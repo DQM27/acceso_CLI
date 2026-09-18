@@ -11,6 +11,16 @@ pub enum NubeError {
     Red(#[from] reqwest::Error),
     #[error("El secreto de este dispositivo fue rechazado o revocado")]
     CredencialesInvalidas,
+    /// El dispositivo existe y su secreto es válido, pero un admin lo
+    /// suspendió temporalmente (`dispositivos.suspended_at` en `device-auth`)
+    /// -- distinto de `CredencialesInvalidas` (baja permanente).
+    #[error("Este dispositivo fue suspendido temporalmente")]
+    DispositivoSuspendido,
+    /// `device-auth` rechazó esta versión por estar debajo del mínimo
+    /// aceptado (`VERSION_MINIMA_ACEPTADA` en el receptor) -- ver
+    /// `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
+    #[error("Esta versión de la app ya no es compatible -- hace falta actualizar")]
+    VersionDesactualizada,
 }
 
 /// Tope por operación de red contra el receptor (conexión + respuesta
@@ -131,8 +141,14 @@ pub fn autenticar_dispositivo(
     }
     let respuesta = cliente_http().post(url).json(&cuerpo).send()?;
 
-    if respuesta.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Err(NubeError::CredencialesInvalidas);
+    match respuesta.status() {
+        reqwest::StatusCode::UNAUTHORIZED => return Err(NubeError::CredencialesInvalidas),
+        reqwest::StatusCode::FORBIDDEN => return Err(NubeError::DispositivoSuspendido),
+        // 426 Upgrade Required -- lo que `device-auth` manda cuando
+        // `VERSION_MINIMA_ACEPTADA` rechaza esta versión. Ver
+        // `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
+        reqwest::StatusCode::UPGRADE_REQUIRED => return Err(NubeError::VersionDesactualizada),
+        _ => {}
     }
     let respuesta = respuesta.error_for_status()?;
     let desfase_reloj_ms = desfase_reloj_ms_desde_header(&respuesta);
@@ -277,6 +293,30 @@ mod tests {
         let resultado = autenticar_dispositivo(&base_url, "secreto-invalido", None);
 
         assert!(matches!(resultado, Err(NubeError::CredencialesInvalidas)));
+    }
+
+    #[test]
+    fn dispositivo_suspendido_se_reporta_como_tal() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\
+             Connection: close\r\n\r\n{\"error\":\"device_suspended\"}",
+        );
+
+        let resultado = autenticar_dispositivo(&base_url, "secreto", None);
+
+        assert!(matches!(resultado, Err(NubeError::DispositivoSuspendido)));
+    }
+
+    #[test]
+    fn version_desactualizada_se_reporta_como_tal() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 426 Upgrade Required\r\nContent-Type: application/json\r\n\
+             Connection: close\r\n\r\n{\"error\":\"version_desactualizada\",\"version_minima\":\"2.0.0\"}",
+        );
+
+        let resultado = autenticar_dispositivo(&base_url, "secreto", None);
+
+        assert!(matches!(resultado, Err(NubeError::VersionDesactualizada)));
     }
 
     #[test]

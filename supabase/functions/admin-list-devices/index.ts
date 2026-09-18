@@ -52,9 +52,11 @@ Deno.serve(async (req: Request) => {
     return json({ error: "unauthorized" }, 401);
   }
 
+  // `direccion` se elimino de `sitios` (2026-09-12) -- ver el mismo
+  // comentario en admin-create-site/index.ts.
   const { data: sitios, error: sitiosError } = await supabase
     .from("sitios")
-    .select("id, nombre, direccion, created_at")
+    .select("id, nombre, created_at")
     .order("nombre");
 
   if (sitiosError) return json({ error: "sitios_error", detail: sitiosError.message }, 500);

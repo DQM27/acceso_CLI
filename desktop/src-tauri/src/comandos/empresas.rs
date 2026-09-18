@@ -14,7 +14,7 @@ pub fn listar_empresas(state: tauri::State<GuiState>) -> Result<Vec<Empresa>, St
     state
         .core()
         .listar_empresas()
-        .map_err(|error| error.to_string())
+        .map_err(super::mensaje_generico)
 }
 
 #[tauri::command]

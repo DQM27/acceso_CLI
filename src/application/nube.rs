@@ -289,11 +289,11 @@ impl AppCore {
     ) -> Result<(), GestionNubeError> {
         let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
             .ok_or(GestionNubeError::SinSecreto)?;
-        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, &secreto, None)?;
+        let token = crate::nube::autenticar_dispositivo(crate::nube::base_url(), &secreto, None)?;
         self.aplicar_desfase_reloj(&token);
         let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::BASE_URL,
-            apikey: crate::nube::APIKEY,
+            base_url: crate::nube::base_url(),
+            apikey: crate::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -323,8 +323,8 @@ impl AppCore {
         let token = self.autenticar_con_cache(&secreto)?;
 
         let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::BASE_URL,
-            apikey: crate::nube::APIKEY,
+            base_url: crate::nube::base_url(),
+            apikey: crate::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -412,8 +412,8 @@ impl AppCore {
 
         let token = self.autenticar_y_cachear(secreto, metadata)?;
         let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::BASE_URL,
-            apikey: crate::nube::APIKEY,
+            base_url: crate::nube::base_url(),
+            apikey: crate::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -462,8 +462,8 @@ impl AppCore {
             .ok_or(GestionNubeError::SinSecreto)?;
         let token = self.autenticar_con_cache(&secreto)?;
         let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::BASE_URL,
-            apikey: crate::nube::APIKEY,
+            base_url: crate::nube::base_url(),
+            apikey: crate::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -493,8 +493,8 @@ impl AppCore {
         let topic = format!("sitio:{}", token.sitio_id);
 
         Ok(SesionRealtimeNube {
-            base_url: crate::nube::BASE_URL.to_string(),
-            apikey: crate::nube::APIKEY.to_string(),
+            base_url: crate::nube::base_url().to_string(),
+            apikey: crate::nube::apikey().to_string(),
             access_token: token.access_token,
             expires_in: token.expires_in,
             sitio_id: token.sitio_id,
@@ -582,8 +582,8 @@ impl AppCore {
         let token = self.autenticar_con_cache(&secreto)?;
 
         let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::BASE_URL,
-            apikey: crate::nube::APIKEY,
+            base_url: crate::nube::base_url(),
+            apikey: crate::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -643,8 +643,8 @@ impl AppCore {
         let token = self.autenticar_con_cache(&secreto)?;
 
         let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::BASE_URL,
-            apikey: crate::nube::APIKEY,
+            base_url: crate::nube::base_url(),
+            apikey: crate::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -686,8 +686,8 @@ impl AppCore {
         };
         let token = self.autenticar_con_cache(&secreto)?;
         let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::BASE_URL,
-            apikey: crate::nube::APIKEY,
+            base_url: crate::nube::base_url(),
+            apikey: crate::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -719,8 +719,8 @@ impl AppCore {
         };
         let token = self.autenticar_con_cache(&secreto)?;
         let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::BASE_URL,
-            apikey: crate::nube::APIKEY,
+            base_url: crate::nube::base_url(),
+            apikey: crate::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -751,8 +751,8 @@ impl AppCore {
         };
         let token = self.autenticar_con_cache(&secreto)?;
         let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::BASE_URL,
-            apikey: crate::nube::APIKEY,
+            base_url: crate::nube::base_url(),
+            apikey: crate::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -779,8 +779,8 @@ impl AppCore {
         let token = self.autenticar_con_cache(&secreto)?;
 
         let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::BASE_URL,
-            apikey: crate::nube::APIKEY,
+            base_url: crate::nube::base_url(),
+            apikey: crate::nube::apikey(),
             token: &token.access_token,
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
@@ -848,9 +848,16 @@ impl AppCore {
     }
 
     /// Igual que [`Self::autenticar_con_cache`], pero permite adjuntar
-    /// `metadata` cuando hace falta mandarla -- sólo la activación inicial
-    /// (ver [`Self::configurar_dispositivo_inicial`]). El resto de los
-    /// llamadores pasan `None` a través de `autenticar_con_cache`.
+    /// `metadata` completa cuando hace falta mandarla -- sólo la activación
+    /// inicial (ver [`Self::configurar_dispositivo_inicial`]). El resto de
+    /// los llamadores pasan `None` a través de `autenticar_con_cache`, pero
+    /// si ya se llamó [`AppCore::establecer_version_app`], acá igual se arma
+    /// una `MetadatosDispositivo` mínima (sólo `app_version`) para que el
+    /// receptor pueda aplicar `VERSION_MINIMA_ACEPTADA` en cualquier
+    /// renovación, no sólo al activar el dispositivo -- ver
+    /// `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9. Sin
+    /// `establecer_version_app`, el comportamiento es exactamente el de
+    /// antes.
     fn autenticar_y_cachear(
         &self,
         secreto: &str,
@@ -874,7 +881,20 @@ impl AppCore {
             }
         }
 
-        let token = crate::nube::autenticar_dispositivo(crate::nube::BASE_URL, secreto, metadata)?;
+        let metadata_con_version;
+        let metadata = match (metadata, &self.version_app) {
+            (Some(metadata), _) => Some(metadata),
+            (None, Some(version)) => {
+                metadata_con_version = crate::nube::MetadatosDispositivo {
+                    app_version: Some(version.clone()),
+                    ..Default::default()
+                };
+                Some(&metadata_con_version)
+            }
+            (None, None) => None,
+        };
+        let token =
+            crate::nube::autenticar_dispositivo(crate::nube::base_url(), secreto, metadata)?;
         self.aplicar_desfase_reloj(&token);
         *self
             .token_nube_cacheado

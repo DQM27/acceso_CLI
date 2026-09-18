@@ -18,7 +18,7 @@ pub fn requiere_configuracion_inicial(state: tauri::State<GuiState>) -> Result<b
     state
         .core()
         .requiere_configuracion_inicial()
-        .map_err(|error| error.to_string())
+        .map_err(super::mensaje_generico)
 }
 
 /// Ya no distingue `sin_password_local` -- `login` resuelve las dos ramas
@@ -85,8 +85,8 @@ fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
         state.core().actualizar_desfase_reloj(desfase_ms);
     }
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,
@@ -111,8 +111,8 @@ fn usuario_sigue_activo_remoto(state: &GuiState, cedula: &str) -> Result<bool, S
         state.core().actualizar_desfase_reloj(desfase_ms);
     }
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,
@@ -244,7 +244,12 @@ async fn login_supabase(
     let cedula_supabase = cedula.clone();
 
     let sesion_supabase = tauri::async_runtime::spawn_blocking(move || {
-        nube::login(nube::BASE_URL, nube::APIKEY, &cedula_supabase, &password)
+        nube::login(
+            nube::base_url(),
+            nube::apikey(),
+            &cedula_supabase,
+            &password,
+        )
     })
     .await
     .map_err(|_| ErrorLogin {
@@ -310,8 +315,8 @@ pub async fn cambiar_password_supabase(
 
     tauri::async_runtime::spawn_blocking(move || {
         nube::cambiar_password(
-            nube::BASE_URL,
-            nube::APIKEY,
+            nube::base_url(),
+            nube::apikey(),
             &access_token,
             &sesion.cedula,
             &password_actual,
@@ -319,8 +324,8 @@ pub async fn cambiar_password_supabase(
         )
     })
     .await
-    .map_err(|error| error.to_string())?
-    .map_err(|error| error.to_string())
+    .map_err(super::mensaje_generico)?
+    .map_err(super::mensaje_generico)
 }
 
 #[tauri::command]

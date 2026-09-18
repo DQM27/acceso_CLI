@@ -24,11 +24,6 @@ pub enum SchemaError {
     /// `PRAGMA quick_check` encontró un problema estructural.
     #[error("La base de datos falló la verificación de integridad: {0}")]
     IntegridadInvalida(String),
-    /// Hay una migración de esquema pendiente pero el respaldo obligatorio
-    /// previo (`TipoRespaldo::PreMigracion`) falló — el arranque se detiene
-    /// antes de tocar el esquema.
-    #[error("No se pudo crear el respaldo obligatorio antes de migrar el esquema: {0}")]
-    RespaldoPreMigracionFallido(String),
     /// Invariante interno: tras aplicar todas las migraciones conocidas, la
     /// versión resultante no es `SCHEMA_VERSION`. No es un error de `SQLite` —
     /// sólo puede pasar si la cadena de migraciones de este archivo tiene un
@@ -751,9 +746,8 @@ fn ejecutar_migracion_46(connection: &Connection) -> Result<(), SchemaError> {
 }
 
 /// Rechaza un archivo ajeno o corrupto antes de cualquier otra operación —
-/// en particular antes del respaldo obligatorio pre-migración
-/// (`connection::respaldar_antes_de_migrar`), para no terminar copiando a
-/// `backups/` un archivo que ni siquiera es nuestro.
+/// se corre antes de tocar el esquema, para no terminar migrando (o
+/// mostrando como propio) un archivo que ni siquiera es nuestro.
 pub(crate) fn verificar_archivo_propio(connection: &Connection) -> Result<(), SchemaError> {
     rechazar_archivo_ajeno(connection)?;
     verificar_integridad_rapida(connection)
@@ -815,8 +809,8 @@ fn registrar_funcion_plegar(connection: &Connection) -> Result<(), SchemaError> 
 }
 
 /// Chequeo estructural barato en cada apertura (`quick_check`, no
-/// `integrity_check`/`foreign_key_check` completos — esos se reservan para
-/// la validación de respaldos, donde el costo mayor es aceptable).
+/// `integrity_check`/`foreign_key_check` completos — mucho más lentos,
+/// no justificados en cada arranque).
 fn verificar_integridad_rapida(connection: &Connection) -> Result<(), SchemaError> {
     let resultado: String = connection.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
     if resultado != "ok" {

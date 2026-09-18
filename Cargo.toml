@@ -55,6 +55,12 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 rust_xlsxwriter = { version = "0.98.2", features = ["chrono", "constant_memory"] }
 tempfile = "3"
 thiserror = "2"
+# Fachada de logging, compartida por escritorio (tauri-plugin-log) y mobile
+# (android_logger en mobile/rust-core) -- ver `mensajes.rs`, punto 5.1 de
+# docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md. Sin backend
+# instalado, las llamadas son no-op: agregarla acá no cambia nada por sí
+# sola, sólo habilita el macro para el crate compartido.
+log = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"], optional = true }

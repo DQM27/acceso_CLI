@@ -28,6 +28,12 @@ android {
         targetSdk = 36
         versionCode = 11
         versionName = "1.1.10"
+
+        // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
+        // el default acá es "development" (debug); `release {}` abajo lo
+        // pisa a "production". Mismo criterio que `cfg!(debug_assertions)`
+        // del lado de escritorio.
+        manifestPlaceholders["sentryEnvironment"] = "development"
     }
 
     signingConfigs {
@@ -48,6 +54,7 @@ android {
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            manifestPlaceholders["sentryEnvironment"] = "production"
         }
     }
 
@@ -99,6 +106,12 @@ dependencies {
     // dejarla despierta gastando batería sin nadie mirando la pantalla.
     // Misma versión que lifecycle-viewmodel-compose de arriba, mismo motivo.
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+    // Error-tracking (docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md,
+    // punto 5.4 -- espejo mobile del que ya se conectó en desktop). Init
+    // automático vía meta-data en AndroidManifest.xml, sin tocar código:
+    // captura crashes no manejados desde el primer arranque después de
+    // instalarlo.
+    implementation("io.sentry:sentry-android:8.9.0")
 
     // Tests unitarios de los ViewModel (JVM puro, sin emulador) — ver
     // mobile/android/app/src/test/.../NucleoDePrueba.kt para el porqué de cada uno.

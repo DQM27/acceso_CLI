@@ -1,0 +1,42 @@
+name: zizmor
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Mismo criterio que codeql.yml: corre aparte de cada push/PR para
+    # atrapar hallazgos nuevos (reglas nuevas de zizmor) sobre workflows que
+    # ya están en main y no se volvieron a tocar.
+    - cron: "0 6 * * 1"
+
+jobs:
+  zizmor:
+    name: Auditoría de seguridad de GitHub Actions
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # Método oficial recomendado por zizmor -- ubuntu-latest ya trae
+      # python3/pipx, así que no hace falta instalar nada aparte (evita el
+      # costo de compilar el binario Rust en cada corrida). `continue-on-error`
+      # a propósito: zizmor devuelve código de salida distinto de cero en
+      # cuanto encuentra algo -- el hallazgo se ve igual en la pestaña
+      # Security (paso de abajo); no tiene sentido que un finding nuevo
+      # tumbe todo el job antes de subir el reporte.
+      - name: zizmor (SARIF)
+        continue-on-error: true
+        run: |
+          pipx run zizmor --format sarif .github/workflows/ > zizmor-results.sarif
+
+      - name: Subir resultados a GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3
+        with:
+          sarif_file: zizmor-results.sarif
+          category: zizmor

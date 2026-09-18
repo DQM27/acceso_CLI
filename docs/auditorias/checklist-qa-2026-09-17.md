@@ -1,0 +1,46 @@
+# Checklist QA — para ir tildando (2026-09-17)
+
+> Versión resumida y accionable de
+> `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md` — ese documento
+> tiene el detalle técnico completo de cada punto (por qué importa, qué
+> se hizo, cómo se verifica). Este archivo es solo para llevar el pulso de
+> qué falta, tildando a medida que se resuelve. Actualizar los dos en
+> paralelo, no solo uno.
+
+## Ya implementado (rama `qa`, no mergeado a `main` todavía)
+
+- [x] Versión instalada visible en el sidebar de escritorio
+- [x] `cargo fmt --check` corriendo en los 3 jobs de CI (antes solo 1 de 3)
+- [x] Logs activados en producción (antes solo en modo debug)
+- [x] Fallo silencioso corregido en la sincronización automática (errores y panics que no dejaban rastro)
+- [x] Código muerto del viejo sistema de respaldo eliminado + nota falsa en `pendientes.md` corregida
+- [x] **Corrección 2026-09-17 (tarde):** el secreto de dispositivo en Android **sí está cifrado** (Android Keystore, `SecretoDispositivoStore.kt`, desde el commit `7aed199` del 2026-09-10) -- la entrada de más abajo, agregada hoy más temprano, estaba mal: busqué solo `androidx.security`/`EncryptedFile` y no encontré el mecanismo real, que usa el API de Keystore directo. Verificado de punta a punta: la clave ya no depende de `ANDROID_ID` (se genera dentro del propio Keystore), `ANDROID_ID` solo se usa para migrar el secreto legado en texto plano una única vez, y el archivo viejo se borra después. Conectado de verdad en `AplicacionViewModel.kt:52`, no es código muerto.
+- [x] `CODEOWNERS` agregado (`.github/CODEOWNERS`, @DQM27) -- falta el interruptor en GitHub, ver más abajo
+- [x] Chequeo de versión mínima entre dispositivos -- **escritorio completo**, con tests (`cargo test --lib`, 365 passed). Mobile queda pendiente, ver más abajo
+
+## Decisiones de negocio pendientes (no es código, es elegir)
+
+- [ ] **Correo para el diagnóstico crítico** — ¿creamos cuenta en Resend (gratis para este volumen) para que el zip de diagnóstico se mande solo? *(Vos dijiste "opción A" — falta el ok final para crear la cuenta)*
+- [x] **Ambiente de staging, cerrado de punta a punta (2026-09-18).** Proyecto `control-acceso-staging` (`pmrytjktlyiuikxuuxpr`) creado vía MCP -- 75 migraciones + 10 Edge Functions desplegadas, verificado 1:1 contra producción. `DEVICE_SIGNING_KEY` ya cargado y rotado (vos lo hiciste en el dashboard) -- probado de punta a punta con un dispositivo real: `device-auth` firma, Postgres confía en la firma, RLS scopea correctamente. Ver `docs/recuperacion-sitio-staging.md` para el detalle completo, incluidos 2 hallazgos reales de reproducibilidad (esquema `private` y una política de Realtime que nunca tuvieron migración propia -- corregidos también en `docs/recuperacion-supabase.md`) y un drift real entre git y producción (`admin-list-devices`, ya corregido). **Variables de entorno implementadas** (punto 11 cerrado) -- ya no hace falta editar código para apuntar las apps a staging, ver ese punto en `plan-qa-buenas-practicas-2026-09-17.md`. **Google OAuth también cerrado (2026-09-18)** -- Client ID/Secret de Google Cloud (proyecto `mega-brisas`) cargados en Supabase, login probado real contra el panel local (`web/.env.local` → staging), entra correctamente. Cloudflare Access sigue diferido a propósito, pero ya no bloquea altas en `administradores_panel` (se cargaron los 2 secretos de Vault dummy que el trigger necesita para no abortar -- ver `recuperacion-sitio-staging.md` punto 3).
+- [x] **Sentry (error-tracking automático) -- conectado en ambas plataformas (2026-09-17).** Cuenta creada por el usuario, dos proyectos (`control-acceso-desktop`, `control-acceso-mobile`) vía el MCP de Sentry. **Ojo con la cuenta:** quedó en trial del plan Business (13 días), sin tarjeta cargada -- al vencer baja sola al plan gratis real porque no hay forma de cobrar. No tocar el botón "Confirmar" de la pantalla de planes mientras tanto (activaría el plan pago). Ver detalle técnico en `plan-qa-buenas-practicas-2026-09-17.md`, punto 5.4.
+- [ ] **Revisión de código obligatoria en GitHub** — el archivo `CODEOWNERS` ya está (`.github/CODEOWNERS`, @DQM27 como revisor por defecto). Falta el interruptor, que **no tengo forma de activar yo** (no hay herramienta para tocar configuración del repo en este entorno) — vos lo hacés en 1 minuto: GitHub → repo → **Settings → Branches → Add branch protection rule** → rama `main` → tildar **"Require a pull request before merging"** + **"Require review from Code Owners"** → Save.
+  ⚠️ **Ojo con esto:** una vez activado, ni siquiera vos podés pushear directo a `main` (ni yo, cuando trabajo con tu cuenta) — todo cambio, sin excepción, tiene que pasar por PR + tu propia aprobación como Code Owner. Si eso te complica el flujo del día a día, hay una casilla "Do not allow bypassing the above settings" que podés dejar SIN marcar para que el dueño del repo pueda saltarse la regla en un apuro.
+- [x] **Runbook de base local dañada (2026-09-17), ampliado con automatización real (2026-09-18).** `docs/recuperacion-sitio-local.md` -- aceptaste perder auditoría/incidentes/cola pendiente; queda anotado "a valorar más adelante". Se detectó y corrigió un hallazgo de seguridad real: `db_key.dat` y el secreto de dispositivo vivían en la misma carpeta que la base (`%LOCALAPPDATA%`) -- movidos a `%APPDATA%` (separado). Además, la app ahora detecta sola un fallo de apertura, ofrece con un diálogo Sí/No reconstruir desde la nube, respalda el `.db`/`db_key.dat` dañados en cuarentena antes de borrarlos, y reintenta -- sin código nuevo de UI, cae en la pantalla de activación de siempre. **Pendiente:** verificar en el próximo push a CI que los tests nuevos (`recuperacion_local.rs`) pasan de verdad -- no se pudieron ejecutar en esta PC por un problema de entorno (DLL) sin relación con el código, sólo se verificó por `clippy`/compilación.
+- [ ] **Verificar que Sentry realmente notifica** — por defecto manda email al primer error nuevo de un tipo (no en cada repetición), pero no se confirmó de punta a punta (el MCP no expone la API de alert rules, quedó deprecada del lado de Sentry). Entrar a **Settings → Alerts** de cada proyecto (`control-acceso-desktop`/`control-acceso-mobile`) y a **Settings → Notifications** de la cuenta para confirmar que el canal de aviso (email u otro) está activo -- forzar un error de prueba es la forma más segura de confirmarlo antes de depender de esto en un sitio real
+
+## Trabajo técnico pendiente (no necesita tu decisión, solo tiempo)
+
+- [ ] **Chequeo de versión mínima en mobile** — falta que Kotlin le pase su versión real a Rust (nuevo método UniFFI + una llamada en `AplicacionViewModel.kt`). Chico y de bajo riesgo, pero toca Kotlin — decime si avanzo
+- [ ] Configurar `VERSION_MINIMA_ACEPTADA` en Supabase cuando decidan la primera versión a exigir (`supabase secrets set VERSION_MINIMA_ACEPTADA=X.Y.Z`) -- sin esto seteado, el chequeo ya está listo pero no rechaza nada
+- [ ] Diagnóstico exportable (.zip) — el botón + armar el archivo (espera el ok de Resend de arriba para la parte de "mandarlo solo")
+- [x] **Instrumentar más puntos de fallo con logs, escritorio y mobile (2026-09-17).** Ver detalle técnico en `plan-qa-buenas-practicas-2026-09-17.md`, puntos 5.1/5.2/5.3.
+- [x] **Logging del fallo fatal de arranque (2026-09-17).** Archivo propio en `%LOCALAPPDATA%\<identifier>\logs\fallo-fatal-arranque.log`, sin depender del plugin (que a esa altura no existe todavía) -- más `sentry::capture_message` (ya inicializado en ese punto). Ver punto 5.3.
+- [ ] ~~Cifrado del secreto de dispositivo en Android~~ **Ya está hecho — ver corrección arriba.** Lo único real que falta: no hay test automatizado de `AndroidKeystoreSecretoDispositivoStore` (no se puede sin Robolectric, que el proyecto no tiene) — decidir si vale la pena sumarlo
+- [ ] Variables de entorno para `web`/`web-visitas` (para poder apuntar a staging sin editar código) — depende de que el proyecto de staging ya exista
+
+## Descartado a propósito (no reabrir sin una razón nueva)
+
+- [x] ~~Backups tradicionales~~ — decisión de arquitectura ya tomada, la nube es el respaldo
+- [x] ~~Pruebas de carga clásicas~~ — no es un servidor multi-usuario
+- [x] ~~Feature flags de producto~~ — sin caso de uso real hoy
+- [x] ~~Migraciones "down"/reversibles~~ — la atomicidad transaccional ya cubre el riesgo real

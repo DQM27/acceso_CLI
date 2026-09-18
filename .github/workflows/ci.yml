@@ -21,11 +21,19 @@ jobs:
       - name: Instalar Rust para el núcleo móvil de pruebas
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: mobile/rust-core
+
+      # Sin este paso nadie lo detecta hasta que alguien corre `cargo fmt`
+      # a mano -- pasó de verdad: 6 archivos de mobile/rust-core llegaron
+      # sin formatear a `main` porque `test`/`test-gui` chequean fmt de SU
+      # propio crate, no de éste (ver docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md).
+      - name: Formato (rustfmt, mobile/rust-core)
+        working-directory: mobile/rust-core
+        run: cargo fmt --check
 
       - name: Instalar cargo-audit
         uses: taiki-e/install-action@v2
@@ -98,7 +106,15 @@ jobs:
       - name: Instalar toolchain de Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: rustfmt, clippy
+
+      # No necesita el vendor de SQLite3MC compilado -- `cargo fmt --check`
+      # sólo lee sintaxis, no linkea. Mismo motivo que el paso equivalente en
+      # test-android: cada crate chequea SU propio formato, "test" (raíz) no
+      # cubre este (ver docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md).
+      - name: Formato (rustfmt, Rust del lado Tauri)
+        working-directory: desktop/src-tauri
+        run: cargo fmt --check
 
       - uses: Swatinem/rust-cache@v2
         with:

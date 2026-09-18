@@ -1,3 +1,7 @@
+# Herramientas de desarrollo descargadas localmente (ej. gh CLI), no forman
+# parte del proyecto
+/.tools/
+
 # Rust
 /target/
 # Vendor-lib de SQLite3MC (ver sqlite3mc-vendor-lib/build.rs): la lib estática
@@ -18,6 +22,13 @@
 # Variables de entorno y secretos
 .env
 .env.*
+# Excepción: valores por defecto de producción para web/web-visitas
+# (URL + publishable key de Supabase -- pública a propósito, no un secreto,
+# ver docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md punto 11).
+# `.env.local` en cada carpeta sigue ignorado -- ahí va el override de
+# staging de cada quien, nunca versionado.
+!/web/.env
+!/web-visitas/.env
 supabase_admin_key.txt
 supabase_signing_key.json
 nueva_clave_firma.json

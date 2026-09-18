@@ -1,0 +1,64 @@
+name: cargo-geiger
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+  schedule:
+    # Semanal, no en cada PR normal: compilar cargo-geiger desde cero tarda
+    # varios minutos y esto es informativo (superficie de `unsafe` en TODO
+    # el árbol de dependencias, no sólo el código propio -- eso ya lo cubren
+    # los lints `undocumented_unsafe_blocks`/`multiple_unsafe_ops_per_block`
+    # de cada Cargo.toml), no un gate que deba bloquear cada cambio chico.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  cargo-geiger:
+    name: Superficie de unsafe en dependencias (${{ matrix.crate }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Mismas features que los alias -plano de .cargo/config.toml --
+          # evita arrastrar OpenSSL vendorizado (cifrado-sqlcipher, default
+          # de root/mobile) sólo para un reporte informativo. La raíz
+          # necesita "nube" además de "sqlite-plano" para no dejar afuera
+          # del reporte todo `src/nube/` (reqwest, jsonwebtoken); desktop y
+          # mobile ya traen "nube" fijo en su propia dependencia a
+          # `control_acceso`, no como feature propia.
+          - crate: raíz
+            directorio: .
+            features: "nube,sqlite-plano"
+          - crate: desktop
+            directorio: desktop/src-tauri
+            features: "sqlite-plano"
+          - crate: mobile
+            directorio: mobile/rust-core
+            features: "sqlite-plano"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-18)
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: ${{ matrix.directorio }}
+
+      - name: Instalar cargo-geiger
+        run: cargo install cargo-geiger --locked
+
+      # Sólo lectura/informe -- cargo-geiger no tiene un modo "falla si hay
+      # unsafe", así que esto queda como reporte en el log del job, a
+      # revisar a mano (mismo espíritu que los 7 avisos "unmaintained" que
+      # ya deja pasar `cargo audit` en este repo, ver docs/pendientes.md).
+      - name: Reporte de unsafe (${{ matrix.crate }})
+        working-directory: ${{ matrix.directorio }}
+        run: cargo geiger --no-default-features --features ${{ matrix.features }} || true

@@ -12,6 +12,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { LucideIcon } from "lucide-react";
 import type { Seccion } from "../App";
 import MenuContextualSecciones from "./MenuContextualSecciones";
+import VersionFooter from "./VersionFooter";
 
 interface FilaSeccion {
   id: Seccion;
@@ -145,6 +146,8 @@ export default function Sidebar({
         title="Doble click para colapsar/expandir -- click derecho para mostrar/ocultar secciones"
         onDoubleClick={onToggleColapsado}
       />
+
+      <VersionFooter colapsado={colapsado} />
 
       {menu && (
         <MenuContextualSecciones

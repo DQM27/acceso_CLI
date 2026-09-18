@@ -6,6 +6,29 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SIGNING_KEY_JSON = Deno.env.get("DEVICE_SIGNING_KEY")!;
 
+// Secret opcional (no una tabla -- cambia rara vez, no hace falta consultarla
+// en cada login) -- si no está seteado, el chequeo de versión mínima queda
+// desactivado por completo (comportamiento actual, sin romper nada). Se
+// configura con `supabase secrets set VERSION_MINIMA_ACEPTADA=1.5.0`.
+// Ver docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md, punto 9.
+const VERSION_MINIMA_ACEPTADA = Deno.env.get("VERSION_MINIMA_ACEPTADA") ?? null;
+
+/** Compara versiones "major.minor.patch" (sin sufijos de pre-release, mismo
+ * esquema que ya usa el proyecto, ej. "1.5.3") -- true si `version` es
+ * estrictamente menor que `minima`. Cualquier parte no numérica (o ausente)
+ * cuenta como 0, para no reventar con algo malformado -- lo deja del lado
+ * "está por debajo" en vez de tirar una excepción sin manejar. */
+function versionPorDebajoDe(version: string, minima: string): boolean {
+  const a = version.split(".").map((parte) => Number.parseInt(parte, 10) || 0);
+  const b = minima.split(".").map((parte) => Number.parseInt(parte, 10) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
+
 // 12h (antes 1h, 2026-09-12) -- un dispositivo real pasa horas sin
 // sincronizar (celular guardado, PC sin uso momentaneo) y el cliente sólo
 // renueva "on demand" antes de cada sync, no en segundo plano solo. Con 1h,
@@ -109,6 +132,19 @@ Deno.serve(async (req: Request) => {
       status: 403,
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
+  }
+
+  // Sin versión mínima configurada, o sin que el cliente la mande, no se
+  // bloquea nada -- "no sé" nunca es motivo para rechazar (evita dejar
+  // afuera de golpe a dispositivos que todavía no mandan `app_version` en
+  // cada renovación el día que se active este chequeo). 426 Upgrade
+  // Required: es exactamente lo que dice el estándar HTTP para este caso.
+  const appVersion = body.metadata?.app_version;
+  if (VERSION_MINIMA_ACEPTADA && appVersion && versionPorDebajoDe(appVersion, VERSION_MINIMA_ACEPTADA)) {
+    return new Response(
+      JSON.stringify({ error: "version_desactualizada", version_minima: VERSION_MINIMA_ACEPTADA }),
+      { status: 426, headers: { "Content-Type": "application/json", ...CORS_HEADERS } },
+    );
   }
 
   const jwk = JSON.parse(SIGNING_KEY_JSON);

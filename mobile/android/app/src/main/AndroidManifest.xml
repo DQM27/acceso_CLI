@@ -19,6 +19,24 @@
         android:label="Brisas Control de Acceso"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <!-- Sentry (io.sentry:sentry-android): init automático, sin
+             Application/código propio. DSN del proyecto
+             `control-acceso-mobile`, mismo criterio que el DSN de escritorio
+             en desktop/src-tauri/src/lib.rs: no es secreto, va embebido en
+             el cliente. `sentryEnvironment` viene de los
+             `manifestPlaceholders` de app/build.gradle.kts
+             (debug="development", release="production"). El sample rate en
+             0.0: sólo error-tracking, sin performance tracing (mismo motivo
+             que `traces_sample_rate = 0.0` en desktop, para no gastar cuota
+             del plan gratis en algo sin usar). -->
+        <meta-data android:name="io.sentry.dsn"
+            android:value="https://5fb608eb8db4b9a18aca8d2901a4b894@o4512103124041728.ingest.us.sentry.io/4512104610463744" />
+        <meta-data android:name="io.sentry.environment"
+            android:value="${sentryEnvironment}" />
+        <meta-data android:name="io.sentry.traces.sample-rate"
+            android:value="0.0" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">

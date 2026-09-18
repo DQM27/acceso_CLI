@@ -106,7 +106,7 @@ fn main() {
 
     let secreto =
         nube::credenciales::cargar_secreto().expect("no hay secreto de dispositivo guardado");
-    let token = nube::autenticar_dispositivo(nube::BASE_URL, &secreto, None)
+    let token = nube::autenticar_dispositivo(nube::base_url(), &secreto, None)
         .expect("no se pudo autenticar el dispositivo");
     println!(
         "Autenticado: sitio={} dispositivo={} tipo={}",
@@ -114,8 +114,8 @@ fn main() {
     );
 
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,

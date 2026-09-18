@@ -12,6 +12,16 @@
 //! parte no expone nada -- el blob de `db_key.dat` sigue atado al usuario de
 //! Windows que lo creó.
 //!
+//! `db_key.dat` vive en `%APPDATA%` (roaming), NO en `%LOCALAPPDATA%` junto
+//! a `control_acceso.db` -- eso era así hasta 2026-09-18, pero un evento que
+//! corrompe/borra la carpeta de la base (disco, reinstalación) se llevaba
+//! puesto también la clave, sin ninguna ganancia de confidencialidad real
+//! (DPAPI ya protege el blob esté donde esté). Separar las carpetas es
+//! puramente por resiliencia ante fallas correlacionadas, no por
+//! confidencialidad -- ver `docs/recuperacion-sitio-local.md` y
+//! `control_acceso::nube::credenciales::directorio_credenciales_roaming`
+//! (misma carpeta que usa el secreto de dispositivo, por el mismo motivo).
+//!
 //! Este módulo es exclusivo de escritorio Windows (`cfg(windows)`); Android
 //! usa su propio Keystore (`SecretoDispositivoStore.kt`), sin tocar nada de
 //! acá.
@@ -25,7 +35,10 @@ use windows::Win32::Security::Cryptography::{
 };
 use zeroize::Zeroizing;
 
-const NOMBRE_ARCHIVO_CLAVE: &str = "db_key.dat";
+/// `pub(crate)` para que `recuperacion_local` sepa qué archivo poner en
+/// cuarentena junto con `control_acceso.db` -- una sola fuente de verdad
+/// para el nombre, en vez de repetir el literal.
+pub const NOMBRE_ARCHIVO_CLAVE: &str = "db_key.dat";
 const LONGITUD_CLAVE: usize = 32;
 
 #[derive(Debug, thiserror::Error)]
@@ -62,8 +75,9 @@ pub enum ErrorClaveBaseDatos {
     ClaveFaltanteConBaseExistente { ruta_base_datos: PathBuf },
 }
 
-/// Resuelve la clave de 256 bits para `SQLCipher` en `directorio` (el mismo
-/// directorio donde vive `control_acceso.db`). Primera vez: genera 32 bytes
+/// Resuelve la clave de 256 bits para `SQLCipher` en `directorio` (deliberadamente
+/// distinto del directorio donde vive `control_acceso.db`, ver el
+/// doc-comment del módulo). Primera vez: genera 32 bytes
 /// aleatorios, los protege con DPAPI (scope de usuario actual -- nunca
 /// `CRYPTPROTECT_LOCAL_MACHINE`, ver el comentario de `proteger`) y los deja
 /// listos para usar. Arranques siguientes: lee el blob y lo desprotege.

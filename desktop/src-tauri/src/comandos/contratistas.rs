@@ -25,7 +25,7 @@ pub fn buscar_contratistas(
     state
         .core()
         .buscar_contratistas(&filtro.construir())
-        .map_err(|error| error.to_string())
+        .map_err(super::mensaje_generico)
 }
 
 /// Formulario de alta — usa el mismo DTO que editar (ver dto/contratistas.rs).

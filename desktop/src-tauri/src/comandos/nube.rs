@@ -222,8 +222,8 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
 fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, FalloSincronizacion> {
     let token = autenticar(state).map_err(FalloSincronizacion::Mensaje)?;
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,
@@ -237,7 +237,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     // tope de 12h en `GuiState::access_token_supabase_vigente` sigue
     // aplicando igual si esto no logra renovar a tiempo.
     if let Some(refresh_token) = state.refresh_token_supabase()
-        && let Ok(sesion) = nube::refrescar(nube::BASE_URL, nube::APIKEY, &refresh_token)
+        && let Ok(sesion) = nube::refrescar(nube::base_url(), nube::apikey(), &refresh_token)
     {
         state.iniciar_sesion_supabase(sesion);
     }
@@ -384,8 +384,8 @@ fn preparar_sesion_realtime(state: &GuiState) -> Result<SesionRealtimeNube, Stri
     let sesion = autenticar(state)?;
 
     Ok(SesionRealtimeNube {
-        base_url: nube::BASE_URL.to_string(),
-        apikey: nube::APIKEY.to_string(),
+        base_url: nube::base_url().to_string(),
+        apikey: nube::apikey().to_string(),
         access_token: sesion.access_token,
         expires_in: sesion.expires_in,
         topic: format!("sitio:{}", sesion.sitio_id),
@@ -423,7 +423,7 @@ pub fn listar_ingresos_remotos(
                     contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero
              FROM ingresos_remotos ORDER BY hora_entrada",
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(super::mensaje_generico)?;
     let filas = statement
         .query_map([], |row| {
             Ok(IngresoRemoto {
@@ -438,9 +438,9 @@ pub fn listar_ingresos_remotos(
                 gafete_numero: row.get(8)?,
             })
         })
-        .map_err(|error| error.to_string())?
+        .map_err(super::mensaje_generico)?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?;
+        .map_err(super::mensaje_generico)?;
     Ok(filas)
 }
 
@@ -452,8 +452,8 @@ pub fn cerrar_ingreso_remoto(uuid: String, state: tauri::State<GuiState>) -> Res
     let actor = state.sesion_activa()?;
     let token = autenticar(&state)?;
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,
@@ -477,7 +477,7 @@ pub fn listar_ingresos_proveedor_remotos(
                     hora_entrada, usuario_entrada_nombre
              FROM ingresos_proveedor_remotos ORDER BY hora_entrada",
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(super::mensaje_generico)?;
     let filas = statement
         .query_map([], |row| {
             Ok(IngresoProveedorRemoto {
@@ -491,9 +491,9 @@ pub fn listar_ingresos_proveedor_remotos(
                 usuario_entrada_nombre: row.get(7)?,
             })
         })
-        .map_err(|error| error.to_string())?
+        .map_err(super::mensaje_generico)?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?;
+        .map_err(super::mensaje_generico)?;
     Ok(filas)
 }
 
@@ -506,8 +506,8 @@ pub fn cerrar_ingreso_proveedor_remoto(
     let actor = state.sesion_activa()?;
     let token = autenticar(&state)?;
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,
@@ -531,7 +531,7 @@ pub fn listar_prestamos_gafete_provisional_remotos(
                     hora_entrega, usuario_entrega_nombre
              FROM prestamos_gafete_provisional_remotos ORDER BY hora_entrega",
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(super::mensaje_generico)?;
     let filas = statement
         .query_map([], |row| {
             Ok(PrestamoGafeteProvisionalRemoto {
@@ -543,9 +543,9 @@ pub fn listar_prestamos_gafete_provisional_remotos(
                 usuario_entrega_nombre: row.get(5)?,
             })
         })
-        .map_err(|error| error.to_string())?
+        .map_err(super::mensaje_generico)?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?;
+        .map_err(super::mensaje_generico)?;
     Ok(filas)
 }
 
@@ -559,8 +559,8 @@ pub fn cerrar_prestamo_gafete_provisional_remoto(
     let actor = state.sesion_activa()?;
     let token = autenticar(&state)?;
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,

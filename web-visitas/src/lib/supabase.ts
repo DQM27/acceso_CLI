@@ -4,9 +4,15 @@ export const CLAVE_SESION = "brisas-visitas-auth";
 
 // La sesión dura lo que esta pestaña. El verificador PKCE sobrevive al retorno
 // de Google sin compartir tokens con el panel ni guardar datos de visitantes.
+//
+// URL/clave vienen de `.env` (versionado, valores de producción por
+// defecto) -- para apuntar el build local a staging sin tocar ese
+// archivo, crear un `.env.local` (gitignored) con
+// VITE_SUPABASE_URL/VITE_SUPABASE_PUBLISHABLE_KEY y los valores de
+// `docs/recuperacion-sitio-staging.md`.
 export const supabase = createClient(
-  "https://xidaepyaljzkpbsxrqsm.supabase.co",
-  "sb_publishable_Sr9DPGMD7MFirLQfG7ViWg_6pJeEpqU",
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
   {
     auth: {
       flowType: "pkce",

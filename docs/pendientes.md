@@ -285,16 +285,41 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   0 errores y ya está wireado en `ci.yml`/`web.yml`. Detalle en los commits
   `fix(desktop)`/`feat(web)`/`feat(web-visitas)` del 2026-09-12.
 - [ ] **`cargo-deny` (licencias + dependencias duplicadas/baneadas) -- evaluado y
-  descartado por ahora**, no por falta de valor sino por alcance: se optó por
-  `cargo-audit` (más simple, sin archivo de configuración) para esta primera
-  pasada. Si más adelante se quiere el chequeo de licencias también, agregar
-  `cargo-deny` es el paso natural siguiente.
-- [ ] **Dependabot -- no agregado.** No hay `.github/dependabot.yml` -- hoy nadie se
-  entera si una dependencia ya instalada saca un CVE nuevo *después* de este commit
-  (`cargo audit` en CI sólo protege código nuevo que se pushee).
-- [ ] **CodeQL (SAST) -- no agregado.** Análisis estático más profundo que
-  clippy/ESLint (patrones de inyección, etc.), gratis vía GitHub Actions. Ni
-  evaluado en detalle todavía, sólo mencionado como opción.
+  descartado a propósito (2026-09-17), no reabrir sin una razón nueva.** No es
+  un producto que se redistribuya ni tiene requisitos de compliance de
+  licencias, así que el beneficio es bajo frente a `cargo-audit`, que ya
+  cubre lo que sí importa (CVEs conocidos). Si algún día se distribuye el
+  binario a terceros, agregar `cargo-deny` es el paso natural siguiente.
+- [x] **Dependabot (2026-09-17).** `.github/dependabot.yml` -- `cargo` en los
+  3 crates (raíz, `desktop/src-tauri`, `mobile/rust-core`), `npm` en los 3
+  frontends (`desktop`, `web`, `web-visitas`) y `github-actions`, todos
+  semanales. Cierra el hueco real: `cargo audit`/ESLint en CI sólo protegen
+  código que se pushea, esto avisa de un CVE nuevo en una dependencia que ya
+  estaba instalada.
+- [x] **CodeQL -- SAST (2026-09-17).** `.github/workflows/codeql.yml` --
+  `javascript-typescript` en push/PR a `main` + cron semanal, cubre `web`,
+  `web-visitas` y las Edge Functions de Supabase (la superficie con más
+  exposición real a inyección/XSS). El núcleo Rust queda fuera de este
+  workflow a propósito -- clippy + `cargo-audit` ya lo cubren y el soporte
+  de CodeQL para Rust no es lo bastante maduro todavía para este flujo.
+- [x] **`zizmor` -- seguridad de los propios workflows de GitHub Actions
+  (2026-09-17).** `.github/workflows/zizmor.yml` -- ninguna de las
+  herramientas de arriba mira el YAML de CI en sí; `zizmor` busca patrones
+  de inyección de comandos vía inputs no confiables (ej. título/body de un
+  PR ejecutándose sin querer dentro de un `run:`). SARIF a la pestaña
+  Security, push/PR a `main` + cron semanal. No se pudo compilar/correr
+  localmente para probarlo antes de commitear (el `cargo install` se cortó
+  solo por límite del sandbox de esta sesión, no un problema real del
+  crate) -- usa el método oficial (`pipx run zizmor`, ubuntu-latest ya trae
+  `pipx`), verificar que el primer run en CI pase en verde.
+- [x] **`cargo-geiger` -- superficie de `unsafe` en dependencias
+  (2026-09-17).** `.github/workflows/cargo-geiger.yml` -- audita `unsafe`
+  en TODO el árbol de dependencias de los 3 crates, no sólo el código
+  propio (eso ya lo cubren `undocumented_unsafe_blocks`/
+  `multiple_unsafe_ops_per_block` en cada `Cargo.toml`). Sólo informativo
+  (no falla el job), semanal + al tocar algún `Cargo.toml`/`Cargo.lock` en
+  `main`. Mismo caveat que `zizmor`: no se pudo probar localmente (mismo
+  límite del sandbox), verificar el primer run.
 
 ## Panel web y modelo multi-sitio
 
@@ -541,9 +566,17 @@ estabilizador y clasificador.
   hay respaldos locales que importar.
 - [x] ~~Respaldo automático a la 01:00 hora Costa Rica.~~ Obsoleto -- ver arriba.
 - [x] ~~Retención automática queda en 7 respaldos.~~ Obsoleto -- ver arriba.
-- [x] ~~Respaldo previo a migraciones y rollback.~~ El respaldo GENERAL se eliminó; el
-  respaldo puntual pre-migración de esquema (distinto, más chico) sigue vivo en
-  `src/database/schema.rs` -- no verificado de nuevo en este pase, sólo se corrige la nota.
+- [x] ~~Respaldo previo a migraciones y rollback.~~ **Corrección 2026-09-17, verificado
+  contra código**: la nota anterior decía que el respaldo puntual pre-migración "sigue
+  vivo" en `src/database/schema.rs` -- es falso, no está. `grep` de `TipoRespaldo`/
+  `respaldar_antes_de_migrar` en todo `src/` no encuentra ninguna función ni struct con
+  ese nombre; sólo quedaban 3 doc-comments y una variante de error
+  (`SchemaError::RespaldoPreMigracionFallido`) que la mencionaban sin que nada la
+  construyera jamás (código muerto, invisible a clippy por ser un enum público). Limpiado
+  en la rama `qa` (ver `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto
+  "Backups"). Lo único que sí sigue vivo hoy contra corrupción de esquema es la
+  atomicidad transaccional (una migración que falla revierte sola, `PRAGMA user_version`
+  incluido) -- no hay ningún archivo de respaldo real, ni general ni pre-migración.
 - [ ] **Agregados de dominio con constructores privados diferidos a V3.** Reabrir con
   concurrencia multi-terminal -- **sigue sin hacer** (revertido de `[x]` a `[ ]`,
   2026-09-13: no hay evidencia de que este ítem específico -- reforzar invariantes de

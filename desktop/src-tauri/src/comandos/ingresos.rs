@@ -31,8 +31,8 @@ fn chequear_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Option<Strin
         state.core().actualizar_desfase_reloj(desfase_ms);
     }
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,
@@ -71,8 +71,8 @@ fn gafete_libre_en_otro_dispositivo(state: &GuiState, numero: i64) -> Result<boo
         state.core().actualizar_desfase_reloj(desfase_ms);
     }
     let contexto = nube::ContextoSincronizacion {
-        base_url: nube::BASE_URL,
-        apikey: nube::APIKEY,
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
         token: &token.access_token,
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,
