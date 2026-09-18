@@ -77,7 +77,14 @@ fn intentar_login_local(
 /// se está tratando de determinar. La identidad de la nube es del
 /// dispositivo (el secreto), no del usuario que intenta entrar, así que no
 /// hace falta una.
-fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
+///
+/// `pub` (el módulo `comandos` no es público fuera del crate, así que esto
+/// no amplía nada) -- también la llama
+/// `lib.rs::precargar_catalogo_durante_splash` para adelantar esta misma
+/// descarga a los 3 segundos del splash (ver ese doc-comment), así el
+/// reintento de acá de más abajo casi nunca tiene que esperar los
+/// `ESPERA_MAXIMA_SYNC_LOGIN` completos.
+pub fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
     let secreto = nube::credenciales::cargar_secreto()
         .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
     let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;

@@ -49,6 +49,33 @@ const ESPERA_INICIAL_SINCRONIZACION: Duration = Duration::from_secs(10);
 /// Administrador u Operador con un fallo de una función que ni les
 /// corresponde. Un error de red real tampoco se anuncia: se reintenta solo
 /// en la próxima vuelta.
+/// Adelanta la descarga del catálogo (usuarios/contratistas/empresas/gafetes)
+/// a los ~3 segundos que el splash ya se queda visible (ver
+/// `configurar_cierre_de_splash`), en vez de esperar a que se dispare desde
+/// `comandos::autenticacion::login` -- ahí sólo corre en el caso raro de
+/// "usuario reactivado en otro dispositivo, todavía marcado inactivo acá",
+/// con hasta `ESPERA_MAXIMA_SYNC_LOGIN` (5s) de espera. Si el catálogo ya
+/// está fresco por este adelanto, ese reintento en general ni hace falta.
+///
+/// Sin timeout propio a propósito: el splash cierra solo a los 3 segundos
+/// pase lo que pase (mismo criterio que el resto del arranque, nunca
+/// bloqueante), así que esto corre en paralelo y, si tarda más, sigue en
+/// segundo plano sin afectar el cierre del splash ni el login -- éste sigue
+/// teniendo su propio reintento como red de seguridad. Silencioso en el
+/// error (sin sesión ni pantalla donde mostrar nada a esta altura) --
+/// mismo criterio que `iniciar_sincronizacion_automatica`.
+fn precargar_catalogo_durante_splash(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let resultado = tauri::async_runtime::spawn_blocking(move || {
+            comandos::autenticacion::refrescar_catalogo_sin_sesion(&app.state::<GuiState>())
+        })
+        .await;
+        if let Ok(Err(error)) = resultado {
+            log::warn!("no se pudo adelantar el catálogo durante el splash: {error}");
+        }
+    });
+}
+
 fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(ESPERA_INICIAL_SINCRONIZACION).await;
@@ -430,6 +457,7 @@ pub fn run() {
         ))
         .setup(|app| {
             configurar_plugins_condicionales(app.handle())?;
+            precargar_catalogo_durante_splash(app.handle().clone());
             iniciar_sincronizacion_automatica(app.handle().clone());
             configurar_cierre_de_splash(app);
             Ok(())
