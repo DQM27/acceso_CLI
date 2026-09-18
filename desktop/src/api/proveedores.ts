@@ -36,12 +36,20 @@ export interface SolicitudIngresoProveedor {
   gafete_numero: number;
 }
 
-export function listarEmpresasProveedor(): Promise<EmpresaProveedor[]> {
-  return invoke("listar_empresas_proveedor");
+/** `soloActivos`: el núcleo filtra directamente (ver
+ * `EmpresaProveedorRepository::listar`) -- un selector de un wizard (elegir
+ * empresa para un ingreso nuevo) debe pedir `true`; la grilla de
+ * administración (activar/desactivar) pide `false` para poder ver y
+ * reactivar las inactivas. */
+export function listarEmpresasProveedor(soloActivos: boolean): Promise<EmpresaProveedor[]> {
+  return invoke("listar_empresas_proveedor", { soloActivos });
 }
 
-export function buscarEmpresasProveedor(texto: string): Promise<EmpresaProveedor[]> {
-  return invoke("buscar_empresas_proveedor", { texto });
+export function buscarEmpresasProveedor(
+  texto: string,
+  soloActivos: boolean,
+): Promise<EmpresaProveedor[]> {
+  return invoke("buscar_empresas_proveedor", { texto, soloActivos });
 }
 
 export async function crearEmpresaProveedor(nombre: string): Promise<number> {

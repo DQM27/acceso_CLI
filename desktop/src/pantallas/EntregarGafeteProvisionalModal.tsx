@@ -59,8 +59,10 @@ export default function EntregarGafeteProvisionalModal({
 
   const [encargados, setEncargados] = useState<EncargadoRuta[]>([]);
   useEffect(() => {
-    listarEncargadosRuta()
-      .then((datos) => setEncargados(datos.filter((encargado) => encargado.activo)))
+    // El núcleo filtra los desactivados (`soloActivos: true`) -- no queda
+    // del lado de la pantalla decidir eso.
+    listarEncargadosRuta(true)
+      .then(setEncargados)
       .catch(() => {});
   }, []);
 

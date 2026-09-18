@@ -26,19 +26,25 @@ impl AppCore {
     // ---- Catálogo: empresas proveedoras ----
 
     /// Sin `actor`, mismo criterio que `AppCore::listar_empresas` -- lectura,
-    /// no autoriza nada.
-    pub fn listar_empresas_proveedor(&self) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
-        SqliteEmpresaProveedorRepository::new(&self.connection).listar()
+    /// no autoriza nada. `solo_activos`: ver doc-comment de
+    /// `EmpresaProveedorRepository::listar`.
+    pub fn listar_empresas_proveedor(
+        &self,
+        solo_activos: bool,
+    ) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
+        SqliteEmpresaProveedorRepository::new(&self.connection).listar(solo_activos)
     }
 
     /// Sin `actor`, mismo criterio que `AppCore::buscar_encargados_ruta` --
     /// pensado para el selector con autocompletado del wizard de
-    /// proveedores.
+    /// proveedores. `solo_activos`: ver doc-comment de
+    /// `EmpresaProveedorRepository::listar`.
     pub fn buscar_empresas_proveedor(
         &self,
         texto: &str,
+        solo_activos: bool,
     ) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
-        SqliteEmpresaProveedorRepository::new(&self.connection).buscar(texto)
+        SqliteEmpresaProveedorRepository::new(&self.connection).buscar(texto, solo_activos)
     }
 
     pub fn crear_empresa_proveedor(
@@ -246,17 +252,24 @@ mod tests {
             .unwrap();
         assert!(
             !core
-                .listar_empresas_proveedor()
+                .listar_empresas_proveedor(false)
                 .unwrap()
                 .iter()
                 .find(|empresa| empresa.id == empresa_id)
                 .unwrap()
                 .activo
         );
+        assert!(
+            core.listar_empresas_proveedor(true)
+                .unwrap()
+                .iter()
+                .all(|empresa| empresa.id != empresa_id),
+            "la desactivada no debe aparecer al pedir sólo activas"
+        );
 
         core.activar_empresa_proveedor(&actor, empresa_id).unwrap();
         assert!(
-            core.listar_empresas_proveedor()
+            core.listar_empresas_proveedor(false)
                 .unwrap()
                 .iter()
                 .find(|empresa| empresa.id == empresa_id)
@@ -271,7 +284,7 @@ mod tests {
 
         core.crear_empresa_proveedor(&actor, "Dos Pinos").unwrap();
 
-        let resultados = core.buscar_empresas_proveedor("dos pinos").unwrap();
+        let resultados = core.buscar_empresas_proveedor("dos pinos", false).unwrap();
         assert_eq!(resultados.len(), 1);
         assert_eq!(resultados[0].nombre, "Dos Pinos");
     }

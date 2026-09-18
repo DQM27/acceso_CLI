@@ -14,14 +14,17 @@ use crate::estado::GuiState;
 // ---- Catálogo: vehículos ----
 
 #[tauri::command]
-pub fn listar_vehiculos_ruta(state: tauri::State<GuiState>) -> Result<Vec<VehiculoRuta>, String> {
+pub fn listar_vehiculos_ruta(
+    solo_activos: bool,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<VehiculoRuta>, String> {
     state.sesion_activa()?;
     // Sin `mensaje_*` propio a propósito, mismo criterio que
     // `listar_visitas_activas`: es una lectura simple que devuelve
     // `DatabaseError` directo, no un `*ServiceError` de negocio.
     state
         .core()
-        .listar_vehiculos_ruta()
+        .listar_vehiculos_ruta(solo_activos)
         .map_err(|_| "No se pudo cargar la lista de vehículos".to_string())
 }
 
@@ -53,11 +56,14 @@ pub fn actualizar_vehiculo_ruta(
 // ---- Catálogo: encargados (personal KOF) ----
 
 #[tauri::command]
-pub fn listar_encargados_ruta(state: tauri::State<GuiState>) -> Result<Vec<EncargadoRuta>, String> {
+pub fn listar_encargados_ruta(
+    solo_activos: bool,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<EncargadoRuta>, String> {
     state.sesion_activa()?;
     state
         .core()
-        .listar_encargados_ruta()
+        .listar_encargados_ruta(solo_activos)
         .map_err(|_| "No se pudo cargar la lista de encargados".to_string())
 }
 
@@ -89,11 +95,14 @@ pub fn actualizar_encargado_ruta(
 // ---- Catálogo: números de ruta ----
 
 #[tauri::command]
-pub fn listar_rutas(state: tauri::State<GuiState>) -> Result<Vec<Ruta>, String> {
+pub fn listar_rutas(
+    solo_activos: bool,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<Ruta>, String> {
     state.sesion_activa()?;
     state
         .core()
-        .listar_rutas()
+        .listar_rutas(solo_activos)
         .map_err(|_| "No se pudo cargar la lista de rutas".to_string())
 }
 

@@ -69,12 +69,15 @@ export default function Empresas() {
   const recargar = useCallback(
     (estaVigente: () => boolean = () => true) => {
       setCargando(true);
+      // Administración: pide `false` para ver y poder reactivar las
+      // inactivas (a diferencia de los selectores de un wizard, que piden
+      // `true`).
       const promesa =
         tipo === "contratista"
           ? buscarEmpresas({ texto: texto || undefined }).then((datos) => {
               if (estaVigente()) setFilasContratista(datos);
             })
-          : buscarEmpresasProveedor(texto).then((datos) => {
+          : buscarEmpresasProveedor(texto, false).then((datos) => {
               if (estaVigente()) setFilasProveedor(datos);
             });
       return promesa.finally(() => {

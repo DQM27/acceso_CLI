@@ -17,7 +17,11 @@ pub trait EncargadoRutaRepository {
 
     fn actualizar(&self, encargado: &EncargadoRuta) -> Result<(), DatabaseError>;
 
-    fn listar(&self) -> Result<Vec<EncargadoRuta>, DatabaseError>;
+    /// `solo_activos`: mismo criterio que
+    /// `EmpresaProveedorRepository::listar` -- los selectores de un wizard
+    /// piden `true` (un encargado desactivado no es una opción válida para
+    /// una salida nueva), la pantalla de administración pide `false`.
+    fn listar(&self, solo_activos: bool) -> Result<Vec<EncargadoRuta>, DatabaseError>;
 
     /// Por nombre o código de empleado -- pedido explícito del usuario,
     /// 2026-09-15, mismo criterio que el buscador de contratistas ("busca
@@ -26,8 +30,9 @@ pub trait EncargadoRutaRepository {
     /// necesita paginar ni combinar filtros, sólo un texto corto. `PLEGAR`
     /// (función SQL registrada en `database::schema`) ignora
     /// mayúsculas/diacríticos en el nombre; el código de empleado es
-    /// siempre numérico, alcanza con `LIKE` simple.
-    fn buscar(&self, texto: &str) -> Result<Vec<EncargadoRuta>, DatabaseError>;
+    /// siempre numérico, alcanza con `LIKE` simple. Mismo `solo_activos`
+    /// que `listar`.
+    fn buscar(&self, texto: &str, solo_activos: bool) -> Result<Vec<EncargadoRuta>, DatabaseError>;
 }
 
 pub struct SqliteEncargadoRutaRepository<'a> {
@@ -139,21 +144,28 @@ impl EncargadoRutaRepository for SqliteEncargadoRutaRepository<'_> {
         self.encolar_actualizacion(encargado.id)
     }
 
-    fn listar(&self) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+    fn listar(&self, solo_activos: bool) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        let filtro_activo = if solo_activos { "WHERE activo = 1" } else { "" };
         let mut statement = self
             .connection
-            .prepare(&format!("{SELECT_ENCARGADO} ORDER BY nombre"))?;
+            .prepare(&format!("{SELECT_ENCARGADO} {filtro_activo} ORDER BY nombre"))?;
         let encargados = statement
             .query_map([], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(encargados)
     }
 
-    fn buscar(&self, texto: &str) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+    fn buscar(
+        &self,
+        texto: &str,
+        solo_activos: bool,
+    ) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        let filtro_activo = if solo_activos { "AND activo = 1" } else { "" };
         let mut statement = self.connection.prepare(&format!(
             "{SELECT_ENCARGADO}
-             WHERE PLEGAR(nombre) LIKE '%' || PLEGAR(?1) || '%'
-                OR codigo_empleado LIKE '%' || ?1 || '%'
+             WHERE (PLEGAR(nombre) LIKE '%' || PLEGAR(?1) || '%'
+                OR codigo_empleado LIKE '%' || ?1 || '%')
+             {filtro_activo}
              ORDER BY nombre
              LIMIT {LIMITE_BUSQUEDA}"
         ))?;
@@ -218,7 +230,7 @@ mod tests {
         repo.crear(&nuevo("5040017", "Michael Araya Retana"))
             .unwrap();
 
-        let resultados = repo.buscar("araya").unwrap();
+        let resultados = repo.buscar("araya", false).unwrap();
 
         assert_eq!(resultados.len(), 1);
         assert_eq!(resultados[0].nombre, "Michael Araya Retana");
@@ -232,7 +244,7 @@ mod tests {
             .unwrap();
         repo.crear(&nuevo("77851", "Ramon Rodriguez")).unwrap();
 
-        let resultados = repo.buscar("5040").unwrap();
+        let resultados = repo.buscar("5040", false).unwrap();
 
         assert_eq!(resultados.len(), 1);
         assert_eq!(resultados[0].codigo_empleado, "5040017");
@@ -245,7 +257,22 @@ mod tests {
         repo.crear(&nuevo("5040017", "Michael Araya Retana"))
             .unwrap();
 
-        assert!(repo.buscar("no existe nadie asi").unwrap().is_empty());
+        assert!(repo.buscar("no existe nadie asi", false).unwrap().is_empty());
+    }
+
+    #[test]
+    fn buscar_solo_activos_omite_los_desactivados() {
+        let connection = conexion();
+        let repo = SqliteEncargadoRutaRepository::new(&connection);
+        let id = repo
+            .crear(&nuevo("5040017", "Michael Araya Retana"))
+            .unwrap();
+        let mut encargado = repo.buscar_por_id(id).unwrap().unwrap();
+        encargado.activo = false;
+        repo.actualizar(&encargado).unwrap();
+
+        assert!(repo.buscar("araya", true).unwrap().is_empty());
+        assert_eq!(repo.buscar("araya", false).unwrap().len(), 1);
     }
 
     #[test]
@@ -261,5 +288,20 @@ mod tests {
         repo.actualizar(&encargado).unwrap();
 
         assert!(!repo.buscar_por_id(id).unwrap().unwrap().activo);
+    }
+
+    #[test]
+    fn listar_solo_activos_omite_los_desactivados() {
+        let connection = conexion();
+        let repo = SqliteEncargadoRutaRepository::new(&connection);
+        repo.crear(&nuevo("5040017", "Michael Araya Retana"))
+            .unwrap();
+        let id = repo.crear(&nuevo("77851", "Ramon Rodriguez")).unwrap();
+        let mut encargado = repo.buscar_por_id(id).unwrap().unwrap();
+        encargado.activo = false;
+        repo.actualizar(&encargado).unwrap();
+
+        assert_eq!(repo.listar(true).unwrap().len(), 1);
+        assert_eq!(repo.listar(false).unwrap().len(), 2);
     }
 }

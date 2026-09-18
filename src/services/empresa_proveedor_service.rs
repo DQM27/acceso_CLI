@@ -62,15 +62,19 @@ where
         Ok(self.empresas.establecer_activo(id, false)?)
     }
 
-    pub fn listar(&self) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
-        Ok(self.empresas.listar()?)
+    pub fn listar(
+        &self,
+        solo_activos: bool,
+    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+        Ok(self.empresas.listar(solo_activos)?)
     }
 
     pub fn buscar(
         &self,
         texto: &str,
+        solo_activos: bool,
     ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
-        Ok(self.empresas.buscar(texto)?)
+        Ok(self.empresas.buscar(texto, solo_activos)?)
     }
 }
 
@@ -140,6 +144,25 @@ mod tests {
         servicio.crear("Maika").unwrap();
 
         let error = servicio.crear("Maika").unwrap_err();
+
+        assert!(matches!(
+            error,
+            EmpresaProveedorServiceError::NombreDuplicado
+        ));
+    }
+
+    /// Hallazgo del usuario, 2026-09-18: `UNIQUE(nombre)` sólo bloqueaba un
+    /// choque exacto -- "Dos Pinos" y "DOS PINOS" se colaban como dos
+    /// empresas distintas. El índice único sobre `PLEGAR(nombre)`
+    /// (`MIGRACION_47`) cierra ese hueco.
+    #[test]
+    fn crear_con_nombre_duplicado_ignorando_mayusculas_y_diacriticos_falla() {
+        let connection = conexion();
+        let repo = SqliteEmpresaProveedorRepository::new(&connection);
+        let servicio = EmpresaProveedorService::new(&repo);
+        servicio.crear("Dos Pinos").unwrap();
+
+        let error = servicio.crear("DOS PIÑOS").unwrap_err();
 
         assert!(matches!(
             error,

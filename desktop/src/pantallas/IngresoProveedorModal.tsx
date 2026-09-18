@@ -68,8 +68,10 @@ export default function IngresoProveedorModal({
 
   const [empresas, setEmpresas] = useState<EmpresaProveedor[]>([]);
   useEffect(() => {
-    listarEmpresasProveedor()
-      .then((datos) => setEmpresas(datos.filter((empresa) => empresa.activo)))
+    // El núcleo filtra las inactivas (`soloActivos: true`) -- no queda del
+    // lado de la pantalla decidir eso.
+    listarEmpresasProveedor(true)
+      .then(setEmpresas)
       .catch(() => {});
   }, []);
 

@@ -140,13 +140,14 @@ export default function SalidaRutaModal({
 
   const [vehiculos, setVehiculos] = useState<VehiculoRuta[]>([]);
   const [encargados, setEncargados] = useState<EncargadoRuta[]>([]);
-  const [rutas, setRutas] = useState<Ruta[]>([]);
+  const [rutasActivas, setRutasActivas] = useState<Ruta[]>([]);
   useEffect(() => {
-    listarVehiculosRuta().then(setVehiculos).catch(() => {});
-    listarEncargadosRuta().then(setEncargados).catch(() => {});
-    listarRutas().then(setRutas).catch(() => {});
+    // El núcleo filtra los desactivados/dadas de baja (`soloActivos: true`)
+    // -- no queda del lado de la pantalla decidir eso.
+    listarVehiculosRuta(true).then(setVehiculos).catch(() => {});
+    listarEncargadosRuta(true).then(setEncargados).catch(() => {});
+    listarRutas(true).then(setRutasActivas).catch(() => {});
   }, []);
-  const rutasActivas = useMemo(() => rutas.filter((r) => r.activo), [rutas]);
 
   const placaTexto = watch("vehiculo_placa");
   const numeroUnidad = watch("vehiculo_numero_unidad");

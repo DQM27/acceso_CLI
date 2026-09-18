@@ -1560,7 +1560,10 @@ impl Nucleo {
     pub fn buscar_encargados_ruta(&self, texto: String) -> Result<Vec<EncargadoRuta>, NucleoError> {
         Ok(self
             .core_lock()
-            .buscar_encargados_ruta(texto.trim())
+            // `true`: es un selector (checklist de rutas/gafete provisional)
+            // -- un encargado desactivado no es una opción válida (mismo
+            // criterio que `EmpresaProveedorRepository::listar`).
+            .buscar_encargados_ruta(texto.trim(), true)
             .map_err(|origen| NucleoError::Interno {
                 mensaje: interno(origen),
             })?
@@ -1577,7 +1580,10 @@ impl Nucleo {
     pub fn buscar_rutas(&self, texto: String) -> Result<Vec<Ruta>, NucleoError> {
         Ok(self
             .core_lock()
-            .buscar_rutas(texto.trim())
+            // `true`: es un selector -- una ruta dada de baja no es una
+            // opción válida para una salida nueva (mismo criterio que
+            // `EmpresaProveedorRepository::listar`).
+            .buscar_rutas(texto.trim(), true)
             .map_err(|origen| NucleoError::Interno {
                 mensaje: interno(origen),
             })?
@@ -1690,7 +1696,12 @@ impl Nucleo {
     ) -> Result<Vec<EmpresaProveedor>, NucleoError> {
         Ok(self
             .core_lock()
-            .buscar_empresas_proveedor(texto.trim())
+            // `true`: es el selector del wizard de proveedores -- una
+            // empresa desactivada no es una opción válida para un ingreso
+            // nuevo. Este era justo el bug reportado: el filtro faltaba acá
+            // y en Kotlin, así que el buscador seguía mostrando empresas
+            // desactivadas.
+            .buscar_empresas_proveedor(texto.trim(), true)
             .map_err(|origen| NucleoError::Interno {
                 mensaje: interno(origen),
             })?

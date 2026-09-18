@@ -288,8 +288,11 @@ impl<'a, R: RutaRepository + ?Sized> RutaCatalogoService<'a, R> {
         Ok(self.rutas.actualizar(&ruta)?)
     }
 
-    pub fn listar(&self) -> Result<Vec<crate::models::ruta::Ruta>, RutaCatalogoServiceError> {
-        Ok(self.rutas.listar()?)
+    pub fn listar(
+        &self,
+        solo_activos: bool,
+    ) -> Result<Vec<crate::models::ruta::Ruta>, RutaCatalogoServiceError> {
+        Ok(self.rutas.listar(solo_activos)?)
     }
 }
 

@@ -54,7 +54,10 @@ pub fn buscar_encargados_ruta_provisional(
     state.sesion_activa()?;
     state
         .core()
-        .buscar_encargados_ruta(&texto)
+        // `true`: es un selector para prestar un gafete -- un encargado
+        // desactivado no es una opción válida (mismo criterio que
+        // `EmpresaProveedorRepository::listar`).
+        .buscar_encargados_ruta(&texto, true)
         .map_err(|_| "No se pudo buscar en el catálogo de encargados".to_string())
 }
 

@@ -37,9 +37,13 @@ impl AppCore {
     // ---- Catálogo: vehículos ----
 
     /// Sin `actor`, mismo criterio que `AppCore::listar_empresas`: es una
-    /// lectura, no una operación que autorizar.
-    pub fn listar_vehiculos_ruta(&self) -> Result<Vec<VehiculoRuta>, DatabaseError> {
-        SqliteVehiculoRutaRepository::new(&self.connection).listar()
+    /// lectura, no una operación que autorizar. `solo_activos`: ver
+    /// doc-comment de `EmpresaProveedorRepository::listar`.
+    pub fn listar_vehiculos_ruta(
+        &self,
+        solo_activos: bool,
+    ) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        SqliteVehiculoRutaRepository::new(&self.connection).listar(solo_activos)
     }
 
     pub fn crear_vehiculo_ruta(
@@ -81,15 +85,24 @@ impl AppCore {
 
     // ---- Catálogo: encargados (personal KOF) ----
 
-    pub fn listar_encargados_ruta(&self) -> Result<Vec<EncargadoRuta>, DatabaseError> {
-        SqliteEncargadoRutaRepository::new(&self.connection).listar()
+    /// `solo_activos`: ver doc-comment de `EmpresaProveedorRepository::listar`.
+    pub fn listar_encargados_ruta(
+        &self,
+        solo_activos: bool,
+    ) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        SqliteEncargadoRutaRepository::new(&self.connection).listar(solo_activos)
     }
 
     /// Sin `actor`, mismo criterio que `listar_encargados_ruta` -- lectura,
     /// no autoriza nada. Pensado para el buscador del checklist mobile
     /// (nombre o código de empleado), ver el doc-comment del trait.
-    pub fn buscar_encargados_ruta(&self, texto: &str) -> Result<Vec<EncargadoRuta>, DatabaseError> {
-        SqliteEncargadoRutaRepository::new(&self.connection).buscar(texto)
+    /// `solo_activos`: ver doc-comment de `EmpresaProveedorRepository::listar`.
+    pub fn buscar_encargados_ruta(
+        &self,
+        texto: &str,
+        solo_activos: bool,
+    ) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        SqliteEncargadoRutaRepository::new(&self.connection).buscar(texto, solo_activos)
     }
 
     pub fn crear_encargado_ruta(
@@ -131,14 +144,16 @@ impl AppCore {
 
     // ---- Catálogo: números de ruta (bloqueante, ver ruta_service.rs) ----
 
-    pub fn listar_rutas(&self) -> Result<Vec<Ruta>, DatabaseError> {
-        SqliteRutaRepository::new(&self.connection).listar()
+    /// `solo_activos`: ver doc-comment de `EmpresaProveedorRepository::listar`.
+    pub fn listar_rutas(&self, solo_activos: bool) -> Result<Vec<Ruta>, DatabaseError> {
+        SqliteRutaRepository::new(&self.connection).listar(solo_activos)
     }
 
     /// Sin `actor`, mismo criterio que `listar_rutas` -- lectura. Pensado
-    /// para el buscador del checklist mobile (número parcial).
-    pub fn buscar_rutas(&self, texto: &str) -> Result<Vec<Ruta>, DatabaseError> {
-        SqliteRutaRepository::new(&self.connection).buscar(texto)
+    /// para el buscador del checklist mobile (número parcial). `solo_activos`:
+    /// ver doc-comment de `EmpresaProveedorRepository::listar`.
+    pub fn buscar_rutas(&self, texto: &str, solo_activos: bool) -> Result<Vec<Ruta>, DatabaseError> {
+        SqliteRutaRepository::new(&self.connection).buscar(texto, solo_activos)
     }
 
     pub fn crear_ruta(
@@ -444,7 +459,7 @@ mod tests {
         )
         .unwrap();
 
-        let vehiculos = core.listar_vehiculos_ruta().unwrap();
+        let vehiculos = core.listar_vehiculos_ruta(false).unwrap();
         assert_eq!(vehiculos.len(), 1);
         assert_eq!(vehiculos[0].placa, "C12345");
     }
@@ -465,7 +480,7 @@ mod tests {
         )
         .unwrap();
 
-        let encargados = core.listar_encargados_ruta().unwrap();
+        let encargados = core.listar_encargados_ruta(false).unwrap();
         assert_eq!(encargados.len(), 1);
         assert_eq!(encargados[0].codigo_empleado, "5040017");
     }
@@ -485,9 +500,9 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(core.buscar_encargados_ruta("araya").unwrap().len(), 1);
-        assert_eq!(core.buscar_encargados_ruta("5040").unwrap().len(), 1);
-        assert!(core.buscar_encargados_ruta("nadie").unwrap().is_empty());
+        assert_eq!(core.buscar_encargados_ruta("araya", false).unwrap().len(), 1);
+        assert_eq!(core.buscar_encargados_ruta("5040", false).unwrap().len(), 1);
+        assert!(core.buscar_encargados_ruta("nadie", false).unwrap().is_empty());
     }
 
     #[test]
@@ -495,8 +510,8 @@ mod tests {
         let (core, _actor) = nucleo_con_usuario();
 
         // La 79 ya existe (fixture).
-        assert_eq!(core.buscar_rutas("79").unwrap().len(), 1);
-        assert!(core.buscar_rutas("222").unwrap().is_empty());
+        assert_eq!(core.buscar_rutas("79", false).unwrap().len(), 1);
+        assert!(core.buscar_rutas("222", false).unwrap().is_empty());
     }
 
     #[test]
@@ -526,7 +541,7 @@ mod tests {
 
         core.crear_ruta(&actor, 120).unwrap();
 
-        let rutas = core.listar_rutas().unwrap();
+        let rutas = core.listar_rutas(false).unwrap();
         assert_eq!(rutas.len(), 2, "79 (del fixture) + 120");
         assert!(rutas.iter().any(|r| r.numero == 120));
     }
@@ -545,7 +560,7 @@ mod tests {
         let error = core.crear_rutas_rango(&actor, 78, 80).unwrap_err();
 
         assert!(matches!(error, RutaCatalogoServiceError::NumeroDuplicado));
-        let rutas = core.listar_rutas().unwrap();
+        let rutas = core.listar_rutas(false).unwrap();
         assert_eq!(
             rutas.iter().map(|r| r.numero).collect::<Vec<_>>(),
             vec![79],
@@ -560,14 +575,14 @@ mod tests {
         let ids = core.crear_rutas_rango(&actor, 100, 102).unwrap();
 
         assert_eq!(ids.len(), 3);
-        assert_eq!(core.listar_rutas().unwrap().len(), 4, "79 (fixture) + 3");
+        assert_eq!(core.listar_rutas(false).unwrap().len(), 4, "79 (fixture) + 3");
     }
 
     #[test]
     fn dar_de_baja_y_reactivar_ruta_redondean_el_viaje() {
         let (core, actor) = nucleo_con_usuario();
         let ruta_id = core
-            .listar_rutas()
+            .listar_rutas(false)
             .unwrap()
             .into_iter()
             .find(|r| r.numero == 79)
@@ -575,10 +590,10 @@ mod tests {
             .id;
 
         core.dar_de_baja_ruta(&actor, ruta_id).unwrap();
-        assert!(!core.listar_rutas().unwrap()[0].activo);
+        assert!(!core.listar_rutas(false).unwrap()[0].activo);
 
         core.reactivar_ruta(&actor, ruta_id).unwrap();
-        assert!(core.listar_rutas().unwrap()[0].activo);
+        assert!(core.listar_rutas(false).unwrap()[0].activo);
     }
 
     #[test]
@@ -586,7 +601,7 @@ mod tests {
         let (core, actor) = nucleo_con_usuario();
         core.registrar_salida_ruta(&actor, solicitud("C12345", "700101452"))
             .unwrap();
-        let ruta_id = core.listar_rutas().unwrap()[0].id;
+        let ruta_id = core.listar_rutas(false).unwrap()[0].id;
 
         let error = core.dar_de_baja_ruta(&actor, ruta_id).unwrap_err();
 
