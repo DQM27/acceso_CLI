@@ -138,16 +138,12 @@ fn mostrar_error_fatal_y_salir(mensaje: &str) -> ! {
 
     #[cfg(windows)]
     {
-        use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
-        use windows::core::HSTRING;
-        let texto = HSTRING::from(mensaje);
-        let titulo = HSTRING::from("Control de Acceso — Error al iniciar");
-        // SAFETY: `texto`/`titulo` son `HSTRING` válidas y viven hasta el
-        // final de este bloque; `None` como `hwnd` es válido según la
-        // documentación de `MessageBoxW` (sin ventana padre).
-        unsafe {
-            MessageBoxW(None, &texto, &titulo, MB_OK | MB_ICONERROR);
-        }
+        rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title("Control de Acceso — Error al iniciar")
+            .set_description(mensaje)
+            .set_buttons(rfd::MessageButtons::Ok)
+            .show();
     }
     #[cfg(not(windows))]
     {
@@ -190,26 +186,23 @@ fn intentar_abrir_nucleo(
 /// en el log/Sentry (`abrir_nucleo_con_recuperacion`).
 #[cfg(windows)]
 fn confirmar_reconstruccion_desde_nube() -> bool {
-    use windows::Win32::UI::WindowsAndMessaging::{IDYES, MB_ICONWARNING, MB_YESNO, MessageBoxW};
-    use windows::core::HSTRING;
-
-    let texto = HSTRING::from(
-        "No se pudo abrir la base de datos local de este sitio (posible corrupción).\n\n\
-         ¿Reconstruirla desde la nube?\n\n\
-         Se va a perder, de forma permanente, el historial de auditoría y de \
-         incidentes de gafetes de ESTE dispositivo, y cualquier operación \
-         reciente que todavía no se hubiera subido. Todo lo demás \
-         (contratistas, ingresos, gafetes, rutas, préstamos, etc.) se vuelve \
-         a bajar solo, sin pasos adicionales.\n\n\
-         Se guarda una copia del archivo dañado por si se puede rescatar más \
-         adelante.",
-    );
-    let titulo = HSTRING::from("Control de Acceso — Base de datos dañada");
-    // SAFETY: mismo criterio que `mostrar_error_fatal_y_salir` -- `HSTRING`
-    // válidas y vivas hasta el final del bloque; `None` como `hwnd` es
-    // válido sin ventana padre.
-    let resultado = unsafe { MessageBoxW(None, &texto, &titulo, MB_YESNO | MB_ICONWARNING) };
-    resultado == IDYES
+    let resultado = rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Warning)
+        .set_title("Control de Acceso — Base de datos dañada")
+        .set_description(
+            "No se pudo abrir la base de datos local de este sitio (posible corrupción).\n\n\
+             ¿Reconstruirla desde la nube?\n\n\
+             Se va a perder, de forma permanente, el historial de auditoría y de \
+             incidentes de gafetes de ESTE dispositivo, y cualquier operación \
+             reciente que todavía no se hubiera subido. Todo lo demás \
+             (contratistas, ingresos, gafetes, rutas, préstamos, etc.) se vuelve \
+             a bajar solo, sin pasos adicionales.\n\n\
+             Se guarda una copia del archivo dañado por si se puede rescatar más \
+             adelante.",
+        )
+        .set_buttons(rfd::MessageButtons::YesNo)
+        .show();
+    resultado == rfd::MessageDialogResult::Yes
 }
 
 /// En cualquier plataforma sin este diálogo (no debería alcanzarse -- la
