@@ -28,11 +28,18 @@ jobs:
       - name: Instalar toolchain de Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-18)
 
+      # lookup-only: true -- este workflow SOLO corre para publicar un
+      # release real (push de tag o dispatch manual con ese fin), nunca
+      # para un PR de afuera -- restaurar una cache desde una corrida
+      # anterior acá es justo el escenario de "cache poisoning" que marca
+      # zizmor. Se prioriza esa garantía sobre la velocidad de build, que
+      # en un release (poco frecuente) no importa.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: |
             desktop/src-tauri
             sqlite3mc-vendor-lib
+          lookup-only: true
 
       # cifrado-sqlite3mc (default de desktop/src-tauri desde 2026-09-12, ver
       # docs/decisiones-tecnicas.md) enlaza esta librería estática como paso
@@ -43,12 +50,13 @@ jobs:
       - name: Compilar SQLite3MC vendorizado (paso previo obligatorio)
         run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
 
+      # Sin `cache: npm` a propósito -- mismo motivo que el lookup-only de
+      # arriba (release real, no aceptar estado cacheado de una corrida
+      # anterior).
       - name: Instalar Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
 
       - name: Instalar dependencias del frontend
         working-directory: desktop
@@ -123,9 +131,12 @@ jobs:
         with:
           targets: aarch64-linux-android,x86_64-linux-android
 
+      # lookup-only: true -- mismo motivo que en el job de escritorio de
+      # arriba.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: mobile/rust-core
+          lookup-only: true
 
       - name: Instalar NDK
         id: ndk
