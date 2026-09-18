@@ -54,6 +54,7 @@ import {
   buscarActualizacion,
   cerrarSesion,
   instalarActualizacion,
+  mostrarVentanaPrincipal,
   requiereConfiguracionInicial,
   sincronizarConNube,
 } from "./api";
@@ -169,6 +170,14 @@ export default function App() {
         // comando `login` lo va a reportar con su propio mensaje de error.
         console.error(error);
         setPantalla({ tipo: "login" });
+      })
+      .finally(() => {
+        // Recién acá hay algo real que mostrar -- antes la ventana
+        // principal quedaba visible desde el arranque con el interior en
+        // blanco mientras el WebView cargaba. El splash (ventana aparte,
+        // HTML estático sin bundle de JS) se ve casi al instante y tapa
+        // ese hueco.
+        mostrarVentanaPrincipal().catch(console.error);
       });
   }, []);
 

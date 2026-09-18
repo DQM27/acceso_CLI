@@ -11,9 +11,10 @@ import { configurarDispositivoInicial } from "../api";
  * ellos cae solo en "fijar contraseña" -- ya existente, no hay nada nuevo
  * que construir ahí.
  *
- * Reemplaza al mensaje fijo de "usá --reset-root/--cli" -- ese camino
- * sigue existiendo como rescate para un sitio que de verdad quiera operar
- * sin nube nunca, pero ya no es el único.
+ * Reemplaza al mensaje fijo de "usá --reset-root/--cli" -- ese binario
+ * de consola ya no existe en `main` (queda preservado sólo en la rama
+ * `no-borrar-cli-tui`), así que este flujo pegando el secreto del panel
+ * es hoy la única forma de arrancar un dispositivo nuevo.
  */
 export default function PrimerArranque({ onListo }: { onListo: () => void }) {
   const [secreto, setSecreto] = useState("");
@@ -73,11 +74,6 @@ export default function PrimerArranque({ onListo }: { onListo: () => void }) {
         <button type="submit" className="boton boton-primario" disabled={enviando || !secreto.trim()}>
           {enviando ? "Conectando…" : "Conectar y sincronizar"}
         </button>
-
-        <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.78rem" }}>
-          Sin nube todavía disponible para esta unidad operativa? Creá el usuario ROOT desde la consola
-          (<code>--tui-clasica</code> o <code>--cli</code>) y volvé a abrir esta ventana.
-        </p>
       </form>
     </div>
   );

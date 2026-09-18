@@ -264,6 +264,24 @@ fn abrir_nucleo_con_recuperacion(
     }
 }
 
+/// Cierra la ventana de splash y muestra la ventana principal -- invocado
+/// desde `App.tsx` una vez que React resolvió `requiereConfiguracionInicial`
+/// (o sea, cuando ya hay algo real para mostrar). Sin esto, la ventana
+/// principal (visible desde el arranque) se veía en blanco mientras el
+/// `WebView` terminaba de cargar/arrancar React -- el splash es HTML estático
+/// sin bundle de JS, aparece casi al instante (reportado 2026-09-18).
+#[tauri::command]
+fn mostrar_ventana_principal(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(splash) = app.get_webview_window("splashscreen") {
+        let _ = splash.close();
+    }
+    if let Some(principal) = app.get_webview_window("main") {
+        principal.show().map_err(|error| error.to_string())?;
+        principal.set_focus().map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 /// Resuelve ruta/candado de instancia/clave de cifrado y abre `AppCore` --
 /// separado de `run()` únicamente para mantenerla bajo el tope de líneas de
 /// Clippy (`too_many_lines`); sin lógica propia, es el mismo arranque que
@@ -458,6 +476,7 @@ pub fn run() {
             comandos::nube::listar_prestamos_gafete_provisional_remotos,
             comandos::nube::cerrar_prestamo_gafete_provisional_remoto,
             comandos::nube::fallos_permanentes_nube,
+            mostrar_ventana_principal,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -35,6 +35,14 @@ export function requiereConfiguracionInicial(): Promise<boolean> {
   return invoke("requiere_configuracion_inicial");
 }
 
+/// Cierra la ventana de splash (HTML estático, sin bundle de JS) y muestra
+/// la principal -- se llama una sola vez, apenas `App.tsx` sabe qué pantalla
+/// mostrar (ver ese archivo). No es un comando de dominio (no toca
+/// `AppCore`), vive suelto en `lib.rs` del lado Rust.
+export function mostrarVentanaPrincipal(): Promise<void> {
+  return invoke("mostrar_ventana_principal");
+}
+
 export function login(cedula: string, password: string): Promise<ResultadoLogin> {
   return invoke("login", { cedula, password });
 }

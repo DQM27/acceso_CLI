@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Lattis</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+      }
+
+      .tarjeta {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        padding: 2rem;
+        border-radius: 20px;
+        background: #ffffff;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      img {
+        width: 88px;
+        height: 88px;
+        border-radius: 18px;
+        object-fit: cover;
+      }
+
+      .anillo {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 3px solid #d9dee3;
+        border-top-color: #0b7eb0;
+        animation: girar 0.8s linear infinite;
+      }
+
+      @keyframes girar {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="tarjeta">
+      <img src="/lattis-splash.png" alt="Lattis" />
+      <div class="anillo" aria-hidden="true"></div>
+    </div>
+  </body>
+</html>
