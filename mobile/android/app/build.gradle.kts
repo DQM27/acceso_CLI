@@ -26,8 +26,8 @@ android {
         // y x86_64 (emulador de desarrollo).
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.2.0"
+        versionCode = 13
+        versionName = "1.2.1"
 
         // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
         // el default acá es "development" (debug); `release {}` abajo lo
