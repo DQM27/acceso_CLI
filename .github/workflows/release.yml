@@ -50,13 +50,14 @@ jobs:
       - name: Compilar SQLite3MC vendorizado (paso previo obligatorio)
         run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
 
-      # Sin `cache: npm` a propósito -- mismo motivo que el lookup-only de
+      # package-manager-cache: false -- mismo motivo que el lookup-only de
       # arriba (release real, no aceptar estado cacheado de una corrida
       # anterior).
       - name: Instalar Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
+          package-manager-cache: false
 
       - name: Instalar dependencias del frontend
         working-directory: desktop
