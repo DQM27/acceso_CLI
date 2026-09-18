@@ -153,3 +153,37 @@ impl EmpresaRepository for SqliteEmpresaRepository<'_> {
         Ok(empresas)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::schema::initialize_database;
+
+    fn conexion() -> Connection {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+    }
+
+    fn nueva(nombre: &str) -> Empresa {
+        Empresa {
+            id: 0,
+            nombre: nombre.to_string(),
+            activo: true,
+        }
+    }
+
+    /// Hallazgo del usuario, 2026-09-18: `UNIQUE(nombre)` sólo bloqueaba un
+    /// choque exacto -- "Dos Pinos" y "DOS PINOS" se colaban como dos
+    /// empresas distintas. El índice único sobre `PLEGAR(nombre)`
+    /// (`MIGRACION_47`) cierra ese hueco.
+    #[test]
+    fn nombre_duplicado_ignorando_mayusculas_y_diacriticos_viola_unique() {
+        let connection = conexion();
+        let repo = SqliteEmpresaRepository::new(&connection);
+        repo.crear(&nueva("Dos Pinos")).unwrap();
+
+        let error = repo.crear(&nueva("DOS PIÑOS")).unwrap_err();
+        assert!(error.es_constraint_unique());
+    }
+}

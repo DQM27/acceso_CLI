@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 46;
+pub const SCHEMA_VERSION: i64 = 47;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -381,6 +381,11 @@ fn aplicar_migraciones_posteriores_a_29(
         *version = 46;
     }
 
+    if *version == 46 {
+        aplicar_migracion_47(connection)?;
+        *version = 47;
+    }
+
     Ok(())
 }
 
@@ -745,6 +750,26 @@ fn ejecutar_migracion_46(connection: &Connection) -> Result<(), SchemaError> {
     Ok(())
 }
 
+/// `UNIQUE(nombre)` en `empresas`/`empresas_proveedor` sólo bloqueaba un
+/// choque exacto -- "Dos Pinos" y "DOS PINOS" se colaban como dos empresas
+/// distintas (hallazgo del usuario, 2026-09-18). Un índice único sobre
+/// `PLEGAR(nombre)` (misma función que ya usan los buscadores, ver
+/// `registrar_funcion_plegar`) cierra el hueco sin tocar el valor guardado
+/// -- el nombre se sigue mostrando tal como se escribió, sólo la
+/// comparación de unicidad ignora mayúsculas y diacríticos. Sin recrear
+/// tablas: un índice nuevo no necesita el patrón `_nueva`/copiar/`DROP` de
+/// otras migraciones. Si alguna instalación ya tuviera dos nombres que sólo
+/// difieren en mayúsculas/tildes, esta migración falla a propósito en vez
+/// de elegir en silencio cuál de las dos filas "gana" -- un caso así
+/// necesita revisión manual, no una regla automática.
+fn aplicar_migracion_47(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_47)?;
+    transaction.execute_batch("PRAGMA user_version = 47")?;
+    transaction.commit()?;
+    Ok(())
+}
+
 /// Rechaza un archivo ajeno o corrupto antes de cualquier otra operación —
 /// se corre antes de tocar el esquema, para no terminar migrando (o
 /// mostrando como propio) un archivo que ni siquiera es nuestro.
@@ -794,12 +819,23 @@ fn adoptar_application_id(connection: &Connection) -> Result<(), SchemaError> {
 /// columnas opcionales como `usuario_salida_nombre`, donde antes
 /// `LIKE ... COLLATE NOCASE` excluía la fila sin error al comparar contra
 /// `NULL` y `PLEGAR(NULL)` sin este manejo rompía la consulta entera.
+///
+/// `SQLITE_INNOCUOUS` (desde `MIGRACION_47`): con `PRAGMA trusted_schema =
+/// OFF` (ver `fijar_pragmas_iniciales`), `SQLite` rechaza cualquier función
+/// de aplicación dentro de un objeto del esquema persistido (índice sobre
+/// expresión, `CHECK`, columna generada) salvo que esté marcada así --
+/// "unsafe use of `PLEGAR()`" es el error exacto que tira sin esta bandera.
+/// Es correcto marcarla: `PLEGAR` no lee ni escribe nada fuera de su
+/// argumento, mismo motivo por el que ya es seguro registrarla sin
+/// sincronización entre threads.
 fn registrar_funcion_plegar(connection: &Connection) -> Result<(), SchemaError> {
     connection
         .create_scalar_function(
             "PLEGAR",
             1,
-            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            FunctionFlags::SQLITE_UTF8
+                | FunctionFlags::SQLITE_DETERMINISTIC
+                | FunctionFlags::SQLITE_INNOCUOUS,
             |contexto| {
                 let texto: Option<String> = contexto.get(0)?;
                 Ok(texto.map(|texto| plegar_para_busqueda(&texto)))
@@ -3811,4 +3847,11 @@ WHEN
 BEGIN
     SELECT RAISE(ABORT, 'La fecha de devolucion debe estar normalizada en UTC');
 END;
+";
+
+// Cierra el hueco de "Dos Pinos" vs "DOS PINOS" -- ver el comentario de
+// `aplicar_migracion_47` arriba.
+const MIGRACION_47: &str = r"
+CREATE UNIQUE INDEX idx_empresas_nombre_plegado ON empresas (PLEGAR(nombre));
+CREATE UNIQUE INDEX idx_empresas_proveedor_nombre_plegado ON empresas_proveedor (PLEGAR(nombre));
 ";
