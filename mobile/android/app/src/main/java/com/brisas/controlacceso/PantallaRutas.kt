@@ -458,7 +458,6 @@ private fun PasoDocumentoRuta(
                         modifier = Modifier
                             .width(110.dp)
                             .height(AlturaBusquedaBrisas)
-                            .border(1.dp, MaterialTheme.colorScheme.outline, FormaCampoBrisas)
                             .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
                     )
                     DropdownMenu(

@@ -50,13 +50,16 @@ internal val AlturaBusquedaBrisas = 50.dp
 internal val FormaPildoraBrisas = RoundedCornerShape(12.dp)
 
 /** Colores compartidos para un campo de texto "filled" sin borde visible
- * (buscadores, login) -- mismo fondo blanco que las tarjetas, en vez del
- * `OutlinedTextField` con borde que traía Material3 por defecto. */
+ * (buscadores, login). Antes usaba `colorScheme.surface`, igual al fondo de
+ * las tarjetas que los contienen -- el campo quedaba invisible hasta que se
+ * le escribía algo (reportado 2026-09-18, pantallas Rutas/Proveedores).
+ * `surfaceVariant` (tono gris claro del esquema Material3) diferencia el
+ * campo de la tarjeta sin necesitar un borde. */
 @Composable
 internal fun ColoresCampoBrisas(): TextFieldColors = TextFieldDefaults.colors(
-    focusedContainerColor = MaterialTheme.colorScheme.surface,
-    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-    disabledContainerColor = MaterialTheme.colorScheme.surface,
+    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
     focusedIndicatorColor = Color.Transparent,
     unfocusedIndicatorColor = Color.Transparent,
     disabledIndicatorColor = Color.Transparent,
