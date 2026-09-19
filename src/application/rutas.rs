@@ -101,7 +101,9 @@ impl AppCore {
         EncargadoRutaService::new(&repositorio).listar()
     }
 
-    pub fn listar_encargados_ruta_seleccionables(&self) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+    pub fn listar_encargados_ruta_seleccionables(
+        &self,
+    ) -> Result<Vec<EncargadoRuta>, DatabaseError> {
         let repositorio = SqliteEncargadoRutaRepository::new(&self.connection);
         EncargadoRutaService::new(&repositorio).listar_seleccionables()
     }
@@ -185,7 +187,10 @@ impl AppCore {
         RutaCatalogoService::new(&repositorio).buscar(texto)
     }
 
-    pub fn buscar_rutas_seleccionables(&self, texto: &str) -> Result<Vec<Ruta>, RutaCatalogoServiceError> {
+    pub fn buscar_rutas_seleccionables(
+        &self,
+        texto: &str,
+    ) -> Result<Vec<Ruta>, RutaCatalogoServiceError> {
         let repositorio = SqliteRutaRepository::new(&self.connection);
         RutaCatalogoService::new(&repositorio).buscar_seleccionables(texto)
     }

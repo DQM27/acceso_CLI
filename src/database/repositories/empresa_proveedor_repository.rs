@@ -37,7 +37,11 @@ pub trait EmpresaProveedorRepository {
     /// pensado para el selector con autocompletado del wizard de
     /// proveedores (mobile) y el desktop equivalente. Mismo `solo_activos`
     /// que `listar`.
-    fn buscar(&self, texto: &str, solo_activos: bool) -> Result<Vec<EmpresaProveedor>, DatabaseError>;
+    fn buscar(
+        &self,
+        texto: &str,
+        solo_activos: bool,
+    ) -> Result<Vec<EmpresaProveedor>, DatabaseError>;
 }
 
 pub struct SqliteEmpresaProveedorRepository<'a> {
@@ -124,9 +128,9 @@ impl EmpresaProveedorRepository for SqliteEmpresaProveedorRepository<'_> {
 
     fn listar(&self, solo_activos: bool) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
         let filtro_activo = if solo_activos { "WHERE activo = 1" } else { "" };
-        let mut statement = self
-            .connection
-            .prepare(&format!("{SELECT_EMPRESA_PROVEEDOR} {filtro_activo} ORDER BY nombre"))?;
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_EMPRESA_PROVEEDOR} {filtro_activo} ORDER BY nombre"
+        ))?;
         let empresas = statement
             .query_map([], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
@@ -254,7 +258,10 @@ mod tests {
 
         let empresas = repo.listar(true).unwrap();
         assert_eq!(
-            empresas.iter().map(|e| e.nombre.as_str()).collect::<Vec<_>>(),
+            empresas
+                .iter()
+                .map(|e| e.nombre.as_str())
+                .collect::<Vec<_>>(),
             vec!["Dos Pinos"]
         );
         assert_eq!(repo.listar(false).unwrap().len(), 2);

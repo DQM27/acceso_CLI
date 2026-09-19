@@ -2,6 +2,8 @@ package com.brisas.controlacceso
 
 import java.io.File
 import java.sql.DriverManager
+import java.text.Normalizer
+import org.sqlite.Function
 import uniffi.control_acceso_mobile.Nucleo
 
 /// Abre un [Nucleo] de prueba sobre un archivo `SQLite` temporal, con el
@@ -35,13 +37,45 @@ object NucleoDePrueba {
         // liberarla antes de que JDBC abra la suya para sembrar.
         Nucleo.abrir(ruta).close()
 
+        // `empresas`/`empresas_proveedor` tienen un índice único sobre
+        // `PLEGAR(nombre)` (migración 47) -- esa función sólo existe
+        // registrada del lado de Rust (`registrar_funcion_plegar`), así que
+        // cualquier INSERT en esta conexión JDBC aparte necesita su propia
+        // implementación o SQLite tira "unknown function: PLEGAR()".
         DriverManager.getConnection("jdbc:sqlite:$ruta").use { conexion ->
+            // Sin `FLAG_DETERMINISTIC`, SQLite se niega a preparar
+            // cualquier sentencia contra `empresas`/`empresas_proveedor`
+            // ("non-deterministic functions prohibited in index
+            // expressions") porque el índice persistido exige que la
+            // función que lo define sea determinística -- mismo motivo por
+            // el que el lado Rust la registra con `SQLITE_DETERMINISTIC`.
+            Function.create(conexion, "PLEGAR", PlegarDePrueba, Function.FLAG_DETERMINISTIC)
             conexion.createStatement().use { sentencia ->
                 seedSql.forEach { sentencia.execute(it) }
             }
         }
 
         return Nucleo.abrir(ruta)
+    }
+
+    /// Mismo criterio que `plegar_para_busqueda` en `src/texto.rs`:
+    /// minúsculas + diacríticos plegados vía descomposición Unicode (NFD) y
+    /// se descartan las marcas combinantes. Sólo hace falta que exista y
+    /// sea consistente para que las sentencias `INSERT` sembradas no
+    /// choquen con el índice único de la migración 47.
+    private object PlegarDePrueba : Function() {
+        override fun xFunc() {
+            val texto = value_text(0)
+            if (texto == null) {
+                result()
+                return
+            }
+            result(
+                Normalizer.normalize(texto, Normalizer.Form.NFD)
+                    .replace(Regex("\\p{Mn}"), "")
+                    .lowercase(),
+            )
+        }
     }
 
     /// Sentencia lista para sembrar un usuario Root con [CLAVE_PRUEBA] —

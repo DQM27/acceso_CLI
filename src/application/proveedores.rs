@@ -29,7 +29,9 @@ impl AppCore {
     /// contraparte para un selector de wizard, donde una empresa inactiva
     /// nunca es una opción válida -- la decisión de cuál pedir vive en
     /// `EmpresaProveedorService`, no acá ni en quien llama.
-    pub fn listar_empresas_proveedor(&self) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+    pub fn listar_empresas_proveedor(
+        &self,
+    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
         let repositorio = SqliteEmpresaProveedorRepository::new(&self.connection);
         EmpresaProveedorService::new(&repositorio).listar()
     }

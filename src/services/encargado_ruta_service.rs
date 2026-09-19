@@ -79,7 +79,8 @@ mod tests {
     fn seleccionables_omiten_los_desactivados_pero_administracion_los_incluye() {
         let connection = conexion();
         let repo = SqliteEncargadoRutaRepository::new(&connection);
-        repo.crear(&nuevo("5040017", "Michael Araya Retana")).unwrap();
+        repo.crear(&nuevo("5040017", "Michael Araya Retana"))
+            .unwrap();
         let id_ramon = repo.crear(&nuevo("77851", "Ramon Rodriguez")).unwrap();
         let mut ramon = repo.buscar_por_id(id_ramon).unwrap().unwrap();
         ramon.activo = false;

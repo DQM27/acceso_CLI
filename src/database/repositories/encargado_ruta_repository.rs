@@ -146,20 +146,16 @@ impl EncargadoRutaRepository for SqliteEncargadoRutaRepository<'_> {
 
     fn listar(&self, solo_activos: bool) -> Result<Vec<EncargadoRuta>, DatabaseError> {
         let filtro_activo = if solo_activos { "WHERE activo = 1" } else { "" };
-        let mut statement = self
-            .connection
-            .prepare(&format!("{SELECT_ENCARGADO} {filtro_activo} ORDER BY nombre"))?;
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_ENCARGADO} {filtro_activo} ORDER BY nombre"
+        ))?;
         let encargados = statement
             .query_map([], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(encargados)
     }
 
-    fn buscar(
-        &self,
-        texto: &str,
-        solo_activos: bool,
-    ) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+    fn buscar(&self, texto: &str, solo_activos: bool) -> Result<Vec<EncargadoRuta>, DatabaseError> {
         let filtro_activo = if solo_activos { "AND activo = 1" } else { "" };
         let mut statement = self.connection.prepare(&format!(
             "{SELECT_ENCARGADO}
@@ -257,7 +253,11 @@ mod tests {
         repo.crear(&nuevo("5040017", "Michael Araya Retana"))
             .unwrap();
 
-        assert!(repo.buscar("no existe nadie asi", false).unwrap().is_empty());
+        assert!(
+            repo.buscar("no existe nadie asi", false)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

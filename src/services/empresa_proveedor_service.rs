@@ -72,12 +72,17 @@ where
         Ok(self.empresas.listar(false)?)
     }
 
-    pub fn listar_seleccionables(&self) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+    pub fn listar_seleccionables(
+        &self,
+    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
         Ok(self.empresas.listar(true)?)
     }
 
     /// Mismo criterio que `listar`/`listar_seleccionables`.
-    pub fn buscar(&self, texto: &str) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+    pub fn buscar(
+        &self,
+        texto: &str,
+    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
         Ok(self.empresas.buscar(texto, false)?)
     }
 
