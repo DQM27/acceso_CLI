@@ -93,6 +93,13 @@ pub fn resolver_clave(
     match fs::read(&ruta_clave) {
         Ok(blob) => desproteger(&blob, &ruta_clave),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            if let Some(blob) = leer_clave_legada(ruta_base_datos) {
+                guardar_atomico(&ruta_clave, &blob).map_err(|origen| ErrorClaveBaseDatos::Io {
+                    ruta: ruta_clave.clone(),
+                    origen,
+                })?;
+                return desproteger(&blob, &ruta_clave);
+            }
             if ruta_base_datos.exists() {
                 return Err(ErrorClaveBaseDatos::ClaveFaltanteConBaseExistente {
                     ruta_base_datos: ruta_base_datos.to_path_buf(),
@@ -105,6 +112,22 @@ pub fn resolver_clave(
             origen,
         }),
     }
+}
+
+/// Migración desde antes de 2026-09-18 (commit `731a17c`), cuando
+/// `db_key.dat` vivía junto a `control_acceso.db` en vez de en la carpeta
+/// roaming (ver el doc-comment del módulo). Sin esto, cualquier instalación
+/// previa a ese cambio se topa con `ClaveFaltanteConBaseExistente` en el
+/// primer arranque tras actualizar -- la clave sigue ahí, sólo que en la
+/// carpeta vieja; el diálogo resultante ("reconstruir desde la nube") es
+/// destructivo (pierde auditoría/incidentes locales) y evitable. Copia el
+/// blob tal cual, sin desproteger/re-proteger -- DPAPI liga el blob a la
+/// cuenta de Windows, no a la carpeta, así que el mismo blob es válido en la
+/// carpeta nueva. No borra el original: si algo sale mal con la copia, la
+/// clave legada sigue disponible para otro intento.
+fn leer_clave_legada(ruta_base_datos: &Path) -> Option<Vec<u8>> {
+    let carpeta = ruta_base_datos.parent()?;
+    fs::read(carpeta.join(NOMBRE_ARCHIVO_CLAVE)).ok()
 }
 
 fn generar_y_guardar(ruta_clave: &Path) -> Result<Zeroizing<[u8; 32]>, ErrorClaveBaseDatos> {
@@ -270,6 +293,43 @@ mod tests {
         assert_ne!(*clave, [0_u8; 32]);
 
         std::fs::remove_dir_all(&directorio).ok();
+    }
+
+    /// Regresión del incidente real reportado por Sentry (issue 7741594388,
+    /// 2026-09-19): un dispositivo activado antes del commit `731a17c`
+    /// (17-sep) tenía `db_key.dat` junto a `control_acceso.db`; tras
+    /// actualizar, la carpeta roaming nueva no lo tenía y el arranque caía
+    /// en `ClaveFaltanteConBaseExistente` -- la clave seguía en disco, sólo
+    /// que en la carpeta vieja.
+    #[test]
+    fn migra_clave_legada_de_la_carpeta_de_la_base_si_la_nueva_no_la_tiene() {
+        let directorio_base_datos = directorio_temporal("legado_base");
+        let directorio_roaming = directorio_temporal("legado_roaming");
+        let ruta_base_datos = directorio_base_datos.join("control_acceso.db");
+        std::fs::write(&ruta_base_datos, b"contenido de una base existente").unwrap();
+
+        let clave_original = [9_u8; 32];
+        let protegida = proteger(&clave_original).unwrap();
+        std::fs::write(
+            directorio_base_datos.join(NOMBRE_ARCHIVO_CLAVE),
+            &protegida,
+        )
+        .unwrap();
+
+        let clave = resolver_clave(&directorio_roaming, &ruta_base_datos).unwrap();
+
+        assert_eq!(*clave, clave_original);
+        assert!(
+            directorio_roaming.join(NOMBRE_ARCHIVO_CLAVE).exists(),
+            "debe quedar copiada en la carpeta nueva"
+        );
+        assert!(
+            directorio_base_datos.join(NOMBRE_ARCHIVO_CLAVE).exists(),
+            "no debe borrar la copia legada"
+        );
+
+        std::fs::remove_dir_all(&directorio_base_datos).ok();
+        std::fs::remove_dir_all(&directorio_roaming).ok();
     }
 
     #[test]

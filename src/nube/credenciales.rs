@@ -281,7 +281,44 @@ pub fn guardar_secreto(secreto: &str) -> io::Result<()> {
 /// Ver [`guardar_secreto`] sobre por qué esta versión es sólo de escritorio.
 #[must_use]
 pub fn cargar_secreto() -> Option<String> {
-    cargar_secreto_en(&directorio_default()?)
+    let directorio = directorio_default()?;
+    cargar_secreto_en(&directorio).or_else(|| migrar_secreto_legado(&directorio))
+}
+
+/// Migración desde antes de 2026-09-18 (commit `731a17c`), cuando este
+/// secreto vivía en `%LOCALAPPDATA%\ControlAcceso` junto a
+/// `control_acceso.db` en vez de en `%APPDATA%` (ver el doc-comment de
+/// `ROAMING_APP_DATA_ENV`) -- mismo problema y mismo fix que
+/// `desktop/src-tauri/src/clave_cifrado.rs::leer_clave_legada`. Sin esto, un
+/// dispositivo ya activado antes de ese cambio pierde silenciosamente su
+/// secreto al actualizar y queda pidiendo reactivación evitable -- el
+/// secreto sigue en disco, sólo que en la carpeta vieja. Copia el archivo
+/// tal cual (protegido con DPAPI, atado a la cuenta de Windows, no a la
+/// carpeta) y no borra el original.
+fn migrar_secreto_legado(directorio_nuevo: &Path) -> Option<String> {
+    migrar_secreto_desde(&directorio_legado_desktop()?, directorio_nuevo)
+}
+
+/// Lógica pura de la migración, separada de [`migrar_secreto_legado`] para
+/// poder probarla con dos directorios temporales en vez de tener que mutar
+/// la variable de entorno real (`%LOCALAPPDATA%`), que otros tests de este
+/// binario también leen.
+fn migrar_secreto_desde(legado: &Path, directorio_nuevo: &Path) -> Option<String> {
+    let contenido = fs::read(legado.join(FILE_NAME)).ok()?;
+    fs::create_dir_all(directorio_nuevo).ok()?;
+    fs::write(directorio_nuevo.join(FILE_NAME), &contenido).ok()?;
+    cargar_secreto_en(directorio_nuevo)
+}
+
+/// Carpeta donde vivía este secreto (y `db_key.dat`) antes de `731a17c` --
+/// sólo para la migración de arriba, nunca para guardar nada nuevo ahí.
+fn directorio_legado_desktop() -> Option<PathBuf> {
+    let root = std::env::var_os(crate::database::connection::LOCAL_APP_DATA_ENV)?;
+    let root = PathBuf::from(root);
+    if !root.is_absolute() {
+        return None;
+    }
+    Some(root.join("ControlAcceso"))
 }
 
 /// Guarda el secreto en `<directorio>/dispositivo-nube.secret`, protegido
@@ -421,6 +458,35 @@ mod tests {
         let directorio = directorio_temporal();
 
         assert_eq!(cargar_secreto_en(&directorio), None);
+    }
+
+    /// Regresión del mismo incidente que
+    /// `clave_cifrado::migra_clave_legada_de_la_carpeta_de_la_base_si_la_nueva_no_la_tiene`
+    /// (Sentry issue 7741594388, 2026-09-19): un dispositivo activado antes
+    /// del commit `731a17c` tenía este secreto en la carpeta vieja; sin la
+    /// migración, `cargar_secreto` devolvía `None` tras actualizar y pedía
+    /// reactivar un dispositivo que ya estaba activado.
+    #[test]
+    fn migra_secreto_legado_de_la_carpeta_vieja_si_la_nueva_no_lo_tiene() {
+        let legado = directorio_temporal();
+        let nuevo = directorio_temporal();
+        guardar_secreto_en(&legado, "secreto-de-antes-de-mudarse").expect("se guarda en legado");
+
+        let recuperado = migrar_secreto_desde(&legado, &nuevo);
+
+        assert_eq!(recuperado.as_deref(), Some("secreto-de-antes-de-mudarse"));
+        assert_eq!(
+            cargar_secreto_en(&nuevo).as_deref(),
+            Some("secreto-de-antes-de-mudarse"),
+            "debe quedar legible en la carpeta nueva para el próximo arranque"
+        );
+        assert!(
+            legado.join(FILE_NAME).exists(),
+            "no debe borrar la copia legada"
+        );
+
+        let _ = fs::remove_dir_all(legado);
+        let _ = fs::remove_dir_all(nuevo);
     }
 
     #[test]
