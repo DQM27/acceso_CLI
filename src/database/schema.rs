@@ -828,7 +828,7 @@ fn adoptar_application_id(connection: &Connection) -> Result<(), SchemaError> {
 /// Es correcto marcarla: `PLEGAR` no lee ni escribe nada fuera de su
 /// argumento, mismo motivo por el que ya es seguro registrarla sin
 /// sincronización entre threads.
-fn registrar_funcion_plegar(connection: &Connection) -> Result<(), SchemaError> {
+pub(crate) fn registrar_funcion_plegar(connection: &Connection) -> Result<(), SchemaError> {
     connection
         .create_scalar_function(
             "PLEGAR",

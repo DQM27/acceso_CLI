@@ -1178,7 +1178,15 @@ fn dos_conexiones_migran_una_base_vacia_sin_reaplicar_pasos() {
         hilo.join().unwrap().unwrap();
     }
 
+    // Conexión nueva sobre una base ya migrada -- `initialize_database` es
+    // idempotente (no reaplica nada, ver `version(&connection) ==
+    // SCHEMA_VERSION` abajo) pero igual hace falta llamarla para registrar
+    // `PLEGAR`, la función detrás de `idx_empresas_nombre_plegado`
+    // (migración 47): sin ella, hasta `PRAGMA integrity_check` -- que
+    // valida las expresiones de todo índice persistido -- tira "unknown
+    // function: PLEGAR()".
     let connection = Connection::open(&ruta).unwrap();
+    initialize_database(&connection).unwrap();
     assert_eq!(version(&connection), SCHEMA_VERSION);
     let tablas_fts: i64 = connection
         .query_row(
