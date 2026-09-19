@@ -165,6 +165,41 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   ve lo que pasó en la otra PC todavía. Falta: llamar la variante
   correspondiente justo antes de confirmar cada tipo de ingreso/entrega en
   los comandos de escritorio, mismo punto donde mobile ya lo hace.
+- [ ] **No existe un veto de acceso por cédula que cruce catálogos (hallazgo
+  2026-09-19, discutido con el usuario, sin implementar).** Confirmado
+  leyendo `IngresoProveedorService::registrar_ingreso`: no consulta ningún
+  catálogo por cédula -- el propio doc-comment del archivo lo dice
+  ("sin catálogo de personas, cédula/nombre son snapshot puro"). Hoy sólo
+  el camino de contratista tiene un veto real
+  (`domain::acceso::verificar_acceso`, Regla 1, `contratista.tiene_acceso`)
+  -- alguien vetado ahí puede reingresar sin problema como proveedor (o
+  como visita) con la misma cédula.
+
+  **Idea inicial del usuario** (reusar `contratistas.tiene_acceso` como
+  lista negra para proveedores) **descartada a propósito**: `contratistas`
+  no es una tabla neutra -- exige `empresa_id` (FK a una empresa
+  CONTRATISTA), trae PRAIND/`tipo_ingreso`/`es_personal_ruta`, y meter ahí
+  a alguien sólo para vetarlo ensucia grillas/exports/reportes de
+  contratistas de verdad. Además `tiene_acceso` significa "esta relación
+  laboral está autorizada", no "esta cédula está vetada del sitio sin
+  importar el rol" -- son conceptos distintos que no deberían compartir
+  columna. Y acoplar `IngresoProveedorService` a leer el catálogo de
+  contratistas rompe la separación de catálogos que el resto del código
+  mantiene a propósito (mismo criterio que
+  `empresa_proveedor_repository.rs`/`encargado_ruta_repository.rs`: catálogos
+  chicos, sin generalizar entre ellos).
+
+  **Diseño propuesto en su lugar**: una tabla nueva y neutra,
+  `personas_vetadas` (cédula como clave, motivo, fecha, usuario que la
+  vetó) -- sin relación con `contratistas` ni `empresas_proveedor`, sólo
+  "esta cédula no entra". Se consulta por cédula desde los distintos
+  flujos de ingreso (`RegistroIngresoService`, `IngresoProveedorService`,
+  y evaluar si también visitas) antes de dejar pasar, cada uno con su
+  propio veredicto (mismo espíritu que el resto de las reglas de
+  `domain::acceso`). Sin arrancar todavía -- a expandir/diseñar en detalle
+  antes de tocar código (falta: quién puede vetar/desvetar, si sincroniza
+  a la nube igual que el resto de catálogos, y si reemplaza o convive con
+  `contratista.tiene_acceso`).
 - [ ] **Revisar bucket público `historial-web`.** Está documentado como público, vacío y
   sin referencias en código. Confirmar si es vestigio; si no se usa, eliminarlo desde
   Supabase.
