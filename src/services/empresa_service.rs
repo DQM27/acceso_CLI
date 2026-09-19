@@ -92,8 +92,20 @@ where
         Ok(self.empresas.establecer_activo(id, false)?)
     }
 
+    /// Para la grilla de administración -- trae activas e inactivas, así se
+    /// puede reactivar una. `listar_seleccionables` es la contraparte para
+    /// el selector de empresa al crear/editar un contratista, donde una
+    /// empresa inactiva nunca es una opción válida. La decisión de cuál
+    /// pedir es de negocio, no de la pantalla -- por eso son dos métodos con
+    /// nombre propio en vez de un parámetro `bool` que cualquier llamador
+    /// podría pasar sin pensarlo (mismo criterio que
+    /// `EmpresaProveedorService`).
     pub fn listar(&self) -> Result<Vec<Empresa>, EmpresaServiceError> {
-        Ok(self.empresas.listar()?)
+        Ok(self.empresas.listar(false)?)
+    }
+
+    pub fn listar_seleccionables(&self) -> Result<Vec<Empresa>, EmpresaServiceError> {
+        Ok(self.empresas.listar(true)?)
     }
 
     #[allow(clippy::too_many_arguments)]

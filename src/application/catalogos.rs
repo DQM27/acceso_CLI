@@ -199,10 +199,21 @@ impl AppCore {
             .map_err(ContratistaServiceError::Database)
     }
 
+    /// Para la grilla de administración -- trae activas e inactivas.
+    /// `listar_empresas_seleccionables` es la contraparte para el selector
+    /// de empresa al crear/editar un contratista, donde una empresa inactiva
+    /// nunca es una opción válida -- la decisión de cuál pedir vive en
+    /// `EmpresaService`, no acá ni en quien llama.
     pub fn listar_empresas(
         &self,
     ) -> Result<Vec<crate::models::empresa::Empresa>, EmpresaServiceError> {
         EmpresaService::new(&SqliteEmpresaRepository::new(&self.connection)).listar()
+    }
+
+    pub fn listar_empresas_seleccionables(
+        &self,
+    ) -> Result<Vec<crate::models::empresa::Empresa>, EmpresaServiceError> {
+        EmpresaService::new(&SqliteEmpresaRepository::new(&self.connection)).listar_seleccionables()
     }
 
     pub fn buscar_empresas(

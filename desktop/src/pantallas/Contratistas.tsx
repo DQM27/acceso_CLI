@@ -7,7 +7,7 @@ import InterruptorCelda from "../componentes/InterruptorCelda";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioContratista from "./FormularioContratista";
-import { actualizarContratista, buscarContratistas, listarEmpresas } from "../api";
+import { actualizarContratista, buscarContratistas, listarEmpresasSeleccionables } from "../api";
 import type { ContratistaResumen, Empresa, RolUsuario } from "../api";
 import { textoFechaDDMMYYYY } from "../tiempo";
 
@@ -92,7 +92,11 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
   useHotkeys("ctrl+n", () => setFormularioAbierto("crear"), { preventDefault: true });
 
   useEffect(() => {
-    listarEmpresas()
+    // Sólo activas -- una empresa desactivada no es una opción válida en el
+    // desplegable del formulario. `FormularioContratista` agrega aparte la
+    // empresa actual del contratista en edición si ya está desactivada, para
+    // no perderla de vista ni reasignarla en silencio.
+    listarEmpresasSeleccionables()
       .then(setEmpresas)
       .catch((error) => toast.error(String(error)));
   }, []);

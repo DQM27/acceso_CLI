@@ -139,6 +139,16 @@ export default function FormularioContratista({
           Empresa
           <select {...register("empresa_id")}>
             <option value="">Seleccionar…</option>
+            {/* `empresas` (prop) sólo trae activas -- si estamos editando un
+                contratista cuya empresa ya se desactivó, se agrega acá como
+                única excepción, marcada, para no perderla de la vista ni
+                reasignarla en silencio a otra empresa al guardar. */}
+            {contratista &&
+              !empresas.some((empresa) => empresa.id === contratista.empresa_id) && (
+                <option value={contratista.empresa_id}>
+                  {contratista.empresa_nombre} (inactiva)
+                </option>
+              )}
             {empresas.map((empresa) => (
               <option key={empresa.id} value={empresa.id}>
                 {empresa.nombre}

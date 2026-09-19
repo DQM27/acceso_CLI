@@ -16,7 +16,14 @@ pub trait EmpresaRepository {
 
     fn establecer_activo(&self, id: i64, activo: bool) -> Result<(), DatabaseError>;
 
-    fn listar(&self) -> Result<Vec<Empresa>, DatabaseError>;
+    /// `solo_activos`: mismo criterio que `EmpresaProveedorRepository::listar`
+    /// -- el selector de empresa al crear/editar un contratista
+    /// (`FormularioContratista.tsx`/`PantallaNuevoContratista.kt`) debe pedir
+    /// `true`, una empresa desactivada no es una opción válida para un
+    /// contratista nuevo. La pantalla de administración pide `false` para
+    /// poder ver y reactivar las inactivas. El filtro vive acá a propósito,
+    /// no en cada pantalla.
+    fn listar(&self, solo_activos: bool) -> Result<Vec<Empresa>, DatabaseError>;
 }
 
 pub struct SqliteEmpresaRepository<'a> {
@@ -134,17 +141,19 @@ impl EmpresaRepository for SqliteEmpresaRepository<'_> {
         self.encolar_actualizacion(id)
     }
 
-    fn listar(&self) -> Result<Vec<Empresa>, DatabaseError> {
-        let mut statement = self.connection.prepare(
+    fn listar(&self, solo_activos: bool) -> Result<Vec<Empresa>, DatabaseError> {
+        let filtro_activo = if solo_activos { "WHERE activo = 1" } else { "" };
+        let mut statement = self.connection.prepare(&format!(
             "
             SELECT
                 id,
                 nombre,
                 activo
             FROM empresas
+            {filtro_activo}
             ORDER BY nombre
-            ",
-        )?;
+            "
+        ))?;
 
         let empresas = statement
             .query_map([], convertir_fila)?
@@ -185,5 +194,41 @@ mod tests {
 
         let error = repo.crear(&nueva("DOS PIÑOS")).unwrap_err();
         assert!(error.es_constraint_unique());
+    }
+
+    #[test]
+    fn listar_trae_todas_ordenadas_por_nombre() {
+        let connection = conexion();
+        let repo = SqliteEmpresaRepository::new(&connection);
+        repo.crear(&nueva("Dos Pinos")).unwrap();
+        repo.crear(&nueva("Maika")).unwrap();
+
+        let empresas = repo.listar(false).unwrap();
+        assert_eq!(
+            empresas
+                .iter()
+                .map(|e| e.nombre.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Dos Pinos", "Maika"]
+        );
+    }
+
+    #[test]
+    fn listar_solo_activos_omite_las_desactivadas() {
+        let connection = conexion();
+        let repo = SqliteEmpresaRepository::new(&connection);
+        repo.crear(&nueva("Dos Pinos")).unwrap();
+        let id_maika = repo.crear(&nueva("Maika")).unwrap();
+        repo.establecer_activo(id_maika, false).unwrap();
+
+        let empresas = repo.listar(true).unwrap();
+        assert_eq!(
+            empresas
+                .iter()
+                .map(|e| e.nombre.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Dos Pinos"]
+        );
+        assert_eq!(repo.listar(false).unwrap().len(), 2);
     }
 }

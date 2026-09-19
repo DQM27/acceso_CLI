@@ -1759,10 +1759,15 @@ impl Nucleo {
             .collect())
     }
 
+    /// Es el selector del wizard de "Nuevo contratista" -- una empresa
+    /// desactivada no es una opción válida ahí, ver
+    /// `EmpresaService::listar_seleccionables`. No hay pantalla de
+    /// administración de empresas en mobile, así que no hace falta exponer
+    /// también la variante sin filtro.
     pub fn listar_empresas(&self) -> Result<Vec<Empresa>, NucleoError> {
         Ok(self
             .core_lock()
-            .listar_empresas()?
+            .listar_empresas_seleccionables()?
             .into_iter()
             .map(Into::into)
             .collect())

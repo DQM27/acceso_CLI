@@ -469,6 +469,7 @@ pub fn run() {
             comandos::contratistas::crear_contratista,
             comandos::contratistas::actualizar_contratista,
             comandos::empresas::listar_empresas,
+            comandos::empresas::listar_empresas_seleccionables,
             comandos::empresas::buscar_empresas,
             comandos::empresas::crear_empresa,
             comandos::empresas::actualizar_empresa,

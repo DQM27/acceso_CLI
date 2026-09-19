@@ -6,7 +6,9 @@ use std::{
 
 use rusqlite::Connection;
 
-use super::schema::{SchemaError, initialize_database, registrar_funcion_plegar, verificar_archivo_propio};
+use super::schema::{
+    SchemaError, initialize_database, registrar_funcion_plegar, verificar_archivo_propio,
+};
 
 pub const DATABASE_PATH_ENV: &str = "CONTROL_ACCESO_DB";
 pub const LOCAL_APP_DATA_ENV: &str = "LOCALAPPDATA";
