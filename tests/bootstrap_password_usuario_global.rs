@@ -9,6 +9,7 @@
 //! fila directo por SQL con el hash centinela (`SIN_PASSWORD_LOCAL`), tal
 //! cual haría esa función.
 
+use chrono::Utc;
 use rusqlite::Connection;
 
 use control_acceso::application::AppCore;
@@ -58,7 +59,7 @@ fn manda_a_fijar_password_en_vez_de_credenciales_invalidas() {
 
     // No importa qué contraseña se pruebe -- todavía no hay ninguna que
     // verificar, así que ni siquiera se llega a intentar Argon2.
-    let resultado = autenticacion.autenticar("9-0001", "cualquier-cosa");
+    let resultado = autenticacion.autenticar("9-0001", "cualquier-cosa", Utc::now());
 
     assert!(matches!(
         resultado,
@@ -75,7 +76,7 @@ fn fija_password_y_puede_iniciar_sesion_de_ahi_en_adelante() {
     let autenticacion = AutenticacionService::new(&repository);
 
     assert!(matches!(
-        autenticacion.autenticar("9-0002", "lo-que-sea"),
+        autenticacion.autenticar("9-0002", "lo-que-sea", Utc::now()),
         Err(AutenticacionError::SinPasswordLocal)
     ));
 
@@ -85,7 +86,7 @@ fn fija_password_y_puede_iniciar_sesion_de_ahi_en_adelante() {
     usuarios.cambiar_password(id, "mi-password-nueva").unwrap();
 
     let sesion = autenticacion
-        .autenticar("9-0002", "mi-password-nueva")
+        .autenticar("9-0002", "mi-password-nueva", Utc::now())
         .expect("ahora sí debería poder entrar");
     assert_eq!(sesion.cedula, "9-0002");
     assert_eq!(sesion.rol, RolUsuario::Operador);
@@ -93,7 +94,7 @@ fn fija_password_y_puede_iniciar_sesion_de_ahi_en_adelante() {
     // Ya fijada, se comporta como cualquier password real -- una
     // incorrecta es un rechazo normal, no otra vez "sin password local".
     assert!(matches!(
-        autenticacion.autenticar("9-0002", "password-incorrecta"),
+        autenticacion.autenticar("9-0002", "password-incorrecta", Utc::now()),
         Err(AutenticacionError::CredencialesInvalidas)
     ));
 }

@@ -129,6 +129,7 @@ where
             password_hash,
             rol,
             activo,
+            password_hash_confirmado_en: None,
         };
         self.usuarios
             .crear(&usuario)
@@ -464,6 +465,7 @@ where
             password_hash,
             rol: RolUsuario::Root,
             activo: true,
+            password_hash_confirmado_en: None,
         };
         self.usuarios
             .crear_root_inicial_atomico(&usuario)

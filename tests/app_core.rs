@@ -95,6 +95,7 @@ fn autenticacion_conserva_errores_de_credenciales_e_inactivo() {
             password_hash: generar_hash("password2").unwrap(),
             rol: RolUsuario::Operador,
             activo: false,
+            password_hash_confirmado_en: None,
         })
         .unwrap();
     let core = AppCore::new(connection);
@@ -256,6 +257,7 @@ fn listar_roots_activos_excluye_otros_roles_e_inactivos() {
             password_hash: generar_hash("password1").unwrap(),
             rol: RolUsuario::Root,
             activo: true,
+            password_hash_confirmado_en: None,
         })
         .unwrap();
     usuarios
@@ -266,6 +268,7 @@ fn listar_roots_activos_excluye_otros_roles_e_inactivos() {
             password_hash: generar_hash("password2").unwrap(),
             rol: RolUsuario::Operador,
             activo: true,
+            password_hash_confirmado_en: None,
         })
         .unwrap();
     usuarios
@@ -276,6 +279,7 @@ fn listar_roots_activos_excluye_otros_roles_e_inactivos() {
             password_hash: generar_hash("password3").unwrap(),
             rol: RolUsuario::Root,
             activo: false,
+            password_hash_confirmado_en: None,
         })
         .unwrap();
     let core = AppCore::new(connection);
@@ -314,6 +318,7 @@ fn resetear_password_root_rechaza_usuario_que_no_es_root_activo() {
             password_hash: generar_hash("password2").unwrap(),
             rol: RolUsuario::Operador,
             activo: true,
+            password_hash_confirmado_en: None,
         })
         .unwrap();
     let core = AppCore::new(connection);

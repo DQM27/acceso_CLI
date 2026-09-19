@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 47;
+pub const SCHEMA_VERSION: i64 = 48;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -384,6 +384,11 @@ fn aplicar_migraciones_posteriores_a_29(
     if *version == 46 {
         aplicar_migracion_47(connection)?;
         *version = 47;
+    }
+
+    if *version == 47 {
+        aplicar_migracion_48(connection)?;
+        *version = 48;
     }
 
     Ok(())
@@ -766,6 +771,21 @@ fn aplicar_migracion_47(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_47)?;
     transaction.execute_batch("PRAGMA user_version = 47")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Columna nueva para cachear localmente el login de un usuario global
+/// (Administrador/Operador, autenticado contra Supabase Auth) y poder
+/// operar sin internet ante un corte -- ver
+/// `docs/decisiones-tecnicas.md`, entrada 2026-09-18, y el doc-comment de
+/// `Usuario::password_hash_confirmado_en`. `NULL` por defecto en todas las
+/// filas existentes (ROOT y cuentas locales de antes de esa migración):
+/// mismo significado que ya tenían, hash permanente sin vencimiento.
+fn aplicar_migracion_48(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_48)?;
+    transaction.execute_batch("PRAGMA user_version = 48")?;
     transaction.commit()?;
     Ok(())
 }
@@ -3854,4 +3874,10 @@ END;
 const MIGRACION_47: &str = r"
 CREATE UNIQUE INDEX idx_empresas_nombre_plegado ON empresas (PLEGAR(nombre));
 CREATE UNIQUE INDEX idx_empresas_proveedor_nombre_plegado ON empresas_proveedor (PLEGAR(nombre));
+";
+
+// Caché de login offline para usuarios globales -- ver el comentario de
+// `aplicar_migracion_48` arriba.
+const MIGRACION_48: &str = r"
+ALTER TABLE usuarios ADD COLUMN password_hash_confirmado_en TEXT;
 ";

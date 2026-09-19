@@ -249,6 +249,10 @@ async fn login_supabase(
     let cedula = cedula.to_string();
     let password = password.to_string();
     let cedula_supabase = cedula.clone();
+    // Se usa más abajo para cachear el login offline (`cachear_password_local`)
+    // -- `password` se mueve al `spawn_blocking` de acá abajo, así que hace
+    // falta esta copia ANTES de ese `move`.
+    let password_para_cache = password.clone();
 
     let sesion_supabase = tauri::async_runtime::spawn_blocking(move || {
         nube::login(
@@ -290,6 +294,25 @@ async fn login_supabase(
     state.iniciar_sesion(identidad.clone());
     state.iniciar_sesion_supabase(sesion_supabase.clone());
 
+    // Best-effort a propósito (ver el doc-comment de `cachear_password_local`):
+    // un fallo acá (disco lleno, lo que sea) no debe tumbar un login que ya
+    // fue exitoso contra Supabase, sólo deja sin el atajo offline a esta
+    // cuenta hasta el próximo login online.
+    let id_para_cache = identidad.id;
+    let manejador = app.clone();
+    match tauri::async_runtime::spawn_blocking(move || {
+        manejador
+            .state::<GuiState>()
+            .core()
+            .cachear_password_local(id_para_cache, &password_para_cache)
+    })
+    .await
+    {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => log::warn!("no se pudo cachear el login offline: {error}"),
+        Err(error) => log::warn!("no se pudo lanzar el cacheo de login offline: {error}"),
+    }
+
     let manejador = app.clone();
     tauri::async_runtime::spawn(async move {
         let _ = tauri::async_runtime::spawn_blocking(move || {
@@ -319,6 +342,10 @@ pub async fn cambiar_password_supabase(
     let access_token = state
         .access_token_supabase_vigente()
         .ok_or_else(|| "La sesión venció -- iniciá sesión de nuevo".to_string())?;
+    // Se usan más abajo para refrescar el caché de login offline -- `sesion`
+    // y `password_nueva` se mueven al `spawn_blocking` de acá abajo.
+    let id_para_cache = sesion.id;
+    let password_para_cache = password_nueva.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
         nube::cambiar_password(
@@ -332,7 +359,30 @@ pub async fn cambiar_password_supabase(
     })
     .await
     .map_err(super::mensaje_generico)?
-    .map_err(super::mensaje_generico)
+    .map_err(super::mensaje_generico)?;
+
+    // Best-effort, mismo criterio que en `login_supabase` -- ver el
+    // doc-comment de `cachear_password_local`. Refresca el caché con la
+    // contraseña NUEVA y una marca de vencimiento fresca: sin esto, el
+    // caché seguiría teniendo la contraseña VIEJA hasta el próximo login
+    // online, que dejaría de servir apenas cambiara la contraseña.
+    let manejador = app.clone();
+    match tauri::async_runtime::spawn_blocking(move || {
+        manejador
+            .state::<GuiState>()
+            .core()
+            .cachear_password_local(id_para_cache, &password_para_cache)
+    })
+    .await
+    {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => log::warn!("no se pudo refrescar el cacheo de login offline: {error}"),
+        Err(error) => {
+            log::warn!("no se pudo lanzar el refresco del cacheo de login offline: {error}");
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

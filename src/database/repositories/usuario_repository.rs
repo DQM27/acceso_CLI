@@ -22,6 +22,16 @@ pub trait UsuarioRepository {
 
     fn actualizar_password(&self, id: i64, password_hash: &str) -> Result<(), DatabaseError>;
 
+    /// Ver `Usuario::password_hash_confirmado_en` -- a diferencia de
+    /// `actualizar_password` (que deja el hash como permanente, sin
+    /// vencimiento), ésta siempre graba una marca de vencimiento real.
+    fn actualizar_password_cacheada(
+        &self,
+        id: i64,
+        password_hash: &str,
+        confirmado_en: &str,
+    ) -> Result<(), DatabaseError>;
+
     fn listar(&self) -> Result<Vec<Usuario>, DatabaseError>;
 
     fn contar_usuarios(&self) -> Result<i64, DatabaseError>;
@@ -63,6 +73,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Usuario> {
         password_hash: row.get(3)?,
         rol,
         activo: row.get::<_, i64>(5)? != 0,
+        password_hash_confirmado_en: row.get(6)?,
     })
 }
 
@@ -82,8 +93,9 @@ fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, D
     let uuid = generar_uuid_v4();
     connection.execute(
         "
-        INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo, uuid)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        INSERT INTO usuarios
+            (cedula, nombre, password_hash, rol, activo, uuid, password_hash_confirmado_en)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
         ",
         params![
             usuario.cedula,
@@ -92,6 +104,7 @@ fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, D
             rol_a_texto(usuario.rol),
             i64::from(usuario.activo),
             uuid,
+            usuario.password_hash_confirmado_en,
         ],
     )?;
     let id = connection.last_insert_rowid();
@@ -105,7 +118,7 @@ fn buscar_usuario_en_transaccion(
 ) -> Result<Usuario, DatabaseError> {
     let resultado = transaction.query_row(
         "
-        SELECT id, cedula, nombre, password_hash, rol, activo
+        SELECT id, cedula, nombre, password_hash, rol, activo, password_hash_confirmado_en
         FROM usuarios
         WHERE id = ?1
         ",
@@ -215,7 +228,8 @@ impl UsuarioRepository for SqliteUsuarioRepository<'_> {
                 nombre,
                 password_hash,
                 rol,
-                activo
+                activo,
+                password_hash_confirmado_en
             FROM usuarios
             WHERE cedula = ?1
             ",
@@ -239,7 +253,8 @@ impl UsuarioRepository for SqliteUsuarioRepository<'_> {
                 nombre,
                 password_hash,
                 rol,
-                activo
+                activo,
+                password_hash_confirmado_en
             FROM usuarios
             WHERE id = ?1
             ",
@@ -291,9 +306,31 @@ impl UsuarioRepository for SqliteUsuarioRepository<'_> {
     }
 
     fn actualizar_password(&self, id: i64, password_hash: &str) -> Result<(), DatabaseError> {
+        // Limpia `password_hash_confirmado_en` a propósito: un cambio de
+        // contraseña "de verdad" (ROOT/legado cambiando la suya, o un reset
+        // administrativo) siempre deja un hash permanente, nunca uno
+        // cacheado con vencimiento -- ver `Usuario::password_hash_confirmado_en`.
+        // La única función que sí graba una marca real es
+        // `actualizar_password_cacheada`, de abajo.
         let filas = self.connection.execute(
-            "UPDATE usuarios SET password_hash = ?1 WHERE id = ?2",
+            "UPDATE usuarios SET password_hash = ?1, password_hash_confirmado_en = NULL WHERE id = ?2",
             params![password_hash, id],
+        )?;
+        if filas == 0 {
+            return Err(DatabaseError::UsuarioNoEncontrado);
+        }
+        Ok(())
+    }
+
+    fn actualizar_password_cacheada(
+        &self,
+        id: i64,
+        password_hash: &str,
+        confirmado_en: &str,
+    ) -> Result<(), DatabaseError> {
+        let filas = self.connection.execute(
+            "UPDATE usuarios SET password_hash = ?1, password_hash_confirmado_en = ?2 WHERE id = ?3",
+            params![password_hash, confirmado_en, id],
         )?;
         if filas == 0 {
             return Err(DatabaseError::UsuarioNoEncontrado);
@@ -310,7 +347,8 @@ impl UsuarioRepository for SqliteUsuarioRepository<'_> {
                 nombre,
                 password_hash,
                 rol,
-                activo
+                activo,
+                password_hash_confirmado_en
             FROM usuarios
             ORDER BY nombre
             ",

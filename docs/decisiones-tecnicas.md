@@ -564,3 +564,112 @@ Verificado: `cargo test-3mc --lib` (200/200, núcleo raíz),
 `cargo test-mobile-3mc --lib` (12/12), `cargo build-desktop-3mc` limpio,
 smoke test aislado de `benchmarks/sqlite-3way/sqlite3mc/` sigue en verde
 tras el `git mv`.
+
+---
+
+## 2026-09-18 — Login sin internet: hueco encontrado, diseño acordado (sin implementar todavía)
+
+**Contexto:** revisando el splash de desktop se llegó a preguntar qué pasa
+si un Administrador/Operador intenta loguearse sin internet. Respuesta
+corta: no puede, en ninguna de las dos plataformas.
+
+**El hueco:** desde la migración a Supabase Auth
+(`docs/planes-implementados/plan-autenticacion-supabase-auth.md`), cualquier
+usuario global sincronizado llega con el centinela `SIN_PASSWORD_LOCAL`
+como `password_hash` local (`guardar_usuarios` en `src/nube/sincronizacion.rs`
+nunca lo pisa si ya hay uno real, pero tampoco lo genera para cuentas
+nuevas). Eso manda siempre a `login_supabase` (desktop,
+`desktop/src-tauri/src/comandos/autenticacion.rs`) / `autenticar_supabase`
+(mobile, `mobile/rust-core/src/lib.rs:2792`), y las dos llaman a
+`nube::login`/`nube::auth_supabase::login` directo, sin timeout ni
+fallback -- si no hay red, el login falla, punto. Confirmado leyendo las
+dos implementaciones, son un espejo exacto la una de la otra.
+
+El único camino que sí funciona sin red es el local (Argon2 contra
+`password_hash` real) -- pero eso hoy es sólo ROOT del alta inicial;
+ninguna cuenta nueva creada bajo el sistema actual llega a tener un hash
+local real. No fue una decisión consciente de aquel plan -- es un efecto
+colateral no evaluado de sacarle el hash local a los usuarios globales.
+
+**Impacto:** si un sitio pierde internet, sólo ROOT puede operar el
+software (no el control de acceso físico en sí, sólo el software). Un
+Administrador/Operador no puede iniciar sesión de cero, y si ya tenía
+sesión abierta, un reinicio de la app durante el corte lo deja afuera
+también (`docs/planes-implementados/plan-autenticacion-supabase-auth.md`,
+sección "Sesión y modo offline": cerrar la app siempre pierde la sesión).
+
+**Decisión de diseño (pendiente de implementar):**
+
+1. Tras un login exitoso contra Supabase, cachear localmente un hash
+   Argon2 real de esa contraseña (mismo mecanismo que ya usa ROOT --
+   reutiliza `password_hash`/`intentar_login_local` tal cual, sin construir
+   un camino paralelo). Reusar ese camino automáticamente hace que el
+   chequeo "¿sigue activo?" (`usuario_sigue_activo_remoto`) también corra
+   para estas cuentas la próxima vez que sí haya red, gratis.
+2. Ese caché **vence a las 24h** sin una confirmación real contra Supabase
+   (usando el reloj propio corregido de la app, `RelojCorregido` --
+   no el reloj del sistema operativo sin corregir). Pasado ese tope, el
+   login local con ese hash cacheado se rechaza aunque la contraseña sea
+   correcta, y se exige el camino online de nuevo. Mismo patrón que ya usa
+   `TOPE_PRESENCIA_SUPABASE` (12h) para sesión abierta -- acá el número es
+   distinto (24h, pensado para cubrir un corte de fin de semana) porque el
+   escenario es otro (arrancar sesión sin red, no mantener una ya abierta).
+   Falta definir dónde vive esa marca de tiempo (columna nueva en
+   `usuarios` local, no sincronizada -- ver siguiente punto).
+3. Aplica a **desktop y mobile** por igual -- las dos plataformas tienen
+   exactamente el mismo hueco (ver arriba), así que el diseño y el número
+   de horas deben ser el mismo en las dos, no vale la pena que diverjan.
+4. **Riesgo aceptado explícitamente, acotado a propósito**: cachear la
+   contraseña reintroduce, para cuentas Supabase, el mismo riesgo que ya
+   existe hoy para ROOT/legado -- alguien desactivado remotamente podría
+   seguir operando offline (generando ingresos, editando contratistas)
+   hasta que el dispositivo vuelva a sincronizar. El tope de 24h existe
+   específicamente para acotar ese riesgo a una ventana conocida en vez de
+   dejarlo indefinido. Se acepta este riesgo porque el modelo de datos de
+   la app es deliberadamente no destructivo (sin `DELETE` sobre tablas de
+   negocio reales -- confirmado por `grep`, los únicos `DELETE FROM` del
+   crate son sobre tablas de caché/cola de sincronización, nunca sobre
+   `contratistas`/`ingresos`/`gafetes`/`historial`/`auditoria`): en el peor
+   caso, el abuso de esta ventana genera registros basura o ediciones
+   erróneas, nunca pérdida de datos.
+5. **Explícitamente fuera de alcance por ahora**: un modo 100% offline de
+   la app (operar indefinidamente sin nunca haber sincronizado). El
+   ecosistema completo (multi-sitio, multi-dispositivo, catálogo
+   compartido) depende de la nube como fuente de verdad -- esto sólo
+   resuelve resiliencia ante un corte temporal, no reemplaza esa
+   dependencia. Si en el futuro hace falta un modo realmente offline, es
+   una decisión de arquitectura aparte, no una extensión de este punto.
+
+**Estado: implementado (2026-09-18), en las dos plataformas.**
+
+- `MIGRACION_48` (`src/database/schema.rs`) agrega
+  `usuarios.password_hash_confirmado_en` (`TEXT`, `NULL` por defecto).
+- `Usuario::password_hash_confirmado_en` (`src/models/usuario.rs`),
+  `UsuarioRepository::actualizar_password_cacheada` (nueva, junto a
+  `actualizar_password` -- ver el doc-comment de esta última sobre por qué
+  siempre limpia la marca) y `AppCore::cachear_password_local`
+  (`src/application/autenticacion.rs`) hacen el trabajo compartido por las
+  dos plataformas (mismo crate raíz).
+- `AutenticacionService::buscar_candidato`/`autenticar`
+  (`src/services/autenticacion_service.rs`) ahora reciben `ahora:
+  DateTime<Utc>` (del reloj corregido del núcleo, nunca leído por el propio
+  servicio) y rechazan un hash cacheado vencido con
+  `AutenticacionError::SinPasswordLocal` -- el mismo camino que ya usaba
+  "sin contraseña local todavía", así que desktop/mobile no necesitaron
+  tocar su propio manejo de ese error para beneficiarse del tope.
+- El cacheo en sí (llamar a `cachear_password_local` tras un login online
+  exitoso) vive en cada plataforma por separado, porque cada una arma su
+  propio `login_supabase`/`autenticar_supabase`:
+  `desktop/src-tauri/src/comandos/autenticacion.rs::login_supabase` (y
+  también `cambiar_password_supabase`, para refrescar el caché con la
+  contraseña nueva) y `mobile/rust-core/src/lib.rs::Nucleo::autenticar_supabase`.
+  Los dos son best-effort (un fallo ahí sólo deja sin el atajo offline a esa
+  cuenta, nunca tumba un login ya exitoso).
+- Verificado: suite completa del núcleo (`cargo test-plano`, sin fallos,
+  incluye 3 tests nuevos en `tests/autenticacion_service.rs` para el tope de
+  24h), `cargo test-mobile-plano` (22/22), `cargo clippy --all-targets`
+  limpio en las tres plataformas (root/desktop/mobile) con la config de
+  lints real del repo (no sólo `-D warnings` genérico), `cargo fmt --check`
+  limpio. **No probado todavía con la app real corriendo** -- falta un
+  login de verdad con un usuario Administrador/Operador, cortar la red, y
+  confirmar que puede volver a entrar dentro de las 24h y no después.

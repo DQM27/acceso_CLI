@@ -1,3 +1,4 @@
+use chrono::Utc;
 use rusqlite::Connection;
 
 use control_acceso::database::repositories::usuario_repository::{
@@ -181,10 +182,10 @@ fn cambiar_password_invalida_anterior_y_habilita_nueva() {
     servicio.cambiar_password(id, "password3").unwrap();
     let auth = AutenticacionService::new(&repository);
     assert!(matches!(
-        auth.autenticar("2001", "password2"),
+        auth.autenticar("2001", "password2", Utc::now()),
         Err(AutenticacionError::CredencialesInvalidas)
     ));
-    assert!(auth.autenticar("2001", "password3").is_ok());
+    assert!(auth.autenticar("2001", "password3", Utc::now()).is_ok());
 }
 
 #[test]
@@ -255,7 +256,7 @@ fn cambio_password_respeta_limite_de_ocho_caracteres() {
     servicio.cambiar_password(id, "12345678").unwrap();
     assert!(
         AutenticacionService::new(&repository)
-            .autenticar("2001", "12345678")
+            .autenticar("2001", "12345678", Utc::now())
             .is_ok()
     );
 }

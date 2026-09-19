@@ -139,14 +139,17 @@ input {
   backdrop-filter: blur(16px);
 }
 
-/* El ícono real (waves+leaf, `src/assets/marca.png`) ya trae su propio
-   fondo oscuro y esquinas redondeadas horneadas en el PNG — el contenedor
-   sólo lo tamaña/recorta, sin agregar un segundo fondo/borde que se vería
-   como un marco doble alrededor del ícono. */
+/* `src/assets/marca.png` ya trae el isotipo Y el texto "Lattis" horneados
+   en el propio PNG (fondo blanco, sin esquinas redondeadas) -- por eso acá
+   nunca va texto "Lattis" aparte al lado (sería literal duplicado, ver
+   Login.tsx). Grande a propósito (antes 2.75rem) -- a ese tamaño el
+   wordmark horneado en el PNG quedaba demasiado chico para leerse
+   (hallazgo del usuario, 2026-09-19). El contenedor sólo recorta/redondea
+   sus propias esquinas cuadradas, no agrega fondo propio. */
 .marca-sello {
   display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 6rem;
+  height: 6rem;
   flex-shrink: 0;
   place-items: center;
   overflow: hidden;
