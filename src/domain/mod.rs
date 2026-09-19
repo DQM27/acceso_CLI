@@ -6,3 +6,4 @@ pub mod gafete;
 pub mod registro_ingreso;
 pub mod resultado_acceso;
 pub mod resultado_salida_ruta;
+pub mod viaje_ruta;

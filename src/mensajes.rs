@@ -255,9 +255,10 @@ pub fn mensaje_encargado_ruta(error: EncargadoRutaServiceError) -> String {
 
 pub fn mensaje_ruta(error: RutaServiceError) -> String {
     use RutaServiceError::{
-        DocumentoRequiereAutorizacion, DocumentoYaRegistrado, EncargadoVacio, NumeroDocumentoVacio,
-        OperadorNoAutorizado, PlacaVacia, RelojRetrocedido, RetornoAnteriorASalida, RutaInactiva,
-        RutaNoEncontrada, SalidaNoActiva, VehiculoYaEnRuta,
+        DocumentoRequiereAutorizacion, EncargadoVacio, NumeroDocumentoVacio, OperadorNoAutorizado,
+        PlacaVacia, RelojRetrocedido, RetornoAnteriorASalida, RutaInactiva, RutaNoEncontrada,
+        SalidaNoActiva, SinDocumentos, VehiculoYaEnRuta, ViajeNoCoincide, ViajeNoEncontrado,
+        ViajeYaCerrado,
     };
 
     match error {
@@ -265,9 +266,7 @@ pub fn mensaje_ruta(error: RutaServiceError) -> String {
         EncargadoVacio => "El nombre del encargado es obligatorio".into(),
         NumeroDocumentoVacio => "El número de documento es obligatorio".into(),
         VehiculoYaEnRuta => "Este vehículo ya tiene una salida de ruta activa".into(),
-        DocumentoYaRegistrado => {
-            "Ya existe una salida registrada con ese número de documento".into()
-        }
+        SinDocumentos => "La salida debe declarar al menos un documento".into(),
         DocumentoRequiereAutorizacion => {
             "El documento no es de hoy -- confirme que cuenta con el correo de autorización".into()
         }
@@ -275,6 +274,12 @@ pub fn mensaje_ruta(error: RutaServiceError) -> String {
         RutaInactiva => "El número de ruta está dado de baja".into(),
         SalidaNoActiva => "La salida de ruta ya no está activa".into(),
         RetornoAnteriorASalida => "El retorno no puede ser anterior a la salida".into(),
+        ViajeNoEncontrado => "El viaje que se quiere continuar no existe".into(),
+        ViajeYaCerrado => "El viaje que se quiere continuar ya está cerrado".into(),
+        ViajeNoCoincide => {
+            "El vehículo o el encargado no coinciden con los del viaje que se quiere continuar"
+                .into()
+        }
         RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
         OperadorNoAutorizado => {
             "La sesión que registra el movimiento no existe o está inactiva".into()

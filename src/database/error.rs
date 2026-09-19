@@ -8,6 +8,8 @@ pub enum DatabaseError {
     MovimientoVisitaNoActivo,
     #[error("No existe una salida de ruta activa con ese ID")]
     SalidaRutaNoActiva,
+    #[error("No existe un viaje de ruta abierto con ese ID")]
+    ViajeRutaNoAbierto,
     #[error("No existe un préstamo de gafete provisional activo con ese ID")]
     PrestamoGafeteProvisionalNoActivo,
     #[error("No existe un ingreso de proveedor activo con ese ID")]

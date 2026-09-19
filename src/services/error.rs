@@ -207,8 +207,11 @@ pub enum RutaServiceError {
     /// `vehiculos_ruta` igual puede quedar "ya en ruta".
     #[error("Este vehículo ya tiene una salida de ruta activa")]
     VehiculoYaEnRuta,
-    #[error("Ya existe una salida registrada con ese número de documento")]
-    DocumentoYaRegistrado,
+    /// Al menos un documento -- confirmado explícito del usuario: todos
+    /// los documentos de una salida se declaran juntos, en el momento de
+    /// esa salida (ver `docs/planes-implementados/plan-control-rutas.md`).
+    #[error("La salida debe declarar al menos un documento")]
+    SinDocumentos,
     /// La fecha del documento no coincide con hoy y no se marcó tener el
     /// correo de autorización -- la UI ya debería haber bloqueado el botón
     /// de confirmar antes de llegar acá (ver
@@ -230,6 +233,20 @@ pub enum RutaServiceError {
     SalidaNoActiva,
     #[error("El retorno no puede ser anterior a la salida")]
     RetornoAnteriorASalida,
+    /// El `continuar_viaje_id` que mandó el llamador no existe --
+    /// mismo criterio que `RutaNoEncontrada`.
+    #[error("El viaje que se quiere continuar no existe")]
+    ViajeNoEncontrado,
+    /// El viaje que se quiere continuar ya está `CERRADO` -- nunca se
+    /// reabre (mismo criterio de inmutabilidad de todo el sistema, ver
+    /// `docs/planes-implementados/plan-control-rutas.md`).
+    #[error("El viaje que se quiere continuar ya está cerrado")]
+    ViajeYaCerrado,
+    /// La placa/encargado de la solicitud no coinciden con los del viaje
+    /// que se quiere continuar -- "misma ruta" significa continuar
+    /// exactamente el mismo viaje, no uno parecido.
+    #[error("El vehículo o el encargado no coinciden con los del viaje que se quiere continuar")]
+    ViajeNoCoincide,
     /// Comprobación de sanidad de todo el sistema (¿el reloj de la máquina
     /// retrocedió respecto al último movimiento conocido, de cualquier
     /// dominio?), no una regla de negocio de una salida puntual -- mismo

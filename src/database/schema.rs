@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 48;
+pub const SCHEMA_VERSION: i64 = 49;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -389,6 +389,11 @@ fn aplicar_migraciones_posteriores_a_29(
     if *version == 47 {
         aplicar_migracion_48(connection)?;
         *version = 48;
+    }
+
+    if *version == 48 {
+        aplicar_migracion_49(connection)?;
+        *version = 49;
     }
 
     Ok(())
@@ -787,6 +792,55 @@ fn aplicar_migracion_48(connection: &Connection) -> Result<(), SchemaError> {
     transaction.execute_batch(MIGRACION_48)?;
     transaction.execute_batch("PRAGMA user_version = 48")?;
     transaction.commit()?;
+    Ok(())
+}
+
+/// Rediseño del núcleo de rutas -- separa lo que hasta acá vivía todo en
+/// `salidas_ruta` en 3 entidades reales (ver
+/// `docs/planes-implementados/plan-control-rutas.md`, sección "Rediseño
+/// del núcleo de rutas -- documento/tramo/viaje", 2026-09-19/20):
+/// - `viajes_ruta` (nueva): agrupa 1+ tramos de la misma unidad+encargado
+///   el mismo día, con su propio cierre explícito (`estado`).
+/// - `documentos_ruta` (nueva): el comprobante real, independiente del
+///   vehículo -- puede repartirse entre varias salidas, incluso de
+///   camiones distintos. `ruta_id` es NULLABLE a propósito: el número de
+///   ruta es propiedad del documento (va impreso en cada comprobante),
+///   no del camión -- un tercero puede llevar documentos de varias rutas
+///   a la vez, o de ninguna.
+/// - `salida_ruta_documentos` (nueva, tabla puente): vincula tramos con
+///   documentos (N a N). El veredicto de fecha vencida
+///   (`resultado`/`motivo_resultado`) vive ACÁ, no en `documentos_ruta`
+///   -- un documento puede reusarse en un tramo de otro día (recarga que
+///   termina de despachar "la ruta del día anterior"), así que el
+///   veredicto se evalúa por cada vínculo, no una vez fijo en el
+///   documento.
+/// - `salidas_ruta` se recrea: pierde `numero_documento`/
+///   `fecha_documento`/`resultado`/`motivo_resultado`/`numero_ruta`/
+///   `sub_numero` (se mueven arriba), gana `viaje_id`.
+///
+/// Sin datos que preservar de `salidas_ruta` -- mismo criterio que
+/// `MIGRACION_38` ("sin datos que preservar"): el módulo de rutas
+/// todavía no se probó en producción real (confirmado por el usuario,
+/// 2026-09-19: "el mecanismo de ruta... está crudo, no se ha probado").
+///
+/// `foreign_keys = OFF/ON` alrededor, mismo criterio que
+/// `aplicar_migracion_41`/`44`/`46`: se recrea `salidas_ruta`, que
+/// `salida_ruta_documentos` referencia dentro de la misma migración.
+fn aplicar_migracion_49(connection: &Connection) -> Result<(), SchemaError> {
+    connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let resultado = ejecutar_migracion_49(connection);
+    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+    resultado
+}
+
+fn ejecutar_migracion_49(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_49)?;
+    transaction.execute_batch("PRAGMA user_version = 49")?;
+    transaction.commit()?;
+    if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
+        return Err(SchemaError::MigracionStrictReferenciasInvalidas);
+    }
     Ok(())
 }
 
@@ -3880,4 +3934,271 @@ CREATE UNIQUE INDEX idx_empresas_proveedor_nombre_plegado ON empresas_proveedor 
 // `aplicar_migracion_48` arriba.
 const MIGRACION_48: &str = r"
 ALTER TABLE usuarios ADD COLUMN password_hash_confirmado_en TEXT;
+";
+
+// Ver el comentario de `aplicar_migracion_49` arriba.
+const MIGRACION_49: &str = r"
+CREATE TABLE viajes_ruta (
+    id INTEGER PRIMARY KEY,
+    vehiculo_id INTEGER REFERENCES vehiculos_ruta(id) ON DELETE RESTRICT,
+    vehiculo_placa TEXT NOT NULL,
+    vehiculo_numero_unidad TEXT,
+    encargado_id INTEGER REFERENCES encargados_ruta(id) ON DELETE RESTRICT,
+    encargado_nombre TEXT NOT NULL,
+    estado TEXT NOT NULL CHECK (estado IN ('ABIERTO', 'CERRADO')),
+    fecha_hora_creacion TEXT NOT NULL,
+    usuario_creacion_id INTEGER NOT NULL REFERENCES usuarios(id),
+    usuario_creacion_nombre TEXT NOT NULL,
+    fecha_hora_cierre TEXT,
+    usuario_cierre_id INTEGER REFERENCES usuarios(id),
+    usuario_cierre_nombre TEXT,
+    uuid TEXT NOT NULL,
+    CHECK (
+        (estado = 'ABIERTO' AND fecha_hora_cierre IS NULL AND usuario_cierre_id IS NULL AND usuario_cierre_nombre IS NULL)
+        OR
+        (estado = 'CERRADO' AND fecha_hora_cierre IS NOT NULL AND usuario_cierre_nombre IS NOT NULL)
+    )
+) STRICT;
+CREATE UNIQUE INDEX idx_viajes_ruta_uuid ON viajes_ruta(uuid);
+CREATE INDEX idx_viajes_ruta_placa_estado ON viajes_ruta(vehiculo_placa, estado);
+
+CREATE TRIGGER viajes_ruta_no_eliminar
+BEFORE DELETE ON viajes_ruta
+BEGIN
+    SELECT RAISE(ABORT, 'Los viajes de ruta no se pueden eliminar');
+END;
+CREATE TRIGGER viajes_ruta_apertura_inmutable
+BEFORE UPDATE OF
+    vehiculo_id, vehiculo_placa, vehiculo_numero_unidad, encargado_id, encargado_nombre,
+    fecha_hora_creacion, usuario_creacion_id, usuario_creacion_nombre, uuid
+ON viajes_ruta
+WHEN
+    NEW.vehiculo_id IS NOT OLD.vehiculo_id
+    OR NEW.vehiculo_placa IS NOT OLD.vehiculo_placa
+    OR NEW.vehiculo_numero_unidad IS NOT OLD.vehiculo_numero_unidad
+    OR NEW.encargado_id IS NOT OLD.encargado_id
+    OR NEW.encargado_nombre IS NOT OLD.encargado_nombre
+    OR NEW.fecha_hora_creacion IS NOT OLD.fecha_hora_creacion
+    OR NEW.usuario_creacion_id IS NOT OLD.usuario_creacion_id
+    OR NEW.usuario_creacion_nombre IS NOT OLD.usuario_creacion_nombre
+    OR NEW.uuid IS NOT OLD.uuid
+BEGIN
+    SELECT RAISE(ABORT, 'Los datos de apertura del viaje son inmutables');
+END;
+CREATE TRIGGER viajes_ruta_cierre_unico
+BEFORE UPDATE OF estado, fecha_hora_cierre, usuario_cierre_id, usuario_cierre_nombre
+ON viajes_ruta
+WHEN
+    OLD.estado = 'CERRADO'
+    OR NEW.estado IS NOT 'CERRADO'
+    OR NEW.fecha_hora_cierre IS NULL
+    OR NEW.usuario_cierre_nombre IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'El viaje solo puede cerrarse una vez');
+END;
+CREATE TRIGGER viajes_ruta_fecha_utc_insert
+BEFORE INSERT ON viajes_ruta
+WHEN
+    strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_creacion) IS NOT NEW.fecha_hora_creacion
+    OR (
+        NEW.fecha_hora_cierre IS NOT NULL
+        AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_cierre) IS NOT NEW.fecha_hora_cierre
+    )
+BEGIN
+    SELECT RAISE(ABORT, 'Las fechas del viaje deben estar normalizadas en UTC');
+END;
+CREATE TRIGGER viajes_ruta_cierre_utc
+BEFORE UPDATE OF fecha_hora_cierre ON viajes_ruta
+WHEN
+    NEW.fecha_hora_cierre IS NOT NULL
+    AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_cierre) IS NOT NEW.fecha_hora_cierre
+BEGIN
+    SELECT RAISE(ABORT, 'La fecha de cierre debe estar normalizada en UTC');
+END;
+
+CREATE TABLE documentos_ruta (
+    id INTEGER PRIMARY KEY,
+    numero_documento TEXT NOT NULL,
+    ruta_id INTEGER REFERENCES rutas(id) ON DELETE RESTRICT,
+    sub_numero INTEGER NOT NULL CHECK (sub_numero >= 1),
+    fecha_documento TEXT NOT NULL,
+    fecha_hora_creacion TEXT NOT NULL,
+    uuid TEXT NOT NULL
+) STRICT;
+CREATE UNIQUE INDEX idx_documentos_ruta_uuid ON documentos_ruta(uuid);
+CREATE UNIQUE INDEX idx_documentos_ruta_numero ON documentos_ruta(numero_documento);
+CREATE INDEX idx_documentos_ruta_ruta ON documentos_ruta(ruta_id) WHERE ruta_id IS NOT NULL;
+
+CREATE TRIGGER documentos_ruta_no_eliminar
+BEFORE DELETE ON documentos_ruta
+BEGIN
+    SELECT RAISE(ABORT, 'Los documentos de ruta no se pueden eliminar');
+END;
+CREATE TRIGGER documentos_ruta_inmutable
+BEFORE UPDATE ON documentos_ruta
+BEGIN
+    SELECT RAISE(ABORT, 'Los documentos de ruta son inmutables');
+END;
+CREATE TRIGGER documentos_ruta_fecha_utc_insert
+BEFORE INSERT ON documentos_ruta
+WHEN strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_creacion) IS NOT NEW.fecha_hora_creacion
+BEGIN
+    SELECT RAISE(ABORT, 'La fecha de creación del documento debe estar normalizada en UTC');
+END;
+
+-- salidas_ruta se recrea: pierde numero_documento/fecha_documento/
+-- resultado/motivo_resultado/numero_ruta/sub_numero (se mueven a
+-- documentos_ruta/salida_ruta_documentos), gana viaje_id. Sin datos que
+-- preservar -- ver el comentario de `aplicar_migracion_49`.
+DROP TABLE salidas_ruta;
+CREATE TABLE salidas_ruta (
+    id INTEGER PRIMARY KEY,
+    viaje_id INTEGER NOT NULL REFERENCES viajes_ruta(id) ON DELETE RESTRICT,
+    vehiculo_id INTEGER REFERENCES vehiculos_ruta(id) ON DELETE RESTRICT,
+    vehiculo_placa TEXT NOT NULL,
+    vehiculo_numero_unidad TEXT,
+    encargado_id INTEGER REFERENCES encargados_ruta(id) ON DELETE RESTRICT,
+    encargado_nombre TEXT NOT NULL,
+    fecha_hora_salida TEXT NOT NULL,
+    usuario_salida_id INTEGER NOT NULL REFERENCES usuarios(id),
+    usuario_salida_nombre TEXT NOT NULL,
+    fecha_hora_retorno TEXT,
+    usuario_retorno_id INTEGER REFERENCES usuarios(id),
+    usuario_retorno_nombre TEXT,
+    uuid TEXT NOT NULL,
+    CHECK (
+        (fecha_hora_retorno IS NULL AND usuario_retorno_id IS NULL AND usuario_retorno_nombre IS NULL)
+        OR (fecha_hora_retorno IS NOT NULL AND usuario_retorno_nombre IS NOT NULL)
+    ),
+    CHECK (fecha_hora_retorno IS NULL OR fecha_hora_retorno >= fecha_hora_salida)
+) STRICT;
+CREATE UNIQUE INDEX idx_salidas_ruta_uuid ON salidas_ruta(uuid);
+CREATE INDEX idx_salidas_ruta_viaje ON salidas_ruta(viaje_id);
+CREATE INDEX idx_salidas_ruta_vehiculo ON salidas_ruta(vehiculo_id) WHERE vehiculo_id IS NOT NULL;
+CREATE INDEX idx_salidas_ruta_encargado ON salidas_ruta(encargado_id) WHERE encargado_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_salidas_ruta_placa_activa
+ON salidas_ruta(vehiculo_placa) WHERE fecha_hora_retorno IS NULL;
+
+CREATE TRIGGER salidas_ruta_no_eliminar
+BEFORE DELETE ON salidas_ruta
+BEGIN
+    SELECT RAISE(ABORT, 'Las salidas de ruta no se pueden eliminar');
+END;
+CREATE TRIGGER salidas_ruta_apertura_inmutable
+BEFORE UPDATE OF
+    viaje_id, vehiculo_id, vehiculo_placa, vehiculo_numero_unidad, encargado_id, encargado_nombre,
+    fecha_hora_salida, usuario_salida_id, usuario_salida_nombre, uuid
+ON salidas_ruta
+WHEN
+    NEW.viaje_id IS NOT OLD.viaje_id
+    OR NEW.vehiculo_id IS NOT OLD.vehiculo_id
+    OR NEW.vehiculo_placa IS NOT OLD.vehiculo_placa
+    OR NEW.vehiculo_numero_unidad IS NOT OLD.vehiculo_numero_unidad
+    OR NEW.encargado_id IS NOT OLD.encargado_id
+    OR NEW.encargado_nombre IS NOT OLD.encargado_nombre
+    OR NEW.fecha_hora_salida IS NOT OLD.fecha_hora_salida
+    OR NEW.usuario_salida_id IS NOT OLD.usuario_salida_id
+    OR NEW.usuario_salida_nombre IS NOT OLD.usuario_salida_nombre
+    OR NEW.uuid IS NOT OLD.uuid
+BEGIN
+    SELECT RAISE(ABORT, 'Los datos de salida de la ruta son inmutables');
+END;
+CREATE TRIGGER salidas_ruta_retorno_unico
+BEFORE UPDATE OF fecha_hora_retorno, usuario_retorno_id, usuario_retorno_nombre
+ON salidas_ruta
+WHEN
+    OLD.fecha_hora_retorno IS NOT NULL
+    OR NEW.fecha_hora_retorno IS NULL
+    OR NEW.usuario_retorno_nombre IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'El retorno solo puede registrarse una vez');
+END;
+CREATE TRIGGER salidas_ruta_fecha_utc_insert
+BEFORE INSERT ON salidas_ruta
+WHEN
+    strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+    OR (
+        NEW.fecha_hora_retorno IS NOT NULL
+        AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_retorno) IS NOT NEW.fecha_hora_retorno
+    )
+BEGIN
+    SELECT RAISE(ABORT, 'Las fechas de la salida de ruta deben estar normalizadas en UTC');
+END;
+CREATE TRIGGER salidas_ruta_retorno_utc
+BEFORE UPDATE OF fecha_hora_retorno ON salidas_ruta
+WHEN
+    NEW.fecha_hora_retorno IS NOT NULL
+    AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_retorno) IS NOT NEW.fecha_hora_retorno
+BEGIN
+    SELECT RAISE(ABORT, 'La fecha de retorno debe estar normalizada en UTC');
+END;
+
+CREATE TABLE salida_ruta_documentos (
+    salida_id INTEGER NOT NULL REFERENCES salidas_ruta(id) ON DELETE RESTRICT,
+    documento_id INTEGER NOT NULL REFERENCES documentos_ruta(id) ON DELETE RESTRICT,
+    resultado TEXT NOT NULL CHECK (resultado IN ('PERMITIDO', 'PERMITIDO_CON_AUTORIZACION')),
+    motivo_resultado TEXT CHECK (
+        motivo_resultado IS NULL OR motivo_resultado IN ('DOCUMENTO_FECHA_DISTINTA')
+    ),
+    uuid TEXT NOT NULL,
+    PRIMARY KEY (salida_id, documento_id),
+    CHECK (
+        (resultado = 'PERMITIDO' AND motivo_resultado IS NULL)
+        OR (resultado = 'PERMITIDO_CON_AUTORIZACION' AND motivo_resultado = 'DOCUMENTO_FECHA_DISTINTA')
+    )
+) STRICT;
+CREATE UNIQUE INDEX idx_salida_ruta_documentos_uuid ON salida_ruta_documentos(uuid);
+CREATE INDEX idx_salida_ruta_documentos_documento ON salida_ruta_documentos(documento_id);
+
+CREATE TRIGGER salida_ruta_documentos_no_eliminar
+BEFORE DELETE ON salida_ruta_documentos
+BEGIN
+    SELECT RAISE(ABORT, 'Los vínculos entre salida y documento de ruta no se pueden eliminar');
+END;
+CREATE TRIGGER salida_ruta_documentos_inmutable
+BEFORE UPDATE ON salida_ruta_documentos
+BEGIN
+    SELECT RAISE(ABORT, 'Los vínculos entre salida y documento de ruta son inmutables');
+END;
+
+-- Suma 'viaje_ruta', 'documento_ruta', 'salida_ruta_documento' al CHECK
+-- de cola_salida.entidad -- mismo patrón que MIGRACION_30/36/38/40/41.
+-- Lista base copiada de MIGRACION_41 (la última que tocó esta tabla),
+-- no de MIGRACION_40 -- esa migración ya había sumado
+-- 'empresa_proveedor'/'ingreso_proveedor' después de 40.
+CREATE TABLE cola_salida_nueva (
+    id INTEGER PRIMARY KEY,
+    entidad TEXT NOT NULL CHECK (
+        entidad IN (
+            'contratista', 'ingreso', 'empresa', 'gafete', 'usuario', 'movimiento_visita',
+            'vehiculo_ruta', 'encargado_ruta', 'salida_ruta', 'ruta', 'prestamo_gafete_provisional',
+            'empresa_proveedor', 'ingreso_proveedor',
+            'viaje_ruta', 'documento_ruta', 'salida_ruta_documento'
+        )
+    ),
+    entidad_uuid TEXT NOT NULL,
+    operacion TEXT NOT NULL CHECK (operacion IN ('crear', 'actualizar', 'cerrar')),
+    estado TEXT NOT NULL DEFAULT 'pendiente'
+        CHECK (estado IN ('pendiente', 'enviado', 'fallido')),
+    intentos INTEGER NOT NULL DEFAULT 0 CHECK (intentos >= 0),
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    ultimo_error TEXT,
+    proximo_intento_en TEXT GENERATED ALWAYS AS (
+        datetime(actualizado_en, '+' || MIN(intentos * 15, 1440) || ' minutes')
+    ) STORED
+) STRICT;
+INSERT INTO cola_salida_nueva (
+    id, entidad, entidad_uuid, operacion, estado, intentos,
+    creado_en, actualizado_en, ultimo_error
+)
+SELECT
+    id, entidad, entidad_uuid, operacion, estado, intentos,
+    creado_en, actualizado_en, ultimo_error
+FROM cola_salida;
+DROP TABLE cola_salida;
+ALTER TABLE cola_salida_nueva RENAME TO cola_salida;
+CREATE INDEX idx_cola_salida_pendientes
+ON cola_salida(proximo_intento_en)
+WHERE estado = 'pendiente';
 ";

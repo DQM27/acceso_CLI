@@ -1,5 +1,6 @@
 pub mod cita;
 pub mod contratista;
+pub mod documento_ruta;
 pub mod empresa;
 pub mod empresa_proveedor;
 pub mod encargado_ruta;
@@ -11,6 +12,8 @@ pub mod registro_ingreso;
 pub mod registro_ingreso_proveedor;
 pub mod ruta;
 pub mod salida_ruta;
+pub mod salida_ruta_documento;
 pub mod tipo_ingreso;
 pub mod usuario;
 pub mod vehiculo_ruta;
+pub mod viaje_ruta;

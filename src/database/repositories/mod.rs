@@ -1,5 +1,6 @@
 pub mod cita_repository;
 pub mod contratista_repository;
+pub mod documento_ruta_repository;
 pub mod empresa_proveedor_repository;
 pub mod empresa_repository;
 pub mod encargado_ruta_repository;
@@ -9,6 +10,8 @@ pub mod prestamo_gafete_provisional_repository;
 pub mod registro_ingreso_proveedor_repository;
 pub mod registro_ingreso_repository;
 pub mod ruta_repository;
+pub mod salida_ruta_documento_repository;
 pub mod salida_ruta_repository;
 pub mod usuario_repository;
 pub mod vehiculo_ruta_repository;
+pub mod viaje_ruta_repository;

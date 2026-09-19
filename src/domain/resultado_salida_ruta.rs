@@ -22,6 +22,14 @@ pub enum ResultadoSalidaRuta {
 /// pantalla, ver `PantallaRutas.kt`), no algo que este dominio pueda
 /// verificar por sí mismo -- mismo nivel de confianza que ya usa
 /// `RegistroIngresoService` para otros datos declarados en el momento.
+///
+/// Desde el rediseño documento/tramo/viaje (2026-09-19/20, ver
+/// `docs/planes-implementados/plan-control-rutas.md`) esta función se
+/// invoca **por cada vínculo** documento↔tramo
+/// (`salida_ruta_documentos`), no una sola vez por documento -- un mismo
+/// documento puede reusarse en un tramo de otro día (recarga que termina
+/// de despachar "la ruta del día anterior"), y cada uso necesita su
+/// propio veredicto contra la fecha de ESE tramo.
 pub fn verificar_fecha_documento(
     fecha_documento: NaiveDate,
     hoy: NaiveDate,

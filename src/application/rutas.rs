@@ -9,20 +9,25 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
+use crate::database::repositories::documento_ruta_repository::SqliteDocumentoRutaRepository;
 use crate::database::repositories::encargado_ruta_repository::{
     EncargadoRutaRepository, SqliteEncargadoRutaRepository,
 };
 use crate::database::repositories::ruta_repository::SqliteRutaRepository;
+use crate::database::repositories::salida_ruta_documento_repository::SqliteSalidaRutaDocumentoRepository;
 use crate::database::repositories::salida_ruta_repository::{
     SqliteSalidaRutaRepository, ultimo_instante_salida_ruta,
 };
 use crate::database::repositories::vehiculo_ruta_repository::{
     SqliteVehiculoRutaRepository, VehiculoRutaRepository,
 };
+use crate::database::repositories::viaje_ruta_repository::SqliteViajeRutaRepository;
+use crate::domain::viaje_ruta::DecisionRetornoViaje;
 use crate::models::encargado_ruta::EncargadoRuta;
 use crate::models::ruta::Ruta;
 use crate::models::salida_ruta::{SalidaRuta, SalidaRutaActivaResumen};
 use crate::models::vehiculo_ruta::VehiculoRuta;
+use crate::models::viaje_ruta::ViajeRuta;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::encargado_ruta_service::EncargadoRutaService;
 use crate::services::error::{
@@ -266,8 +271,8 @@ impl AppCore {
             .map_err(RutaCatalogoServiceError::Database)?
             .ok_or(RutaCatalogoServiceError::OperacionNoAutorizada)?;
         let rutas = SqliteRutaRepository::new(&transaction);
-        let salidas = SqliteSalidaRutaRepository::new(&transaction);
-        RutaCatalogoService::new(&rutas).dar_de_baja(&salidas, id)?;
+        let vinculos = SqliteSalidaRutaDocumentoRepository::new(&transaction);
+        RutaCatalogoService::new(&rutas).dar_de_baja(&vinculos, id)?;
         transaction
             .commit()
             .map_err(DatabaseError::from)
@@ -339,7 +344,19 @@ impl AppCore {
             let vehiculos = SqliteVehiculoRutaRepository::new(transaction);
             let encargados = SqliteEncargadoRutaRepository::new(transaction);
             let rutas = SqliteRutaRepository::new(transaction);
-            RutaService::new(&salidas, &vehiculos, &encargados, &rutas).registrar_salida(&solicitud)
+            let documentos = SqliteDocumentoRutaRepository::new(transaction);
+            let viajes = SqliteViajeRutaRepository::new(transaction);
+            let vinculos = SqliteSalidaRutaDocumentoRepository::new(transaction);
+            RutaService::new(
+                &salidas,
+                &vehiculos,
+                &encargados,
+                &rutas,
+                &documentos,
+                &viajes,
+                &vinculos,
+            )
+            .registrar_salida(&solicitud)
         })
     }
 
@@ -347,14 +364,26 @@ impl AppCore {
         &self,
         actor: &UsuarioSesion,
         salida_id: i64,
+        decision: DecisionRetornoViaje,
     ) -> Result<(), RutaServiceError> {
         self.en_transaccion_con_reloj_validado_rutas(actor, |transaction, ahora| {
             let salidas = SqliteSalidaRutaRepository::new(transaction);
             let vehiculos = SqliteVehiculoRutaRepository::new(transaction);
             let encargados = SqliteEncargadoRutaRepository::new(transaction);
             let rutas = SqliteRutaRepository::new(transaction);
-            RutaService::new(&salidas, &vehiculos, &encargados, &rutas)
-                .registrar_retorno(salida_id, ahora, actor.id)
+            let documentos = SqliteDocumentoRutaRepository::new(transaction);
+            let viajes = SqliteViajeRutaRepository::new(transaction);
+            let vinculos = SqliteSalidaRutaDocumentoRepository::new(transaction);
+            RutaService::new(
+                &salidas,
+                &vehiculos,
+                &encargados,
+                &rutas,
+                &documentos,
+                &viajes,
+                &vinculos,
+            )
+            .registrar_retorno(salida_id, decision, ahora, actor.id)
         })
     }
 
@@ -365,7 +394,19 @@ impl AppCore {
         let vehiculos = SqliteVehiculoRutaRepository::new(&self.connection);
         let encargados = SqliteEncargadoRutaRepository::new(&self.connection);
         let rutas = SqliteRutaRepository::new(&self.connection);
-        RutaService::new(&salidas, &vehiculos, &encargados, &rutas).listar_activas()
+        let documentos = SqliteDocumentoRutaRepository::new(&self.connection);
+        let viajes = SqliteViajeRutaRepository::new(&self.connection);
+        let vinculos = SqliteSalidaRutaDocumentoRepository::new(&self.connection);
+        RutaService::new(
+            &salidas,
+            &vehiculos,
+            &encargados,
+            &rutas,
+            &documentos,
+            &viajes,
+            &vinculos,
+        )
+        .listar_activas()
     }
 
     pub fn buscar_salida_ruta(&self, id: i64) -> Result<Option<SalidaRuta>, RutaServiceError> {
@@ -373,7 +414,45 @@ impl AppCore {
         let vehiculos = SqliteVehiculoRutaRepository::new(&self.connection);
         let encargados = SqliteEncargadoRutaRepository::new(&self.connection);
         let rutas = SqliteRutaRepository::new(&self.connection);
-        RutaService::new(&salidas, &vehiculos, &encargados, &rutas).buscar_por_id(id)
+        let documentos = SqliteDocumentoRutaRepository::new(&self.connection);
+        let viajes = SqliteViajeRutaRepository::new(&self.connection);
+        let vinculos = SqliteSalidaRutaDocumentoRepository::new(&self.connection);
+        RutaService::new(
+            &salidas,
+            &vehiculos,
+            &encargados,
+            &rutas,
+            &documentos,
+            &viajes,
+            &vinculos,
+        )
+        .buscar_por_id(id)
+    }
+
+    /// Sin `actor`, mismo criterio que `listar_rutas_activas` -- lectura.
+    /// La UI la consulta para ofrecer "+ Nuevo tramo" en vez del checklist
+    /// completo cuando una unidad ya anduvo hoy.
+    pub fn buscar_viaje_ruta_abierto_por_placa(
+        &self,
+        placa: &str,
+    ) -> Result<Option<ViajeRuta>, RutaServiceError> {
+        let salidas = SqliteSalidaRutaRepository::new(&self.connection);
+        let vehiculos = SqliteVehiculoRutaRepository::new(&self.connection);
+        let encargados = SqliteEncargadoRutaRepository::new(&self.connection);
+        let rutas = SqliteRutaRepository::new(&self.connection);
+        let documentos = SqliteDocumentoRutaRepository::new(&self.connection);
+        let viajes = SqliteViajeRutaRepository::new(&self.connection);
+        let vinculos = SqliteSalidaRutaDocumentoRepository::new(&self.connection);
+        RutaService::new(
+            &salidas,
+            &vehiculos,
+            &encargados,
+            &rutas,
+            &documentos,
+            &viajes,
+            &vinculos,
+        )
+        .buscar_viaje_abierto_por_placa(placa)
     }
 }
 
@@ -451,15 +530,19 @@ mod tests {
     }
 
     fn solicitud(placa: &str, numero_documento: &str) -> SolicitudSalidaRuta {
+        use crate::services::ruta_service::SolicitudDocumentoRuta;
         SolicitudSalidaRuta {
             vehiculo_placa: placa.to_string(),
             vehiculo_numero_unidad: Some("22906".to_string()),
             encargado_nombre: "Carlos Balmaceda".to_string(),
             encargado_codigo_empleado: None,
-            numero_ruta: 79,
-            sub_numero: 1,
-            numero_documento: numero_documento.to_string(),
-            fecha_documento: "2026-09-15".parse().unwrap(),
+            documentos: vec![SolicitudDocumentoRuta {
+                numero_documento: numero_documento.to_string(),
+                numero_ruta: Some(79),
+                sub_numero: 1,
+                fecha_documento: "2026-09-15".parse().unwrap(),
+            }],
+            continuar_viaje_id: None,
             tiene_correo_autorizacion: false,
             // Ignorados por `AppCore::registrar_salida_ruta` -- se pisan
             // con el actor/reloj reales de la transacción.
@@ -475,8 +558,12 @@ mod tests {
         let resultado = core
             .registrar_salida_ruta(&actor, solicitud("C12345", "700101452"))
             .unwrap();
-        core.registrar_retorno_ruta(&actor, resultado.salida_id)
-            .unwrap();
+        core.registrar_retorno_ruta(
+            &actor,
+            resultado.salida_id,
+            DecisionRetornoViaje::NoVuelveASalir,
+        )
+        .unwrap();
 
         let salida = core
             .buscar_salida_ruta(resultado.salida_id)
@@ -493,8 +580,12 @@ mod tests {
             .unwrap();
         core.registrar_salida_ruta(&actor, solicitud("C99999", "700101453"))
             .unwrap();
-        core.registrar_retorno_ruta(&actor, resultado.salida_id)
-            .unwrap();
+        core.registrar_retorno_ruta(
+            &actor,
+            resultado.salida_id,
+            DecisionRetornoViaje::NoVuelveASalir,
+        )
+        .unwrap();
 
         let activas = core.listar_rutas_activas().unwrap();
 
