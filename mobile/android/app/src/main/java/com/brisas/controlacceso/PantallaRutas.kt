@@ -560,9 +560,12 @@ private fun PasoVehiculo(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         PasoEncabezado(3, "Vehículo", completado)
-        // Fila propia (sin el encabezado) -- mismo motivo que en
-        // [PasoEncargado]: la cámara se centra contra el campo, no contra
-        // la tarjeta entera.
+        // Fila propia (sin el encabezado ni el texto de error) -- mismo
+        // motivo que en [PasoEncargado]/[PasoEmpresaProveedora]: la cámara
+        // se centra sólo contra el campo. El texto "no existe" vive fuera de
+        // esta Row porque su alto variable, si quedara adentro, recalcula el
+        // centrado vertical de la Row entera y desfasa el botón cada vez que
+        // aparece/desaparece (bug reportado 2026-09-19).
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -606,15 +609,15 @@ private fun PasoVehiculo(
                         }
                     }
                 }
-                if (sinCoincidencias) {
-                    Text(
-                        "Ese vehículo no existe en el catálogo.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
             }
             BotonCamaraCuadrado(onEscanear)
+        }
+        if (sinCoincidencias) {
+            Text(
+                "Ese vehículo no existe en el catálogo.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }
