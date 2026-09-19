@@ -20,9 +20,8 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -202,10 +201,8 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
             label = { Text("Cédula") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-            ),
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
         )
 
@@ -214,10 +211,8 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
             onValueChange = { nombre = it },
             label = { Text("Nombre") },
             singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-            ),
+            shape = FormaCampoBrisas,
+            colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         )
 
@@ -232,10 +227,8 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                 readOnly = true,
                 label = { Text("Empresa") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuEmpresaAbierto) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                ),
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
                 modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             )
             DropdownMenu(expanded = menuEmpresaAbierto, onDismissRequest = { menuEmpresaAbierto = false }) {
@@ -272,10 +265,8 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                 readOnly = true,
                 label = { Text("Tipo de ingreso") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuTipoAbierto) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                ),
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
                 modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             )
             DropdownMenu(expanded = menuTipoAbierto, onDismissRequest = { menuTipoAbierto = false }) {
@@ -306,10 +297,8 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                 onValueChange = { fechaPraind = it.filter { c -> c.isDigit() || c == '-' } },
                 label = { Text("Vencimiento PRAIND (DD-MM-AAAA)") },
                 singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                ),
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             )
         }

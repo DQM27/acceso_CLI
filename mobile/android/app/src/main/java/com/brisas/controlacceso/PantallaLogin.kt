@@ -13,7 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -82,7 +82,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
             modifier = Modifier.padding(top = 16.dp),
         )
 
-        TextField(
+        OutlinedTextField(
             value = viewModel.cedula,
             onValueChange = { viewModel.cambiarCedula(it) },
             label = { Text("Cédula") },
@@ -91,7 +91,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
             colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
         )
-        TextField(
+        OutlinedTextField(
             value = viewModel.password,
             onValueChange = { viewModel.cambiarPassword(it) },
             label = { Text("Contraseña") },

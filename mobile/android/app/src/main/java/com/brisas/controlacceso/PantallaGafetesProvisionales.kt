@@ -20,7 +20,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -94,7 +94,7 @@ fun PantallaGafetesProvisionales(
         // `FilaContratista` en modo Ingreso), no en un menú desplegable --
         // pedido explícito del usuario en pruebas reales, 2026-09-17:
         // unificar el look de esta pantalla con el de Contratista.
-        TextField(
+        OutlinedTextField(
             value = viewModel.textoEncargado,
             onValueChange = viewModel::cambiarTextoEncargado,
             placeholder = { Text("Nombre o código de empleado") },
@@ -139,7 +139,7 @@ fun PantallaGafetesProvisionales(
             // tiene uno): el placeholder terminaba recortado contra el borde
             // superior del campo en vez de centrado -- bug reportado en
             // pruebas reales, 2026-09-17 ("el input... sale cortado").
-            TextField(
+            OutlinedTextField(
                 value = gafeteTexto,
                 onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
                 placeholder = { Text("Número de gafete") },

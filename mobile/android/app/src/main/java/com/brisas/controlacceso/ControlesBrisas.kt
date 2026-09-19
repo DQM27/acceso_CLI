@@ -18,10 +18,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldColors
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,20 +49,17 @@ internal val AlturaBusquedaBrisas = 50.dp
  * esquinas bien marcadas pero no un óvalo. */
 internal val FormaPildoraBrisas = RoundedCornerShape(12.dp)
 
-/** Colores compartidos para un campo de texto "filled" sin borde visible
- * (buscadores, login). Antes usaba `colorScheme.surface`, igual al fondo de
- * las tarjetas que los contienen -- el campo quedaba invisible hasta que se
- * le escribía algo (reportado 2026-09-18, pantallas Rutas/Proveedores).
- * `surfaceVariant` (tono gris claro del esquema Material3) diferencia el
- * campo de la tarjeta sin necesitar un borde. */
+/** Colores compartidos para todo campo de texto de la app -- borde visible
+ * (`outline` sin foco, `primary` con foco) sobre fondo transparente, mismo
+ * look que ya tenía [PantallaNuevoContratista] -- pedido explícito del
+ * usuario (2026-09-19) para homogeneizar TODOS los inputs a ese estilo, no
+ * al revés. Reemplaza al estilo "filled" sin borde que tuvo este mismo
+ * nombre hasta esa fecha -- usar siempre junto a `OutlinedTextField`, no
+ * `TextField` (el filled no puede dibujar el marco completo). */
 @Composable
-internal fun ColoresCampoBrisas(): TextFieldColors = TextFieldDefaults.colors(
-    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-    focusedIndicatorColor = Color.Transparent,
-    unfocusedIndicatorColor = Color.Transparent,
-    disabledIndicatorColor = Color.Transparent,
+internal fun ColoresCampoBrisas(): TextFieldColors = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    focusedLabelColor = MaterialTheme.colorScheme.primary,
 )
 
 /** Acciones principales: forma y área táctil comunes en todas las pantallas. */

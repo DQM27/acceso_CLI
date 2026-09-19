@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -32,7 +33,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -185,7 +187,7 @@ fun PantallaProveedores(
             // con `leadingIcon` (a diferencia del buscador de
             // `PantallaActivos`, que no tiene `placeholder`) ese alto
             // dejaba el texto del placeholder recortado, casi invisible.
-            TextField(
+            OutlinedTextField(
                 value = busqueda,
                 onValueChange = { busqueda = it },
                 placeholder = { Text("Cédula, nombre, empresa…") },
@@ -393,9 +395,8 @@ private fun PasoDatosProveedor(
     onCambiarNombre: (String) -> Unit,
     onEscanear: () -> Unit,
 ) {
-    TarjetaPasoProveedor(onEscanear = onEscanear) {
-        PasoEncabezadoProveedor(1, "Datos del proveedor", completado)
-        TextField(
+    TarjetaPasoProveedor(1, "Datos del proveedor", completado, onEscanear = onEscanear) {
+        OutlinedTextField(
             value = cedula,
             onValueChange = onCambiarCedula,
             placeholder = { Text("Cédula") },
@@ -404,7 +405,7 @@ private fun PasoDatosProveedor(
             colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
         )
-        TextField(
+        OutlinedTextField(
             value = nombre,
             onValueChange = onCambiarNombre,
             placeholder = { Text("Nombre") },
@@ -437,13 +438,34 @@ private fun PasoEmpresaProveedora(
     // 2026-09-17: dejaba crear un duplicado de una empresa que ya existía).
     val sinCoincidencias = !completado && texto.isNotBlank() && resultados.isEmpty()
 
-    TarjetaPasoProveedor {
-        PasoEncabezadoProveedor(2, "Empresa proveedora", completado)
+    TarjetaPasoProveedor(
+        2,
+        "Empresa proveedora",
+        completado,
+        onEscanear = { onCrear(texto) },
+        icono = Icons.Default.Add,
+        descripcionIcono = "Añadir empresa",
+        botonHabilitado = sinCoincidencias && !creando,
+        contenidoExtra = {
+            if (sinCoincidencias) {
+                // Ya no es un botón clickeable -- la acción de crear ahora
+                // vive en el botón "+" al lado del campo (mismo lugar que la
+                // cámara en las otras 2 tarjetas). Esto queda como aviso de
+                // que esa empresa no existe todavía, nada más -- y vive
+                // fuera de la fila que centra el botón para no correrlo.
+                Text(
+                    if (creando) "Creando…" else "Empresa no existe",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    ) {
         ExposedDropdownMenuBox(
             expanded = menuAbierto && resultados.isNotEmpty(),
             onExpandedChange = { menuAbierto = it },
         ) {
-            TextField(
+            OutlinedTextField(
                 value = texto,
                 onValueChange = {
                     onCambiarTexto(it)
@@ -473,14 +495,6 @@ private fun PasoEmpresaProveedora(
                 }
             }
         }
-        if (sinCoincidencias) {
-            BotonDiscretoBrisas(
-                onClick = { onCrear(texto) },
-                enabled = !creando,
-            ) {
-                Text(if (creando) "Creando…" else "Crear empresa \"$texto\"")
-            }
-        }
     }
 }
 
@@ -496,9 +510,8 @@ private fun PasoVehiculoYGafete(
     gafeteTexto: String,
     onCambiarGafeteTexto: (String) -> Unit,
 ) {
-    TarjetaPasoProveedor(onEscanear = onEscanearPlaca) {
-        PasoEncabezadoProveedor(3, "Vehículo y gafete", completado)
-        TextField(
+    TarjetaPasoProveedor(3, "Vehículo y gafete", completado, onEscanear = onEscanearPlaca) {
+        OutlinedTextField(
             value = placa,
             onValueChange = onCambiarPlaca,
             placeholder = { Text("Placa (opcional)") },
@@ -507,7 +520,7 @@ private fun PasoVehiculoYGafete(
             colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
         )
-        TextField(
+        OutlinedTextField(
             value = gafeteTexto,
             onValueChange = onCambiarGafeteTexto,
             placeholder = { Text("Número de gafete") },
@@ -527,33 +540,63 @@ private fun PasoVehiculoYGafete(
 /// `private` allá).
 @Composable
 private fun TarjetaPasoProveedor(
+    numero: Int,
+    titulo: String,
+    completado: Boolean,
     onEscanear: (() -> Unit)? = null,
+    // Mismo botón cuadrado para las 3 tarjetas -- ícono/descripción/estado
+    // habilitado configurables para que sirva tanto de "escanear" (pasos 1 y
+    // 3) como de "añadir empresa" (paso 2, pedido explícito del usuario
+    // 2026-09-19: un botón al lado del campo, no un texto clickeable abajo
+    // -- las 3 tarjetas quedan con la misma utilidad visual).
+    icono: ImageVector = Icons.Default.PhotoCamera,
+    descripcionIcono: String = "Escanear",
+    botonHabilitado: Boolean = true,
+    // Contenido debajo de la fila campo(s)+botón, FUERA de ella a propósito
+    // -- si un mensaje variable (ej. "Empresa no existe") viviera adentro
+    // de la columna que el botón centra, la altura de esa columna cambiaría
+    // con el mensaje y el botón se corriría (bug reportado 2026-09-19: el
+    // input quedaba desfasado del botón). Así el botón siempre se centra
+    // sólo contra el/los campo(s), nunca contra contenido variable.
+    contenidoExtra: (@Composable () -> Unit)? = null,
     contenido: @Composable () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            contenido()
-        }
-        if (onEscanear != null) {
-            Box(
-                modifier = Modifier
-                    .size(AlturaBusquedaBrisas)
-                    .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
-                    .clip(FormaCampoBrisas)
-                    .clickable(onClick = onEscanear),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear", tint = MaterialTheme.colorScheme.primary)
+        PasoEncabezadoProveedor(numero, titulo, completado)
+        // Fila propia (sin el encabezado) -- mismo motivo que en
+        // `PantallaRutas`: el botón se centra contra el/los campo(s), no
+        // contra la tarjeta entera (pedido explícito del usuario,
+        // 2026-09-19).
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                contenido()
+            }
+            if (onEscanear != null) {
+                val colorBoton =
+                    if (botonHabilitado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                Box(
+                    modifier = Modifier
+                        .size(AlturaBusquedaBrisas)
+                        .border(1.dp, colorBoton, FormaCampoBrisas)
+                        .clip(FormaCampoBrisas)
+                        .clickable(enabled = botonHabilitado, onClick = onEscanear),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(icono, contentDescription = descripcionIcono, tint = colorBoton)
+                }
             }
         }
+        contenidoExtra?.invoke()
     }
 }
 

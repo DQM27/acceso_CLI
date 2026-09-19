@@ -240,7 +240,10 @@ fun PantallaPrincipal(
             // la pantalla y su ViewModel siguen intactos, pendiente decidir
             // si se reasigna a otro lado o se quita del todo (2026-09-17).
             FilaPildoras(
-                opciones = listOf("Activos", "Rutas", "Gafetes KOF", "Proveedores"),
+                // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
+                // usuario (2026-09-19) para descomprimir la fila de
+                // pestañas, ya apiñada (ver comentario arriba).
+                opciones = listOf("Activos", "Rutas", "KOF", "Proveedores"),
                 seleccionado = pestana,
                 onSeleccionar = { pestana = it },
                 modifier = Modifier.padding(horizontal = 16.dp),

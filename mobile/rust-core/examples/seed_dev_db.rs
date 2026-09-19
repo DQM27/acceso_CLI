@@ -18,15 +18,19 @@ fn main() {
 
     // Se lee en tiempo de ejecución (no `include_str!`) -- ese SQL tiene
     // datos reales de personas y ya no se trackea en git (ver .gitignore),
-    // así que tampoco debe quedar embebido en el binario compilado.
-    let sql_contratistas = std::fs::read_to_string("../../contratistas_base_final_limpia_v15.sql")
-        .expect(
-            "no se encontró contratistas_base_final_limpia_v15.sql en la raíz del repo -- \
-         es un archivo local con datos reales, no se trackea en git",
-        );
-    conexion
-        .execute_batch(&sql_contratistas)
-        .expect("fallo insertando contratistas");
+    // así que tampoco debe quedar embebido en el binario compilado. Sin ese
+    // archivo local (máquina nueva, clon fresco) se sigue de largo sin
+    // contratistas en vez de abortar -- el usuario ROOT y los gafetes ya
+    // alcanzan para probar login/UI.
+    match std::fs::read_to_string("../../contratistas_base_final_limpia_v15.sql") {
+        Ok(sql_contratistas) => conexion
+            .execute_batch(&sql_contratistas)
+            .expect("fallo insertando contratistas"),
+        Err(_) => eprintln!(
+            "aviso: no se encontró contratistas_base_final_limpia_v15.sql en la raíz del \
+             repo -- se sigue sin contratistas de prueba"
+        ),
+    }
 
     conexion
         .execute_batch(include_str!("seed_gafetes.sql"))

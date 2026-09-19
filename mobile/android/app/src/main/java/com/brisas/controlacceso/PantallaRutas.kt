@@ -29,7 +29,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -349,22 +349,30 @@ private fun PasoEncargado(
 ) {
     var menuAbierto by remember { mutableStateOf(false) }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            PasoEncabezado(1, "Encargado (gafete KOF)", completado)
+        PasoEncabezado(1, "Encargado (gafete KOF)", completado)
+        // Fila propia (sin el encabezado) para que la cámara se centre
+        // contra el/los input(s), no contra la tarjeta entera -- pedido
+        // explícito del usuario (2026-09-19): con el encabezado adentro de
+        // esta fila, `CenterVertically` la centraba respecto a
+        // encabezado+campos, y quedaba corrida hacia arriba con 2 campos.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             ExposedDropdownMenuBox(
                 expanded = menuAbierto && resultados.isNotEmpty(),
                 onExpandedChange = { menuAbierto = it },
+                modifier = Modifier.weight(1f),
             ) {
-                TextField(
+                OutlinedTextField(
                     value = texto,
                     onValueChange = {
                         onCambiarTexto(it)
@@ -394,8 +402,8 @@ private fun PasoEncargado(
                     }
                 }
             }
+            BotonCamaraCuadrado(onEscanear)
         }
-        BotonCamaraCuadrado(onEscanear)
     }
 }
 
@@ -426,91 +434,98 @@ private fun PasoDocumentoRuta(
 ) {
     var menuRutaAbierto by remember { mutableStateOf(false) }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            PasoEncabezado(2, "Documento de ruta", completado)
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ExposedDropdownMenuBox(
-                    expanded = menuRutaAbierto && resultadosRuta.isNotEmpty(),
-                    onExpandedChange = { menuRutaAbierto = it },
+        PasoEncabezado(2, "Documento de ruta", completado)
+        // Fila propia (sin el encabezado) -- mismo motivo que en
+        // [PasoEncargado]: la cámara se centra contra los 2 campos (ruta +
+        // documento), no contra la tarjeta entera.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextField(
-                        value = textoRuta,
-                        onValueChange = {
-                            onCambiarTextoRuta(it.filter(Char::isDigit))
-                            menuRutaAbierto = true
-                        },
-                        placeholder = { Text("Ruta") },
-                        singleLine = true,
-                        shape = FormaCampoBrisas,
-                        colors = ColoresCampoBrisas(),
-                        modifier = Modifier
-                            .width(110.dp)
-                            .height(AlturaBusquedaBrisas)
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
-                    )
-                    DropdownMenu(
+                    ExposedDropdownMenuBox(
                         expanded = menuRutaAbierto && resultadosRuta.isNotEmpty(),
-                        onDismissRequest = { menuRutaAbierto = false },
+                        onExpandedChange = { menuRutaAbierto = it },
                     ) {
-                        resultadosRuta.forEach { ruta ->
-                            DropdownMenuItem(
-                                text = { Text("${ruta.numero}") },
-                                onClick = {
-                                    onElegirRuta(ruta)
-                                    menuRutaAbierto = false
-                                },
-                            )
+                        OutlinedTextField(
+                            value = textoRuta,
+                            onValueChange = {
+                                onCambiarTextoRuta(it.filter(Char::isDigit))
+                                menuRutaAbierto = true
+                            },
+                            placeholder = { Text("Ruta") },
+                            singleLine = true,
+                            shape = FormaCampoBrisas,
+                            colors = ColoresCampoBrisas(),
+                            modifier = Modifier
+                                .width(110.dp)
+                                .height(AlturaBusquedaBrisas)
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
+                        )
+                        DropdownMenu(
+                            expanded = menuRutaAbierto && resultadosRuta.isNotEmpty(),
+                            onDismissRequest = { menuRutaAbierto = false },
+                        ) {
+                            resultadosRuta.forEach { ruta ->
+                                DropdownMenuItem(
+                                    text = { Text("${ruta.numero}") },
+                                    onClick = {
+                                        onElegirRuta(ruta)
+                                        menuRutaAbierto = false
+                                    },
+                                )
+                            }
                         }
                     }
+                    Text(
+                        etiquetaTipo,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.clickable(onClick = onTocarTipo),
+                    )
                 }
-                Text(
-                    etiquetaTipo,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable(onClick = onTocarTipo),
+                if (rutaSinCoincidencias) {
+                    Text(
+                        "Esa ruta no existe en el catálogo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                OutlinedTextField(
+                    value = numeroDocumento,
+                    onValueChange = onCambiarNumeroDocumento,
+                    placeholder = { Text("No. de transporte / documento") },
+                    singleLine = true,
+                    shape = FormaCampoBrisas,
+                    colors = ColoresCampoBrisas(),
+                    modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
                 )
-            }
-            if (rutaSinCoincidencias) {
-                Text(
-                    "Esa ruta no existe en el catálogo.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            TextField(
-                value = numeroDocumento,
-                onValueChange = onCambiarNumeroDocumento,
-                placeholder = { Text("No. de transporte / documento") },
-                singleLine = true,
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
-            )
-            if (fechaVencida) {
-                Text(
-                    "El documento no es de hoy -- requiere correo de autorización para continuar.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = tieneCorreo, onCheckedChange = onCambiarTieneCorreo)
-                    Text("Tengo el correo de autorización", style = MaterialTheme.typography.bodySmall)
+                if (fechaVencida) {
+                    Text(
+                        "El documento no es de hoy -- requiere correo de autorización para continuar.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = tieneCorreo, onCheckedChange = onCambiarTieneCorreo)
+                        Text("Tengo el correo de autorización", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
+            BotonCamaraCuadrado(onEscanear)
         }
-        BotonCamaraCuadrado(onEscanear)
     }
 }
 
@@ -530,37 +545,44 @@ private fun PasoVehiculo(
     onCambiarNumeroUnidad: (String) -> Unit,
     onEscanear: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            PasoEncabezado(3, "Vehículo", completado)
-            TextField(
-                value = placa,
-                onValueChange = onCambiarPlaca,
-                placeholder = { Text("Placa") },
-                singleLine = true,
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
-            )
-            TextField(
-                value = numeroUnidad,
-                onValueChange = onCambiarNumeroUnidad,
-                placeholder = { Text("N.º de unidad (opcional)") },
-                singleLine = true,
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
-            )
+        PasoEncabezado(3, "Vehículo", completado)
+        // Fila propia (sin el encabezado) -- mismo motivo que en
+        // [PasoEncargado]: la cámara se centra contra los 2 campos (placa +
+        // unidad), no contra la tarjeta entera.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedTextField(
+                    value = placa,
+                    onValueChange = onCambiarPlaca,
+                    placeholder = { Text("Placa") },
+                    singleLine = true,
+                    shape = FormaCampoBrisas,
+                    colors = ColoresCampoBrisas(),
+                    modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+                )
+                OutlinedTextField(
+                    value = numeroUnidad,
+                    onValueChange = onCambiarNumeroUnidad,
+                    placeholder = { Text("N.º de unidad (opcional)") },
+                    singleLine = true,
+                    shape = FormaCampoBrisas,
+                    colors = ColoresCampoBrisas(),
+                    modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+                )
+            }
+            BotonCamaraCuadrado(onEscanear)
         }
-        BotonCamaraCuadrado(onEscanear)
     }
 }
 
