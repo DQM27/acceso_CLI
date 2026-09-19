@@ -387,6 +387,8 @@ pub enum GafeteServiceError {
     ContratistaNoEncontrado,
     #[error("Visitante no encontrado")]
     VisitaNoEncontrada,
+    #[error("Encargado de ruta no encontrado")]
+    EncargadoRutaNoEncontrado,
     /// La transición pedida no aplica al estado actual (ej. dar de baja uno
     /// ya perdido, o resolver uno que no está perdido).
     #[error("El gafete no está en un estado válido para esta operación")]

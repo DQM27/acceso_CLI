@@ -132,6 +132,7 @@ pub fn mensaje_gafete(error: GafeteServiceError) -> String {
         }
         GafeteServiceError::ContratistaNoEncontrado => "El contratista ya no existe".into(),
         GafeteServiceError::VisitaNoEncontrada => "El visitante ya no existe".into(),
+        GafeteServiceError::EncargadoRutaNoEncontrado => "El encargado de ruta ya no existe".into(),
         GafeteServiceError::EstadoInvalido => {
             "El gafete no está en un estado válido para esa operación".into()
         }

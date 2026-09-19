@@ -16,6 +16,9 @@ use crate::database::repositories::cita_repository::{CitaRepository, SqliteCitaR
 use crate::database::repositories::contratista_repository::{
     ContratistaRepository, SqliteContratistaRepository,
 };
+use crate::database::repositories::encargado_ruta_repository::{
+    EncargadoRutaRepository, SqliteEncargadoRutaRepository,
+};
 use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
 use crate::models::gafete::{MotivoResolucionGafete, PortadorGafete, TipoGafete};
@@ -172,6 +175,45 @@ impl AppCore {
         Ok(())
     }
 
+    /// Misma idea que `marcar_gafete_perdido_contratista`, pero valida
+    /// existencia contra `EncargadoRutaRepository` -- un gafete provisional
+    /// KOF asignado a un encargado de ruta también puede perderse, igual
+    /// que cualquier otro (`PortadorGafete::ProvisionalKof`, ya soportado
+    /// por el núcleo desde siempre). La única diferencia real con
+    /// contratista/visita es de dónde sale el catálogo para buscar a quién
+    /// se le asigna -- acá es `encargados_ruta`, el mismo catálogo que ya
+    /// usa el selector de KOF en `SalidaRutaModal.tsx`.
+    pub fn marcar_gafete_perdido_provisional_kof(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        encargado_ruta_id: i64,
+    ) -> Result<(), GafeteServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        let actor_actual = verificar_actor_activo(&transaction, actor)
+            .map_err(GafeteServiceError::Database)?
+            .ok_or(GafeteServiceError::OperacionNoAutorizada)?;
+        let encargados = SqliteEncargadoRutaRepository::new(&transaction);
+        if encargados.buscar_por_id(encargado_ruta_id)?.is_none() {
+            return Err(GafeteServiceError::EncargadoRutaNoEncontrado);
+        }
+        let gafetes = SqliteGafeteRepository::new(&transaction);
+        let incidentes = SqliteGafetesIncidentes::new(&transaction);
+        let registros = SqliteRegistroIngresoRepository::new(&transaction);
+        GafeteService::new(&gafetes).marcar_perdido(
+            &incidentes,
+            &registros,
+            id,
+            PortadorGafete::ProvisionalKof(encargado_ruta_id),
+            actor_actual.id,
+            self.reloj.ahora_utc(),
+        )?;
+        transaction.commit().map_err(DatabaseError::from)?;
+        Ok(())
+    }
+
     pub fn resolver_gafete(
         &self,
         actor: &UsuarioSesion,
@@ -195,5 +237,98 @@ impl AppCore {
         )?;
         transaction.commit().map_err(DatabaseError::from)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::repositories::gafete_repository::GafeteRepository;
+    use crate::database::schema::initialize_database;
+    use crate::models::encargado_ruta::EncargadoRuta;
+    use crate::models::gafete::TipoGafete;
+    use crate::tiempo::RelojFijo;
+    use chrono::{TimeZone, Utc};
+    use std::sync::Arc;
+
+    fn nucleo_con_usuario_encargado_y_gafete() -> (AppCore, UsuarioSesion, i64) {
+        let connection = rusqlite::Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+                 VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1)",
+                [],
+            )
+            .unwrap();
+        let encargado_id = SqliteEncargadoRutaRepository::new(&connection)
+            .crear(&EncargadoRuta {
+                id: 0,
+                codigo_empleado: "E1".to_string(),
+                nombre: "Encargado Test".to_string(),
+                cedula: None,
+                activo: true,
+            })
+            .unwrap();
+        SqliteGafeteRepository::new(&connection)
+            .crear(9, TipoGafete::ProvisionalKof)
+            .unwrap();
+        let reloj = Arc::new(RelojFijo::new(
+            Utc.with_ymd_and_hms(2026, 9, 19, 12, 0, 0).unwrap(),
+        ));
+        let core = AppCore::con_reloj(connection, reloj);
+        let sesion = UsuarioSesion {
+            id: 1,
+            cedula: "1001".to_string(),
+            nombre: "Operador".to_string(),
+            rol: crate::models::usuario::RolUsuario::Operador,
+        };
+        (core, sesion, encargado_id)
+    }
+
+    /// Cualquier gafete se puede perder, KOF no es la excepción -- ver el
+    /// doc-comment de `marcar_gafete_perdido_provisional_kof`.
+    #[test]
+    fn marcar_perdido_provisional_kof_redondea_el_viaje() {
+        let (core, actor, encargado_id) = nucleo_con_usuario_encargado_y_gafete();
+        let gafete_id = core
+            .buscar_gafetes(&FiltroGafetes::default())
+            .unwrap()
+            .into_iter()
+            .find(|g| g.numero == 9)
+            .unwrap()
+            .id;
+
+        core.marcar_gafete_perdido_provisional_kof(&actor, gafete_id, encargado_id)
+            .unwrap();
+
+        let gafete = core
+            .buscar_gafetes(&FiltroGafetes::default())
+            .unwrap()
+            .into_iter()
+            .find(|g| g.id == gafete_id)
+            .unwrap();
+        assert_eq!(gafete.estado, crate::models::gafete::EstadoGafete::Perdido);
+    }
+
+    #[test]
+    fn marcar_perdido_provisional_kof_con_encargado_inexistente_falla() {
+        let (core, actor, _) = nucleo_con_usuario_encargado_y_gafete();
+        let gafete_id = core
+            .buscar_gafetes(&FiltroGafetes::default())
+            .unwrap()
+            .into_iter()
+            .find(|g| g.numero == 9)
+            .unwrap()
+            .id;
+
+        let error = core
+            .marcar_gafete_perdido_provisional_kof(&actor, gafete_id, 9999)
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            GafeteServiceError::EncargadoRutaNoEncontrado
+        ));
     }
 }
