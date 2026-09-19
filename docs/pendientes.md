@@ -21,8 +21,8 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - `mobile/README.md`
 - `docs/features-futuras/plan-sesion-unica-dispositivos.md`
 - tracker anterior de escritorio (absorbido aquí; ya no existe como lista aparte)
-- `README.md`, `packaging/msix/README.md`, `packaging/alacritty/README.md`,
-  `docs/recuperacion-supabase.md`, `docs/auditorias/realtime-verificado.md`
+- `README.md`, `packaging/msix/README.md`, `docs/recuperacion-supabase.md`,
+  `docs/auditorias/realtime-verificado.md`
 
 ---
 
