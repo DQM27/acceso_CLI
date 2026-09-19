@@ -109,6 +109,13 @@ export function marcarGafetePerdidoVisita(id: number, citaVisitanteId: number): 
   return invoke("marcar_gafete_perdido_visita", { id, citaVisitanteId });
 }
 
+export function marcarGafetePerdidoProvisionalKof(
+  id: number,
+  encargadoRutaId: number,
+): Promise<void> {
+  return invoke("marcar_gafete_perdido_provisional_kof", { id, encargadoRutaId });
+}
+
 export function resolverGafete(id: number, motivo: MotivoResolucionGafete): Promise<void> {
   return invoke("resolver_gafete", { id, motivo });
 }

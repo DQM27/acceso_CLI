@@ -11,13 +11,20 @@ import {
 import {
   buscarContratistas,
   darDeBajaGafete,
+  listarEncargadosRutaSeleccionables,
   marcarGafetePerdidoContratista,
+  marcarGafetePerdidoProvisionalKof,
   marcarGafetePerdidoVisita,
   nombrePortador,
   resolverGafete,
   verificarCheckInVisita,
 } from "../api";
-import type { ContratistaResumen, GafeteResumen, MotivoResolucionGafete } from "../api";
+import type {
+  ContratistaResumen,
+  EncargadoRuta,
+  GafeteResumen,
+  MotivoResolucionGafete,
+} from "../api";
 
 const DEBOUNCE_MS = 120;
 const MAX_RESULTADOS = 4;
@@ -27,10 +34,19 @@ const MAX_RESULTADOS = 4;
  * que la TUI (B/P/R en `src/tui/gafetes/`): Disponible ofrece dar de baja o
  * marcar perdido (búsqueda del portador, ramificada por `gafete.tipo`:
  * contratista busca por texto libre, mismo mecanismo de `NuevoIngresoModal`;
- * visita busca por cédula exacta, mismo mecanismo del check-in); Perdido
- * ofrece resolver (pagado/apareció, sólo tiene sentido para contratista,
- * pero el backend no lo restringe por tipo). De baja no ofrece ninguna
- * acción — es un estado final.
+ * visita busca por cédula exacta, mismo mecanismo del check-in; KOF elige
+ * del catálogo de encargados de ruta, mismo combobox y catálogo
+ * `listarEncargadosRutaSeleccionables` que ya usa
+ * `EntregarGafeteProvisionalModal` — cualquier gafete se puede perder, KOF
+ * no es la excepción); Perdido ofrece resolver (pagado/apareció, sólo tiene
+ * sentido para contratista, pero el backend no lo restringe por tipo). De
+ * baja no ofrece ninguna acción — es un estado final.
+ *
+ * Proveedor es la única excepción real: su registro es efímero (la persona
+ * llega y se registra en el momento vía `registro_ingresos_proveedor`, sin
+ * un catálogo propio de posibles portadores como sí tienen contratistas y
+ * encargados de ruta) -- no hay de dónde elegir a quién se le asigna, así
+ * que se oculta hasta que exista ese catálogo.
  */
 export default function GestionGafeteModal({
   gafete,
@@ -53,19 +69,14 @@ export default function GestionGafeteModal({
   const [enviando, setEnviando] = useState(false);
 
   const esVisita = gafete.tipo === "Visita";
-  // Un gafete provisional KOF no se marca perdido/resuelto con este flujo
-  // -- su ciclo es entrega/devolución (`prestamos_gafete_provisional`), no
-  // "asignar un portador que debe responder por él". Mostrar el botón acá
-  // lo haría caer por accidente en la búsqueda de contratista (rama
-  // `!esVisita`), que no tiene sentido para este tipo -- se oculta hasta
-  // que exista un flujo de entrega/devolución propio en desktop.
   const esProvisionalKof = gafete.tipo === "ProvisionalKof";
-  // Mismo criterio que ProvisionalKof: el ciclo de un gafete de proveedor
-  // es ingreso/salida (`registro_ingresos_proveedor`), no un portador que
-  // se le asigna para marcarlo perdido -- se oculta hasta que exista un
-  // flujo de ingreso/salida propio en desktop.
+  // El ciclo normal de un gafete de proveedor es ingreso/salida
+  // (`registro_ingresos_proveedor`), sin un catálogo propio de posibles
+  // portadores (registro efímero, ver el doc-comment de arriba) -- se
+  // oculta hasta que exista ese catálogo.
   const esProveedor = gafete.tipo === "Proveedor";
-  const listaVisible = !esVisita && buscandoPortador && filtro.trim().length > 0;
+  const listaVisible =
+    !esVisita && !esProvisionalKof && buscandoPortador && filtro.trim().length > 0;
   const { campoRef, posicion: posicionLista } = useListaFlotante(listaVisible);
   const { resaltado, setResaltado, manejarTecla } = useNavegacionFlechas(
     resultados,
@@ -74,7 +85,7 @@ export default function GestionGafeteModal({
   );
 
   useEffect(() => {
-    if (esVisita || !buscandoPortador || !filtro.trim()) {
+    if (esVisita || esProvisionalKof || !buscandoPortador || !filtro.trim()) {
       // `Promise.resolve().then(...)` en vez de llamar `setResultados([])`
       // directo -- ver el mismo comentario en Activos.tsx.
       Promise.resolve().then(() => {
@@ -91,7 +102,26 @@ export default function GestionGafeteModal({
         .finally(() => setCargandoResultados(false));
     }, DEBOUNCE_MS);
     return () => clearTimeout(id);
-  }, [filtro, buscandoPortador, esVisita]);
+  }, [filtro, buscandoPortador, esVisita, esProvisionalKof]);
+
+  // Catálogo de encargados de ruta para el combobox de KOF -- mismo patrón
+  // (`<input list>` + `<datalist>`, sin buscador servidor-lado aparte) que
+  // ya usa `EntregarGafeteProvisionalModal`. Sólo activas (`listarEncargados
+  // RutaSeleccionables`): un encargado desactivado no es una opción válida
+  // para asignarle un gafete perdido nuevo.
+  const [encargados, setEncargados] = useState<EncargadoRuta[]>([]);
+  useEffect(() => {
+    if (!esProvisionalKof) return;
+    listarEncargadosRutaSeleccionables()
+      .then(setEncargados)
+      .catch(() => {});
+  }, [esProvisionalKof]);
+  const [encargadoTexto, setEncargadoTexto] = useState("");
+  const etiquetaEncargado = (encargado: EncargadoRuta) =>
+    `${encargado.nombre} · ${encargado.codigo_empleado}`;
+  const encargadoElegido = encargados.find(
+    (encargado) => etiquetaEncargado(encargado).toLowerCase() === encargadoTexto.trim().toLowerCase(),
+  );
 
   async function confirmarBaja() {
     setError(null);
@@ -111,6 +141,19 @@ export default function GestionGafeteModal({
     setEnviando(true);
     try {
       await marcarGafetePerdidoContratista(gafete.id, contratista.id);
+      onCambiado();
+    } catch (error) {
+      setError(String(error));
+      setEnviando(false);
+    }
+  }
+
+  async function confirmarPortadorProvisionalKof() {
+    if (!encargadoElegido) return;
+    setError(null);
+    setEnviando(true);
+    try {
+      await marcarGafetePerdidoProvisionalKof(gafete.id, encargadoElegido.id);
       onCambiado();
     } catch (error) {
       setError(String(error));
@@ -178,7 +221,7 @@ export default function GestionGafeteModal({
             >
               Dar de baja
             </button>
-            {!esProvisionalKof && !esProveedor && (
+            {!esProveedor && (
               <button
                 type="button"
                 className="boton"
@@ -214,7 +257,37 @@ export default function GestionGafeteModal({
           </form>
         )}
 
-        {gafete.estado === "Disponible" && buscandoPortador && !esVisita && (
+        {gafete.estado === "Disponible" && buscandoPortador && esProvisionalKof && (
+          <form
+            style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}
+            onSubmit={(evento) => {
+              evento.preventDefault();
+              confirmarPortadorProvisionalKof();
+            }}
+          >
+            <label className="campo" style={{ flex: 1 }}>
+              Asignado a · encargado de ruta
+              <input
+                list="encargados-perdido-datalist"
+                value={encargadoTexto}
+                onChange={(evento) => setEncargadoTexto(evento.target.value)}
+                autoFocus
+                autoComplete="off"
+                placeholder="Escriba para buscar por nombre o código…"
+              />
+              <datalist id="encargados-perdido-datalist">
+                {encargados.map((encargado) => (
+                  <option key={encargado.id} value={etiquetaEncargado(encargado)} />
+                ))}
+              </datalist>
+            </label>
+            <button type="submit" className="boton" disabled={enviando || !encargadoElegido}>
+              Confirmar
+            </button>
+          </form>
+        )}
+
+        {gafete.estado === "Disponible" && buscandoPortador && !esVisita && !esProvisionalKof && (
           <div ref={campoRef}>
             <label className="campo">
               Asignado a · cédula o nombre

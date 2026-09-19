@@ -98,6 +98,19 @@ pub fn marcar_gafete_perdido_visita(
 }
 
 #[tauri::command]
+pub fn marcar_gafete_perdido_provisional_kof(
+    id: i64,
+    encargado_ruta_id: i64,
+    state: tauri::State<GuiState>,
+) -> Result<(), String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .marcar_gafete_perdido_provisional_kof(&sesion, id, encargado_ruta_id)
+        .map_err(control_acceso::mensajes::mensaje_gafete)
+}
+
+#[tauri::command]
 pub fn resolver_gafete(
     id: i64,
     motivo: MotivoResolucionGafete,

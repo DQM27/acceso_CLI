@@ -529,6 +529,7 @@ pub fn run() {
             comandos::gafetes::dar_de_baja_gafete,
             comandos::gafetes::marcar_gafete_perdido_contratista,
             comandos::gafetes::marcar_gafete_perdido_visita,
+            comandos::gafetes::marcar_gafete_perdido_provisional_kof,
             comandos::gafetes::resolver_gafete,
             comandos::nube::configurar_dispositivo_inicial,
             comandos::nube::sincronizar_con_nube,
