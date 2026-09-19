@@ -46,6 +46,7 @@ import uniffi.control_acceso_mobile.EncargadoRuta
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.Ruta
 import uniffi.control_acceso_mobile.SalidaRutaActivaResumen
+import uniffi.control_acceso_mobile.SolicitudDocumentoRuta
 import uniffi.control_acceso_mobile.SolicitudSalidaRuta
 import uniffi.control_acceso_mobile.VehiculoRuta
 
@@ -209,10 +210,22 @@ fun PantallaRutas(nucleo: Nucleo) {
                         vehiculoNumeroUnidad = vehiculo.numeroUnidad,
                         encargadoNombre = encargado.nombre,
                         encargadoCodigoEmpleado = encargado.codigoEmpleado,
-                        numeroRuta = ruta.numero,
-                        subNumero = (subNumeroTexto.toLongOrNull() ?: 1L),
-                        numeroDocumento = numeroDocumento,
-                        fechaDocumento = textoDDMMYYYYaIsoRuta(fechaDocumentoTexto),
+                        // Por ahora, un solo documento por salida -- la
+                        // lista repetible ("+ agregar documento") queda
+                        // para el rediseño de esta pantalla (ver
+                        // `docs/planes-implementados/plan-control-rutas.md`).
+                        documentos = listOf(
+                            SolicitudDocumentoRuta(
+                                numeroDocumento = numeroDocumento,
+                                numeroRuta = ruta.numero,
+                                subNumero = (subNumeroTexto.toLongOrNull() ?: 1L),
+                                fechaDocumento = textoDDMMYYYYaIsoRuta(fechaDocumentoTexto),
+                            ),
+                        ),
+                        // `null` = siempre abre un viaje nuevo -- el "+
+                        // Nuevo tramo" que precarga un viaje ya abierto
+                        // también queda para el rediseño.
+                        continuarViajeId = null,
                         tieneCorreoAutorizacion = tieneCorreo,
                     ),
                     onExito = {
@@ -649,13 +662,15 @@ private fun FilaSalidaRuta(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
-            "${salida.numeroRuta} · ${etiquetaSubNumero(salida.subNumero.toString())}",
+            "${salida.vehiculoPlaca}" + (salida.vehiculoNumeroUnidad?.let { " ($it)" } ?: ""),
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
         )
+        // Ya no trae el documento/número de ruta -- un tramo puede llevar
+        // varios ahora, ver el doc-comment de `SalidaRutaActivaResumen`.
+        // Mostrarlos queda para el rediseño de esta pantalla.
         Text(
-            "${salida.encargadoNombre} · ${salida.vehiculoPlaca}" +
-                (salida.vehiculoNumeroUnidad?.let { " ($it)" } ?: ""),
+            salida.encargadoNombre,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -693,7 +708,7 @@ private fun DialogoConfirmarRetornoRuta(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "${salida.numeroRuta} · ${salida.encargadoNombre} · ${salida.vehiculoPlaca}",
+                "${salida.encargadoNombre} · ${salida.vehiculoPlaca}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),

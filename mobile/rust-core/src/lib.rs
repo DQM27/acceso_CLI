@@ -29,11 +29,10 @@ use control_acceso::database::queries::usuarios::{
 use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
-use control_acceso::domain::resultado_salida_ruta::ResultadoSalidaRuta as ResultadoSalidaRutaNucleo;
+use control_acceso::domain::viaje_ruta::DecisionRetornoViaje as DecisionRetornoViajeNucleo;
 use control_acceso::models::empresa::Empresa as EmpresaNucleo;
 use control_acceso::models::empresa_proveedor::EmpresaProveedor as EmpresaProveedorNucleo;
 use control_acceso::models::encargado_ruta::EncargadoRuta as EncargadoRutaNucleo;
-use control_acceso::models::vehiculo_ruta::VehiculoRuta as VehiculoRutaNucleo;
 use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
 use control_acceso::models::prestamo_gafete_provisional::PrestamoGafeteProvisionalActivoResumen as PrestamoGafeteProvisionalActivoResumenNucleo;
 use control_acceso::models::registro_ingreso::{
@@ -45,6 +44,8 @@ use control_acceso::models::ruta::Ruta as RutaNucleo;
 use control_acceso::models::salida_ruta::SalidaRutaActivaResumen as SalidaRutaActivaResumenNucleo;
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
+use control_acceso::models::vehiculo_ruta::VehiculoRuta as VehiculoRutaNucleo;
+use control_acceso::models::viaje_ruta::ViajeRuta as ViajeRutaNucleo;
 use control_acceso::nube::IngresoProveedorRemoto as IngresoProveedorRemotoNucleo;
 use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
 use control_acceso::nube::PrestamoGafeteProvisionalRemoto as PrestamoGafeteProvisionalRemotoNucleo;
@@ -66,6 +67,7 @@ use control_acceso::services::registro_ingreso_service::{
 };
 use control_acceso::services::ruta_service::{
     ResultadoRegistroSalidaRuta as ResultadoRegistroSalidaRutaNucleo,
+    SolicitudDocumentoRuta as SolicitudDocumentoRutaNucleo,
     SolicitudSalidaRuta as SolicitudSalidaRutaNucleo,
 };
 use control_acceso::services::usuario_service::CrearUsuarioInput as CrearUsuarioInputNucleo;
@@ -758,24 +760,6 @@ impl From<PrestamoGafeteProvisionalRemotoNucleo> for PrestamoGafeteProvisionalRe
     }
 }
 
-/// Espejo de `domain::resultado_salida_ruta::ResultadoSalidaRuta` --
-/// `Permitido`/`PermitidoConAutorizacion` según si el documento de carga
-/// es de hoy (ver `RutaService::registrar_salida`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
-pub enum ResultadoSalidaRuta {
-    Permitido,
-    PermitidoConAutorizacion,
-}
-
-impl From<ResultadoSalidaRutaNucleo> for ResultadoSalidaRuta {
-    fn from(resultado: ResultadoSalidaRutaNucleo) -> Self {
-        match resultado {
-            ResultadoSalidaRutaNucleo::Permitido => Self::Permitido,
-            ResultadoSalidaRutaNucleo::PermitidoConAutorizacion => Self::PermitidoConAutorizacion,
-        }
-    }
-}
-
 /// Espejo de `EncargadoRuta` -- sin `cedula` a propósito: el catálogo KOF
 /// nunca la trae (pedido explícito del usuario, ver el modelo real) y el
 /// checklist mobile no la necesita para nada, sólo confirma nombre +
@@ -842,52 +826,110 @@ impl From<RutaNucleo> for Ruta {
     }
 }
 
+/// Espejo de `ruta_service::SolicitudDocumentoRuta` -- un documento
+/// declarado como parte de una solicitud de salida, 1+ por solicitud
+/// (confirmado: todos se declaran juntos, al momento de la salida).
+/// `numero_ruta` es `None` para un documento de tercero sin ruta de
+/// catálogo válida detrás. `fecha_documento` viaja como texto ISO
+/// (`AAAA-MM-DD`), mismo criterio que `fecha_vencimiento_praind` en
+/// `DatosContratista`.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SolicitudDocumentoRuta {
+    pub numero_documento: String,
+    pub numero_ruta: Option<i64>,
+    pub sub_numero: i64,
+    pub fecha_documento: String,
+}
+
 /// Espejo de `SolicitudSalidaRuta` -- sin `usuario_salida_id`/
 /// `fecha_hora_salida` (el núcleo los pisa siempre con el actor/reloj
 /// reales, igual que `AppCore::registrar_salida_ruta`/`desktop/src-tauri/src/dto/rutas.rs`).
-/// `fecha_documento` viaja como texto ISO (`AAAA-MM-DD`), mismo criterio
-/// que `fecha_vencimiento_praind` en `DatosContratista`.
+///
+/// `continuar_viaje_id`: `Some` cuando el guardia declaró "sí, misma
+/// ruta" al confirmar un retorno anterior -- el tramo nuevo se abre
+/// dentro de ESE viaje en vez de crear uno (ver
+/// `buscar_viaje_ruta_abierto_por_placa`). `None` abre un viaje nuevo.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct SolicitudSalidaRuta {
     pub vehiculo_placa: String,
     pub vehiculo_numero_unidad: Option<String>,
     pub encargado_nombre: String,
     pub encargado_codigo_empleado: Option<String>,
-    pub numero_ruta: i64,
-    pub sub_numero: i64,
-    pub numero_documento: String,
-    pub fecha_documento: String,
+    pub documentos: Vec<SolicitudDocumentoRuta>,
+    pub continuar_viaje_id: Option<i64>,
     pub tiene_correo_autorizacion: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
 pub struct ResultadoRegistroSalidaRuta {
     pub salida_id: i64,
-    pub resultado: ResultadoSalidaRuta,
+    pub viaje_id: i64,
 }
 
 impl From<ResultadoRegistroSalidaRutaNucleo> for ResultadoRegistroSalidaRuta {
     fn from(resultado: ResultadoRegistroSalidaRutaNucleo) -> Self {
         Self {
             salida_id: resultado.salida_id,
-            resultado: resultado.resultado.into(),
+            viaje_id: resultado.viaje_id,
+        }
+    }
+}
+
+/// Espejo de `domain::viaje_ruta::DecisionRetornoViaje` -- la respuesta
+/// obligatoria del guardia a "¿vuelve a salir?" en el mismo acto de
+/// confirmar un retorno (ver `registrar_retorno_ruta`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum DecisionRetornoViaje {
+    NoVuelveASalir,
+    MismaRuta,
+    OtraRutaOTercero,
+}
+
+impl From<DecisionRetornoViaje> for DecisionRetornoViajeNucleo {
+    fn from(decision: DecisionRetornoViaje) -> Self {
+        match decision {
+            DecisionRetornoViaje::NoVuelveASalir => Self::NoVuelveASalir,
+            DecisionRetornoViaje::MismaRuta => Self::MismaRuta,
+            DecisionRetornoViaje::OtraRutaOTercero => Self::OtraRutaOTercero,
+        }
+    }
+}
+
+/// Espejo mínimo de `ViajeRuta` -- sólo lo que la UI necesita para
+/// precargar vehículo/encargado al continuar un viaje ya abierto (ver
+/// `buscar_viaje_ruta_abierto_por_placa`), no el objeto completo.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ViajeRuta {
+    pub id: i64,
+    pub vehiculo_placa: String,
+    pub vehiculo_numero_unidad: Option<String>,
+    pub encargado_nombre: String,
+}
+
+impl From<ViajeRutaNucleo> for ViajeRuta {
+    fn from(viaje: ViajeRutaNucleo) -> Self {
+        Self {
+            id: viaje.id,
+            vehiculo_placa: viaje.vehiculo_placa,
+            vehiculo_numero_unidad: viaje.vehiculo_numero_unidad,
+            encargado_nombre: viaje.encargado_nombre,
         }
     }
 }
 
 /// Espejo de `SalidaRutaActivaResumen` -- fila de "rutas activas" (salidas
-/// sin retorno todavía), análoga a `IngresoActivoResumen`.
+/// sin retorno todavía), análoga a `IngresoActivoResumen`. `viaje_id`
+/// permite a la UI agrupar los tramos activos del mismo viaje en una sola
+/// tarjeta (ver el mockup aprobado). Ya no trae los campos de un único
+/// documento -- un tramo puede tener varios, la UI que los necesite los
+/// consulta aparte.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct SalidaRutaActivaResumen {
     pub id: i64,
+    pub viaje_id: i64,
     pub vehiculo_placa: String,
     pub vehiculo_numero_unidad: Option<String>,
     pub encargado_nombre: String,
-    pub numero_ruta: i64,
-    pub sub_numero: i64,
-    pub numero_documento: String,
-    pub fecha_documento: String,
-    pub resultado: ResultadoSalidaRuta,
     pub fecha_hora_salida: String,
     pub usuario_salida_nombre: String,
 }
@@ -896,14 +938,10 @@ impl From<SalidaRutaActivaResumenNucleo> for SalidaRutaActivaResumen {
     fn from(activa: SalidaRutaActivaResumenNucleo) -> Self {
         Self {
             id: activa.id,
+            viaje_id: activa.viaje_id,
             vehiculo_placa: activa.vehiculo_placa,
             vehiculo_numero_unidad: activa.vehiculo_numero_unidad,
             encargado_nombre: activa.encargado_nombre,
-            numero_ruta: activa.numero_ruta,
-            sub_numero: activa.sub_numero,
-            numero_documento: activa.numero_documento,
-            fecha_documento: activa.fecha_documento.to_string(),
-            resultado: activa.resultado.into(),
             fecha_hora_salida: activa.fecha_hora_salida.to_rfc3339(),
             usuario_salida_nombre: activa.usuario_salida_nombre,
         }
@@ -1633,7 +1671,7 @@ impl Nucleo {
     }
 
     /// Registra la salida (apertura) del ciclo de una ruta -- espejo de
-    /// `AppCore::registrar_salida_ruta`. `solicitud.fecha_documento` viaja
+    /// `AppCore::registrar_salida_ruta`. `documento.fecha_documento` viaja
     /// como texto ISO (`AAAA-MM-DD`), mismo criterio que
     /// `fecha_vencimiento_praind` en `crear_contratista`.
     pub fn registrar_salida_ruta(
@@ -1641,13 +1679,24 @@ impl Nucleo {
         solicitud: SolicitudSalidaRuta,
     ) -> Result<ResultadoRegistroSalidaRuta, NucleoError> {
         let actor = self.actor_autenticado()?;
-        let fecha_documento =
+        let documentos =
             solicitud
-                .fecha_documento
-                .parse()
-                .map_err(|_| NucleoError::FechaInvalida {
-                    mensaje: solicitud.fecha_documento.clone(),
-                })?;
+                .documentos
+                .into_iter()
+                .map(|documento| {
+                    let fecha_documento = documento.fecha_documento.parse().map_err(|_| {
+                        NucleoError::FechaInvalida {
+                            mensaje: documento.fecha_documento.clone(),
+                        }
+                    })?;
+                    Ok(SolicitudDocumentoRutaNucleo {
+                        numero_documento: documento.numero_documento,
+                        numero_ruta: documento.numero_ruta,
+                        sub_numero: documento.sub_numero,
+                        fecha_documento,
+                    })
+                })
+                .collect::<Result<Vec<_>, NucleoError>>()?;
         Ok(self
             .core_lock()
             .registrar_salida_ruta(
@@ -1657,10 +1706,8 @@ impl Nucleo {
                     vehiculo_numero_unidad: solicitud.vehiculo_numero_unidad,
                     encargado_nombre: solicitud.encargado_nombre,
                     encargado_codigo_empleado: solicitud.encargado_codigo_empleado,
-                    numero_ruta: solicitud.numero_ruta,
-                    sub_numero: solicitud.sub_numero,
-                    numero_documento: solicitud.numero_documento,
-                    fecha_documento,
+                    documentos,
+                    continuar_viaje_id: solicitud.continuar_viaje_id,
                     tiene_correo_autorizacion: solicitud.tiene_correo_autorizacion,
                     // Ignorados por `AppCore::registrar_salida_ruta` -- se
                     // pisan con el actor/reloj reales de la transacción.
@@ -1672,10 +1719,18 @@ impl Nucleo {
     }
 
     /// Registra el retorno (cierre) de una salida de ruta activa --
-    /// espejo de `AppCore::registrar_retorno_ruta`.
-    pub fn registrar_retorno_ruta(&self, salida_id: i64) -> Result<(), NucleoError> {
+    /// espejo de `AppCore::registrar_retorno_ruta`. `decision` es la
+    /// respuesta obligatoria del guardia a "¿vuelve a salir?", pedida en
+    /// el mismo acto de confirmar el retorno.
+    pub fn registrar_retorno_ruta(
+        &self,
+        salida_id: i64,
+        decision: DecisionRetornoViaje,
+    ) -> Result<(), NucleoError> {
         let actor = self.actor_autenticado()?;
-        Ok(self.core_lock().registrar_retorno_ruta(&actor, salida_id)?)
+        Ok(self
+            .core_lock()
+            .registrar_retorno_ruta(&actor, salida_id, decision.into())?)
     }
 
     /// Sin actor -- es una lectura, mismo criterio que
@@ -1687,6 +1742,20 @@ impl Nucleo {
             .into_iter()
             .map(Into::into)
             .collect())
+    }
+
+    /// Para que la UI sepa si una unidad ya anduvo hoy y ofrecer "+ Nuevo
+    /// tramo" en vez del checklist completo -- espejo de
+    /// `AppCore::buscar_viaje_ruta_abierto_por_placa`. Sin actor, mismo
+    /// criterio que `listar_rutas_activas` -- es una lectura.
+    pub fn buscar_viaje_ruta_abierto_por_placa(
+        &self,
+        placa: String,
+    ) -> Result<Option<ViajeRuta>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .buscar_viaje_ruta_abierto_por_placa(placa.trim())?
+            .map(Into::into))
     }
 
     /// Entrega un gafete provisional KOF -- espejo de
@@ -3643,20 +3712,23 @@ mod tests {
             vehiculo_numero_unidad: Some("22906".to_string()),
             encargado_nombre: "Michael Araya Retana".to_string(),
             encargado_codigo_empleado: Some("5040017".to_string()),
-            numero_ruta: 79,
-            sub_numero: 1,
-            numero_documento: numero_documento.to_string(),
-            // No usar `chrono::Utc::now()` para "hoy" acá -- la validación
-            // real (`RutaService::registrar_salida`) compara contra
-            // `fecha_costa_rica(fecha_hora_salida)` (UTC-6), no contra el
-            // día calendario UTC. Entre 00:00 y 06:00 UTC ambos difieren en
-            // un día, y este test fallaba exactamente en esa ventana
-            // (`DocumentoRequiereAutorizacion` inesperado) -- no era un bug
-            // de `interno()`/logging, es un desfase de huso horario en el
-            // propio fixture.
-            fecha_documento: control_acceso::tiempo::fecha_costa_rica(chrono::Utc::now())
-                .format("%Y-%m-%d")
-                .to_string(),
+            documentos: vec![SolicitudDocumentoRuta {
+                numero_ruta: Some(79),
+                sub_numero: 1,
+                numero_documento: numero_documento.to_string(),
+                // No usar `chrono::Utc::now()` para "hoy" acá -- la
+                // validación real (`RutaService::registrar_salida`) compara
+                // contra `fecha_costa_rica(fecha_hora_salida)` (UTC-6), no
+                // contra el día calendario UTC. Entre 00:00 y 06:00 UTC
+                // ambos difieren en un día, y este test fallaba exactamente
+                // en esa ventana (`DocumentoRequiereAutorizacion`
+                // inesperado) -- no era un bug de `interno()`/logging, es un
+                // desfase de huso horario en el propio fixture.
+                fecha_documento: control_acceso::tiempo::fecha_costa_rica(chrono::Utc::now())
+                    .format("%Y-%m-%d")
+                    .to_string(),
+            }],
+            continuar_viaje_id: None,
             tiene_correo_autorizacion: false,
         }
     }
@@ -3698,14 +3770,16 @@ mod tests {
         let resultado = nucleo
             .registrar_salida_ruta(solicitud_salida_ruta("C12345", "700101452"))
             .unwrap();
-        assert_eq!(resultado.resultado, ResultadoSalidaRuta::Permitido);
+        assert!(resultado.viaje_id > 0);
 
         let activas = nucleo.listar_rutas_activas().unwrap();
         assert_eq!(activas.len(), 1);
         assert_eq!(activas[0].id, resultado.salida_id);
-        assert_eq!(activas[0].numero_ruta, 79);
+        assert_eq!(activas[0].viaje_id, resultado.viaje_id);
 
-        nucleo.registrar_retorno_ruta(resultado.salida_id).unwrap();
+        nucleo
+            .registrar_retorno_ruta(resultado.salida_id, DecisionRetornoViaje::NoVuelveASalir)
+            .unwrap();
 
         assert_eq!(nucleo.listar_rutas_activas().unwrap(), Vec::new());
     }
@@ -3714,7 +3788,7 @@ mod tests {
     fn registrar_salida_ruta_con_numero_inexistente_falla() {
         let nucleo = nucleo_con_actor_y_ruta_79();
         let mut solicitud = solicitud_salida_ruta("C12345", "700101452");
-        solicitud.numero_ruta = 222;
+        solicitud.documentos[0].numero_ruta = Some(222);
 
         let resultado = nucleo.registrar_salida_ruta(solicitud);
 

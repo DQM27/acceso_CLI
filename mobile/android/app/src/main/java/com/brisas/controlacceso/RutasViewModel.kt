@@ -14,6 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import uniffi.control_acceso_mobile.DecisionRetornoViaje
 import uniffi.control_acceso_mobile.EncargadoRuta
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
@@ -274,10 +275,16 @@ class RutasViewModel(
         }
     }
 
+    /// Por ahora siempre cierra el viaje ("no vuelve a salir") -- el
+    /// diálogo de "¿vuelve a salir?" con sus 3 ramas queda para el
+    /// rediseño de esta pantalla (ver
+    /// `docs/planes-implementados/plan-control-rutas.md`).
     fun registrarRetorno(salida: SalidaRutaActivaResumen) {
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) { nucleo.registrarRetornoRuta(salida.id) }
+                withContext(dispatcherIO) {
+                    nucleo.registrarRetornoRuta(salida.id, DecisionRetornoViaje.NO_VUELVE_A_SALIR)
+                }
                 CambiosNube.solicitar()
                 refrescarActivas()
             } catch (excepcion: NucleoException) {

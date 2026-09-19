@@ -16,6 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.SolicitudDocumentoRuta
 import uniffi.control_acceso_mobile.SolicitudSalidaRuta
 
 /// Mismo criterio que `ActivosViewModelTest` -- un `StandardTestDispatcher`
@@ -136,18 +137,27 @@ class RutasViewModelTest {
                 vehiculoNumeroUnidad = null,
                 encargadoNombre = "Michael Araya Retana",
                 encargadoCodigoEmpleado = "5040017",
-                numeroRuta = 79L,
-                subNumero = 1L,
-                numeroDocumento = "700101452",
-                // Debe ser "hoy" para no chocar con el bloqueo transitorio por
-                // documento vencido (`RutaServiceError::DocumentoRequiereAutorizacion`)
-                // -- una fecha fija se vence sola al día siguiente de escribirla.
-                // Zona horaria explícita de Costa Rica, no la del sistema del
-                // runner (UTC en CI) -- el núcleo Rust define "hoy" con esa
-                // zona (`fecha_costa_rica`), y entre 00:00 y 06:00 UTC ese
-                // "hoy" todavía es "ayer" en CR, lo que hacía fallar este test
-                // de forma intermitente según la hora en que corriera CI.
-                fechaDocumento = java.time.LocalDate.now(java.time.ZoneId.of("America/Costa_Rica")).toString(),
+                documentos = listOf(
+                    SolicitudDocumentoRuta(
+                        numeroDocumento = "700101452",
+                        numeroRuta = 79L,
+                        subNumero = 1L,
+                        // Debe ser "hoy" para no chocar con el bloqueo
+                        // transitorio por documento vencido
+                        // (`RutaServiceError::DocumentoRequiereAutorizacion`)
+                        // -- una fecha fija se vence sola al día siguiente
+                        // de escribirla. Zona horaria explícita de Costa
+                        // Rica, no la del sistema del runner (UTC en CI) --
+                        // el núcleo Rust define "hoy" con esa zona
+                        // (`fecha_costa_rica`), y entre 00:00 y 06:00 UTC
+                        // ese "hoy" todavía es "ayer" en CR, lo que hacía
+                        // fallar este test de forma intermitente según la
+                        // hora en que corriera CI.
+                        fechaDocumento =
+                            java.time.LocalDate.now(java.time.ZoneId.of("America/Costa_Rica")).toString(),
+                    ),
+                ),
+                continuarViajeId = null,
                 tieneCorreoAutorizacion = false,
             ),
             onExito = { onExitoLlamado = true },
@@ -158,7 +168,7 @@ class RutasViewModelTest {
         assertNull(viewModel.error)
         assertEquals(1, viewModel.activas.size)
         val salida = viewModel.activas.single()
-        assertEquals(79L, salida.numeroRuta)
+        assertEquals("C12345", salida.vehiculoPlaca)
 
         viewModel.registrarRetorno(salida)
         advanceUntilIdle()
@@ -180,10 +190,15 @@ class RutasViewModelTest {
                 vehiculoNumeroUnidad = null,
                 encargadoNombre = "Sin Catalogo",
                 encargadoCodigoEmpleado = null,
-                numeroRuta = 222L,
-                subNumero = 1L,
-                numeroDocumento = "700101452",
-                fechaDocumento = "2026-09-15",
+                documentos = listOf(
+                    SolicitudDocumentoRuta(
+                        numeroDocumento = "700101452",
+                        numeroRuta = 222L,
+                        subNumero = 1L,
+                        fechaDocumento = "2026-09-15",
+                    ),
+                ),
+                continuarViajeId = null,
                 tieneCorreoAutorizacion = false,
             ),
             onExito = { onExitoLlamado = true },
