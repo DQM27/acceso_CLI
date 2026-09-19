@@ -48,10 +48,11 @@ class RutasViewModel(
     // Buscador de encargado (paso 1) -- por nombre o código de empleado,
     // pedido explícito del usuario, 2026-09-15: "que funcione de las dos
     // formas, como ahora funciona contratista, que busca por nombre o por
-    // número de cédula". A diferencia del número de ruta, NO es
-    // bloqueante -- si no se elige nada de la lista, el nombre tipeado
-    // libremente igual alcanza para registrar la salida (el match de
-    // catálogo es consultivo, ver `RutaService`).
+    // número de cédula". BLOQUEANTE desde 2026-09-19 (mismo pedido que ya
+    // se le hizo al buscador de vehículo: "más de lo mismo, debe ser un
+    // buscador") -- el paso sólo se da por completo cuando hay un
+    // [EncargadoRuta] real elegido de `resultadosEncargado`, nunca por el
+    // sólo hecho de que el campo de texto no esté vacío.
     var textoEncargado by mutableStateOf("")
         private set
     var resultadosEncargado by mutableStateOf<List<EncargadoRuta>>(emptyList())
@@ -132,6 +133,28 @@ class RutasViewModel(
         textoEncargado = encargado.nombre
         encargadoSeleccionado = encargado
         resultadosEncargado = emptyList()
+    }
+
+    /// Autocompleta el buscador de encargado con lo que trajo el OCR del
+    /// gafete KOF (código de empleado o nombre, ver
+    /// `PantallaEscanearCarnetKof.kt`) y dispara la búsqueda -- mismo
+    /// criterio que [usarVehiculoEscaneado]: si hay una única coincidencia
+    /// exacta, la elige sola; si no, deja los resultados para que el
+    /// guardia elija a mano.
+    fun usarEncargadoEscaneado(texto: String) {
+        cambiarTextoEncargado(texto)
+        trabajoBusquedaEncargado?.cancel()
+        trabajoBusquedaEncargado = viewModelScope.launch {
+            try {
+                val resultados = withContext(dispatcherIO) { nucleo.buscarEncargadosRuta(texto) }
+                resultadosEncargado = resultados
+                resultados
+                    .singleOrNull { it.codigoEmpleado == texto || it.nombre == texto }
+                    ?.let { elegirEncargado(it) }
+            } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            }
+        }
     }
 
     fun cambiarTextoRuta(nuevo: String) {

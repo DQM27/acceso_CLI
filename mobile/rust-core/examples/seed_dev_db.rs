@@ -36,5 +36,9 @@ fn main() {
         .execute_batch(include_str!("seed_gafetes.sql"))
         .expect("fallo insertando gafetes");
 
+    conexion
+        .execute_batch(include_str!("seed_rutas.sql"))
+        .expect("fallo insertando catálogo de rutas");
+
     println!("Semilla de desarrollo cargada en {ruta}");
 }

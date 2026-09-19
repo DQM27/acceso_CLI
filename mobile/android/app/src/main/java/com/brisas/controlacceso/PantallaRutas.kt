@@ -102,7 +102,7 @@ fun PantallaRutas(nucleo: Nucleo) {
                 // resuelve por cédula antes que por nombre cuando ambos
                 // vienen del OCR).
                 val texto = carnet.codigoEmpleado ?: carnet.nombre
-                if (texto != null) viewModel.cambiarTextoEncargado(texto)
+                if (texto != null) viewModel.usarEncargadoEscaneado(texto)
             },
             onCerrar = { escanerCarnetKofAbierto = false },
         )
@@ -125,7 +125,8 @@ fun PantallaRutas(nucleo: Nucleo) {
     }
 
     val rutaSeleccionada = viewModel.rutaSeleccionada
-    val paso1Completo = viewModel.textoEncargado.isNotBlank()
+    val encargadoSeleccionado = viewModel.encargadoSeleccionado
+    val paso1Completo = encargadoSeleccionado != null
     val paso2Completo = rutaSeleccionada != null && numeroDocumento.isNotBlank() && fechaDocumentoTexto.isNotBlank()
     val vehiculoSeleccionado = viewModel.vehiculoSeleccionado
     val paso3Completo = vehiculoSeleccionado != null
@@ -149,6 +150,10 @@ fun PantallaRutas(nucleo: Nucleo) {
                 onCambiarTexto = viewModel::cambiarTextoEncargado,
                 resultados = viewModel.resultadosEncargado,
                 onElegir = viewModel::elegirEncargado,
+                sinCoincidencias =
+                    viewModel.textoEncargado.isNotBlank() &&
+                        encargadoSeleccionado == null &&
+                        viewModel.resultadosEncargado.isEmpty(),
                 onEscanear = { escanerCarnetKofAbierto = true },
             )
             PasoDocumentoRuta(
@@ -197,12 +202,13 @@ fun PantallaRutas(nucleo: Nucleo) {
             onClick = {
                 val ruta = rutaSeleccionada ?: return@BotonBrisas
                 val vehiculo = vehiculoSeleccionado ?: return@BotonBrisas
+                val encargado = encargadoSeleccionado ?: return@BotonBrisas
                 viewModel.registrarSalida(
                     SolicitudSalidaRuta(
                         vehiculoPlaca = vehiculo.placa,
                         vehiculoNumeroUnidad = vehiculo.numeroUnidad,
-                        encargadoNombre = viewModel.textoEncargado,
-                        encargadoCodigoEmpleado = viewModel.encargadoSeleccionado?.codigoEmpleado,
+                        encargadoNombre = encargado.nombre,
+                        encargadoCodigoEmpleado = encargado.codigoEmpleado,
                         numeroRuta = ruta.numero,
                         subNumero = (subNumeroTexto.toLongOrNull() ?: 1L),
                         numeroDocumento = numeroDocumento,
@@ -335,9 +341,10 @@ private fun BotonCamaraCuadrado(onEscanear: () -> Unit) {
 
 /// Paso "Encargado" -- buscador real por nombre o código de empleado
 /// (pedido explícito del usuario, 2026-09-15: "que funcione de las dos
-/// formas, como ahora funciona contratista"). No es bloqueante: si nadie
-/// del catálogo coincide, el texto tipeado libremente igual alcanza para
-/// registrar la salida (ver doc-comment de [RutasViewModel.textoEncargado]).
+/// formas, como ahora funciona contratista"). BLOQUEANTE desde
+/// 2026-09-19 (pedido explícito: "más de lo mismo, debe ser un buscador",
+/// igual que [PasoVehiculo]) -- el paso no se da por completo sin elegir
+/// un [EncargadoRuta] real de la lista.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PasoEncargado(
@@ -346,6 +353,7 @@ private fun PasoEncargado(
     onCambiarTexto: (String) -> Unit,
     resultados: List<EncargadoRuta>,
     onElegir: (EncargadoRuta) -> Unit,
+    sinCoincidencias: Boolean,
     onEscanear: () -> Unit,
 ) {
     var menuAbierto by remember { mutableStateOf(false) }
@@ -359,11 +367,9 @@ private fun PasoEncargado(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         PasoEncabezado(1, "Encargado de Ruta", completado)
-        // Fila propia (sin el encabezado) para que la cámara se centre
-        // contra el/los input(s), no contra la tarjeta entera -- pedido
-        // explícito del usuario (2026-09-19): con el encabezado adentro de
-        // esta fila, `CenterVertically` la centraba respecto a
-        // encabezado+campos, y quedaba corrida hacia arriba con 2 campos.
+        // Fila propia (sin el encabezado ni el texto de error) -- mismo
+        // motivo que en [PasoVehiculo]: el alto variable del texto "no
+        // existe" desfasa el botón si queda dentro de la Row centrada.
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -404,6 +410,13 @@ private fun PasoEncargado(
                 }
             }
             BotonCamaraCuadrado(onEscanear)
+        }
+        if (sinCoincidencias) {
+            Text(
+                "Ese encargado no existe en el catálogo.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }
