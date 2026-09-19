@@ -47,6 +47,7 @@ import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.Ruta
 import uniffi.control_acceso_mobile.SalidaRutaActivaResumen
 import uniffi.control_acceso_mobile.SolicitudSalidaRuta
+import uniffi.control_acceso_mobile.VehiculoRuta
 
 /// Checklist real del módulo de rutas -- ver
 /// `docs/planes-implementados/plan-control-rutas.md`. Conectado al núcleo
@@ -71,8 +72,6 @@ fun PantallaRutas(nucleo: Nucleo) {
     var numeroDocumento by remember { mutableStateOf("") }
     var fechaDocumentoTexto by remember { mutableStateOf(fechaHoyTextoRuta()) }
     var tieneCorreo by remember { mutableStateOf(false) }
-    var vehiculoPlaca by remember { mutableStateOf("") }
-    var vehiculoNumeroUnidad by remember { mutableStateOf("") }
 
     var salidaParaConfirmarRetorno by remember { mutableStateOf<SalidaRutaActivaResumen?>(null) }
     var escanerRutaAbierto by remember { mutableStateOf(false) }
@@ -114,10 +113,11 @@ fun PantallaRutas(nucleo: Nucleo) {
         PantallaEscanearVehiculoRuta(
             onVehiculoDetectado = { detectado ->
                 escanerVehiculoAbierto = false
-                when (detectado.tipo) {
-                    TipoVehiculoDetectado.PLACA -> vehiculoPlaca = detectado.valor
-                    TipoVehiculoDetectado.NUMERO_UNIDAD -> vehiculoNumeroUnidad = detectado.valor
-                }
+                // Un solo buscador contra el catálogo ahora -- da igual si
+                // el OCR leyó placa o número de unidad, los dos buscan
+                // contra el mismo [VehiculoRuta] (ver
+                // [RutasViewModel.usarVehiculoEscaneado]).
+                viewModel.usarVehiculoEscaneado(detectado.valor)
             },
             onCerrar = { escanerVehiculoAbierto = false },
         )
@@ -127,10 +127,8 @@ fun PantallaRutas(nucleo: Nucleo) {
     val rutaSeleccionada = viewModel.rutaSeleccionada
     val paso1Completo = viewModel.textoEncargado.isNotBlank()
     val paso2Completo = rutaSeleccionada != null && numeroDocumento.isNotBlank() && fechaDocumentoTexto.isNotBlank()
-    // La placa es el único dato obligatorio del lado de Rust
-    // (`RutaServiceError::PlacaVacia`) -- el número de unidad es un dato
-    // auxiliar, no alcanza por sí solo para completar el paso.
-    val paso3Completo = vehiculoPlaca.isNotBlank()
+    val vehiculoSeleccionado = viewModel.vehiculoSeleccionado
+    val paso3Completo = vehiculoSeleccionado != null
     val fechaVencida = fechaDocumentoTexto.isNotBlank() && fechaDocumentoTexto != fechaHoyTextoRuta()
     val bloqueadoPorFecha = fechaVencida && !tieneCorreo
     val puedeConfirmar =
@@ -174,10 +172,14 @@ fun PantallaRutas(nucleo: Nucleo) {
             )
             PasoVehiculo(
                 completado = paso3Completo,
-                placa = vehiculoPlaca,
-                onCambiarPlaca = { vehiculoPlaca = it },
-                numeroUnidad = vehiculoNumeroUnidad,
-                onCambiarNumeroUnidad = { vehiculoNumeroUnidad = it },
+                texto = viewModel.textoVehiculo,
+                onCambiarTexto = viewModel::cambiarTextoVehiculo,
+                resultados = viewModel.resultadosVehiculo,
+                onElegir = viewModel::elegirVehiculo,
+                sinCoincidencias =
+                    viewModel.textoVehiculo.isNotBlank() &&
+                        vehiculoSeleccionado == null &&
+                        viewModel.resultadosVehiculo.isEmpty(),
                 onEscanear = { escanerVehiculoAbierto = true },
             )
         }
@@ -194,10 +196,11 @@ fun PantallaRutas(nucleo: Nucleo) {
         BotonBrisas(
             onClick = {
                 val ruta = rutaSeleccionada ?: return@BotonBrisas
+                val vehiculo = vehiculoSeleccionado ?: return@BotonBrisas
                 viewModel.registrarSalida(
                     SolicitudSalidaRuta(
-                        vehiculoPlaca = vehiculoPlaca,
-                        vehiculoNumeroUnidad = vehiculoNumeroUnidad.ifBlank { null },
+                        vehiculoPlaca = vehiculo.placa,
+                        vehiculoNumeroUnidad = vehiculo.numeroUnidad,
                         encargadoNombre = viewModel.textoEncargado,
                         encargadoCodigoEmpleado = viewModel.encargadoSeleccionado?.codigoEmpleado,
                         numeroRuta = ruta.numero,
@@ -211,8 +214,6 @@ fun PantallaRutas(nucleo: Nucleo) {
                         numeroDocumento = ""
                         fechaDocumentoTexto = fechaHoyTextoRuta()
                         tieneCorreo = false
-                        vehiculoPlaca = ""
-                        vehiculoNumeroUnidad = ""
                     },
                 )
             },
@@ -357,7 +358,7 @@ private fun PasoEncargado(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        PasoEncabezado(1, "Encargado (gafete KOF)", completado)
+        PasoEncabezado(1, "Encargado de Ruta", completado)
         // Fila propia (sin el encabezado) para que la cámara se centre
         // contra el/los input(s), no contra la tarjeta entera -- pedido
         // explícito del usuario (2026-09-19): con el encabezado adentro de
@@ -529,22 +530,27 @@ private fun PasoDocumentoRuta(
     }
 }
 
-/// Paso "Vehículo" -- dos campos separados (placa / número de unidad) en
-/// vez del campo único que había antes: el bug reportado 2026-09-15 era
-/// justamente que ese campo único siempre se mandaba como placa sin
-/// importar qué había leído el OCR (`VehiculoRutaDetectado.tipo`). La
-/// placa es la única obligatoria -- mismo motivo que
-/// `RutaServiceError::PlacaVacia` del núcleo: el número de unidad es un
-/// dato auxiliar, nunca reemplaza a la placa en el registro.
+/// Paso "Vehículo" -- un solo buscador contra el catálogo `VehiculoRuta`
+/// (placa o número de unidad), no dos campos de texto libre. Antes eran dos
+/// `OutlinedTextField` separados donde se podía tipear cualquier cosa; pedido
+/// explícito del usuario (2026-09-19): "es un buscador con dos criterios,
+/// placa o número de unidad -- no se puede poner lo que uno quiera, sino
+/// sólo lo que la tabla proporciona". Mismo criterio BLOQUEANTE que
+/// [PasoDocumentoRuta] con el número de ruta -- el paso no se da por
+/// completo sin elegir un [VehiculoRuta] real de la lista.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PasoVehiculo(
     completado: Boolean,
-    placa: String,
-    onCambiarPlaca: (String) -> Unit,
-    numeroUnidad: String,
-    onCambiarNumeroUnidad: (String) -> Unit,
+    texto: String,
+    onCambiarTexto: (String) -> Unit,
+    resultados: List<VehiculoRuta>,
+    onElegir: (VehiculoRuta) -> Unit,
+    sinCoincidencias: Boolean,
     onEscanear: () -> Unit,
 ) {
+    var menuAbierto by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -555,31 +561,58 @@ private fun PasoVehiculo(
     ) {
         PasoEncabezado(3, "Vehículo", completado)
         // Fila propia (sin el encabezado) -- mismo motivo que en
-        // [PasoEncargado]: la cámara se centra contra los 2 campos (placa +
-        // unidad), no contra la tarjeta entera.
+        // [PasoEncargado]: la cámara se centra contra el campo, no contra
+        // la tarjeta entera.
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OutlinedTextField(
-                    value = placa,
-                    onValueChange = onCambiarPlaca,
-                    placeholder = { Text("Placa") },
-                    singleLine = true,
-                    shape = FormaCampoBrisas,
-                    colors = ColoresCampoBrisas(),
-                    modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
-                )
-                OutlinedTextField(
-                    value = numeroUnidad,
-                    onValueChange = onCambiarNumeroUnidad,
-                    placeholder = { Text("N.º de unidad (opcional)") },
-                    singleLine = true,
-                    shape = FormaCampoBrisas,
-                    colors = ColoresCampoBrisas(),
-                    modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
-                )
+                ExposedDropdownMenuBox(
+                    expanded = menuAbierto && resultados.isNotEmpty(),
+                    onExpandedChange = { menuAbierto = it },
+                ) {
+                    OutlinedTextField(
+                        value = texto,
+                        onValueChange = {
+                            onCambiarTexto(it)
+                            menuAbierto = true
+                        },
+                        placeholder = { Text("Placa o número de unidad") },
+                        singleLine = true,
+                        shape = FormaCampoBrisas,
+                        colors = ColoresCampoBrisas(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(AlturaBusquedaBrisas)
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
+                    )
+                    DropdownMenu(
+                        expanded = menuAbierto && resultados.isNotEmpty(),
+                        onDismissRequest = { menuAbierto = false },
+                    ) {
+                        resultados.forEach { vehiculo ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        vehiculo.numeroUnidad?.let { "${vehiculo.placa} · $it" } ?: vehiculo.placa,
+                                    )
+                                },
+                                onClick = {
+                                    onElegir(vehiculo)
+                                    menuAbierto = false
+                                },
+                            )
+                        }
+                    }
+                }
+                if (sinCoincidencias) {
+                    Text(
+                        "Ese vehículo no existe en el catálogo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
             BotonCamaraCuadrado(onEscanear)
         }

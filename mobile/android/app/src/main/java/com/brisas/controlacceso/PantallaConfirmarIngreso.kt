@@ -326,6 +326,11 @@ fun PantallaConfirmarIngreso(
 
 @Composable
 fun PantallaIngresoBloqueado(preparacion: PreparacionIngreso, mensaje: String, onCambiar: () -> Unit) {
+    // Mismo destino que "← Cambiar contratista" de abajo -- su hermana
+    // `PantallaConfirmarIngreso` ya lo hacía (línea de arriba), esta rama
+    // del mismo `when` se había quedado sin el equivalente (hallazgo
+    // 2026-09-19).
+    BackHandler(onBack = onCambiar)
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(preparacion.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Text(

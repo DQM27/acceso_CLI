@@ -10,17 +10,31 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 
-/// Guía visual deliberadamente estática. Los `boundingBox` de ML Kit están
-/// en coordenadas del frame de análisis y `PreviewView.FILL_CENTER` aplica
-/// su propio recorte; dibujarlos directamente sobre Compose produce cajas
-/// desplazadas según pantalla/orientación. Hasta usar la transformación
-/// oficial de CameraX, una guía honesta es preferible a seguimiento falso.
+/// Guía visual deliberadamente estática (el rectángulo/esquinas no siguen al
+/// documento). Los `boundingBox` de ML Kit están en coordenadas del frame de
+/// análisis y `PreviewView.FILL_CENTER` aplica su propio recorte; dibujarlos
+/// directamente sobre Compose produce cajas desplazadas según
+/// pantalla/orientación. Hasta usar la transformación oficial de CameraX, una
+/// guía honesta es preferible a seguimiento falso.
+///
+/// Rediseñado 2026-09-19 (pedido explícito del usuario: "se ve muy simple
+/// para lo que ofrece Compose") -- antes era sólo una línea punteada
+/// horizontal con un brillo que la recorría. Ahora sigue el patrón estándar
+/// de scanners de documentos (Google ML Kit Document Scanner, apps de
+/// verificación de identidad tipo Jumio/Onfido): rectángulo con proporción
+/// de cédula real, fondo oscurecido fuera del área de captura (para que el
+/// recuadro "salte" en vez de perderse contra el resto de la imagen de
+/// cámara), esquinas marcadas en vez de un borde completo, y un barrido
+/// vertical dentro del recuadro en vez de horizontal sobre una línea suelta.
 ///
 /// En su propio archivo (separado de `PantallaEscanearCedula.kt`) porque es
 /// puramente dibujo de UI -- no conoce cámara, ML Kit, ni el estado de
@@ -47,30 +61,92 @@ fun MarcoGuiaCedula(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1250, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 1600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "barridoMarcoOcr",
     )
 
     Canvas(modifier = modifier) {
-        val anchoGuia = size.width * 0.72f
+        // Proporción real de una cédula/tarjeta ID (ISO/IEC 7810 ID-1,
+        // 85.60×53.98mm ≈ 1.586:1) -- un rectángulo cuadrado o al voleo no
+        // comunica "así se ve una cédula acostada" tan bien como uno con la
+        // proporción correcta.
+        val anchoGuia = size.width * 0.84f
+        val altoGuia = anchoGuia / 1.586f
         val izquierdaGuia = (size.width - anchoGuia) / 2f
-        val yGuia = size.height * 0.52f
-        drawLine(
-            color = color.copy(alpha = 0.35f + pulso * 0.25f),
-            start = Offset(izquierdaGuia, yGuia),
-            end = Offset(izquierdaGuia + anchoGuia, yGuia),
-            strokeWidth = 2.dp.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12.dp.toPx(), 12.dp.toPx())),
+        val arribaGuia = size.height * 0.52f - altoGuia / 2f
+        val guia = Rect(
+            left = izquierdaGuia,
+            top = arribaGuia,
+            right = izquierdaGuia + anchoGuia,
+            bottom = arribaGuia + altoGuia,
         )
-        val anchoBrillo = anchoGuia * 0.28f
-        val inicioBrillo = izquierdaGuia + (anchoGuia - anchoBrillo) * avanceBarrido
-        drawLine(
-            color = color.copy(alpha = if (estado == EstadoEscaneo.BUSCANDO) 0.72f else 0.48f),
-            start = Offset(inicioBrillo, yGuia),
-            end = Offset(inicioBrillo + anchoBrillo, yGuia),
-            strokeWidth = 3.dp.toPx(),
+        val radioEsquina = 14.dp.toPx()
+
+        // Fondo oscurecido FUERA del recuadro -- 4 rectángulos en vez de un
+        // cutout con BlendMode.Clear: mismo resultado visual, sin depender
+        // de un `graphicsLayer(compositingStrategy = Offscreen)` extra sólo
+        // para esto.
+        val colorScrim = Color.Black.copy(alpha = 0.55f)
+        drawRect(colorScrim, topLeft = Offset(0f, 0f), size = Size(size.width, guia.top))
+        drawRect(colorScrim, topLeft = Offset(0f, guia.bottom), size = Size(size.width, size.height - guia.bottom))
+        drawRect(colorScrim, topLeft = Offset(0f, guia.top), size = Size(guia.left, guia.height))
+        drawRect(
+            colorScrim,
+            topLeft = Offset(guia.right, guia.top),
+            size = Size(size.width - guia.right, guia.height),
         )
+
+        val colorConPulso = color.copy(alpha = 0.55f + pulso * 0.35f)
+
+        // Borde completo tenue (ayuda a "cerrar" el recuadro visualmente)...
+        drawRoundRect(
+            color = color.copy(alpha = 0.25f),
+            topLeft = guia.topLeft,
+            size = guia.size,
+            cornerRadius = CornerRadius(radioEsquina),
+            style = Stroke(width = 1.5.dp.toPx()),
+        )
+
+        // ...más 4 esquinas marcadas (look de scanner de documentos), más
+        // gruesas y con el pulso de color -- son las que de verdad guían el
+        // ojo hacia dónde encuadrar.
+        val largoEsquina = anchoGuia * 0.09f
+        val grosorEsquina = 4.dp.toPx()
+        fun esquina(origen: Offset, haciaX: Float, haciaY: Float) {
+            drawLine(
+                color = colorConPulso,
+                start = origen,
+                end = Offset(origen.x + largoEsquina * haciaX, origen.y),
+                strokeWidth = grosorEsquina,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = colorConPulso,
+                start = origen,
+                end = Offset(origen.x, origen.y + largoEsquina * haciaY),
+                strokeWidth = grosorEsquina,
+                cap = StrokeCap.Round,
+            )
+        }
+        esquina(Offset(guia.left, guia.top), haciaX = 1f, haciaY = 1f)
+        esquina(Offset(guia.right, guia.top), haciaX = -1f, haciaY = 1f)
+        esquina(Offset(guia.left, guia.bottom), haciaX = 1f, haciaY = -1f)
+        esquina(Offset(guia.right, guia.bottom), haciaX = -1f, haciaY = -1f)
+
+        // Barrido vertical dentro del recuadro -- sólo mientras se busca
+        // (una vez confirmado/inválido, un barrido en movimiento contradice
+        // el mensaje de "ya terminé de leer").
+        if (estado == EstadoEscaneo.BUSCANDO) {
+            val yBarrido = guia.top + guia.height * avanceBarrido
+            drawLine(
+                color = colorConPulso,
+                start = Offset(guia.left + 6.dp.toPx(), yBarrido),
+                end = Offset(guia.right - 6.dp.toPx(), yBarrido),
+                strokeWidth = 2.5.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+        }
     }
 }

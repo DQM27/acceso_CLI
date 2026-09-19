@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -271,6 +272,12 @@ private fun FormularioNuevoIngresoProveedor(
     val paso2Completo = viewModel.empresaSeleccionada != null
     val paso3Completo = gafeteTexto.isNotBlank()
     val puedeRegistrar = paso1Completo && paso2Completo && paso3Completo && !viewModel.registrando
+
+    // Mismo destino que el botón "← Volver" visible de abajo -- sin esto,
+    // atrás del sistema se escapaba a la Activity en vez de volver a la
+    // lista (hallazgo 2026-09-19, mismo patrón ya usado en las pantallas de
+    // escaneo/PantallaConfirmarIngreso).
+    BackHandler(onBack = onVolver)
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())

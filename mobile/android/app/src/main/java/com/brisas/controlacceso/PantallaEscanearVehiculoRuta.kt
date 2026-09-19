@@ -195,7 +195,7 @@ private fun VistaCamaraVehiculoRuta(
                                     }
                                 },
                                 onFallo = {
-                                    if (sesionActiva.get()) ultimoMensaje = "No se pudo leer el texto. Intente acercar."
+                                    if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
                                 },
                             )
                         }
@@ -218,21 +218,21 @@ private fun VistaCamaraVehiculoRuta(
             modifier = Modifier.fillMaxSize(),
         )
         MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
-        Column(
-            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                ultimoMensaje,
-                color = Color.White,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.78f))
-                    .padding(12.dp),
-            )
-            BotonDiscretoBrisas(onClick = onCerrar) { Text("Cancelar") }
-        }
+        Text(
+            ultimoMensaje,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp, start = 16.dp, end = 72.dp)
+                .background(Color.Black.copy(alpha = 0.78f), FormaCampoBrisas)
+                .padding(12.dp),
+        )
+        // Mismo botón compartido que las otras 3 pantallas de escaneo
+        // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
+        // 2026-09-19).
+        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
     }
 }
 

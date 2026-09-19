@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -105,6 +106,10 @@ private fun buscarEmpresaPorNombre(empresas: List<Empresa>, textoCarnet: String)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
+    // Mismo destino que el botón "← Volver" visible de abajo -- sin esto,
+    // atrás del sistema se escapaba a la Activity en vez de volver a
+    // Activos (hallazgo 2026-09-19).
+    BackHandler(onBack = onVolver)
     var empresas by remember { mutableStateOf<List<Empresa>>(emptyList()) }
     var cedula by rememberSaveable { mutableStateOf("") }
     var nombre by rememberSaveable { mutableStateOf("") }

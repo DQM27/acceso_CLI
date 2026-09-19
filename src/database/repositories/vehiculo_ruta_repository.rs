@@ -24,6 +24,16 @@ pub trait VehiculoRutaRepository {
     /// piden `true` (un vehículo desactivado no es una opción válida para
     /// una salida nueva), la pantalla de administración pide `false`.
     fn listar(&self, solo_activos: bool) -> Result<Vec<VehiculoRuta>, DatabaseError>;
+
+    /// Por placa o número de unidad -- pedido explícito del usuario
+    /// (2026-09-19): el paso "Vehículo" del checklist mobile tenía dos
+    /// campos de texto libre (placa / número de unidad) que en realidad
+    /// debían ser un solo buscador contra ESTE catálogo, mismo criterio que
+    /// `EncargadoRutaRepository::buscar` ("busca por nombre o por código de
+    /// empleado"). Sin `PLEGAR` acá -- a diferencia de un nombre de
+    /// persona, ni la placa ni el número de unidad llevan tildes. Mismo
+    /// `solo_activos` que `listar`.
+    fn buscar(&self, texto: &str, solo_activos: bool) -> Result<Vec<VehiculoRuta>, DatabaseError>;
 }
 
 pub struct SqliteVehiculoRutaRepository<'a> {
@@ -58,6 +68,9 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<VehiculoRuta> {
 }
 
 const SELECT_VEHICULO: &str = "SELECT id, numero_unidad, placa, activo FROM vehiculos_ruta";
+
+/// Mismo criterio y mismo valor que `encargado_ruta_repository::LIMITE_BUSQUEDA`.
+const LIMITE_BUSQUEDA: usize = 20;
 
 impl VehiculoRutaRepository for SqliteVehiculoRutaRepository<'_> {
     fn crear(&self, vehiculo: &VehiculoRuta) -> Result<i64, DatabaseError> {
@@ -143,6 +156,22 @@ impl VehiculoRutaRepository for SqliteVehiculoRutaRepository<'_> {
             .prepare(&format!("{SELECT_VEHICULO} {filtro_activo} ORDER BY placa"))?;
         let vehiculos = statement
             .query_map([], convertir_fila)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(vehiculos)
+    }
+
+    fn buscar(&self, texto: &str, solo_activos: bool) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        let filtro_activo = if solo_activos { "AND activo = 1" } else { "" };
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_VEHICULO}
+             WHERE (placa LIKE '%' || ?1 || '%'
+                OR numero_unidad LIKE '%' || ?1 || '%')
+             {filtro_activo}
+             ORDER BY placa
+             LIMIT {LIMITE_BUSQUEDA}"
+        ))?;
+        let vehiculos = statement
+            .query_map(params![texto], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(vehiculos)
     }
@@ -237,5 +266,52 @@ mod tests {
 
         assert_eq!(repo.listar(true).unwrap().len(), 1);
         assert_eq!(repo.listar(false).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn buscar_encuentra_por_placa_parcial() {
+        let connection = conexion();
+        let repo = SqliteVehiculoRutaRepository::new(&connection);
+        repo.crear(&nuevo("C12345", Some("22906"))).unwrap();
+
+        let resultados = repo.buscar("C123", false).unwrap();
+
+        assert_eq!(resultados.len(), 1);
+        assert_eq!(resultados[0].placa, "C12345");
+    }
+
+    #[test]
+    fn buscar_encuentra_por_numero_de_unidad_parcial() {
+        let connection = conexion();
+        let repo = SqliteVehiculoRutaRepository::new(&connection);
+        repo.crear(&nuevo("C12345", Some("22906"))).unwrap();
+        repo.crear(&nuevo("C99999", None)).unwrap();
+
+        let resultados = repo.buscar("2290", false).unwrap();
+
+        assert_eq!(resultados.len(), 1);
+        assert_eq!(resultados[0].placa, "C12345");
+    }
+
+    #[test]
+    fn buscar_sin_coincidencias_devuelve_vacio() {
+        let connection = conexion();
+        let repo = SqliteVehiculoRutaRepository::new(&connection);
+        repo.crear(&nuevo("C12345", None)).unwrap();
+
+        assert!(repo.buscar("ZZZZZZ", false).unwrap().is_empty());
+    }
+
+    #[test]
+    fn buscar_solo_activos_omite_los_desactivados() {
+        let connection = conexion();
+        let repo = SqliteVehiculoRutaRepository::new(&connection);
+        let id = repo.crear(&nuevo("C12345", None)).unwrap();
+        let mut vehiculo = repo.buscar_por_id(id).unwrap().unwrap();
+        vehiculo.activo = false;
+        repo.actualizar(&vehiculo).unwrap();
+
+        assert!(repo.buscar("C123", true).unwrap().is_empty());
+        assert_eq!(repo.buscar("C123", false).unwrap().len(), 1);
     }
 }

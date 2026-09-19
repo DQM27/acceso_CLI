@@ -259,7 +259,7 @@ private fun VistaCamaraCedula(
                         if (!sesionActiva.get()) return@construirAnalizadorOcr
                         estado = EstadoEscaneo.BUSCANDO
                         vencido = false
-                        ultimoMensaje = "No se pudo leer el texto. Intente acercar."
+                        ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
                     },
                 )
                 analisisCamara = analisis
@@ -285,23 +285,25 @@ private fun VistaCamaraCedula(
             modifier = Modifier.fillMaxSize(),
         )
         MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
-        Column(
-            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                ultimoMensaje,
-                color = Color.White,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.78f))
-                    .padding(12.dp),
-            )
-            BotonDiscretoBrisas(onClick = onCerrar) {
-                Text("Cancelar")
-            }
-        }
+        Text(
+            ultimoMensaje,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp, start = 16.dp, end = 72.dp)
+                .background(Color.Black.copy(alpha = 0.78f), FormaCampoBrisas)
+                .padding(12.dp),
+        )
+        // Círculo flotante en vez del texto "Cancelar" que vivía debajo del
+        // mensaje -- pedido explícito del usuario (2026-09-19): la posición
+        // esquina-superior es la convención de cualquier pantalla de cámara
+        // (cerrar sin competir visualmente con el mensaje de estado, y sin
+        // el `padding(end = 72.dp)` de arriba el mensaje se le metía debajo).
+        // Compartido (`ControlesBrisas.kt`) -- mismo botón en las 4 pantallas
+        // de escaneo (Cédula, Carnet KOF, Vehículo/Ruta, Comprobante).
+        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
     }
 }
 
@@ -449,6 +451,13 @@ private const val DURACION_SONIDO_CONFIRMACION_MS = 100
 private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 900L
 private const val FRAMES_AUSENCIA_PARA_REPETIR = 3
+
+/// Compartido por las 4 pantallas de escaneo -- antes cada una tenía su
+/// propia copia textual idéntica (hallazgo 2026-09-19, riesgo de
+/// desincronizarse si alguien edita una sin las otras 3). Sin `private`:
+/// vive acá porque [analizarCedula]/[iniciarCamara] (el resto de lo
+/// compartido) también viven en este archivo.
+const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer el texto. Intente acercar."
 
 // El reverso (con el MRZ -- las líneas de texto tipo código de barras) trae
 // nombre Y cédula en un solo escaneo con checksum verificado; el frente

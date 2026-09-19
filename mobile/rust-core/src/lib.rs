@@ -33,6 +33,7 @@ use control_acceso::domain::resultado_salida_ruta::ResultadoSalidaRuta as Result
 use control_acceso::models::empresa::Empresa as EmpresaNucleo;
 use control_acceso::models::empresa_proveedor::EmpresaProveedor as EmpresaProveedorNucleo;
 use control_acceso::models::encargado_ruta::EncargadoRuta as EncargadoRutaNucleo;
+use control_acceso::models::vehiculo_ruta::VehiculoRuta as VehiculoRutaNucleo;
 use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
 use control_acceso::models::prestamo_gafete_provisional::PrestamoGafeteProvisionalActivoResumen as PrestamoGafeteProvisionalActivoResumenNucleo;
 use control_acceso::models::registro_ingreso::{
@@ -794,6 +795,28 @@ impl From<EncargadoRutaNucleo> for EncargadoRuta {
             codigo_empleado: encargado.codigo_empleado,
             nombre: encargado.nombre,
             activo: encargado.activo,
+        }
+    }
+}
+
+/// Espejo de `VehiculoRuta` -- `numero_unidad` sigue `Option<String>`
+/// (`None` para vehículos de apoyo/particulares, sólo tienen placa, ver el
+/// modelo real).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct VehiculoRuta {
+    pub id: i64,
+    pub numero_unidad: Option<String>,
+    pub placa: String,
+    pub activo: bool,
+}
+
+impl From<VehiculoRutaNucleo> for VehiculoRuta {
+    fn from(vehiculo: VehiculoRutaNucleo) -> Self {
+        Self {
+            id: vehiculo.id,
+            numero_unidad: vehiculo.numero_unidad,
+            placa: vehiculo.placa,
+            activo: vehiculo.activo,
         }
     }
 }
@@ -1564,6 +1587,23 @@ impl Nucleo {
             // encargado desactivado no es una opción válida, ver
             // `EncargadoRutaService::buscar_seleccionables`.
             .buscar_encargados_ruta_seleccionables(texto.trim())
+            .map_err(|origen| NucleoError::Interno {
+                mensaje: interno(origen),
+            })?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Buscador del checklist de rutas (paso "Vehículo") -- por placa o
+    /// número de unidad, mismo criterio que `buscar_encargados_ruta`.
+    /// Reemplaza los dos campos de texto libre que tenía antes ese paso del
+    /// lado Kotlin (pedido explícito del usuario, 2026-09-19): ahora es un
+    /// buscador contra este catálogo, no texto arbitrario.
+    pub fn buscar_vehiculos_ruta(&self, texto: String) -> Result<Vec<VehiculoRuta>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .buscar_vehiculos_ruta_seleccionables(texto.trim())
             .map_err(|origen| NucleoError::Interno {
                 mensaje: interno(origen),
             })?

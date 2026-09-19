@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -192,6 +195,28 @@ fun BotonIconoCuadradoBrisas(
  * de adentro para que el degradé, no el primer ítem, ocupe ese espacio --
  * si no, el scroll dejaría un hueco sin nada que desvanecer. Compartido
  * entre [PantallaActivos] y [PantallaHistorial] (2026-09-15). */
+/** Botón circular de cerrar/cancelar para las 4 pantallas de escaneo OCR
+ * (Cédula, Carnet KOF, Vehículo/Ruta, Comprobante) -- fondo oscuro
+ * semitransparente porque flota directo sobre el preview de cámara, no
+ * sobre una tarjeta clara del resto de la app. Nació en
+ * `PantallaEscanearCedula.kt` (2026-09-19, pedido explícito del usuario:
+ * reemplazar el texto "Cancelar" que competía con el mensaje de estado) y se
+ * subió acá para que las otras 3 pantallas de escaneo lo compartan en vez de
+ * quedarse con el texto plano viejo. */
+@Composable
+fun BotonCerrarCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = Color.White)
+    }
+}
+
 @Composable
 fun ListaConDesvanecido(contenido: @Composable () -> Unit) {
     Box {

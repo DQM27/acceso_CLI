@@ -20,6 +20,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -69,16 +72,32 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        // Logo más grande y sin el texto "Lattis" debajo -- redundante, el
+        // logo ya dice la marca (pedido explícito del usuario, 2026-09-19).
+        // En su lugar, "Control de acceso móvil" con "móvil" en negrita
+        // para resaltarlo -- distingue esta app de las otras plataformas
+        // (desktop/web) que comparten la misma marca.
         Image(
             painter = painterResource(id = R.drawable.marca),
             contentDescription = null,
-            modifier = Modifier.size(96.dp).clip(RoundedCornerShape(20.dp)),
+            modifier = Modifier.size(128.dp).clip(RoundedCornerShape(26.dp)),
         )
 
         Text(
-            "Lattis",
+            buildAnnotatedString {
+                // `titleLarge` ya es bold (peso 700, `TipografiaBrisas` en
+                // DisenoMovil.kt) -- ponerle Bold también a "móvil" no
+                // resaltaba nada porque ya estaba igual de grueso que el
+                // resto. Se aligera "Control de acceso" a Normal para que
+                // "móvil" contraste y sea lo que el ojo agarra primero.
+                withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
+                    append("Control de acceso ")
+                }
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                    append("MOVIL")
+                }
+            },
             style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(top = 16.dp),
         )
 

@@ -810,6 +810,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas(): Int
 
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_vehiculos_ruta(): Int
+
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase(): Int
 
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_secreto_dispositivo_legado(): Int
@@ -970,6 +972,12 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
 
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(
+        `ptr`: Long,
+        `texto`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_vehiculos_ruta(
         `ptr`: Long,
         `texto`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
@@ -1529,6 +1537,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas() and 0xFFFF) != 19377) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_vehiculos_ruta() and 0xFFFF) != 54159) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase() and 0xFFFF) != 21021) {
@@ -2186,6 +2197,12 @@ public interface NucleoInterface {
      * (`EncargadoRutaRepository::buscar`), no hace falta repetirlo acá.
      */
     fun `buscarEncargadosRuta`(`texto`: kotlin.String): List<EncargadoRuta>
+
+    /**
+     * Buscador del checklist de rutas (paso "Vehículo") -- por placa o
+     * número de unidad, mismo criterio que `buscar_encargados_ruta`.
+     */
+    fun `buscarVehiculosRuta`(`texto`: kotlin.String): List<VehiculoRuta>
 
     /**
      * Últimos 7 días por defecto: en Android el historial es contexto
@@ -2885,6 +2902,24 @@ open class Nucleo :
             callWithHandle {
                 uniffiRustCallWithError(NucleoException) { _status ->
                     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(
+                        it,
+                        FfiConverterString.lower(`texto`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Buscador del checklist de rutas (paso "Vehículo") -- por placa o
+     * número de unidad, mismo criterio que `buscar_encargados_ruta`.
+     */
+    @Throws(NucleoException::class)
+    override fun `buscarVehiculosRuta`(`texto`: kotlin.String): List<VehiculoRuta> =
+        FfiConverterSequenceTypeVehiculoRuta.lift(
+            callWithHandle {
+                uniffiRustCallWithError(NucleoException) { _status ->
+                    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_buscar_vehiculos_ruta(
                         it,
                         FfiConverterString.lower(`texto`),
                         _status,
@@ -4280,6 +4315,46 @@ public object FfiConverterTypeEncargadoRuta : FfiConverterRustBuffer<EncargadoRu
         FfiConverterLong.write(value.`id`, buf)
         FfiConverterString.write(value.`codigoEmpleado`, buf)
         FfiConverterString.write(value.`nombre`, buf)
+        FfiConverterBoolean.write(value.`activo`, buf)
+    }
+}
+
+data class VehiculoRuta(
+    var `id`: kotlin.Long,
+    var `numeroUnidad`: kotlin.String?,
+    var `placa`: kotlin.String,
+    var `activo`: kotlin.Boolean,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVehiculoRuta : FfiConverterRustBuffer<VehiculoRuta> {
+    override fun read(buf: ByteBuffer): VehiculoRuta =
+        VehiculoRuta(
+            FfiConverterLong.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+
+    override fun allocationSize(value: VehiculoRuta) =
+        (
+            FfiConverterLong.allocationSize(value.`id`) +
+                FfiConverterOptionalString.allocationSize(value.`numeroUnidad`) +
+                FfiConverterString.allocationSize(value.`placa`) +
+                FfiConverterBoolean.allocationSize(value.`activo`)
+        )
+
+    override fun write(
+        value: VehiculoRuta,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterLong.write(value.`id`, buf)
+        FfiConverterOptionalString.write(value.`numeroUnidad`, buf)
+        FfiConverterString.write(value.`placa`, buf)
         FfiConverterBoolean.write(value.`activo`, buf)
     }
 }
@@ -6184,6 +6259,34 @@ public object FfiConverterSequenceTypeEncargadoRuta : FfiConverterRustBuffer<Lis
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeEncargadoRuta.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeVehiculoRuta : FfiConverterRustBuffer<List<VehiculoRuta>> {
+    override fun read(buf: ByteBuffer): List<VehiculoRuta> {
+        val len = buf.getInt()
+        return List<VehiculoRuta>(len) {
+            FfiConverterTypeVehiculoRuta.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<VehiculoRuta>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeVehiculoRuta.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<VehiculoRuta>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeVehiculoRuta.write(it, buf)
         }
     }
 }

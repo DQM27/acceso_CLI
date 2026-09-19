@@ -89,7 +89,7 @@ fun PantallaEscanearCarnetKof(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                "Se necesita permiso de cámara para escanear el carnet.",
+                "Se necesita permiso de cámara para escanear el gafete.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -188,7 +188,7 @@ private fun VistaCamaraCarnetKof(
                                     }
                                 },
                                 onFallo = {
-                                    if (sesionActiva.get()) ultimoMensaje = "No se pudo leer el texto. Intente acercar."
+                                    if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
                                 },
                             )
                         }
@@ -211,21 +211,21 @@ private fun VistaCamaraCarnetKof(
             modifier = Modifier.fillMaxSize(),
         )
         MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
-        Column(
-            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                ultimoMensaje,
-                color = Color.White,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.78f))
-                    .padding(12.dp),
-            )
-            BotonDiscretoBrisas(onClick = onCerrar) { Text("Cancelar") }
-        }
+        Text(
+            ultimoMensaje,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp, start = 16.dp, end = 72.dp)
+                .background(Color.Black.copy(alpha = 0.78f), FormaCampoBrisas)
+                .padding(12.dp),
+        )
+        // Mismo botón compartido que las otras 3 pantallas de escaneo
+        // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
+        // 2026-09-19).
+        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
         if (BuildConfig.DEBUG && textoCrudoDebug.isNotBlank()) {
             Text(
                 "DEBUG -- texto crudo de ML Kit:\n$textoCrudoDebug",
@@ -243,7 +243,11 @@ private fun VistaCamaraCarnetKof(
     }
 }
 
-private const val MENSAJE_INICIAL_KOF = "Apunte al frente del carnet KOF"
+// "gafete KOF", no "carnet KOF" -- el resto de la app llama a este mismo
+// documento "gafete KOF" (tab "KOF", encabezado "Encargado (gafete KOF)" en
+// PantallaRutas.kt); este mensaje se había quedado con el nombre interno del
+// documento en vez del que la persona ya conoce (hallazgo 2026-09-19).
+private const val MENSAJE_INICIAL_KOF = "Apunte al frente del gafete KOF"
 
 /// Debounce por repetición de frames -- mismo criterio que
 /// `EstabilizadorComprobanteRuta` (ver `PantallaEscanearComprobanteRuta.kt`),
