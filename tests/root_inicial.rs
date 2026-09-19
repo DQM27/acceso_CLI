@@ -1,3 +1,4 @@
+use chrono::Utc;
 use control_acceso::database::repositories::usuario_repository::{
     SqliteUsuarioRepository, UsuarioRepository,
 };
@@ -184,7 +185,7 @@ fn unico_root_puede_cambiar_identidad_y_password() {
     assert!(actualizado.activo);
     assert!(
         control_acceso::services::autenticacion_service::AutenticacionService::new(&r)
-            .autenticar("ROOT-NUEVO", "password-nueva")
+            .autenticar("ROOT-NUEVO", "password-nueva", Utc::now())
             .is_ok()
     );
 }

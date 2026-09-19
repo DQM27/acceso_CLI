@@ -282,6 +282,12 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              -- `uuid` a usuarios -- mismo motivo que las tres de arriba.
              DROP INDEX idx_usuarios_uuid;
              ALTER TABLE usuarios DROP COLUMN uuid;
+             -- MIGRACION_48 (que corre al final al rebobinar) le agrega
+             -- `password_hash_confirmado_en` a usuarios -- mismo motivo: sin
+             -- soltarla acá, el `SELECT *` de MIGRACION_15 (más abajo en la
+             -- cadena de re-aplicación) encuentra una columna de más contra
+             -- la forma que `usuarios_nueva` esperaba en ese punto histórico.
+             ALTER TABLE usuarios DROP COLUMN password_hash_confirmado_en;
              DROP INDEX idx_registro_ingresos_uuid;
              -- MIGRACION_23 (que corre al final al rebobinar) crea
              -- `sincronizacion_estado` desde cero -- mismo motivo que
@@ -403,6 +409,12 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              -- `uuid` a usuarios -- mismo motivo que las tres de arriba.
              DROP INDEX idx_usuarios_uuid;
              ALTER TABLE usuarios DROP COLUMN uuid;
+             -- MIGRACION_48 (que corre al final al rebobinar) le agrega
+             -- `password_hash_confirmado_en` a usuarios -- mismo motivo: sin
+             -- soltarla acá, el `SELECT *` de MIGRACION_15 (más abajo en la
+             -- cadena de re-aplicación) encuentra una columna de más contra
+             -- la forma que `usuarios_nueva` esperaba en ese punto histórico.
+             ALTER TABLE usuarios DROP COLUMN password_hash_confirmado_en;
              DROP INDEX idx_registro_ingresos_uuid;
              -- MIGRACION_23 (que corre al final al rebobinar) crea
              -- `sincronizacion_estado` desde cero -- mismo motivo que
@@ -536,6 +548,12 @@ fn migracion_12_habilita_cambio_de_cedula() {
              -- `uuid` a usuarios -- mismo motivo que las tres de arriba.
              DROP INDEX idx_usuarios_uuid;
              ALTER TABLE usuarios DROP COLUMN uuid;
+             -- MIGRACION_48 (que corre al final al rebobinar) le agrega
+             -- `password_hash_confirmado_en` a usuarios -- mismo motivo: sin
+             -- soltarla acá, el `SELECT *` de MIGRACION_15 (más abajo en la
+             -- cadena de re-aplicación) encuentra una columna de más contra
+             -- la forma que `usuarios_nueva` esperaba en ese punto histórico.
+             ALTER TABLE usuarios DROP COLUMN password_hash_confirmado_en;
              DROP INDEX idx_registro_ingresos_uuid;
              -- MIGRACION_23 (que corre al final al rebobinar) crea
              -- `sincronizacion_estado` desde cero -- mismo motivo que
@@ -914,6 +932,16 @@ fn base_version_34_con_gafete_perdido() -> Connection {
     let connection = Connection::open_in_memory().unwrap();
     connection.execute_batch(&ddl_de("empresas")).unwrap();
     connection.execute_batch(&ddl_de("usuarios")).unwrap();
+    // `ddl_de` trae la forma ACTUAL de `usuarios` (el `sql` de `sqlite_master`
+    // ya refleja cualquier `ALTER TABLE ADD COLUMN` aplicado desde que se
+    // creó) -- hasta MIGRACION_48 eso coincidía por casualidad con la forma
+    // de v34 porque ninguna migración entre la 23 y la 47 tocaba `usuarios`.
+    // MIGRACION_48 (`password_hash_confirmado_en`) rompe esa coincidencia:
+    // sin soltarla acá, `initialize_database` más abajo choca con "duplicate
+    // column name" al querer agregar una columna que ya está.
+    connection
+        .execute_batch("ALTER TABLE usuarios DROP COLUMN password_hash_confirmado_en;")
+        .unwrap();
     connection.execute_batch(&ddl_de("contratistas")).unwrap();
     connection.execute_batch(&ddl_de("citas")).unwrap();
     connection

@@ -21,6 +21,7 @@ fn crear_usuario(cedula: &str, nombre: &str, rol: RolUsuario, activo: bool) -> U
         password_hash: "hash_de_prueba".to_string(),
         rol,
         activo,
+        password_hash_confirmado_en: None,
     }
 }
 

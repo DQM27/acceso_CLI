@@ -48,7 +48,7 @@ impl AppCore {
         password: &str,
     ) -> Result<UsuarioSesion, AutenticacionError> {
         let repository = SqliteUsuarioRepository::new(&self.connection);
-        AutenticacionService::new(&repository).autenticar(cedula, password)
+        AutenticacionService::new(&repository).autenticar(cedula, password, self.reloj.ahora_utc())
     }
 
     /// `false` si `sesion` ya no corresponde a un usuario activo -- por
@@ -68,7 +68,7 @@ impl AppCore {
         cedula: &str,
     ) -> Result<CandidatoAutenticacion, AutenticacionError> {
         let repository = SqliteUsuarioRepository::new(&self.connection);
-        AutenticacionService::new(&repository).buscar_candidato(cedula)
+        AutenticacionService::new(&repository).buscar_candidato(cedula, self.reloj.ahora_utc())
     }
 
     /// Ver `AutenticacionService::resolver_identidad_local` -- para cuando
@@ -80,6 +80,34 @@ impl AppCore {
     ) -> Result<UsuarioSesion, AutenticacionError> {
         let repository = SqliteUsuarioRepository::new(&self.connection);
         AutenticacionService::new(&repository).resolver_identidad_local(cedula)
+    }
+
+    /// Cachea localmente un hash real de `password` para `id` -- se llama
+    /// tras un login exitoso contra Supabase Auth (`nube::auth_supabase::login`,
+    /// ver `login_supabase`/`autenticar_supabase` en desktop/mobile), nunca
+    /// con una contraseña sin verificar. Ver `Usuario::password_hash_confirmado_en`
+    /// y `docs/decisiones-tecnicas.md` (entrada 2026-09-18): existe para que
+    /// un usuario global (Administrador/Operador) pueda seguir operando sin
+    /// internet ante un corte, acotado a `TOPE_CACHE_LOCAL_OFFLINE` (24h,
+    /// `services::autenticacion_service`) desde este instante -- pasado ese
+    /// tope, `AutenticacionService::buscar_candidato` deja de aceptarlo y
+    /// hay que volver a loguear online para renovarlo.
+    ///
+    /// Quien llama debe tratar un error acá como best-effort (mismo criterio
+    /// que el resto de la sincronización "mejor esfuerzo" de este crate):
+    /// no cachear no debe tumbar un login que de por sí ya fue exitoso
+    /// contra Supabase, sólo significa que el próximo corte de internet no
+    /// va a tener este atajo disponible para esta cuenta.
+    pub fn cachear_password_local(
+        &self,
+        id: i64,
+        password: &str,
+    ) -> Result<(), UsuarioServiceError> {
+        let hash = crate::services::password::generar_hash(password)?;
+        let confirmado_en = crate::tiempo::serializar_utc(self.reloj.ahora_utc());
+        let repository = SqliteUsuarioRepository::new(&self.connection);
+        repository.actualizar_password_cacheada(id, &hash, &confirmado_en)?;
+        Ok(())
     }
 
     /// Completa el alta de contraseña de un usuario global (Administrador/Operador,

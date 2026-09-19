@@ -2822,6 +2822,24 @@ impl Nucleo {
         *self.sesion_lock() = Some(identidad.clone());
         self.iniciar_sesion_supabase(sesion_supabase.clone());
 
+        // Best-effort a propósito -- mismo criterio que `login_supabase` en
+        // desktop (ver el doc-comment de `AppCore::cachear_password_local`):
+        // un fallo acá no debe tumbar un login que ya fue exitoso contra
+        // Supabase, sólo deja sin el atajo offline a esta cuenta hasta el
+        // próximo login online. Ver `Usuario::password_hash_confirmado_en`
+        // y docs/decisiones-tecnicas.md, entrada 2026-09-18.
+        // El resultado se liga a una variable ANTES del `if let` a propósito
+        // -- `core_lock()` es un `MutexGuard`, y dejarlo como temporal
+        // directo en el scrutinee lo mantendría vivo durante todo el bloque
+        // (hasta la llave de cierre), no sólo durante la llamada -- riesgo
+        // real de deadlock si algo más adelante necesitara el mismo candado.
+        let resultado_cache = self
+            .core_lock()
+            .cachear_password_local(identidad.id, password);
+        if let Err(error) = resultado_cache {
+            log::warn!("no se pudo cachear el login offline: {error}");
+        }
+
         Ok(ResultadoLogin {
             sesion: identidad.into(),
             debe_cambiar_password: sesion_supabase.debe_cambiar_password,

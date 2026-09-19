@@ -1,8 +1,19 @@
+use chrono::{DateTime, Utc};
+
 use crate::database::repositories::usuario_repository::UsuarioRepository;
 use crate::models::usuario::RolUsuario;
+use crate::tiempo::parsear_utc;
 
 use super::error::AutenticacionError;
 use super::password::{SIN_PASSWORD_LOCAL, verificar_password};
+
+/// Cuánto dura válido un hash cacheado tras un login online exitoso contra
+/// Supabase (`Usuario::password_hash_confirmado_en`) -- ver
+/// `docs/decisiones-tecnicas.md`, entrada 2026-09-18. Sólo aplica a ese
+/// caché: un hash permanente (`password_hash_confirmado_en` en `None` --
+/// ROOT, o cualquier cuenta local de antes de la migración a Supabase Auth)
+/// nunca vence, sin importar este tope.
+const TOPE_CACHE_LOCAL_OFFLINE: chrono::Duration = chrono::Duration::hours(24);
 
 /// Identidad autenticada que puede cruzar hacia aplicación/presentación sin exponer el hash.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,17 +63,26 @@ where
         &self,
         cedula: &str,
         password: &str,
+        ahora: DateTime<Utc>,
     ) -> Result<UsuarioSesion, AutenticacionError> {
-        let candidato = self.buscar_candidato(cedula)?;
+        let candidato = self.buscar_candidato(cedula, ahora)?;
         verificar_candidato(candidato, password)
     }
 
     /// Resuelve la cédula y confirma que el usuario está activo, sin verificar todavía la
     /// contraseña. El llamador decide dónde y cuándo correr `verificar_password` sobre el
     /// hash devuelto (por ejemplo, en un hilo aparte).
+    ///
+    /// `ahora` viene siempre del reloj corregido del núcleo (`AppCore::reloj`),
+    /// nunca leído acá -- este servicio no tiene ni debe tener acceso a un
+    /// reloj propio, sigue el mismo criterio que el resto de `services/`
+    /// (recibe el tiempo, no lo mide). Se usa únicamente para decidir si un
+    /// hash CACHEADO (`Usuario::password_hash_confirmado_en`, ver
+    /// `TOPE_CACHE_LOCAL_OFFLINE`) ya venció.
     pub fn buscar_candidato(
         &self,
         cedula: &str,
+        ahora: DateTime<Utc>,
     ) -> Result<CandidatoAutenticacion, AutenticacionError> {
         let usuario = self
             .usuarios
@@ -79,6 +99,22 @@ where
         // se iba a poder verificar contra nada.
         if usuario.password_hash == SIN_PASSWORD_LOCAL {
             return Err(AutenticacionError::SinPasswordLocal);
+        }
+
+        // Un hash CACHEADO (ver `Usuario::password_hash_confirmado_en`) sólo
+        // es válido `TOPE_CACHE_LOCAL_OFFLINE` desde que se confirmó online
+        // por última vez -- pasado eso, se trata exactamente igual que
+        // `SIN_PASSWORD_LOCAL`: sin camino local usable, quien llama cae al
+        // login online de nuevo (ver `login_supabase`/`autenticar_supabase`).
+        // Una marca ilegible (dato corrupto, no debería pasar nunca) se
+        // trata como vencida -- fallar hacia "pedí red de nuevo" es más
+        // seguro que fallar hacia "aceptar sin chequear".
+        if let Some(confirmado_en) = usuario.password_hash_confirmado_en.as_deref() {
+            let vencido = parsear_utc(confirmado_en)
+                .map_or(true, |marca| ahora - marca > TOPE_CACHE_LOCAL_OFFLINE);
+            if vencido {
+                return Err(AutenticacionError::SinPasswordLocal);
+            }
         }
 
         Ok(CandidatoAutenticacion {

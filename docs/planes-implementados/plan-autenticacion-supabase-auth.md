@@ -207,9 +207,21 @@ en vez de indefinido.
 
 **Lo que falta:**
 
-- **Android**: `mobile/rust-core`/`LoginViewModel.kt`/`PantallaFijarPasswordInicial.kt`
-  siguen con el `SIN_PASSWORD_LOCAL` viejo -- fuera de alcance explícito, va a quedar
-  desalineado del resto hasta que se migre con el mismo patrón que desktop.
-- **TUI**: mismo caso -- sigue con el camino local viejo, no tiene el chequeo de
-  Supabase Auth conectado.
+- ~~**Android**: `mobile/rust-core`/`LoginViewModel.kt`/`PantallaFijarPasswordInicial.kt`
+  siguen con el `SIN_PASSWORD_LOCAL` viejo~~ -- **corregido 2026-09-18**: esta nota había
+  quedado desactualizada. Android ya migró (en algún commit posterior a la última edición
+  de este doc, sin actualizarlo): `Nucleo::autenticar`/`autenticar_con_secreto`
+  (`mobile/rust-core/src/lib.rs:1315-1319`) redirigen a `autenticar_supabase`
+  (`lib.rs:2792-2803`) exactamente igual que `login_supabase` en desktop, y
+  `PantallaFijarPasswordInicial.kt` ya no existe en el código fuente (sólo quedaban
+  `.class`/`.dex` viejos en `build/`, basura de compilación). Confirmado con `grep` sobre
+  el árbol fuente completo, no sólo los archivos mencionados acá.
+- **TUI**: sigue con el camino local viejo, no tiene el chequeo de Supabase Auth
+  conectado -- esto sí sigue vigente, no se revisó en la corrección de arriba.
 - Probar en vivo (ver punto de arriba) antes de considerar esto terminado de verdad.
+- ~~**Login sin internet imposible para Administrador/Operador**~~ -- **resuelto
+  2026-09-18**, ver `docs/decisiones-tecnicas.md` misma fecha: `login_supabase`
+  (desktop) y `autenticar_supabase` (mobile) ahora cachean localmente un hash real
+  tras el primer login online, acotado a 24h (`MIGRACION_48`,
+  `AppCore::cachear_password_local`). No probado todavía con la app real corriendo
+  -- ver el "Estado" de esa entrada para el checklist pendiente.
