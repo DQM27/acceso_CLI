@@ -50,20 +50,19 @@ const ESPERA_INICIAL_SINCRONIZACION: Duration = Duration::from_secs(10);
 /// corresponde. Un error de red real tampoco se anuncia: se reintenta solo
 /// en la próxima vuelta.
 /// Adelanta la descarga del catálogo (usuarios/contratistas/empresas/gafetes)
-/// a los ~3 segundos que el splash ya se queda visible (ver
-/// `configurar_cierre_de_splash`), en vez de esperar a que se dispare desde
-/// `comandos::autenticacion::login` -- ahí sólo corre en el caso raro de
-/// "usuario reactivado en otro dispositivo, todavía marcado inactivo acá",
-/// con hasta `ESPERA_MAXIMA_SYNC_LOGIN` (5s) de espera. Si el catálogo ya
-/// está fresco por este adelanto, ese reintento en general ni hace falta.
+/// durante el splash (ver `configurar_cierre_de_splash`), en vez de esperar
+/// a que se dispare desde `comandos::autenticacion::login` -- ahí sólo corre
+/// en el caso raro de "usuario reactivado en otro dispositivo, todavía
+/// marcado inactivo acá", con hasta `ESPERA_MAXIMA_SYNC_LOGIN` (5s) de
+/// espera. Si el catálogo ya está fresco por este adelanto, ese reintento en
+/// general ni hace falta.
 ///
-/// Sin timeout propio a propósito: el splash cierra solo a los 3 segundos
-/// pase lo que pase (mismo criterio que el resto del arranque, nunca
-/// bloqueante), así que esto corre en paralelo y, si tarda más, sigue en
-/// segundo plano sin afectar el cierre del splash ni el login -- éste sigue
-/// teniendo su propio reintento como red de seguridad. Silencioso en el
-/// error (sin sesión ni pantalla donde mostrar nada a esta altura) --
-/// mismo criterio que `iniciar_sincronizacion_automatica`.
+/// Sin timeout propio a propósito: corre en paralelo al cierre del splash
+/// (camino normal o red de seguridad, cualquiera que sea) y, si tarda más
+/// que eso, sigue en segundo plano sin afectar ni el cierre del splash ni el
+/// login -- éste sigue teniendo su propio reintento como red de seguridad.
+/// Silencioso en el error (sin sesión ni pantalla donde mostrar nada a esta
+/// altura) -- mismo criterio que `iniciar_sincronizacion_automatica`.
 fn precargar_catalogo_durante_splash(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         let resultado = tauri::async_runtime::spawn_blocking(move || {
@@ -284,10 +283,34 @@ fn abrir_nucleo_con_recuperacion(
     }
 }
 
+/// Cuánto espera la red de seguridad de `configurar_cierre_de_splash` antes
+/// de forzar el cierre si el frontend nunca invocó `mostrar_ventana_principal`.
+/// Generoso a propósito -- NO es el mecanismo normal de cierre (ese es el
+/// invoke desde React apenas pinta la pantalla real, sin esperar nada fijo),
+/// sólo la red de seguridad para primer-arranque/bases grandes o un frontend
+/// colgado. Si esto llega a dispararse en producción es señal de un bug real
+/// (ver el log/Sentry que deja `configurar_cierre_de_splash`), no de que el
+/// arranque tardó -- por eso no se acorta para "que se sienta rápido": lo que
+/// tiene que sentirse rápido es el camino normal, no este timeout.
+const ESPERA_MAXIMA_SPLASH: Duration = Duration::from_secs(8);
+
+/// Marca si `mostrar_ventana_principal` (camino normal, invocado desde
+/// `App.tsx`) ya corrió -- lo consulta la red de seguridad de
+/// `configurar_cierre_de_splash` para saber si de verdad hace falta forzar
+/// algo, en vez de inferirlo de si `get_webview_window("splashscreen")`
+/// todavía devuelve `Some` (ambiguo: `close()` no destruye la ventana en el
+/// acto, así que esa devolvería `Some` durante una ventana de tiempo corta
+/// aunque el cierre normal ya haya arrancado, y generaría un falso positivo
+/// en el log/Sentry de abajo).
+struct EstadoSplash {
+    cerrado_por_frontend: std::sync::atomic::AtomicBool,
+}
+
 /// Cierra el splash (si sigue abierto) y muestra/enfoca la principal (si
-/// todavía estaba oculta) -- idempotente, la llaman tanto el timer fijo de
-/// `setup()` como el comando de abajo, cualquiera que llegue primero gana y
-/// el otro no hace nada.
+/// todavía estaba oculta) -- idempotente (`close`/`show` no fallan si ya se
+/// llamaron antes), la llama tanto el comando de abajo (camino normal) como
+/// la red de seguridad, cualquiera que llegue primero gana y el otro no hace
+/// nada dañino.
 fn cerrar_splash_y_mostrar_principal(app: &tauri::AppHandle) {
     if let Some(splash) = app.get_webview_window("splashscreen") {
         let _ = splash.close();
@@ -298,32 +321,54 @@ fn cerrar_splash_y_mostrar_principal(app: &tauri::AppHandle) {
     }
 }
 
-/// Adelanta el cierre del splash desde `App.tsx` una vez que React resolvió
-/// `requiereConfiguracionInicial` -- si React está listo antes de los 3
-/// segundos fijos del timer de `setup()`, no hace falta esperarlo.
+/// Camino normal de cierre del splash -- lo invoca `App.tsx` apenas React
+/// terminó de pintar la pantalla real (login o alta inicial), nunca antes:
+/// mostrar la principal un instante antes de que el DOM tenga ese contenido
+/// es lo que antes producía un parpadeo en blanco (ver comentario en
+/// `App.tsx` junto al `useEffect` que llama esto).
 #[tauri::command]
 fn mostrar_ventana_principal(app: tauri::AppHandle) {
+    app.state::<EstadoSplash>()
+        .cerrado_por_frontend
+        .store(true, std::sync::atomic::Ordering::SeqCst);
     cerrar_splash_y_mostrar_principal(&app);
 }
 
-/// Arma el cierre garantizado del splash -- antes dependía de que el
-/// frontend invocara `mostrar_ventana_principal` en el momento justo
-/// (reportado 2026-09-18: quedaba flotando arriba de la ventana principal
-/// para siempre, y si se cerraba la principal el splash sobrevivía solo,
-/// sin nada que lo cierre). Un timer fijo acá no depende de esa carrera:
-/// pase lo que pase en el frontend, a los 3 segundos el splash se cierra y
-/// la principal se muestra.
+/// Arma el cierre del splash: el camino normal es el invoke de arriba desde
+/// React, disparado apenas hay algo real que mostrar (no un tiempo fijo,
+/// para no esperar de más cuando el arranque es rápido ni mostrar la
+/// principal en blanco cuando es lento). Esto sólo agrega la red de
+/// seguridad -- reportado 2026-09-18: antes de tenerla, si el frontend nunca
+/// llegaba a invocar el comando (excepción antes de tiempo, JS colgado), el
+/// splash quedaba flotando arriba de la principal para siempre.
 fn configurar_cierre_de_splash(app: &tauri::App) {
+    app.manage(EstadoSplash {
+        cerrado_por_frontend: std::sync::atomic::AtomicBool::new(false),
+    });
+
     let handle = app.handle().clone();
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-        cerrar_splash_y_mostrar_principal(&handle);
+        tokio::time::sleep(ESPERA_MAXIMA_SPLASH).await;
+        let ya_cerrado = handle
+            .state::<EstadoSplash>()
+            .cerrado_por_frontend
+            .load(std::sync::atomic::Ordering::SeqCst);
+        if !ya_cerrado {
+            let mensaje = format!(
+                "splash: el frontend no invocó mostrar_ventana_principal en \
+                 {}s, se fuerza el cierre desde la red de seguridad",
+                ESPERA_MAXIMA_SPLASH.as_secs()
+            );
+            log::warn!("{mensaje}");
+            sentry::capture_message(&mensaje, sentry::Level::Warning);
+            cerrar_splash_y_mostrar_principal(&handle);
+        }
     });
     if let Some(principal) = app.get_webview_window("main") {
         let handle_para_cierre = app.handle().clone();
         principal.on_window_event(move |evento| {
-            // Si cierran la principal antes de que pase el timer de arriba
-            // (ej. durante esos 3 segundos), el splash queda huérfano
+            // Si cierran la principal antes de que el frontend llegue a
+            // invocar el comando de arriba, el splash queda huérfano
             // manteniendo vivo el proceso -- lo cierra también.
             if matches!(evento, tauri::WindowEvent::Destroyed)
                 && let Some(splash) = handle_para_cierre.get_webview_window("splashscreen")

@@ -183,8 +183,11 @@ export default function Login({
           <div className="marca-sello" aria-hidden="true">
             <img src={marca} alt="" />
           </div>
+          {/* Sin "Lattis" acá -- el PNG ya trae el wordmark horneado, un
+              texto aparte sería literal duplicado (hallazgo del usuario,
+              2026-09-19). Subtítulo real en su lugar. */}
           <div>
-            <h1 className="text-lg font-semibold text-texto">Lattis</h1>
+            <h1 className="text-lg font-semibold text-texto">Control de acceso</h1>
           </div>
         </div>
 

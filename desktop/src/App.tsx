@@ -22,7 +22,16 @@
  *    que llevó a sacar `Sidebar.tsx` de `Shell` (que sí hace enrutamiento
  *    y orquesta modales, eso es responsabilidad suya).
  */
-import { Suspense, lazy, startTransition, useEffect, useMemo, useState, ViewTransition } from "react";
+import {
+  Suspense,
+  lazy,
+  startTransition,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  ViewTransition,
+} from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
@@ -54,6 +63,7 @@ import {
   buscarActualizacion,
   cerrarSesion,
   instalarActualizacion,
+  mostrarVentanaPrincipal,
   requiereConfiguracionInicial,
   sincronizarConNube,
 } from "./api";
@@ -61,6 +71,23 @@ import type { ResumenSincronizacion, UsuarioSesion } from "./api";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { SesionProvider } from "./contexto/SesionContexto";
 import { BarraEstadoProvider, SeccionActivaProvider } from "./contexto/BarraEstadoContexto";
+
+/** Piso de cuánto se ve el splash (`splashscreen.html`), aunque la pantalla
+ * real esté lista antes -- sin esto, en un arranque rápido el splash pasaba
+ * tan fugaz que ni se alcanzaba a leer (reportado 2026-09-19). No compite
+ * con `ESPERA_MAXIMA_SPLASH` de `lib.rs` (8s, la red de seguridad si el
+ * frontend nunca avisa) -- éste es un PISO sobre el camino normal, aquél un
+ * TECHO sobre el camino de emergencia; entre uno y otro el splash dura entre
+ * `DURACION_MINIMA_SPLASH_MS` y `ESPERA_MAXIMA_SPLASH` según qué tan rápido
+ * esté todo. */
+const DURACION_MINIMA_SPLASH_MS = 2000;
+
+/** Instante de referencia para medir cuánto lleva visible el splash (ver
+ * `DURACION_MINIMA_SPLASH_MS`) -- módulo, no dentro de `App`, porque tiene
+ * que capturarse una sola vez, apenas este archivo se evalúa (lo más cerca
+ * posible del instante real en que Tauri mostró la ventana del splash), no
+ * en cada montaje/remontaje del componente. */
+const inicioSplash = performance.now();
 
 // Las pantallas y sus tablas se cargan al entrar a cada sección.
 const Activos = lazy(() => import("./pantallas/Activos"));
@@ -158,6 +185,16 @@ function guardarSidebarOcultas(ocultas: Seccion[]) {
 
 export default function App() {
   const [pantalla, setPantalla] = useState<Pantalla>({ tipo: "cargando" });
+  // Evita reinvocar `mostrarVentanaPrincipal` en transiciones posteriores
+  // (login → shell al autenticar, shell → login al cerrar sesión, etc.) --
+  // sólo hace falta la primera vez que hay algo real que mostrar. Puesta en
+  // `true` recién dentro del efecto de abajo, no acá: bajo `StrictMode`
+  // (activo en dev, ver `main.tsx`) React monta/desmonta cada efecto una vez
+  // de más, y si este flag se marcara antes del segundo
+  // `requestAnimationFrame` (en vez de recién cuando ese frame corre de
+  // verdad), el primer montaje "de prueba" lo dejaría marcado y el segundo
+  // montaje real nunca llegaría a invocar nada.
+  const yaMostroVentanaPrincipal = useRef(false);
 
   useEffect(() => {
     requiereConfiguracionInicial()
@@ -169,17 +206,56 @@ export default function App() {
         // comando `login` lo va a reportar con su propio mensaje de error.
         console.error(error);
         setPantalla({ tipo: "login" });
-      })
-      .finally(() => {
-        // No dispara el cierre del splash antes de tiempo a propósito --
-        // eso corría una carrera contra el propio pintado de React
-        // (reportado 2026-09-18: el splash quedaba flotando arriba de la
-        // principal para siempre). El timer fijo de 3 segundos en
-        // `setup()` (lib.rs) es el único que cierra el splash; esto sólo
-        // sirve de límite superior para el spinner cuando la carga real
-        // tarda MÁS que esos 3 segundos.
       });
   }, []);
+
+  useEffect(() => {
+    // Recién acá (no en el `.then()/.finally()` de arriba) es seguro avisarle
+    // a Rust que muestre la ventana principal: este efecto corre DESPUÉS de
+    // que React ya commiteó el render de la pantalla real (login o alta
+    // inicial), mientras que el `.finally()` de la promesa se dispara ANTES
+    // de ese commit -- llamar `mostrarVentanaPrincipal` ahí mostraba la
+    // ventana un instante antes de que el DOM tuviera ese contenido (un
+    // parpadeo en blanco), que es lo que reportado 2026-09-18 llevó a
+    // sacarlo por completo y dejar sólo el timer fijo del lado Rust como
+    // único mecanismo -- ver `configurar_cierre_de_splash` en lib.rs para el
+    // reemplazo de ese timer por una red de seguridad de verdad.
+    //
+    // El doble `requestAnimationFrame` espera un ciclo de pintado COMPLETO
+    // del browser (no sólo el commit de React, que no garantiza que ya se
+    // pintó en pantalla) antes de invocar: el primer rAF corre justo antes
+    // de pintar el frame donde se aplicó el nuevo estado, el segundo ya
+    // corre después de ese pintado. Encima de eso, `DURACION_MINIMA_SPLASH_MS`
+    // -- ver su comentario -- así que en un arranque rápido esto puede
+    // terminar esperando el resto de ese piso en vez de invocar apenas pinta.
+    if (pantalla.tipo === "cargando" || yaMostroVentanaPrincipal.current) return;
+
+    let cancelado = false;
+    let cancelarSegundoFrame = () => {};
+    let cancelarEsperaMinima = () => {};
+    const idPrimerFrame = requestAnimationFrame(() => {
+      const idSegundoFrame = requestAnimationFrame(() => {
+        if (cancelado) return;
+        const faltante = DURACION_MINIMA_SPLASH_MS - (performance.now() - inicioSplash);
+        const idTimeout = window.setTimeout(
+          () => {
+            if (cancelado) return;
+            yaMostroVentanaPrincipal.current = true;
+            mostrarVentanaPrincipal().catch(console.error);
+          },
+          Math.max(0, faltante),
+        );
+        cancelarEsperaMinima = () => window.clearTimeout(idTimeout);
+      });
+      cancelarSegundoFrame = () => cancelAnimationFrame(idSegundoFrame);
+    });
+    return () => {
+      cancelado = true;
+      cancelAnimationFrame(idPrimerFrame);
+      cancelarSegundoFrame();
+      cancelarEsperaMinima();
+    };
+  }, [pantalla.tipo]);
 
   if (pantalla.tipo === "cargando") {
     // Reemplaza el `return null` de antes -- mientras Rust abre la base y
