@@ -12,7 +12,7 @@ use crate::database::error::DatabaseError;
 use crate::database::repositories::encargado_ruta_repository::{
     EncargadoRutaRepository, SqliteEncargadoRutaRepository,
 };
-use crate::database::repositories::ruta_repository::{RutaRepository, SqliteRutaRepository};
+use crate::database::repositories::ruta_repository::SqliteRutaRepository;
 use crate::database::repositories::salida_ruta_repository::{
     SqliteSalidaRutaRepository, ultimo_instante_salida_ruta,
 };
@@ -24,12 +24,14 @@ use crate::models::ruta::Ruta;
 use crate::models::salida_ruta::{SalidaRuta, SalidaRutaActivaResumen};
 use crate::models::vehiculo_ruta::VehiculoRuta;
 use crate::services::autenticacion_service::UsuarioSesion;
+use crate::services::encargado_ruta_service::EncargadoRutaService;
 use crate::services::error::{
     EncargadoRutaServiceError, RutaCatalogoServiceError, RutaServiceError, VehiculoRutaServiceError,
 };
 use crate::services::ruta_service::{
     ResultadoRegistroSalidaRuta, RutaCatalogoService, RutaService, SolicitudSalidaRuta,
 };
+use crate::services::vehiculo_ruta_service::VehiculoRutaService;
 
 use super::{AppCore, verificar_actor_activo};
 
@@ -37,9 +39,19 @@ impl AppCore {
     // ---- Catálogo: vehículos ----
 
     /// Sin `actor`, mismo criterio que `AppCore::listar_empresas`: es una
-    /// lectura, no una operación que autorizar.
+    /// lectura, no una operación que autorizar. Para la grilla de
+    /// administración -- trae activos e inactivos.
+    /// `listar_vehiculos_ruta_seleccionables` es la contraparte para el
+    /// selector de salida de ruta, donde un vehículo desactivado nunca es
+    /// una opción válida -- la decisión vive en `VehiculoRutaService`.
     pub fn listar_vehiculos_ruta(&self) -> Result<Vec<VehiculoRuta>, DatabaseError> {
-        SqliteVehiculoRutaRepository::new(&self.connection).listar()
+        let repositorio = SqliteVehiculoRutaRepository::new(&self.connection);
+        VehiculoRutaService::new(&repositorio).listar()
+    }
+
+    pub fn listar_vehiculos_ruta_seleccionables(&self) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        let repositorio = SqliteVehiculoRutaRepository::new(&self.connection);
+        VehiculoRutaService::new(&repositorio).listar_seleccionables()
     }
 
     pub fn crear_vehiculo_ruta(
@@ -81,15 +93,37 @@ impl AppCore {
 
     // ---- Catálogo: encargados (personal KOF) ----
 
+    /// Para la grilla de administración -- trae activos e inactivos.
+    /// `listar_encargados_ruta_seleccionables` es la contraparte para un
+    /// selector de wizard -- la decisión vive en `EncargadoRutaService`.
     pub fn listar_encargados_ruta(&self) -> Result<Vec<EncargadoRuta>, DatabaseError> {
-        SqliteEncargadoRutaRepository::new(&self.connection).listar()
+        let repositorio = SqliteEncargadoRutaRepository::new(&self.connection);
+        EncargadoRutaService::new(&repositorio).listar()
+    }
+
+    pub fn listar_encargados_ruta_seleccionables(
+        &self,
+    ) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        let repositorio = SqliteEncargadoRutaRepository::new(&self.connection);
+        EncargadoRutaService::new(&repositorio).listar_seleccionables()
     }
 
     /// Sin `actor`, mismo criterio que `listar_encargados_ruta` -- lectura,
-    /// no autoriza nada. Pensado para el buscador del checklist mobile
-    /// (nombre o código de empleado), ver el doc-comment del trait.
+    /// no autoriza nada. Buscador de la grilla de administración (nombre o
+    /// código de empleado). `buscar_encargados_ruta_seleccionables` es la
+    /// contraparte para el selector del checklist mobile/gafete
+    /// provisional, ver el doc-comment del trait.
     pub fn buscar_encargados_ruta(&self, texto: &str) -> Result<Vec<EncargadoRuta>, DatabaseError> {
-        SqliteEncargadoRutaRepository::new(&self.connection).buscar(texto)
+        let repositorio = SqliteEncargadoRutaRepository::new(&self.connection);
+        EncargadoRutaService::new(&repositorio).buscar(texto)
+    }
+
+    pub fn buscar_encargados_ruta_seleccionables(
+        &self,
+        texto: &str,
+    ) -> Result<Vec<EncargadoRuta>, DatabaseError> {
+        let repositorio = SqliteEncargadoRutaRepository::new(&self.connection);
+        EncargadoRutaService::new(&repositorio).buscar_seleccionables(texto)
     }
 
     pub fn crear_encargado_ruta(
@@ -131,14 +165,34 @@ impl AppCore {
 
     // ---- Catálogo: números de ruta (bloqueante, ver ruta_service.rs) ----
 
-    pub fn listar_rutas(&self) -> Result<Vec<Ruta>, DatabaseError> {
-        SqliteRutaRepository::new(&self.connection).listar()
+    /// Para la grilla de administración -- trae activas y dadas de baja.
+    /// `listar_rutas_seleccionables` es la contraparte para el checklist
+    /// mobile -- la decisión vive en `RutaCatalogoService`.
+    pub fn listar_rutas(&self) -> Result<Vec<Ruta>, RutaCatalogoServiceError> {
+        let repositorio = SqliteRutaRepository::new(&self.connection);
+        RutaCatalogoService::new(&repositorio).listar()
     }
 
-    /// Sin `actor`, mismo criterio que `listar_rutas` -- lectura. Pensado
-    /// para el buscador del checklist mobile (número parcial).
-    pub fn buscar_rutas(&self, texto: &str) -> Result<Vec<Ruta>, DatabaseError> {
-        SqliteRutaRepository::new(&self.connection).buscar(texto)
+    pub fn listar_rutas_seleccionables(&self) -> Result<Vec<Ruta>, RutaCatalogoServiceError> {
+        let repositorio = SqliteRutaRepository::new(&self.connection);
+        RutaCatalogoService::new(&repositorio).listar_seleccionables()
+    }
+
+    /// Sin `actor`, mismo criterio que `listar_rutas` -- lectura. Buscador
+    /// de la grilla de administración (número parcial).
+    /// `buscar_rutas_seleccionables` es la contraparte para el checklist
+    /// mobile.
+    pub fn buscar_rutas(&self, texto: &str) -> Result<Vec<Ruta>, RutaCatalogoServiceError> {
+        let repositorio = SqliteRutaRepository::new(&self.connection);
+        RutaCatalogoService::new(&repositorio).buscar(texto)
+    }
+
+    pub fn buscar_rutas_seleccionables(
+        &self,
+        texto: &str,
+    ) -> Result<Vec<Ruta>, RutaCatalogoServiceError> {
+        let repositorio = SqliteRutaRepository::new(&self.connection);
+        RutaCatalogoService::new(&repositorio).buscar_seleccionables(texto)
     }
 
     pub fn crear_ruta(
@@ -347,6 +401,7 @@ fn verificar_operador_activo(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::repositories::ruta_repository::RutaRepository;
     use crate::database::schema::initialize_database;
     use crate::services::autenticacion_service::UsuarioSesion;
     use crate::tiempo::RelojFijo;

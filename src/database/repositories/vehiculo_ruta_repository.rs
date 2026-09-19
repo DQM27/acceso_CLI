@@ -19,7 +19,11 @@ pub trait VehiculoRutaRepository {
 
     fn actualizar(&self, vehiculo: &VehiculoRuta) -> Result<(), DatabaseError>;
 
-    fn listar(&self) -> Result<Vec<VehiculoRuta>, DatabaseError>;
+    /// `solo_activos`: mismo criterio que
+    /// `EmpresaProveedorRepository::listar` -- los selectores de un wizard
+    /// piden `true` (un vehículo desactivado no es una opción válida para
+    /// una salida nueva), la pantalla de administración pide `false`.
+    fn listar(&self, solo_activos: bool) -> Result<Vec<VehiculoRuta>, DatabaseError>;
 }
 
 pub struct SqliteVehiculoRutaRepository<'a> {
@@ -132,10 +136,11 @@ impl VehiculoRutaRepository for SqliteVehiculoRutaRepository<'_> {
         self.encolar_actualizacion(vehiculo.id)
     }
 
-    fn listar(&self) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+    fn listar(&self, solo_activos: bool) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        let filtro_activo = if solo_activos { "WHERE activo = 1" } else { "" };
         let mut statement = self
             .connection
-            .prepare(&format!("{SELECT_VEHICULO} ORDER BY placa"))?;
+            .prepare(&format!("{SELECT_VEHICULO} {filtro_activo} ORDER BY placa"))?;
         let vehiculos = statement
             .query_map([], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
@@ -218,5 +223,19 @@ mod tests {
         repo.actualizar(&vehiculo).unwrap();
 
         assert!(!repo.buscar_por_id(id).unwrap().unwrap().activo);
+    }
+
+    #[test]
+    fn listar_solo_activos_omite_los_desactivados() {
+        let connection = conexion();
+        let repo = SqliteVehiculoRutaRepository::new(&connection);
+        repo.crear(&nuevo("C12345", None)).unwrap();
+        let id = repo.crear(&nuevo("C99999", None)).unwrap();
+        let mut vehiculo = repo.buscar_por_id(id).unwrap().unwrap();
+        vehiculo.activo = false;
+        repo.actualizar(&vehiculo).unwrap();
+
+        assert_eq!(repo.listar(true).unwrap().len(), 1);
+        assert_eq!(repo.listar(false).unwrap().len(), 2);
     }
 }

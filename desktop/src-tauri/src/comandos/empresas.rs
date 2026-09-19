@@ -4,16 +4,32 @@ use control_acceso::models::empresa::Empresa;
 use crate::dto::empresas::FiltroEmpresasEntrada;
 use crate::estado::GuiState;
 
-/// Lista completa sin filtro — usada por los desplegables de "Empresa" en
-/// otras pantallas (Contratistas hoy). El núcleo no exige sesión para esta
-/// lectura, pero la GUI sí la exige acá — ver el comentario equivalente en
-/// `comandos::contratistas::buscar_contratistas`.
+/// Para la grilla de administración -- trae activas e inactivas.
+/// `listar_empresas_seleccionables` es la contraparte para el desplegable de
+/// "Empresa" al crear/editar un contratista (`FormularioContratista.tsx`),
+/// donde una empresa desactivada nunca es una opción válida. El núcleo no
+/// exige sesión para esta lectura, pero la GUI sí la exige acá — ver el
+/// comentario equivalente en `comandos::contratistas::buscar_contratistas`.
 #[tauri::command]
 pub fn listar_empresas(state: tauri::State<GuiState>) -> Result<Vec<Empresa>, String> {
     state.sesion_activa()?;
     state
         .core()
         .listar_empresas()
+        .map_err(super::mensaje_generico)
+}
+
+/// Para un selector (el desplegable de "Empresa" al crear/editar un
+/// contratista) -- una empresa desactivada nunca es una opción válida, ver
+/// `EmpresaService::listar_seleccionables`.
+#[tauri::command]
+pub fn listar_empresas_seleccionables(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<Empresa>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .listar_empresas_seleccionables()
         .map_err(super::mensaje_generico)
 }
 

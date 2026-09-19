@@ -23,12 +23,25 @@ pub trait EmpresaProveedorRepository {
 
     fn establecer_activo(&self, id: i64, activo: bool) -> Result<(), DatabaseError>;
 
-    fn listar(&self) -> Result<Vec<EmpresaProveedor>, DatabaseError>;
+    /// `solo_activos`: los selectores de un wizard (elegir empresa para un
+    /// nuevo ingreso) deben pedir `true` -- una empresa desactivada no es
+    /// una opción válida para una operación nueva. La pantalla de
+    /// administración (activar/desactivar) pide `false`, porque ahí sí hay
+    /// que ver y poder reactivar las inactivas. El filtro vive acá a
+    /// propósito, no en cada pantalla: dejarlo del lado de la presentación
+    /// es justo el bug que originó este parámetro (una pantalla se olvidó
+    /// de filtrar y siguió mostrando empresas desactivadas).
+    fn listar(&self, solo_activos: bool) -> Result<Vec<EmpresaProveedor>, DatabaseError>;
 
     /// Por nombre -- mismo criterio que `EncargadoRutaRepository::buscar`,
     /// pensado para el selector con autocompletado del wizard de
-    /// proveedores (mobile) y el desktop equivalente.
-    fn buscar(&self, texto: &str) -> Result<Vec<EmpresaProveedor>, DatabaseError>;
+    /// proveedores (mobile) y el desktop equivalente. Mismo `solo_activos`
+    /// que `listar`.
+    fn buscar(
+        &self,
+        texto: &str,
+        solo_activos: bool,
+    ) -> Result<Vec<EmpresaProveedor>, DatabaseError>;
 }
 
 pub struct SqliteEmpresaProveedorRepository<'a> {
@@ -113,20 +126,27 @@ impl EmpresaProveedorRepository for SqliteEmpresaProveedorRepository<'_> {
         self.encolar_actualizacion(id)
     }
 
-    fn listar(&self) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
-        let mut statement = self
-            .connection
-            .prepare(&format!("{SELECT_EMPRESA_PROVEEDOR} ORDER BY nombre"))?;
+    fn listar(&self, solo_activos: bool) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
+        let filtro_activo = if solo_activos { "WHERE activo = 1" } else { "" };
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_EMPRESA_PROVEEDOR} {filtro_activo} ORDER BY nombre"
+        ))?;
         let empresas = statement
             .query_map([], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(empresas)
     }
 
-    fn buscar(&self, texto: &str) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
+    fn buscar(
+        &self,
+        texto: &str,
+        solo_activos: bool,
+    ) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
+        let filtro_activo = if solo_activos { "AND activo = 1" } else { "" };
         let mut statement = self.connection.prepare(&format!(
             "{SELECT_EMPRESA_PROVEEDOR}
              WHERE PLEGAR(nombre) LIKE '%' || PLEGAR(?1) || '%'
+             {filtro_activo}
              ORDER BY nombre
              LIMIT {LIMITE_BUSQUEDA}"
         ))?;
@@ -184,9 +204,20 @@ mod tests {
         let repo = SqliteEmpresaProveedorRepository::new(&connection);
         repo.crear(&nueva("Dos Pinos")).unwrap();
 
-        let resultados = repo.buscar("dos pinos").unwrap();
+        let resultados = repo.buscar("dos pinos", false).unwrap();
         assert_eq!(resultados.len(), 1);
         assert_eq!(resultados[0].nombre, "Dos Pinos");
+    }
+
+    #[test]
+    fn buscar_solo_activos_omite_las_desactivadas() {
+        let connection = conexion();
+        let repo = SqliteEmpresaProveedorRepository::new(&connection);
+        let id = repo.crear(&nueva("Dos Pinos")).unwrap();
+        repo.establecer_activo(id, false).unwrap();
+
+        assert!(repo.buscar("dos pinos", true).unwrap().is_empty());
+        assert_eq!(repo.buscar("dos pinos", false).unwrap().len(), 1);
     }
 
     #[test]
@@ -207,7 +238,7 @@ mod tests {
         repo.crear(&nueva("Dos Pinos")).unwrap();
         repo.crear(&nueva("Maika")).unwrap();
 
-        let empresas = repo.listar().unwrap();
+        let empresas = repo.listar(false).unwrap();
         assert_eq!(
             empresas
                 .iter()
@@ -215,5 +246,24 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["Dos Pinos", "Maika"]
         );
+    }
+
+    #[test]
+    fn listar_solo_activos_omite_las_desactivadas() {
+        let connection = conexion();
+        let repo = SqliteEmpresaProveedorRepository::new(&connection);
+        repo.crear(&nueva("Dos Pinos")).unwrap();
+        let id_maika = repo.crear(&nueva("Maika")).unwrap();
+        repo.establecer_activo(id_maika, false).unwrap();
+
+        let empresas = repo.listar(true).unwrap();
+        assert_eq!(
+            empresas
+                .iter()
+                .map(|e| e.nombre.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Dos Pinos"]
+        );
+        assert_eq!(repo.listar(false).unwrap().len(), 2);
     }
 }

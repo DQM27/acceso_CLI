@@ -91,6 +91,9 @@ export default function CatalogoRutas() {
   const recargar = useCallback(
     (estaVigente: () => boolean = () => true) => {
       setCargando(true);
+      // Administración: usa el listar completo (activos e inactivos), no
+      // el `*Seleccionables` que usan los selectores de un wizard -- así se
+      // puede ver y reactivar las inactivas.
       const carga =
         vista === "vehiculos"
           ? listarVehiculosRuta()

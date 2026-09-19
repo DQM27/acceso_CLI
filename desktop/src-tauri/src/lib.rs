@@ -429,6 +429,17 @@ fn inicializar_sentry() -> sentry::ClientInitGuard {
     ))
 }
 
+/// Cuerpo del `.setup()` de `run()` -- separado únicamente para mantenerla
+/// bajo el tope de líneas de Clippy (mismo motivo que `preparar_nucleo`/
+/// `configurar_plugins_condicionales`).
+fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    configurar_plugins_condicionales(app.handle())?;
+    precargar_catalogo_durante_splash(app.handle().clone());
+    iniciar_sincronizacion_automatica(app.handle().clone());
+    configurar_cierre_de_splash(app);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Inicia la aplicación de escritorio y registra todos los comandos Tauri.
 ///
@@ -448,13 +459,7 @@ pub fn run() {
             ruta_base_datos,
             clave_base_datos,
         ))
-        .setup(|app| {
-            configurar_plugins_condicionales(app.handle())?;
-            precargar_catalogo_durante_splash(app.handle().clone());
-            iniciar_sincronizacion_automatica(app.handle().clone());
-            configurar_cierre_de_splash(app);
-            Ok(())
-        })
+        .setup(configurar_arranque)
         .invoke_handler(tauri::generate_handler![
             comandos::autenticacion::requiere_configuracion_inicial,
             comandos::autenticacion::login,
@@ -464,6 +469,7 @@ pub fn run() {
             comandos::contratistas::crear_contratista,
             comandos::contratistas::actualizar_contratista,
             comandos::empresas::listar_empresas,
+            comandos::empresas::listar_empresas_seleccionables,
             comandos::empresas::buscar_empresas,
             comandos::empresas::crear_empresa,
             comandos::empresas::actualizar_empresa,
@@ -480,12 +486,15 @@ pub fn run() {
             comandos::citas::listar_historial_visitas_sitio,
             comandos::citas::listar_agenda_visitas,
             comandos::rutas::listar_vehiculos_ruta,
+            comandos::rutas::listar_vehiculos_ruta_seleccionables,
             comandos::rutas::crear_vehiculo_ruta,
             comandos::rutas::actualizar_vehiculo_ruta,
             comandos::rutas::listar_encargados_ruta,
+            comandos::rutas::listar_encargados_ruta_seleccionables,
             comandos::rutas::crear_encargado_ruta,
             comandos::rutas::actualizar_encargado_ruta,
             comandos::rutas::listar_rutas,
+            comandos::rutas::listar_rutas_seleccionables,
             comandos::rutas::crear_ruta,
             comandos::rutas::crear_rutas_rango,
             comandos::rutas::dar_de_baja_ruta,
@@ -495,6 +504,7 @@ pub fn run() {
             comandos::rutas::listar_rutas_activas,
             comandos::rutas::buscar_salida_ruta,
             comandos::proveedores::listar_empresas_proveedor,
+            comandos::proveedores::listar_empresas_proveedor_seleccionables,
             comandos::proveedores::buscar_empresas_proveedor,
             comandos::proveedores::crear_empresa_proveedor,
             comandos::proveedores::establecer_empresa_proveedor_activa,

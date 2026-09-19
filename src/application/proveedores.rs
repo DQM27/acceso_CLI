@@ -8,9 +8,7 @@
 use rusqlite::{Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
-use crate::database::repositories::empresa_proveedor_repository::{
-    EmpresaProveedorRepository, SqliteEmpresaProveedorRepository,
-};
+use crate::database::repositories::empresa_proveedor_repository::SqliteEmpresaProveedorRepository;
 use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::registro_ingreso_proveedor_repository::SqliteRegistroIngresoProveedorRepository;
 use crate::models::empresa_proveedor::EmpresaProveedor;
@@ -26,19 +24,44 @@ impl AppCore {
     // ---- Catálogo: empresas proveedoras ----
 
     /// Sin `actor`, mismo criterio que `AppCore::listar_empresas` -- lectura,
-    /// no autoriza nada.
-    pub fn listar_empresas_proveedor(&self) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
-        SqliteEmpresaProveedorRepository::new(&self.connection).listar()
+    /// no autoriza nada. Para la grilla de administración -- trae activas e
+    /// inactivas. `listar_empresas_proveedor_seleccionables` es la
+    /// contraparte para un selector de wizard, donde una empresa inactiva
+    /// nunca es una opción válida -- la decisión de cuál pedir vive en
+    /// `EmpresaProveedorService`, no acá ni en quien llama.
+    pub fn listar_empresas_proveedor(
+        &self,
+    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+        let repositorio = SqliteEmpresaProveedorRepository::new(&self.connection);
+        EmpresaProveedorService::new(&repositorio).listar()
+    }
+
+    pub fn listar_empresas_proveedor_seleccionables(
+        &self,
+    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+        let repositorio = SqliteEmpresaProveedorRepository::new(&self.connection);
+        EmpresaProveedorService::new(&repositorio).listar_seleccionables()
     }
 
     /// Sin `actor`, mismo criterio que `AppCore::buscar_encargados_ruta` --
-    /// pensado para el selector con autocompletado del wizard de
+    /// pensado para el buscador de la grilla de administración
+    /// (`Empresas.tsx`). `buscar_empresas_proveedor_seleccionables` es la
+    /// contraparte para el selector con autocompletado del wizard de
     /// proveedores.
     pub fn buscar_empresas_proveedor(
         &self,
         texto: &str,
-    ) -> Result<Vec<EmpresaProveedor>, DatabaseError> {
-        SqliteEmpresaProveedorRepository::new(&self.connection).buscar(texto)
+    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+        let repositorio = SqliteEmpresaProveedorRepository::new(&self.connection);
+        EmpresaProveedorService::new(&repositorio).buscar(texto)
+    }
+
+    pub fn buscar_empresas_proveedor_seleccionables(
+        &self,
+        texto: &str,
+    ) -> Result<Vec<EmpresaProveedor>, EmpresaProveedorServiceError> {
+        let repositorio = SqliteEmpresaProveedorRepository::new(&self.connection);
+        EmpresaProveedorService::new(&repositorio).buscar_seleccionables(texto)
     }
 
     pub fn crear_empresa_proveedor(
@@ -184,6 +207,7 @@ impl AppCore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::repositories::empresa_proveedor_repository::EmpresaProveedorRepository;
     use crate::database::repositories::gafete_repository::GafeteRepository;
     use crate::database::schema::initialize_database;
     use crate::models::gafete::TipoGafete;
@@ -252,6 +276,13 @@ mod tests {
                 .find(|empresa| empresa.id == empresa_id)
                 .unwrap()
                 .activo
+        );
+        assert!(
+            core.listar_empresas_proveedor_seleccionables()
+                .unwrap()
+                .iter()
+                .all(|empresa| empresa.id != empresa_id),
+            "la desactivada no debe aparecer al pedir sólo activas"
         );
 
         core.activar_empresa_proveedor(&actor, empresa_id).unwrap();

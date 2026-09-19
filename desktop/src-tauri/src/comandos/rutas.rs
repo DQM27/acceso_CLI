@@ -25,6 +25,19 @@ pub fn listar_vehiculos_ruta(state: tauri::State<GuiState>) -> Result<Vec<Vehicu
         .map_err(|_| "No se pudo cargar la lista de vehículos".to_string())
 }
 
+/// Para el selector de salida de ruta -- un vehículo desactivado nunca es
+/// una opción válida, ver `VehiculoRutaService::listar_seleccionables`.
+#[tauri::command]
+pub fn listar_vehiculos_ruta_seleccionables(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<VehiculoRuta>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .listar_vehiculos_ruta_seleccionables()
+        .map_err(|_| "No se pudo cargar la lista de vehículos".to_string())
+}
+
 #[tauri::command]
 pub fn crear_vehiculo_ruta(
     datos: DatosVehiculoRutaEntrada,
@@ -61,6 +74,20 @@ pub fn listar_encargados_ruta(state: tauri::State<GuiState>) -> Result<Vec<Encar
         .map_err(|_| "No se pudo cargar la lista de encargados".to_string())
 }
 
+/// Para un selector de wizard (entrega de gafete provisional, salida de
+/// ruta) -- un encargado desactivado nunca es una opción válida, ver
+/// `EncargadoRutaService::listar_seleccionables`.
+#[tauri::command]
+pub fn listar_encargados_ruta_seleccionables(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<EncargadoRuta>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .listar_encargados_ruta_seleccionables()
+        .map_err(|_| "No se pudo cargar la lista de encargados".to_string())
+}
+
 #[tauri::command]
 pub fn crear_encargado_ruta(
     datos: DatosEncargadoRutaEntrada,
@@ -94,6 +121,17 @@ pub fn listar_rutas(state: tauri::State<GuiState>) -> Result<Vec<Ruta>, String> 
     state
         .core()
         .listar_rutas()
+        .map_err(|_| "No se pudo cargar la lista de rutas".to_string())
+}
+
+/// Para el selector de salida de ruta -- una ruta dada de baja nunca es una
+/// opción válida, ver `RutaCatalogoService::listar_seleccionables`.
+#[tauri::command]
+pub fn listar_rutas_seleccionables(state: tauri::State<GuiState>) -> Result<Vec<Ruta>, String> {
+    state.sesion_activa()?;
+    state
+        .core()
+        .listar_rutas_seleccionables()
         .map_err(|_| "No se pudo cargar la lista de rutas".to_string())
 }
 

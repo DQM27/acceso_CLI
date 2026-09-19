@@ -1560,7 +1560,10 @@ impl Nucleo {
     pub fn buscar_encargados_ruta(&self, texto: String) -> Result<Vec<EncargadoRuta>, NucleoError> {
         Ok(self
             .core_lock()
-            .buscar_encargados_ruta(texto.trim())
+            // Es un selector (checklist de rutas/gafete provisional) -- un
+            // encargado desactivado no es una opción válida, ver
+            // `EncargadoRutaService::buscar_seleccionables`.
+            .buscar_encargados_ruta_seleccionables(texto.trim())
             .map_err(|origen| NucleoError::Interno {
                 mensaje: interno(origen),
             })?
@@ -1577,7 +1580,10 @@ impl Nucleo {
     pub fn buscar_rutas(&self, texto: String) -> Result<Vec<Ruta>, NucleoError> {
         Ok(self
             .core_lock()
-            .buscar_rutas(texto.trim())
+            // Es un selector -- una ruta dada de baja no es una opción
+            // válida para una salida nueva, ver
+            // `RutaCatalogoService::buscar_seleccionables`.
+            .buscar_rutas_seleccionables(texto.trim())
             .map_err(|origen| NucleoError::Interno {
                 mensaje: interno(origen),
             })?
@@ -1683,14 +1689,18 @@ impl Nucleo {
     }
 
     /// Selector con autocompletado del wizard de proveedores (Paso 2:
-    /// empresa) -- espejo de `AppCore::buscar_empresas_proveedor`.
+    /// empresa) -- espejo de `AppCore::buscar_empresas_proveedor_seleccionables`.
+    /// Es el selector del wizard de proveedores -- una empresa desactivada
+    /// no es una opción válida para un ingreso nuevo. Este era justo el bug
+    /// reportado: el filtro faltaba acá y en Kotlin, así que el buscador
+    /// seguía mostrando empresas desactivadas.
     pub fn buscar_empresas_proveedor(
         &self,
         texto: String,
     ) -> Result<Vec<EmpresaProveedor>, NucleoError> {
         Ok(self
             .core_lock()
-            .buscar_empresas_proveedor(texto.trim())
+            .buscar_empresas_proveedor_seleccionables(texto.trim())
             .map_err(|origen| NucleoError::Interno {
                 mensaje: interno(origen),
             })?
@@ -1749,10 +1759,15 @@ impl Nucleo {
             .collect())
     }
 
+    /// Es el selector del wizard de "Nuevo contratista" -- una empresa
+    /// desactivada no es una opción válida ahí, ver
+    /// `EmpresaService::listar_seleccionables`. No hay pantalla de
+    /// administración de empresas en mobile, así que no hace falta exponer
+    /// también la variante sin filtro.
     pub fn listar_empresas(&self) -> Result<Vec<Empresa>, NucleoError> {
         Ok(self
             .core_lock()
-            .listar_empresas()?
+            .listar_empresas_seleccionables()?
             .into_iter()
             .map(Into::into)
             .collect())

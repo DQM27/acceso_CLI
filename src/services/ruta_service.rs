@@ -288,8 +288,35 @@ impl<'a, R: RutaRepository + ?Sized> RutaCatalogoService<'a, R> {
         Ok(self.rutas.actualizar(&ruta)?)
     }
 
+    /// Para la grilla de administración -- trae todas, activas e inactivas
+    /// (dadas de baja), así se puede reactivar una. `listar_seleccionables`
+    /// es la contraparte para el checklist mobile: una ruta dada de baja
+    /// nunca es una opción válida para una salida nueva. Mismo criterio que
+    /// `EmpresaProveedorService::listar`/`listar_seleccionables`.
     pub fn listar(&self) -> Result<Vec<crate::models::ruta::Ruta>, RutaCatalogoServiceError> {
-        Ok(self.rutas.listar()?)
+        Ok(self.rutas.listar(false)?)
+    }
+
+    pub fn listar_seleccionables(
+        &self,
+    ) -> Result<Vec<crate::models::ruta::Ruta>, RutaCatalogoServiceError> {
+        Ok(self.rutas.listar(true)?)
+    }
+
+    /// Buscador del checklist mobile (número parcial) -- mismo criterio que
+    /// `listar`/`listar_seleccionables`.
+    pub fn buscar(
+        &self,
+        texto: &str,
+    ) -> Result<Vec<crate::models::ruta::Ruta>, RutaCatalogoServiceError> {
+        Ok(self.rutas.buscar(texto, false)?)
+    }
+
+    pub fn buscar_seleccionables(
+        &self,
+        texto: &str,
+    ) -> Result<Vec<crate::models::ruta::Ruta>, RutaCatalogoServiceError> {
+        Ok(self.rutas.buscar(texto, true)?)
     }
 }
 
@@ -757,5 +784,22 @@ mod tests {
         let error = servicio.dar_de_baja(&salidas, 999).unwrap_err();
 
         assert!(matches!(error, RutaCatalogoServiceError::RutaNoEncontrada));
+    }
+
+    /// `listar`/`buscar` (administración) traen todo; `_seleccionables`
+    /// (checklist mobile) omite las dadas de baja.
+    #[test]
+    fn seleccionables_omiten_las_dadas_de_baja_pero_administracion_las_incluye() {
+        let connection = conexion();
+        let rutas = SqliteRutaRepository::new(&connection);
+        let salidas = SqliteSalidaRutaRepository::new(&connection);
+        let ruta_id = rutas.buscar_por_numero(79).unwrap().unwrap().id;
+        let servicio = RutaCatalogoService::new(&rutas);
+        servicio.dar_de_baja(&salidas, ruta_id).unwrap();
+
+        assert_eq!(servicio.listar().unwrap().len(), 1);
+        assert!(servicio.listar_seleccionables().unwrap().is_empty());
+        assert_eq!(servicio.buscar("79").unwrap().len(), 1);
+        assert!(servicio.buscar_seleccionables("79").unwrap().is_empty());
     }
 }

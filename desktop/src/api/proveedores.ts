@@ -36,8 +36,17 @@ export interface SolicitudIngresoProveedor {
   gafete_numero: number;
 }
 
+/** Para la grilla de administración -- trae activas e inactivas, así se
+ * puede reactivar una. `listarEmpresasProveedorSeleccionables` es la
+ * contraparte para un selector de wizard (elegir empresa para un ingreso
+ * nuevo), donde una empresa inactiva nunca es una opción válida -- esa
+ * decisión la toma el núcleo (`EmpresaProveedorService`), no quien llama. */
 export function listarEmpresasProveedor(): Promise<EmpresaProveedor[]> {
   return invoke("listar_empresas_proveedor");
+}
+
+export function listarEmpresasProveedorSeleccionables(): Promise<EmpresaProveedor[]> {
+  return invoke("listar_empresas_proveedor_seleccionables");
 }
 
 export function buscarEmpresasProveedor(texto: string): Promise<EmpresaProveedor[]> {

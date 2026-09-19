@@ -6,7 +6,9 @@ use std::{
 
 use rusqlite::Connection;
 
-use super::schema::{SchemaError, initialize_database, verificar_archivo_propio};
+use super::schema::{
+    SchemaError, initialize_database, registrar_funcion_plegar, verificar_archivo_propio,
+};
 
 pub const DATABASE_PATH_ENV: &str = "CONTROL_ACCESO_DB";
 pub const LOCAL_APP_DATA_ENV: &str = "LOCALAPPDATA";
@@ -166,6 +168,15 @@ fn abrir_conexion_secundaria_base(
     if let Some(clave) = clave {
         aplicar_clave(&connection, clave)?;
     }
+    // `empresas`/`empresas_proveedor` tienen un índice único sobre
+    // `PLEGAR(nombre)` (migración 47) y `buscar()` también la usa
+    // directamente en el `WHERE` -- sin registrarla acá, cualquier
+    // lectura o escritura contra esas tablas en esta conexión (ej.
+    // `recibir_catalogo_del_sitio` sincronizando el catálogo vía
+    // `GuiState::conexion_secundaria`) tira "unknown function: PLEGAR()".
+    // No hace falta el resto de `initialize_database` (migrar/validar el
+    // esquema) -- la conexión principal ya lo hizo.
+    registrar_funcion_plegar(&connection)?;
     connection.execute_batch(PRAGMAS_CONEXION_SECUNDARIA_BASE)?;
     Ok(connection)
 }

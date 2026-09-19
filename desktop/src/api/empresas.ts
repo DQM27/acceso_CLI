@@ -20,9 +20,17 @@ export interface FiltroEmpresas {
   texto?: string;
 }
 
-/** Lista completa sin filtro — la usan los desplegables de "Empresa" en otras pantallas. */
+/** Para la grilla de administración -- trae activas e inactivas.
+ * `listarEmpresasSeleccionables` es la contraparte para el desplegable de
+ * "Empresa" al crear/editar un contratista, donde una empresa desactivada
+ * nunca es una opción válida -- esa decisión la toma el núcleo
+ * (`EmpresaService`), no quien llama. */
 export function listarEmpresas(): Promise<Empresa[]> {
   return invoke("listar_empresas");
+}
+
+export function listarEmpresasSeleccionables(): Promise<Empresa[]> {
+  return invoke("listar_empresas_seleccionables");
 }
 
 export function buscarEmpresas(filtro: FiltroEmpresas): Promise<EmpresaResumen[]> {

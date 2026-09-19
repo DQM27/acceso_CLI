@@ -11,7 +11,12 @@ import {
   useListaFlotante,
   useNavegacionFlechas,
 } from "../componentes/ListaFlotante";
-import { listarEncargadosRuta, listarRutas, listarVehiculosRuta, registrarSalidaRuta } from "../api";
+import {
+  listarEncargadosRutaSeleccionables,
+  listarRutasSeleccionables,
+  listarVehiculosRutaSeleccionables,
+  registrarSalidaRuta,
+} from "../api";
 import type { EncargadoRuta, Ruta, VehiculoRuta } from "../api";
 import { fechaYMD } from "../tiempo";
 
@@ -140,13 +145,12 @@ export default function SalidaRutaModal({
 
   const [vehiculos, setVehiculos] = useState<VehiculoRuta[]>([]);
   const [encargados, setEncargados] = useState<EncargadoRuta[]>([]);
-  const [rutas, setRutas] = useState<Ruta[]>([]);
+  const [rutasActivas, setRutasActivas] = useState<Ruta[]>([]);
   useEffect(() => {
-    listarVehiculosRuta().then(setVehiculos).catch(() => {});
-    listarEncargadosRuta().then(setEncargados).catch(() => {});
-    listarRutas().then(setRutas).catch(() => {});
+    listarVehiculosRutaSeleccionables().then(setVehiculos).catch(() => {});
+    listarEncargadosRutaSeleccionables().then(setEncargados).catch(() => {});
+    listarRutasSeleccionables().then(setRutasActivas).catch(() => {});
   }, []);
-  const rutasActivas = useMemo(() => rutas.filter((r) => r.activo), [rutas]);
 
   const placaTexto = watch("vehiculo_placa");
   const numeroUnidad = watch("vehiculo_numero_unidad");

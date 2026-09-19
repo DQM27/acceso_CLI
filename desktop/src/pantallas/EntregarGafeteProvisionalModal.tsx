@@ -4,7 +4,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
-import { listarEncargadosRuta } from "../api/rutas";
+import { listarEncargadosRutaSeleccionables } from "../api/rutas";
 import type { EncargadoRuta } from "../api/rutas";
 import { entregarGafeteProvisional } from "../api/gafetesProvisionales";
 
@@ -59,8 +59,8 @@ export default function EntregarGafeteProvisionalModal({
 
   const [encargados, setEncargados] = useState<EncargadoRuta[]>([]);
   useEffect(() => {
-    listarEncargadosRuta()
-      .then((datos) => setEncargados(datos.filter((encargado) => encargado.activo)))
+    listarEncargadosRutaSeleccionables()
+      .then(setEncargados)
       .catch(() => {});
   }, []);
 

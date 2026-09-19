@@ -14,13 +14,18 @@ pub trait RutaRepository {
 
     fn actualizar(&self, ruta: &Ruta) -> Result<(), DatabaseError>;
 
-    fn listar(&self) -> Result<Vec<Ruta>, DatabaseError>;
+    /// `solo_activos`: mismo criterio que
+    /// `EmpresaProveedorRepository::listar` -- los selectores de un wizard
+    /// piden `true` (una ruta dada de baja no es una opción válida para una
+    /// salida nueva), la pantalla de administración pide `false`.
+    fn listar(&self, solo_activos: bool) -> Result<Vec<Ruta>, DatabaseError>;
 
     /// Coincidencia parcial del número (ej. "7" encuentra 7, 17, 79...) --
     /// pedido explícito del usuario, 2026-09-15: el checklist mobile
     /// necesita un buscador, no sólo la lista completa, para confirmar en
-    /// el momento que el número leído por OCR existe en el catálogo.
-    fn buscar(&self, texto: &str) -> Result<Vec<Ruta>, DatabaseError>;
+    /// el momento que el número leído por OCR existe en el catálogo. Mismo
+    /// `solo_activos` que `listar`.
+    fn buscar(&self, texto: &str, solo_activos: bool) -> Result<Vec<Ruta>, DatabaseError>;
 }
 
 pub struct SqliteRutaRepository<'a> {
@@ -101,20 +106,23 @@ impl RutaRepository for SqliteRutaRepository<'_> {
         self.encolar_actualizacion(ruta.id)
     }
 
-    fn listar(&self) -> Result<Vec<Ruta>, DatabaseError> {
+    fn listar(&self, solo_activos: bool) -> Result<Vec<Ruta>, DatabaseError> {
+        let filtro_activo = if solo_activos { "WHERE activo = 1" } else { "" };
         let mut statement = self
             .connection
-            .prepare(&format!("{SELECT_RUTA} ORDER BY numero"))?;
+            .prepare(&format!("{SELECT_RUTA} {filtro_activo} ORDER BY numero"))?;
         let rutas = statement
             .query_map([], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rutas)
     }
 
-    fn buscar(&self, texto: &str) -> Result<Vec<Ruta>, DatabaseError> {
+    fn buscar(&self, texto: &str, solo_activos: bool) -> Result<Vec<Ruta>, DatabaseError> {
+        let filtro_activo = if solo_activos { "AND activo = 1" } else { "" };
         let mut statement = self.connection.prepare(&format!(
             "{SELECT_RUTA}
              WHERE CAST(numero AS TEXT) LIKE '%' || ?1 || '%'
+             {filtro_activo}
              ORDER BY numero
              LIMIT {LIMITE_BUSQUEDA}"
         ))?;
@@ -170,7 +178,7 @@ mod tests {
         repo.crear(179).unwrap();
         repo.crear(120).unwrap();
 
-        let resultados = repo.buscar("79").unwrap();
+        let resultados = repo.buscar("79", false).unwrap();
 
         assert_eq!(
             resultados.iter().map(|r| r.numero).collect::<Vec<_>>(),
@@ -184,7 +192,20 @@ mod tests {
         let repo = SqliteRutaRepository::new(&connection);
         repo.crear(79).unwrap();
 
-        assert!(repo.buscar("222").unwrap().is_empty());
+        assert!(repo.buscar("222", false).unwrap().is_empty());
+    }
+
+    #[test]
+    fn buscar_solo_activos_omite_las_dadas_de_baja() {
+        let connection = conexion();
+        let repo = SqliteRutaRepository::new(&connection);
+        let id = repo.crear(79).unwrap();
+        let mut ruta = repo.buscar_por_id(id).unwrap().unwrap();
+        ruta.activo = false;
+        repo.actualizar(&ruta).unwrap();
+
+        assert!(repo.buscar("79", true).unwrap().is_empty());
+        assert_eq!(repo.buscar("79", false).unwrap().len(), 1);
     }
 
     #[test]
@@ -207,11 +228,25 @@ mod tests {
         repo.crear(120).unwrap();
         repo.crear(79).unwrap();
 
-        let rutas = repo.listar().unwrap();
+        let rutas = repo.listar(false).unwrap();
 
         assert_eq!(
             rutas.iter().map(|r| r.numero).collect::<Vec<_>>(),
             vec![79, 120]
         );
+    }
+
+    #[test]
+    fn listar_solo_activos_omite_las_dadas_de_baja() {
+        let connection = conexion();
+        let repo = SqliteRutaRepository::new(&connection);
+        repo.crear(79).unwrap();
+        let id = repo.crear(120).unwrap();
+        let mut ruta = repo.buscar_por_id(id).unwrap().unwrap();
+        ruta.activo = false;
+        repo.actualizar(&ruta).unwrap();
+
+        assert_eq!(repo.listar(true).unwrap().len(), 1);
+        assert_eq!(repo.listar(false).unwrap().len(), 2);
     }
 }

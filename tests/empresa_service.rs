@@ -265,6 +265,23 @@ fn nombre_duplicado_produce_error_semantico_y_conserva_integridad() {
     );
 }
 
+/// El selector de empresa al crear/editar un contratista
+/// (`FormularioContratista.tsx`/`PantallaNuevoContratista.kt`) pide
+/// `listar_seleccionables` -- una empresa desactivada no es una opción
+/// válida ahí. Mismo criterio que `EmpresaProveedorService`.
+#[test]
+fn seleccionables_omiten_las_desactivadas_pero_administracion_las_incluye() {
+    let connection = preparar_base();
+    let repository = SqliteEmpresaRepository::new(&connection);
+    let servicio = EmpresaService::new(&repository);
+    servicio.crear("Maika").unwrap();
+    let id_dos_pinos = servicio.crear("Dos Pinos").unwrap();
+    servicio.desactivar(id_dos_pinos).unwrap();
+
+    assert_eq!(servicio.listar().unwrap().len(), 2);
+    assert_eq!(servicio.listar_seleccionables().unwrap().len(), 1);
+}
+
 // Bandeja de salida hacia la nube (`docs/planes-implementados/plan-persistencia-nube.md`): crear
 // o actualizar una empresa debe dejar siempre su aviso correspondiente en
 // `cola_salida`.
