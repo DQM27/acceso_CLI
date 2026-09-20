@@ -1,11 +1,7 @@
 package com.brisas.controlacceso
 
-import android.Manifest
-import android.content.pm.PackageManager
+import android.util.Log
 import android.util.Size
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -13,16 +9,10 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,9 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -65,38 +53,11 @@ fun PantallaEscanearCarnetKof(
     onCarnetDetectado: suspend (CarnetKofDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
-    BackHandler(onBack = onCerrar)
-    val contexto = LocalContext.current
-    var permisoConcedido by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-    }
-    val pedirPermiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
-        permisoConcedido = concedido
-    }
-
-    LaunchedEffect(Unit) {
-        if (!permisoConcedido) {
-            pedirPermiso.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    if (permisoConcedido) {
+    EscanerConPermisoCamara(
+        mensajePermiso = "Se necesita permiso de cámara para escanear el gafete.",
+        onCerrar = onCerrar,
+    ) {
         VistaCamaraCarnetKof(onCarnetDetectado = onCarnetDetectado, onCerrar = onCerrar)
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                "Se necesita permiso de cámara para escanear el carnet.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BotonDiscretoBrisas(onClick = onCerrar) { Text("Volver") }
-                BotonBrisas(onClick = { pedirPermiso.launch(Manifest.permission.CAMERA) }) { Text("Dar permiso") }
-            }
-        }
     }
 }
 
@@ -109,13 +70,17 @@ private fun VistaCamaraCarnetKof(
     val lifecycleOwner = LocalLifecycleOwner.current
     val alcance = rememberCoroutineScope()
     val onDetectadoActual by rememberUpdatedState(onCarnetDetectado)
-    val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     var ultimoMensaje by remember { mutableStateOf(MENSAJE_INICIAL_KOF) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
-    var textoCrudoDebug by remember { mutableStateOf("") }
-    val estabilizador = remember { EstabilizadorCarnetKof() }
+    val estabilizador = remember {
+        EstabilizadorPorRepeticion(
+            extraer = { texto -> extraerCarnetKof(texto)?.takeIf { it.nombre != null } },
+            clave = { "${it.nombre}:${it.codigoEmpleado}" },
+        )
+    }
+    val detectorInvalido = remember { DetectorTextoNoReconocido(esTipoEsperado = ::esCarnetKof) }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
@@ -138,9 +103,11 @@ private fun VistaCamaraCarnetKof(
         }
     }
 
-    val colorBuscando = Color(0xFF9E9E9E)
-    val colorConfirmado = Color(0xFF43A047)
-    val colorMarco = if (estado == EstadoEscaneo.CONFIRMADO) colorConfirmado else colorBuscando
+    val colorMarco = when (estado) {
+        EstadoEscaneo.CONFIRMADO -> ColorEscaneoConfirmado
+        EstadoEscaneo.INVALIDO -> ColorEscaneoInvalido
+        EstadoEscaneo.BUSCANDO -> ColorEscaneoBuscando
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -169,26 +136,46 @@ private fun VistaCamaraCarnetKof(
                                 sesionActiva = sesionActiva,
                                 onTexto = { texto ->
                                     if (sesionActiva.get()) {
-                                        if (BuildConfig.DEBUG) textoCrudoDebug = texto
+                                        // Log, no overlay en pantalla -- pedido
+                                        // explícito del usuario 2026-09-20 (se
+                                        // veía mal encima de la cámara). Sigue
+                                        // disponible por `adb logcat` en un
+                                        // build debug si hace falta diagnosticar
+                                        // un perfil que no lee bien.
+                                        if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
                                         val resultado = estabilizador.procesarFrame(texto)
-                                        if (resultado != null) {
-                                            estado = EstadoEscaneo.CONFIRMADO
-                                            ultimoMensaje = "Encargado ${resultado.nombre} confirmado"
-                                            if (detectada.compareAndSet(false, true)) {
-                                                haptica.performHapticFeedback(HapticFeedbackType.Confirm)
-                                                trabajoResultado?.cancel()
-                                                trabajoResultado = alcance.launch {
-                                                    if (sesionActiva.get()) onDetectadoActual(resultado)
+                                        when {
+                                            resultado != null -> {
+                                                estado = EstadoEscaneo.CONFIRMADO
+                                                ultimoMensaje = "Encargado ${resultado.nombre} confirmado"
+                                                if (detectada.compareAndSet(false, true)) {
+                                                    vibrarConfirmacion(contexto)
+                                                    reproducirSonidoConfirmacion()
+                                                    trabajoResultado?.cancel()
+                                                    trabajoResultado = alcance.launch {
+                                                        if (sesionActiva.get()) onDetectadoActual(resultado)
+                                                    }
                                                 }
                                             }
-                                        } else {
-                                            estado = EstadoEscaneo.BUSCANDO
-                                            ultimoMensaje = MENSAJE_INICIAL_KOF
+                                            // Mismo criterio que Comprobante de
+                                            // Ruta -- ver `DetectorTextoNoReconocido`.
+                                            // `esCarnetKof` ya excluye el
+                                            // comprobante (comparte la marca "Coca
+                                            // Cola FEMSA").
+                                            detectorInvalido.procesarFrame(texto) -> {
+                                                if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
+                                                estado = EstadoEscaneo.INVALIDO
+                                                ultimoMensaje = "Gafete no reconocido"
+                                            }
+                                            else -> {
+                                                estado = EstadoEscaneo.BUSCANDO
+                                                ultimoMensaje = MENSAJE_INICIAL_KOF
+                                            }
                                         }
                                     }
                                 },
                                 onFallo = {
-                                    if (sesionActiva.get()) ultimoMensaje = "No se pudo leer el texto. Intente acercar."
+                                    if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
                                 },
                             )
                         }
@@ -211,62 +198,26 @@ private fun VistaCamaraCarnetKof(
             modifier = Modifier.fillMaxSize(),
         )
         MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
-        Column(
-            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                ultimoMensaje,
-                color = Color.White,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.78f))
-                    .padding(12.dp),
-            )
-            BotonDiscretoBrisas(onClick = onCerrar) { Text("Cancelar") }
-        }
-        if (BuildConfig.DEBUG && textoCrudoDebug.isNotBlank()) {
-            Text(
-                "DEBUG -- texto crudo de ML Kit:\n$textoCrudoDebug",
-                color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState())
-                    .background(Color.Black.copy(alpha = 0.85f))
-                    .padding(12.dp),
-            )
-        }
+        Text(
+            ultimoMensaje,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp, start = 16.dp, end = 72.dp)
+                .background(Color.Black.copy(alpha = 0.78f), FormaCampoBrisas)
+                .padding(12.dp),
+        )
+        // Mismo botón compartido que las otras 3 pantallas de escaneo
+        // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
+        // 2026-09-19).
+        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
     }
 }
 
-private const val MENSAJE_INICIAL_KOF = "Apunte al frente del carnet KOF"
-
-/// Debounce por repetición de frames -- mismo criterio que
-/// `EstabilizadorComprobanteRuta` (ver `PantallaEscanearComprobanteRuta.kt`),
-/// pero sólo confirma cuando hay **nombre**: ver comentario de
-/// [PantallaEscanearCarnetKof] arriba sobre por qué el reverso solo
-/// (código de empleado sin nombre) no alcanza para cerrar este paso.
-private class EstabilizadorCarnetKof(
-    private val framesRequeridos: Int = 2,
-    private val ventana: Int = framesRequeridos + 2,
-) {
-    private val candidatosRecientes = ArrayDeque<String>()
-
-    fun procesarFrame(texto: String): CarnetKofDetectado? {
-        val detectado = extraerCarnetKof(texto)?.takeIf { it.nombre != null }
-        val clave = detectado?.let { "${it.nombre}:${it.codigoEmpleado}" } ?: CLAVE_SIN_CANDIDATO
-        candidatosRecientes.addLast(clave)
-        while (candidatosRecientes.size > ventana) candidatosRecientes.removeFirst()
-        if (detectado == null) return null
-        val repeticiones = candidatosRecientes.count { it == clave }
-        return if (repeticiones >= framesRequeridos) detectado else null
-    }
-
-    companion object {
-        private const val CLAVE_SIN_CANDIDATO = " "
-    }
-}
+// "gafete KOF", no "carnet KOF" -- el resto de la app llama a este mismo
+// documento "gafete KOF" (tab "KOF", encabezado "Encargado (gafete KOF)" en
+// PantallaRutas.kt); este mensaje se había quedado con el nombre interno del
+// documento en vez del que la persona ya conoce (hallazgo 2026-09-19).
+private const val MENSAJE_INICIAL_KOF = "Apunte al frente del gafete KOF"

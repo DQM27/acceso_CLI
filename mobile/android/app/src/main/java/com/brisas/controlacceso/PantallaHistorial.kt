@@ -15,7 +15,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
@@ -38,7 +38,7 @@ fun PantallaHistorial(nucleo: Nucleo, refrescarNube: Int = 0) {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        TextField(
+        OutlinedTextField(
             value = viewModel.texto,
             onValueChange = { viewModel.cambiarTexto(it) },
             label = null,

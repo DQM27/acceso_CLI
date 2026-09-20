@@ -20,6 +20,7 @@ import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.Ruta
 import uniffi.control_acceso_mobile.SalidaRutaActivaResumen
 import uniffi.control_acceso_mobile.SolicitudSalidaRuta
+import uniffi.control_acceso_mobile.VehiculoRuta
 
 /// Dueño del estado real de [PantallaRutas] y de las llamadas a [Nucleo] --
 /// mismo criterio que [ActivosViewModel] (ver su doc-comment): el
@@ -47,10 +48,11 @@ class RutasViewModel(
     // Buscador de encargado (paso 1) -- por nombre o código de empleado,
     // pedido explícito del usuario, 2026-09-15: "que funcione de las dos
     // formas, como ahora funciona contratista, que busca por nombre o por
-    // número de cédula". A diferencia del número de ruta, NO es
-    // bloqueante -- si no se elige nada de la lista, el nombre tipeado
-    // libremente igual alcanza para registrar la salida (el match de
-    // catálogo es consultivo, ver `RutaService`).
+    // número de cédula". BLOQUEANTE desde 2026-09-19 (mismo pedido que ya
+    // se le hizo al buscador de vehículo: "más de lo mismo, debe ser un
+    // buscador") -- el paso sólo se da por completo cuando hay un
+    // [EncargadoRuta] real elegido de `resultadosEncargado`, nunca por el
+    // sólo hecho de que el campo de texto no esté vacío.
     var textoEncargado by mutableStateOf("")
         private set
     var resultadosEncargado by mutableStateOf<List<EncargadoRuta>>(emptyList())
@@ -71,6 +73,21 @@ class RutasViewModel(
     var rutaSeleccionada by mutableStateOf<Ruta?>(null)
         private set
     private var trabajoBusquedaRuta: Job? = null
+
+    // Buscador de vehículo (paso 3) -- por placa o número de unidad,
+    // BLOQUEANTE (pedido explícito del usuario, 2026-09-19: "es un buscador,
+    // no se puede poner lo que uno quiera, sólo lo que la tabla
+    // proporciona") -- mismo criterio que el buscador de número de ruta, no
+    // el de encargado. Reemplaza los dos campos de texto libre
+    // (`vehiculoPlaca`/`vehiculoNumeroUnidad`) que antes vivían como estado
+    // local de [PantallaRutas].
+    var textoVehiculo by mutableStateOf("")
+        private set
+    var resultadosVehiculo by mutableStateOf<List<VehiculoRuta>>(emptyList())
+        private set
+    var vehiculoSeleccionado by mutableStateOf<VehiculoRuta?>(null)
+        private set
+    private var trabajoBusquedaVehiculo: Job? = null
 
     init {
         refrescarActivas()
@@ -118,6 +135,28 @@ class RutasViewModel(
         resultadosEncargado = emptyList()
     }
 
+    /// Autocompleta el buscador de encargado con lo que trajo el OCR del
+    /// gafete KOF (código de empleado o nombre, ver
+    /// `PantallaEscanearCarnetKof.kt`) y dispara la búsqueda -- mismo
+    /// criterio que [usarVehiculoEscaneado]: si hay una única coincidencia
+    /// exacta, la elige sola; si no, deja los resultados para que el
+    /// guardia elija a mano.
+    fun usarEncargadoEscaneado(texto: String) {
+        cambiarTextoEncargado(texto)
+        trabajoBusquedaEncargado?.cancel()
+        trabajoBusquedaEncargado = viewModelScope.launch {
+            try {
+                val resultados = withContext(dispatcherIO) { nucleo.buscarEncargadosRuta(texto) }
+                resultadosEncargado = resultados
+                resultados
+                    .singleOrNull { it.codigoEmpleado == texto || it.nombre == texto }
+                    ?.let { elegirEncargado(it) }
+            } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            }
+        }
+    }
+
     fun cambiarTextoRuta(nuevo: String) {
         textoRuta = nuevo
         rutaSeleccionada = null
@@ -162,6 +201,54 @@ class RutasViewModel(
         }
     }
 
+    /// Mismo criterio que [cambiarTextoRuta]: escribir de nuevo abandona
+    /// cualquier selección previa.
+    fun cambiarTextoVehiculo(nuevo: String) {
+        textoVehiculo = nuevo
+        vehiculoSeleccionado = null
+        trabajoBusquedaVehiculo?.cancel()
+        if (nuevo.isBlank()) {
+            resultadosVehiculo = emptyList()
+            return
+        }
+        trabajoBusquedaVehiculo = viewModelScope.launch {
+            delay(DEBOUNCE_MS)
+            try {
+                resultadosVehiculo = withContext(dispatcherIO) { nucleo.buscarVehiculosRuta(nuevo) }
+            } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            }
+        }
+    }
+
+    fun elegirVehiculo(vehiculo: VehiculoRuta) {
+        trabajoBusquedaVehiculo?.cancel()
+        textoVehiculo = vehiculo.placa
+        vehiculoSeleccionado = vehiculo
+        resultadosVehiculo = emptyList()
+    }
+
+    /// Autocompleta el buscador de vehículo con lo que trajo el OCR (placa
+    /// O número de unidad, mismo catálogo para ambos) y dispara la
+    /// búsqueda -- mismo criterio que [usarNumeroRutaEscaneado]: si hay una
+    /// única coincidencia exacta, la elige sola; si no, deja los
+    /// resultados para que el guardia elija a mano.
+    fun usarVehiculoEscaneado(texto: String) {
+        cambiarTextoVehiculo(texto)
+        trabajoBusquedaVehiculo?.cancel()
+        trabajoBusquedaVehiculo = viewModelScope.launch {
+            try {
+                val resultados = withContext(dispatcherIO) { nucleo.buscarVehiculosRuta(texto) }
+                resultadosVehiculo = resultados
+                resultados
+                    .singleOrNull { it.placa == texto || it.numeroUnidad == texto }
+                    ?.let { elegirVehiculo(it) }
+            } catch (excepcion: NucleoException) {
+                error = excepcion.message
+            }
+        }
+    }
+
     fun registrarSalida(solicitud: SolicitudSalidaRuta, onExito: () -> Unit) {
         if (registrando) return
         registrando = true
@@ -175,6 +262,8 @@ class RutasViewModel(
                 encargadoSeleccionado = null
                 textoRuta = ""
                 rutaSeleccionada = null
+                textoVehiculo = ""
+                vehiculoSeleccionado = null
                 refrescarActivas()
                 onExito()
             } catch (excepcion: NucleoException) {

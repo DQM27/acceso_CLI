@@ -33,6 +33,11 @@ sealed class FilaProveedorActiva {
     data class Remota(val remoto: IngresoProveedorRemoto) : FilaProveedorActiva()
 }
 
+private fun FilaProveedorActiva.cedula(): String = when (this) {
+    is FilaProveedorActiva.Local -> registro.cedula
+    is FilaProveedorActiva.Remota -> remoto.cedula
+}
+
 /// Dueño del estado real de [PantallaProveedores] y de las llamadas a
 /// [Nucleo] -- mismo criterio que [GafetesProvisionalesViewModel]:
 /// pantalla autocontenida (buscador + formulario + lista de activos), sin
@@ -61,6 +66,20 @@ class ProveedoresViewModel(
     var nombre by mutableStateOf("")
         private set
     var placa by mutableStateOf("")
+        private set
+
+    // Pedido explícito del usuario 2026-09-20: antes el aviso de "esta
+    // cédula ya tiene un ingreso activo" sólo salía al presionar "Registrar
+    // ingreso" (el chequeo real vive en Rust, `IngresoProveedorServiceError::IngresoActivo`)
+    // -- quien opera llenaba empresa/placa/gafete completos para recién ahí
+    // enterarse. Se adelanta la misma validación acá contra `activos` (ya
+    // cargado al entrar a la pantalla y refrescado tras cada alta/baja) en
+    // cuanto la cédula cambia -- por escaneo o tecleada a mano, ambas pasan
+    // por `cambiarCedula`. No reemplaza el chequeo de Rust (que sigue
+    // siendo la fuente de verdad si otro dispositivo registró un ingreso
+    // justo en el medio), sólo evita hacer avanzar a alguien con un dato ya
+    // conocido como inválido.
+    var cedulaConIngresoActivo by mutableStateOf(false)
         private set
 
     // Buscador de empresa proveedora -- mismo criterio que el buscador de
@@ -101,6 +120,14 @@ class ProveedoresViewModel(
 
     fun cambiarCedula(nuevo: String) {
         cedula = nuevo.filter(Char::isDigit)
+        cedulaConIngresoActivo = cedula.isNotBlank() && activos.any { it.cedula() == cedula }
+        error = if (cedulaConIngresoActivo) {
+            MENSAJE_CEDULA_CON_INGRESO_ACTIVO
+        } else if (error == MENSAJE_CEDULA_CON_INGRESO_ACTIVO) {
+            null
+        } else {
+            error
+        }
     }
 
     fun cambiarNombre(nuevo: String) {
@@ -174,7 +201,7 @@ class ProveedoresViewModel(
 
     fun registrarIngreso(gafeteNumero: Long, onExito: () -> Unit) {
         val empresa = empresaSeleccionada ?: return
-        if (registrando || cedula.isBlank() || nombre.isBlank()) return
+        if (registrando || cedula.isBlank() || nombre.isBlank() || cedulaConIngresoActivo) return
         registrando = true
         viewModelScope.launch {
             try {
@@ -220,6 +247,24 @@ class ProveedoresViewModel(
         }
     }
 
+    /// Se llama al cerrar el formulario sin registrar (botón "← Volver" o
+    /// atrás del sistema) -- limpia los mismos campos que un registro
+    /// exitoso. Sin esto, `error` (ej. "Esta cédula ya tiene un ingreso de
+    /// proveedor activo", puesto por `cambiarCedula` al escanear) se
+    /// quedaba pegado después de salir del formulario y aparecía en la
+    /// pantalla de la lista de activos, que reusa el mismo campo `error`
+    /// para sus propias fallas (`refrescarActivos`/`registrarSalida`) --
+    /// bug reportado en pruebas reales, 2026-09-20.
+    fun cancelarFormulario() {
+        cedula = ""
+        nombre = ""
+        placa = ""
+        textoEmpresa = ""
+        empresaSeleccionada = null
+        cedulaConIngresoActivo = false
+        error = null
+    }
+
     /// Local: cierra en `registro_ingresos_proveedor` (este dispositivo).
     /// Remota: cierra directo contra la nube (mismo criterio que
     /// `ActivosViewModel.confirmarSalida` para contratistas) -- nunca toca
@@ -253,6 +298,13 @@ class ProveedoresViewModel(
         // Mismo valor que `RutasViewModel`/`ActivosViewModel`/
         // `GafetesProvisionalesViewModel`.
         private const val DEBOUNCE_MS = 300L
+
+        // Mismo texto que `IngresoProveedorServiceError::IngresoActivo` en
+        // Rust (`src/services/error.rs`) -- el chequeo local en
+        // `cambiarCedula` es un adelanto de UX, no un reemplazo; que diga
+        // lo mismo evita que alguien vea dos redacciones distintas para el
+        // mismo motivo según en qué momento se entera.
+        const val MENSAJE_CEDULA_CON_INGRESO_ACTIVO = "Esta cédula ya tiene un ingreso de proveedor activo"
 
         fun factory(
             nucleo: Nucleo,

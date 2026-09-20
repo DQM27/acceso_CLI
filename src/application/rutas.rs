@@ -54,6 +54,24 @@ impl AppCore {
         VehiculoRutaService::new(&repositorio).listar_seleccionables()
     }
 
+    /// Sin `actor`, mismo criterio que `listar_vehiculos_ruta` -- lectura,
+    /// no autoriza nada. Buscador de la grilla de administración (placa o
+    /// número de unidad). `buscar_vehiculos_ruta_seleccionables` es la
+    /// contraparte para el selector del checklist mobile, ver el
+    /// doc-comment del trait.
+    pub fn buscar_vehiculos_ruta(&self, texto: &str) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        let repositorio = SqliteVehiculoRutaRepository::new(&self.connection);
+        VehiculoRutaService::new(&repositorio).buscar(texto)
+    }
+
+    pub fn buscar_vehiculos_ruta_seleccionables(
+        &self,
+        texto: &str,
+    ) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        let repositorio = SqliteVehiculoRutaRepository::new(&self.connection);
+        VehiculoRutaService::new(&repositorio).buscar_seleccionables(texto)
+    }
+
     pub fn crear_vehiculo_ruta(
         &self,
         actor: &UsuarioSesion,

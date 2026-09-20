@@ -1,11 +1,6 @@
 package com.brisas.controlacceso
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.util.Size
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -13,10 +8,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -34,9 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -69,42 +59,12 @@ fun PantallaEscanearVehiculoRuta(
     mensajeInicial: String = MENSAJE_INICIAL_VEHICULO,
     mensajePermiso: String = "Se necesita permiso de cámara para escanear la placa o el número de unidad.",
 ) {
-    BackHandler(onBack = onCerrar)
-    val contexto = LocalContext.current
-    var permisoConcedido by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-    }
-    val pedirPermiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
-        permisoConcedido = concedido
-    }
-
-    LaunchedEffect(Unit) {
-        if (!permisoConcedido) {
-            pedirPermiso.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    if (permisoConcedido) {
+    EscanerConPermisoCamara(mensajePermiso = mensajePermiso, onCerrar = onCerrar) {
         VistaCamaraVehiculoRuta(
             onVehiculoDetectado = onVehiculoDetectado,
             onCerrar = onCerrar,
             mensajeInicial = mensajeInicial,
         )
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                mensajePermiso,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BotonDiscretoBrisas(onClick = onCerrar) { Text("Volver") }
-                BotonBrisas(onClick = { pedirPermiso.launch(Manifest.permission.CAMERA) }) { Text("Dar permiso") }
-            }
-        }
     }
 }
 
@@ -118,12 +78,14 @@ private fun VistaCamaraVehiculoRuta(
     val lifecycleOwner = LocalLifecycleOwner.current
     val alcance = rememberCoroutineScope()
     val onDetectadoActual by rememberUpdatedState(onVehiculoDetectado)
-    val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     var ultimoMensaje by remember { mutableStateOf(mensajeInicial) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
-    val estabilizador = remember { EstabilizadorVehiculoRuta() }
+    val estabilizador = remember {
+        EstabilizadorPorRepeticion(extraer = ::extraerVehiculo, clave = { "${it.tipo}:${it.valor}" })
+    }
+    val detectorInvalido = remember { DetectorTextoNoReconocido(esTipoEsperado = { extraerVehiculo(it) != null }) }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
@@ -146,9 +108,11 @@ private fun VistaCamaraVehiculoRuta(
         }
     }
 
-    val colorBuscando = Color(0xFF9E9E9E)
-    val colorConfirmado = Color(0xFF43A047)
-    val colorMarco = if (estado == EstadoEscaneo.CONFIRMADO) colorConfirmado else colorBuscando
+    val colorMarco = when (estado) {
+        EstadoEscaneo.CONFIRMADO -> ColorEscaneoConfirmado
+        EstadoEscaneo.INVALIDO -> ColorEscaneoInvalido
+        EstadoEscaneo.BUSCANDO -> ColorEscaneoBuscando
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -178,24 +142,42 @@ private fun VistaCamaraVehiculoRuta(
                                 onTexto = { texto ->
                                     if (sesionActiva.get()) {
                                         val resultado = estabilizador.procesarFrame(texto)
-                                        if (resultado != null) {
-                                            estado = EstadoEscaneo.CONFIRMADO
-                                            ultimoMensaje = "${resultado.valor} confirmado"
-                                            if (detectada.compareAndSet(false, true)) {
-                                                haptica.performHapticFeedback(HapticFeedbackType.Confirm)
-                                                trabajoResultado?.cancel()
-                                                trabajoResultado = alcance.launch {
-                                                    if (sesionActiva.get()) onDetectadoActual(resultado)
+                                        when {
+                                            resultado != null -> {
+                                                estado = EstadoEscaneo.CONFIRMADO
+                                                ultimoMensaje = "${resultado.valor} confirmado"
+                                                if (detectada.compareAndSet(false, true)) {
+                                                    vibrarConfirmacion(contexto)
+                                                    reproducirSonidoConfirmacion()
+                                                    trabajoResultado?.cancel()
+                                                    trabajoResultado = alcance.launch {
+                                                        if (sesionActiva.get()) onDetectadoActual(resultado)
+                                                    }
                                                 }
                                             }
-                                        } else {
-                                            estado = EstadoEscaneo.BUSCANDO
-                                            ultimoMensaje = mensajeInicial
+                                            // Sin clasificador aparte acá (a
+                                            // diferencia de Comprobante/Carnet KOF):
+                                            // placa/número de unidad es un dato
+                                            // atómico, `extraerVehiculo` ya decide
+                                            // todo en un solo paso -- que falle es
+                                            // en sí mismo la señal de "esto no es
+                                            // una placa ni un número de unidad".
+                                            // Ver `DetectorTextoNoReconocido` sobre
+                                            // por qué esto tolera frames sueltos.
+                                            detectorInvalido.procesarFrame(texto) -> {
+                                                if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
+                                                estado = EstadoEscaneo.INVALIDO
+                                                ultimoMensaje = "No se reconoce como placa ni número de unidad"
+                                            }
+                                            else -> {
+                                                estado = EstadoEscaneo.BUSCANDO
+                                                ultimoMensaje = mensajeInicial
+                                            }
                                         }
                                     }
                                 },
                                 onFallo = {
-                                    if (sesionActiva.get()) ultimoMensaje = "No se pudo leer el texto. Intente acercar."
+                                    if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
                                 },
                             )
                         }
@@ -218,45 +200,22 @@ private fun VistaCamaraVehiculoRuta(
             modifier = Modifier.fillMaxSize(),
         )
         MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
-        Column(
-            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                ultimoMensaje,
-                color = Color.White,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.78f))
-                    .padding(12.dp),
-            )
-            BotonDiscretoBrisas(onClick = onCerrar) { Text("Cancelar") }
-        }
+        Text(
+            ultimoMensaje,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp, start = 16.dp, end = 72.dp)
+                .background(Color.Black.copy(alpha = 0.78f), FormaCampoBrisas)
+                .padding(12.dp),
+        )
+        // Mismo botón compartido que las otras 3 pantallas de escaneo
+        // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
+        // 2026-09-19).
+        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
     }
 }
 
 private const val MENSAJE_INICIAL_VEHICULO = "Apunte a la placa o al número de unidad"
-
-/// Debounce por repetición de frames -- mismo criterio que
-/// `EstabilizadorComprobanteRuta`/`EstabilizadorCarnetKof`.
-private class EstabilizadorVehiculoRuta(
-    private val framesRequeridos: Int = 2,
-    private val ventana: Int = framesRequeridos + 2,
-) {
-    private val candidatosRecientes = ArrayDeque<String>()
-
-    fun procesarFrame(texto: String): VehiculoRutaDetectado? {
-        val detectado = extraerVehiculo(texto)
-        val clave = detectado?.let { "${it.tipo}:${it.valor}" } ?: CLAVE_SIN_CANDIDATO
-        candidatosRecientes.addLast(clave)
-        while (candidatosRecientes.size > ventana) candidatosRecientes.removeFirst()
-        if (detectado == null) return null
-        val repeticiones = candidatosRecientes.count { it == clave }
-        return if (repeticiones >= framesRequeridos) detectado else null
-    }
-
-    companion object {
-        private const val CLAVE_SIN_CANDIDATO = " "
-    }
-}

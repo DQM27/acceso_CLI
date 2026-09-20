@@ -13,6 +13,69 @@ class LectorDocumentosIdentidadTest {
         assertEquals(TipoDocumento.CEDULA_NACIONAL, clasificarTipoDocumento(texto))
     }
 
+    // --- Cédula nacional de frente (sin voltear al MRZ) ---
+    // Basado en dos fotos reales del 2026-09-20: formato nuevo (con
+    // orquídeas) y el formato azul anterior -- ambos comparten las mismas
+    // etiquetas de campo, así que un solo extractor cubre los dos.
+
+    @Test
+    fun cedulaNacionalFrenteFormatoNuevoLeeNombreYApellidos() {
+        val texto = """
+            REPÚBLICA DE COSTA RICA
+            TRIBUNAL SUPREMO DE ELECCIONES
+            CÉDULA DE IDENTIDAD
+            1 2345 6789
+            Nombre: JUAN CARLOS
+            1°Apellido: GOMEZ
+            2°Apellido: VARGAS
+            F. Nac: 22/08/2003 Vence: 08/04/2036
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CEDULA_NACIONAL, doc?.tipo)
+        assertEquals("123456789", doc?.numeroDocumento)
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("GOMEZ VARGAS", doc?.apellidos)
+    }
+
+    @Test
+    fun cedulaNacionalFrenteFormatoAzulAnteriorLeeNombreYApellidos() {
+        val texto = """
+            REPÚBLICA DE COSTA RICA
+            Tribunal Supremo de Elecciones
+            Cédula de Identidad
+            1 9876 5432
+            Nombre: ANA LUCIA
+            1° Apellido: RODRIGUEZ
+            2° Apellido: SOLIS
+            C.C.:
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CEDULA_NACIONAL, doc?.tipo)
+        assertEquals("198765432", doc?.numeroDocumento)
+        assertEquals("ANA LUCIA", doc?.nombre)
+        assertEquals("RODRIGUEZ SOLIS", doc?.apellidos)
+    }
+
+    @Test
+    fun cedulaNacionalFrenteSinNombreLegibleSigueDevolviendoElNumero() {
+        // Ángulo/reflejo típico -- el número se leyó bien pero el bloque de
+        // nombre/apellidos no calzó todavía. No debe bloquear la
+        // confirmación por número (ver EstabilizadorLectura.mensajeDeConfirmacion,
+        // que sí avisa "muéstreme el reverso" en este caso).
+        val texto = "TRIBUNAL SUPREMO DE ELECCIONES\n1-1234-0567\nCOSTA RICA"
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CEDULA_NACIONAL, doc?.tipo)
+        assertEquals("112340567", doc?.numeroDocumento)
+        assertNull(doc?.nombre)
+        assertNull(doc?.apellidos)
+    }
+
     @Test
     fun clasificaCedulaResidencia() {
         val texto = "DIRECCIÓN GENERAL DE MIGRACIÓN Y EXTRANJERÍA\nRESIDENTE PERMANENTE"
@@ -371,5 +434,52 @@ class LectorDocumentosIdentidadTest {
         val documento = DocumentoDetectado(tipo = TipoDocumento.CEDULA_NACIONAL, numeroDocumento = "101110111")
         val hoy = FechaDocumento(8, 9, 2026)
         assertEquals(TipoDocumento.CEDULA_NACIONAL, documento.reclasificarPorEdad(hoy).tipo)
+    }
+
+    // --- DIMEX: nombre/apellidos no deben quedar en un valor de Sexo ---
+
+    @Test
+    fun dimexNoConfundeNombreConValorDeSexo() {
+        // Reproduce el hallazgo real (2026-09-20): ML Kit linealiza el
+        // texto de un DIMEX real con "Nombre:" seguido del valor de Sexo,
+        // no del nombre real -- antes esto quedaba guardado tal cual
+        // ("MASCULINO") en el campo `nombre`.
+        val texto = """
+            RESIDENTE PERMANENTE
+            DOCUMENTO NO.: 155824395105
+            Nombre:
+            MASCULINO
+            Apellidos:
+            FEMENINO
+            Nacionalidad:
+            NICARAGUENSE
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CEDULA_RESIDENCIA, doc?.tipo)
+        assertNull(doc?.nombre)
+        assertNull(doc?.apellidos)
+        // Nacionalidad no se toca -- ver el comentario en
+        // LectorDocumentosIdentidad.kt sobre por qué ese caso queda
+        // pendiente de una muestra real.
+        assertEquals("NICARAGUENSE", doc?.nacionalidad)
+    }
+
+    @Test
+    fun dimexMantieneNombreYApellidosCuandoNoHayColision() {
+        val texto = """
+            RESIDENTE PERMANENTE
+            DOCUMENTO NO.: 155824395105
+            Nombre:
+            JUAN CARLOS
+            Apellidos:
+            PEREZ MORA
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
     }
 }

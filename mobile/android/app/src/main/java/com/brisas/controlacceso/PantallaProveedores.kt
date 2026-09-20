@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -32,20 +35,28 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.EmpresaProveedor
 import uniffi.control_acceso_mobile.IngresoProveedorRemoto
 import uniffi.control_acceso_mobile.Nucleo
@@ -158,7 +169,11 @@ fun PantallaProveedores(
             onCambiarGafeteTexto = { gafeteTexto = it },
             onEscanear = { escaneando = true },
             onEscanearPlaca = { escaneandoPlaca = true },
-            onVolver = { mostrandoFormulario = false },
+            onVolver = {
+                viewModel.cancelarFormulario()
+                gafeteTexto = ""
+                mostrandoFormulario = false
+            },
         )
         return
     }
@@ -185,7 +200,7 @@ fun PantallaProveedores(
             // con `leadingIcon` (a diferencia del buscador de
             // `PantallaActivos`, que no tiene `placeholder`) ese alto
             // dejaba el texto del placeholder recortado, casi invisible.
-            TextField(
+            OutlinedTextField(
                 value = busqueda,
                 onValueChange = { busqueda = it },
                 placeholder = { Text("Cédula, nombre, empresa…") },
@@ -268,11 +283,25 @@ private fun FormularioNuevoIngresoProveedor(
     val paso1Completo = viewModel.cedula.isNotBlank() && viewModel.nombre.isNotBlank()
     val paso2Completo = viewModel.empresaSeleccionada != null
     val paso3Completo = gafeteTexto.isNotBlank()
-    val puedeRegistrar = paso1Completo && paso2Completo && paso3Completo && !viewModel.registrando
+    val puedeRegistrar = paso1Completo && paso2Completo && paso3Completo &&
+        !viewModel.registrando && !viewModel.cedulaConIngresoActivo
 
+    // Mismo destino que el botón "← Volver" visible de abajo -- sin esto,
+    // atrás del sistema se escapaba a la Activity en vez de volver a la
+    // lista (hallazgo 2026-09-19, mismo patrón ya usado en las pantallas de
+    // escaneo/PantallaConfirmarIngreso).
+    BackHandler(onBack = onVolver)
+
+    // Mismo criterio que [PantallaRutas]: `imePadding()` va en un `Column`
+    // SIN `fillMaxSize` -- combinarlo con `fillMaxSize` deja un hueco enorme
+    // entre el teclado y el contenido (bug reportado 2026-09-20), porque el
+    // padding se suma sobre un alto que ya estaba fijado a pantalla completa
+    // en vez de sobre el alto real del contenido.
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier = Modifier.verticalScroll(scrollState).imePadding(),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Nuevo ingreso", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -306,6 +335,25 @@ private fun FormularioNuevoIngresoProveedor(
                 onEscanearPlaca = onEscanearPlaca,
                 gafeteTexto = gafeteTexto,
                 onCambiarGafeteTexto = { onCambiarGafeteTexto(it.filter(Char::isDigit)) },
+                // Al enfocar el último input, lleva el scroll hasta el
+                // fondo -- ahí vive el botón "Registrar ingreso", último
+                // elemento de esta misma Column. El foco por sí solo sólo
+                // garantiza que el campo entre en pantalla, no el botón de
+                // abajo (pedido explícito del usuario 2026-09-20: quiere ver
+                // campo y botón juntos, no sólo el campo). Un solo
+                // `animateScrollTo` no alcanza: el teclado tarda ~250ms en
+                // animarse y el `imePadding()` va agrandando la Column
+                // cuadro a cuadro, así que `maxValue` todavía no refleja el
+                // alto final en el instante del foco -- se repite mientras
+                // dura esa animación para perseguir el nuevo fondo.
+                onGafeteEnfocado = {
+                    scope.launch {
+                        repeat(15) {
+                            scrollState.animateScrollTo(scrollState.maxValue)
+                            delay(30)
+                        }
+                    }
+                },
             )
         }
 
@@ -344,6 +392,7 @@ private fun FormularioNuevoIngresoProveedor(
         ) {
             Text(if (viewModel.registrando) "Registrando…" else "Registrar ingreso")
         }
+    }
     }
 }
 
@@ -393,9 +442,8 @@ private fun PasoDatosProveedor(
     onCambiarNombre: (String) -> Unit,
     onEscanear: () -> Unit,
 ) {
-    TarjetaPasoProveedor(onEscanear = onEscanear) {
-        PasoEncabezadoProveedor(1, "Datos del proveedor", completado)
-        TextField(
+    TarjetaPasoProveedor(1, "Datos del proveedor", completado, onEscanear = onEscanear) {
+        OutlinedTextField(
             value = cedula,
             onValueChange = onCambiarCedula,
             placeholder = { Text("Cédula") },
@@ -404,7 +452,7 @@ private fun PasoDatosProveedor(
             colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
         )
-        TextField(
+        OutlinedTextField(
             value = nombre,
             onValueChange = onCambiarNombre,
             placeholder = { Text("Nombre") },
@@ -437,13 +485,34 @@ private fun PasoEmpresaProveedora(
     // 2026-09-17: dejaba crear un duplicado de una empresa que ya existía).
     val sinCoincidencias = !completado && texto.isNotBlank() && resultados.isEmpty()
 
-    TarjetaPasoProveedor {
-        PasoEncabezadoProveedor(2, "Empresa proveedora", completado)
+    TarjetaPasoProveedor(
+        2,
+        "Empresa proveedora",
+        completado,
+        onEscanear = { onCrear(texto) },
+        icono = Icons.Default.Add,
+        descripcionIcono = "Añadir empresa",
+        botonHabilitado = sinCoincidencias && !creando,
+        contenidoExtra = {
+            if (sinCoincidencias) {
+                // Ya no es un botón clickeable -- la acción de crear ahora
+                // vive en el botón "+" al lado del campo (mismo lugar que la
+                // cámara en las otras 2 tarjetas). Esto queda como aviso de
+                // que esa empresa no existe todavía, nada más -- y vive
+                // fuera de la fila que centra el botón para no correrlo.
+                Text(
+                    if (creando) "Creando…" else "Empresa no existe",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    ) {
         ExposedDropdownMenuBox(
             expanded = menuAbierto && resultados.isNotEmpty(),
             onExpandedChange = { menuAbierto = it },
         ) {
-            TextField(
+            OutlinedTextField(
                 value = texto,
                 onValueChange = {
                     onCambiarTexto(it)
@@ -473,14 +542,6 @@ private fun PasoEmpresaProveedora(
                 }
             }
         }
-        if (sinCoincidencias) {
-            BotonDiscretoBrisas(
-                onClick = { onCrear(texto) },
-                enabled = !creando,
-            ) {
-                Text(if (creando) "Creando…" else "Crear empresa \"$texto\"")
-            }
-        }
     }
 }
 
@@ -495,10 +556,10 @@ private fun PasoVehiculoYGafete(
     onEscanearPlaca: () -> Unit,
     gafeteTexto: String,
     onCambiarGafeteTexto: (String) -> Unit,
+    onGafeteEnfocado: () -> Unit,
 ) {
-    TarjetaPasoProveedor(onEscanear = onEscanearPlaca) {
-        PasoEncabezadoProveedor(3, "Vehículo y gafete", completado)
-        TextField(
+    TarjetaPasoProveedor(3, "Vehículo y gafete", completado, onEscanear = onEscanearPlaca) {
+        OutlinedTextField(
             value = placa,
             onValueChange = onCambiarPlaca,
             placeholder = { Text("Placa (opcional)") },
@@ -507,14 +568,15 @@ private fun PasoVehiculoYGafete(
             colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
         )
-        TextField(
+        OutlinedTextField(
             value = gafeteTexto,
             onValueChange = onCambiarGafeteTexto,
             placeholder = { Text("Número de gafete") },
             singleLine = true,
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas)
+                .onFocusChanged { if (it.isFocused) onGafeteEnfocado() },
         )
     }
 }
@@ -527,33 +589,63 @@ private fun PasoVehiculoYGafete(
 /// `private` allá).
 @Composable
 private fun TarjetaPasoProveedor(
+    numero: Int,
+    titulo: String,
+    completado: Boolean,
     onEscanear: (() -> Unit)? = null,
+    // Mismo botón cuadrado para las 3 tarjetas -- ícono/descripción/estado
+    // habilitado configurables para que sirva tanto de "escanear" (pasos 1 y
+    // 3) como de "añadir empresa" (paso 2, pedido explícito del usuario
+    // 2026-09-19: un botón al lado del campo, no un texto clickeable abajo
+    // -- las 3 tarjetas quedan con la misma utilidad visual).
+    icono: ImageVector = Icons.Default.PhotoCamera,
+    descripcionIcono: String = "Escanear",
+    botonHabilitado: Boolean = true,
+    // Contenido debajo de la fila campo(s)+botón, FUERA de ella a propósito
+    // -- si un mensaje variable (ej. "Empresa no existe") viviera adentro
+    // de la columna que el botón centra, la altura de esa columna cambiaría
+    // con el mensaje y el botón se corriría (bug reportado 2026-09-19: el
+    // input quedaba desfasado del botón). Así el botón siempre se centra
+    // sólo contra el/los campo(s), nunca contra contenido variable.
+    contenidoExtra: (@Composable () -> Unit)? = null,
     contenido: @Composable () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            contenido()
-        }
-        if (onEscanear != null) {
-            Box(
-                modifier = Modifier
-                    .size(AlturaBusquedaBrisas)
-                    .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
-                    .clip(FormaCampoBrisas)
-                    .clickable(onClick = onEscanear),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear", tint = MaterialTheme.colorScheme.primary)
+        PasoEncabezadoProveedor(numero, titulo, completado)
+        // Fila propia (sin el encabezado) -- mismo motivo que en
+        // `PantallaRutas`: el botón se centra contra el/los campo(s), no
+        // contra la tarjeta entera (pedido explícito del usuario,
+        // 2026-09-19).
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                contenido()
+            }
+            if (onEscanear != null) {
+                val colorBoton =
+                    if (botonHabilitado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                Box(
+                    modifier = Modifier
+                        .size(AlturaBusquedaBrisas)
+                        .border(1.dp, colorBoton, FormaCampoBrisas)
+                        .clip(FormaCampoBrisas)
+                        .clickable(enabled = botonHabilitado, onClick = onEscanear),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(icono, contentDescription = descripcionIcono, tint = colorBoton)
+                }
             }
         }
+        contenidoExtra?.invoke()
     }
 }
 
@@ -571,6 +663,10 @@ private fun FilaProveedorActivo(fila: FilaProveedorActiva, onConfirmarSalida: ()
 /// Antes esta tarjeta abría con "Gafete N" en vez del nombre -- pedido
 /// explícito del usuario en pruebas reales, 2026-09-17: unificar el orden
 /// de importancia entre las dos pantallas.
+///
+/// Mayúscula + negrita + gafete en azul, y "dio ingreso" en la última
+/// línea -- mismo tratamiento que `FilaActivoLocal` (contratista), pedido
+/// explícito del usuario 2026-09-20 para unificar las dos tarjetas.
 @Composable
 private fun FilaProveedorActivoLocal(
     registro: RegistroIngresoProveedorActivoResumen,
@@ -587,13 +683,23 @@ private fun FilaProveedorActivoLocal(
     ) {
         Text(registro.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(
-            "${registro.cedula} · ${registro.empresaNombre} · Gafete ${registro.gafeteNumero}" +
-                (registro.placa?.let { " · $it" } ?: ""),
+            buildAnnotatedString {
+                append(
+                    (
+                        "${registro.cedula} · ${registro.empresaNombre}" +
+                            (registro.placa?.let { " · $it" } ?: "") + " · "
+                    ).uppercase(),
+                )
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                    append("Gafete ${registro.gafeteNumero}".uppercase())
+                }
+            },
             style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "Ingresó ${textoFechaHora(registro.fechaHoraIngreso)}",
+            "Ingresó ${textoFechaHora(registro.fechaHoraIngreso)} · dio ingreso ${registro.usuarioIngresoNombre}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -616,13 +722,23 @@ private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirma
     ) {
         Text(remoto.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(
-            "${remoto.cedula} · ${remoto.empresaNombre} · Gafete ${remoto.gafeteNumero}" +
-                (remoto.placa?.let { " · $it" } ?: ""),
+            buildAnnotatedString {
+                append(
+                    (
+                        "${remoto.cedula} · ${remoto.empresaNombre}" +
+                            (remoto.placa?.let { " · $it" } ?: "") + " · "
+                    ).uppercase(),
+                )
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                    append("Gafete ${remoto.gafeteNumero}".uppercase())
+                }
+            },
             style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "Ingresó ${textoFechaHora(remoto.horaEntrada)}",
+            "Ingresó ${textoFechaHora(remoto.horaEntrada)} · dio ingreso ${remoto.usuarioEntradaNombre}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

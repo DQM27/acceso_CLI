@@ -162,9 +162,19 @@ private val REGEX_LICENCIA_EXTRANJERO = Regex("""N[º9O]?[:.]?\s*DM[- ]""")
 private val REGEX_LICENCIA_DM_DIRECTO = Regex("""\bDM[- ]?(\d{6,15})\b""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NUMERO = Regex("""DOCUMENTO\s*NO\.?:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NUMERO_PROVISIONAL = Regex("""N[°ºO]?\s*DOCUMENTO\s*:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
-private val REGEX_DIMEX_NOMBRE = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
+// Compartida con la cédula nacional de frente (misma etiqueta "Nombre:"
+// exacta en ambos documentos) -- ver `extraerCedulaNacionalFrente`.
+private val REGEX_NOMBRE_ETIQUETA = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_APELLIDOS = Regex("""Apellidos:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NACIONALIDAD = Regex("""Nacionalidad:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
+// Cédula nacional de frente: el apellido viene partido en dos campos, no
+// uno solo como en DIMEX -- "1°Apellido:"/"1° Apellido:" según el diseño
+// (formato nuevo con orquídeas vs. el azul anterior, dos fotos reales del
+// 2026-09-20), y lo mismo para el segundo. `\D{0,4}` entre el dígito y
+// "Apellido" tolera el símbolo de grado, el espacio, o ambos, sin
+// necesitar saber cuál de los dos diseños es.
+private val REGEX_CEDULA_APELLIDO1 = Regex("""1\D{0,4}Apellido:?[ \t]*\n?[ \t]*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
+private val REGEX_CEDULA_APELLIDO2 = Regex("""2\D{0,4}Apellido:?[ \t]*\n?[ \t]*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_LICENCIA_NUMERO = Regex("""N[º°9O]?[:.]?\s*(?:DM|CI)?[- ]?(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_CEDULA = Regex("""No\.?\s*de\s*c[ée]dula:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_NOMBRE = Regex("""Nombre:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
@@ -229,9 +239,7 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
 /// escaneo debe seguir esperando más frames, no tratarlo como fallo).
 fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
     return when (clasificarTipoDocumento(texto)) {
-        TipoDocumento.CEDULA_NACIONAL -> extraerCedulaDeTexto(texto)?.let {
-            DocumentoDetectado(tipo = TipoDocumento.CEDULA_NACIONAL, numeroDocumento = it)
-        }
+        TipoDocumento.CEDULA_NACIONAL -> extraerCedulaNacionalFrente(texto)
         TipoDocumento.CEDULA_RESIDENCIA -> extraerDimex(texto)
         TipoDocumento.LICENCIA_NACIONAL -> extraerLicencia(texto, esExtranjero = false)
         TipoDocumento.LICENCIA_EXTRANJERO -> extraerLicencia(texto, esExtranjero = true)
@@ -249,6 +257,26 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
     }
 }
 
+// El DIMEX tiene varios campos de una sola palabra (Sexo, y a veces
+// Nacionalidad) impresos cerca de Nombre/Apellidos -- si el orden en que
+// ML Kit linealiza el texto no respeta el layout visual real de la
+// tarjeta (columnas, no un único renglón de arriba a abajo), la regex de
+// "Nombre:" puede terminar capturando el valor de OTRO campo que quedó
+// pegado justo después en el texto crudo, no el nombre real (hallazgo
+// 2026-09-20, reportado contra una DIMEX real: el nombre salía como
+// "MASCULINO"). Sexo es un conjunto cerrado y chico -- fácil de detectar y
+// descartar sin arriesgar nada. Nacionalidad NO lo es (decenas de
+// gentilicios posibles): sin una muestra real del texto crudo tal como lo
+// entrega ML Kit en ese caso, cualquier lista de exclusión sería a ciegas
+// y podría estar igual de equivocada -- queda pendiente hasta tener ese
+// dato (ver `TAG_DEBUG_OCR_LECTURA` en `EscaneoCompartido.kt`).
+private val VALORES_SEXO_DIMEX = setOf("M", "F", "MASCULINO", "FEMENINO")
+
+private fun valorSiNoEsSexo(match: MatchResult?): String? {
+    val valor = match?.groupValues?.get(1)?.trim() ?: return null
+    return valor.takeUnless { it.uppercase() in VALORES_SEXO_DIMEX }
+}
+
 /// Extrae el número de "Documento No.:", nunca el de "Expediente No.:" --
 /// este es el caso que motivó todo el refinamiento (ver plan, sección 1):
 /// ambos son números de longitud similar en el mismo bloque de texto, y una
@@ -258,8 +286,8 @@ private fun extraerDimex(texto: String): DocumentoDetectado? {
         ?: REGEX_DIMEX_NUMERO_PROVISIONAL.find(texto)?.groupValues?.get(1)
         ?: return null
 
-    val nombre = REGEX_DIMEX_NOMBRE.find(texto)?.groupValues?.get(1)?.trim()
-    val apellidos = REGEX_DIMEX_APELLIDOS.find(texto)?.groupValues?.get(1)?.trim()
+    val nombre = valorSiNoEsSexo(REGEX_NOMBRE_ETIQUETA.find(texto))
+    val apellidos = valorSiNoEsSexo(REGEX_DIMEX_APELLIDOS.find(texto))
     val nacionalidad = REGEX_DIMEX_NACIONALIDAD.find(texto)?.groupValues?.get(1)?.trim()
     val vencimiento = extraerFecha(texto, etiqueta = "Vence")
         ?: extraerFecha(texto, etiqueta = "Fecha Vencimiento")
@@ -271,6 +299,32 @@ private fun extraerDimex(texto: String): DocumentoDetectado? {
         apellidos = apellidos,
         nacionalidad = nacionalidad,
         vencimiento = vencimiento,
+    )
+}
+
+/// Frente de la cédula nacional (sin voltear al MRZ del reverso). Hasta acá
+/// esta rama sólo devolvía el número -- pedido explícito del usuario
+/// 2026-09-20 tras probar contra dos cédulas reales (formato nuevo con
+/// orquídeas y el formato azul anterior): en ambas el nombre se veía en
+/// pantalla pero nunca se guardaba porque este extractor no intentaba leer
+/// nada más que `numeroDocumento`. Las dos variantes de diseño comparten
+/// las mismas etiquetas de campo ("Nombre:", "1°/2° Apellido:"), así que
+/// un solo extractor cubre ambas sin necesitar distinguir cuál es cuál.
+/// `numeroDocumento` sigue siendo el único campo obligatorio -- nombre y
+/// apellidos quedan en `null` si por ángulo/reflejo no se leyeron todavía,
+/// nunca deben bloquear que se acepte la lectura por el número.
+private fun extraerCedulaNacionalFrente(texto: String): DocumentoDetectado? {
+    val numero = extraerCedulaDeTexto(texto) ?: return null
+    val nombre = REGEX_NOMBRE_ETIQUETA.find(texto)?.groupValues?.get(1)?.trim()
+    val apellido1 = REGEX_CEDULA_APELLIDO1.find(texto)?.groupValues?.get(1)?.trim()
+    val apellido2 = REGEX_CEDULA_APELLIDO2.find(texto)?.groupValues?.get(1)?.trim()
+    val apellidos = listOfNotNull(apellido1, apellido2).filter { it.isNotBlank() }.joinToString(" ").ifBlank { null }
+
+    return DocumentoDetectado(
+        tipo = TipoDocumento.CEDULA_NACIONAL,
+        numeroDocumento = numero,
+        nombre = nombre,
+        apellidos = apellidos,
     )
 }
 

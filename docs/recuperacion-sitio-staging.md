@@ -154,3 +154,157 @@ no reutiliza el `project ref` de uno borrado). El `DEVICE_SIGNING_KEY` de
 este documento queda inválido para un proyecto nuevo -- hay que generar
 uno distinto (nunca reciclar el mismo par de llaves entre dos proyectos,
 ni siquiera dos de staging).
+
+## Aislar también lo local (2026-09-20)
+
+Apuntar a staging cambia solo la nube -- por defecto la app sigue
+escribiendo en el `control_acceso.db` real y reusando el secreto de
+activación real. Para un aislamiento completo hacen falta además:
+
+- **`CONTROL_ACCESO_DB`** (ver `src/database/connection.rs`,
+  `DATABASE_PATH_ENV`): ruta absoluta a un archivo distinto de
+  `%LOCALAPPDATA%\ControlAcceso\control_acceso.db`.
+- **`APPDATA`**: `dispositivo-nube.secret` (el secreto de activación de
+  este dispositivo) y `db_key.dat` (clave SQLCipher en escritorio) viven
+  en `%APPDATA%\ControlAcceso` -- separado de `%LOCALAPPDATA%` a
+  propósito (ver `src/nube/credenciales.rs`, `ROAMING_APP_DATA_ENV`).
+  Ese módulo no tiene su propia variable de override, así que la única
+  forma de aislarlo sin tocar código es sobreescribir `APPDATA` mismo
+  para la sesión de terminal que corre el sandbox -- eso también hace
+  que cualquier otro programa lanzado desde esa misma terminal vea el
+  `APPDATA` distinto, sin efecto fuera de esa terminal.
+
+`scripts/activar_sandbox.ps1` pone las tres variables
+(`CONTROL_ACCESO_SUPABASE_URL`/`APIKEY`, `CONTROL_ACCESO_DB`, `APPDATA`)
+de una sola vez. Uso: `. .\scripts\activar_sandbox.ps1` (con el punto y
+espacio al inicio) y correr `cargo run`/`npm run tauri dev` desde esa
+misma terminal.
+
+**Mobile/APK (cerrado 2026-09-20):** `mobile/android` ya fija
+`CONTROL_ACCESO_SUPABASE_URL`/`APIKEY` antes de la primera llamada al
+núcleo -- `AplicacionControlAcceso.kt` (nueva `Application`, registrada
+en `AndroidManifest.xml` con `android:name=".AplicacionControlAcceso"`)
+llama `android.system.Os.setenv(...)` en `onCreate()`, que corre antes de
+cualquier Activity/ViewModel. Android no hereda variables de entorno de
+shell como Windows, así que `Os.setenv` es el único equivalente --
+mismo criterio de fondo que `scripts/activar_sandbox.ps1`.
+
+Gateado por `BuildConfig.DEBUG` (mismo patrón que el `FLAG_SECURE` de
+`MainActivity.kt`): **todo build de debug apunta a staging
+automáticamente, sin nada que activar a mano** -- un `assembleDebug`/`run`
+normal desde Android Studio o `./gradlew installDebug` nunca toca
+producción. Un build de **release** (firmado, el que sale por GitHub
+Releases) sigue apuntando a producción sin cambios. No hay override en
+sentido contrario (forzar staging en release o producción en debug) --
+si algún día hace falta, agregar un `buildConfigField` en
+`app/build.gradle.kts` en vez de tocar el `Os.setenv` a mano.
+
+Verificado con `./gradlew :app:compileDebugKotlin` (compila limpio); no
+se corrió aún en un dispositivo/emulador real.
+
+**`applicationIdSuffix` en debug (2026-09-20):** al instalar el primer
+APK de prueba en un teléfono real, Android lo ofreció como
+"actualización" en vez de instalación nueva -- señal de que debug y
+release compartían `applicationId` (`com.dqm27.lattis`, sin sufijo).
+Sin esto, instalar un build de prueba corre el riesgo real de
+reemplazar la app de producción instalada en ese mismo teléfono.
+Agregado `applicationIdSuffix = ".debug"` al bloque `debug {}` de
+`app/build.gradle.kts` -- debug y release quedan como dos apps
+distintas (`com.dqm27.lattis.debug` / `com.dqm27.lattis`), coexisten sin
+pisarse. No afecta el `.so`/bindings de UniFFI (van por `namespace`, no
+por `applicationId`) -- solo hizo falta recompilar el APK, no el núcleo
+Rust.
+
+## Generador local de secretos de dispositivo (2026-09-20)
+
+`scripts/generar_secreto_dispositivo.mjs` genera, sin red, el mismo
+formato de secreto que `admin-provision-device` (`uuid+uuid`, hash
+SHA-256 hex) e imprime el SQL para insertarlo a mano contra el proyecto
+de staging. Pensado para activar dispositivos de prueba sin pasar por el
+panel/Google OAuth. Uso:
+
+```
+node scripts/generar_secreto_dispositivo.mjs --sitio "Sitio de prueba" --tipo pc --etiqueta "PC recepcion"
+```
+
+## Clonado de datos de producción → staging (2026-09-20)
+
+A pedido explícito del usuario ("tener información con qué trabajar y no
+ensuciar el otro"): se copiaron datos reales de `control-acceso-nube`
+(`xidaepyaljzkpbsxrqsm`) a `control-acceso-staging`
+(`pmrytjktlyiuikxuuxpr`), tabla por tabla vía el MCP de Supabase
+(`execute_sql`), sin `pg_dump`/CLI (no instalados en esta máquina).
+
+**Copiado completo:** `sitios` (2), `dispositivos` (7 -- solo para
+integridad de FK, ver abajo), `empresas` (45), `empresas_proveedor` (4),
+`gafetes` (45), `rutas` (86), `ingresos` (73),
+`prestamos_gafete_provisional` (2).
+
+**Copiado parcial (muestra, no la tabla completa):**
+- `contratistas`: 150 de 402 filas de producción.
+- `encargados_ruta`: 100 de 1438 filas de producción.
+
+Motivo del corte: cada llamada a `execute_sql` tiene un límite de tamaño
+de resultado (~25-30k caracteres); mover el resto habría significado
+~15-20 llamadas más solo para esas dos tablas. Si se necesita el resto
+en algún momento, repetir el mismo patrón con `order by id limit X
+offset Y` sobre producción y pegar el INSERT resultante en staging.
+
+**Deliberadamente NO copiado:** `usuarios`, `administradores_panel`,
+`anfitriones`, `citas`/`cita_sitios`/`cita_visitantes`,
+`movimientos_visita` -- todas ligadas a identidades de Supabase Auth o a
+funcionalidad de visitas (V2, no prioridad actual). Clonar sus filas
+crearía referencias rotas (`auth_user_id` apuntando a un usuario de Auth
+que no existe en este proyecto) sin ganar nada útil para probar
+contratistas/rutas/gafetes.
+
+**FKs con `session_replication_role = replica`:** algunas filas de
+`gafetes`/`ingresos`/`prestamos_gafete_provisional` referencian
+`contratista_id`/`encargado_id` que quedaron fuera de la muestra parcial
+de arriba. Para no bloquear el insert completo por esas pocas filas, se
+desactivaron temporalmente los triggers de FK (`SET
+session_replication_role = replica; ... SET session_replication_role =
+default;`) solo durante esos inserts. Resultado: unas pocas filas de
+`gafetes`/`ingresos`/`prestamos_gafete_provisional` en staging apuntan a
+un `contratista_id`/`encargado_id` que no existe ahí -- inofensivo para
+pruebas (son sandbox, no hay integridad que proteger), pero una consulta
+con `inner join` a `contratistas`/`encargados_ruta` puede devolver menos
+filas de las que aparecen sueltas en esas tablas.
+
+**Nota sobre `dispositivos`:** se clonó completa (con `secret_hash`
+real de producción) solo para que las FK de las demás tablas
+(`dispositivo_origen_id`) no rompan -- esos hashes no dan acceso útil
+por sí solos (el proyecto de staging tiene su propio
+`DEVICE_SIGNING_KEY`, distinto del de producción) y no se puede
+recuperar el secreto en texto plano desde el hash.
+
+**Usuario ROOT de prueba (creado a mano, 2026-09-20):** cédula `1`,
+contraseña `daniel`, sitio `Brisas`. Insertado directo en `auth.users` +
+`auth.identities` (bcrypt vía `pgcrypto`, `crypt(...,gen_salt('bf'))`) +
+`public.usuarios` con `rol='ROOT'` -- no vino de `admin-create-usuario`
+porque esa Edge Function pide login de administrador del panel primero.
+Mismo email sintético que usa esa función:
+`emailSinteticoParaCedula()` → `1@brisas.local`. Si se necesita otro
+usuario de prueba, repetir el mismo patrón (o usar el panel real una vez
+que tenga datos).
+
+**Trampa real al insertar en `auth.users` a mano:** dejar
+`confirmation_token`/`recovery_token`/`email_change_token_new`/
+`email_change`/`email_change_token_current`/`reauthentication_token` en
+`NULL` (su default en el esquema) rompe el login -- el código Go de
+GoTrue las escanea como `string` no-nullable, no como `sql.NullString`.
+Error real visto en los logs de auth (`query_logs`, `source=auth_logs`):
+`error finding user: sql: Scan error on column index 3, name
+"confirmation_token": converting NULL to string is unsupported` (500,
+que el cliente Rust reporta como "El servidor devolvió una respuesta
+inesperada" porque el body de error no matchea `RespuestaToken`). Fix:
+poner esas seis columnas en `''` en vez de `NULL` al insertar (o con un
+`UPDATE` después, como se hizo acá). Si se repite este patrón para otro
+usuario de prueba, incluir el `''` desde el `INSERT` directamente.
+
+**Drift de esquema pendiente (ya documentado antes de este cambio):**
+staging todavía no tiene las 2 migraciones más nuevas de `main`
+(`instala_extension_unaccent`, `unicidad_nombre_empresas_ignora_mayusculas_y_tildes`)
+-- no bloqueó este clonado porque ninguna tabla tocada depende de esas
+migraciones, pero sigue pendiente aplicarlas si se prueba algo que sí las
+necesite.

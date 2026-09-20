@@ -479,6 +479,16 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   problema** (23s, sin tocar OpenSSL) -- sirve para probar UI/diseño rápido
   en el dispositivo real, pero esa base queda SIN CIFRAR: nunca usar ese
   `.so` para un APK que vaya a manejar datos reales.
+- [ ] **Extender el aviso "no existe en el catálogo" (texto rojo bajo el
+  campo) a los demás buscadores de la app móvil (hallazgo 2026-09-19,
+  pedido explícito del usuario).** Hoy sólo lo tienen "N.º de ruta"
+  (`PasoDocumentoRuta`) y "Vehículo" (`PasoVehiculo`, ambos en
+  `PantallaRutas.kt`) y "Empresa proveedora" (`PasoEmpresaProveedora` en
+  `PantallaProveedores.kt`) -- el resto de los buscadores no-bloqueantes
+  (Encargado de Ruta, Gafete provisional KOF) no muestran nada cuando el
+  texto tipeado no matchea ninguna fila. Definir primero si aplica a los
+  no-bloqueantes (ahí "sin coincidencias" no es un error -- el texto
+  libre igual es válido) antes de copiar el patrón sin más.
 - [ ] **Mobile muestra errores crudos de nube/sincronización, sin traducir
   (hallazgo 2026-09-12).** Desktop redacta todo error de `nube`/`sync` a
   mensajes amigables (`mensaje_nube`/`mensaje_sincronizacion` en

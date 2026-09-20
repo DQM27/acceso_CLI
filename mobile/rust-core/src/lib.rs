@@ -44,6 +44,7 @@ use control_acceso::models::ruta::Ruta as RutaNucleo;
 use control_acceso::models::salida_ruta::SalidaRutaActivaResumen as SalidaRutaActivaResumenNucleo;
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
+use control_acceso::models::vehiculo_ruta::VehiculoRuta as VehiculoRutaNucleo;
 use control_acceso::nube::IngresoProveedorRemoto as IngresoProveedorRemotoNucleo;
 use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
 use control_acceso::nube::PrestamoGafeteProvisionalRemoto as PrestamoGafeteProvisionalRemotoNucleo;
@@ -798,6 +799,28 @@ impl From<EncargadoRutaNucleo> for EncargadoRuta {
     }
 }
 
+/// Espejo de `VehiculoRuta` -- `numero_unidad` sigue `Option<String>`
+/// (`None` para vehículos de apoyo/particulares, sólo tienen placa, ver el
+/// modelo real).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct VehiculoRuta {
+    pub id: i64,
+    pub numero_unidad: Option<String>,
+    pub placa: String,
+    pub activo: bool,
+}
+
+impl From<VehiculoRutaNucleo> for VehiculoRuta {
+    fn from(vehiculo: VehiculoRutaNucleo) -> Self {
+        Self {
+            id: vehiculo.id,
+            numero_unidad: vehiculo.numero_unidad,
+            placa: vehiculo.placa,
+            activo: vehiculo.activo,
+        }
+    }
+}
+
 /// Espejo de `Ruta` (catálogo de números válidos) -- el checklist mobile
 /// sólo lo consume vía `Nucleo::buscar_rutas` para confirmar el número
 /// leído por OCR contra el catálogo, nunca lo administra (alta/baja/rango
@@ -921,6 +944,7 @@ pub struct RegistroIngresoProveedorActivoResumen {
     pub placa: Option<String>,
     pub gafete_numero: i64,
     pub fecha_hora_ingreso: String,
+    pub usuario_ingreso_nombre: String,
 }
 
 impl From<RegistroIngresoProveedorActivoResumenNucleo> for RegistroIngresoProveedorActivoResumen {
@@ -933,6 +957,7 @@ impl From<RegistroIngresoProveedorActivoResumenNucleo> for RegistroIngresoProvee
             placa: activo.placa,
             gafete_numero: activo.gafete_numero,
             fecha_hora_ingreso: activo.fecha_hora_ingreso.to_rfc3339(),
+            usuario_ingreso_nombre: activo.usuario_ingreso_nombre,
         }
     }
 }
@@ -1564,6 +1589,23 @@ impl Nucleo {
             // encargado desactivado no es una opción válida, ver
             // `EncargadoRutaService::buscar_seleccionables`.
             .buscar_encargados_ruta_seleccionables(texto.trim())
+            .map_err(|origen| NucleoError::Interno {
+                mensaje: interno(origen),
+            })?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Buscador del checklist de rutas (paso "Vehículo") -- por placa o
+    /// número de unidad, mismo criterio que `buscar_encargados_ruta`.
+    /// Reemplaza los dos campos de texto libre que tenía antes ese paso del
+    /// lado Kotlin (pedido explícito del usuario, 2026-09-19): ahora es un
+    /// buscador contra este catálogo, no texto arbitrario.
+    pub fn buscar_vehiculos_ruta(&self, texto: String) -> Result<Vec<VehiculoRuta>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .buscar_vehiculos_ruta_seleccionables(texto.trim())
             .map_err(|origen| NucleoError::Interno {
                 mensaje: interno(origen),
             })?

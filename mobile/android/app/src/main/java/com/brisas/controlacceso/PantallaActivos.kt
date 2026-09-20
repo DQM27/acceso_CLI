@@ -21,11 +21,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,16 +36,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import java.time.LocalDate
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
 import uniffi.control_acceso_mobile.IngresoRemoto
 import uniffi.control_acceso_mobile.Nucleo
-import uniffi.control_acceso_mobile.ResultadoAcceso
 import uniffi.control_acceso_mobile.TipoIngreso
 
 /// Una sola vista para el ciclo completo — entrada, permanencia y salida —,
@@ -104,8 +106,6 @@ fun PantallaActivos(
                 nucleo = nucleo,
                 secretoStore = secretoStore,
                 preparacion = actual.preparacion,
-                ingresoAutomatico = viewModel.automatico,
-                onCambiarIngresoAutomatico = { viewModel.cambiarAutomatico(it) },
                 onRegistrado = { viewModel.onIngresoRegistrado() },
                 onCambiar = { viewModel.cancelarSeleccionIngreso() },
             )
@@ -140,22 +140,32 @@ fun PantallaActivos(
     if (escanerGafeteSalidaAbierto) {
         PantallaEscanearCedula(
             modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA,
-            continuo = viewModel.automatico,
+            // Siempre continuo -- pedido explícito del usuario 2026-09-20:
+            // un toggle aparte para decidir "¿sigo escaneando o no?" es un
+            // paso de más, cuando la propia cámara ya tiene un botón para
+            // cerrarla (arriba a la derecha) el día que la persona termine.
+            // Abrir la cámara ya es la acción deliberada de sacar un gafete
+            // -- cada uno que detecta se registra al toque, sin botón de
+            // confirmar, y la cámara se queda armada para el siguiente
+            // hasta que alguien la cierra a mano.
+            continuo = true,
+            // Llena el hueco que dejaba el modo continuo: antes, mientras
+            // la cámara seguía abierta, el mensaje sólo confirmaba que se
+            // LEYÓ el gafete ("Gafete N procesado"), nunca si la salida en
+            // verdad se registró -- un gafete sin ingreso activo quedaba en
+            // silencio, tapado por la propia cámara. Acá se le pasa el
+            // resultado real de la última mutación para que la pantalla de
+            // escaneo lo pinte en el momento (verde/rojo), no sólo el
+            // guardia que mira la lista de abajo después de cerrarla.
+            resultadoUltimoEscaneo = { viewModel.mensaje?.let { it to viewModel.mensajeEsError } },
             onDocumentoDetectado = { documento ->
-                if (!viewModel.automatico) {
-                    escanerGafeteSalidaAbierto = false
-                }
                 if (viewModel.modo != ModoBusqueda.SALIDA_GAFETE) {
                     viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE)
                 }
-                if (viewModel.automatico) {
-                    // Es suspend: el escáner no se rearma hasta que la
-                    // mutación terminó. Así nunca entran dos gafetes en
-                    // paralelo ni se cancela una salida ya iniciada.
-                    viewModel.registrarSalidaPorGafeteEscaneado(documento)
-                } else {
-                    viewModel.cambiarTexto(documento.textoBusqueda ?: documento.numeroDocumento)
-                }
+                // Es suspend: el escáner no se rearma hasta que la mutación
+                // terminó. Así nunca entran dos gafetes en paralelo ni se
+                // cancela una salida ya iniciada.
+                viewModel.registrarSalidaPorGafeteEscaneado(documento)
             },
             onCerrar = { escanerGafeteSalidaAbierto = false },
         )
@@ -200,8 +210,6 @@ fun PantallaActivos(
                 texto = viewModel.texto,
                 coincidencias = viewModel.coincidenciasGafete,
                 enviando = viewModel.enviandoGafetes,
-                automatico = viewModel.automatico,
-                onCambiarAutomatico = { viewModel.cambiarAutomatico(it) },
                 onRegistrarSalidaGafetes = { viewModel.registrarSalidaPorGafetes() },
             )
         }
@@ -249,7 +257,7 @@ private fun CampoBusquedaActivos(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextField(
+        OutlinedTextField(
             value = texto,
             onValueChange = onCambiarTexto,
             label = null,
@@ -348,35 +356,22 @@ private fun ContenidoModoSalidaNombre(activos: List<FilaActiva>, onElegirActivo:
     ListaActivos(activos, onClick = onElegirActivo)
 }
 
-/// Uno o más números de gafete separados por coma, con vista previa de a
-/// quién le corresponde cada uno antes de un único botón que confirma
-/// todos de una vez. Ver el doc-comment de [PantallaActivos].
+/// Sólo para el tipeo manual -- uno o más números de gafete separados por
+/// coma, con vista previa de a quién le corresponde cada uno antes de un
+/// único botón que confirma todos de una vez. El escaneo por cámara
+/// (`escanerGafeteSalidaAbierto` en [PantallaActivos]) no pasa por acá:
+/// escanear ya es la acción deliberada de sacar un gafete, así que registra
+/// la salida al toque, sin botón de confirmar de por medio (pedido
+/// explícito del usuario 2026-09-20). Ver el doc-comment de
+/// [PantallaActivos].
 @Composable
 private fun ContenidoModoSalidaGafete(
     texto: String,
     coincidencias: List<CoincidenciaGafete>,
     enviando: Boolean,
-    automatico: Boolean,
-    onCambiarAutomatico: (Boolean) -> Unit,
     onRegistrarSalidaGafetes: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = 8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(
-                checked = automatico,
-                onCheckedChange = onCambiarAutomatico,
-                enabled = !enviando,
-            )
-            Text(
-                "Automático",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(start = 4.dp),
-            )
-        }
-
         if (texto.isBlank()) {
             Text(
                 "Escriba uno o más números de gafete, separados por coma",
@@ -520,21 +515,32 @@ private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(activo.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        // Mayúscula + negrita en toda la línea, gafete en azul -- pedido
+        // explícito del usuario 2026-09-20: es un dato importante (lo que
+        // el guardia de salida necesita confirmar contra lo que la persona
+        // trae puesto), tiene que resaltar más que cédula/empresa. El
+        // estado de acceso (antes "Al día"/"PRAIND próximo a vencer"/motivo
+        // de denegación) se sacó de acá -- ya se mostró y se aceptó al
+        // momento de registrar el ingreso, repetirlo en cada tarjeta activa
+        // era ruido, no información nueva.
         Text(
-            "${activo.cedula} · ${activo.empresaNombre}" +
-                if (activo.gafeteNumero != null) " · Gafete ${activo.gafeteNumero}" else " · Sin gafete",
+            buildAnnotatedString {
+                append("${activo.cedula} · ${activo.empresaNombre} · ".uppercase())
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                    append(
+                        (if (activo.gafeteNumero != null) "Gafete ${activo.gafeteNumero}" else "Sin gafete")
+                            .uppercase(),
+                    )
+                }
+            },
             style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             "Ingresó ${textoFechaHora(activo.fechaHoraIngreso)} · dio ingreso ${activo.usuarioIngresoNombre}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            textoEstadoAcceso(activo.resultadoAcceso),
-            style = MaterialTheme.typography.bodySmall,
-            color = colorEstadoAcceso(activo.resultadoAcceso),
         )
     }
 }
@@ -591,10 +597,31 @@ private fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Unit
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (!contratista.tieneAcceso) {
+            // Mismo texto y criterio que `mensajeMotivoDenegacion` (motivo
+            // SIN_ACCESO) en `PantallaConfirmarIngreso` -- acá esta fila
+            // sólo conoce el toggle crudo (`tieneAcceso`), no el resto de
+            // `verificar_acceso` (PRAIND, empresa, etc.), así que el único
+            // motivo posible en este catálogo es justo ese. Mayúscula y
+            // negrita, pedido explícito del usuario 2026-09-20 para que se
+            // lea con fuerza.
             Text(
-                "Sin acceso autorizado",
+                "ACCESO DENEGADO",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Bold,
+            )
+        } else if (contratista.fechaVencimientoPraind?.let { LocalDate.parse(it) < LocalDate.now() } == true) {
+            // Independiente del toggle de arriba -- acá sí hay fecha
+            // (`ContratistaResumen.fechaVencimientoPraind`), a diferencia
+            // del "Acceso denegado" de arriba que no la necesita. Sin fecha
+            // en el texto a propósito (pedido explícito del usuario
+            // 2026-09-20): sólo "PRAIND VENCIDO", el detalle con la fecha ya
+            // aparece en la pantalla de confirmar ingreso.
+            Text(
+                "PRAIND VENCIDO",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Bold,
             )
         }
         if (contratista.tieneIngresoActivo) {
@@ -610,22 +637,8 @@ private fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Unit
 private fun etiquetaTipoIngreso(tipo: TipoIngreso): String =
     when (tipo) {
         TipoIngreso.PRAIND -> "PRAIND"
-        TipoIngreso.IN_HOUSE -> "In-house"
+        TipoIngreso.IN_HOUSE -> "IN HOUSE"
         TipoIngreso.POR_CORREO -> "Por correo"
         TipoIngreso.SWAT -> "SWAT"
     }
 
-private fun textoEstadoAcceso(resultado: ResultadoAcceso): String =
-    when (resultado) {
-        is ResultadoAcceso.Permitido -> "Al día"
-        is ResultadoAcceso.PermitidoConAdvertencia -> "PRAIND próximo a vencer"
-        is ResultadoAcceso.Denegado -> mensajeMotivoDenegacion(resultado.motivo)
-    }
-
-@Composable
-private fun colorEstadoAcceso(resultado: ResultadoAcceso) =
-    when (resultado) {
-        is ResultadoAcceso.Permitido -> MaterialTheme.colorScheme.primary
-        is ResultadoAcceso.PermitidoConAdvertencia -> MaterialTheme.colorScheme.error
-        is ResultadoAcceso.Denegado -> MaterialTheme.colorScheme.error
-    }

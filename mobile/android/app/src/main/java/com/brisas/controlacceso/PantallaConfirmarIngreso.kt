@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Row
@@ -15,13 +16,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,12 +32,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.MedioIngreso
@@ -80,21 +80,35 @@ fun mensajeBloqueo(preparacion: PreparacionIngreso): String {
 /// Espejo de `mensajeVencimientoPraind` (`desktop/src/api/ingresos.ts`) --
 /// antes esta pantalla sólo mostraba "PRAIND próximo a vencer" sin decir
 /// cuánto quedaba, mientras desktop ya avisaba "vence en N días (fecha)".
-/// `fecha` en ISO (`AAAA-MM-DD`), igual que la manda `PreparacionIngreso`.
+/// `fecha` en ISO (`AAAA-MM-DD`), igual que la manda `PreparacionIngreso`,
+/// pero se muestra día-mes-año -- misma convención que el resto de la app
+/// (`FechaDocumento.aTextoDDMMYYYY`) -- mostrar el ISO crudo entre
+/// paréntesis era inconsistente con eso (hallazgo 2026-09-20).
 fun mensajeVencimientoPraind(fecha: String): String {
-    val dias = ChronoUnit.DAYS.between(LocalDate.now(), LocalDate.parse(fecha))
+    val fechaParseada = LocalDate.parse(fecha)
+    val dias = ChronoUnit.DAYS.between(LocalDate.now(), fechaParseada)
     val cuenta = when {
         dias <= 0 -> "vence hoy"
         dias == 1L -> "vence mañana"
         else -> "vence en $dias días"
     }
-    return "$cuenta ($fecha)"
+    val fechaTexto = "%02d-%02d-%04d".format(fechaParseada.dayOfMonth, fechaParseada.monthValue, fechaParseada.year)
+    return "$cuenta ($fechaTexto)"
 }
 
 fun mensajeMotivoDenegacion(motivo: MotivoDenegacion): String =
     when (motivo) {
-        MotivoDenegacion.SIN_ACCESO -> "Acceso denegado · no tiene acceso autorizado"
-        MotivoDenegacion.PRAIND_VENCIDO -> "Acceso denegado · PRAIND vencido"
+        // Mayúscula y sin detalle aparte a propósito -- a diferencia de los
+        // otros dos motivos, "no tiene acceso" es la razón que ya niega el
+        // toggle "Con acceso" del alta de contratista: agregar "no tiene
+        // acceso autorizado" era redundante con "Acceso denegado" (pedido
+        // explícito del usuario 2026-09-20, mayúscula agregada el mismo
+        // día para que se lea con más fuerza junto al de PRAIND vencido).
+        MotivoDenegacion.SIN_ACCESO -> "ACCESO DENEGADO"
+        // Mismo criterio, mayúscula y sin el prefijo "Acceso denegado ·" --
+        // "PRAIND vencido" ya deja claro que el acceso está denegado, el
+        // prefijo era ruido (pedido explícito del usuario 2026-09-20).
+        MotivoDenegacion.PRAIND_VENCIDO -> "PRAIND VENCIDO"
         MotivoDenegacion.PRAIND_NO_REGISTRADO -> "Acceso denegado · PRAIND sin fecha registrada"
         MotivoDenegacion.EMPRESA_INACTIVA -> "Acceso denegado · la empresa está inactiva"
     }
@@ -127,8 +141,6 @@ fun PantallaConfirmarIngreso(
     nucleo: Nucleo,
     secretoStore: SecretoDispositivoStore,
     preparacion: PreparacionIngreso,
-    ingresoAutomatico: Boolean,
-    onCambiarIngresoAutomatico: (Boolean) -> Unit,
     onRegistrado: () -> Unit,
     onCambiar: () -> Unit,
 ) {
@@ -198,8 +210,13 @@ fun PantallaConfirmarIngreso(
                 gafeteTexto = limpio
                 error = null
                 escanerGafeteAbierto = false
+                // Escanear ya es una acción deliberada -- a diferencia de
+                // tipear a mano, no hace falta un check "Automático" aparte
+                // para decidir si dispara el ingreso solo (pedido explícito
+                // del usuario 2026-09-20: quitar esa lógica y ese espacio en
+                // pantalla). Tipeado a mano sigue requiriendo el botón.
                 val gafete = limpio.toLongOrNull()
-                if (ingresoAutomatico && gafete != null) {
+                if (gafete != null) {
                     registrarIngreso(gafete)
                 }
             },
@@ -208,10 +225,29 @@ fun PantallaConfirmarIngreso(
         return
     }
 
+    // Mismo criterio que [PantallaRutas]/[PantallaProveedores]/
+    // [PantallaNuevoContratista]: `imePadding()` va en un Column SIN
+    // `fillMaxSize` -- combinarlo con `fillMaxSize` deja un hueco enorme
+    // entre el teclado y el contenido (bug reportado 2026-09-20).
+    val scrollStateFormulario = rememberScrollState()
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
     Column(
-        modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
+        modifier = Modifier.verticalScroll(scrollStateFormulario).imePadding(),
     ) {
-        Text(preparacion.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        // Mismo lenguaje que [PantallaProveedores]: "← Volver" arriba a la
+        // derecha en vez de un botón propio abajo de todo (pedido explícito
+        // del usuario 2026-09-20, para homogeneizar los dos formularios).
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                preparacion.nombre,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            BotonDiscretoBrisas(onClick = onCambiar) {
+                Text("← Volver")
+            }
+        }
         Text(
             "${preparacion.cedula} · ${preparacion.empresaNombre}",
             style = MaterialTheme.typography.bodyMedium,
@@ -252,21 +288,6 @@ fun PantallaConfirmarIngreso(
 
         if (preparacion.requiereGafete) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(
-                    checked = ingresoAutomatico,
-                    onCheckedChange = onCambiarIngresoAutomatico,
-                    enabled = !enviando,
-                )
-                Text(
-                    "Automático",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(start = 4.dp),
-                )
-            }
-            Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -276,11 +297,29 @@ fun PantallaConfirmarIngreso(
                     label = { Text("Número de gafete") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    modifier = Modifier.weight(1f).focusRequester(focoGafete),
+                    shape = FormaCampoBrisas,
+                    colors = ColoresCampoBrisas(),
+                    // Al enfocar este último input, lleva el scroll hasta el
+                    // fondo -- ahí vive "Registrar entrada", último elemento
+                    // de esta misma Column. El foco por sí solo sólo
+                    // garantiza que el campo entre en pantalla, no el botón
+                    // de abajo (pedido explícito del usuario 2026-09-20). Un
+                    // solo `animateScrollTo` no alcanza: el teclado tarda
+                    // ~250ms en animarse y el `imePadding()` va agrandando
+                    // la Column cuadro a cuadro, así que `maxValue` todavía
+                    // no refleja el alto final en el instante del foco -- se
+                    // repite mientras dura esa animación.
+                    modifier = Modifier.weight(1f).focusRequester(focoGafete)
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                alcance.launch {
+                                    repeat(15) {
+                                        scrollStateFormulario.animateScrollTo(scrollStateFormulario.maxValue)
+                                        delay(30)
+                                    }
+                                }
+                            }
+                        },
                 )
                 BotonDiscretoBrisas(
                     onClick = { escanerGafeteAbierto = true },
@@ -300,6 +339,14 @@ fun PantallaConfirmarIngreso(
             Text(mensajeError, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp))
         }
 
+        // Mismo criterio que [PantallaProveedores]/[PantallaRutas]: el botón
+        // se ve gris (deshabilitado) mientras falten datos, en vez de dejar
+        // que el error salga recién al tocarlo -- pedido explícito del
+        // usuario 2026-09-20, para que las dos pantallas se sientan igual.
+        // Cuando el contratista no requiere gafete no hay nada más que
+        // completar (el medio de ingreso ya arranca con un valor elegido),
+        // así que el botón queda habilitado de entrada.
+        val gafeteListo = !preparacion.requiereGafete || gafeteTexto.trim().toLongOrNull() != null
         BotonBrisas(
             onClick = {
                 error = null
@@ -315,31 +362,42 @@ fun PantallaConfirmarIngreso(
                 }
                 registrarIngreso(gafete)
             },
-            enabled = !enviando,
+            enabled = !enviando && gafeteListo,
             modifier = Modifier.fillMaxWidth().focusRequester(focoConfirmar),
         ) {
-            Text(if (enviando) "Registrando…" else "Registrar entrada")
+            Text(if (enviando) "Registrando…" else "Registrar ingreso")
         }
-
-        BotonDiscretoBrisas(onClick = onCambiar, modifier = Modifier.padding(top = 8.dp)) {
-            Text("← Cambiar contratista")
-        }
+    }
     }
 }
 
 @Composable
 fun PantallaIngresoBloqueado(preparacion: PreparacionIngreso, mensaje: String, onCambiar: () -> Unit) {
+    BackHandler(onBack = onCambiar)
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(preparacion.nombre, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        // Mismo lenguaje que [PantallaProveedores]/[PantallaConfirmarIngreso]:
+        // "← Volver" arriba a la derecha en vez de un botón propio abajo de
+        // todo (pedido explícito del usuario 2026-09-20, para que las tres
+        // pantallas se vean igual).
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                preparacion.nombre,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            BotonDiscretoBrisas(onClick = onCambiar) {
+                Text("← Volver")
+            }
+        }
         Text(
             "${preparacion.cedula} · ${preparacion.empresaNombre}",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 20.dp),
         )
-        Text(mensaje, color = MaterialTheme.colorScheme.error)
-        OutlinedButton(onClick = onCambiar, modifier = Modifier.padding(top = 16.dp)) {
-            Text("← Cambiar contratista")
-        }
+        // Negrita -- pedido explícito del usuario 2026-09-20: que el motivo
+        // de la denegación se lea con más fuerza que el resto del texto.
+        Text(mensaje, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
     }
 }

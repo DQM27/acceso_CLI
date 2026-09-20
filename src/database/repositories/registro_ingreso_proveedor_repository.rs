@@ -245,7 +245,8 @@ impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorReposi
     fn listar_activos(&self) -> Result<Vec<RegistroIngresoProveedorActivoResumen>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
-            SELECT id, cedula, nombre, empresa_nombre, placa, gafete_numero, fecha_hora_ingreso
+            SELECT id, cedula, nombre, empresa_nombre, placa, gafete_numero, fecha_hora_ingreso,
+                   usuario_ingreso_nombre
             FROM registro_ingresos_proveedor
             WHERE fecha_hora_salida IS NULL
             ORDER BY fecha_hora_ingreso ASC
@@ -261,6 +262,7 @@ impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorReposi
                     row.get::<_, Option<String>>(4)?,
                     row.get::<_, i64>(5)?,
                     row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -268,7 +270,16 @@ impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorReposi
         filas
             .into_iter()
             .map(
-                |(id, cedula, nombre, empresa_nombre, placa, gafete_numero, fecha_hora_texto)| {
+                |(
+                    id,
+                    cedula,
+                    nombre,
+                    empresa_nombre,
+                    placa,
+                    gafete_numero,
+                    fecha_hora_texto,
+                    usuario_ingreso_nombre,
+                )| {
                     let fecha_hora_ingreso = parsear_utc(&fecha_hora_texto)
                         .map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))?;
                     Ok(RegistroIngresoProveedorActivoResumen {
@@ -279,6 +290,7 @@ impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorReposi
                         placa,
                         gafete_numero,
                         fecha_hora_ingreso,
+                        usuario_ingreso_nombre,
                     })
                 },
             )
@@ -391,5 +403,6 @@ mod tests {
         assert_eq!(fila.id, activo_id);
         assert_eq!(fila.cedula, "1-1111");
         assert_eq!(fila.gafete_numero, 3);
+        assert_eq!(fila.usuario_ingreso_nombre, "Operador");
     }
 }

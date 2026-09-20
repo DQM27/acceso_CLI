@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -14,14 +15,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldColors
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import uniffi.control_acceso_mobile.EncargadoRuta
 
 /** Radio de los campos "filled" (buscadores, login) -- iguala el de
  * [FormaControlBrisas]; antes era 28.dp (cápsula) y se veía más redondeado
@@ -49,20 +54,17 @@ internal val AlturaBusquedaBrisas = 50.dp
  * esquinas bien marcadas pero no un óvalo. */
 internal val FormaPildoraBrisas = RoundedCornerShape(12.dp)
 
-/** Colores compartidos para un campo de texto "filled" sin borde visible
- * (buscadores, login). Antes usaba `colorScheme.surface`, igual al fondo de
- * las tarjetas que los contienen -- el campo quedaba invisible hasta que se
- * le escribía algo (reportado 2026-09-18, pantallas Rutas/Proveedores).
- * `surfaceVariant` (tono gris claro del esquema Material3) diferencia el
- * campo de la tarjeta sin necesitar un borde. */
+/** Colores compartidos para todo campo de texto de la app -- borde visible
+ * (`outline` sin foco, `primary` con foco) sobre fondo transparente, mismo
+ * look que ya tenía [PantallaNuevoContratista] -- pedido explícito del
+ * usuario (2026-09-19) para homogeneizar TODOS los inputs a ese estilo, no
+ * al revés. Reemplaza al estilo "filled" sin borde que tuvo este mismo
+ * nombre hasta esa fecha -- usar siempre junto a `OutlinedTextField`, no
+ * `TextField` (el filled no puede dibujar el marco completo). */
 @Composable
-internal fun ColoresCampoBrisas(): TextFieldColors = TextFieldDefaults.colors(
-    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-    focusedIndicatorColor = Color.Transparent,
-    unfocusedIndicatorColor = Color.Transparent,
-    disabledIndicatorColor = Color.Transparent,
+internal fun ColoresCampoBrisas(): TextFieldColors = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    focusedLabelColor = MaterialTheme.colorScheme.primary,
 )
 
 /** Acciones principales: forma y área táctil comunes en todas las pantallas. */
@@ -195,6 +197,28 @@ fun BotonIconoCuadradoBrisas(
  * de adentro para que el degradé, no el primer ítem, ocupe ese espacio --
  * si no, el scroll dejaría un hueco sin nada que desvanecer. Compartido
  * entre [PantallaActivos] y [PantallaHistorial] (2026-09-15). */
+/** Botón circular de cerrar/cancelar para las 4 pantallas de escaneo OCR
+ * (Cédula, Carnet KOF, Vehículo/Ruta, Comprobante) -- fondo oscuro
+ * semitransparente porque flota directo sobre el preview de cámara, no
+ * sobre una tarjeta clara del resto de la app. Nació en
+ * `PantallaEscanearCedula.kt` (2026-09-19, pedido explícito del usuario:
+ * reemplazar el texto "Cancelar" que competía con el mensaje de estado) y se
+ * subió acá para que las otras 3 pantallas de escaneo lo compartan en vez de
+ * quedarse con el texto plano viejo. */
+@Composable
+fun BotonCerrarCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = Color.White)
+    }
+}
+
 @Composable
 fun ListaConDesvanecido(contenido: @Composable () -> Unit) {
     Box {
@@ -210,5 +234,42 @@ fun ListaConDesvanecido(contenido: @Composable () -> Unit) {
                     ),
                 ),
         )
+    }
+}
+
+/// Tarjeta de un resultado de búsqueda de encargado de ruta -- nombre
+/// arriba, código de empleado abajo con el número en azul y negrita (pedido
+/// explícito del usuario, 2026-09-20: "darle más protagonismo", sólo al
+/// número, no a la etiqueta "Código de empleado:"). Compartida entre el
+/// paso 1 de Rutas (`PantallaRutas.kt`) y Gafetes Provisionales
+/// (`PantallaGafetesProvisionales.kt`) -- mismo catálogo `encargados_ruta`,
+/// mismo look pedido explícitamente ("usa el mismo buscador y animación que
+/// tiene KOF"), una sola fuente de verdad en vez de dos copias que puedan
+/// desalinearse.
+@Composable
+fun FilaEncargadoRuta(encargado: EncargadoRuta, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(encargado.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Row {
+            Text(
+                "Código de empleado: ",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                encargado.codigoEmpleado,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }

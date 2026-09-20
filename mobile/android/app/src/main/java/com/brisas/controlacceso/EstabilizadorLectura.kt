@@ -59,6 +59,21 @@ class EstabilizadorLectura(
     // frames aunque el número reconocido sea el mismo.
     private val candidatosRecientes = ArrayDeque<String>()
 
+    // Acumula campos opcionales (nombre, apellidos...) vistos en distintos
+    // frames para el MISMO candidato (misma clave) -- hallazgo 2026-09-20
+    // contra una cédula nacional real: "Nombre:", "1° Apellido:" y "2°
+    // Apellido:" son tres bloques de texto separados en la tarjeta (a
+    // diferencia de DIMEX, donde "Apellidos:" es un solo bloque), así que
+    // rara vez ML Kit los lee los tres juntos en el mismo frame -- sin
+    // esto, el documento que se confirmaba era el de ESE frame puntual
+    // (a veces con nombre, a veces sólo con apellidos, a veces ninguno),
+    // en vez de la unión de todo lo ya visto para ese número mientras se
+    // sostiene el documento. Se reinicia sólo cuando cambia la clave (otro
+    // número), nunca por un frame suelto sin candidato -- un frame borroso
+    // de por medio no debe tirar lo ya leído bien.
+    private var claveAcumulada: String? = null
+    private var documentoAcumulado: DocumentoDetectado? = null
+
     init {
         require(framesRequeridos > 0) { "framesRequeridos debe ser mayor que cero" }
         require(ventana >= framesRequeridos) { "ventana debe cubrir los frames requeridos" }
@@ -107,8 +122,8 @@ class EstabilizadorLectura(
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = mensajeApuntar())
         }
 
-        val documento = leerDocumentoDeTexto(texto)
-        if (documento == null) {
+        val documentoDeEsteFrame = leerDocumentoDeTexto(texto)
+        if (documentoDeEsteFrame == null) {
             // Tipo reconocible por palabras clave, pero todavía no se pudo
             // extraer el número -- lectura parcial (glare, ángulo, foco), no
             // un documento inválido. Ya se sabe qué es: se lo decimos a
@@ -117,7 +132,15 @@ class EstabilizadorLectura(
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "${tipo.nombreLegible()} detectado — mantenga firme")
         }
 
-        val clave = documento.claveEstabilizacion()
+        val clave = documentoDeEsteFrame.claveEstabilizacion()
+        val documento = if (clave == claveAcumulada) {
+            documentoAcumulado!!.fusionarCamposOpcionales(documentoDeEsteFrame)
+        } else {
+            documentoDeEsteFrame
+        }
+        claveAcumulada = clave
+        documentoAcumulado = documento
+
         registrarClave(clave)
         val repeticiones = candidatosRecientes.count { it == clave }
 
@@ -134,14 +157,16 @@ class EstabilizadorLectura(
     /// siendo CONFIRMADO, no INVALIDO), pero quien opera necesita saberlo de
     /// inmediato sin tener que leer la fecha en la pantalla por su cuenta.
     ///
-    /// Caso especial: cédula nacional leída del FRENTE (sin MRZ) sólo trae
-    /// número, nunca nombre (`LectorDocumentosIdentidad.leerDocumentoDeTexto`
-    /// no lo extrae de esa cara a propósito -- el nombre confiable sale del
-    /// MRZ con checksum verificado). Sin este aviso, quien opera no tenía
-    /// forma de saber que le faltaba el nombre hasta llenar el formulario a
-    /// mano -- bug reportado en pruebas reales, 2026-09-17 (confirmado que
-    /// el MRZ del reverso sí lee todo bien; el problema era que nadie sabía
-    /// que había que voltear la cédula).
+    /// Caso especial: cédula nacional leída del FRENTE (sin MRZ). Desde
+    /// 2026-09-20 `extraerCedulaNacionalFrente` también intenta leer
+    /// "Nombre:"/"1° Apellido:"/"2° Apellido:" del frente, pero sigue
+    /// siendo una lectura por regex sin checksum (a diferencia del MRZ del
+    /// reverso) -- por ángulo/reflejo puede confirmarse el número sin haber
+    /// alcanzado a leer el nombre todavía. Este aviso sigue existiendo para
+    /// ese caso (`documento.nombre == null`), no porque el frente nunca
+    /// pueda traer nombre -- bug original reportado en pruebas reales,
+    /// 2026-09-17: sin este aviso, quien operaba no tenía forma de saber
+    /// que le faltaba el nombre hasta llenar el formulario a mano.
     private fun mensajeDeConfirmacion(
         documento: DocumentoDetectado,
         hoy: FechaDocumento,
@@ -162,6 +187,8 @@ class EstabilizadorLectura(
 
     fun reiniciar() {
         candidatosRecientes.clear()
+        claveAcumulada = null
+        documentoAcumulado = null
     }
 
     private fun registrarFrameSinCandidato() = registrarClave(CLAVE_SIN_CANDIDATO)
@@ -188,6 +215,25 @@ private const val CLAVE_SIN_CANDIDATO = "\u0000"
 
 private fun DocumentoDetectado.claveEstabilizacion(): String =
     "${tipo.name}:${(textoBusqueda ?: numeroDocumento).trim().uppercase()}"
+
+/// Combina este documento (ya acumulado de frames anteriores para la misma
+/// clave) con la lectura de un frame nuevo -- cada campo opcional se
+/// actualiza sólo si el frame nuevo trae un valor no nulo, si no conserva
+/// el que ya se tenía. Así un campo que un frame puntual no alcanzó a leer
+/// (nombre, un apellido...) no borra lo que sí se leyó bien en un frame
+/// anterior del mismo candidato. `numeroDocumento`/`tipo`/`fuenteDatos`
+/// vienen siempre del frame nuevo -- son la clave, no un campo opcional, y
+/// ya se validó que corresponde al mismo candidato antes de llamar a esto.
+private fun DocumentoDetectado.fusionarCamposOpcionales(nuevo: DocumentoDetectado): DocumentoDetectado = nuevo.copy(
+    textoBusqueda = nuevo.textoBusqueda ?: textoBusqueda,
+    nombre = nuevo.nombre ?: nombre,
+    apellidos = nuevo.apellidos ?: apellidos,
+    nacionalidad = nuevo.nacionalidad ?: nacionalidad,
+    empresa = nuevo.empresa ?: empresa,
+    vencimiento = nuevo.vencimiento ?: vencimiento,
+    fechaNacimiento = nuevo.fechaNacimiento ?: fechaNacimiento,
+    sexo = nuevo.sexo ?: sexo,
+)
 
 private fun TipoDocumento.esValidoParaModo(modo: ModoEscaneoDocumento): Boolean =
     when (modo) {

@@ -35,6 +35,16 @@ where
     pub fn listar_seleccionables(&self) -> Result<Vec<VehiculoRuta>, DatabaseError> {
         self.vehiculos.listar(true)
     }
+
+    /// Buscador por placa o número de unidad (checklist mobile) -- mismo
+    /// criterio que `EncargadoRutaService::buscar`/`buscar_seleccionables`.
+    pub fn buscar(&self, texto: &str) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        self.vehiculos.buscar(texto, false)
+    }
+
+    pub fn buscar_seleccionables(&self, texto: &str) -> Result<Vec<VehiculoRuta>, DatabaseError> {
+        self.vehiculos.buscar(texto, true)
+    }
 }
 
 #[cfg(test)]
@@ -72,5 +82,20 @@ mod tests {
 
         assert_eq!(servicio.listar().unwrap().len(), 2);
         assert_eq!(servicio.listar_seleccionables().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn buscar_seleccionables_omite_los_desactivados() {
+        let connection = conexion();
+        let repo = SqliteVehiculoRutaRepository::new(&connection);
+        repo.crear(&nuevo("C12345")).unwrap();
+        let id = repo.crear(&nuevo("C99999")).unwrap();
+        let mut vehiculo = repo.buscar_por_id(id).unwrap().unwrap();
+        vehiculo.activo = false;
+        repo.actualizar(&vehiculo).unwrap();
+        let servicio = VehiculoRutaService::new(&repo);
+
+        assert_eq!(servicio.buscar("C1").unwrap().len(), 1);
+        assert!(servicio.buscar_seleccionables("C99999").unwrap().is_empty());
     }
 }

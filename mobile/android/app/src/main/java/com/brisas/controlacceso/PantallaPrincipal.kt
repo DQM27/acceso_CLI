@@ -1,5 +1,8 @@
 package com.brisas.controlacceso
 
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,12 +28,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -66,6 +71,24 @@ fun PantallaPrincipal(
 ) {
     var refrescarNube by remember { mutableIntStateOf(0) }
     var mostrarNuevoContratista by remember { mutableStateOf(false) }
+    // Sin esto, atrás del sistema en la raíz (pestañas) caía directo al
+    // default de Android -- cerraba/minimizaba la app de un solo toque, sin
+    // que hubiera ningún BackHandler compose que lo interceptara (hallazgo
+    // 2026-09-19, pedido explícito del usuario: doble tap para salir, mismo
+    // patrón estándar de Android). `enabled = !mostrarNuevoContratista`
+    // para no competir con el BackHandler propio de esa pantalla cuando
+    // está abierta.
+    val contexto = LocalContext.current
+    var ultimoTapAtras by remember { mutableLongStateOf(0L) }
+    BackHandler(enabled = !mostrarNuevoContratista) {
+        val ahora = System.currentTimeMillis()
+        if (ahora - ultimoTapAtras < 2000) {
+            (contexto as? Activity)?.finish()
+        } else {
+            ultimoTapAtras = ahora
+            Toast.makeText(contexto, "Tocá de nuevo para salir", Toast.LENGTH_SHORT).show()
+        }
+    }
     // `docs/pendientes.md`, "alertar luego al sincronizar" -- ver el mismo
     // campo en `desktop/src/App.tsx` (`manejarResumenSincronizacion`).
     // Alimentado desde los dos caminos de sync (pulso periódico y botón
@@ -240,7 +263,10 @@ fun PantallaPrincipal(
             // la pantalla y su ViewModel siguen intactos, pendiente decidir
             // si se reasigna a otro lado o se quita del todo (2026-09-17).
             FilaPildoras(
-                opciones = listOf("Activos", "Rutas", "Gafetes KOF", "Proveedores"),
+                // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
+                // usuario (2026-09-19) para descomprimir la fila de
+                // pestañas, ya apiñada (ver comentario arriba).
+                opciones = listOf("Activos", "Rutas", "KOF", "Proveedores"),
                 seleccionado = pestana,
                 onSeleccionar = { pestana = it },
                 modifier = Modifier.padding(horizontal = 16.dp),

@@ -2,6 +2,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Normal (sin permiso en tiempo de ejecución): hace falta para
+         controlar la intensidad de la vibración de confirmación/error del
+         escáner con Vibrator/VibrationEffect en vez del haptic feedback
+         semántico de Compose, que no deja elegir qué tan fuerte vibra. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!-- La base de datos local trae cédulas, hashes de contraseña e
@@ -13,6 +18,7 @@
          (ej. preferencias, no la base), usar dataExtractionRules en vez
          de reactivar esto entero. -->
     <application
+        android:name=".AplicacionControlAcceso"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -39,7 +45,31 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">
+            <!-- Sin esto, girar el teléfono (o forzar horizontal a mano
+                 desde una pantalla puntual, ver PantallaEscanearComprobanteRuta)
+                 destruye y recrea TODA la Activity: con una sola Activity
+                 para toda la app, eso significa perder cualquier estado que
+                 no viva en un ViewModel (ej. "¿la cámara está abierta?"),
+                 devolviendo a quien opera a una pantalla anterior sin avisar
+                 (hallazgo 2026-09-20: girar el celular para leer el
+                 comprobante de ruta, un papel más ancho que una cédula, sacaba
+                 de la cámara en vez de ayudar). Compose ya recompone solo
+                 ante un cambio de configuración, no hace falta el
+                 reinicio completo que sí necesitaba una Activity clásica
+                 basada en XML/vistas. -->
+
+            <!-- Sin esto, el modo por defecto de Android ("adjustPan") movía
+                 TODA la ventana hacia arriba al abrir el teclado, incluida
+                 la cabecera fija (botón "Nuevo contratista", pestañas) que
+                 vive fuera del scroll propio de cada pantalla, en
+                 PantallaPrincipal, en vez de dejar que solo el contenido
+                 con `imePadding()`/scroll se reacomode (reportado 2026-09-20,
+                 en Rutas y Proveedores). `adjustResize` es lo correcto acá
+                 porque el teclado ya se maneja vía insets/Compose, no vía
+                 redimensionado nativo de la ventana. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

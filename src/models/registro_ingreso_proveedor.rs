@@ -59,4 +59,9 @@ pub struct RegistroIngresoProveedorActivoResumen {
     pub placa: Option<String>,
     pub gafete_numero: i64,
     pub fecha_hora_ingreso: DateTime<Utc>,
+    /// Ya vivía en la tabla (`usuario_ingreso_nombre`, ver `crear`) pero
+    /// nunca se seleccionaba acá -- pedido explícito del usuario 2026-09-20:
+    /// mostrar en la tarjeta de "Proveedores activos" quién dio el ingreso,
+    /// igual que ya hace `IngresoActivoResumen` para contratistas.
+    pub usuario_ingreso_nombre: String,
 }

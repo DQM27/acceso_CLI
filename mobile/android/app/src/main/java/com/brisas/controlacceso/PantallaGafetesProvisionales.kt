@@ -20,7 +20,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
-import uniffi.control_acceso_mobile.EncargadoRuta
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalActivoResumen
 import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalRemoto
@@ -94,7 +93,7 @@ fun PantallaGafetesProvisionales(
         // `FilaContratista` en modo Ingreso), no en un menú desplegable --
         // pedido explícito del usuario en pruebas reales, 2026-09-17:
         // unificar el look de esta pantalla con el de Contratista.
-        TextField(
+        OutlinedTextField(
             value = viewModel.textoEncargado,
             onValueChange = viewModel::cambiarTextoEncargado,
             placeholder = { Text("Nombre o código de empleado") },
@@ -118,7 +117,7 @@ fun PantallaGafetesProvisionales(
                     verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     items(viewModel.resultadosEncargado.take(6), key = { it.id }) { encargado ->
-                        FilaEncargadoProvisional(encargado, onClick = { viewModel.elegirEncargado(encargado) })
+                        FilaEncargadoRuta(encargado, onClick = { viewModel.elegirEncargado(encargado) })
                     }
                 }
             }
@@ -139,7 +138,7 @@ fun PantallaGafetesProvisionales(
             // tiene uno): el placeholder terminaba recortado contra el borde
             // superior del campo en vez de centrado -- bug reportado en
             // pruebas reales, 2026-09-17 ("el input... sale cortado").
-            TextField(
+            OutlinedTextField(
                 value = gafeteTexto,
                 onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
                 placeholder = { Text("Número de gafete") },
@@ -201,28 +200,6 @@ fun PantallaGafetesProvisionales(
 private fun FilaGafeteProvisionalActiva.clave(): String = when (this) {
     is FilaGafeteProvisionalActiva.Local -> "local-${prestamo.id}"
     is FilaGafeteProvisionalActiva.Remota -> "remota-${remoto.uuid}"
-}
-
-/// Mismo estilo que `FilaContratista` (PantallaActivos.kt, modo Ingreso) --
-/// nombre primero, código de empleado abajo, tarjeta completa tocable.
-@Composable
-private fun FilaEncargadoProvisional(encargado: EncargadoRuta, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(encargado.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        Text(
-            "Código de empleado: ${encargado.codigoEmpleado}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Composable
