@@ -47,16 +47,13 @@ import kotlinx.coroutines.launch
 /// sub-número (tipo) y documento a la vez porque el comprobante real trae
 /// los tres juntos en la misma línea impresa.
 ///
-/// Resolución de análisis subida a 1920x1080 (2026-09-20, tras una foto
-/// real del comprobante): es una hoja completa, no una tarjeta -- para que
-/// entre completa en el encuadre hay que sostener el teléfono bastante más
-/// lejos que con una cédula, así que a la misma resolución de 1280x720 que
-/// usan las otras 3 pantallas el texto impreso (más chico que el de una
-/// cédula) le queda a ML Kit con muchos menos píxeles por carácter. Esto
-/// explica mejor un "no lee NADA en absoluto" que cualquier problema de
-/// region/recorte: ya se probó sin ningún recorte (frame completo) y
-/// tampoco leía, lo que apunta a que ML Kit no estaba resolviendo texto en
-/// absoluto, no a que la extracción fallara sobre texto ya leído.
+/// Resolución de análisis: 1280x720, igual que las otras 3 pantallas.
+/// Hubo acá una subida a 1920x1080 (2026-09-20, hipótesis de que el texto
+/// impreso más chico de una hoja completa necesitaba más píxeles por
+/// carácter que ML Kit) -- se revirtió: probada contra el dispositivo real
+/// empeoró la lectura en vez de mejorarla, así que se vuelve a 1280x720,
+/// la última resolución confirmada como funcional para este perfil, de
+/// antes de cualquiera de los experimentos de rotación/recorte.
 @Composable
 fun PantallaEscanearComprobanteRuta(
     onComprobanteDetectado: suspend (ComprobanteRutaDetectado) -> Unit,
@@ -125,11 +122,17 @@ private fun VistaCamaraComprobanteRuta(
                     .setResolutionSelector(
                         ResolutionSelector.Builder()
                             .setResolutionStrategy(
-                                // 1920x1080, no 1280x720 como las otras 3
-                                // pantallas -- ver comentario abajo, esta es
-                                // la sospecha real detrás de "no lee nada de
-                                // nada" (foto real del 2026-09-20).
-                                ResolutionStrategy(Size(1920, 1080), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
+                                // Vuelta a 1280x720 (2026-09-20) -- la
+                                // subida a 1920x1080 fue una apuesta sin
+                                // confirmar en el dispositivo real y el
+                                // usuario reportó que empeoró (parece forzar
+                                // un modo de captura distinto). 1280x720 es
+                                // la última resolución confirmada como
+                                // funcional para este perfil (antes de
+                                // cualquiera de los experimentos de
+                                // rotación/recorte), y es la misma que usan
+                                // las otras 3 pantallas de escaneo.
+                                ResolutionStrategy(Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
                             )
                             .build(),
                     )
