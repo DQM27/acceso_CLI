@@ -1,11 +1,6 @@
 package com.brisas.controlacceso
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.util.Size
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -13,10 +8,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -65,38 +57,11 @@ fun PantallaEscanearCarnetKof(
     onCarnetDetectado: suspend (CarnetKofDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
-    BackHandler(onBack = onCerrar)
-    val contexto = LocalContext.current
-    var permisoConcedido by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-    }
-    val pedirPermiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
-        permisoConcedido = concedido
-    }
-
-    LaunchedEffect(Unit) {
-        if (!permisoConcedido) {
-            pedirPermiso.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    if (permisoConcedido) {
+    EscanerConPermisoCamara(
+        mensajePermiso = "Se necesita permiso de cámara para escanear el gafete.",
+        onCerrar = onCerrar,
+    ) {
         VistaCamaraCarnetKof(onCarnetDetectado = onCarnetDetectado, onCerrar = onCerrar)
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                "Se necesita permiso de cámara para escanear el gafete.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BotonDiscretoBrisas(onClick = onCerrar) { Text("Volver") }
-                BotonBrisas(onClick = { pedirPermiso.launch(Manifest.permission.CAMERA) }) { Text("Dar permiso") }
-            }
-        }
     }
 }
 
@@ -115,7 +80,12 @@ private fun VistaCamaraCarnetKof(
     var ultimoMensaje by remember { mutableStateOf(MENSAJE_INICIAL_KOF) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var textoCrudoDebug by remember { mutableStateOf("") }
-    val estabilizador = remember { EstabilizadorCarnetKof() }
+    val estabilizador = remember {
+        EstabilizadorPorRepeticion(
+            extraer = { texto -> extraerCarnetKof(texto)?.takeIf { it.nombre != null } },
+            clave = { "${it.nombre}:${it.codigoEmpleado}" },
+        )
+    }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
@@ -138,9 +108,7 @@ private fun VistaCamaraCarnetKof(
         }
     }
 
-    val colorBuscando = Color(0xFF9E9E9E)
-    val colorConfirmado = Color(0xFF43A047)
-    val colorMarco = if (estado == EstadoEscaneo.CONFIRMADO) colorConfirmado else colorBuscando
+    val colorMarco = if (estado == EstadoEscaneo.CONFIRMADO) ColorEscaneoConfirmado else ColorEscaneoBuscando
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -248,29 +216,3 @@ private fun VistaCamaraCarnetKof(
 // PantallaRutas.kt); este mensaje se había quedado con el nombre interno del
 // documento en vez del que la persona ya conoce (hallazgo 2026-09-19).
 private const val MENSAJE_INICIAL_KOF = "Apunte al frente del gafete KOF"
-
-/// Debounce por repetición de frames -- mismo criterio que
-/// `EstabilizadorComprobanteRuta` (ver `PantallaEscanearComprobanteRuta.kt`),
-/// pero sólo confirma cuando hay **nombre**: ver comentario de
-/// [PantallaEscanearCarnetKof] arriba sobre por qué el reverso solo
-/// (código de empleado sin nombre) no alcanza para cerrar este paso.
-private class EstabilizadorCarnetKof(
-    private val framesRequeridos: Int = 2,
-    private val ventana: Int = framesRequeridos + 2,
-) {
-    private val candidatosRecientes = ArrayDeque<String>()
-
-    fun procesarFrame(texto: String): CarnetKofDetectado? {
-        val detectado = extraerCarnetKof(texto)?.takeIf { it.nombre != null }
-        val clave = detectado?.let { "${it.nombre}:${it.codigoEmpleado}" } ?: CLAVE_SIN_CANDIDATO
-        candidatosRecientes.addLast(clave)
-        while (candidatosRecientes.size > ventana) candidatosRecientes.removeFirst()
-        if (detectado == null) return null
-        val repeticiones = candidatosRecientes.count { it == clave }
-        return if (repeticiones >= framesRequeridos) detectado else null
-    }
-
-    companion object {
-        private const val CLAVE_SIN_CANDIDATO = " "
-    }
-}

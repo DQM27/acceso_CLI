@@ -1,11 +1,6 @@
 package com.brisas.controlacceso
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.util.Size
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -13,10 +8,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -69,42 +61,12 @@ fun PantallaEscanearVehiculoRuta(
     mensajeInicial: String = MENSAJE_INICIAL_VEHICULO,
     mensajePermiso: String = "Se necesita permiso de cámara para escanear la placa o el número de unidad.",
 ) {
-    BackHandler(onBack = onCerrar)
-    val contexto = LocalContext.current
-    var permisoConcedido by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-    }
-    val pedirPermiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
-        permisoConcedido = concedido
-    }
-
-    LaunchedEffect(Unit) {
-        if (!permisoConcedido) {
-            pedirPermiso.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    if (permisoConcedido) {
+    EscanerConPermisoCamara(mensajePermiso = mensajePermiso, onCerrar = onCerrar) {
         VistaCamaraVehiculoRuta(
             onVehiculoDetectado = onVehiculoDetectado,
             onCerrar = onCerrar,
             mensajeInicial = mensajeInicial,
         )
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                mensajePermiso,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BotonDiscretoBrisas(onClick = onCerrar) { Text("Volver") }
-                BotonBrisas(onClick = { pedirPermiso.launch(Manifest.permission.CAMERA) }) { Text("Dar permiso") }
-            }
-        }
     }
 }
 
@@ -123,7 +85,9 @@ private fun VistaCamaraVehiculoRuta(
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     var ultimoMensaje by remember { mutableStateOf(mensajeInicial) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
-    val estabilizador = remember { EstabilizadorVehiculoRuta() }
+    val estabilizador = remember {
+        EstabilizadorPorRepeticion(extraer = ::extraerVehiculo, clave = { "${it.tipo}:${it.valor}" })
+    }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
@@ -146,9 +110,7 @@ private fun VistaCamaraVehiculoRuta(
         }
     }
 
-    val colorBuscando = Color(0xFF9E9E9E)
-    val colorConfirmado = Color(0xFF43A047)
-    val colorMarco = if (estado == EstadoEscaneo.CONFIRMADO) colorConfirmado else colorBuscando
+    val colorMarco = if (estado == EstadoEscaneo.CONFIRMADO) ColorEscaneoConfirmado else ColorEscaneoBuscando
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -237,26 +199,3 @@ private fun VistaCamaraVehiculoRuta(
 }
 
 private const val MENSAJE_INICIAL_VEHICULO = "Apunte a la placa o al número de unidad"
-
-/// Debounce por repetición de frames -- mismo criterio que
-/// `EstabilizadorComprobanteRuta`/`EstabilizadorCarnetKof`.
-private class EstabilizadorVehiculoRuta(
-    private val framesRequeridos: Int = 2,
-    private val ventana: Int = framesRequeridos + 2,
-) {
-    private val candidatosRecientes = ArrayDeque<String>()
-
-    fun procesarFrame(texto: String): VehiculoRutaDetectado? {
-        val detectado = extraerVehiculo(texto)
-        val clave = detectado?.let { "${it.tipo}:${it.valor}" } ?: CLAVE_SIN_CANDIDATO
-        candidatosRecientes.addLast(clave)
-        while (candidatosRecientes.size > ventana) candidatosRecientes.removeFirst()
-        if (detectado == null) return null
-        val repeticiones = candidatosRecientes.count { it == clave }
-        return if (repeticiones >= framesRequeridos) detectado else null
-    }
-
-    companion object {
-        private const val CLAVE_SIN_CANDIDATO = " "
-    }
-}

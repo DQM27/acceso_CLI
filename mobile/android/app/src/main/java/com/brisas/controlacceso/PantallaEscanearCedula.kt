@@ -1,15 +1,10 @@
 package com.brisas.controlacceso
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 import android.util.Size
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.BackHandler
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
@@ -20,10 +15,7 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -73,22 +65,14 @@ fun PantallaEscanearCedula(
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
-    BackHandler(onBack = onCerrar)
-    val contexto = LocalContext.current
-    var permisoConcedido by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+    // Antes el mensaje de permiso era fijo ("...para escanear cédulas"),
+    // sin importar el modo -- pedía cédulas incluso escaneando un gafete
+    // (hallazgo 2026-09-20, al unificar las 4 pantallas de escaneo).
+    val mensajePermiso = when (modo) {
+        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Se necesita permiso de cámara para escanear cédulas."
+        ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Se necesita permiso de cámara para escanear gafetes."
     }
-    val pedirPermiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
-        permisoConcedido = concedido
-    }
-
-    LaunchedEffect(Unit) {
-        if (!permisoConcedido) {
-            pedirPermiso.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    if (permisoConcedido) {
+    EscanerConPermisoCamara(mensajePermiso = mensajePermiso, onCerrar = onCerrar) {
         VistaCamaraCedula(
             modo = modo,
             continuo = continuo,
@@ -96,22 +80,6 @@ fun PantallaEscanearCedula(
             onDocumentoDetectado = onDocumentoDetectado,
             onCerrar = onCerrar,
         )
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("Se necesita permiso de cámara para escanear cédulas.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BotonDiscretoBrisas(onClick = onCerrar) {
-                    Text("Volver")
-                }
-                BotonBrisas(onClick = { pedirPermiso.launch(Manifest.permission.CAMERA) }) {
-                    Text("Dar permiso")
-                }
-            }
-        }
     }
 }
 
@@ -191,23 +159,16 @@ private fun VistaCamaraCedula(
         }
     }
 
-    // Colores de estado fijos, no dependientes del tema (Classic/Brisas/Negro):
-    // acá el color comunica significado (buscando/inválido/confirmado), y ese
-    // significado debe leerse igual sin importar qué tema tenga activo quien
-    // opera -- a diferencia del acento decorativo que usaba antes este marco.
-    val colorBuscando = Color(0xFF9E9E9E)
-    val colorInvalido = Color(0xFFE53935)
-    val colorConfirmado = Color(0xFF43A047)
-    // Un documento vencido igual se leyó bien (por eso el estado sigue
-    // siendo CONFIRMADO, no INVALIDO), pero visualmente no puede quedar
-    // idéntico a uno vigente -- ámbar, ni el verde de "todo bien" ni el
-    // rojo de "no reconocido".
-    val colorVencido = Color(0xFFFF8F00)
+    // Colores de estado compartidos por las 4 pantallas de escaneo (ver
+    // `EscaneoCompartido.kt`) -- fijos, no dependientes del tema
+    // (Classic/Brisas/Negro): acá el color comunica significado
+    // (buscando/inválido/confirmado/vencido), y ese significado debe leerse
+    // igual sin importar qué tema tenga activo quien opera.
     val colorMarco = when {
-        estado == EstadoEscaneo.CONFIRMADO && vencido -> colorVencido
-        estado == EstadoEscaneo.CONFIRMADO -> colorConfirmado
-        estado == EstadoEscaneo.INVALIDO -> colorInvalido
-        else -> colorBuscando
+        estado == EstadoEscaneo.CONFIRMADO && vencido -> ColorEscaneoVencido
+        estado == EstadoEscaneo.CONFIRMADO -> ColorEscaneoConfirmado
+        estado == EstadoEscaneo.INVALIDO -> ColorEscaneoInvalido
+        else -> ColorEscaneoBuscando
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -337,8 +298,8 @@ private fun VistaCamaraCedula(
                 .background(
                     when {
                         resultado == null -> Color.Black.copy(alpha = 0.78f)
-                        resultado.second -> colorInvalido.copy(alpha = 0.85f)
-                        else -> colorConfirmado.copy(alpha = 0.85f)
+                        resultado.second -> ColorEscaneoInvalido.copy(alpha = 0.85f)
+                        else -> ColorEscaneoConfirmado.copy(alpha = 0.85f)
                     },
                     FormaCampoBrisas,
                 )

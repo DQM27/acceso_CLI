@@ -1,12 +1,7 @@
 package com.brisas.controlacceso
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.util.Size
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -17,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -68,38 +62,11 @@ fun PantallaEscanearComprobanteRuta(
     onComprobanteDetectado: suspend (ComprobanteRutaDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
-    BackHandler(onBack = onCerrar)
-    val contexto = LocalContext.current
-    var permisoConcedido by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-    }
-    val pedirPermiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
-        permisoConcedido = concedido
-    }
-
-    LaunchedEffect(Unit) {
-        if (!permisoConcedido) {
-            pedirPermiso.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    if (permisoConcedido) {
+    EscanerConPermisoCamara(
+        mensajePermiso = "Se necesita permiso de cámara para escanear el comprobante.",
+        onCerrar = onCerrar,
+    ) {
         VistaCamaraComprobanteRuta(onComprobanteDetectado = onComprobanteDetectado, onCerrar = onCerrar)
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                "Se necesita permiso de cámara para escanear el comprobante.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BotonDiscretoBrisas(onClick = onCerrar) { Text("Volver") }
-                BotonBrisas(onClick = { pedirPermiso.launch(Manifest.permission.CAMERA) }) { Text("Dar permiso") }
-            }
-        }
     }
 }
 
@@ -138,7 +105,12 @@ private fun VistaCamaraComprobanteRuta(
     var numeroDocumentoTextoDebug by remember { mutableStateOf<String?>(null) }
     var barcodeValorDebug by remember { mutableStateOf<String?>(null) }
     var yaAvisoComparacion by remember { mutableStateOf(false) }
-    val estabilizador = remember { EstabilizadorComprobanteRuta() }
+    val estabilizador = remember {
+        EstabilizadorPorRepeticion(
+            extraer = ::extraerComprobanteRuta,
+            clave = { "${it.numeroRuta}:${it.subNumero}:${it.numeroDocumento}" },
+        )
+    }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
@@ -162,9 +134,7 @@ private fun VistaCamaraComprobanteRuta(
         }
     }
 
-    val colorBuscando = Color(0xFF9E9E9E)
-    val colorConfirmado = Color(0xFF43A047)
-    val colorMarco = if (estado == EstadoEscaneo.CONFIRMADO) colorConfirmado else colorBuscando
+    val colorMarco = if (estado == EstadoEscaneo.CONFIRMADO) ColorEscaneoConfirmado else ColorEscaneoBuscando
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -314,7 +284,7 @@ private fun VistaCamaraComprobanteRuta(
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background((if (coincide) colorConfirmado else Color(0xFFC62828)).copy(alpha = 0.9f))
+                            .background((if (coincide) ColorEscaneoConfirmado else Color(0xFFC62828)).copy(alpha = 0.9f))
                             .padding(12.dp),
                     )
                 }
@@ -385,28 +355,3 @@ private fun analizarComprobanteConBarcodeDebug(
 
 private const val MENSAJE_INICIAL = "Apunte al comprobante de carga de ruta"
 
-/// Debounce simple por repetición de frames -- mismo criterio que
-/// `EstabilizadorLectura` (ver ese archivo), pero sin MRZ ni tipos de
-/// documento de identidad: la clave estable acá es ruta+sub-número+
-/// documento juntos, ya que los tres vienen impresos en la misma línea y
-/// deben leerse consistentes entre sí, no por separado.
-private class EstabilizadorComprobanteRuta(
-    private val framesRequeridos: Int = 2,
-    private val ventana: Int = framesRequeridos + 2,
-) {
-    private val candidatosRecientes = ArrayDeque<String>()
-
-    fun procesarFrame(texto: String): ComprobanteRutaDetectado? {
-        val detectado = extraerComprobanteRuta(texto)
-        val clave = detectado?.let { "${it.numeroRuta}:${it.subNumero}:${it.numeroDocumento}" } ?: CLAVE_SIN_CANDIDATO
-        candidatosRecientes.addLast(clave)
-        while (candidatosRecientes.size > ventana) candidatosRecientes.removeFirst()
-        if (detectado == null) return null
-        val repeticiones = candidatosRecientes.count { it == clave }
-        return if (repeticiones >= framesRequeridos) detectado else null
-    }
-
-    companion object {
-        private const val CLAVE_SIN_CANDIDATO = " "
-    }
-}
