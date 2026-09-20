@@ -533,7 +533,15 @@ fun analizarCedula(
         return
     }
     val rotacion = imagen.imageInfo.rotationDegrees
-    val input = InputImage.fromMediaImage(mediaImage, rotacion)
+    // Recorta al mismo recuadro que ve la persona en pantalla antes de
+    // mandarle el frame a ML Kit -- pedido explícito del usuario 2026-09-20
+    // para que el reconocimiento sea más rápido (menos píxeles) y más
+    // preciso (el texto de interés ocupa más del cuadro, sin ruido de fondo
+    // compitiendo), tal como recomienda la guía oficial de ML Kit. Con
+    // `recortarParaOcr` devolviendo `null` (formato inesperado, plano
+    // corrupto, lo que sea) se cae al frame completo de siempre -- nunca
+    // debe romper el escaneo por un recorte que salió mal.
+    val input = recortarParaOcr(mediaImage, rotacion) ?: InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
         .addOnSuccessListener(ejecutorPrincipal) { resultado ->
             if (sesionActiva.get()) {
@@ -544,6 +552,78 @@ fun analizarCedula(
         .addOnCompleteListener(ejecutorPrincipal) {
             imagen.close()
         }
+}
+
+/// Recorta el frame de la cámara al mismo recuadro que dibuja
+/// `MarcoGuiaCedula` (`RegionGuiaOcr`, misma proporción/posición) antes de
+/// mandarlo a ML Kit. `null` si algo no sale como se espera -- el llamador
+/// cae de vuelta al frame completo, nunca debe romper el escaneo.
+///
+/// Por qué rota A BITMAP COMPLETO primero y recién ahí recorta, en vez de
+/// calcular el recorte directo sobre el buffer crudo (que ahorraría el
+/// paso de JPEG/rotación): el recuadro que ve la persona está expresado en
+/// coordenadas YA ROTADAS (como la pantalla, vertical), mientras que
+/// `imagen`/sus planos vienen en la orientación nativa del sensor (normal
+/// que la cámara trasera entregue esto en apaisado incluso con el teléfono
+/// en vertical). Traducir el recuadro vertical a coordenadas del sensor sin
+/// rotar exige invertir a mano el giro de 90°/270° que aplica la cámara --
+/// exactamente el tipo de mapeo de coordenadas que ya salió mal una vez en
+/// este archivo (ver el comentario de `analizarCedula`, sección 0.6 del
+/// plan, sobre por qué el recuadro de guía es deliberadamente estático).
+/// Rotar primero devuelve un bitmap donde "arriba/ancho/alto" ya significan
+/// lo mismo que en pantalla, así que el recorte usa la misma aritmética que
+/// `MarcoGuiaCedula` sin ningún signo que invertir.
+@androidx.annotation.OptIn(ExperimentalGetImage::class)
+private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int): InputImage? {
+    if (imagen.format != android.graphics.ImageFormat.YUV_420_888) return null
+    val planos = imagen.planes
+    if (planos.size < 3) return null
+    return try {
+        val yPlano = planos[0]
+        val uPlano = planos[1]
+        val vPlano = planos[2]
+        val yBytes = ByteArray(yPlano.buffer.remaining()).also { yPlano.buffer.get(it) }
+        val uBytes = ByteArray(uPlano.buffer.remaining()).also { uPlano.buffer.get(it) }
+        val vBytes = ByteArray(vPlano.buffer.remaining()).also { vPlano.buffer.get(it) }
+        val nv21 = construirNv21(
+            ancho = imagen.width,
+            alto = imagen.height,
+            y = yBytes,
+            yRowStride = yPlano.rowStride,
+            u = uBytes,
+            v = vBytes,
+            uvRowStride = uPlano.rowStride,
+            uvPixelStride = uPlano.pixelStride,
+        )
+        val yuvImage = android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, imagen.width, imagen.height, null)
+        val jpegCompleto = java.io.ByteArrayOutputStream().use { salida ->
+            val ok = yuvImage.compressToJpeg(
+                android.graphics.Rect(0, 0, imagen.width, imagen.height),
+                90,
+                salida,
+            )
+            if (!ok) return null
+            salida.toByteArray()
+        }
+        val bitmapCompleto = android.graphics.BitmapFactory.decodeByteArray(jpegCompleto, 0, jpegCompleto.size)
+            ?: return null
+        val bitmapDerecho = if (rotacionGrados == 0) {
+            bitmapCompleto
+        } else {
+            val matriz = android.graphics.Matrix().apply { postRotate(rotacionGrados.toFloat()) }
+            android.graphics.Bitmap.createBitmap(
+                bitmapCompleto, 0, 0, bitmapCompleto.width, bitmapCompleto.height, matriz, false,
+            )
+        }
+        val recorte = RegionGuiaOcr.rectanguloEnPixeles(bitmapDerecho.width, bitmapDerecho.height)
+        if (recorte.width <= 0 || recorte.height <= 0) return null
+        val bitmapRecortado = android.graphics.Bitmap.createBitmap(
+            bitmapDerecho, recorte.left, recorte.top, recorte.width, recorte.height,
+        )
+        InputImage.fromBitmap(bitmapRecortado, 0)
+    } catch (e: Exception) {
+        null
+    }
 }
 
 // Compiladas una sola vez, no dentro de la función -- se llaman en cada
