@@ -62,6 +62,14 @@ import kotlinx.coroutines.launch
 fun PantallaEscanearCedula(
     modo: ModoEscaneoDocumento = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
     continuo: Boolean = false,
+    // Sólo lo usa el escaneo continuo de gafetes (`PantallaActivos`) -- las
+    // otras 3 pantallas de escaneo se quedan con el default (sin tarjeta de
+    // resultado) y no cambian en nada. Es una función, no un valor, para
+    // leer siempre el estado más reciente del llamador (`ViewModel.mensaje`)
+    // en el instante en que cada escaneo termina, sin depender de que
+    // Compose ya haya recompuesto con el valor nuevo -- ver el doc-comment
+    // en `VistaCamaraCedula` donde se llama.
+    resultadoUltimoEscaneo: () -> Pair<String, Boolean>? = { null },
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
@@ -84,6 +92,7 @@ fun PantallaEscanearCedula(
         VistaCamaraCedula(
             modo = modo,
             continuo = continuo,
+            resultadoUltimoEscaneo = resultadoUltimoEscaneo,
             onDocumentoDetectado = onDocumentoDetectado,
             onCerrar = onCerrar,
         )
@@ -110,6 +119,7 @@ fun PantallaEscanearCedula(
 private fun VistaCamaraCedula(
     modo: ModoEscaneoDocumento,
     continuo: Boolean,
+    resultadoUltimoEscaneo: () -> Pair<String, Boolean>?,
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
@@ -117,6 +127,7 @@ private fun VistaCamaraCedula(
     val lifecycleOwner = LocalLifecycleOwner.current
     val alcance = rememberCoroutineScope()
     val onDocumentoActual by rememberUpdatedState(onDocumentoDetectado)
+    val obtenerResultadoActual by rememberUpdatedState(resultadoUltimoEscaneo)
     // Háptica semántica de Compose (`HapticFeedbackType.Confirm`), no
     // `Vibrator`/`VibrationEffect` crudo -- la guía oficial de Android
     // desaconseja `createOneShot`/`createWaveform` para feedback de UI
@@ -130,6 +141,12 @@ private fun VistaCamaraCedula(
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
+    // Resultado real de la última mutación (nombre en éxito, motivo en
+    // fallo), no sólo "se leyó el gafete" -- ver `resultadoUltimoEscaneo`.
+    // `null` mientras no hay nada que mostrar todavía o el llamador no usa
+    // esta función (las otras 3 pantallas de escaneo se quedan con el
+    // mensaje de siempre).
+    var resultadoMostrado by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     // Una instancia por apertura de pantalla -- lleva el conteo de frames
     // consistentes del debounce (ver EstabilizadorLectura), no debe
     // compartirse entre sesiones de escaneo distintas.
@@ -238,9 +255,25 @@ private fun VistaCamaraCedula(
                                             delay(DEMORA_AVISO_VENCIDO_MS)
                                         }
                                         if (!sesionActiva.get()) return@launch
+                                        // `onDocumentoActual` es suspend: para el
+                                        // caso de gafetes ya espera a que la
+                                        // mutación en Rust termine (ver
+                                        // `ActivosViewModel.registrarSalidaPorGafeteEscaneado`),
+                                        // así que al volver de acá el resultado
+                                        // que devuelve `obtenerResultadoActual`
+                                        // ya es el de ESTE escaneo, no el
+                                        // anterior -- se lee directo (una
+                                        // función, no un valor recompuesto) para
+                                        // no depender de que Compose ya haya
+                                        // vuelto a dibujar con el estado nuevo.
                                         onDocumentoActual(documento)
                                         if (continuo && sesionActiva.get()) {
-                                            ultimoMensaje = mensajeProcesadoContinuo(modo, valor)
+                                            val resultado = obtenerResultadoActual()
+                                            if (resultado != null) {
+                                                resultadoMostrado = resultado
+                                            } else {
+                                                ultimoMensaje = mensajeProcesadoContinuo(modo, valor)
+                                            }
                                             delay(DEMORA_REARMAR_ESCANEO_CONTINUO_MS)
                                             if (sesionActiva.get()) {
                                                 detectada.set(false)
@@ -248,6 +281,7 @@ private fun VistaCamaraCedula(
                                                 estado = EstadoEscaneo.BUSCANDO
                                                 vencido = false
                                                 ultimoMensaje = mensajeInicialEscaneo(modo)
+                                                resultadoMostrado = null
                                             }
                                         }
                                     }
@@ -285,15 +319,29 @@ private fun VistaCamaraCedula(
             modifier = Modifier.fillMaxSize(),
         )
         MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
+        // Con resultado real (éxito/fallo de la mutación, no sólo "se leyó
+        // el texto"), el mismo mensaje se pinta verde/rojo en vez de negro
+        // neutro -- pedido explícito del usuario 2026-09-20: antes, en
+        // escaneo continuo, el único aviso de que algo salió mal era el
+        // recuadro cambiando de color, fácil de no notar mientras se sigue
+        // apuntando la cámara al siguiente gafete.
+        val resultado = resultadoMostrado
         Text(
-            ultimoMensaje,
+            resultado?.first ?: ultimoMensaje,
             color = Color.White,
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .padding(top = 16.dp, start = 16.dp, end = 72.dp)
-                .background(Color.Black.copy(alpha = 0.78f), FormaCampoBrisas)
+                .background(
+                    when {
+                        resultado == null -> Color.Black.copy(alpha = 0.78f)
+                        resultado.second -> colorInvalido.copy(alpha = 0.85f)
+                        else -> colorConfirmado.copy(alpha = 0.85f)
+                    },
+                    FormaCampoBrisas,
+                )
                 .padding(12.dp),
         )
         // Círculo flotante en vez del texto "Cancelar" que vivía debajo del
@@ -449,7 +497,12 @@ private fun reproducirSonidoConfirmacion() {
 private const val VOLUMEN_SONIDO_CONFIRMACION = 40 // sobre 100 -- sutil, no un beep de caja registradora
 private const val DURACION_SONIDO_CONFIRMACION_MS = 100
 private const val DEMORA_AVISO_VENCIDO_MS = 1200L
-private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 900L
+// Subido de 900ms -- con el ciclo de salida por gafete ya sin botón de
+// confirmar (pedido explícito del usuario 2026-09-20), el mensaje de
+// resultado (nombre en verde, motivo en rojo) apenas alcanzaba a leerse
+// antes de que la cámara se rearmara para el siguiente. Sigue siendo
+// bastante más rápido que tener que confirmar a mano.
+private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 1600L
 private const val FRAMES_AUSENCIA_PARA_REPETIR = 3
 
 /// Compartido por las 4 pantallas de escaneo -- antes cada una tenía su
