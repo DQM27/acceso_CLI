@@ -169,7 +169,11 @@ fun PantallaProveedores(
             onCambiarGafeteTexto = { gafeteTexto = it },
             onEscanear = { escaneando = true },
             onEscanearPlaca = { escaneandoPlaca = true },
-            onVolver = { mostrandoFormulario = false },
+            onVolver = {
+                viewModel.cancelarFormulario()
+                gafeteTexto = ""
+                mostrandoFormulario = false
+            },
         )
         return
     }
@@ -279,7 +283,8 @@ private fun FormularioNuevoIngresoProveedor(
     val paso1Completo = viewModel.cedula.isNotBlank() && viewModel.nombre.isNotBlank()
     val paso2Completo = viewModel.empresaSeleccionada != null
     val paso3Completo = gafeteTexto.isNotBlank()
-    val puedeRegistrar = paso1Completo && paso2Completo && paso3Completo && !viewModel.registrando
+    val puedeRegistrar = paso1Completo && paso2Completo && paso3Completo &&
+        !viewModel.registrando && !viewModel.cedulaConIngresoActivo
 
     // Mismo destino que el botón "← Volver" visible de abajo -- sin esto,
     // atrás del sistema se escapaba a la Activity en vez de volver a la
