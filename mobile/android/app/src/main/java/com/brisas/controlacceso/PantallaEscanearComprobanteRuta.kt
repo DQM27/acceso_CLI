@@ -17,7 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,9 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executors
@@ -74,25 +70,12 @@ private fun VistaCamaraComprobanteRuta(
     val onDetectadoActual by rememberUpdatedState(onComprobanteDetectado)
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
-    // Sólo se crea en debug (ver uso más abajo) -- sondeo exploratorio del
-    // código de barras del comprobante: todavía no sabemos qué dato trae
-    // (¿el mismo "Transporte"? ¿otra cosa?), así que por ahora sólo se lee
-    // y se muestra, no reemplaza ni complementa la extracción por texto
-    // hasta confirmar qué dice contra un comprobante real.
-    val barcodeScanner = remember { if (BuildConfig.DEBUG) BarcodeScanning.getClient() else null }
     var ultimoMensaje by remember { mutableStateOf(MENSAJE_INICIAL) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     // Log, no overlay en pantalla (pedido explícito del usuario 2026-09-20:
     // se veía mal encima de la cámara) -- `adb logcat -s
     // $TAG_DEBUG_OCR_LECTURA` en un build debug sigue alcanzando para
     // ajustar los regex de LectorComprobanteRuta.kt sin adivinar a ciegas.
-    // Comparación exploratoria (2026-09-15): el usuario probó el sondeo del
-    // código de barras contra el papel real para ver si "dice lo mismo" que
-    // "Transporte:" -- se comparan los valores ya parseados y el resultado
-    // también va a Log, no a un Toast/overlay.
-    var numeroDocumentoTextoDebug by remember { mutableStateOf<String?>(null) }
-    var barcodeValorDebug by remember { mutableStateOf<String?>(null) }
-    var yaAvisoComparacion by remember { mutableStateOf(false) }
     val estabilizador = remember {
         EstabilizadorPorRepeticion(
             extraer = ::extraerComprobanteRuta,
@@ -118,7 +101,6 @@ private fun VistaCamaraComprobanteRuta(
             if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
             ejecutor.shutdown()
             recognizer.close()
-            barcodeScanner?.close()
         }
     }
 
@@ -146,10 +128,7 @@ private fun VistaCamaraComprobanteRuta(
                             }
                             val onTexto: (String) -> Unit = { texto ->
                                 if (sesionActiva.get()) {
-                                    if (BuildConfig.DEBUG) {
-                                        Log.d(TAG_DEBUG_OCR_LECTURA, texto)
-                                        numeroDocumentoTextoDebug = extraerComprobanteRuta(texto)?.numeroDocumento
-                                    }
+                                    if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
                                     val resultado = estabilizador.procesarFrame(texto)
                                     if (resultado != null) {
                                         estado = EstadoEscaneo.CONFIRMADO
@@ -170,49 +149,31 @@ private fun VistaCamaraComprobanteRuta(
                             val onFallo: () -> Unit = {
                                 if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
                             }
-                            val scannerBarcodeActual = barcodeScanner
-                            if (scannerBarcodeActual != null) {
-                                // Sólo el camino debug corre los dos detectores por
-                                // frame (texto + barcode) -- ver comentario de
-                                // `barcodeScanner` más arriba. El camino de
-                                // producción (`else`) sigue usando únicamente
-                                // `analizarCedula`, sin el costo extra.
-                                analizarComprobanteConBarcodeDebug(
-                                    imagen = imagen,
-                                    recognizer = recognizer,
-                                    barcodeScanner = scannerBarcodeActual,
-                                    ejecutorPrincipal = ejecutorPrincipal,
-                                    sesionActiva = sesionActiva,
-                                    onTexto = onTexto,
-                                    onBarcodes = { codigos ->
-                                        if (sesionActiva.get() && codigos.isNotEmpty()) {
-                                            Log.d(
-                                                TAG_DEBUG_OCR_LECTURA,
-                                                "barcode: " + codigos.joinToString("; ") { "${it.rawValue} (formato ${it.format})" },
-                                            )
-                                            barcodeValorDebug = codigos.firstOrNull()?.rawValue?.trim()
-                                        }
-                                    },
-                                    onFallo = onFallo,
-                                )
-                            } else {
-                                analizarCedula(
-                                    imagen = imagen,
-                                    recognizer = recognizer,
-                                    ejecutorPrincipal = ejecutorPrincipal,
-                                    sesionActiva = sesionActiva,
-                                    onTexto = onTexto,
-                                    onFallo = onFallo,
-                                    // Sin recorte -- pedido explícito del
-                                    // usuario 2026-09-20: con la región
-                                    // angosta/estimada, el comprobante dejó
-                                    // de leer cualquier campo. Sin datos
-                                    // reales de qué región exacta conviene,
-                                    // mejor volver al frame completo que
-                                    // seguir adivinando mal.
-                                    region = null,
-                                )
-                            }
+                            // Mismo camino simple que usan Vehículo/Ruta y
+                            // Carnet KOF -- antes esta pantalla era la única
+                            // de las 4 con un camino aparte en debug que
+                            // además corría el detector de códigos de barras
+                            // en cada frame (sondeo exploratorio del
+                            // 2026-09-15 que nunca llegó a una conclusión
+                            // útil). Se sacó por completo (2026-09-20): tras
+                            // reportarse que el comprobante dejó de
+                            // reconocer cualquier cosa, esta pantalla era la
+                            // única con ese camino extra sin probar, así que
+                            // en vez de seguir adivinando la región de
+                            // recorte se unifica con el camino ya
+                            // comprobado que sí funciona en las otras 3.
+                            analizarCedula(
+                                imagen = imagen,
+                                recognizer = recognizer,
+                                ejecutorPrincipal = ejecutorPrincipal,
+                                sesionActiva = sesionActiva,
+                                onTexto = onTexto,
+                                onFallo = onFallo,
+                                // Sin recorte -- el comprobante es mucho más
+                                // ancho que una tarjeta y no hay todavía
+                                // datos reales de qué región exacta conviene.
+                                region = null,
+                            )
                         }
                     }
                 analisisCamara = analisis
@@ -253,69 +214,7 @@ private fun VistaCamaraComprobanteRuta(
         // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
         // 2026-09-19).
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
-        if (BuildConfig.DEBUG) {
-            val docTexto = numeroDocumentoTextoDebug
-            val docBarcode = barcodeValorDebug
-            if (docTexto != null && docBarcode != null) {
-                LaunchedEffect(docTexto, docBarcode) {
-                    if (!yaAvisoComparacion) {
-                        yaAvisoComparacion = true
-                        val coincide = docTexto == docBarcode
-                        Log.d(
-                            TAG_DEBUG_OCR_LECTURA,
-                            if (coincide) {
-                                "barcode coincide con Transporte ($docTexto)"
-                            } else {
-                                "barcode NO coincide -- texto=$docTexto barcode=$docBarcode"
-                            },
-                        )
-                    }
-                }
-            }
-        }
     }
-}
-
-/// Variante DEBUG-only de [analizarCedula] que además corre el detector de
-/// códigos de barras de ML Kit sobre el mismo frame -- exploratorio: el
-/// usuario pidió ver qué dato trae el código de barras del comprobante de
-/// ruta (visible justo debajo de "Transporte:" en las 4 fotos reales) para
-/// decidir si conviene usarlo en vez de (o además de) la extracción por
-/// texto. Se ejecuta el reconocedor de texto primero -- que es el que de
-/// verdad importa para [EstabilizadorComprobanteRuta] -- y recién en su
-/// `onComplete` se dispara el de barcode, cerrando el `ImageProxy` sólo
-/// cuando ambos terminan.
-private fun analizarComprobanteConBarcodeDebug(
-    imagen: androidx.camera.core.ImageProxy,
-    recognizer: com.google.mlkit.vision.text.TextRecognizer,
-    barcodeScanner: com.google.mlkit.vision.barcode.BarcodeScanner,
-    ejecutorPrincipal: java.util.concurrent.Executor,
-    sesionActiva: AtomicBoolean,
-    onTexto: (String) -> Unit,
-    onBarcodes: (List<Barcode>) -> Unit,
-    onFallo: () -> Unit,
-) {
-    val mediaImage = imagen.image
-    if (mediaImage == null) {
-        imagen.close()
-        return
-    }
-    val rotacion = imagen.imageInfo.rotationDegrees
-    val input = InputImage.fromMediaImage(mediaImage, rotacion)
-    recognizer.process(input)
-        .addOnSuccessListener(ejecutorPrincipal) { resultado ->
-            if (sesionActiva.get()) onTexto(resultado.text)
-        }
-        .addOnFailureListener(ejecutorPrincipal) { if (sesionActiva.get()) onFallo() }
-        .addOnCompleteListener(ejecutorPrincipal) {
-            barcodeScanner.process(input)
-                .addOnSuccessListener(ejecutorPrincipal) { codigos ->
-                    if (sesionActiva.get()) onBarcodes(codigos.filter { it.rawValue != null })
-                }
-                .addOnCompleteListener(ejecutorPrincipal) {
-                    imagen.close()
-                }
-        }
 }
 
 private const val MENSAJE_INICIAL = "Apunte al comprobante de carga de ruta"
