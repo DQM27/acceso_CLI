@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import uniffi.control_acceso_mobile.EncargadoRuta
 
 /** Radio de los campos "filled" (buscadores, login) -- iguala el de
  * [FormaControlBrisas]; antes era 28.dp (cápsula) y se veía más redondeado
@@ -232,5 +234,42 @@ fun ListaConDesvanecido(contenido: @Composable () -> Unit) {
                     ),
                 ),
         )
+    }
+}
+
+/// Tarjeta de un resultado de búsqueda de encargado de ruta -- nombre
+/// arriba, código de empleado abajo con el número en azul y negrita (pedido
+/// explícito del usuario, 2026-09-20: "darle más protagonismo", sólo al
+/// número, no a la etiqueta "Código de empleado:"). Compartida entre el
+/// paso 1 de Rutas (`PantallaRutas.kt`) y Gafetes Provisionales
+/// (`PantallaGafetesProvisionales.kt`) -- mismo catálogo `encargados_ruta`,
+/// mismo look pedido explícitamente ("usa el mismo buscador y animación que
+/// tiene KOF"), una sola fuente de verdad en vez de dos copias que puedan
+/// desalinearse.
+@Composable
+fun FilaEncargadoRuta(encargado: EncargadoRuta, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(encargado.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Row {
+            Text(
+                "Código de empleado: ",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                encargado.codigoEmpleado,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }

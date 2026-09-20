@@ -390,14 +390,22 @@ private fun BotonCamaraCuadrado(onEscanear: () -> Unit) {
 ///
 /// Resultados como tarjetas tocables (2026-09-20, pedido explícito del
 /// usuario), no en un `DropdownMenu` como antes -- mismo motivo que llevó a
-/// cambiar el buscador de Gafetes Provisionales (ver `FilaEncargadoProvisional`
-/// en `PantallaGafetesProvisionales.kt`, que usa exactamente este patrón
-/// contra el mismo catálogo): `ExposedDropdownMenuBox` sacaba el foco del
-/// campo y cerraba el teclado al borrar texto hasta vaciar la lista de
-/// resultados (bug reportado en pruebas reales, 2026-09-20) -- el popup de
-/// `DropdownMenu` compite por el foco con el `TextField` en cada
-/// recomposición del anclaje. La tarjeta lleva el código de empleado en
-/// negrita (pedido explícito) para que se lea más organizado.
+/// cambiar el buscador de Gafetes Provisionales: `ExposedDropdownMenuBox`
+/// sacaba el foco del campo y cerraba el teclado al borrar texto hasta
+/// vaciar la lista de resultados (bug reportado en pruebas reales,
+/// 2026-09-20) -- el popup de `DropdownMenu` compite por el foco con el
+/// `TextField` en cada recomposición del anclaje.
+///
+/// La lista de resultados vive FUERA de la tarjeta numerada (blanca), no
+/// adentro -- pedido explícito del usuario tras un primer intento que sí la
+/// metía adentro: `colorScheme.surface` (tarjeta) y el fondo de cada
+/// resultado son el MISMO blanco, así que sin el contraste del fondo de
+/// página (`colorScheme.background`) los resultados se veían como un solo
+/// bloque estirado en vez de tarjetas separadas -- exactamente el look que
+/// ya tenía bien resuelto Gafetes Provisionales (`ListaConDesvanecido` +
+/// `LazyColumn` flotando sobre el fondo de página, sin ninguna tarjeta
+/// blanca por debajo). `FilaEncargadoRuta` (`ControlesBrisas.kt`) es la
+/// misma tarjeta que usa esa pantalla -- una sola fuente de verdad.
 @Composable
 private fun PasoEncargado(
     completado: Boolean,
@@ -408,83 +416,58 @@ private fun PasoEncargado(
     sinCoincidencias: Boolean,
     onEscanear: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        PasoEncabezado(1, "Encargado de Ruta", completado)
-        // Fila propia (sin el encabezado ni el texto de error) -- mismo
-        // motivo que en [PasoVehiculo]: el alto variable del texto "no
-        // existe" desfasa el botón si queda dentro de la Row centrada.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            OutlinedTextField(
-                value = texto,
-                onValueChange = onCambiarTexto,
-                placeholder = { Text("Nombre o código de empleado") },
-                singleLine = true,
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
-            )
-            BotonCamaraCuadrado(onEscanear)
-        }
-        if (resultados.isNotEmpty()) {
-            // Tope de 6 -- mismo criterio que Contratista/Gafetes
-            // Provisionales: esta lista vive dentro de una Column sin scroll
-            // propio (la de todo el formulario sí, pero no ésta puntual),
-            // sin un tope crece sin límite y empuja el resto del formulario
-            // fuera de pantalla.
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                resultados.take(6).forEach { encargado ->
-                    FilaEncargadoRuta(encargado, onClick = { onElegir(encargado) })
-                }
+            PasoEncabezado(1, "Encargado de Ruta", completado)
+            // Fila propia (sin el encabezado ni el texto de error) -- mismo
+            // motivo que en [PasoVehiculo]: el alto variable del texto "no
+            // existe" desfasa el botón si queda dentro de la Row centrada.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedTextField(
+                    value = texto,
+                    onValueChange = onCambiarTexto,
+                    placeholder = { Text("Nombre o código de empleado") },
+                    singleLine = true,
+                    shape = FormaCampoBrisas,
+                    colors = ColoresCampoBrisas(),
+                    modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
+                )
+                BotonCamaraCuadrado(onEscanear)
+            }
+            if (sinCoincidencias) {
+                Text(
+                    "Ese encargado no existe en el catálogo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
-        if (sinCoincidencias) {
-            Text(
-                "Ese encargado no existe en el catálogo.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-    }
-}
-
-/// Mismo patrón que `FilaEncargadoProvisional` (`PantallaGafetesProvisionales.kt`,
-/// mismo catálogo `encargados_ruta`) pero con el código de empleado en
-/// negrita -- pedido explícito del usuario para que la tarjeta (más chica
-/// que la de Contratista: sólo tiene estos dos datos) se organice mejor.
-@Composable
-private fun FilaEncargadoRuta(encargado: EncargadoRuta, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(encargado.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        Row {
-            Text(
-                "Código de empleado: ",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                encargado.codigoEmpleado,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Bold,
-            )
+        if (resultados.isNotEmpty()) {
+            // `Column`, no `LazyColumn` -- a diferencia de Gafetes
+            // Provisionales (pantalla propia, sin scroll), este paso vive
+            // dentro del `Column.verticalScroll(...)` de todo el formulario
+            // de "Registrar salida"; un `LazyColumn` anidado en un
+            // `Column` que ya scrollea revienta en runtime (altura máxima
+            // infinita). Tope de 6 -- mismo criterio que Contratista/Gafetes
+            // Provisionales para no empujar el resto del formulario fuera
+            // de pantalla.
+            ListaConDesvanecido {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    resultados.take(6).forEach { encargado ->
+                        FilaEncargadoRuta(encargado, onClick = { onElegir(encargado) })
+                    }
+                }
+            }
         }
     }
 }

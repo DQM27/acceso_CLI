@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
-import uniffi.control_acceso_mobile.EncargadoRuta
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalActivoResumen
 import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalRemoto
@@ -118,7 +117,7 @@ fun PantallaGafetesProvisionales(
                     verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     items(viewModel.resultadosEncargado.take(6), key = { it.id }) { encargado ->
-                        FilaEncargadoProvisional(encargado, onClick = { viewModel.elegirEncargado(encargado) })
+                        FilaEncargadoRuta(encargado, onClick = { viewModel.elegirEncargado(encargado) })
                     }
                 }
             }
@@ -201,28 +200,6 @@ fun PantallaGafetesProvisionales(
 private fun FilaGafeteProvisionalActiva.clave(): String = when (this) {
     is FilaGafeteProvisionalActiva.Local -> "local-${prestamo.id}"
     is FilaGafeteProvisionalActiva.Remota -> "remota-${remoto.uuid}"
-}
-
-/// Mismo estilo que `FilaContratista` (PantallaActivos.kt, modo Ingreso) --
-/// nombre primero, código de empleado abajo, tarjeta completa tocable.
-@Composable
-private fun FilaEncargadoProvisional(encargado: EncargadoRuta, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(encargado.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        Text(
-            "Código de empleado: ${encargado.codigoEmpleado}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Composable
