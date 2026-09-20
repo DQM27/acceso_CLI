@@ -46,6 +46,16 @@ fun MarcoGuiaCedula(
     color: Color,
     estado: EstadoEscaneo,
     modifier: Modifier = Modifier,
+    // Misma región que de verdad se recorta antes del OCR (ver
+    // `RegionGuiaOcr`/`analizarCedula`) -- por defecto la angosta de
+    // tarjeta, para que las 3 pantallas que no pasan nada distinto no
+    // cambien en nada. El comprobante de carga de ruta pasa
+    // `RegionGuiaOcr.DOCUMENTO_ANCHO` para que el recuadro que se ve en
+    // pantalla sea el mismo que el que de verdad se analiza -- si no,
+    // quedaría un recuadro angosto dibujado encima de un recorte ancho,
+    // mintiéndole a quien opera sobre qué parte de la hoja hace falta
+    // encuadrar.
+    region: RegionGuiaOcr = RegionGuiaOcr.TARJETA_ID,
 ) {
     val transicion = rememberInfiniteTransition(label = "marcoOcr")
     val pulso by transicion.animateFloat(
@@ -68,14 +78,12 @@ fun MarcoGuiaCedula(
     )
 
     Canvas(modifier = modifier) {
-        // Proporción real de una cédula/tarjeta ID (ISO/IEC 7810 ID-1,
-        // 85.60×53.98mm ≈ 1.586:1) -- un rectángulo cuadrado o al voleo no
-        // comunica "así se ve una cédula acostada" tan bien como uno con la
-        // proporción correcta.
-        val anchoGuia = size.width * 0.84f
-        val altoGuia = anchoGuia / 1.586f
+        // `region` es la misma fuente de verdad que usa el recorte real
+        // antes del OCR -- ver el doc-comment de `RegionGuiaOcr`.
+        val anchoGuia = size.width * region.fraccionAncho
+        val altoGuia = anchoGuia / region.proporcionAnchoAlto
         val izquierdaGuia = (size.width - anchoGuia) / 2f
-        val arribaGuia = size.height * 0.52f - altoGuia / 2f
+        val arribaGuia = size.height * region.fraccionTopCentro - altoGuia / 2f
         val guia = Rect(
             left = izquierdaGuia,
             top = arribaGuia,

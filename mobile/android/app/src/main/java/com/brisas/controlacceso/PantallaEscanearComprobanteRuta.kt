@@ -60,6 +60,12 @@ fun PantallaEscanearComprobanteRuta(
     EscanerConPermisoCamara(
         mensajePermiso = "Se necesita permiso de cámara para escanear el comprobante.",
         onCerrar = onCerrar,
+        // El comprobante es una hoja, no una tarjeta -- mucho más ancha que
+        // una cédula, así que en vertical hay que alejar tanto el teléfono
+        // para que entre completa que el texto queda ilegible. Se fuerza
+        // horizontal automáticamente en vez de pedirle a la persona que
+        // gire el teléfono a mano (pedido explícito del usuario 2026-09-20).
+        forzarHorizontal = true,
     ) {
         VistaCamaraComprobanteRuta(onComprobanteDetectado = onComprobanteDetectado, onCerrar = onCerrar)
     }
@@ -206,6 +212,7 @@ private fun VistaCamaraComprobanteRuta(
                                     sesionActiva = sesionActiva,
                                     onTexto = onTexto,
                                     onFallo = onFallo,
+                                    region = RegionGuiaOcr.DOCUMENTO_ANCHO,
                                 )
                             }
                         }
@@ -227,7 +234,12 @@ private fun VistaCamaraComprobanteRuta(
             },
             modifier = Modifier.fillMaxSize(),
         )
-        MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
+        MarcoGuiaCedula(
+            color = colorMarco,
+            estado = estado,
+            modifier = Modifier.fillMaxSize(),
+            region = RegionGuiaOcr.DOCUMENTO_ANCHO,
+        )
         Text(
             ultimoMensaje,
             color = Color.White,

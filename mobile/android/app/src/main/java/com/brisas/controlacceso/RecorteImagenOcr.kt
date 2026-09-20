@@ -9,30 +9,53 @@ data class RectanguloEntero(val left: Int, val top: Int, val right: Int, val bot
     val height: Int get() = bottom - top
 }
 
-/// Misma región que dibuja `MarcoGuiaCedula` (84% del ancho, proporción de
-/// cédula ISO/IEC 7810 ID-1 ≈ 1.586:1, centrada, con el mismo
-/// desplazamiento vertical) -- pero en enteros de píxeles de imagen, no en
-/// los `Float` de un `Canvas` de Compose. Los tres números de acá deben
-/// mantenerse iguales a los de `MarcoGuiaCedula.kt` a mano (viven en
-/// sistemas de coordenadas distintos, no se pueden compartir el mismo
-/// código sin acoplar el dibujo de UI con el recorte para OCR) -- si se
-/// ajusta uno, ajustar el otro.
-object RegionGuiaOcr {
-    const val FRACCION_ANCHO = 0.84f
-    const val PROPORCION_ANCHO_ALTO = 1.586f
-    const val FRACCION_TOP_CENTRO = 0.52f
-
+/// Región de interés para recortar antes del OCR -- misma forma que
+/// `MarcoGuiaCedula` debe dibujar para esa pantalla (fracción del ancho
+/// visible, proporción ancho:alto, y a qué fracción de la altura queda el
+/// centro vertical). En enteros de píxeles de imagen, no en los `Float` de
+/// un `Canvas` de Compose -- `MarcoGuiaCedula.kt` recibe estos mismos tres
+/// números por parámetro para que el recuadro que ve la persona y lo que
+/// de verdad se analiza sean SIEMPRE la misma región (una sola fuente de
+/// verdad por pantalla, no dos copias que se puedan desalinear).
+///
+/// `TARJETA_ID` (cédula, gafete, carnet KOF) es angosta a propósito --
+/// proporción real de una cédula/tarjeta ISO/IEC 7810 ID-1. `DOCUMENTO_ANCHO`
+/// (comprobante de carga de ruta) es mucho más grande porque ese papel no
+/// es una tarjeta: los campos que hacen falta (Ruta/Transporte/Fecha de
+/// Entrega) están repartidos en un bloque bastante más alto y ancho que
+/// una cédula (hallazgo 2026-09-20: con la región angosta de tarjeta, la
+/// franja analizada nunca llegaba a cubrir "Fecha de Entrega"). Pendiente
+/// de ajustar con más pruebas reales -- es la primera estimación, no un
+/// número medido contra el papel físico.
+data class RegionGuiaOcr(
+    val fraccionAncho: Float,
+    val proporcionAnchoAlto: Float,
+    val fraccionTopCentro: Float,
+) {
     fun rectanguloEnPixeles(anchoVisible: Int, altoVisible: Int): RectanguloEntero {
-        val ancho = (anchoVisible * FRACCION_ANCHO).toInt().coerceAtLeast(1)
-        val alto = (ancho / PROPORCION_ANCHO_ALTO).toInt().coerceAtLeast(1)
+        val ancho = (anchoVisible * fraccionAncho).toInt().coerceAtLeast(1)
+        val alto = (ancho / proporcionAnchoAlto).toInt().coerceAtLeast(1)
         val left = (anchoVisible - ancho) / 2
-        val top = (altoVisible * FRACCION_TOP_CENTRO - alto / 2f).toInt()
+        val top = (altoVisible * fraccionTopCentro - alto / 2f).toInt()
         return RectanguloEntero(
             left = left.coerceIn(0, anchoVisible),
             top = top.coerceIn(0, altoVisible),
             right = (left + ancho).coerceIn(0, anchoVisible),
             bottom = (top + alto).coerceIn(0, altoVisible),
         )
+    }
+
+    companion object {
+        val TARJETA_ID = RegionGuiaOcr(fraccionAncho = 0.84f, proporcionAnchoAlto = 1.586f, fraccionTopCentro = 0.52f)
+        // El comprobante de carga de ruta se escanea con el teléfono
+        // forzado a horizontal (ver `EscanerConPermisoCamara`,
+        // `forzarHorizontal`) porque el papel es más ancho que alto -- acá
+        // "ancho visible"/"alto visible" ya son los de una pantalla en
+        // horizontal, así que casi toda la pantalla es la región útil
+        // (poco margen de sobra, no el recorte angosto de una tarjeta).
+        // Centrada -- sin datos reales todavía de en qué parte de la hoja
+        // conviene encuadrar más, centrar es la apuesta más segura.
+        val DOCUMENTO_ANCHO = RegionGuiaOcr(fraccionAncho = 0.96f, proporcionAnchoAlto = 1.6f, fraccionTopCentro = 0.5f)
     }
 }
 

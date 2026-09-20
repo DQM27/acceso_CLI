@@ -41,7 +41,21 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">
+            <!-- Sin esto, girar el teléfono (o forzar horizontal a mano
+                 desde una pantalla puntual, ver PantallaEscanearComprobanteRuta)
+                 destruye y recrea TODA la Activity: con una sola Activity
+                 para toda la app, eso significa perder cualquier estado que
+                 no viva en un ViewModel (ej. "¿la cámara está abierta?"),
+                 devolviendo a quien opera a una pantalla anterior sin avisar
+                 (hallazgo 2026-09-20: girar el celular para leer el
+                 comprobante de ruta, un papel más ancho que una cédula, sacaba
+                 de la cámara en vez de ayudar). Compose ya recompone solo
+                 ante un cambio de configuración, no hace falta el
+                 reinicio completo que sí necesitaba una Activity clásica
+                 basada en XML/vistas. -->
+
             <!-- Sin esto, el modo por defecto de Android ("adjustPan") movía
                  TODA la ventana hacia arriba al abrir el teclado, incluida
                  la cabecera fija (botón "Nuevo contratista", pestañas) que

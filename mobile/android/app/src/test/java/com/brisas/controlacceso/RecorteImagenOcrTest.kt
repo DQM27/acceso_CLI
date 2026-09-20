@@ -7,7 +7,7 @@ class RecorteImagenOcrTest {
 
     @Test
     fun rectanguloGuiaQuedaCentradoYConLaProporcionDeCedula() {
-        val rect = RegionGuiaOcr.rectanguloEnPixeles(anchoVisible = 1000, altoVisible = 2000)
+        val rect = RegionGuiaOcr.TARJETA_ID.rectanguloEnPixeles(anchoVisible = 1000, altoVisible = 2000)
 
         assertEquals(840, rect.width)
         // 840 / 1.586 truncado a entero.
@@ -18,8 +18,19 @@ class RecorteImagenOcrTest {
     }
 
     @Test
+    fun rectanguloDocumentoAnchoUsaCasiTodaLaPantallaEnHorizontal() {
+        // Pantalla ya en horizontal (forzada por `forzarHorizontal`) --
+        // ancho mayor que alto, al revés de una pantalla de teléfono normal.
+        val rect = RegionGuiaOcr.DOCUMENTO_ANCHO.rectanguloEnPixeles(anchoVisible = 2400, altoVisible = 1080)
+
+        assertEquals(2304, rect.width) // 96% de 2400
+        assertEquals(true, rect.height > 1000) // usa casi toda la altura disponible
+        assertEquals(rect.left, 2400 - rect.right) // centrado
+    }
+
+    @Test
     fun rectanguloGuiaNuncaSaleDeLaImagenAunConDimensionesChicas() {
-        val rect = RegionGuiaOcr.rectanguloEnPixeles(anchoVisible = 10, altoVisible = 10)
+        val rect = RegionGuiaOcr.TARJETA_ID.rectanguloEnPixeles(anchoVisible = 10, altoVisible = 10)
 
         assertEquals(true, rect.left in 0..10)
         assertEquals(true, rect.top in 0..10)

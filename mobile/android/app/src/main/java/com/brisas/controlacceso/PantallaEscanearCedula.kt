@@ -1,9 +1,5 @@
 package com.brisas.controlacceso
 
-import android.media.AudioManager
-import android.media.ToneGenerator
-import android.os.Handler
-import android.os.Looper
 import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
@@ -430,33 +426,6 @@ fun iniciarCamara(
 // por defecto -- un empujón puntual solo puede sumar latencia sin garantía
 // de ayudar, así que se sacó del todo.
 
-/// Sonido corto y discreto de confirmación -- complementa la háptica, no la
-/// reemplaza (alguien con el celular en silencio/vibrador no debería
-/// quedarse sin ninguna señal, y viceversa). `TONE_PROP_ACK` es
-/// literalmente el tono que Android reserva para "confirmación positiva",
-/// no un beep genérico. Se reproduce en `STREAM_NOTIFICATION`: ese stream
-/// respeta el modo silencioso/No molestar del sistema automáticamente, así
-/// que no hace falta consultar `AudioManager.getRingerMode()` a mano --
-/// dejar que el sistema decida si corresponde sonar es más confiable que
-/// replicar esa lógica acá. Volumen bajo (`MAX_VOLUME` es 100) y duración
-/// corta a propósito: nada de un beep de escáner de supermercado.
-private fun reproducirSonidoConfirmacion() {
-    try {
-        val generador = ToneGenerator(AudioManager.STREAM_NOTIFICATION, VOLUMEN_SONIDO_CONFIRMACION)
-        generador.startTone(ToneGenerator.TONE_PROP_ACK, DURACION_SONIDO_CONFIRMACION_MS)
-        // ToneGenerator reserva un recurso nativo de audio hasta `release()` --
-        // sin esto se queda tomado el resto de la vida del proceso. El
-        // delay deja que el tono realmente termine de sonar antes de soltarlo.
-        Handler(Looper.getMainLooper()).postDelayed(generador::release, DURACION_SONIDO_CONFIRMACION_MS + 50L)
-    } catch (e: RuntimeException) {
-        // El constructor de ToneGenerator puede fallar si el dispositivo no
-        // tiene el recurso de audio disponible en ese momento -- el sonido
-        // es un complemento, nunca debe tumbar el flujo de escaneo por esto.
-    }
-}
-
-private const val VOLUMEN_SONIDO_CONFIRMACION = 40 // sobre 100 -- sutil, no un beep de caja registradora
-private const val DURACION_SONIDO_CONFIRMACION_MS = 100
 private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 // Subido de 900ms -- con el ciclo de salida por gafete ya sin botón de
 // confirmar (pedido explícito del usuario 2026-09-20), el mensaje de
@@ -526,6 +495,10 @@ fun analizarCedula(
     sesionActiva: AtomicBoolean,
     onTexto: (String) -> Unit,
     onFallo: () -> Unit,
+    // Angosta (proporción de tarjeta) por defecto -- las pantallas de un
+    // documento más ancho (comprobante de carga de ruta) pasan
+    // `RegionGuiaOcr.DOCUMENTO_ANCHO` para no recortar de más.
+    region: RegionGuiaOcr = RegionGuiaOcr.TARJETA_ID,
 ) {
     val mediaImage = imagen.image
     if (mediaImage == null) {
@@ -541,7 +514,7 @@ fun analizarCedula(
     // `recortarParaOcr` devolviendo `null` (formato inesperado, plano
     // corrupto, lo que sea) se cae al frame completo de siempre -- nunca
     // debe romper el escaneo por un recorte que salió mal.
-    val input = recortarParaOcr(mediaImage, rotacion) ?: InputImage.fromMediaImage(mediaImage, rotacion)
+    val input = recortarParaOcr(mediaImage, rotacion, region) ?: InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
         .addOnSuccessListener(ejecutorPrincipal) { resultado ->
             if (sesionActiva.get()) {
@@ -574,7 +547,7 @@ fun analizarCedula(
 /// lo mismo que en pantalla, así que el recorte usa la misma aritmética que
 /// `MarcoGuiaCedula` sin ningún signo que invertir.
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
-private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int): InputImage? {
+private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int, region: RegionGuiaOcr): InputImage? {
     if (imagen.format != android.graphics.ImageFormat.YUV_420_888) return null
     val planos = imagen.planes
     if (planos.size < 3) return null
@@ -615,7 +588,7 @@ private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int): I
                 bitmapCompleto, 0, 0, bitmapCompleto.width, bitmapCompleto.height, matriz, false,
             )
         }
-        val recorte = RegionGuiaOcr.rectanguloEnPixeles(bitmapDerecho.width, bitmapDerecho.height)
+        val recorte = region.rectanguloEnPixeles(bitmapDerecho.width, bitmapDerecho.height)
         if (recorte.width <= 0 || recorte.height <= 0) return null
         val bitmapRecortado = android.graphics.Bitmap.createBitmap(
             bitmapDerecho, recorte.left, recorte.top, recorte.width, recorte.height,
