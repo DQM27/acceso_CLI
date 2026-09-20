@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import android.util.Log
 import android.util.Size
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -11,10 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -79,7 +77,6 @@ private fun VistaCamaraCarnetKof(
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     var ultimoMensaje by remember { mutableStateOf(MENSAJE_INICIAL_KOF) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
-    var textoCrudoDebug by remember { mutableStateOf("") }
     val estabilizador = remember {
         EstabilizadorPorRepeticion(
             extraer = { texto -> extraerCarnetKof(texto)?.takeIf { it.nombre != null } },
@@ -137,7 +134,13 @@ private fun VistaCamaraCarnetKof(
                                 sesionActiva = sesionActiva,
                                 onTexto = { texto ->
                                     if (sesionActiva.get()) {
-                                        if (BuildConfig.DEBUG) textoCrudoDebug = texto
+                                        // Log, no overlay en pantalla -- pedido
+                                        // explícito del usuario 2026-09-20 (se
+                                        // veía mal encima de la cámara). Sigue
+                                        // disponible por `adb logcat` en un
+                                        // build debug si hace falta diagnosticar
+                                        // un perfil que no lee bien.
+                                        if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
                                         val resultado = estabilizador.procesarFrame(texto)
                                         if (resultado != null) {
                                             estado = EstadoEscaneo.CONFIRMADO
@@ -194,20 +197,6 @@ private fun VistaCamaraCarnetKof(
         // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
         // 2026-09-19).
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
-        if (BuildConfig.DEBUG && textoCrudoDebug.isNotBlank()) {
-            Text(
-                "DEBUG -- texto crudo de ML Kit:\n$textoCrudoDebug",
-                color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState())
-                    .background(Color.Black.copy(alpha = 0.85f))
-                    .padding(12.dp),
-            )
-        }
     }
 }
 

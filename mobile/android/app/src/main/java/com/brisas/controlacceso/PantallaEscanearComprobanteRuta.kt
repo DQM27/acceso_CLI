@@ -1,7 +1,7 @@
 package com.brisas.controlacceso
 
+import android.util.Log
 import android.util.Size
-import android.widget.Toast
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -9,15 +9,10 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,18 +85,14 @@ private fun VistaCamaraComprobanteRuta(
     val barcodeScanner = remember { if (BuildConfig.DEBUG) BarcodeScanning.getClient() else null }
     var ultimoMensaje by remember { mutableStateOf(MENSAJE_INICIAL) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
-    // Sólo en debug (mismo criterio que FLAG_SECURE en MainActivity.kt) --
-    // hasta tener el perfil probado a fondo contra el papel real, ver el
-    // texto crudo de ML Kit en pantalla es la forma más rápida de ajustar
-    // los regex de LectorComprobanteRuta.kt sin adivinar a ciegas.
-    var textoCrudoDebug by remember { mutableStateOf("") }
-    var barcodeCrudoDebug by remember { mutableStateOf("") }
-    // Comparación exploratoria (2026-09-15): el usuario probó el sondeo
-    // contra el papel real y el barcode "aparentemente dice lo mismo" que
-    // "Transporte:" -- en vez de que confíe a ojo comparando dos bloques
-    // de texto crudo, se comparan los valores ya parseados acá mismo y se
-    // muestra un resultado claro (una sola línea, no otro bloque de
-    // debug) + un aviso (Toast) la primera vez que hay par para comparar.
+    // Log, no overlay en pantalla (pedido explícito del usuario 2026-09-20:
+    // se veía mal encima de la cámara) -- `adb logcat -s
+    // $TAG_DEBUG_OCR_LECTURA` en un build debug sigue alcanzando para
+    // ajustar los regex de LectorComprobanteRuta.kt sin adivinar a ciegas.
+    // Comparación exploratoria (2026-09-15): el usuario probó el sondeo del
+    // código de barras contra el papel real para ver si "dice lo mismo" que
+    // "Transporte:" -- se comparan los valores ya parseados y el resultado
+    // también va a Log, no a un Toast/overlay.
     var numeroDocumentoTextoDebug by remember { mutableStateOf<String?>(null) }
     var barcodeValorDebug by remember { mutableStateOf<String?>(null) }
     var yaAvisoComparacion by remember { mutableStateOf(false) }
@@ -159,7 +150,7 @@ private fun VistaCamaraComprobanteRuta(
                             val onTexto: (String) -> Unit = { texto ->
                                 if (sesionActiva.get()) {
                                     if (BuildConfig.DEBUG) {
-                                        textoCrudoDebug = texto
+                                        Log.d(TAG_DEBUG_OCR_LECTURA, texto)
                                         numeroDocumentoTextoDebug = extraerComprobanteRuta(texto)?.numeroDocumento
                                     }
                                     val resultado = estabilizador.procesarFrame(texto)
@@ -198,9 +189,10 @@ private fun VistaCamaraComprobanteRuta(
                                     onTexto = onTexto,
                                     onBarcodes = { codigos ->
                                         if (sesionActiva.get() && codigos.isNotEmpty()) {
-                                            barcodeCrudoDebug = codigos.joinToString("\n") {
-                                                "${it.rawValue} (formato ${it.format})"
-                                            }
+                                            Log.d(
+                                                TAG_DEBUG_OCR_LECTURA,
+                                                "barcode: " + codigos.joinToString("; ") { "${it.rawValue} (formato ${it.format})" },
+                                            )
                                             barcodeValorDebug = codigos.firstOrNull()?.rawValue?.trim()
                                         }
                                     },
@@ -251,62 +243,25 @@ private fun VistaCamaraComprobanteRuta(
         // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
         // 2026-09-19).
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
-        Column(
-            // `top = 88.dp`, no 16 -- este bloque es sólo DEBUG (comparación
-            // barcode/texto), queda debajo del mensaje/botón que ahora
-            // flotan aparte en vez de compartir esta misma columna.
-            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(top = 88.dp, start = 16.dp, end = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (BuildConfig.DEBUG) {
-                val docTexto = numeroDocumentoTextoDebug
-                val docBarcode = barcodeValorDebug
-                if (docTexto != null && docBarcode != null) {
-                    val coincide = docTexto == docBarcode
-                    LaunchedEffect(docTexto, docBarcode) {
-                        if (!yaAvisoComparacion) {
-                            yaAvisoComparacion = true
-                            val mensaje = if (coincide) {
-                                "✓ Barcode coincide con Transporte ($docTexto)"
+        if (BuildConfig.DEBUG) {
+            val docTexto = numeroDocumentoTextoDebug
+            val docBarcode = barcodeValorDebug
+            if (docTexto != null && docBarcode != null) {
+                LaunchedEffect(docTexto, docBarcode) {
+                    if (!yaAvisoComparacion) {
+                        yaAvisoComparacion = true
+                        val coincide = docTexto == docBarcode
+                        Log.d(
+                            TAG_DEBUG_OCR_LECTURA,
+                            if (coincide) {
+                                "barcode coincide con Transporte ($docTexto)"
                             } else {
-                                "✗ Barcode NO coincide -- texto=$docTexto barcode=$docBarcode"
-                            }
-                            Toast.makeText(contexto, mensaje, Toast.LENGTH_LONG).show()
-                        }
+                                "barcode NO coincide -- texto=$docTexto barcode=$docBarcode"
+                            },
+                        )
                     }
-                    Text(
-                        if (coincide) {
-                            "DEBUG -- ✓ código de barras COINCIDE con Transporte ($docTexto)"
-                        } else {
-                            "DEBUG -- ✗ código de barras NO coincide (texto=$docTexto, barcode=$docBarcode)"
-                        },
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background((if (coincide) ColorEscaneoConfirmado else Color(0xFFC62828)).copy(alpha = 0.9f))
-                            .padding(12.dp),
-                    )
                 }
             }
-        }
-        if (BuildConfig.DEBUG && (textoCrudoDebug.isNotBlank() || barcodeCrudoDebug.isNotBlank())) {
-            val textoDebug = buildString {
-                if (barcodeCrudoDebug.isNotBlank()) append("DEBUG -- código de barras:\n$barcodeCrudoDebug\n\n")
-                if (textoCrudoDebug.isNotBlank()) append("DEBUG -- texto crudo de ML Kit:\n$textoCrudoDebug")
-            }
-            Text(
-                textoDebug,
-                color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState())
-                    .background(Color.Black.copy(alpha = 0.85f))
-                    .padding(12.dp),
-            )
         }
     }
 }
