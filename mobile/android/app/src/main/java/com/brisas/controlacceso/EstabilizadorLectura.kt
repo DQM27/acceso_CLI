@@ -134,14 +134,16 @@ class EstabilizadorLectura(
     /// siendo CONFIRMADO, no INVALIDO), pero quien opera necesita saberlo de
     /// inmediato sin tener que leer la fecha en la pantalla por su cuenta.
     ///
-    /// Caso especial: cédula nacional leída del FRENTE (sin MRZ) sólo trae
-    /// número, nunca nombre (`LectorDocumentosIdentidad.leerDocumentoDeTexto`
-    /// no lo extrae de esa cara a propósito -- el nombre confiable sale del
-    /// MRZ con checksum verificado). Sin este aviso, quien opera no tenía
-    /// forma de saber que le faltaba el nombre hasta llenar el formulario a
-    /// mano -- bug reportado en pruebas reales, 2026-09-17 (confirmado que
-    /// el MRZ del reverso sí lee todo bien; el problema era que nadie sabía
-    /// que había que voltear la cédula).
+    /// Caso especial: cédula nacional leída del FRENTE (sin MRZ). Desde
+    /// 2026-09-20 `extraerCedulaNacionalFrente` también intenta leer
+    /// "Nombre:"/"1° Apellido:"/"2° Apellido:" del frente, pero sigue
+    /// siendo una lectura por regex sin checksum (a diferencia del MRZ del
+    /// reverso) -- por ángulo/reflejo puede confirmarse el número sin haber
+    /// alcanzado a leer el nombre todavía. Este aviso sigue existiendo para
+    /// ese caso (`documento.nombre == null`), no porque el frente nunca
+    /// pueda traer nombre -- bug original reportado en pruebas reales,
+    /// 2026-09-17: sin este aviso, quien operaba no tenía forma de saber
+    /// que le faltaba el nombre hasta llenar el formulario a mano.
     private fun mensajeDeConfirmacion(
         documento: DocumentoDetectado,
         hoy: FechaDocumento,
