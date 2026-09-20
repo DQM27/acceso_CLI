@@ -345,6 +345,15 @@ where
         Ok(self.salidas.listar_activas()?)
     }
 
+    /// Historial completo de un viaje (todos sus tramos, abiertos y ya
+    /// retornados) -- para la tarjeta agrupada de "Rutas activas".
+    pub fn listar_tramos_de_viaje(
+        &self,
+        viaje_id: i64,
+    ) -> Result<Vec<SalidaRuta>, RutaServiceError> {
+        Ok(self.salidas.listar_por_viaje(viaje_id)?)
+    }
+
     /// Para que la UI sepa si una unidad ya anduvo hoy y ofrecer "+
     /// Nuevo tramo" en vez de arrancar el checklist desde cero.
     pub fn buscar_viaje_abierto_por_placa(
@@ -892,11 +901,12 @@ mod tests {
     }
 
     #[test]
-    fn otra_ruta_abre_un_viaje_nuevo() {
+    fn otra_ruta_cierra_el_viaje_y_abre_uno_nuevo() {
         // "Sí, otra ruta" -- mismo camión/encargado, pero es una
-        // asignación distinta: no manda `continuar_viaje_id`, así que
-        // abre un viaje nuevo aunque el anterior siga técnicamente
-        // abierto del lado de la base (la UI decide no continuarlo).
+        // asignación distinta: cierra el viaje actual (mismo criterio que
+        // "no vuelve a salir", ver `DecisionRetornoViaje::cierra_el_viaje`)
+        // y, al no mandar `continuar_viaje_id`, la salida siguiente abre
+        // uno nuevo.
         let connection = conexion();
         let servicio = servicio(&connection);
         let resultado_1 = servicio
@@ -916,6 +926,24 @@ mod tests {
             .unwrap();
 
         assert_ne!(resultado_2.viaje_id, resultado_1.viaje_id);
+
+        // El viaje anterior quedó cerrado -- nunca es candidato a
+        // continuar (mismo resguardo que `continuar_un_viaje_ya_cerrado_falla`).
+        // Primero hay que cerrar el tramo de `resultado_2` -- si no, la
+        // validación de "vehículo ya en ruta" (por placa) se dispara antes
+        // de siquiera llegar a mirar `continuar_viaje_id`.
+        servicio
+            .registrar_retorno(
+                resultado_2.salida_id,
+                DecisionRetornoViaje::NoVuelveASalir,
+                instante_costa_rica_hoy("2026-09-15", 16),
+                1,
+            )
+            .unwrap();
+        let mut otra_solicitud = solicitud("C12345", "700101454", fecha("2026-09-15"));
+        otra_solicitud.continuar_viaje_id = Some(resultado_1.viaje_id);
+        let error = servicio.registrar_salida(&otra_solicitud).unwrap_err();
+        assert!(matches!(error, RutaServiceError::ViajeYaCerrado));
     }
 
     #[test]

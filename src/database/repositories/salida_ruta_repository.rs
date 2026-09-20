@@ -35,6 +35,13 @@ pub trait SalidaRutaRepository {
     /// Fila aplanada para la pantalla "Rutas activas" -- análoga a
     /// `RegistroIngresoRepository`/`MovimientoVisitaRepository::listar_activos`.
     fn listar_activas(&self) -> Result<Vec<SalidaRutaActivaResumen>, DatabaseError>;
+
+    /// Todos los tramos de un viaje, abiertos y ya retornados -- para la
+    /// tarjeta agrupada de "Rutas activas" (mockup "Opción A" ya
+    /// aprobado): el guardia ve el historial completo del viaje (ej. "H1
+    /// salió y volvió, H2 salió y sigue en ruta"), no sólo el tramo
+    /// actualmente abierto.
+    fn listar_por_viaje(&self, viaje_id: i64) -> Result<Vec<SalidaRuta>, DatabaseError>;
 }
 
 pub struct SqliteSalidaRutaRepository<'a> {
@@ -253,6 +260,16 @@ impl SalidaRutaRepository for SqliteSalidaRutaRepository<'_> {
             )
             .collect()
     }
+
+    fn listar_por_viaje(&self, viaje_id: i64) -> Result<Vec<SalidaRuta>, DatabaseError> {
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_SALIDA} WHERE viaje_id = ?1 ORDER BY fecha_hora_salida ASC"
+        ))?;
+        let filas = statement.query_map(params![viaje_id], convertir_fila)?;
+        filas
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(DatabaseError::from)
+    }
 }
 
 const ULTIMO_INSTANTE_SALIDA_RUTA_SQL: &str = "
@@ -376,5 +393,30 @@ mod tests {
 
         assert_eq!(activas.len(), 1);
         assert_eq!(activas[0].vehiculo_placa, "C99999");
+    }
+
+    #[test]
+    fn listar_por_viaje_trae_todos_los_tramos_del_viaje_en_orden() {
+        let connection = conexion();
+        let repo = SqliteSalidaRutaRepository::new(&connection);
+        let viaje_id = crear_viaje(&connection, "C12345");
+        let id_1 = repo.crear(&nueva(viaje_id, "C12345")).unwrap();
+        repo.registrar_retorno(
+            id_1,
+            Utc.with_ymd_and_hms(2026, 9, 19, 10, 0, 0).unwrap(),
+            1,
+        )
+        .unwrap();
+        let mut segunda = nueva(viaje_id, "C12345");
+        segunda.fecha_hora_salida = Utc.with_ymd_and_hms(2026, 9, 19, 11, 0, 0).unwrap();
+        let id_2 = repo.crear(&segunda).unwrap();
+
+        let tramos = repo.listar_por_viaje(viaje_id).unwrap();
+
+        assert_eq!(tramos.len(), 2);
+        assert_eq!(tramos[0].id, id_1);
+        assert!(tramos[0].retorno.is_some());
+        assert_eq!(tramos[1].id, id_2);
+        assert!(tramos[1].retorno.is_none());
     }
 }

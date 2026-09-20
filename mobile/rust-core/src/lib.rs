@@ -41,6 +41,7 @@ use control_acceso::models::registro_ingreso::{
 };
 use control_acceso::models::registro_ingreso_proveedor::RegistroIngresoProveedorActivoResumen as RegistroIngresoProveedorActivoResumenNucleo;
 use control_acceso::models::ruta::Ruta as RutaNucleo;
+use control_acceso::models::salida_ruta::SalidaRuta as SalidaRutaNucleo;
 use control_acceso::models::salida_ruta::SalidaRutaActivaResumen as SalidaRutaActivaResumenNucleo;
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
@@ -948,6 +949,32 @@ impl From<SalidaRutaActivaResumenNucleo> for SalidaRutaActivaResumen {
     }
 }
 
+/// Espejo mínimo de `SalidaRuta` -- un tramo dentro del historial de un
+/// viaje (ver `listar_tramos_ruta_de_viaje`), no el objeto completo: la
+/// tarjeta agrupada de "Rutas activas" (mockup "Opción A" ya aprobado)
+/// sólo necesita saber cuándo salió y si ya volvió para dibujar cada
+/// fila del historial -- vehículo/encargado ya se muestran una vez en el
+/// encabezado de la tarjeta, no hace falta repetirlos por tramo.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TramoRutaResumen {
+    pub id: i64,
+    pub fecha_hora_salida: String,
+    /// `None` mientras el tramo sigue abierto ("en ruta").
+    pub fecha_hora_retorno: Option<String>,
+}
+
+impl From<SalidaRutaNucleo> for TramoRutaResumen {
+    fn from(salida: SalidaRutaNucleo) -> Self {
+        Self {
+            id: salida.id,
+            fecha_hora_salida: salida.fecha_hora_salida.to_rfc3339(),
+            fecha_hora_retorno: salida
+                .retorno
+                .map(|retorno| retorno.fecha_hora.to_rfc3339()),
+        }
+    }
+}
+
 /// Espejo de `PrestamoGafeteProvisionalActivoResumen` -- fila de "préstamos
 /// activos" (gafetes provisionales KOF entregados sin devolver todavía).
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -1739,6 +1766,23 @@ impl Nucleo {
         Ok(self
             .core_lock()
             .listar_rutas_activas()?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Historial completo de un viaje (todos sus tramos, abiertos y ya
+    /// retornados) -- espejo de `AppCore::listar_tramos_ruta_de_viaje`.
+    /// La tarjeta agrupada de "Rutas activas" la llama una vez por cada
+    /// viaje visible (mockup "Opción A" ya aprobado). Sin actor, mismo
+    /// criterio que `listar_rutas_activas` -- es una lectura.
+    pub fn listar_tramos_ruta_de_viaje(
+        &self,
+        viaje_id: i64,
+    ) -> Result<Vec<TramoRutaResumen>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .listar_tramos_ruta_de_viaje(viaje_id)?
             .into_iter()
             .map(Into::into)
             .collect())
@@ -3782,6 +3826,31 @@ mod tests {
             .unwrap();
 
         assert_eq!(nucleo.listar_rutas_activas().unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn listar_tramos_ruta_de_viaje_trae_el_historial_completo() {
+        let nucleo = nucleo_con_actor_y_ruta_79();
+
+        let resultado_1 = nucleo
+            .registrar_salida_ruta(solicitud_salida_ruta("C12345", "700101452"))
+            .unwrap();
+        nucleo
+            .registrar_retorno_ruta(resultado_1.salida_id, DecisionRetornoViaje::MismaRuta)
+            .unwrap();
+        let mut segunda_solicitud = solicitud_salida_ruta("C12345", "700101452");
+        segunda_solicitud.continuar_viaje_id = Some(resultado_1.viaje_id);
+        let resultado_2 = nucleo.registrar_salida_ruta(segunda_solicitud).unwrap();
+
+        let tramos = nucleo
+            .listar_tramos_ruta_de_viaje(resultado_1.viaje_id)
+            .unwrap();
+
+        assert_eq!(tramos.len(), 2);
+        assert_eq!(tramos[0].id, resultado_1.salida_id);
+        assert!(tramos[0].fecha_hora_retorno.is_some());
+        assert_eq!(tramos[1].id, resultado_2.salida_id);
+        assert!(tramos[1].fecha_hora_retorno.is_none());
     }
 
     #[test]

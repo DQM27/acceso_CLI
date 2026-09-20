@@ -430,6 +430,33 @@ impl AppCore {
     }
 
     /// Sin `actor`, mismo criterio que `listar_rutas_activas` -- lectura.
+    /// La tarjeta agrupada de "Rutas activas" la consulta por cada viaje
+    /// visible para mostrar su historial completo de tramos (mockup
+    /// "Opción A" ya aprobado), no sólo el tramo actualmente abierto.
+    pub fn listar_tramos_ruta_de_viaje(
+        &self,
+        viaje_id: i64,
+    ) -> Result<Vec<SalidaRuta>, RutaServiceError> {
+        let salidas = SqliteSalidaRutaRepository::new(&self.connection);
+        let vehiculos = SqliteVehiculoRutaRepository::new(&self.connection);
+        let encargados = SqliteEncargadoRutaRepository::new(&self.connection);
+        let rutas = SqliteRutaRepository::new(&self.connection);
+        let documentos = SqliteDocumentoRutaRepository::new(&self.connection);
+        let viajes = SqliteViajeRutaRepository::new(&self.connection);
+        let vinculos = SqliteSalidaRutaDocumentoRepository::new(&self.connection);
+        RutaService::new(
+            &salidas,
+            &vehiculos,
+            &encargados,
+            &rutas,
+            &documentos,
+            &viajes,
+            &vinculos,
+        )
+        .listar_tramos_de_viaje(viaje_id)
+    }
+
+    /// Sin `actor`, mismo criterio que `listar_rutas_activas` -- lectura.
     /// La UI la consulta para ofrecer "+ Nuevo tramo" en vez del checklist
     /// completo cuando una unidad ya anduvo hoy.
     pub fn buscar_viaje_ruta_abierto_por_placa(
@@ -758,5 +785,34 @@ mod tests {
             error,
             RutaCatalogoServiceError::RutaConSalidaActiva
         ));
+    }
+
+    #[test]
+    fn listar_tramos_ruta_de_viaje_trae_el_historial_completo() {
+        let (core, actor) = nucleo_con_usuario();
+        let resultado_1 = core
+            .registrar_salida_ruta(&actor, solicitud("C12345", "700101452"))
+            .unwrap();
+        core.registrar_retorno_ruta(
+            &actor,
+            resultado_1.salida_id,
+            DecisionRetornoViaje::MismaRuta,
+        )
+        .unwrap();
+        let mut segunda_solicitud = solicitud("C12345", "700101452");
+        segunda_solicitud.continuar_viaje_id = Some(resultado_1.viaje_id);
+        let resultado_2 = core
+            .registrar_salida_ruta(&actor, segunda_solicitud)
+            .unwrap();
+
+        let tramos = core
+            .listar_tramos_ruta_de_viaje(resultado_1.viaje_id)
+            .unwrap();
+
+        assert_eq!(tramos.len(), 2);
+        assert_eq!(tramos[0].id, resultado_1.salida_id);
+        assert!(tramos[0].retorno.is_some());
+        assert_eq!(tramos[1].id, resultado_2.salida_id);
+        assert!(tramos[1].retorno.is_none());
     }
 }

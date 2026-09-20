@@ -5,14 +5,18 @@
 /// explícitamente que responderla es obligatorio en ese momento, no
 /// puede quedar pendiente para después.
 ///
-/// `MismaRuta` y `OtraRutaOTercero` sólo difieren del lado de la UI/del
-/// llamador (si la próxima `registrar_salida` manda
-/// `continuar_viaje_id` o no) -- `RutaService::registrar_retorno` no
-/// necesita distinguir entre esos dos casos, sólo entre "cierra el viaje
-/// ahora" y "lo deja abierto". Se modelan igual como variantes propias
-/// (en vez de un simple `bool`) porque documentan la intención real y
-/// dejan lugar para que, más adelante, cada una dispare una acción
-/// distinta sin tener que tocar la firma del método otra vez.
+/// `MismaRuta` es la ÚNICA variante que deja el viaje abierto -- es la
+/// única que de verdad continúa la misma asignación (confirmado
+/// explícitamente por el usuario: "la condición es si vuelve a salir es
+/// mismo documento, con el mismo encargado y la misma unidad"). Tanto
+/// `NoVuelveASalir` como `OtraRutaOTercero` cierran el viaje actual --
+/// "otra ruta/tercero" es, por definición, una asignación distinta (otro
+/// documento, posiblemente sin ruta de catálogo), así que el viaje previo
+/// no puede quedar como candidato a continuar: si `registrar_salida`
+/// alguna vez consulta `buscar_viaje_abierto_por_placa` para una unidad
+/// que ya volvió con "otra ruta", el único viaje que debe encontrar es
+/// uno realmente continuable, nunca uno que el guardia ya declaró
+/// terminado.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecisionRetornoViaje {
     NoVuelveASalir,
@@ -23,6 +27,6 @@ pub enum DecisionRetornoViaje {
 impl DecisionRetornoViaje {
     /// `true` cuando el viaje debe cerrarse al registrar este retorno.
     pub fn cierra_el_viaje(self) -> bool {
-        matches!(self, Self::NoVuelveASalir)
+        !matches!(self, Self::MismaRuta)
     }
 }

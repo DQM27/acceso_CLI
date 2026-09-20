@@ -755,6 +755,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_rutas_activas(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_tramos_ruta_de_viaje(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
@@ -894,6 +896,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_proveedores_activos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_rutas_activas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_tramos_ruta_de_viaje(`ptr`: Long,`viajeId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1167,6 +1171,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_rutas_activas() and 0xFFFF) != 2190) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_tramos_ruta_de_viaje() and 0xFFFF) != 57008) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios() and 0xFFFF) != 1455) {
@@ -1984,6 +1991,15 @@ public interface NucleoInterface {
      * `listar_ingresos_activos`.
      */
     fun `listarRutasActivas`(): List<SalidaRutaActivaResumen>
+    
+    /**
+     * Historial completo de un viaje (todos sus tramos, abiertos y ya
+     * retornados) -- espejo de `AppCore::listar_tramos_ruta_de_viaje`.
+     * La tarjeta agrupada de "Rutas activas" la llama una vez por cada
+     * viaje visible (mockup "Opción A" ya aprobado). Sin actor, mismo
+     * criterio que `listar_rutas_activas` -- es una lectura.
+     */
+    fun `listarTramosRutaDeViaje`(`viajeId`: kotlin.Long): List<TramoRutaResumen>
     
     /**
      * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
@@ -3090,6 +3106,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_rutas_activas(
         it,
         _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Historial completo de un viaje (todos sus tramos, abiertos y ya
+     * retornados) -- espejo de `AppCore::listar_tramos_ruta_de_viaje`.
+     * La tarjeta agrupada de "Rutas activas" la llama una vez por cada
+     * viaje visible (mockup "Opción A" ya aprobado). Sin actor, mismo
+     * criterio que `listar_rutas_activas` -- es una lectura.
+     */
+    @Throws(NucleoException::class)override fun `listarTramosRutaDeViaje`(`viajeId`: kotlin.Long): List<TramoRutaResumen> {
+            return FfiConverterSequenceTypeTramoRutaResumen.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_tramos_ruta_de_viaje(
+        it,
+        
+        FfiConverterLong.lower(`viajeId`),_status)
 }
     }
     )
@@ -5158,6 +5196,60 @@ public object FfiConverterTypeSolicitudSalidaRuta: FfiConverterRustBuffer<Solici
 
 
 /**
+ * Espejo mínimo de `SalidaRuta` -- un tramo dentro del historial de un
+ * viaje (ver `listar_tramos_ruta_de_viaje`), no el objeto completo: la
+ * tarjeta agrupada de "Rutas activas" (mockup "Opción A" ya aprobado)
+ * sólo necesita saber cuándo salió y si ya volvió para dibujar cada
+ * fila del historial -- vehículo/encargado ya se muestran una vez en el
+ * encabezado de la tarjeta, no hace falta repetirlos por tramo.
+ */
+data class TramoRutaResumen (
+    var `id`: kotlin.Long
+    , 
+    var `fechaHoraSalida`: kotlin.String
+    , 
+    /**
+     * `None` mientras el tramo sigue abierto ("en ruta").
+     */
+    var `fechaHoraRetorno`: kotlin.String?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTramoRutaResumen: FfiConverterRustBuffer<TramoRutaResumen> {
+    override fun read(buf: ByteBuffer): TramoRutaResumen {
+        return TramoRutaResumen(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: TramoRutaResumen) = (
+            FfiConverterLong.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`fechaHoraSalida`) +
+            FfiConverterOptionalString.allocationSize(value.`fechaHoraRetorno`)
+    )
+
+    override fun write(value: TramoRutaResumen, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`id`, buf)
+            FfiConverterString.write(value.`fechaHoraSalida`, buf)
+            FfiConverterOptionalString.write(value.`fechaHoraRetorno`, buf)
+    }
+}
+
+
+
+/**
  * Espejo de `UsuarioResumen` — sólo se expone a Root/Administrador
  * (`Operacion::GestionarUsuarios`, `domain/autorizacion.rs`); Rust ya
  * rechaza a un Operador con `OperacionNoAutorizada` aunque Kotlin
@@ -6504,6 +6596,34 @@ public object FfiConverterSequenceTypeSolicitudDocumentoRuta: FfiConverterRustBu
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeSolicitudDocumentoRuta.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeTramoRutaResumen: FfiConverterRustBuffer<List<TramoRutaResumen>> {
+    override fun read(buf: ByteBuffer): List<TramoRutaResumen> {
+        val len = buf.getInt()
+        return List<TramoRutaResumen>(len) {
+            FfiConverterTypeTramoRutaResumen.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<TramoRutaResumen>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeTramoRutaResumen.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<TramoRutaResumen>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeTramoRutaResumen.write(it, buf)
         }
     }
 }
