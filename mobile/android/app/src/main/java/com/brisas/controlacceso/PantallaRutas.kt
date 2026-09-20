@@ -498,7 +498,7 @@ private fun PasoDocumentoRuta(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        PasoEncabezado(2, "Documento de ruta", completado)
+        PasoEncabezado(2, "Documento de Ruta", completado)
         // Fila propia (sin el encabezado) -- mismo motivo que en
         // [PasoEncargado]: la cámara se centra contra los 2 campos (ruta +
         // documento), no contra la tarjeta entera.

@@ -80,6 +80,7 @@ private fun VistaCamaraCarnetKof(
             clave = { "${it.nombre}:${it.codigoEmpleado}" },
         )
     }
+    val detectorInvalido = remember { DetectorTextoNoReconocido(esTipoEsperado = ::esCarnetKof) }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
@@ -157,10 +158,11 @@ private fun VistaCamaraCarnetKof(
                                                 }
                                             }
                                             // Mismo criterio que Comprobante de
-                                            // Ruta -- ver ese archivo. `esCarnetKof`
-                                            // ya excluye el comprobante (comparte
-                                            // la marca "Coca Cola FEMSA").
-                                            texto.trim().length >= LARGO_MINIMO_TEXTO_INVALIDO && !esCarnetKof(texto) -> {
+                                            // Ruta -- ver `DetectorTextoNoReconocido`.
+                                            // `esCarnetKof` ya excluye el
+                                            // comprobante (comparte la marca "Coca
+                                            // Cola FEMSA").
+                                            detectorInvalido.procesarFrame(texto) -> {
                                                 if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
                                                 estado = EstadoEscaneo.INVALIDO
                                                 ultimoMensaje = "Gafete no reconocido"

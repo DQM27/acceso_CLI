@@ -21,19 +21,22 @@ data class RectanguloEntero(val left: Int, val top: Int, val right: Int, val bot
 /// `TARJETA_ID` (cédula, gafete, carnet KOF) -- proporción real de una
 /// cédula/tarjeta ISO/IEC 7810 ID-1.
 ///
-/// `COMPROBANTE_RUTA` -- segundo intento para el comprobante de carga de
-/// ruta (2026-09-20, pedido explícito del usuario tras revertir el primer
-/// intento a `region = null`). Los dos intentos anteriores (forzar
-/// horizontal, después ensanchar en vertical) adivinaban una región
-/// AJUSTADA al documento y terminaron dejando la pantalla sin leer ningún
-/// campo -- ver el historial de `PantallaEscanearComprobanteRuta.kt`. Este
-/// intento va deliberadamente holgado en vez de ajustado: recorta sólo
-/// ~10% de cada dimensión del frame (95% del ancho, ~90% del alto de un
-/// frame ya rotado a 720x1280 -- ver `recortarParaOcr`), lo suficiente para
-/// seguir la recomendación de ML Kit de no mandarle el frame entero sin
-/// arriesgarse a repetir el mismo fallo de cortar el campo que se necesita
-/// leer. Pendiente de validar contra el dispositivo real, igual que los
-/// intentos anteriores.
+/// `COMPROBANTE_RUTA` -- tercer intento para el comprobante de carga de
+/// ruta (2026-09-20). Los dos primeros (forzar horizontal, después
+/// ensanchar en vertical -- ver el historial de
+/// `PantallaEscanearComprobanteRuta.kt`) adivinaban una región ajustada
+/// SIN validar contra el dispositivo real y dejaron la pantalla sin leer
+/// ningún campo; un cuarto intento después la volvió holgada (95%/90% del
+/// frame) para confirmar primero que el recorte en sí no era el problema
+/// -- ese sí funcionó. Con eso ya confirmado, este achica la región a una
+/// escala parecida a `TARJETA_ID` (pedido explícito del usuario: "no hay
+/// necesidad de esa enorme área", comparándola contra el recuadro angosto
+/// de Carnet KOF/Vehículo): "Ruta/No.de Carga:" y "Transporte:" quedan
+/// relativamente cerca entre sí en el documento real (ver
+/// `LectorComprobanteRuta.kt`), no hace falta encuadrar la hoja completa
+/// para que ambos entren. `fraccionTopCentro` igual a `TARJETA_ID` (0.52,
+/// no 0.38 como en el ajuste anterior) -- pedido explícito del usuario: el
+/// recuadro quedaba corrido hacia arriba en vez de centrado como el resto.
 data class RegionGuiaOcr(
     val fraccionAncho: Float,
     val proporcionAnchoAlto: Float,
@@ -54,7 +57,7 @@ data class RegionGuiaOcr(
 
     companion object {
         val TARJETA_ID = RegionGuiaOcr(fraccionAncho = 0.84f, proporcionAnchoAlto = 1.586f, fraccionTopCentro = 0.52f)
-        val COMPROBANTE_RUTA = RegionGuiaOcr(fraccionAncho = 0.95f, proporcionAnchoAlto = 0.59f, fraccionTopCentro = 0.5f)
+        val COMPROBANTE_RUTA = RegionGuiaOcr(fraccionAncho = 0.85f, proporcionAnchoAlto = 1.3f, fraccionTopCentro = 0.52f)
     }
 }
 

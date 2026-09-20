@@ -85,6 +85,7 @@ private fun VistaCamaraVehiculoRuta(
     val estabilizador = remember {
         EstabilizadorPorRepeticion(extraer = ::extraerVehiculo, clave = { "${it.tipo}:${it.valor}" })
     }
+    val detectorInvalido = remember { DetectorTextoNoReconocido(esTipoEsperado = { extraerVehiculo(it) != null }) }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
@@ -161,7 +162,9 @@ private fun VistaCamaraVehiculoRuta(
                                             // todo en un solo paso -- que falle es
                                             // en sí mismo la señal de "esto no es
                                             // una placa ni un número de unidad".
-                                            texto.trim().length >= LARGO_MINIMO_TEXTO_INVALIDO && extraerVehiculo(texto) == null -> {
+                                            // Ver `DetectorTextoNoReconocido` sobre
+                                            // por qué esto tolera frames sueltos.
+                                            detectorInvalido.procesarFrame(texto) -> {
                                                 if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
                                                 estado = EstadoEscaneo.INVALIDO
                                                 ultimoMensaje = "No se reconoce como placa ni número de unidad"

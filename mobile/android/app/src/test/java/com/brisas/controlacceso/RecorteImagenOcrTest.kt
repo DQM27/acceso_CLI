@@ -18,16 +18,21 @@ class RecorteImagenOcrTest {
     }
 
     @Test
-    fun rectanguloGuiaDelComprobanteQuedaCentradoYHolgado() {
+    fun rectanguloGuiaDelComprobanteQuedaCentradoYEnEscalaParecidaATarjeta() {
         // Frame ya rotado a proporción de pantalla (720x1280, como entrega
-        // recortarParaOcr) -- la región debe cubrir la gran mayoría del
-        // frame en ambas dimensiones (recorte holgado a propósito, ver el
-        // doc-comment de RegionGuiaOcr.COMPROBANTE_RUTA).
+        // recortarParaOcr) -- región chica, escala comparable a TARJETA_ID
+        // (ver el doc-comment de RegionGuiaOcr.COMPROBANTE_RUTA), no el
+        // frame casi completo del intento anterior.
         val rect = RegionGuiaOcr.COMPROBANTE_RUTA.rectanguloEnPixeles(anchoVisible = 720, altoVisible = 1280)
 
-        assertEquals(684, rect.width) // 95% de 720
-        assertEquals(true, rect.height > 1280 * 0.85)
+        assertEquals(612, rect.width) // 85% de 720
+        assertEquals(470, rect.height) // 612 / 1.3 truncado a entero
         assertEquals(rect.left, 720 - rect.right)
+        assertEquals(54, rect.left)
+        // Mismo fraccionTopCentro que TARJETA_ID (0.52) -- pedido explícito
+        // del usuario: el recuadro quedaba corrido hacia arriba en un
+        // ajuste anterior (0.38) en vez de centrado como el resto.
+        assertEquals(430, rect.top)
     }
 
     @Test

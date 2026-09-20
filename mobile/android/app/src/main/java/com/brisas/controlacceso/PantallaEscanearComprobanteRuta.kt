@@ -90,6 +90,7 @@ private fun VistaCamaraComprobanteRuta(
             clave = { "${it.numeroRuta}:${it.subNumero}:${it.numeroDocumento}" },
         )
     }
+    val detectorInvalido = remember { DetectorTextoNoReconocido(esTipoEsperado = ::esComprobanteCargaRuta) }
     val detectada = remember { AtomicBoolean(false) }
     val sesionActiva = remember { AtomicBoolean(true) }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
@@ -164,19 +165,14 @@ private fun VistaCamaraComprobanteRuta(
                                                 }
                                             }
                                         }
-                                        // Hay texto real (no sólo ruido/vacío) pero
-                                        // no es un comprobante de carga de ruta --
-                                        // mismo criterio que `EstabilizadorLectura`
-                                        // con documentos de identidad (DESCONOCIDO):
-                                        // marco rojo + vibración de error una sola
-                                        // vez al entrar, no en cada frame que la
-                                        // persona sigue apuntando mal. Si SÍ es un
-                                        // comprobante pero todavía no se leyó el
-                                        // "Transporte:" (esComprobanteCargaRuta ya
-                                        // dio true), se queda en BUSCANDO -- eso no
-                                        // es un encuadre inválido, es "sostenga
-                                        // firme".
-                                        texto.trim().length >= LARGO_MINIMO_TEXTO_INVALIDO && !esComprobanteCargaRuta(texto) -> {
+                                        // `DetectorTextoNoReconocido` ya tolera
+                                        // frames sueltos mal leídos -- ver su
+                                        // doc-comment. Si SÍ es un comprobante pero
+                                        // todavía no se leyó el "Transporte:"
+                                        // (esComprobanteCargaRuta ya dio true), se
+                                        // queda en BUSCANDO -- eso no es un
+                                        // encuadre inválido, es "sostenga firme".
+                                        detectorInvalido.procesarFrame(texto) -> {
                                             if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
                                             estado = EstadoEscaneo.INVALIDO
                                             ultimoMensaje = "Documento no reconocido"
@@ -211,14 +207,12 @@ private fun VistaCamaraComprobanteRuta(
                                 sesionActiva = sesionActiva,
                                 onTexto = onTexto,
                                 onFallo = onFallo,
-                                // Segundo intento de recorte (2026-09-20,
-                                // pedido explícito del usuario): región
-                                // propia y holgada para el comprobante en
-                                // vez de la angosta de tarjeta -- ver el
+                                // Región propia para el comprobante (2026-09-20,
+                                // pedido explícito del usuario) -- ver el
                                 // doc-comment de RegionGuiaOcr.COMPROBANTE_RUTA
-                                // sobre por qué va deliberadamente holgada
-                                // tras los dos intentos ajustados que
-                                // dejaron la pantalla sin leer nada.
+                                // sobre la escala (comparable a TARJETA_ID,
+                                // no el frame casi completo del intento
+                                // anterior).
                                 region = RegionGuiaOcr.COMPROBANTE_RUTA,
                             )
                         }
