@@ -144,7 +144,7 @@ private fun VistaCamaraVehiculoRuta(
                                             estado = EstadoEscaneo.CONFIRMADO
                                             ultimoMensaje = "${resultado.valor} confirmado"
                                             if (detectada.compareAndSet(false, true)) {
-                                                haptica.performHapticFeedback(HapticFeedbackType.Confirm)
+                                                haptica.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 reproducirSonidoConfirmacion()
                                                 trabajoResultado?.cancel()
                                                 trabajoResultado = alcance.launch {

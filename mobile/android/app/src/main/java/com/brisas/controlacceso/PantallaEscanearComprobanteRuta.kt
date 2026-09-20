@@ -60,12 +60,6 @@ fun PantallaEscanearComprobanteRuta(
     EscanerConPermisoCamara(
         mensajePermiso = "Se necesita permiso de cámara para escanear el comprobante.",
         onCerrar = onCerrar,
-        // El comprobante es una hoja, no una tarjeta -- mucho más ancha que
-        // una cédula, así que en vertical hay que alejar tanto el teléfono
-        // para que entre completa que el texto queda ilegible. Se fuerza
-        // horizontal automáticamente en vez de pedirle a la persona que
-        // gire el teléfono a mano (pedido explícito del usuario 2026-09-20).
-        forzarHorizontal = true,
     ) {
         VistaCamaraComprobanteRuta(onComprobanteDetectado = onComprobanteDetectado, onCerrar = onCerrar)
     }
@@ -164,7 +158,7 @@ private fun VistaCamaraComprobanteRuta(
                                         estado = EstadoEscaneo.CONFIRMADO
                                         ultimoMensaje = "Comprobante ${resultado.numeroRuta} confirmado"
                                         if (detectada.compareAndSet(false, true)) {
-                                            haptica.performHapticFeedback(HapticFeedbackType.Confirm)
+                                            haptica.performHapticFeedback(HapticFeedbackType.LongPress)
                                             trabajoResultado?.cancel()
                                             trabajoResultado = alcance.launch {
                                                 if (sesionActiva.get()) onDetectadoActual(resultado)

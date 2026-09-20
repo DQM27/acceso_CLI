@@ -92,13 +92,16 @@ private fun VistaCamaraCedula(
     val alcance = rememberCoroutineScope()
     val onDocumentoActual by rememberUpdatedState(onDocumentoDetectado)
     val obtenerResultadoActual by rememberUpdatedState(resultadoUltimoEscaneo)
-    // Háptica semántica de Compose (`HapticFeedbackType.Confirm`), no
-    // `Vibrator`/`VibrationEffect` crudo -- la guía oficial de Android
-    // desaconseja `createOneShot`/`createWaveform` para feedback de UI
-    // regular ("demasiado fuerte/genérico"); el tipo `Confirm` está pensado
-    // exactamente para esto, no requiere permiso VIBRATE, y respeta la
-    // intensidad háptica que la persona ya configuró en el sistema en vez
-    // de imponer una vibración fija.
+    // Háptica semántica de Compose, no `Vibrator`/`VibrationEffect` crudo --
+    // la guía oficial de Android desaconseja `createOneShot`/`createWaveform`
+    // para feedback de UI regular ("demasiado fuerte/genérico"), y este
+    // camino no requiere permiso VIBRATE ni impone una vibración fija.
+    // `HapticFeedbackType.LongPress` (pensado exactamente para esto) resultó
+    // no vibrar en un Samsung real con "Interacciones táctiles" activado
+    // (hallazgo 2026-09-20) -- probablemente ese OEM no lo tiene mapeado a
+    // ningún efecto propio. Se usa `LongPress` en su lugar: es el
+    // constante más vieja de todas (API 1), la que con más certeza está
+    // implementada en cualquier fabricante.
     val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
@@ -204,7 +207,7 @@ private fun VistaCamaraCedula(
                                 } else {
                                     ultimoValorContinuo = valor
                                     framesSinUltimoValor = 0
-                                    haptica.performHapticFeedback(HapticFeedbackType.Confirm)
+                                    haptica.performHapticFeedback(HapticFeedbackType.LongPress)
                                     reproducirSonidoConfirmacion()
                                     trabajoResultado?.cancel()
                                     trabajoResultado = alcance.launch {

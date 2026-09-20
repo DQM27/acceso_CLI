@@ -48,14 +48,14 @@ data class RegionGuiaOcr(
     companion object {
         val TARJETA_ID = RegionGuiaOcr(fraccionAncho = 0.84f, proporcionAnchoAlto = 1.586f, fraccionTopCentro = 0.52f)
         // El comprobante de carga de ruta se escanea con el teléfono
-        // forzado a horizontal (ver `EscanerConPermisoCamara`,
-        // `forzarHorizontal`) porque el papel es más ancho que alto -- acá
-        // "ancho visible"/"alto visible" ya son los de una pantalla en
-        // horizontal, así que casi toda la pantalla es la región útil
-        // (poco margen de sobra, no el recorte angosto de una tarjeta).
-        // Centrada -- sin datos reales todavía de en qué parte de la hoja
-        // conviene encuadrar más, centrar es la apuesta más segura.
-        val DOCUMENTO_ANCHO = RegionGuiaOcr(fraccionAncho = 0.96f, proporcionAnchoAlto = 1.6f, fraccionTopCentro = 0.5f)
+        // siempre vertical, igual que las otras 3 pantallas (se descartó
+        // forzar horizontal -- pedido explícito del usuario 2026-09-20, la
+        // rotación automática se veía mal y la cámara no cerraba bien al
+        // capturar). El papel es más ancho que una cédula, así que en vez
+        // de rotar nada, la región es casi todo el ancho de la pantalla y
+        // bastante más alta que la de una tarjeta -- primera estimación,
+        // pendiente de ajustar con más pruebas reales.
+        val DOCUMENTO_ANCHO = RegionGuiaOcr(fraccionAncho = 0.94f, proporcionAnchoAlto = 1.2f, fraccionTopCentro = 0.42f)
     }
 }
 

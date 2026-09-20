@@ -146,7 +146,7 @@ private fun VistaCamaraCarnetKof(
                                             estado = EstadoEscaneo.CONFIRMADO
                                             ultimoMensaje = "Encargado ${resultado.nombre} confirmado"
                                             if (detectada.compareAndSet(false, true)) {
-                                                haptica.performHapticFeedback(HapticFeedbackType.Confirm)
+                                                haptica.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 reproducirSonidoConfirmacion()
                                                 trabajoResultado?.cancel()
                                                 trabajoResultado = alcance.launch {
