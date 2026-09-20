@@ -40,16 +40,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.EmpresaProveedor
 import uniffi.control_acceso_mobile.IngresoProveedorRemoto
 import uniffi.control_acceso_mobile.Nucleo
@@ -286,8 +290,10 @@ private fun FormularioNuevoIngresoProveedor(
     // padding se suma sobre un alto que ya estaba fijado a pantalla completa
     // en vez de sobre el alto real del contenido.
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
     Column(
-        modifier = Modifier.verticalScroll(rememberScrollState()).imePadding(),
+        modifier = Modifier.verticalScroll(scrollState).imePadding(),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Nuevo ingreso", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -321,6 +327,25 @@ private fun FormularioNuevoIngresoProveedor(
                 onEscanearPlaca = onEscanearPlaca,
                 gafeteTexto = gafeteTexto,
                 onCambiarGafeteTexto = { onCambiarGafeteTexto(it.filter(Char::isDigit)) },
+                // Al enfocar el último input, lleva el scroll hasta el
+                // fondo -- ahí vive el botón "Registrar ingreso", último
+                // elemento de esta misma Column. El foco por sí solo sólo
+                // garantiza que el campo entre en pantalla, no el botón de
+                // abajo (pedido explícito del usuario 2026-09-20: quiere ver
+                // campo y botón juntos, no sólo el campo). Un solo
+                // `animateScrollTo` no alcanza: el teclado tarda ~250ms en
+                // animarse y el `imePadding()` va agrandando la Column
+                // cuadro a cuadro, así que `maxValue` todavía no refleja el
+                // alto final en el instante del foco -- se repite mientras
+                // dura esa animación para perseguir el nuevo fondo.
+                onGafeteEnfocado = {
+                    scope.launch {
+                        repeat(15) {
+                            scrollState.animateScrollTo(scrollState.maxValue)
+                            delay(30)
+                        }
+                    }
+                },
             )
         }
 
@@ -523,6 +548,7 @@ private fun PasoVehiculoYGafete(
     onEscanearPlaca: () -> Unit,
     gafeteTexto: String,
     onCambiarGafeteTexto: (String) -> Unit,
+    onGafeteEnfocado: () -> Unit,
 ) {
     TarjetaPasoProveedor(3, "Vehículo y gafete", completado, onEscanear = onEscanearPlaca) {
         OutlinedTextField(
@@ -541,7 +567,8 @@ private fun PasoVehiculoYGafete(
             singleLine = true,
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas)
+                .onFocusChanged { if (it.isFocused) onGafeteEnfocado() },
         )
     }
 }

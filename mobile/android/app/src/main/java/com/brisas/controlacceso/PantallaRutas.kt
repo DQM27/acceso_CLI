@@ -37,14 +37,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.EncargadoRuta
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.Ruta
@@ -147,8 +151,10 @@ fun PantallaRutas(nucleo: Nucleo) {
         // activas") -- los dos no combinan en un mismo eje de scroll.
         // `imePadding()` deja que el teclado empuje este bloque hacia
         // arriba y el campo enfocado se desplace por encima de él.
+        val scrollStateFormulario = rememberScrollState()
+        val scopeFormulario = rememberCoroutineScope()
         Column(
-            modifier = Modifier.verticalScroll(rememberScrollState()).imePadding(),
+            modifier = Modifier.verticalScroll(scrollStateFormulario).imePadding(),
         ) {
         Text(
             "Registrar salida",
@@ -200,6 +206,24 @@ fun PantallaRutas(nucleo: Nucleo) {
                         vehiculoSeleccionado == null &&
                         viewModel.resultadosVehiculo.isEmpty(),
                 onEscanear = { escanerVehiculoAbierto = true },
+                // Al enfocar el último input, lleva el scroll hasta el
+                // fondo -- ahí vive "Confirmar salida", último elemento de
+                // esta misma Column. El foco por sí solo sólo garantiza que
+                // el campo entre en pantalla, no el botón de abajo (pedido
+                // explícito del usuario 2026-09-20). Un solo
+                // `animateScrollTo` no alcanza: el teclado tarda ~250ms en
+                // animarse y el `imePadding()` va agrandando la Column
+                // cuadro a cuadro, así que `maxValue` todavía no refleja el
+                // alto final en el instante del foco -- se repite mientras
+                // dura esa animación para perseguir el nuevo fondo.
+                onEnfocado = {
+                    scopeFormulario.launch {
+                        repeat(15) {
+                            scrollStateFormulario.animateScrollTo(scrollStateFormulario.maxValue)
+                            delay(30)
+                        }
+                    }
+                },
             )
         }
 
@@ -576,6 +600,7 @@ private fun PasoVehiculo(
     onElegir: (VehiculoRuta) -> Unit,
     sinCoincidencias: Boolean,
     onEscanear: () -> Unit,
+    onEnfocado: () -> Unit,
 ) {
     var menuAbierto by remember { mutableStateOf(false) }
 
@@ -616,7 +641,8 @@ private fun PasoVehiculo(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(AlturaBusquedaBrisas)
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable)
+                            .onFocusChanged { if (it.isFocused) onEnfocado() },
                     )
                     DropdownMenu(
                         expanded = menuAbierto && resultados.isNotEmpty(),
