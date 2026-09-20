@@ -372,4 +372,51 @@ class LectorDocumentosIdentidadTest {
         val hoy = FechaDocumento(8, 9, 2026)
         assertEquals(TipoDocumento.CEDULA_NACIONAL, documento.reclasificarPorEdad(hoy).tipo)
     }
+
+    // --- DIMEX: nombre/apellidos no deben quedar en un valor de Sexo ---
+
+    @Test
+    fun dimexNoConfundeNombreConValorDeSexo() {
+        // Reproduce el hallazgo real (2026-09-20): ML Kit linealiza el
+        // texto de un DIMEX real con "Nombre:" seguido del valor de Sexo,
+        // no del nombre real -- antes esto quedaba guardado tal cual
+        // ("MASCULINO") en el campo `nombre`.
+        val texto = """
+            RESIDENTE PERMANENTE
+            DOCUMENTO NO.: 155824395105
+            Nombre:
+            MASCULINO
+            Apellidos:
+            FEMENINO
+            Nacionalidad:
+            NICARAGUENSE
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CEDULA_RESIDENCIA, doc?.tipo)
+        assertNull(doc?.nombre)
+        assertNull(doc?.apellidos)
+        // Nacionalidad no se toca -- ver el comentario en
+        // LectorDocumentosIdentidad.kt sobre por qué ese caso queda
+        // pendiente de una muestra real.
+        assertEquals("NICARAGUENSE", doc?.nacionalidad)
+    }
+
+    @Test
+    fun dimexMantieneNombreYApellidosCuandoNoHayColision() {
+        val texto = """
+            RESIDENTE PERMANENTE
+            DOCUMENTO NO.: 155824395105
+            Nombre:
+            JUAN CARLOS
+            Apellidos:
+            PEREZ MORA
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+    }
 }

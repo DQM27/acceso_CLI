@@ -249,6 +249,26 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
     }
 }
 
+// El DIMEX tiene varios campos de una sola palabra (Sexo, y a veces
+// Nacionalidad) impresos cerca de Nombre/Apellidos -- si el orden en que
+// ML Kit linealiza el texto no respeta el layout visual real de la
+// tarjeta (columnas, no un único renglón de arriba a abajo), la regex de
+// "Nombre:" puede terminar capturando el valor de OTRO campo que quedó
+// pegado justo después en el texto crudo, no el nombre real (hallazgo
+// 2026-09-20, reportado contra una DIMEX real: el nombre salía como
+// "MASCULINO"). Sexo es un conjunto cerrado y chico -- fácil de detectar y
+// descartar sin arriesgar nada. Nacionalidad NO lo es (decenas de
+// gentilicios posibles): sin una muestra real del texto crudo tal como lo
+// entrega ML Kit en ese caso, cualquier lista de exclusión sería a ciegas
+// y podría estar igual de equivocada -- queda pendiente hasta tener ese
+// dato (ver `TAG_DEBUG_OCR_LECTURA` en `EscaneoCompartido.kt`).
+private val VALORES_SEXO_DIMEX = setOf("M", "F", "MASCULINO", "FEMENINO")
+
+private fun valorSiNoEsSexo(match: MatchResult?): String? {
+    val valor = match?.groupValues?.get(1)?.trim() ?: return null
+    return valor.takeUnless { it.uppercase() in VALORES_SEXO_DIMEX }
+}
+
 /// Extrae el número de "Documento No.:", nunca el de "Expediente No.:" --
 /// este es el caso que motivó todo el refinamiento (ver plan, sección 1):
 /// ambos son números de longitud similar en el mismo bloque de texto, y una
@@ -258,8 +278,8 @@ private fun extraerDimex(texto: String): DocumentoDetectado? {
         ?: REGEX_DIMEX_NUMERO_PROVISIONAL.find(texto)?.groupValues?.get(1)
         ?: return null
 
-    val nombre = REGEX_DIMEX_NOMBRE.find(texto)?.groupValues?.get(1)?.trim()
-    val apellidos = REGEX_DIMEX_APELLIDOS.find(texto)?.groupValues?.get(1)?.trim()
+    val nombre = valorSiNoEsSexo(REGEX_DIMEX_NOMBRE.find(texto))
+    val apellidos = valorSiNoEsSexo(REGEX_DIMEX_APELLIDOS.find(texto))
     val nacionalidad = REGEX_DIMEX_NACIONALIDAD.find(texto)?.groupValues?.get(1)?.trim()
     val vencimiento = extraerFecha(texto, etiqueta = "Vence")
         ?: extraerFecha(texto, etiqueta = "Fecha Vencimiento")
