@@ -270,6 +270,36 @@ class EstabilizadorLecturaTest {
     }
 
     @Test
+    fun cedulaNacionalAcumulaNombreYApellidosVistosEnFramesDistintos() {
+        // Hallazgo 2026-09-20 contra una cédula real: "Nombre:", "1°
+        // Apellido:" y "2° Apellido:" son tres bloques separados en la
+        // tarjeta (a diferencia de DIMEX, donde "Apellidos:" es un solo
+        // bloque) -- rara vez ML Kit los lee los tres juntos en el mismo
+        // frame. Un frame trae sólo el nombre, el siguiente sólo los
+        // apellidos; el documento confirmado debe traer los tres, no sólo
+        // lo que haya en el frame que completó el debounce.
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 2)
+        val frameConNombre = """
+            TRIBUNAL SUPREMO DE ELECCIONES
+            1 2345 6789
+            Nombre: JUAN CARLOS
+        """.trimIndent()
+        val frameConApellidos = """
+            TRIBUNAL SUPREMO DE ELECCIONES
+            1 2345 6789
+            1°Apellido: GOMEZ
+            2°Apellido: VARGAS
+        """.trimIndent()
+
+        estabilizador.procesarFrame(frameConNombre)
+        val r = estabilizador.procesarFrame(frameConApellidos)
+
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals("JUAN CARLOS", r.documento?.nombre)
+        assertEquals("GOMEZ VARGAS", r.documento?.apellidos)
+    }
+
+    @Test
     fun cedulaNacionalLeidaSoloDelFrenteAvisaQueFaltaVoltearla() {
         // Sin MRZ en el texto (sólo lo que trae el frente con la foto): el
         // número se lee bien, pero nunca hay nombre desde esa cara -- ver
