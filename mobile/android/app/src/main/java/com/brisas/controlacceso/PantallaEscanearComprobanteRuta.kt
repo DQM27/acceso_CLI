@@ -112,7 +112,11 @@ private fun VistaCamaraComprobanteRuta(
         }
     }
 
-    val colorMarco = if (estado == EstadoEscaneo.CONFIRMADO) ColorEscaneoConfirmado else ColorEscaneoBuscando
+    val colorMarco = when (estado) {
+        EstadoEscaneo.CONFIRMADO -> ColorEscaneoConfirmado
+        EstadoEscaneo.INVALIDO -> ColorEscaneoInvalido
+        EstadoEscaneo.BUSCANDO -> ColorEscaneoBuscando
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -148,19 +152,39 @@ private fun VistaCamaraComprobanteRuta(
                                 if (sesionActiva.get()) {
                                     if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
                                     val resultado = estabilizador.procesarFrame(texto)
-                                    if (resultado != null) {
-                                        estado = EstadoEscaneo.CONFIRMADO
-                                        ultimoMensaje = "Comprobante ${resultado.numeroRuta} confirmado"
-                                        if (detectada.compareAndSet(false, true)) {
-                                            vibrarConfirmacion(contexto)
-                                            trabajoResultado?.cancel()
-                                            trabajoResultado = alcance.launch {
-                                                if (sesionActiva.get()) onDetectadoActual(resultado)
+                                    when {
+                                        resultado != null -> {
+                                            estado = EstadoEscaneo.CONFIRMADO
+                                            ultimoMensaje = "Comprobante ${resultado.numeroRuta} confirmado"
+                                            if (detectada.compareAndSet(false, true)) {
+                                                vibrarConfirmacion(contexto)
+                                                trabajoResultado?.cancel()
+                                                trabajoResultado = alcance.launch {
+                                                    if (sesionActiva.get()) onDetectadoActual(resultado)
+                                                }
                                             }
                                         }
-                                    } else {
-                                        estado = EstadoEscaneo.BUSCANDO
-                                        ultimoMensaje = MENSAJE_INICIAL
+                                        // Hay texto real (no sólo ruido/vacío) pero
+                                        // no es un comprobante de carga de ruta --
+                                        // mismo criterio que `EstabilizadorLectura`
+                                        // con documentos de identidad (DESCONOCIDO):
+                                        // marco rojo + vibración de error una sola
+                                        // vez al entrar, no en cada frame que la
+                                        // persona sigue apuntando mal. Si SÍ es un
+                                        // comprobante pero todavía no se leyó el
+                                        // "Transporte:" (esComprobanteCargaRuta ya
+                                        // dio true), se queda en BUSCANDO -- eso no
+                                        // es un encuadre inválido, es "sostenga
+                                        // firme".
+                                        texto.trim().length >= LARGO_MINIMO_TEXTO_INVALIDO && !esComprobanteCargaRuta(texto) -> {
+                                            if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
+                                            estado = EstadoEscaneo.INVALIDO
+                                            ultimoMensaje = "Documento no reconocido"
+                                        }
+                                        else -> {
+                                            estado = EstadoEscaneo.BUSCANDO
+                                            ultimoMensaje = MENSAJE_INICIAL
+                                        }
                                     }
                                 }
                             }
@@ -187,10 +211,15 @@ private fun VistaCamaraComprobanteRuta(
                                 sesionActiva = sesionActiva,
                                 onTexto = onTexto,
                                 onFallo = onFallo,
-                                // Sin recorte -- el comprobante es mucho más
-                                // ancho que una tarjeta y no hay todavía
-                                // datos reales de qué región exacta conviene.
-                                region = null,
+                                // Segundo intento de recorte (2026-09-20,
+                                // pedido explícito del usuario): región
+                                // propia y holgada para el comprobante en
+                                // vez de la angosta de tarjeta -- ver el
+                                // doc-comment de RegionGuiaOcr.COMPROBANTE_RUTA
+                                // sobre por qué va deliberadamente holgada
+                                // tras los dos intentos ajustados que
+                                // dejaron la pantalla sin leer nada.
+                                region = RegionGuiaOcr.COMPROBANTE_RUTA,
                             )
                         }
                     }
@@ -215,7 +244,7 @@ private fun VistaCamaraComprobanteRuta(
             color = colorMarco,
             estado = estado,
             modifier = Modifier.fillMaxSize(),
-            region = null,
+            region = RegionGuiaOcr.COMPROBANTE_RUTA,
         )
         Text(
             ultimoMensaje,

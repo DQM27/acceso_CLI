@@ -18,15 +18,22 @@ data class RectanguloEntero(val left: Int, val top: Int, val right: Int, val bot
 /// de verdad se analiza sean SIEMPRE la misma región (una sola fuente de
 /// verdad por pantalla, no dos copias que se puedan desalinear).
 ///
-/// Sólo `TARJETA_ID` por ahora (cédula, gafete, carnet KOF) -- proporción
-/// real de una cédula/tarjeta ISO/IEC 7810 ID-1. Hubo un `DOCUMENTO_ANCHO`
-/// para el comprobante de carga de ruta (un papel mucho más grande que una
-/// tarjeta), pero se sacó -- dos estimaciones a ciegas seguidas (una
-/// forzando horizontal, otra ensanchando en vertical) terminaron dejando
-/// esa pantalla sin leer ningún campo (hallazgo 2026-09-20). Ese perfil
-/// vuelve a analizar el frame completo (`region = null` en
-/// `analizarCedula`/`MarcoGuiaCedula`) hasta tener datos reales de qué
-/// región conviene.
+/// `TARJETA_ID` (cédula, gafete, carnet KOF) -- proporción real de una
+/// cédula/tarjeta ISO/IEC 7810 ID-1.
+///
+/// `COMPROBANTE_RUTA` -- segundo intento para el comprobante de carga de
+/// ruta (2026-09-20, pedido explícito del usuario tras revertir el primer
+/// intento a `region = null`). Los dos intentos anteriores (forzar
+/// horizontal, después ensanchar en vertical) adivinaban una región
+/// AJUSTADA al documento y terminaron dejando la pantalla sin leer ningún
+/// campo -- ver el historial de `PantallaEscanearComprobanteRuta.kt`. Este
+/// intento va deliberadamente holgado en vez de ajustado: recorta sólo
+/// ~10% de cada dimensión del frame (95% del ancho, ~90% del alto de un
+/// frame ya rotado a 720x1280 -- ver `recortarParaOcr`), lo suficiente para
+/// seguir la recomendación de ML Kit de no mandarle el frame entero sin
+/// arriesgarse a repetir el mismo fallo de cortar el campo que se necesita
+/// leer. Pendiente de validar contra el dispositivo real, igual que los
+/// intentos anteriores.
 data class RegionGuiaOcr(
     val fraccionAncho: Float,
     val proporcionAnchoAlto: Float,
@@ -47,6 +54,7 @@ data class RegionGuiaOcr(
 
     companion object {
         val TARJETA_ID = RegionGuiaOcr(fraccionAncho = 0.84f, proporcionAnchoAlto = 1.586f, fraccionTopCentro = 0.52f)
+        val COMPROBANTE_RUTA = RegionGuiaOcr(fraccionAncho = 0.95f, proporcionAnchoAlto = 0.59f, fraccionTopCentro = 0.5f)
     }
 }
 

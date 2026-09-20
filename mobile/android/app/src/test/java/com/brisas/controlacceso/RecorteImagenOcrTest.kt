@@ -18,6 +18,19 @@ class RecorteImagenOcrTest {
     }
 
     @Test
+    fun rectanguloGuiaDelComprobanteQuedaCentradoYHolgado() {
+        // Frame ya rotado a proporción de pantalla (720x1280, como entrega
+        // recortarParaOcr) -- la región debe cubrir la gran mayoría del
+        // frame en ambas dimensiones (recorte holgado a propósito, ver el
+        // doc-comment de RegionGuiaOcr.COMPROBANTE_RUTA).
+        val rect = RegionGuiaOcr.COMPROBANTE_RUTA.rectanguloEnPixeles(anchoVisible = 720, altoVisible = 1280)
+
+        assertEquals(684, rect.width) // 95% de 720
+        assertEquals(true, rect.height > 1280 * 0.85)
+        assertEquals(rect.left, 720 - rect.right)
+    }
+
+    @Test
     fun rectanguloGuiaNuncaSaleDeLaImagenAunConDimensionesChicas() {
         val rect = RegionGuiaOcr.TARJETA_ID.rectanguloEnPixeles(anchoVisible = 10, altoVisible = 10)
 

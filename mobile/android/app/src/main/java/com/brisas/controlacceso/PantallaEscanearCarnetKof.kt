@@ -102,7 +102,11 @@ private fun VistaCamaraCarnetKof(
         }
     }
 
-    val colorMarco = if (estado == EstadoEscaneo.CONFIRMADO) ColorEscaneoConfirmado else ColorEscaneoBuscando
+    val colorMarco = when (estado) {
+        EstadoEscaneo.CONFIRMADO -> ColorEscaneoConfirmado
+        EstadoEscaneo.INVALIDO -> ColorEscaneoInvalido
+        EstadoEscaneo.BUSCANDO -> ColorEscaneoBuscando
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -139,20 +143,32 @@ private fun VistaCamaraCarnetKof(
                                         // un perfil que no lee bien.
                                         if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
                                         val resultado = estabilizador.procesarFrame(texto)
-                                        if (resultado != null) {
-                                            estado = EstadoEscaneo.CONFIRMADO
-                                            ultimoMensaje = "Encargado ${resultado.nombre} confirmado"
-                                            if (detectada.compareAndSet(false, true)) {
-                                                vibrarConfirmacion(contexto)
-                                                reproducirSonidoConfirmacion()
-                                                trabajoResultado?.cancel()
-                                                trabajoResultado = alcance.launch {
-                                                    if (sesionActiva.get()) onDetectadoActual(resultado)
+                                        when {
+                                            resultado != null -> {
+                                                estado = EstadoEscaneo.CONFIRMADO
+                                                ultimoMensaje = "Encargado ${resultado.nombre} confirmado"
+                                                if (detectada.compareAndSet(false, true)) {
+                                                    vibrarConfirmacion(contexto)
+                                                    reproducirSonidoConfirmacion()
+                                                    trabajoResultado?.cancel()
+                                                    trabajoResultado = alcance.launch {
+                                                        if (sesionActiva.get()) onDetectadoActual(resultado)
+                                                    }
                                                 }
                                             }
-                                        } else {
-                                            estado = EstadoEscaneo.BUSCANDO
-                                            ultimoMensaje = MENSAJE_INICIAL_KOF
+                                            // Mismo criterio que Comprobante de
+                                            // Ruta -- ver ese archivo. `esCarnetKof`
+                                            // ya excluye el comprobante (comparte
+                                            // la marca "Coca Cola FEMSA").
+                                            texto.trim().length >= LARGO_MINIMO_TEXTO_INVALIDO && !esCarnetKof(texto) -> {
+                                                if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
+                                                estado = EstadoEscaneo.INVALIDO
+                                                ultimoMensaje = "Gafete no reconocido"
+                                            }
+                                            else -> {
+                                                estado = EstadoEscaneo.BUSCANDO
+                                                ultimoMensaje = MENSAJE_INICIAL_KOF
+                                            }
                                         }
                                     }
                                 },
