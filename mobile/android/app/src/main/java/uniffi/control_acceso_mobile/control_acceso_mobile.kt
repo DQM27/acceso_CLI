@@ -4490,6 +4490,8 @@ data class RegistroIngresoProveedorActivoResumen (
     var `gafeteNumero`: kotlin.Long
     , 
     var `fechaHoraIngreso`: kotlin.String
+    , 
+    var `usuarioIngresoNombre`: kotlin.String
     
 ){
     
@@ -4513,6 +4515,7 @@ public object FfiConverterTypeRegistroIngresoProveedorActivoResumen: FfiConverte
             FfiConverterOptionalString.read(buf),
             FfiConverterLong.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
         )
     }
 
@@ -4523,7 +4526,8 @@ public object FfiConverterTypeRegistroIngresoProveedorActivoResumen: FfiConverte
             FfiConverterString.allocationSize(value.`empresaNombre`) +
             FfiConverterOptionalString.allocationSize(value.`placa`) +
             FfiConverterLong.allocationSize(value.`gafeteNumero`) +
-            FfiConverterString.allocationSize(value.`fechaHoraIngreso`)
+            FfiConverterString.allocationSize(value.`fechaHoraIngreso`) +
+            FfiConverterString.allocationSize(value.`usuarioIngresoNombre`)
     )
 
     override fun write(value: RegistroIngresoProveedorActivoResumen, buf: ByteBuffer) {
@@ -4534,6 +4538,7 @@ public object FfiConverterTypeRegistroIngresoProveedorActivoResumen: FfiConverte
             FfiConverterOptionalString.write(value.`placa`, buf)
             FfiConverterLong.write(value.`gafeteNumero`, buf)
             FfiConverterString.write(value.`fechaHoraIngreso`, buf)
+            FfiConverterString.write(value.`usuarioIngresoNombre`, buf)
     }
 }
 

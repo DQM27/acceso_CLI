@@ -944,6 +944,7 @@ pub struct RegistroIngresoProveedorActivoResumen {
     pub placa: Option<String>,
     pub gafete_numero: i64,
     pub fecha_hora_ingreso: String,
+    pub usuario_ingreso_nombre: String,
 }
 
 impl From<RegistroIngresoProveedorActivoResumenNucleo> for RegistroIngresoProveedorActivoResumen {
@@ -956,6 +957,7 @@ impl From<RegistroIngresoProveedorActivoResumenNucleo> for RegistroIngresoProvee
             placa: activo.placa,
             gafete_numero: activo.gafete_numero,
             fecha_hora_ingreso: activo.fecha_hora_ingreso.to_rfc3339(),
+            usuario_ingreso_nombre: activo.usuario_ingreso_nombre,
         }
     }
 }

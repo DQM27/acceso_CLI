@@ -48,7 +48,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -655,6 +658,10 @@ private fun FilaProveedorActivo(fila: FilaProveedorActiva, onConfirmarSalida: ()
 /// Antes esta tarjeta abría con "Gafete N" en vez del nombre -- pedido
 /// explícito del usuario en pruebas reales, 2026-09-17: unificar el orden
 /// de importancia entre las dos pantallas.
+///
+/// Mayúscula + negrita + gafete en azul, y "dio ingreso" en la última
+/// línea -- mismo tratamiento que `FilaActivoLocal` (contratista), pedido
+/// explícito del usuario 2026-09-20 para unificar las dos tarjetas.
 @Composable
 private fun FilaProveedorActivoLocal(
     registro: RegistroIngresoProveedorActivoResumen,
@@ -671,13 +678,23 @@ private fun FilaProveedorActivoLocal(
     ) {
         Text(registro.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(
-            "${registro.cedula} · ${registro.empresaNombre} · Gafete ${registro.gafeteNumero}" +
-                (registro.placa?.let { " · $it" } ?: ""),
+            buildAnnotatedString {
+                append(
+                    (
+                        "${registro.cedula} · ${registro.empresaNombre}" +
+                            (registro.placa?.let { " · $it" } ?: "") + " · "
+                    ).uppercase(),
+                )
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                    append("Gafete ${registro.gafeteNumero}".uppercase())
+                }
+            },
             style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "Ingresó ${textoFechaHora(registro.fechaHoraIngreso)}",
+            "Ingresó ${textoFechaHora(registro.fechaHoraIngreso)} · dio ingreso ${registro.usuarioIngresoNombre}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -700,13 +717,23 @@ private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirma
     ) {
         Text(remoto.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(
-            "${remoto.cedula} · ${remoto.empresaNombre} · Gafete ${remoto.gafeteNumero}" +
-                (remoto.placa?.let { " · $it" } ?: ""),
+            buildAnnotatedString {
+                append(
+                    (
+                        "${remoto.cedula} · ${remoto.empresaNombre}" +
+                            (remoto.placa?.let { " · $it" } ?: "") + " · "
+                    ).uppercase(),
+                )
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                    append("Gafete ${remoto.gafeteNumero}".uppercase())
+                }
+            },
             style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "Ingresó ${textoFechaHora(remoto.horaEntrada)}",
+            "Ingresó ${textoFechaHora(remoto.horaEntrada)} · dio ingreso ${remoto.usuarioEntradaNombre}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
