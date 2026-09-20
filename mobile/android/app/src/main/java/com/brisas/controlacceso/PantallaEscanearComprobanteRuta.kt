@@ -46,6 +46,17 @@ import kotlinx.coroutines.launch
 /// resultado ([ComprobanteRutaDetectado]). Un solo escaneo carga ruta,
 /// sub-número (tipo) y documento a la vez porque el comprobante real trae
 /// los tres juntos en la misma línea impresa.
+///
+/// Resolución de análisis subida a 1920x1080 (2026-09-20, tras una foto
+/// real del comprobante): es una hoja completa, no una tarjeta -- para que
+/// entre completa en el encuadre hay que sostener el teléfono bastante más
+/// lejos que con una cédula, así que a la misma resolución de 1280x720 que
+/// usan las otras 3 pantallas el texto impreso (más chico que el de una
+/// cédula) le queda a ML Kit con muchos menos píxeles por carácter. Esto
+/// explica mejor un "no lee NADA en absoluto" que cualquier problema de
+/// region/recorte: ya se probó sin ningún recorte (frame completo) y
+/// tampoco leía, lo que apunta a que ML Kit no estaba resolviendo texto en
+/// absoluto, no a que la extracción fallara sobre texto ya leído.
 @Composable
 fun PantallaEscanearComprobanteRuta(
     onComprobanteDetectado: suspend (ComprobanteRutaDetectado) -> Unit,
@@ -114,7 +125,11 @@ private fun VistaCamaraComprobanteRuta(
                     .setResolutionSelector(
                         ResolutionSelector.Builder()
                             .setResolutionStrategy(
-                                ResolutionStrategy(Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
+                                // 1920x1080, no 1280x720 como las otras 3
+                                // pantallas -- ver comentario abajo, esta es
+                                // la sospecha real detrás de "no lee nada de
+                                // nada" (foto real del 2026-09-20).
+                                ResolutionStrategy(Size(1920, 1080), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
                             )
                             .build(),
                     )
