@@ -48,6 +48,15 @@ android {
     }
 
     buildTypes {
+        debug {
+            // `applicationId` propio -- sin esto, un debug build (que ya
+            // apunta solo a staging, ver AplicacionControlAcceso.kt) se
+            // instala como "actualización" de la app real de producción en
+            // el mismo teléfono (mismo paquete, Android no distingue por
+            // firma hasta ahí) y la reemplaza. Con el sufijo, Android los
+            // trata como dos apps distintas -- coexisten sin pisarse.
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

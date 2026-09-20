@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -279,9 +280,14 @@ private fun FormularioNuevoIngresoProveedor(
     // escaneo/PantallaConfirmarIngreso).
     BackHandler(onBack = onVolver)
 
+    // Mismo criterio que [PantallaRutas]: `imePadding()` va en un `Column`
+    // SIN `fillMaxSize` -- combinarlo con `fillMaxSize` deja un hueco enorme
+    // entre el teclado y el contenido (bug reportado 2026-09-20), porque el
+    // padding se suma sobre un alto que ya estaba fijado a pantalla completa
+    // en vez de sobre el alto real del contenido.
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+        modifier = Modifier.verticalScroll(rememberScrollState()).imePadding(),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Nuevo ingreso", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -353,6 +359,7 @@ private fun FormularioNuevoIngresoProveedor(
         ) {
             Text(if (viewModel.registrando) "Registrando…" else "Registrar ingreso")
         }
+    }
     }
 }
 

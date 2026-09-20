@@ -11,11 +11,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -136,6 +139,17 @@ fun PantallaRutas(nucleo: Nucleo) {
         paso1Completo && paso2Completo && paso3Completo && !bloqueadoPorFecha && !viewModel.registrando
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        // Scroll propio para este bloque -- sin esto, el teclado tapaba el
+        // input de "Placa o número de unidad" (paso 3) sin forma de
+        // deslizar hasta él (reportado 2026-09-20). No se puede envolver
+        // TODA la pantalla en un solo `verticalScroll` como en
+        // [PantallaProveedores] porque abajo hay un `LazyColumn` ("Rutas
+        // activas") -- los dos no combinan en un mismo eje de scroll.
+        // `imePadding()` deja que el teclado empuje este bloque hacia
+        // arriba y el campo enfocado se desplace por encima de él.
+        Column(
+            modifier = Modifier.verticalScroll(rememberScrollState()).imePadding(),
+        ) {
         Text(
             "Registrar salida",
             style = MaterialTheme.typography.titleMedium,
@@ -227,6 +241,7 @@ fun PantallaRutas(nucleo: Nucleo) {
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         ) {
             Text("Confirmar salida")
+        }
         }
 
         Text(
