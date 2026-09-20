@@ -219,7 +219,28 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
         }
 
         BotonBrisas(
-            onClick = { escaneando = true },
+            onClick = {
+                // Limpia todo antes de abrir la cámara -- pedido explícito
+                // del usuario 2026-09-20: sin esto, si se escanea un
+                // segundo carnet (persona equivocada, mala lectura, etc.)
+                // los datos del primero podían quedar mezclados con los del
+                // segundo en vez de partir de cero. Este formulario es un
+                // caso simple para esto: un solo botón llena TODOS los
+                // campos de una vez, a diferencia de Proveedores/Rutas
+                // donde cada escáner llena sólo un paso del formulario y
+                // borrar todo ahí sí destruiría trabajo ya hecho en otros
+                // pasos.
+                cedula = ""
+                nombre = ""
+                empresaSeleccionada = null
+                empresaSugeridaTexto = null
+                tipoIngreso = TipoIngreso.PRAIND
+                personalRuta = false
+                fechaPraind = ""
+                error = null
+                mensaje = null
+                escaneando = true
+            },
             modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
         ) {
             Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
@@ -453,7 +474,11 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                 }
             },
             enabled = !enviando && !praindVencido,
-            modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 32.dp),
+            // Sin padding inferior -- igual que el botón de Proveedores/
+            // Rutas: ese `bottom = 32.dp` sumado al `imePadding()` del
+            // teclado dejaba un hueco visible de más entre el botón y el
+            // teclado (reportado 2026-09-20).
+            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
             Text(if (enviando) "Guardando…" else "Guardar")
         }
