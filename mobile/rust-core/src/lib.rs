@@ -33,7 +33,6 @@ use control_acceso::domain::resultado_salida_ruta::ResultadoSalidaRuta as Result
 use control_acceso::models::empresa::Empresa as EmpresaNucleo;
 use control_acceso::models::empresa_proveedor::EmpresaProveedor as EmpresaProveedorNucleo;
 use control_acceso::models::encargado_ruta::EncargadoRuta as EncargadoRutaNucleo;
-use control_acceso::models::vehiculo_ruta::VehiculoRuta as VehiculoRutaNucleo;
 use control_acceso::models::medio_ingreso::MedioIngreso as MedioIngresoNucleo;
 use control_acceso::models::prestamo_gafete_provisional::PrestamoGafeteProvisionalActivoResumen as PrestamoGafeteProvisionalActivoResumenNucleo;
 use control_acceso::models::registro_ingreso::{
@@ -45,6 +44,7 @@ use control_acceso::models::ruta::Ruta as RutaNucleo;
 use control_acceso::models::salida_ruta::SalidaRutaActivaResumen as SalidaRutaActivaResumenNucleo;
 use control_acceso::models::tipo_ingreso::TipoIngreso as TipoIngresoNucleo;
 use control_acceso::models::usuario::RolUsuario as RolUsuarioNucleo;
+use control_acceso::models::vehiculo_ruta::VehiculoRuta as VehiculoRutaNucleo;
 use control_acceso::nube::IngresoProveedorRemoto as IngresoProveedorRemotoNucleo;
 use control_acceso::nube::IngresoRemoto as IngresoRemotoNucleo;
 use control_acceso::nube::PrestamoGafeteProvisionalRemoto as PrestamoGafeteProvisionalRemotoNucleo;
