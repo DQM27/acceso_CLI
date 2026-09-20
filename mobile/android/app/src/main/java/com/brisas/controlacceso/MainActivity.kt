@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -95,8 +99,18 @@ class MainActivity : ComponentActivity() {
                     // no en el `Surface`, para que el COLOR de fondo sí
                     // llegue hasta atrás de las barras del sistema aunque el
                     // contenido interactivo no.
+                    //
+                    // Se excluye el IME a propósito: `safeDrawing` = barras +
+                    // cutout + teclado, y varias pantallas (Login, Proveedores,
+                    // Rutas, etc.) ya ponen su propio `imePadding()` en el
+                    // `Column` con scroll para poder desplazarse hasta el
+                    // campo enfocado. Si además éste de acá reservaba espacio
+                    // por el teclado, el hueco se contaba dos veces -- hueco
+                    // enorme entre el input y el teclado (reportado
+                    // 2026-09-20, ej. "Vehículo y gafete" en Proveedores).
                     Box(
-                        modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+                        modifier = Modifier.fillMaxSize()
+                            .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime)),
                         contentAlignment = Alignment.TopCenter,
                     ) {
                         Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
