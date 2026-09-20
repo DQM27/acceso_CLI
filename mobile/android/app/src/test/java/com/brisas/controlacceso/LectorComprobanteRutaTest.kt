@@ -102,7 +102,6 @@ class LectorComprobanteRutaTest {
         assertEquals("CRR079", resultado?.numeroRuta)
         assertEquals(1, resultado?.subNumero)
         assertEquals("700101452", resultado?.numeroDocumento)
-        assertEquals(FechaDocumento(15, 9, 2026), resultado?.fecha)
     }
 
     // Las 3 fixtures de abajo (H2/H3/H4) usan la tabla de materiales REAL
@@ -206,12 +205,14 @@ class LectorComprobanteRutaTest {
     }
 
     @Test
-    fun sinFechaSigueExtrayendoElRestoConFechaNula() {
+    fun sinLaLineaDeFechaSigueExtrayendoRutaYTransporte() {
+        // Ya no se lee "Fecha de Entrega:" (pedido explícito del usuario
+        // 2026-09-20) -- que la línea esté o no ni siquiera debería
+        // importar para el resto de la extracción.
         val texto = comprobantePrincipal.lineToRemoveContaining("Fecha de Entrega:")
         val resultado = extraerComprobanteRuta(texto)
         assertEquals("CRR079", resultado?.numeroRuta)
         assertEquals("700101452", resultado?.numeroDocumento)
-        assertNull(resultado?.fecha)
     }
 
     @Test

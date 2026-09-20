@@ -18,15 +18,15 @@ data class RectanguloEntero(val left: Int, val top: Int, val right: Int, val bot
 /// de verdad se analiza sean SIEMPRE la misma región (una sola fuente de
 /// verdad por pantalla, no dos copias que se puedan desalinear).
 ///
-/// `TARJETA_ID` (cédula, gafete, carnet KOF) es angosta a propósito --
-/// proporción real de una cédula/tarjeta ISO/IEC 7810 ID-1. `DOCUMENTO_ANCHO`
-/// (comprobante de carga de ruta) es mucho más grande porque ese papel no
-/// es una tarjeta: los campos que hacen falta (Ruta/Transporte/Fecha de
-/// Entrega) están repartidos en un bloque bastante más alto y ancho que
-/// una cédula (hallazgo 2026-09-20: con la región angosta de tarjeta, la
-/// franja analizada nunca llegaba a cubrir "Fecha de Entrega"). Pendiente
-/// de ajustar con más pruebas reales -- es la primera estimación, no un
-/// número medido contra el papel físico.
+/// Sólo `TARJETA_ID` por ahora (cédula, gafete, carnet KOF) -- proporción
+/// real de una cédula/tarjeta ISO/IEC 7810 ID-1. Hubo un `DOCUMENTO_ANCHO`
+/// para el comprobante de carga de ruta (un papel mucho más grande que una
+/// tarjeta), pero se sacó -- dos estimaciones a ciegas seguidas (una
+/// forzando horizontal, otra ensanchando en vertical) terminaron dejando
+/// esa pantalla sin leer ningún campo (hallazgo 2026-09-20). Ese perfil
+/// vuelve a analizar el frame completo (`region = null` en
+/// `analizarCedula`/`MarcoGuiaCedula`) hasta tener datos reales de qué
+/// región conviene.
 data class RegionGuiaOcr(
     val fraccionAncho: Float,
     val proporcionAnchoAlto: Float,
@@ -47,15 +47,6 @@ data class RegionGuiaOcr(
 
     companion object {
         val TARJETA_ID = RegionGuiaOcr(fraccionAncho = 0.84f, proporcionAnchoAlto = 1.586f, fraccionTopCentro = 0.52f)
-        // El comprobante de carga de ruta se escanea con el teléfono
-        // siempre vertical, igual que las otras 3 pantallas (se descartó
-        // forzar horizontal -- pedido explícito del usuario 2026-09-20, la
-        // rotación automática se veía mal y la cámara no cerraba bien al
-        // capturar). El papel es más ancho que una cédula, así que en vez
-        // de rotar nada, la región es casi todo el ancho de la pantalla y
-        // bastante más alta que la de una tarjeta -- primera estimación,
-        // pendiente de ajustar con más pruebas reales.
-        val DOCUMENTO_ANCHO = RegionGuiaOcr(fraccionAncho = 0.94f, proporcionAnchoAlto = 1.2f, fraccionTopCentro = 0.42f)
     }
 }
 

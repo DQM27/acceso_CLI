@@ -2,6 +2,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Normal (sin permiso en tiempo de ejecución): hace falta para
+         controlar la intensidad de la vibración de confirmación/error del
+         escáner con Vibrator/VibrationEffect en vez del haptic feedback
+         semántico de Compose, que no deja elegir qué tan fuerte vibra. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!-- La base de datos local trae cédulas, hashes de contraseña e

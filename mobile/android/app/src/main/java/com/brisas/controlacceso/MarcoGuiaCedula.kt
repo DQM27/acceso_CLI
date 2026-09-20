@@ -49,13 +49,12 @@ fun MarcoGuiaCedula(
     // Misma región que de verdad se recorta antes del OCR (ver
     // `RegionGuiaOcr`/`analizarCedula`) -- por defecto la angosta de
     // tarjeta, para que las 3 pantallas que no pasan nada distinto no
-    // cambien en nada. El comprobante de carga de ruta pasa
-    // `RegionGuiaOcr.DOCUMENTO_ANCHO` para que el recuadro que se ve en
-    // pantalla sea el mismo que el que de verdad se analiza -- si no,
-    // quedaría un recuadro angosto dibujado encima de un recorte ancho,
-    // mintiéndole a quien opera sobre qué parte de la hoja hace falta
-    // encuadrar.
-    region: RegionGuiaOcr = RegionGuiaOcr.TARJETA_ID,
+    // cambien en nada. `null` (comprobante de carga de ruta, sin recorte
+    // -- ver el comentario en `analizarCedula`) dibuja el recuadro sobre
+    // toda la pantalla, sin oscurecer nada: mentirle a quien opera con un
+    // recuadro angosto cuando en realidad se está analizando el frame
+    // completo sería peor que no mostrar ningún límite.
+    region: RegionGuiaOcr? = RegionGuiaOcr.TARJETA_ID,
 ) {
     val transicion = rememberInfiniteTransition(label = "marcoOcr")
     val pulso by transicion.animateFloat(
@@ -79,11 +78,12 @@ fun MarcoGuiaCedula(
 
     Canvas(modifier = modifier) {
         // `region` es la misma fuente de verdad que usa el recorte real
-        // antes del OCR -- ver el doc-comment de `RegionGuiaOcr`.
-        val anchoGuia = size.width * region.fraccionAncho
-        val altoGuia = anchoGuia / region.proporcionAnchoAlto
+        // antes del OCR -- ver el doc-comment de `RegionGuiaOcr`. Sin
+        // región (`null`), el recuadro es toda la pantalla.
+        val anchoGuia = region?.let { size.width * it.fraccionAncho } ?: size.width
+        val altoGuia = region?.let { anchoGuia / it.proporcionAnchoAlto } ?: size.height
         val izquierdaGuia = (size.width - anchoGuia) / 2f
-        val arribaGuia = size.height * region.fraccionTopCentro - altoGuia / 2f
+        val arribaGuia = region?.let { size.height * it.fraccionTopCentro - altoGuia / 2f } ?: 0f
         val guia = Rect(
             left = izquierdaGuia,
             top = arribaGuia,

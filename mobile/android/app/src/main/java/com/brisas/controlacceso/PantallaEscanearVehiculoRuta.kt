@@ -26,9 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -80,7 +78,6 @@ private fun VistaCamaraVehiculoRuta(
     val lifecycleOwner = LocalLifecycleOwner.current
     val alcance = rememberCoroutineScope()
     val onDetectadoActual by rememberUpdatedState(onVehiculoDetectado)
-    val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     var ultimoMensaje by remember { mutableStateOf(mensajeInicial) }
@@ -144,7 +141,7 @@ private fun VistaCamaraVehiculoRuta(
                                             estado = EstadoEscaneo.CONFIRMADO
                                             ultimoMensaje = "${resultado.valor} confirmado"
                                             if (detectada.compareAndSet(false, true)) {
-                                                haptica.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                vibrarConfirmacion(contexto)
                                                 reproducirSonidoConfirmacion()
                                                 trabajoResultado?.cancel()
                                                 trabajoResultado = alcance.launch {

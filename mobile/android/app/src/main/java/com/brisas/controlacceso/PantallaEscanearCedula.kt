@@ -30,9 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -92,17 +90,12 @@ private fun VistaCamaraCedula(
     val alcance = rememberCoroutineScope()
     val onDocumentoActual by rememberUpdatedState(onDocumentoDetectado)
     val obtenerResultadoActual by rememberUpdatedState(resultadoUltimoEscaneo)
-    // Háptica semántica de Compose, no `Vibrator`/`VibrationEffect` crudo --
-    // la guía oficial de Android desaconseja `createOneShot`/`createWaveform`
-    // para feedback de UI regular ("demasiado fuerte/genérico"), y este
-    // camino no requiere permiso VIBRATE ni impone una vibración fija.
-    // `HapticFeedbackType.LongPress` (pensado exactamente para esto) resultó
-    // no vibrar en un Samsung real con "Interacciones táctiles" activado
-    // (hallazgo 2026-09-20) -- probablemente ese OEM no lo tiene mapeado a
-    // ningún efecto propio. Se usa `LongPress` en su lugar: es el
-    // constante más vieja de todas (API 1), la que con más certeza está
-    // implementada en cualquier fabricante.
-    val haptica = LocalHapticFeedback.current
+    // `Vibrator`/`VibrationEffect` directo (`vibrarConfirmacion`/
+    // `vibrarError` en `EscaneoCompartido.kt`), no la háptica semántica de
+    // Compose -- `HapticFeedbackType.Confirm` resultó no vibrar en un
+    // Samsung real con "Interacciones táctiles" activado (hallazgo
+    // 2026-09-20), y de cualquier forma esa API no deja elegir amplitud ni
+    // patrón para poder distinguir éxito de error.
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
@@ -192,6 +185,14 @@ private fun VistaCamaraCedula(
                                 framesSinUltimoValor = 0
                             }
                         }
+                        // Vibración de error al ENTRAR a inválido, no en
+                        // cada frame que se queda ahí -- pedido explícito
+                        // del usuario 2026-09-20 ("si el documento no es
+                        // correcto que vibre más"), sin repetir el golpe
+                        // mientras la persona sigue apuntando mal.
+                        if (resultado.estado == EstadoEscaneo.INVALIDO && estado != EstadoEscaneo.INVALIDO) {
+                            vibrarError(contexto)
+                        }
                         estado = resultado.estado
                         ultimoMensaje = resultado.mensaje
                         vencido = resultado.vencido
@@ -207,8 +208,22 @@ private fun VistaCamaraCedula(
                                 } else {
                                     ultimoValorContinuo = valor
                                     framesSinUltimoValor = 0
-                                    haptica.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    reproducirSonidoConfirmacion()
+                                    // En modo continuo el aviso espera al
+                                    // resultado real de la mutación (ver más
+                                    // abajo) -- pedido explícito del usuario
+                                    // 2026-09-20: escanear un gafete que ya
+                                    // tenía salida registrada vibraba/sonaba
+                                    // exactamente igual que uno que sí salió,
+                                    // porque esto disparaba apenas se leía el
+                                    // texto, antes de saber si la salida se
+                                    // pudo registrar. Sin modo continuo no hay
+                                    // "resultado" que esperar -- el llamador
+                                    // decide qué hacer con el documento
+                                    // después, fuera de esta pantalla.
+                                    if (!continuo) {
+                                        vibrarConfirmacion(contexto)
+                                        reproducirSonidoConfirmacion()
+                                    }
                                     trabajoResultado?.cancel()
                                     trabajoResultado = alcance.launch {
                                         if (!continuo && resultado.vencido) {
@@ -231,6 +246,12 @@ private fun VistaCamaraCedula(
                                             val resultado = obtenerResultadoActual()
                                             if (resultado != null) {
                                                 resultadoMostrado = resultado
+                                                if (resultado.second) {
+                                                    vibrarError(contexto)
+                                                } else {
+                                                    vibrarConfirmacion(contexto)
+                                                    reproducirSonidoConfirmacion()
+                                                }
                                             } else {
                                                 ultimoMensaje = mensajeProcesadoContinuo(modo, valor)
                                             }
@@ -498,10 +519,13 @@ fun analizarCedula(
     sesionActiva: AtomicBoolean,
     onTexto: (String) -> Unit,
     onFallo: () -> Unit,
-    // Angosta (proporción de tarjeta) por defecto -- las pantallas de un
-    // documento más ancho (comprobante de carga de ruta) pasan
-    // `RegionGuiaOcr.DOCUMENTO_ANCHO` para no recortar de más.
-    region: RegionGuiaOcr = RegionGuiaOcr.TARJETA_ID,
+    // Angosta (proporción de tarjeta) por defecto. `null` desactiva el
+    // recorte por completo (frame entero, como antes de este cambio) --
+    // el comprobante de carga de ruta lo usa así: es un papel mucho más
+    // grande que una tarjeta y, sin datos reales todavía de qué región
+    // exacta conviene recortar, adivinar mal significaba dejar de leer
+    // CUALQUIER campo (hallazgo 2026-09-20) en vez de sólo leer peor.
+    region: RegionGuiaOcr? = RegionGuiaOcr.TARJETA_ID,
 ) {
     val mediaImage = imagen.image
     if (mediaImage == null) {
@@ -517,7 +541,7 @@ fun analizarCedula(
     // `recortarParaOcr` devolviendo `null` (formato inesperado, plano
     // corrupto, lo que sea) se cae al frame completo de siempre -- nunca
     // debe romper el escaneo por un recorte que salió mal.
-    val input = recortarParaOcr(mediaImage, rotacion, region) ?: InputImage.fromMediaImage(mediaImage, rotacion)
+    val input = region?.let { recortarParaOcr(mediaImage, rotacion, it) } ?: InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
         .addOnSuccessListener(ejecutorPrincipal) { resultado ->
             if (sesionActiva.get()) {

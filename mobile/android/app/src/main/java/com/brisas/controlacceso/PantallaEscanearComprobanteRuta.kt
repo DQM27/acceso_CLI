@@ -27,9 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -74,7 +72,6 @@ private fun VistaCamaraComprobanteRuta(
     val lifecycleOwner = LocalLifecycleOwner.current
     val alcance = rememberCoroutineScope()
     val onDetectadoActual by rememberUpdatedState(onComprobanteDetectado)
-    val haptica = LocalHapticFeedback.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     // Sólo se crea en debug (ver uso más abajo) -- sondeo exploratorio del
@@ -158,7 +155,7 @@ private fun VistaCamaraComprobanteRuta(
                                         estado = EstadoEscaneo.CONFIRMADO
                                         ultimoMensaje = "Comprobante ${resultado.numeroRuta} confirmado"
                                         if (detectada.compareAndSet(false, true)) {
-                                            haptica.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            vibrarConfirmacion(contexto)
                                             trabajoResultado?.cancel()
                                             trabajoResultado = alcance.launch {
                                                 if (sesionActiva.get()) onDetectadoActual(resultado)
@@ -206,7 +203,14 @@ private fun VistaCamaraComprobanteRuta(
                                     sesionActiva = sesionActiva,
                                     onTexto = onTexto,
                                     onFallo = onFallo,
-                                    region = RegionGuiaOcr.DOCUMENTO_ANCHO,
+                                    // Sin recorte -- pedido explícito del
+                                    // usuario 2026-09-20: con la región
+                                    // angosta/estimada, el comprobante dejó
+                                    // de leer cualquier campo. Sin datos
+                                    // reales de qué región exacta conviene,
+                                    // mejor volver al frame completo que
+                                    // seguir adivinando mal.
+                                    region = null,
                                 )
                             }
                         }
@@ -232,7 +236,7 @@ private fun VistaCamaraComprobanteRuta(
             color = colorMarco,
             estado = estado,
             modifier = Modifier.fillMaxSize(),
-            region = RegionGuiaOcr.DOCUMENTO_ANCHO,
+            region = null,
         )
         Text(
             ultimoMensaje,

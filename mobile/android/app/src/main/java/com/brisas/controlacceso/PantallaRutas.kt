@@ -92,7 +92,6 @@ fun PantallaRutas(nucleo: Nucleo) {
                 extraerDigitosRuta(comprobante.numeroRuta)?.let(viewModel::usarNumeroRutaEscaneado)
                 subNumeroTexto = comprobante.subNumero.toString()
                 numeroDocumento = comprobante.numeroDocumento
-                comprobante.fecha?.let { fechaDocumentoTexto = it.aTextoDDMMYYYYRuta() }
             },
             onCerrar = { escanerRutaAbierto = false },
         )
@@ -137,10 +136,14 @@ fun PantallaRutas(nucleo: Nucleo) {
     val paso2Completo = rutaSeleccionada != null && numeroDocumento.isNotBlank() && fechaDocumentoTexto.isNotBlank()
     val vehiculoSeleccionado = viewModel.vehiculoSeleccionado
     val paso3Completo = vehiculoSeleccionado != null
+    // Ya no bloquea la confirmación (pedido explícito del usuario
+    // 2026-09-20: "elimina la limitación de la fecha") -- `fechaVencida`
+    // se queda sólo como aviso visual en `PasoDocumentoRuta`, y
+    // `tieneCorreo` sigue viajando al backend (`tieneCorreoAutorizacion`)
+    // aunque ya no exista nada que desbloquear con él.
     val fechaVencida = fechaDocumentoTexto.isNotBlank() && fechaDocumentoTexto != fechaHoyTextoRuta()
-    val bloqueadoPorFecha = fechaVencida && !tieneCorreo
     val puedeConfirmar =
-        paso1Completo && paso2Completo && paso3Completo && !bloqueadoPorFecha && !viewModel.registrando
+        paso1Completo && paso2Completo && paso3Completo && !viewModel.registrando
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
         // Scroll propio para este bloque -- sin esto, el teclado tapaba el

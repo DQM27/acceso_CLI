@@ -18,22 +18,6 @@ class RecorteImagenOcrTest {
     }
 
     @Test
-    fun rectanguloDocumentoAnchoUsaCasiTodoElAnchoEnPantallaVertical() {
-        // Pantalla de teléfono normal (vertical) -- ya no se fuerza
-        // horizontal (revertido 2026-09-20).
-        val rect = RegionGuiaOcr.DOCUMENTO_ANCHO.rectanguloEnPixeles(anchoVisible = 1080, altoVisible = 2400)
-
-        assertEquals(1015, rect.width) // 94% de 1080, truncado
-        // Bastante más ancho, en proporción, que el recuadro de tarjeta
-        // (1.586:1): acá el ancho es más grande que el alto/1.2.
-        assertEquals(true, rect.width > rect.height)
-        // Centrado horizontalmente -- el margen restante (65px) es impar,
-        // así que la división entera deja como mucho 1px de diferencia
-        // entre los dos lados, no una igualdad exacta.
-        assertEquals(true, kotlin.math.abs(rect.left - (1080 - rect.right)) <= 1)
-    }
-
-    @Test
     fun rectanguloGuiaNuncaSaleDeLaImagenAunConDimensionesChicas() {
         val rect = RegionGuiaOcr.TARJETA_ID.rectanguloEnPixeles(anchoVisible = 10, altoVisible = 10)
 
