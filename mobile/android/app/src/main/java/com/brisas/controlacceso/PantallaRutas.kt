@@ -387,7 +387,17 @@ private fun BotonCamaraCuadrado(onEscanear: () -> Unit) {
 /// 2026-09-19 (pedido explícito: "más de lo mismo, debe ser un buscador",
 /// igual que [PasoVehiculo]) -- el paso no se da por completo sin elegir
 /// un [EncargadoRuta] real de la lista.
-@OptIn(ExperimentalMaterial3Api::class)
+///
+/// Resultados como tarjetas tocables (2026-09-20, pedido explícito del
+/// usuario), no en un `DropdownMenu` como antes -- mismo motivo que llevó a
+/// cambiar el buscador de Gafetes Provisionales (ver `FilaEncargadoProvisional`
+/// en `PantallaGafetesProvisionales.kt`, que usa exactamente este patrón
+/// contra el mismo catálogo): `ExposedDropdownMenuBox` sacaba el foco del
+/// campo y cerraba el teclado al borrar texto hasta vaciar la lista de
+/// resultados (bug reportado en pruebas reales, 2026-09-20) -- el popup de
+/// `DropdownMenu` compite por el foco con el `TextField` en cada
+/// recomposición del anclaje. La tarjeta lleva el código de empleado en
+/// negrita (pedido explícito) para que se lea más organizado.
 @Composable
 private fun PasoEncargado(
     completado: Boolean,
@@ -398,8 +408,6 @@ private fun PasoEncargado(
     sinCoincidencias: Boolean,
     onEscanear: () -> Unit,
 ) {
-    var menuAbierto by remember { mutableStateOf(false) }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -416,48 +424,66 @@ private fun PasoEncargado(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ExposedDropdownMenuBox(
-                expanded = menuAbierto && resultados.isNotEmpty(),
-                onExpandedChange = { menuAbierto = it },
-                modifier = Modifier.weight(1f),
-            ) {
-                OutlinedTextField(
-                    value = texto,
-                    onValueChange = {
-                        onCambiarTexto(it)
-                        menuAbierto = true
-                    },
-                    placeholder = { Text("Nombre o código de empleado") },
-                    singleLine = true,
-                    shape = FormaCampoBrisas,
-                    colors = ColoresCampoBrisas(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(AlturaBusquedaBrisas)
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
-                )
-                DropdownMenu(
-                    expanded = menuAbierto && resultados.isNotEmpty(),
-                    onDismissRequest = { menuAbierto = false },
-                ) {
-                    resultados.forEach { encargado ->
-                        DropdownMenuItem(
-                            text = { Text("${encargado.nombre} · ${encargado.codigoEmpleado}") },
-                            onClick = {
-                                onElegir(encargado)
-                                menuAbierto = false
-                            },
-                        )
-                    }
+            OutlinedTextField(
+                value = texto,
+                onValueChange = onCambiarTexto,
+                placeholder = { Text("Nombre o código de empleado") },
+                singleLine = true,
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
+                modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
+            )
+            BotonCamaraCuadrado(onEscanear)
+        }
+        if (resultados.isNotEmpty()) {
+            // Tope de 6 -- mismo criterio que Contratista/Gafetes
+            // Provisionales: esta lista vive dentro de una Column sin scroll
+            // propio (la de todo el formulario sí, pero no ésta puntual),
+            // sin un tope crece sin límite y empuja el resto del formulario
+            // fuera de pantalla.
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                resultados.take(6).forEach { encargado ->
+                    FilaEncargadoRuta(encargado, onClick = { onElegir(encargado) })
                 }
             }
-            BotonCamaraCuadrado(onEscanear)
         }
         if (sinCoincidencias) {
             Text(
                 "Ese encargado no existe en el catálogo.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+/// Mismo patrón que `FilaEncargadoProvisional` (`PantallaGafetesProvisionales.kt`,
+/// mismo catálogo `encargados_ruta`) pero con el código de empleado en
+/// negrita -- pedido explícito del usuario para que la tarjeta (más chica
+/// que la de Contratista: sólo tiene estos dos datos) se organice mejor.
+@Composable
+private fun FilaEncargadoRuta(encargado: EncargadoRuta, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(encargado.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Row {
+            Text(
+                "Código de empleado: ",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                encargado.codigoEmpleado,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold,
             )
         }
     }
