@@ -4,22 +4,21 @@ import VersionFooter from "./VersionFooter";
 
 describe("VersionFooter", () => {
   it("muestra la versión real de Tauri (no la de package.json)", async () => {
-    render(<VersionFooter colapsado={false} />);
+    render(<VersionFooter />);
     await waitFor(() => expect(screen.getByText("v0.0.0-test")).toBeTruthy());
   });
 
-  it("colapsado oculta el texto pero conserva el title para el tooltip", async () => {
-    const { container } = render(<VersionFooter colapsado />);
+  it("conserva el title con el nombre completo para el tooltip", async () => {
+    const { container } = render(<VersionFooter />);
     await waitFor(() =>
       expect(container.querySelector(".shell-sidebar-version")?.getAttribute("title")).toBe(
         "Lattis v0.0.0-test",
       ),
     );
-    expect(screen.queryByText("v0.0.0-test")).toBeNull();
   });
 
   it("no renderiza nada mientras la versión todavía no llegó", () => {
-    const { container } = render(<VersionFooter colapsado={false} />);
+    const { container } = render(<VersionFooter />);
     expect(container.querySelector(".shell-sidebar-version")).toBeNull();
   });
 });

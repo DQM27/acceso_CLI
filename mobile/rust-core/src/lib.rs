@@ -19,10 +19,7 @@ use control_acceso::database::queries::Igualdad;
 use control_acceso::database::queries::contratistas::{
     ContratistaResumen as ContratistaResumenNucleo, FiltroContratistas as FiltroContratistasNucleo,
 };
-use control_acceso::database::queries::ingresos::{
-    FiltroHistorial as FiltroHistorialNucleo, FiltroIngresosActivos as FiltroIngresosActivosNucleo,
-    MovimientoIngresoResumen as MovimientoIngresoResumenNucleo,
-};
+use control_acceso::database::queries::ingresos::FiltroIngresosActivos as FiltroIngresosActivosNucleo;
 use control_acceso::database::queries::usuarios::{
     FiltroUsuarios as FiltroUsuariosNucleo, UsuarioResumen as UsuarioResumenNucleo,
 };
@@ -450,82 +447,6 @@ impl From<ResultadoIngresoRegistradoNucleo> for ResultadoIngresoRegistrado {
                 }
             }
             ResultadoIngresoRegistradoNucleo::Migrado => Self::Migrado,
-        }
-    }
-}
-
-/// Espejo de `MovimientoIngresoResumen` — un renglón de Historial (entrada
-/// + salida, si ya la tiene).
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct MovimientoHistorial {
-    pub registro_id: i64,
-    pub uuid: String,
-    pub cedula: String,
-    pub contratista_nombre: String,
-    pub empresa_nombre: String,
-    pub tipo_ingreso: TipoIngreso,
-    pub medio_ingreso: MedioIngreso,
-    pub fecha_hora_ingreso: String,
-    pub fecha_hora_salida: Option<String>,
-    pub gafete_numero: Option<i64>,
-    pub usuario_ingreso_nombre: String,
-    pub usuario_salida_nombre: Option<String>,
-    pub resultado_acceso: ResultadoIngresoRegistrado,
-}
-
-#[derive(Debug, Clone, uniffi::Record)]
-pub struct MovimientoHistorialSitio {
-    pub uuid: String,
-    pub cedula: Option<String>,
-    pub contratista_nombre: String,
-    pub empresa_nombre: Option<String>,
-    pub fecha_hora_ingreso: String,
-    pub fecha_hora_salida: Option<String>,
-    pub gafete_numero: Option<i64>,
-    pub usuario_ingreso_nombre: Option<String>,
-    pub usuario_salida_nombre: Option<String>,
-    pub motivo_resultado: Option<String>,
-    /// `"pc"`/`"mobile"`, o `None` para filas sincronizadas antes de que
-    /// esto existiera (`database::schema`, migración 26) -- pedido del
-    /// usuario para diferenciar de un vistazo de qué dispositivo vino un
-    /// movimiento.
-    pub dispositivo_entrada_tipo: Option<String>,
-}
-
-impl From<control_acceso::application::MovimientoHistorialSitio> for MovimientoHistorialSitio {
-    fn from(m: control_acceso::application::MovimientoHistorialSitio) -> Self {
-        Self {
-            uuid: m.uuid,
-            cedula: m.cedula,
-            contratista_nombre: m.contratista_nombre,
-            empresa_nombre: m.empresa_nombre,
-            fecha_hora_ingreso: m.fecha_hora_ingreso,
-            fecha_hora_salida: m.fecha_hora_salida,
-            gafete_numero: m.gafete_numero,
-            usuario_ingreso_nombre: m.usuario_ingreso_nombre,
-            usuario_salida_nombre: m.usuario_salida_nombre,
-            motivo_resultado: m.motivo_resultado,
-            dispositivo_entrada_tipo: m.dispositivo_entrada_tipo,
-        }
-    }
-}
-
-impl From<MovimientoIngresoResumenNucleo> for MovimientoHistorial {
-    fn from(movimiento: MovimientoIngresoResumenNucleo) -> Self {
-        Self {
-            registro_id: movimiento.registro_id,
-            uuid: movimiento.uuid,
-            cedula: movimiento.cedula,
-            contratista_nombre: movimiento.contratista_nombre,
-            empresa_nombre: movimiento.empresa_nombre,
-            tipo_ingreso: movimiento.tipo_ingreso.into(),
-            medio_ingreso: movimiento.medio_ingreso.into(),
-            fecha_hora_ingreso: movimiento.fecha_hora_ingreso.to_rfc3339(),
-            fecha_hora_salida: movimiento.fecha_hora_salida.map(|f| f.to_rfc3339()),
-            gafete_numero: movimiento.gafete_numero,
-            usuario_ingreso_nombre: movimiento.usuario_ingreso_nombre,
-            usuario_salida_nombre: movimiento.usuario_salida_nombre,
-            resultado_acceso: movimiento.resultado_acceso.into(),
         }
     }
 }
@@ -1192,8 +1113,6 @@ struct SesionSupabaseCacheada {
 /// Mismo tope que escritorio (ver `estado.rs`) -- aplicado por el cliente,
 /// no depende de la configuración de expiración del proyecto de Supabase.
 const TOPE_PRESENCIA_SUPABASE: std::time::Duration = std::time::Duration::from_secs(12 * 60 * 60);
-
-const DIAS_HISTORIAL_MOVIL: i64 = 7;
 
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
 /// abre una vez al arrancar la app y se reusa en todas las pantallas (login,
@@ -1867,53 +1786,6 @@ impl Nucleo {
     pub fn cerrar_sesion(&self) {
         *self.sesion_lock() = None;
         *self.lock_sesion_supabase() = None;
-    }
-
-    /// Últimos 7 días por defecto: en Android el historial es contexto
-    /// operativo reciente, no auditoría exhaustiva. Para rangos amplios,
-    /// filtros densos y exportación están web/escritorio.
-    pub fn buscar_historial(&self, texto: String) -> Result<Vec<MovimientoHistorial>, NucleoError> {
-        const LIMITE_MOVIL: usize = 30;
-
-        let ahora = chrono::Utc::now();
-        let desde = ahora - chrono::Duration::days(DIAS_HISTORIAL_MOVIL);
-        // `hasta` es un límite exclusivo — dejarlo exactamente en "ahora"
-        // puede excluir un movimiento creado en el mismo instante (choca
-        // con la resolución del reloj). Mismo margen que ya usa
-        // `Historial.tsx` cuando `hasta` queda abierto ("hoy + 1 día").
-        let hasta = ahora + chrono::Duration::days(1);
-        let texto_normalizado = texto.trim();
-        let filtro = FiltroHistorialNucleo {
-            texto_persona: (!texto_normalizado.is_empty()).then(|| texto_normalizado.to_string()),
-            limite: LIMITE_MOVIL,
-            ..FiltroHistorialNucleo::nuevo(desde, hasta)
-        };
-        let pagina = self
-            .core_lock()
-            .buscar_historial(&filtro)
-            .map_err(|origen| NucleoError::Interno {
-                mensaje: interno(origen),
-            })?;
-        Ok(pagina.items.into_iter().map(Into::into).collect())
-    }
-
-    pub fn listar_historial_sitio(
-        &self,
-        texto: String,
-    ) -> Result<Vec<MovimientoHistorialSitio>, NucleoError> {
-        let actor = self.actor_autenticado()?;
-        let ahora = chrono::Utc::now();
-        Ok(self
-            .core_lock()
-            .listar_historial_sitio(
-                &actor,
-                ahora - chrono::Duration::days(DIAS_HISTORIAL_MOVIL),
-                ahora + chrono::Duration::days(1),
-                &texto,
-            )?
-            .into_iter()
-            .map(Into::into)
-            .collect())
     }
 
     /// Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
@@ -3482,45 +3354,6 @@ mod tests {
 
         let resultado = nucleo.crear_empresa("Otra Empresa".to_string());
         assert!(matches!(resultado, Err(NucleoError::NoAutenticado)));
-    }
-
-    #[test]
-    fn buscar_historial_encuentra_movimiento_reciente() {
-        let archivo = tempfile::NamedTempFile::new().unwrap();
-        let ruta = archivo.path().to_str().unwrap().to_string();
-        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
-        conexion
-            .execute_batch(
-                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
-                 INSERT INTO contratistas (
-                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
-                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
-                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
-                     '999999999', 'Actor Test',
-                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
-                     'ROOT', 1
-                 );",
-            )
-            .unwrap();
-        drop(conexion);
-
-        let nucleo = Nucleo::abrir(ruta).unwrap();
-        nucleo
-            .autenticar(
-                "999999999".to_string(),
-                "clave_prueba_123".to_string(),
-                String::new(),
-                String::new(),
-            )
-            .unwrap();
-        nucleo
-            .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
-            .unwrap();
-
-        let movimientos = nucleo.buscar_historial(String::new()).unwrap();
-        assert_eq!(movimientos.len(), 1);
-        assert_eq!(movimientos[0].contratista_nombre, "Contratista Test");
-        assert!(movimientos[0].fecha_hora_salida.is_none());
     }
 
     /// Antes del aplanado de autorización (ver

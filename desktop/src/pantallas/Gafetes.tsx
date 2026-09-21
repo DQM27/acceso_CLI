@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import { useHotkeys } from "react-hotkeys-hook";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
@@ -116,7 +115,6 @@ export default function Gafetes() {
     [texto, tipo],
   );
 
-  useHotkeys("ctrl+n", () => setFormularioAbierto(true), { preventDefault: true });
   // `true`: el catálogo ahora también recibe cambios de OTRO dispositivo
   // del sitio (`recibir_catalogo_del_sitio`, ver `docs/planes-implementados/plan-persistencia-nube.md`)
   // -- sin esto, marcar un gafete perdido/resuelto desde otra PC no se
@@ -134,7 +132,7 @@ export default function Gafetes() {
             onFilaDobleClic={setGestionAbierta}
             controles={
               <>
-                <button className="boton" title="Ctrl+N" onClick={() => setFormularioAbierto(true)}>
+                <button className="boton" onClick={() => setFormularioAbierto(true)}>
                   + Nuevo
                 </button>
                 <div className="campo" style={{ flex: "0 1 16rem" }}>

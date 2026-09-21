@@ -287,8 +287,10 @@ class RutasViewModel(
     }
 
     companion object {
-        // Mismo valor que `ActivosViewModel` -- ver su comentario.
-        private const val DEBOUNCE_MS = 300L
+        // Bajado a 150ms (pedido explícito del usuario, 2026-09-21), mismo
+        // valor en los 5 buscadores con debounce -- ver el comentario de
+        // `ActivosViewModel`.
+        private const val DEBOUNCE_MS = 150L
 
         fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
             initializer { RutasViewModel(nucleo) }

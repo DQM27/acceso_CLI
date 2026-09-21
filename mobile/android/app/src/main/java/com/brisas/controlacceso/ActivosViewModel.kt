@@ -451,11 +451,11 @@ class ActivosViewModel(
     }
 
     companion object {
-        // Ver el comentario en `cambiarTexto`. 300ms es el mismo orden de
-        // magnitud que usan la mayoría de buscadores con debounce -- ya no
-        // se siente el retraso al escribir, pero absorbe una racha normal
-        // de tecleo.
-        private const val DEBOUNCE_BUSQUEDA_MS = 300L
+        // Ver el comentario en `cambiarTexto`. Bajado de 300ms a 150ms
+        // (pedido explícito del usuario, 2026-09-21, tras probar 200ms y
+        // confirmar que la búsqueda local no lo resiente), mismo valor en
+        // los 5 buscadores con debounce de la app.
+        private const val DEBOUNCE_BUSQUEDA_MS = 150L
 
         fun factory(
             nucleo: Nucleo,

@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import uniffi.control_acceso_mobile.EmpresaProveedor
 import uniffi.control_acceso_mobile.EncargadoRuta
 
 /** Radio de los campos "filled" (buscadores, login) -- iguala el de
@@ -45,8 +46,8 @@ internal val FormaCampoBrisas = RoundedCornerShape(16.dp)
 /** Altura de los campos de búsqueda "filled" (~10% más bajo que la altura
  * por defecto de un `TextField` sin label, pedido explícito 2026-09-15) --
  * distinto de [AlturaControlBrisas] (botones) a propósito. Compartido entre
- * [PantallaActivos] y [PantallaHistorial] para que ambos buscadores luzcan
- * igual (2026-09-15). */
+ * varias pantallas con buscador (Activos, Rutas, Proveedores...) para que
+ * todas luzcan igual (2026-09-15). */
 internal val AlturaBusquedaBrisas = 50.dp
 
 /** Forma de las píldoras de selector ([FilaPildoras]) -- antes cápsula
@@ -271,5 +272,29 @@ fun FilaEncargadoRuta(encargado: EncargadoRuta, onClick: () -> Unit) {
                 fontWeight = FontWeight.Bold,
             )
         }
+    }
+}
+
+/// Tarjeta de un resultado de búsqueda de empresa proveedora -- mismo look
+/// que [FilaEncargadoRuta] (una sola fuente de verdad para "resultado de
+/// búsqueda tocable"), pero sin segunda línea: `EmpresaProveedor` sólo tiene
+/// nombre, no hay un segundo dato que mostrarle protagonismo. Reemplaza al
+/// `ExposedDropdownMenuBox`/`DropdownMenu` que tenía antes
+/// `PasoEmpresaProveedora` (`PantallaProveedores.kt`) -- mismo bug que ya se
+/// arregló acá para Rutas y Gafetes Provisionales: el popup de
+/// `DropdownMenu` compite por el foco con el `TextField` en cada
+/// recomposición del anclaje y cerraba el teclado con cada letra tipeada
+/// (reportado en pruebas reales, 2026-09-21).
+@Composable
+fun FilaEmpresaProveedor(empresa: EmpresaProveedor, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+    ) {
+        Text(empresa.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
     }
 }

@@ -147,7 +147,7 @@ export default function Sidebar({
         onDoubleClick={onToggleColapsado}
       />
 
-      <VersionFooter colapsado={colapsado} />
+      <VersionFooter />
 
       {menu && (
         <MenuContextualSecciones

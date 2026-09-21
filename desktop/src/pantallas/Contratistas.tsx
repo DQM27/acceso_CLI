@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -89,8 +88,6 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
           (seleccionadas.length > 0 ? ` · ${seleccionadas.length} seleccionado(s)` : ""),
   );
 
-  useHotkeys("ctrl+n", () => setFormularioAbierto("crear"), { preventDefault: true });
-
   useEffect(() => {
     // Sólo activas -- una empresa desactivada no es una opción válida en el
     // desplegable del formulario. `FormularioContratista` agrega aparte la
@@ -147,7 +144,7 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
             filtrosPorColumna
             controles={
               <>
-                <button className="boton" title="Ctrl+N" onClick={() => setFormularioAbierto("crear")}>
+                <button className="boton" onClick={() => setFormularioAbierto("crear")}>
                   + Nuevo
                 </button>
                 <div className="campo" style={{ flex: "0 1 16rem" }}>

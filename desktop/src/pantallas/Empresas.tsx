@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import { useHotkeys } from "react-hotkeys-hook";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -64,8 +63,6 @@ export default function Empresas() {
   const filas: FilaEmpresa[] = tipo === "contratista" ? filasContratista : filasProveedor;
   useBarraEstado(cargando ? "Cargando…" : `${filas.length} resultado(s)`);
 
-  useHotkeys("ctrl+n", () => setFormularioAbierto("crear"), { preventDefault: true });
-
   const recargar = useCallback(
     (estaVigente: () => boolean = () => true) => {
       setCargando(true);
@@ -113,7 +110,7 @@ export default function Empresas() {
           <option value="proveedor">Empresas proveedoras</option>
         </select>
       </div>
-      <button className="boton" title="Ctrl+N" onClick={() => setFormularioAbierto("crear")}>
+      <button className="boton" onClick={() => setFormularioAbierto("crear")}>
         + Nueva
       </button>
       <div className="campo" style={{ flex: "0 1 16rem" }}>
