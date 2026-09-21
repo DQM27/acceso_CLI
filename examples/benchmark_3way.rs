@@ -159,7 +159,7 @@ fn main() {
             );
 
             let resultado = core
-                .registrar_ingreso(&actor, 1, MedioIngreso::Caminando, None)
+                .registrar_ingreso(&actor, 1, MedioIngreso::Caminando, None, None)
                 .expect("registrar_ingreso no debería fallar en el caso feliz sembrado");
 
             core.registrar_salida(&actor, resultado.registro_id)

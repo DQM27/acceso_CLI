@@ -899,7 +899,7 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_devolucion_gafete_provisional(`ptr`: Long,`prestamoId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor(`ptr`: Long,`cedula`: RustBuffer.ByValue,`nombre`: RustBuffer.ByValue,`empresaId`: Long,`placa`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
@@ -1174,7 +1174,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional() and 0xFFFF) != 33923) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() and 0xFFFF) != 64645) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() and 0xFFFF) != 38089) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor() and 0xFFFF) != 65024) {
@@ -1996,7 +1996,7 @@ public interface NucleoInterface {
      */
     fun `registrarDevolucionGafeteProvisional`(`prestamoId`: kotlin.Long)
     
-    fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?): ResultadoRegistroEntrada
+    fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?): ResultadoRegistroEntrada
     
     /**
      * Registra el ingreso (apertura) del ciclo de un proveedor -- espejo
@@ -3136,7 +3136,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
 
     
-    @Throws(NucleoException::class)override fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?): ResultadoRegistroEntrada {
+    @Throws(NucleoException::class)override fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?): ResultadoRegistroEntrada {
             return FfiConverterTypeResultadoRegistroEntrada.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
@@ -3145,7 +3145,8 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         
         FfiConverterLong.lower(`contratistaId`),
         FfiConverterTypeMedioIngreso.lower(`medio`),
-        FfiConverterOptionalLong.lower(`gafete`),_status)
+        FfiConverterOptionalLong.lower(`gafete`),
+        FfiConverterOptionalString.lower(`placa`),_status)
 }
     }
     )
@@ -3879,6 +3880,14 @@ data class IngresoActivoResumen (
     , 
     var `gafeteNumero`: kotlin.Long?
     , 
+    /**
+     * Placa del vehículo -- `Some` sólo cuando `medio_ingreso` es
+     * `Vehiculo`; `None` en datos viejos pre-migración aunque el medio sea
+     * `Vehiculo` (ver el doc-comment del mismo campo en el núcleo,
+     * `services::registro_ingreso_service::IngresoActivoResumen`).
+     */
+    var `placa`: kotlin.String?
+    , 
     var `usuarioIngresoNombre`: kotlin.String
     , 
     var `resultadoAcceso`: ResultadoAcceso
@@ -3907,6 +3916,7 @@ public object FfiConverterTypeIngresoActivoResumen: FfiConverterRustBuffer<Ingre
             FfiConverterTypeMedioIngreso.read(buf),
             FfiConverterString.read(buf),
             FfiConverterOptionalLong.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterTypeResultadoAcceso.read(buf),
         )
@@ -3922,6 +3932,7 @@ public object FfiConverterTypeIngresoActivoResumen: FfiConverterRustBuffer<Ingre
             FfiConverterTypeMedioIngreso.allocationSize(value.`medioIngreso`) +
             FfiConverterString.allocationSize(value.`fechaHoraIngreso`) +
             FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterOptionalString.allocationSize(value.`placa`) +
             FfiConverterString.allocationSize(value.`usuarioIngresoNombre`) +
             FfiConverterTypeResultadoAcceso.allocationSize(value.`resultadoAcceso`)
     )
@@ -3936,6 +3947,7 @@ public object FfiConverterTypeIngresoActivoResumen: FfiConverterRustBuffer<Ingre
             FfiConverterTypeMedioIngreso.write(value.`medioIngreso`, buf)
             FfiConverterString.write(value.`fechaHoraIngreso`, buf)
             FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
+            FfiConverterOptionalString.write(value.`placa`, buf)
             FfiConverterString.write(value.`usuarioIngresoNombre`, buf)
             FfiConverterTypeResultadoAcceso.write(value.`resultadoAcceso`, buf)
     }
@@ -4366,6 +4378,8 @@ data class PrestamoGafeteProvisionalActivoResumen (
     var `gafeteNumero`: kotlin.Long
     , 
     var `fechaHoraEntrega`: kotlin.String
+    , 
+    var `usuarioEntregaNombre`: kotlin.String
     
 ){
     
@@ -4387,6 +4401,7 @@ public object FfiConverterTypePrestamoGafeteProvisionalActivoResumen: FfiConvert
             FfiConverterString.read(buf),
             FfiConverterLong.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
         )
     }
 
@@ -4395,7 +4410,8 @@ public object FfiConverterTypePrestamoGafeteProvisionalActivoResumen: FfiConvert
             FfiConverterString.allocationSize(value.`encargadoNombre`) +
             FfiConverterString.allocationSize(value.`encargadoCodigoEmpleado`) +
             FfiConverterLong.allocationSize(value.`gafeteNumero`) +
-            FfiConverterString.allocationSize(value.`fechaHoraEntrega`)
+            FfiConverterString.allocationSize(value.`fechaHoraEntrega`) +
+            FfiConverterString.allocationSize(value.`usuarioEntregaNombre`)
     )
 
     override fun write(value: PrestamoGafeteProvisionalActivoResumen, buf: ByteBuffer) {
@@ -4404,6 +4420,7 @@ public object FfiConverterTypePrestamoGafeteProvisionalActivoResumen: FfiConvert
             FfiConverterString.write(value.`encargadoCodigoEmpleado`, buf)
             FfiConverterLong.write(value.`gafeteNumero`, buf)
             FfiConverterString.write(value.`fechaHoraEntrega`, buf)
+            FfiConverterString.write(value.`usuarioEntregaNombre`, buf)
     }
 }
 

@@ -963,6 +963,53 @@ fn historial_convierte_tipos_medios_y_fechas_seguras() {
     ));
 }
 
+/// `placa` viaja hasta `IngresoActivoLectura`/`MovimientoIngresoResumen` --
+/// ambas lecturas (Activos e Historial) deben devolverla tal cual quedó
+/// persistida, `None` cuando no hay (dato viejo pre-`MIGRACION_49` o
+/// `CAMINANDO`).
+#[test]
+fn activos_e_historial_devuelven_la_placa_persistida() {
+    let base = preparar_base();
+    base.connection
+        .execute(
+            "INSERT INTO registro_ingresos(
+                contratista_id,empresa_id,fecha_hora_ingreso,medio_ingreso,tipo_ingreso,
+                gafete_numero,usuario_ingreso_id,
+                contratista_cedula,contratista_nombre,empresa_nombre,
+                usuario_ingreso_nombre,fecha_vencimiento_praind,
+                es_personal_ruta,tiene_acceso,resultado_acceso,motivo_resultado,
+                reglas_version,placa
+            ) SELECT ?1,?2,?3,'VEHICULO','SWAT',
+                NULL,?4,
+                c.cedula,c.nombre,e.nombre,ui.nombre,c.fecha_vencimiento_praind,
+                c.es_personal_ruta,c.tiene_acceso,'MIGRADO','DATOS_RECONSTRUIDOS',0,?5
+              FROM contratistas c
+              INNER JOIN empresas e ON e.id=?2
+              INNER JOIN usuarios ui ON ui.id=?4
+              WHERE c.id=?1",
+            params![
+                base.contratista_uno,
+                base.empresa_uno,
+                control_acceso::tiempo::serializar_utc(dt("2026-08-12 07:00:00")),
+                base.usuario_entrada,
+                "ABC123",
+            ],
+        )
+        .unwrap();
+
+    let activos = SqliteIngresosQuery::new(&base.connection)
+        .listar_activos(&FiltroIngresosActivos::default())
+        .unwrap();
+    assert_eq!(activos.items.len(), 1);
+    assert_eq!(activos.items[0].placa.as_deref(), Some("ABC123"));
+
+    let historial = SqliteIngresosQuery::new(&base.connection)
+        .buscar_historial(&filtro_historial())
+        .unwrap();
+    assert_eq!(historial.items.len(), 1);
+    assert_eq!(historial.items[0].placa.as_deref(), Some("ABC123"));
+}
+
 #[test]
 fn service_rechaza_rango_invalido_y_devuelve_pagina_valida() {
     let base = preparar_base();

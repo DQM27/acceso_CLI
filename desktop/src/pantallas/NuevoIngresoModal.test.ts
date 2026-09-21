@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validarGafete } from "./NuevoIngresoModal";
+import { validarGafete, validarPlaca } from "./NuevoIngresoModal";
 
 describe("validarGafete", () => {
   it("sin gafete requerido, siempre válido con numero null", () => {
@@ -28,5 +28,17 @@ describe("validarGafete", () => {
     // parseInt("12abc") da 12, no NaN -- mismo comportamiento que ya tenía
     // el código original antes de extraer la función, no un cambio nuevo.
     expect(validarGafete("12abc", true)).toEqual({ valido: true, numero: 12 });
+  });
+});
+
+describe("validarPlaca", () => {
+  it("vacía o sólo espacios es inválida", () => {
+    expect(validarPlaca("")).toEqual({ valido: false, mensaje: "La placa es requerida" });
+    expect(validarPlaca("   ")).toEqual({ valido: false, mensaje: "La placa es requerida" });
+  });
+
+  it("recorta espacios y acepta cualquier texto no vacío", () => {
+    expect(validarPlaca("ABC123")).toEqual({ valido: true, placa: "ABC123" });
+    expect(validarPlaca("  ABC123  ")).toEqual({ valido: true, placa: "ABC123" });
   });
 });

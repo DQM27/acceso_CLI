@@ -88,6 +88,7 @@ fn historial_reconstruye_el_estado_de_la_empresa_al_momento_del_ingreso() {
             contratista_id,
             MedioIngreso::Caminando,
             Some(18),
+            None,
             usuario_entrada,
             fecha("2026-08-12 08:00:00"),
         )
@@ -125,6 +126,7 @@ fn cambios_maestros_no_reescriben_el_movimiento_historico() {
             contratista_id,
             MedioIngreso::Caminando,
             Some(18),
+            None,
             usuario_entrada,
             entrada,
         )
@@ -232,6 +234,7 @@ fn sqlite_impide_reescribir_o_eliminar_un_movimiento() {
             contratista_id,
             MedioIngreso::Caminando,
             Some(18),
+            None,
             usuario_entrada,
             fecha("2026-08-12 08:00:00"),
         )

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT"
+authors = ["Daniel Quintana — DQM27"]
 
 [lib]
 name = "control_acceso_mobile"

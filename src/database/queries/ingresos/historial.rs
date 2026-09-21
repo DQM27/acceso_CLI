@@ -38,6 +38,9 @@ pub struct MovimientoIngresoResumen {
     pub fecha_hora_ingreso: DateTime<Utc>,
     pub fecha_hora_salida: Option<DateTime<Utc>>,
     pub gafete_numero: Option<i64>,
+    /// Placa del vehículo -- ver el doc-comment del mismo campo en
+    /// `IngresoActivoResumen` (`services::registro_ingreso_service`).
+    pub placa: Option<String>,
     pub usuario_ingreso_nombre: String,
     pub usuario_salida_nombre: Option<String>,
     pub resultado_acceso: ResultadoIngresoRegistrado,
@@ -127,7 +130,7 @@ const HISTORIAL_COLUMNAS: &str = "
     r.medio_ingreso, r.fecha_hora_ingreso, r.fecha_hora_salida,
     r.gafete_numero, r.usuario_ingreso_nombre, r.usuario_salida_nombre,
     r.resultado_acceso, r.motivo_resultado, r.reglas_version,
-    r.empresa_activa_snapshot, r.uuid
+    r.empresa_activa_snapshot, r.uuid, r.placa
 ";
 
 pub(super) fn buscar_historial(
@@ -314,6 +317,7 @@ fn convertir_movimiento(row: &Row<'_>) -> rusqlite::Result<MovimientoIngresoResu
         fecha_hora_ingreso: fecha_hora_desde_fila(row, 7)?,
         fecha_hora_salida: fecha_hora_opcional_desde_fila(row, 8)?,
         gafete_numero: row.get(9)?,
+        placa: row.get(17)?,
         usuario_ingreso_nombre: row.get(10)?,
         usuario_salida_nombre: row.get(11)?,
         resultado_acceso: resultado_desde_fila(row, 12, motivo_resultado)?,

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -106,6 +108,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
             onValueChange = { viewModel.cambiarCedula(it) },
             label = { Text("Cédula") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
@@ -115,6 +118,14 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
             onValueChange = { viewModel.cambiarPassword(it) },
             label = { Text("Contraseña") },
             singleLine = true,
+            // `visualTransformation` sólo oculta el texto EN PANTALLA (los
+            // puntos) -- sin `KeyboardType.Password` el teclado del sistema
+            // no sabe que es un campo sensible y sigue armando su predictivo
+            // con lo tipeado (hallazgo real del usuario 2026-09-21: la barra
+            // de sugerencias mostraba "daniel"/"daniel27" mientras escribía
+            // la contraseña). Este flag es lo que de verdad apaga
+            // predicción/autocorrección/diccionario personal para el campo.
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             visualTransformation = PasswordVisualTransformation(),
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),

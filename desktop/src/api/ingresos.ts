@@ -14,6 +14,18 @@ export function textoMedio(medio: MedioIngreso): string {
   return medio === "Vehiculo" ? "Vehículo" : "Caminando";
 }
 
+/** Igual que `textoMedio`, pero muestra la placa en vez del texto genérico
+ * "Vehículo" cuando hay una guardada (`MIGRACION_49`) -- pedido explícito
+ * del usuario, 2026-09-21. Cae a `textoMedio` si no hay placa (dato viejo
+ * pre-migración, o `"Caminando"`), igual que el espejo en el núcleo
+ * (`historial::exportacion::medio_texto_con_placa`). */
+export function textoMedioConPlaca(medio: MedioIngreso, placa: string | null): string {
+  if (medio === "Vehiculo" && placa !== null && placa.trim() !== "") {
+    return placa;
+  }
+  return textoMedio(medio);
+}
+
 export type MotivoDenegacion =
   | "SinAcceso"
   | "PraindVencido"
@@ -74,6 +86,9 @@ export interface IngresoActivoResumen {
   /** ISO 8601 (UTC) — convertir con `new Date(...)` antes de mostrar. */
   fecha_hora_ingreso: string;
   gafete_numero: number | null;
+  /** Placa del vehículo -- sólo cuando `medio_ingreso` es `"Vehiculo"`.
+   * `null` en datos viejos pre-migración aunque el medio sea `"Vehiculo"`. */
+  placa: string | null;
   usuario_ingreso_nombre: string;
   resultado_registrado: ResultadoIngresoRegistrado;
   resultado_acceso: ResultadoAcceso;
@@ -178,8 +193,14 @@ export async function registrarIngreso(
   contratistaId: number,
   medio: MedioIngreso,
   gafete: number | null,
+  placa: string | null,
 ): Promise<ResultadoRegistroEntrada> {
-  const resultado = await invoke<ResultadoRegistroEntrada>("registrar_ingreso", { contratistaId, medio, gafete });
+  const resultado = await invoke<ResultadoRegistroEntrada>("registrar_ingreso", {
+    contratistaId,
+    medio,
+    gafete,
+    placa,
+  });
   solicitarSincronizacionNube();
   return resultado;
 }

@@ -251,6 +251,7 @@ fn detecta_ingreso_activo_sin_cargar_listado() {
             id,
             MedioIngreso::Caminando,
             Some(10),
+            None,
             base.usuario_id,
             fecha_hora(),
         )
@@ -338,6 +339,7 @@ fn registrar_entrada_revalida_cambio_de_acceso_despues_de_preparar() {
             id,
             MedioIngreso::Caminando,
             None,
+            None,
             base.usuario_id,
             fecha_hora()
         ),
@@ -367,6 +369,7 @@ fn registrar_entrada_revalida_ingreso_creado_despues_de_preparar() {
             id,
             MedioIngreso::Caminando,
             None,
+            None,
             base.usuario_id,
             fecha_hora(),
         )
@@ -375,6 +378,7 @@ fn registrar_entrada_revalida_ingreso_creado_despues_de_preparar() {
         service.registrar_entrada(
             id,
             MedioIngreso::Caminando,
+            None,
             None,
             base.usuario_id,
             fecha_hora()

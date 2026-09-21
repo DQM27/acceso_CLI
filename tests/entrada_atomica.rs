@@ -136,6 +136,7 @@ fn ejecutar_en_paralelo(
                     contratista_id,
                     MedioIngreso::Caminando,
                     gafete,
+                    None,
                 ))
             })
         })
@@ -251,6 +252,7 @@ fn una_revocacion_confirmada_antes_del_bloqueo_impide_el_ingreso() {
             contratista_id,
             MedioIngreso::Caminando,
             None,
+            None,
         ));
         resultado_tx.send(resultado).unwrap();
     });
@@ -288,6 +290,7 @@ fn una_revocacion_confirmada_antes_del_bloqueo_impide_el_ingreso() {
             &actor(usuario_id),
             contratista_id,
             MedioIngreso::Caminando,
+            None,
             None,
         )
         .unwrap();

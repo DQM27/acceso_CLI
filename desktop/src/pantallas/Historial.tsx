@@ -14,7 +14,7 @@ import {
   listarHistorial,
   listarHistorialSitio,
   medioIngresoDesdeNube,
-  textoMedio,
+  textoMedioConPlaca,
   tipoIngresoDesdeNube,
 } from "../api";
 import type { MovimientoHistorialRemoto, MovimientoIngresoResumen } from "../api";
@@ -50,6 +50,7 @@ interface FilaRemota {
   fecha_hora_ingreso: string;
   fecha_hora_salida: string | null;
   gafete_numero: number | null;
+  placa: string | null;
   usuario_ingreso_nombre: string;
   usuario_salida_nombre: string | null;
   resultado_acceso: null;
@@ -103,6 +104,7 @@ export function filaDesdeRemoto(remoto: MovimientoHistorialRemoto): FilaHistoria
     fecha_hora_ingreso: remoto.fecha_hora_ingreso,
     fecha_hora_salida: remoto.fecha_hora_salida,
     gafete_numero: remoto.gafete_numero,
+    placa: remoto.placa,
     usuario_ingreso_nombre: remoto.usuario_ingreso_nombre ?? "—",
     usuario_salida_nombre: remoto.usuario_salida_nombre,
     resultado_acceso: null,
@@ -313,7 +315,7 @@ export default function Historial() {
         headerName: "Medio",
         flex: 1,
         minWidth: 100,
-        valueFormatter: (p) => textoMedio(p.value),
+        valueFormatter: (p) => textoMedioConPlaca(p.value, p.data?.placa ?? null),
       },
       {
         field: "gafete_numero",

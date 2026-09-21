@@ -339,6 +339,11 @@ pub struct IngresoActivoResumen {
     pub medio_ingreso: MedioIngreso,
     pub fecha_hora_ingreso: String,
     pub gafete_numero: Option<i64>,
+    /// Placa del vehículo -- `Some` sólo cuando `medio_ingreso` es
+    /// `Vehiculo`; `None` en datos viejos pre-migración aunque el medio sea
+    /// `Vehiculo` (ver el doc-comment del mismo campo en el núcleo,
+    /// `services::registro_ingreso_service::IngresoActivoResumen`).
+    pub placa: Option<String>,
     pub usuario_ingreso_nombre: String,
     pub resultado_acceso: ResultadoAcceso,
 }
@@ -355,6 +360,7 @@ impl From<IngresoActivoResumenNucleo> for IngresoActivoResumen {
             medio_ingreso: activo.medio_ingreso.into(),
             fecha_hora_ingreso: activo.fecha_hora_ingreso.to_rfc3339(),
             gafete_numero: activo.gafete_numero,
+            placa: activo.placa,
             usuario_ingreso_nombre: activo.usuario_ingreso_nombre,
             resultado_acceso: activo.resultado_acceso.into(),
         }
@@ -919,6 +925,7 @@ pub struct PrestamoGafeteProvisionalActivoResumen {
     pub encargado_codigo_empleado: String,
     pub gafete_numero: i64,
     pub fecha_hora_entrega: String,
+    pub usuario_entrega_nombre: String,
 }
 
 impl From<PrestamoGafeteProvisionalActivoResumenNucleo> for PrestamoGafeteProvisionalActivoResumen {
@@ -929,6 +936,7 @@ impl From<PrestamoGafeteProvisionalActivoResumenNucleo> for PrestamoGafeteProvis
             encargado_codigo_empleado: activo.encargado_codigo_empleado,
             gafete_numero: activo.gafete_numero,
             fecha_hora_entrega: activo.fecha_hora_entrega.to_rfc3339(),
+            usuario_entrega_nombre: activo.usuario_entrega_nombre,
         }
     }
 }
@@ -1491,11 +1499,12 @@ impl Nucleo {
         contratista_id: i64,
         medio: MedioIngreso,
         gafete: Option<i64>,
+        placa: Option<String>,
     ) -> Result<ResultadoRegistroEntrada, NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self
             .core_lock()
-            .registrar_ingreso(&actor, contratista_id, medio.into(), gafete)?
+            .registrar_ingreso(&actor, contratista_id, medio.into(), gafete, placa)?
             .into())
     }
 
@@ -3236,7 +3245,7 @@ mod tests {
         assert_eq!(preparacion.resultado_acceso, ResultadoAcceso::Permitido);
 
         let resultado = nucleo
-            .registrar_ingreso(1, MedioIngreso::Caminando, None)
+            .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
             .unwrap();
         assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
     }
@@ -3272,7 +3281,7 @@ mod tests {
             )
             .unwrap();
         let registro = nucleo
-            .registrar_ingreso(1, MedioIngreso::Caminando, None)
+            .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
             .unwrap();
 
         let activos = nucleo
@@ -3327,14 +3336,14 @@ mod tests {
             )
             .unwrap();
         nucleo
-            .registrar_ingreso(1, MedioIngreso::Caminando, Some(7))
+            .registrar_ingreso(1, MedioIngreso::Caminando, Some(7), None)
             .unwrap();
         // Cédula "222222222" no contiene un 7, así que si el modo Gafete
         // filtrara mal (o cayera al modo texto) esto no debería confundirse
         // con el otro contratista de todas formas — el segundo ingreso
         // (sin gafete) es el control negativo de esta prueba.
         nucleo
-            .registrar_ingreso(2, MedioIngreso::Caminando, None)
+            .registrar_ingreso(2, MedioIngreso::Caminando, None, None)
             .unwrap();
 
         let por_gafete = nucleo
@@ -3505,7 +3514,7 @@ mod tests {
             )
             .unwrap();
         nucleo
-            .registrar_ingreso(1, MedioIngreso::Caminando, None)
+            .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
             .unwrap();
 
         let movimientos = nucleo.buscar_historial(String::new()).unwrap();
@@ -3602,7 +3611,7 @@ mod tests {
         let ruta = archivo.path().to_str().unwrap().to_string();
         let nucleo = Nucleo::abrir(ruta).unwrap();
 
-        let resultado = nucleo.registrar_ingreso(1, MedioIngreso::Caminando, None);
+        let resultado = nucleo.registrar_ingreso(1, MedioIngreso::Caminando, None, None);
 
         assert!(matches!(resultado, Err(NucleoError::NoAutenticado)));
     }
@@ -3741,6 +3750,12 @@ mod tests {
         assert_eq!(activos.len(), 1);
         assert_eq!(activos[0].id, prestamo_id);
         assert_eq!(activos[0].encargado_codigo_empleado, "5040017");
+        // Cubre la conversión `From<PrestamoGafeteProvisionalActivoResumenNucleo>`
+        // -- el test del repositorio (núcleo) ya cubre que la columna se lea
+        // bien de la base, pero no que el mapeo a la struct de UniFFI la
+        // traiga consigo (un campo olvidado en ese `From` no lo detectaría
+        // ningún otro test).
+        assert_eq!(activos[0].usuario_entrega_nombre, "Actor Test");
 
         nucleo
             .registrar_devolucion_gafete_provisional(prestamo_id)

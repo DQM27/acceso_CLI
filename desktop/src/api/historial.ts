@@ -33,6 +33,9 @@ export interface MovimientoIngresoResumen {
   /** ISO 8601 (UTC), `null` si el movimiento sigue activo (sin salida). */
   fecha_hora_salida: string | null;
   gafete_numero: number | null;
+  /** Placa del vehículo -- sólo cuando `medio_ingreso` es `"Vehiculo"`.
+   * `null` en datos viejos pre-migración aunque el medio sea `"Vehiculo"`. */
+  placa: string | null;
   usuario_ingreso_nombre: string;
   usuario_salida_nombre: string | null;
   resultado_acceso: ResultadoIngresoRegistrado;
@@ -85,6 +88,7 @@ export interface MovimientoHistorialRemoto {
   fecha_hora_ingreso: string;
   fecha_hora_salida: string | null;
   gafete_numero: number | null;
+  placa: string | null;
   usuario_ingreso_nombre: string | null;
   usuario_salida_nombre: string | null;
   /** `"pc"`/`"movil"`, o `null` para filas sincronizadas antes de que esto

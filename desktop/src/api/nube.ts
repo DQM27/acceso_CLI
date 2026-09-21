@@ -95,6 +95,7 @@ export interface IngresoRemoto {
   tipo_ingreso: string | null;
   medio_ingreso: string | null;
   gafete_numero: number | null;
+  placa: string | null;
 }
 
 /** Espejo de `IngresoRemoto`, pero para el ciclo de proveedores -- ver

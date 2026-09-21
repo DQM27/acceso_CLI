@@ -240,7 +240,8 @@ impl PrestamoGafeteProvisionalRepository for SqlitePrestamoGafeteProvisionalRepo
     fn listar_activos(&self) -> Result<Vec<PrestamoGafeteProvisionalActivoResumen>, DatabaseError> {
         let mut statement = self.connection.prepare(
             "
-            SELECT id, encargado_nombre, encargado_codigo_empleado, gafete_numero, fecha_hora_entrega
+            SELECT id, encargado_nombre, encargado_codigo_empleado, gafete_numero, fecha_hora_entrega,
+                   usuario_entrega_nombre
             FROM prestamos_gafete_provisional
             WHERE fecha_hora_devolucion IS NULL
             ORDER BY fecha_hora_entrega ASC
@@ -254,6 +255,7 @@ impl PrestamoGafeteProvisionalRepository for SqlitePrestamoGafeteProvisionalRepo
                     row.get::<_, String>(2)?,
                     row.get::<_, i64>(3)?,
                     row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -267,6 +269,7 @@ impl PrestamoGafeteProvisionalRepository for SqlitePrestamoGafeteProvisionalRepo
                     encargado_codigo_empleado,
                     gafete_numero,
                     fecha_hora_texto,
+                    usuario_entrega_nombre,
                 )| {
                     let fecha_hora_entrega = parsear_utc(&fecha_hora_texto)
                         .map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))?;
@@ -276,6 +279,7 @@ impl PrestamoGafeteProvisionalRepository for SqlitePrestamoGafeteProvisionalRepo
                         encargado_codigo_empleado,
                         gafete_numero,
                         fecha_hora_entrega,
+                        usuario_entrega_nombre,
                     })
                 },
             )
@@ -432,5 +436,6 @@ mod tests {
         assert_eq!(fila.id, activo_id);
         assert_eq!(fila.encargado_nombre, "Michael Araya Retana");
         assert_eq!(fila.gafete_numero, 3);
+        assert_eq!(fila.usuario_entrega_nombre, "Operador");
     }
 }

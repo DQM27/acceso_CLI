@@ -13,6 +13,7 @@ function remoto(overrides: Partial<MovimientoHistorialRemoto> = {}): MovimientoH
     fecha_hora_ingreso: "2027-03-08T12:00:00Z",
     fecha_hora_salida: null,
     gafete_numero: null,
+    placa: null,
     usuario_ingreso_nombre: "root",
     usuario_salida_nombre: null,
     dispositivo_entrada_tipo: "pc",

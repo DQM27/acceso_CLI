@@ -145,7 +145,9 @@ jobs:
       # arriba.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          workspaces: mobile/rust-core
+          workspaces: |
+            mobile/rust-core
+            sqlite3mc-vendor-lib
           lookup-only: true
 
       - name: Instalar NDK
@@ -157,19 +159,37 @@ jobs:
       - name: Instalar cargo-ndk
         run: cargo install cargo-ndk
 
-      # Mismos dos ABIs que el build local (ver mobile/README.md):
-      # arm64-v8a para el dispositivo real, x86_64 además por si algún día
-      # hace falta correr este mismo APK en un emulador de pruebas.
-      - name: Compilar el núcleo Rust para Android (arm64-v8a + x86_64)
-        working-directory: mobile/rust-core
+      # Mismo motor que desktop (`cifrado-sqlite3mc`, ver el job de arriba)
+      # en vez del `cifrado-sqlcipher` que traía por default mobile/rust-core
+      # -- decisión explícita del usuario 2026-09-21 para que ambas
+      # plataformas usen el mismo cifrado de verdad, no sólo en dev. El
+      # vendorizado es un paso previo obligatorio (mismo motivo que el job de
+      # escritorio) y, a diferencia de ahí, hay que repetirlo UNA VEZ POR
+      # ABI: `sqlite3mc-vendor-lib/dist` es una ruta fija (no por-target), así
+      # que compilar el vendorizado para el segundo ABI pisa el .a del
+      # primero -- por eso va intercalado con el build del núcleo de cada
+      # ABI, no una sola vez al principio. Mismos dos ABIs que el build local
+      # (ver mobile/README.md): arm64-v8a para el dispositivo real, x86_64
+      # además por si algún día hace falta correr este mismo APK en un
+      # emulador de pruebas.
+      - name: Compilar el núcleo Rust para Android (arm64-v8a)
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
-          mkdir -p ../android/app/src/main/jniLibs/arm64-v8a
-          mkdir -p ../android/app/src/main/jniLibs/x86_64
-          cargo ndk -t aarch64-linux-android build --release
+          mkdir -p mobile/android/app/src/main/jniLibs/arm64-v8a
+          cargo ndk -t aarch64-linux-android build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+          cd mobile/rust-core
+          cargo ndk -t aarch64-linux-android build --release --no-default-features --features cifrado-sqlite3mc
           cp target/aarch64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/arm64-v8a/
-          cargo ndk -t x86_64-linux-android build --release
+
+      - name: Compilar el núcleo Rust para Android (x86_64)
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          mkdir -p mobile/android/app/src/main/jniLibs/x86_64
+          cargo ndk -t x86_64-linux-android build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+          cd mobile/rust-core
+          cargo ndk -t x86_64-linux-android build --release --no-default-features --features cifrado-sqlite3mc
           cp target/x86_64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/x86_64/
 
       # El keystore real nunca está en el repo (ver mobile/.gitignore) --

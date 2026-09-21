@@ -114,6 +114,17 @@ pub enum RegistroIngresoServiceError {
     IngresoActivo,
     #[error("El contratista requiere gafete")]
     GafeteRequerido,
+    /// El medio de ingreso es `Vehiculo` y no se indicó placa -- mismo
+    /// criterio que `GafeteRequerido`, pero para el campo condicional al
+    /// medio en vez de al contratista (`MIGRACION_49`).
+    #[error("La placa es obligatoria cuando el ingreso es en vehículo")]
+    PlacaRequerida,
+    /// El medio de ingreso es `Caminando` pero se indicó una placa -- el
+    /// `CHECK` de `registro_ingresos` la rechazaría de todos modos, pero se
+    /// valida acá para devolver un error de dominio legible en vez de un
+    /// `DatabaseError::Sqlite` crudo.
+    #[error("No se puede indicar placa cuando el ingreso es a pie")]
+    PlacaNoAplica,
     #[error("El gafete ya está asignado")]
     GafeteOcupado,
     #[error("El gafete no está asignado actualmente")]

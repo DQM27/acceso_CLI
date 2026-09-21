@@ -88,6 +88,23 @@ private fun textoDDMMYYYYaIso(texto: String): String {
     return "%s-%s-%s".format(anio.padStart(4, '0'), mes.padStart(2, '0'), dia.padStart(2, '0'))
 }
 
+/// Máscara del campo de vencimiento PRAIND -- descarta todo lo que no sea
+/// dígito (así el usuario no puede meter un "-" de más ni queda uno duplicado
+/// al reconstruir) y reinserta los guiones en las posiciones DD-MM-AAAA a
+/// medida que tipea, hasta los 8 dígitos que ocupa la fecha completa. Mismo
+/// criterio que un campo de tarjeta con máscara -- pedido explícito del
+/// usuario 2026-09-21: sin esto tocaba tipear los guiones a mano con el
+/// teclado completo en vez del numérico.
+private fun formatearFechaDDMMYYYY(texto: String): String {
+    val digitos = texto.filter(Char::isDigit).take(8)
+    return buildString {
+        for (indice in digitos.indices) {
+            append(digitos[indice])
+            if (indice == 1 || indice == 3) append('-')
+        }
+    }
+}
+
 /// Compara texto libre del carnet contra los nombres reales de
 /// `Nucleo.listarEmpresas()` -- ninguna de las dos fuentes garantiza
 /// mayúsculas/espacios idénticos, así que primero se intenta una igualdad
@@ -378,10 +395,11 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
         if (requierePraind(tipoIngreso, personalRuta)) {
             OutlinedTextField(
                 value = fechaPraind,
-                onValueChange = { fechaPraind = it.filter { c -> c.isDigit() || c == '-' } },
+                onValueChange = { fechaPraind = formatearFechaDDMMYYYY(it) },
                 label = { Text("Vencimiento PRAIND (DD-MM-AAAA)") },
                 singleLine = true,
                 isError = praindVencido,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 shape = FormaCampoBrisas,
                 colors = ColoresCampoBrisas(),
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp)

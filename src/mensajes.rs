@@ -201,13 +201,16 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
 pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     use RegistroIngresoServiceError::{
         AccesoDenegado, ContratistaNoEncontrado, GafeteNoDisponible, GafeteNoRegistrado,
-        GafeteOcupado, GafeteRequerido, IngresoActivo, RelojRetrocedido,
+        GafeteOcupado, GafeteRequerido, IngresoActivo, PlacaNoAplica, PlacaRequerida,
+        RelojRetrocedido,
     };
 
     match error {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),
         IngresoActivo => "El contratista ya tiene un ingreso activo".into(),
         GafeteRequerido => "El gafete es requerido".into(),
+        PlacaRequerida => "La placa es obligatoria cuando el ingreso es en vehículo".into(),
+        PlacaNoAplica => "No se puede indicar placa cuando el ingreso es a pie".into(),
         GafeteOcupado => "El gafete ya está en uso".into(),
         GafeteNoRegistrado => "El número de gafete no existe en el catálogo".into(),
         GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),

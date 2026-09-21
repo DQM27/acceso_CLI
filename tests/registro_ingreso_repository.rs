@@ -105,6 +105,7 @@ fn crear_registro(contratista_id: i64, empresa_id: i64, usuario_id: i64) -> Nuev
         medio_ingreso: MedioIngreso::Vehiculo,
         tipo_ingreso: TipoIngreso::Praind,
         gafete_numero: None,
+        placa: Some("XYZ789".into()),
         usuario_ingreso_id: usuario_id,
         datos_historicos: DatosHistoricosEntrada {
             contratista_cedula: "20000001".into(),
@@ -146,7 +147,70 @@ fn debe_crear_y_recuperar_registro() {
     assert_eq!(recuperado.usuario_ingreso_id, usuario_id);
     assert_eq!(recuperado.medio_ingreso, MedioIngreso::Vehiculo);
     assert_eq!(recuperado.tipo_ingreso, TipoIngreso::Praind);
+    assert_eq!(recuperado.placa.as_deref(), Some("XYZ789"));
     assert!(recuperado.salida.is_none());
+}
+
+/// `MIGRACION_49`: la placa sólo puede venir acompañada de `VEHICULO` -- un
+/// intento de guardar placa con `CAMINANDO` debe chocar contra el `CHECK`
+/// de la base, no depender únicamente de la validación de
+/// `RegistroIngresoService` (que se prueba aparte, en
+/// `tests/registro_ingreso_service.rs`).
+#[test]
+fn el_check_de_la_base_rechaza_placa_con_caminando() {
+    let connection = crear_base_de_prueba();
+
+    let empresa_id = crear_empresa(&connection);
+    let usuario_id = crear_usuario(&connection);
+    let contratista_id = crear_contratista(&connection, empresa_id);
+
+    let mut registro = crear_registro(contratista_id, empresa_id, usuario_id);
+    registro.medio_ingreso = MedioIngreso::Caminando;
+    registro.placa = Some("XYZ789".into());
+
+    let repository = SqliteRegistroIngresoRepository::new(&connection);
+
+    let error = repository
+        .crear(&registro)
+        .expect_err("el CHECK debió rechazar placa con CAMINANDO");
+    match error {
+        DatabaseError::Sqlite(rusqlite::Error::SqliteFailure(_, mensaje)) => {
+            assert!(
+                mensaje
+                    .as_deref()
+                    .unwrap_or_default()
+                    .contains("CHECK constraint failed"),
+                "{mensaje:?}"
+            );
+        }
+        otro => panic!("error inesperado: {otro:?}"),
+    }
+}
+
+/// Contraparte: `VEHICULO` sin placa (dato viejo pre-`MIGRACION_49`, o un
+/// caso donde el llamador de más bajo nivel no la exige) sigue siendo
+/// válido para el `CHECK` -- sólo `CAMINANDO` con placa está prohibido.
+#[test]
+fn el_check_de_la_base_permite_vehiculo_sin_placa() {
+    let connection = crear_base_de_prueba();
+
+    let empresa_id = crear_empresa(&connection);
+    let usuario_id = crear_usuario(&connection);
+    let contratista_id = crear_contratista(&connection, empresa_id);
+
+    let mut registro = crear_registro(contratista_id, empresa_id, usuario_id);
+    registro.placa = None;
+
+    let repository = SqliteRegistroIngresoRepository::new(&connection);
+    let id = repository
+        .crear(&registro)
+        .expect("VEHICULO sin placa debe ser aceptado por el CHECK");
+
+    let recuperado = repository
+        .buscar_por_id(id)
+        .unwrap()
+        .expect("el registro no fue encontrado");
+    assert_eq!(recuperado.placa, None);
 }
 
 #[test]

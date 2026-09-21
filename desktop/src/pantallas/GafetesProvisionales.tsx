@@ -109,6 +109,12 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
         valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_entrega) : ""),
       },
       {
+        field: "usuario_entrega_nombre",
+        headerName: "Entregó",
+        flex: 1.1,
+        minWidth: 130,
+      },
+      {
         headerName: "Acción",
         flex: 0.9,
         minWidth: 110,

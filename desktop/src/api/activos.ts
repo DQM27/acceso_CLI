@@ -32,6 +32,7 @@ export interface FilaRemota {
   medio_ingreso: MedioIngreso | null;
   fecha_hora_ingreso: string;
   gafete_numero: number | null;
+  placa: string | null;
   usuario_ingreso_nombre: string;
   resultado_registrado: null;
   resultado_acceso: null;
@@ -56,6 +57,7 @@ export function filaDesdeRemoto(remoto: IngresoRemoto): FilaActiva {
     medio_ingreso: medioIngresoDesdeNube(remoto.medio_ingreso),
     fecha_hora_ingreso: remoto.hora_entrada,
     gafete_numero: remoto.gafete_numero,
+    placa: remoto.placa,
     usuario_ingreso_nombre: remoto.usuario_entrada_nombre ?? "—",
     resultado_registrado: null,
     resultado_acceso: null,

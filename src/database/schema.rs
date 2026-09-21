@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 48;
+pub const SCHEMA_VERSION: i64 = 49;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -389,6 +389,11 @@ fn aplicar_migraciones_posteriores_a_29(
     if *version == 47 {
         aplicar_migracion_48(connection)?;
         *version = 48;
+    }
+
+    if *version == 48 {
+        aplicar_migracion_49(connection)?;
+        *version = 49;
     }
 
     Ok(())
@@ -787,6 +792,39 @@ fn aplicar_migracion_48(connection: &Connection) -> Result<(), SchemaError> {
     transaction.execute_batch(MIGRACION_48)?;
     transaction.execute_batch("PRAGMA user_version = 48")?;
     transaction.commit()?;
+    Ok(())
+}
+
+/// Agrega `placa` a `registro_ingresos` -- la placa del vehículo cuando el
+/// contratista entra en `MedioIngreso::Vehiculo` (pedido explícito del
+/// usuario, 2026-09-21: hoy se elige "Vehículo" como medio pero la placa no
+/// se captura en ningún lado). `NULL` cuando el medio es `CAMINANDO` -- un
+/// `CHECK` de columna cruzada (`(medio_ingreso = 'VEHICULO') OR (placa IS
+/// NULL)`) hace esa regla imposible de romper en la base, igual que ya hace
+/// el `CHECK` de fecha/usuario de salida un poco más abajo. Mismo criterio
+/// que `MIGRACION_44`/`46`: `SQLite` no permite `ALTER TABLE ... ADD COLUMN`
+/// con un `CHECK` que referencia otra columna, así que la tabla se recrea
+/// completa (recreate-and-swap) en vez de un simple `ADD COLUMN`. Se
+/// desactivan las foreign keys durante el swap por el mismo motivo que en
+/// esas dos migraciones: `registro_ingresos` referencia `contratistas`/
+/// `empresas`/`usuarios`, y `DROP TABLE` + `RENAME` intermedios dispararían
+/// `PRAGMA foreign_key_check` en un estado transitorio inválido si quedaran
+/// activas.
+fn aplicar_migracion_49(connection: &Connection) -> Result<(), SchemaError> {
+    connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let resultado = ejecutar_migracion_49(connection);
+    connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+    resultado
+}
+
+fn ejecutar_migracion_49(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_49)?;
+    transaction.execute_batch("PRAGMA user_version = 49")?;
+    transaction.commit()?;
+    if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
+        return Err(SchemaError::MigracionStrictReferenciasInvalidas);
+    }
     Ok(())
 }
 
@@ -3880,4 +3918,197 @@ CREATE UNIQUE INDEX idx_empresas_proveedor_nombre_plegado ON empresas_proveedor 
 // `aplicar_migracion_48` arriba.
 const MIGRACION_48: &str = r"
 ALTER TABLE usuarios ADD COLUMN password_hash_confirmado_en TEXT;
+";
+
+// Agrega `placa` a `registro_ingresos` -- ver el comentario de
+// `aplicar_migracion_49` arriba. Recrea la tabla completa (columnas,
+// índices, triggers) igual que `MIGRACION_21`, sólo sumando la columna
+// nueva y su `CHECK` cruzado con `medio_ingreso`.
+const MIGRACION_49: &str = r"
+CREATE TABLE registro_ingresos_nueva (
+    id INTEGER PRIMARY KEY,
+    contratista_id INTEGER NOT NULL,
+    empresa_id INTEGER NOT NULL,
+    fecha_hora_ingreso TEXT NOT NULL,
+    medio_ingreso TEXT NOT NULL CHECK (medio_ingreso IN ('CAMINANDO', 'VEHICULO')),
+    tipo_ingreso TEXT NOT NULL CHECK (
+        tipo_ingreso IN ('PRAIND', 'IN_HOUSE', 'POR_CORREO', 'SWAT')
+    ),
+    gafete_numero INTEGER,
+    usuario_ingreso_id INTEGER NOT NULL,
+    fecha_hora_salida TEXT,
+    usuario_salida_id INTEGER,
+    contratista_cedula TEXT NOT NULL,
+    contratista_nombre TEXT NOT NULL,
+    empresa_nombre TEXT NOT NULL,
+    usuario_ingreso_nombre TEXT NOT NULL,
+    usuario_salida_nombre TEXT,
+    fecha_vencimiento_praind TEXT,
+    es_personal_ruta INTEGER NOT NULL CHECK (es_personal_ruta IN (0, 1)),
+    tiene_acceso INTEGER NOT NULL CHECK (tiene_acceso IN (0, 1)),
+    resultado_acceso TEXT NOT NULL CHECK (
+        resultado_acceso IN ('PERMITIDO', 'PERMITIDO_CON_ADVERTENCIA', 'MIGRADO')
+    ),
+    motivo_resultado TEXT CHECK (
+        motivo_resultado IS NULL
+        OR motivo_resultado IN ('PRAIND_PROXIMO_VENCER', 'DATOS_RECONSTRUIDOS')
+    ),
+    reglas_version INTEGER NOT NULL CHECK (reglas_version >= 0),
+    empresa_activa_snapshot INTEGER NOT NULL DEFAULT 1
+        CHECK (empresa_activa_snapshot IN (0, 1)),
+    uuid TEXT,
+    placa TEXT,
+    CHECK (
+        (fecha_hora_salida IS NULL
+            AND usuario_salida_id IS NULL
+            AND usuario_salida_nombre IS NULL)
+        OR
+        (fecha_hora_salida IS NOT NULL
+            AND usuario_salida_nombre IS NOT NULL)
+    ),
+    CHECK (fecha_hora_salida IS NULL OR fecha_hora_salida >= fecha_hora_ingreso),
+    CHECK (
+        (resultado_acceso = 'PERMITIDO' AND motivo_resultado IS NULL AND reglas_version > 0)
+        OR
+        (resultado_acceso = 'PERMITIDO_CON_ADVERTENCIA'
+            AND motivo_resultado = 'PRAIND_PROXIMO_VENCER'
+            AND reglas_version > 0)
+        OR
+        (resultado_acceso = 'MIGRADO'
+            AND motivo_resultado = 'DATOS_RECONSTRUIDOS'
+            AND reglas_version = 0)
+    ),
+    CHECK ((medio_ingreso = 'VEHICULO') OR (placa IS NULL)),
+    FOREIGN KEY (contratista_id) REFERENCES contratistas(id),
+    FOREIGN KEY (empresa_id) REFERENCES empresas(id),
+    FOREIGN KEY (usuario_ingreso_id) REFERENCES usuarios(id),
+    FOREIGN KEY (usuario_salida_id) REFERENCES usuarios(id)
+) STRICT;
+
+INSERT INTO registro_ingresos_nueva (
+    id, contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+    gafete_numero, usuario_ingreso_id, fecha_hora_salida, usuario_salida_id,
+    contratista_cedula, contratista_nombre, empresa_nombre, usuario_ingreso_nombre,
+    usuario_salida_nombre, fecha_vencimiento_praind, es_personal_ruta, tiene_acceso,
+    resultado_acceso, motivo_resultado, reglas_version, empresa_activa_snapshot, uuid
+)
+SELECT
+    id, contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+    gafete_numero, usuario_ingreso_id, fecha_hora_salida, usuario_salida_id,
+    contratista_cedula, contratista_nombre, empresa_nombre, usuario_ingreso_nombre,
+    usuario_salida_nombre, fecha_vencimiento_praind, es_personal_ruta, tiene_acceso,
+    resultado_acceso, motivo_resultado, reglas_version, empresa_activa_snapshot, uuid
+FROM registro_ingresos;
+DROP TABLE registro_ingresos;
+ALTER TABLE registro_ingresos_nueva RENAME TO registro_ingresos;
+
+CREATE INDEX idx_registro_ingresos_contratista ON registro_ingresos(contratista_id);
+CREATE INDEX idx_registro_ingresos_empresa ON registro_ingresos(empresa_id);
+CREATE INDEX idx_registro_ingresos_fecha_ingreso ON registro_ingresos(fecha_hora_ingreso);
+CREATE INDEX idx_registro_ingresos_fecha_salida
+ON registro_ingresos(fecha_hora_salida)
+WHERE fecha_hora_salida IS NOT NULL;
+CREATE INDEX idx_registro_ingresos_gafete ON registro_ingresos(gafete_numero);
+CREATE UNIQUE INDEX idx_registro_ingresos_contratista_activo
+ON registro_ingresos(contratista_id) WHERE fecha_hora_salida IS NULL;
+CREATE UNIQUE INDEX idx_registro_ingresos_gafete_activo
+ON registro_ingresos(gafete_numero)
+WHERE gafete_numero IS NOT NULL AND fecha_hora_salida IS NULL;
+CREATE UNIQUE INDEX idx_registro_ingresos_uuid ON registro_ingresos(uuid);
+
+CREATE TRIGGER registro_ingresos_no_eliminar
+BEFORE DELETE ON registro_ingresos
+BEGIN
+    SELECT RAISE(ABORT, 'Los movimientos de acceso no se pueden eliminar');
+END;
+CREATE TRIGGER registro_ingresos_entrada_inmutable
+BEFORE UPDATE OF
+    contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+    gafete_numero, usuario_ingreso_id, contratista_cedula, contratista_nombre,
+    empresa_nombre, usuario_ingreso_nombre, fecha_vencimiento_praind,
+    es_personal_ruta, tiene_acceso, resultado_acceso, motivo_resultado,
+    reglas_version, empresa_activa_snapshot, uuid, placa
+ON registro_ingresos
+WHEN
+    NEW.contratista_id IS NOT OLD.contratista_id
+    OR NEW.empresa_id IS NOT OLD.empresa_id
+    OR NEW.fecha_hora_ingreso IS NOT OLD.fecha_hora_ingreso
+    OR NEW.medio_ingreso IS NOT OLD.medio_ingreso
+    OR NEW.tipo_ingreso IS NOT OLD.tipo_ingreso
+    OR NEW.gafete_numero IS NOT OLD.gafete_numero
+    OR NEW.usuario_ingreso_id IS NOT OLD.usuario_ingreso_id
+    OR NEW.contratista_cedula IS NOT OLD.contratista_cedula
+    OR NEW.contratista_nombre IS NOT OLD.contratista_nombre
+    OR NEW.empresa_nombre IS NOT OLD.empresa_nombre
+    OR NEW.usuario_ingreso_nombre IS NOT OLD.usuario_ingreso_nombre
+    OR NEW.fecha_vencimiento_praind IS NOT OLD.fecha_vencimiento_praind
+    OR NEW.es_personal_ruta IS NOT OLD.es_personal_ruta
+    OR NEW.tiene_acceso IS NOT OLD.tiene_acceso
+    OR NEW.resultado_acceso IS NOT OLD.resultado_acceso
+    OR NEW.motivo_resultado IS NOT OLD.motivo_resultado
+    OR NEW.reglas_version IS NOT OLD.reglas_version
+    OR NEW.empresa_activa_snapshot IS NOT OLD.empresa_activa_snapshot
+    OR NEW.uuid IS NOT OLD.uuid
+    OR NEW.placa IS NOT OLD.placa
+BEGIN
+    SELECT RAISE(ABORT, 'Los datos historicos del ingreso son inmutables');
+END;
+CREATE TRIGGER registro_ingresos_salida_unica
+BEFORE UPDATE OF fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+ON registro_ingresos
+WHEN
+    OLD.fecha_hora_salida IS NOT NULL
+    OR NEW.fecha_hora_salida IS NULL
+    OR NEW.usuario_salida_nombre IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'La salida solo puede registrarse una vez');
+END;
+CREATE TRIGGER registro_ingresos_fecha_utc_insert
+BEFORE INSERT ON registro_ingresos
+WHEN
+    strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_ingreso) IS NOT NEW.fecha_hora_ingreso
+    OR (
+        NEW.fecha_hora_salida IS NOT NULL
+        AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+    )
+BEGIN
+    SELECT RAISE(ABORT, 'Las fechas de movimientos deben estar normalizadas en UTC');
+END;
+CREATE TRIGGER registro_ingresos_salida_utc
+BEFORE UPDATE OF fecha_hora_salida ON registro_ingresos
+WHEN
+    NEW.fecha_hora_salida IS NOT NULL
+    AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+BEGIN
+    SELECT RAISE(ABORT, 'La fecha de salida debe estar normalizada en UTC');
+END;
+CREATE TRIGGER registro_ingresos_fts_ad AFTER DELETE ON registro_ingresos BEGIN
+    INSERT INTO registro_ingresos_fts(
+        registro_ingresos_fts, rowid, contratista_cedula,
+        contratista_nombre, empresa_nombre
+    ) VALUES (
+        'delete', old.id, old.contratista_cedula,
+        old.contratista_nombre, old.empresa_nombre
+    );
+END;
+CREATE TRIGGER registro_ingresos_fts_ai AFTER INSERT ON registro_ingresos BEGIN
+    INSERT INTO registro_ingresos_fts(
+        rowid, contratista_cedula, contratista_nombre, empresa_nombre
+    ) VALUES (
+        new.id, new.contratista_cedula, new.contratista_nombre, new.empresa_nombre
+    );
+END;
+
+-- `ingresos_remotos` es la cache local de ingresos abiertos por OTRO
+-- dispositivo del sitio (`recibir_ingresos_abiertos`, `nube::sincronizacion`)
+-- -- espejo de solo lectura de la fila remota, mismo criterio que ya se uso
+-- para sumarle `medio_ingreso`/`gafete_numero` etc. Sin CHECK cruzado aca
+-- a proposito: es solo cache, la garantia de integridad real vive en
+-- `registro_ingresos` (arriba) y en el esquema remoto de Supabase.
+ALTER TABLE ingresos_remotos ADD COLUMN placa TEXT;
+
+-- `historial_sitio` es el espejo de TODO movimiento del sitio (abierto o
+-- cerrado, de cualquier dispositivo, ver `recibir_historial_del_sitio`) --
+-- mismo motivo que en `ingresos_remotos` arriba, sólo cache de lectura.
+ALTER TABLE historial_sitio ADD COLUMN placa TEXT;
 ";

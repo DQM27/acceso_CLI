@@ -54,6 +54,11 @@ pub struct NuevoRegistroIngreso {
     pub medio_ingreso: MedioIngreso,
     pub tipo_ingreso: TipoIngreso,
     pub gafete_numero: Option<i64>,
+    /// Placa del vehículo -- `Some` sólo cuando `medio_ingreso` es
+    /// `Vehiculo` (`CHECK` cruzado en `registro_ingresos`, `MIGRACION_49`).
+    /// `RegistroIngresoService::registrar_entrada` es quien exige esa
+    /// correspondencia antes de llegar acá.
+    pub placa: Option<String>,
     pub usuario_ingreso_id: i64,
     pub datos_historicos: DatosHistoricosEntrada,
 }
@@ -85,6 +90,10 @@ pub struct RegistroIngreso {
     /// `Some(numero)` = tiene gafete.
     /// `None` = sin gafete (S/G).
     pub gafete_numero: Option<i64>,
+
+    /// Placa del vehículo -- ver el doc-comment del mismo campo en
+    /// `NuevoRegistroIngreso`.
+    pub placa: Option<String>,
 
     pub usuario_ingreso_id: i64,
 

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -25,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 
@@ -77,6 +79,9 @@ fun PantallaCambioObligatorio(
             onValueChange = { password = it },
             label = { Text("Contraseña nueva") },
             singleLine = true,
+            // Ver el comentario del mismo campo en PantallaLogin.kt --
+            // sin esto el predictivo del teclado sigue viendo el texto real.
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             visualTransformation = PasswordVisualTransformation(),
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
@@ -87,6 +92,7 @@ fun PantallaCambioObligatorio(
             onValueChange = { confirmar = it },
             label = { Text("Confirmar contraseña") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             visualTransformation = PasswordVisualTransformation(),
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
