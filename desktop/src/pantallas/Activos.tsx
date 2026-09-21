@@ -14,7 +14,7 @@ export default function Activos({
   onAbrirSalida,
 }: {
   /** Los modales de Nuevo Ingreso y Salida viven en el Shell (se disparan
-   * desde cualquier pantalla vía Ctrl+Shift+N/S, no sólo desde acá) —
+   * desde cualquier pantalla vía Ctrl+N/S, no sólo desde acá) —
    * este número sube cada vez que registran algo, para que la grilla se
    * refresque aunque ya estuviera montada. */
   refrescarSenal?: number;
@@ -241,10 +241,10 @@ export default function Activos({
             onSeleccionCambia={setSeleccionadas}
             controles={
               <>
-                <button className="boton" title="Ctrl+Shift+N" onClick={onAbrirNuevoIngreso}>
+                <button className="boton" title="Ctrl+N" onClick={onAbrirNuevoIngreso}>
                   + Ingreso
                 </button>
-                <button className="boton" title="Ctrl+Shift+S" onClick={onAbrirSalida}>
+                <button className="boton" title="Ctrl+S" onClick={onAbrirSalida}>
                   Salida
                 </button>
                 <div className="campo" style={{ flex: "0 1 16rem" }}>

@@ -470,15 +470,17 @@ function Shell({
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
   const [estadoConexionNube, setEstadoConexionNube] = useState<EstadoConexionNube>(null);
 
-  // Ctrl+Shift+N/S (no Ctrl+N/S solos — esas convenciones quedan libres
-  // para un "nuevo"/"salida" más genéricos más adelante) desde cualquier
-  // pantalla: ambos modales son autosuficientes (buscan y registran sin
-  // depender de qué sección esté abierta), así que no tiene sentido
-  // atarlos a un botón dentro de Activos únicamente. Deshabilitados por
-  // defecto mientras se escribe en un campo de texto (comportamiento por
-  // defecto de la librería).
-  useHotkeys("ctrl+shift+n", () => setModalNuevoIngreso(true), { preventDefault: true });
-  useHotkeys("ctrl+shift+s", () => setModalSalida(true), { preventDefault: true });
+  // Ctrl+N/S globales, desde cualquier pantalla: ambos modales son
+  // autosuficientes (buscan y registran sin depender de qué sección esté
+  // abierta), así que no tiene sentido atarlos a un botón dentro de Activos
+  // únicamente. Antes eran Ctrl+Shift+N/S (para dejar Ctrl+N/S libres para
+  // un "crear/nuevo" local de cada pantalla) -- simplificado a un solo par
+  // de atajos en toda la app (pedido explícito del usuario, 2026-09-21): los
+  // Ctrl+N locales de Contratistas/Empresas/Gafetes se quitaron para no
+  // competir con este. Deshabilitados por defecto mientras se escribe en un
+  // campo de texto (comportamiento por defecto de la librería).
+  useHotkeys("ctrl+n", () => setModalNuevoIngreso(true), { preventDefault: true });
+  useHotkeys("ctrl+s", () => setModalSalida(true), { preventDefault: true });
   // Mismo atajo que la TUI clásica y --cli (Ctrl+Q cierra sesión desde
   // cualquier pantalla) — acá sin tarjeta de confirmación porque el botón
   // "Cerrar sesión" del sidebar tampoco la pide, así el atajo y el botón se
