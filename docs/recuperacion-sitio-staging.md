@@ -42,6 +42,53 @@ sin pasar por CI), el archivo en git tiene que actualizarse en el mismo
 momento -- son dos acciones separadas que nada las mantiene sincronizadas
 solas.
 
+## Drift #2: triggers de realtime faltantes en el esquema versionado (2026-09-21)
+
+Al probar el aviso en vivo (Realtime broadcast, `desktop/src/nubeRealtime.ts`)
+contra este proyecto, el fallback periódico de 2 minutos funcionaba pero el
+aviso instantáneo NUNCA llegaba para altas/bajas de **contratistas, empresas,
+gafetes e ingresos** -- el flujo central de entrada/salida, la parte más
+crítica de todo el sistema.
+
+**Causa:** los triggers `contratistas_emitir_cambio_nube`,
+`empresas_emitir_cambio_nube`, `gafetes_emitir_cambio_nube` e
+`ingresos_emitir_cambio_nube` (todos ejecutan
+`private.emitir_cambio_nube_sitio()`, ver
+`avisa_cambio_nube_segun_quien_escribe_no_quien_creo_la_fila.sql`) existían en
+producción pero **en NINGÚN archivo de `supabase/migrations/`** -- se habían
+creado a mano, fuera de una migración versionada, antes de que el resto de
+las tablas adoptara el hábito de agregar su propio trigger en la misma
+migración que las crea (comparar con `avisa_cambio_nube_en_usuarios.sql` o
+`avisa_cambio_nube_en_cita_sitios.sql`, que sí quedaron documentadas). Este
+proyecto de staging, reconstruido replicando sólo las migraciones del repo,
+nunca los tuvo -- confirmado comparando
+`information_schema.triggers` entre los dos proyectos.
+
+**Por qué importa más que un bug puntual de sandbox:** si algún día hace
+falta reconstruir PRODUCCIÓN desde cero a partir de `supabase/migrations/`
+(desastre real, no solo un sandbox de prueba), esos mismos 4 triggers
+faltarían ahí también -- el esquema versionado en git no bastaba para
+reproducir el 100% de la infraestructura real. Es la misma categoría de
+problema que el drift de Edge Functions de la sección de arriba (código real
+≠ código en git), pero en DDL de base de datos, más difícil de notar porque
+no rompe con un error -- simplemente el realtime queda mudo y todo sigue
+"funcionando" vía el pulso de 2 minutos, silencioso hasta que alguien nota la
+demora.
+
+**Arreglado:** migración `20260921140000_agrega_triggers_faltantes_emitir_cambio_nube.sql`
+agregada al repo (usa `drop trigger if exists` + `create trigger`, segura de
+aplicar también en producción sin duplicar) y aplicada en ambos proyectos.
+
+**Lección para no repetir esto:** cualquier `CREATE TRIGGER`/`CREATE POLICY`/
+cambio de esquema que se aplique a mano contra producción (dashboard o SQL
+directo) tiene que convertirse en una migración committeada en el MISMO
+momento -- nunca "ya lo aplico y después escribo la migración", porque
+"después" es exactamente lo que no pasó acá. Si en algún momento se sospecha
+drift de nuevo, comparar `information_schema.triggers`/`pg_policies`/
+`information_schema.routines` completos entre `xidaepyaljzkpbsxrqsm` y un
+proyecto reconstruido desde migraciones es la forma de confirmarlo (así se
+encontró este caso).
+
 ## Falta a mano (no lo puede hacer el MCP)
 
 ### 1. `DEVICE_SIGNING_KEY` -- bloqueante para cualquier prueba real
