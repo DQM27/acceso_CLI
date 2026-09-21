@@ -1,0 +1,76 @@
+name: Deploy web
+
+# Manual a propósito -- a diferencia de `web.yml` (verificación automática en
+# cada push/PR), publicar a producción es una decisión deliberada, no algo
+# que deba dispararse solo con cada merge a main. Mismo criterio que
+# `release.yml` (desktop/mobile): quien publica elige cuándo y qué versión.
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Cuál desplegar"
+        required: true
+        type: choice
+        options: [web, web-visitas]
+      bump:
+        description: "Tipo de incremento de versión (semver)"
+        required: true
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ inputs.app }}/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+      # Sin --git-tag-version: el commit/tag los arma el paso de abajo, con
+      # mensaje propio y el nombre de la app en el tag (evita chocar con los
+      # tags `v*` de desktop/mobile en release.yml).
+      - name: Subir versión (${{ inputs.bump }})
+        id: version
+        run: |
+          nueva=$(npm version ${{ inputs.bump }} --no-git-tag-version | tr -d 'v')
+          echo "version=$nueva" >> "$GITHUB_OUTPUT"
+
+      - run: npm run build
+
+      - name: Publicar a Cloudflare (${{ inputs.app }})
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: ${{ inputs.app }}
+          command: deploy
+
+      # Sólo después de que el deploy salió bien -- un bump commiteado de un
+      # build que falló en publicar sería mentira (la versión no refleja lo
+      # que está realmente sirviendo Cloudflare).
+      - name: Commitear el bump de versión
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore(release): sube ${{ inputs.app }} a ${{ steps.version.outputs.version }}"
+          git tag "${{ inputs.app }}-v${{ steps.version.outputs.version }}"
+          git push origin HEAD:main
+          git push origin "${{ inputs.app }}-v${{ steps.version.outputs.version }}"
