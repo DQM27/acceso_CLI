@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -28,13 +29,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
@@ -49,13 +46,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -469,7 +471,6 @@ private fun PasoDatosProveedor(
 
 /// Paso 2 -- mismo buscador con alta inline que ya existía, ahora dentro de
 /// su propia tarjeta numerada.
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PasoEmpresaProveedora(
     completado: Boolean,
@@ -480,13 +481,33 @@ private fun PasoEmpresaProveedora(
     onElegir: (EmpresaProveedor) -> Unit,
     onCrear: (String) -> Unit,
 ) {
-    var menuAbierto by remember { mutableStateOf(false) }
     // `resultados` queda vacío tanto "sin coincidencias todavía" como justo
     // después de elegir una empresa (`elegirEmpresa` los limpia) -- sin
     // `!completado` acá, el botón "Crear empresa" seguía apareciendo con
     // una empresa YA seleccionada (bug reportado en pruebas reales,
     // 2026-09-17: dejaba crear un duplicado de una empresa que ya existía).
     val sinCoincidencias = !completado && texto.isNotBlank() && resultados.isEmpty()
+
+    // Resultados en un `Popup` propio (no un `ExposedDropdownMenuBox`/
+    // `DropdownMenu` como antes) -- `DropdownMenu` usa por dentro un Popup
+    // FOCUSABLE, que compite por el foco con el `TextField` en cada
+    // recomposición del anclaje y cerraba el teclado con cada letra tipeada
+    // (bug reportado en pruebas reales, 2026-09-21). `PopupProperties(
+    // focusable = false)` es la diferencia clave: nunca le saca el foco al
+    // campo, así que el teclado se queda abierto sea cual sea el resultado.
+    // Flota por ENCIMA del campo (arriba, tapando la tarjeta "Datos del
+    // proveedor" si hace falta), nunca abajo -- con el teclado abierto no
+    // queda espacio visible debajo del campo, y ahí tapaba justo lo que se
+    // estaba tipeando (pedido explícito del usuario, 2026-09-21, tras probar
+    // la versión con `alignment = BottomStart`). `altoListaPx` mide el alto
+    // real de la lista ya renderizada; el offset Y = -(alto + gap) empuja el
+    // Popup hacia arriba esa misma distancia, dejando su borde inferior justo
+    // encima del campo. En el primer frame (`altoListaPx == 0`, todavía sin
+    // medir) el Popup nace superpuesto al campo y salta a su lugar apenas se
+    // mide -- parpadeo de un frame, aceptable frente a tapar el texto.
+    var anchoCampoPx by remember { mutableStateOf(0) }
+    var altoListaPx by remember { mutableStateOf(0) }
+    val densidad = LocalDensity.current
 
     TarjetaPasoProveedor(
         2,
@@ -511,37 +532,36 @@ private fun PasoEmpresaProveedora(
             }
         },
     ) {
-        ExposedDropdownMenuBox(
-            expanded = menuAbierto && resultados.isNotEmpty(),
-            onExpandedChange = { menuAbierto = it },
-        ) {
+        Box(modifier = Modifier.onSizeChanged { anchoCampoPx = it.width }) {
             OutlinedTextField(
                 value = texto,
-                onValueChange = {
-                    onCambiarTexto(it)
-                    menuAbierto = true
-                },
+                onValueChange = onCambiarTexto,
                 placeholder = { Text("Nombre de la empresa") },
                 singleLine = true,
                 shape = FormaCampoBrisas,
                 colors = ColoresCampoBrisas(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(AlturaBusquedaBrisas)
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
+                modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
             )
-            DropdownMenu(
-                expanded = menuAbierto && resultados.isNotEmpty(),
-                onDismissRequest = { menuAbierto = false },
-            ) {
-                resultados.forEach { empresa ->
-                    DropdownMenuItem(
-                        text = { Text(empresa.nombre) },
-                        onClick = {
-                            onElegir(empresa)
-                            menuAbierto = false
-                        },
-                    )
+            if (resultados.isNotEmpty()) {
+                Popup(
+                    alignment = Alignment.TopStart,
+                    offset = IntOffset(0, -(altoListaPx + with(densidad) { 4.dp.roundToPx() })),
+                    properties = PopupProperties(focusable = false),
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .width(with(densidad) { anchoCampoPx.toDp() })
+                            .onSizeChanged { altoListaPx = it.height },
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 6.dp,
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            resultados.take(6).forEach { empresa ->
+                                FilaEmpresaProveedor(empresa, onClick = { onElegir(empresa) })
+                            }
+                        }
+                    }
                 }
             }
         }

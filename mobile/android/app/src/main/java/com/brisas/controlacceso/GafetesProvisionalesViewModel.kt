@@ -188,8 +188,9 @@ class GafetesProvisionalesViewModel(
     }
 
     companion object {
-        // Mismo valor que `RutasViewModel`/`ActivosViewModel`.
-        private const val DEBOUNCE_MS = 300L
+        // Bajado a 150ms (pedido explícito del usuario, 2026-09-21), mismo
+        // valor en los 5 buscadores con debounce de la app.
+        private const val DEBOUNCE_MS = 150L
 
         fun factory(
             nucleo: Nucleo,
