@@ -96,6 +96,13 @@ input {
 
 .campo input,
 .campo select {
+  /* Explícito a propósito -- sin esto, un input que no es hijo directo de
+     `.campo` (ej. envuelto en el `<div style={{position:"relative"}}>` del
+     spinner de búsqueda en NuevoIngresoModal.tsx) pierde el estiramiento
+     automático que le daba `.campo` como flex column y cae a su ancho
+     intrínseco por defecto (~20 caracteres, el `size` de un <input>) --
+     hallazgo real del usuario 2026-09-21, el buscador se veía diminuto. */
+  width: 100%;
   min-height: var(--control-altura);
   padding: 0.4rem 0.7rem;
   border-radius: var(--radio-chico);

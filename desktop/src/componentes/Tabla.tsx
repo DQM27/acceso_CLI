@@ -11,6 +11,7 @@ import type {
   ColumnState,
   GridReadyEvent,
   SortChangedEvent,
+  TextMatcherParams,
 } from "ag-grid-community";
 import { useSeccionActiva } from "../contexto/BarraEstadoContexto";
 import { useUsuarioId } from "../contexto/SesionContexto";
@@ -31,6 +32,69 @@ import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
  * server-side, exportar) se agregan recién cuando una pantalla real las
  * necesite — no antes.
  */
+/** Espejo en JS de `PLEGAR` (SQLite, `database/schema.rs`) -- mismo criterio
+ * de "sin tildes/mayúsculas no importa" que ya tiene el buscador de Rust
+ * (`database/search.rs`). El `quickFilterText` propio de AG Grid sólo hace
+ * `.toUpperCase()`, sin tocar diacríticos -- sin esto, buscar "Sanches" en
+ * la grilla no encontraba a "Sánchez" aunque el mismo texto sí funcionara en
+ * el buscador del modal "Nuevo ingreso" (hallazgo real del usuario,
+ * 2026-09-21: dos buscadores con reglas distintas para el mismo dato). */
+function plegar(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase();
+}
+
+/** `quickFilterParser`/`quickFilterMatcher` de AG Grid -- el parser pliega
+ * cada palabra tecleada, el matcher pliega el texto agregado de la fila
+ * antes de comparar (AG Grid ya lo entrega en mayúsculas, `plegar` sólo le
+ * saca los acentos). Mismo AND implícito que el default de AG Grid: todas
+ * las palabras tienen que aparecer en algún lado de la fila. */
+function quickFilterParser(texto: string): string[] {
+  return plegar(texto)
+    .split(" ")
+    .filter((parte) => parte.length > 0);
+}
+
+function quickFilterMatcher(partes: string[], textoFila: string): boolean {
+  const plegado = plegar(textoFila);
+  return partes.every((parte) => plegado.includes(parte));
+}
+
+/** Mismo problema que el quick filter de arriba, pero en el filtro POR
+ * COLUMNA (`floatingFilter`, `agTextColumnFilter`) -- es código
+ * completamente distinto dentro de AG Grid, con su propio "contains" que
+ * tampoco separa por palabras ni ignora tildes (hallazgo real del usuario,
+ * 2026-09-21: probó "Carlos Sa" en el filtro de la columna Nombre, no en el
+ * buscador de arriba, y tampoco encontraba "Carlos Mauricio Sánchez"). Sólo
+ * `contains`/`notContains` parten por palabras -- el resto de las opciones
+ * (equals, startsWith, etc.) son comparaciones de una sola frase, partirlas
+ * no tendría sentido. */
+function textMatcher({ filterOption, value, filterText }: TextMatcherParams): boolean {
+  if (filterText == null) return true;
+  const valorPlegado = plegar(String(value ?? ""));
+  const textoPlegado = plegar(filterText);
+  switch (filterOption) {
+    case "notContains":
+      return !valorPlegado.includes(textoPlegado);
+    case "equals":
+      return valorPlegado === textoPlegado;
+    case "notEqual":
+      return valorPlegado !== textoPlegado;
+    case "startsWith":
+      return valorPlegado.startsWith(textoPlegado);
+    case "endsWith":
+      return valorPlegado.endsWith(textoPlegado);
+    case "contains":
+    default:
+      return textoPlegado
+        .split(" ")
+        .filter((parte) => parte.length > 0)
+        .every((parte) => valorPlegado.includes(parte));
+  }
+}
+
 const temaBrisas = themeQuartz.withParams({
   backgroundColor: "var(--panel)",
   foregroundColor: "var(--texto)",
@@ -63,6 +127,7 @@ const columnaPorDefectoConFiltro: ColDef = {
   ...columnaPorDefecto,
   filter: true,
   floatingFilter: true,
+  filterParams: { textMatcher },
 };
 
 export interface EstadoGuardado {
@@ -408,6 +473,8 @@ function TablaBase<T>(
           rowData={filas}
           columnDefs={columnasConVisibilidad}
           quickFilterText={busqueda}
+          quickFilterParser={quickFilterParser}
+          quickFilterMatcher={quickFilterMatcher}
           overlayNoRowsTemplate={MENSAJE_SIN_FILAS}
           // Resguardo además de memoizar `columnas` en cada pantalla: si de
           // todos modos algo le pasa un `columnDefs` nuevo, esto evita que
