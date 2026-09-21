@@ -9,7 +9,7 @@ import { getVersion } from "@tauri-apps/api/app";
  * `tauri.conf.json` real) y no de `package.json` -- ese campo quedó
  * congelado en "0.0.0" y no es la fuente de verdad de la app empaquetada.
  */
-export default function VersionFooter({ colapsado }: { colapsado: boolean }) {
+export default function VersionFooter() {
   const [version, setVersion] = useState("");
 
   useEffect(() => {
