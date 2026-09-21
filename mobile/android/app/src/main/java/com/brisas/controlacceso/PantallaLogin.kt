@@ -118,6 +118,14 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
             onValueChange = { viewModel.cambiarPassword(it) },
             label = { Text("Contraseña") },
             singleLine = true,
+            // `visualTransformation` sólo oculta el texto EN PANTALLA (los
+            // puntos) -- sin `KeyboardType.Password` el teclado del sistema
+            // no sabe que es un campo sensible y sigue armando su predictivo
+            // con lo tipeado (hallazgo real del usuario 2026-09-21: la barra
+            // de sugerencias mostraba "daniel"/"daniel27" mientras escribía
+            // la contraseña). Este flag es lo que de verdad apaga
+            // predicción/autocorrección/diccionario personal para el campo.
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             visualTransformation = PasswordVisualTransformation(),
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
