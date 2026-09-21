@@ -100,7 +100,7 @@ export default function Login() {
         </section>
       </main>
       <footer className="acceso-pie">
-        <span>Brisas · Control de accesos</span>
+        <span>Lattis · Control de acceso</span>
         <span>Portal de anfitriones</span>
       </footer>
     </div>

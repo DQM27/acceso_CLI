@@ -2,6 +2,7 @@
   "name": "web",
   "private": true,
   "version": "0.0.0",
+  "author": "Daniel Quintana — DQM27",
   "type": "module",
   "overrides": {
     "miniflare": {
