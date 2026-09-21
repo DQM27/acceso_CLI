@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -51,6 +52,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -448,6 +450,7 @@ private fun PasoDatosProveedor(
             onValueChange = onCambiarCedula,
             placeholder = { Text("Cédula") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
@@ -573,6 +576,7 @@ private fun PasoVehiculoYGafete(
             onValueChange = onCambiarGafeteTexto,
             placeholder = { Text("Número de gafete") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
             modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas)
