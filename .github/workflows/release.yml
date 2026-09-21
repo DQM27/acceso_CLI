@@ -215,22 +215,34 @@ jobs:
         working-directory: mobile/android
         run: ./gradlew assembleRelease
 
+      # El nombre del archivo usa el versionName real de mobile (ej. "1.2.3"),
+      # NO el tag del Release (ej. "v1.6.4") -- ese tag es la versión de
+      # DESKTOP (ver feedback_versionado_independiente_mobile_desktop.md,
+      # ambas plataformas versionan independiente). Nombrarlo con
+      # `RELEASE_VERSION`/`github.ref_name` hacía que el .apk dijera
+      # "Lattis-v1.6.4.apk" aunque adentro el versionName real fuera 1.2.3 --
+      # confuso para cualquiera que lo descargue (hallazgo real del usuario,
+      # 2026-09-21).
+      - name: Leer el versionName real de mobile
+        id: version_mobile
+        working-directory: mobile/android
+        run: |
+          version=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Preparar el APK para la Release
         env:
-          # Nunca interpolar inputs.version directo en un `run:` -- es texto
-          # libre que cualquiera puede escribir al disparar el workflow
-          # manual, y quedaria pegado literal en el script de shell
-          # (inyeccion de comandos, hallazgo real de zizmor 2026-09-18). Con
-          # env: pasa como valor de variable, no como codigo.
-          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
-        run: cp mobile/android/app/build/outputs/apk/release/app-release.apk "Lattis-${RELEASE_VERSION}.apk"
+          MOBILE_VERSION: ${{ steps.version_mobile.outputs.version }}
+        run: cp mobile/android/app/build/outputs/apk/release/app-release.apk "Lattis-mobile-v${MOBILE_VERSION}.apk"
 
       # `gh release upload` (no una action de terceros) -- `needs: build-gui`
-      # garantiza que el Release ya existe para cuando corre esto. Mismo
-      # motivo que el paso de arriba para no interpolar `inputs.version`
-      # directo en el script: viaja por `env`.
+      # garantiza que el Release ya existe para cuando corre esto. El nombre
+      # del asset usa la versión de mobile (ver arriba); a qué Release del
+      # repo se adjunta sigue siendo el tag que disparó el workflow
+      # (`RELEASE_VERSION`), eso sí sigue siendo el tag/versión de desktop.
       - name: Adjuntar el APK a la Release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
-        run: gh release upload "$RELEASE_VERSION" "Lattis-${RELEASE_VERSION}.apk" --clobber
+          MOBILE_VERSION: ${{ steps.version_mobile.outputs.version }}
+        run: gh release upload "$RELEASE_VERSION" "Lattis-mobile-v${MOBILE_VERSION}.apk" --clobber
