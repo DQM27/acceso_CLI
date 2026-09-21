@@ -7608,7 +7608,7 @@ mod tests {
     /// con su uuid real) -- ni coinciden por `uuid` ni por nombre exacto,
     /// sólo por `PLEGAR`. Sin la tercera rama del `ON CONFLICT` esto
     /// abortaba el pull con "UNIQUE constraint failed:
-    /// idx_empresas_proveedor_nombre_plegado".
+    /// `idx_empresas_proveedor_nombre_plegado`".
     #[test]
     fn recibe_empresa_proveedor_con_grafia_distinta_a_una_fila_local_se_fusiona_por_nombre_plegado()
     {
