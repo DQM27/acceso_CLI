@@ -70,8 +70,16 @@ fn crear_trigger_cedula_inmutable(connection: &Connection) {
 /// entera (mismo patrón recreate-and-swap que la migración real).
 fn rebobinar_registro_ingresos_sin_placa_ni_uuid(connection: &Connection) {
     connection
-        .execute_batch(
-            "
+        .execute_batch(SQL_REBOBINAR_REGISTRO_INGRESOS_SIN_PLACA_NI_UUID)
+        .unwrap();
+}
+
+// Separado en un `const` (en vez de un literal inline dentro de la función
+// de arriba) puramente para que clippy no la cuente como una función de 176
+// líneas (`too_many_lines`, en `deny` -- ver `[lints.clippy]` de
+// `Cargo.toml`) -- es texto SQL, no lógica, mismo criterio que las
+// constantes `MIGRACION_N` de `src/database/schema.rs`.
+const SQL_REBOBINAR_REGISTRO_INGRESOS_SIN_PLACA_NI_UUID: &str = "
             CREATE TABLE registro_ingresos_v_sin_placa (
                 id INTEGER PRIMARY KEY,
                 contratista_id INTEGER NOT NULL,
@@ -246,10 +254,7 @@ fn rebobinar_registro_ingresos_sin_placa_ni_uuid(connection: &Connection) {
                     new.id, new.contratista_cedula, new.contratista_nombre, new.empresa_nombre
                 );
             END;
-            ",
-        )
-        .unwrap();
-}
+            ";
 
 fn crear_esquema_version_1(connection: &Connection) {
     connection

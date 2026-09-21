@@ -802,7 +802,7 @@ fn aplicar_migracion_48(connection: &Connection) -> Result<(), SchemaError> {
 /// `CHECK` de columna cruzada (`(medio_ingreso = 'VEHICULO') OR (placa IS
 /// NULL)`) hace esa regla imposible de romper en la base, igual que ya hace
 /// el `CHECK` de fecha/usuario de salida un poco más abajo. Mismo criterio
-/// que `MIGRACION_44`/`46`: SQLite no permite `ALTER TABLE ... ADD COLUMN`
+/// que `MIGRACION_44`/`46`: `SQLite` no permite `ALTER TABLE ... ADD COLUMN`
 /// con un `CHECK` que referencia otra columna, así que la tabla se recrea
 /// completa (recreate-and-swap) en vez de un simple `ADD COLUMN`. Se
 /// desactivan las foreign keys durante el swap por el mismo motivo que en
