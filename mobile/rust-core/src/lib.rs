@@ -925,6 +925,7 @@ pub struct PrestamoGafeteProvisionalActivoResumen {
     pub encargado_codigo_empleado: String,
     pub gafete_numero: i64,
     pub fecha_hora_entrega: String,
+    pub usuario_entrega_nombre: String,
 }
 
 impl From<PrestamoGafeteProvisionalActivoResumenNucleo> for PrestamoGafeteProvisionalActivoResumen {
@@ -935,6 +936,7 @@ impl From<PrestamoGafeteProvisionalActivoResumenNucleo> for PrestamoGafeteProvis
             encargado_codigo_empleado: activo.encargado_codigo_empleado,
             gafete_numero: activo.gafete_numero,
             fecha_hora_entrega: activo.fecha_hora_entrega.to_rfc3339(),
+            usuario_entrega_nombre: activo.usuario_entrega_nombre,
         }
     }
 }
@@ -3748,6 +3750,12 @@ mod tests {
         assert_eq!(activos.len(), 1);
         assert_eq!(activos[0].id, prestamo_id);
         assert_eq!(activos[0].encargado_codigo_empleado, "5040017");
+        // Cubre la conversión `From<PrestamoGafeteProvisionalActivoResumenNucleo>`
+        // -- el test del repositorio (núcleo) ya cubre que la columna se lea
+        // bien de la base, pero no que el mapeo a la struct de UniFFI la
+        // traiga consigo (un campo olvidado en ese `From` no lo detectaría
+        // ningún otro test).
+        assert_eq!(activos[0].usuario_entrega_nombre, "Actor Test");
 
         nucleo
             .registrar_devolucion_gafete_provisional(prestamo_id)

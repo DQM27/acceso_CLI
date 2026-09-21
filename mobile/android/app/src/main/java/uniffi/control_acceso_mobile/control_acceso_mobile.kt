@@ -4378,6 +4378,8 @@ data class PrestamoGafeteProvisionalActivoResumen (
     var `gafeteNumero`: kotlin.Long
     , 
     var `fechaHoraEntrega`: kotlin.String
+    , 
+    var `usuarioEntregaNombre`: kotlin.String
     
 ){
     
@@ -4399,6 +4401,7 @@ public object FfiConverterTypePrestamoGafeteProvisionalActivoResumen: FfiConvert
             FfiConverterString.read(buf),
             FfiConverterLong.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
         )
     }
 
@@ -4407,7 +4410,8 @@ public object FfiConverterTypePrestamoGafeteProvisionalActivoResumen: FfiConvert
             FfiConverterString.allocationSize(value.`encargadoNombre`) +
             FfiConverterString.allocationSize(value.`encargadoCodigoEmpleado`) +
             FfiConverterLong.allocationSize(value.`gafeteNumero`) +
-            FfiConverterString.allocationSize(value.`fechaHoraEntrega`)
+            FfiConverterString.allocationSize(value.`fechaHoraEntrega`) +
+            FfiConverterString.allocationSize(value.`usuarioEntregaNombre`)
     )
 
     override fun write(value: PrestamoGafeteProvisionalActivoResumen, buf: ByteBuffer) {
@@ -4416,6 +4420,7 @@ public object FfiConverterTypePrestamoGafeteProvisionalActivoResumen: FfiConvert
             FfiConverterString.write(value.`encargadoCodigoEmpleado`, buf)
             FfiConverterLong.write(value.`gafeteNumero`, buf)
             FfiConverterString.write(value.`fechaHoraEntrega`, buf)
+            FfiConverterString.write(value.`usuarioEntregaNombre`, buf)
     }
 }
 

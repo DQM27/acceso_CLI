@@ -12,6 +12,7 @@ export interface PrestamoGafeteProvisionalActivoResumen {
   gafete_numero: number;
   /** ISO 8601 (UTC) — convertir con `new Date(...)` antes de mostrar. */
   fecha_hora_entrega: string;
+  usuario_entrega_nombre: string;
 }
 
 /** Espejo de `nube::PrestamoGafeteProvisionalRemoto` -- un préstamo abierto
@@ -80,17 +81,18 @@ export interface FilaGafeteProvisionalRemota {
   encargado_codigo_empleado: string;
   gafete_numero: number;
   fecha_hora_entrega: string;
+  usuario_entrega_nombre: string;
 }
 
 export type FilaGafeteProvisionalActiva = FilaGafeteProvisionalLocal | FilaGafeteProvisionalRemota;
 
-function filaGafeteProvisionalDesdeLocal(
+export function filaGafeteProvisionalDesdeLocal(
   item: PrestamoGafeteProvisionalActivoResumen,
 ): FilaGafeteProvisionalActiva {
   return { ...item, origen: "local" };
 }
 
-function filaGafeteProvisionalDesdeRemoto(
+export function filaGafeteProvisionalDesdeRemoto(
   remoto: PrestamoGafeteProvisionalRemoto,
 ): FilaGafeteProvisionalActiva {
   return {
@@ -101,6 +103,7 @@ function filaGafeteProvisionalDesdeRemoto(
     encargado_codigo_empleado: remoto.encargado_codigo_empleado,
     gafete_numero: remoto.gafete_numero,
     fecha_hora_entrega: remoto.hora_entrega,
+    usuario_entrega_nombre: remoto.usuario_entrega_nombre,
   };
 }
 

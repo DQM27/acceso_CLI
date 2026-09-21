@@ -49,4 +49,11 @@ pub struct PrestamoGafeteProvisionalActivoResumen {
     pub encargado_codigo_empleado: String,
     pub gafete_numero: i64,
     pub fecha_hora_entrega: DateTime<Utc>,
+    /// Nombre de quien entregó el gafete -- ya se guarda como snapshot en
+    /// `prestamos_gafete_provisional.usuario_entrega_nombre` (mismo patrón
+    /// que `contratista_nombre` en `registro_ingresos`), pero este resumen
+    /// nunca lo leía. Mismo criterio que `IngresoActivoResumen.usuario_ingreso_nombre`
+    /// -- pedido explícito del usuario 2026-09-21, para mostrarlo en mobile
+    /// igual que ya se muestra "dio ingreso X" en la tarjeta de contratista.
+    pub usuario_entrega_nombre: String,
 }

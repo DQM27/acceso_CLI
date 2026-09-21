@@ -33,8 +33,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -236,13 +239,30 @@ private fun FilaPrestamoGafeteProvisionalLocal(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(prestamo.encargadoNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        // Mismo criterio que la tarjeta de Contratista activo
+        // (`PantallaActivos.kt::FilaActivoLocal`) -- mayúscula + negrita en
+        // toda la línea, gafete resaltado -- pero acá en rojo en vez de azul
+        // (`colorScheme.error` en vez de `colorScheme.primary`), pedido
+        // explícito del usuario 2026-09-21 para distinguir de un vistazo un
+        // gafete PROVISIONAL KOF de uno de contratista. "Código de empleado:"
+        // explícito (no sólo el valor pelado) para consistencia con el resto
+        // de tarjetas del mismo módulo (ver ControlesBrisas.kt/el diálogo de
+        // asignación más arriba en este archivo, que ya usan esa etiqueta).
         Text(
-            "${prestamo.encargadoCodigoEmpleado} · Gafete ${prestamo.gafeteNumero}",
+            buildAnnotatedString {
+                append("Código de empleado: ${prestamo.encargadoCodigoEmpleado} · ".uppercase())
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) {
+                    append("Gafete ${prestamo.gafeteNumero}".uppercase())
+                }
+            },
             style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        // "· entregó X" -- mismo criterio que "dio ingreso X" en la tarjeta
+        // de Contratista activo, pedido explícito del usuario 2026-09-21.
         Text(
-            "Entregado ${textoFechaHora(prestamo.fechaHoraEntrega)}",
+            "Entregado ${textoFechaHora(prestamo.fechaHoraEntrega)} · entregó ${prestamo.usuarioEntregaNombre}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -267,13 +287,21 @@ private fun FilaPrestamoGafeteProvisionalRemota(
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(remoto.encargadoNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        // Mismo criterio que FilaPrestamoGafeteProvisionalLocal -- ver ese
+        // comentario.
         Text(
-            "${remoto.encargadoCodigoEmpleado} · Gafete ${remoto.gafeteNumero}",
+            buildAnnotatedString {
+                append("Código de empleado: ${remoto.encargadoCodigoEmpleado} · ".uppercase())
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) {
+                    append("Gafete ${remoto.gafeteNumero}".uppercase())
+                }
+            },
             style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "Entregado ${textoFechaHora(remoto.horaEntrega)}",
+            "Entregado ${textoFechaHora(remoto.horaEntrega)} · entregó ${remoto.usuarioEntregaNombre}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
