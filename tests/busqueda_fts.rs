@@ -150,6 +150,36 @@ fn historial_usa_fts_y_conserva_total_coherente() {
     assert_eq!(pagina.total, 1);
 }
 
+/// Regresión del hallazgo runtime 2026-09-21: se conocía el primer nombre y
+/// el primer apellido ("Carlos Sanches") pero el contratista tenía un
+/// segundo nombre en medio ("Carlos Mauricio Sanches") -- la consulta FTS
+/// buscaba antes el texto completo como una sola frase (substring literal
+/// contiguo, por el tokenizador `trigram`), así que sólo encontraba a la
+/// persona si se tecleaban dos palabras realmente adyacentes en el nombre.
+#[test]
+fn contratistas_busca_nombre_y_apellido_salteando_un_nombre_intermedio() {
+    let connection = base();
+    connection
+        .execute(
+            "INSERT INTO contratistas(
+                cedula,nombre,empresa_id,tipo_ingreso,fecha_vencimiento_praind,
+                es_personal_ruta,tiene_acceso
+             ) VALUES ('1002','Carlos Mauricio Sanches',1,'PRAIND','2030-01-01',0,1)",
+            [],
+        )
+        .unwrap();
+    let query = SqliteContratistasQuery::new(&connection);
+
+    assert_eq!(
+        query
+            .buscar(&filtro_contratista("Carlos Sanches"))
+            .unwrap()
+            .items
+            .len(),
+        1
+    );
+}
+
 #[test]
 fn texto_corto_y_operadores_fts_son_seguros() {
     let connection = base();
