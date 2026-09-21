@@ -25,7 +25,11 @@ export default function VersionFooter({ colapsado }: { colapsado: boolean }) {
 
   return (
     <div className="shell-sidebar-version" title={`Lattis v${version}`}>
-      {!colapsado && `v${version}`}
+      {/* Antes se ocultaba con el sidebar colapsado (¡colapsado &&) -- pero
+          la columna angosta (3.75rem, ver .shell-sidebar-colapsada) tiene
+          espacio de sobra para "v1.6.4" a este tamaño de fuente (0.7rem),
+          no hacía falta esconderlo (hallazgo real del usuario, 2026-09-21). */}
+      {`v${version}`}
     </div>
   );
 }

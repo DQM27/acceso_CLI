@@ -40,14 +40,14 @@ import {
   Boxes,
   Building2,
   ClipboardList,
+  DoorOpen,
+  HardHat,
   History,
   IdCard,
   Loader2,
   Route,
   Truck,
   UserCheck,
-  Users,
-  UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import marca from "./assets/marca.png";
@@ -327,10 +327,16 @@ const SECCIONES: {
   Icono: LucideIcon;
 }[] = [
   { id: "activos", etiqueta: "Activos", Icono: UserCheck },
-  { id: "visitas", etiqueta: "Visitas", Icono: UsersRound },
+  // Antes UsersRound -- se veía casi igual que el ícono de Contratistas
+  // (Users, ambos "grupo de personas") a este tamaño; DoorOpen distingue
+  // de un vistazo (hallazgo real del usuario, 2026-09-21).
+  { id: "visitas", etiqueta: "Visitas", Icono: DoorOpen },
   { id: "rutas", etiqueta: "Rutas", Icono: Route },
   { id: "historial", etiqueta: "Historial", Icono: History },
-  { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
+  // Antes Users -- casco de construcción es mas tematico para
+  // "contratistas" y de paso deja de parecerse al icono de Visitas
+  // (pedido explicito del usuario 2026-09-21).
+  { id: "contratistas", etiqueta: "Contratistas", Icono: HardHat },
   { id: "auditoria", etiqueta: "Auditoría", Icono: ClipboardList },
   { id: "empresas", etiqueta: "Empresas", Icono: Building2 },
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
@@ -464,15 +470,17 @@ function Shell({
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
   const [estadoConexionNube, setEstadoConexionNube] = useState<EstadoConexionNube>(null);
 
-  // Ctrl+Shift+N/S (no Ctrl+N/S solos — esas convenciones quedan libres
-  // para un "nuevo"/"salida" más genéricos más adelante) desde cualquier
-  // pantalla: ambos modales son autosuficientes (buscan y registran sin
-  // depender de qué sección esté abierta), así que no tiene sentido
-  // atarlos a un botón dentro de Activos únicamente. Deshabilitados por
-  // defecto mientras se escribe en un campo de texto (comportamiento por
-  // defecto de la librería).
-  useHotkeys("ctrl+shift+n", () => setModalNuevoIngreso(true), { preventDefault: true });
-  useHotkeys("ctrl+shift+s", () => setModalSalida(true), { preventDefault: true });
+  // Ctrl+N/S globales, desde cualquier pantalla: ambos modales son
+  // autosuficientes (buscan y registran sin depender de qué sección esté
+  // abierta), así que no tiene sentido atarlos a un botón dentro de Activos
+  // únicamente. Antes eran Ctrl+Shift+N/S (para dejar Ctrl+N/S libres para
+  // un "crear/nuevo" local de cada pantalla) -- simplificado a un solo par
+  // de atajos en toda la app (pedido explícito del usuario, 2026-09-21): los
+  // Ctrl+N locales de Contratistas/Empresas/Gafetes se quitaron para no
+  // competir con este. Deshabilitados por defecto mientras se escribe en un
+  // campo de texto (comportamiento por defecto de la librería).
+  useHotkeys("ctrl+n", () => setModalNuevoIngreso(true), { preventDefault: true });
+  useHotkeys("ctrl+s", () => setModalSalida(true), { preventDefault: true });
   // Mismo atajo que la TUI clásica y --cli (Ctrl+Q cierra sesión desde
   // cualquier pantalla) — acá sin tarjeta de confirmación porque el botón
   // "Cerrar sesión" del sidebar tampoco la pide, así el atajo y el botón se

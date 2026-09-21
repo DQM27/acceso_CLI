@@ -8,14 +8,14 @@ describe("VersionFooter", () => {
     await waitFor(() => expect(screen.getByText("v0.0.0-test")).toBeTruthy());
   });
 
-  it("colapsado oculta el texto pero conserva el title para el tooltip", async () => {
+  it("colapsado también muestra el texto (hay espacio de sobra en la columna angosta) y conserva el title para el tooltip", async () => {
     const { container } = render(<VersionFooter colapsado />);
     await waitFor(() =>
       expect(container.querySelector(".shell-sidebar-version")?.getAttribute("title")).toBe(
         "Lattis v0.0.0-test",
       ),
     );
-    expect(screen.queryByText("v0.0.0-test")).toBeNull();
+    expect(screen.queryByText("v0.0.0-test")).toBeTruthy();
   });
 
   it("no renderiza nada mientras la versión todavía no llegó", () => {

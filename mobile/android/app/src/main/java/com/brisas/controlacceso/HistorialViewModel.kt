@@ -142,8 +142,10 @@ class HistorialViewModel(
     fun refrescar() = buscar()
 
     companion object {
-        // Ver el mismo comentario en `ActivosViewModel`.
-        private const val DEBOUNCE_BUSQUEDA_MS = 300L
+        // Ver el mismo comentario en `ActivosViewModel`. Bajado a 150ms
+        // junto con los otros 5 buscadores (pedido explícito del usuario,
+        // 2026-09-21).
+        private const val DEBOUNCE_BUSQUEDA_MS = 150L
 
         fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
             initializer { HistorialViewModel(nucleo) }
