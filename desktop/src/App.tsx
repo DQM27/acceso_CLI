@@ -40,14 +40,14 @@ import {
   Boxes,
   Building2,
   ClipboardList,
+  DoorOpen,
+  HardHat,
   History,
   IdCard,
   Loader2,
   Route,
   Truck,
   UserCheck,
-  Users,
-  UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import marca from "./assets/marca.png";
@@ -327,10 +327,16 @@ const SECCIONES: {
   Icono: LucideIcon;
 }[] = [
   { id: "activos", etiqueta: "Activos", Icono: UserCheck },
-  { id: "visitas", etiqueta: "Visitas", Icono: UsersRound },
+  // Antes UsersRound -- se veía casi igual que el ícono de Contratistas
+  // (Users, ambos "grupo de personas") a este tamaño; DoorOpen distingue
+  // de un vistazo (hallazgo real del usuario, 2026-09-21).
+  { id: "visitas", etiqueta: "Visitas", Icono: DoorOpen },
   { id: "rutas", etiqueta: "Rutas", Icono: Route },
   { id: "historial", etiqueta: "Historial", Icono: History },
-  { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
+  // Antes Users -- casco de construcción es mas tematico para
+  // "contratistas" y de paso deja de parecerse al icono de Visitas
+  // (pedido explicito del usuario 2026-09-21).
+  { id: "contratistas", etiqueta: "Contratistas", Icono: HardHat },
   { id: "auditoria", etiqueta: "Auditoría", Icono: ClipboardList },
   { id: "empresas", etiqueta: "Empresas", Icono: Building2 },
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },

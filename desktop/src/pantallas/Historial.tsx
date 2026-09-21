@@ -308,14 +308,28 @@ export default function Historial() {
         flex: 1,
         minWidth: 110,
         valueFormatter: (p) => textoDispositivo(p.value ?? null),
+        // Buscador de arriba (quickFilter) limitado a Cédula/Nombre/Empresa
+        // -- las tres cosas que identifican a LA PERSONA que se busca, mismo
+        // criterio que Activos.tsx (hallazgo real del usuario 2026-09-21:
+        // buscar "daniel" traía en cambio quien dio el ingreso). Quien
+        // necesite filtrar por el resto de estas columnas ya tiene el
+        // filtro propio de cada columna (`floatingFilter`), sin tocar.
+        getQuickFilterText: () => "",
       },
-      { field: "tipo_ingreso", headerName: "Tipo", flex: 1, minWidth: 100 },
+      {
+        field: "tipo_ingreso",
+        headerName: "Tipo",
+        flex: 1,
+        minWidth: 100,
+        getQuickFilterText: () => "",
+      },
       {
         field: "medio_ingreso",
         headerName: "Medio",
         flex: 1,
         minWidth: 100,
         valueFormatter: (p) => textoMedioConPlaca(p.value, p.data?.placa ?? null),
+        getQuickFilterText: () => "",
       },
       {
         field: "gafete_numero",
@@ -323,6 +337,7 @@ export default function Historial() {
         flex: 0.9,
         minWidth: 90,
         valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
+        getQuickFilterText: () => "",
       },
       {
         colId: "fecha_ingreso",
@@ -334,6 +349,7 @@ export default function Historial() {
         minWidth: 140,
         valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_ingreso) : ""),
         valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
+        getQuickFilterText: () => "",
       },
       {
         colId: "hora_ingreso",
@@ -341,6 +357,7 @@ export default function Historial() {
         flex: 1.3,
         minWidth: 130,
         valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
+        getQuickFilterText: () => "",
       },
       {
         // "Activo" (no sólo vacío) cuando no hay salida — mismo texto que
@@ -355,6 +372,7 @@ export default function Historial() {
         valueGetter: (p) =>
           p.data?.fecha_hora_salida ? fechaLocalYMD(p.data.fecha_hora_salida) : "Activo",
         valueFormatter: (p) => (p.value === "Activo" ? "Activo" : textoFechaDDMMYYYY(p.value)),
+        getQuickFilterText: () => "",
       },
       {
         colId: "hora_salida",
@@ -363,9 +381,22 @@ export default function Historial() {
         minWidth: 130,
         valueGetter: (p) =>
           p.data?.fecha_hora_salida ? textoHora(p.data.fecha_hora_salida) : "Activo",
+        getQuickFilterText: () => "",
       },
-      { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", flex: 1.3, minWidth: 130 },
-      { field: "usuario_salida_nombre", headerName: "Dio salida", flex: 1.3, minWidth: 130 },
+      {
+        field: "usuario_ingreso_nombre",
+        headerName: "Dio ingreso",
+        flex: 1.3,
+        minWidth: 130,
+        getQuickFilterText: () => "",
+      },
+      {
+        field: "usuario_salida_nombre",
+        headerName: "Dio salida",
+        flex: 1.3,
+        minWidth: 130,
+        getQuickFilterText: () => "",
+      },
     ],
     [],
   );
