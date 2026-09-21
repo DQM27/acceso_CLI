@@ -105,7 +105,21 @@ export default function Activos({
         cellStyle: { textAlign: "left" },
       },
       { field: "empresa_nombre", headerName: "Empresa", flex: 1.1, minWidth: 140 },
-      { field: "tipo_ingreso", headerName: "Tipo", flex: 1, minWidth: 100 },
+      {
+        field: "tipo_ingreso",
+        headerName: "Tipo",
+        flex: 1,
+        minWidth: 100,
+        // Buscador de arriba (quickFilter) limitado a Cédula/Nombre/Empresa
+        // -- las tres cosas que identifican a LA PERSONA que se busca.
+        // `getQuickFilterText: () => ""` saca esta columna de esa búsqueda
+        // sin afectar el filtro de columna propio (`floatingFilter`), que
+        // sigue funcionando normal. Mismo criterio en el resto de columnas
+        // de abajo -- hallazgo real del usuario 2026-09-21: buscar "daniel"
+        // (un contratista) traía en cambio el registro dado de alta por el
+        // operador Daniel, porque el buscador también miraba "Dio ingreso".
+        getQuickFilterText: () => "",
+      },
       {
         field: "medio_ingreso",
         headerName: "Medio",
@@ -113,6 +127,7 @@ export default function Activos({
         minWidth: 100,
         valueFormatter: (p) =>
           p.value == null ? "—" : textoMedioConPlaca(p.value, p.data?.placa ?? null),
+        getQuickFilterText: () => "",
       },
       {
         field: "gafete_numero",
@@ -120,6 +135,7 @@ export default function Activos({
         flex: 0.9,
         minWidth: 90,
         valueFormatter: (p) => (p.value == null ? "S/G" : String(p.value)),
+        getQuickFilterText: () => "",
       },
       {
         colId: "fecha_ingreso",
@@ -136,6 +152,7 @@ export default function Activos({
         // ese mismo string a DD/MM/AAAA para mostrar, sin re-parsearlo.
         valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_ingreso) : ""),
         valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
+        getQuickFilterText: () => "",
       },
       {
         colId: "hora_ingreso",
@@ -148,8 +165,15 @@ export default function Activos({
         // "HH:MM", la columna se filtra/ordena como texto plano — mismo
         // comportamiento que el resto de columnas de texto, sin ícono raro.
         valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_ingreso) : ""),
+        getQuickFilterText: () => "",
       },
-      { field: "usuario_ingreso_nombre", headerName: "Dio ingreso", flex: 1.3, minWidth: 130 },
+      {
+        field: "usuario_ingreso_nombre",
+        headerName: "Dio ingreso",
+        flex: 1.3,
+        minWidth: 130,
+        getQuickFilterText: () => "",
+      },
       {
         headerName: "Acción",
         flex: 0.9,
