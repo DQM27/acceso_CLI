@@ -34,7 +34,7 @@ class NubeViewModel(
     // Misma reacción ante `sesionExpulsada` que el pulso periódico
     // (`SincronizacionPeriodica`, ver `PantallaPrincipal.kt`).
     private val onSesionExpulsada: () -> Unit = {},
-    // Ver el mismo parámetro en ActivosViewModel/HistorialViewModel —
+    // Ver el mismo parámetro en ActivosViewModel/RutasViewModel —
     // permite tests con tiempo controlado en vez de hilos reales.
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {

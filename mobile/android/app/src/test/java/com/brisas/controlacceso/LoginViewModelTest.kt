@@ -19,7 +19,7 @@ import uniffi.control_acceso_mobile.Nucleo
 /// `LoginViewModel.autenticar` intenta una sincronización corta antes de
 /// confirmar (ver su doc-comment) -- ya no es puramente síncrono, así que
 /// estos tests necesitan el mismo patrón `runTest`/`StandardTestDispatcher`
-/// que `HistorialViewModelTest`. Sin secreto de nube en el store de prueba,
+/// que el resto de los ViewModelTest de la app. Sin secreto de nube en el store de prueba,
 /// la sincronización de fondo no toca red y el login sigue con lo que ya
 /// validó local -- mismo comportamiento que en producción cuando el
 /// dispositivo no tiene la nube configurada.
