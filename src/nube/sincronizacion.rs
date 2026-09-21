@@ -3623,10 +3623,26 @@ fn guardar_rutas(
     Ok(recibidas)
 }
 
-/// Mismo patrón `ON CONFLICT(nombre)` que `guardar_rutas`/`guardar_empresas`
-/// -- si ya existe localmente una empresa con el mismo nombre (la creó
-/// este dispositivo), la actualiza y le completa el `uuid` en vez de
-/// duplicarla.
+/// Tres `ON CONFLICT` encadenados (soportado desde SQLite 3.35, ver
+/// `guardar_empresas` con el mismo patrón), probados en este orden hasta que
+/// uno matchea:
+/// 1. `uuid` -- la fila YA estaba sincronizada y sólo le cambió el nombre en
+///    la nube (ej. un `UPDATE` a mayúsculas hecho directo en Supabase):
+///    actualiza el nombre de esa misma fila.
+/// 2. `nombre` (exacto) -- fila nueva sin conflicto de uuid, pero coincide
+///    letra por letra con una empresa creada en ESTE dispositivo: la fusiona
+///    sin duplicar, completándole el `uuid`.
+/// 3. `PLEGAR(nombre)` (sin mayúsculas/acentos) -- ni uuid ni el nombre
+///    exacto coinciden, pero SÍ el nombre plegado: es la MISMA empresa con
+///    otra grafía (ej. local "Mayca" vs. remoto ya normalizado "MAYCA", cada
+///    una con su propio `uuid` por haberse creado por separado). Sin esta
+///    tercera rama, ese INSERT no encontraba conflicto en `uuid` ni en
+///    `nombre` y terminaba chocando en cambio con
+///    `idx_empresas_proveedor_nombre_plegado`, un error sin capturar que
+///    abortaba el pull ENTERO (bug real en producción, 2026-09-21: tras
+///    normalizar nombres de empresas a mayúsculas en Supabase, ni desktop ni
+///    mobile volvían a sincronizar nada, ni siquiera ingresos, porque toda
+///    la transacción del pull fallaba en este paso).
 fn guardar_empresas_proveedor(
     transaction: &rusqlite::Transaction<'_>,
     empresas: &[FilaEmpresaProveedorRemota],
@@ -3636,7 +3652,14 @@ fn guardar_empresas_proveedor(
         transaction.execute(
             "
             INSERT INTO empresas_proveedor (nombre, activo, uuid) VALUES (?1, ?2, ?3)
+            ON CONFLICT(uuid) DO UPDATE SET
+                nombre = excluded.nombre,
+                activo = excluded.activo
             ON CONFLICT(nombre) DO UPDATE SET
+                activo = excluded.activo,
+                uuid = COALESCE(empresas_proveedor.uuid, excluded.uuid)
+            ON CONFLICT(PLEGAR(nombre)) DO UPDATE SET
+                nombre = excluded.nombre,
                 activo = excluded.activo,
                 uuid = COALESCE(empresas_proveedor.uuid, excluded.uuid)
             ",
@@ -3647,6 +3670,10 @@ fn guardar_empresas_proveedor(
     Ok(recibidas)
 }
 
+/// Mismo motivo que `guardar_empresas_proveedor`: `ON CONFLICT(uuid)`
+/// primero para que un nombre cambiado en la nube (ej. mayúsculas) sí baje a
+/// una fila ya sincronizada, con `ON CONFLICT(nombre)` como respaldo para
+/// fusionar una empresa creada en este dispositivo sin duplicarla.
 fn guardar_empresas(
     transaction: &rusqlite::Transaction<'_>,
     empresas: &[FilaEmpresaRemota],
@@ -3656,7 +3683,14 @@ fn guardar_empresas(
         transaction.execute(
             "
             INSERT INTO empresas (nombre, activo, uuid) VALUES (?1, ?2, ?3)
+            ON CONFLICT(uuid) DO UPDATE SET
+                nombre = excluded.nombre,
+                activo = excluded.activo
             ON CONFLICT(nombre) DO UPDATE SET
+                activo = excluded.activo,
+                uuid = COALESCE(empresas.uuid, excluded.uuid)
+            ON CONFLICT(PLEGAR(nombre)) DO UPDATE SET
+                nombre = excluded.nombre,
                 activo = excluded.activo,
                 uuid = COALESCE(empresas.uuid, excluded.uuid)
             ",
@@ -7522,6 +7556,101 @@ mod tests {
         );
     }
 
+    /// Bug real reportado por el usuario 2026-09-21: un `UPDATE` directo en
+    /// Supabase que sube el nombre a mayúsculas nunca bajaba a los
+    /// dispositivos. Causa: con un solo `ON CONFLICT(nombre)`, el nombre
+    /// remoto ya no coincidía (case-sensitive) con la fila local existente
+    /// -- sin conflicto por nombre, el INSERT chocaba en cambio contra el
+    /// índice único de `uuid` con un error que abortaba el pull entero.
+    #[test]
+    fn recibe_empresa_proveedor_renombrada_en_la_nube_actualiza_la_fila_ya_sincronizada() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO empresas_proveedor (nombre, uuid) VALUES ('Dos Pinos', 'uuid-dos-pinos')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-dos-pinos\",\"nombre\":\"DOS PINOS\",\"activa\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+        ]);
+
+        recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM empresas_proveedor", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(total, 1, "no duplica la fila, la actualiza por uuid");
+        let nombre: String = connection
+            .query_row(
+                "SELECT nombre FROM empresas_proveedor WHERE uuid = 'uuid-dos-pinos'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(nombre, "DOS PINOS");
+    }
+
+    /// Reproduce el incidente de producción tal cual (2026-09-21, reportado
+    /// con captura del error real en mobile): una empresa creada LOCAL antes
+    /// de sincronizar ("Mayca", con un uuid provisorio propio de este
+    /// dispositivo) y la misma empresa ya normalizada en la nube ("MAYCA",
+    /// con su uuid real) -- ni coinciden por `uuid` ni por nombre exacto,
+    /// sólo por `PLEGAR`. Sin la tercera rama del `ON CONFLICT` esto
+    /// abortaba el pull con "UNIQUE constraint failed:
+    /// `idx_empresas_proveedor_nombre_plegado`".
+    #[test]
+    fn recibe_empresa_proveedor_con_grafia_distinta_a_una_fila_local_se_fusiona_por_nombre_plegado()
+    {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO empresas_proveedor (nombre, uuid) VALUES ('Mayca', 'uuid-local-provisorio')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-mayca-real\",\"nombre\":\"MAYCA\",\"activa\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+        ]);
+
+        recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM empresas_proveedor", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(total, 1, "no deja las dos grafías como filas separadas");
+        let (nombre, uuid): (String, String) = connection
+            .query_row("SELECT nombre, uuid FROM empresas_proveedor", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(nombre, "MAYCA", "queda con la grafía que manda la nube");
+        assert_eq!(
+            uuid, "uuid-local-provisorio",
+            "COALESCE no pisa el uuid que la fila local ya tenía"
+        );
+    }
+
     #[test]
     fn recibe_catalogo_rutas_del_sitio_y_lo_guarda_local() {
         let connection = Connection::open_in_memory().unwrap();
@@ -7737,6 +7866,46 @@ mod tests {
             Some("uuid-contratista-remoto"),
             "le completa el uuid"
         );
+    }
+
+    /// Mismo bug real que `recibe_empresa_proveedor_renombrada_en_la_nube_actualiza_la_fila_ya_sincronizada`,
+    /// pero para `empresas` (contratistas) -- comparten el mismo patrón de
+    /// `guardar_*` con `ON CONFLICT` encadenado.
+    #[test]
+    fn recibe_empresa_de_contratistas_renombrada_en_la_nube_actualiza_la_fila_ya_sincronizada() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "INSERT INTO empresas (nombre, uuid) VALUES ('Mi Empresa', 'uuid-mi-empresa')",
+                [],
+            )
+            .unwrap();
+        let base_url = servidor_de_respuestas(vec![
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-mi-empresa\",\"nombre\":\"MI EMPRESA\",\"activa\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+        ]);
+
+        recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+        let total: i64 = connection
+            .query_row("SELECT COUNT(*) FROM empresas", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(total, 1, "no duplica la fila, la actualiza por uuid");
+        let nombre: String = connection
+            .query_row(
+                "SELECT nombre FROM empresas WHERE uuid = 'uuid-mi-empresa'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(nombre, "MI EMPRESA");
     }
 
     #[test]
