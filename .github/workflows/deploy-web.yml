@@ -33,11 +33,14 @@ jobs:
         with:
           persist-credentials: true
 
+      # Sin cache: npm -- hallazgo real de zizmor ("cache poisoning"): este
+      # workflow tiene `contents: write` y usa secrets (token de Cloudflare),
+      # mismo criterio que el `lookup-only: true` de Swatinem/rust-cache en
+      # release.yml -- un deploy real no debería confiar en un cache de una
+      # corrida anterior.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: ${{ inputs.app }}/package-lock.json
 
       - run: npm ci
       - run: npm run lint
@@ -66,14 +69,17 @@ jobs:
       # build que falló en publicar sería mentira (la versión no refleja lo
       # que está realmente sirviendo Cloudflare).
       - name: Commitear el bump de versión
+        env:
+          APP: ${{ inputs.app }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json
-          git commit -m "chore(release): sube ${{ inputs.app }} a ${{ steps.version.outputs.version }}"
-          git tag "${{ inputs.app }}-v${{ steps.version.outputs.version }}"
+          git commit -m "chore(release): sube $APP a $VERSION"
+          git tag "$APP-v$VERSION"
           git push origin HEAD:main
-          git push origin "${{ inputs.app }}-v${{ steps.version.outputs.version }}"
+          git push origin "$APP-v$VERSION"
 
       # Sin binarios adjuntos a propósito -- a diferencia de desktop/mobile
       # (release.yml), acá no hay nada instalable que descargar: es una app
@@ -84,7 +90,10 @@ jobs:
       - name: Crear GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          APP: ${{ inputs.app }}
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ github.sha }}
         run: |
-          gh release create "${{ inputs.app }}-v${{ steps.version.outputs.version }}" \
-            --title "${{ inputs.app }} v${{ steps.version.outputs.version }}" \
-            --notes "Desplegado a producción (Cloudflare) desde el commit ${{ github.sha }}."
+          gh release create "$APP-v$VERSION" \
+            --title "$APP v$VERSION" \
+            --notes "Desplegado a producción (Cloudflare) desde el commit $COMMIT."
