@@ -49,25 +49,137 @@ fn crear_trigger_cedula_inmutable(connection: &Connection) {
         .unwrap();
 }
 
-/// `registro_ingresos_entrada_inmutable` (recreado con `uuid` en su lista de
-/// columnas por `MIGRACION_21`) rechaza `ALTER TABLE ... DROP COLUMN uuid` si
-/// sigue vigente -- `SQLite` valida las referencias del trigger al momento de
-/// soltar la columna. Rebobina el trigger a la forma que tenía en
-/// `MIGRACION_15` (sin `uuid`), para simular una base congelada en una
-/// versión anterior a `MIGRACION_16`.
-fn rebobinar_trigger_entrada_inmutable_sin_uuid(connection: &Connection) {
+/// Deshace, para el fixture de pruebas, lo que `MIGRACION_16` (agrega
+/// `uuid`) y `MIGRACION_49` (agrega `placa` + el `CHECK` cruzado contra
+/// `medio_ingreso`) le hicieron a `registro_ingresos` -- de un solo saque,
+/// en vez de dos pasos separados (que era el plan original: recrear sin
+/// `placa` acá y soltar `uuid` aparte con un simple `ALTER TABLE ... DROP
+/// COLUMN uuid`, como ya hacía `rebobinar_trigger_entrada_inmutable_sin_uuid`
+/// para el trigger). Ese plan en dos pasos resultó frágil: `SQLite`
+/// reconstruye TODOS los índices de la tabla al ejecutar `DROP COLUMN`
+/// (no sólo los que mencionan la columna soltada) y, contra esta tabla en
+/// particular, la reconstrucción chocaba con "index ... already exists" --
+/// aparentemente una interacción entre el `DROP COLUMN` y el propio
+/// recreate-and-swap que acababa de hacer esta función. Recrear la tabla
+/// una sola vez, ya sin `uuid` ni `placa` ni sus objetos dependientes,
+/// evita point por completo la maquinaria de `DROP COLUMN` de `SQLite`
+/// para esta tabla. `SQLite` rechaza igual `DROP COLUMN placa` mientras el
+/// `CHECK` siga mencionándola ("no such column: placa" durante la
+/// validación posterior al drop) -- un `CHECK` no se puede quitar con
+/// `ALTER TABLE`, así que de cualquier forma hacía falta recrear la tabla
+/// entera (mismo patrón recreate-and-swap que la migración real).
+fn rebobinar_registro_ingresos_sin_placa_ni_uuid(connection: &Connection) {
     connection
         .execute_batch(
-            "DROP TRIGGER registro_ingresos_entrada_inmutable;
-             CREATE TRIGGER registro_ingresos_entrada_inmutable
-             BEFORE UPDATE OF
+            "
+            CREATE TABLE registro_ingresos_v_sin_placa (
+                id INTEGER PRIMARY KEY,
+                contratista_id INTEGER NOT NULL,
+                empresa_id INTEGER NOT NULL,
+                fecha_hora_ingreso TEXT NOT NULL,
+                medio_ingreso TEXT NOT NULL CHECK (medio_ingreso IN ('CAMINANDO', 'VEHICULO')),
+                tipo_ingreso TEXT NOT NULL CHECK (
+                    tipo_ingreso IN ('PRAIND', 'IN_HOUSE', 'POR_CORREO', 'SWAT')
+                ),
+                gafete_numero INTEGER,
+                usuario_ingreso_id INTEGER NOT NULL,
+                fecha_hora_salida TEXT,
+                usuario_salida_id INTEGER,
+                contratista_cedula TEXT NOT NULL,
+                contratista_nombre TEXT NOT NULL,
+                empresa_nombre TEXT NOT NULL,
+                usuario_ingreso_nombre TEXT NOT NULL,
+                usuario_salida_nombre TEXT,
+                fecha_vencimiento_praind TEXT,
+                es_personal_ruta INTEGER NOT NULL CHECK (es_personal_ruta IN (0, 1)),
+                tiene_acceso INTEGER NOT NULL CHECK (tiene_acceso IN (0, 1)),
+                resultado_acceso TEXT NOT NULL CHECK (
+                    resultado_acceso IN ('PERMITIDO', 'PERMITIDO_CON_ADVERTENCIA', 'MIGRADO')
+                ),
+                motivo_resultado TEXT CHECK (
+                    motivo_resultado IS NULL
+                    OR motivo_resultado IN ('PRAIND_PROXIMO_VENCER', 'DATOS_RECONSTRUIDOS')
+                ),
+                reglas_version INTEGER NOT NULL CHECK (reglas_version >= 0),
+                empresa_activa_snapshot INTEGER NOT NULL DEFAULT 1
+                    CHECK (empresa_activa_snapshot IN (0, 1)),
+                CHECK (
+                    (fecha_hora_salida IS NULL
+                        AND usuario_salida_id IS NULL
+                        AND usuario_salida_nombre IS NULL)
+                    OR
+                    (fecha_hora_salida IS NOT NULL
+                        AND usuario_salida_nombre IS NOT NULL)
+                ),
+                CHECK (fecha_hora_salida IS NULL OR fecha_hora_salida >= fecha_hora_ingreso),
+                CHECK (
+                    (resultado_acceso = 'PERMITIDO' AND motivo_resultado IS NULL AND reglas_version > 0)
+                    OR
+                    (resultado_acceso = 'PERMITIDO_CON_ADVERTENCIA'
+                        AND motivo_resultado = 'PRAIND_PROXIMO_VENCER'
+                        AND reglas_version > 0)
+                    OR
+                    (resultado_acceso = 'MIGRADO'
+                        AND motivo_resultado = 'DATOS_RECONSTRUIDOS'
+                        AND reglas_version = 0)
+                ),
+                FOREIGN KEY (contratista_id) REFERENCES contratistas(id),
+                FOREIGN KEY (empresa_id) REFERENCES empresas(id),
+                FOREIGN KEY (usuario_ingreso_id) REFERENCES usuarios(id),
+                FOREIGN KEY (usuario_salida_id) REFERENCES usuarios(id)
+            ) STRICT;
+
+            INSERT INTO registro_ingresos_v_sin_placa (
+                id, contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+                gafete_numero, usuario_ingreso_id, fecha_hora_salida, usuario_salida_id,
+                contratista_cedula, contratista_nombre, empresa_nombre, usuario_ingreso_nombre,
+                usuario_salida_nombre, fecha_vencimiento_praind, es_personal_ruta, tiene_acceso,
+                resultado_acceso, motivo_resultado, reglas_version, empresa_activa_snapshot
+            )
+            SELECT
+                id, contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+                gafete_numero, usuario_ingreso_id, fecha_hora_salida, usuario_salida_id,
+                contratista_cedula, contratista_nombre, empresa_nombre, usuario_ingreso_nombre,
+                usuario_salida_nombre, fecha_vencimiento_praind, es_personal_ruta, tiene_acceso,
+                resultado_acceso, motivo_resultado, reglas_version, empresa_activa_snapshot
+            FROM registro_ingresos;
+
+            DROP TABLE registro_ingresos;
+            ALTER TABLE registro_ingresos_v_sin_placa RENAME TO registro_ingresos;
+
+            CREATE INDEX idx_registro_ingresos_contratista ON registro_ingresos(contratista_id);
+            CREATE INDEX idx_registro_ingresos_empresa ON registro_ingresos(empresa_id);
+            CREATE INDEX idx_registro_ingresos_fecha_ingreso ON registro_ingresos(fecha_hora_ingreso);
+            -- Sin idx_registro_ingresos_fecha_salida a proposito: nace
+            -- recien en MIGRACION_11, que todavia no corrio en el punto al
+            -- que rebobinan los llamadores de este helper (v9/v10) -- si ya
+            -- existiera aca, el CREATE INDEX de esa migracion chocaria con
+            -- un error de indice duplicado al querer crearlo de nuevo.
+            CREATE INDEX idx_registro_ingresos_gafete ON registro_ingresos(gafete_numero);
+            CREATE UNIQUE INDEX idx_registro_ingresos_contratista_activo
+            ON registro_ingresos(contratista_id) WHERE fecha_hora_salida IS NULL;
+            CREATE UNIQUE INDEX idx_registro_ingresos_gafete_activo
+            ON registro_ingresos(gafete_numero)
+            WHERE gafete_numero IS NOT NULL AND fecha_hora_salida IS NULL;
+            -- Sin `idx_registro_ingresos_uuid` a propósito: ese índice (y la
+            -- columna `uuid` misma) nace en `MIGRACION_16`, todavía no
+            -- corrió en el punto al que rebobinan los llamadores de este
+            -- helper.
+
+            CREATE TRIGGER registro_ingresos_no_eliminar
+            BEFORE DELETE ON registro_ingresos
+            BEGIN
+                SELECT RAISE(ABORT, 'Los movimientos de acceso no se pueden eliminar');
+            END;
+            CREATE TRIGGER registro_ingresos_entrada_inmutable
+            BEFORE UPDATE OF
                 contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
                 gafete_numero, usuario_ingreso_id, contratista_cedula, contratista_nombre,
                 empresa_nombre, usuario_ingreso_nombre, fecha_vencimiento_praind,
                 es_personal_ruta, tiene_acceso, resultado_acceso, motivo_resultado,
                 reglas_version, empresa_activa_snapshot
-             ON registro_ingresos
-             WHEN
+            ON registro_ingresos
+            WHEN
                 NEW.contratista_id IS NOT OLD.contratista_id
                 OR NEW.empresa_id IS NOT OLD.empresa_id
                 OR NEW.fecha_hora_ingreso IS NOT OLD.fecha_hora_ingreso
@@ -86,9 +198,55 @@ fn rebobinar_trigger_entrada_inmutable_sin_uuid(connection: &Connection) {
                 OR NEW.motivo_resultado IS NOT OLD.motivo_resultado
                 OR NEW.reglas_version IS NOT OLD.reglas_version
                 OR NEW.empresa_activa_snapshot IS NOT OLD.empresa_activa_snapshot
-             BEGIN
+            BEGIN
                 SELECT RAISE(ABORT, 'Los datos historicos del ingreso son inmutables');
-             END;",
+            END;
+            CREATE TRIGGER registro_ingresos_salida_unica
+            BEFORE UPDATE OF fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+            ON registro_ingresos
+            WHEN
+                OLD.fecha_hora_salida IS NOT NULL
+                OR NEW.fecha_hora_salida IS NULL
+                OR NEW.usuario_salida_nombre IS NULL
+            BEGIN
+                SELECT RAISE(ABORT, 'La salida solo puede registrarse una vez');
+            END;
+            CREATE TRIGGER registro_ingresos_fecha_utc_insert
+            BEFORE INSERT ON registro_ingresos
+            WHEN
+                strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_ingreso) IS NOT NEW.fecha_hora_ingreso
+                OR (
+                    NEW.fecha_hora_salida IS NOT NULL
+                    AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+                )
+            BEGIN
+                SELECT RAISE(ABORT, 'Las fechas de movimientos deben estar normalizadas en UTC');
+            END;
+            CREATE TRIGGER registro_ingresos_salida_utc
+            BEFORE UPDATE OF fecha_hora_salida ON registro_ingresos
+            WHEN
+                NEW.fecha_hora_salida IS NOT NULL
+                AND strftime('%Y-%m-%dT%H:%M:%SZ', NEW.fecha_hora_salida) IS NOT NEW.fecha_hora_salida
+            BEGIN
+                SELECT RAISE(ABORT, 'La fecha de salida debe estar normalizada en UTC');
+            END;
+            CREATE TRIGGER registro_ingresos_fts_ad AFTER DELETE ON registro_ingresos BEGIN
+                INSERT INTO registro_ingresos_fts(
+                    registro_ingresos_fts, rowid, contratista_cedula,
+                    contratista_nombre, empresa_nombre
+                ) VALUES (
+                    'delete', old.id, old.contratista_cedula,
+                    old.contratista_nombre, old.empresa_nombre
+                );
+            END;
+            CREATE TRIGGER registro_ingresos_fts_ai AFTER INSERT ON registro_ingresos BEGIN
+                INSERT INTO registro_ingresos_fts(
+                    rowid, contratista_cedula, contratista_nombre, empresa_nombre
+                ) VALUES (
+                    new.id, new.contratista_cedula, new.contratista_nombre, new.empresa_nombre
+                );
+            END;
+            ",
         )
         .unwrap();
 }
@@ -308,12 +466,9 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              DROP TABLE citas;",
         )
         .unwrap();
-    rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
+    rebobinar_registro_ingresos_sin_placa_ni_uuid(&connection);
     connection
-        .execute_batch(
-            "ALTER TABLE registro_ingresos DROP COLUMN uuid;
-             PRAGMA user_version = 9;",
-        )
+        .execute_batch("PRAGMA user_version = 9;")
         .unwrap();
 
     initialize_database(&connection).unwrap();
@@ -435,12 +590,9 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              DROP TABLE citas;",
         )
         .unwrap();
-    rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
+    rebobinar_registro_ingresos_sin_placa_ni_uuid(&connection);
     connection
-        .execute_batch(
-            "ALTER TABLE registro_ingresos DROP COLUMN uuid;
-             PRAGMA user_version = 10;",
-        )
+        .execute_batch("PRAGMA user_version = 10;")
         .unwrap();
 
     initialize_database(&connection).unwrap();
@@ -574,12 +726,9 @@ fn migracion_12_habilita_cambio_de_cedula() {
              DROP TABLE citas;",
         )
         .unwrap();
-    rebobinar_trigger_entrada_inmutable_sin_uuid(&connection);
+    rebobinar_registro_ingresos_sin_placa_ni_uuid(&connection);
     connection
-        .execute_batch(
-            "ALTER TABLE registro_ingresos DROP COLUMN uuid;
-             PRAGMA user_version = 11;",
-        )
+        .execute_batch("PRAGMA user_version = 11;")
         .unwrap();
 
     initialize_database(&connection).unwrap();
@@ -943,6 +1092,40 @@ fn base_version_34_con_gafete_perdido() -> Connection {
         .execute_batch("ALTER TABLE usuarios DROP COLUMN password_hash_confirmado_en;")
         .unwrap();
     connection.execute_batch(&ddl_de("contratistas")).unwrap();
+    // `registro_ingresos` no lo toca ninguna migración entre la 21 y la 49
+    // (la próxima que la recrea) -- tomar la forma ACTUAL de la referencia
+    // es equivalente a reconstruir la de v34 a mano, mismo criterio que
+    // `contratistas`/`citas`/`cita_visitantes` arriba. Sin esto,
+    // `MIGRACION_49` (agrega `placa`, recrea la tabla) no encuentra
+    // `registro_ingresos` en este fixture -- nunca se creó.
+    connection
+        .execute_batch(&ddl_de("registro_ingresos"))
+        .unwrap();
+    // Mismo motivo: `ingresos_remotos` (MIGRACION_17) e `historial_sitio`
+    // (MIGRACION_25) ya existían en v34, pero ninguna migración entre esa y
+    // la 48 las tocaba -- `MIGRACION_49` sí (les agrega `placa` con un simple
+    // `ALTER TABLE ... ADD COLUMN`), así que este fixture necesita crearlas
+    // para que la cadena de migraciones no encuentre "no such table" al
+    // llegar ahí. A diferencia de `registro_ingresos` arriba, acá sí hace
+    // falta soltar `placa` de nuevo después de copiar el DDL actual --
+    // `ddl_de` ya la incluye (una columna agregada con `ALTER TABLE ADD
+    // COLUMN` sí queda reflejada en `sqlite_master`, a diferencia de un
+    // `DROP COLUMN`) y un simple `ALTER TABLE ... ADD COLUMN placa` (sin
+    // `CHECK` cruzado, a diferencia de `registro_ingresos`) no tolera un
+    // nombre duplicado -- mismo criterio que ya usa este fixture con
+    // `usuarios.password_hash_confirmado_en` un poco más abajo.
+    connection
+        .execute_batch(&ddl_de("ingresos_remotos"))
+        .unwrap();
+    connection
+        .execute_batch("ALTER TABLE ingresos_remotos DROP COLUMN placa;")
+        .unwrap();
+    connection
+        .execute_batch(&ddl_de("historial_sitio"))
+        .unwrap();
+    connection
+        .execute_batch("ALTER TABLE historial_sitio DROP COLUMN placa;")
+        .unwrap();
     connection.execute_batch(&ddl_de("citas")).unwrap();
     connection
         .execute_batch(&ddl_de("cita_visitantes"))
@@ -1523,5 +1706,117 @@ fn cola_salida_acepta_movimiento_visita_y_conserva_los_valores_viejos() {
             )
             .is_err(),
         "un valor de entidad fuera del CHECK debería seguir rechazándose"
+    );
+}
+
+// MIGRACION_49 -- agrega `placa` a `registro_ingresos`, con un CHECK cruzado
+// contra `medio_ingreso` (sólo `VEHICULO` puede llevar placa).
+#[test]
+fn migracion_49_corre_limpia_y_llega_a_schema_version() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    assert!(
+        !connection
+            .prepare("PRAGMA foreign_key_check")
+            .unwrap()
+            .exists([])
+            .unwrap(),
+        "la migración no debería dejar referencias huérfanas"
+    );
+
+    let columnas: Vec<String> = connection
+        .prepare("SELECT name FROM pragma_table_info('registro_ingresos')")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert!(
+        columnas.iter().any(|c| c == "placa"),
+        "registro_ingresos debería tener la columna placa: {columnas:?}"
+    );
+}
+
+/// `contratista_id` distinto en cada llamada a propósito -- el índice único
+/// `idx_registro_ingresos_contratista_activo` sólo permite un ingreso ACTIVO
+/// por contratista a la vez, y este test no le importa la salida, sólo el
+/// `CHECK` de placa.
+fn insertar_ingreso_base(
+    connection: &Connection,
+    contratista_id: i64,
+    medio_ingreso: &str,
+    placa: Option<&str>,
+) -> Result<i64, rusqlite::Error> {
+    connection.execute(
+        "INSERT INTO registro_ingresos (
+            contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+            gafete_numero, usuario_ingreso_id, contratista_cedula, contratista_nombre,
+            empresa_nombre, usuario_ingreso_nombre, es_personal_ruta, tiene_acceso,
+            resultado_acceso, reglas_version, uuid, placa
+         ) VALUES (
+            ?1, 1, '2026-08-11T08:00:00Z', ?2, 'PRAIND', NULL, 1, '1-1111', 'Persona',
+            'Empresa', 'Operador', 0, 1, 'PERMITIDO', 1, ?3, ?4
+         )",
+        rusqlite::params![
+            contratista_id,
+            medio_ingreso,
+            format!("uuid-{contratista_id}-{medio_ingreso}"),
+            placa
+        ],
+    )?;
+    Ok(connection.last_insert_rowid())
+}
+
+/// El `CHECK ((medio_ingreso = 'VEHICULO') OR (placa IS NULL))` de
+/// `MIGRACION_49` es la única garantía dura de que `CAMINANDO` nunca lleva
+/// placa -- sin esto, la validación del servicio (`tests/registro_ingreso_service.rs`)
+/// sería la única barrera, y un `INSERT` directo (ej. un import) podría
+/// colarse.
+#[test]
+fn check_de_placa_rechaza_caminando_con_placa_y_acepta_el_resto() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO empresas (id, nombre) VALUES (1, 'Empresa')",
+            [],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO usuarios (id, cedula, nombre, password_hash, rol, activo)
+             VALUES (1, '1001', 'Operador', 'hash', 'OPERADOR', 1)",
+            [],
+        )
+        .unwrap();
+    for id in 1..=4i64 {
+        connection
+            .execute(
+                "INSERT INTO contratistas (
+                    id, cedula, nombre, empresa_id, tipo_ingreso,
+                    fecha_vencimiento_praind, es_personal_ruta, tiene_acceso
+                 ) VALUES (?1, ?2, 'Persona', 1, 'PRAIND', '2030-01-01', 0, 1)",
+                rusqlite::params![id, format!("1-{id}")],
+            )
+            .unwrap();
+    }
+
+    assert!(
+        insertar_ingreso_base(&connection, 1, "CAMINANDO", Some("ABC123")).is_err(),
+        "CAMINANDO con placa debería violar el CHECK"
+    );
+    assert!(
+        insertar_ingreso_base(&connection, 2, "CAMINANDO", None).is_ok(),
+        "CAMINANDO sin placa sigue siendo válido"
+    );
+    assert!(
+        insertar_ingreso_base(&connection, 3, "VEHICULO", Some("ABC123")).is_ok(),
+        "VEHICULO con placa es el caso normal"
+    );
+    assert!(
+        insertar_ingreso_base(&connection, 4, "VEHICULO", None).is_ok(),
+        "VEHICULO sin placa (dato viejo pre-migración) sigue siendo válido"
     );
 }

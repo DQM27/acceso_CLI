@@ -96,6 +96,13 @@ fun mensajeVencimientoPraind(fecha: String): String {
     return "$cuenta ($fechaTexto)"
 }
 
+/// Mismo criterio que `NuevoIngresoModal.tsx` (`confirmarIngreso`): la placa
+/// sólo se manda (y sólo existe) cuando el medio es Vehículo -- con
+/// Caminando se descarta lo tipeado, aunque el operador haya escrito algo
+/// antes de cambiar de radio.
+fun placaSiCorresponde(medio: MedioIngreso, placaTexto: String): String? =
+    if (medio == MedioIngreso.VEHICULO) placaTexto.trim() else null
+
 fun mensajeMotivoDenegacion(motivo: MotivoDenegacion): String =
     when (motivo) {
         // Mayúscula y sin detalle aparte a propósito -- a diferencia de los
@@ -146,6 +153,7 @@ fun PantallaConfirmarIngreso(
 ) {
     var medio by rememberSaveable { mutableStateOf(MedioIngreso.CAMINANDO) }
     var gafeteTexto by rememberSaveable { mutableStateOf("") }
+    var placaTexto by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var enviando by remember { mutableStateOf(false) }
     var escanerGafeteAbierto by remember { mutableStateOf(false) }
@@ -166,7 +174,7 @@ fun PantallaConfirmarIngreso(
         }
     }
 
-    fun registrarIngreso(gafete: Long?) {
+    fun registrarIngreso(gafete: Long?, placa: String?) {
         if (enviando) return
         error = null
         enviando = true
@@ -185,7 +193,7 @@ fun PantallaConfirmarIngreso(
                             throw GafeteOcupadoEnSitioException(gafete)
                         }
                     }
-                    nucleo.registrarIngreso(preparacion.contratistaId, medio, gafete)
+                    nucleo.registrarIngreso(preparacion.contratistaId, medio, gafete, placa)
                 }
                 onRegistrado()
             } catch (excepcion: GafeteOcupadoEnSitioException) {
@@ -216,8 +224,13 @@ fun PantallaConfirmarIngreso(
                 // del usuario 2026-09-20: quitar esa lógica y ese espacio en
                 // pantalla). Tipeado a mano sigue requiriendo el botón.
                 val gafete = limpio.toLongOrNull()
-                if (gafete != null) {
-                    registrarIngreso(gafete)
+                // Con Vehículo, sólo dispara el ingreso solo si la placa ya
+                // se había completado antes de escanear -- de lo contrario
+                // el operador todavía tiene que llenarla, mismo criterio que
+                // "Tipeado a mano sigue requiriendo el botón" arriba.
+                val placaLista = medio == MedioIngreso.CAMINANDO || placaTexto.isNotBlank()
+                if (gafete != null && placaLista) {
+                    registrarIngreso(gafete, placaSiCorresponde(medio, placaTexto))
                 }
             },
             onCerrar = { escanerGafeteAbierto = false },
@@ -275,15 +288,33 @@ fun PantallaConfirmarIngreso(
         Text("Medio de ingreso", style = MaterialTheme.typography.bodyMedium)
         Row(modifier = Modifier.padding(bottom = 16.dp)) {
             listOf(MedioIngreso.CAMINANDO to "Caminando", MedioIngreso.VEHICULO to "Vehículo").forEach { (opcion, etiqueta) ->
+                // Descarta la placa tipeada antes si el operador vuelve a
+                // Caminando -- ver el doc-comment de `placaSiCorresponde`.
+                val elegir = {
+                    medio = opcion
+                    if (opcion == MedioIngreso.CAMINANDO) placaTexto = ""
+                }
                 Row(
                     modifier = Modifier
-                        .selectable(selected = medio == opcion, onClick = { medio = opcion })
+                        .selectable(selected = medio == opcion, onClick = elegir)
                         .padding(end = 16.dp),
                 ) {
-                    RadioButton(selected = medio == opcion, onClick = { medio = opcion })
+                    RadioButton(selected = medio == opcion, onClick = elegir)
                     Text(etiqueta, modifier = Modifier.padding(top = 12.dp, start = 4.dp))
                 }
             }
+        }
+
+        if (medio == MedioIngreso.VEHICULO) {
+            OutlinedTextField(
+                value = placaTexto,
+                onValueChange = { placaTexto = it },
+                label = { Text("Placa del vehículo") },
+                singleLine = true,
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            )
         }
 
         if (preparacion.requiereGafete) {
@@ -347,6 +378,7 @@ fun PantallaConfirmarIngreso(
         // completar (el medio de ingreso ya arranca con un valor elegido),
         // así que el botón queda habilitado de entrada.
         val gafeteListo = !preparacion.requiereGafete || gafeteTexto.trim().toLongOrNull() != null
+        val placaLista = medio != MedioIngreso.VEHICULO || placaTexto.isNotBlank()
         BotonBrisas(
             onClick = {
                 error = null
@@ -360,9 +392,14 @@ fun PantallaConfirmarIngreso(
                 } else {
                     null
                 }
-                registrarIngreso(gafete)
+                val placa = placaSiCorresponde(medio, placaTexto)
+                if (medio == MedioIngreso.VEHICULO && placa.isNullOrBlank()) {
+                    error = "La placa es requerida"
+                    return@BotonBrisas
+                }
+                registrarIngreso(gafete, placa)
             },
-            enabled = !enviando && gafeteListo,
+            enabled = !enviando && gafeteListo && placaLista,
             modifier = Modifier.fillMaxWidth().focusRequester(focoConfirmar),
         ) {
             Text(if (enviando) "Registrando…" else "Registrar ingreso")

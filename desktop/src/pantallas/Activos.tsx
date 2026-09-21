@@ -4,7 +4,7 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
-import { cerrarFilaActiva, claveFilaActiva, listarTodosLosActivos, textoMedio } from "../api";
+import { cerrarFilaActiva, claveFilaActiva, listarTodosLosActivos, textoMedioConPlaca } from "../api";
 import type { FilaActiva } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
@@ -111,7 +111,8 @@ export default function Activos({
         headerName: "Medio",
         flex: 1,
         minWidth: 100,
-        valueFormatter: (p) => (p.value == null ? "—" : textoMedio(p.value)),
+        valueFormatter: (p) =>
+          p.value == null ? "—" : textoMedioConPlaca(p.value, p.data?.placa ?? null),
       },
       {
         field: "gafete_numero",

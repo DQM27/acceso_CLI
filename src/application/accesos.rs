@@ -87,6 +87,7 @@ impl AppCore {
         contratista_id: i64,
         medio: crate::models::medio_ingreso::MedioIngreso,
         gafete: Option<i64>,
+        placa: Option<String>,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
         self.en_transaccion_con_reloj_validado(actor, |transaction, ahora| {
             let contratistas = SqliteContratistaRepository::new(transaction);
@@ -96,6 +97,7 @@ impl AppCore {
                 contratista_id,
                 medio,
                 gafete,
+                placa,
                 actor.id,
                 ahora,
             )

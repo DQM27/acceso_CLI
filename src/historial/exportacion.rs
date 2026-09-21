@@ -98,9 +98,10 @@ fn celda_movimiento(
                 .gafete_numero
                 .map_or_else(|| "S/G".to_owned(), |numero| numero.to_string()),
         ),
-        ColumnaHistorial::Medio => {
-            CeldaMovimiento::Centrada(medio_texto(movimiento.medio_ingreso).to_owned())
-        }
+        ColumnaHistorial::Medio => CeldaMovimiento::Centrada(medio_texto_con_placa(
+            movimiento.medio_ingreso,
+            movimiento.placa.as_deref(),
+        )),
         ColumnaHistorial::Ingreso => {
             CeldaMovimiento::Centrada(movimiento.usuario_ingreso_nombre.clone())
         }
@@ -285,6 +286,19 @@ pub const fn medio_texto(medio: MedioIngreso) -> &'static str {
     }
 }
 
+/// Igual que [`medio_texto`], pero muestra la placa en vez del texto
+/// genérico "Vehículo" cuando hay una guardada (`MIGRACION_49`) -- pedido
+/// explícito del usuario, 2026-09-21. Cae a "Vehículo" si no hay placa
+/// (dato viejo pre-migración): nunca queda una celda vacía. `pub` por el
+/// mismo motivo que [`tipo_texto`]/[`medio_texto`] -- la exportación a PDF
+/// de la GUI reusa esta función en vez de duplicar el criterio.
+pub fn medio_texto_con_placa(medio: MedioIngreso, placa: Option<&str>) -> String {
+    match (medio, placa) {
+        (MedioIngreso::Vehiculo, Some(placa)) if !placa.trim().is_empty() => placa.to_owned(),
+        _ => medio_texto(medio).to_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{NaiveDate, Utc};
@@ -311,6 +325,7 @@ mod tests {
             ),
             fecha_hora_salida: None,
             gafete_numero: Some(7),
+            placa: None,
             usuario_ingreso_nombre: "Quintana".into(),
             usuario_salida_nombre: None,
             resultado_acceso: ResultadoIngresoRegistrado::Permitido,
@@ -349,5 +364,35 @@ mod tests {
         let bytes = std::fs::read(destino).unwrap();
         assert!(bytes.starts_with(b"PK"), "XLSX debe ser un contenedor ZIP");
         assert!(bytes.len() > 1_000, "el libro no debe quedar vacío");
+    }
+
+    #[test]
+    fn medio_texto_con_placa_muestra_la_placa_en_vehiculo() {
+        assert_eq!(
+            medio_texto_con_placa(MedioIngreso::Vehiculo, Some("ABC123")),
+            "ABC123"
+        );
+    }
+
+    #[test]
+    fn medio_texto_con_placa_cae_a_vehiculo_sin_placa() {
+        assert_eq!(
+            medio_texto_con_placa(MedioIngreso::Vehiculo, None),
+            "Vehículo"
+        );
+        assert_eq!(
+            medio_texto_con_placa(MedioIngreso::Vehiculo, Some("   ")),
+            "Vehículo"
+        );
+    }
+
+    #[test]
+    fn medio_texto_con_placa_ignora_placa_en_caminando() {
+        // No debería pasar (el CHECK de MIGRACION_49 lo impide), pero si
+        // llegara un dato así de todos modos no debe mostrarse la placa.
+        assert_eq!(
+            medio_texto_con_placa(MedioIngreso::Caminando, Some("ABC123")),
+            "Caminando"
+        );
     }
 }

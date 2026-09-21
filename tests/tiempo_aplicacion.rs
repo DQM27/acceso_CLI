@@ -63,7 +63,7 @@ fn appcore_usa_costa_rica_para_reglas_utc_para_persistencia_y_detecta_retrocesos
     };
 
     let resultado = core
-        .registrar_ingreso(&actor, 1, MedioIngreso::Caminando, None)
+        .registrar_ingreso(&actor, 1, MedioIngreso::Caminando, None, None)
         .unwrap();
     assert_eq!(
         resultado.resultado_acceso,

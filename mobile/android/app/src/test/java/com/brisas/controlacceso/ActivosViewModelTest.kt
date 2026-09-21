@@ -154,7 +154,7 @@ class ActivosViewModelTest {
             "",
             "",
         )
-        nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, 7L)
+        nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, 7L, null)
         val viewModel = viewModel()
         advanceUntilIdle()
 

@@ -44,6 +44,20 @@ export function validarGafete(
   return { valido: true, numero };
 }
 
+/** Mismo criterio que `validarGafete`, pero para la placa -- obligatoria
+ * cuando el medio es `"Vehiculo"`, descartada (nunca se manda) cuando es
+ * `"Caminando"` (ver `confirmarIngreso`, que ni siquiera llama a esta
+ * función en ese caso). Sin formato particular impuesto: las placas de
+ * Costa Rica varían bastante (motos, vehículos de otras provincias,
+ * temporales), no vale la pena una expresión regular frágil. */
+export function validarPlaca(
+  texto: string,
+): { valido: true; placa: string } | { valido: false; mensaje: string } {
+  const recortada = texto.trim();
+  if (!recortada) return { valido: false, mensaje: "La placa es requerida" };
+  return { valido: true, placa: recortada };
+}
+
 /**
  * El buscador queda siempre visible arriba; al elegir un contratista el
  * panel correspondiente (formulario o motivo de bloqueo) se expande debajo
@@ -72,6 +86,7 @@ export default function NuevoIngresoModal({
   const [seleccion, setSeleccion] = useState<Seleccion>({ tipo: "ninguna" });
   const [medio, setMedio] = useState<MedioIngreso>("Caminando");
   const [gafeteTexto, setGafeteTexto] = useState("");
+  const [placaTexto, setPlacaTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -134,6 +149,7 @@ export default function NuevoIngresoModal({
       if (puedeContinuar(preparacion)) {
         setMedio("Caminando");
         setGafeteTexto("");
+        setPlacaTexto("");
         setSeleccion({ tipo: "formulario", contratista, preparacion });
       } else {
         setSeleccion({ tipo: "bloqueada", contratista, mensaje: mensajeBloqueo(preparacion) });
@@ -152,15 +168,28 @@ export default function NuevoIngresoModal({
   async function confirmarIngreso() {
     if (seleccion.tipo !== "formulario") return;
     const { preparacion } = seleccion;
-    const resultado = validarGafete(gafeteTexto, preparacion.requiere_gafete);
-    if (!resultado.valido) {
-      setError(resultado.mensaje);
+    const resultadoGafete = validarGafete(gafeteTexto, preparacion.requiere_gafete);
+    if (!resultadoGafete.valido) {
+      setError(resultadoGafete.mensaje);
       return;
+    }
+    // Sólo se valida (y se manda) la placa cuando el medio es Vehículo --
+    // con Caminando, `placaTexto` se descarta aunque el operador haya
+    // escrito algo antes de cambiar de radio (mismo criterio que el núcleo,
+    // `RegistroIngresoServiceError::PlacaNoAplica`).
+    let placa: string | null = null;
+    if (medio === "Vehiculo") {
+      const resultadoPlaca = validarPlaca(placaTexto);
+      if (!resultadoPlaca.valido) {
+        setError(resultadoPlaca.mensaje);
+        return;
+      }
+      placa = resultadoPlaca.placa;
     }
     setError(null);
     setEnviando(true);
     try {
-      await registrarIngreso(preparacion.contratista_id, medio, resultado.numero);
+      await registrarIngreso(preparacion.contratista_id, medio, resultadoGafete.numero, placa);
       setMensaje(`✓ Ingreso registrado — ${preparacion.nombre}`);
       setSeleccion({ tipo: "ninguna" });
       setFiltro("");
@@ -314,13 +343,31 @@ export default function NuevoIngresoModal({
                           type="radio"
                           name="medio"
                           checked={medio === opcion}
-                          onChange={() => setMedio(opcion)}
+                          onChange={() => {
+                            setMedio(opcion);
+                            // Descarta lo tipeado antes si el operador vuelve
+                            // a Caminando -- ver el comentario de
+                            // `confirmarIngreso` sobre por qué nunca se manda.
+                            if (opcion === "Caminando") setPlacaTexto("");
+                          }}
                         />
                         {opcion === "Caminando" ? "Caminando" : "Vehículo"}
                       </label>
                     ))}
                   </div>
                 </div>
+
+                {medio === "Vehiculo" && (
+                  <label className="campo">
+                    Placa del vehículo
+                    <input
+                      value={placaTexto}
+                      onChange={(evento) => setPlacaTexto(evento.target.value.toUpperCase())}
+                      autoFocus
+                      placeholder="Placa del vehículo"
+                    />
+                  </label>
+                )}
 
                 {seleccion.preparacion.requiere_gafete && (
                   <label className="campo">

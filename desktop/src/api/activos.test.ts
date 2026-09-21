@@ -20,6 +20,7 @@ describe("filaDesdeLocal / filaDesdeRemoto", () => {
       medio_ingreso: "Caminando",
       fecha_hora_ingreso: "2027-03-08T12:00:00Z",
       gafete_numero: 10,
+      placa: null,
       usuario_ingreso_nombre: "root",
       resultado_registrado: "Permitido",
       resultado_acceso: "Permitido",
@@ -45,6 +46,7 @@ describe("filaDesdeLocal / filaDesdeRemoto", () => {
       tipo_ingreso: "PRAIND",
       medio_ingreso: "VEHICULO",
       gafete_numero: 42,
+      placa: "ABC123",
     };
 
     const resultado = filaDesdeRemoto(remoto);
@@ -60,6 +62,7 @@ describe("filaDesdeLocal / filaDesdeRemoto", () => {
       tipo_ingreso: "Praind",
       medio_ingreso: "Vehiculo",
       gafete_numero: 42,
+      placa: "ABC123",
       usuario_ingreso_nombre: "Op PC",
     });
   });
@@ -75,6 +78,7 @@ describe("filaDesdeLocal / filaDesdeRemoto", () => {
       tipo_ingreso: null,
       medio_ingreso: null,
       gafete_numero: null,
+      placa: null,
     };
 
     expect(filaDesdeRemoto(remoto).usuario_ingreso_nombre).toBe("—");

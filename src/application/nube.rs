@@ -513,7 +513,8 @@ impl AppCore {
         self.autorizar_uso_nube(actor)?;
         let mut statement = self.connection.prepare(
             "SELECT uuid, contratista_nombre, hora_entrada, usuario_entrada_nombre,
-                    contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero
+                    contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero,
+                    placa
              FROM ingresos_remotos ORDER BY hora_entrada",
         )?;
         let filas = statement
@@ -528,6 +529,7 @@ impl AppCore {
                     tipo_ingreso: row.get(6)?,
                     medio_ingreso: row.get(7)?,
                     gafete_numero: row.get(8)?,
+                    placa: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;

@@ -89,7 +89,7 @@ class HistorialViewModelTest {
             NucleoDePrueba.sqlUsuarioRoot(),
         )
         nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
-        nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, null)
+        nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, null, null)
 
         val viewModel = HistorialViewModel(nucleo, dispatcherIO = dispatcher)
         advanceUntilIdle()
@@ -192,7 +192,7 @@ class HistorialViewModelTest {
             NucleoDePrueba.sqlUsuarioRoot(),
         )
         nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
-        nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, null)
+        nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, null, null)
 
         val viewModel = HistorialViewModel(nucleo, dispatcherIO = dispatcher)
         advanceUntilIdle()

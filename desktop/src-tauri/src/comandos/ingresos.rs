@@ -140,6 +140,7 @@ pub fn registrar_ingreso(
     contratista_id: i64,
     medio: MedioIngreso,
     gafete: Option<i64>,
+    placa: Option<String>,
     state: tauri::State<GuiState>,
 ) -> Result<ResultadoRegistroEntrada, String> {
     let sesion = state.sesion_activa()?;
@@ -152,7 +153,7 @@ pub fn registrar_ingreso(
     }
     state
         .core()
-        .registrar_ingreso(&sesion, contratista_id, medio, gafete)
+        .registrar_ingreso(&sesion, contratista_id, medio, gafete, placa)
         .map_err(mensaje_ingreso)
 }
 

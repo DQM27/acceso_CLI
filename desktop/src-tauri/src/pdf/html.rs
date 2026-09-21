@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 
 use chrono::Utc;
 use control_acceso::database::queries::ingresos::MovimientoIngresoResumen;
-use control_acceso::historial::exportacion::{ColumnaHistorial, medio_texto, tipo_texto};
+use control_acceso::historial::exportacion::{ColumnaHistorial, medio_texto_con_placa, tipo_texto};
 use control_acceso::tiempo::a_costa_rica;
 
 /// Paleta CLARA de `desktop/src/index.css` (light) a propósito, aunque la
@@ -93,7 +93,9 @@ fn valor_columna(columna: ColumnaHistorial, movimiento: &MovimientoIngresoResume
         ColumnaHistorial::Gafete => movimiento
             .gafete_numero
             .map_or_else(|| "S/G".to_string(), |numero| numero.to_string()),
-        ColumnaHistorial::Medio => medio_texto(movimiento.medio_ingreso).to_string(),
+        ColumnaHistorial::Medio => {
+            medio_texto_con_placa(movimiento.medio_ingreso, movimiento.placa.as_deref())
+        }
         ColumnaHistorial::Ingreso => movimiento.usuario_ingreso_nombre.clone(),
         ColumnaHistorial::Egreso => movimiento
             .usuario_salida_nombre
@@ -217,6 +219,7 @@ mod tests {
             ),
             fecha_hora_salida: None,
             gafete_numero: Some(7),
+            placa: None,
             usuario_ingreso_nombre: "Quintana".into(),
             usuario_salida_nombre: None,
             resultado_acceso: ResultadoIngresoRegistrado::Permitido,

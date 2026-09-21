@@ -81,6 +81,9 @@ pub struct MovimientoHistorialRemoto {
     pub fecha_hora_ingreso: String,
     pub fecha_hora_salida: Option<String>,
     pub gafete_numero: Option<i64>,
+    /// Placa del vehículo -- ver el doc-comment del mismo campo en
+    /// `IngresoActivoResumen`/`MovimientoIngresoResumen` del núcleo.
+    pub placa: Option<String>,
     pub usuario_ingreso_nombre: Option<String>,
     pub usuario_salida_nombre: Option<String>,
     /// `"pc"`/`"movil"`, o `None` para filas sincronizadas antes de que
@@ -103,7 +106,8 @@ pub fn listar_historial_sitio(
         .prepare(
             "SELECT uuid, contratista_cedula, contratista_nombre, empresa_nombre, tipo_ingreso,
                     medio_ingreso, hora_entrada, hora_salida, gafete_numero,
-                    usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_tipo
+                    usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_tipo,
+                    placa
              FROM historial_sitio
              WHERE hora_entrada >= ?1 AND hora_entrada < ?2
              ORDER BY hora_entrada DESC",
@@ -129,6 +133,7 @@ pub fn listar_historial_sitio(
                     usuario_ingreso_nombre: row.get(9)?,
                     usuario_salida_nombre: row.get(10)?,
                     dispositivo_entrada_tipo: row.get(11)?,
+                    placa: row.get(12)?,
                 })
             },
         )

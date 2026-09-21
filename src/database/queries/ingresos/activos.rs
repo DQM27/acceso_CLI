@@ -35,6 +35,9 @@ pub struct IngresoActivoLectura {
     pub medio_ingreso: MedioIngreso,
     pub fecha_hora_ingreso: DateTime<Utc>,
     pub gafete_numero: Option<i64>,
+    /// Placa del vehículo -- ver el doc-comment del mismo campo en
+    /// `IngresoActivoResumen` (`services::registro_ingreso_service`).
+    pub placa: Option<String>,
     pub usuario_ingreso_nombre: String,
     pub fecha_vencimiento_praind: Option<NaiveDate>,
     pub es_personal_ruta: bool,
@@ -104,7 +107,7 @@ pub(super) fn listar_activos(
             r.tipo_ingreso, r.medio_ingreso, r.fecha_hora_ingreso, r.gafete_numero,
             r.usuario_ingreso_nombre, c.fecha_vencimiento_praind,
             c.es_personal_ruta, c.tiene_acceso, e.activo,
-            r.resultado_acceso, r.motivo_resultado
+            r.resultado_acceso, r.motivo_resultado, r.placa
          FROM registro_ingresos AS r
          INNER JOIN contratistas AS c ON c.id = r.contratista_id
          INNER JOIN empresas AS e ON e.id = c.empresa_id
@@ -210,6 +213,7 @@ fn convertir_activo(row: &Row<'_>) -> rusqlite::Result<IngresoActivoLectura> {
         medio_ingreso: medio_desde_fila(row, 7)?,
         fecha_hora_ingreso: fecha_hora_desde_fila(row, 8)?,
         gafete_numero: row.get(9)?,
+        placa: row.get(17)?,
         usuario_ingreso_nombre: row.get(10)?,
         fecha_vencimiento_praind: fecha_desde_fila(row, 11)?,
         es_personal_ruta: row.get::<_, i64>(12)? != 0,

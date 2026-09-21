@@ -119,6 +119,10 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
             usuario_id,
         });
 
+    // Agregada al final del SELECT (no intercalada) para no correr los
+    // índices posicionales de las columnas anteriores -- ver `MIGRACION_49`.
+    let placa: Option<String> = row.get(10)?;
+
     Ok(RegistroIngreso {
         id: row.get(0)?,
         contratista_id: row.get(1)?,
@@ -127,6 +131,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngreso> {
         medio_ingreso,
         tipo_ingreso,
         gafete_numero,
+        placa,
         usuario_ingreso_id: row.get(7)?,
         salida,
     })
@@ -179,7 +184,8 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
                 motivo_resultado,
                 reglas_version,
                 empresa_activa_snapshot,
-                uuid
+                uuid,
+                placa
             )
             SELECT
                 :contratista_id, :empresa_id, :fecha_hora_ingreso,
@@ -188,7 +194,7 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
                 :contratista_nombre, e.nombre, u.nombre,
                 :fecha_vencimiento_praind, :es_personal_ruta,
                 :tiene_acceso, :resultado_acceso, :motivo_resultado,
-                :reglas_version, :empresa_activa_snapshot, :uuid
+                :reglas_version, :empresa_activa_snapshot, :uuid, :placa
             FROM empresas AS e
             CROSS JOIN usuarios AS u
             WHERE e.id = :empresa_id AND u.id = :usuario_ingreso_id
@@ -211,6 +217,7 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
                 ":reglas_version": registro.datos_historicos.reglas_version,
                 ":empresa_activa_snapshot": i64::from(registro.datos_historicos.empresa_activa),
                 ":uuid": uuid,
+                ":placa": registro.placa,
             },
         )?;
 
@@ -239,7 +246,8 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
                 gafete_numero,
                 usuario_ingreso_id,
                 fecha_hora_salida,
-                usuario_salida_id
+                usuario_salida_id,
+                placa
             FROM registro_ingresos
             WHERE id = ?1
             ",
@@ -270,7 +278,8 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
                 gafete_numero,
                 usuario_ingreso_id,
                 fecha_hora_salida,
-                usuario_salida_id
+                usuario_salida_id,
+                placa
             FROM registro_ingresos
             WHERE contratista_id = ?1
               AND fecha_hora_salida IS NULL
@@ -304,7 +313,8 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
                 gafete_numero,
                 usuario_ingreso_id,
                 fecha_hora_salida,
-                usuario_salida_id
+                usuario_salida_id,
+                placa
             FROM registro_ingresos
             WHERE gafete_numero = ?1
               AND fecha_hora_salida IS NULL
@@ -370,7 +380,8 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
                 gafete_numero,
                 usuario_ingreso_id,
                 fecha_hora_salida,
-                usuario_salida_id
+                usuario_salida_id,
+                placa
             FROM registro_ingresos
             ORDER BY fecha_hora_ingreso DESC
             ",

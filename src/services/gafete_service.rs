@@ -182,6 +182,7 @@ mod tests {
                 medio_ingreso: crate::models::medio_ingreso::MedioIngreso::Caminando,
                 tipo_ingreso: TipoIngreso::Praind,
                 gafete_numero: Some(gafete_numero),
+                placa: None,
                 usuario_ingreso_id: 1,
                 datos_historicos: crate::models::registro_ingreso::DatosHistoricosEntrada {
                     contratista_cedula: "1".to_owned(),

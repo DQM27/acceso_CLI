@@ -130,6 +130,7 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
             primer_contratista_id,
             MedioIngreso::Vehiculo,
             Some(5),
+            Some("ABC123".to_string()),
             usuario_id,
             fecha_ingreso(),
         )
@@ -156,6 +157,7 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
             primer_contratista_id,
             MedioIngreso::Caminando,
             Some(6),
+            None,
             usuario_id,
             fecha_ingreso(),
         ),
@@ -176,6 +178,7 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
             segundo_contratista_id,
             MedioIngreso::Caminando,
             Some(5),
+            None,
             usuario_id,
             fecha_ingreso(),
         ),
@@ -212,6 +215,7 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
             segundo_contratista_id,
             MedioIngreso::Caminando,
             Some(5),
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -251,6 +255,7 @@ fn comprobar_flujo_sin_gafete(
             contratista_id,
             MedioIngreso::Caminando,
             Some(99),
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -304,6 +309,7 @@ fn flujo_por_correo_exige_y_persiste_gafete() {
             contratista_id,
             MedioIngreso::Vehiculo,
             None,
+            Some("ABC123".to_string()),
             usuario_id,
             fecha_ingreso(),
         ),
@@ -315,6 +321,7 @@ fn flujo_por_correo_exige_y_persiste_gafete() {
             contratista_id,
             MedioIngreso::Vehiculo,
             Some(8),
+            Some("ABC123".to_string()),
             usuario_id,
             fecha_ingreso(),
         )
@@ -355,6 +362,7 @@ fn intentar_ingreso_restringido(
             contratista_id,
             MedioIngreso::Caminando,
             Some(10),
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -423,6 +431,7 @@ fn sqlite_impide_ingreso_activo_y_gafete_activo_duplicados() {
         medio_ingreso: MedioIngreso::Caminando,
         tipo_ingreso: TipoIngreso::Praind,
         gafete_numero: Some(gafete_numero),
+        placa: None,
         usuario_ingreso_id: usuario_id,
         datos_historicos: DatosHistoricosEntrada {
             contratista_cedula: contratista_id.to_string(),

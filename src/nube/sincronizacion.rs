@@ -904,6 +904,7 @@ fn construir_cuerpo_ingreso(
         motivo_resultado,
         reglas_version,
         empresa_activa_snapshot,
+        placa,
     ): (
         i64,
         String,
@@ -918,11 +919,12 @@ fn construir_cuerpo_ingreso(
         Option<String>,
         i64,
         bool,
+        Option<String>,
     ) = connection.query_row(
         "
         SELECT contratista_id, contratista_nombre, fecha_hora_ingreso, usuario_ingreso_nombre,
                contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero,
-               resultado_acceso, motivo_resultado, reglas_version, empresa_activa_snapshot
+               resultado_acceso, motivo_resultado, reglas_version, empresa_activa_snapshot, placa
         FROM registro_ingresos
         WHERE uuid = ?1
         ",
@@ -942,6 +944,7 @@ fn construir_cuerpo_ingreso(
                 row.get(10)?,
                 row.get(11)?,
                 row.get::<_, i64>(12)? != 0,
+                row.get(13)?,
             ))
         },
     )?;
@@ -968,6 +971,7 @@ fn construir_cuerpo_ingreso(
         "motivo_resultado": motivo_resultado,
         "reglas_version": reglas_version,
         "empresa_activa_snapshot": empresa_activa_snapshot,
+        "placa": placa,
     }))
 }
 
@@ -1771,6 +1775,7 @@ pub struct IngresoRemoto {
     pub tipo_ingreso: Option<String>,
     pub medio_ingreso: Option<String>,
     pub gafete_numero: Option<i64>,
+    pub placa: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -1785,6 +1790,7 @@ struct FilaIngresoRemoto {
     tipo_ingreso: Option<String>,
     medio_ingreso: Option<String>,
     gafete_numero: Option<i64>,
+    placa: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -1956,7 +1962,7 @@ pub fn recibir_ingresos_abiertos(
     let url = format!(
         "{}/rest/v1/ingresos?sitio_id=eq.{}&hora_salida=is.null\
          &select=id,contratista_nombre,hora_entrada,usuario_entrada_nombre,dispositivo_entrada_id,\
-         contratista_cedula,empresa_nombre,tipo_ingreso,medio_ingreso,gafete_numero",
+         contratista_cedula,empresa_nombre,tipo_ingreso,medio_ingreso,gafete_numero,placa",
         contexto.base_url, contexto.sitio_id,
     );
     let filas: Vec<FilaIngresoRemoto> = obtener_json(&cliente, contexto, &url)?;
@@ -1990,8 +1996,9 @@ pub fn recibir_ingresos_abiertos(
             INSERT INTO ingresos_remotos (
                 uuid, sitio_id, contratista_nombre, hora_entrada,
                 usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en,
-                contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?7, ?8, ?9, ?10, ?11)
+                contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero,
+                placa
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?7, ?8, ?9, ?10, ?11, ?12)
             ",
             params![
                 fila.id,
@@ -2005,6 +2012,7 @@ pub fn recibir_ingresos_abiertos(
                 fila.tipo_ingreso,
                 fila.medio_ingreso,
                 fila.gafete_numero,
+                fila.placa,
             ],
         )?;
         remotos.push(IngresoRemoto {
@@ -2017,6 +2025,7 @@ pub fn recibir_ingresos_abiertos(
             tipo_ingreso: fila.tipo_ingreso,
             medio_ingreso: fila.medio_ingreso,
             gafete_numero: fila.gafete_numero,
+            placa: fila.placa,
         });
     }
     transaction.commit()?;
@@ -2574,6 +2583,7 @@ struct FilaHistorialRemota {
     dispositivo_entrada_id: String,
     dispositivo_salida_id: Option<String>,
     updated_at: String,
+    placa: Option<String>,
     /// `"pc"`/`"mobile"` (`dispositivos.tipo`) -- embebido vía `PostgREST`
     /// (`dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)`)
     /// para que la pantalla pueda mostrar de qué tipo de dispositivo vino
@@ -2620,7 +2630,7 @@ pub fn recibir_historial_del_sitio(
          &select=id,contratista_cedula,contratista_nombre,empresa_nombre,tipo_ingreso,\
          medio_ingreso,hora_entrada,hora_salida,gafete_numero,usuario_entrada_nombre,\
          usuario_salida_nombre,resultado_acceso,motivo_resultado,reglas_version,\
-         empresa_activa_snapshot,dispositivo_entrada_id,dispositivo_salida_id,updated_at,\
+         empresa_activa_snapshot,dispositivo_entrada_id,dispositivo_salida_id,updated_at,placa,\
          dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)",
         contexto.base_url, contexto.sitio_id,
     );
@@ -2713,8 +2723,8 @@ fn aplicar_pagina_historial(
                 usuario_entrada_nombre, usuario_salida_nombre, resultado_acceso,
                 motivo_resultado, reglas_version, empresa_activa_snapshot,
                 dispositivo_entrada_id, dispositivo_salida_id, actualizado_en,
-                dispositivo_entrada_tipo
-            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)
+                dispositivo_entrada_tipo, placa
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)
             ON CONFLICT(uuid) DO UPDATE SET
                 hora_salida = excluded.hora_salida,
                 usuario_salida_nombre = excluded.usuario_salida_nombre,
@@ -2749,6 +2759,7 @@ fn aplicar_pagina_historial(
                 fila.dispositivo_entrada
                     .as_ref()
                     .and_then(|d| d.tipo.clone()),
+                fila.placa,
             ],
         )?;
         recibidos += 1;

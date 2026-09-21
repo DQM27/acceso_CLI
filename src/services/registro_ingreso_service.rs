@@ -77,6 +77,11 @@ pub struct IngresoActivoResumen {
     pub medio_ingreso: MedioIngreso,
     pub fecha_hora_ingreso: DateTime<Utc>,
     pub gafete_numero: Option<i64>,
+    /// Placa del vehículo -- `Some` sólo cuando `medio_ingreso` es
+    /// `Vehiculo`. `None` en datos viejos pre-`MIGRACION_49` aunque el
+    /// medio sea `Vehiculo`; las pantallas caen a mostrar "Vehículo" en ese
+    /// caso.
+    pub placa: Option<String>,
     pub usuario_ingreso_nombre: String,
     /// Decisión persistida en el momento del ingreso; no se recalcula.
     pub resultado_registrado: ResultadoIngresoRegistrado,
@@ -158,6 +163,7 @@ fn convertir_activo(lectura: IngresoActivoLectura, hoy: NaiveDate) -> IngresoAct
         medio_ingreso: lectura.medio_ingreso,
         fecha_hora_ingreso: lectura.fecha_hora_ingreso,
         gafete_numero: lectura.gafete_numero,
+        placa: lectura.placa,
         usuario_ingreso_nombre: lectura.usuario_ingreso_nombre,
         resultado_registrado: lectura.resultado_registrado,
         resultado_acceso,
@@ -242,9 +248,30 @@ where
         contratista_id: i64,
         medio_ingreso: MedioIngreso,
         gafete_numero: Option<i64>,
+        placa: Option<String>,
         usuario_ingreso_id: i64,
         fecha_hora_ingreso: DateTime<Utc>,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
+        // La placa es obligatoria en Vehículo y no aplica en Caminando --
+        // mismo criterio que el gafete, pero condicional al medio en vez de
+        // al contratista. El `CHECK` de `registro_ingresos` (`MIGRACION_49`)
+        // rechazaría igual una combinación inválida, pero validar acá da un
+        // error de dominio legible en vez de un `DatabaseError::Sqlite` crudo.
+        let placa = match medio_ingreso {
+            MedioIngreso::Vehiculo => {
+                let placa = placa
+                    .filter(|texto| !texto.trim().is_empty())
+                    .ok_or(RegistroIngresoServiceError::PlacaRequerida)?;
+                Some(placa)
+            }
+            MedioIngreso::Caminando => {
+                if placa.is_some() {
+                    return Err(RegistroIngresoServiceError::PlacaNoAplica);
+                }
+                None
+            }
+        };
+
         let contratista = self
             .contratistas
             .buscar_por_id(contratista_id)?
@@ -313,6 +340,7 @@ where
             medio_ingreso,
             tipo_ingreso: contratista.tipo_ingreso,
             gafete_numero,
+            placa,
             usuario_ingreso_id,
             datos_historicos: DatosHistoricosEntrada {
                 contratista_cedula: contratista.cedula,

@@ -108,6 +108,7 @@ fn resultado_praind_con_vencimiento(
             id,
             MedioIngreso::Caminando,
             Some(10),
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -136,6 +137,7 @@ fn empresa_inactiva_deniega_registrar_entrada() {
         .registrar_entrada(
             id,
             MedioIngreso::Caminando,
+            None,
             None,
             usuario_id,
             fecha_ingreso(),
@@ -213,6 +215,7 @@ fn praind_normal_con_gafete_libre_crea_ingreso() {
             id,
             MedioIngreso::Caminando,
             Some(10),
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -249,6 +252,7 @@ fn praind_normal_sin_gafete_es_rechazado() {
         id,
         MedioIngreso::Caminando,
         None,
+        None,
         usuario_id,
         fecha_ingreso(),
     );
@@ -276,6 +280,7 @@ fn por_correo_con_gafete_libre_crea_ingreso() {
             id,
             MedioIngreso::Vehiculo,
             Some(11),
+            Some("ABC123".to_string()),
             usuario_id,
             fecha_ingreso(),
         )
@@ -320,6 +325,7 @@ fn probar_ingreso_sin_gafete(
             id,
             MedioIngreso::Caminando,
             Some(99),
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -356,6 +362,7 @@ fn personal_de_ruta_con_praind_vigente_guarda_none() {
             id,
             MedioIngreso::Vehiculo,
             Some(15),
+            Some("ABC123".to_string()),
             usuario_id,
             fecha_ingreso(),
         )
@@ -391,6 +398,7 @@ fn personal_de_ruta_con_praind_vencido_es_rechazado() {
         id,
         MedioIngreso::Caminando,
         None,
+        None,
         usuario_id,
         fecha_ingreso(),
     );
@@ -417,6 +425,7 @@ fn contratista_sin_acceso_es_rechazado() {
     let resultado = servicio.registrar_entrada(
         id,
         MedioIngreso::Caminando,
+        None,
         None,
         usuario_id,
         fecha_ingreso(),
@@ -446,6 +455,7 @@ fn contratista_con_ingreso_activo_es_rechazado() {
             id,
             MedioIngreso::Caminando,
             None,
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -454,6 +464,7 @@ fn contratista_con_ingreso_activo_es_rechazado() {
     let resultado = servicio.registrar_entrada(
         id,
         MedioIngreso::Caminando,
+        None,
         None,
         usuario_id,
         fecha_ingreso(),
@@ -490,6 +501,7 @@ fn gafete_ocupado_es_rechazado() {
             primero,
             MedioIngreso::Caminando,
             Some(20),
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -499,6 +511,7 @@ fn gafete_ocupado_es_rechazado() {
         segundo,
         MedioIngreso::Caminando,
         Some(20),
+        None,
         usuario_id,
         fecha_ingreso(),
     );
@@ -533,6 +546,7 @@ fn empresa_y_tipo_salen_del_contratista() {
             id,
             MedioIngreso::Vehiculo,
             Some(30),
+            Some("ABC123".to_string()),
             usuario_id,
             fecha_ingreso(),
         )
@@ -562,6 +576,7 @@ fn salida_por_id_funciona() {
             id,
             MedioIngreso::Caminando,
             None,
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -589,6 +604,7 @@ fn salida_igual_al_ingreso_es_permitida_y_conserva_usuario() {
         .registrar_entrada(
             id,
             MedioIngreso::Caminando,
+            None,
             None,
             usuario_id,
             fecha_ingreso(),
@@ -627,6 +643,7 @@ fn salida_anterior_es_rechazada_y_no_modifica_sqlite() {
         .registrar_entrada(
             id,
             MedioIngreso::Caminando,
+            None,
             None,
             usuario_id,
             fecha_ingreso(),
@@ -669,6 +686,7 @@ fn salida_por_gafete_funciona() {
             id,
             MedioIngreso::Caminando,
             Some(40),
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -705,6 +723,139 @@ fn gafete_no_asignado_produce_error() {
 }
 
 #[test]
+fn vehiculo_sin_placa_es_rechazado() {
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista(
+            "2001",
+            empresa_id,
+            TipoIngreso::Praind,
+            Some(praind_vigente()),
+        ),
+    );
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
+
+    let resultado = servicio.registrar_entrada(
+        id,
+        MedioIngreso::Vehiculo,
+        Some(10),
+        None,
+        usuario_id,
+        fecha_ingreso(),
+    );
+
+    assert!(matches!(
+        resultado,
+        Err(RegistroIngresoServiceError::PlacaRequerida)
+    ));
+}
+
+/// Placa en blanco equivale a "no se indicó" -- mismo criterio de fondo
+/// que un campo de texto vacío en cualquier otro lado de la app.
+#[test]
+fn vehiculo_con_placa_en_blanco_es_rechazado() {
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista(
+            "2001",
+            empresa_id,
+            TipoIngreso::Praind,
+            Some(praind_vigente()),
+        ),
+    );
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
+
+    let resultado = servicio.registrar_entrada(
+        id,
+        MedioIngreso::Vehiculo,
+        Some(10),
+        Some("   ".to_string()),
+        usuario_id,
+        fecha_ingreso(),
+    );
+
+    assert!(matches!(
+        resultado,
+        Err(RegistroIngresoServiceError::PlacaRequerida)
+    ));
+}
+
+#[test]
+fn caminando_con_placa_es_rechazado() {
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista(
+            "2001",
+            empresa_id,
+            TipoIngreso::Praind,
+            Some(praind_vigente()),
+        ),
+    );
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
+
+    let resultado = servicio.registrar_entrada(
+        id,
+        MedioIngreso::Caminando,
+        Some(10),
+        Some("ABC123".to_string()),
+        usuario_id,
+        fecha_ingreso(),
+    );
+
+    assert!(matches!(
+        resultado,
+        Err(RegistroIngresoServiceError::PlacaNoAplica)
+    ));
+}
+
+#[test]
+fn vehiculo_con_placa_persiste_y_se_puede_leer_de_vuelta() {
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista(
+            "2001",
+            empresa_id,
+            TipoIngreso::Praind,
+            Some(praind_vigente()),
+        ),
+    );
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+    let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
+
+    let registro_id = servicio
+        .registrar_entrada(
+            id,
+            MedioIngreso::Vehiculo,
+            Some(10),
+            Some("XYZ789".to_string()),
+            usuario_id,
+            fecha_ingreso(),
+        )
+        .unwrap();
+
+    let registro = registros
+        .buscar_por_id(registro_id.registro_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(registro.placa.as_deref(), Some("XYZ789"));
+}
+
+#[test]
 fn contratista_inexistente_es_rechazado() {
     let (connection, _, usuario_id) = preparar_base();
     let contratistas = SqliteContratistaRepository::new(&connection);
@@ -715,6 +866,7 @@ fn contratista_inexistente_es_rechazado() {
     let resultado = servicio.registrar_entrada(
         999,
         MedioIngreso::Caminando,
+        None,
         None,
         usuario_id,
         fecha_ingreso(),
@@ -774,6 +926,7 @@ fn debe_encolar_hacia_la_nube_al_registrar_entrada() {
             id,
             MedioIngreso::Caminando,
             Some(10),
+            None,
             usuario_id,
             fecha_ingreso(),
         )
@@ -804,6 +957,7 @@ fn debe_encolar_hacia_la_nube_al_registrar_salida() {
             id,
             MedioIngreso::Caminando,
             Some(10),
+            None,
             usuario_id,
             fecha_ingreso(),
         )
