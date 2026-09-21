@@ -74,3 +74,17 @@ jobs:
           git tag "${{ inputs.app }}-v${{ steps.version.outputs.version }}"
           git push origin HEAD:main
           git push origin "${{ inputs.app }}-v${{ steps.version.outputs.version }}"
+
+      # Sin binarios adjuntos a propósito -- a diferencia de desktop/mobile
+      # (release.yml), acá no hay nada instalable que descargar: es una app
+      # desplegada en vivo, no un artefacto. Sirve igual como historial
+      # visible de "esto se publicó a producción cuándo y con qué commit",
+      # mismo lugar (pestaña Releases) donde ya se ve desktop/mobile, en vez
+      # de que la única traza quede en la pestaña Tags (mucho menos visible).
+      - name: Crear GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ inputs.app }}-v${{ steps.version.outputs.version }}" \
+            --title "${{ inputs.app }} v${{ steps.version.outputs.version }}" \
+            --notes "Desplegado a producción (Cloudflare) desde el commit ${{ github.sha }}."
