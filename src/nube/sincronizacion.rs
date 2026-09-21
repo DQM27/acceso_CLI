@@ -7610,7 +7610,8 @@ mod tests {
     /// abortaba el pull con "UNIQUE constraint failed:
     /// idx_empresas_proveedor_nombre_plegado".
     #[test]
-    fn recibe_empresa_proveedor_con_grafia_distinta_a_una_fila_local_se_fusiona_por_nombre_plegado() {
+    fn recibe_empresa_proveedor_con_grafia_distinta_a_una_fila_local_se_fusiona_por_nombre_plegado()
+    {
         let connection = Connection::open_in_memory().unwrap();
         initialize_database(&connection).unwrap();
         connection
