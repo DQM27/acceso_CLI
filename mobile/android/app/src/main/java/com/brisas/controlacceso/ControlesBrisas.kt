@@ -45,8 +45,8 @@ internal val FormaCampoBrisas = RoundedCornerShape(16.dp)
 /** Altura de los campos de búsqueda "filled" (~10% más bajo que la altura
  * por defecto de un `TextField` sin label, pedido explícito 2026-09-15) --
  * distinto de [AlturaControlBrisas] (botones) a propósito. Compartido entre
- * [PantallaActivos] y [PantallaHistorial] para que ambos buscadores luzcan
- * igual (2026-09-15). */
+ * varias pantallas con buscador (Activos, Rutas, Proveedores...) para que
+ * todas luzcan igual (2026-09-15). */
 internal val AlturaBusquedaBrisas = 50.dp
 
 /** Forma de las píldoras de selector ([FilaPildoras]) -- antes cápsula

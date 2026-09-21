@@ -685,8 +685,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_vehiculos_ruta(
@@ -738,8 +736,6 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_gafetes_provisionales_activos(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_historial_sitio(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos(
     ): Int
@@ -823,8 +819,6 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_historial(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_rutas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_vehiculos_ruta(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -876,8 +870,6 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_gafetes_provisionales_activos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_historial_sitio(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(`ptr`: Long,`texto`: RustBuffer.ByValue,`modo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1060,9 +1052,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta() and 0xFFFF) != 61462) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_historial() and 0xFFFF) != 13812) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas() and 0xFFFF) != 19377) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1139,9 +1128,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_gafetes_provisionales_activos() and 0xFFFF) != 59488) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_historial_sitio() and 0xFFFF) != 22322) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() and 0xFFFF) != 52849) {
@@ -1715,13 +1701,6 @@ public interface NucleoInterface {
     fun `buscarEncargadosRuta`(`texto`: kotlin.String): List<EncargadoRuta>
     
     /**
-     * Últimos 7 días por defecto: en Android el historial es contexto
-     * operativo reciente, no auditoría exhaustiva. Para rangos amplios,
-     * filtros densos y exportación están web/escritorio.
-     */
-    fun `buscarHistorial`(`texto`: kotlin.String): List<MovimientoHistorial>
-    
-    /**
      * Buscador del checklist de rutas (paso "Documento de ruta") -- el
      * número de ruta es bloqueante (debe existir en el catálogo, pedido
      * explícito del usuario, 2026-09-15), así que el checklist confirma
@@ -1925,8 +1904,6 @@ public interface NucleoInterface {
      * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
      */
     fun `listarGafetesProvisionalesActivos`(): List<PrestamoGafeteProvisionalActivoResumen>
-    
-    fun `listarHistorialSitio`(`texto`: kotlin.String): List<MovimientoHistorialSitio>
     
     /**
      * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
@@ -2347,26 +2324,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(
-        it,
-        
-        FfiConverterString.lower(`texto`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Últimos 7 días por defecto: en Android el historial es contexto
-     * operativo reciente, no auditoría exhaustiva. Para rangos amplios,
-     * filtros densos y exportación están web/escritorio.
-     */
-    @Throws(NucleoException::class)override fun `buscarHistorial`(`texto`: kotlin.String): List<MovimientoHistorial> {
-            return FfiConverterSequenceTypeMovimientoHistorial.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_buscar_historial(
         it,
         
         FfiConverterString.lower(`texto`),_status)
@@ -2921,21 +2878,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_gafetes_provisionales_activos(
         it,
         _status)
-}
-    }
-    )
-    }
-    
-
-    
-    @Throws(NucleoException::class)override fun `listarHistorialSitio`(`texto`: kotlin.String): List<MovimientoHistorialSitio> {
-            return FfiConverterSequenceTypeMovimientoHistorialSitio.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_historial_sitio(
-        it,
-        
-        FfiConverterString.lower(`texto`),_status)
 }
     }
     )
@@ -4074,192 +4016,6 @@ public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemot
             FfiConverterString.write(value.`contratistaNombre`, buf)
             FfiConverterString.write(value.`horaEntrada`, buf)
             FfiConverterOptionalString.write(value.`usuarioEntradaNombre`, buf)
-    }
-}
-
-
-
-/**
- * Espejo de `MovimientoIngresoResumen` — un renglón de Historial (entrada
- * + salida, si ya la tiene).
- */
-data class MovimientoHistorial (
-    var `registroId`: kotlin.Long
-    , 
-    var `uuid`: kotlin.String
-    , 
-    var `cedula`: kotlin.String
-    , 
-    var `contratistaNombre`: kotlin.String
-    , 
-    var `empresaNombre`: kotlin.String
-    , 
-    var `tipoIngreso`: TipoIngreso
-    , 
-    var `medioIngreso`: MedioIngreso
-    , 
-    var `fechaHoraIngreso`: kotlin.String
-    , 
-    var `fechaHoraSalida`: kotlin.String?
-    , 
-    var `gafeteNumero`: kotlin.Long?
-    , 
-    var `usuarioIngresoNombre`: kotlin.String
-    , 
-    var `usuarioSalidaNombre`: kotlin.String?
-    , 
-    var `resultadoAcceso`: ResultadoIngresoRegistrado
-    
-){
-    
-
-    
-
-    
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeMovimientoHistorial: FfiConverterRustBuffer<MovimientoHistorial> {
-    override fun read(buf: ByteBuffer): MovimientoHistorial {
-        return MovimientoHistorial(
-            FfiConverterLong.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterTypeTipoIngreso.read(buf),
-            FfiConverterTypeMedioIngreso.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalLong.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterTypeResultadoIngresoRegistrado.read(buf),
-        )
-    }
-
-    override fun allocationSize(value: MovimientoHistorial) = (
-            FfiConverterLong.allocationSize(value.`registroId`) +
-            FfiConverterString.allocationSize(value.`uuid`) +
-            FfiConverterString.allocationSize(value.`cedula`) +
-            FfiConverterString.allocationSize(value.`contratistaNombre`) +
-            FfiConverterString.allocationSize(value.`empresaNombre`) +
-            FfiConverterTypeTipoIngreso.allocationSize(value.`tipoIngreso`) +
-            FfiConverterTypeMedioIngreso.allocationSize(value.`medioIngreso`) +
-            FfiConverterString.allocationSize(value.`fechaHoraIngreso`) +
-            FfiConverterOptionalString.allocationSize(value.`fechaHoraSalida`) +
-            FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`) +
-            FfiConverterString.allocationSize(value.`usuarioIngresoNombre`) +
-            FfiConverterOptionalString.allocationSize(value.`usuarioSalidaNombre`) +
-            FfiConverterTypeResultadoIngresoRegistrado.allocationSize(value.`resultadoAcceso`)
-    )
-
-    override fun write(value: MovimientoHistorial, buf: ByteBuffer) {
-            FfiConverterLong.write(value.`registroId`, buf)
-            FfiConverterString.write(value.`uuid`, buf)
-            FfiConverterString.write(value.`cedula`, buf)
-            FfiConverterString.write(value.`contratistaNombre`, buf)
-            FfiConverterString.write(value.`empresaNombre`, buf)
-            FfiConverterTypeTipoIngreso.write(value.`tipoIngreso`, buf)
-            FfiConverterTypeMedioIngreso.write(value.`medioIngreso`, buf)
-            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
-            FfiConverterOptionalString.write(value.`fechaHoraSalida`, buf)
-            FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
-            FfiConverterString.write(value.`usuarioIngresoNombre`, buf)
-            FfiConverterOptionalString.write(value.`usuarioSalidaNombre`, buf)
-            FfiConverterTypeResultadoIngresoRegistrado.write(value.`resultadoAcceso`, buf)
-    }
-}
-
-
-
-data class MovimientoHistorialSitio (
-    var `uuid`: kotlin.String
-    , 
-    var `cedula`: kotlin.String?
-    , 
-    var `contratistaNombre`: kotlin.String
-    , 
-    var `empresaNombre`: kotlin.String?
-    , 
-    var `fechaHoraIngreso`: kotlin.String
-    , 
-    var `fechaHoraSalida`: kotlin.String?
-    , 
-    var `gafeteNumero`: kotlin.Long?
-    , 
-    var `usuarioIngresoNombre`: kotlin.String?
-    , 
-    var `usuarioSalidaNombre`: kotlin.String?
-    , 
-    var `motivoResultado`: kotlin.String?
-    , 
-    /**
-     * `"pc"`/`"mobile"`, o `None` para filas sincronizadas antes de que
-     * esto existiera (`database::schema`, migración 26) -- pedido del
-     * usuario para diferenciar de un vistazo de qué dispositivo vino un
-     * movimiento.
-     */
-    var `dispositivoEntradaTipo`: kotlin.String?
-    
-){
-    
-
-    
-
-    
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeMovimientoHistorialSitio: FfiConverterRustBuffer<MovimientoHistorialSitio> {
-    override fun read(buf: ByteBuffer): MovimientoHistorialSitio {
-        return MovimientoHistorialSitio(
-            FfiConverterString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalLong.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalString.read(buf),
-        )
-    }
-
-    override fun allocationSize(value: MovimientoHistorialSitio) = (
-            FfiConverterString.allocationSize(value.`uuid`) +
-            FfiConverterOptionalString.allocationSize(value.`cedula`) +
-            FfiConverterString.allocationSize(value.`contratistaNombre`) +
-            FfiConverterOptionalString.allocationSize(value.`empresaNombre`) +
-            FfiConverterString.allocationSize(value.`fechaHoraIngreso`) +
-            FfiConverterOptionalString.allocationSize(value.`fechaHoraSalida`) +
-            FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`) +
-            FfiConverterOptionalString.allocationSize(value.`usuarioIngresoNombre`) +
-            FfiConverterOptionalString.allocationSize(value.`usuarioSalidaNombre`) +
-            FfiConverterOptionalString.allocationSize(value.`motivoResultado`) +
-            FfiConverterOptionalString.allocationSize(value.`dispositivoEntradaTipo`)
-    )
-
-    override fun write(value: MovimientoHistorialSitio, buf: ByteBuffer) {
-            FfiConverterString.write(value.`uuid`, buf)
-            FfiConverterOptionalString.write(value.`cedula`, buf)
-            FfiConverterString.write(value.`contratistaNombre`, buf)
-            FfiConverterOptionalString.write(value.`empresaNombre`, buf)
-            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
-            FfiConverterOptionalString.write(value.`fechaHoraSalida`, buf)
-            FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
-            FfiConverterOptionalString.write(value.`usuarioIngresoNombre`, buf)
-            FfiConverterOptionalString.write(value.`usuarioSalidaNombre`, buf)
-            FfiConverterOptionalString.write(value.`motivoResultado`, buf)
-            FfiConverterOptionalString.write(value.`dispositivoEntradaTipo`, buf)
     }
 }
 
@@ -6141,62 +5897,6 @@ public object FfiConverterSequenceTypeIngresoRemoto: FfiConverterRustBuffer<List
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeIngresoRemoto.write(it, buf)
-        }
-    }
-}
-
-
-
-
-/**
- * @suppress
- */
-public object FfiConverterSequenceTypeMovimientoHistorial: FfiConverterRustBuffer<List<MovimientoHistorial>> {
-    override fun read(buf: ByteBuffer): List<MovimientoHistorial> {
-        val len = buf.getInt()
-        return List<MovimientoHistorial>(len) {
-            FfiConverterTypeMovimientoHistorial.read(buf)
-        }
-    }
-
-    override fun allocationSize(value: List<MovimientoHistorial>): ULong {
-        val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeMovimientoHistorial.allocationSize(it) }.sum()
-        return sizeForLength + sizeForItems
-    }
-
-    override fun write(value: List<MovimientoHistorial>, buf: ByteBuffer) {
-        buf.putInt(value.size)
-        value.iterator().forEach {
-            FfiConverterTypeMovimientoHistorial.write(it, buf)
-        }
-    }
-}
-
-
-
-
-/**
- * @suppress
- */
-public object FfiConverterSequenceTypeMovimientoHistorialSitio: FfiConverterRustBuffer<List<MovimientoHistorialSitio>> {
-    override fun read(buf: ByteBuffer): List<MovimientoHistorialSitio> {
-        val len = buf.getInt()
-        return List<MovimientoHistorialSitio>(len) {
-            FfiConverterTypeMovimientoHistorialSitio.read(buf)
-        }
-    }
-
-    override fun allocationSize(value: List<MovimientoHistorialSitio>): ULong {
-        val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeMovimientoHistorialSitio.allocationSize(it) }.sum()
-        return sizeForLength + sizeForItems
-    }
-
-    override fun write(value: List<MovimientoHistorialSitio>, buf: ByteBuffer) {
-        buf.putInt(value.size)
-        value.iterator().forEach {
-            FfiConverterTypeMovimientoHistorialSitio.write(it, buf)
         }
     }
 }

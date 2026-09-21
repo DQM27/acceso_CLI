@@ -259,9 +259,10 @@ fun PantallaPrincipal(
             PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
         } else {
             var pestana by remember { mutableIntStateOf(0) }
-            // "Historial" se sacó de acá por espacio (pestañas apiñadas) --
-            // la pantalla y su ViewModel siguen intactos, pendiente decidir
-            // si se reasigna a otro lado o se quita del todo (2026-09-17).
+            // "Historial" se sacó de acá por espacio (pestañas apiñadas,
+            // 2026-09-17); su pantalla/ViewModel/wrappers Rust se eliminaron
+            // del todo el 2026-09-21 al confirmar que no había ningún otro
+            // punto de entrada que lo usara.
             FilaPildoras(
                 // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
                 // usuario (2026-09-19) para descomprimir la fila de
