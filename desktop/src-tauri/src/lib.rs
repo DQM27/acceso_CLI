@@ -561,6 +561,7 @@ pub fn run() {
             comandos::gafetes_provisionales::entregar_gafete_provisional,
             comandos::gafetes_provisionales::registrar_devolucion_gafete_provisional,
             comandos::gafetes_provisionales::listar_gafetes_provisionales_activos,
+            comandos::gafetes_provisionales::listar_gafetes_provisionales_historial_sitio,
             comandos::historial::listar_historial,
             comandos::historial::listar_historial_sitio,
             comandos::historial::exportar_historial,

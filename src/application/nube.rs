@@ -343,6 +343,17 @@ impl AppCore {
         let citas_recibidas = crate::nube::recibir_citas_del_sitio(&self.connection, &contexto)?;
         let historial_visitas_recibidos =
             crate::nube::recibir_historial_visitas_del_sitio(&self.connection, &contexto)?;
+        // Descartado a propósito, igual que `_remotos_proveedor` arriba --
+        // sin contador en `ResumenSincronizacion` porque nadie lo pidió
+        // (falencia detectada 2026-09-21: la pantalla de escritorio no
+        // tenía historial de gafetes provisionales). Sólo desktop -- mobile
+        // no tiene pantalla que lo use, mismo criterio documentado para
+        // `historial_visitas_recibidos` en `mobile/rust-core/src/lib.rs`.
+        let _gafetes_provisionales_historial_recibidos =
+            crate::nube::recibir_historial_gafetes_provisionales_del_sitio(
+                &self.connection,
+                &contexto,
+            )?;
 
         Ok(ResumenSincronizacion {
             enviados: resumen.enviados,

@@ -459,6 +459,10 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              -- MIGRACION_25 (que corre al final al rebobinar) crea
              -- `historial_sitio` desde cero -- mismo motivo.
              DROP TABLE historial_sitio;
+             -- MIGRACION_50 (que corre al final al rebobinar) crea
+             -- `prestamos_gafete_provisional_historial_sitio` desde cero --
+             -- mismo motivo.
+             DROP TABLE prestamos_gafete_provisional_historial_sitio;
              -- MIGRACION_32 (que corre al final al rebobinar) crea
              -- `historial_visitas_sitio` desde cero -- mismo motivo.
              DROP TABLE historial_visitas_sitio;
@@ -583,6 +587,10 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              -- MIGRACION_25 (que corre al final al rebobinar) crea
              -- `historial_sitio` desde cero -- mismo motivo.
              DROP TABLE historial_sitio;
+             -- MIGRACION_50 (que corre al final al rebobinar) crea
+             -- `prestamos_gafete_provisional_historial_sitio` desde cero --
+             -- mismo motivo.
+             DROP TABLE prestamos_gafete_provisional_historial_sitio;
              -- MIGRACION_32 (que corre al final al rebobinar) crea
              -- `historial_visitas_sitio` desde cero -- mismo motivo.
              DROP TABLE historial_visitas_sitio;
@@ -719,6 +727,10 @@ fn migracion_12_habilita_cambio_de_cedula() {
              -- MIGRACION_25 (que corre al final al rebobinar) crea
              -- `historial_sitio` desde cero -- mismo motivo.
              DROP TABLE historial_sitio;
+             -- MIGRACION_50 (que corre al final al rebobinar) crea
+             -- `prestamos_gafete_provisional_historial_sitio` desde cero --
+             -- mismo motivo.
+             DROP TABLE prestamos_gafete_provisional_historial_sitio;
              -- MIGRACION_32 (que corre al final al rebobinar) crea
              -- `historial_visitas_sitio` desde cero -- mismo motivo.
              DROP TABLE historial_visitas_sitio;
@@ -1741,6 +1753,40 @@ fn migracion_49_corre_limpia_y_llega_a_schema_version() {
     assert!(
         columnas.iter().any(|c| c == "placa"),
         "registro_ingresos debería tener la columna placa: {columnas:?}"
+    );
+}
+
+#[test]
+fn migracion_50_corre_limpia_y_llega_a_schema_version() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+
+    let columnas: Vec<String> = connection
+        .prepare("SELECT name FROM pragma_table_info('prestamos_gafete_provisional_historial_sitio')")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert!(
+        columnas.iter().any(|c| c == "fecha_hora_devolucion"),
+        "prestamos_gafete_provisional_historial_sitio debería existir con sus columnas: {columnas:?}"
+    );
+
+    let columnas_sync: Vec<String> = connection
+        .prepare("SELECT name FROM pragma_table_info('sincronizacion_estado')")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert!(
+        columnas_sync
+            .iter()
+            .any(|c| c == "gafetes_provisionales_historial_actualizado_hasta"),
+        "sincronizacion_estado debería tener la marca de agua nueva: {columnas_sync:?}"
     );
 }
 

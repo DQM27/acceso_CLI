@@ -139,3 +139,29 @@ export async function cerrarFilaGafeteProvisionalActiva(
     await cerrarPrestamoGafeteProvisionalRemoto(fila.uuid_remoto);
   }
 }
+
+// ---- Historial -- falencia detectada por el usuario 2026-09-21: la
+// pantalla de escritorio no tenía ninguna vista de historial, sólo
+// "Activos". Mismo criterio que Proveedores/Visitas (`api/proveedores.ts`,
+// `listarHistorialIngresosProveedorSitio`): la caché del sitio
+// (`prestamos_gafete_provisional_historial_sitio`) ya incluye lo que ESTE
+// dispositivo entregó (vuelve sincronizada desde Supabase) -- sin fusionar
+// con la tabla local, volumen bajo no amerita esa complejidad extra. ----
+
+/** Espejo de `comandos::gafetes_provisionales::PrestamoGafeteProvisionalHistorialSitio`. */
+export interface PrestamoGafeteProvisionalHistorialSitio {
+  uuid: string;
+  encargado_nombre: string;
+  encargado_codigo_empleado: string;
+  gafete_numero: number;
+  fecha_hora_entrega: string;
+  usuario_entrega_nombre: string;
+  fecha_hora_devolucion: string | null;
+  usuario_devolucion_nombre: string | null;
+}
+
+export function listarGafetesProvisionalesHistorialSitio(): Promise<
+  PrestamoGafeteProvisionalHistorialSitio[]
+> {
+  return invoke("listar_gafetes_provisionales_historial_sitio");
+}
