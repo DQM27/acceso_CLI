@@ -348,9 +348,14 @@ const TODAS_LAS_SECCIONES: {
 /** Secciones sin terminar, ocultas de la interfaz (pedido del usuario
  * 2026-09-23: que no se vean a medias en una demostración). El código de
  * cada pantalla sigue intacto -- para volver a mostrar una, basta con
- * sacarla de acá. "Catálogo KOF" queda visible a propósito: ahí se dan de
- * alta los encargados que usa "Gafetes KOF", que sí está terminado. */
-const SECCIONES_EN_DESARROLLO: ReadonlySet<Seccion> = new Set<Seccion>(["visitas", "rutas"]);
+ * sacarla de acá. "Catálogo KOF" también: los encargados que usa "Gafetes
+ * KOF" se administran por SQL directo en Supabase (decisión del usuario) y
+ * llegan igual por `recibir_catalogo_rutas_del_sitio`. */
+const SECCIONES_EN_DESARROLLO: ReadonlySet<Seccion> = new Set<Seccion>([
+  "visitas",
+  "rutas",
+  "catalogoRutas",
+]);
 
 const SECCIONES = TODAS_LAS_SECCIONES.filter(
   (seccion) => !SECCIONES_EN_DESARROLLO.has(seccion.id),
