@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use rust_xlsxwriter::{Format, FormatAlign, FormatBorder, Worksheet, XlsxError};
 
 use crate::{
@@ -6,6 +6,56 @@ use crate::{
     models::{medio_ingreso::MedioIngreso, tipo_ingreso::TipoIngreso},
     tiempo::a_costa_rica,
 };
+
+/// Un movimiento tal como lo escribe la exportación (Excel/PDF), venga de
+/// `registro_ingresos` (este dispositivo) o de `historial_sitio` (otro
+/// dispositivo del sitio, ver `MIGRACION_25`). Existe porque una fila
+/// remota puede traer `NULL` en campos que localmente son obligatorios
+/// (filas sincronizadas antes de que la nube cargara esas columnas) --
+/// antes la exportación sólo aceptaba `MovimientoIngresoResumen` y por eso
+/// dejaba afuera todo lo remoto. Un campo `None` se muestra como "—", nunca
+/// se inventa un valor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MovimientoExportable {
+    pub uuid: String,
+    pub cedula: Option<String>,
+    pub contratista_nombre: String,
+    pub empresa_nombre: Option<String>,
+    pub tipo_ingreso: Option<TipoIngreso>,
+    pub medio_ingreso: Option<MedioIngreso>,
+    pub fecha_hora_ingreso: DateTime<Utc>,
+    pub fecha_hora_salida: Option<DateTime<Utc>>,
+    pub gafete_numero: Option<i64>,
+    pub placa: Option<String>,
+    pub usuario_ingreso_nombre: Option<String>,
+    pub usuario_salida_nombre: Option<String>,
+}
+
+impl From<MovimientoIngresoResumen> for MovimientoExportable {
+    fn from(movimiento: MovimientoIngresoResumen) -> Self {
+        Self {
+            uuid: movimiento.uuid,
+            cedula: Some(movimiento.cedula),
+            contratista_nombre: movimiento.contratista_nombre,
+            empresa_nombre: Some(movimiento.empresa_nombre),
+            tipo_ingreso: Some(movimiento.tipo_ingreso),
+            medio_ingreso: Some(movimiento.medio_ingreso),
+            fecha_hora_ingreso: movimiento.fecha_hora_ingreso,
+            fecha_hora_salida: movimiento.fecha_hora_salida,
+            gafete_numero: movimiento.gafete_numero,
+            placa: movimiento.placa,
+            usuario_ingreso_nombre: Some(movimiento.usuario_ingreso_nombre),
+            usuario_salida_nombre: movimiento.usuario_salida_nombre,
+        }
+    }
+}
+
+/// Texto de una columna opcional -- "—" cuando no vino, mismo criterio que
+/// ya usaba [`ColumnaHistorial::Egreso`] sin salida. `pub` por el mismo
+/// motivo que [`tipo_texto`]: el PDF de la GUI lo reusa.
+pub fn o_guion(valor: Option<&str>) -> String {
+    valor.unwrap_or("—").to_owned()
+}
 
 /// Columnas que el operador puede mostrar tanto en la tabla clásica como en
 /// una exportación de Historial. Mantener un único enum evita que F4 y el
@@ -71,7 +121,7 @@ enum CeldaMovimiento {
 }
 
 fn celda_movimiento(
-    movimiento: &MovimientoIngresoResumen,
+    movimiento: &MovimientoExportable,
     columna: ColumnaHistorial,
 ) -> CeldaMovimiento {
     let ingreso_local = a_costa_rica(movimiento.fecha_hora_ingreso);
@@ -83,10 +133,12 @@ fn celda_movimiento(
         ),
         ColumnaHistorial::Nombre => CeldaMovimiento::Texto(movimiento.contratista_nombre.clone()),
         // Cédula siempre es texto: Excel no debe eliminar ceros iniciales.
-        ColumnaHistorial::Cedula => CeldaMovimiento::Texto(movimiento.cedula.clone()),
-        ColumnaHistorial::Empresa => CeldaMovimiento::Centrada(movimiento.empresa_nombre.clone()),
+        ColumnaHistorial::Cedula => CeldaMovimiento::Texto(o_guion(movimiento.cedula.as_deref())),
+        ColumnaHistorial::Empresa => {
+            CeldaMovimiento::Centrada(o_guion(movimiento.empresa_nombre.as_deref()))
+        }
         ColumnaHistorial::Tipo => {
-            CeldaMovimiento::Centrada(tipo_texto(movimiento.tipo_ingreso).to_owned())
+            CeldaMovimiento::Centrada(o_guion(movimiento.tipo_ingreso.map(tipo_texto)))
         }
         ColumnaHistorial::Entrada => CeldaMovimiento::Hora(ingreso_local.time()),
         ColumnaHistorial::Salida => movimiento.fecha_hora_salida.map_or_else(
@@ -98,19 +150,13 @@ fn celda_movimiento(
                 .gafete_numero
                 .map_or_else(|| "S/G".to_owned(), |numero| numero.to_string()),
         ),
-        ColumnaHistorial::Medio => CeldaMovimiento::Centrada(medio_texto_con_placa(
-            movimiento.medio_ingreso,
-            movimiento.placa.as_deref(),
-        )),
+        ColumnaHistorial::Medio => CeldaMovimiento::Centrada(texto_medio(movimiento)),
         ColumnaHistorial::Ingreso => {
-            CeldaMovimiento::Centrada(movimiento.usuario_ingreso_nombre.clone())
+            CeldaMovimiento::Centrada(o_guion(movimiento.usuario_ingreso_nombre.as_deref()))
         }
-        ColumnaHistorial::Egreso => CeldaMovimiento::Centrada(
-            movimiento
-                .usuario_salida_nombre
-                .clone()
-                .unwrap_or_else(|| "—".to_owned()),
-        ),
+        ColumnaHistorial::Egreso => {
+            CeldaMovimiento::Centrada(o_guion(movimiento.usuario_salida_nombre.as_deref()))
+        }
     }
 }
 
@@ -237,7 +283,7 @@ pub(crate) fn escribir_movimiento(
     hoja: &mut Worksheet,
     fila: u32,
     columnas: &[ColumnaHistorial],
-    movimiento: &MovimientoIngresoResumen,
+    movimiento: &MovimientoExportable,
     formatos: &FormatosHistorial,
 ) -> Result<(), XlsxError> {
     // Alterna cebra según la fila real de Excel (1 = primera fila de datos,
@@ -299,6 +345,16 @@ pub fn medio_texto_con_placa(medio: MedioIngreso, placa: Option<&str>) -> String
     }
 }
 
+/// [`medio_texto_con_placa`] sobre un [`MovimientoExportable`] -- "—" si
+/// el medio no vino (fila remota vieja). `pub` por el mismo motivo que
+/// [`tipo_texto`]: el PDF de la GUI la reusa.
+pub fn texto_medio(movimiento: &MovimientoExportable) -> String {
+    movimiento.medio_ingreso.map_or_else(
+        || "—".to_owned(),
+        |medio| medio_texto_con_placa(medio, movimiento.placa.as_deref()),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{NaiveDate, Utc};
@@ -353,7 +409,7 @@ mod tests {
                 hoja,
                 1,
                 &columnas,
-                &movimiento(),
+                &movimiento().into(),
                 &FormatosHistorial::default(),
             )
             .unwrap();

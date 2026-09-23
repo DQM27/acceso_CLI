@@ -25,10 +25,9 @@ import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "..
  * de la caché `historial_sitio` -- ver `docs/planes-implementados/plan-persistencia-nube.md`).
  * Decisión explícita del usuario: es la misma operación vista desde otro
  * dispositivo, no una versión resumida -- se combinan en una sola grilla
- * con los mismos campos que ya muestra Historial. `registro_id: null` en
- * una fila remota significa que no se puede exportar por id (ver
- * `seleccionParaExportar`) -- limitación conocida, no un bug: el export
- * hoy recorta por `registro_id` local, que una fila remota no tiene. */
+ * con los mismos campos que ya muestra Historial. Excel/PDF recortan por
+ * `uuid` (ver `seleccionParaExportar`), que ambas tienen -- una fila remota
+ * no tiene `registro_id` local. */
 interface FilaLocal extends MovimientoIngresoResumen {
   origen: "local";
   // Siempre "pc": esta pantalla sólo existe en el build de escritorio, no
@@ -196,11 +195,11 @@ export default function Historial() {
   // sin acotar. Devuelve `null` (con el toast de error ya disparado) si no
   // hay nada exportable, para que quien llama corte ahí sin duplicar el
   // chequeo. Cuando `truncado` es `true`, el cliente sólo tiene una
-  // porción del rango — `ids: null` le dice al backend que exporte todo
+  // porción del rango — `uuids: null` le dice al backend que exporte todo
   // `desde`/`hasta` directo de la base en vez de la porción cargada (ver
   // `exportarHistorial`/`exportarHistorialPdf`); el filtro por columna deja
   // de aplicar ahí porque ya no puede evaluarse sobre el total real.
-  function seleccionParaExportar(): { ids: number[] | null; claves: string[] } | null {
+  function seleccionParaExportar(): { uuids: string[] | null; claves: string[] } | null {
     const claves = (tablaRef.current?.columnasVisibles() ?? Object.keys(CLAVES_COLUMNA))
       .map((colId) => CLAVES_COLUMNA[colId])
       .filter((clave): clave is string => clave !== undefined);
@@ -208,26 +207,14 @@ export default function Historial() {
       toast.error("No hay columnas visibles para exportar.");
       return null;
     }
-    if (truncado) return { ids: null, claves };
+    if (truncado) return { uuids: null, claves };
 
     const visibles = tablaRef.current?.filasFiltradas() ?? filas;
     if (visibles.length === 0) {
       toast.error("No hay filas para exportar con el filtro actual.");
       return null;
     }
-    // Una fila remota (`origen: "remoto"`, generada por otro dispositivo)
-    // no tiene `registro_id` local -- el export hoy recorta por id contra
-    // `registro_ingresos` de esta base, así que esas filas quedan afuera
-    // del archivo. Se avisa en vez de fallar en silencio.
-    const idsLocales = visibles
-      .map((fila) => fila.registro_id)
-      .filter((id): id is number => id !== null);
-    if (idsLocales.length < visibles.length) {
-      toast.warning(
-        `${visibles.length - idsLocales.length} movimiento(s) de otro dispositivo no se incluyen en el archivo todavía.`,
-      );
-    }
-    return { ids: idsLocales, claves };
+    return { uuids: visibles.map((fila) => fila.uuid), claves };
   }
 
   async function exportar() {
@@ -245,7 +232,7 @@ export default function Historial() {
     toast.promise(
       exportarHistorial(
         destino,
-        seleccion.ids,
+        seleccion.uuids,
         seleccion.claves,
         desde || undefined,
         hasta || undefined,
@@ -273,7 +260,7 @@ export default function Historial() {
     toast.promise(
       exportarHistorialPdf(
         destino,
-        seleccion.ids,
+        seleccion.uuids,
         seleccion.claves,
         `Filtro: ${textoRangoFecha(desde, hasta)}`,
         desde || undefined,

@@ -6,8 +6,9 @@
 use std::fmt::Write as _;
 
 use chrono::Utc;
-use control_acceso::database::queries::ingresos::MovimientoIngresoResumen;
-use control_acceso::historial::exportacion::{ColumnaHistorial, medio_texto_con_placa, tipo_texto};
+use control_acceso::historial::exportacion::{
+    ColumnaHistorial, MovimientoExportable, o_guion, texto_medio, tipo_texto,
+};
 use control_acceso::tiempo::a_costa_rica;
 
 /// Paleta CLARA de `desktop/src/index.css` (light) a propósito, aunque la
@@ -73,7 +74,7 @@ fn es_columna_izquierda(columna: ColumnaHistorial) -> bool {
 /// Mismo texto por columna que ya escribe `historial/exportacion.rs` a
 /// Excel (`escribir_movimiento`) — no una segunda fuente de verdad de cómo
 /// se ve cada dato.
-fn valor_columna(columna: ColumnaHistorial, movimiento: &MovimientoIngresoResumen) -> String {
+fn valor_columna(columna: ColumnaHistorial, movimiento: &MovimientoExportable) -> String {
     let ingreso_local = a_costa_rica(movimiento.fecha_hora_ingreso);
     match columna {
         ColumnaHistorial::FechaIngreso => ingreso_local.format("%d/%m/%Y").to_string(),
@@ -82,9 +83,9 @@ fn valor_columna(columna: ColumnaHistorial, movimiento: &MovimientoIngresoResume
             |s| a_costa_rica(s).format("%d/%m/%Y").to_string(),
         ),
         ColumnaHistorial::Nombre => movimiento.contratista_nombre.clone(),
-        ColumnaHistorial::Cedula => movimiento.cedula.clone(),
-        ColumnaHistorial::Empresa => movimiento.empresa_nombre.clone(),
-        ColumnaHistorial::Tipo => tipo_texto(movimiento.tipo_ingreso).to_string(),
+        ColumnaHistorial::Cedula => o_guion(movimiento.cedula.as_deref()),
+        ColumnaHistorial::Empresa => o_guion(movimiento.empresa_nombre.as_deref()),
+        ColumnaHistorial::Tipo => o_guion(movimiento.tipo_ingreso.map(tipo_texto)),
         ColumnaHistorial::Entrada => ingreso_local.format("%H:%M").to_string(),
         ColumnaHistorial::Salida => movimiento.fecha_hora_salida.map_or_else(
             || "Activo".to_string(),
@@ -93,14 +94,9 @@ fn valor_columna(columna: ColumnaHistorial, movimiento: &MovimientoIngresoResume
         ColumnaHistorial::Gafete => movimiento
             .gafete_numero
             .map_or_else(|| "S/G".to_string(), |numero| numero.to_string()),
-        ColumnaHistorial::Medio => {
-            medio_texto_con_placa(movimiento.medio_ingreso, movimiento.placa.as_deref())
-        }
-        ColumnaHistorial::Ingreso => movimiento.usuario_ingreso_nombre.clone(),
-        ColumnaHistorial::Egreso => movimiento
-            .usuario_salida_nombre
-            .clone()
-            .unwrap_or_else(|| "—".to_string()),
+        ColumnaHistorial::Medio => texto_medio(movimiento),
+        ColumnaHistorial::Ingreso => o_guion(movimiento.usuario_ingreso_nombre.as_deref()),
+        ColumnaHistorial::Egreso => o_guion(movimiento.usuario_salida_nombre.as_deref()),
     }
 }
 
@@ -117,7 +113,7 @@ fn escapar(texto: &str) -> String {
 }
 
 pub fn generar_html(
-    movimientos: &[MovimientoIngresoResumen],
+    movimientos: &[MovimientoExportable],
     columnas: &[ColumnaHistorial],
     generado_por: &str,
     filtro_descripcion: &str,
@@ -198,9 +194,11 @@ mod tests {
     };
     use control_acceso::models::{medio_ingreso::MedioIngreso, tipo_ingreso::TipoIngreso};
 
+    use control_acceso::database::queries::ingresos::MovimientoIngresoResumen;
+
     use super::*;
 
-    fn movimiento() -> MovimientoIngresoResumen {
+    fn movimiento() -> MovimientoExportable {
         MovimientoIngresoResumen {
             registro_id: 1,
             uuid: "00000000-0000-0000-0000-000000000001".into(),
@@ -227,6 +225,7 @@ mod tests {
             reglas_version: VERSION_REGLAS_ACCESO,
             empresa_activa_snapshot: true,
         }
+        .into()
     }
 
     #[test]
@@ -263,5 +262,24 @@ mod tests {
         let html = generar_html(&[movimiento()], &columnas, "Daniel", "Todo el historial");
 
         assert_eq!(html.matches("Activo").count(), 2);
+    }
+
+    /// Una fila remota vieja (`historial_sitio` sin tipo/medio/cédula)
+    /// igual sale en el PDF, con "—" en lo que no vino -- nunca se inventa.
+    #[test]
+    fn fila_remota_sin_datos_opcionales_muestra_guion() {
+        let mut remoto = movimiento();
+        remoto.cedula = None;
+        remoto.tipo_ingreso = None;
+        remoto.medio_ingreso = None;
+        let columnas = [
+            ColumnaHistorial::Cedula,
+            ColumnaHistorial::Tipo,
+            ColumnaHistorial::Medio,
+        ];
+        let html = generar_html(&[remoto], &columnas, "Daniel", "Todo el historial");
+
+        assert_eq!(html.matches("<td>—</td>").count(), 2);
+        assert!(html.contains("<td class=\"izquierda\">—</td>"));
     }
 }

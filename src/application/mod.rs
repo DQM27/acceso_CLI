@@ -31,7 +31,8 @@ mod usuarios;
 pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion};
 pub use historial::{
     ExportarHistorialError, buscar_historial_completo_con_conexion,
-    exportar_historial_seleccion_con_conexion,
+    exportar_historial_seleccion_con_conexion, movimientos_completos_con_conexion,
+    movimientos_en_orden_con_conexion,
 };
 #[cfg(feature = "nube")]
 pub use nube::{

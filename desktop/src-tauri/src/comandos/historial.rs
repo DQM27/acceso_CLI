@@ -144,13 +144,15 @@ pub fn listar_historial_sitio(
 }
 
 /// Exporta el historial a un XLSX en `destino`, sólo con las `columnas`
-/// pedidas (sus claves, ver `ColumnaHistorial::clave`). Con `ids` en
+/// pedidas (sus claves, ver `ColumnaHistorial::clave`). Con `uuids` en
 /// `Some` (EN ESE ORDEN — el orden visible en la grilla tras un
 /// reordenamiento de columna, no el cronológico de la consulta), recorta a
-/// esos `registro_id` — la grilla (AG Grid) filtra filas, las ordena y
+/// esos movimientos, locales o de otro dispositivo del sitio
+/// (`historial_sitio`) — antes recortaba por `registro_id` y dejaba afuera
+/// todo lo remoto. La grilla (AG Grid) filtra filas, las ordena y
 /// oculta columnas del lado del cliente, `AppCore` no conoce nada de eso,
 /// así que la pantalla manda exactamente lo que tiene visible en ese
-/// momento. `ids: None` exporta todo el rango `desde`/`hasta` tal cual está
+/// momento. `uuids: None` exporta todo el rango `desde`/`hasta` tal cual está
 /// en la base, sin pasar por el array cargado en el cliente — la pantalla
 /// lo usa cuando el historial superó el tope de carga completa
 /// (`CargaCompleta::truncado`, ver `AppCore::buscar_historial_completo`) y
@@ -160,7 +162,7 @@ pub fn listar_historial_sitio(
 #[tauri::command]
 pub fn exportar_historial(
     destino: String,
-    ids: Option<Vec<i64>>,
+    uuids: Option<Vec<String>>,
     columnas: Vec<String>,
     desde: Option<NaiveDate>,
     hasta: Option<NaiveDate>,
@@ -183,7 +185,7 @@ pub fn exportar_historial(
     let resultado = exportar_historial_seleccion_con_conexion(
         &conexion,
         &FiltroHistorial::nuevo(desde_utc, hasta_utc),
-        ids.as_deref(),
+        uuids.as_deref(),
         &columnas,
         &destino,
     )
@@ -246,7 +248,7 @@ impl Drop for RespaldoDestino {
     }
 }
 
-/// Exporta a PDF los mismos `ids`/`columnas` que ya resuelve
+/// Exporta a PDF los mismos `uuids`/`columnas` que ya resuelve
 /// `exportar_historial` para Excel — mismo criterio de "lo que la grilla
 /// tiene visible ahora", pero HTML/CSS renderizado por `WebView2`
 /// (`pdf::generador`) en vez de `rust_xlsxwriter`. `filtro_descripcion` es
@@ -257,14 +259,14 @@ impl Drop for RespaldoDestino {
 /// nombre que mande el cliente para algo que es, en la práctica, un dato de
 /// auditoría. A diferencia de Excel, un PDF necesita cada fila entera en
 /// memoria para armar el HTML antes de imprimir — así que el camino sin
-/// `ids` (`buscar_historial_completo`) sigue acotado por
+/// `uuids` (`movimientos_completos`) sigue acotado por
 /// `LIMITE_CARGA_COMPLETA_MAXIMO`; un PDF de cientos de miles de filas no
 /// es un formato razonable de todos modos (para eso está Excel).
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn exportar_historial_pdf(
     destino: String,
-    ids: Option<Vec<i64>>,
+    uuids: Option<Vec<String>>,
     columnas: Vec<String>,
     filtro_descripcion: String,
     desde: Option<NaiveDate>,
@@ -293,12 +295,9 @@ pub async fn exportar_historial_pdf(
         let state = app_para_consulta.state::<GuiState>();
         let core = state.core();
         let filtro = FiltroHistorial::nuevo(desde_utc, hasta_utc);
-        ids.map_or_else(
-            || {
-                core.buscar_historial_completo(&filtro)
-                    .map(|carga| carga.items)
-            },
-            |ids| core.movimientos_en_orden(&filtro, &ids),
+        uuids.map_or_else(
+            || core.movimientos_completos(&filtro),
+            |uuids| core.movimientos_en_orden(&filtro, &uuids),
         )
     })
     .await

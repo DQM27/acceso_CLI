@@ -103,8 +103,10 @@ export function listarHistorialSitio(
   return invoke("listar_historial_sitio", { desde: desde ?? null, hasta: hasta ?? null });
 }
 
-/** `ids`: los `registro_id` que la grilla tiene visibles tras su propio
- * filtro por columna, en `null` cuando la carga se truncó
+/** `uuids`: los `uuid` que la grilla tiene visibles tras su propio filtro
+ * por columna -- locales y de otros dispositivos del sitio por igual (el
+ * backend busca cada uno en `registro_ingresos` y, si no está, en
+ * `historial_sitio`) --, en `null` cuando la carga se truncó
  * (`CargaCompleta.truncado`) y ya no representa el total real — en ese caso
  * el backend exporta todo el rango `desde`/`hasta` directo de la base en
  * vez de sólo lo que el cliente alcanzó a cargar (ver `Historial.tsx`).
@@ -117,22 +119,22 @@ export function listarHistorialSitio(
  * historial acumulado. */
 export function exportarHistorial(
   destino: string,
-  ids: number[] | null,
+  uuids: string[] | null,
   columnas: string[],
   desde?: string,
   hasta?: string,
 ): Promise<number> {
   return invoke("exportar_historial", {
     destino,
-    ids,
+    uuids,
     columnas,
     desde: desde ?? null,
     hasta: hasta ?? null,
   });
 }
 
-/** Mismo recorte que `exportarHistorial` (`ids`/`columnas`/`desde`/`hasta`,
- * `ids: null` con el mismo significado — todo el rango, no sólo lo
+/** Mismo recorte que `exportarHistorial` (`uuids`/`columnas`/`desde`/`hasta`,
+ * `uuids: null` con el mismo significado — todo el rango, no sólo lo
  * cargado), a PDF en vez de Excel. `filtroDescripcion`: texto ya formateado
  * para el encabezado del PDF (ver `textoRangoFecha` en
  * `SelectorRangoFecha.tsx`) — el backend no recalcula el formateo de
@@ -140,7 +142,7 @@ export function exportarHistorial(
  * lo saca de la sesión activa, no del cliente. */
 export function exportarHistorialPdf(
   destino: string,
-  ids: number[] | null,
+  uuids: string[] | null,
   columnas: string[],
   filtroDescripcion: string,
   desde?: string,
@@ -148,7 +150,7 @@ export function exportarHistorialPdf(
 ): Promise<void> {
   return invoke("exportar_historial_pdf", {
     destino,
-    ids,
+    uuids,
     columnas,
     filtroDescripcion,
     desde: desde ?? null,
