@@ -29,6 +29,9 @@ export interface ResumenSincronizacion {
   /** Mismo criterio que `historial_visitas_recibidos`, pero para ingresos
    * de proveedor. */
   historial_ingresos_proveedor_recibidos: number;
+  /** Mismo criterio que `historial_visitas_recibidos`, pero para préstamos
+   * de gafete provisional KOF. */
+  historial_gafetes_provisionales_recibidos: number;
   sitio_id: string;
   dispositivo_id: string;
   tipo: string;
