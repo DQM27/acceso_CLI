@@ -342,7 +342,7 @@ const TODAS_LAS_SECCIONES: {
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
   { id: "catalogoRutas", etiqueta: "Catálogo KOF", Icono: Truck },
   { id: "proveedores", etiqueta: "Proveedores", Icono: Boxes },
-  { id: "gafetesProvisionales", etiqueta: "Gafetes KOF", Icono: BadgeCheck },
+  { id: "gafetesProvisionales", etiqueta: "KOF", Icono: BadgeCheck },
 ];
 
 /** Secciones sin terminar, ocultas de la interfaz (pedido del usuario
