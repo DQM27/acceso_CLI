@@ -321,7 +321,7 @@ export type Seccion =
  * administrativo web (ver docs/planes-implementados/plan-autenticacion-supabase-auth.md) — el
  * escritorio ya no origina cambios contra esa tabla, salvo que la propia
  * sesión cambie su propia contraseña (`cambiarMiPassword`). */
-const SECCIONES: {
+const TODAS_LAS_SECCIONES: {
   id: Seccion;
   etiqueta: string;
   Icono: LucideIcon;
@@ -344,6 +344,17 @@ const SECCIONES: {
   { id: "proveedores", etiqueta: "Proveedores", Icono: Boxes },
   { id: "gafetesProvisionales", etiqueta: "Gafetes KOF", Icono: BadgeCheck },
 ];
+
+/** Secciones sin terminar, ocultas de la interfaz (pedido del usuario
+ * 2026-09-23: que no se vean a medias en una demostración). El código de
+ * cada pantalla sigue intacto -- para volver a mostrar una, basta con
+ * sacarla de acá. "Catálogo KOF" queda visible a propósito: ahí se dan de
+ * alta los encargados que usa "Gafetes KOF", que sí está terminado. */
+const SECCIONES_EN_DESARROLLO: ReadonlySet<Seccion> = new Set<Seccion>(["visitas", "rutas"]);
+
+const SECCIONES = TODAS_LAS_SECCIONES.filter(
+  (seccion) => !SECCIONES_EN_DESARROLLO.has(seccion.id),
+);
 
 /**
  * Interfaz central: sidebar izquierdo con las secciones + área de contenido
