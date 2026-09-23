@@ -138,18 +138,23 @@ class ProveedoresViewModel(
         placa = nuevo.uppercase()
     }
 
-    fun cambiarTextoEmpresa(nuevo: String) {
-        textoEmpresa = nuevo
+    /// Siempre en mayúscula, igual que `cambiarPlaca` -- pedido del usuario
+    /// (2026-09-23): los nombres de empresa proveedora se guardan en
+    /// mayúscula, y este mismo campo es el que da de alta una empresa nueva
+    /// (`crearEmpresa`). La búsqueda del núcleo no distingue mayúsculas.
+    fun cambiarTextoEmpresa(valor: String) {
+        val texto = valor.uppercase()
+        textoEmpresa = texto
         empresaSeleccionada = null
         trabajoBusquedaEmpresa?.cancel()
-        if (nuevo.isBlank()) {
+        if (texto.isBlank()) {
             resultadosEmpresa = emptyList()
             return
         }
         trabajoBusquedaEmpresa = viewModelScope.launch {
             delay(DEBOUNCE_MS)
             try {
-                resultadosEmpresa = withContext(dispatcherIO) { nucleo.buscarEmpresasProveedor(nuevo) }
+                resultadosEmpresa = withContext(dispatcherIO) { nucleo.buscarEmpresasProveedor(texto) }
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             }
@@ -167,13 +172,16 @@ class ProveedoresViewModel(
     /// (Paso 2: "Crear empresa" cuando no aparece en la búsqueda).
     fun crearEmpresa(nombreNuevo: String) {
         if (creandoEmpresa || nombreNuevo.isBlank()) return
+        // Mayúscula también acá, no sólo en `cambiarTextoEmpresa` -- quien
+        // llame con otro texto (no el del campo) no debe poder saltársela.
+        val nombre = nombreNuevo.trim().uppercase()
         creandoEmpresa = true
         viewModelScope.launch {
             try {
-                val id = withContext(dispatcherIO) { nucleo.crearEmpresaProveedor(nombreNuevo.trim()) }
+                val id = withContext(dispatcherIO) { nucleo.crearEmpresaProveedor(nombre) }
                 CambiosNube.solicitar()
-                empresaSeleccionada = EmpresaProveedor(id = id, nombre = nombreNuevo.trim(), activo = true)
-                textoEmpresa = nombreNuevo.trim()
+                empresaSeleccionada = EmpresaProveedor(id = id, nombre = nombre, activo = true)
+                textoEmpresa = nombre
                 resultadosEmpresa = emptyList()
                 error = null
             } catch (excepcion: NucleoException) {
