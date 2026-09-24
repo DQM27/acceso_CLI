@@ -478,6 +478,31 @@ input {
   }
 }
 
+/* Ficha que se despliega debajo del buscador al elegir a alguien (Nuevo
+   ingreso, KOF, proveedores): entra con un fundido y un leve deslizamiento
+   en vez de aparecer de golpe. El modal está anclado arriba (`anclarArriba`
+   en Modal.tsx), así que sólo crece hacia abajo. */
+@keyframes ficha-aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ficha-desplegable {
+  animation: ficha-aparecer 0.22s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ficha-desplegable {
+    animation: none;
+  }
+}
+
 /* Tarjetas de opción (tipo de gafete en `FormularioGafete`): ícono arriba y
    nombre abajo, todas del mismo ancho; la elegida con borde y fondo de
    acento, igual que la fila resaltada de `ListaFlotante`. */

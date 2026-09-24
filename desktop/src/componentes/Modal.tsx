@@ -15,10 +15,16 @@ import type { ReactNode } from "react";
 export default function Modal({
   titulo,
   onCerrar,
+  anclarArriba = false,
   children,
 }: {
   titulo: string;
   onCerrar: () => void;
+  /** Fija el borde superior en vez de centrar -- para modales que crecen
+   * al elegir algo (buscador + ficha que se despliega debajo). Centrado, al
+   * crecer se movía para arriba y para abajo a la vez, y se veía a los
+   * saltos (reportado 2026-09-24); anclado arriba sólo crece hacia abajo. */
+  anclarArriba?: boolean;
   children: ReactNode;
 }) {
   useEffect(() => {
@@ -36,8 +42,9 @@ export default function Modal({
         inset: 0,
         background: "var(--velo)",
         display: "flex",
-        alignItems: "center",
+        alignItems: anclarArriba ? "flex-start" : "center",
         justifyContent: "center",
+        paddingTop: anclarArriba ? "12vh" : undefined,
         zIndex: 100,
       }}
     >

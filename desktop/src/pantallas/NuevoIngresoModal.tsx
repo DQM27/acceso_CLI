@@ -232,7 +232,7 @@ export default function NuevoIngresoModal({
   }
 
   return (
-    <Modal titulo="Nuevo ingreso" onCerrar={onCerrar}>
+    <Modal titulo="Nuevo ingreso" onCerrar={onCerrar} anclarArriba>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <div ref={campoRef}>
           <label className="campo">
@@ -246,7 +246,10 @@ export default function NuevoIngresoModal({
                 autoFocus
                 placeholder="Cédula o nombre…"
               />
-              {buscando && (
+              {/* También mientras se verifica al elegido: la ficha aparece
+                  una sola vez, ya completa, en vez de mostrar primero
+                  "Verificando…" y después crecer otra vez. */}
+              {(buscando || seleccion.tipo === "cargando") && (
                 <Loader2
                   size={14}
                   strokeWidth={2}
@@ -316,8 +319,9 @@ export default function NuevoIngresoModal({
           </p>
         )}
 
-        {seleccion.tipo !== "ninguna" && (
+        {(seleccion.tipo === "formulario" || seleccion.tipo === "bloqueada") && (
           <div
+            className="ficha-desplegable"
             style={{
               display: "flex",
               flexDirection: "column",
@@ -341,10 +345,6 @@ export default function NuevoIngresoModal({
                 Cambiar
               </button>
             </div>
-
-            {seleccion.tipo === "cargando" && (
-              <p style={{ margin: 0, color: "var(--muted)" }}>Verificando…</p>
-            )}
 
             {seleccion.tipo === "bloqueada" && (
               <p className="login-error" role="alert">
