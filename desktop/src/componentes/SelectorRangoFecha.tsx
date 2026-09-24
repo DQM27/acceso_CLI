@@ -37,15 +37,15 @@ function fechaCorta(ymd: string): string {
 }
 
 /** Texto compacto del botón (pedido del usuario 2026-09-23: más chico y
- * más estético): el nombre del acceso rápido si el rango coincide con uno
- * ("Hoy", "Este mes"...), si no las fechas con año corto. El texto completo
+ * más estético): el nombre corto del acceso rápido si el rango coincide con
+ * uno ("Hoy", "Mes", "7 días"...), si no las fechas con año corto. El texto completo
  * sigue en `textoRangoFecha` (título del botón y encabezado del PDF). */
 export function etiquetaCortaRango(desde: string, hasta: string, hoy: Date = new Date()): string {
   const preset = PRESETS.find((p) => {
     const rango = p.calcular(hoy);
     return rango.desde === desde && rango.hasta === hasta;
   });
-  if (preset) return preset.etiqueta;
+  if (preset) return preset.corta;
   if (desde && hasta) return `${fechaCorta(desde)} – ${fechaCorta(hasta)}`;
   if (desde) return `Desde ${fechaCorta(desde)}`;
   if (hasta) return `Hasta ${fechaCorta(hasta)}`;
@@ -53,7 +53,11 @@ export function etiquetaCortaRango(desde: string, hasta: string, hoy: Date = new
 }
 
 export interface Preset {
+  /** Nombre completo: el título al pasar el mouse sobre el acceso rápido. */
   etiqueta: string;
+  /** Nombre corto: lo que muestran el acceso rápido del panel y el botón
+   * "Período" (pedido del usuario 2026-09-23: mucho texto). */
+  corta: string;
   calcular: (hoy: Date) => { desde: string; hasta: string };
 }
 
@@ -68,10 +72,12 @@ function inicioSemana(d: Date): Date {
 export const PRESETS: Preset[] = [
   {
     etiqueta: "Hoy",
+    corta: "Hoy",
     calcular: (hoy) => ({ desde: fechaYMD(hoy), hasta: fechaYMD(hoy) }),
   },
   {
     etiqueta: "Ayer",
+    corta: "Ayer",
     calcular: (hoy) => {
       const ayer = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 1);
       return { desde: fechaYMD(ayer), hasta: fechaYMD(ayer) };
@@ -79,10 +85,12 @@ export const PRESETS: Preset[] = [
   },
   {
     etiqueta: "Esta semana",
+    corta: "Semana",
     calcular: (hoy) => ({ desde: fechaYMD(inicioSemana(hoy)), hasta: fechaYMD(hoy) }),
   },
   {
     etiqueta: "Semana pasada",
+    corta: "Sem. pasada",
     calcular: (hoy) => {
       const inicioActual = inicioSemana(hoy);
       const inicioPasada = new Date(
@@ -100,6 +108,7 @@ export const PRESETS: Preset[] = [
   },
   {
     etiqueta: "Este mes",
+    corta: "Mes",
     calcular: (hoy) => ({
       desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), 1)),
       hasta: fechaYMD(hoy),
@@ -107,6 +116,7 @@ export const PRESETS: Preset[] = [
   },
   {
     etiqueta: "Mes pasado",
+    corta: "Mes pasado",
     calcular: (hoy) => ({
       desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)),
       // Día 0 del mes actual == último día del mes anterior.
@@ -115,6 +125,7 @@ export const PRESETS: Preset[] = [
   },
   {
     etiqueta: "Últimos 7 días",
+    corta: "7 días",
     calcular: (hoy) => ({
       desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 6)),
       hasta: fechaYMD(hoy),
@@ -122,6 +133,7 @@ export const PRESETS: Preset[] = [
   },
   {
     etiqueta: "Últimos 30 días",
+    corta: "30 días",
     calcular: (hoy) => ({
       desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 29)),
       hasta: fechaYMD(hoy),
@@ -135,10 +147,12 @@ export const PRESETS: Preset[] = [
   // abiertos -- sin filtro.
   {
     etiqueta: "Últimos 6 meses",
+    corta: "6 meses",
     calcular: (hoy) => ({ desde: fechaHaceMeses(6, hoy), hasta: "" }),
   },
   {
     etiqueta: "Todo el historial",
+    corta: "Todo",
     calcular: () => ({ desde: "", hasta: "" }),
   },
 ];
@@ -215,7 +229,7 @@ export default function SelectorRangoFecha({
           (Excel/CSV/PDF). Ancho fijo: lo que piden los accesos rápidos en
           dos columnas, cada uno en una sola línea. */}
       {abierto && posicion && (
-        <ListaFlotante posicion={posicion} ancho={300} direccion="izquierda">
+        <ListaFlotante posicion={posicion} ancho={260} direccion="izquierda">
           <div
             ref={popoverRef}
             style={{
@@ -241,6 +255,7 @@ export default function SelectorRangoFecha({
                 {PRESETS.map((preset) => (
                   <button
                     key={preset.etiqueta}
+                    title={preset.etiqueta}
                     type="button"
                     className="boton"
                     style={{
@@ -263,7 +278,7 @@ export default function SelectorRangoFecha({
                       setAbierto(false);
                     }}
                   >
-                    {preset.etiqueta}
+                    {preset.corta}
                   </button>
                 ))}
               </div>

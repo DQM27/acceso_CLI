@@ -74,8 +74,8 @@ describe("etiquetaCortaRango (texto del botón)", () => {
 
   it("usa el nombre del acceso rápido cuando el rango coincide con uno", () => {
     expect(etiquetaCortaRango("2026-08-12", "2026-08-12", hoy)).toBe("Hoy");
-    expect(etiquetaCortaRango("2026-08-01", "2026-08-12", hoy)).toBe("Este mes");
-    expect(etiquetaCortaRango("2026-08-06", "2026-08-12", hoy)).toBe("Últimos 7 días");
+    expect(etiquetaCortaRango("2026-08-01", "2026-08-12", hoy)).toBe("Mes");
+    expect(etiquetaCortaRango("2026-08-06", "2026-08-12", hoy)).toBe("7 días");
   });
 
   it("si no coincide, muestra las fechas con año corto", () => {
@@ -86,8 +86,8 @@ describe("etiquetaCortaRango (texto del botón)", () => {
 
   it("los accesos para anular el filtro se muestran por su nombre", () => {
     // Período con que abre Historial: 6 meses atrás, `hasta` abierto.
-    expect(etiquetaCortaRango("2026-02-12", "", hoy)).toBe("Últimos 6 meses");
-    expect(etiquetaCortaRango("", "", hoy)).toBe("Todo el historial");
+    expect(etiquetaCortaRango("2026-02-12", "", hoy)).toBe("6 meses");
+    expect(etiquetaCortaRango("", "", hoy)).toBe("Todo");
   });
 });
 
