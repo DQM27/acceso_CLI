@@ -160,8 +160,14 @@ export interface PrestamoGafeteProvisionalHistorialSitio {
   usuario_devolucion_nombre: string | null;
 }
 
-export function listarGafetesProvisionalesHistorialSitio(): Promise<
-  PrestamoGafeteProvisionalHistorialSitio[]
-> {
-  return invoke("listar_gafetes_provisionales_historial_sitio");
+/** `desde`/`hasta`: "YYYY-MM-DD" o `undefined` para no acotar ese extremo,
+ * mismo criterio que `listarHistorial` (ver `rango_utc`). */
+export function listarGafetesProvisionalesHistorialSitio(
+  desde?: string,
+  hasta?: string,
+): Promise<PrestamoGafeteProvisionalHistorialSitio[]> {
+  return invoke("listar_gafetes_provisionales_historial_sitio", {
+    desde: desde ?? null,
+    hasta: hasta ?? null,
+  });
 }

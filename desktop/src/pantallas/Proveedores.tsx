@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react
 import { toast } from "sonner";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   cerrarFilaProveedorActiva,
@@ -10,7 +11,7 @@ import {
   listarTodosLosProveedoresActivos,
 } from "../api/proveedores";
 import type { FilaProveedorActiva, HistorialIngresoProveedorRemoto } from "../api/proveedores";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 const IngresoProveedorModal = lazy(() => import("./IngresoProveedorModal"));
 
@@ -64,6 +65,11 @@ const idPorUuid = (fila: { uuid: string }) => fila.uuid;
 
 export default function Proveedores({ refrescarSenal }: { refrescarSenal?: number }) {
   const [vista, setVista] = useState<Vista>("activos");
+  // Período del historial -- mismo selector y mismo arranque ("Últimos 6
+  // meses", `hasta` abierto) que Historial de contratistas (pedido del
+  // usuario 2026-09-23: el selector en todos los historiales).
+  const [desde, setDesde] = useState(() => fechaHaceMeses(6));
+  const [hasta, setHasta] = useState("");
   const [filasActivos, setFilasActivos] = useState<FilaProveedorActiva[]>([]);
   const [filasHistorial, setFilasHistorial] = useState<HistorialIngresoProveedorRemoto[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -84,10 +90,10 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
 
   const recargarHistorial = useCallback(() => {
     setCargando(true);
-    return listarHistorialIngresosProveedorSitio()
+    return listarHistorialIngresosProveedorSitio(desde || undefined, hasta || undefined)
       .then(setFilasHistorial)
       .finally(() => setCargando(false));
-  }, []);
+  }, [desde, hasta]);
 
   useEffect(() => {
     let vigente = true;
@@ -282,7 +288,19 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
                   />
                 </div>
               }
-              accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
+              accionesDerecha={
+                <>
+                  <SelectorRangoFecha
+                    desde={desde}
+                    hasta={hasta}
+                    onAplicar={(nuevoDesde, nuevoHasta) => {
+                      setDesde(nuevoDesde);
+                      setHasta(nuevoHasta);
+                    }}
+                  />
+                  <ToggleVista vista={vista} onCambiar={setVista} />
+                </>
+              }
             />
           )}
         </div>

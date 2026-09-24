@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react
 import { toast } from "sonner";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   cerrarFilaGafeteProvisionalActiva,
@@ -13,7 +14,7 @@ import type {
   FilaGafeteProvisionalActiva,
   PrestamoGafeteProvisionalHistorialSitio,
 } from "../api/gafetesProvisionales";
-import { textoFechaDDMMYYYY, textoHora, fechaLocalYMD } from "../tiempo";
+import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 const EntregarGafeteProvisionalModal = lazy(() => import("./EntregarGafeteProvisionalModal"));
 
@@ -74,6 +75,11 @@ const idPorUuid = (fila: { uuid: string }) => fila.uuid;
 
 export default function GafetesProvisionales({ refrescarSenal }: { refrescarSenal?: number }) {
   const [vista, setVista] = useState<Vista>("activos");
+  // Período del historial -- mismo selector y mismo arranque ("Últimos 6
+  // meses", `hasta` abierto) que Historial de contratistas (pedido del
+  // usuario 2026-09-23: el selector en todos los historiales).
+  const [desde, setDesde] = useState(() => fechaHaceMeses(6));
+  const [hasta, setHasta] = useState("");
   const [filasActivos, setFilasActivos] = useState<FilaGafeteProvisionalActiva[]>([]);
   const [filasHistorial, setFilasHistorial] = useState<PrestamoGafeteProvisionalHistorialSitio[]>(
     [],
@@ -98,10 +104,10 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
 
   const recargarHistorial = useCallback(() => {
     setCargando(true);
-    return listarGafetesProvisionalesHistorialSitio()
+    return listarGafetesProvisionalesHistorialSitio(desde || undefined, hasta || undefined)
       .then(setFilasHistorial)
       .finally(() => setCargando(false));
-  }, []);
+  }, [desde, hasta]);
 
   useEffect(() => {
     let vigente = true;
@@ -295,7 +301,19 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
                   />
                 </div>
               }
-              accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
+              accionesDerecha={
+                <>
+                  <SelectorRangoFecha
+                    desde={desde}
+                    hasta={hasta}
+                    onAplicar={(nuevoDesde, nuevoHasta) => {
+                      setDesde(nuevoDesde);
+                      setHasta(nuevoHasta);
+                    }}
+                  />
+                  <ToggleVista vista={vista} onCambiar={setVista} />
+                </>
+              }
             />
           )}
         </div>
