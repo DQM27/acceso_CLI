@@ -132,6 +132,35 @@ describe("useListaFlotante", () => {
     expect(screen.getByTestId("posicion").textContent).toBe("visible");
   });
 
+  it("sigue al campo si se mueve mientras la lista está visible", async () => {
+    // Reproduce el bug de 2026-09-24: el modal se encoge animado y el
+    // buscador se desplaza; la lista tiene que acompañarlo, no quedarse
+    // donde lo midió la primera vez.
+    function EnvoltorioTop() {
+      const { campoRef, posicion } = useListaFlotante(true);
+      return (
+        <div>
+          <div ref={campoRef} data-testid="campo" />
+          <span data-testid="top">{posicion?.top ?? "sin"}</span>
+        </div>
+      );
+    }
+    let bottom = 100;
+    const espia = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(
+        () => ({ top: bottom - 40, bottom, left: 10, right: 310, width: 300 }) as DOMRect,
+      );
+    render(<EnvoltorioTop />);
+    expect(screen.getByTestId("top").textContent).toBe("104");
+
+    bottom = 250;
+    await act(() => new Promise((listo) => requestAnimationFrame(() => listo(undefined))));
+    await act(() => new Promise((listo) => requestAnimationFrame(() => listo(undefined))));
+    expect(screen.getByTestId("top").textContent).toBe("254");
+    espia.mockRestore();
+  });
+
   it("al dejar de estar visible, vuelve a null", () => {
     const { rerender } = render(<Envoltorio visible={true} />);
     expect(screen.getByTestId("posicion").textContent).toBe("visible");
