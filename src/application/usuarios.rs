@@ -11,7 +11,7 @@ use crate::database::repositories::usuario_repository::{
 };
 use crate::domain::autorizacion::{Operacion, puede_cambiar_password, puede_gestionar_usuario};
 use crate::models::usuario::{RolUsuario, Usuario};
-use crate::services::autenticacion_service::{CandidatoAutenticacion, UsuarioSesion};
+use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::UsuarioServiceError;
 use crate::services::usuario_service::{
     ActualizarUsuarioInput, CrearUsuarioInput, UsuarioConsultaService, UsuarioService,
@@ -32,45 +32,6 @@ impl AppCore {
         }
         UsuarioConsultaService::new(&SqliteUsuariosQuery::new(&self.connection))
             .buscar_para_tabla_como(filtro, actor_actual.rol)
-    }
-
-    /// Usuarios ROOT activos — usado por el flujo de recuperación `--reset-root`
-    /// (main.rs) para saber a cuál restablecer cuando hay más de uno.
-    pub fn listar_roots_activos(&self) -> Result<Vec<Usuario>, UsuarioServiceError> {
-        let usuarios =
-            UsuarioService::new(&SqliteUsuarioRepository::new(&self.connection)).listar()?;
-        Ok(usuarios
-            .into_iter()
-            .filter(|usuario| usuario.rol == RolUsuario::Root && usuario.activo)
-            .collect())
-    }
-
-    /// Camino de recuperación fuera de la TUI (`--reset-root` en main.rs), pensado para
-    /// cuando el ROOT olvidó su contraseña y no hay otro admin/root con sesión para
-    /// restablecérsela. A propósito no pasa por `verificar_gestion_usuario` como el
-    /// resto de `cambiar_password_usuario_*`: no hay actor logueado, porque este
-    /// flujo existe justo para cuando nadie puede loguearse. Su única barrera es
-    /// tener acceso al ejecutable y al archivo de la base de datos — quien tiene eso
-    /// ya podría manipular el `.sqlite` directamente, así que esto no baja el nivel
-    /// de seguridad real, sólo evita tener que calcular un hash Argon2 a mano.
-    pub fn resetear_password_root(
-        &self,
-        id: i64,
-        nueva_password: &str,
-    ) -> Result<(), UsuarioServiceError> {
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        let usuario = SqliteUsuarioRepository::new(&transaction)
-            .buscar_por_id(id)?
-            .ok_or(UsuarioServiceError::UsuarioNoEncontrado)?;
-        if usuario.rol != RolUsuario::Root || !usuario.activo {
-            return Err(UsuarioServiceError::UsuarioNoEncontrado);
-        }
-        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
-            .cambiar_password(id, nueva_password)?;
-        transaction.commit().map_err(DatabaseError::from)?;
-        Ok(())
     }
 
     pub fn crear_usuario(
@@ -277,56 +238,6 @@ impl AppCore {
                 actor_actual.id,
                 password_actual,
                 nueva_password,
-                &actor_actual.nombre,
-                self.reloj.ahora_utc(),
-                &SqliteAuditoria::new(&transaction),
-            )?;
-        transaction.commit().map_err(DatabaseError::from)?;
-        Ok(())
-    }
-
-    /// Resuelve el hash vigente y valida la contraseña nueva sin ejecutar
-    /// Argon2. La TUI usa el candidato devuelto en un hilo aparte.
-    pub fn preparar_cambio_password_propio(
-        &self,
-        actor: &UsuarioSesion,
-        nueva_password: &str,
-    ) -> Result<CandidatoAutenticacion, UsuarioServiceError> {
-        let actor_actual = verificar_actor_activo(&self.connection, actor)?
-            .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
-        let repositorio = SqliteUsuarioRepository::new(&self.connection);
-        UsuarioService::new(&repositorio)
-            .validar_password_para_cambio(actor_actual.id, nueva_password)?;
-        Ok(CandidatoAutenticacion {
-            sesion: UsuarioSesion {
-                id: actor_actual.id,
-                cedula: actor_actual.cedula,
-                nombre: actor_actual.nombre,
-                rol: actor_actual.rol,
-            },
-            password_hash: actor_actual.password_hash,
-        })
-    }
-
-    pub fn cambiar_mi_password_con_hash(
-        &self,
-        actor: &UsuarioSesion,
-        hash_actual_verificado: &str,
-        nuevo_hash: &str,
-    ) -> Result<(), UsuarioServiceError> {
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        let actor_actual = verificar_actor_activo(&transaction, actor)?
-            .ok_or(UsuarioServiceError::OperacionNoAutorizada)?;
-        if actor_actual.password_hash != hash_actual_verificado {
-            return Err(UsuarioServiceError::PasswordActualIncorrecta);
-        }
-        UsuarioService::new(&SqliteUsuarioRepository::new(&transaction))
-            .cambiar_password_con_hash_auditado(
-                actor_actual.id,
-                nuevo_hash,
-                actor_actual.id,
                 &actor_actual.nombre,
                 self.reloj.ahora_utc(),
                 &SqliteAuditoria::new(&transaction),

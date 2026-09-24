@@ -22,6 +22,7 @@ fn crear_usuario(cedula: &str, nombre: &str, rol: RolUsuario, activo: bool) -> U
         rol,
         activo,
         password_hash_confirmado_en: None,
+        password_temporal_cacheada: false,
     }
 }
 

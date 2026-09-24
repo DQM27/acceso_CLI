@@ -382,8 +382,11 @@ impl AppCore {
     /// incluidos), para que el próximo Login tenga con quién autenticar.
     /// Cada usuario que llega así arranca con el centinela
     /// `SIN_PASSWORD_LOCAL` (ver `recibir_catalogo_del_sitio`), así que el
-    /// primer login de cualquiera de ellos cae solo en el flujo de "fijar
-    /// contraseña" ya existente (`AppCore::fijar_password_inicial`).
+    /// primer login de cualquiera de ellos cae en `AutenticacionError::SinPasswordLocal`
+    /// y de ahí al login contra Supabase Auth (`login_supabase`/
+    /// `autenticar_supabase`, ver docs/planes-implementados/plan-autenticacion-supabase-auth.md)
+    /// -- no en `AppCore::fijar_password_inicial`, eliminada en la
+    /// auditoría 2026-09-24 (NR-07/NS-25) por no tener ningún llamador real.
     ///
     /// Se rechaza a propósito si ya existe algún usuario local -- este
     /// camino es sólo el bootstrap de una base vacía, no una forma

@@ -31,14 +31,13 @@ los servicios orquestan casos de uso y el dominio contiene reglas puras.
   partir de la 01:00 (hora Costa Rica); si falla, la app avisa en vez de descartarlo en
   silencio.
 
-### Recuperación fuera de la TUI
+### Recuperación de contraseña de ROOT
 
-`control_acceso --reset-root` restablece la contraseña de un usuario ROOT sin
-necesidad de loguearse, para cuando la olvida y no hay otro Administrador/Root con
-sesión activa que se la pueda cambiar desde el menú de Usuarios. Pide confirmación
-explícita y genera un respaldo dedicado (tipo `PorFlag`, exento de la retención
-automática) antes de aplicar el cambio, para poder deshacerlo restaurándolo desde la
-pantalla de Respaldos.
+Con ROOT unificado a la misma identidad que gestiona el panel administrativo web
+(Supabase Auth), resetear la contraseña de un ROOT que la olvidó pasa por ese panel
+(`admin-reset-password-usuario`), no por la app de escritorio ni por un flag de
+línea de comandos -- ver `docs/decisiones-tecnicas.md`, entrada 2026-09-12. La app
+no tiene ni TUI ni CLI propios (esa capa se retiró; ver esa misma entrada).
 
 ### Roles
 

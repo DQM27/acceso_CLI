@@ -48,23 +48,35 @@ impl From<nube::AuthSupabaseError> for ErrorLogin {
 
 /// Éxito de `login` -- separado de `UsuarioSesion` (compartido con
 /// TUI/mobile) a propósito, sólo desktop necesita decirle a la pantalla
-/// que fuerce el cambio de contraseña antes de dejar operar. `false`
-/// siempre en la rama local (ROOT del arranque inicial, o cualquier cuenta
-/// que ya tenía password local de antes de esta migración) -- esa
-/// contraseña ya es la real, no una temporal de un solo uso.
+/// que fuerce el cambio de contraseña antes de dejar operar. `false` en la
+/// rama local para el ROOT del arranque inicial o cualquier cuenta que ya
+/// tenía password local de antes de la migración a Supabase Auth -- esa
+/// contraseña ya es la real, no una temporal. Puede ser `true` también en
+/// la rama local (`CandidatoAutenticacion::debe_cambiar_password`, ver
+/// `intentar_login_local`): un usuario global cuya contraseña TEMPORAL
+/// quedó cacheada para operar sin conexión, y que todavía no la cambió,
+/// sigue debiendo el cambio aunque el login haya sido local (hallazgo de
+/// auditoría 2026-09-24, MV-01/DF-03).
 #[derive(serde::Serialize)]
 pub struct ResultadoLogin {
     pub sesion: UsuarioSesion,
     pub debe_cambiar_password: bool,
 }
 
+/// Devuelve, junto con la sesión, si la contraseña recién verificada era
+/// una TEMPORAL todavía cacheada (`CandidatoAutenticacion::debe_cambiar_password`)
+/// -- antes de este campo, `login` siempre devolvía `debe_cambiar_password:
+/// false` para esta rama, lo que permitía esquivar el cambio obligatorio
+/// quedándose sin conexión (hallazgo de auditoría 2026-09-24, MV-01/DF-03).
 fn intentar_login_local(
     state: &GuiState,
     cedula: &str,
     password: &str,
-) -> Result<UsuarioSesion, AutenticacionError> {
+) -> Result<(UsuarioSesion, bool), AutenticacionError> {
     let candidato = state.core().buscar_candidato_autenticacion(cedula)?;
-    verificar_candidato(candidato, password)
+    let debe_cambiar_password = candidato.debe_cambiar_password;
+    let sesion = verificar_candidato(candidato, password)?;
+    Ok((sesion, debe_cambiar_password))
 }
 
 /// Trae sólo el catálogo (usuarios/contratistas/empresas/gafetes), sin
@@ -166,8 +178,8 @@ pub async fn login(
 ) -> Result<ResultadoLogin, ErrorLogin> {
     let state = app.state::<GuiState>();
 
-    let sesion = match intentar_login_local(&state, &cedula, &password) {
-        Ok(sesion) => sesion,
+    let (sesion, debe_cambiar_password) = match intentar_login_local(&state, &cedula, &password) {
+        Ok(resultado) => resultado,
         Err(AutenticacionError::UsuarioInactivo) => {
             let manejador = app.clone();
             let _ = tokio::time::timeout(
@@ -229,7 +241,7 @@ pub async fn login(
 
     Ok(ResultadoLogin {
         sesion,
-        debe_cambiar_password: false,
+        debe_cambiar_password,
     })
 }
 
@@ -298,13 +310,21 @@ async fn login_supabase(
     // un fallo acá (disco lleno, lo que sea) no debe tumbar un login que ya
     // fue exitoso contra Supabase, sólo deja sin el atajo offline a esta
     // cuenta hasta el próximo login online.
+    //
+    // Propaga `debe_cambiar_password` al caché a propósito (hallazgo de
+    // auditoría 2026-09-24, MV-01/DF-03): si la contraseña que se está
+    // cacheando es una temporal todavía sin cambiar, un login sin conexión
+    // más adelante debe seguir exigiendo el cambio, no aceptarla como si ya
+    // fuera definitiva.
     let id_para_cache = identidad.id;
+    let debe_cambiar_password_para_cache = sesion_supabase.debe_cambiar_password;
     let manejador = app.clone();
     match tauri::async_runtime::spawn_blocking(move || {
-        manejador
-            .state::<GuiState>()
-            .core()
-            .cachear_password_local(id_para_cache, &password_para_cache)
+        manejador.state::<GuiState>().core().cachear_password_local(
+            id_para_cache,
+            &password_para_cache,
+            debe_cambiar_password_para_cache,
+        )
     })
     .await
     {
@@ -366,12 +386,16 @@ pub async fn cambiar_password_supabase(
     // contraseña NUEVA y una marca de vencimiento fresca: sin esto, el
     // caché seguiría teniendo la contraseña VIEJA hasta el próximo login
     // online, que dejaría de servir apenas cambiara la contraseña.
+    // `false`: el cambio ya se confirmó contra Supabase Auth (arriba), así
+    // que la contraseña que se está cacheando ahora es la definitiva, no
+    // una temporal pendiente de cambio.
     let manejador = app.clone();
     match tauri::async_runtime::spawn_blocking(move || {
-        manejador
-            .state::<GuiState>()
-            .core()
-            .cachear_password_local(id_para_cache, &password_para_cache)
+        manejador.state::<GuiState>().core().cachear_password_local(
+            id_para_cache,
+            &password_para_cache,
+            false,
+        )
     })
     .await
     {
