@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CircleOff, IdCard, Users } from "lucide-react";
+import { CircleOff, IdCard, LogIn, LogOut, Users } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
@@ -304,12 +304,26 @@ export default function Activos({
             accionesDerecha={<ToggleGafete filtro={filtroGafete} onCambiar={setFiltroGafete} />}
             controles={
               <>
-                <button className="boton" title="Ctrl+N" onClick={onAbrirNuevoIngreso}>
-                  + Ingreso
-                </button>
-                <button className="boton" title="Ctrl+S" onClick={onAbrirSalida}>
-                  Salida
-                </button>
+                {/* Ingreso y salida como íconos, en una sola pieza (pedido
+                    del usuario 2026-09-23); el atajo va en el nombre. */}
+                <div className="segmentado" role="group" aria-label="Movimientos">
+                  <button
+                    type="button"
+                    title="Nuevo ingreso (Ctrl+N)"
+                    aria-label="Nuevo ingreso"
+                    onClick={onAbrirNuevoIngreso}
+                  >
+                    <LogIn size={16} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Registrar salida (Ctrl+S)"
+                    aria-label="Registrar salida"
+                    onClick={onAbrirSalida}
+                  >
+                    <LogOut size={16} aria-hidden="true" />
+                  </button>
+                </div>
                 <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input
                     placeholder="Cédula, nombre, empresa…"

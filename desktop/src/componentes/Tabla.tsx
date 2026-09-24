@@ -382,6 +382,16 @@ function TablaBase<T>(
 
   const conFiltro = filtrosPorColumna === true && filtrosVisibles;
 
+  // "Cargando…" sólo en la PRIMERA carga: después, cada recarga (cambio de
+  // vista, Realtime) con la lista vacía mostraba "Cargando…" y enseguida
+  // "Sin resultados" -- se veía como un parpadeo (reportado por el usuario
+  // 2026-09-23). Estado ajustado durante el render, patrón de React en vez
+  // de un efecto.
+  const [primeraCargaHecha, setPrimeraCargaHecha] = useState(false);
+  if (!primeraCargaHecha && cargando === false) {
+    setPrimeraCargaHecha(true);
+  }
+
   // `claseFila` puede depender del reloj (ej. "más de 12 horas adentro"):
   // sin esto, una fila que cruza el umbral no cambiaba hasta el próximo
   // refresco de datos.
@@ -756,7 +766,7 @@ function TablaBase<T>(
           // Menús de filtro, "Cargando…", etc. en español -- sin esto AG
           // Grid mostraba "Contains", "Equals", "AND/OR" en inglés.
           localeText={AG_GRID_LOCALE_ES}
-          loading={cargando === true && filas.length === 0}
+          loading={cargando === true && filas.length === 0 && !primeraCargaHecha}
           tooltipShowMode="whenTruncated"
           tooltipShowDelay={400}
           // Resguardo además de memoizar `columnas` en cada pantalla: si de
