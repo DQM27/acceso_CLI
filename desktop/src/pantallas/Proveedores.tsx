@@ -62,16 +62,6 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
  * `Tabla`) -- a nivel de módulo para que sea una función estable. */
 const idPorUuid = (fila: { uuid: string }) => fila.uuid;
 
-function totalesProveedoresActivos(visibles: FilaProveedorActiva[]): Record<string, string> {
-  return { nombre: `${visibles.length} adentro` };
-}
-
-function totalesProveedoresHistorial(
-  visibles: HistorialIngresoProveedorRemoto[],
-): Record<string, string> {
-  return { nombre: `${visibles.length} movimiento(s)` };
-}
-
 export default function Proveedores({ refrescarSenal }: { refrescarSenal?: number }) {
   const [vista, setVista] = useState<Vista>("activos");
   const [filasActivos, setFilasActivos] = useState<FilaProveedorActiva[]>([]);
@@ -256,7 +246,6 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
               id="proveedores-activos"
               nombreExportacion="proveedores-activos"
               idFila={claveFilaProveedorActiva}
-              filaTotales={totalesProveedoresActivos}
               columnas={columnasActivos}
               filas={filasActivos}
               busqueda={busqueda}
@@ -283,7 +272,6 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
               id="proveedores-historial"
               nombreExportacion="proveedores-historial"
               idFila={idPorUuid}
-              filaTotales={totalesProveedoresHistorial}
               columnas={columnasHistorial}
               filas={filasHistorial}
               busqueda={busqueda}

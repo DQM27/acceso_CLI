@@ -70,12 +70,6 @@ function claseFilaActiva(fila: FilaActiva): string | undefined {
   return masDeDoceHoras(fila) ? "fila-mas-de-12-horas" : undefined;
 }
 
-/** Fila fija de totales de lo visible (`filaTotales` de `Tabla`). */
-function totalesActivos(visibles: FilaActiva[]): Record<string, string> {
-  const sinGafete = visibles.filter((fila) => fila.gafete_numero == null).length;
-  return { contratista_nombre: `${visibles.length} adentro`, gafete_numero: `${sinGafete} S/G` };
-}
-
 export default function Activos({
   refrescarSenal,
   onAbrirNuevoIngreso,
@@ -98,12 +92,13 @@ export default function Activos({
   const [procesando, setProcesando] = useState(false);
   const [filtroGafete, setFiltroGafete] = useState<FiltroGafete>("todos");
   const filasVisibles = useMemo(() => filtrarPorGafete(filas, filtroGafete), [filas, filtroGafete]);
+  const sinGafete = useMemo(() => filtrarPorGafete(filas, "sin").length, [filas]);
 
   useBarraEstado(
     cargando
       ? "Cargando…"
       : filtroGafete === "todos"
-        ? `${total} adentro`
+        ? `${total} adentro · ${sinGafete} S/G`
         : `${filasVisibles.length} de ${total} adentro (${ETIQUETAS_FILTRO_GAFETE[filtroGafete]})`,
   );
 
@@ -316,7 +311,6 @@ export default function Activos({
             id="activos"
             nombreExportacion="activos"
             idFila={claveFilaActiva}
-            filaTotales={totalesActivos}
             claseFila={claseFilaActiva}
             columnas={columnas}
             filas={filasVisibles}

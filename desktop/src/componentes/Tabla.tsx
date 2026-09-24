@@ -10,11 +10,8 @@ import type {
   ColDef,
   GetRowIdParams,
   ITooltipParams,
-  ModelUpdatedEvent,
   RowClassParams,
   RowClickedEvent,
-  ValueFormatterParams,
-  ValueGetterParams,
   ColumnMovedEvent,
   ColumnPinnedEvent,
   ColumnResizedEvent,
@@ -187,36 +184,6 @@ const FILTRO_NUMERO: ColDef = {
   filterParams: {},
 };
 
-/** Adapta una columna para que la fila fija de totales (`filaTotales`) se
- * vea como texto simple: su valor sale de `data[clave]` tal cual, sin pasar
- * por el `valueGetter`/`valueFormatter` de la columna (que esperan una fila
- * real -- ej. el formateador de Gafete convertiría el vacío en "S/G") ni
- * por su componente de celda (el botón "Salida" no tiene sentido ahí). */
-function paraFilaFija<T>(columna: ColDef<T>, clave: string | undefined): ColDef<T> {
-  const { valueGetter, valueFormatter, cellRenderer } = columna;
-  const valorFijo = (data: unknown) =>
-    clave && data ? ((data as Record<string, unknown>)[clave] ?? "") : "";
-  return {
-    ...columna,
-    valueGetter:
-      typeof valueGetter === "function"
-        ? (p: ValueGetterParams<T>) => (p.node?.rowPinned ? valorFijo(p.data) : valueGetter(p))
-        : valueGetter,
-    valueFormatter:
-      typeof valueFormatter === "function"
-        ? (p: ValueFormatterParams<T>) =>
-            p.node?.rowPinned ? String(p.value ?? "") : valueFormatter(p)
-        : valueFormatter,
-    ...(cellRenderer
-      ? {
-          cellRenderer: undefined,
-          cellRendererSelector: (p: { node: { rowPinned?: unknown } }) =>
-            p.node.rowPinned ? undefined : { component: cellRenderer },
-        }
-      : {}),
-  };
-}
-
 const MENSAJE_SIN_FILAS = `<span style="color: var(--muted); font-size: 0.9rem;">Sin resultados</span>`;
 
 const columnaPorDefectoConFiltro: ColDef = {
@@ -323,11 +290,6 @@ export interface TablaProps<T> {
    * Grid reconoce la misma fila en vez de redibujar todo, y hace destellar
    * las celdas que cambiaron (ej. una salida que llega por Realtime). */
   idFila?: (fila: T) => string;
-  /** Fila fija abajo con totales de lo visible (respeta filtros y
-   * búsqueda). Devuelve el texto por columna (`colId`/`field`); las
-   * columnas que no aparecen quedan vacías. Debe ser una función estable
-   * (definida fuera del componente) para no recrear las columnas. */
-  filaTotales?: (visibles: T[]) => Record<string, string>;
   /** Clase CSS extra para una fila según sus datos (ej. resaltar a quien
    * lleva más de 12 horas adentro). Como puede depender de la hora actual,
    * la grilla se redibuja sola cada minuto mientras esto esté puesto. Debe
@@ -366,7 +328,6 @@ function TablaBase<T>(
     cargando,
     nombreExportacion,
     idFila,
-    filaTotales,
     claseFila,
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
@@ -433,10 +394,9 @@ function TablaBase<T>(
         let columna: ColDef<T> = clave ? { ...resto, hide: ocultas.has(clave) } : resto;
         if (type === "fecha" && conFiltro) columna = { ...columna, ...(FILTRO_FECHA as ColDef<T>) };
         if (type === "numero" && conFiltro) columna = { ...columna, ...(FILTRO_NUMERO as ColDef<T>) };
-        if (filaTotales) columna = paraFilaFija(columna, clave);
         return columna;
       }),
-    [columnas, ocultas, conFiltro, filaTotales],
+    [columnas, ocultas, conFiltro],
   );
 
   const columnaBase = useMemo<ColDef>(
@@ -446,20 +406,6 @@ function TablaBase<T>(
     }),
     [conFiltro, idFila],
   );
-
-  // Totales de lo visible -- se recalculan cada vez que cambia lo que la
-  // grilla muestra (datos nuevos, filtro, búsqueda). La comparación por
-  // JSON evita un render de más cuando el total no cambió.
-  const [totales, setTotales] = useState<Record<string, string> | null>(null);
-  function alActualizarModelo(evento: ModelUpdatedEvent<T>) {
-    if (!filaTotales) return;
-    const visibles: T[] = [];
-    evento.api.forEachNodeAfterFilter((nodo) => {
-      if (nodo.data) visibles.push(nodo.data);
-    });
-    const nuevos = filaTotales(visibles);
-    setTotales((actual) => (JSON.stringify(actual) === JSON.stringify(nuevos) ? actual : nuevos));
-  }
 
   async function exportarCsv() {
     const api = apiRef.current;
@@ -481,8 +427,6 @@ function TablaBase<T>(
     const contenido = api.getDataAsCsv({
       columnKeys,
       columnSeparator: ";",
-      skipPinnedBottom: true,
-      skipPinnedTop: true,
     });
     if (!contenido) {
       toast.error("No hay filas para exportar.");
@@ -726,17 +670,15 @@ function TablaBase<T>(
           rowData={filas}
           getRowId={
             idFila
-              ? (p: GetRowIdParams<T>) => (p.rowPinned ? `fija-${p.rowPinned}` : idFila(p.data))
+              ? (p: GetRowIdParams<T>) => idFila(p.data)
               : undefined
           }
-          pinnedBottomRowData={filaTotales && totales ? [totales] : undefined}
           getRowClass={
             claseFila
               ? (p: RowClassParams<T>) =>
-                  p.node.rowPinned || !p.data ? undefined : claseFila(p.data)
+                  (p.data ? claseFila(p.data) : undefined)
               : undefined
           }
-          onModelUpdated={filaTotales ? alActualizarModelo : undefined}
           // Sin el recuadro de foco al hacer clic en una celda (se veía
           // feo y no copiaba nada) -- a cambio no hay navegación por
           // flechas dentro de la grilla.
@@ -787,7 +729,6 @@ function TablaBase<T>(
           onRowClicked={
             seleccionMultiple
               ? (evento: RowClickedEvent<T>) => {
-                  if (evento.node.rowPinned) return;
                   if (clicEnControlInteractivo(evento.event?.target)) return;
                   evento.node.setSelected(!evento.node.isSelected());
                 }

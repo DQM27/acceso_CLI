@@ -139,10 +139,6 @@ const CLAVES_COLUMNA: Record<string, string> = {
  * `Tabla`) -- a nivel de módulo para que sea una función estable. */
 const idPorUuid = (fila: { uuid: string }) => fila.uuid;
 
-function totalesHistorial(visibles: FilaHistorial[]): Record<string, string> {
-  return { contratista_nombre: `${visibles.length} movimiento(s)` };
-}
-
 export default function Historial() {
   const [filas, setFilas] = useState<FilaHistorial[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -426,7 +422,6 @@ export default function Historial() {
             ref={tablaRef}
             id="historial"
             idFila={idPorUuid}
-            filaTotales={totalesHistorial}
             columnas={columnas}
             filas={filas}
             filtrosPorColumna

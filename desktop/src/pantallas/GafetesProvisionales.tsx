@@ -72,16 +72,6 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
  * `Tabla`) -- a nivel de módulo para que sea una función estable. */
 const idPorUuid = (fila: { uuid: string }) => fila.uuid;
 
-function totalesKofActivos(visibles: FilaGafeteProvisionalActiva[]): Record<string, string> {
-  return { encargado_nombre: `${visibles.length} prestado(s)` };
-}
-
-function totalesKofHistorial(
-  visibles: PrestamoGafeteProvisionalHistorialSitio[],
-): Record<string, string> {
-  return { encargado_nombre: `${visibles.length} préstamo(s)` };
-}
-
 export default function GafetesProvisionales({ refrescarSenal }: { refrescarSenal?: number }) {
   const [vista, setVista] = useState<Vista>("activos");
   const [filasActivos, setFilasActivos] = useState<FilaGafeteProvisionalActiva[]>([]);
@@ -269,7 +259,6 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
               id="gafetes-provisionales-activos"
               nombreExportacion="kof-activos"
               idFila={claveFilaGafeteProvisionalActiva}
-              filaTotales={totalesKofActivos}
               columnas={columnasActivos}
               filas={filasActivos}
               busqueda={busqueda}
@@ -296,7 +285,6 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
               id="gafetes-provisionales-historial"
               nombreExportacion="kof-historial"
               idFila={idPorUuid}
-              filaTotales={totalesKofHistorial}
               columnas={columnasHistorial}
               filas={filasHistorial}
               busqueda={busqueda}
