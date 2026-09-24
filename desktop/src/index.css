@@ -233,7 +233,12 @@ input {
   gap: 0.7rem;
   width: 100%;
   text-align: left;
-  padding: 0.6rem 0.75rem;
+  /* Mismo alto exacto que los controles de la barra de herramientas
+     (`--control-altura`), con el ícono centrado: así el primer ícono del
+     menú queda a la altura de esa barra (ver `.shell-nav` y
+     `.pantalla-cuerpo`; pedido del usuario 2026-09-23). */
+  min-height: var(--control-altura);
+  padding: 0 0.75rem;
   border: none;
   border-radius: var(--radio-chico);
   background: transparent;
@@ -253,7 +258,7 @@ input {
    angosta, no corrido a la izquierda por el padding horizontal normal. */
 .shell-sidebar-colapsada .nav-item {
   justify-content: center;
-  padding: 0.65rem 0;
+  padding: 0;
 }
 
 .nav-item:hover:not(.nav-item-activo) {
@@ -533,7 +538,11 @@ input {
      sin esto la marca de "activo" (`box-shadow` de `.nav-item-activo`)
      queda pegada al borde de la tarjeta. El padding de `.nav-item` (1rem)
      es aparte: el espacio entre ese borde y el ícono/texto de adentro. */
-  padding: 0.75rem 0.375rem 0;
+  /* 0.375rem arriba: con el margen (0.375rem) y el borde (1px) de la
+     tarjeta, el primer ítem arranca a 0.375rem * 2 + 1px del borde
+     superior -- el mismo punto donde `.pantalla-cuerpo` arranca la barra
+     de herramientas, así quedan alineados. */
+  padding: 0.375rem 0.375rem 0;
 }
 
 .chip {
@@ -656,6 +665,10 @@ input {
   flex: 1;
   min-height: 0;
   padding: 0.375rem;
+  /* La barra de herramientas arranca a la misma altura que el primer ícono
+     del menú lateral (margen + borde + espacio interno de la tarjeta, ver
+     `.shell-nav`). */
+  padding-top: calc(0.375rem * 2 + 1px);
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
