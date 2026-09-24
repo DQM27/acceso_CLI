@@ -23,6 +23,17 @@ pub struct Usuario {
     /// de las marcas de tiempo de este crate (`catalogo_actualizado_hasta`,
     /// etc.) -- nunca un timestamp crudo del sistema operativo sin corregir.
     pub password_hash_confirmado_en: Option<String>,
+    /// Sólo tiene sentido junto con `password_hash_confirmado_en`
+    /// (`Some`): `true` cuando el hash que se cacheó ahí todavía era una
+    /// contraseña TEMPORAL (`debe_cambiar_password` en `true` al momento
+    /// del login online que lo cacheó, ver `AppCore::cachear_password_local`)
+    /// que la persona nunca llegó a cambiar antes de quedarse sin
+    /// internet. `AutenticacionService::buscar_candidato` lo propaga en
+    /// `CandidatoAutenticacion::debe_cambiar_password` para que un login
+    /// sin conexión siga exigiendo el cambio en vez de dejarlo pasar --
+    /// hallazgo de auditoría 2026-09-24 (MV-01/DF-03). Un cambio de
+    /// contraseña real (`actualizar_password`) siempre lo vuelve a `false`.
+    pub password_temporal_cacheada: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

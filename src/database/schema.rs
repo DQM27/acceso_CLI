@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 50;
+pub const SCHEMA_VERSION: i64 = 51;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -399,6 +399,11 @@ fn aplicar_migraciones_posteriores_a_29(
     if *version == 49 {
         aplicar_migracion_50(connection)?;
         *version = 50;
+    }
+
+    if *version == 50 {
+        aplicar_migracion_51(connection)?;
+        *version = 51;
     }
 
     Ok(())
@@ -847,6 +852,29 @@ fn aplicar_migracion_50(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_50)?;
     transaction.execute_batch("PRAGMA user_version = 50")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Columna nueva para distinguir un hash CACHEADO (`password_hash_confirmado_en`
+/// no nulo) que corresponde a una contraseña TEMPORAL todavía sin cambiar
+/// (`debe_cambiar_password` en `true` cuando se cacheó, ver
+/// `AppCore::cachear_password_local`) de uno que ya es la contraseña real
+/// del usuario. Hallazgo de auditoría 2026-09-24 (MV-01/DF-03): antes de
+/// esta columna, un login online con la contraseña temporal la dejaba
+/// cacheada igual que cualquier otra, y el siguiente login sin conexión
+/// devolvía `debe_cambiar_password = false` siempre -- el cambio
+/// obligatorio se podía esquivar del todo quedándose sin internet. `0`
+/// (falso) por defecto en todas las filas existentes: un hash ya cacheado
+/// antes de esta migración no tiene forma de saber si era temporal, y
+/// tratarlo como si ya no lo fuera es lo mismo que pasaba hasta ahora --
+/// no empeora nada, sólo dejan de arrastrar el problema los cacheos
+/// nuevos, que sí van a marcar esto correctamente desde el próximo login
+/// online.
+fn aplicar_migracion_51(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_51)?;
+    transaction.execute_batch("PRAGMA user_version = 51")?;
     transaction.commit()?;
     Ok(())
 }
@@ -4154,4 +4182,8 @@ CREATE TABLE prestamos_gafete_provisional_historial_sitio (
 
 CREATE INDEX idx_prestamos_gafete_provisional_historial_sitio_fecha_entrega
 ON prestamos_gafete_provisional_historial_sitio(fecha_hora_entrega);
+";
+
+const MIGRACION_51: &str = r"
+ALTER TABLE usuarios ADD COLUMN password_temporal_cacheada INTEGER NOT NULL DEFAULT 0;
 ";

@@ -25,11 +25,16 @@ pub trait UsuarioRepository {
     /// Ver `Usuario::password_hash_confirmado_en` -- a diferencia de
     /// `actualizar_password` (que deja el hash como permanente, sin
     /// vencimiento), ésta siempre graba una marca de vencimiento real.
+    /// `temporal` es el `Usuario::password_temporal_cacheada` que queda
+    /// grabado junto al hash -- `true` cuando la contraseña que se está
+    /// cacheando todavía no fue cambiada por la persona (login online con
+    /// `debe_cambiar_password` en `true`).
     fn actualizar_password_cacheada(
         &self,
         id: i64,
         password_hash: &str,
         confirmado_en: &str,
+        temporal: bool,
     ) -> Result<(), DatabaseError>;
 
     fn listar(&self) -> Result<Vec<Usuario>, DatabaseError>;
@@ -74,6 +79,7 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<Usuario> {
         rol,
         activo: row.get::<_, i64>(5)? != 0,
         password_hash_confirmado_en: row.get(6)?,
+        password_temporal_cacheada: row.get::<_, i64>(7)? != 0,
     })
 }
 
@@ -94,8 +100,9 @@ fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, D
     connection.execute(
         "
         INSERT INTO usuarios
-            (cedula, nombre, password_hash, rol, activo, uuid, password_hash_confirmado_en)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            (cedula, nombre, password_hash, rol, activo, uuid, password_hash_confirmado_en,
+             password_temporal_cacheada)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
         ",
         params![
             usuario.cedula,
@@ -105,6 +112,7 @@ fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, D
             i64::from(usuario.activo),
             uuid,
             usuario.password_hash_confirmado_en,
+            i64::from(usuario.password_temporal_cacheada),
         ],
     )?;
     let id = connection.last_insert_rowid();
@@ -118,7 +126,7 @@ fn buscar_usuario_en_transaccion(
 ) -> Result<Usuario, DatabaseError> {
     let resultado = transaction.query_row(
         "
-        SELECT id, cedula, nombre, password_hash, rol, activo, password_hash_confirmado_en
+        SELECT id, cedula, nombre, password_hash, rol, activo, password_hash_confirmado_en, password_temporal_cacheada
         FROM usuarios
         WHERE id = ?1
         ",
@@ -229,7 +237,8 @@ impl UsuarioRepository for SqliteUsuarioRepository<'_> {
                 password_hash,
                 rol,
                 activo,
-                password_hash_confirmado_en
+                password_hash_confirmado_en,
+                password_temporal_cacheada
             FROM usuarios
             WHERE cedula = ?1
             ",
@@ -254,7 +263,8 @@ impl UsuarioRepository for SqliteUsuarioRepository<'_> {
                 password_hash,
                 rol,
                 activo,
-                password_hash_confirmado_en
+                password_hash_confirmado_en,
+                password_temporal_cacheada
             FROM usuarios
             WHERE id = ?1
             ",
@@ -310,10 +320,16 @@ impl UsuarioRepository for SqliteUsuarioRepository<'_> {
         // contraseña "de verdad" (ROOT/legado cambiando la suya, o un reset
         // administrativo) siempre deja un hash permanente, nunca uno
         // cacheado con vencimiento -- ver `Usuario::password_hash_confirmado_en`.
-        // La única función que sí graba una marca real es
+        // También limpia `password_temporal_cacheada`: la contraseña que
+        // acaba de quedar activa ya no es "temporal pendiente de cambio",
+        // sea cual sea el estado que tuviera antes -- ver
+        // `Usuario::password_temporal_cacheada`. La única función que sí
+        // graba una marca real (y puede dejarlo en `true`) es
         // `actualizar_password_cacheada`, de abajo.
         let filas = self.connection.execute(
-            "UPDATE usuarios SET password_hash = ?1, password_hash_confirmado_en = NULL WHERE id = ?2",
+            "UPDATE usuarios
+             SET password_hash = ?1, password_hash_confirmado_en = NULL, password_temporal_cacheada = 0
+             WHERE id = ?2",
             params![password_hash, id],
         )?;
         if filas == 0 {
@@ -327,10 +343,13 @@ impl UsuarioRepository for SqliteUsuarioRepository<'_> {
         id: i64,
         password_hash: &str,
         confirmado_en: &str,
+        temporal: bool,
     ) -> Result<(), DatabaseError> {
         let filas = self.connection.execute(
-            "UPDATE usuarios SET password_hash = ?1, password_hash_confirmado_en = ?2 WHERE id = ?3",
-            params![password_hash, confirmado_en, id],
+            "UPDATE usuarios
+             SET password_hash = ?1, password_hash_confirmado_en = ?2, password_temporal_cacheada = ?3
+             WHERE id = ?4",
+            params![password_hash, confirmado_en, i64::from(temporal), id],
         )?;
         if filas == 0 {
             return Err(DatabaseError::UsuarioNoEncontrado);
@@ -348,7 +367,8 @@ impl UsuarioRepository for SqliteUsuarioRepository<'_> {
                 password_hash,
                 rol,
                 activo,
-                password_hash_confirmado_en
+                password_hash_confirmado_en,
+                password_temporal_cacheada
             FROM usuarios
             ORDER BY nombre
             ",

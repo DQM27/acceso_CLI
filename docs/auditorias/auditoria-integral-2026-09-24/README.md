@@ -215,8 +215,8 @@ release sin versión fija; la configuración de zizmor suprime sus 61 hallazgos.
 | Elemento | Ubicación | Acción sugerida |
 |---|---|---|
 | Módulo `lenguaje_comandos` completo (≈1 430 líneas + 38 tests) y `AppCore::buscar_auditoria` | `src/lenguaje_comandos/` | Eliminar (HT-02) |
-| `fijar_password_inicial` — fija la contraseña de cualquier cuenta sólo con la cédula | núcleo / nube | **Eliminar primero**: es peligroso si alguien lo reconecta (NR-07, NS-25) |
-| `resetear_password_root`, `cambiar_mi_password_con_hash` y otras 9 funciones `pub` sin consumidor; 13 usadas sólo por tests | núcleo | Eliminar o bajar a `pub(crate)` (HT-03, NR-07) |
+| ✅ `fijar_password_inicial` — fijaba la contraseña de cualquier cuenta sólo con la cédula | núcleo / nube | Eliminada (NR-07, NS-25) |
+| ✅ `resetear_password_root`, `listar_roots_activos`, `preparar_cambio_password_propio`, `cambiar_mi_password_con_hash` | núcleo | Eliminadas (HT-03, NR-07). Quedan otras funciones `pub` sin consumidor de la misma tabla (HT-03) sin revisar todavía. |
 | `verificar_token_offline`, `obtener_jwks`, varios métodos de `application/nube.rs` | `src/nube/`, `src/application/nube.rs` | Eliminar (NS-25) |
 | 12 métodos UniFFI sin uso, incluido `guardar_secreto_dispositivo` (formato débil derivado de `ANDROID_ID`) | `mobile/rust-core/src/lib.rs` | Eliminar (MV-11) |
 | Comando `buscar_encargados_ruta_provisional` (registrado, nunca invocado) y `cambiar_mi_password` | `desktop/src-tauri` | Eliminar (DT-21, DF-17) |
@@ -269,8 +269,14 @@ comentarios de seguridad describen un cifrado móvil que no existe.
 2. NS-05: confirmar en el dashboard de Supabase que el registro público está desactivado.
 3. NS-02: "Eliminar" dispositivo también revoca.
 4. ✅ DT-03: `tauri-plugin-updater` → 2.12.0 (commit `49c7268`).
-5. MV-01 / DF-03: no cachear la contraseña temporal y exigir el cambio en el backend.
-6. Eliminar `fijar_password_inicial` y las demás APIs de contraseña sin uso.
+5. ✅ MV-01 / DF-03 / MV-02: nueva columna `usuarios.password_temporal_cacheada`
+   (migración 51) para que el caché de login offline sepa si la contraseña
+   era temporal; propagada en núcleo, escritorio y móvil, con el refresco
+   de caché en `cambiar_password_supabase` de móvil que faltaba (MV-02).
+6. ✅ Eliminadas `fijar_password_inicial`, `resetear_password_root`,
+   `listar_roots_activos`, `preparar_cambio_password_propio` y
+   `cambiar_mi_password_con_hash` -- sin llamadores reales, confirmado con
+   `grep` en núcleo, escritorio, móvil y tests antes de borrar.
 
 **Corto plazo (2-4 semanas)**
 7. NR-01 / MV-03: cifrar la base Android y agregar `dataExtractionRules`.
