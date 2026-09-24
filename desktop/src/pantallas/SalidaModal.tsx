@@ -17,6 +17,12 @@ const MAX_RESULTADOS = 4;
 
 type ModoBusqueda = "nombre" | "gafete";
 
+/** "GAFETE 2" / "S/G" (sin gafete), en mayúsculas como el resto de los
+ * datos del contratista. */
+export function textoGafete(numero: number | null): string {
+  return numero == null ? "S/G" : `GAFETE ${numero}`;
+}
+
 const OPCIONES_MODO: OpcionSegmentada<ModoBusqueda>[] = [
   { valor: "nombre", Icono: UserSearch, titulo: "Nombre o cédula" },
   { valor: "gafete", Icono: IdCard, titulo: "Gafete" },
@@ -178,32 +184,31 @@ export default function SalidaModal({
         }}
         style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
       >
-        {/* Modo de búsqueda: antes un checkbox chico "Por gafete" al lado
-            del campo, difícil de atinar (reportado por el usuario
-            2026-09-23). Ahora un selector grande de dos opciones, a lo
-            ancho, con el relleno deslizante del resto de la app. */}
-        <SegmentadoOpciones
-          opciones={OPCIONES_MODO}
-          valor={modoGafete ? "gafete" : "nombre"}
-          onCambiar={(modo) => cambiarModo(modo === "gafete")}
-          etiqueta="Buscar por"
-          conTexto
-          anchoCompleto
-        />
-
-        <div ref={campoRef}>
-          <label className="campo">
-            {modoGafete ? "Números de gafete" : "Buscar por cédula o nombre"}
-            <input
-              ref={buscadorRef}
-              value={texto}
-              onChange={(evento) => cambiarTexto(evento.target.value)}
-              onKeyDown={manejarTeclaBuscador}
-              autoFocus
-              inputMode={modoGafete ? "numeric" : "text"}
-              placeholder={modoGafete ? "Ej. 2, 25, 85" : "Cédula o nombre…"}
-            />
-          </label>
+        {/* Modo de búsqueda al lado del buscador, discreto, donde estaba el
+            checkbox "Por gafete" -- pero como botones de ícono, fáciles de
+            pulsar (el checkbox era difícil de atinar; pedido del usuario
+            2026-09-23). Mismo relleno deslizante del resto de la app. */}
+        <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-end" }}>
+          <div ref={campoRef} style={{ flex: 1 }}>
+            <label className="campo">
+              {modoGafete ? "Números de gafete" : "Buscar por cédula o nombre"}
+              <input
+                ref={buscadorRef}
+                value={texto}
+                onChange={(evento) => cambiarTexto(evento.target.value)}
+                onKeyDown={manejarTeclaBuscador}
+                autoFocus
+                inputMode={modoGafete ? "numeric" : "text"}
+                placeholder={modoGafete ? "Ej. 2, 25, 85" : "Cédula o nombre…"}
+              />
+            </label>
+          </div>
+          <SegmentadoOpciones
+            opciones={OPCIONES_MODO}
+            valor={modoGafete ? "gafete" : "nombre"}
+            onCambiar={(modo) => cambiarModo(modo === "gafete")}
+            etiqueta="Buscar por"
+          />
         </div>
 
         {listaNombreVisible && posicionLista && (
@@ -253,7 +258,8 @@ export default function SalidaModal({
                 {seleccion.activo.contratista_nombre}
               </p>
               <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
-                {seleccion.activo.cedula ?? "—"} · {seleccion.activo.empresa_nombre ?? "—"}
+                {seleccion.activo.cedula ?? "—"} · {seleccion.activo.empresa_nombre ?? "—"} ·{" "}
+                {textoGafete(seleccion.activo.gafete_numero)}
               </p>
             </div>
             <button type="submit" className="boton boton-primario" disabled={enviando}>
@@ -270,6 +276,9 @@ export default function SalidaModal({
                 flexDirection: "column",
                 border: "1px solid var(--borde)",
                 borderRadius: "var(--radio-chico)",
+                // Mismo fondo oscuro que la ficha del modo nombre, pero en
+                // filas compactas: acá pueden ser varios gafetes a la vez.
+                background: "var(--campo-fondo)",
                 overflow: "hidden",
               }}
             >
@@ -282,19 +291,23 @@ export default function SalidaModal({
                       display: "flex",
                       justifyContent: "space-between",
                       gap: "0.75rem",
-                      padding: "0.5rem 0.8rem",
-                      borderBottom: "1px solid var(--borde)",
+                      padding: "0.6rem 0.85rem",
+                      borderTop: indice > 0 ? "1px solid var(--borde)" : undefined,
                       fontSize: "0.9rem",
                     }}
                   >
-                    <span style={{ color: "var(--muted)" }}>Gafete {numero}</span>
+                    {/* Primero quién (nombre y empresa), después el gafete
+                        -- pedido del usuario 2026-09-23. */}
                     {activo ? (
-                      <span style={{ color: "var(--texto)" }}>
+                      <span style={{ color: "var(--texto)", fontWeight: 600 }}>
                         {activo.contratista_nombre} · {activo.empresa_nombre}
                       </span>
                     ) : (
                       <span style={{ color: "var(--error)" }}>Sin ingreso activo</span>
                     )}
+                    <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>
+                      {textoGafete(numero)}
+                    </span>
                   </div>
                 );
               })}

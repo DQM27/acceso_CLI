@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coincideTexto } from "./SalidaModal";
+import { coincideTexto, textoGafete } from "./SalidaModal";
 import type { FilaActiva, FilaLocal, FilaRemota } from "../api";
 
 function activo(overrides: Partial<FilaLocal> = {}): FilaActiva {
@@ -74,5 +74,12 @@ describe("coincideTexto", () => {
   it("una fila remota sin cédula (nube no la mandó) no rompe la búsqueda", () => {
     expect(coincideTexto(remoto({ cedula: null }), "0847")).toBe(false);
     expect(coincideTexto(remoto({ cedula: null, contratista_nombre: "Persona Remota" }), "remota")).toBe(true);
+  });
+});
+
+describe("textoGafete", () => {
+  it("muestra el numero en mayusculas o S/G sin gafete", () => {
+    expect(textoGafete(2)).toBe("GAFETE 2");
+    expect(textoGafete(null)).toBe("S/G");
   });
 });

@@ -31,23 +31,4 @@ describe("SegmentadoOpciones", () => {
 
     expect(onCambiar).toHaveBeenCalledWith("historial");
   });
-
-  it("con texto muestra el nombre de cada opción y se elige tocándolo", () => {
-    const onCambiar = vi.fn();
-    render(
-      <SegmentadoOpciones
-        opciones={opciones}
-        valor="activos"
-        onCambiar={onCambiar}
-        etiqueta="Vista"
-        conTexto
-        anchoCompleto
-      />,
-    );
-
-    fireEvent.click(screen.getByText("Historial"));
-
-    expect(onCambiar).toHaveBeenCalledWith("historial");
-    expect(screen.getByRole("group", { name: "Vista" }).style.width).toBe("100%");
-  });
 });

@@ -379,22 +379,6 @@ input {
   transition: color 0.4s ease;
 }
 
-/* Con texto al lado del ícono (ej. modo de búsqueda del modal de Salida):
-   opciones más altas y con la letra de los controles, para que sean un
-   blanco fácil de pulsar. */
-.segmentado-con-texto button {
-  gap: 0.45rem;
-  min-height: calc(var(--control-altura) + 6px);
-  padding: 0 0.9rem;
-  font-family: var(--fuente);
-  font-size: var(--fuente-control);
-  white-space: nowrap;
-}
-
-.segmentado-con-texto button:not([aria-pressed="true"]) {
-  color: var(--texto);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .segmentado-indicador {
     transition: none;
