@@ -44,7 +44,7 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
 
 /**
  * Pantalla operativa de proveedores -- mismo patrón que Rutas.tsx: grilla de
- * "activos" + botón "+ Ingreso" que abre el registro en un modal, y un botón
+ * "activos" + botón "+ Nuevo" que abre el registro en un modal, y un botón
  * directo "Salida" por fila. `refrescarSenal` (de `Shell`) recarga sola
  * cuando llega cualquier sincronización, igual que Activos/Rutas. La lista
  * de activos fusiona locales + los que otro dispositivo del sitio tiene
@@ -251,7 +251,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
               controles={
                 <>
                   <button type="button" className="boton" onClick={() => setModalAbierto(true)}>
-                    + Ingreso
+                    + Nuevo
                   </button>
                   <div className="campo" style={{ flex: "0 1 16rem" }}>
                     <input
