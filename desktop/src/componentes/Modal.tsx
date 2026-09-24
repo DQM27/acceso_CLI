@@ -23,7 +23,7 @@ export default function Modal({
   /** Fija el borde superior en vez de centrar -- para modales que crecen
    * al elegir algo (buscador + ficha que se despliega debajo). Centrado, al
    * crecer se movía para arriba y para abajo a la vez, y se veía a los
-   * saltos (reportado 2026-09-24); anclado arriba sólo crece hacia abajo. */
+   * saltos (reportado 2026-09-24); anclado sólo crece hacia abajo. */
   anclarArriba?: boolean;
   children: ReactNode;
 }) {
@@ -44,7 +44,10 @@ export default function Modal({
         display: "flex",
         alignItems: anclarArriba ? "flex-start" : "center",
         justifyContent: "center",
-        paddingTop: anclarArriba ? "12vh" : undefined,
+        // Anclado a media altura menos ~13rem: vacío (sólo el buscador)
+        // queda justo encima del centro, y con la ficha desplegada el
+        // modal completo queda centrado. `max` para ventanas bajas.
+        paddingTop: anclarArriba ? "max(4vh, calc(50vh - 13rem))" : undefined,
         zIndex: 100,
       }}
     >
