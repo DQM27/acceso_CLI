@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { CircleOff, IdCard, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
@@ -19,6 +21,14 @@ const ETIQUETAS_FILTRO_GAFETE: Record<FiltroGafete, string> = {
   sin: "S/G",
 };
 
+/** Ícono y nombre completo (al pasar el mouse) de cada opción -- el
+ * control muestra sólo íconos (pedido del usuario 2026-09-23). */
+const OPCIONES_FILTRO_GAFETE: { valor: FiltroGafete; Icono: LucideIcon; titulo: string }[] = [
+  { valor: "todos", Icono: Users, titulo: "Todos" },
+  { valor: "con", Icono: IdCard, titulo: "Con gafete" },
+  { valor: "sin", Icono: CircleOff, titulo: "Sin gafete (S/G)" },
+];
+
 export function filtrarPorGafete<T extends { gafete_numero: number | null }>(
   filas: readonly T[],
   filtro: FiltroGafete,
@@ -28,9 +38,8 @@ export function filtrarPorGafete<T extends { gafete_numero: number | null }>(
   return filas.filter((fila) => (fila.gafete_numero == null) === sinGafete);
 }
 
-// Duplicado a propósito del `ToggleVista` de `Proveedores.tsx`/
-// `GafetesProvisionales.tsx` -- mismo botón segmentado (queda marcado el
-// elegido), mismo criterio de no compartirlo entre pantallas.
+/** Control segmentado de una sola pieza, sólo íconos (`.segmentado` en
+ * index.css): la opción elegida queda rellena con el color de acento. */
 function ToggleGafete({
   filtro,
   onCambiar,
@@ -39,16 +48,17 @@ function ToggleGafete({
   onCambiar: (filtro: FiltroGafete) => void;
 }) {
   return (
-    <div style={{ display: "flex", gap: "0.25rem" }}>
-      {(Object.keys(ETIQUETAS_FILTRO_GAFETE) as FiltroGafete[]).map((opcion) => (
+    <div className="segmentado" role="group" aria-label="Filtrar por gafete">
+      {OPCIONES_FILTRO_GAFETE.map(({ valor, Icono, titulo }) => (
         <button
-          key={opcion}
+          key={valor}
           type="button"
-          className={opcion === filtro ? "boton boton-primario" : "boton"}
-          disabled={opcion === filtro}
-          onClick={() => onCambiar(opcion)}
+          title={titulo}
+          aria-label={titulo}
+          aria-pressed={valor === filtro}
+          onClick={() => onCambiar(valor)}
         >
-          {ETIQUETAS_FILTRO_GAFETE[opcion]}
+          <Icono size={16} aria-hidden="true" />
         </button>
       ))}
     </div>

@@ -264,6 +264,51 @@ input {
   text-transform: uppercase;
 }
 
+/* Control segmentado de una sola pieza (ej. filtro de gafete en Activos):
+   mismo alto, borde y fondo que `.boton`, con las opciones unidas y la
+   elegida rellena con el acento (`aria-pressed`). */
+.segmentado {
+  display: inline-flex;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-chico);
+  background: var(--panel-suave);
+  overflow: hidden;
+}
+
+.segmentado button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* El borde lo pone el contenedor: 2px menos para medir igual que `.boton`. */
+  min-height: calc(var(--control-altura) - 2px);
+  padding: 0 0.7rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color var(--duracion), color var(--duracion);
+}
+
+.segmentado button + button {
+  border-left: 1px solid var(--borde-fuerte);
+}
+
+.segmentado button:hover:not([aria-pressed="true"]) {
+  background: var(--acento-suave);
+  color: var(--texto);
+}
+
+.segmentado button[aria-pressed="true"] {
+  background: var(--acento-relleno);
+  color: var(--sobre-acento);
+  cursor: default;
+}
+
+.segmentado button:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+
 /* Más de 12 horas adentro (Activos, `claseFilaActiva`): fondo suave de
    advertencia y marca a la izquierda. Único resaltado de filas de la app. */
 .ag-row.fila-mas-de-12-horas {
