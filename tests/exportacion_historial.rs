@@ -219,7 +219,13 @@ fn movimientos_en_orden_omite_uuids_inexistentes() {
 #[test]
 fn movimientos_en_orden_incluye_movimientos_de_otro_dispositivo() {
     let connection = conexion_con_movimientos(3);
-    insertar_remoto(&connection, "remoto-1", instante(21, 10), Some("SWAT"), Some("VEHICULO"));
+    insertar_remoto(
+        &connection,
+        "remoto-1",
+        instante(21, 10),
+        Some("SWAT"),
+        Some("VEHICULO"),
+    );
     // Fila vieja sin tipo/medio: igual sale, sin inventar valores.
     insertar_remoto(&connection, "remoto-2", instante(22, 10), None, None);
     let core = AppCore::new(connection);
@@ -243,8 +249,20 @@ fn movimientos_en_orden_incluye_movimientos_de_otro_dispositivo() {
 #[test]
 fn movimientos_completos_mezcla_remotos_sin_duplicar_los_propios() {
     let connection = conexion_con_movimientos(2);
-    insertar_remoto(&connection, "local-1", instante(20, 8), Some("PRAIND"), Some("CAMINANDO"));
-    insertar_remoto(&connection, "remoto-1", instante(25, 10), Some("PRAIND"), Some("CAMINANDO"));
+    insertar_remoto(
+        &connection,
+        "local-1",
+        instante(20, 8),
+        Some("PRAIND"),
+        Some("CAMINANDO"),
+    );
+    insertar_remoto(
+        &connection,
+        "remoto-1",
+        instante(25, 10),
+        Some("PRAIND"),
+        Some("CAMINANDO"),
+    );
     let core = AppCore::new(connection);
     let filtro = FiltroHistorial::nuevo(instante(1, 0), instante(31, 23));
 
@@ -263,9 +281,27 @@ fn movimientos_completos_mezcla_remotos_sin_duplicar_los_propios() {
 #[test]
 fn exportar_todo_el_rango_incluye_movimientos_de_otro_dispositivo() {
     let connection = conexion_con_movimientos(4);
-    insertar_remoto(&connection, "local-2", instante(20, 8), Some("PRAIND"), Some("CAMINANDO"));
-    insertar_remoto(&connection, "remoto-1", instante(21, 10), Some("PRAIND"), Some("CAMINANDO"));
-    insertar_remoto(&connection, "remoto-fuera", instante(1, 0) - chrono::Duration::days(1), None, None);
+    insertar_remoto(
+        &connection,
+        "local-2",
+        instante(20, 8),
+        Some("PRAIND"),
+        Some("CAMINANDO"),
+    );
+    insertar_remoto(
+        &connection,
+        "remoto-1",
+        instante(21, 10),
+        Some("PRAIND"),
+        Some("CAMINANDO"),
+    );
+    insertar_remoto(
+        &connection,
+        "remoto-fuera",
+        instante(1, 0) - chrono::Duration::days(1),
+        None,
+        None,
+    );
     let core = AppCore::new(connection);
     let filtro = FiltroHistorial::nuevo(instante(1, 0), instante(31, 23));
     let directorio = tempfile::tempdir().unwrap();
@@ -286,8 +322,14 @@ fn exporta_una_tabla_generica_a_xlsx() {
     let directorio = tempfile::tempdir().unwrap();
     let destino = directorio.path().join("proveedores.xlsx");
     let columnas = vec![
-        ColumnaTabla { titulo: "NOMBRE".into(), izquierda: true },
-        ColumnaTabla { titulo: "EMPRESA".into(), izquierda: false },
+        ColumnaTabla {
+            titulo: "NOMBRE".into(),
+            izquierda: true,
+        },
+        ColumnaTabla {
+            titulo: "EMPRESA".into(),
+            izquierda: false,
+        },
     ];
     let filas = vec![
         vec!["Ana Solano".to_owned(), "BELCA".to_owned()],

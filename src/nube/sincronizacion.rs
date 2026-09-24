@@ -7041,11 +7041,9 @@ mod tests {
              \"updated_at\":\"2026-01-01T09:00:05Z\"}]",
         );
 
-        let recibidos = recibir_historial_gafetes_provisionales_del_sitio(
-            &connection,
-            &contexto(&base_url),
-        )
-        .unwrap();
+        let recibidos =
+            recibir_historial_gafetes_provisionales_del_sitio(&connection, &contexto(&base_url))
+                .unwrap();
 
         assert_eq!(recibidos, 1);
         let (nombre, devolucion): (String, Option<String>) = connection

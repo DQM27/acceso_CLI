@@ -341,7 +341,9 @@ pub(crate) fn escribir_tabla_generica(
     filas: &[Vec<String>],
 ) -> Result<(), XlsxError> {
     let encabezado = formato_encabezado();
-    let centrado = con_cebra(con_fuente_base(Format::new().set_align(FormatAlign::Center)));
+    let centrado = con_cebra(con_fuente_base(
+        Format::new().set_align(FormatAlign::Center),
+    ));
     let izquierda = con_cebra(con_fuente_base(Format::new()));
 
     hoja.set_name("Movimientos")?;
@@ -495,8 +497,14 @@ mod tests {
         let directorio = tempfile::tempdir().unwrap();
         let destino = directorio.path().join("tabla.xlsx");
         let columnas = vec![
-            ColumnaTabla { titulo: "NOMBRE".into(), izquierda: true },
-            ColumnaTabla { titulo: "GAFETE".into(), izquierda: false },
+            ColumnaTabla {
+                titulo: "NOMBRE".into(),
+                izquierda: true,
+            },
+            ColumnaTabla {
+                titulo: "GAFETE".into(),
+                izquierda: false,
+            },
         ];
         // La segunda fila trae una celda menos: se escribe vacía, no falla.
         let filas = vec![

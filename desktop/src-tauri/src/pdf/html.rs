@@ -182,8 +182,13 @@ pub fn generar_html_tabla(
 
     let mut encabezados = String::new();
     for columna in columnas {
-        write!(encabezados, "<th{}>{}</th>", clase(columna), escapar(&columna.titulo))
-            .expect("escribir en String no falla");
+        write!(
+            encabezados,
+            "<th{}>{}</th>",
+            clase(columna),
+            escapar(&columna.titulo)
+        )
+        .expect("escribir en String no falla");
     }
 
     let mut cuerpo = String::new();
@@ -197,7 +202,13 @@ pub fn generar_html_tabla(
         cuerpo.push_str("</tr>");
     }
 
-    documento(titulo, &encabezados, &cuerpo, generado_por, filtro_descripcion)
+    documento(
+        titulo,
+        &encabezados,
+        &cuerpo,
+        generado_por,
+        filtro_descripcion,
+    )
 }
 
 /// Esqueleto común de los PDF (encabezado con título, filtro, quién lo
@@ -347,8 +358,14 @@ mod tests {
     #[test]
     fn tabla_generica_usa_su_titulo_y_escapa_los_datos() {
         let columnas = vec![
-            ColumnaTabla { titulo: "NOMBRE".into(), izquierda: true },
-            ColumnaTabla { titulo: "GAFETE".into(), izquierda: false },
+            ColumnaTabla {
+                titulo: "NOMBRE".into(),
+                izquierda: true,
+            },
+            ColumnaTabla {
+                titulo: "GAFETE".into(),
+                izquierda: false,
+            },
         ];
         let filas = vec![vec!["Ana <Solano>".to_owned(), "S/G".to_owned()]];
         let html = generar_html_tabla(

@@ -220,14 +220,16 @@ pub fn movimientos_completos_con_conexion(
 ) -> Result<Vec<MovimientoExportable>, ExportarHistorialError> {
     let locales = buscar_historial_completo_con_conexion(connection, filtro)?.items;
     let uuids_locales: HashSet<String> = locales.iter().map(|m| m.uuid.clone()).collect();
-    let mut movimientos: Vec<MovimientoExportable> =
-        locales.into_iter().map(MovimientoExportable::from).collect();
+    let mut movimientos: Vec<MovimientoExportable> = locales
+        .into_iter()
+        .map(MovimientoExportable::from)
+        .collect();
     movimientos.extend(movimientos_del_sitio_con_conexion(
         connection,
         filtro,
         &uuids_locales,
     )?);
-    movimientos.sort_by(|a, b| b.fecha_hora_ingreso.cmp(&a.fecha_hora_ingreso));
+    movimientos.sort_by_key(|m| std::cmp::Reverse(m.fecha_hora_ingreso));
     Ok(movimientos)
 }
 
@@ -328,7 +330,9 @@ pub fn exportar_historial_seleccion_con_conexion(
     // retener nada. El tamaño de lo que se retiene está acotado por
     // `uuids.len()`, no por el total del historial.
     let ordenados: Option<Vec<MovimientoExportable>> = match uuids {
-        Some(uuids) => Some(movimientos_en_orden_con_conexion(connection, filtro, uuids)?),
+        Some(uuids) => Some(movimientos_en_orden_con_conexion(
+            connection, filtro, uuids,
+        )?),
         None => None,
     };
 
@@ -478,6 +482,12 @@ impl AppCore {
         columnas: &[ColumnaHistorial],
         destino: &Path,
     ) -> Result<usize, ExportarHistorialError> {
-        exportar_historial_seleccion_con_conexion(&self.connection, filtro, uuids, columnas, destino)
+        exportar_historial_seleccion_con_conexion(
+            &self.connection,
+            filtro,
+            uuids,
+            columnas,
+            destino,
+        )
     }
 }

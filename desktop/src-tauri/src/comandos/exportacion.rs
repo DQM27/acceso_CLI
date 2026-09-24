@@ -77,8 +77,13 @@ pub async fn exportar_tabla_pdf(
     if columnas.is_empty() {
         return Err("Seleccione al menos una columna".to_owned());
     }
-    let html =
-        pdf::html::generar_html_tabla(&titulo, &columnas, &filas, &sesion.nombre, &filtro_descripcion);
+    let html = pdf::html::generar_html_tabla(
+        &titulo,
+        &columnas,
+        &filas,
+        &sesion.nombre,
+        &filtro_descripcion,
+    );
     let destino = PathBuf::from(destino);
     let respaldo = RespaldoDestino::apartar(&destino)?;
     let resultado = pdf::generador::generar_pdf(&app, html, destino).await;

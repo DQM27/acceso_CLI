@@ -1764,7 +1764,9 @@ fn migracion_50_corre_limpia_y_llega_a_schema_version() {
     assert_eq!(version(&connection), SCHEMA_VERSION);
 
     let columnas: Vec<String> = connection
-        .prepare("SELECT name FROM pragma_table_info('prestamos_gafete_provisional_historial_sitio')")
+        .prepare(
+            "SELECT name FROM pragma_table_info('prestamos_gafete_provisional_historial_sitio')",
+        )
         .unwrap()
         .query_map([], |row| row.get(0))
         .unwrap()

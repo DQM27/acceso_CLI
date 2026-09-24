@@ -494,16 +494,12 @@ fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
 pub fn run() {
     let _guardia_sentry = inicializar_sentry();
     let (ruta_base_datos, instancia, clave_base_datos, core) = preparar_nucleo();
+    let estado = GuiState::new(core, instancia, ruta_base_datos, clave_base_datos);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .manage(GuiState::new(
-            core,
-            instancia,
-            ruta_base_datos,
-            clave_base_datos,
-        ))
+        .manage(estado)
         .setup(configurar_arranque)
         .invoke_handler(tauri::generate_handler![
             comandos::autenticacion::requiere_configuracion_inicial,
