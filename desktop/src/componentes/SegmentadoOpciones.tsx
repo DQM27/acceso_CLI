@@ -22,32 +22,50 @@ export default function SegmentadoOpciones<V extends string>({
   valor,
   onCambiar,
   etiqueta,
+  conTexto = false,
+  anchoCompleto = false,
 }: {
   opciones: OpcionSegmentada<V>[];
   valor: V;
   onCambiar: (valor: V) => void;
   /** Nombre del grupo para el lector de pantalla (ej. "Vista"). */
   etiqueta: string;
+  /** Muestra el título al lado del ícono (ej. el selector de modo del
+   * modal de Salida, donde cada opción tiene que ser un blanco grande y
+   * claro), en vez de sólo el ícono. */
+  conTexto?: boolean;
+  /** Ocupa todo el ancho disponible (opciones repartidas en partes iguales). */
+  anchoCompleto?: boolean;
 }) {
   const indice = Math.max(
     0,
     opciones.findIndex((opcion) => opcion.valor === valor),
   );
-  const estilo = { "--cantidad": opciones.length, "--indice": indice } as CSSProperties;
+  const estilo = {
+    "--cantidad": opciones.length,
+    "--indice": indice,
+    ...(anchoCompleto ? { width: "100%" } : {}),
+  } as CSSProperties;
 
   return (
-    <div className="segmentado segmentado-deslizante" role="group" aria-label={etiqueta} style={estilo}>
+    <div
+      className={`segmentado segmentado-deslizante${conTexto ? " segmentado-con-texto" : ""}`}
+      role="group"
+      aria-label={etiqueta}
+      style={estilo}
+    >
       <span className="segmentado-indicador" aria-hidden="true" />
       {opciones.map(({ valor: opcion, Icono, titulo }) => (
         <button
           key={opcion}
           type="button"
-          title={titulo}
-          aria-label={titulo}
+          title={conTexto ? undefined : titulo}
+          aria-label={conTexto ? undefined : titulo}
           aria-pressed={opcion === valor}
           onClick={() => onCambiar(opcion)}
         >
           <Icono size={16} aria-hidden="true" />
+          {conTexto && <span>{titulo}</span>}
         </button>
       ))}
     </div>

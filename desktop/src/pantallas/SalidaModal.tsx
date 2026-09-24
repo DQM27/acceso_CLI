@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { IdCard, UserSearch } from "lucide-react";
 import Modal from "../componentes/Modal";
+import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
+import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import {
   FilaListaFlotante,
   ListaFlotante,
@@ -11,6 +14,13 @@ import { cerrarFilaActiva, claveFilaActiva, gafetesDe, listarTodosLosActivos, sa
 import type { FilaActiva } from "../api";
 
 const MAX_RESULTADOS = 4;
+
+type ModoBusqueda = "nombre" | "gafete";
+
+const OPCIONES_MODO: OpcionSegmentada<ModoBusqueda>[] = [
+  { valor: "nombre", Icono: UserSearch, titulo: "Nombre o cédula" },
+  { valor: "gafete", Icono: IdCard, titulo: "Gafete" },
+];
 
 export function coincideTexto(activo: FilaActiva, textoBuscado: string): boolean {
   const buscado = textoBuscado.toLowerCase();
@@ -24,16 +34,16 @@ type Seleccion = { tipo: "ninguna" } | { tipo: "elegido"; activo: FilaActiva };
 
 /**
  * Un solo modal para las dos formas de encontrar a quién dar salida — un
- * checkbox junto al buscador cambia cómo se interpreta el mismo campo de
+ * selector "Nombre o cédula / Gafete" sobre el buscador cambia cómo se interpreta el mismo campo de
  * texto, en vez de mantener dos modales casi idénticos (ambos ya
  * necesitaban la misma lista de activos, el mismo "queda abierto tras
  * confirmar", el mismo foco de vuelta al buscador):
  *
- * - Modo normal (desmarcado): busca por cédula o nombre entre los
+ * - Modo "Nombre o cédula": busca por cédula o nombre entre los
  *   ingresos activos — elegir uno expande el panel de confirmación debajo
  *   (mismo patrón que Nuevo Ingreso), Enter/click en "Registrar salida"
  *   confirma esa persona.
- * - Modo gafete (marcado): el texto se interpreta como números de gafete
+ * - Modo "Gafete": el texto se interpreta como números de gafete
  *   separados por coma — Enter confirma TODOS los que coincidan de una,
  *   sin paso de confirmación (el gafete ya es único entre activos).
  *
@@ -98,7 +108,7 @@ export default function SalidaModal({
     setSeleccion({ tipo: "ninguna" });
     setMensaje(null);
     setError(null);
-    // El click en el checkbox se lleva el foco — sin esto, hay que hacer
+    // El click en el selector de modo se lleva el foco — sin esto, hay que hacer
     // un segundo click aparte en el campo antes de poder escribir.
     buscadorRef.current?.focus();
   }
@@ -168,39 +178,31 @@ export default function SalidaModal({
         }}
         style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
       >
-        <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-end" }}>
-          <div ref={campoRef} style={{ flex: 1 }}>
-            <label className="campo">
-              {modoGafete ? "Números de gafete" : "Buscar por cédula o nombre"}
-              <input
-                ref={buscadorRef}
-                value={texto}
-                onChange={(evento) => cambiarTexto(evento.target.value)}
-                onKeyDown={manejarTeclaBuscador}
-                autoFocus
-                inputMode={modoGafete ? "numeric" : "text"}
-                placeholder={modoGafete ? "Ej. 2, 25, 85" : "Cédula o nombre…"}
-              />
-            </label>
-          </div>
+        {/* Modo de búsqueda: antes un checkbox chico "Por gafete" al lado
+            del campo, difícil de atinar (reportado por el usuario
+            2026-09-23). Ahora un selector grande de dos opciones, a lo
+            ancho, con el relleno deslizante del resto de la app. */}
+        <SegmentadoOpciones
+          opciones={OPCIONES_MODO}
+          valor={modoGafete ? "gafete" : "nombre"}
+          onCambiar={(modo) => cambiarModo(modo === "gafete")}
+          etiqueta="Buscar por"
+          conTexto
+          anchoCompleto
+        />
 
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              paddingBottom: "0.6rem",
-              color: "var(--texto)",
-              whiteSpace: "nowrap",
-              fontSize: "0.9rem",
-            }}
-          >
+        <div ref={campoRef}>
+          <label className="campo">
+            {modoGafete ? "Números de gafete" : "Buscar por cédula o nombre"}
             <input
-              type="checkbox"
-              checked={modoGafete}
-              onChange={(evento) => cambiarModo(evento.target.checked)}
+              ref={buscadorRef}
+              value={texto}
+              onChange={(evento) => cambiarTexto(evento.target.value)}
+              onKeyDown={manejarTeclaBuscador}
+              autoFocus
+              inputMode={modoGafete ? "numeric" : "text"}
+              placeholder={modoGafete ? "Ej. 2, 25, 85" : "Cédula o nombre…"}
             />
-            Por gafete
           </label>
         </div>
 
