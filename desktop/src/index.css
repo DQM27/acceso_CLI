@@ -127,6 +127,44 @@ input {
   opacity: 0.6;
 }
 
+/* Modales (`Modal.tsx`): título, etiquetas de campos y botones en
+   mayúsculas -- pedido del usuario 2026-09-23, mismo lenguaje que los
+   encabezados de las grillas y "ACCESO RÁPIDO" del selector de período.
+   Las etiquetas van chicas, grises y un poco espaciadas. Lo que se escribe
+   en los campos, los ejemplos (placeholder) y los mensajes de error dentro
+   de una etiqueta quedan en texto normal: frases en mayúsculas se leen
+   peor. */
+.modal h2 {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.modal .campo {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+}
+
+.modal .campo input,
+.modal .campo select,
+.modal .campo textarea,
+.modal .campo span {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Opciones (radio/checkbox) dentro de un `.campo` -- ej. "Caminando /
+   Vehículo" en Nuevo ingreso: en mayúsculas como el resto, pero con su
+   tamaño normal, son opciones y no etiquetas. */
+.modal .campo label {
+  font-size: 0.85rem;
+  letter-spacing: normal;
+}
+
+.modal .boton {
+  text-transform: uppercase;
+}
+
 /* Botón con ícono (lucide-react) + texto opcional al lado — hoy sólo
    "Cerrar sesión". Centrado también cuando sólo lleva ícono (texto
    condicional en `false` desde React, no un `display:none` en CSS). */
