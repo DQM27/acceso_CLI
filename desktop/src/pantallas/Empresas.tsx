@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -102,8 +103,14 @@ export default function Empresas() {
   // final el selector de tipo.
   const controles = (
     <>
-      <button className="boton" onClick={() => setFormularioAbierto("crear")}>
-        + Nueva
+      <button
+        type="button"
+        className="boton boton-icono"
+        title="Nueva empresa"
+        aria-label="Nueva empresa"
+        onClick={() => setFormularioAbierto("crear")}
+      >
+        <Plus size={16} aria-hidden="true" />
       </button>
       <div className="campo" style={{ flex: "0 1 16rem" }}>
         <input

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { CircleOff, IdCard, Users } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
+import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
 import { useAccionBarraEstado, useBarraEstado } from "../contexto/BarraEstadoContexto";
 import { cerrarFilaActiva, claveFilaActiva, listarTodosLosActivos, textoMedioConPlaca } from "../api";
@@ -23,7 +24,7 @@ const ETIQUETAS_FILTRO_GAFETE: Record<FiltroGafete, string> = {
 
 /** Ícono y nombre completo (al pasar el mouse) de cada opción -- el
  * control muestra sólo íconos (pedido del usuario 2026-09-23). */
-const OPCIONES_FILTRO_GAFETE: { valor: FiltroGafete; Icono: LucideIcon; titulo: string }[] = [
+const OPCIONES_FILTRO_GAFETE: OpcionSegmentada<FiltroGafete>[] = [
   { valor: "todos", Icono: Users, titulo: "Todos" },
   { valor: "con", Icono: IdCard, titulo: "Con gafete" },
   { valor: "sin", Icono: CircleOff, titulo: "Sin gafete (S/G)" },
@@ -38,8 +39,7 @@ export function filtrarPorGafete<T extends { gafete_numero: number | null }>(
   return filas.filter((fila) => (fila.gafete_numero == null) === sinGafete);
 }
 
-/** Control segmentado de una sola pieza, sólo íconos (`.segmentado` en
- * index.css): la opción elegida queda rellena con el color de acento. */
+/** Pieza única de íconos con el relleno deslizante (`SegmentadoOpciones`). */
 function ToggleGafete({
   filtro,
   onCambiar,
@@ -48,20 +48,12 @@ function ToggleGafete({
   onCambiar: (filtro: FiltroGafete) => void;
 }) {
   return (
-    <div className="segmentado" role="group" aria-label="Filtrar por gafete">
-      {OPCIONES_FILTRO_GAFETE.map(({ valor, Icono, titulo }) => (
-        <button
-          key={valor}
-          type="button"
-          title={titulo}
-          aria-label={titulo}
-          aria-pressed={valor === filtro}
-          onClick={() => onCambiar(valor)}
-        >
-          <Icono size={16} aria-hidden="true" />
-        </button>
-      ))}
-    </div>
+    <SegmentadoOpciones
+      opciones={OPCIONES_FILTRO_GAFETE}
+      valor={filtro}
+      onCambiar={onCambiar}
+      etiqueta="Filtrar por gafete"
+    />
   );
 }
 

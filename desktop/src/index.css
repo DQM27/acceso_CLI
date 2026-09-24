@@ -314,6 +314,46 @@ input {
   background: var(--acento-hover);
 }
 
+/* Variante para elegir UNA opción (`SegmentadoOpciones.tsx`): todas las
+   opciones miden lo mismo (grilla de columnas iguales) y el relleno de
+   acento es un indicador aparte que se desliza a la elegida en vez de
+   saltar. `--cantidad`/`--indice` los pone el componente. */
+.segmentado-deslizante {
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.segmentado-indicador {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(100% / var(--cantidad));
+  transform: translateX(calc(100% * var(--indice)));
+  background: var(--acento-relleno);
+  transition: transform 0.22s ease;
+  pointer-events: none;
+}
+
+.segmentado-deslizante button {
+  position: relative;
+  z-index: 1;
+}
+
+/* El fondo lo pone el indicador; acá sólo el color del ícono. */
+.segmentado-deslizante button[aria-pressed="true"] {
+  background: transparent;
+  transition: color 0.22s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segmentado-indicador {
+    transition: none;
+  }
+}
+
 /* Deshabilitado (ej. Excel/CSV/PDF mientras se exporta): mismo criterio
    que `.boton:disabled`. */
 .segmentado button:disabled {

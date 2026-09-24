@@ -1,9 +1,10 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { History, UserCheck } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { History, Plus, UserCheck } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
+import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import type { TablaHandle } from "../componentes/Tabla";
 import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
 import BotonesExportacion from "../componentes/BotonesExportacion";
@@ -29,35 +30,18 @@ const ETIQUETAS_VISTA: Record<Vista, string> = {
 // Duplicado a propósito de `Visitas.tsx`/`CatalogoRutas.tsx` -- es puro
 // markup de un botón, no vale la pena compartirlo entre pantallas que no
 // se importan una a otra (ver la convención de App.tsx).
-/** Ícono de cada vista -- los mismos del menú lateral (UserCheck para
- * Activos, History para Historial). */
-const ICONOS_VISTA: Record<Vista, LucideIcon> = {
-  activos: UserCheck,
-  historial: History,
-};
+/** Opciones de vista -- íconos del menú lateral (UserCheck para Activos,
+ * History para Historial). */
+const OPCIONES_VISTA: OpcionSegmentada<Vista>[] = [
+  { valor: "activos", Icono: UserCheck, titulo: ETIQUETAS_VISTA.activos },
+  { valor: "historial", Icono: History, titulo: ETIQUETAS_VISTA.historial },
+];
 
-// Pieza única de íconos (`.segmentado`, como el filtro de gafete de
-// Activos), con el nombre al pasar el mouse -- pedido del usuario
-// 2026-09-23.
+// Pieza única de íconos con el relleno deslizante (`SegmentadoOpciones`),
+// pedido del usuario 2026-09-23.
 function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista) => void }) {
   return (
-    <div className="segmentado" role="group" aria-label="Vista">
-      {(Object.keys(ETIQUETAS_VISTA) as Vista[]).map((opcion) => {
-        const Icono = ICONOS_VISTA[opcion];
-        return (
-          <button
-            key={opcion}
-            type="button"
-            title={ETIQUETAS_VISTA[opcion]}
-            aria-label={ETIQUETAS_VISTA[opcion]}
-            aria-pressed={opcion === vista}
-            onClick={() => onCambiar(opcion)}
-          >
-            <Icono size={16} aria-hidden="true" />
-          </button>
-        );
-      })}
-    </div>
+    <SegmentadoOpciones opciones={OPCIONES_VISTA} valor={vista} onCambiar={onCambiar} etiqueta="Vista" />
   );
 }
 
@@ -276,8 +260,14 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
               busqueda={busqueda}
               controles={
                 <>
-                  <button type="button" className="boton" onClick={() => setModalAbierto(true)}>
-                    + Nuevo
+                  <button
+                    type="button"
+                    className="boton boton-icono"
+                    title="Nuevo ingreso de proveedor"
+                    aria-label="Nuevo ingreso de proveedor"
+                    onClick={() => setModalAbierto(true)}
+                  >
+                    <Plus size={16} aria-hidden="true" />
                   </button>
                   <div className="campo" style={{ flex: "0 1 16rem" }}>
                     <input
