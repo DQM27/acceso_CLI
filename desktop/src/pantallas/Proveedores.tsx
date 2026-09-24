@@ -1,8 +1,10 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
-import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
+import type { TablaHandle } from "../componentes/Tabla";
+import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
+import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   cerrarFilaProveedorActiva,
@@ -70,6 +72,8 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
   // usuario 2026-09-23: el selector en todos los historiales).
   const [desde, setDesde] = useState(() => fechaHaceMeses(6));
   const [hasta, setHasta] = useState("");
+  // Para que los botones de exportación lean lo que muestra la grilla.
+  const tablaHistorialRef = useRef<TablaHandle<HistorialIngresoProveedorRemoto>>(null);
   const [filasActivos, setFilasActivos] = useState<FilaProveedorActiva[]>([]);
   const [filasHistorial, setFilasHistorial] = useState<HistorialIngresoProveedorRemoto[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -272,6 +276,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
             />
           ) : (
             <Tabla<HistorialIngresoProveedorRemoto>
+              ref={tablaHistorialRef}
               cargando={cargando}
               filtrosPorColumna
               id="proveedores-historial"
@@ -297,6 +302,12 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
                       setDesde(nuevoDesde);
                       setHasta(nuevoHasta);
                     }}
+                  />
+                  <BotonesExportacion
+                    tablaRef={tablaHistorialRef}
+                    nombreArchivo="historial-proveedores"
+                    titulo="Historial de Proveedores"
+                    filtroDescripcion={`Filtro: ${textoRangoFecha(desde, hasta)}`}
                   />
                   <ToggleVista vista={vista} onCambiar={setVista} />
                 </>

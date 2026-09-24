@@ -258,16 +258,22 @@ impl ColumnaHistorial {
     }
 }
 
-pub(crate) fn preparar_hoja(
-    hoja: &mut Worksheet,
-    columnas: &[ColumnaHistorial],
-) -> Result<(), XlsxError> {
-    let encabezado = con_fuente_base(
+/// Encabezado de columna de todas las exportaciones a Excel: Arial 10
+/// negrita, centrado, con borde y fondo celeste.
+fn formato_encabezado() -> Format {
+    con_fuente_base(
         Format::new()
             .set_align(FormatAlign::Center)
             .set_border(FormatBorder::Thin)
             .set_background_color("D9EAF7"),
-    );
+    )
+}
+
+pub(crate) fn preparar_hoja(
+    hoja: &mut Worksheet,
+    columnas: &[ColumnaHistorial],
+) -> Result<(), XlsxError> {
+    let encabezado = formato_encabezado();
 
     hoja.set_name("Movimientos")?;
     hoja.set_freeze_panes(1, 0)?;
@@ -308,6 +314,68 @@ pub(crate) fn escribir_movimiento(
                 hoja.write_string_with_format(fila, indice, &valor, &formatos.texto[variante])?;
             }
         }
+    }
+    Ok(())
+}
+
+/// Columna de una tabla genérica a exportar (ver [`escribir_tabla_generica`]):
+/// el título tal cual se ve en la grilla y si el dato va alineado a la
+/// izquierda (texto libre, ej. nombres) o centrado (el resto).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+pub struct ColumnaTabla {
+    pub titulo: String,
+    pub izquierda: bool,
+}
+
+/// Hoja de Excel con cualquier tabla ya formateada como texto -- la usan
+/// las grillas de escritorio que no tienen un exportador propio (historial
+/// de proveedores y de KOF): la grilla manda exactamente lo que muestra
+/// (columnas visibles, filas filtradas y ordenadas, valores ya formateados)
+/// y acá sólo se le da el mismo estilo que al Historial de contratistas
+/// (encabezado, cebra, Arial 10 negrita, autofiltro). El ancho de cada
+/// columna sale del texto más largo, entre 8 y 50 caracteres.
+pub(crate) fn escribir_tabla_generica(
+    hoja: &mut Worksheet,
+    columnas: &[ColumnaTabla],
+    filas: &[Vec<String>],
+) -> Result<(), XlsxError> {
+    let encabezado = formato_encabezado();
+    let centrado = con_cebra(con_fuente_base(Format::new().set_align(FormatAlign::Center)));
+    let izquierda = con_cebra(con_fuente_base(Format::new()));
+
+    hoja.set_name("Movimientos")?;
+    hoja.set_freeze_panes(1, 0)?;
+    for (indice, columna) in columnas.iter().enumerate() {
+        let largo = filas
+            .iter()
+            .filter_map(|fila| fila.get(indice))
+            .map(|valor| valor.chars().count())
+            .chain(std::iter::once(columna.titulo.chars().count()))
+            .max()
+            .unwrap_or(0);
+        let ancho = u32::try_from(largo.clamp(8, 50) + 3).unwrap_or(53);
+        let indice = u16::try_from(indice).unwrap_or(u16::MAX);
+        hoja.set_column_width(indice, f64::from(ancho))?;
+        hoja.write_string_with_format(0, indice, &columna.titulo, &encabezado)?;
+    }
+    for (numero, fila) in filas.iter().enumerate() {
+        let fila_excel = u32::try_from(numero + 1).unwrap_or(u32::MAX);
+        let variante = (fila_excel % 2) as usize;
+        for (indice, columna) in columnas.iter().enumerate() {
+            let valor = fila.get(indice).map_or("", String::as_str);
+            let formato = if columna.izquierda {
+                &izquierda[variante]
+            } else {
+                &centrado[variante]
+            };
+            let indice = u16::try_from(indice).unwrap_or(u16::MAX);
+            hoja.write_string_with_format(fila_excel, indice, valor, formato)?;
+        }
+    }
+    if !columnas.is_empty() {
+        let ultima = u16::try_from(columnas.len() - 1).unwrap_or(u16::MAX);
+        hoja.autofilter(0, 0, u32::try_from(filas.len()).unwrap_or(u32::MAX), ultima)?;
     }
     Ok(())
 }
@@ -420,6 +488,27 @@ mod tests {
         let bytes = std::fs::read(destino).unwrap();
         assert!(bytes.starts_with(b"PK"), "XLSX debe ser un contenedor ZIP");
         assert!(bytes.len() > 1_000, "el libro no debe quedar vacío");
+    }
+
+    #[test]
+    fn escribe_una_tabla_generica_con_filas_mas_cortas_que_las_columnas() {
+        let directorio = tempfile::tempdir().unwrap();
+        let destino = directorio.path().join("tabla.xlsx");
+        let columnas = vec![
+            ColumnaTabla { titulo: "NOMBRE".into(), izquierda: true },
+            ColumnaTabla { titulo: "GAFETE".into(), izquierda: false },
+        ];
+        // La segunda fila trae una celda menos: se escribe vacía, no falla.
+        let filas = vec![
+            vec!["Ana Solano".to_owned(), "S/G".to_owned()],
+            vec!["Beto Rojas".to_owned()],
+        ];
+        let mut libro = rust_xlsxwriter::Workbook::new();
+        escribir_tabla_generica(libro.add_worksheet(), &columnas, &filas).unwrap();
+        libro.save(&destino).unwrap();
+
+        let bytes = std::fs::read(destino).unwrap();
+        assert!(bytes.starts_with(b"PK"), "XLSX debe ser un contenedor ZIP");
     }
 
     #[test]

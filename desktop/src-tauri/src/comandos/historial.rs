@@ -205,13 +205,13 @@ pub fn exportar_historial(
 /// éxito; si nunca se llama (error, `?` temprano), el `Drop` lo restaura.
 /// También evita chocar con el chequeo de `exportar_historial_seleccion`
 /// (pensado para quien llama sin este paso previo, ej. la TUI).
-struct RespaldoDestino {
+pub(crate) struct RespaldoDestino {
     original: PathBuf,
     respaldo: Option<PathBuf>,
 }
 
 impl RespaldoDestino {
-    fn apartar(destino: &std::path::Path) -> Result<Self, String> {
+    pub(crate) fn apartar(destino: &std::path::Path) -> Result<Self, String> {
         let respaldo = if destino.exists() {
             let nombre = format!(
                 ".{}.bak-{}",
@@ -233,7 +233,7 @@ impl RespaldoDestino {
         })
     }
 
-    fn confirmar(mut self) {
+    pub(crate) fn confirmar(mut self) {
         if let Some(respaldo) = self.respaldo.take() {
             let _ = std::fs::remove_file(respaldo);
         }

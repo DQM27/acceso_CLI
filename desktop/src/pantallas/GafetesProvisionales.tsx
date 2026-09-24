@@ -1,8 +1,10 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
-import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
+import type { TablaHandle } from "../componentes/Tabla";
+import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
+import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   cerrarFilaGafeteProvisionalActiva,
@@ -80,6 +82,8 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
   // usuario 2026-09-23: el selector en todos los historiales).
   const [desde, setDesde] = useState(() => fechaHaceMeses(6));
   const [hasta, setHasta] = useState("");
+  // Para que los botones de exportación lean lo que muestra la grilla.
+  const tablaHistorialRef = useRef<TablaHandle<PrestamoGafeteProvisionalHistorialSitio>>(null);
   const [filasActivos, setFilasActivos] = useState<FilaGafeteProvisionalActiva[]>([]);
   const [filasHistorial, setFilasHistorial] = useState<PrestamoGafeteProvisionalHistorialSitio[]>(
     [],
@@ -285,6 +289,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
             />
           ) : (
             <Tabla<PrestamoGafeteProvisionalHistorialSitio>
+              ref={tablaHistorialRef}
               cargando={cargando}
               filtrosPorColumna
               id="gafetes-provisionales-historial"
@@ -310,6 +315,12 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
                       setDesde(nuevoDesde);
                       setHasta(nuevoHasta);
                     }}
+                  />
+                  <BotonesExportacion
+                    tablaRef={tablaHistorialRef}
+                    nombreArchivo="historial-kof"
+                    titulo="Historial de Gafetes Provisionales KOF"
+                    filtroDescripcion={`Filtro: ${textoRangoFecha(desde, hasta)}`}
                   />
                   <ToggleVista vista={vista} onCambiar={setVista} />
                 </>

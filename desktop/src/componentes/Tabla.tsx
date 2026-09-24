@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Funnel, RotateCcw, UnfoldHorizontal } from "lucide-react";
 import type {
   ColDef,
+  Column,
   GetRowIdParams,
   ITooltipParams,
   RowClassParams,
@@ -26,6 +27,7 @@ import { useUsuarioId } from "../contexto/SesionContexto";
 import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
 import FiltroFechaTabla from "./FiltroFechaTabla";
 import { guardarCsv } from "../api/exportacion";
+import type { ColumnaDatosTabla } from "../api/exportacion";
 
 /**
  * Tema y comportamiento compartido de TODAS las tablas de la app — un solo
@@ -145,6 +147,13 @@ export function textoTooltip({ valueFormatted, value }: ITooltipParams): string 
   if (typeof value === "string" && value !== "") return value;
   if (typeof value === "number") return String(value);
   return undefined;
+}
+
+/** Columna exportable: tiene un dato (`field` o `valueGetter`) -- deja
+ * afuera las de botones ("Salida") y la de casillas de selección. */
+function columnaConDato(columna: Column): boolean {
+  const definicion = columna.getColDef();
+  return definicion.field !== undefined || typeof definicion.valueGetter === "function";
 }
 
 /** Un clic dentro de un botón, interruptor o campo de la celda no debe
@@ -312,6 +321,17 @@ export interface TablaHandle<T> {
    * archivo, sin extensión. La pantalla pone su propio botón (hoy sólo
    * Historial, junto a Excel/PDF -- pedido del usuario 2026-09-23). */
   exportarCsv: (nombre: string) => Promise<void>;
+  /** Lo que la grilla muestra ahora, listo para exportar (Excel/PDF de
+   * `BotonesExportacion`): columnas visibles con dato (sin botones ni
+   * casillas), en su orden real, con el título en mayúsculas como se ve; y
+   * las filas filtradas y ordenadas con cada valor ya formateado
+   * ("23/09/2026", "S/G"...). */
+  datosVisibles: () => DatosTabla;
+}
+
+export interface DatosTabla {
+  columnas: ColumnaDatosTabla[];
+  filas: string[][];
 }
 
 function TablaBase<T>(
@@ -360,21 +380,6 @@ function TablaBase<T>(
     return () => document.removeEventListener("mousedown", alHacerClicAfuera);
   }, [selectorAbierto, selectorRef]);
 
-  useImperativeHandle(ref, () => ({
-    filasFiltradas: () => {
-      const resultado: T[] = [];
-      apiRef.current?.forEachNodeAfterFilter((nodo) => {
-        if (nodo.data) resultado.push(nodo.data);
-      });
-      return resultado;
-    },
-    columnasVisibles: () =>
-      (apiRef.current?.getColumnState() ?? [])
-        .filter((columna) => !columna.hide)
-        .map((columna) => columna.colId),
-    exportarCsv,
-  }));
-
   const conFiltro = filtrosPorColumna === true && filtrosVisibles;
 
   // `claseFila` puede depender del reloj (ej. "más de 12 horas adentro"):
@@ -415,10 +420,7 @@ function TablaBase<T>(
     // Sólo columnas con dato (no las de botones ni la de casillas).
     const columnKeys = api
       .getAllDisplayedColumns()
-      .filter((columna) => {
-        const definicion = columna.getColDef();
-        return definicion.field !== undefined || typeof definicion.valueGetter === "function";
-      })
+      .filter(columnaConDato)
       .map((columna) => columna.getColId());
     if (columnKeys.length === 0) {
       toast.error("No hay columnas visibles para exportar.");
@@ -447,6 +449,47 @@ function TablaBase<T>(
       toast.error(String(error));
     }
   }
+
+  // Después de `exportarCsv`: el mango la expone y la regla de React no
+  // admite usarla antes de su declaración.
+  useImperativeHandle(ref, () => ({
+    filasFiltradas: () => {
+      const resultado: T[] = [];
+      apiRef.current?.forEachNodeAfterFilter((nodo) => {
+        if (nodo.data) resultado.push(nodo.data);
+      });
+      return resultado;
+    },
+    columnasVisibles: () =>
+      (apiRef.current?.getColumnState() ?? [])
+        .filter((columna) => !columna.hide)
+        .map((columna) => columna.colId),
+    exportarCsv,
+    datosVisibles: () => {
+      const api = apiRef.current;
+      if (!api) return { columnas: [], filas: [] };
+      const visibles = api.getAllDisplayedColumns().filter(columnaConDato);
+      const columnas = visibles.map((columna) => {
+        const definicion = columna.getColDef();
+        const estilo = definicion.cellStyle as { textAlign?: string } | undefined;
+        return {
+          titulo: (definicion.headerName ?? columna.getColId()).toUpperCase(),
+          izquierda: typeof estilo === "object" && estilo?.textAlign === "left",
+        };
+      });
+      const filas: string[][] = [];
+      api.forEachNodeAfterFilterAndSort((nodo) => {
+        if (!nodo.data) return;
+        filas.push(
+          visibles.map((columna) => {
+            const valor: unknown = api.getCellValue({ rowNode: nodo, colKey: columna, useFormatter: true });
+            return valor == null ? "" : String(valor);
+          }),
+        );
+      });
+      return { columnas, filas };
+    },
+  }));
 
   /** Cada columna al ancho de su contenido. Se les saca el `flex` (reparto
    * proporcional del espacio) porque si no, AG Grid lo vuelve a aplicar

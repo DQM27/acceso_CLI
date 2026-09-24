@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 
 use chrono::Utc;
 use control_acceso::historial::exportacion::{
-    ColumnaHistorial, MovimientoExportable, o_guion, texto_medio, tipo_texto,
+    ColumnaHistorial, ColumnaTabla, MovimientoExportable, o_guion, texto_medio, tipo_texto,
 };
 use control_acceso::tiempo::a_costa_rica;
 
@@ -152,6 +152,64 @@ pub fn generar_html(
         filas.push_str("</tr>");
     }
 
+    documento(
+        "Historial de Movimientos",
+        &encabezados,
+        &filas,
+        generado_por,
+        filtro_descripcion,
+    )
+}
+
+/// Mismo documento que [`generar_html`] pero para cualquier tabla ya
+/// formateada del lado de la GUI (títulos y valores como texto, tal cual se
+/// ven en la grilla) -- historial de proveedores y de KOF, que no tienen un
+/// exportador propio. `titulo` va en el encabezado del PDF.
+pub fn generar_html_tabla(
+    titulo: &str,
+    columnas: &[ColumnaTabla],
+    filas: &[Vec<String>],
+    generado_por: &str,
+    filtro_descripcion: &str,
+) -> String {
+    let clase = |columna: &ColumnaTabla| {
+        if columna.izquierda {
+            " class=\"izquierda\""
+        } else {
+            ""
+        }
+    };
+
+    let mut encabezados = String::new();
+    for columna in columnas {
+        write!(encabezados, "<th{}>{}</th>", clase(columna), escapar(&columna.titulo))
+            .expect("escribir en String no falla");
+    }
+
+    let mut cuerpo = String::new();
+    for fila in filas {
+        cuerpo.push_str("<tr>");
+        for (indice, columna) in columnas.iter().enumerate() {
+            let valor = fila.get(indice).map_or("", String::as_str);
+            write!(cuerpo, "<td{}>{}</td>", clase(columna), escapar(valor))
+                .expect("escribir en String no falla");
+        }
+        cuerpo.push_str("</tr>");
+    }
+
+    documento(titulo, &encabezados, &cuerpo, generado_por, filtro_descripcion)
+}
+
+/// Esqueleto común de los PDF (encabezado con título, filtro, quién lo
+/// generó y cuándo, más la tabla) -- `encabezados`/`filas` ya vienen
+/// escapados; el resto se escapa acá.
+fn documento(
+    titulo: &str,
+    encabezados: &str,
+    filas: &str,
+    generado_por: &str,
+    filtro_descripcion: &str,
+) -> String {
     let generado_en = a_costa_rica(Utc::now())
         .format("%d/%m/%Y %H:%M")
         .to_string();
@@ -161,13 +219,13 @@ pub fn generar_html(
 <html lang="es">
 <head>
 <meta charset="utf-8" />
-<title>Historial de Movimientos</title>
+<title>{titulo}</title>
 <style>{ESTILO}</style>
 </head>
 <body>
   <header>
     <div>
-      <h1>Historial de Movimientos</h1>
+      <h1>{titulo}</h1>
       <p class="subtitulo">{filtro}</p>
     </div>
     <div class="meta">
@@ -181,6 +239,7 @@ pub fn generar_html(
   </table>
 </body>
 </html>"#,
+        titulo = escapar(titulo),
         filtro = escapar(filtro_descripcion),
         generado_por = escapar(generado_por),
     )
@@ -281,5 +340,28 @@ mod tests {
 
         assert_eq!(html.matches("<td>—</td>").count(), 2);
         assert!(html.contains("<td class=\"izquierda\">—</td>"));
+    }
+
+    /// Tabla genérica (historial de proveedores/KOF): título propio,
+    /// alineación por columna y todo escapado.
+    #[test]
+    fn tabla_generica_usa_su_titulo_y_escapa_los_datos() {
+        let columnas = vec![
+            ColumnaTabla { titulo: "NOMBRE".into(), izquierda: true },
+            ColumnaTabla { titulo: "GAFETE".into(), izquierda: false },
+        ];
+        let filas = vec![vec!["Ana <Solano>".to_owned(), "S/G".to_owned()]];
+        let html = generar_html_tabla(
+            "Historial de Proveedores",
+            &columnas,
+            &filas,
+            "Daniel",
+            "Filtro: Hoy",
+        );
+
+        assert!(html.contains("<title>Historial de Proveedores</title>"));
+        assert!(html.contains("<th class=\"izquierda\">NOMBRE</th>"));
+        assert!(html.contains("<td class=\"izquierda\">Ana &lt;Solano&gt;</td>"));
+        assert!(html.contains("<td>S/G</td>"));
     }
 }

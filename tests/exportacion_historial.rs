@@ -2,9 +2,9 @@ use chrono::{NaiveDate, Utc};
 use rusqlite::{Connection, params};
 
 use control_acceso::{
-    application::{AppCore, ExportarHistorialError},
+    application::{AppCore, ExportarHistorialError, exportar_tabla_xlsx},
     database::{queries::ingresos::FiltroHistorial, schema::initialize_database},
-    historial::ColumnaHistorial,
+    historial::{ColumnaHistorial, exportacion::ColumnaTabla},
     models::{medio_ingreso::MedioIngreso, tipo_ingreso::TipoIngreso},
     tiempo::serializar_utc,
 };
@@ -276,4 +276,32 @@ fn exportar_todo_el_rango_incluye_movimientos_de_otro_dispositivo() {
         .unwrap();
 
     assert_eq!(exportados, 5);
+}
+
+/// Tabla genérica (historial de proveedores y de KOF en escritorio): arma
+/// el XLSX, rechaza una tabla sin columnas y nunca pisa un archivo que ya
+/// existe (mismo criterio que el exportador de Historial).
+#[test]
+fn exporta_una_tabla_generica_a_xlsx() {
+    let directorio = tempfile::tempdir().unwrap();
+    let destino = directorio.path().join("proveedores.xlsx");
+    let columnas = vec![
+        ColumnaTabla { titulo: "NOMBRE".into(), izquierda: true },
+        ColumnaTabla { titulo: "EMPRESA".into(), izquierda: false },
+    ];
+    let filas = vec![
+        vec!["Ana Solano".to_owned(), "BELCA".to_owned()],
+        vec!["Beto Rojas".to_owned(), "BOCATA".to_owned()],
+    ];
+
+    assert_eq!(exportar_tabla_xlsx(&columnas, &filas, &destino).unwrap(), 2);
+    assert!(std::fs::read(&destino).unwrap().starts_with(b"PK"));
+    assert!(matches!(
+        exportar_tabla_xlsx(&columnas, &filas, &destino),
+        Err(ExportarHistorialError::DestinoExiste(_))
+    ));
+    assert!(matches!(
+        exportar_tabla_xlsx(&[], &filas, &directorio.path().join("otra.xlsx")),
+        Err(ExportarHistorialError::SinColumnas)
+    ));
 }

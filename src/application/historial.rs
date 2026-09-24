@@ -9,7 +9,8 @@ use crate::database::queries::ingresos::{
     FiltroHistorial, MovimientoIngresoResumen, PaginaHistorial, SqliteIngresosQuery,
 };
 use crate::historial::exportacion::{
-    ColumnaHistorial, FormatosHistorial, MovimientoExportable, escribir_movimiento, preparar_hoja,
+    ColumnaHistorial, ColumnaTabla, FormatosHistorial, MovimientoExportable, escribir_movimiento,
+    escribir_tabla_generica, preparar_hoja,
 };
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::models::tipo_ingreso::TipoIngreso;
@@ -235,23 +236,14 @@ pub fn movimientos_completos_con_conexion(
 /// Medido (`docs/pendientes.md`): armar el XLSX de 100,000 movimientos tarda
 /// ~33 segundos, muy por encima de lo que el respaldo llegó a tardar — este
 /// era el punto realmente bloqueante, no el respaldo.
-pub fn exportar_historial_seleccion_con_conexion(
-    connection: &Connection,
-    filtro: &FiltroHistorial,
-    uuids: Option<&[String]>,
-    columnas: &[ColumnaHistorial],
-    destino: &Path,
-) -> Result<usize, ExportarHistorialError> {
-    const MAX_FILAS_DATOS_XLSX: usize = 1_048_575;
+/// Filas de datos que entran en una hoja de Excel (1.048.576 menos el
+/// encabezado).
+const MAX_FILAS_DATOS_XLSX: usize = 1_048_575;
 
-    if columnas.is_empty() {
-        return Err(ExportarHistorialError::SinColumnas);
-    }
-    if let Some(uuids) = uuids
-        && uuids.len() > MAX_FILAS_DATOS_XLSX
-    {
-        return Err(ExportarHistorialError::DemasiadasFilas(uuids.len()));
-    }
+/// El destino no debe existir (nunca se pisa otro archivo acá; la GUI
+/// aparta el existente antes, ver `RespaldoDestino`) y su carpeta sí.
+/// Devuelve esa carpeta, donde después se arma el archivo temporal.
+fn validar_destino(destino: &Path) -> Result<PathBuf, ExportarHistorialError> {
     if destino.exists() {
         return Err(ExportarHistorialError::DestinoExiste(destino.to_owned()));
     }
@@ -264,6 +256,70 @@ pub fn exportar_historial_seleccion_con_conexion(
             directorio.to_owned(),
         ));
     }
+    Ok(directorio.to_owned())
+}
+
+/// Se escribe junto al destino y sólo se publica al finalizar. Así un
+/// error no deja un XLSX parcial y nunca se reemplaza otro archivo.
+fn guardar_libro(
+    libro: &mut rust_xlsxwriter::Workbook,
+    destino: &Path,
+    directorio: &Path,
+) -> Result<(), ExportarHistorialError> {
+    let temporal = tempfile::Builder::new()
+        .prefix(".historial-")
+        .suffix(".xlsx")
+        .tempfile_in(directorio)?
+        .into_temp_path();
+    libro.save(&temporal)?;
+    temporal.persist_noclobber(destino).map_err(|error| {
+        if error.error.kind() == std::io::ErrorKind::AlreadyExists {
+            ExportarHistorialError::DestinoExiste(destino.to_owned())
+        } else {
+            ExportarHistorialError::Io(error.error)
+        }
+    })?;
+    Ok(())
+}
+
+/// Exporta a XLSX una tabla ya armada del lado de la GUI (títulos y
+/// valores como texto, tal cual se ven en la grilla) -- ver
+/// [`escribir_tabla_generica`]. Para grillas sin exportador propio
+/// (historial de proveedores y de KOF). Devuelve la cantidad de filas.
+pub fn exportar_tabla_xlsx(
+    columnas: &[ColumnaTabla],
+    filas: &[Vec<String>],
+    destino: &Path,
+) -> Result<usize, ExportarHistorialError> {
+    if columnas.is_empty() {
+        return Err(ExportarHistorialError::SinColumnas);
+    }
+    if filas.len() > MAX_FILAS_DATOS_XLSX {
+        return Err(ExportarHistorialError::DemasiadasFilas(filas.len()));
+    }
+    let directorio = validar_destino(destino)?;
+    let mut libro = rust_xlsxwriter::Workbook::new();
+    escribir_tabla_generica(libro.add_worksheet(), columnas, filas)?;
+    guardar_libro(&mut libro, destino, &directorio)?;
+    Ok(filas.len())
+}
+
+pub fn exportar_historial_seleccion_con_conexion(
+    connection: &Connection,
+    filtro: &FiltroHistorial,
+    uuids: Option<&[String]>,
+    columnas: &[ColumnaHistorial],
+    destino: &Path,
+) -> Result<usize, ExportarHistorialError> {
+    if columnas.is_empty() {
+        return Err(ExportarHistorialError::SinColumnas);
+    }
+    if let Some(uuids) = uuids
+        && uuids.len() > MAX_FILAS_DATOS_XLSX
+    {
+        return Err(ExportarHistorialError::DemasiadasFilas(uuids.len()));
+    }
+    let directorio = validar_destino(destino)?;
 
     // Con `uuids` (recorte + orden de la GUI) hace falta juntar primero
     // los movimientos pedidos antes de poder escribirlos en ESE orden —
@@ -345,21 +401,7 @@ pub fn exportar_historial_seleccion_con_conexion(
         )?;
     }
 
-    // Se escribe junto al destino y sólo se publica al finalizar. Así un
-    // error no deja un XLSX parcial y nunca se reemplaza otro archivo.
-    let temporal = tempfile::Builder::new()
-        .prefix(".historial-")
-        .suffix(".xlsx")
-        .tempfile_in(directorio)?
-        .into_temp_path();
-    libro.save(&temporal)?;
-    temporal.persist_noclobber(destino).map_err(|error| {
-        if error.error.kind() == std::io::ErrorKind::AlreadyExists {
-            ExportarHistorialError::DestinoExiste(destino.to_owned())
-        } else {
-            ExportarHistorialError::Io(error.error)
-        }
-    })?;
+    guardar_libro(&mut libro, destino, &directorio)?;
     Ok(exportados)
 }
 
