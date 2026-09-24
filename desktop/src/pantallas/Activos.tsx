@@ -233,6 +233,7 @@ export default function Activos({
 
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaActiva>
+            filtrosPorColumna
             id="activos"
             columnas={columnas}
             filas={filas}

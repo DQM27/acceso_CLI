@@ -185,6 +185,7 @@ export default function Auditoria() {
         )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaAuditoria>
+            filtrosPorColumna
             id="auditoria"
             columnas={columnas}
             filas={filas}

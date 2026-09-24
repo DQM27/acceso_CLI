@@ -23,6 +23,7 @@ const columnasContratista: ColDef<EmpresaResumen>[] = [
     headerName: "Activa",
     flex: 1,
     minWidth: 100,
+    filter: false,
     cellRenderer: InterruptorCelda,
     cellRendererParams: { critico: true },
   },
@@ -35,6 +36,7 @@ const columnasProveedor: ColDef<EmpresaProveedor>[] = [
     headerName: "Activa",
     flex: 1,
     minWidth: 100,
+    filter: false,
     cellRenderer: InterruptorCelda,
     cellRendererParams: { critico: true },
   },
@@ -129,6 +131,7 @@ export default function Empresas() {
         <div style={{ flex: 1, minHeight: 0 }}>
           {tipo === "contratista" ? (
             <Tabla<EmpresaResumen>
+              filtrosPorColumna
               id="empresas"
               columnas={columnasContratista}
               filas={filasContratista}
@@ -138,6 +141,7 @@ export default function Empresas() {
             />
           ) : (
             <Tabla<EmpresaProveedor>
+              filtrosPorColumna
               id="empresas-proveedor"
               columnas={columnasProveedor}
               filas={filasProveedor}

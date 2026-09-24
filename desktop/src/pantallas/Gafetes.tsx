@@ -126,6 +126,7 @@ export default function Gafetes() {
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<GafeteResumen>
+            filtrosPorColumna
             id="gafetes"
             columnas={columnas}
             filas={filas}

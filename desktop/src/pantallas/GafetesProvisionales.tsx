@@ -247,6 +247,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
         <div style={{ flex: 1, minHeight: 0 }}>
           {vista === "activos" ? (
             <Tabla<FilaGafeteProvisionalActiva>
+              filtrosPorColumna
               id="gafetes-provisionales-activos"
               columnas={columnasActivos}
               filas={filasActivos}
@@ -269,6 +270,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
             />
           ) : (
             <Tabla<PrestamoGafeteProvisionalHistorialSitio>
+              filtrosPorColumna
               id="gafetes-provisionales-historial"
               columnas={columnasHistorial}
               filas={filasHistorial}
