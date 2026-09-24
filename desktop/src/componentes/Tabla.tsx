@@ -6,7 +6,7 @@ import { themeQuartz } from "ag-grid-community";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { RotateCcw, UnfoldHorizontal } from "lucide-react";
+import { Funnel, RotateCcw, UnfoldHorizontal } from "lucide-react";
 import type {
   ColDef,
   GetRowIdParams,
@@ -590,6 +590,25 @@ function TablaBase<T>(
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           {accionesDerecha}
 
+          {/* Mostrar/ocultar la fila de filtros por columna: interruptor
+              aparte del grupo de anchos (ésos son acciones, éste queda
+              encendido o apagado -- relleno de acento con los filtros
+              visibles). Antes vivía dentro de "Columnas ▾". */}
+          {filtrosPorColumna && (
+            <div className="segmentado">
+              <button
+                type="button"
+                className="segmentado-interruptor"
+                title={filtrosVisibles ? "Ocultar filtros" : "Mostrar filtros"}
+                aria-label="Filtros por columna"
+                aria-pressed={filtrosVisibles}
+                onClick={alternarFiltrosVisibles}
+              >
+                <Funnel size={16} aria-hidden="true" />
+              </button>
+            </div>
+          )}
+
           {/* Anchos de columna: misma pieza de íconos que el filtro de
               gafete de Activos (`.segmentado`), afuera del menú "Columnas ▾"
               -- pedido del usuario 2026-09-23. */}
@@ -648,19 +667,6 @@ function TablaBase<T>(
                       {columna.headerName ?? clave}
                     </label>
                   ))}
-                {filtrosPorColumna && (
-                  <>
-                    <hr style={{ width: "100%", border: "none", borderTop: "1px solid var(--borde)", margin: "0.2rem 0" }} />
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <input
-                        type="checkbox"
-                        checked={filtrosVisibles}
-                        onChange={alternarFiltrosVisibles}
-                      />
-                      Filtros por columna
-                    </label>
-                  </>
-                )}
               </div>
             </ListaFlotante>
           )}

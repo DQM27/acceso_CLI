@@ -304,6 +304,16 @@ input {
   cursor: default;
 }
 
+/* Interruptor (ej. mostrar/ocultar filtros en Tabla.tsx): a diferencia de
+   una opción elegida, encendido se vuelve a pulsar para apagarlo. */
+.segmentado button.segmentado-interruptor[aria-pressed="true"] {
+  cursor: pointer;
+}
+
+.segmentado button.segmentado-interruptor[aria-pressed="true"]:hover {
+  background: var(--acento-hover);
+}
+
 .segmentado button:focus-visible {
   outline: 2px solid var(--acento);
   outline-offset: -2px;
