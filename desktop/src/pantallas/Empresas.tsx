@@ -98,8 +98,20 @@ export default function Empresas() {
     }
   }
 
+  // Orden pedido por el usuario (2026-09-23): "+ Nueva", el buscador y al
+  // final el selector de tipo.
   const controles = (
     <>
+      <button className="boton" onClick={() => setFormularioAbierto("crear")}>
+        + Nueva
+      </button>
+      <div className="campo" style={{ flex: "0 1 16rem" }}>
+        <input
+          placeholder="Nombre…"
+          value={texto}
+          onChange={(evento) => setTexto(evento.target.value)}
+        />
+      </div>
       <div className="campo" style={{ flex: "0 1 13rem" }}>
         <select
           value={tipo}
@@ -111,16 +123,6 @@ export default function Empresas() {
           <option value="contratista">Empresas (contratistas)</option>
           <option value="proveedor">Empresas proveedoras</option>
         </select>
-      </div>
-      <button className="boton" onClick={() => setFormularioAbierto("crear")}>
-        + Nueva
-      </button>
-      <div className="campo" style={{ flex: "0 1 16rem" }}>
-        <input
-          placeholder="Nombre…"
-          value={texto}
-          onChange={(evento) => setTexto(evento.target.value)}
-        />
       </div>
     </>
   );
