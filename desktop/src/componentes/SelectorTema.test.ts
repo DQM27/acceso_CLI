@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { leerTema, temaDelSistema } from "./SelectorTema";
+import { leerTema, siguienteTema, temaDelSistema } from "./SelectorTema";
 
 const CLAVE_TEMA = "escritorio:tema";
 
@@ -55,5 +55,19 @@ describe("leerTema", () => {
     localStorage.setItem(CLAVE_TEMA, "basura");
     mockearSistema(false);
     expect(leerTema()).toBe("light");
+  });
+
+  it("reconoce Tokyo Night guardado", () => {
+    localStorage.setItem(CLAVE_TEMA, "tokyo-night");
+    mockearSistema(false);
+    expect(leerTema()).toBe("tokyo-night");
+  });
+});
+
+describe("siguienteTema", () => {
+  it("recorre claro → oscuro → Tokyo Night → claro", () => {
+    expect(siguienteTema("light")).toBe("dark");
+    expect(siguienteTema("dark")).toBe("tokyo-night");
+    expect(siguienteTema("tokyo-night")).toBe("light");
   });
 });
