@@ -314,6 +314,37 @@ input {
   background: var(--acento-hover);
 }
 
+/* Capas de "Activos / Historial" (Proveedores, KOF): las dos grillas
+   quedan montadas, una encima de la otra, y el cambio es un fundido
+   cruzado -- la anterior se desvanece mientras aparece la nueva (pedido del
+   usuario 2026-09-23). La oculta deja de recibir clics de inmediato y
+   recién pasa a `visibility: hidden` al terminar el fundido. */
+.capa-vista {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.35s ease;
+}
+
+.capa-vista-oculta {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.35s ease,
+    visibility 0s linear 0.35s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .capa-vista,
+  .capa-vista-oculta {
+    transition: none;
+  }
+}
+
 /* Variante para elegir UNA opción (`SegmentadoOpciones.tsx`): todas las
    opciones miden lo mismo (grilla de columnas iguales) y el relleno de
    acento es un indicador aparte que se desliza a la elegida en vez de

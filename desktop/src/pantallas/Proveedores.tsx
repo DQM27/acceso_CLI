@@ -1,5 +1,4 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 import { toast } from "sonner";
 import { History, Plus, UserCheck } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
@@ -70,17 +69,11 @@ const idPorUuid = (fila: { uuid: string }) => fila.uuid;
  * montadas una encima de la otra y sólo se muestra la elegida. Antes se
  * renderizaba una u otra, y cada cambio destruía la grilla y creaba otra
  * desde cero -- parpadeaba y perdía scroll y filtros (reportado por el
- * usuario 2026-09-23). `visibility` (no `display: none`) a propósito: la
- * oculta conserva su tamaño, así AG Grid no recalcula columnas al volver,
- * y el relleno deslizante de "Activos / Historial" se anima igual. */
-function capaVista(visible: boolean): CSSProperties {
-  return {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    flexDirection: "column",
-    visibility: visible ? "visible" : "hidden",
-  };
+ * usuario 2026-09-23). La oculta conserva su tamaño (no `display: none`),
+ * así AG Grid no recalcula columnas al volver; el cambio es un fundido
+ * cruzado (`.capa-vista` en index.css). */
+function claseCapaVista(visible: boolean): string {
+  return visible ? "capa-vista" : "capa-vista capa-vista-oculta";
 }
 
 export default function Proveedores({ refrescarSenal }: { refrescarSenal?: number }) {
@@ -267,7 +260,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          <div style={capaVista(vista === "activos")}>
+          <div className={claseCapaVista(vista === "activos")}>
             <Tabla<FilaProveedorActiva>
               cargando={cargando}
               filtrosPorColumna
@@ -299,7 +292,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
               accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
             />
           </div>
-          <div style={capaVista(vista === "historial")}>
+          <div className={claseCapaVista(vista === "historial")}>
             <Tabla<HistorialIngresoProveedorRemoto>
               ref={tablaHistorialRef}
               cargando={cargando}
