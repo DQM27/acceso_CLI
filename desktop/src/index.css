@@ -283,13 +283,44 @@ input {
    separa el contenido del borde de la ventana en `.pantalla-cuerpo` — nada
    de margen a la derecha, ese gap ya lo da el padding de `.pantalla-cuerpo`
    (doblarlo ahí se vería asimétrico respecto a los otros tres lados). */
+/* Columna lateral (Sidebar.tsx): cabecera con el botón de colapsar/expandir
+   a la altura de la barra de herramientas y, debajo, la tarjeta del menú a
+   la altura de la grilla. */
+.shell-columna-lateral {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  margin-left: 0.375rem;
+}
+
+/* Misma altura y posición que la barra de herramientas de `Tabla`: arranca
+   donde `.pantalla-cuerpo` (0.375rem * 2 + 1px), mide `--control-altura`
+   y deja debajo el mismo espacio (0.375rem) que separa esa barra de la
+   grilla -- así la tarjeta del menú empieza justo donde empieza la grilla. */
+.shell-cabecera-lateral {
+  display: flex;
+  align-items: center;
+  height: var(--control-altura);
+  margin-top: calc(0.375rem * 2 + 1px);
+  margin-bottom: 0.375rem;
+}
+
+/* Colapsada: el botón centrado en la columna angosta. */
+.shell-columna-lateral-colapsada .shell-cabecera-lateral {
+  justify-content: center;
+}
+
 .shell-sidebar {
   display: flex;
   flex-direction: column;
   /* 15rem -> 12.5rem -> 11.25rem -> acá, valor final. */
   width: 10rem;
+  flex: 1;
+  min-height: 0;
   flex-shrink: 0;
-  margin: 0.375rem 0 0.375rem 0.375rem;
+  /* Margen izquierdo y de arriba ahora en `.shell-columna-lateral` /
+     `.shell-cabecera-lateral`: la tarjeta arranca a la altura de la grilla. */
+  margin: 0 0 0.375rem 0;
   background: var(--panel-lateral);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
@@ -538,10 +569,8 @@ input {
      sin esto la marca de "activo" (`box-shadow` de `.nav-item-activo`)
      queda pegada al borde de la tarjeta. El padding de `.nav-item` (1rem)
      es aparte: el espacio entre ese borde y el ícono/texto de adentro. */
-  /* 0.375rem arriba: con el margen (0.375rem) y el borde (1px) de la
-     tarjeta, el primer ítem arranca a 0.375rem * 2 + 1px del borde
-     superior -- el mismo punto donde `.pantalla-cuerpo` arranca la barra
-     de herramientas, así quedan alineados. */
+  /* 0.375rem arriba antes del primer ítem: la tarjeta ya arranca a la
+     altura de la grilla (ver `.shell-cabecera-lateral`). */
   padding: 0.375rem 0.375rem 0;
 }
 
@@ -665,9 +694,8 @@ input {
   flex: 1;
   min-height: 0;
   padding: 0.375rem;
-  /* La barra de herramientas arranca a la misma altura que el primer ícono
-     del menú lateral (margen + borde + espacio interno de la tarjeta, ver
-     `.shell-nav`). */
+  /* La barra de herramientas arranca a la misma altura que el botón de
+     colapsar/expandir del menú (`.shell-cabecera-lateral`, mismo valor). */
   padding-top: calc(0.375rem * 2 + 1px);
   display: flex;
   flex-direction: column;
