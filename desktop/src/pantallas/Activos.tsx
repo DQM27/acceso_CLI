@@ -8,6 +8,53 @@ import { cerrarFilaActiva, claveFilaActiva, listarTodosLosActivos, textoMedioCon
 import type { FilaActiva } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
+/** Filtro rápido por gafete (pedido del usuario 2026-09-23): ver sólo a
+ * quienes entraron sin gafete ("S/G", `gafete_numero` nulo), sólo a
+ * quienes tienen uno, o a todos. */
+export type FiltroGafete = "todos" | "con" | "sin";
+
+const ETIQUETAS_FILTRO_GAFETE: Record<FiltroGafete, string> = {
+  todos: "Todos",
+  con: "Con gafete",
+  sin: "S/G",
+};
+
+export function filtrarPorGafete<T extends { gafete_numero: number | null }>(
+  filas: readonly T[],
+  filtro: FiltroGafete,
+): T[] {
+  if (filtro === "todos") return [...filas];
+  const sinGafete = filtro === "sin";
+  return filas.filter((fila) => (fila.gafete_numero == null) === sinGafete);
+}
+
+// Duplicado a propósito del `ToggleVista` de `Proveedores.tsx`/
+// `GafetesProvisionales.tsx` -- mismo botón segmentado (queda marcado el
+// elegido), mismo criterio de no compartirlo entre pantallas.
+function ToggleGafete({
+  filtro,
+  onCambiar,
+}: {
+  filtro: FiltroGafete;
+  onCambiar: (filtro: FiltroGafete) => void;
+}) {
+  return (
+    <div style={{ display: "flex", gap: "0.25rem" }}>
+      {(Object.keys(ETIQUETAS_FILTRO_GAFETE) as FiltroGafete[]).map((opcion) => (
+        <button
+          key={opcion}
+          type="button"
+          className={opcion === filtro ? "boton boton-primario" : "boton"}
+          disabled={opcion === filtro}
+          onClick={() => onCambiar(opcion)}
+        >
+          {ETIQUETAS_FILTRO_GAFETE[opcion]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function Activos({
   refrescarSenal,
   onAbrirNuevoIngreso,
@@ -28,8 +75,16 @@ export default function Activos({
   const [seleccionadas, setSeleccionadas] = useState<FilaActiva[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
   const [procesando, setProcesando] = useState(false);
+  const [filtroGafete, setFiltroGafete] = useState<FiltroGafete>("todos");
+  const filasVisibles = useMemo(() => filtrarPorGafete(filas, filtroGafete), [filas, filtroGafete]);
 
-  useBarraEstado(cargando ? "Cargando…" : `${total} adentro`);
+  useBarraEstado(
+    cargando
+      ? "Cargando…"
+      : filtroGafete === "todos"
+        ? `${total} adentro`
+        : `${filasVisibles.length} de ${total} adentro (${ETIQUETAS_FILTRO_GAFETE[filtroGafete]})`,
+  );
 
   const recargar = useCallback(() => {
     // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
@@ -236,10 +291,11 @@ export default function Activos({
             filtrosPorColumna
             id="activos"
             columnas={columnas}
-            filas={filas}
+            filas={filasVisibles}
             busqueda={busqueda}
             seleccionMultiple
             onSeleccionCambia={setSeleccionadas}
+            accionesDerecha={<ToggleGafete filtro={filtroGafete} onCambiar={setFiltroGafete} />}
             controles={
               <>
                 <button className="boton" title="Ctrl+N" onClick={onAbrirNuevoIngreso}>
