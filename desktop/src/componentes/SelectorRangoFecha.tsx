@@ -10,10 +10,11 @@ import { fechaYMD, textoFechaDDMMYYYY } from "../tiempo";
  * mecanismo de posicionamiento/portal de `ListaFlotante` en vez de
  * reinventarlo; el click-afuera para cerrar es lo único nuevo acá.
  *
- * Los cambios quedan en un borrador local (`desdeBorrador`/`hastaBorrador`)
- * hasta "Aplicar" — clickear un preset o tipear en los campos no dispara
- * `onAplicar` todavía, así el usuario puede tocar varias cosas antes de
- * confirmar (o "Cancelar" y no cambiar nada).
+ * Un acceso rápido aplica y cierra en el acto. El rango a mano (campos
+ * Desde/Hasta) queda en un borrador local (`desdeBorrador`/`hastaBorrador`)
+ * hasta "Aplicar" — tipear en los campos no dispara `onAplicar` todavía,
+ * así el usuario puede ajustar las dos fechas antes de confirmar (o
+ * "Cancelar" y no cambiar nada).
  */
 
 /** Mismo texto que muestra el botón "Período: ..." — se exporta para que
@@ -168,7 +169,9 @@ export default function SelectorRangoFecha({
           className="boton boton-icono"
           onClick={alternar}
           aria-expanded={abierto}
-          style={{ minWidth: 280 }}
+          // En mayúsculas (pedido del usuario 2026-09-23). Va en el propio
+          // botón: los botones no heredan `text-transform` del contenedor.
+          style={{ minWidth: 280, textTransform: "uppercase" }}
         >
           <CalendarDays size={16} />
           Período: {etiqueta}
@@ -204,10 +207,13 @@ export default function SelectorRangoFecha({
                     type="button"
                     className="boton"
                     style={{ padding: "0.4rem 0.6rem", fontSize: "0.85rem" }}
+                    // Un acceso rápido aplica y cierra en el acto (pedido del
+                    // usuario 2026-09-23: elegir y después "Aplicar" era un
+                    // paso de más). "Aplicar" queda para el rango a mano.
                     onClick={() => {
                       const rango = preset.calcular(new Date());
-                      setDesdeBorrador(rango.desde);
-                      setHastaBorrador(rango.hasta);
+                      onAplicar(rango.desde, rango.hasta);
+                      setAbierto(false);
                     }}
                   >
                     {preset.etiqueta}
