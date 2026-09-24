@@ -48,7 +48,7 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
 /**
  * Entrega/devolución de gafetes provisionales KOF -- contraparte de
  * escritorio de `PantallaGafetesProvisionales.kt` (mobile). Mismo patrón
- * que Rutas/Proveedores: grilla de "prestados" + botón "+ Entregar" que
+ * que Rutas/Proveedores: grilla de "prestados" + botón "+ Nuevo" que
  * abre el registro en un modal, y un botón "Devolver" por fila -- a
  * diferencia de mobile (tarjeta completa tocable), acá se sigue la
  * convención ya establecida de escritorio (botón de acción en la columna,
@@ -264,7 +264,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
               controles={
                 <>
                   <button type="button" className="boton" onClick={() => setModalAbierto(true)}>
-                    + Entregar
+                    + Nuevo
                   </button>
                   <div className="campo" style={{ flex: "0 1 16rem" }}>
                     <input
