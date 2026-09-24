@@ -9,11 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.PersonAdd
@@ -209,12 +209,15 @@ fun PantallaPrincipal(
                 BotonIconoCuadradoBrisas(onClick = { mostrarNuevoContratista = true }) {
                     Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
                 }
-                val oscuroActual = GestorTema.oscuroForzado ?: isSystemInDarkTheme()
-                BotonIconoCuadradoBrisas(onClick = { GestorTema.alternar(oscuroActual) }) {
-                    Icon(
-                        if (oscuroActual) Icons.Default.LightMode else Icons.Default.DarkMode,
-                        contentDescription = if (oscuroActual) "Cambiar a modo claro" else "Cambiar a modo oscuro",
-                    )
+                // Recorre claro → oscuro → Tokyo Night; el ícono muestra el
+                // tema al que se pasa con el próximo toque.
+                val tema = temaActual()
+                BotonIconoCuadradoBrisas(onClick = { GestorTema.alternar(tema) }) {
+                    when (tema.siguiente()) {
+                        TemaApp.CLARO -> Icon(Icons.Default.LightMode, contentDescription = "Cambiar a modo claro")
+                        TemaApp.OSCURO -> Icon(Icons.Default.DarkMode, contentDescription = "Cambiar a modo oscuro")
+                        TemaApp.TOKYO_NIGHT -> Icon(Icons.Default.AutoAwesome, contentDescription = "Cambiar a Tokyo Night")
+                    }
                 }
                 BotonIconoCuadradoBrisas(
                     onClick = { nubeViewModel.sincronizar() },
