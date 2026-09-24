@@ -306,15 +306,21 @@ input {
   margin-bottom: 0.375rem;
 }
 
-/* Nombre de la app en la cabecera, con el menú abierto: mayúsculas
-   espaciadas en el color de acento, alineado con el texto de los ítems. */
+/* Nombre de la app en la cabecera, con el menú abierto, en el color de
+   acento. Ocupa todo el espacio libre hasta el botón: las letras (una
+   `<span>` cada una, ver Sidebar.tsx) se reparten a lo ancho con
+   `space-between` -- pedido del usuario 2026-09-23, no dejar hueco. No se
+   puede seleccionar: es marca, no texto para copiar. */
 .shell-marca {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
   padding-left: 0.75rem;
+  margin-right: 0.75rem;
   color: var(--acento);
-  font-size: 1rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  user-select: none;
 }
 
 /* Colapsada: el botón centrado en la columna angosta. */

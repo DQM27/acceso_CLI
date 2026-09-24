@@ -128,7 +128,18 @@ export default function Sidebar({
             Texto y no `marca.png`: la imagen tiene fondo blanco y a este
             alto, en tema oscuro, quedaba un cuadro blanco con letras
             diminutas. */}
-        {!colapsado && <span className="shell-marca">Lattis</span>}
+        {/* Letra por letra: `.shell-marca` las reparte a lo ancho, así el
+            nombre llega hasta el botón sin dejar espacio libre, sea cual
+            sea el ancho del menú. */}
+        {!colapsado && (
+          <span className="shell-marca" role="img" aria-label="Lattis">
+            {"LATTIS".split("").map((letra, indice) => (
+              <span key={indice} aria-hidden="true">
+                {letra}
+              </span>
+            ))}
+          </span>
+        )}
         <button
           type="button"
           className="boton boton-icono"
