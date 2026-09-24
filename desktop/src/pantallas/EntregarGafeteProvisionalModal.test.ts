@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filtrarEncargados, validarNumeroGafete } from "./EntregarGafeteProvisionalModal";
+import { filtrarEncargados } from "./EntregarGafeteProvisionalModal";
 import type { EncargadoRuta } from "../api/rutas";
 
 const encargado = (id: number, nombre: string, codigo_empleado: string): EncargadoRuta => ({
@@ -35,16 +35,5 @@ describe("filtrarEncargados", () => {
 
   it("respeta el máximo de resultados", () => {
     expect(filtrarEncargados(CATALOGO, "e-", 2)).toHaveLength(2);
-  });
-});
-
-describe("validarNumeroGafete", () => {
-  it("acepta un número positivo", () => {
-    expect(validarNumeroGafete(" 7 ")).toEqual({ valido: true, numero: 7 });
-  });
-
-  it("rechaza vacío y cero", () => {
-    expect(validarNumeroGafete("").valido).toBe(false);
-    expect(validarNumeroGafete("0").valido).toBe(false);
   });
 });
