@@ -13,16 +13,9 @@ import {
   entregarGafeteProvisional,
   listarTodosLosGafetesProvisionalesActivos,
 } from "../api/gafetesProvisionales";
+import { coincideBusqueda, textoGafete, validarNumeroGafete } from "../busqueda";
 
 const MAX_RESULTADOS = 5;
-
-/** Minúsculas y sin tildes, para que "jose" encuentre a "JOSÉ". */
-function plegar(texto: string): string {
-  return texto
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
-}
 
 /** Encargados cuyo nombre o código de empleado contienen todas las palabras
  * de `texto` (sin distinguir tildes ni mayúsculas). El catálogo es chico y
@@ -33,31 +26,12 @@ export function filtrarEncargados(
   texto: string,
   maximo: number = MAX_RESULTADOS,
 ): EncargadoRuta[] {
-  const partes = plegar(texto).split(/\s+/).filter(Boolean);
-  if (partes.length === 0) return [];
   return encargados
-    .filter((encargado) => {
-      const pajar = plegar(`${encargado.nombre} ${encargado.codigo_empleado}`);
-      return partes.every((parte) => pajar.includes(parte));
-    })
+    .filter((encargado) =>
+      coincideBusqueda(texto, `${encargado.nombre} ${encargado.codigo_empleado}`),
+    )
     .slice(0, maximo);
 }
-
-/** Mismo criterio que `validarGafete` de NuevoIngresoModal, pero acá el
- * gafete siempre es obligatorio. */
-export function validarNumeroGafete(
-  texto: string,
-): { valido: true; numero: number } | { valido: false; mensaje: string } {
-  const recortado = texto.trim();
-  if (!recortado) return { valido: false, mensaje: "El número de gafete es obligatorio" };
-  const numero = Number.parseInt(recortado, 10);
-  if (Number.isNaN(numero) || numero <= 0) {
-    return { valido: false, mensaje: "Ingrese un número de gafete válido" };
-  }
-  return { valido: true, numero };
-}
-
-const textoGafete = (numero: number) => `#${String(numero).padStart(2, "0")}`;
 
 /**
  * Mismo flujo que `NuevoIngresoModal` (pedido del usuario 2026-09-24: el
