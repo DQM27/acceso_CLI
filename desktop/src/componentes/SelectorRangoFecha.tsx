@@ -196,12 +196,12 @@ export default function SelectorRangoFecha({
           {etiquetaCortaRango(desde, hasta)}
         </button>
       </div>
-      {/* Ancho fijo (lo que piden los accesos rápidos en dos columnas) y
-          alineado al borde DERECHO del botón: crece hacia la izquierda,
-          sobre la barra vacía, y nunca tapa los botones de al lado
-          (Excel/CSV/PDF). */}
+      {/* Se abre al costado izquierdo del botón, a su misma altura (pedido
+          del usuario 2026-09-23), así nunca tapa los botones de al lado
+          (Excel/CSV/PDF). Ancho fijo: lo que piden los accesos rápidos en
+          dos columnas, cada uno en una sola línea. */}
       {abierto && posicion && (
-        <ListaFlotante posicion={posicion} ancho={280} alinear="derecha">
+        <ListaFlotante posicion={posicion} ancho={300} direccion="izquierda">
           <div
             ref={popoverRef}
             style={{
@@ -230,8 +230,13 @@ export default function SelectorRangoFecha({
                     type="button"
                     className="boton"
                     style={{
-                      padding: "0.4rem 0.6rem",
-                      fontSize: "0.85rem",
+                      padding: "0.35rem 0.4rem",
+                      fontSize: "0.78rem",
+                      // Sin negrita y sin saltos: cada acceso rápido en una
+                      // sola línea (en negrita "SEMANA PASADA" y "ÚLTIMOS 30
+                      // DÍAS" se partían en dos).
+                      fontWeight: 400,
+                      whiteSpace: "nowrap",
                       // En mayúsculas, como "ACCESO RÁPIDO".
                       textTransform: "uppercase",
                     }}
