@@ -6,6 +6,7 @@ import { themeQuartz } from "ag-grid-community";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
+import { RotateCcw, UnfoldHorizontal } from "lucide-react";
 import type {
   ColDef,
   GetRowIdParams,
@@ -458,7 +459,6 @@ function TablaBase<T>(
       state: api.getColumnState().map((columna) => ({ colId: columna.colId, flex: null })),
     });
     api.autoSizeAllColumns();
-    setSelectorAbierto(false);
   }
 
   function restablecerAnchos() {
@@ -476,7 +476,6 @@ function TablaBase<T>(
         ),
     });
     guardarLayout(ocultas);
-    setSelectorAbierto(false);
   }
 
   function alternar(clave: string) {
@@ -591,6 +590,28 @@ function TablaBase<T>(
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           {accionesDerecha}
 
+          {/* Anchos de columna: misma pieza de íconos que el filtro de
+              gafete de Activos (`.segmentado`), afuera del menú "Columnas ▾"
+              -- pedido del usuario 2026-09-23. */}
+          <div className="segmentado" role="group" aria-label="Anchos de columna">
+            <button
+              type="button"
+              title="Ajustar anchos al contenido"
+              aria-label="Ajustar anchos al contenido"
+              onClick={ajustarAnchos}
+            >
+              <UnfoldHorizontal size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              title="Restablecer anchos"
+              aria-label="Restablecer anchos"
+              onClick={restablecerAnchos}
+            >
+              <RotateCcw size={16} aria-hidden="true" />
+            </button>
+          </div>
+
           <div ref={selectorRef}>
             <button type="button" className="boton" onClick={() => setSelectorAbierto((a) => !a)}>
               Columnas ▾
@@ -640,13 +661,6 @@ function TablaBase<T>(
                     </label>
                   </>
                 )}
-                <hr style={{ width: "100%", border: "none", borderTop: "1px solid var(--borde)", margin: "0.2rem 0" }} />
-                <button type="button" className="boton" onClick={ajustarAnchos}>
-                  Ajustar anchos al contenido
-                </button>
-                <button type="button" className="boton" onClick={restablecerAnchos}>
-                  Restablecer anchos
-                </button>
               </div>
             </ListaFlotante>
           )}
