@@ -17,6 +17,7 @@ import {
   registrarIngreso,
 } from "../api";
 import type { ContratistaResumen, MedioIngreso, PreparacionIngreso } from "../api";
+import { fechaYMD } from "../tiempo";
 
 const DEBOUNCE_MS = 120;
 const MAX_RESULTADOS = 4;
@@ -42,6 +43,34 @@ export function validarGafete(
   if (!recortado) return { valido: false, mensaje: "El gafete es requerido" };
   if (Number.isNaN(numero)) return { valido: false, mensaje: "Ingrese un número de gafete válido" };
   return { valido: true, numero };
+}
+
+export interface AvisoContratista {
+  texto: string;
+  /** Variable CSS del color del chip (ej. "var(--error)"). */
+  color: string;
+}
+
+/** Chips de la lista de resultados del buscador: lo que el operador tiene
+ * que ver ANTES de elegir a alguien (pedido del usuario 2026-09-23, que
+ * además sacó la empresa de esa lista para darles lugar -- sigue en la
+ * ficha al elegir). Sólo informativos: si puede o no entrar lo decide el
+ * núcleo al elegir (`prepararIngreso`), no estos chips. `hoy` en
+ * "AAAA-MM-DD", inyectable para el test. */
+export function avisosContratista(
+  contratista: Pick<
+    ContratistaResumen,
+    "tiene_ingreso_activo" | "tiene_acceso" | "fecha_vencimiento_praind"
+  >,
+  hoy: string = fechaYMD(new Date()),
+): AvisoContratista[] {
+  const avisos: AvisoContratista[] = [];
+  if (contratista.tiene_ingreso_activo) avisos.push({ texto: "Adentro", color: "var(--acento)" });
+  if (!contratista.tiene_acceso) avisos.push({ texto: "Sin acceso", color: "var(--error)" });
+  if (contratista.fecha_vencimiento_praind && contratista.fecha_vencimiento_praind < hoy) {
+    avisos.push({ texto: "PRAIND vencido", color: "var(--error)" });
+  }
+  return avisos;
 }
 
 /** Mismo criterio que `validarGafete`, pero para la placa -- obligatoria
@@ -250,13 +279,30 @@ export default function NuevoIngresoModal({
                   {contratista.nombre}{" "}
                   <span style={{ color: "var(--muted)" }}>· {contratista.cedula}</span>
                 </span>
-                <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                  {contratista.empresa_nombre}
-                  {contratista.tiene_ingreso_activo && (
-                    <span className="chip" style={{ ["--chip-color" as string]: "var(--acento)" }}>
-                      Adentro
+                {/* Sin la empresa (queda en la ficha al elegir): este lado
+                    es para los avisos, en una sola línea. */}
+                {/* `alignItems`/`alignSelf: center`: si el nombre ocupa dos
+                    líneas, los chips conservan su tamaño y quedan centrados
+                    en vez de estirarse a todo el alto de la fila. */}
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    alignSelf: "center",
+                    gap: "0.3rem",
+                    flexShrink: 0,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {avisosContratista(contratista).map((aviso) => (
+                    <span
+                      key={aviso.texto}
+                      className="chip"
+                      style={{ ["--chip-color" as string]: aviso.color }}
+                    >
+                      {aviso.texto}
                     </span>
-                  )}
+                  ))}
                 </span>
               </FilaListaFlotante>
             ))}
