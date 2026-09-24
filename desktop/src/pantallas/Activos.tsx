@@ -55,6 +55,12 @@ function ToggleGafete({
   );
 }
 
+/** Fila fija de totales de lo visible (`filaTotales` de `Tabla`). */
+function totalesActivos(visibles: FilaActiva[]): Record<string, string> {
+  const sinGafete = visibles.filter((fila) => fila.gafete_numero == null).length;
+  return { contratista_nombre: `${visibles.length} adentro`, gafete_numero: `${sinGafete} S/G` };
+}
+
 export default function Activos({
   refrescarSenal,
   onAbrirNuevoIngreso,
@@ -186,6 +192,7 @@ export default function Activos({
       },
       {
         field: "gafete_numero",
+        type: "numero",
         headerName: "Gafete",
         flex: 0.9,
         minWidth: 90,
@@ -194,6 +201,7 @@ export default function Activos({
       },
       {
         colId: "fecha_ingreso",
+        type: "fecha",
         headerName: "Fecha",
         flex: 1.1,
         minWidth: 110,
@@ -291,6 +299,9 @@ export default function Activos({
             cargando={cargando}
             filtrosPorColumna
             id="activos"
+            nombreExportacion="activos"
+            idFila={claveFilaActiva}
+            filaTotales={totalesActivos}
             columnas={columnas}
             filas={filasVisibles}
             busqueda={busqueda}

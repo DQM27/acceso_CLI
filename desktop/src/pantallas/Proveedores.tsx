@@ -5,6 +5,7 @@ import Tabla from "../componentes/Tabla";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   cerrarFilaProveedorActiva,
+  claveFilaProveedorActiva,
   listarHistorialIngresosProveedorSitio,
   listarTodosLosProveedoresActivos,
 } from "../api/proveedores";
@@ -57,6 +58,20 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
  * historial completo del sitio es tarea de escritorio, el celular es para
  * registros rápidos).
  */
+/** Identidad de fila para el destello de celdas cambiadas (`idFila` de
+ * `Tabla`) -- a nivel de módulo para que sea una función estable. */
+const idPorUuid = (fila: { uuid: string }) => fila.uuid;
+
+function totalesProveedoresActivos(visibles: FilaProveedorActiva[]): Record<string, string> {
+  return { nombre: `${visibles.length} adentro` };
+}
+
+function totalesProveedoresHistorial(
+  visibles: HistorialIngresoProveedorRemoto[],
+): Record<string, string> {
+  return { nombre: `${visibles.length} movimiento(s)` };
+}
+
 export default function Proveedores({ refrescarSenal }: { refrescarSenal?: number }) {
   const [vista, setVista] = useState<Vista>("activos");
   const [filasActivos, setFilasActivos] = useState<FilaProveedorActiva[]>([]);
@@ -121,9 +136,10 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
         minWidth: 100,
         valueFormatter: (p) => p.value ?? "Caminando",
       },
-      { field: "gafete_numero", headerName: "Gafete", flex: 0.7, minWidth: 90 },
+      { field: "gafete_numero", type: "numero", headerName: "Gafete", flex: 0.7, minWidth: 90 },
       {
         colId: "fecha_ingreso",
+        type: "fecha",
         headerName: "Fecha",
         flex: 0.9,
         minWidth: 100,
@@ -181,6 +197,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
       },
       {
         field: "gafete_numero",
+        type: "numero",
         headerName: "Gafete",
         flex: 0.7,
         minWidth: 90,
@@ -188,6 +205,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
       },
       {
         colId: "fecha_entrada",
+        type: "fecha",
         headerName: "Fecha",
         flex: 0.9,
         minWidth: 100,
@@ -236,6 +254,9 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
               cargando={cargando}
               filtrosPorColumna
               id="proveedores-activos"
+              nombreExportacion="proveedores-activos"
+              idFila={claveFilaProveedorActiva}
+              filaTotales={totalesProveedoresActivos}
               columnas={columnasActivos}
               filas={filasActivos}
               busqueda={busqueda}
@@ -260,6 +281,9 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
               cargando={cargando}
               filtrosPorColumna
               id="proveedores-historial"
+              nombreExportacion="proveedores-historial"
+              idFila={idPorUuid}
+              filaTotales={totalesProveedoresHistorial}
               columnas={columnasHistorial}
               filas={filasHistorial}
               busqueda={busqueda}

@@ -134,6 +134,7 @@ export default function Empresas() {
               cargando={cargando}
               filtrosPorColumna
               id="empresas"
+              nombreExportacion="empresas"
               columnas={columnasContratista}
               filas={filasContratista}
               onCeldaEditada={manejarEdicion}
@@ -145,6 +146,7 @@ export default function Empresas() {
               cargando={cargando}
               filtrosPorColumna
               id="empresas-proveedor"
+              nombreExportacion="empresas-proveedoras"
               columnas={columnasProveedor}
               filas={filasProveedor}
               onCeldaEditada={manejarEdicion}

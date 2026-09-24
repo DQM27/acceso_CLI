@@ -566,6 +566,7 @@ pub fn run() {
             comandos::historial::listar_historial_sitio,
             comandos::historial::exportar_historial,
             comandos::historial::exportar_historial_pdf,
+            comandos::exportacion::guardar_csv,
             comandos::auditoria::listar_auditoria,
             comandos::auditoria::listar_auditoria_gafetes,
             comandos::gafetes::buscar_gafetes,

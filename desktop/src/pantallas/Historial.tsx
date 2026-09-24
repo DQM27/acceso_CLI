@@ -135,6 +135,14 @@ const CLAVES_COLUMNA: Record<string, string> = {
   usuario_salida_nombre: "egreso",
 };
 
+/** Identidad de fila para el destello de celdas cambiadas (`idFila` de
+ * `Tabla`) -- a nivel de módulo para que sea una función estable. */
+const idPorUuid = (fila: { uuid: string }) => fila.uuid;
+
+function totalesHistorial(visibles: FilaHistorial[]): Record<string, string> {
+  return { contratista_nombre: `${visibles.length} movimiento(s)` };
+}
+
 export default function Historial() {
   const [filas, setFilas] = useState<FilaHistorial[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -320,6 +328,7 @@ export default function Historial() {
       },
       {
         field: "gafete_numero",
+        type: "numero",
         headerName: "Gafete",
         flex: 0.9,
         minWidth: 90,
@@ -328,6 +337,7 @@ export default function Historial() {
       },
       {
         colId: "fecha_ingreso",
+        type: "fecha",
         headerName: "Fecha ingreso",
         // 120 truncaba el título en mayúscula ("FECHA ING…") mientras el
         // resto de encabezados entraba completo — 140 es lo que necesita
@@ -353,6 +363,7 @@ export default function Historial() {
         // `fecha_hora_salida`; antes la grilla dejaba la celda en blanco y
         // no coincidía con lo que se veía en el archivo exportado.
         colId: "fecha_salida",
+        type: "fecha",
         headerName: "Fecha salida",
         flex: 1.4,
         minWidth: 140,
@@ -414,6 +425,8 @@ export default function Historial() {
             cargando={cargando}
             ref={tablaRef}
             id="historial"
+            idFila={idPorUuid}
+            filaTotales={totalesHistorial}
             columnas={columnas}
             filas={filas}
             filtrosPorColumna

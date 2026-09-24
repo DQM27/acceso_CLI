@@ -4,10 +4,16 @@ import type { ReactNode } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
+import { save } from "@tauri-apps/plugin-dialog";
+import { toast } from "sonner";
 import type {
   ColDef,
+  GetRowIdParams,
   ITooltipParams,
+  ModelUpdatedEvent,
   RowClickedEvent,
+  ValueFormatterParams,
+  ValueGetterParams,
   ColumnMovedEvent,
   ColumnPinnedEvent,
   ColumnResizedEvent,
@@ -19,6 +25,8 @@ import type {
 import { useSeccionActiva } from "../contexto/BarraEstadoContexto";
 import { useUsuarioId } from "../contexto/SesionContexto";
 import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
+import FiltroFechaTabla from "./FiltroFechaTabla";
+import { guardarCsv } from "../api/exportacion";
 
 /**
  * Tema y comportamiento compartido de TODAS las tablas de la app — un solo
@@ -147,6 +155,67 @@ export function clicEnControlInteractivo(objetivo: EventTarget | null | undefine
   return objetivo instanceof Element && objetivo.closest("button, input, select, a, label") !== null;
 }
 
+/** Comparador del filtro de fecha para columnas cuyo valor es "AAAA-MM-DD"
+ * (`fechaLocalYMD`, todas las columnas de fecha de la app) -- el valor se
+ * guarda así para que ordene bien como texto; lo que se ve en pantalla es
+ * DD/MM/AAAA (`valueFormatter`). Un valor que no es fecha (ej. "Activo" en
+ * "Fecha salida") cuenta como anterior a cualquier fecha. */
+export function compararFechaYMD(filtroMedianoche: Date, valorCelda: unknown): number {
+  if (typeof valorCelda !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(valorCelda)) return -1;
+  const [anio, mes, dia] = valorCelda.split("-").map(Number);
+  const celda = new Date(anio, mes - 1, dia).getTime();
+  const filtro = filtroMedianoche.getTime();
+  return celda < filtro ? -1 : celda > filtro ? 1 : 0;
+}
+
+/** `type: "fecha"` / `type: "numero"` en la definición de una columna
+ * (ver `columnasConVisibilidad`): filtro de fecha (antes, después, entre...)
+ * o de número (mayor que, menor que...) en vez del de texto. Sólo aplica con
+ * los filtros por columna visibles. */
+const FILTRO_FECHA: ColDef = {
+  filter: "agDateColumnFilter",
+  dateComponent: FiltroFechaTabla,
+  filterParams: {
+    comparator: compararFechaYMD,
+    inRangeFloatingFilterDateFormat: "DD/MM/YYYY",
+  },
+};
+
+const FILTRO_NUMERO: ColDef = {
+  filter: "agNumberColumnFilter",
+  filterParams: {},
+};
+
+/** Adapta una columna para que la fila fija de totales (`filaTotales`) se
+ * vea como texto simple: su valor sale de `data[clave]` tal cual, sin pasar
+ * por el `valueGetter`/`valueFormatter` de la columna (que esperan una fila
+ * real -- ej. el formateador de Gafete convertiría el vacío en "S/G") ni
+ * por su componente de celda (el botón "Salida" no tiene sentido ahí). */
+function paraFilaFija<T>(columna: ColDef<T>, clave: string | undefined): ColDef<T> {
+  const { valueGetter, valueFormatter, cellRenderer } = columna;
+  const valorFijo = (data: unknown) =>
+    clave && data ? ((data as Record<string, unknown>)[clave] ?? "") : "";
+  return {
+    ...columna,
+    valueGetter:
+      typeof valueGetter === "function"
+        ? (p: ValueGetterParams<T>) => (p.node?.rowPinned ? valorFijo(p.data) : valueGetter(p))
+        : valueGetter,
+    valueFormatter:
+      typeof valueFormatter === "function"
+        ? (p: ValueFormatterParams<T>) =>
+            p.node?.rowPinned ? String(p.value ?? "") : valueFormatter(p)
+        : valueFormatter,
+    ...(cellRenderer
+      ? {
+          cellRenderer: undefined,
+          cellRendererSelector: (p: { node: { rowPinned?: unknown } }) =>
+            p.node.rowPinned ? undefined : { component: cellRenderer },
+        }
+      : {}),
+  };
+}
+
 const MENSAJE_SIN_FILAS = `<span style="color: var(--muted); font-size: 0.9rem;">Sin resultados</span>`;
 
 const columnaPorDefectoConFiltro: ColDef = {
@@ -245,6 +314,19 @@ export interface TablaProps<T> {
    * (Realtime, pulso de sincronización) mantienen las filas viejas a la
    * vista en vez de taparlas con un aviso cada vez. */
   cargando?: boolean;
+  /** Muestra un botón "CSV" junto a "Columnas ▾" que exporta lo que la
+   * grilla tiene visible ahora (filas filtradas y ordenadas, columnas
+   * visibles). Es el nombre sugerido del archivo, sin extensión. */
+  nombreExportacion?: string;
+  /** Identidad estable de cada fila. Con esto, al refrescar los datos AG
+   * Grid reconoce la misma fila en vez de redibujar todo, y hace destellar
+   * las celdas que cambiaron (ej. una salida que llega por Realtime). */
+  idFila?: (fila: T) => string;
+  /** Fila fija abajo con totales de lo visible (respeta filtros y
+   * búsqueda). Devuelve el texto por columna (`colId`/`field`); las
+   * columnas que no aparecen quedan vacías. Debe ser una función estable
+   * (definida fuera del componente) para no recrear las columnas. */
+  filaTotales?: (visibles: T[]) => Record<string, string>;
 }
 
 /** Mango imperativo opcional (`ref`) para que la pantalla pida datos que
@@ -276,6 +358,9 @@ function TablaBase<T>(
     filtrosPorColumna,
     id,
     cargando,
+    nombreExportacion,
+    idFila,
+    filaTotales,
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
 ) {
@@ -320,14 +405,118 @@ function TablaBase<T>(
         .map((columna) => columna.colId),
   }));
 
+  const conFiltro = filtrosPorColumna === true && filtrosVisibles;
+
   const columnasConVisibilidad = useMemo(
     () =>
-      columnas.map((columna) => {
-        const clave = identidad(columna as ColDef<unknown>);
-        return clave ? { ...columna, hide: ocultas.has(clave) } : columna;
+      columnas.map((original) => {
+        const clave = identidad(original as ColDef<unknown>);
+        // `type` se resuelve acá (no con `columnTypes` de AG Grid) para
+        // que dependa de si los filtros están visibles.
+        const { type, ...resto } = original;
+        let columna: ColDef<T> = clave ? { ...resto, hide: ocultas.has(clave) } : resto;
+        if (type === "fecha" && conFiltro) columna = { ...columna, ...(FILTRO_FECHA as ColDef<T>) };
+        if (type === "numero" && conFiltro) columna = { ...columna, ...(FILTRO_NUMERO as ColDef<T>) };
+        if (filaTotales) columna = paraFilaFija(columna, clave);
+        return columna;
       }),
-    [columnas, ocultas],
+    [columnas, ocultas, conFiltro, filaTotales],
   );
+
+  const columnaBase = useMemo<ColDef>(
+    () => ({
+      ...(conFiltro ? columnaPorDefectoConFiltro : columnaPorDefecto),
+      ...(idFila ? { enableCellChangeFlash: true } : {}),
+    }),
+    [conFiltro, idFila],
+  );
+
+  // Totales de lo visible -- se recalculan cada vez que cambia lo que la
+  // grilla muestra (datos nuevos, filtro, búsqueda). La comparación por
+  // JSON evita un render de más cuando el total no cambió.
+  const [totales, setTotales] = useState<Record<string, string> | null>(null);
+  function alActualizarModelo(evento: ModelUpdatedEvent<T>) {
+    if (!filaTotales) return;
+    const visibles: T[] = [];
+    evento.api.forEachNodeAfterFilter((nodo) => {
+      if (nodo.data) visibles.push(nodo.data);
+    });
+    const nuevos = filaTotales(visibles);
+    setTotales((actual) => (JSON.stringify(actual) === JSON.stringify(nuevos) ? actual : nuevos));
+  }
+
+  async function exportarCsv() {
+    const api = apiRef.current;
+    if (!api || !nombreExportacion) return;
+    // Sólo columnas con dato (no las de botones ni la de casillas).
+    const columnKeys = api
+      .getAllDisplayedColumns()
+      .filter((columna) => {
+        const definicion = columna.getColDef();
+        return definicion.field !== undefined || typeof definicion.valueGetter === "function";
+      })
+      .map((columna) => columna.getColId());
+    if (columnKeys.length === 0) {
+      toast.error("No hay columnas visibles para exportar.");
+      return;
+    }
+    // Punto y coma: Excel en español (Costa Rica usa coma decimal) espera
+    // ese separador; con coma abriría todo en una sola columna.
+    const contenido = api.getDataAsCsv({
+      columnKeys,
+      columnSeparator: ";",
+      skipPinnedBottom: true,
+      skipPinnedTop: true,
+    });
+    if (!contenido) {
+      toast.error("No hay filas para exportar.");
+      return;
+    }
+    const destino = await save({
+      title: "Exportar a CSV",
+      defaultPath: `${nombreExportacion}.csv`,
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+    });
+    if (!destino) return;
+    try {
+      await guardarCsv(destino, contenido);
+      toast.success("CSV exportado.");
+    } catch (error) {
+      toast.error(String(error));
+    }
+  }
+
+  /** Cada columna al ancho de su contenido. Se les saca el `flex` (reparto
+   * proporcional del espacio) porque si no, AG Grid lo vuelve a aplicar
+   * encima al primer cambio de tamaño. Queda guardado como cualquier otro
+   * cambio de ancho; "Restablecer anchos" vuelve al reparto original. */
+  function ajustarAnchos() {
+    const api = apiRef.current;
+    if (!api) return;
+    api.applyColumnState({
+      state: api.getColumnState().map((columna) => ({ colId: columna.colId, flex: null })),
+    });
+    api.autoSizeAllColumns();
+    setSelectorAbierto(false);
+  }
+
+  function restablecerAnchos() {
+    const api = apiRef.current;
+    if (!api) return;
+    api.applyColumnState({
+      state: columnas
+        .map((columna) => ({
+          colId: identidad(columna as ColDef<unknown>),
+          flex: columna.flex ?? null,
+          width: columna.flex ? undefined : columna.width,
+        }))
+        .filter((estado): estado is { colId: string; flex: number | null; width: number | undefined } =>
+          estado.colId !== undefined,
+        ),
+    });
+    guardarLayout(ocultas);
+    setSelectorAbierto(false);
+  }
 
   function alternar(clave: string) {
     setOcultas((actual) => {
@@ -441,6 +630,17 @@ function TablaBase<T>(
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           {accionesDerecha}
 
+          {nombreExportacion && (
+            <button
+              type="button"
+              className="boton"
+              title="Exportar a CSV lo que se ve ahora (filtros, orden y columnas)"
+              onClick={exportarCsv}
+            >
+              CSV
+            </button>
+          )}
+
           <div ref={selectorRef}>
             <button type="button" className="boton" onClick={() => setSelectorAbierto((a) => !a)}>
               Columnas ▾
@@ -490,6 +690,13 @@ function TablaBase<T>(
                     </label>
                   </>
                 )}
+                <hr style={{ width: "100%", border: "none", borderTop: "1px solid var(--borde)", margin: "0.2rem 0" }} />
+                <button type="button" className="boton" onClick={ajustarAnchos}>
+                  Ajustar anchos al contenido
+                </button>
+                <button type="button" className="boton" onClick={restablecerAnchos}>
+                  Restablecer anchos
+                </button>
               </div>
             </ListaFlotante>
           )}
@@ -499,10 +706,22 @@ function TablaBase<T>(
       <div style={{ flex: 1, minHeight: 0 }}>
         <AgGridReact<T>
           theme={temaBrisas}
-          defaultColDef={
-            filtrosPorColumna && filtrosVisibles ? columnaPorDefectoConFiltro : columnaPorDefecto
-          }
+          defaultColDef={columnaBase}
           rowData={filas}
+          getRowId={
+            idFila
+              ? (p: GetRowIdParams<T>) => (p.rowPinned ? `fija-${p.rowPinned}` : idFila(p.data))
+              : undefined
+          }
+          pinnedBottomRowData={filaTotales && totales ? [totales] : undefined}
+          onModelUpdated={filaTotales ? alActualizarModelo : undefined}
+          // Sin el recuadro de foco al hacer clic en una celda (se veía
+          // feo y no copiaba nada) -- a cambio no hay navegación por
+          // flechas dentro de la grilla.
+          suppressCellFocus
+          columnHoverHighlight
+          // "Álvarez" junto a las A, no al final de la lista.
+          accentedSort
           columnDefs={columnasConVisibilidad}
           quickFilterText={busqueda}
           quickFilterParser={quickFilterParser}
@@ -546,6 +765,7 @@ function TablaBase<T>(
           onRowClicked={
             seleccionMultiple
               ? (evento: RowClickedEvent<T>) => {
+                  if (evento.node.rowPinned) return;
                   if (clicEnControlInteractivo(evento.event?.target)) return;
                   evento.node.setSelected(!evento.node.isSelected());
                 }

@@ -119,6 +119,7 @@ export default function Auditoria() {
     () => [
       {
         colId: "fecha",
+        type: "fecha",
         headerName: "Fecha",
         flex: 1.1,
         minWidth: 110,
@@ -188,6 +189,7 @@ export default function Auditoria() {
             cargando={cargando}
             filtrosPorColumna
             id="auditoria"
+            nombreExportacion="auditoria"
             columnas={columnas}
             filas={filas}
             busqueda={busqueda}

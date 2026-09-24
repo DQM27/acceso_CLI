@@ -264,6 +264,13 @@ input {
   text-transform: uppercase;
 }
 
+/* Fila fija de totales (`filaTotales` en Tabla.tsx): en negrita y con el
+   fondo del encabezado, para que no se confunda con una fila de datos. */
+.ag-floating-bottom .ag-row {
+  background: var(--panel-suave);
+  font-weight: 600;
+}
+
 .shell-sidebar-colapsada {
   width: 3.75rem;
 }

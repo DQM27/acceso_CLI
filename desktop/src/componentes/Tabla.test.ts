@@ -3,6 +3,7 @@ import type { ColDef } from "ag-grid-community";
 import {
   claveAlmacenamiento,
   clicEnControlInteractivo,
+  compararFechaYMD,
   identidad,
   leerEstadoGuardado,
   textoTooltip,
@@ -110,5 +111,20 @@ describe("clicEnControlInteractivo", () => {
     const celda = document.createElement("div");
     expect(clicEnControlInteractivo(celda)).toBe(false);
     expect(clicEnControlInteractivo(null)).toBe(false);
+  });
+});
+
+describe("compararFechaYMD", () => {
+  const filtro = new Date(2026, 8, 23);
+
+  it("compara el dia de la celda contra el del filtro", () => {
+    expect(compararFechaYMD(filtro, "2026-09-23")).toBe(0);
+    expect(compararFechaYMD(filtro, "2026-09-22")).toBeLessThan(0);
+    expect(compararFechaYMD(filtro, "2026-09-24")).toBeGreaterThan(0);
+  });
+
+  it("un valor que no es fecha (ej. Activo) queda antes de cualquier fecha", () => {
+    expect(compararFechaYMD(filtro, "Activo")).toBeLessThan(0);
+    expect(compararFechaYMD(filtro, null)).toBeLessThan(0);
   });
 });

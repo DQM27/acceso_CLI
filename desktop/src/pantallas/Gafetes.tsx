@@ -41,6 +41,7 @@ export default function Gafetes() {
     () => [
       {
         field: "numero",
+        type: "numero",
         headerName: "Número",
         flex: 1.1,
         minWidth: 110,
@@ -129,6 +130,7 @@ export default function Gafetes() {
             cargando={cargando}
             filtrosPorColumna
             id="gafetes"
+            nombreExportacion="gafetes"
             columnas={columnas}
             filas={filas}
             onFilaDobleClic={setGestionAbierta}

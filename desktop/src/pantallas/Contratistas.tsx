@@ -36,6 +36,7 @@ export function columnasPara(actorRol: RolUsuario): ColDef<ContratistaResumen>[]
     { field: "tipo_ingreso", headerName: "Tipo", flex: 1.2, minWidth: 120 },
     {
       field: "fecha_vencimiento_praind",
+      type: "fecha",
       headerName: "PRAIND vence",
       flex: 1.4,
       minWidth: 140,
