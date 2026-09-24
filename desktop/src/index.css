@@ -478,6 +478,53 @@ input {
   }
 }
 
+/* Tarjetas de opción (tipo de gafete en `FormularioGafete`): ícono arriba y
+   nombre abajo, todas del mismo ancho; la elegida con borde y fondo de
+   acento, igual que la fila resaltada de `ListaFlotante`. */
+.opciones-tarjeta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+  gap: 0.5rem;
+}
+
+.opcion-tarjeta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.8rem 0.5rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    background-color var(--duracion),
+    border-color var(--duracion),
+    color var(--duracion);
+}
+
+.opcion-tarjeta:hover:not([aria-checked="true"]) {
+  border-color: var(--borde-fuerte);
+  color: var(--texto);
+}
+
+.opcion-tarjeta[aria-checked="true"] {
+  border-color: var(--acento);
+  background: var(--acento-suave);
+  color: var(--acento);
+  box-shadow: inset 0 0 0 1px var(--acento);
+  cursor: default;
+}
+
+.opcion-tarjeta:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
 /* Deshabilitado (ej. Excel/CSV/PDF mientras se exporta): mismo criterio
    que `.boton:disabled`. */
 .segmentado button:disabled {
