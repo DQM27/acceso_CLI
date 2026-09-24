@@ -333,7 +333,7 @@ input {
   width: calc(100% / var(--cantidad));
   transform: translateX(calc(100% * var(--indice)));
   background: var(--acento-relleno);
-  transition: transform 0.22s ease;
+  transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
   pointer-events: none;
 }
 
@@ -345,7 +345,7 @@ input {
 /* El fondo lo pone el indicador; acá sólo el color del ícono. */
 .segmentado-deslizante button[aria-pressed="true"] {
   background: transparent;
-  transition: color 0.22s ease;
+  transition: color 0.4s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

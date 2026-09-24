@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { toast } from "sonner";
 import { History, Plus, UserCheck } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
@@ -64,6 +65,23 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
 /** Identidad de fila para el destello de celdas cambiadas (`idFila` de
  * `Tabla`) -- a nivel de módulo para que sea una función estable. */
 const idPorUuid = (fila: { uuid: string }) => fila.uuid;
+
+/** Capa de cada vista (Activos / Historial): las dos grillas quedan
+ * montadas una encima de la otra y sólo se muestra la elegida. Antes se
+ * renderizaba una u otra, y cada cambio destruía la grilla y creaba otra
+ * desde cero -- parpadeaba y perdía scroll y filtros (reportado por el
+ * usuario 2026-09-23). `visibility` (no `display: none`) a propósito: la
+ * oculta conserva su tamaño, así AG Grid no recalcula columnas al volver,
+ * y el relleno deslizante de "Activos / Historial" se anima igual. */
+function capaVista(visible: boolean): CSSProperties {
+  return {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    flexDirection: "column",
+    visibility: visible ? "visible" : "hidden",
+  };
+}
 
 export default function Proveedores({ refrescarSenal }: { refrescarSenal?: number }) {
   const [vista, setVista] = useState<Vista>("activos");
@@ -248,8 +266,8 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          {vista === "activos" ? (
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <div style={capaVista(vista === "activos")}>
             <Tabla<FilaProveedorActiva>
               cargando={cargando}
               filtrosPorColumna
@@ -280,7 +298,8 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
               }
               accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
             />
-          ) : (
+          </div>
+          <div style={capaVista(vista === "historial")}>
             <Tabla<HistorialIngresoProveedorRemoto>
               ref={tablaHistorialRef}
               cargando={cargando}
@@ -319,7 +338,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
                 </>
               }
             />
-          )}
+          </div>
         </div>
       </div>
 
