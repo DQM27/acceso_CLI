@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 /**
@@ -11,20 +11,21 @@ import type { ReactNode } from "react";
  * lugar (frecuente al operar rápido, buscando o llenando un formulario) no
  * debe descartar en silencio lo que ya se escribió. Cerrar es explícito:
  * la X o Esc.
+ *
+ * Cambio de alto animado (reportado 2026-09-24): al elegir a alguien en un
+ * buscador (Nuevo ingreso, Salida, KOF, proveedores) se despliega una ficha
+ * debajo y el modal crece. Centrado, ese crecimiento era de golpe y se veía
+ * a los saltos; ahora el cuerpo mide su contenido (`ResizeObserver`) y el
+ * alto pasa de un valor al otro con una transición, así el modal se estira
+ * suave sin dejar de estar centrado.
  */
 export default function Modal({
   titulo,
   onCerrar,
-  anclarArriba = false,
   children,
 }: {
   titulo: string;
   onCerrar: () => void;
-  /** Fija el borde superior en vez de centrar -- para modales que crecen
-   * al elegir algo (buscador + ficha que se despliega debajo). Centrado, al
-   * crecer se movía para arriba y para abajo a la vez, y se veía a los
-   * saltos (reportado 2026-09-24); anclado sólo crece hacia abajo. */
-  anclarArriba?: boolean;
   children: ReactNode;
 }) {
   useEffect(() => {
@@ -35,6 +36,20 @@ export default function Modal({
     return () => window.removeEventListener("keydown", alTeclear);
   }, [onCerrar]);
 
+  const contenidoRef = useRef<HTMLDivElement>(null);
+  // `null` hasta la primera medida: al abrir, el modal aparece con su alto
+  // natural (sin animar desde 0); de ahí en más cada cambio se anima.
+  const [alto, setAlto] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const contenido = contenidoRef.current;
+    // Sin ResizeObserver (jsdom en los tests) el alto queda natural, sin
+    // animación.
+    if (!contenido || typeof ResizeObserver === "undefined") return;
+    const observador = new ResizeObserver(() => setAlto(contenido.offsetHeight));
+    observador.observe(contenido);
+    return () => observador.disconnect();
+  }, []);
+
   return (
     <div
       style={{
@@ -42,12 +57,8 @@ export default function Modal({
         inset: 0,
         background: "var(--velo)",
         display: "flex",
-        alignItems: anclarArriba ? "flex-start" : "center",
+        alignItems: "center",
         justifyContent: "center",
-        // Anclado a media altura menos ~13rem: vacío (sólo el buscador)
-        // queda justo encima del centro, y con la ficha desplegada el
-        // modal completo queda centrado. `max` para ventanas bajas.
-        paddingTop: anclarArriba ? "max(4vh, calc(50vh - 13rem))" : undefined,
         zIndex: 100,
       }}
     >
@@ -78,7 +89,9 @@ export default function Modal({
             ✕
           </button>
         </div>
-        {children}
+        <div className="modal-cuerpo" style={{ height: alto ?? undefined }}>
+          <div ref={contenidoRef}>{children}</div>
+        </div>
       </div>
     </div>
   );

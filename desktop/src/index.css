@@ -478,10 +478,19 @@ input {
   }
 }
 
+/* Cuerpo del modal: su alto lo pone Modal.tsx (medido con ResizeObserver)
+   y cambia con transición, así el modal se estira suave y centrado cuando
+   se despliega una ficha. `overflow: clip` con margen para no recortar los
+   anillos de foco de los campos durante la animación. */
+.modal-cuerpo {
+  overflow: clip;
+  overflow-clip-margin: 6px;
+  transition: height 0.25s cubic-bezier(0.2, 0, 0, 1);
+}
+
 /* Ficha que se despliega debajo del buscador al elegir a alguien (Nuevo
-   ingreso, KOF, proveedores): entra con un fundido y un leve deslizamiento
-   en vez de aparecer de golpe. El modal está anclado arriba (`anclarArriba`
-   en Modal.tsx), así que sólo crece hacia abajo. */
+   ingreso, Salida, KOF, proveedores): entra con un fundido y un leve
+   deslizamiento mientras el modal se estira (`.modal-cuerpo`). */
 @keyframes ficha-aparecer {
   from {
     opacity: 0;
@@ -500,6 +509,10 @@ input {
 @media (prefers-reduced-motion: reduce) {
   .ficha-desplegable {
     animation: none;
+  }
+
+  .modal-cuerpo {
+    transition: none;
   }
 }
 
