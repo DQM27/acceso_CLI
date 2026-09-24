@@ -314,6 +314,18 @@ input {
   background: var(--acento-hover);
 }
 
+/* Deshabilitado (ej. Excel/CSV/PDF mientras se exporta): mismo criterio
+   que `.boton:disabled`. */
+.segmentado button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.segmentado button:disabled:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
 .segmentado button:focus-visible {
   outline: 2px solid var(--acento);
   outline-offset: -2px;

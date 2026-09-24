@@ -89,11 +89,11 @@ export default function BotonesExportacion<T>({
   }
 
   const ayuda = "respeta el filtro/orden/columnas actuales de la grilla";
+  // Una sola pieza de íconos (`.segmentado`), igual que en Historial.
   return (
-    <>
+    <div className="segmentado" role="group" aria-label="Exportar">
       <button
         type="button"
-        className="boton boton-icono"
         title={exportando ? "Exportando…" : `Exportar a Excel — ${ayuda}`}
         onClick={exportarExcel}
         disabled={exportando}
@@ -102,7 +102,6 @@ export default function BotonesExportacion<T>({
       </button>
       <button
         type="button"
-        className="boton boton-icono"
         title={`Exportar a CSV — ${ayuda}`}
         onClick={() => tablaRef.current?.exportarCsv(nombreArchivo)}
         disabled={exportando}
@@ -111,13 +110,12 @@ export default function BotonesExportacion<T>({
       </button>
       <button
         type="button"
-        className="boton boton-icono"
         title={exportando ? "Exportando…" : `Exportar a PDF — ${ayuda}`}
         onClick={exportarPdf}
         disabled={exportando}
       >
         <FileText size={16} />
       </button>
-    </>
+    </div>
   );
 }

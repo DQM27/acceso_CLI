@@ -459,49 +459,51 @@ export default function Historial() {
                     setHasta(nuevoHasta);
                   }}
                 />
-                <button
-                  type="button"
-                  className="boton boton-icono"
-                  title={
-                    exportando
-                      ? "Exportando…"
-                      : truncado
-                        ? "Exportar a Excel — trae todo el rango de fechas, no sólo lo cargado"
-                        : "Exportar a Excel — respeta el filtro/orden/columnas actuales de la grilla"
-                  }
-                  onClick={exportar}
-                  disabled={exportando}
-                >
-                  <FileSpreadsheet size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="boton boton-icono"
-                  title={
-                    truncado
-                      ? "Exportar a CSV — sólo lo cargado; para todo el rango usá Excel o PDF"
-                      : "Exportar a CSV — respeta el filtro/orden/columnas actuales de la grilla"
-                  }
-                  onClick={exportarCsv}
-                  disabled={exportando}
-                >
-                  <Sheet size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="boton boton-icono"
-                  title={
-                    exportando
-                      ? "Exportando…"
-                      : truncado
-                        ? "Exportar a PDF — trae todo el rango de fechas, no sólo lo cargado"
-                        : "Exportar a PDF — respeta el filtro/orden/columnas actuales de la grilla"
-                  }
-                  onClick={exportarPdf}
-                  disabled={exportando}
-                >
-                  <FileText size={16} />
-                </button>
+                {/* Excel · CSV · PDF en una sola pieza de íconos
+                    (`.segmentado`), como filtros/anchos -- pedido del usuario
+                    2026-09-23: son de la misma categoría. */}
+                <div className="segmentado" role="group" aria-label="Exportar">
+                  <button
+                    type="button"
+                    title={
+                      exportando
+                        ? "Exportando…"
+                        : truncado
+                          ? "Exportar a Excel — trae todo el rango de fechas, no sólo lo cargado"
+                          : "Exportar a Excel — respeta el filtro/orden/columnas actuales de la grilla"
+                    }
+                    onClick={exportar}
+                    disabled={exportando}
+                  >
+                    <FileSpreadsheet size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    title={
+                      truncado
+                        ? "Exportar a CSV — sólo lo cargado; para todo el rango usá Excel o PDF"
+                        : "Exportar a CSV — respeta el filtro/orden/columnas actuales de la grilla"
+                    }
+                    onClick={exportarCsv}
+                    disabled={exportando}
+                  >
+                    <Sheet size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    title={
+                      exportando
+                        ? "Exportando…"
+                        : truncado
+                          ? "Exportar a PDF — trae todo el rango de fechas, no sólo lo cargado"
+                          : "Exportar a PDF — respeta el filtro/orden/columnas actuales de la grilla"
+                    }
+                    onClick={exportarPdf}
+                    disabled={exportando}
+                  >
+                    <FileText size={16} />
+                  </button>
+                </div>
               </>
             }
           />

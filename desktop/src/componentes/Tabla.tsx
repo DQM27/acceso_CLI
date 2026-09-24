@@ -6,7 +6,7 @@ import { themeQuartz } from "ag-grid-community";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { Funnel, RotateCcw, UnfoldHorizontal } from "lucide-react";
+import { Columns3, Funnel, RotateCcw, UnfoldHorizontal } from "lucide-react";
 import type {
   ColDef,
   Column,
@@ -633,12 +633,19 @@ function TablaBase<T>(
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           {accionesDerecha}
 
-          {/* Mostrar/ocultar la fila de filtros por columna: interruptor
-              aparte del grupo de anchos (ésos son acciones, éste queda
-              encendido o apagado -- relleno de acento con los filtros
-              visibles). Antes vivía dentro de "Columnas ▾". */}
-          {filtrosPorColumna && (
-            <div className="segmentado">
+          {/* Filtros y anchos de columna en una sola pieza de íconos
+              (`.segmentado`, como el filtro de gafete de Activos) -- pedido
+              del usuario 2026-09-23: son de la misma categoría. El embudo es
+              un interruptor (relleno de acento con los filtros visibles);
+              los otros dos son acciones. Antes vivían dentro de
+              "Columnas ▾". */}
+          <div
+            ref={selectorRef}
+            className="segmentado"
+            role="group"
+            aria-label="Columnas: filtros, anchos y visibles"
+          >
+            {filtrosPorColumna && (
               <button
                 type="button"
                 className="segmentado-interruptor"
@@ -649,13 +656,7 @@ function TablaBase<T>(
               >
                 <Funnel size={16} aria-hidden="true" />
               </button>
-            </div>
-          )}
-
-          {/* Anchos de columna: misma pieza de íconos que el filtro de
-              gafete de Activos (`.segmentado`), afuera del menú "Columnas ▾"
-              -- pedido del usuario 2026-09-23. */}
-          <div className="segmentado" role="group" aria-label="Anchos de columna">
+            )}
             <button
               type="button"
               title="Ajustar anchos al contenido"
@@ -672,18 +673,19 @@ function TablaBase<T>(
             >
               <RotateCcw size={16} aria-hidden="true" />
             </button>
-          </div>
-
-          <div ref={selectorRef}>
-            {/* Mayúsculas y sin negrita, como el botón de período de
-                Historial (pedido del usuario 2026-09-23). */}
+            {/* Antes "COLUMNAS ▾" en texto: ahora ícono, al final del mismo
+                grupo (pedido del usuario 2026-09-23). Queda marcado
+                mientras el menú está abierto. */}
             <button
               type="button"
-              className="boton"
+              title="Columnas visibles"
+              aria-label="Columnas visibles"
+              aria-expanded={selectorAbierto}
+              aria-pressed={selectorAbierto}
+              className="segmentado-interruptor"
               onClick={() => setSelectorAbierto((a) => !a)}
-              style={{ textTransform: "uppercase", fontWeight: 400 }}
             >
-              Columnas ▾
+              <Columns3 size={16} aria-hidden="true" />
             </button>
           </div>
 

@@ -1,5 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { History, UserCheck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
@@ -30,20 +32,34 @@ const ETIQUETAS_VISTA: Record<Vista, string> = {
 // Duplicado a propósito de `Proveedores.tsx`/`Visitas.tsx`/`CatalogoRutas.tsx`
 // -- es puro markup de un botón, no vale la pena compartirlo entre
 // pantallas que no se importan una a otra (ver la convención de App.tsx).
+/** Ícono de cada vista -- los mismos del menú lateral (UserCheck para
+ * Activos, History para Historial). */
+const ICONOS_VISTA: Record<Vista, LucideIcon> = {
+  activos: UserCheck,
+  historial: History,
+};
+
+// Pieza única de íconos (`.segmentado`, como el filtro de gafete de
+// Activos), con el nombre al pasar el mouse -- pedido del usuario
+// 2026-09-23.
 function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista) => void }) {
   return (
-    <div style={{ display: "flex", gap: "0.25rem" }}>
-      {(Object.keys(ETIQUETAS_VISTA) as Vista[]).map((opcion) => (
-        <button
-          key={opcion}
-          type="button"
-          className={opcion === vista ? "boton boton-primario" : "boton"}
-          disabled={opcion === vista}
-          onClick={() => onCambiar(opcion)}
-        >
-          {ETIQUETAS_VISTA[opcion]}
-        </button>
-      ))}
+    <div className="segmentado" role="group" aria-label="Vista">
+      {(Object.keys(ETIQUETAS_VISTA) as Vista[]).map((opcion) => {
+        const Icono = ICONOS_VISTA[opcion];
+        return (
+          <button
+            key={opcion}
+            type="button"
+            title={ETIQUETAS_VISTA[opcion]}
+            aria-label={ETIQUETAS_VISTA[opcion]}
+            aria-pressed={opcion === vista}
+            onClick={() => onCambiar(opcion)}
+          >
+            <Icono size={16} aria-hidden="true" />
+          </button>
+        );
+      })}
     </div>
   );
 }
