@@ -1,6 +1,8 @@
 import { useLayoutEffect, useState } from "react";
 import { Moon, Sparkles, Sun } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useUsuarioId } from "../contexto/SesionContexto";
+import { guardarPreferencia, leerPreferencia } from "../preferencias";
 
 const CLAVE_TEMA = "escritorio:tema";
 
@@ -31,13 +33,11 @@ export function temaDelSistema(): Tema {
   }
 }
 
-export function leerTema(): Tema {
-  try {
-    const guardado = localStorage.getItem(CLAVE_TEMA);
-    return TEMAS.includes(guardado as Tema) ? (guardado as Tema) : temaDelSistema();
-  } catch {
-    return temaDelSistema();
-  }
+/** Tema guardado del usuario (cada usuario tiene el suyo, ver
+ * `preferencias.ts`); sin guardado válido, el del sistema operativo. */
+export function leerTema(usuarioId: number | null = null): Tema {
+  const guardado = leerPreferencia(CLAVE_TEMA, usuarioId);
+  return TEMAS.includes(guardado as Tema) ? (guardado as Tema) : temaDelSistema();
 }
 
 export function siguienteTema(actual: Tema): Tema {
@@ -49,7 +49,7 @@ export function siguienteTema(actual: Tema): Tema {
  * `diseno.css` ya soporta `[data-theme="light"|"dark"]` como override
  * explícito por encima de `prefers-color-scheme`, y `tokyo-night.css` suma
  * `[data-theme="tokyo-night"]`; acá está el control para recorrerlos y
- * guardar la elección. El claro/oscuro se copió de
+ * guardar la elección, por usuario. El claro/oscuro se copió de
  * `web/src/componentes/SelectorTema.tsx` (mismo diseno.css generado, mismas
  * clases); Tokyo Night es sólo del escritorio.
  *
@@ -58,7 +58,8 @@ export function siguienteTema(actual: Tema): Tema {
  * operativo, se ve un parpadeo de un frame con el tema equivocado.
  */
 export default function SelectorTema() {
-  const [tema, setTema] = useState<Tema>(leerTema);
+  const usuarioId = useUsuarioId();
+  const [tema, setTema] = useState<Tema>(() => leerTema(usuarioId));
 
   useLayoutEffect(() => {
     document.documentElement.setAttribute("data-theme", tema);
@@ -67,12 +68,7 @@ export default function SelectorTema() {
   function alternar() {
     setTema((actual) => {
       const siguiente = siguienteTema(actual);
-      try {
-        localStorage.setItem(CLAVE_TEMA, siguiente);
-      } catch {
-        // localStorage puede fallar (modo privado, cuota llena) -- perder
-        // la preferencia guardada no es motivo para romper el toggle.
-      }
+      guardarPreferencia(CLAVE_TEMA, usuarioId, siguiente);
       return siguiente;
     });
   }

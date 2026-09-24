@@ -57,6 +57,7 @@ import marca from "./assets/marca.png";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import SelectorTema from "./componentes/SelectorTema";
+import { guardarPreferencia, leerPreferencia } from "./preferencias";
 import BarraNube from "./componentes/BarraNube";
 import type { EstadoConexionNube } from "./componentes/BarraNube";
 import ErrorBoundary from "./componentes/ErrorBoundary";
@@ -118,26 +119,17 @@ type Pantalla =
   | { tipo: "login" }
   | { tipo: "shell"; sesion: UsuarioSesion };
 
+// Estado del menú lateral, por usuario (ver `preferencias.ts`): cada quien
+// tiene su propio orden, secciones ocultas y colapsado en la misma PC.
 const CLAVE_SIDEBAR_COLAPSADO = "sidebar:colapsado";
 
-/** `localStorage` puede fallar (modo privado, cuota llena) — mismo criterio
- * que `leerEstadoGuardado`/`guardarLayout` en `Tabla.tsx`: perder la
- * preferencia guardada no es motivo para romper nada, sólo se vuelve al
- * valor por defecto (expandido). */
-function leerSidebarColapsado(): boolean {
-  try {
-    return localStorage.getItem(CLAVE_SIDEBAR_COLAPSADO) === "1";
-  } catch {
-    return false;
-  }
+/** Sin guardado (o si `localStorage` falla): expandido. */
+function leerSidebarColapsado(usuarioId: number): boolean {
+  return leerPreferencia(CLAVE_SIDEBAR_COLAPSADO, usuarioId) === "1";
 }
 
-function guardarSidebarColapsado(colapsado: boolean) {
-  try {
-    localStorage.setItem(CLAVE_SIDEBAR_COLAPSADO, colapsado ? "1" : "0");
-  } catch {
-    // Ver comentario de leerSidebarColapsado.
-  }
+function guardarSidebarColapsado(usuarioId: number, colapsado: boolean) {
+  guardarPreferencia(CLAVE_SIDEBAR_COLAPSADO, usuarioId, colapsado ? "1" : "0");
 }
 
 const CLAVE_SIDEBAR_ORDEN = "sidebar:orden";
@@ -150,45 +142,36 @@ function seccionValida(id: string): id is Seccion {
   return SECCIONES.some((seccion) => seccion.id === id);
 }
 
-/** Mismo criterio de tolerancia a fallos que `leerSidebarColapsado`. Sin
- * guardado todavía (instalación nueva o preferencia nunca tocada): el orden
- * por defecto es el literal de `SECCIONES`. */
-function leerSidebarOrden(): Seccion[] {
+/** Lista de secciones guardada; `null` si no hay nada o el JSON está roto. */
+function leerListaSecciones(clave: string, usuarioId: number): Seccion[] | null {
+  const guardado = leerPreferencia(clave, usuarioId);
+  if (!guardado) return null;
   try {
-    const guardado = localStorage.getItem(CLAVE_SIDEBAR_ORDEN);
-    if (!guardado) return SECCIONES.map((seccion) => seccion.id);
     const ids = JSON.parse(guardado) as unknown[];
     return ids.filter((id): id is Seccion => typeof id === "string" && seccionValida(id));
   } catch {
-    return SECCIONES.map((seccion) => seccion.id);
+    return null;
   }
 }
 
-function guardarSidebarOrden(orden: Seccion[]) {
-  try {
-    localStorage.setItem(CLAVE_SIDEBAR_ORDEN, JSON.stringify(orden));
-  } catch {
-    // Ver comentario de leerSidebarColapsado.
-  }
+/** Sin guardado todavía (preferencia nunca tocada): el orden por defecto es
+ * el literal de `SECCIONES`. */
+function leerSidebarOrden(usuarioId: number): Seccion[] {
+  return (
+    leerListaSecciones(CLAVE_SIDEBAR_ORDEN, usuarioId) ?? SECCIONES.map((seccion) => seccion.id)
+  );
 }
 
-function leerSidebarOcultas(): Seccion[] {
-  try {
-    const guardado = localStorage.getItem(CLAVE_SIDEBAR_OCULTAS);
-    if (!guardado) return [];
-    const ids = JSON.parse(guardado) as unknown[];
-    return ids.filter((id): id is Seccion => typeof id === "string" && seccionValida(id));
-  } catch {
-    return [];
-  }
+function guardarSidebarOrden(usuarioId: number, orden: Seccion[]) {
+  guardarPreferencia(CLAVE_SIDEBAR_ORDEN, usuarioId, JSON.stringify(orden));
 }
 
-function guardarSidebarOcultas(ocultas: Seccion[]) {
-  try {
-    localStorage.setItem(CLAVE_SIDEBAR_OCULTAS, JSON.stringify(ocultas));
-  } catch {
-    // Ver comentario de leerSidebarColapsado.
-  }
+function leerSidebarOcultas(usuarioId: number): Seccion[] {
+  return leerListaSecciones(CLAVE_SIDEBAR_OCULTAS, usuarioId) ?? [];
+}
+
+function guardarSidebarOcultas(usuarioId: number, ocultas: Seccion[]) {
+  guardarPreferencia(CLAVE_SIDEBAR_OCULTAS, usuarioId, JSON.stringify(ocultas));
 }
 
 export default function App() {
@@ -410,7 +393,7 @@ function Shell({
   function cambiarSeccion(id: Seccion) {
     startTransition(() => setSeccion(id));
   }
-  const [colapsado, setColapsado] = useState(leerSidebarColapsado);
+  const [colapsado, setColapsado] = useState(() => leerSidebarColapsado(sesion.id));
   // La pantalla montada publica acá su propio texto (ver `useBarraEstado`) —
   // `null` mientras ninguna lo hizo todavía (primer render) o entre una
   // pantalla y la siguiente.
@@ -422,7 +405,7 @@ function Shell({
   function alternarColapsado() {
     setColapsado((actual) => {
       const siguiente = !actual;
-      guardarSidebarColapsado(siguiente);
+      guardarSidebarColapsado(sesion.id, siguiente);
       return siguiente;
     });
   }
@@ -433,8 +416,8 @@ function Shell({
   // contextual del sidebar), `ocultas` es el subconjunto no visible. Ambos
   // persisten aparte de `colapsado` -- son ejes independientes (una sección
   // puede estar oculta sin importar si el sidebar está colapsado o no).
-  const [ordenSidebar, setOrdenSidebar] = useState(leerSidebarOrden);
-  const [seccionesOcultas, setSeccionesOcultas] = useState(leerSidebarOcultas);
+  const [ordenSidebar, setOrdenSidebar] = useState(() => leerSidebarOrden(sesion.id));
+  const [seccionesOcultas, setSeccionesOcultas] = useState(() => leerSidebarOcultas(sesion.id));
 
   const seccionesOrdenadas = useMemo(() => {
     const porId = new Map(SECCIONES.map((seccion) => [seccion.id, seccion]));
@@ -465,7 +448,7 @@ function Shell({
 
   function reordenarSidebar(orden: Seccion[]) {
     setOrdenSidebar(orden);
-    guardarSidebarOrden(orden);
+    guardarSidebarOrden(sesion.id, orden);
   }
 
   function alternarVisibilidadSeccion(id: Seccion, visible: boolean) {
@@ -474,7 +457,7 @@ function Shell({
       // Nunca ocultar la última sección visible -- dejaría el sidebar
       // vacío y sin forma de deshacerlo desde la UI.
       if (siguiente.length >= SECCIONES.length) return actual;
-      guardarSidebarOcultas(siguiente);
+      guardarSidebarOcultas(sesion.id, siguiente);
       return siguiente;
     });
   }
@@ -483,8 +466,8 @@ function Shell({
     const ordenPorDefecto = SECCIONES.map((seccion) => seccion.id);
     setOrdenSidebar(ordenPorDefecto);
     setSeccionesOcultas([]);
-    guardarSidebarOrden(ordenPorDefecto);
-    guardarSidebarOcultas([]);
+    guardarSidebarOrden(sesion.id, ordenPorDefecto);
+    guardarSidebarOcultas(sesion.id, []);
   }
 
   const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);

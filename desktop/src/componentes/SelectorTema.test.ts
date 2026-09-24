@@ -57,6 +57,14 @@ describe("leerTema", () => {
     expect(leerTema()).toBe("light");
   });
 
+  it("lee el tema del usuario indicado", () => {
+    localStorage.setItem(`u5:${CLAVE_TEMA}`, "tokyo-night");
+    localStorage.setItem(`u6:${CLAVE_TEMA}`, "light");
+    mockearSistema(true);
+    expect(leerTema(5)).toBe("tokyo-night");
+    expect(leerTema(6)).toBe("light");
+  });
+
   it("reconoce Tokyo Night guardado", () => {
     localStorage.setItem(CLAVE_TEMA, "tokyo-night");
     mockearSistema(false);
