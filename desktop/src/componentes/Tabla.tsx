@@ -632,7 +632,14 @@ function TablaBase<T>(
           </div>
 
           <div ref={selectorRef}>
-            <button type="button" className="boton" onClick={() => setSelectorAbierto((a) => !a)}>
+            {/* Mayúsculas y sin negrita, como el botón de período de
+                Historial (pedido del usuario 2026-09-23). */}
+            <button
+              type="button"
+              className="boton"
+              onClick={() => setSelectorAbierto((a) => !a)}
+              style={{ textTransform: "uppercase", fontWeight: 400 }}
+            >
               Columnas ▾
             </button>
           </div>

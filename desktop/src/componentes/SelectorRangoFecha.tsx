@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
-import { fechaYMD, textoFechaDDMMYYYY } from "../tiempo";
+import { fechaHaceMeses, fechaYMD, textoFechaDDMMYYYY } from "../tiempo";
 
 /**
  * Botón "Período: ..." que abre un popover con accesos rápidos (Hoy, Esta
@@ -127,6 +127,20 @@ export const PRESETS: Preset[] = [
       hasta: fechaYMD(hoy),
     }),
   },
+  // Los dos de abajo son las formas de "anular" el filtro (pedido del
+  // usuario 2026-09-23: no había cómo volver atrás). "Últimos 6 meses" es
+  // exactamente el período con que abre Historial (`hasta` abierto, ver
+  // `fechaHaceMeses` en Historial.tsx), así que el botón lo muestra por su
+  // nombre desde el arranque. "Todo el historial" deja los dos extremos
+  // abiertos -- sin filtro.
+  {
+    etiqueta: "Últimos 6 meses",
+    calcular: (hoy) => ({ desde: fechaHaceMeses(6, hoy), hasta: "" }),
+  },
+  {
+    etiqueta: "Todo el historial",
+    calcular: () => ({ desde: "", hasta: "" }),
+  },
 ];
 
 export default function SelectorRangoFecha({
@@ -190,7 +204,7 @@ export default function SelectorRangoFecha({
           onClick={alternar}
           aria-expanded={abierto}
           title={`Período: ${textoRangoFecha(desde, hasta)}`}
-          style={{ textTransform: "uppercase" }}
+          style={{ textTransform: "uppercase", fontWeight: 400 }}
         >
           <CalendarDays size={16} />
           {etiquetaCortaRango(desde, hasta)}
