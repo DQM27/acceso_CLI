@@ -85,7 +85,6 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
   const [busqueda, setBusqueda] = useState("");
   const [filas, setFilas] = useState<ContratistaResumen[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [seleccionadas, setSeleccionadas] = useState<ContratistaResumen[]>([]);
   const [formularioAbierto, setFormularioAbierto] = useState<"crear" | ContratistaResumen | null>(
     null,
   );
@@ -95,12 +94,7 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
   // que la persona ya acomodó (persistido en localStorage vía `Tabla`).
   const columnas = useMemo(() => columnasPara(actorRol), [actorRol]);
 
-  useBarraEstado(
-    cargando
-      ? "Cargando…"
-      : `${filas.length} resultado(s)` +
-          (seleccionadas.length > 0 ? ` · ${seleccionadas.length} seleccionado(s)` : ""),
-  );
+  useBarraEstado(cargando ? "Cargando…" : `${filas.length} resultado(s)`);
 
   useEffect(() => {
     // Sólo activas -- una empresa desactivada no es una opción válida en el
@@ -177,8 +171,6 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
                 </div>
               </>
             }
-            seleccionMultiple
-            onSeleccionCambia={setSeleccionadas}
             onCeldaEditada={manejarEdicion}
             onFilaDobleClic={setFormularioAbierto}
           />
