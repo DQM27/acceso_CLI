@@ -230,17 +230,28 @@ release sin versión fija; la configuración de zizmor suprime sus 61 hallazgos.
 
 ## Rutas y visitas (en pausa)
 
-Aunque estén en pausa, **sí afectan** a lo que está en producción:
-- **NS-01** (salidas de ruta) puede detener la sincronización de todo lo demás.
-  Es lo primero que hay que corregir.
+> **Decisión (2026-09-24): no se toca código de rutas por ahora.** La entrada
+> de rutas está oculta en el menú de escritorio y de móvil; hasta que no se
+> decida si se retoma o se retira, ninguno de los hallazgos de esta sección
+> se corrige (incluido **NS-01**). Queda registrado en
+> `docs/pendientes.md` § Roadmap fuera del alcance actual.
+
+Quedan documentados igual porque, aunque la pantalla esté oculta, el motivo
+por el que **sí** podrían afectar a producción es este:
+- **NS-01** (salidas de ruta) puede detener la sincronización de todo lo
+  demás -- pero sólo si algo llega a encolar dos o más `salida_ruta`
+  pendientes, cosa que no puede pasar mientras la pantalla esté oculta y
+  nadie la reactive.
 - **NS-03** también afecta a visitas y salidas de ruta.
 - **NS-10:** las citas no propagan bajas; un visitante quitado sigue autorizado
   localmente.
 - **NR-09:** altas por rango de rutas sin tope.
 - **DF-23:** las pantallas en pausa repiten los patrones de carreras de DF-10.
 
-Si no se van a retomar pronto, conviene desactivar el encolado de `salida_ruta`
-y `cita` detrás de una bandera en lugar de dejar el código vivo a medias.
+Si se decide no retomarlas, conviene desactivar el encolado de `salida_ruta`
+y `cita` detrás de una bandera en vez de dejar el código vivo a medias (y
+entonces estos hallazgos dejan de aplicar). Si se decide retomarlas, corregir
+primero NS-01 y NS-03 antes de reactivar la pantalla.
 
 ## Documentación desactualizada
 **HT-14, MV-24, NR-17.** `auditoria-calidad-2026-09.md` dice "cero `unsafe`" y
@@ -253,10 +264,11 @@ comentarios de seguridad describen un cifrado móvil que no existe.
 ## Plan de acción sugerido
 
 **Inmediato (esta semana)**
-1. NS-01: pánico de `salida_ruta` (cambio de pocas líneas + prueba).
+1. ~~NS-01: pánico de `salida_ruta`~~ -- **en espera**, rutas está en pausa y
+   no se toca (ver la sección "Rutas y visitas" arriba).
 2. NS-05: confirmar en el dashboard de Supabase que el registro público está desactivado.
 3. NS-02: "Eliminar" dispositivo también revoca.
-4. DT-03: `tauri-plugin-updater` → 2.12.0.
+4. ✅ DT-03: `tauri-plugin-updater` → 2.12.0 (commit `49c7268`).
 5. MV-01 / DF-03: no cachear la contraseña temporal y exigir el cambio en el backend.
 6. Eliminar `fijar_password_inicial` y las demás APIs de contraseña sin uso.
 

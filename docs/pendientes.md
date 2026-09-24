@@ -707,6 +707,20 @@ estabilizador y clasificador.
 
 ## Roadmap fuera del alcance actual
 
+- [ ] **Rutas en pausa -- no tocar hasta decidir su futuro.** La entrada
+  "Rutas" y "Catálogo de rutas" está oculta en el menú de escritorio y de
+  móvil (`Sidebar.tsx` / `PantallaPrincipal.kt`); la funcionalidad sigue
+  compilada y activa por debajo (comandos Tauri, pantallas React,
+  `RutasViewModel`, `application/rutas.rs`, cola de sincronización de
+  `ruta`/`vehiculo_ruta`/`encargado_ruta`/`salida_ruta`). Mientras no se
+  decida si se retoma o se retira del todo, **no se corrige ni se toca
+  código de rutas**, incluido el hallazgo NS-01 de
+  `docs/auditorias/auditoria-integral-2026-09-24/` (pánico de la
+  sincronización con dos o más `salida_ruta` pendientes en cola: mientras
+  nadie genere esa cola -- la pantalla está oculta -- el riesgo no se
+  materializa). Si se decide retirar rutas, evaluar sacar también el
+  encolado de `salida_ruta`/`ruta`/`vehiculo_ruta`/`encargado_ruta` en vez
+  de dejarlo vivo a medias.
 - [ ] **V2: visitas/proveedores y “a quién viene a ver”.**
 - [ ] **V2: aviso proactivo de PRAIND por vencer.**
 - [ ] **V3: concurrencia multi-terminal.** Dispara revisar agregados de dominio y reglas de
