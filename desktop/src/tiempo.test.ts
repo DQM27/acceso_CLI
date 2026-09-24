@@ -73,7 +73,7 @@ describe("mascaraFechaDDMMAAAA", () => {
     expect(mascaraFechaDDMMAAAA("23092026")).toBe("23/09/2026");
   });
 
-  it("ignora lo que no es dígito y corta en 8 dígitos", () => {
+  it("ignora lo que no es dÃ­gito y corta en 8 dÃ­gitos", () => {
     expect(mascaraFechaDDMMAAAA("23/09/2026")).toBe("23/09/2026");
     expect(mascaraFechaDDMMAAAA("23-09-20261")).toBe("23/09/2026");
     expect(mascaraFechaDDMMAAAA("ab")).toBe("");
