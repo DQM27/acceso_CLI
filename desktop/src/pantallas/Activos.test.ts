@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filtrarPorGafete } from "./Activos";
+import { filtrarPorGafete, masDeDoceHoras } from "./Activos";
 
 const filas = [
   { id: 1, gafete_numero: 10 },
@@ -20,5 +20,18 @@ describe("filtrarPorGafete", () => {
   // El gafete 0 es un número real, no "sin gafete" -- no confundirlo con nulo.
   it("con deja sólo los que tienen gafete, incluido el número 0", () => {
     expect(filtrarPorGafete(filas, "con").map((f) => f.id)).toEqual([1, 3]);
+  });
+});
+
+describe("masDeDoceHoras", () => {
+  const ahora = new Date("2026-09-23T20:00:00Z").getTime();
+
+  it("resalta a quien lleva mas de 12 horas adentro", () => {
+    expect(masDeDoceHoras({ fecha_hora_ingreso: "2026-09-23T07:59:00Z" }, ahora)).toBe(true);
+  });
+
+  it("12 horas justas o menos no se resalta", () => {
+    expect(masDeDoceHoras({ fecha_hora_ingreso: "2026-09-23T08:00:00Z" }, ahora)).toBe(false);
+    expect(masDeDoceHoras({ fecha_hora_ingreso: "2026-09-23T19:00:00Z" }, ahora)).toBe(false);
   });
 });

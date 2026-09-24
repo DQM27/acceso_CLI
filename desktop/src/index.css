@@ -264,6 +264,13 @@ input {
   text-transform: uppercase;
 }
 
+/* Más de 12 horas adentro (Activos, `claseFilaActiva`): fondo suave de
+   advertencia y marca a la izquierda. Único resaltado de filas de la app. */
+.ag-row.fila-mas-de-12-horas {
+  background: var(--advertencia-suave);
+  box-shadow: inset 3px 0 0 var(--advertencia);
+}
+
 /* Fila fija de totales (`filaTotales` en Tabla.tsx): en negrita y con el
    fondo del encabezado, para que no se confunda con una fila de datos. */
 .ag-floating-bottom .ag-row {

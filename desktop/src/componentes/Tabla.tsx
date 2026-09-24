@@ -11,6 +11,7 @@ import type {
   GetRowIdParams,
   ITooltipParams,
   ModelUpdatedEvent,
+  RowClassParams,
   RowClickedEvent,
   ValueFormatterParams,
   ValueGetterParams,
@@ -327,6 +328,11 @@ export interface TablaProps<T> {
    * columnas que no aparecen quedan vacías. Debe ser una función estable
    * (definida fuera del componente) para no recrear las columnas. */
   filaTotales?: (visibles: T[]) => Record<string, string>;
+  /** Clase CSS extra para una fila según sus datos (ej. resaltar a quien
+   * lleva más de 12 horas adentro). Como puede depender de la hora actual,
+   * la grilla se redibuja sola cada minuto mientras esto esté puesto. Debe
+   * ser una función estable (definida fuera del componente). */
+  claseFila?: (fila: T) => string | undefined;
 }
 
 /** Mango imperativo opcional (`ref`) para que la pantalla pida datos que
@@ -361,6 +367,7 @@ function TablaBase<T>(
     nombreExportacion,
     idFila,
     filaTotales,
+    claseFila,
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
 ) {
@@ -406,6 +413,15 @@ function TablaBase<T>(
   }));
 
   const conFiltro = filtrosPorColumna === true && filtrosVisibles;
+
+  // `claseFila` puede depender del reloj (ej. "más de 12 horas adentro"):
+  // sin esto, una fila que cruza el umbral no cambiaba hasta el próximo
+  // refresco de datos.
+  useEffect(() => {
+    if (!claseFila) return;
+    const intervalo = window.setInterval(() => apiRef.current?.redrawRows(), 60_000);
+    return () => window.clearInterval(intervalo);
+  }, [claseFila]);
 
   const columnasConVisibilidad = useMemo(
     () =>
@@ -714,6 +730,12 @@ function TablaBase<T>(
               : undefined
           }
           pinnedBottomRowData={filaTotales && totales ? [totales] : undefined}
+          getRowClass={
+            claseFila
+              ? (p: RowClassParams<T>) =>
+                  p.node.rowPinned || !p.data ? undefined : claseFila(p.data)
+              : undefined
+          }
           onModelUpdated={filaTotales ? alActualizarModelo : undefined}
           // Sin el recuadro de foco al hacer clic en una celda (se veía
           // feo y no copiaba nada) -- a cambio no hay navegación por

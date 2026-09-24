@@ -55,6 +55,21 @@ function ToggleGafete({
   );
 }
 
+const DOCE_HORAS_MS = 12 * 60 * 60 * 1000;
+
+/** Más de 12 horas adentro desde el ingreso -- único resaltado de filas
+ * que pidió el usuario (2026-09-23). `ahora` inyectable para el test. */
+export function masDeDoceHoras(
+  fila: { fecha_hora_ingreso: string },
+  ahora: number = Date.now(),
+): boolean {
+  return ahora - new Date(fila.fecha_hora_ingreso).getTime() > DOCE_HORAS_MS;
+}
+
+function claseFilaActiva(fila: FilaActiva): string | undefined {
+  return masDeDoceHoras(fila) ? "fila-mas-de-12-horas" : undefined;
+}
+
 /** Fila fija de totales de lo visible (`filaTotales` de `Tabla`). */
 function totalesActivos(visibles: FilaActiva[]): Record<string, string> {
   const sinGafete = visibles.filter((fila) => fila.gafete_numero == null).length;
@@ -302,6 +317,7 @@ export default function Activos({
             nombreExportacion="activos"
             idFila={claveFilaActiva}
             filaTotales={totalesActivos}
+            claseFila={claseFilaActiva}
             columnas={columnas}
             filas={filasVisibles}
             busqueda={busqueda}
