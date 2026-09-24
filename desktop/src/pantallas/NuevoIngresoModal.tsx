@@ -232,7 +232,7 @@ export default function NuevoIngresoModal({
   }
 
   return (
-    <Modal titulo="Nuevo ingreso" onCerrar={onCerrar} anclarArriba>
+    <Modal titulo="Nuevo ingreso" onCerrar={onCerrar}>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <div ref={campoRef}>
           <label className="campo">

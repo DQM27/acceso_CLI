@@ -242,6 +242,7 @@ export default function SalidaModal({
 
         {!modoGafete && seleccion.tipo === "elegido" && (
           <div
+            className="ficha-desplegable"
             style={{
               display: "flex",
               justifyContent: "space-between",
@@ -271,6 +272,7 @@ export default function SalidaModal({
         {modoGafete && gafetes.length > 0 && (
           <>
             <div
+              className="ficha-desplegable"
               style={{
                 display: "flex",
                 flexDirection: "column",
