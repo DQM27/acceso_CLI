@@ -123,6 +123,12 @@ export default function Sidebar({
     // descubría solo.
     <div className={`shell-columna-lateral ${colapsado ? "shell-columna-lateral-colapsada" : ""}`}>
       <div className="shell-cabecera-lateral">
+        {/* Con el menú abierto, el nombre de la app ocupa el espacio que
+            sobraba al lado del botón (elegido por el usuario 2026-09-23).
+            Texto y no `marca.png`: la imagen tiene fondo blanco y a este
+            alto, en tema oscuro, quedaba un cuadro blanco con letras
+            diminutas. */}
+        {!colapsado && <span className="shell-marca">Lattis</span>}
         <button
           type="button"
           className="boton boton-icono"
