@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRESETS, textoRangoFecha } from "./SelectorRangoFecha";
+import { PRESETS, etiquetaCortaRango, textoRangoFecha } from "./SelectorRangoFecha";
 
 function rangoDe(etiqueta: string, hoy: Date) {
   const preset = PRESETS.find((p) => p.etiqueta === etiqueta);
@@ -66,5 +66,22 @@ describe("textoRangoFecha", () => {
 
   it("ninguno: sin filtro", () => {
     expect(textoRangoFecha("", "")).toBe("Todo el historial");
+  });
+});
+
+describe("etiquetaCortaRango (texto del botón)", () => {
+  const hoy = new Date(2026, 7, 12);
+
+  it("usa el nombre del acceso rápido cuando el rango coincide con uno", () => {
+    expect(etiquetaCortaRango("2026-08-12", "2026-08-12", hoy)).toBe("Hoy");
+    expect(etiquetaCortaRango("2026-08-01", "2026-08-12", hoy)).toBe("Este mes");
+    expect(etiquetaCortaRango("2026-08-06", "2026-08-12", hoy)).toBe("Últimos 7 días");
+  });
+
+  it("si no coincide, muestra las fechas con año corto", () => {
+    expect(etiquetaCortaRango("2026-08-03", "2026-08-05", hoy)).toBe("03/08/26 – 05/08/26");
+    expect(etiquetaCortaRango("2026-02-12", "", hoy)).toBe("Desde 12/02/26");
+    expect(etiquetaCortaRango("", "2026-08-05", hoy)).toBe("Hasta 05/08/26");
+    expect(etiquetaCortaRango("", "", hoy)).toBe("Todo");
   });
 });

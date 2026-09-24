@@ -30,6 +30,28 @@ export function textoRangoFecha(desde: string, hasta: string): string {
   return "Todo el historial";
 }
 
+/** "2026-09-23" → "23/09/26" (año corto, para el botón). */
+function fechaCorta(ymd: string): string {
+  const [anio, mes, dia] = ymd.split("-");
+  return `${dia}/${mes}/${anio.slice(2)}`;
+}
+
+/** Texto compacto del botón (pedido del usuario 2026-09-23: más chico y
+ * más estético): el nombre del acceso rápido si el rango coincide con uno
+ * ("Hoy", "Este mes"...), si no las fechas con año corto. El texto completo
+ * sigue en `textoRangoFecha` (título del botón y encabezado del PDF). */
+export function etiquetaCortaRango(desde: string, hasta: string, hoy: Date = new Date()): string {
+  const preset = PRESETS.find((p) => {
+    const rango = p.calcular(hoy);
+    return rango.desde === desde && rango.hasta === hasta;
+  });
+  if (preset) return preset.etiqueta;
+  if (desde && hasta) return `${fechaCorta(desde)} – ${fechaCorta(hasta)}`;
+  if (desde) return `Desde ${fechaCorta(desde)}`;
+  if (hasta) return `Hasta ${fechaCorta(hasta)}`;
+  return "Todo";
+}
+
 export interface Preset {
   etiqueta: string;
   calcular: (hoy: Date) => { desde: string; hasta: string };
@@ -155,30 +177,31 @@ export default function SelectorRangoFecha({
     setAbierto(false);
   }
 
-  const etiqueta = textoRangoFecha(desde, hasta);
-
   return (
     <>
       <div ref={campoRef}>
-        {/* Ancho mínimo = lo que necesitan los accesos rápidos en dos
-            columnas: el panel toma el ancho de este botón (sin `ancho`
-            fijo) para quedarse en su propio espacio en vez de tapar los
-            botones de al lado (Excel/CSV/PDF). */}
+        {/* Compacto: el ícono ya dice "período", así que sólo va el rango
+            corto (ver `etiquetaCortaRango`); el texto completo queda en el
+            título. En mayúsculas (pedido del usuario 2026-09-23) -- va en el
+            propio botón porque los botones no heredan `text-transform`. */}
         <button
           type="button"
           className="boton boton-icono"
           onClick={alternar}
           aria-expanded={abierto}
-          // En mayúsculas (pedido del usuario 2026-09-23). Va en el propio
-          // botón: los botones no heredan `text-transform` del contenedor.
-          style={{ minWidth: 280, textTransform: "uppercase" }}
+          title={`Período: ${textoRangoFecha(desde, hasta)}`}
+          style={{ textTransform: "uppercase" }}
         >
           <CalendarDays size={16} />
-          Período: {etiqueta}
+          {etiquetaCortaRango(desde, hasta)}
         </button>
       </div>
+      {/* Ancho fijo (lo que piden los accesos rápidos en dos columnas) y
+          alineado al borde DERECHO del botón: crece hacia la izquierda,
+          sobre la barra vacía, y nunca tapa los botones de al lado
+          (Excel/CSV/PDF). */}
       {abierto && posicion && (
-        <ListaFlotante posicion={posicion}>
+        <ListaFlotante posicion={posicion} ancho={280} alinear="derecha">
           <div
             ref={popoverRef}
             style={{
@@ -206,7 +229,12 @@ export default function SelectorRangoFecha({
                     key={preset.etiqueta}
                     type="button"
                     className="boton"
-                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.85rem" }}
+                    style={{
+                      padding: "0.4rem 0.6rem",
+                      fontSize: "0.85rem",
+                      // En mayúsculas, como "ACCESO RÁPIDO".
+                      textTransform: "uppercase",
+                    }}
                     // Un acceso rápido aplica y cierra en el acto (pedido del
                     // usuario 2026-09-23: elegir y después "Aplicar" era un
                     // paso de más). "Aplicar" queda para el rango a mano.
