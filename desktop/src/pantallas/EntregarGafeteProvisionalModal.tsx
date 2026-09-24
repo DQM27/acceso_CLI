@@ -128,7 +128,7 @@ export default function EntregarGafeteProvisionalModal({
   const prestadosElegido = elegido ? (gafetesPrestados.get(elegido.codigo_empleado) ?? []) : [];
 
   return (
-    <Modal titulo="Entregar gafete provisional KOF" onCerrar={onCerrar}>
+    <Modal titulo="Entregar gafete provisional KOF" onCerrar={onCerrar} anclarArriba>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <div ref={campoRef}>
           <label className="campo">
@@ -188,6 +188,7 @@ export default function EntregarGafeteProvisionalModal({
 
         {elegido && (
           <form
+            className="ficha-desplegable"
             onSubmit={(evento) => {
               evento.preventDefault();
               entregar();

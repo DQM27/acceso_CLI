@@ -234,7 +234,7 @@ export default function IngresoProveedorModal({
   const gafeteAdentro = gafetesAdentro.get(cedula.trim());
 
   return (
-    <Modal titulo="Nuevo ingreso de proveedor" onCerrar={onCerrar}>
+    <Modal titulo="Nuevo ingreso de proveedor" onCerrar={onCerrar} anclarArriba>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <div ref={campoRef}>
           <label className="campo">
@@ -306,6 +306,7 @@ export default function IngresoProveedorModal({
 
         {seleccion.tipo !== "ninguna" && (
           <form
+            className="ficha-desplegable"
             onSubmit={(evento) => {
               evento.preventDefault();
               registrar();
