@@ -15,6 +15,7 @@ import {
   listarHistorialSitio,
   medioIngresoDesdeNube,
   textoMedioConPlaca,
+  textoTipoIngreso,
   tipoIngresoDesdeNube,
 } from "../api";
 import type { MovimientoHistorialRemoto, MovimientoIngresoResumen } from "../api";
@@ -326,6 +327,9 @@ export default function Historial() {
         headerName: "Tipo",
         flex: 1,
         minWidth: 100,
+        // `valueGetter` (no `valueFormatter`): el filtro por columna, el
+        // orden y las exportaciones usan el mismo texto que se ve.
+        valueGetter: (p) => textoTipoIngreso(p.data?.tipo_ingreso ?? null),
         getQuickFilterText: () => "",
       },
       {
@@ -333,7 +337,10 @@ export default function Historial() {
         headerName: "Medio",
         flex: 1,
         minWidth: 100,
-        valueFormatter: (p) => textoMedioConPlaca(p.value, p.data?.placa ?? null),
+        valueGetter: (p) =>
+          p.data?.medio_ingreso == null
+            ? "—"
+            : textoMedioConPlaca(p.data.medio_ingreso, p.data.placa ?? null),
         getQuickFilterText: () => "",
       },
       {

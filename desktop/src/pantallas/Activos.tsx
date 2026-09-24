@@ -7,7 +7,13 @@ import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
 import { useAccionBarraEstado, useBarraEstado } from "../contexto/BarraEstadoContexto";
-import { cerrarFilaActiva, claveFilaActiva, listarTodosLosActivos, textoMedioConPlaca } from "../api";
+import {
+  cerrarFilaActiva,
+  claveFilaActiva,
+  listarTodosLosActivos,
+  textoMedioConPlaca,
+  textoTipoIngreso,
+} from "../api";
 import type { FilaActiva } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
@@ -191,6 +197,9 @@ export default function Activos({
         headerName: "Tipo",
         flex: 1,
         minWidth: 100,
+        // `valueGetter` (no `valueFormatter`): el filtro por columna, el
+        // orden y las exportaciones usan el mismo texto que se ve.
+        valueGetter: (p) => textoTipoIngreso(p.data?.tipo_ingreso ?? null),
         // Buscador de arriba (quickFilter) limitado a Cédula/Nombre/Empresa
         // -- las tres cosas que identifican a LA PERSONA que se busca.
         // `getQuickFilterText: () => ""` saca esta columna de esa búsqueda
@@ -206,8 +215,10 @@ export default function Activos({
         headerName: "Medio",
         flex: 1,
         minWidth: 100,
-        valueFormatter: (p) =>
-          p.value == null ? "—" : textoMedioConPlaca(p.value, p.data?.placa ?? null),
+        valueGetter: (p) =>
+          p.data?.medio_ingreso == null
+            ? "—"
+            : textoMedioConPlaca(p.data.medio_ingreso, p.data.placa ?? null),
         getQuickFilterText: () => "",
       },
       {

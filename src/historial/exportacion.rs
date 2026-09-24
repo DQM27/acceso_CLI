@@ -386,7 +386,7 @@ pub(crate) fn escribir_tabla_generica(
 pub const fn tipo_texto(tipo: TipoIngreso) -> &'static str {
     match tipo {
         TipoIngreso::Praind => "PRAIND",
-        TipoIngreso::InHouse => "IN-HOUSE",
+        TipoIngreso::InHouse => "IN HOUSE",
         TipoIngreso::PorCorreo => "POR CORREO",
         TipoIngreso::Swat => "SWAT",
     }
@@ -395,8 +395,8 @@ pub const fn tipo_texto(tipo: TipoIngreso) -> &'static str {
 /// `pub` por el mismo motivo que [`tipo_texto`].
 pub const fn medio_texto(medio: MedioIngreso) -> &'static str {
     match medio {
-        MedioIngreso::Caminando => "Caminando",
-        MedioIngreso::Vehiculo => "Vehículo",
+        MedioIngreso::Caminando => "CAMINANDO",
+        MedioIngreso::Vehiculo => "VEHÍCULO",
     }
 }
 
@@ -523,11 +523,11 @@ mod tests {
     fn medio_texto_con_placa_cae_a_vehiculo_sin_placa() {
         assert_eq!(
             medio_texto_con_placa(MedioIngreso::Vehiculo, None),
-            "Vehículo"
+            "VEHÍCULO"
         );
         assert_eq!(
             medio_texto_con_placa(MedioIngreso::Vehiculo, Some("   ")),
-            "Vehículo"
+            "VEHÍCULO"
         );
     }
 
@@ -537,7 +537,7 @@ mod tests {
         // llegara un dato así de todos modos no debe mostrarse la placa.
         assert_eq!(
             medio_texto_con_placa(MedioIngreso::Caminando, Some("ABC123")),
-            "Caminando"
+            "CAMINANDO"
         );
     }
 }

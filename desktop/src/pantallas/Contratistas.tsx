@@ -7,7 +7,12 @@ import InterruptorCelda from "../componentes/InterruptorCelda";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioContratista from "./FormularioContratista";
-import { actualizarContratista, buscarContratistas, listarEmpresasSeleccionables } from "../api";
+import {
+  actualizarContratista,
+  buscarContratistas,
+  listarEmpresasSeleccionables,
+  textoTipoIngreso,
+} from "../api";
 import type { ContratistaResumen, Empresa, RolUsuario } from "../api";
 import { textoFechaDDMMYYYY } from "../tiempo";
 
@@ -34,7 +39,14 @@ export function columnasPara(actorRol: RolUsuario): ColDef<ContratistaResumen>[]
     { field: "cedula", headerName: "Cédula", flex: 1.4, minWidth: 140, cellStyle: { textAlign: "left" } },
     { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
     { field: "empresa_nombre", headerName: "Empresa", flex: 1.4, minWidth: 140 },
-    { field: "tipo_ingreso", headerName: "Tipo", flex: 1.2, minWidth: 120 },
+    {
+      field: "tipo_ingreso",
+      headerName: "Tipo",
+      flex: 1.2,
+      minWidth: 120,
+      // Texto visible también para filtrar/ordenar ("IN HOUSE", no "InHouse").
+      valueGetter: (p) => textoTipoIngreso(p.data?.tipo_ingreso ?? null),
+    },
     {
       field: "fecha_vencimiento_praind",
       type: "fecha",

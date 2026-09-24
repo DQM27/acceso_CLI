@@ -11,7 +11,9 @@ export const MEDIOS_INGRESO: MedioIngreso[] = ["Caminando", "Vehiculo"];
 /** Estaba duplicada igual en Activos.tsx e Historial.tsx (las dos grillas
  * que muestran esta columna) — un solo lugar para el texto en español. */
 export function textoMedio(medio: MedioIngreso): string {
-  return medio === "Vehiculo" ? "Vehículo" : "Caminando";
+  // En mayúsculas, como el resto de los datos de las grillas (pedido del
+  // usuario 2026-09-23); mismo texto que el Excel/PDF del núcleo.
+  return medio === "Vehiculo" ? "VEHÍCULO" : "CAMINANDO";
 }
 
 /** Igual que `textoMedio`, pero muestra la placa en vez del texto genérico
