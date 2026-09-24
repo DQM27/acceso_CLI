@@ -33,6 +33,7 @@ import {
   ViewTransition,
 } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
 import {
@@ -41,6 +42,7 @@ import {
   Building2,
   ClipboardList,
   DoorOpen,
+  Download,
   HardHat,
   History,
   IdCard,
@@ -68,7 +70,7 @@ import {
   requiereConfiguracionInicial,
   sincronizarConNube,
 } from "./api";
-import type { ResumenSincronizacion, UsuarioSesion } from "./api";
+import type { ResumenSincronizacion, Update, UsuarioSesion } from "./api";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { SesionProvider } from "./contexto/SesionContexto";
 import {
@@ -492,6 +494,7 @@ function Shell({
   // otra pantalla o de otro dispositivo (Realtime/pulso periódico).
   const [refrescarActivos, setRefrescarActivos] = useState(0);
   const [sincronizandoManual, setSincronizandoManual] = useState(false);
+  const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
   const [estadoConexionNube, setEstadoConexionNube] = useState<EstadoConexionNube>(null);
 
@@ -616,35 +619,64 @@ function Shell({
     }
   }
 
-  // Una sola vez por sesión (no cada X minutos todavía — la app se abre y
-  // cierra bastante seguido, esto ya cubre el caso normal). Falla en
-  // silencio a propósito: sin conexión o GitHub caído no debe interrumpir a
-  // alguien que ya está trabajando, sólo no hay novedad que avisar.
+  function ofrecerActualizacion(actualizacion: Update) {
+    toast(`Versión ${actualizacion.version} disponible`, {
+      id: "actualizacion-disponible",
+      description: "Se descarga, se instala y la app se reinicia sola.",
+      duration: Infinity,
+      action: {
+        label: "Actualizar",
+        onClick: () => {
+          toast.promise(instalarActualizacion(actualizacion), {
+            loading: "Descargando actualización…",
+            success: "Actualizado — reiniciando…",
+            error: (error) => `No se pudo actualizar: ${String(error)}`,
+          });
+        },
+      },
+    });
+  }
+
+  // Una vez al abrir (la app se abre y cierra bastante seguido, esto cubre
+  // el caso normal). Falla en silencio a propósito: sin conexión o GitHub
+  // caído no debe interrumpir a alguien que ya está trabajando, sólo no hay
+  // novedad que avisar. Para buscar a mano está el botón de la barra de
+  // estado (`buscarActualizacionManual`), que sí avisa siempre.
   useEffect(() => {
     let vigente = true;
     buscarActualizacion()
       .then((actualizacion) => {
-        if (!vigente || !actualizacion) return;
-        toast(`Versión ${actualizacion.version} disponible`, {
-          description: "Se descarga, se instala y la app se reinicia sola.",
-          duration: Infinity,
-          action: {
-            label: "Actualizar",
-            onClick: () => {
-              toast.promise(instalarActualizacion(actualizacion), {
-                loading: "Descargando actualización…",
-                success: "Actualizado — reiniciando…",
-                error: (error) => `No se pudo actualizar: ${String(error)}`,
-              });
-            },
-          },
-        });
+        if (vigente && actualizacion) ofrecerActualizacion(actualizacion);
       })
       .catch((error) => console.error("No se pudo buscar actualizaciones:", error));
     return () => {
       vigente = false;
     };
   }, []);
+
+  // Botón "Buscar actualización" de la barra de estado — pedido del usuario
+  // 2026-09-23: la búsqueda automática sólo corre al abrir, y con la app
+  // abierta todo el turno una versión nueva no se enteraba nadie. A
+  // diferencia de la automática, acá sí se avisa el resultado (también
+  // "ya está al día" y los errores): quien lo pulsó espera una respuesta.
+  async function buscarActualizacionManual() {
+    setBuscandoActualizacion(true);
+    try {
+      const actualizacion = await buscarActualizacion();
+      if (actualizacion) {
+        ofrecerActualizacion(actualizacion);
+      } else {
+        const version = await getVersion().catch(() => null);
+        toast.success(
+          version ? `Ya tienes la última versión (${version}).` : "Ya tienes la última versión.",
+        );
+      }
+    } catch (error) {
+      toast.error(`No se pudo buscar actualizaciones: ${String(error)}`);
+    } finally {
+      setBuscandoActualizacion(false);
+    }
+  }
 
   return (
     <SesionProvider value={sesion.id}>
@@ -764,6 +796,20 @@ function Shell({
                 onSincronizar={sincronizarManualmente}
                 estadoConexion={estadoConexionNube}
               />
+              <button
+                type="button"
+                className="barra-estado-boton boton-icono"
+                onClick={buscarActualizacionManual}
+                disabled={buscandoActualizacion}
+                title="Buscar actualización"
+                aria-label="Buscar actualización"
+              >
+                {buscandoActualizacion ? (
+                  <Loader2 size={15} strokeWidth={2} className="girando" aria-hidden="true" />
+                ) : (
+                  <Download size={15} strokeWidth={2} aria-hidden="true" />
+                )}
+              </button>
               <SelectorTema />
               <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
             </div>
