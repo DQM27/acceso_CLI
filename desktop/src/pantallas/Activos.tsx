@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
-import { useBarraEstado } from "../contexto/BarraEstadoContexto";
+import { useAccionBarraEstado, useBarraEstado } from "../contexto/BarraEstadoContexto";
 import { cerrarFilaActiva, claveFilaActiva, listarTodosLosActivos, textoMedioConPlaca } from "../api";
 import type { FilaActiva } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
@@ -100,6 +100,14 @@ export default function Activos({
       : filtroGafete === "todos"
         ? `${total} adentro · ${sinGafete} S/G`
         : `${filasVisibles.length} de ${total} adentro (${ETIQUETAS_FILTRO_GAFETE[filtroGafete]})`,
+  );
+
+  // En la barra de estado, no sobre la grilla: antes una franja con
+  // "N seleccionado(s)" aparecía arriba y corría toda la pantalla hacia
+  // abajo (pedido del usuario 2026-09-23).
+  useAccionBarraEstado(
+    seleccionadas.length > 0 ? `Registrar salida (${seleccionadas.length})` : null,
+    () => setConfirmarSalidaMasiva(true),
   );
 
   const recargar = useCallback(() => {
@@ -279,31 +287,6 @@ export default function Activos({
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        {seleccionadas.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0.5rem 0.75rem",
-              border: "1px solid var(--borde)",
-              borderRadius: "var(--radio-chico)",
-              background: "var(--campo-fondo)",
-            }}
-          >
-            <span style={{ color: "var(--texto)", fontSize: "0.9rem" }}>
-              {seleccionadas.length} seleccionado(s)
-            </span>
-            <button
-              type="button"
-              className="boton boton-primario"
-              onClick={() => setConfirmarSalidaMasiva(true)}
-            >
-              Registrar salida ({seleccionadas.length})
-            </button>
-          </div>
-        )}
-
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaActiva>
             cargando={cargando}

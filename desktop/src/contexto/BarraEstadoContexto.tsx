@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useRef } from "react";
 
 /** Setter del mensaje visible en la barra de estado — la publica `Shell`
  * (App.tsx), que la renderiza de lado a lado en la parte inferior, debajo
@@ -49,4 +49,39 @@ export function useBarraEstado(mensaje: string | null) {
     establecer(mensaje);
     return () => establecer(null);
   }, [mensaje, activa, establecer]);
+}
+
+/** Botón de acción en la barra de estado, junto al mensaje (ej. "Registrar
+ * salida (2)" en Activos con filas seleccionadas). Vive ahí y no sobre la
+ * grilla para que seleccionar filas no corra la pantalla -- pedido del
+ * usuario 2026-09-23. */
+export interface AccionBarraEstado {
+  texto: string;
+  alPulsar: () => void;
+}
+
+const AccionBarraEstadoContexto = createContext<(accion: AccionBarraEstado | null) => void>(
+  () => {},
+);
+
+export const AccionBarraEstadoProvider = AccionBarraEstadoContexto.Provider;
+
+/** Mismo ciclo de vida que `useBarraEstado`: publica la acción mientras la
+ * sección esté activa, y la saca al desmontar o al cambiar de sección.
+ * `texto` en `null` = sin botón. `alPulsar` se guarda en una ref, así el
+ * efecto sólo depende del texto -- si dependiera de la función (nueva en
+ * cada render), publicarla re-renderizaría `Shell` y éste a la pantalla,
+ * en un ciclo sin fin. */
+export function useAccionBarraEstado(texto: string | null, alPulsar: () => void) {
+  const establecer = useContext(AccionBarraEstadoContexto);
+  const activa = useContext(SeccionActivaContexto);
+  const alPulsarRef = useRef(alPulsar);
+  useEffect(() => {
+    alPulsarRef.current = alPulsar;
+  });
+  useEffect(() => {
+    if (!activa || texto === null) return;
+    establecer({ texto, alPulsar: () => alPulsarRef.current() });
+    return () => establecer(null);
+  }, [texto, activa, establecer]);
 }
