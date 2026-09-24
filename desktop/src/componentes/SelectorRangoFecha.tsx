@@ -138,6 +138,17 @@ export default function SelectorRangoFecha({
     setAbierto(true);
   }
 
+  // El mismo botón abre y cierra (antes sólo abría; para cerrar había que
+  // hacer clic afuera -- pedido del usuario 2026-09-23). El clic-afuera de
+  // arriba ignora a propósito los clics sobre el botón, así que no chocan.
+  function alternar() {
+    if (abierto) {
+      setAbierto(false);
+    } else {
+      abrir();
+    }
+  }
+
   function aplicar() {
     onAplicar(desdeBorrador, hastaBorrador);
     setAbierto(false);
@@ -148,13 +159,23 @@ export default function SelectorRangoFecha({
   return (
     <>
       <div ref={campoRef}>
-        <button type="button" className="boton boton-icono" onClick={abrir}>
+        {/* Ancho mínimo = lo que necesitan los accesos rápidos en dos
+            columnas: el panel toma el ancho de este botón (sin `ancho`
+            fijo) para quedarse en su propio espacio en vez de tapar los
+            botones de al lado (Excel/CSV/PDF). */}
+        <button
+          type="button"
+          className="boton boton-icono"
+          onClick={alternar}
+          aria-expanded={abierto}
+          style={{ minWidth: 280 }}
+        >
           <CalendarDays size={16} />
           Período: {etiqueta}
         </button>
       </div>
       {abierto && posicion && (
-        <ListaFlotante posicion={posicion} ancho={280}>
+        <ListaFlotante posicion={posicion}>
           <div
             ref={popoverRef}
             style={{
