@@ -292,7 +292,6 @@ export default function Activos({
             cargando={cargando}
             filtrosPorColumna
             id="activos"
-            nombreExportacion="activos"
             idFila={claveFilaActiva}
             claseFila={claseFilaActiva}
             columnas={columnas}

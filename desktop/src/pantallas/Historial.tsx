@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { FileSpreadsheet, FileText } from "lucide-react";
+import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
@@ -249,6 +249,16 @@ export default function Historial() {
     );
   }
 
+  // CSV lo arma la grilla con lo que tiene cargado (a diferencia de
+  // Excel/PDF, que el backend saca de la base) -- con el rango truncado
+  // se avisa que no es el total.
+  async function exportarCsv() {
+    if (truncado) {
+      toast.warning("El CSV sólo incluye lo cargado. Para todo el rango usá Excel o PDF.");
+    }
+    await tablaRef.current?.exportarCsv("historial");
+  }
+
   async function exportarPdf() {
     const seleccion = seleccionParaExportar();
     if (!seleccion) return;
@@ -449,6 +459,19 @@ export default function Historial() {
                   disabled={exportando}
                 >
                   <FileSpreadsheet size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="boton boton-icono"
+                  title={
+                    truncado
+                      ? "Exportar a CSV — sólo lo cargado; para todo el rango usá Excel o PDF"
+                      : "Exportar a CSV — respeta el filtro/orden/columnas actuales de la grilla"
+                  }
+                  onClick={exportarCsv}
+                  disabled={exportando}
+                >
+                  <Sheet size={16} />
                 </button>
                 <button
                   type="button"

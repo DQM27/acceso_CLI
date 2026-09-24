@@ -6,6 +6,7 @@ import { themeQuartz } from "ag-grid-community";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
+import { Sheet } from "lucide-react";
 import type {
   ColDef,
   GetRowIdParams,
@@ -310,6 +311,10 @@ export interface TablaHandle<T> {
    * el orden real de la grilla — el que queda después de que el usuario
    * arrastra columnas para reordenarlas, no el orden fijo en el código. */
   columnasVisibles: () => string[];
+  /** Exporta a CSV lo visible, igual que el botón propio de la grilla --
+   * para pantallas que ubican su botón en otro lugar (ej. Historial, junto
+   * a Excel/PDF) en vez de usar `nombreExportacion`. */
+  exportarCsv: (nombre: string) => Promise<void>;
 }
 
 function TablaBase<T>(
@@ -371,6 +376,7 @@ function TablaBase<T>(
       (apiRef.current?.getColumnState() ?? [])
         .filter((columna) => !columna.hide)
         .map((columna) => columna.colId),
+    exportarCsv,
   }));
 
   const conFiltro = filtrosPorColumna === true && filtrosVisibles;
@@ -407,9 +413,9 @@ function TablaBase<T>(
     [conFiltro, idFila],
   );
 
-  async function exportarCsv() {
+  async function exportarCsv(nombre: string | undefined = nombreExportacion) {
     const api = apiRef.current;
-    if (!api || !nombreExportacion) return;
+    if (!api || !nombre) return;
     // Sólo columnas con dato (no las de botones ni la de casillas).
     const columnKeys = api
       .getAllDisplayedColumns()
@@ -434,7 +440,7 @@ function TablaBase<T>(
     }
     const destino = await save({
       title: "Exportar a CSV",
-      defaultPath: `${nombreExportacion}.csv`,
+      defaultPath: `${nombre}.csv`,
       filters: [{ name: "CSV", extensions: ["csv"] }],
     });
     if (!destino) return;
@@ -591,13 +597,14 @@ function TablaBase<T>(
           {accionesDerecha}
 
           {nombreExportacion && (
+            // Mismo botón de ícono que Excel/PDF en Historial.
             <button
               type="button"
-              className="boton"
-              title="Exportar a CSV lo que se ve ahora (filtros, orden y columnas)"
-              onClick={exportarCsv}
+              className="boton boton-icono"
+              title="Exportar a CSV — respeta el filtro/orden/columnas actuales de la grilla"
+              onClick={() => exportarCsv()}
             >
-              CSV
+              <Sheet size={16} />
             </button>
           )}
 
