@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "./tiempo";
+import {
+  fechaHaceMeses,
+  fechaLocalYMD,
+  interpretarFechaDDMMAAAA,
+  mascaraFechaDDMMAAAA,
+  textoFechaDDMMAAAA,
+  textoFechaDDMMYYYY,
+  textoHora,
+} from "./tiempo";
 
 // Se arma la fecha con getters LOCALES directos (no parseando un string UTC
 // fijo), y se compara contra lo que el propio runner calcularía para esa
@@ -54,5 +62,35 @@ describe("fechaHaceMeses", () => {
 
   it("año bisiesto: el último día de febrero es el 29, no el 28", () => {
     expect(fechaHaceMeses(1, new Date(2028, 2, 31))).toBe("2028-02-29");
+  });
+});
+
+describe("mascaraFechaDDMMAAAA", () => {
+  it("pone las barras mientras se escribe", () => {
+    expect(mascaraFechaDDMMAAAA("2")).toBe("2");
+    expect(mascaraFechaDDMMAAAA("230")).toBe("23/0");
+    expect(mascaraFechaDDMMAAAA("23092")).toBe("23/09/2");
+    expect(mascaraFechaDDMMAAAA("23092026")).toBe("23/09/2026");
+  });
+
+  it("ignora lo que no es dígito y corta en 8 dígitos", () => {
+    expect(mascaraFechaDDMMAAAA("23/09/2026")).toBe("23/09/2026");
+    expect(mascaraFechaDDMMAAAA("23-09-20261")).toBe("23/09/2026");
+    expect(mascaraFechaDDMMAAAA("ab")).toBe("");
+  });
+});
+
+describe("interpretarFechaDDMMAAAA / textoFechaDDMMAAAA", () => {
+  it("interpreta una fecha completa en hora local", () => {
+    const fecha = interpretarFechaDDMMAAAA("23/09/2026");
+    expect(fecha).not.toBeNull();
+    expect(fecha && textoFechaDDMMAAAA(fecha)).toBe("23/09/2026");
+    expect(fecha?.getHours()).toBe(0);
+  });
+
+  it("rechaza incompletas o inexistentes", () => {
+    expect(interpretarFechaDDMMAAAA("23/09/20")).toBeNull();
+    expect(interpretarFechaDDMMAAAA("31/02/2026")).toBeNull();
+    expect(interpretarFechaDDMMAAAA("00/01/2026")).toBeNull();
   });
 });

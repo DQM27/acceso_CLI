@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ColDef } from "ag-grid-community";
-import { claveAlmacenamiento, identidad, leerEstadoGuardado } from "./Tabla";
+import {
+  claveAlmacenamiento,
+  clicEnControlInteractivo,
+  compararFechaYMD,
+  identidad,
+  leerEstadoGuardado,
+  textoTooltip,
+} from "./Tabla";
+import type { ITooltipParams } from "ag-grid-community";
 import type { EstadoGuardado } from "./Tabla";
 
 // `ColDef<unknown>` infiere `field` como `keyof unknown` (efectivamente
@@ -67,5 +75,56 @@ describe("leerEstadoGuardado", () => {
   it("JSON corrupto no tira, devuelve null", () => {
     localStorage.setItem(claveAlmacenamiento("activos"), "{esto no es json");
     expect(leerEstadoGuardado("activos")).toBeNull();
+  });
+});
+
+describe("textoTooltip", () => {
+  const params = (valueFormatted: unknown, value: unknown) =>
+    ({ valueFormatted, value }) as unknown as ITooltipParams;
+
+  it("prefiere el valor formateado (ej. S/G)", () => {
+    expect(textoTooltip(params("S/G", null))).toBe("S/G");
+  });
+
+  it("cae al valor crudo de texto o numero", () => {
+    expect(textoTooltip(params(null, "KAREN DE LOS ANGELES"))).toBe("KAREN DE LOS ANGELES");
+    expect(textoTooltip(params(undefined, 42))).toBe("42");
+  });
+
+  it("sin tooltip para booleanos, objetos o vacios", () => {
+    expect(textoTooltip(params(undefined, true))).toBeUndefined();
+    expect(textoTooltip(params(undefined, { a: 1 }))).toBeUndefined();
+    expect(textoTooltip(params("", ""))).toBeUndefined();
+  });
+});
+
+describe("clicEnControlInteractivo", () => {
+  it("un clic dentro de un boton no cuenta como clic de fila", () => {
+    const boton = document.createElement("button");
+    const icono = document.createElement("span");
+    boton.appendChild(icono);
+    expect(clicEnControlInteractivo(boton)).toBe(true);
+    expect(clicEnControlInteractivo(icono)).toBe(true);
+  });
+
+  it("un clic en texto de la celda si cuenta", () => {
+    const celda = document.createElement("div");
+    expect(clicEnControlInteractivo(celda)).toBe(false);
+    expect(clicEnControlInteractivo(null)).toBe(false);
+  });
+});
+
+describe("compararFechaYMD", () => {
+  const filtro = new Date(2026, 8, 23);
+
+  it("compara el dia de la celda contra el del filtro", () => {
+    expect(compararFechaYMD(filtro, "2026-09-23")).toBe(0);
+    expect(compararFechaYMD(filtro, "2026-09-22")).toBeLessThan(0);
+    expect(compararFechaYMD(filtro, "2026-09-24")).toBeGreaterThan(0);
+  });
+
+  it("un valor que no es fecha (ej. Activo) queda antes de cualquier fecha", () => {
+    expect(compararFechaYMD(filtro, "Activo")).toBeLessThan(0);
+    expect(compararFechaYMD(filtro, null)).toBeLessThan(0);
   });
 });

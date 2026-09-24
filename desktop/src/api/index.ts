@@ -11,6 +11,7 @@ export * from "./citas";
 export * from "./comun";
 export * from "./contratistas";
 export * from "./empresas";
+export * from "./exportacion";
 export * from "./gafetes";
 export * from "./historial";
 export * from "./ingresos";

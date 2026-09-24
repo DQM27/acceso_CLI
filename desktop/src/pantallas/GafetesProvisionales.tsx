@@ -1,21 +1,57 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { History, Plus, UserCheck } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
+import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
+import type { TablaHandle } from "../componentes/Tabla";
+import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
+import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   cerrarFilaGafeteProvisionalActiva,
+  claveFilaGafeteProvisionalActiva,
+  listarGafetesProvisionalesHistorialSitio,
   listarTodosLosGafetesProvisionalesActivos,
 } from "../api/gafetesProvisionales";
-import type { FilaGafeteProvisionalActiva } from "../api/gafetesProvisionales";
-import { textoFechaDDMMYYYY, textoHora, fechaLocalYMD } from "../tiempo";
+import type {
+  FilaGafeteProvisionalActiva,
+  PrestamoGafeteProvisionalHistorialSitio,
+} from "../api/gafetesProvisionales";
+import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 const EntregarGafeteProvisionalModal = lazy(() => import("./EntregarGafeteProvisionalModal"));
+
+type Vista = "activos" | "historial";
+
+const ETIQUETAS_VISTA: Record<Vista, string> = {
+  activos: "Activos",
+  historial: "Historial",
+};
+
+// Duplicado a propósito de `Proveedores.tsx`/`Visitas.tsx`/`CatalogoRutas.tsx`
+// -- es puro markup de un botón, no vale la pena compartirlo entre
+// pantallas que no se importan una a otra (ver la convención de App.tsx).
+/** Opciones de vista -- íconos del menú lateral (UserCheck para Activos,
+ * History para Historial). */
+const OPCIONES_VISTA: OpcionSegmentada<Vista>[] = [
+  { valor: "activos", Icono: UserCheck, titulo: ETIQUETAS_VISTA.activos },
+  { valor: "historial", Icono: History, titulo: ETIQUETAS_VISTA.historial },
+];
+
+// Pieza única de íconos con el relleno deslizante (`SegmentadoOpciones`),
+// pedido del usuario 2026-09-23.
+function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista) => void }) {
+  return (
+    <SegmentadoOpciones opciones={OPCIONES_VISTA} valor={vista} onCambiar={onCambiar} etiqueta="Vista" />
+  );
+}
 
 /**
  * Entrega/devolución de gafetes provisionales KOF -- contraparte de
  * escritorio de `PantallaGafetesProvisionales.kt` (mobile). Mismo patrón
- * que Rutas/Proveedores: grilla de "prestados" + botón "+ Entregar" que
+ * que Rutas/Proveedores: grilla de "prestados" + botón "+ Nuevo" que
  * abre el registro en un modal, y un botón "Devolver" por fila -- a
  * diferencia de mobile (tarjeta completa tocable), acá se sigue la
  * convención ya establecida de escritorio (botón de acción en la columna,
@@ -27,34 +63,70 @@ const EntregarGafeteProvisionalModal = lazy(() => import("./EntregarGafeteProvis
  * completo hasta esta sesión (bug reportado en pruebas reales,
  * 2026-09-17: un préstamo hecho en el celular nunca aparecía acá).
  *
- * Sin vista de "Historial" aparte -- a diferencia de Proveedores/Visitas,
- * el volumen de este flujo es bajo (uno o dos olvidos por turno, no
- * decenas), no amerita una segunda grilla; quien necesite auditar
- * devoluciones ya puede hacerlo contra `prestamos_gafete_provisional` en
- * Supabase directamente.
+ * El toggle "Activos/Historial" (mismo patrón que Proveedores.tsx/
+ * Visitas.tsx, agregado 2026-09-22 tras una falencia detectada por el
+ * usuario) es EXCLUSIVO de escritorio: "Historial" lee
+ * `prestamos_gafete_provisional_historial_sitio`, una caché que sólo
+ * sincroniza la PC -- el celular no la trae a propósito (mismo criterio ya
+ * usado en `historial_visitas_sitio`/`historial_ingresos_proveedor_sitio`:
+ * auditar el historial completo del sitio es tarea de escritorio).
  */
+/** Identidad de fila para el destello de celdas cambiadas (`idFila` de
+ * `Tabla`) -- a nivel de módulo para que sea una función estable. */
+const idPorUuid = (fila: { uuid: string }) => fila.uuid;
+
+/** Capa de cada vista (Activos / Historial): las dos grillas quedan
+ * montadas una encima de la otra y sólo se muestra la elegida. Antes se
+ * renderizaba una u otra, y cada cambio destruía la grilla y creaba otra
+ * desde cero -- parpadeaba y perdía scroll y filtros (reportado por el
+ * usuario 2026-09-23). La oculta conserva su tamaño (no `display: none`),
+ * así AG Grid no recalcula columnas al volver; el cambio es un fundido
+ * cruzado (`.capa-vista` en index.css). */
+function claseCapaVista(visible: boolean): string {
+  return visible ? "capa-vista" : "capa-vista capa-vista-oculta";
+}
+
 export default function GafetesProvisionales({ refrescarSenal }: { refrescarSenal?: number }) {
-  const [filas, setFilas] = useState<FilaGafeteProvisionalActiva[]>([]);
+  const [vista, setVista] = useState<Vista>("activos");
+  // Período del historial -- mismo selector y mismo arranque ("Últimos 6
+  // meses", `hasta` abierto) que Historial de contratistas (pedido del
+  // usuario 2026-09-23: el selector en todos los historiales).
+  const [desde, setDesde] = useState(() => fechaHaceMeses(6));
+  const [hasta, setHasta] = useState("");
+  // Para que los botones de exportación lean lo que muestra la grilla.
+  const tablaHistorialRef = useRef<TablaHandle<PrestamoGafeteProvisionalHistorialSitio>>(null);
+  const [filasActivos, setFilasActivos] = useState<FilaGafeteProvisionalActiva[]>([]);
+  const [filasHistorial, setFilasHistorial] = useState<PrestamoGafeteProvisionalHistorialSitio[]>(
+    [],
+  );
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
 
-  useBarraEstado(cargando ? "Cargando…" : `${filas.length} gafete(s) prestado(s)`);
+  const total = vista === "activos" ? filasActivos.length : filasHistorial.length;
+  useBarraEstado(
+    cargando
+      ? "Cargando…"
+      : `${total} ${vista === "historial" ? "movimiento(s)" : "gafete(s) prestado(s)"}`,
+  );
 
-  const recargar = useCallback(() => {
-    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
-    // directo -- de lo contrario `react-hooks/set-state-in-effect` marca
-    // esta actualización de estado como síncrona dentro del cuerpo del
-    // efecto que la dispara (abajo). Mismo patrón que Rutas.tsx/Activos.tsx.
-    return Promise.resolve()
-      .then(() => setCargando(true))
-      .then(() => listarTodosLosGafetesProvisionalesActivos())
-      .then(setFilas)
+  const recargarActivos = useCallback(() => {
+    setCargando(true);
+    return listarTodosLosGafetesProvisionalesActivos()
+      .then(setFilasActivos)
       .finally(() => setCargando(false));
   }, []);
 
+  const recargarHistorial = useCallback(() => {
+    setCargando(true);
+    return listarGafetesProvisionalesHistorialSitio(desde || undefined, hasta || undefined)
+      .then(setFilasHistorial)
+      .finally(() => setCargando(false));
+  }, [desde, hasta]);
+
   useEffect(() => {
     let vigente = true;
+    const recargar = vista === "activos" ? recargarActivos : recargarHistorial;
     recargar().catch((error) => vigente && toast.error(String(error)));
     return () => {
       vigente = false;
@@ -63,21 +135,21 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
     // Proveedores.tsx/Visitas.tsx: sin esto, una entrega/devolución hecha
     // desde otro dispositivo del sitio sólo aparecía acá al cambiar de
     // pestaña y volver.
-  }, [refrescarSenal, recargar]);
+  }, [vista, refrescarSenal, recargarActivos, recargarHistorial]);
 
   const registrarDevolucion = useCallback(
     async (fila: FilaGafeteProvisionalActiva) => {
       try {
         await cerrarFilaGafeteProvisionalActiva(fila);
-        await recargar();
+        await recargarActivos();
       } catch (error) {
         toast.error(String(error));
       }
     },
-    [recargar],
+    [recargarActivos],
   );
 
-  const columnas: ColDef<FilaGafeteProvisionalActiva>[] = useMemo(
+  const columnasActivos: ColDef<FilaGafeteProvisionalActiva>[] = useMemo(
     () => [
       {
         field: "encargado_nombre",
@@ -92,9 +164,10 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
         flex: 0.9,
         minWidth: 120,
       },
-      { field: "gafete_numero", headerName: "Gafete", flex: 0.7, minWidth: 90 },
+      { field: "gafete_numero", type: "numero", headerName: "Gafete", flex: 0.7, minWidth: 90 },
       {
         colId: "fecha_entrega",
+        type: "fecha",
         headerName: "Fecha",
         flex: 0.9,
         minWidth: 100,
@@ -138,20 +211,111 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
     [registrarDevolucion],
   );
 
+  const columnasHistorial: ColDef<PrestamoGafeteProvisionalHistorialSitio>[] = useMemo(
+    () => [
+      {
+        field: "encargado_nombre",
+        headerName: "Encargado",
+        flex: 1.4,
+        minWidth: 160,
+        cellStyle: { textAlign: "left" },
+      },
+      {
+        field: "encargado_codigo_empleado",
+        headerName: "Código empleado",
+        flex: 0.9,
+        minWidth: 120,
+      },
+      { field: "gafete_numero", type: "numero", headerName: "Gafete", flex: 0.7, minWidth: 90 },
+      {
+        colId: "fecha_entrega",
+        type: "fecha",
+        headerName: "Fecha",
+        flex: 0.9,
+        minWidth: 100,
+        valueGetter: (p) => (p.data ? fechaLocalYMD(p.data.fecha_hora_entrega) : ""),
+        valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
+      },
+      {
+        colId: "hora_entrega",
+        headerName: "Entrega",
+        flex: 0.8,
+        minWidth: 85,
+        valueGetter: (p) => (p.data ? textoHora(p.data.fecha_hora_entrega) : ""),
+      },
+      {
+        colId: "hora_devolucion",
+        headerName: "Devolución",
+        flex: 0.8,
+        minWidth: 90,
+        valueGetter: (p) =>
+          p.data?.fecha_hora_devolucion ? textoHora(p.data.fecha_hora_devolucion) : "",
+        valueFormatter: (p) => p.value || "—",
+      },
+      {
+        field: "usuario_entrega_nombre",
+        headerName: "Entregó",
+        flex: 1.1,
+        minWidth: 130,
+      },
+      {
+        field: "usuario_devolucion_nombre",
+        headerName: "Recibió",
+        flex: 1.1,
+        minWidth: 130,
+        valueFormatter: (p) => p.value ?? "—",
+      },
+    ],
+    [],
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <Tabla<FilaGafeteProvisionalActiva>
-            id="gafetes-provisionales-activos"
-            columnas={columnas}
-            filas={filas}
-            busqueda={busqueda}
-            controles={
-              <>
-                <button type="button" className="boton" onClick={() => setModalAbierto(true)}>
-                  + Entregar
-                </button>
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <div className={claseCapaVista(vista === "activos")}>
+            <Tabla<FilaGafeteProvisionalActiva>
+              cargando={cargando}
+              filtrosPorColumna
+              id="gafetes-provisionales-activos"
+              idFila={claveFilaGafeteProvisionalActiva}
+              columnas={columnasActivos}
+              filas={filasActivos}
+              busqueda={busqueda}
+              controles={
+                <>
+                  <button
+                    type="button"
+                    className="boton boton-icono"
+                    title="Nuevo préstamo de gafete provisional"
+                    aria-label="Nuevo préstamo de gafete provisional"
+                    onClick={() => setModalAbierto(true)}
+                  >
+                    <Plus size={16} aria-hidden="true" />
+                  </button>
+                  <div className="campo" style={{ flex: "0 1 16rem" }}>
+                    <input
+                      placeholder="Nombre o código de empleado…"
+                      value={busqueda}
+                      onChange={(evento) => setBusqueda(evento.target.value)}
+                    />
+                  </div>
+                </>
+              }
+              accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
+            />
+          </div>
+          <div className={claseCapaVista(vista === "historial")}>
+            <Tabla<PrestamoGafeteProvisionalHistorialSitio>
+              ref={tablaHistorialRef}
+              cargando={cargando}
+              filtrosPorColumna
+              id="gafetes-provisionales-historial"
+              idFila={idPorUuid}
+              columnas={columnasHistorial}
+              filas={filasHistorial}
+              busqueda={busqueda}
+              controles={
                 <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input
                     placeholder="Nombre o código de empleado…"
@@ -159,9 +323,28 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
                     onChange={(evento) => setBusqueda(evento.target.value)}
                   />
                 </div>
-              </>
-            }
-          />
+              }
+              accionesDerecha={
+                <>
+                  <SelectorRangoFecha
+                    desde={desde}
+                    hasta={hasta}
+                    onAplicar={(nuevoDesde, nuevoHasta) => {
+                      setDesde(nuevoDesde);
+                      setHasta(nuevoHasta);
+                    }}
+                  />
+                  <BotonesExportacion
+                    tablaRef={tablaHistorialRef}
+                    nombreArchivo="historial-kof"
+                    titulo="Historial de Gafetes Provisionales KOF"
+                    filtroDescripcion={`Filtro: ${textoRangoFecha(desde, hasta)}`}
+                  />
+                  <ToggleVista vista={vista} onCambiar={setVista} />
+                </>
+              }
+            />
+          </div>
         </div>
       </div>
 
@@ -170,7 +353,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
           <EntregarGafeteProvisionalModal
             onRegistrado={() => {
               setModalAbierto(false);
-              recargar();
+              recargarActivos();
             }}
             onCerrar={() => setModalAbierto(false)}
           />

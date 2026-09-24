@@ -3623,7 +3623,7 @@ fn guardar_rutas(
     Ok(recibidas)
 }
 
-/// Tres `ON CONFLICT` encadenados (soportado desde SQLite 3.35, ver
+/// Tres `ON CONFLICT` encadenados (soportado desde `SQLite` 3.35, ver
 /// `guardar_empresas` con el mismo patrón), probados en este orden hasta que
 /// uno matchea:
 /// 1. `uuid` -- la fila YA estaba sincronizada y sólo le cambió el nombre en
@@ -4540,6 +4540,130 @@ pub fn cerrar_prestamo_gafete_provisional_remoto(
         params![uuid],
     )?;
     Ok(())
+}
+
+#[derive(serde::Deserialize)]
+struct FilaHistorialGafeteProvisionalRemota {
+    id: String,
+    encargado_nombre: String,
+    encargado_codigo_empleado: String,
+    gafete_numero: i64,
+    hora_entrega: String,
+    usuario_entrega_nombre: String,
+    hora_devolucion: Option<String>,
+    usuario_devolucion_nombre: Option<String>,
+    updated_at: String,
+}
+
+/// Trae a `prestamos_gafete_provisional_historial_sitio` todo préstamo
+/// (activo o devuelto) del sitio, de cualquier dispositivo -- mismo
+/// criterio que `recibir_historial_del_sitio`: "es la misma operación
+/// vista desde dos dispositivos distintos", no una versión resumida.
+/// Falencia detectada por el usuario 2026-09-21: la pantalla de escritorio
+/// no tenía ninguna vista de historial de gafetes provisionales, sólo
+/// "Activos" -- un préstamo que OTRO dispositivo entregó Y devolvió nunca
+/// quedaba guardado localmente (sólo pasaba por la caché
+/// `prestamos_gafete_provisional_remotos` mientras estaba abierto).
+///
+/// `obtener_json` (no `obtener_json_paginado_con`) y la marca de agua SIN
+/// ventana de traslape (no `marca_historial_para_consulta`) a propósito --
+/// a diferencia del historial de ingresos (que sí tuvo ese bug real de
+/// desfase de reloj perdiendo filas para siempre), este flujo es de
+/// volumen muy bajo ("uno o dos olvidos por turno", ver el doc-comment que
+/// tenía `GafetesProvisionales.tsx` antes de esta feature) -- mismo
+/// criterio que el resto del catálogo del sitio (contratistas, gafetes,
+/// rutas, citas), que tampoco usa esa ventana.
+pub fn recibir_historial_gafetes_provisionales_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+) -> Result<u32, SincronizacionError> {
+    let cliente = cliente_http();
+
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT gafetes_provisionales_historial_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let filtro_incremental = marca_anterior
+        .as_deref()
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
+
+    let url = format!(
+        "{}/rest/v1/prestamos_gafete_provisional?sitio_id=eq.{}{filtro_incremental}\
+         &select=id,encargado_nombre,encargado_codigo_empleado,gafete_numero,hora_entrega,\
+         usuario_entrega_nombre,hora_devolucion,usuario_devolucion_nombre,updated_at",
+        contexto.base_url, contexto.sitio_id,
+    );
+    let filas: Vec<FilaHistorialGafeteProvisionalRemota> = obtener_json(&cliente, contexto, &url)?;
+
+    let transaction = connection.unchecked_transaction()?;
+    let mut recibidos = 0_u32;
+    let ahora_texto = crate::tiempo::serializar_utc(chrono::Utc::now());
+    // Igual que `aplicar_pagina_citas`: una fila con fecha ilegible se omite
+    // sin abortar el resto (no cuenta para `recibidos` ni la marca de agua,
+    // vuelve a pedirse en el próximo sync).
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_anterior
+        .as_deref()
+        .and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
+    for fila in &filas {
+        let Ok(fecha_hora_entrega) =
+            crate::tiempo::parsear_utc(&fila.hora_entrega).map(crate::tiempo::serializar_utc)
+        else {
+            continue;
+        };
+        let fecha_hora_devolucion = match fila
+            .hora_devolucion
+            .as_deref()
+            .map(crate::tiempo::parsear_utc)
+            .transpose()
+        {
+            Ok(valor) => valor.map(crate::tiempo::serializar_utc),
+            Err(_) => continue,
+        };
+        let Ok(actualizado) = crate::tiempo::parsear_utc(&fila.updated_at) else {
+            continue;
+        };
+
+        transaction.execute(
+            "
+            INSERT INTO prestamos_gafete_provisional_historial_sitio (
+                uuid, sitio_id, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+                fecha_hora_entrega, usuario_entrega_nombre, fecha_hora_devolucion,
+                usuario_devolucion_nombre, actualizado_en
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
+            ON CONFLICT(uuid) DO UPDATE SET
+                fecha_hora_devolucion = excluded.fecha_hora_devolucion,
+                usuario_devolucion_nombre = excluded.usuario_devolucion_nombre,
+                actualizado_en = excluded.actualizado_en
+            ",
+            params![
+                fila.id,
+                contexto.sitio_id,
+                fila.encargado_nombre,
+                fila.encargado_codigo_empleado,
+                fila.gafete_numero,
+                fecha_hora_entrega,
+                fila.usuario_entrega_nombre,
+                fecha_hora_devolucion,
+                fila.usuario_devolucion_nombre,
+                ahora_texto,
+            ],
+        )?;
+        recibidos += 1;
+        marca_mas_nueva = Some(marca_mas_nueva.map_or(actualizado, |marca| marca.max(actualizado)));
+    }
+
+    if let Some(marca) = marca_mas_nueva {
+        transaction.execute(
+            "UPDATE sincronizacion_estado
+             SET gafetes_provisionales_historial_actualizado_hasta = ?1 WHERE id = 1",
+            params![crate::tiempo::serializar_utc(marca)],
+        )?;
+    }
+    transaction.commit()?;
+
+    Ok(recibidos)
 }
 
 #[cfg(test)]
@@ -6901,6 +7025,83 @@ mod tests {
             )
             .unwrap();
         assert_eq!(cacheados, 1);
+    }
+
+    #[test]
+    fn recibe_historial_gafetes_provisionales_del_sitio_y_lo_guarda_local() {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             [{\"id\":\"uuid-remoto\",\"encargado_nombre\":\"Kendall Morales\",\
+             \"encargado_codigo_empleado\":\"5366536\",\"gafete_numero\":4,\
+             \"hora_entrega\":\"2026-01-01T08:00:00Z\",\"usuario_entrega_nombre\":\"Op PC\",\
+             \"hora_devolucion\":\"2026-01-01T09:00:00Z\",\
+             \"usuario_devolucion_nombre\":\"Op Movil\",\
+             \"updated_at\":\"2026-01-01T09:00:05Z\"}]",
+        );
+
+        let recibidos =
+            recibir_historial_gafetes_provisionales_del_sitio(&connection, &contexto(&base_url))
+                .unwrap();
+
+        assert_eq!(recibidos, 1);
+        let (nombre, devolucion): (String, Option<String>) = connection
+            .query_row(
+                "SELECT encargado_nombre, usuario_devolucion_nombre
+                 FROM prestamos_gafete_provisional_historial_sitio WHERE uuid = 'uuid-remoto'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(nombre, "Kendall Morales");
+        assert_eq!(devolucion.as_deref(), Some("Op Movil"));
+    }
+
+    #[test]
+    fn segunda_sincronizacion_de_historial_gafetes_provisionales_pide_solo_lo_actualizado_desde_la_marca_previa()
+     {
+        let connection = Connection::open_in_memory().unwrap();
+        initialize_database(&connection).unwrap();
+        connection
+            .execute(
+                "UPDATE sincronizacion_estado
+                 SET gafetes_provisionales_historial_actualizado_hasta = '2026-09-09T08:00:00Z'
+                 WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let servidor = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                let leidos = socket.read(&mut buffer).unwrap();
+                assert!(leidos > 0);
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            let pedido = String::from_utf8(pedido).unwrap();
+            assert!(
+                pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00Z")
+                    || pedido.contains("updated_at=gt.2026-09-09T08:00:00Z")
+            );
+            let cuerpo = "[]";
+            write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            )
+            .unwrap();
+        });
+
+        recibir_historial_gafetes_provisionales_del_sitio(&connection, &contexto(&base_url))
+            .unwrap();
+        servidor.join().unwrap();
     }
 
     fn conexion_con_un_prestamo_gafete_provisional_activo() -> Connection {

@@ -33,6 +33,7 @@ import {
   ViewTransition,
 } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
 import {
@@ -41,10 +42,12 @@ import {
   Building2,
   ClipboardList,
   DoorOpen,
+  Download,
   HardHat,
   History,
   IdCard,
   Loader2,
+  LogOut,
   Route,
   Truck,
   UserCheck,
@@ -54,6 +57,7 @@ import marca from "./assets/marca.png";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import SelectorTema from "./componentes/SelectorTema";
+import { guardarPreferencia, leerPreferencia } from "./preferencias";
 import BarraNube from "./componentes/BarraNube";
 import type { EstadoConexionNube } from "./componentes/BarraNube";
 import ErrorBoundary from "./componentes/ErrorBoundary";
@@ -67,10 +71,15 @@ import {
   requiereConfiguracionInicial,
   sincronizarConNube,
 } from "./api";
-import type { ResumenSincronizacion, UsuarioSesion } from "./api";
+import type { ResumenSincronizacion, Update, UsuarioSesion } from "./api";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { SesionProvider } from "./contexto/SesionContexto";
-import { BarraEstadoProvider, SeccionActivaProvider } from "./contexto/BarraEstadoContexto";
+import {
+  AccionBarraEstadoProvider,
+  BarraEstadoProvider,
+  SeccionActivaProvider,
+} from "./contexto/BarraEstadoContexto";
+import type { AccionBarraEstado } from "./contexto/BarraEstadoContexto";
 
 /** Piso de cuánto se ve el splash (`splashscreen.html`), aunque la pantalla
  * real esté lista antes -- sin esto, en un arranque rápido el splash pasaba
@@ -110,26 +119,17 @@ type Pantalla =
   | { tipo: "login" }
   | { tipo: "shell"; sesion: UsuarioSesion };
 
+// Estado del menú lateral, por usuario (ver `preferencias.ts`): cada quien
+// tiene su propio orden, secciones ocultas y colapsado en la misma PC.
 const CLAVE_SIDEBAR_COLAPSADO = "sidebar:colapsado";
 
-/** `localStorage` puede fallar (modo privado, cuota llena) — mismo criterio
- * que `leerEstadoGuardado`/`guardarLayout` en `Tabla.tsx`: perder la
- * preferencia guardada no es motivo para romper nada, sólo se vuelve al
- * valor por defecto (expandido). */
-function leerSidebarColapsado(): boolean {
-  try {
-    return localStorage.getItem(CLAVE_SIDEBAR_COLAPSADO) === "1";
-  } catch {
-    return false;
-  }
+/** Sin guardado (o si `localStorage` falla): expandido. */
+function leerSidebarColapsado(usuarioId: number): boolean {
+  return leerPreferencia(CLAVE_SIDEBAR_COLAPSADO, usuarioId) === "1";
 }
 
-function guardarSidebarColapsado(colapsado: boolean) {
-  try {
-    localStorage.setItem(CLAVE_SIDEBAR_COLAPSADO, colapsado ? "1" : "0");
-  } catch {
-    // Ver comentario de leerSidebarColapsado.
-  }
+function guardarSidebarColapsado(usuarioId: number, colapsado: boolean) {
+  guardarPreferencia(CLAVE_SIDEBAR_COLAPSADO, usuarioId, colapsado ? "1" : "0");
 }
 
 const CLAVE_SIDEBAR_ORDEN = "sidebar:orden";
@@ -142,45 +142,36 @@ function seccionValida(id: string): id is Seccion {
   return SECCIONES.some((seccion) => seccion.id === id);
 }
 
-/** Mismo criterio de tolerancia a fallos que `leerSidebarColapsado`. Sin
- * guardado todavía (instalación nueva o preferencia nunca tocada): el orden
- * por defecto es el literal de `SECCIONES`. */
-function leerSidebarOrden(): Seccion[] {
+/** Lista de secciones guardada; `null` si no hay nada o el JSON está roto. */
+function leerListaSecciones(clave: string, usuarioId: number): Seccion[] | null {
+  const guardado = leerPreferencia(clave, usuarioId);
+  if (!guardado) return null;
   try {
-    const guardado = localStorage.getItem(CLAVE_SIDEBAR_ORDEN);
-    if (!guardado) return SECCIONES.map((seccion) => seccion.id);
     const ids = JSON.parse(guardado) as unknown[];
     return ids.filter((id): id is Seccion => typeof id === "string" && seccionValida(id));
   } catch {
-    return SECCIONES.map((seccion) => seccion.id);
+    return null;
   }
 }
 
-function guardarSidebarOrden(orden: Seccion[]) {
-  try {
-    localStorage.setItem(CLAVE_SIDEBAR_ORDEN, JSON.stringify(orden));
-  } catch {
-    // Ver comentario de leerSidebarColapsado.
-  }
+/** Sin guardado todavía (preferencia nunca tocada): el orden por defecto es
+ * el literal de `SECCIONES`. */
+function leerSidebarOrden(usuarioId: number): Seccion[] {
+  return (
+    leerListaSecciones(CLAVE_SIDEBAR_ORDEN, usuarioId) ?? SECCIONES.map((seccion) => seccion.id)
+  );
 }
 
-function leerSidebarOcultas(): Seccion[] {
-  try {
-    const guardado = localStorage.getItem(CLAVE_SIDEBAR_OCULTAS);
-    if (!guardado) return [];
-    const ids = JSON.parse(guardado) as unknown[];
-    return ids.filter((id): id is Seccion => typeof id === "string" && seccionValida(id));
-  } catch {
-    return [];
-  }
+function guardarSidebarOrden(usuarioId: number, orden: Seccion[]) {
+  guardarPreferencia(CLAVE_SIDEBAR_ORDEN, usuarioId, JSON.stringify(orden));
 }
 
-function guardarSidebarOcultas(ocultas: Seccion[]) {
-  try {
-    localStorage.setItem(CLAVE_SIDEBAR_OCULTAS, JSON.stringify(ocultas));
-  } catch {
-    // Ver comentario de leerSidebarColapsado.
-  }
+function leerSidebarOcultas(usuarioId: number): Seccion[] {
+  return leerListaSecciones(CLAVE_SIDEBAR_OCULTAS, usuarioId) ?? [];
+}
+
+function guardarSidebarOcultas(usuarioId: number, ocultas: Seccion[]) {
+  guardarPreferencia(CLAVE_SIDEBAR_OCULTAS, usuarioId, JSON.stringify(ocultas));
 }
 
 export default function App() {
@@ -321,7 +312,7 @@ export type Seccion =
  * administrativo web (ver docs/planes-implementados/plan-autenticacion-supabase-auth.md) — el
  * escritorio ya no origina cambios contra esa tabla, salvo que la propia
  * sesión cambie su propia contraseña (`cambiarMiPassword`). */
-const SECCIONES: {
+const TODAS_LAS_SECCIONES: {
   id: Seccion;
   etiqueta: string;
   Icono: LucideIcon;
@@ -342,8 +333,24 @@ const SECCIONES: {
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
   { id: "catalogoRutas", etiqueta: "Catálogo KOF", Icono: Truck },
   { id: "proveedores", etiqueta: "Proveedores", Icono: Boxes },
-  { id: "gafetesProvisionales", etiqueta: "Gafetes KOF", Icono: BadgeCheck },
+  { id: "gafetesProvisionales", etiqueta: "KOF", Icono: BadgeCheck },
 ];
+
+/** Secciones sin terminar, ocultas de la interfaz (pedido del usuario
+ * 2026-09-23: que no se vean a medias en una demostración). El código de
+ * cada pantalla sigue intacto -- para volver a mostrar una, basta con
+ * sacarla de acá. "Catálogo KOF" también: los encargados que usa "Gafetes
+ * KOF" se administran por SQL directo en Supabase (decisión del usuario) y
+ * llegan igual por `recibir_catalogo_rutas_del_sitio`. */
+const SECCIONES_EN_DESARROLLO: ReadonlySet<Seccion> = new Set<Seccion>([
+  "visitas",
+  "rutas",
+  "catalogoRutas",
+]);
+
+const SECCIONES = TODAS_LAS_SECCIONES.filter(
+  (seccion) => !SECCIONES_EN_DESARROLLO.has(seccion.id),
+);
 
 /**
  * Interfaz central: sidebar izquierdo con las secciones + área de contenido
@@ -386,16 +393,19 @@ function Shell({
   function cambiarSeccion(id: Seccion) {
     startTransition(() => setSeccion(id));
   }
-  const [colapsado, setColapsado] = useState(leerSidebarColapsado);
+  const [colapsado, setColapsado] = useState(() => leerSidebarColapsado(sesion.id));
   // La pantalla montada publica acá su propio texto (ver `useBarraEstado`) —
   // `null` mientras ninguna lo hizo todavía (primer render) o entre una
   // pantalla y la siguiente.
   const [mensajeEstado, setMensajeEstado] = useState<string | null>(null);
+  // Botón de acción de la pantalla activa junto al mensaje (ver
+  // `useAccionBarraEstado`) -- ej. "Registrar salida (2)" en Activos.
+  const [accionEstado, setAccionEstado] = useState<AccionBarraEstado | null>(null);
 
   function alternarColapsado() {
     setColapsado((actual) => {
       const siguiente = !actual;
-      guardarSidebarColapsado(siguiente);
+      guardarSidebarColapsado(sesion.id, siguiente);
       return siguiente;
     });
   }
@@ -406,8 +416,8 @@ function Shell({
   // contextual del sidebar), `ocultas` es el subconjunto no visible. Ambos
   // persisten aparte de `colapsado` -- son ejes independientes (una sección
   // puede estar oculta sin importar si el sidebar está colapsado o no).
-  const [ordenSidebar, setOrdenSidebar] = useState(leerSidebarOrden);
-  const [seccionesOcultas, setSeccionesOcultas] = useState(leerSidebarOcultas);
+  const [ordenSidebar, setOrdenSidebar] = useState(() => leerSidebarOrden(sesion.id));
+  const [seccionesOcultas, setSeccionesOcultas] = useState(() => leerSidebarOcultas(sesion.id));
 
   const seccionesOrdenadas = useMemo(() => {
     const porId = new Map(SECCIONES.map((seccion) => [seccion.id, seccion]));
@@ -438,7 +448,7 @@ function Shell({
 
   function reordenarSidebar(orden: Seccion[]) {
     setOrdenSidebar(orden);
-    guardarSidebarOrden(orden);
+    guardarSidebarOrden(sesion.id, orden);
   }
 
   function alternarVisibilidadSeccion(id: Seccion, visible: boolean) {
@@ -447,7 +457,7 @@ function Shell({
       // Nunca ocultar la última sección visible -- dejaría el sidebar
       // vacío y sin forma de deshacerlo desde la UI.
       if (siguiente.length >= SECCIONES.length) return actual;
-      guardarSidebarOcultas(siguiente);
+      guardarSidebarOcultas(sesion.id, siguiente);
       return siguiente;
     });
   }
@@ -456,8 +466,8 @@ function Shell({
     const ordenPorDefecto = SECCIONES.map((seccion) => seccion.id);
     setOrdenSidebar(ordenPorDefecto);
     setSeccionesOcultas([]);
-    guardarSidebarOrden(ordenPorDefecto);
-    guardarSidebarOcultas([]);
+    guardarSidebarOrden(sesion.id, ordenPorDefecto);
+    guardarSidebarOcultas(sesion.id, []);
   }
 
   const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);
@@ -467,6 +477,7 @@ function Shell({
   // otra pantalla o de otro dispositivo (Realtime/pulso periódico).
   const [refrescarActivos, setRefrescarActivos] = useState(0);
   const [sincronizandoManual, setSincronizandoManual] = useState(false);
+  const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
   const [estadoConexionNube, setEstadoConexionNube] = useState<EstadoConexionNube>(null);
 
@@ -591,29 +602,34 @@ function Shell({
     }
   }
 
-  // Una sola vez por sesión (no cada X minutos todavía — la app se abre y
-  // cierra bastante seguido, esto ya cubre el caso normal). Falla en
-  // silencio a propósito: sin conexión o GitHub caído no debe interrumpir a
-  // alguien que ya está trabajando, sólo no hay novedad que avisar.
+  function ofrecerActualizacion(actualizacion: Update) {
+    toast(`Versión ${actualizacion.version} disponible`, {
+      id: "actualizacion-disponible",
+      description: "Se descarga, se instala y la app se reinicia sola.",
+      duration: Infinity,
+      action: {
+        label: "Actualizar",
+        onClick: () => {
+          toast.promise(instalarActualizacion(actualizacion), {
+            loading: "Descargando actualización…",
+            success: "Actualizado — reiniciando…",
+            error: (error) => `No se pudo actualizar: ${String(error)}`,
+          });
+        },
+      },
+    });
+  }
+
+  // Una vez al abrir (la app se abre y cierra bastante seguido, esto cubre
+  // el caso normal). Falla en silencio a propósito: sin conexión o GitHub
+  // caído no debe interrumpir a alguien que ya está trabajando, sólo no hay
+  // novedad que avisar. Para buscar a mano está el botón de la barra de
+  // estado (`buscarActualizacionManual`), que sí avisa siempre.
   useEffect(() => {
     let vigente = true;
     buscarActualizacion()
       .then((actualizacion) => {
-        if (!vigente || !actualizacion) return;
-        toast(`Versión ${actualizacion.version} disponible`, {
-          description: "Se descarga, se instala y la app se reinicia sola.",
-          duration: Infinity,
-          action: {
-            label: "Actualizar",
-            onClick: () => {
-              toast.promise(instalarActualizacion(actualizacion), {
-                loading: "Descargando actualización…",
-                success: "Actualizado — reiniciando…",
-                error: (error) => `No se pudo actualizar: ${String(error)}`,
-              });
-            },
-          },
-        });
+        if (vigente && actualizacion) ofrecerActualizacion(actualizacion);
       })
       .catch((error) => console.error("No se pudo buscar actualizaciones:", error));
     return () => {
@@ -621,9 +637,34 @@ function Shell({
     };
   }, []);
 
+  // Botón "Buscar actualización" de la barra de estado — pedido del usuario
+  // 2026-09-23: la búsqueda automática sólo corre al abrir, y con la app
+  // abierta todo el turno una versión nueva no se enteraba nadie. A
+  // diferencia de la automática, acá sí se avisa el resultado (también
+  // "ya está al día" y los errores): quien lo pulsó espera una respuesta.
+  async function buscarActualizacionManual() {
+    setBuscandoActualizacion(true);
+    try {
+      const actualizacion = await buscarActualizacion();
+      if (actualizacion) {
+        ofrecerActualizacion(actualizacion);
+      } else {
+        const version = await getVersion().catch(() => null);
+        toast.success(
+          version ? `Ya tienes la última versión (${version}).` : "Ya tienes la última versión.",
+        );
+      }
+    } catch (error) {
+      toast.error(`No se pudo buscar actualizaciones: ${String(error)}`);
+    } finally {
+      setBuscandoActualizacion(false);
+    }
+  }
+
   return (
     <SesionProvider value={sesion.id}>
       <BarraEstadoProvider value={setMensajeEstado}>
+      <AccionBarraEstadoProvider value={setAccionEstado}>
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
             <Sidebar
@@ -716,13 +757,42 @@ function Shell({
               acá (`useBarraEstado`) en vez de dibujarlo ella misma sobre la
               grilla; a la derecha, el usuario (antes fijo en el sidebar). */}
           <div className="barra-estado">
-            <span>{mensajeEstado}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <span>{mensajeEstado}</span>
+              {accionEstado && (
+                <button
+                  type="button"
+                  // Mismo botón que "Sincronizar" (BarraNube.tsx), para que
+                  // la barra se vea pareja.
+                  className="barra-estado-boton"
+                  onClick={accionEstado.alPulsar}
+                  style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
+                >
+                  <LogOut size={13} strokeWidth={2} aria-hidden="true" />
+                  {accionEstado.texto}
+                </button>
+              )}
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <BarraNube
                 sincronizando={sincronizandoManual}
                 onSincronizar={sincronizarManualmente}
                 estadoConexion={estadoConexionNube}
               />
+              <button
+                type="button"
+                className="barra-estado-boton boton-icono"
+                onClick={buscarActualizacionManual}
+                disabled={buscandoActualizacion}
+                title="Buscar actualización"
+                aria-label="Buscar actualización"
+              >
+                {buscandoActualizacion ? (
+                  <Loader2 size={15} strokeWidth={2} className="girando" aria-hidden="true" />
+                ) : (
+                  <Download size={15} strokeWidth={2} aria-hidden="true" />
+                )}
+              </button>
               <SelectorTema />
               <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
             </div>
@@ -750,6 +820,7 @@ function Shell({
               los colores por defecto de sonner. */}
           <Toaster theme="system" position="bottom-right" richColors={false} />
         </div>
+      </AccionBarraEstadoProvider>
       </BarraEstadoProvider>
     </SesionProvider>
   );

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { FileSpreadsheet, FileText } from "lucide-react";
+import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
@@ -15,6 +15,7 @@ import {
   listarHistorialSitio,
   medioIngresoDesdeNube,
   textoMedioConPlaca,
+  textoTipoIngreso,
   tipoIngresoDesdeNube,
 } from "../api";
 import type { MovimientoHistorialRemoto, MovimientoIngresoResumen } from "../api";
@@ -25,10 +26,9 @@ import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "..
  * de la caché `historial_sitio` -- ver `docs/planes-implementados/plan-persistencia-nube.md`).
  * Decisión explícita del usuario: es la misma operación vista desde otro
  * dispositivo, no una versión resumida -- se combinan en una sola grilla
- * con los mismos campos que ya muestra Historial. `registro_id: null` en
- * una fila remota significa que no se puede exportar por id (ver
- * `seleccionParaExportar`) -- limitación conocida, no un bug: el export
- * hoy recorta por `registro_id` local, que una fila remota no tiene. */
+ * con los mismos campos que ya muestra Historial. Excel/PDF recortan por
+ * `uuid` (ver `seleccionParaExportar`), que ambas tienen -- una fila remota
+ * no tiene `registro_id` local. */
 interface FilaLocal extends MovimientoIngresoResumen {
   origen: "local";
   // Siempre "pc": esta pantalla sólo existe en el build de escritorio, no
@@ -136,6 +136,10 @@ const CLAVES_COLUMNA: Record<string, string> = {
   usuario_salida_nombre: "egreso",
 };
 
+/** Identidad de fila para el destello de celdas cambiadas (`idFila` de
+ * `Tabla`) -- a nivel de módulo para que sea una función estable. */
+const idPorUuid = (fila: { uuid: string }) => fila.uuid;
+
 export default function Historial() {
   const [filas, setFilas] = useState<FilaHistorial[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -155,6 +159,10 @@ export default function Historial() {
   // día en curso. El usuario puede ampliar `desde` para ver más atrás.
   const [desde, setDesde] = useState(() => fechaHaceMeses(6));
   const [hasta, setHasta] = useState("");
+  // Buscador general (pedido del usuario 2026-09-23): sólo Cédula, Nombre y
+  // Empresa -- el resto de columnas ya tiene `getQuickFilterText: () => ""`.
+  // Excel/PDF/CSV exportan lo filtrado, así que también lo respetan.
+  const [busqueda, setBusqueda] = useState("");
   const tablaRef = useRef<TablaHandle<FilaHistorial>>(null);
 
   useBarraEstado(
@@ -196,11 +204,11 @@ export default function Historial() {
   // sin acotar. Devuelve `null` (con el toast de error ya disparado) si no
   // hay nada exportable, para que quien llama corte ahí sin duplicar el
   // chequeo. Cuando `truncado` es `true`, el cliente sólo tiene una
-  // porción del rango — `ids: null` le dice al backend que exporte todo
+  // porción del rango — `uuids: null` le dice al backend que exporte todo
   // `desde`/`hasta` directo de la base en vez de la porción cargada (ver
   // `exportarHistorial`/`exportarHistorialPdf`); el filtro por columna deja
   // de aplicar ahí porque ya no puede evaluarse sobre el total real.
-  function seleccionParaExportar(): { ids: number[] | null; claves: string[] } | null {
+  function seleccionParaExportar(): { uuids: string[] | null; claves: string[] } | null {
     const claves = (tablaRef.current?.columnasVisibles() ?? Object.keys(CLAVES_COLUMNA))
       .map((colId) => CLAVES_COLUMNA[colId])
       .filter((clave): clave is string => clave !== undefined);
@@ -208,26 +216,14 @@ export default function Historial() {
       toast.error("No hay columnas visibles para exportar.");
       return null;
     }
-    if (truncado) return { ids: null, claves };
+    if (truncado) return { uuids: null, claves };
 
     const visibles = tablaRef.current?.filasFiltradas() ?? filas;
     if (visibles.length === 0) {
       toast.error("No hay filas para exportar con el filtro actual.");
       return null;
     }
-    // Una fila remota (`origen: "remoto"`, generada por otro dispositivo)
-    // no tiene `registro_id` local -- el export hoy recorta por id contra
-    // `registro_ingresos` de esta base, así que esas filas quedan afuera
-    // del archivo. Se avisa en vez de fallar en silencio.
-    const idsLocales = visibles
-      .map((fila) => fila.registro_id)
-      .filter((id): id is number => id !== null);
-    if (idsLocales.length < visibles.length) {
-      toast.warning(
-        `${visibles.length - idsLocales.length} movimiento(s) de otro dispositivo no se incluyen en el archivo todavía.`,
-      );
-    }
-    return { ids: idsLocales, claves };
+    return { uuids: visibles.map((fila) => fila.uuid), claves };
   }
 
   async function exportar() {
@@ -245,7 +241,7 @@ export default function Historial() {
     toast.promise(
       exportarHistorial(
         destino,
-        seleccion.ids,
+        seleccion.uuids,
         seleccion.claves,
         desde || undefined,
         hasta || undefined,
@@ -256,6 +252,16 @@ export default function Historial() {
         error: (error) => String(error),
       },
     );
+  }
+
+  // CSV lo arma la grilla con lo que tiene cargado (a diferencia de
+  // Excel/PDF, que el backend saca de la base) -- con el rango truncado
+  // se avisa que no es el total.
+  async function exportarCsv() {
+    if (truncado) {
+      toast.warning("El CSV sólo incluye lo cargado. Para todo el rango usá Excel o PDF.");
+    }
+    await tablaRef.current?.exportarCsv("historial");
   }
 
   async function exportarPdf() {
@@ -273,7 +279,7 @@ export default function Historial() {
     toast.promise(
       exportarHistorialPdf(
         destino,
-        seleccion.ids,
+        seleccion.uuids,
         seleccion.claves,
         `Filtro: ${textoRangoFecha(desde, hasta)}`,
         desde || undefined,
@@ -321,6 +327,9 @@ export default function Historial() {
         headerName: "Tipo",
         flex: 1,
         minWidth: 100,
+        // `valueGetter` (no `valueFormatter`): el filtro por columna, el
+        // orden y las exportaciones usan el mismo texto que se ve.
+        valueGetter: (p) => textoTipoIngreso(p.data?.tipo_ingreso ?? null),
         getQuickFilterText: () => "",
       },
       {
@@ -328,11 +337,15 @@ export default function Historial() {
         headerName: "Medio",
         flex: 1,
         minWidth: 100,
-        valueFormatter: (p) => textoMedioConPlaca(p.value, p.data?.placa ?? null),
+        valueGetter: (p) =>
+          p.data?.medio_ingreso == null
+            ? "—"
+            : textoMedioConPlaca(p.data.medio_ingreso, p.data.placa ?? null),
         getQuickFilterText: () => "",
       },
       {
         field: "gafete_numero",
+        type: "numero",
         headerName: "Gafete",
         flex: 0.9,
         minWidth: 90,
@@ -341,6 +354,7 @@ export default function Historial() {
       },
       {
         colId: "fecha_ingreso",
+        type: "fecha",
         headerName: "Fecha ingreso",
         // 120 truncaba el título en mayúscula ("FECHA ING…") mientras el
         // resto de encabezados entraba completo — 140 es lo que necesita
@@ -366,6 +380,7 @@ export default function Historial() {
         // `fecha_hora_salida`; antes la grilla dejaba la celda en blanco y
         // no coincidía con lo que se veía en el archivo exportado.
         colId: "fecha_salida",
+        type: "fecha",
         headerName: "Fecha salida",
         flex: 1.4,
         minWidth: 140,
@@ -424,11 +439,23 @@ export default function Historial() {
         )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaHistorial>
+            cargando={cargando}
             ref={tablaRef}
             id="historial"
+            idFila={idPorUuid}
             columnas={columnas}
             filas={filas}
             filtrosPorColumna
+            busqueda={busqueda}
+            controles={
+              <div className="campo" style={{ flex: "0 1 16rem" }}>
+                <input
+                  placeholder="Cédula, nombre, empresa…"
+                  value={busqueda}
+                  onChange={(evento) => setBusqueda(evento.target.value)}
+                />
+              </div>
+            }
             accionesDerecha={
               <>
                 <SelectorRangoFecha
@@ -439,36 +466,51 @@ export default function Historial() {
                     setHasta(nuevoHasta);
                   }}
                 />
-                <button
-                  type="button"
-                  className="boton boton-icono"
-                  title={
-                    exportando
-                      ? "Exportando…"
-                      : truncado
-                        ? "Exportar a Excel — trae todo el rango de fechas, no sólo lo cargado"
-                        : "Exportar a Excel — respeta el filtro/orden/columnas actuales de la grilla"
-                  }
-                  onClick={exportar}
-                  disabled={exportando}
-                >
-                  <FileSpreadsheet size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="boton boton-icono"
-                  title={
-                    exportando
-                      ? "Exportando…"
-                      : truncado
-                        ? "Exportar a PDF — trae todo el rango de fechas, no sólo lo cargado"
-                        : "Exportar a PDF — respeta el filtro/orden/columnas actuales de la grilla"
-                  }
-                  onClick={exportarPdf}
-                  disabled={exportando}
-                >
-                  <FileText size={16} />
-                </button>
+                {/* Excel · CSV · PDF en una sola pieza de íconos
+                    (`.segmentado`), como filtros/anchos -- pedido del usuario
+                    2026-09-23: son de la misma categoría. */}
+                <div className="segmentado" role="group" aria-label="Exportar">
+                  <button
+                    type="button"
+                    title={
+                      exportando
+                        ? "Exportando…"
+                        : truncado
+                          ? "Exportar a Excel — trae todo el rango de fechas, no sólo lo cargado"
+                          : "Exportar a Excel — respeta el filtro/orden/columnas actuales de la grilla"
+                    }
+                    onClick={exportar}
+                    disabled={exportando}
+                  >
+                    <FileSpreadsheet size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    title={
+                      truncado
+                        ? "Exportar a CSV — sólo lo cargado; para todo el rango usá Excel o PDF"
+                        : "Exportar a CSV — respeta el filtro/orden/columnas actuales de la grilla"
+                    }
+                    onClick={exportarCsv}
+                    disabled={exportando}
+                  >
+                    <Sheet size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    title={
+                      exportando
+                        ? "Exportando…"
+                        : truncado
+                          ? "Exportar a PDF — trae todo el rango de fechas, no sólo lo cargado"
+                          : "Exportar a PDF — respeta el filtro/orden/columnas actuales de la grilla"
+                    }
+                    onClick={exportarPdf}
+                    disabled={exportando}
+                  >
+                    <FileText size={16} />
+                  </button>
+                </div>
               </>
             }
           />

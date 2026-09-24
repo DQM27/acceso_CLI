@@ -23,6 +23,11 @@ export interface PosicionLista {
    * para `alinear="derecha"` en `ListaFlotante` (ver ese componente). */
   right: number;
   width: number;
+  /** Borde superior del campo y distancia de su borde IZQUIERDO al borde
+   * derecho de la ventana (+4 de separación) -- para `direccion="izquierda"`
+   * en `ListaFlotante`: el popover se abre al costado, a la misma altura. */
+  topCampo: number;
+  rightDesdeIzquierda: number;
 }
 
 /** Recalcula la posición del campo (`campoRef`) mientras `visible` sea
@@ -45,6 +50,8 @@ export function useListaFlotante(visible: boolean) {
         left: rect.left,
         right: window.innerWidth - rect.right,
         width: rect.width,
+        topCampo: rect.top,
+        rightDesdeIzquierda: window.innerWidth - rect.left + 4,
       });
     };
     actualizar();
@@ -117,17 +124,25 @@ export function ListaFlotante({
    * encima del disparador) en vez de `top` — para disparadores pegados al
    * borde inferior de la ventana (ej. `MenuUsuario` en la barra de estado),
    * donde abrir "abajo" de siempre lo dejaría recortado fuera de la
-   * ventana. */
-  direccion?: "abajo" | "arriba";
+   * ventana. "izquierda" lo abre al costado izquierdo del disparador, con
+   * el borde superior a su misma altura (ej. `SelectorRangoFecha`, para no
+   * tapar la grilla debajo del botón); ahí `alinear` no aplica. */
+  direccion?: "abajo" | "arriba" | "izquierda";
   children: ReactNode;
 }) {
+  const ubicacion =
+    direccion === "izquierda"
+      ? { top: posicion.topCampo, right: posicion.rightDesdeIzquierda }
+      : {
+          ...(direccion === "arriba" ? { bottom: posicion.bottom } : { top: posicion.top }),
+          ...(alinear === "derecha" ? { right: posicion.right } : { left: posicion.left }),
+        };
   return createPortal(
     <div
       className="tarjeta"
       style={{
         position: "fixed",
-        ...(direccion === "arriba" ? { bottom: posicion.bottom } : { top: posicion.top }),
-        ...(alinear === "derecha" ? { right: posicion.right } : { left: posicion.left }),
+        ...ubicacion,
         width: ancho ?? posicion.width,
         zIndex: 1000,
         display: "flex",

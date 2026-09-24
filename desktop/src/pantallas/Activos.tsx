@@ -1,12 +1,82 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { CircleOff, IdCard, LogIn, LogOut, Users } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
+import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
-import { useBarraEstado } from "../contexto/BarraEstadoContexto";
-import { cerrarFilaActiva, claveFilaActiva, listarTodosLosActivos, textoMedioConPlaca } from "../api";
+import { useAccionBarraEstado, useBarraEstado } from "../contexto/BarraEstadoContexto";
+import {
+  cerrarFilaActiva,
+  claveFilaActiva,
+  listarTodosLosActivos,
+  textoMedioConPlaca,
+  textoTipoIngreso,
+} from "../api";
 import type { FilaActiva } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+
+/** Filtro rápido por gafete (pedido del usuario 2026-09-23): ver sólo a
+ * quienes entraron sin gafete ("S/G", `gafete_numero` nulo), sólo a
+ * quienes tienen uno, o a todos. */
+export type FiltroGafete = "todos" | "con" | "sin";
+
+const ETIQUETAS_FILTRO_GAFETE: Record<FiltroGafete, string> = {
+  todos: "Todos",
+  con: "Con gafete",
+  sin: "S/G",
+};
+
+/** Ícono y nombre completo (al pasar el mouse) de cada opción -- el
+ * control muestra sólo íconos (pedido del usuario 2026-09-23). */
+const OPCIONES_FILTRO_GAFETE: OpcionSegmentada<FiltroGafete>[] = [
+  { valor: "todos", Icono: Users, titulo: "Todos" },
+  { valor: "con", Icono: IdCard, titulo: "Con gafete" },
+  { valor: "sin", Icono: CircleOff, titulo: "Sin gafete (S/G)" },
+];
+
+export function filtrarPorGafete<T extends { gafete_numero: number | null }>(
+  filas: readonly T[],
+  filtro: FiltroGafete,
+): T[] {
+  if (filtro === "todos") return [...filas];
+  const sinGafete = filtro === "sin";
+  return filas.filter((fila) => (fila.gafete_numero == null) === sinGafete);
+}
+
+/** Pieza única de íconos con el relleno deslizante (`SegmentadoOpciones`). */
+function ToggleGafete({
+  filtro,
+  onCambiar,
+}: {
+  filtro: FiltroGafete;
+  onCambiar: (filtro: FiltroGafete) => void;
+}) {
+  return (
+    <SegmentadoOpciones
+      opciones={OPCIONES_FILTRO_GAFETE}
+      valor={filtro}
+      onCambiar={onCambiar}
+      etiqueta="Filtrar por gafete"
+    />
+  );
+}
+
+const DOCE_HORAS_MS = 12 * 60 * 60 * 1000;
+
+/** Más de 12 horas adentro desde el ingreso -- único resaltado de filas
+ * que pidió el usuario (2026-09-23). `ahora` inyectable para el test. */
+export function masDeDoceHoras(
+  fila: { fecha_hora_ingreso: string },
+  ahora: number = Date.now(),
+): boolean {
+  return ahora - new Date(fila.fecha_hora_ingreso).getTime() > DOCE_HORAS_MS;
+}
+
+function claseFilaActiva(fila: FilaActiva): string | undefined {
+  return masDeDoceHoras(fila) ? "fila-mas-de-12-horas" : undefined;
+}
 
 export default function Activos({
   refrescarSenal,
@@ -28,8 +98,25 @@ export default function Activos({
   const [seleccionadas, setSeleccionadas] = useState<FilaActiva[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
   const [procesando, setProcesando] = useState(false);
+  const [filtroGafete, setFiltroGafete] = useState<FiltroGafete>("todos");
+  const filasVisibles = useMemo(() => filtrarPorGafete(filas, filtroGafete), [filas, filtroGafete]);
+  const sinGafete = useMemo(() => filtrarPorGafete(filas, "sin").length, [filas]);
 
-  useBarraEstado(cargando ? "Cargando…" : `${total} adentro`);
+  useBarraEstado(
+    cargando
+      ? "Cargando…"
+      : filtroGafete === "todos"
+        ? `${total} adentro · ${sinGafete} S/G`
+        : `${filasVisibles.length} de ${total} adentro (${ETIQUETAS_FILTRO_GAFETE[filtroGafete]})`,
+  );
+
+  // En la barra de estado, no sobre la grilla: antes una franja con
+  // "N seleccionado(s)" aparecía arriba y corría toda la pantalla hacia
+  // abajo (pedido del usuario 2026-09-23).
+  useAccionBarraEstado(
+    seleccionadas.length > 0 ? `Registrar salida (${seleccionadas.length})` : null,
+    () => setConfirmarSalidaMasiva(true),
+  );
 
   const recargar = useCallback(() => {
     // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
@@ -110,6 +197,9 @@ export default function Activos({
         headerName: "Tipo",
         flex: 1,
         minWidth: 100,
+        // `valueGetter` (no `valueFormatter`): el filtro por columna, el
+        // orden y las exportaciones usan el mismo texto que se ve.
+        valueGetter: (p) => textoTipoIngreso(p.data?.tipo_ingreso ?? null),
         // Buscador de arriba (quickFilter) limitado a Cédula/Nombre/Empresa
         // -- las tres cosas que identifican a LA PERSONA que se busca.
         // `getQuickFilterText: () => ""` saca esta columna de esa búsqueda
@@ -125,12 +215,15 @@ export default function Activos({
         headerName: "Medio",
         flex: 1,
         minWidth: 100,
-        valueFormatter: (p) =>
-          p.value == null ? "—" : textoMedioConPlaca(p.value, p.data?.placa ?? null),
+        valueGetter: (p) =>
+          p.data?.medio_ingreso == null
+            ? "—"
+            : textoMedioConPlaca(p.data.medio_ingreso, p.data.placa ?? null),
         getQuickFilterText: () => "",
       },
       {
         field: "gafete_numero",
+        type: "numero",
         headerName: "Gafete",
         flex: 0.9,
         minWidth: 90,
@@ -139,6 +232,7 @@ export default function Activos({
       },
       {
         colId: "fecha_ingreso",
+        type: "fecha",
         headerName: "Fecha",
         flex: 1.1,
         minWidth: 110,
@@ -206,47 +300,41 @@ export default function Activos({
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        {seleccionadas.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0.5rem 0.75rem",
-              border: "1px solid var(--borde)",
-              borderRadius: "var(--radio-chico)",
-              background: "var(--campo-fondo)",
-            }}
-          >
-            <span style={{ color: "var(--texto)", fontSize: "0.9rem" }}>
-              {seleccionadas.length} seleccionado(s)
-            </span>
-            <button
-              type="button"
-              className="boton boton-primario"
-              onClick={() => setConfirmarSalidaMasiva(true)}
-            >
-              Registrar salida ({seleccionadas.length})
-            </button>
-          </div>
-        )}
-
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaActiva>
+            cargando={cargando}
+            filtrosPorColumna
             id="activos"
+            idFila={claveFilaActiva}
+            claseFila={claseFilaActiva}
             columnas={columnas}
-            filas={filas}
+            filas={filasVisibles}
             busqueda={busqueda}
             seleccionMultiple
             onSeleccionCambia={setSeleccionadas}
+            accionesDerecha={<ToggleGafete filtro={filtroGafete} onCambiar={setFiltroGafete} />}
             controles={
               <>
-                <button className="boton" title="Ctrl+N" onClick={onAbrirNuevoIngreso}>
-                  + Ingreso
-                </button>
-                <button className="boton" title="Ctrl+S" onClick={onAbrirSalida}>
-                  Salida
-                </button>
+                {/* Ingreso y salida como íconos, en una sola pieza (pedido
+                    del usuario 2026-09-23); el atajo va en el nombre. */}
+                <div className="segmentado" role="group" aria-label="Movimientos">
+                  <button
+                    type="button"
+                    title="Nuevo ingreso (Ctrl+N)"
+                    aria-label="Nuevo ingreso"
+                    onClick={onAbrirNuevoIngreso}
+                  >
+                    <LogIn size={16} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Registrar salida (Ctrl+S)"
+                    aria-label="Registrar salida"
+                    onClick={onAbrirSalida}
+                  >
+                    <LogOut size={16} aria-hidden="true" />
+                  </button>
+                </div>
                 <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input
                     placeholder="Cédula, nombre, empresa…"

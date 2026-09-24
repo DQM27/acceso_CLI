@@ -42,7 +42,9 @@ export default function Modal({
       }}
     >
       <div
-        className="tarjeta"
+        // `modal`: títulos, etiquetas y botones en mayúsculas en TODOS los
+        // modales (ver `.modal` en index.css).
+        className="tarjeta modal"
         style={{
           background: "var(--elevado)",
           boxShadow: "var(--sombra-panel)",

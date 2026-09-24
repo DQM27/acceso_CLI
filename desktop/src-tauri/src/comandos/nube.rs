@@ -54,6 +54,10 @@ pub struct ResumenSincronizacion {
     /// Mismo criterio que `historial_visitas_recibidos`, pero para ingresos
     /// de proveedor (`nube::recibir_historial_ingresos_proveedor_del_sitio`).
     pub historial_ingresos_proveedor_recibidos: u32,
+    /// Mismo criterio que `historial_visitas_recibidos`, pero para préstamos
+    /// de gafete provisional KOF
+    /// (`nube::recibir_historial_gafetes_provisionales_del_sitio`).
+    pub historial_gafetes_provisionales_recibidos: u32,
     pub sitio_id: String,
     pub dispositivo_id: String,
     pub tipo: String,
@@ -263,6 +267,13 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)?;
     let historial_ingresos_proveedor_recibidos =
         nube::recibir_historial_ingresos_proveedor_del_sitio(&conexion, &contexto)?;
+    // Faltaba acá (bug 2026-09-22): la feature de historial de gafetes
+    // provisionales sólo cableó `AppCore::sincronizar_con_nube`, que el
+    // escritorio NO usa -- sin esta llamada la caché
+    // `prestamos_gafete_provisional_historial_sitio` nunca se llenaba y la
+    // vista "Historial" quedaba siempre vacía.
+    let historial_gafetes_provisionales_recibidos =
+        nube::recibir_historial_gafetes_provisionales_del_sitio(&conexion, &contexto)?;
     // Mejor esfuerzo a propósito -- ya se llegó hasta acá con la nube
     // respondiendo bien, pero si este chequeo puntual falla no tiene
     // sentido tumbar un sync que por lo demás anduvo. Vacío en ese caso, no
@@ -297,6 +308,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         citas_recibidas,
         historial_visitas_recibidos,
         historial_ingresos_proveedor_recibidos,
+        historial_gafetes_provisionales_recibidos,
         empresas_recibidas: catalogo.empresas_recibidas,
         contratistas_recibidos: catalogo.contratistas_recibidos,
         gafetes_recibidos: catalogo.gafetes_recibidos,
@@ -344,6 +356,7 @@ pub async fn configurar_dispositivo_inicial(
             citas_recibidas: resumen.citas_recibidas,
             historial_visitas_recibidos: resumen.historial_visitas_recibidos,
             historial_ingresos_proveedor_recibidos: 0,
+            historial_gafetes_provisionales_recibidos: 0,
             empresas_recibidas: resumen.empresas_recibidas,
             contratistas_recibidos: resumen.contratistas_recibidos,
             gafetes_recibidos: resumen.gafetes_recibidos,

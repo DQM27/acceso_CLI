@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
@@ -538,6 +539,9 @@ private fun PasoEmpresaProveedora(
                 onValueChange = onCambiarTexto,
                 placeholder = { Text("Nombre de la empresa") },
                 singleLine = true,
+                // El teclado abre ya en mayúscula; el ViewModel igual lo
+                // convierte (`cambiarTextoEmpresa`) por si se pega texto.
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                 shape = FormaCampoBrisas,
                 colors = ColoresCampoBrisas(),
                 modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),

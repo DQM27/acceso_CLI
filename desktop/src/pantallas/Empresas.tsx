@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -23,6 +24,7 @@ const columnasContratista: ColDef<EmpresaResumen>[] = [
     headerName: "Activa",
     flex: 1,
     minWidth: 100,
+    filter: false,
     cellRenderer: InterruptorCelda,
     cellRendererParams: { critico: true },
   },
@@ -35,6 +37,7 @@ const columnasProveedor: ColDef<EmpresaProveedor>[] = [
     headerName: "Activa",
     flex: 1,
     minWidth: 100,
+    filter: false,
     cellRenderer: InterruptorCelda,
     cellRendererParams: { critico: true },
   },
@@ -96,8 +99,26 @@ export default function Empresas() {
     }
   }
 
+  // Orden pedido por el usuario (2026-09-23): "+ Nueva", el buscador y al
+  // final el selector de tipo.
   const controles = (
     <>
+      <button
+        type="button"
+        className="boton boton-icono"
+        title="Nueva empresa"
+        aria-label="Nueva empresa"
+        onClick={() => setFormularioAbierto("crear")}
+      >
+        <Plus size={16} aria-hidden="true" />
+      </button>
+      <div className="campo" style={{ flex: "0 1 16rem" }}>
+        <input
+          placeholder="Nombre…"
+          value={texto}
+          onChange={(evento) => setTexto(evento.target.value)}
+        />
+      </div>
       <div className="campo" style={{ flex: "0 1 13rem" }}>
         <select
           value={tipo}
@@ -110,16 +131,6 @@ export default function Empresas() {
           <option value="proveedor">Empresas proveedoras</option>
         </select>
       </div>
-      <button className="boton" onClick={() => setFormularioAbierto("crear")}>
-        + Nueva
-      </button>
-      <div className="campo" style={{ flex: "0 1 16rem" }}>
-        <input
-          placeholder="Nombre…"
-          value={texto}
-          onChange={(evento) => setTexto(evento.target.value)}
-        />
-      </div>
     </>
   );
 
@@ -129,6 +140,8 @@ export default function Empresas() {
         <div style={{ flex: 1, minHeight: 0 }}>
           {tipo === "contratista" ? (
             <Tabla<EmpresaResumen>
+              cargando={cargando}
+              filtrosPorColumna
               id="empresas"
               columnas={columnasContratista}
               filas={filasContratista}
@@ -138,6 +151,8 @@ export default function Empresas() {
             />
           ) : (
             <Tabla<EmpresaProveedor>
+              cargando={cargando}
+              filtrosPorColumna
               id="empresas-proveedor"
               columnas={columnasProveedor}
               filas={filasProveedor}

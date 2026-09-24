@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -6,7 +7,12 @@ import InterruptorCelda from "../componentes/InterruptorCelda";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioContratista from "./FormularioContratista";
-import { actualizarContratista, buscarContratistas, listarEmpresasSeleccionables } from "../api";
+import {
+  actualizarContratista,
+  buscarContratistas,
+  listarEmpresasSeleccionables,
+  textoTipoIngreso,
+} from "../api";
 import type { ContratistaResumen, Empresa, RolUsuario } from "../api";
 import { textoFechaDDMMYYYY } from "../tiempo";
 
@@ -33,9 +39,17 @@ export function columnasPara(actorRol: RolUsuario): ColDef<ContratistaResumen>[]
     { field: "cedula", headerName: "Cédula", flex: 1.4, minWidth: 140, cellStyle: { textAlign: "left" } },
     { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
     { field: "empresa_nombre", headerName: "Empresa", flex: 1.4, minWidth: 140 },
-    { field: "tipo_ingreso", headerName: "Tipo", flex: 1.2, minWidth: 120 },
+    {
+      field: "tipo_ingreso",
+      headerName: "Tipo",
+      flex: 1.2,
+      minWidth: 120,
+      // Texto visible también para filtrar/ordenar ("IN HOUSE", no "InHouse").
+      valueGetter: (p) => textoTipoIngreso(p.data?.tipo_ingreso ?? null),
+    },
     {
       field: "fecha_vencimiento_praind",
+      type: "fecha",
       headerName: "PRAIND vence",
       flex: 1.4,
       minWidth: 140,
@@ -137,6 +151,7 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<ContratistaResumen>
+            cargando={cargando}
             id="contratistas"
             columnas={columnas}
             filas={filas}
@@ -144,8 +159,14 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
             filtrosPorColumna
             controles={
               <>
-                <button className="boton" onClick={() => setFormularioAbierto("crear")}>
-                  + Nuevo
+                <button
+                  type="button"
+                  className="boton boton-icono"
+                  title="Nuevo contratista"
+                  aria-label="Nuevo contratista"
+                  onClick={() => setFormularioAbierto("crear")}
+                >
+                  <Plus size={16} aria-hidden="true" />
                 </button>
                 <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input

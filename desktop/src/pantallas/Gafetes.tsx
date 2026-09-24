@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
@@ -41,6 +42,7 @@ export default function Gafetes() {
     () => [
       {
         field: "numero",
+        type: "numero",
         headerName: "Número",
         flex: 1.1,
         minWidth: 110,
@@ -126,14 +128,22 @@ export default function Gafetes() {
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<GafeteResumen>
+            cargando={cargando}
+            filtrosPorColumna
             id="gafetes"
             columnas={columnas}
             filas={filas}
             onFilaDobleClic={setGestionAbierta}
             controles={
               <>
-                <button className="boton" onClick={() => setFormularioAbierto(true)}>
-                  + Nuevo
+                <button
+                  type="button"
+                  className="boton boton-icono"
+                  title="Nuevo gafete"
+                  aria-label="Nuevo gafete"
+                  onClick={() => setFormularioAbierto(true)}
+                >
+                  <Plus size={16} aria-hidden="true" />
                 </button>
                 <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input

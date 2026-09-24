@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRESETS, textoRangoFecha } from "./SelectorRangoFecha";
+import { PRESETS, etiquetaCortaRango, textoRangoFecha } from "./SelectorRangoFecha";
 
 function rangoDe(etiqueta: string, hoy: Date) {
   const preset = PRESETS.find((p) => p.etiqueta === etiqueta);
@@ -66,5 +66,39 @@ describe("textoRangoFecha", () => {
 
   it("ninguno: sin filtro", () => {
     expect(textoRangoFecha("", "")).toBe("Todo el historial");
+  });
+});
+
+describe("etiquetaCortaRango (texto del botón)", () => {
+  const hoy = new Date(2026, 7, 12);
+
+  it("usa el nombre del acceso rápido cuando el rango coincide con uno", () => {
+    expect(etiquetaCortaRango("2026-08-12", "2026-08-12", hoy)).toBe("Hoy");
+    expect(etiquetaCortaRango("2026-08-01", "2026-08-12", hoy)).toBe("Mes");
+    expect(etiquetaCortaRango("2026-08-06", "2026-08-12", hoy)).toBe("7 días");
+  });
+
+  it("si no coincide, muestra las fechas con año corto", () => {
+    expect(etiquetaCortaRango("2026-08-03", "2026-08-05", hoy)).toBe("03/08/26 – 05/08/26");
+    expect(etiquetaCortaRango("2026-03-01", "", hoy)).toBe("Desde 01/03/26");
+    expect(etiquetaCortaRango("", "2026-08-05", hoy)).toBe("Hasta 05/08/26");
+  });
+
+  it("los accesos para anular el filtro se muestran por su nombre", () => {
+    // Período con que abre Historial: 6 meses atrás, `hasta` abierto.
+    expect(etiquetaCortaRango("2026-02-12", "", hoy)).toBe("6 meses");
+    expect(etiquetaCortaRango("", "", hoy)).toBe("Todo");
+  });
+});
+
+describe("accesos para anular el filtro de fechas", () => {
+  const hoy = new Date(2026, 7, 12);
+
+  it("Últimos 6 meses deja 'hasta' abierto, igual que el arranque de Historial", () => {
+    expect(rangoDe("Últimos 6 meses", hoy)).toEqual({ desde: "2026-02-12", hasta: "" });
+  });
+
+  it("Todo el historial deja los dos extremos abiertos", () => {
+    expect(rangoDe("Todo el historial", hoy)).toEqual({ desde: "", hasta: "" });
   });
 });

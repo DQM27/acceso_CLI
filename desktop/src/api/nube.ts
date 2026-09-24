@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { solicitarSincronizacionNube } from "../eventosNube";
 import type { MedioIngreso } from "./ingresos";
 import type { TipoIngreso } from "./contratistas";
 
@@ -29,6 +30,9 @@ export interface ResumenSincronizacion {
   /** Mismo criterio que `historial_visitas_recibidos`, pero para ingresos
    * de proveedor. */
   historial_ingresos_proveedor_recibidos: number;
+  /** Mismo criterio que `historial_visitas_recibidos`, pero para préstamos
+   * de gafete provisional KOF. */
+  historial_gafetes_provisionales_recibidos: number;
   sitio_id: string;
   dispositivo_id: string;
   tipo: string;
@@ -166,16 +170,26 @@ export function listarIngresosRemotos(): Promise<IngresoRemoto[]> {
   return invoke("listar_ingresos_remotos");
 }
 
-export function cerrarIngresoRemoto(uuid: string): Promise<void> {
-  return invoke("cerrar_ingreso_remoto", { uuid });
+/** Cierra contra la nube y después pide sincronizar (mismo criterio que
+ * `cerrarPrestamoGafeteProvisionalRemoto`). Sin esto el historial no se
+ * enteraba de la salida hasta el próximo pulso o un "Sincronizar" a mano:
+ * el aviso Realtime de este cambio trae el id de ESTE dispositivo y
+ * `nubeRealtime.ts` lo descarta a propósito, así que nadie volvía a bajar
+ * `historial_sitio` (bug real reportado por el usuario 2026-09-23). */
+export async function cerrarIngresoRemoto(uuid: string): Promise<void> {
+  await invoke("cerrar_ingreso_remoto", { uuid });
+  solicitarSincronizacionNube();
 }
 
 export function listarIngresosProveedorRemotos(): Promise<IngresoProveedorRemoto[]> {
   return invoke("listar_ingresos_proveedor_remotos");
 }
 
-export function cerrarIngresoProveedorRemoto(uuid: string): Promise<void> {
-  return invoke("cerrar_ingreso_proveedor_remoto", { uuid });
+/** Mismo motivo que `cerrarIngresoRemoto`, pero para el historial de
+ * proveedores (`historial_ingresos_proveedor_sitio`). */
+export async function cerrarIngresoProveedorRemoto(uuid: string): Promise<void> {
+  await invoke("cerrar_ingreso_proveedor_remoto", { uuid });
+  solicitarSincronizacionNube();
 }
 
 /** Filas de la cola que ya agotaron los reintentos automáticos y quedaron

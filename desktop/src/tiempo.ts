@@ -48,3 +48,34 @@ export function fechaHaceMeses(meses: number, hoy: Date = new Date()): string {
   const dia = Math.min(hoy.getDate(), ultimoDiaMesDestino);
   return fechaYMD(new Date(anio, mesDestino, dia));
 }
+
+/** Máscara de escritura DD/MM/AAAA (filtro de fecha de las grillas, ver
+ * `FiltroFechaTabla.tsx`): deja sólo dígitos (máx. 8) y pone las barras
+ * solas -- "23092026" → "23/09/2026", "2309" → "23/09". Pedido del usuario
+ * 2026-09-23: fechas siempre DD/MM/AAAA, sin depender del idioma de
+ * Windows (el selector nativo `type="date"` usa ese formato). */
+export function mascaraFechaDDMMAAAA(texto: string): string {
+  const digitos = texto.replace(/\D/g, "").slice(0, 8);
+  if (digitos.length <= 2) return digitos;
+  if (digitos.length <= 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+  return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
+}
+
+/** "23/09/2026" → medianoche LOCAL de ese día; `null` si está incompleto o
+ * no existe (ej. "31/02/2026"). */
+export function interpretarFechaDDMMAAAA(texto: string): Date | null {
+  const partes = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(texto);
+  if (!partes) return null;
+  const dia = Number(partes[1]);
+  const mes = Number(partes[2]);
+  const anio = Number(partes[3]);
+  const fecha = new Date(anio, mes - 1, dia);
+  const existe =
+    fecha.getFullYear() === anio && fecha.getMonth() === mes - 1 && fecha.getDate() === dia;
+  return existe ? fecha : null;
+}
+
+/** `Date` → "DD/MM/AAAA" en hora local. */
+export function textoFechaDDMMAAAA(fecha: Date): string {
+  return textoFechaDDMMYYYY(fechaYMD(fecha));
+}

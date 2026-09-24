@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
-import { fechaYMD, textoFechaDDMMYYYY } from "../tiempo";
+import { fechaHaceMeses, fechaYMD, textoFechaDDMMYYYY } from "../tiempo";
 
 /**
  * Botón "Período: ..." que abre un popover con accesos rápidos (Hoy, Esta
@@ -10,10 +10,11 @@ import { fechaYMD, textoFechaDDMMYYYY } from "../tiempo";
  * mecanismo de posicionamiento/portal de `ListaFlotante` en vez de
  * reinventarlo; el click-afuera para cerrar es lo único nuevo acá.
  *
- * Los cambios quedan en un borrador local (`desdeBorrador`/`hastaBorrador`)
- * hasta "Aplicar" — clickear un preset o tipear en los campos no dispara
- * `onAplicar` todavía, así el usuario puede tocar varias cosas antes de
- * confirmar (o "Cancelar" y no cambiar nada).
+ * Un acceso rápido aplica y cierra en el acto. El rango a mano (campos
+ * Desde/Hasta) queda en un borrador local (`desdeBorrador`/`hastaBorrador`)
+ * hasta "Aplicar" — tipear en los campos no dispara `onAplicar` todavía,
+ * así el usuario puede ajustar las dos fechas antes de confirmar (o
+ * "Cancelar" y no cambiar nada).
  */
 
 /** Mismo texto que muestra el botón "Período: ..." — se exporta para que
@@ -29,8 +30,34 @@ export function textoRangoFecha(desde: string, hasta: string): string {
   return "Todo el historial";
 }
 
+/** "2026-09-23" → "23/09/26" (año corto, para el botón). */
+function fechaCorta(ymd: string): string {
+  const [anio, mes, dia] = ymd.split("-");
+  return `${dia}/${mes}/${anio.slice(2)}`;
+}
+
+/** Texto compacto del botón (pedido del usuario 2026-09-23: más chico y
+ * más estético): el nombre corto del acceso rápido si el rango coincide con
+ * uno ("Hoy", "Mes", "7 días"...), si no las fechas con año corto. El texto completo
+ * sigue en `textoRangoFecha` (título del botón y encabezado del PDF). */
+export function etiquetaCortaRango(desde: string, hasta: string, hoy: Date = new Date()): string {
+  const preset = PRESETS.find((p) => {
+    const rango = p.calcular(hoy);
+    return rango.desde === desde && rango.hasta === hasta;
+  });
+  if (preset) return preset.corta;
+  if (desde && hasta) return `${fechaCorta(desde)} – ${fechaCorta(hasta)}`;
+  if (desde) return `Desde ${fechaCorta(desde)}`;
+  if (hasta) return `Hasta ${fechaCorta(hasta)}`;
+  return "Todo";
+}
+
 export interface Preset {
+  /** Nombre completo: el título al pasar el mouse sobre el acceso rápido. */
   etiqueta: string;
+  /** Nombre corto: lo que muestran el acceso rápido del panel y el botón
+   * "Período" (pedido del usuario 2026-09-23: mucho texto). */
+  corta: string;
   calcular: (hoy: Date) => { desde: string; hasta: string };
 }
 
@@ -45,10 +72,12 @@ function inicioSemana(d: Date): Date {
 export const PRESETS: Preset[] = [
   {
     etiqueta: "Hoy",
+    corta: "Hoy",
     calcular: (hoy) => ({ desde: fechaYMD(hoy), hasta: fechaYMD(hoy) }),
   },
   {
     etiqueta: "Ayer",
+    corta: "Ayer",
     calcular: (hoy) => {
       const ayer = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 1);
       return { desde: fechaYMD(ayer), hasta: fechaYMD(ayer) };
@@ -56,10 +85,12 @@ export const PRESETS: Preset[] = [
   },
   {
     etiqueta: "Esta semana",
+    corta: "Semana",
     calcular: (hoy) => ({ desde: fechaYMD(inicioSemana(hoy)), hasta: fechaYMD(hoy) }),
   },
   {
     etiqueta: "Semana pasada",
+    corta: "Sem. pasada",
     calcular: (hoy) => {
       const inicioActual = inicioSemana(hoy);
       const inicioPasada = new Date(
@@ -77,6 +108,7 @@ export const PRESETS: Preset[] = [
   },
   {
     etiqueta: "Este mes",
+    corta: "Mes",
     calcular: (hoy) => ({
       desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), 1)),
       hasta: fechaYMD(hoy),
@@ -84,6 +116,7 @@ export const PRESETS: Preset[] = [
   },
   {
     etiqueta: "Mes pasado",
+    corta: "Mes pasado",
     calcular: (hoy) => ({
       desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)),
       // Día 0 del mes actual == último día del mes anterior.
@@ -92,6 +125,7 @@ export const PRESETS: Preset[] = [
   },
   {
     etiqueta: "Últimos 7 días",
+    corta: "7 días",
     calcular: (hoy) => ({
       desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 6)),
       hasta: fechaYMD(hoy),
@@ -99,10 +133,27 @@ export const PRESETS: Preset[] = [
   },
   {
     etiqueta: "Últimos 30 días",
+    corta: "30 días",
     calcular: (hoy) => ({
       desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 29)),
       hasta: fechaYMD(hoy),
     }),
+  },
+  // Los dos de abajo son las formas de "anular" el filtro (pedido del
+  // usuario 2026-09-23: no había cómo volver atrás). "Últimos 6 meses" es
+  // exactamente el período con que abre Historial (`hasta` abierto, ver
+  // `fechaHaceMeses` en Historial.tsx), así que el botón lo muestra por su
+  // nombre desde el arranque. "Todo el historial" deja los dos extremos
+  // abiertos -- sin filtro.
+  {
+    etiqueta: "Últimos 6 meses",
+    corta: "6 meses",
+    calcular: (hoy) => ({ desde: fechaHaceMeses(6, hoy), hasta: "" }),
+  },
+  {
+    etiqueta: "Todo el historial",
+    corta: "Todo",
+    calcular: () => ({ desde: "", hasta: "" }),
   },
 ];
 
@@ -138,23 +189,47 @@ export default function SelectorRangoFecha({
     setAbierto(true);
   }
 
+  // El mismo botón abre y cierra (antes sólo abría; para cerrar había que
+  // hacer clic afuera -- pedido del usuario 2026-09-23). El clic-afuera de
+  // arriba ignora a propósito los clics sobre el botón, así que no chocan.
+  function alternar() {
+    if (abierto) {
+      setAbierto(false);
+    } else {
+      abrir();
+    }
+  }
+
   function aplicar() {
     onAplicar(desdeBorrador, hastaBorrador);
     setAbierto(false);
   }
 
-  const etiqueta = textoRangoFecha(desde, hasta);
-
   return (
     <>
       <div ref={campoRef}>
-        <button type="button" className="boton boton-icono" onClick={abrir}>
+        {/* Compacto: el ícono ya dice "período", así que sólo va el rango
+            corto (ver `etiquetaCortaRango`); el texto completo queda en el
+            título. En mayúsculas (pedido del usuario 2026-09-23) -- va en el
+            propio botón porque los botones no heredan `text-transform`. */}
+        <button
+          type="button"
+          className="boton boton-icono"
+          onClick={alternar}
+          aria-expanded={abierto}
+          title={`Período: ${textoRangoFecha(desde, hasta)}`}
+          style={{ textTransform: "uppercase", fontWeight: 400 }}
+        >
           <CalendarDays size={16} />
-          Período: {etiqueta}
+          {etiquetaCortaRango(desde, hasta)}
         </button>
       </div>
+      {/* Se abre al costado izquierdo del botón, a su misma altura (pedido
+          del usuario 2026-09-23), así nunca tapa los botones de al lado
+          (Excel/CSV/PDF). Ancho fijo: lo que piden los accesos rápidos en
+          dos columnas, cada uno en una sola línea. */}
       {abierto && posicion && (
-        <ListaFlotante posicion={posicion} ancho={280}>
+        <ListaFlotante posicion={posicion} ancho={260} direccion="izquierda">
           <div
             ref={popoverRef}
             style={{
@@ -180,16 +255,30 @@ export default function SelectorRangoFecha({
                 {PRESETS.map((preset) => (
                   <button
                     key={preset.etiqueta}
+                    title={preset.etiqueta}
                     type="button"
                     className="boton"
-                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.85rem" }}
+                    style={{
+                      padding: "0.35rem 0.4rem",
+                      fontSize: "0.78rem",
+                      // Sin negrita y sin saltos: cada acceso rápido en una
+                      // sola línea (en negrita "SEMANA PASADA" y "ÚLTIMOS 30
+                      // DÍAS" se partían en dos).
+                      fontWeight: 400,
+                      whiteSpace: "nowrap",
+                      // En mayúsculas, como "ACCESO RÁPIDO".
+                      textTransform: "uppercase",
+                    }}
+                    // Un acceso rápido aplica y cierra en el acto (pedido del
+                    // usuario 2026-09-23: elegir y después "Aplicar" era un
+                    // paso de más). "Aplicar" queda para el rango a mano.
                     onClick={() => {
                       const rango = preset.calcular(new Date());
-                      setDesdeBorrador(rango.desde);
-                      setHastaBorrador(rango.hasta);
+                      onAplicar(rango.desde, rango.hasta);
+                      setAbierto(false);
                     }}
                   >
-                    {preset.etiqueta}
+                    {preset.corta}
                   </button>
                 ))}
               </div>

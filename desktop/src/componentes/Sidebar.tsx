@@ -9,6 +9,7 @@ import {
 import type { DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Seccion } from "../App";
 import MenuContextualSecciones from "./MenuContextualSecciones";
@@ -115,6 +116,45 @@ export default function Sidebar({
   }
 
   return (
+    // Columna lateral: arriba el botón de colapsar/expandir, a la altura
+    // de la barra de herramientas; abajo la tarjeta del menú, que arranca a
+    // la altura de la grilla (pedido del usuario 2026-09-23). Antes el
+    // menú se colapsaba con doble clic en su espacio vacío, algo que nadie
+    // descubría solo.
+    <div className={`shell-columna-lateral ${colapsado ? "shell-columna-lateral-colapsada" : ""}`}>
+      <div className="shell-cabecera-lateral">
+        {/* Con el menú abierto, el nombre de la app ocupa el espacio que
+            sobraba al lado del botón (elegido por el usuario 2026-09-23).
+            Texto y no `marca.png`: la imagen tiene fondo blanco y a este
+            alto, en tema oscuro, quedaba un cuadro blanco con letras
+            diminutas. */}
+        {/* Letra por letra: `.shell-marca` las reparte a lo ancho, así el
+            nombre llega hasta el botón sin dejar espacio libre, sea cual
+            sea el ancho del menú. */}
+        {!colapsado && (
+          <span className="shell-marca" role="img" aria-label="Lattis">
+            {"LATTIS".split("").map((letra, indice) => (
+              <span key={indice} aria-hidden="true">
+                {letra}
+              </span>
+            ))}
+          </span>
+        )}
+        <button
+          type="button"
+          className="boton boton-icono"
+          title={colapsado ? "Expandir menú" : "Colapsar menú"}
+          aria-label={colapsado ? "Expandir menú" : "Colapsar menú"}
+          aria-expanded={!colapsado}
+          onClick={onToggleColapsado}
+        >
+          {colapsado ? (
+            <PanelLeftOpen size={16} aria-hidden="true" />
+          ) : (
+            <PanelLeftClose size={16} aria-hidden="true" />
+          )}
+        </button>
+      </div>
     <nav
       className={`shell-sidebar ${colapsado ? "shell-sidebar-colapsada" : ""}`}
       onContextMenu={(evento) => {
@@ -141,11 +181,7 @@ export default function Sidebar({
         </SortableContext>
       </DndContext>
 
-      <div
-        style={{ flex: 1 }}
-        title="Doble click para colapsar/expandir -- click derecho para mostrar/ocultar secciones"
-        onDoubleClick={onToggleColapsado}
-      />
+      <div style={{ flex: 1 }} title="Click derecho para mostrar/ocultar secciones" />
 
       <VersionFooter />
 
@@ -160,5 +196,6 @@ export default function Sidebar({
         />
       )}
     </nav>
+    </div>
   );
 }

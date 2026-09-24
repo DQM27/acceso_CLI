@@ -1,3 +1,4 @@
+import type { ChangeEvent } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,9 +34,22 @@ export default function FormularioEmpresaProveedor({
     defaultValues: { nombre: "" },
   });
 
+  // Siempre en mayúscula (pedido del usuario 2026-09-23), mismo criterio
+  // que el campo de empresa del móvil (`ProveedoresViewModel`). Se convierte
+  // mientras se escribe, conservando la posición del cursor -- reasignar
+  // `value` lo mandaría al final si se corrige a mitad del texto.
+  const registroNombre = register("nombre");
+  function alCambiarNombre(evento: ChangeEvent<HTMLInputElement>) {
+    const campo = evento.target;
+    const { selectionStart, selectionEnd } = campo;
+    campo.value = campo.value.toUpperCase();
+    campo.setSelectionRange(selectionStart, selectionEnd);
+    return registroNombre.onChange(evento);
+  }
+
   async function alGuardar(valores: ValoresFormulario) {
     try {
-      await crearEmpresaProveedor(valores.nombre.trim());
+      await crearEmpresaProveedor(valores.nombre.trim().toUpperCase());
       onGuardado();
     } catch (error) {
       setError("root", { message: String(error) });
@@ -50,7 +64,7 @@ export default function FormularioEmpresaProveedor({
       >
         <label className="campo">
           Nombre
-          <input {...register("nombre")} autoFocus />
+          <input {...registroNombre} onChange={alCambiarNombre} autoFocus />
           {errors.nombre && <span style={{ color: "var(--error)" }}>{errors.nombre.message}</span>}
         </label>
 

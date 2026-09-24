@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./diseno.css";
+@import "./tokyo-night.css";
 @import "./controles.css";
 
 @theme {
@@ -127,6 +128,44 @@ input {
   opacity: 0.6;
 }
 
+/* Modales (`Modal.tsx`): título, etiquetas de campos y botones en
+   mayúsculas -- pedido del usuario 2026-09-23, mismo lenguaje que los
+   encabezados de las grillas y "ACCESO RÁPIDO" del selector de período.
+   Las etiquetas van chicas, grises y un poco espaciadas. Lo que se escribe
+   en los campos, los ejemplos (placeholder) y los mensajes de error dentro
+   de una etiqueta quedan en texto normal: frases en mayúsculas se leen
+   peor. */
+.modal h2 {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.modal .campo {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+}
+
+.modal .campo input,
+.modal .campo select,
+.modal .campo textarea,
+.modal .campo span {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Opciones (radio/checkbox) dentro de un `.campo` -- ej. "Caminando /
+   Vehículo" en Nuevo ingreso: en mayúsculas como el resto, pero con su
+   tamaño normal, son opciones y no etiquetas. */
+.modal .campo label {
+  font-size: 0.85rem;
+  letter-spacing: normal;
+}
+
+.modal .boton {
+  text-transform: uppercase;
+}
+
 /* Botón con ícono (lucide-react) + texto opcional al lado — hoy sólo
    "Cerrar sesión". Centrado también cuando sólo lleva ícono (texto
    condicional en `false` desde React, no un `display:none` en CSS). */
@@ -195,7 +234,12 @@ input {
   gap: 0.7rem;
   width: 100%;
   text-align: left;
-  padding: 0.6rem 0.75rem;
+  /* Mismo alto exacto que los controles de la barra de herramientas
+     (`--control-altura`), con el ícono centrado: así el primer ícono del
+     menú queda a la altura de esa barra (ver `.shell-nav` y
+     `.pantalla-cuerpo`; pedido del usuario 2026-09-23). */
+  min-height: var(--control-altura);
+  padding: 0 0.75rem;
   border: none;
   border-radius: var(--radio-chico);
   background: transparent;
@@ -215,7 +259,7 @@ input {
    angosta, no corrido a la izquierda por el padding horizontal normal. */
 .shell-sidebar-colapsada .nav-item {
   justify-content: center;
-  padding: 0.65rem 0;
+  padding: 0;
 }
 
 .nav-item:hover:not(.nav-item-activo) {
@@ -240,13 +284,62 @@ input {
    separa el contenido del borde de la ventana en `.pantalla-cuerpo` — nada
    de margen a la derecha, ese gap ya lo da el padding de `.pantalla-cuerpo`
    (doblarlo ahí se vería asimétrico respecto a los otros tres lados). */
+/* Columna lateral (Sidebar.tsx): cabecera con el botón de colapsar/expandir
+   a la altura de la barra de herramientas y, debajo, la tarjeta del menú a
+   la altura de la grilla. */
+.shell-columna-lateral {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  margin-left: 0.375rem;
+}
+
+/* Misma altura y posición que la barra de herramientas de `Tabla`: arranca
+   donde `.pantalla-cuerpo` (0.375rem * 2 + 1px), mide `--control-altura`
+   y deja debajo el mismo espacio (0.375rem) que separa esa barra de la
+   grilla -- así la tarjeta del menú empieza justo donde empieza la grilla. */
+.shell-cabecera-lateral {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--control-altura);
+  margin-top: calc(0.375rem * 2 + 1px);
+  margin-bottom: 0.375rem;
+}
+
+/* Nombre de la app en la cabecera, con el menú abierto, en el color de
+   acento. Ocupa todo el espacio libre hasta el botón: las letras (una
+   `<span>` cada una, ver Sidebar.tsx) se reparten a lo ancho con
+   `space-between` -- pedido del usuario 2026-09-23, no dejar hueco. No se
+   puede seleccionar: es marca, no texto para copiar. */
+.shell-marca {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  padding-left: 0.75rem;
+  margin-right: 0.75rem;
+  color: var(--acento);
+  font-size: 1.25rem;
+  font-weight: 700;
+  user-select: none;
+}
+
+/* Colapsada: el botón centrado en la columna angosta. */
+.shell-columna-lateral-colapsada .shell-cabecera-lateral {
+  justify-content: center;
+}
+
 .shell-sidebar {
   display: flex;
   flex-direction: column;
   /* 15rem -> 12.5rem -> 11.25rem -> acá, valor final. */
   width: 10rem;
+  flex: 1;
+  min-height: 0;
   flex-shrink: 0;
-  margin: 0.375rem 0 0.375rem 0.375rem;
+  /* Margen izquierdo y de arriba ahora en `.shell-columna-lateral` /
+     `.shell-cabecera-lateral`: la tarjeta arranca a la altura de la grilla. */
+  margin: 0 0 0.375rem 0;
   background: var(--panel-lateral);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
@@ -263,6 +356,152 @@ input {
 .ag-header-cell-text {
   text-transform: uppercase;
 }
+
+/* Control segmentado de una sola pieza (ej. filtro de gafete en Activos):
+   mismo alto, borde y fondo que `.boton`, con las opciones unidas y la
+   elegida rellena con el acento (`aria-pressed`). */
+.segmentado {
+  display: inline-flex;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-chico);
+  background: var(--panel-suave);
+  overflow: hidden;
+}
+
+.segmentado button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* El borde lo pone el contenedor: 2px menos para medir igual que `.boton`. */
+  min-height: calc(var(--control-altura) - 2px);
+  padding: 0 0.7rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color var(--duracion), color var(--duracion);
+}
+
+.segmentado button + button {
+  border-left: 1px solid var(--borde-fuerte);
+}
+
+.segmentado button:hover:not([aria-pressed="true"]) {
+  background: var(--acento-suave);
+  color: var(--texto);
+}
+
+.segmentado button[aria-pressed="true"] {
+  background: var(--acento-relleno);
+  color: var(--sobre-acento);
+  cursor: default;
+}
+
+/* Interruptor (ej. mostrar/ocultar filtros en Tabla.tsx): a diferencia de
+   una opción elegida, encendido se vuelve a pulsar para apagarlo. */
+.segmentado button.segmentado-interruptor[aria-pressed="true"] {
+  cursor: pointer;
+}
+
+.segmentado button.segmentado-interruptor[aria-pressed="true"]:hover {
+  background: var(--acento-hover);
+}
+
+/* Capas de "Activos / Historial" (Proveedores, KOF): las dos grillas
+   quedan montadas, una encima de la otra, y el cambio es un fundido
+   cruzado -- la anterior se desvanece mientras aparece la nueva (pedido del
+   usuario 2026-09-23). La oculta deja de recibir clics de inmediato y
+   recién pasa a `visibility: hidden` al terminar el fundido. */
+.capa-vista {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.35s ease;
+}
+
+.capa-vista-oculta {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.35s ease,
+    visibility 0s linear 0.35s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .capa-vista,
+  .capa-vista-oculta {
+    transition: none;
+  }
+}
+
+/* Variante para elegir UNA opción (`SegmentadoOpciones.tsx`): todas las
+   opciones miden lo mismo (grilla de columnas iguales) y el relleno de
+   acento es un indicador aparte que se desliza a la elegida en vez de
+   saltar. `--cantidad`/`--indice` los pone el componente. */
+.segmentado-deslizante {
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.segmentado-indicador {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(100% / var(--cantidad));
+  transform: translateX(calc(100% * var(--indice)));
+  background: var(--acento-relleno);
+  transition: transform 0.4s cubic-bezier(0.65, 0, 0.35, 1);
+  pointer-events: none;
+}
+
+.segmentado-deslizante button {
+  position: relative;
+  z-index: 1;
+}
+
+/* El fondo lo pone el indicador; acá sólo el color del ícono. */
+.segmentado-deslizante button[aria-pressed="true"] {
+  background: transparent;
+  transition: color 0.4s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segmentado-indicador {
+    transition: none;
+  }
+}
+
+/* Deshabilitado (ej. Excel/CSV/PDF mientras se exporta): mismo criterio
+   que `.boton:disabled`. */
+.segmentado button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.segmentado button:disabled:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
+.segmentado button:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+
+/* Más de 12 horas adentro (Activos, `claseFilaActiva`): fondo suave de
+   advertencia y marca a la izquierda. Único resaltado de filas de la app. */
+.ag-row.fila-mas-de-12-horas {
+  background: var(--advertencia-suave);
+  box-shadow: inset 3px 0 0 var(--advertencia);
+}
+
 
 .shell-sidebar-colapsada {
   width: 3.75rem;
@@ -349,7 +588,9 @@ input {
      sin esto la marca de "activo" (`box-shadow` de `.nav-item-activo`)
      queda pegada al borde de la tarjeta. El padding de `.nav-item` (1rem)
      es aparte: el espacio entre ese borde y el ícono/texto de adentro. */
-  padding: 0.75rem 0.375rem 0;
+  /* 0.375rem arriba antes del primer ítem: la tarjeta ya arranca a la
+     altura de la grilla (ver `.shell-cabecera-lateral`). */
+  padding: 0.375rem 0.375rem 0;
 }
 
 .chip {
@@ -472,6 +713,9 @@ input {
   flex: 1;
   min-height: 0;
   padding: 0.375rem;
+  /* La barra de herramientas arranca a la misma altura que el botón de
+     colapsar/expandir del menú (`.shell-cabecera-lateral`, mismo valor). */
+  padding-top: calc(0.375rem * 2 + 1px);
   display: flex;
   flex-direction: column;
   gap: 0.9rem;

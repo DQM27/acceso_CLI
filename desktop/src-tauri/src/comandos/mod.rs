@@ -42,6 +42,7 @@ pub mod autenticacion;
 pub mod citas;
 pub mod contratistas;
 pub mod empresas;
+pub mod exportacion;
 pub mod gafetes;
 pub mod gafetes_provisionales;
 pub mod historial;

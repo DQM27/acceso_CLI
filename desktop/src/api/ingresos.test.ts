@@ -38,8 +38,8 @@ describe("mensajeVencimientoPraind", () => {
 
 describe("textoMedio", () => {
   it("Vehiculo -> Vehículo, cualquier otro -> Caminando", () => {
-    expect(textoMedio("Vehiculo")).toBe("Vehículo");
-    expect(textoMedio("Caminando")).toBe("Caminando");
+    expect(textoMedio("Vehiculo")).toBe("VEHÍCULO");
+    expect(textoMedio("Caminando")).toBe("CAMINANDO");
   });
 });
 
@@ -49,13 +49,13 @@ describe("textoMedioConPlaca", () => {
   });
 
   it("Vehiculo sin placa (dato viejo pre-migración) cae a 'Vehículo'", () => {
-    expect(textoMedioConPlaca("Vehiculo", null)).toBe("Vehículo");
-    expect(textoMedioConPlaca("Vehiculo", "   ")).toBe("Vehículo");
+    expect(textoMedioConPlaca("Vehiculo", null)).toBe("VEHÍCULO");
+    expect(textoMedioConPlaca("Vehiculo", "   ")).toBe("VEHÍCULO");
   });
 
   it("Caminando siempre muestra 'Caminando', tenga placa o no", () => {
-    expect(textoMedioConPlaca("Caminando", null)).toBe("Caminando");
-    expect(textoMedioConPlaca("Caminando", "ABC123")).toBe("Caminando");
+    expect(textoMedioConPlaca("Caminando", null)).toBe("CAMINANDO");
+    expect(textoMedioConPlaca("Caminando", "ABC123")).toBe("CAMINANDO");
   });
 });
 

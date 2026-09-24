@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use rust_xlsxwriter::{Format, FormatAlign, FormatBorder, Worksheet, XlsxError};
 
 use crate::{
@@ -6,6 +6,56 @@ use crate::{
     models::{medio_ingreso::MedioIngreso, tipo_ingreso::TipoIngreso},
     tiempo::a_costa_rica,
 };
+
+/// Un movimiento tal como lo escribe la exportación (Excel/PDF), venga de
+/// `registro_ingresos` (este dispositivo) o de `historial_sitio` (otro
+/// dispositivo del sitio, ver `MIGRACION_25`). Existe porque una fila
+/// remota puede traer `NULL` en campos que localmente son obligatorios
+/// (filas sincronizadas antes de que la nube cargara esas columnas) --
+/// antes la exportación sólo aceptaba `MovimientoIngresoResumen` y por eso
+/// dejaba afuera todo lo remoto. Un campo `None` se muestra como "—", nunca
+/// se inventa un valor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MovimientoExportable {
+    pub uuid: String,
+    pub cedula: Option<String>,
+    pub contratista_nombre: String,
+    pub empresa_nombre: Option<String>,
+    pub tipo_ingreso: Option<TipoIngreso>,
+    pub medio_ingreso: Option<MedioIngreso>,
+    pub fecha_hora_ingreso: DateTime<Utc>,
+    pub fecha_hora_salida: Option<DateTime<Utc>>,
+    pub gafete_numero: Option<i64>,
+    pub placa: Option<String>,
+    pub usuario_ingreso_nombre: Option<String>,
+    pub usuario_salida_nombre: Option<String>,
+}
+
+impl From<MovimientoIngresoResumen> for MovimientoExportable {
+    fn from(movimiento: MovimientoIngresoResumen) -> Self {
+        Self {
+            uuid: movimiento.uuid,
+            cedula: Some(movimiento.cedula),
+            contratista_nombre: movimiento.contratista_nombre,
+            empresa_nombre: Some(movimiento.empresa_nombre),
+            tipo_ingreso: Some(movimiento.tipo_ingreso),
+            medio_ingreso: Some(movimiento.medio_ingreso),
+            fecha_hora_ingreso: movimiento.fecha_hora_ingreso,
+            fecha_hora_salida: movimiento.fecha_hora_salida,
+            gafete_numero: movimiento.gafete_numero,
+            placa: movimiento.placa,
+            usuario_ingreso_nombre: Some(movimiento.usuario_ingreso_nombre),
+            usuario_salida_nombre: movimiento.usuario_salida_nombre,
+        }
+    }
+}
+
+/// Texto de una columna opcional -- "—" cuando no vino, mismo criterio que
+/// ya usaba [`ColumnaHistorial::Egreso`] sin salida. `pub` por el mismo
+/// motivo que [`tipo_texto`]: el PDF de la GUI lo reusa.
+pub fn o_guion(valor: Option<&str>) -> String {
+    valor.unwrap_or("—").to_owned()
+}
 
 /// Columnas que el operador puede mostrar tanto en la tabla clásica como en
 /// una exportación de Historial. Mantener un único enum evita que F4 y el
@@ -71,7 +121,7 @@ enum CeldaMovimiento {
 }
 
 fn celda_movimiento(
-    movimiento: &MovimientoIngresoResumen,
+    movimiento: &MovimientoExportable,
     columna: ColumnaHistorial,
 ) -> CeldaMovimiento {
     let ingreso_local = a_costa_rica(movimiento.fecha_hora_ingreso);
@@ -83,10 +133,12 @@ fn celda_movimiento(
         ),
         ColumnaHistorial::Nombre => CeldaMovimiento::Texto(movimiento.contratista_nombre.clone()),
         // Cédula siempre es texto: Excel no debe eliminar ceros iniciales.
-        ColumnaHistorial::Cedula => CeldaMovimiento::Texto(movimiento.cedula.clone()),
-        ColumnaHistorial::Empresa => CeldaMovimiento::Centrada(movimiento.empresa_nombre.clone()),
+        ColumnaHistorial::Cedula => CeldaMovimiento::Texto(o_guion(movimiento.cedula.as_deref())),
+        ColumnaHistorial::Empresa => {
+            CeldaMovimiento::Centrada(o_guion(movimiento.empresa_nombre.as_deref()))
+        }
         ColumnaHistorial::Tipo => {
-            CeldaMovimiento::Centrada(tipo_texto(movimiento.tipo_ingreso).to_owned())
+            CeldaMovimiento::Centrada(o_guion(movimiento.tipo_ingreso.map(tipo_texto)))
         }
         ColumnaHistorial::Entrada => CeldaMovimiento::Hora(ingreso_local.time()),
         ColumnaHistorial::Salida => movimiento.fecha_hora_salida.map_or_else(
@@ -98,19 +150,13 @@ fn celda_movimiento(
                 .gafete_numero
                 .map_or_else(|| "S/G".to_owned(), |numero| numero.to_string()),
         ),
-        ColumnaHistorial::Medio => CeldaMovimiento::Centrada(medio_texto_con_placa(
-            movimiento.medio_ingreso,
-            movimiento.placa.as_deref(),
-        )),
+        ColumnaHistorial::Medio => CeldaMovimiento::Centrada(texto_medio(movimiento)),
         ColumnaHistorial::Ingreso => {
-            CeldaMovimiento::Centrada(movimiento.usuario_ingreso_nombre.clone())
+            CeldaMovimiento::Centrada(o_guion(movimiento.usuario_ingreso_nombre.as_deref()))
         }
-        ColumnaHistorial::Egreso => CeldaMovimiento::Centrada(
-            movimiento
-                .usuario_salida_nombre
-                .clone()
-                .unwrap_or_else(|| "—".to_owned()),
-        ),
+        ColumnaHistorial::Egreso => {
+            CeldaMovimiento::Centrada(o_guion(movimiento.usuario_salida_nombre.as_deref()))
+        }
     }
 }
 
@@ -212,16 +258,22 @@ impl ColumnaHistorial {
     }
 }
 
-pub(crate) fn preparar_hoja(
-    hoja: &mut Worksheet,
-    columnas: &[ColumnaHistorial],
-) -> Result<(), XlsxError> {
-    let encabezado = con_fuente_base(
+/// Encabezado de columna de todas las exportaciones a Excel: Arial 10
+/// negrita, centrado, con borde y fondo celeste.
+fn formato_encabezado() -> Format {
+    con_fuente_base(
         Format::new()
             .set_align(FormatAlign::Center)
             .set_border(FormatBorder::Thin)
             .set_background_color("D9EAF7"),
-    );
+    )
+}
+
+pub(crate) fn preparar_hoja(
+    hoja: &mut Worksheet,
+    columnas: &[ColumnaHistorial],
+) -> Result<(), XlsxError> {
+    let encabezado = formato_encabezado();
 
     hoja.set_name("Movimientos")?;
     hoja.set_freeze_panes(1, 0)?;
@@ -237,7 +289,7 @@ pub(crate) fn escribir_movimiento(
     hoja: &mut Worksheet,
     fila: u32,
     columnas: &[ColumnaHistorial],
-    movimiento: &MovimientoIngresoResumen,
+    movimiento: &MovimientoExportable,
     formatos: &FormatosHistorial,
 ) -> Result<(), XlsxError> {
     // Alterna cebra según la fila real de Excel (1 = primera fila de datos,
@@ -266,13 +318,77 @@ pub(crate) fn escribir_movimiento(
     Ok(())
 }
 
+/// Columna de una tabla genérica a exportar (ver [`escribir_tabla_generica`]):
+/// el título tal cual se ve en la grilla y si el dato va alineado a la
+/// izquierda (texto libre, ej. nombres) o centrado (el resto).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
+pub struct ColumnaTabla {
+    pub titulo: String,
+    pub izquierda: bool,
+}
+
+/// Hoja de Excel con cualquier tabla ya formateada como texto -- la usan
+/// las grillas de escritorio que no tienen un exportador propio (historial
+/// de proveedores y de KOF): la grilla manda exactamente lo que muestra
+/// (columnas visibles, filas filtradas y ordenadas, valores ya formateados)
+/// y acá sólo se le da el mismo estilo que al Historial de contratistas
+/// (encabezado, cebra, Arial 10 negrita, autofiltro). El ancho de cada
+/// columna sale del texto más largo, entre 8 y 50 caracteres.
+pub(crate) fn escribir_tabla_generica(
+    hoja: &mut Worksheet,
+    columnas: &[ColumnaTabla],
+    filas: &[Vec<String>],
+) -> Result<(), XlsxError> {
+    let encabezado = formato_encabezado();
+    let centrado = con_cebra(con_fuente_base(
+        Format::new().set_align(FormatAlign::Center),
+    ));
+    let izquierda = con_cebra(con_fuente_base(Format::new()));
+
+    hoja.set_name("Movimientos")?;
+    hoja.set_freeze_panes(1, 0)?;
+    for (indice, columna) in columnas.iter().enumerate() {
+        let largo = filas
+            .iter()
+            .filter_map(|fila| fila.get(indice))
+            .map(|valor| valor.chars().count())
+            .chain(std::iter::once(columna.titulo.chars().count()))
+            .max()
+            .unwrap_or(0);
+        let ancho = u32::try_from(largo.clamp(8, 50) + 3).unwrap_or(53);
+        let indice = u16::try_from(indice).unwrap_or(u16::MAX);
+        hoja.set_column_width(indice, f64::from(ancho))?;
+        hoja.write_string_with_format(0, indice, &columna.titulo, &encabezado)?;
+    }
+    for (numero, fila) in filas.iter().enumerate() {
+        let fila_excel = u32::try_from(numero + 1).unwrap_or(u32::MAX);
+        let variante = (fila_excel % 2) as usize;
+        for (indice, columna) in columnas.iter().enumerate() {
+            let valor = fila.get(indice).map_or("", String::as_str);
+            let formato = if columna.izquierda {
+                &izquierda[variante]
+            } else {
+                &centrado[variante]
+            };
+            let indice = u16::try_from(indice).unwrap_or(u16::MAX);
+            hoja.write_string_with_format(fila_excel, indice, valor, formato)?;
+        }
+    }
+    if !columnas.is_empty() {
+        let ultima = u16::try_from(columnas.len() - 1).unwrap_or(u16::MAX);
+        hoja.autofilter(0, 0, u32::try_from(filas.len()).unwrap_or(u32::MAX), ultima)?;
+    }
+    Ok(())
+}
+
 /// `pub` (no `pub(crate)`) a propósito — la exportación a PDF de la GUI
 /// (`desktop/src-tauri`, un crate distinto) reusa el mismo texto que ya
 /// usa la exportación a Excel en vez de duplicar el `match`.
 pub const fn tipo_texto(tipo: TipoIngreso) -> &'static str {
     match tipo {
         TipoIngreso::Praind => "PRAIND",
-        TipoIngreso::InHouse => "IN-HOUSE",
+        TipoIngreso::InHouse => "IN HOUSE",
         TipoIngreso::PorCorreo => "POR CORREO",
         TipoIngreso::Swat => "SWAT",
     }
@@ -281,8 +397,8 @@ pub const fn tipo_texto(tipo: TipoIngreso) -> &'static str {
 /// `pub` por el mismo motivo que [`tipo_texto`].
 pub const fn medio_texto(medio: MedioIngreso) -> &'static str {
     match medio {
-        MedioIngreso::Caminando => "Caminando",
-        MedioIngreso::Vehiculo => "Vehículo",
+        MedioIngreso::Caminando => "CAMINANDO",
+        MedioIngreso::Vehiculo => "VEHÍCULO",
     }
 }
 
@@ -297,6 +413,16 @@ pub fn medio_texto_con_placa(medio: MedioIngreso, placa: Option<&str>) -> String
         (MedioIngreso::Vehiculo, Some(placa)) if !placa.trim().is_empty() => placa.to_owned(),
         _ => medio_texto(medio).to_owned(),
     }
+}
+
+/// [`medio_texto_con_placa`] sobre un [`MovimientoExportable`] -- "—" si
+/// el medio no vino (fila remota vieja). `pub` por el mismo motivo que
+/// [`tipo_texto`]: el PDF de la GUI la reusa.
+pub fn texto_medio(movimiento: &MovimientoExportable) -> String {
+    movimiento.medio_ingreso.map_or_else(
+        || "—".to_owned(),
+        |medio| medio_texto_con_placa(medio, movimiento.placa.as_deref()),
+    )
 }
 
 #[cfg(test)]
@@ -353,7 +479,7 @@ mod tests {
                 hoja,
                 1,
                 &columnas,
-                &movimiento(),
+                &movimiento().into(),
                 &FormatosHistorial::default(),
             )
             .unwrap();
@@ -364,6 +490,33 @@ mod tests {
         let bytes = std::fs::read(destino).unwrap();
         assert!(bytes.starts_with(b"PK"), "XLSX debe ser un contenedor ZIP");
         assert!(bytes.len() > 1_000, "el libro no debe quedar vacío");
+    }
+
+    #[test]
+    fn escribe_una_tabla_generica_con_filas_mas_cortas_que_las_columnas() {
+        let directorio = tempfile::tempdir().unwrap();
+        let destino = directorio.path().join("tabla.xlsx");
+        let columnas = vec![
+            ColumnaTabla {
+                titulo: "NOMBRE".into(),
+                izquierda: true,
+            },
+            ColumnaTabla {
+                titulo: "GAFETE".into(),
+                izquierda: false,
+            },
+        ];
+        // La segunda fila trae una celda menos: se escribe vacía, no falla.
+        let filas = vec![
+            vec!["Ana Solano".to_owned(), "S/G".to_owned()],
+            vec!["Beto Rojas".to_owned()],
+        ];
+        let mut libro = rust_xlsxwriter::Workbook::new();
+        escribir_tabla_generica(libro.add_worksheet(), &columnas, &filas).unwrap();
+        libro.save(&destino).unwrap();
+
+        let bytes = std::fs::read(destino).unwrap();
+        assert!(bytes.starts_with(b"PK"), "XLSX debe ser un contenedor ZIP");
     }
 
     #[test]
@@ -378,11 +531,11 @@ mod tests {
     fn medio_texto_con_placa_cae_a_vehiculo_sin_placa() {
         assert_eq!(
             medio_texto_con_placa(MedioIngreso::Vehiculo, None),
-            "Vehículo"
+            "VEHÍCULO"
         );
         assert_eq!(
             medio_texto_con_placa(MedioIngreso::Vehiculo, Some("   ")),
-            "Vehículo"
+            "VEHÍCULO"
         );
     }
 
@@ -392,7 +545,7 @@ mod tests {
         // llegara un dato así de todos modos no debe mostrarse la placa.
         assert_eq!(
             medio_texto_con_placa(MedioIngreso::Caminando, Some("ABC123")),
-            "Caminando"
+            "CAMINANDO"
         );
     }
 }

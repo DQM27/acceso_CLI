@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 49;
+pub const SCHEMA_VERSION: i64 = 50;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -394,6 +394,11 @@ fn aplicar_migraciones_posteriores_a_29(
     if *version == 48 {
         aplicar_migracion_49(connection)?;
         *version = 49;
+    }
+
+    if *version == 49 {
+        aplicar_migracion_50(connection)?;
+        *version = 50;
     }
 
     Ok(())
@@ -825,6 +830,24 @@ fn ejecutar_migracion_49(connection: &Connection) -> Result<(), SchemaError> {
     if connection.prepare("PRAGMA foreign_key_check")?.exists([])? {
         return Err(SchemaError::MigracionStrictReferenciasInvalidas);
     }
+    Ok(())
+}
+
+/// Mismo criterio que `MIGRACION_25` (`historial_sitio`), pero para
+/// préstamos de gafete provisional KOF -- falencia detectada por el
+/// usuario 2026-09-21: la pantalla de escritorio no tenía ninguna vista de
+/// historial, sólo "Activos". Un préstamo que OTRO dispositivo entregó Y
+/// devolvió nunca queda guardado localmente (sólo pasa por la caché
+/// `prestamos_gafete_provisional_remotos` mientras está abierto, ver
+/// `MIGRACION_45`), así que el historial completo del sitio sólo existe en
+/// Supabase -- esta tabla es el mismo espejo local que ya existe para
+/// ingresos. `ADD COLUMN` simple (no recrea nada): a diferencia de
+/// `MIGRACION_44/46/49`, ninguna columna nueva participa de un `CHECK`.
+fn aplicar_migracion_50(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_50)?;
+    transaction.execute_batch("PRAGMA user_version = 50")?;
+    transaction.commit()?;
     Ok(())
 }
 
@@ -4111,4 +4134,24 @@ ALTER TABLE ingresos_remotos ADD COLUMN placa TEXT;
 -- cerrado, de cualquier dispositivo, ver `recibir_historial_del_sitio`) --
 -- mismo motivo que en `ingresos_remotos` arriba, sólo cache de lectura.
 ALTER TABLE historial_sitio ADD COLUMN placa TEXT;
+";
+
+const MIGRACION_50: &str = r"
+ALTER TABLE sincronizacion_estado ADD COLUMN gafetes_provisionales_historial_actualizado_hasta TEXT;
+
+CREATE TABLE prestamos_gafete_provisional_historial_sitio (
+    uuid TEXT PRIMARY KEY,
+    sitio_id TEXT NOT NULL,
+    encargado_nombre TEXT NOT NULL,
+    encargado_codigo_empleado TEXT NOT NULL,
+    gafete_numero INTEGER NOT NULL,
+    fecha_hora_entrega TEXT NOT NULL,
+    usuario_entrega_nombre TEXT NOT NULL,
+    fecha_hora_devolucion TEXT,
+    usuario_devolucion_nombre TEXT,
+    actualizado_en TEXT NOT NULL
+) STRICT;
+
+CREATE INDEX idx_prestamos_gafete_provisional_historial_sitio_fecha_entrega
+ON prestamos_gafete_provisional_historial_sitio(fecha_hora_entrega);
 ";

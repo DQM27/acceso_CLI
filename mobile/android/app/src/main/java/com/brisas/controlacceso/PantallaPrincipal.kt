@@ -267,7 +267,13 @@ fun PantallaPrincipal(
                 // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
                 // usuario (2026-09-19) para descomprimir la fila de
                 // pestañas, ya apiñada (ver comentario arriba).
-                opciones = listOf("Activos", "Rutas", "KOF", "Proveedores"),
+                //
+                // "Rutas" oculta de la fila (pedido del usuario 2026-09-23:
+                // control de rutas sin terminar, que no se vea a medias en
+                // una demostración). `PantallaRutas` sigue intacta; para
+                // volver a mostrarla basta con sacarla de
+                // `PESTANAS_EN_DESARROLLO`.
+                opciones = PESTANAS.filterNot { it in PESTANAS_EN_DESARROLLO },
                 seleccionado = pestana,
                 onSeleccionar = { pestana = it },
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -279,11 +285,13 @@ fun PantallaPrincipal(
             // cambio le pasa a su único hijo las restricciones ya acotadas
             // que le tocaron acá (el resto de la pantalla, vía `weight(1f)`).
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                when (pestana) {
-                    0 -> PantallaActivos(nucleo, secretoStore, refrescarNube)
-                    1 -> PantallaRutas(nucleo)
-                    2 -> PantallaGafetesProvisionales(nucleo, secretoStore, refrescarNube)
-                    else -> PantallaProveedores(nucleo, secretoStore, refrescarNube)
+                // Por nombre, no por índice -- con pestañas ocultas el índice
+                // visible ya no coincide con la posición en `PESTANAS`.
+                when (PESTANAS.filterNot { it in PESTANAS_EN_DESARROLLO }.getOrNull(pestana)) {
+                    "Rutas" -> PantallaRutas(nucleo)
+                    "KOF" -> PantallaGafetesProvisionales(nucleo, secretoStore, refrescarNube)
+                    "Proveedores" -> PantallaProveedores(nucleo, secretoStore, refrescarNube)
+                    else -> PantallaActivos(nucleo, secretoStore, refrescarNube)
                 }
             }
         }
@@ -291,3 +299,9 @@ fun PantallaPrincipal(
 }
 
 private const val DEMORA_BLOQUEO_SESION_MS = 2 * 60_000L
+
+private val PESTANAS = listOf("Activos", "Rutas", "KOF", "Proveedores")
+
+/** Pestañas sin terminar, ocultas de la fila (ver comentario en
+ * `FilaPildoras` arriba). */
+private val PESTANAS_EN_DESARROLLO = setOf("Rutas")

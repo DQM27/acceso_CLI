@@ -119,6 +119,7 @@ export default function Auditoria() {
     () => [
       {
         colId: "fecha",
+        type: "fecha",
         headerName: "Fecha",
         flex: 1.1,
         minWidth: 110,
@@ -185,6 +186,8 @@ export default function Auditoria() {
         )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaAuditoria>
+            cargando={cargando}
+            filtrosPorColumna
             id="auditoria"
             columnas={columnas}
             filas={filas}

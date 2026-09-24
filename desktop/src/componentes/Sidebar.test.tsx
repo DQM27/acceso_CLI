@@ -27,6 +27,30 @@ function renderSidebar(props: Partial<React.ComponentProps<typeof Sidebar>> = {}
 }
 
 describe("Sidebar", () => {
+  it("el botón de arriba colapsa o expande el menú según el estado", () => {
+    const onToggleColapsado = vi.fn();
+    const { rerender } = renderSidebar({ onToggleColapsado });
+
+    fireEvent.click(screen.getByLabelText("Colapsar menú"));
+    expect(onToggleColapsado).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <Sidebar
+        secciones={secciones}
+        ocultas={[]}
+        seccionActual="activos"
+        onCambiarSeccion={() => {}}
+        colapsado
+        onToggleColapsado={onToggleColapsado}
+        onReordenar={() => {}}
+        onCambiarVisibilidad={() => {}}
+        onRestablecer={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Expandir menú"));
+    expect(onToggleColapsado).toHaveBeenCalledTimes(2);
+  });
+
   it("al hacer click en una sección, llama a onCambiarSeccion con su id", () => {
     const onCambiarSeccion = vi.fn();
     renderSidebar({ onCambiarSeccion });

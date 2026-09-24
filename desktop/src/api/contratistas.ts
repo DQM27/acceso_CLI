@@ -9,6 +9,25 @@ import { solicitarSincronizacionNube } from "../eventosNube";
 export type TipoIngreso = "Praind" | "InHouse" | "PorCorreo" | "Swat";
 export const TIPOS_INGRESO: TipoIngreso[] = ["Praind", "InHouse", "PorCorreo", "Swat"];
 
+/** Texto de un tipo de ingreso en las grillas: en mayúsculas y con las
+ * palabras separadas ("IN HOUSE", no el nombre interno "InHouse") --
+ * pedido del usuario 2026-09-23. Mismo texto que el Excel/PDF del núcleo
+ * (`historial::exportacion::tipo_texto`). `null` (fila remota vieja) → "—". */
+export function textoTipoIngreso(tipo: TipoIngreso | null): string {
+  switch (tipo) {
+    case "Praind":
+      return "PRAIND";
+    case "InHouse":
+      return "IN HOUSE";
+    case "PorCorreo":
+      return "POR CORREO";
+    case "Swat":
+      return "SWAT";
+    default:
+      return "—";
+  }
+}
+
 export interface ContratistaResumen {
   id: number;
   empresa_id: number;

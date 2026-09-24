@@ -1,0 +1,48 @@
+/* Tema Tokyo Night (pedido del usuario 2026-09-24): la paleta del tema de
+   VS Code (enkia.tokyo-night) sobre los mismos tokens de `diseno.css`, así
+   todo lo que ya usa `var(--…)` (grillas de AG Grid incluidas, ver
+   `temaBrisas` en Tabla.tsx) cambia sin tocar componentes.
+
+   Vive aparte de `diseno.css` a propósito: ese archivo se genera desde
+   `design/brisas.json` (compartido con el panel web) y regenerarlo
+   borraría este bloque.
+
+   `:root[data-theme=…]` (especificidad 0,2,0) y no sólo `[data-theme=…]`:
+   con el sistema en modo oscuro, `:root:not([data-theme="light"])` de
+   `diseno.css` también aplica y tiene esa misma especificidad; gana éste
+   porque se importa después. */
+:root[data-theme="tokyo-night"] {
+  --fondo: #16161e;
+  --panel: #1a1b26;
+  --panel-suave: #1f2335;
+  --elevado: #24283b;
+  --campo-fondo: #14141b;
+  --borde: #292e42;
+  --borde-fuerte: #545c7e;
+  --texto: #c0caf5;
+  --muted: #9aa5ce;
+  --texto-atenuado: #737aa2;
+  --acento: #7aa2f7;
+  --acento-hover: #3d59a1;
+  --acento-presionado: #2e4482;
+  --acento-suave: #283457;
+  --sobre-acento: #ffffff;
+  --exito: #9ece6a;
+  --exito-suave: #243024;
+  --sobre-exito: #16161e;
+  --advertencia: #e0af68;
+  --advertencia-suave: #352f22;
+  --sobre-advertencia: #16161e;
+  --error: #f7768e;
+  --error-suave: #3a2230;
+  --sobre-error: #16161e;
+  --info: #7dcfff;
+  --info-suave: #1d3445;
+  --sobre-info: #16161e;
+  --sombra-panel: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --velo: rgba(0, 0, 0, 0.6);
+  --panel-lateral: #16161e;
+  --acento-relleno: #3d59a1;
+  --sobre-acento-indicador: #16161e;
+  color-scheme: dark;
+}
