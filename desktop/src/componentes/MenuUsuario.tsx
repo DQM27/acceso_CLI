@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { LogOut } from "lucide-react";
+import { KeyRound, LogOut } from "lucide-react";
 import type { UsuarioSesion } from "../api";
+import CambiarPasswordModal from "./CambiarPasswordModal";
 import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
 
 /**
@@ -8,7 +9,7 @@ import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
  * — mismo lenguaje que los ítems de la status bar de VSC (texto normal
  * hasta que se pasa el mouse, ahí aparece el fondo de botón, ver
  * `.barra-estado-boton`). Al hacer click abre un popover con nombre/rol y
- * "Cerrar sesión" — mismo mecanismo que "Columnas ▾" en `Tabla.tsx`
+ * "Cambiar contraseña" / "Cerrar sesión" — mismo mecanismo que "Columnas ▾" en `Tabla.tsx`
  * (`ListaFlotante`/`useListaFlotante`), pero `direccion="arriba"` porque
  * el disparador vive pegado al borde inferior de la ventana, sin espacio
  * para abrir hacia abajo. Antes vivía fijo en el sidebar (`.shell-usuario`)
@@ -22,6 +23,7 @@ export default function MenuUsuario({
   onCerrarSesion: () => void;
 }) {
   const [abierto, setAbierto] = useState(false);
+  const [cambiandoPassword, setCambiandoPassword] = useState(false);
   const { campoRef, posicion } = useListaFlotante(abierto);
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -66,6 +68,17 @@ export default function MenuUsuario({
             <button
               type="button"
               className="boton boton-icono boton-salir"
+              onClick={() => {
+                setAbierto(false);
+                setCambiandoPassword(true);
+              }}
+            >
+              <KeyRound size={17} strokeWidth={2} aria-hidden="true" />
+              Cambiar contraseña
+            </button>
+            <button
+              type="button"
+              className="boton boton-icono boton-salir"
               onClick={onCerrarSesion}
             >
               <LogOut size={17} strokeWidth={2} aria-hidden="true" />
@@ -74,6 +87,8 @@ export default function MenuUsuario({
           </div>
         </ListaFlotante>
       )}
+
+      {cambiandoPassword && <CambiarPasswordModal onCerrar={() => setCambiandoPassword(false)} />}
     </div>
   );
 }
