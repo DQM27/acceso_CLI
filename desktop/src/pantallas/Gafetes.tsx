@@ -130,7 +130,6 @@ export default function Gafetes() {
             cargando={cargando}
             filtrosPorColumna
             id="gafetes"
-            nombreExportacion="gafetes"
             columnas={columnas}
             filas={filas}
             onFilaDobleClic={setGestionAbierta}

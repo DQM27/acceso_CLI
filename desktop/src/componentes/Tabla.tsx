@@ -6,7 +6,6 @@ import { themeQuartz } from "ag-grid-community";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { Sheet } from "lucide-react";
 import type {
   ColDef,
   GetRowIdParams,
@@ -283,10 +282,6 @@ export interface TablaProps<T> {
    * (Realtime, pulso de sincronización) mantienen las filas viejas a la
    * vista en vez de taparlas con un aviso cada vez. */
   cargando?: boolean;
-  /** Muestra un botón "CSV" junto a "Columnas ▾" que exporta lo que la
-   * grilla tiene visible ahora (filas filtradas y ordenadas, columnas
-   * visibles). Es el nombre sugerido del archivo, sin extensión. */
-  nombreExportacion?: string;
   /** Identidad estable de cada fila. Con esto, al refrescar los datos AG
    * Grid reconoce la misma fila en vez de redibujar todo, y hace destellar
    * las celdas que cambiaron (ej. una salida que llega por Realtime). */
@@ -311,9 +306,10 @@ export interface TablaHandle<T> {
    * el orden real de la grilla — el que queda después de que el usuario
    * arrastra columnas para reordenarlas, no el orden fijo en el código. */
   columnasVisibles: () => string[];
-  /** Exporta a CSV lo visible, igual que el botón propio de la grilla --
-   * para pantallas que ubican su botón en otro lugar (ej. Historial, junto
-   * a Excel/PDF) en vez de usar `nombreExportacion`. */
+  /** Exporta a CSV lo que la grilla tiene visible ahora (filas filtradas
+   * y ordenadas, columnas visibles). `nombre` es el nombre sugerido del
+   * archivo, sin extensión. La pantalla pone su propio botón (hoy sólo
+   * Historial, junto a Excel/PDF -- pedido del usuario 2026-09-23). */
   exportarCsv: (nombre: string) => Promise<void>;
 }
 
@@ -331,7 +327,6 @@ function TablaBase<T>(
     filtrosPorColumna,
     id,
     cargando,
-    nombreExportacion,
     idFila,
     claseFila,
   }: TablaProps<T>,
@@ -413,7 +408,7 @@ function TablaBase<T>(
     [conFiltro, idFila],
   );
 
-  async function exportarCsv(nombre: string | undefined = nombreExportacion) {
+  async function exportarCsv(nombre: string) {
     const api = apiRef.current;
     if (!api || !nombre) return;
     // Sólo columnas con dato (no las de botones ni la de casillas).
@@ -595,18 +590,6 @@ function TablaBase<T>(
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           {accionesDerecha}
-
-          {nombreExportacion && (
-            // Mismo botón de ícono que Excel/PDF en Historial.
-            <button
-              type="button"
-              className="boton boton-icono"
-              title="Exportar a CSV — respeta el filtro/orden/columnas actuales de la grilla"
-              onClick={() => exportarCsv()}
-            >
-              <Sheet size={16} />
-            </button>
-          )}
 
           <div ref={selectorRef}>
             <button type="button" className="boton" onClick={() => setSelectorAbierto((a) => !a)}>

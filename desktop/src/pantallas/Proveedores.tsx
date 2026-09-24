@@ -244,7 +244,6 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
               cargando={cargando}
               filtrosPorColumna
               id="proveedores-activos"
-              nombreExportacion="proveedores-activos"
               idFila={claveFilaProveedorActiva}
               columnas={columnasActivos}
               filas={filasActivos}
@@ -270,7 +269,6 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
               cargando={cargando}
               filtrosPorColumna
               id="proveedores-historial"
-              nombreExportacion="proveedores-historial"
               idFila={idPorUuid}
               columnas={columnasHistorial}
               filas={filasHistorial}

@@ -257,7 +257,6 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
               cargando={cargando}
               filtrosPorColumna
               id="gafetes-provisionales-activos"
-              nombreExportacion="kof-activos"
               idFila={claveFilaGafeteProvisionalActiva}
               columnas={columnasActivos}
               filas={filasActivos}
@@ -283,7 +282,6 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
               cargando={cargando}
               filtrosPorColumna
               id="gafetes-provisionales-historial"
-              nombreExportacion="kof-historial"
               idFila={idPorUuid}
               columnas={columnasHistorial}
               filas={filasHistorial}

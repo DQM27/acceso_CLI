@@ -189,7 +189,6 @@ export default function Auditoria() {
             cargando={cargando}
             filtrosPorColumna
             id="auditoria"
-            nombreExportacion="auditoria"
             columnas={columnas}
             filas={filas}
             busqueda={busqueda}
