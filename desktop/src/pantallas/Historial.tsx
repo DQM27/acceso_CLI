@@ -158,6 +158,10 @@ export default function Historial() {
   // día en curso. El usuario puede ampliar `desde` para ver más atrás.
   const [desde, setDesde] = useState(() => fechaHaceMeses(6));
   const [hasta, setHasta] = useState("");
+  // Buscador general (pedido del usuario 2026-09-23): sólo Cédula, Nombre y
+  // Empresa -- el resto de columnas ya tiene `getQuickFilterText: () => ""`.
+  // Excel/PDF/CSV exportan lo filtrado, así que también lo respetan.
+  const [busqueda, setBusqueda] = useState("");
   const tablaRef = useRef<TablaHandle<FilaHistorial>>(null);
 
   useBarraEstado(
@@ -435,6 +439,16 @@ export default function Historial() {
             columnas={columnas}
             filas={filas}
             filtrosPorColumna
+            busqueda={busqueda}
+            controles={
+              <div className="campo" style={{ flex: "0 1 16rem" }}>
+                <input
+                  placeholder="Cédula, nombre, empresa…"
+                  value={busqueda}
+                  onChange={(evento) => setBusqueda(evento.target.value)}
+                />
+              </div>
+            }
             accionesDerecha={
               <>
                 <SelectorRangoFecha
