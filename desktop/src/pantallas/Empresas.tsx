@@ -131,6 +131,7 @@ export default function Empresas() {
         <div style={{ flex: 1, minHeight: 0 }}>
           {tipo === "contratista" ? (
             <Tabla<EmpresaResumen>
+              cargando={cargando}
               filtrosPorColumna
               id="empresas"
               columnas={columnasContratista}
@@ -141,6 +142,7 @@ export default function Empresas() {
             />
           ) : (
             <Tabla<EmpresaProveedor>
+              cargando={cargando}
               filtrosPorColumna
               id="empresas-proveedor"
               columnas={columnasProveedor}

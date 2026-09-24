@@ -288,6 +288,7 @@ export default function Activos({
 
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaActiva>
+            cargando={cargando}
             filtrosPorColumna
             id="activos"
             columnas={columnas}

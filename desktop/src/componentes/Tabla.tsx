@@ -3,8 +3,11 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import type { ReactNode } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
+import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
 import type {
   ColDef,
+  ITooltipParams,
+  RowClickedEvent,
   ColumnMovedEvent,
   ColumnPinnedEvent,
   ColumnResizedEvent,
@@ -119,7 +122,30 @@ const columnaPorDefecto: ColDef = {
   // centrado igual, sólo el dato cambia).
   headerClass: "columna-centrada",
   cellStyle: { textAlign: "center" },
+  // Texto completo al pasar el mouse, pero sólo en celdas cortadas
+  // ("KAREN DE LOS ANGELE…") -- ver `tooltipShowMode="whenTruncated"` en
+  // la grilla. Sólo texto/números: una celda con componente propio (botón
+  // "Salida", interruptor) no tiene nada que mostrar.
+  tooltipValueGetter: textoTooltip,
 };
+
+/** Lo que muestra el tooltip de una celda -- el valor ya formateado (ej.
+ * "S/G", "23/09/2026") si la columna tiene `valueFormatter`, si no el valor
+ * crudo; `undefined` (sin tooltip) para cualquier cosa que no sea texto o
+ * número. */
+export function textoTooltip({ valueFormatted, value }: ITooltipParams): string | undefined {
+  if (typeof valueFormatted === "string" && valueFormatted !== "") return valueFormatted;
+  if (typeof value === "string" && value !== "") return value;
+  if (typeof value === "number") return String(value);
+  return undefined;
+}
+
+/** Un clic dentro de un botón, interruptor o campo de la celda no debe
+ * marcar/desmarcar la fila -- ej. el botón "Salida" de Activos ya hace su
+ * propia acción. */
+export function clicEnControlInteractivo(objetivo: EventTarget | null | undefined): boolean {
+  return objetivo instanceof Element && objetivo.closest("button, input, select, a, label") !== null;
+}
 
 const MENSAJE_SIN_FILAS = `<span style="color: var(--muted); font-size: 0.9rem;">Sin resultados</span>`;
 
@@ -214,6 +240,11 @@ export interface TablaProps<T> {
    * el layout por defecto. Cada pantalla usa su propio id, así que el
    * layout de una no pisa el de otra. */
   id?: string;
+  /** La pantalla todavía está trayendo datos. Muestra "Cargando…" dentro de
+   * la grilla sólo mientras no haya ninguna fila: los refrescos posteriores
+   * (Realtime, pulso de sincronización) mantienen las filas viejas a la
+   * vista en vez de taparlas con un aviso cada vez. */
+  cargando?: boolean;
 }
 
 /** Mango imperativo opcional (`ref`) para que la pantalla pida datos que
@@ -244,6 +275,7 @@ function TablaBase<T>(
     onFilaDobleClic,
     filtrosPorColumna,
     id,
+    cargando,
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
 ) {
@@ -476,6 +508,12 @@ function TablaBase<T>(
           quickFilterParser={quickFilterParser}
           quickFilterMatcher={quickFilterMatcher}
           overlayNoRowsTemplate={MENSAJE_SIN_FILAS}
+          // Menús de filtro, "Cargando…", etc. en español -- sin esto AG
+          // Grid mostraba "Contains", "Equals", "AND/OR" en inglés.
+          localeText={AG_GRID_LOCALE_ES}
+          loading={cargando === true && filas.length === 0}
+          tooltipShowMode="whenTruncated"
+          tooltipShowDelay={400}
           // Resguardo además de memoizar `columnas` en cada pantalla: si de
           // todos modos algo le pasa un `columnDefs` nuevo, esto evita que
           // AG Grid reordene según el orden literal del array en vez de
@@ -500,6 +538,18 @@ function TablaBase<T>(
           }
           onCellValueChanged={
             onCeldaEditada ? (evento) => onCeldaEditada(evento.data) : undefined
+          }
+          // Selección múltiple: un clic en cualquier parte de la fila la
+          // marca/desmarca, igual que la casilla (sin afectar a las demás).
+          // A mano en vez de `enableClickSelection` de AG Grid porque ése
+          // también se disparaba al tocar el botón "Salida" de la fila.
+          onRowClicked={
+            seleccionMultiple
+              ? (evento: RowClickedEvent<T>) => {
+                  if (clicEnControlInteractivo(evento.event?.target)) return;
+                  evento.node.setSelected(!evento.node.isSelected());
+                }
+              : undefined
           }
           onRowDoubleClicked={
             onFilaDobleClic ? (evento) => evento.data && onFilaDobleClic(evento.data) : undefined

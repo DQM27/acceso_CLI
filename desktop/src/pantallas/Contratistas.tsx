@@ -137,6 +137,7 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<ContratistaResumen>
+            cargando={cargando}
             id="contratistas"
             columnas={columnas}
             filas={filas}

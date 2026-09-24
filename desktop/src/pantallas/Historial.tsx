@@ -411,6 +411,7 @@ export default function Historial() {
         )}
         <div style={{ flex: 1, minHeight: 0 }}>
           <Tabla<FilaHistorial>
+            cargando={cargando}
             ref={tablaRef}
             id="historial"
             columnas={columnas}

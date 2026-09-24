@@ -233,6 +233,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
         <div style={{ flex: 1, minHeight: 0 }}>
           {vista === "activos" ? (
             <Tabla<FilaProveedorActiva>
+              cargando={cargando}
               filtrosPorColumna
               id="proveedores-activos"
               columnas={columnasActivos}
@@ -256,6 +257,7 @@ export default function Proveedores({ refrescarSenal }: { refrescarSenal?: numbe
             />
           ) : (
             <Tabla<HistorialIngresoProveedorRemoto>
+              cargando={cargando}
               filtrosPorColumna
               id="proveedores-historial"
               columnas={columnasHistorial}
