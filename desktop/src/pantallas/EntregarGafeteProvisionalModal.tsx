@@ -232,7 +232,7 @@ export default function EntregarGafeteProvisionalModal({
               <div>
                 <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>{elegido.nombre}</p>
                 <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
-                  Código de empleado {elegido.codigo_empleado} — corroborar con la persona
+                  Código de empleado {elegido.codigo_empleado}
                 </p>
               </div>
               <button
