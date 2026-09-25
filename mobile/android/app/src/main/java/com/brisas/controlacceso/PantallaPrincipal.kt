@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import uniffi.control_acceso_mobile.ConflictoGafeteActivo
 import uniffi.control_acceso_mobile.ConflictoIngresoActivo
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.UsuarioSesion
@@ -94,6 +95,10 @@ fun PantallaPrincipal(
     // Alimentado desde los dos caminos de sync (pulso periódico y botón
     // manual), igual que `refrescarNube`.
     var conflictosIngreso by remember { mutableStateOf<List<ConflictoIngresoActivo>>(emptyList()) }
+    // Mismo criterio que `conflictosIngreso`, pero calculado con datos
+    // locales dentro de `drenar_cola` (fase 3, PR #62) -- ver
+    // `ResumenSincronizacion.conflictosGafete`.
+    var conflictosGafete by remember { mutableStateOf<List<ConflictoGafeteActivo>>(emptyList()) }
     val nubeViewModel: NubeViewModel =
         viewModel(
             factory = NubeViewModel.factory(nucleo, secretoStore, onCerrarSesion),
@@ -123,6 +128,7 @@ fun PantallaPrincipal(
                 } else {
                     refrescarNube += 1
                     conflictosIngreso = resumen.conflictosIngreso
+                    conflictosGafete = resumen.conflictosGafete
                 }
             },
         )
@@ -181,6 +187,7 @@ fun PantallaPrincipal(
         if (resumen != null) {
             refrescarNube += 1
             conflictosIngreso = resumen.conflictosIngreso
+            conflictosGafete = resumen.conflictosGafete
         }
     }
 
@@ -249,6 +256,24 @@ fun PantallaPrincipal(
         for (conflicto in conflictosIngreso) {
             Text(
                 "${conflicto.contratistaNombre} tiene un ingreso activo acá Y en ${conflicto.sitioConflicto} — hay que resolverlo.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
+        }
+
+        // A diferencia del de arriba (simétrico: ambos lados "tienen
+        // razón" hasta que alguien decide), acá Postgres ya decidió -- el
+        // ingreso local de ESTE dispositivo es el que no quedó válido en
+        // la nube, así que el aviso lo dice con esa certeza. Sólo
+        // informativo por ahora (fase 3, PR #62): sin botón de acción
+        // directa -- se deja para una vuelta aparte si hace falta, una
+        // vez visto el comportamiento real.
+        for (conflicto in conflictosGafete) {
+            Text(
+                "El ingreso de ${conflicto.contratistaNombre} con gafete ${conflicto.gafeteNumero} " +
+                    "(${textoFechaHora(conflicto.fechaHoraIngreso)}) no quedó registrado en la nube — " +
+                    "otro dispositivo de este sitio ya lo tiene asignado.",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),

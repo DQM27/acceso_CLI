@@ -536,6 +536,45 @@ pub struct ResumenSincronizacion {
     /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
     /// proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
     pub conflictos_ingreso_proveedor: Vec<ConflictoIngresoProveedorActivo>,
+    /// Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
+    /// la nube fue rechazado porque otro dispositivo del mismo sitio ya
+    /// tiene ese número activo (índice único
+    /// `ingresos_gafete_activo_sitio_idx`) -- a diferencia de
+    /// `conflictos_ingreso`, se calcula con datos locales dentro del mismo
+    /// `drenar_cola`, sin una consulta remota aparte -- ver
+    /// `control_acceso::nube::ConflictoGafeteActivo`.
+    pub conflictos_gafete: Vec<ConflictoGafeteActivo>,
+}
+
+/// Espejo de `control_acceso::nube::ConflictoGafeteActivo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ConflictoGafeteActivo {
+    pub contratista_nombre: String,
+    pub gafete_numero: i64,
+    pub fecha_hora_ingreso: String,
+}
+
+impl From<control_acceso::nube::ConflictoGafeteActivo> for ConflictoGafeteActivo {
+    fn from(conflicto: control_acceso::nube::ConflictoGafeteActivo) -> Self {
+        Self {
+            contratista_nombre: conflicto.contratista_nombre,
+            gafete_numero: conflicto.gafete_numero,
+            fecha_hora_ingreso: conflicto.fecha_hora_ingreso,
+        }
+    }
+}
+
+/// Factorizado aparte -- las dos vías de sincronización
+/// (`intentar_sincronizar_con_nube`/`_con_secreto`) repetirían, si no,
+/// exactamente la misma línea, y una de las dos ya está en el límite de
+/// `too_many_lines` del crate.
+fn mapear_conflictos_gafete(
+    conflictos: Vec<control_acceso::nube::ConflictoGafeteActivo>,
+) -> Vec<ConflictoGafeteActivo> {
+    conflictos
+        .into_iter()
+        .map(ConflictoGafeteActivo::from)
+        .collect()
 }
 
 /// Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
@@ -595,6 +634,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             sesion_expulsada: resumen.sesion_expulsada,
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
+            conflictos_gafete: Vec::new(),
         }
     }
 }
@@ -2015,6 +2055,7 @@ impl Nucleo {
             // en desktop/src-tauri/src/comandos/nube.rs.
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
+            conflictos_gafete: Vec::new(),
         })
     }
 
@@ -2904,6 +2945,10 @@ impl Nucleo {
                 .into_iter()
                 .map(ConflictoIngresoProveedorActivo::from)
                 .collect();
+        // A diferencia de los dos de arriba, éste no pide nada a la nube --
+        // ya viene calculado con datos locales dentro del mismo
+        // `drenar_cola` (`resumen_cola`).
+        let conflictos_gafete = mapear_conflictos_gafete(resumen_cola.conflictos_gafete);
 
         // Igual que en escritorio: si esta sincronización trajo la baja de
         // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
@@ -2931,6 +2976,7 @@ impl Nucleo {
             sesion_expulsada,
             conflictos_ingreso,
             conflictos_ingreso_proveedor,
+            conflictos_gafete,
         })
     }
 
@@ -3014,6 +3060,7 @@ impl Nucleo {
                 .into_iter()
                 .map(Into::into)
                 .collect();
+        let conflictos_gafete = mapear_conflictos_gafete(resumen_cola.conflictos_gafete);
 
         let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
         if sesion_expulsada {
@@ -3037,6 +3084,7 @@ impl Nucleo {
             sesion_expulsada,
             conflictos_ingreso,
             conflictos_ingreso_proveedor,
+            conflictos_gafete,
         })
     }
 }

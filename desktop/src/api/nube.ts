@@ -54,6 +54,12 @@ export interface ResumenSincronizacion {
    * proveedor -- una cédula que quedó activa en este dispositivo pero que
    * la nube dice que también está activa en otro sitio. */
   conflictos_ingreso_proveedor: ConflictoIngresoProveedorActivo[];
+  /** Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
+   * la nube fue rechazado porque otro dispositivo del mismo sitio ya
+   * tiene ese número activo -- a diferencia de `conflictos_ingreso`, se
+   * calcula con datos locales dentro del mismo `drenar_cola`, sin una
+   * consulta remota aparte. */
+  conflictos_gafete: ConflictoGafeteActivo[];
 }
 
 export interface ConflictoIngresoActivo {
@@ -72,6 +78,12 @@ export interface ConflictoIngresoProveedorActivo {
   cedula: string;
   nombre: string;
   sitio_conflicto: string;
+}
+
+export interface ConflictoGafeteActivo {
+  contratista_nombre: string;
+  gafete_numero: number;
+  fecha_hora_ingreso: string;
 }
 
 export interface SesionRealtimeNube {
