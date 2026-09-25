@@ -3472,6 +3472,52 @@ public object FfiConverterTypeNucleo: FfiConverter<Nucleo, Long> {
 
 
 /**
+ * Espejo de `control_acceso::nube::ConflictoGafeteActivo`.
+ */
+data class ConflictoGafeteActivo (
+    var `contratistaNombre`: kotlin.String
+    , 
+    var `gafeteNumero`: kotlin.Long
+    , 
+    var `fechaHoraIngreso`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeConflictoGafeteActivo: FfiConverterRustBuffer<ConflictoGafeteActivo> {
+    override fun read(buf: ByteBuffer): ConflictoGafeteActivo {
+        return ConflictoGafeteActivo(
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ConflictoGafeteActivo) = (
+            FfiConverterString.allocationSize(value.`contratistaNombre`) +
+            FfiConverterLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterString.allocationSize(value.`fechaHoraIngreso`)
+    )
+
+    override fun write(value: ConflictoGafeteActivo, buf: ByteBuffer) {
+            FfiConverterString.write(value.`contratistaNombre`, buf)
+            FfiConverterLong.write(value.`gafeteNumero`, buf)
+            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
+    }
+}
+
+
+
+/**
  * Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
  */
 data class ConflictoIngresoActivo (
@@ -4621,6 +4667,17 @@ data class ResumenSincronizacion (
      * proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
      */
     var `conflictosIngresoProveedor`: List<ConflictoIngresoProveedorActivo>
+    , 
+    /**
+     * Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
+     * la nube fue rechazado porque otro dispositivo del mismo sitio ya
+     * tiene ese número activo (índice único
+     * `ingresos_gafete_activo_sitio_idx`) -- a diferencia de
+     * `conflictos_ingreso`, se calcula con datos locales dentro del mismo
+     * `drenar_cola`, sin una consulta remota aparte -- ver
+     * `control_acceso::nube::ConflictoGafeteActivo`.
+     */
+    var `conflictosGafete`: List<ConflictoGafeteActivo>
     
 ){
     
@@ -4653,6 +4710,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterBoolean.read(buf),
             FfiConverterSequenceTypeConflictoIngresoActivo.read(buf),
             FfiConverterSequenceTypeConflictoIngresoProveedorActivo.read(buf),
+            FfiConverterSequenceTypeConflictoGafeteActivo.read(buf),
         )
     }
 
@@ -4672,7 +4730,8 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterString.allocationSize(value.`tipo`) +
             FfiConverterBoolean.allocationSize(value.`sesionExpulsada`) +
             FfiConverterSequenceTypeConflictoIngresoActivo.allocationSize(value.`conflictosIngreso`) +
-            FfiConverterSequenceTypeConflictoIngresoProveedorActivo.allocationSize(value.`conflictosIngresoProveedor`)
+            FfiConverterSequenceTypeConflictoIngresoProveedorActivo.allocationSize(value.`conflictosIngresoProveedor`) +
+            FfiConverterSequenceTypeConflictoGafeteActivo.allocationSize(value.`conflictosGafete`)
     )
 
     override fun write(value: ResumenSincronizacion, buf: ByteBuffer) {
@@ -4692,6 +4751,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterBoolean.write(value.`sesionExpulsada`, buf)
             FfiConverterSequenceTypeConflictoIngresoActivo.write(value.`conflictosIngreso`, buf)
             FfiConverterSequenceTypeConflictoIngresoProveedorActivo.write(value.`conflictosIngresoProveedor`, buf)
+            FfiConverterSequenceTypeConflictoGafeteActivo.write(value.`conflictosGafete`, buf)
     }
 }
 
@@ -5780,6 +5840,34 @@ public object FfiConverterSequenceLong: FfiConverterRustBuffer<List<kotlin.Long>
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterLong.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeConflictoGafeteActivo: FfiConverterRustBuffer<List<ConflictoGafeteActivo>> {
+    override fun read(buf: ByteBuffer): List<ConflictoGafeteActivo> {
+        val len = buf.getInt()
+        return List<ConflictoGafeteActivo>(len) {
+            FfiConverterTypeConflictoGafeteActivo.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ConflictoGafeteActivo>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeConflictoGafeteActivo.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ConflictoGafeteActivo>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeConflictoGafeteActivo.write(it, buf)
         }
     }
 }
