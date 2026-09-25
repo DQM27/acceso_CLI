@@ -43,39 +43,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.MedioIngreso
-import uniffi.control_acceso_mobile.MotivoDenegacion
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
 import uniffi.control_acceso_mobile.ResultadoAcceso
 
-/// El gafete ya está activo en este sitio del lado de otro dispositivo
-/// (`Nucleo.gafeteOcupadoEnSitio`) -- distinto de [NucleoException] porque
-/// esto nunca llega a tocar `registrar_ingreso` en Rust, se corta acá mismo.
+/// El gafete ya está activo en este sitio del lado de otro dispositivo --
+/// usada por [GafetesProvisionalesViewModel]/[ProveedoresViewModel], que
+/// todavía hacen el chequeo y la escritura como dos pasos separados. Esta
+/// misma pantalla ([PantallaConfirmarIngreso]) ya NO la usa -- desde que
+/// `Nucleo.registrarIngresoConSecreto` fusiona el chequeo con la
+/// escritura, el mismo caso llega acá como [NucleoException]
+/// (`NucleoError::GafeteOcupadoEnSitio` en Rust), con el mismo texto.
 class GafeteOcupadoEnSitioException(numero: Long) :
     Exception("El gafete $numero ya está en uso en otro dispositivo de la unidad operativa")
-
-/// Misma decisión que `desktop/src/api/ingresos.ts` (puedeContinuar /
-/// mensajeBloqueo): `preparar_ingreso` no rechaza estos casos, ya vienen
-/// calculados por Rust (`verificar_acceso`) — esto solo lee el resultado.
-fun puedeContinuar(preparacion: PreparacionIngreso): Boolean =
-    !preparacion.tieneIngresoActivo &&
-        preparacion.activoEnOtroSitio == null &&
-        preparacion.resultadoAcceso !is ResultadoAcceso.Denegado
-
-fun mensajeBloqueo(preparacion: PreparacionIngreso): String {
-    if (preparacion.tieneIngresoActivo) {
-        return "El contratista ya tiene un ingreso activo."
-    }
-    preparacion.activoEnOtroSitio?.let { sitio ->
-        return "El contratista ya tiene un ingreso activo en $sitio."
-    }
-    val resultado = preparacion.resultadoAcceso
-    if (resultado is ResultadoAcceso.Denegado) {
-        return mensajeMotivoDenegacion(resultado.motivo)
-    }
-    return "No se puede continuar con este contratista."
-}
 
 /// Espejo de `mensajeVencimientoPraind` (`desktop/src/api/ingresos.ts`) --
 /// antes esta pantalla sólo mostraba "PRAIND próximo a vencer" sin decir
@@ -102,23 +83,6 @@ fun mensajeVencimientoPraind(fecha: String): String {
 /// antes de cambiar de radio.
 fun placaSiCorresponde(medio: MedioIngreso, placaTexto: String): String? =
     if (medio == MedioIngreso.VEHICULO) placaTexto.trim() else null
-
-fun mensajeMotivoDenegacion(motivo: MotivoDenegacion): String =
-    when (motivo) {
-        // Mayúscula y sin detalle aparte a propósito -- a diferencia de los
-        // otros dos motivos, "no tiene acceso" es la razón que ya niega el
-        // toggle "Con acceso" del alta de contratista: agregar "no tiene
-        // acceso autorizado" era redundante con "Acceso denegado" (pedido
-        // explícito del usuario 2026-09-20, mayúscula agregada el mismo
-        // día para que se lea con más fuerza junto al de PRAIND vencido).
-        MotivoDenegacion.SIN_ACCESO -> "ACCESO DENEGADO"
-        // Mismo criterio, mayúscula y sin el prefijo "Acceso denegado ·" --
-        // "PRAIND vencido" ya deja claro que el acceso está denegado, el
-        // prefijo era ruido (pedido explícito del usuario 2026-09-20).
-        MotivoDenegacion.PRAIND_VENCIDO -> "PRAIND VENCIDO"
-        MotivoDenegacion.PRAIND_NO_REGISTRADO -> "Acceso denegado · PRAIND sin fecha registrada"
-        MotivoDenegacion.EMPRESA_INACTIVA -> "Acceso denegado · la empresa está inactiva"
-    }
 
 /// A diferencia de `PantallaActivos`/`PantallaLogin`, esta pantalla se
 /// queda con `remember`/`rememberSaveable` en vez de un `ViewModel` — a
@@ -181,23 +145,25 @@ fun PantallaConfirmarIngreso(
         alcance.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    // Chequeo en vivo: dos dispositivos del mismo sitio
-                    // sólo validan el gafete contra su propia base local,
-                    // así que sin esto ambos podían aceptar el mismo
-                    // número como activo a la vez (ver
-                    // `Nucleo.gafeteOcupadoEnSitio`).
-                    if (gafete != null) {
-                        val secreto = secretoStore.cargar()
-                            ?: throw SecretoDispositivoNoEncontradoException()
-                        if (nucleo.gafeteOcupadoEnSitioConSecreto(secreto, gafete)) {
-                            throw GafeteOcupadoEnSitioException(gafete)
-                        }
+                    // Con gafete, hace falta el secreto para el chequeo
+                    // cruzado entre dispositivos del sitio -- sin él no
+                    // hay forma de descartar que otro ya lo esté usando,
+                    // mismo criterio que antes. Sin gafete, no hace falta
+                    // ningún secreto -- `registrarIngresoConSecreto` sólo
+                    // toca la red cuando `gafete != null`.
+                    val secreto = if (gafete != null) {
+                        secretoStore.cargar() ?: throw SecretoDispositivoNoEncontradoException()
+                    } else {
+                        secretoStore.cargar().orEmpty()
                     }
-                    nucleo.registrarIngreso(preparacion.contratistaId, medio, gafete, placa)
+                    // Chequeo de "gafete ocupado en otro dispositivo del
+                    // sitio" y escritura en una sola llamada -- antes eran
+                    // dos cruces FFI separados (`gafeteOcupadoEnSitioConSecreto`
+                    // + `registrarIngreso`), con una ventana entre medio
+                    // donde otro dispositivo podía colarse.
+                    nucleo.registrarIngresoConSecreto(preparacion.contratistaId, medio, gafete, placa, secreto)
                 }
                 onRegistrado()
-            } catch (excepcion: GafeteOcupadoEnSitioException) {
-                error = excepcion.message
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             } catch (excepcion: SecretoDispositivoStoreException) {
