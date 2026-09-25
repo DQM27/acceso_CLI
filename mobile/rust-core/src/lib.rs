@@ -1420,9 +1420,9 @@ impl Nucleo {
         // más arriba: `core_lock()` es un `MutexGuard`, y dejarlo como
         // temporal directo en el scrutinee lo mantendría vivo durante todo
         // el bloque, no sólo durante la llamada.
-        let resultado_cache = self
-            .core_lock()
-            .cachear_password_local(sesion.id, &password_nueva, false);
+        let resultado_cache =
+            self.core_lock()
+                .cachear_password_local(sesion.id, &password_nueva, false);
         if let Err(error) = resultado_cache {
             log::warn!("no se pudo refrescar el cacheo de login offline: {error}");
         }

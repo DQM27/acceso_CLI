@@ -73,7 +73,8 @@ where
         password: &str,
         ahora: DateTime<Utc>,
     ) -> Result<UsuarioSesion, AutenticacionError> {
-        let (sesion, _debe_cambiar_password) = self.autenticar_con_estado(cedula, password, ahora)?;
+        let (sesion, _debe_cambiar_password) =
+            self.autenticar_con_estado(cedula, password, ahora)?;
         Ok(sesion)
     }
 

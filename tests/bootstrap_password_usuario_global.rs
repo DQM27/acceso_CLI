@@ -97,4 +97,3 @@ fn fija_password_y_puede_iniciar_sesion_de_ahi_en_adelante() {
         Err(AutenticacionError::CredencialesInvalidas)
     ));
 }
-
