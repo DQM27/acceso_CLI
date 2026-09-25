@@ -290,10 +290,26 @@ pub struct PreparacionIngreso {
     /// continuar, ver `docs/pendientes.md`.
     pub activo_en_otro_sitio: Option<String>,
     pub gafetes_deuda: Vec<i64>,
+    /// `None` si se puede continuar con este contratista; si no, el texto
+    /// ya resuelto del motivo (ingreso activo local, activo en otro sitio,
+    /// o acceso denegado, en ese orden de prioridad). Reemplaza
+    /// `puedeContinuar`/`mensajeBloqueo`/`mensajeMotivoDenegacion`, que
+    /// antes vivían duplicados en Kotlin (con su propio orden y su propio
+    /// texto, ya divergido del de escritorio) -- ver
+    /// `PreparacionIngreso::bloqueo` y `mensajes::mensaje_bloqueo_ingreso`
+    /// en el crate raíz. Kotlin sólo debe mirar este campo: `!= null`
+    /// significa bloqueado, y es el texto a mostrar tal cual.
+    pub mensaje_bloqueo: Option<String>,
 }
 
 impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
     fn from(preparacion: PreparacionIngresoNucleo) -> Self {
+        // Antes de mover el resto de los campos -- `bloqueo()` sólo lee,
+        // no consume.
+        let mensaje_bloqueo = preparacion
+            .bloqueo()
+            .as_ref()
+            .map(control_acceso::mensajes::mensaje_bloqueo_ingreso);
         Self {
             contratista_id: preparacion.contratista_id,
             cedula: preparacion.cedula,
@@ -306,6 +322,7 @@ impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
             tiene_ingreso_activo: preparacion.tiene_ingreso_activo,
             activo_en_otro_sitio: preparacion.activo_en_otro_sitio,
             gafetes_deuda: preparacion.gafetes_deuda,
+            mensaje_bloqueo,
         }
     }
 }
@@ -925,6 +942,13 @@ pub enum NucleoError {
     SesionSupabaseVencida,
     #[error("fecha de PRAIND inválida: {mensaje}")]
     FechaInvalida { mensaje: String },
+    /// El gafete ya está activo en este sitio del lado de OTRO
+    /// dispositivo -- chequeo en vivo (`CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo`),
+    /// nunca llega a tocar `registrar_ingreso` en el núcleo, se corta acá
+    /// mismo. Reemplaza `GafeteOcupadoEnSitioException`, que antes vivía
+    /// sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).
+    #[error("El gafete {numero} ya está en uso en otro dispositivo de la unidad operativa")]
+    GafeteOcupadoEnSitio { numero: i64 },
     #[error("error interno: {mensaje}")]
     Interno { mensaje: String },
 }
@@ -1430,6 +1454,34 @@ impl Nucleo {
         Ok(self.core_lock().preparar_ingreso(contratista_id)?.into())
     }
 
+    /// Igual que [`Nucleo::preparar_ingreso`], pero además intenta el
+    /// chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo
+    /// cruzado de ingresos abiertos entre sitios") cuando los chequeos
+    /// locales ya dejaron pasar -- reemplaza el `if` que antes armaba
+    /// Kotlin en `ActivosViewModel.elegir` con dos llamadas FFI separadas
+    /// (`prepararIngreso` + `contratistaActivoEnOtroSitioConSecreto`) y su
+    /// propio `puedeContinuar`/`mensajeBloqueo`. Nunca toca `core_lock()`
+    /// durante la parte de red -- ver `CacheTokenDispositivo`.
+    ///
+    /// `secreto` vacío (dispositivo sin nube configurada) se salta el
+    /// chequeo remoto sin tocar la red, igual que el resto de los
+    /// `*_con_secreto` de este archivo.
+    pub fn preparar_ingreso_con_secreto(
+        &self,
+        contratista_id: i64,
+        secreto: String,
+    ) -> Result<PreparacionIngreso, NucleoError> {
+        let mut preparacion = self.core_lock().preparar_ingreso(contratista_id)?;
+        // Sin sentido gastar una vuelta de red si un chequeo local ya
+        // bloquea -- `bloqueo()` no consume, sólo lee lo que ya se sabe.
+        if !secreto.trim().is_empty() && preparacion.bloqueo().is_none() {
+            preparacion.activo_en_otro_sitio = self
+                .cache_token
+                .contratista_activo_en_otro_sitio(&secreto, &preparacion.cedula);
+        }
+        Ok(preparacion.into())
+    }
+
     pub fn registrar_ingreso(
         &self,
         contratista_id: i64,
@@ -1442,6 +1494,40 @@ impl Nucleo {
             .core_lock()
             .registrar_ingreso(&actor, contratista_id, medio.into(), gafete, placa)?
             .into())
+    }
+
+    /// Igual que [`Nucleo::registrar_ingreso`], pero además chequea en vivo
+    /// que el gafete (si lo hay) no esté ya activo en este sitio del lado
+    /// de OTRO dispositivo antes de escribir -- reemplaza el par de
+    /// llamadas separadas `gafeteOcupadoEnSitioConSecreto` +
+    /// `registrarIngreso` que antes hacía `PantallaConfirmarIngreso.kt`
+    /// (con su propia `GafeteOcupadoEnSitioException`), acortando la
+    /// ventana entre chequear y escribir a un solo cruce FFI.
+    ///
+    /// `secreto` vacío se salta el chequeo sin tocar la red (mismo
+    /// criterio que el resto de los `*_con_secreto`).
+    pub fn registrar_ingreso_con_secreto(
+        &self,
+        contratista_id: i64,
+        medio: MedioIngreso,
+        gafete: Option<i64>,
+        placa: Option<String>,
+        secreto: String,
+    ) -> Result<ResultadoRegistroEntrada, NucleoError> {
+        if let Some(numero) = gafete
+            && !secreto.trim().is_empty()
+        {
+            let ocupado = self
+                .cache_token
+                .gafete_ocupado_en_otro_dispositivo(&secreto, numero)
+                .map_err(|error| NucleoError::Interno {
+                    mensaje: interno(error),
+                })?;
+            if ocupado {
+                return Err(NucleoError::GafeteOcupadoEnSitio { numero });
+            }
+        }
+        self.registrar_ingreso(contratista_id, medio, gafete, placa)
     }
 
     /// Búsqueda en vivo (la vía primaria del guardia — ver
@@ -3074,6 +3160,156 @@ mod tests {
         let resultado = nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
             .unwrap();
+        assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
+    }
+
+    /// Con `secreto` vacío ninguno de los dos métodos `_con_secreto` debe
+    /// tocar la red -- `CacheTokenDispositivo` corta antes de intentar
+    /// nada, así que el resultado tiene que ser idéntico al de las
+    /// versiones sin secreto. Corre en CI (sin acceso a Internet) sin
+    /// necesitar mockear HTTP.
+    #[test]
+    fn con_secreto_vacio_los_metodos_con_secreto_no_tocan_la_red() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+
+        let preparacion = nucleo
+            .preparar_ingreso_con_secreto(1, String::new())
+            .unwrap();
+        assert_eq!(preparacion.mensaje_bloqueo, None);
+        assert_eq!(preparacion.activo_en_otro_sitio, None);
+
+        let resultado = nucleo
+            .registrar_ingreso_con_secreto(1, MedioIngreso::Caminando, None, None, String::new())
+            .unwrap();
+        assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
+    }
+
+    /// Cuando el bloqueo YA es local (ingreso activo) `preparar_ingreso_con_secreto`
+    /// ni siquiera debe intentar el chequeo remoto -- de eso depende que
+    /// este test pueda correr sin red: si tocara `CacheTokenDispositivo`
+    /// con un secreto no vacío, fallaría por falta de conexión en CI. El
+    /// campo que le interesa a Kotlin es `mensaje_bloqueo`: antes tenía
+    /// que recalcularlo con `puedeContinuar`/`mensajeBloqueo` propios.
+    #[test]
+    fn preparar_ingreso_con_secreto_no_toca_la_red_si_ya_hay_bloqueo_local() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+        nucleo
+            .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
+            .unwrap();
+
+        // Secreto NO vacío a propósito -- si el chequeo remoto se
+        // intentara igual, este test colgaría o fallaría por falta de red
+        // en vez de terminar en microsegundos.
+        let preparacion = nucleo
+            .preparar_ingreso_con_secreto(1, "secreto-de-prueba".to_string())
+            .unwrap();
+
+        assert!(preparacion.tiene_ingreso_activo);
+        assert_eq!(
+            preparacion.mensaje_bloqueo,
+            Some("El contratista ya tiene un ingreso activo.".to_string())
+        );
+    }
+
+    /// `registrar_ingreso_con_secreto` sin gafete tampoco debe tocar la
+    /// red -- el chequeo de "gafete ocupado en otro dispositivo" sólo
+    /// tiene sentido cuando de verdad hay un número que chequear.
+    #[test]
+    fn registrar_ingreso_con_secreto_sin_gafete_no_toca_la_red() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+
+        // Secreto NO vacío, pero SIN gafete -- SWAT no lo requiere.
+        let resultado = nucleo
+            .registrar_ingreso_con_secreto(
+                1,
+                MedioIngreso::Caminando,
+                None,
+                None,
+                "secreto-de-prueba".to_string(),
+            )
+            .unwrap();
+
         assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
     }
 

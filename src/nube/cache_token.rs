@@ -92,8 +92,8 @@ impl CacheTokenDispositivo {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(entrada) = cache.as_ref() {
-                let vigente_por = Duration::from_secs(entrada.token.expires_in)
-                    .saturating_sub(MARGEN_EXPIRACION);
+                let vigente_por =
+                    Duration::from_secs(entrada.token.expires_in).saturating_sub(MARGEN_EXPIRACION);
                 if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
                     let mut token = entrada.token.clone();
                     token.desfase_reloj_ms = None;
@@ -139,11 +139,7 @@ impl CacheTokenDispositivo {
     /// solo -- por eso `Option`, no `Result`: quien llama no tiene forma
     /// de distinguir "no hay conflicto" de "no se pudo verificar", y no
     /// debería poder hacerlo, para no tentarse a tratarlos distinto.
-    pub fn contratista_activo_en_otro_sitio(
-        &self,
-        secreto: &str,
-        cedula: &str,
-    ) -> Option<String> {
+    pub fn contratista_activo_en_otro_sitio(&self, secreto: &str, cedula: &str) -> Option<String> {
         if secreto.trim().is_empty() {
             return None;
         }

@@ -597,13 +597,14 @@ private fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Unit
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (!contratista.tieneAcceso) {
-            // Mismo texto y criterio que `mensajeMotivoDenegacion` (motivo
-            // SIN_ACCESO) en `PantallaConfirmarIngreso` -- acá esta fila
-            // sólo conoce el toggle crudo (`tieneAcceso`), no el resto de
-            // `verificar_acceso` (PRAIND, empresa, etc.), así que el único
-            // motivo posible en este catálogo es justo ese. Mayúscula y
-            // negrita, pedido explícito del usuario 2026-09-20 para que se
-            // lea con fuerza.
+            // Mismo criterio que el motivo SIN_ACCESO del texto que Rust
+            // ya resuelve para el bloqueo de ingreso (`PreparacionIngreso.mensajeBloqueo`,
+            // `mensajes::mensaje_bloqueo_ingreso` en el crate raíz) -- acá
+            // esta fila sólo conoce el toggle crudo (`tieneAcceso`), no el
+            // resto de `verificar_acceso` (PRAIND, empresa, etc.), así que
+            // el único motivo posible en este catálogo es justo ese.
+            // Mayúscula y negrita, pedido explícito del usuario
+            // 2026-09-20 para que se lea con fuerza.
             Text(
                 "ACCESO DENEGADO",
                 style = MaterialTheme.typography.bodySmall,
