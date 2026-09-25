@@ -70,6 +70,8 @@ use control_acceso::tiempo::RelojCorregido;
 
 #[cfg(feature = "lattis-realtime-experimental")]
 mod lattis_experimental;
+mod mrz;
+pub use mrz::{CampoMrz, CorreccionAplicada, FechaMrz, FormatoMrz, RegistroMrz, leer_mrz};
 
 uniffi::setup_scaffolding!();
 

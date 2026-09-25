@@ -194,7 +194,7 @@ class ProveedoresViewModel(
 
     /// `nombreLeido`/`apellidosLeido` llegan separados de un documento MRZ
     /// (`DocumentoDetectado.nombre`/`.apellidos` -- ver
-    /// `LectorDocumentosIdentidad.kt`, `ResultadoMrz.aDocumentoDetectado`);
+    /// `LectorDocumentosIdentidad.kt`, `RegistroMrz.aDocumentoDetectado`);
     /// usar sólo `nombre` (como hacía antes) dejaba el campo vacío o
     /// incompleto cada vez que el nombre de pila viajaba en un campo MRZ
     /// distinto al apellido -- bug reportado en pruebas reales en
