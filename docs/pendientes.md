@@ -52,6 +52,49 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   riesgo de "ejecutable sin `--features` explícito termina sin cifrar" en
   los dos caminos de entrada (dev local y pipeline de release).
 
+- [ ] **`cargo test-3mc` del núcleo raíz falla de verdad en este contenedor
+  Linux -- investigar en una sesión dedicada antes de fijar el motor de
+  cifrado definitivo de producción (2026-09-25).** Confirma en la
+  práctica el hallazgo HT-10 de
+  `docs/auditorias/auditoria-integral-2026-09-24/06-herramientas-codigo-muerto.md`
+  (ningún job de CI corre los tests del núcleo con el motor real de
+  producción, SQLite3MC): al correrlo a mano, la única prueba que existe
+  para confirmar cifrado real bajo `cifrado-sqlite3mc`
+  (`database::connection::tests::sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada`,
+  `src/database/connection.rs:316`) **falla** -- el archivo queda con la
+  cabecera `SQLite format 3\0` sin cifrar, la misma familia de problema
+  que el hallazgo de arriba (2026-09-12) pero por una causa distinta.
+
+  **Causa identificada:** el binario de test queda enlazado dinámicamente
+  contra `libsqlite3.so.0` del *sistema* (`ldd` lo confirma) en vez del
+  `sqlite3mc-vendor-lib/dist/` estático recién compilado. Este contenedor
+  trae `libsqlite3-dev` (Ubuntu, 3.45.1) instalado aparte; algo en el modo
+  de link externo de `libsqlite3-sys` (feature `cifrado-sqlite3mc`, que no
+  activa ningún `bundled*` de `rusqlite`) parece preferir lo que encuentra
+  el sistema/`pkg-config` sobre las variables `SQLITE3_STATIC`/
+  `SQLITE3_LIB_DIR` de `.cargo/config.toml`, y `PRAGMA cipher`/`PRAGMA key`
+  contra un SQLite normal simplemente se ignoran sin error.
+
+  **Confirmado que NO es una regresión de ninguna rama de trabajo:**
+  reproduce igual en un worktree aislado de `origin/main` puro (commit
+  `5eb1c0b`, sin ningún merge de auditoría). Es preexistente.
+
+  **Sin confirmar todavía (por eso queda pendiente, no cerrado):** si esto
+  también pega en los builds reales de producción (Windows para
+  escritorio, NDK/Android para móvil) o es un artefacto exclusivo de este
+  contenedor de desarrollo por tener `libsqlite3-dev` del sistema
+  instalado -- los runners de `release.yml`/`ci.yml` corren en
+  `windows-latest` y no deberían tener ese paquete, pero nadie lo verificó
+  todavía porque, otra vez, ningún workflow corre este test. Antes de
+  declarar SQLite3MC como motor único y definitivo de producción
+  (descartando SQLCipher), reservar una sesión para: (1) reproducir o
+  descartar esto en Windows/Android reales, (2) si es real, decidir si el
+  fix es en `.cargo/config.toml` (forzar el link estático de forma más
+  robusta) o en `sqlite3mc-vendor-lib` (nombre de librería que no choque
+  con `pkg-config`), y (3) recién ahí agregar el job `test-3mc` a `ci.yml`
+  que pide HT-10, para que esto quede cubierto en cada PR en vez de
+  depender de correrlo a mano.
+
   **Sigue pendiente, más chico:** `run()` no valida en tiempo de ejecución
   qué motor quedó enlazado -- si alguien pide `sqlite-plano` a propósito
   (features siguen siendo compile-time, `sqlite-plano` sigue existiendo
