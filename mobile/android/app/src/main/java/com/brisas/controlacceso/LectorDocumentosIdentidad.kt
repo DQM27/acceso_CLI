@@ -4,6 +4,13 @@ import uniffi.control_acceso_mobile.FechaMrz
 import uniffi.control_acceso_mobile.FormatoMrz
 import uniffi.control_acceso_mobile.RegistroMrz
 
+/// Origen de los datos de un documento leído: el frente (texto libre, vía
+/// regex por etiqueta) o el MRZ del reverso (con checksum verificable) --
+/// vivía en `MrzParser.kt` antes de la migración a Rust del 2026-09-25, se
+/// mueve acá porque describe el origen de un `DocumentoDetectado` (este
+/// archivo), no es parte del parseo de MRZ en sí.
+enum class FuenteDatos { OCR_FRENTE, MRZ }
+
 /// Tipos de documento que el lector sabe clasificar. `DESCONOCIDO` es el
 /// resultado cuando el texto no calza ninguna señal conocida -- la pantalla
 /// de escaneo debe seguir buscando, no tratarlo como error terminal.
