@@ -1082,21 +1082,10 @@ impl From<GestionNubeErrorNucleo> for NucleoError {
     }
 }
 
-/// Ver `Nucleo::autenticar_con_cache`. Duplica la idea de
-/// `application::nube::TokenCacheado` (interno a `AppCore`) en vez de
-/// reutilizarla por el mismo motivo que ya la duplicó escritorio
-/// (`desktop/src-tauri/src/estado.rs::TokenCacheado`): autenticar contra la
-/// nube acá no debe pasar por `core_lock()` -- retener ese candado durante
-/// la llamada de red es justo lo que esto evita.
-struct TokenCacheadoNucleo {
-    secreto: String,
-    token: control_acceso::nube::TokenDispositivo,
-    obtenido_en: std::time::Instant,
-}
-
 /// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,
 /// o un ROOT ya sincronizado a otro sitio) -- ver
-/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta de `TokenCacheadoNucleo`
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta del
+/// `TokenDispositivo` que cachea `Nucleo::cache_token`
 /// (identidad del DISPOSITIVO): esto es la identidad de la PERSONA. Vive
 /// sólo en memoria -- nunca se persiste a disco, mismo criterio que
 /// `desktop/src-tauri/src/estado.rs::SesionSupabaseCacheada`: cerrar la app
@@ -1127,16 +1116,16 @@ pub struct Nucleo {
     /// todavía en el piloto).
     sesion: Mutex<Option<UsuarioSesionNucleo>>,
     /// Caché del último `TokenDispositivo`, deliberadamente FUERA del
-    /// `Mutex<AppCore>` de arriba -- ver `Nucleo::autenticar_con_cache`.
-    /// Antes de esto, `autenticar`/`gafete_ocupado_en_sitio` llamaban a los
-    /// métodos de red de `AppCore` a través de `core_lock()`, que quedaba
-    /// tomado durante toda la llamada HTTP: cualquier otra pantalla
-    /// (buscar, listar activos, otro registro) se quedaba esperando ese
-    /// mismo candado mientras tanto -- se sentía como que la app se
-    /// congelaba al iniciar sesión o al confirmar un ingreso con gafete,
-    /// sobre todo si la sincronización periódica estaba en curso al mismo
-    /// tiempo.
-    token_nube_cacheado: Mutex<Option<TokenCacheadoNucleo>>,
+    /// `Mutex<AppCore>` de arriba -- ver el doc-comment de
+    /// `control_acceso::nube::CacheTokenDispositivo`. Antes de esto,
+    /// `autenticar`/`gafete_ocupado_en_sitio` llamaban a los métodos de
+    /// red de `AppCore` a través de `core_lock()`, que quedaba tomado
+    /// durante toda la llamada HTTP: cualquier otra pantalla (buscar,
+    /// listar activos, otro registro) se quedaba esperando ese mismo
+    /// candado mientras tanto -- se sentía como que la app se congelaba al
+    /// iniciar sesión o al confirmar un ingreso con gafete, sobre todo si
+    /// la sincronización periódica estaba en curso al mismo tiempo.
+    cache_token: control_acceso::nube::CacheTokenDispositivo,
     /// Serializa las sincronizaciones completas (`sincronizar_con_nube`,
     /// llamada desde el timer periódico, un aviso Realtime Y el botón
     /// manual -- ver `SincronizacionPeriodica.kt`/`NubeViewModel.kt`) para
@@ -1196,7 +1185,7 @@ impl Nucleo {
         Ok(Self {
             core: Mutex::new(core),
             sesion: Mutex::new(None),
-            token_nube_cacheado: Mutex::new(None),
+            cache_token: control_acceso::nube::CacheTokenDispositivo::new(),
             sincronizacion_en_curso: Mutex::new(()),
             ruta_base_datos: PathBuf::from(&ruta_base_datos),
             sesion_supabase: Mutex::new(None),
@@ -1272,7 +1261,7 @@ impl Nucleo {
             Err(otro) => return Err(otro.into()),
         };
 
-        // Ver el comentario de `token_nube_cacheado`: a diferencia de la
+        // Ver el comentario de `cache_token`: a diferencia de la
         // línea de arriba (autenticación local, SQLite puro), este chequeo
         // habla con la nube -- por eso ya no pasa por `core_lock()` más que
         // un instante para `autorizar_uso_nube` (verificar que `sesion`
@@ -2138,7 +2127,7 @@ impl Nucleo {
         gafete_numero: i64,
     ) -> Result<bool, NucleoError> {
         let actor = self.actor_autenticado()?;
-        // Ver el comentario de `token_nube_cacheado`: este chequeo corre
+        // Ver el comentario de `cache_token`: este chequeo corre
         // justo antes de confirmar un ingreso con gafete, así que retener
         // `core_lock()` durante la red acá es exactamente el freeze que se
         // sentía al registrar. `autorizar_uso_nube` sigue pasando por el
@@ -2153,28 +2142,17 @@ impl Nucleo {
             // sin configurar): no hay con quién chocar, no hace falta red.
             return Ok(false);
         };
-        let token = self
-            .autenticar_con_cache(&secreto)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
         // A diferencia de `autenticar`, acá un fallo de red SÍ se propaga
         // (no `.unwrap_or`): con nube configurada, más vale bloquear el
         // ingreso que arriesgar el mismo gafete duplicado entre
-        // dispositivos -- decisión ya documentada en
-        // `application::nube::AppCore::gafete_ocupado_en_sitio`.
-        control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
-            |error| NucleoError::Interno {
+        // dispositivos -- ver el doc-comment de
+        // `CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo` sobre
+        // por qué esta asimetría (`Result`, no `Option`) es a propósito.
+        self.cache_token
+            .gafete_ocupado_en_otro_dispositivo(&secreto, gafete_numero)
+            .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
-            },
-        )
+            })
     }
 
     /// Chequeo remoto usando el secreto ya descifrado por Android Keystore.
@@ -2188,23 +2166,11 @@ impl Nucleo {
         }
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
-        let token = self
-            .autenticar_con_cache(&secreto)
+        self.cache_token
+            .gafete_ocupado_en_otro_dispositivo(&secreto, gafete_numero)
             .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
-            })?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
-            |error| NucleoError::Interno {
-                mensaje: interno(error),
-            },
-        )
+            })
     }
 
     /// Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
@@ -2291,20 +2257,8 @@ impl Nucleo {
         secreto: String,
         cedula: String,
     ) -> Option<String> {
-        if secreto.trim().is_empty() {
-            return None;
-        }
-        let token = self.autenticar_con_cache(&secreto).ok()?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::contratista_activo_en_otro_sitio(&contexto, &cedula)
-            .ok()
-            .flatten()
+        self.cache_token
+            .contratista_activo_en_otro_sitio(&secreto, &cedula)
     }
 
     /// Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
@@ -2490,16 +2444,14 @@ impl Nucleo {
     }
 
     /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
-    /// autenticar de cero -- mismo margen y misma lógica que
-    /// `GuiState::autenticar_con_cache` en escritorio (y que
-    /// `AppCore::autenticar_con_cache`, que este método reemplaza para
-    /// móvil: ver el comentario de `token_nube_cacheado`). Nunca toca
-    /// `core_lock()`.
+    /// autenticar de cero -- delega en `Nucleo::cache_token`, que
+    /// reemplaza para móvil lo que antes hacía `AppCore::autenticar_con_cache`
+    /// (ver el comentario de ese campo). Nunca toca `core_lock()`.
     fn autenticar_con_cache(
         &self,
         secreto: &str,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        self.autenticar_y_cachear(secreto, None)
+        self.cache_token.autenticar_con_cache(secreto)
     }
 
     /// Igual que [`Nucleo::autenticar_con_cache`], pero permite adjuntar
@@ -2511,38 +2463,7 @@ impl Nucleo {
         secreto: &str,
         metadata: Option<&control_acceso::nube::MetadatosDispositivo>,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        const MARGEN_EXPIRACION: std::time::Duration = std::time::Duration::from_secs(30);
-
-        {
-            let cache = self
-                .token_nube_cacheado
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(entrada) = cache.as_ref() {
-                let vigente_por = std::time::Duration::from_secs(entrada.token.expires_in)
-                    .saturating_sub(MARGEN_EXPIRACION);
-                if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
-                    let mut token = entrada.token.clone();
-                    token.desfase_reloj_ms = None;
-                    return Ok(token);
-                }
-            }
-        }
-
-        let token = control_acceso::nube::autenticar_dispositivo(
-            control_acceso::nube::base_url(),
-            secreto,
-            metadata,
-        )?;
-        *self
-            .token_nube_cacheado
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(TokenCacheadoNucleo {
-            secreto: secreto.to_string(),
-            token: token.clone(),
-            obtenido_en: std::time::Instant::now(),
-        });
-        Ok(token)
+        self.cache_token.autenticar_y_cachear(secreto, metadata)
     }
 
     /// Ver `AppCore::refrescar_catalogo_sin_sesion` -- misma idea (la
@@ -2694,10 +2615,7 @@ impl Nucleo {
     /// vigente. La próxima llamada pide uno nuevo sin esperar a que el
     /// "`vigente_por`" calculado localmente se cumpla solo.
     fn invalidar_token_cacheado(&self) {
-        *self
-            .token_nube_cacheado
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.cache_token.invalidar();
     }
 
     /// Login contra Supabase Auth para un usuario global (Administrador/

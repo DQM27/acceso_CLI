@@ -232,6 +232,45 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     }
 }
 
+/// Texto de [`crate::services::registro_ingreso_service::BloqueoIngreso`],
+/// el mismo motivo que antes calculaban por separado `mensajeBloqueo`/
+/// `mensajeMotivoDenegacion` en Kotlin y en TypeScript -- con un texto que
+/// ya había divergido entre las dos (Kotlin decía "ACCESO DENEGADO" en
+/// mayúscula y sin detalle para los dos motivos más severos, pedido
+/// explícito del usuario del 2026-09-20 para que se leyeran con más
+/// fuerza; escritorio se quedó con la redacción original,
+/// "Acceso denegado · ..."). Acá se elige la forma de escritorio como
+/// contenido canónico -- estructurada, con el detalle siempre presente --
+/// porque el mayúscula-y-negrita de Kotlin es una decisión de
+/// PRESENTACIÓN (qué tan fuerte se lee en la pantalla del celular), no de
+/// contenido: quien la quiera puede seguir aplicándola sobre este mismo
+/// texto (`.uppercase()`, un `fontWeight` distinto), sin que ese estilo
+/// viva acá ni tenga que repetirse si mañana una tercera plataforma
+/// también llama a esta función.
+#[must_use]
+pub fn mensaje_bloqueo_ingreso(
+    bloqueo: &crate::services::registro_ingreso_service::BloqueoIngreso,
+) -> String {
+    use crate::services::registro_ingreso_service::BloqueoIngreso;
+
+    match bloqueo {
+        BloqueoIngreso::IngresoActivo => "El contratista ya tiene un ingreso activo.".into(),
+        BloqueoIngreso::ActivoEnOtroSitio { sitio } => {
+            format!("El contratista ya tiene un ingreso activo en {sitio}.")
+        }
+        BloqueoIngreso::AccesoDenegado { motivo } => match motivo {
+            MotivoDenegacion::SinAcceso => "Acceso denegado · no tiene acceso autorizado".into(),
+            MotivoDenegacion::PraindVencido => "Acceso denegado · PRAIND vencido".into(),
+            MotivoDenegacion::PraindNoRegistrado => {
+                "Acceso denegado · PRAIND sin fecha registrada".into()
+            }
+            MotivoDenegacion::EmpresaInactiva => {
+                "Acceso denegado · la empresa está inactiva".into()
+            }
+        },
+    }
+}
+
 pub fn mensaje_vehiculo_ruta(error: VehiculoRutaServiceError) -> String {
     match error {
         VehiculoRutaServiceError::OperacionNoAutorizada => {
@@ -675,5 +714,31 @@ mod tests {
         assert_ne!(suspendido, desactualizada);
         assert!(suspendido.contains("administrador"));
         assert!(desactualizada.contains("actualizá") || desactualizada.contains("actualiza"));
+    }
+
+    /// Mismo texto que ya mostraba escritorio (`desktop/src/api/ingresos.ts`,
+    /// `mensajeMotivoDenegacion`) antes de esta función -- ver el
+    /// doc-comment de `mensaje_bloqueo_ingreso` sobre por qué se eligió esa
+    /// redacción como canónica.
+    #[test]
+    fn mensaje_bloqueo_ingreso_usa_la_redaccion_estructurada_de_escritorio() {
+        use crate::services::registro_ingreso_service::BloqueoIngreso;
+
+        assert_eq!(
+            mensaje_bloqueo_ingreso(&BloqueoIngreso::IngresoActivo),
+            "El contratista ya tiene un ingreso activo."
+        );
+        assert_eq!(
+            mensaje_bloqueo_ingreso(&BloqueoIngreso::ActivoEnOtroSitio {
+                sitio: "Cartago".into()
+            }),
+            "El contratista ya tiene un ingreso activo en Cartago."
+        );
+        assert_eq!(
+            mensaje_bloqueo_ingreso(&BloqueoIngreso::AccesoDenegado {
+                motivo: MotivoDenegacion::EmpresaInactiva
+            }),
+            "Acceso denegado · la empresa está inactiva"
+        );
     }
 }
