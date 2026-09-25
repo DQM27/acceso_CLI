@@ -7,6 +7,7 @@
 //! que el otro dispositivo del mismo sitio tiene abierto ahora mismo.
 
 pub mod auth_supabase;
+pub mod cache_token;
 pub mod cliente;
 pub mod credenciales;
 pub mod sincronizacion;
@@ -15,12 +16,13 @@ pub use auth_supabase::{
     AuthSupabaseError, Jwk, SesionSupabase, cambiar_password, login, obtener_jwks, refrescar,
     verificar_token_offline,
 };
+pub use cache_token::CacheTokenDispositivo;
 pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo, autenticar_dispositivo};
 pub use sincronizacion::{
-    ConflictoIngresoActivo, ConflictoIngresoProveedorActivo, ConflictoMovimientoVisitaActivo,
-    ContextoSincronizacion, IngresoProveedorRemoto, IngresoRemoto, PrestamoGafeteProvisionalRemoto,
-    ResumenCatalogo, ResumenCatalogoRutas, ResumenDrenado, SincronizacionError,
-    cerrar_ingreso_proveedor_remoto, cerrar_ingreso_remoto,
+    ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
+    ConflictoMovimientoVisitaActivo, ContextoSincronizacion, IngresoProveedorRemoto, IngresoRemoto,
+    PrestamoGafeteProvisionalRemoto, ResumenCatalogo, ResumenCatalogoRutas, ResumenDrenado,
+    SincronizacionError, cerrar_ingreso_proveedor_remoto, cerrar_ingreso_remoto,
     cerrar_prestamo_gafete_provisional_remoto, contar_fallos_permanentes,
     contratista_activo_en_otro_sitio, contratistas_con_conflicto_activo, drenar_cola,
     gafete_de_proveedor_ocupado_en_otro_dispositivo, gafete_de_visita_ocupado_en_otro_dispositivo,

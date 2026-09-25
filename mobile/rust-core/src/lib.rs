@@ -68,6 +68,9 @@ use control_acceso::services::ruta_service::{
 use control_acceso::services::usuario_service::CrearUsuarioInput as CrearUsuarioInputNucleo;
 use control_acceso::tiempo::RelojCorregido;
 
+mod mrz;
+pub use mrz::{CampoMrz, CorreccionAplicada, FechaMrz, FormatoMrz, RegistroMrz, leer_mrz};
+
 uniffi::setup_scaffolding!();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -287,10 +290,26 @@ pub struct PreparacionIngreso {
     /// continuar, ver `docs/pendientes.md`.
     pub activo_en_otro_sitio: Option<String>,
     pub gafetes_deuda: Vec<i64>,
+    /// `None` si se puede continuar con este contratista; si no, el texto
+    /// ya resuelto del motivo (ingreso activo local, activo en otro sitio,
+    /// o acceso denegado, en ese orden de prioridad). Reemplaza
+    /// `puedeContinuar`/`mensajeBloqueo`/`mensajeMotivoDenegacion`, que
+    /// antes vivían duplicados en Kotlin (con su propio orden y su propio
+    /// texto, ya divergido del de escritorio) -- ver
+    /// `PreparacionIngreso::bloqueo` y `mensajes::mensaje_bloqueo_ingreso`
+    /// en el crate raíz. Kotlin sólo debe mirar este campo: `!= null`
+    /// significa bloqueado, y es el texto a mostrar tal cual.
+    pub mensaje_bloqueo: Option<String>,
 }
 
 impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
     fn from(preparacion: PreparacionIngresoNucleo) -> Self {
+        // Antes de mover el resto de los campos -- `bloqueo()` sólo lee,
+        // no consume.
+        let mensaje_bloqueo = preparacion
+            .bloqueo()
+            .as_ref()
+            .map(control_acceso::mensajes::mensaje_bloqueo_ingreso);
         Self {
             contratista_id: preparacion.contratista_id,
             cedula: preparacion.cedula,
@@ -303,6 +322,7 @@ impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
             tiene_ingreso_activo: preparacion.tiene_ingreso_activo,
             activo_en_otro_sitio: preparacion.activo_en_otro_sitio,
             gafetes_deuda: preparacion.gafetes_deuda,
+            mensaje_bloqueo,
         }
     }
 }
@@ -519,6 +539,45 @@ pub struct ResumenSincronizacion {
     /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
     /// proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
     pub conflictos_ingreso_proveedor: Vec<ConflictoIngresoProveedorActivo>,
+    /// Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
+    /// la nube fue rechazado porque otro dispositivo del mismo sitio ya
+    /// tiene ese número activo (índice único
+    /// `ingresos_gafete_activo_sitio_idx`) -- a diferencia de
+    /// `conflictos_ingreso`, se calcula con datos locales dentro del mismo
+    /// `drenar_cola`, sin una consulta remota aparte -- ver
+    /// `control_acceso::nube::ConflictoGafeteActivo`.
+    pub conflictos_gafete: Vec<ConflictoGafeteActivo>,
+}
+
+/// Espejo de `control_acceso::nube::ConflictoGafeteActivo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ConflictoGafeteActivo {
+    pub contratista_nombre: String,
+    pub gafete_numero: i64,
+    pub fecha_hora_ingreso: String,
+}
+
+impl From<control_acceso::nube::ConflictoGafeteActivo> for ConflictoGafeteActivo {
+    fn from(conflicto: control_acceso::nube::ConflictoGafeteActivo) -> Self {
+        Self {
+            contratista_nombre: conflicto.contratista_nombre,
+            gafete_numero: conflicto.gafete_numero,
+            fecha_hora_ingreso: conflicto.fecha_hora_ingreso,
+        }
+    }
+}
+
+/// Factorizado aparte -- las dos vías de sincronización
+/// (`intentar_sincronizar_con_nube`/`_con_secreto`) repetirían, si no,
+/// exactamente la misma línea, y una de las dos ya está en el límite de
+/// `too_many_lines` del crate.
+fn mapear_conflictos_gafete(
+    conflictos: Vec<control_acceso::nube::ConflictoGafeteActivo>,
+) -> Vec<ConflictoGafeteActivo> {
+    conflictos
+        .into_iter()
+        .map(ConflictoGafeteActivo::from)
+        .collect()
 }
 
 /// Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
@@ -578,6 +637,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             sesion_expulsada: resumen.sesion_expulsada,
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
+            conflictos_gafete: Vec::new(),
         }
     }
 }
@@ -922,6 +982,13 @@ pub enum NucleoError {
     SesionSupabaseVencida,
     #[error("fecha de PRAIND inválida: {mensaje}")]
     FechaInvalida { mensaje: String },
+    /// El gafete ya está activo en este sitio del lado de OTRO
+    /// dispositivo -- chequeo en vivo (`CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo`),
+    /// nunca llega a tocar `registrar_ingreso` en el núcleo, se corta acá
+    /// mismo. Reemplaza `GafeteOcupadoEnSitioException`, que antes vivía
+    /// sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).
+    #[error("El gafete {numero} ya está en uso en otro dispositivo de la unidad operativa")]
+    GafeteOcupadoEnSitio { numero: i64 },
     #[error("error interno: {mensaje}")]
     Interno { mensaje: String },
 }
@@ -1084,21 +1151,10 @@ impl From<GestionNubeErrorNucleo> for NucleoError {
     }
 }
 
-/// Ver `Nucleo::autenticar_con_cache`. Duplica la idea de
-/// `application::nube::TokenCacheado` (interno a `AppCore`) en vez de
-/// reutilizarla por el mismo motivo que ya la duplicó escritorio
-/// (`desktop/src-tauri/src/estado.rs::TokenCacheado`): autenticar contra la
-/// nube acá no debe pasar por `core_lock()` -- retener ese candado durante
-/// la llamada de red es justo lo que esto evita.
-struct TokenCacheadoNucleo {
-    secreto: String,
-    token: control_acceso::nube::TokenDispositivo,
-    obtenido_en: std::time::Instant,
-}
-
 /// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,
 /// o un ROOT ya sincronizado a otro sitio) -- ver
-/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta de `TokenCacheadoNucleo`
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta del
+/// `TokenDispositivo` que cachea `Nucleo::cache_token`
 /// (identidad del DISPOSITIVO): esto es la identidad de la PERSONA. Vive
 /// sólo en memoria -- nunca se persiste a disco, mismo criterio que
 /// `desktop/src-tauri/src/estado.rs::SesionSupabaseCacheada`: cerrar la app
@@ -1129,16 +1185,16 @@ pub struct Nucleo {
     /// todavía en el piloto).
     sesion: Mutex<Option<UsuarioSesionNucleo>>,
     /// Caché del último `TokenDispositivo`, deliberadamente FUERA del
-    /// `Mutex<AppCore>` de arriba -- ver `Nucleo::autenticar_con_cache`.
-    /// Antes de esto, `autenticar`/`gafete_ocupado_en_sitio` llamaban a los
-    /// métodos de red de `AppCore` a través de `core_lock()`, que quedaba
-    /// tomado durante toda la llamada HTTP: cualquier otra pantalla
-    /// (buscar, listar activos, otro registro) se quedaba esperando ese
-    /// mismo candado mientras tanto -- se sentía como que la app se
-    /// congelaba al iniciar sesión o al confirmar un ingreso con gafete,
-    /// sobre todo si la sincronización periódica estaba en curso al mismo
-    /// tiempo.
-    token_nube_cacheado: Mutex<Option<TokenCacheadoNucleo>>,
+    /// `Mutex<AppCore>` de arriba -- ver el doc-comment de
+    /// `control_acceso::nube::CacheTokenDispositivo`. Antes de esto,
+    /// `autenticar`/`gafete_ocupado_en_sitio` llamaban a los métodos de
+    /// red de `AppCore` a través de `core_lock()`, que quedaba tomado
+    /// durante toda la llamada HTTP: cualquier otra pantalla (buscar,
+    /// listar activos, otro registro) se quedaba esperando ese mismo
+    /// candado mientras tanto -- se sentía como que la app se congelaba al
+    /// iniciar sesión o al confirmar un ingreso con gafete, sobre todo si
+    /// la sincronización periódica estaba en curso al mismo tiempo.
+    cache_token: control_acceso::nube::CacheTokenDispositivo,
     /// Serializa las sincronizaciones completas (`sincronizar_con_nube`,
     /// llamada desde el timer periódico, un aviso Realtime Y el botón
     /// manual -- ver `SincronizacionPeriodica.kt`/`NubeViewModel.kt`) para
@@ -1198,7 +1254,7 @@ impl Nucleo {
         Ok(Self {
             core: Mutex::new(core),
             sesion: Mutex::new(None),
-            token_nube_cacheado: Mutex::new(None),
+            cache_token: control_acceso::nube::CacheTokenDispositivo::new(),
             sincronizacion_en_curso: Mutex::new(()),
             ruta_base_datos: PathBuf::from(&ruta_base_datos),
             sesion_supabase: Mutex::new(None),
@@ -1274,7 +1330,7 @@ impl Nucleo {
             Err(otro) => return Err(otro.into()),
         };
 
-        // Ver el comentario de `token_nube_cacheado`: a diferencia de la
+        // Ver el comentario de `cache_token`: a diferencia de la
         // línea de arriba (autenticación local, SQLite puro), este chequeo
         // habla con la nube -- por eso ya no pasa por `core_lock()` más que
         // un instante para `autorizar_uso_nube` (verificar que `sesion`
@@ -1438,6 +1494,34 @@ impl Nucleo {
         Ok(self.core_lock().preparar_ingreso(contratista_id)?.into())
     }
 
+    /// Igual que [`Nucleo::preparar_ingreso`], pero además intenta el
+    /// chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo
+    /// cruzado de ingresos abiertos entre sitios") cuando los chequeos
+    /// locales ya dejaron pasar -- reemplaza el `if` que antes armaba
+    /// Kotlin en `ActivosViewModel.elegir` con dos llamadas FFI separadas
+    /// (`prepararIngreso` + `contratistaActivoEnOtroSitioConSecreto`) y su
+    /// propio `puedeContinuar`/`mensajeBloqueo`. Nunca toca `core_lock()`
+    /// durante la parte de red -- ver `CacheTokenDispositivo`.
+    ///
+    /// `secreto` vacío (dispositivo sin nube configurada) se salta el
+    /// chequeo remoto sin tocar la red, igual que el resto de los
+    /// `*_con_secreto` de este archivo.
+    pub fn preparar_ingreso_con_secreto(
+        &self,
+        contratista_id: i64,
+        secreto: String,
+    ) -> Result<PreparacionIngreso, NucleoError> {
+        let mut preparacion = self.core_lock().preparar_ingreso(contratista_id)?;
+        // Sin sentido gastar una vuelta de red si un chequeo local ya
+        // bloquea -- `bloqueo()` no consume, sólo lee lo que ya se sabe.
+        if !secreto.trim().is_empty() && preparacion.bloqueo().is_none() {
+            preparacion.activo_en_otro_sitio = self
+                .cache_token
+                .contratista_activo_en_otro_sitio(&secreto, &preparacion.cedula);
+        }
+        Ok(preparacion.into())
+    }
+
     pub fn registrar_ingreso(
         &self,
         contratista_id: i64,
@@ -1450,6 +1534,40 @@ impl Nucleo {
             .core_lock()
             .registrar_ingreso(&actor, contratista_id, medio.into(), gafete, placa)?
             .into())
+    }
+
+    /// Igual que [`Nucleo::registrar_ingreso`], pero además chequea en vivo
+    /// que el gafete (si lo hay) no esté ya activo en este sitio del lado
+    /// de OTRO dispositivo antes de escribir -- reemplaza el par de
+    /// llamadas separadas `gafeteOcupadoEnSitioConSecreto` +
+    /// `registrarIngreso` que antes hacía `PantallaConfirmarIngreso.kt`
+    /// (con su propia `GafeteOcupadoEnSitioException`), acortando la
+    /// ventana entre chequear y escribir a un solo cruce FFI.
+    ///
+    /// `secreto` vacío se salta el chequeo sin tocar la red (mismo
+    /// criterio que el resto de los `*_con_secreto`).
+    pub fn registrar_ingreso_con_secreto(
+        &self,
+        contratista_id: i64,
+        medio: MedioIngreso,
+        gafete: Option<i64>,
+        placa: Option<String>,
+        secreto: String,
+    ) -> Result<ResultadoRegistroEntrada, NucleoError> {
+        if let Some(numero) = gafete
+            && !secreto.trim().is_empty()
+        {
+            let ocupado = self
+                .cache_token
+                .gafete_ocupado_en_otro_dispositivo(&secreto, numero)
+                .map_err(|error| NucleoError::Interno {
+                    mensaje: interno(error),
+                })?;
+            if ocupado {
+                return Err(NucleoError::GafeteOcupadoEnSitio { numero });
+            }
+        }
+        self.registrar_ingreso(contratista_id, medio, gafete, placa)
     }
 
     /// Búsqueda en vivo (la vía primaria del guardia — ver
@@ -1965,6 +2083,7 @@ impl Nucleo {
             // en desktop/src-tauri/src/comandos/nube.rs.
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
+            conflictos_gafete: Vec::new(),
         })
     }
 
@@ -2163,7 +2282,7 @@ impl Nucleo {
         gafete_numero: i64,
     ) -> Result<bool, NucleoError> {
         let actor = self.actor_autenticado()?;
-        // Ver el comentario de `token_nube_cacheado`: este chequeo corre
+        // Ver el comentario de `cache_token`: este chequeo corre
         // justo antes de confirmar un ingreso con gafete, así que retener
         // `core_lock()` durante la red acá es exactamente el freeze que se
         // sentía al registrar. `autorizar_uso_nube` sigue pasando por el
@@ -2178,28 +2297,17 @@ impl Nucleo {
             // sin configurar): no hay con quién chocar, no hace falta red.
             return Ok(false);
         };
-        let token = self
-            .autenticar_con_cache(&secreto)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
         // A diferencia de `autenticar`, acá un fallo de red SÍ se propaga
         // (no `.unwrap_or`): con nube configurada, más vale bloquear el
         // ingreso que arriesgar el mismo gafete duplicado entre
-        // dispositivos -- decisión ya documentada en
-        // `application::nube::AppCore::gafete_ocupado_en_sitio`.
-        control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
-            |error| NucleoError::Interno {
+        // dispositivos -- ver el doc-comment de
+        // `CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo` sobre
+        // por qué esta asimetría (`Result`, no `Option`) es a propósito.
+        self.cache_token
+            .gafete_ocupado_en_otro_dispositivo(&secreto, gafete_numero)
+            .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
-            },
-        )
+            })
     }
 
     /// Chequeo remoto usando el secreto ya descifrado por Android Keystore.
@@ -2213,23 +2321,11 @@ impl Nucleo {
         }
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
-        let token = self
-            .autenticar_con_cache(&secreto)
+        self.cache_token
+            .gafete_ocupado_en_otro_dispositivo(&secreto, gafete_numero)
             .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
-            })?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
-            |error| NucleoError::Interno {
-                mensaje: interno(error),
-            },
-        )
+            })
     }
 
     /// Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
@@ -2316,20 +2412,8 @@ impl Nucleo {
         secreto: String,
         cedula: String,
     ) -> Option<String> {
-        if secreto.trim().is_empty() {
-            return None;
-        }
-        let token = self.autenticar_con_cache(&secreto).ok()?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::contratista_activo_en_otro_sitio(&contexto, &cedula)
-            .ok()
-            .flatten()
+        self.cache_token
+            .contratista_activo_en_otro_sitio(&secreto, &cedula)
     }
 
     /// Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
@@ -2515,16 +2599,14 @@ impl Nucleo {
     }
 
     /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
-    /// autenticar de cero -- mismo margen y misma lógica que
-    /// `GuiState::autenticar_con_cache` en escritorio (y que
-    /// `AppCore::autenticar_con_cache`, que este método reemplaza para
-    /// móvil: ver el comentario de `token_nube_cacheado`). Nunca toca
-    /// `core_lock()`.
+    /// autenticar de cero -- delega en `Nucleo::cache_token`, que
+    /// reemplaza para móvil lo que antes hacía `AppCore::autenticar_con_cache`
+    /// (ver el comentario de ese campo). Nunca toca `core_lock()`.
     fn autenticar_con_cache(
         &self,
         secreto: &str,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        self.autenticar_y_cachear(secreto, None)
+        self.cache_token.autenticar_con_cache(secreto)
     }
 
     /// Igual que [`Nucleo::autenticar_con_cache`], pero permite adjuntar
@@ -2536,38 +2618,7 @@ impl Nucleo {
         secreto: &str,
         metadata: Option<&control_acceso::nube::MetadatosDispositivo>,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        const MARGEN_EXPIRACION: std::time::Duration = std::time::Duration::from_secs(30);
-
-        {
-            let cache = self
-                .token_nube_cacheado
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(entrada) = cache.as_ref() {
-                let vigente_por = std::time::Duration::from_secs(entrada.token.expires_in)
-                    .saturating_sub(MARGEN_EXPIRACION);
-                if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
-                    let mut token = entrada.token.clone();
-                    token.desfase_reloj_ms = None;
-                    return Ok(token);
-                }
-            }
-        }
-
-        let token = control_acceso::nube::autenticar_dispositivo(
-            control_acceso::nube::base_url(),
-            secreto,
-            metadata,
-        )?;
-        *self
-            .token_nube_cacheado
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(TokenCacheadoNucleo {
-            secreto: secreto.to_string(),
-            token: token.clone(),
-            obtenido_en: std::time::Instant::now(),
-        });
-        Ok(token)
+        self.cache_token.autenticar_y_cachear(secreto, metadata)
     }
 
     /// Ver `AppCore::refrescar_catalogo_sin_sesion` -- misma idea (la
@@ -2719,10 +2770,7 @@ impl Nucleo {
     /// vigente. La próxima llamada pide uno nuevo sin esperar a que el
     /// "`vigente_por`" calculado localmente se cumpla solo.
     fn invalidar_token_cacheado(&self) {
-        *self
-            .token_nube_cacheado
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.cache_token.invalidar();
     }
 
     /// Login contra Supabase Auth para un usuario global (Administrador/
@@ -2934,6 +2982,10 @@ impl Nucleo {
                 .into_iter()
                 .map(ConflictoIngresoProveedorActivo::from)
                 .collect();
+        // A diferencia de los dos de arriba, éste no pide nada a la nube --
+        // ya viene calculado con datos locales dentro del mismo
+        // `drenar_cola` (`resumen_cola`).
+        let conflictos_gafete = mapear_conflictos_gafete(resumen_cola.conflictos_gafete);
 
         // Igual que en escritorio: si esta sincronización trajo la baja de
         // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
@@ -2961,6 +3013,7 @@ impl Nucleo {
             sesion_expulsada,
             conflictos_ingreso,
             conflictos_ingreso_proveedor,
+            conflictos_gafete,
         })
     }
 
@@ -3044,6 +3097,7 @@ impl Nucleo {
                 .into_iter()
                 .map(Into::into)
                 .collect();
+        let conflictos_gafete = mapear_conflictos_gafete(resumen_cola.conflictos_gafete);
 
         let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
         if sesion_expulsada {
@@ -3067,6 +3121,7 @@ impl Nucleo {
             sesion_expulsada,
             conflictos_ingreso,
             conflictos_ingreso_proveedor,
+            conflictos_gafete,
         })
     }
 }
@@ -3153,6 +3208,156 @@ mod tests {
         let resultado = nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
             .unwrap();
+        assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
+    }
+
+    /// Con `secreto` vacío ninguno de los dos métodos `_con_secreto` debe
+    /// tocar la red -- `CacheTokenDispositivo` corta antes de intentar
+    /// nada, así que el resultado tiene que ser idéntico al de las
+    /// versiones sin secreto. Corre en CI (sin acceso a Internet) sin
+    /// necesitar mockear HTTP.
+    #[test]
+    fn con_secreto_vacio_los_metodos_con_secreto_no_tocan_la_red() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+
+        let preparacion = nucleo
+            .preparar_ingreso_con_secreto(1, String::new())
+            .unwrap();
+        assert_eq!(preparacion.mensaje_bloqueo, None);
+        assert_eq!(preparacion.activo_en_otro_sitio, None);
+
+        let resultado = nucleo
+            .registrar_ingreso_con_secreto(1, MedioIngreso::Caminando, None, None, String::new())
+            .unwrap();
+        assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
+    }
+
+    /// Cuando el bloqueo YA es local (ingreso activo) `preparar_ingreso_con_secreto`
+    /// ni siquiera debe intentar el chequeo remoto -- de eso depende que
+    /// este test pueda correr sin red: si tocara `CacheTokenDispositivo`
+    /// con un secreto no vacío, fallaría por falta de conexión en CI. El
+    /// campo que le interesa a Kotlin es `mensaje_bloqueo`: antes tenía
+    /// que recalcularlo con `puedeContinuar`/`mensajeBloqueo` propios.
+    #[test]
+    fn preparar_ingreso_con_secreto_no_toca_la_red_si_ya_hay_bloqueo_local() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+        nucleo
+            .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
+            .unwrap();
+
+        // Secreto NO vacío a propósito -- si el chequeo remoto se
+        // intentara igual, este test colgaría o fallaría por falta de red
+        // en vez de terminar en microsegundos.
+        let preparacion = nucleo
+            .preparar_ingreso_con_secreto(1, "secreto-de-prueba".to_string())
+            .unwrap();
+
+        assert!(preparacion.tiene_ingreso_activo);
+        assert_eq!(
+            preparacion.mensaje_bloqueo,
+            Some("El contratista ya tiene un ingreso activo.".to_string())
+        );
+    }
+
+    /// `registrar_ingreso_con_secreto` sin gafete tampoco debe tocar la
+    /// red -- el chequeo de "gafete ocupado en otro dispositivo" sólo
+    /// tiene sentido cuando de verdad hay un número que chequear.
+    #[test]
+    fn registrar_ingreso_con_secreto_sin_gafete_no_toca_la_red() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+
+        // Secreto NO vacío, pero SIN gafete -- SWAT no lo requiere.
+        let resultado = nucleo
+            .registrar_ingreso_con_secreto(
+                1,
+                MedioIngreso::Caminando,
+                None,
+                None,
+                "secreto-de-prueba".to_string(),
+            )
+            .unwrap();
+
         assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
     }
 

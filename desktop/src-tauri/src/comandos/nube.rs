@@ -80,6 +80,12 @@ pub struct ResumenSincronizacion {
     /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
     /// proveedor (`nube::proveedores_con_conflicto_activo`).
     pub conflictos_ingreso_proveedor: Vec<nube::ConflictoIngresoProveedorActivo>,
+    /// Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
+    /// la nube fue rechazado porque otro dispositivo del mismo sitio ya
+    /// tiene ese número activo -- a diferencia de `conflictos_ingreso`, se
+    /// calcula con datos locales dentro del mismo `drenar_cola` (ver
+    /// `nube::ConflictoGafeteActivo`), sin una consulta remota aparte.
+    pub conflictos_gafete: Vec<nube::ConflictoGafeteActivo>,
 }
 
 /// Datos temporales para que el frontend abra un canal Realtime privado.
@@ -321,6 +327,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         conflictos_ingreso,
         conflictos_movimiento_visita,
         conflictos_ingreso_proveedor,
+        conflictos_gafete: resumen.conflictos_gafete,
     })
 }
 
@@ -372,6 +379,7 @@ pub async fn configurar_dispositivo_inicial(
             conflictos_ingreso: Vec::new(),
             conflictos_movimiento_visita: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
+            conflictos_gafete: Vec::new(),
         })
     })
     .await

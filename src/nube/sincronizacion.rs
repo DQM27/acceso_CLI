@@ -37,10 +37,35 @@ pub struct ContextoSincronizacion<'a> {
     pub sitio_id: &'a str,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ResumenDrenado {
     pub enviados: u32,
     pub fallidos: u32,
+    /// Filas que fallaron de forma permanente por un choque real de
+    /// gafete entre dos dispositivos del mismo sitio -- ver
+    /// [`ConflictoGafeteActivo`] y `procesar_fila_individual`. A
+    /// diferencia de `ConflictoIngresoActivo` (que hace falta consultar
+    /// aparte, con su propia llamada de red por plataforma), esto se
+    /// calcula acá mismo con datos ya locales, así que ambas plataformas
+    /// lo reciben gratis con sólo leer este campo -- sin duplicar la
+    /// consulta.
+    pub conflictos_gafete: Vec<ConflictoGafeteActivo>,
+}
+
+/// Un ingreso que este dispositivo registró con gafete, pero cuyo envío a
+/// la nube fue rechazado porque otro dispositivo del MISMO sitio ya tiene
+/// ese número activo -- el índice único parcial `ingresos_gafete_activo_sitio_idx`
+/// (ver la migración) lo detecta en el momento del `POST`, no en una
+/// consulta aparte. A diferencia de [`ConflictoIngresoActivo`] (simétrico:
+/// ambos lados "tienen razón" hasta que alguien decide), acá Postgres ya
+/// decidió -- el ingreso local de ESTE dispositivo es el que no quedó
+/// válido, así que el mensaje puede decirlo con esa certeza.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct ConflictoGafeteActivo {
+    pub contratista_nombre: String,
+    pub gafete_numero: i64,
+    pub fecha_hora_ingreso: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -335,6 +360,28 @@ fn procesar_fila_individual(
             marcar(connection, fila.id, "enviado", None)?;
             resumen.enviados += 1;
         }
+        Err(error)
+            if fila.entidad == "ingreso"
+                && fila.operacion != "cerrar"
+                && es_conflicto_gafete_activo(&error) =>
+        {
+            // Fallo permanente por naturaleza -- Postgres ya rechazó este
+            // gafete para este sitio del lado de OTRO dispositivo, nunca
+            // va a dejar de fallar solo. No tiene sentido esperar los
+            // `INTENTOS_ANTES_DE_FALLO_PERMANENTE` reintentos con backoff
+            // de hasta un día -- eso es para fallas que sí pueden
+            // resolverse solas (red, Postgres caído un rato), esto no.
+            log::error!(
+                "cola_salida: fila {} (ingreso {}) chocó con un gafete ya activo en otro dispositivo del sitio, queda fallida de inmediato: {error}",
+                fila.id,
+                fila.entidad_uuid,
+            );
+            marcar(connection, fila.id, "fallido", Some(&error.to_string()))?;
+            resumen.fallidos += 1;
+            resumen
+                .conflictos_gafete
+                .push(construir_conflicto_gafete(connection, &fila.entidad_uuid)?);
+        }
         Err(error) => {
             // "pendiente" de nuevo -- no "fallido" -- para que
             // `pendientes()` la vuelva a considerar más adelante, sujeta
@@ -447,6 +494,46 @@ fn exigir_2xx(respuesta: reqwest::blocking::Response) -> Result<(), Sincronizaci
     let status = respuesta.status().as_u16();
     let cuerpo = respuesta.text().unwrap_or_default();
     Err(SincronizacionError::RespuestaInesperada { status, cuerpo })
+}
+
+/// Reconoce, por nombre, el `409` que Postgres devuelve cuando el índice
+/// único `ingresos_gafete_activo_sitio_idx` (ver la migración que lo crea)
+/// rechaza un `POST` porque otro dispositivo del mismo sitio ya tiene ese
+/// gafete activo. No cualquier `23505` -- sólo ESTE índice, nombrado en el
+/// cuerpo de la respuesta de `PostgREST` (`message`), para no confundirlo
+/// con una violación de unicidad distinta que el día de mañana pudiera
+/// darse por otro motivo.
+fn es_conflicto_gafete_activo(error: &SincronizacionError) -> bool {
+    matches!(
+        error,
+        SincronizacionError::RespuestaInesperada { status: 409, cuerpo }
+            if cuerpo.contains("ingresos_gafete_activo_sitio_idx")
+    )
+}
+
+/// Arma [`ConflictoGafeteActivo`] con los mismos tres campos que ya lee
+/// `construir_cuerpo_ingreso` de la fila local -- nada nuevo. `gafete_numero`
+/// se lee como `i64` sin `Option`, sin `unwrap_or_default()`: el único
+/// camino que llega hasta acá es un choque de GAFETE, así que si esta fila
+/// no tuviera uno, `es_conflicto_gafete_activo` no la habría podido dejar
+/// pasar -- si esa premisa alguna vez fallara, mejor que la conversión de
+/// `rusqlite` reviente con un error real que fingir un gafete `0`.
+fn construir_conflicto_gafete(
+    connection: &Connection,
+    uuid: &str,
+) -> Result<ConflictoGafeteActivo, SincronizacionError> {
+    let (contratista_nombre, fecha_hora_ingreso, gafete_numero): (String, String, i64) = connection
+        .query_row(
+            "SELECT contratista_nombre, fecha_hora_ingreso, gafete_numero
+             FROM registro_ingresos WHERE uuid = ?1",
+            params![uuid],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+    Ok(ConflictoGafeteActivo {
+        contratista_nombre,
+        gafete_numero,
+        fecha_hora_ingreso,
+    })
 }
 
 /// `GET` autenticado + deserializar la lista de filas -- compartido por
@@ -4850,7 +4937,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         let estado: String = connection
@@ -4888,7 +4976,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         let estado: String = connection
@@ -4910,7 +4999,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         let estado: String = connection
@@ -4965,7 +5055,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 3,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         let enviadas: i64 = connection
@@ -5029,7 +5120,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 0,
-                fallidos: 1
+                fallidos: 1,
+                ..Default::default()
             }
         );
         let (estado, intentos, ultimo_error): (String, i64, Option<String>) = connection
@@ -5070,7 +5162,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 0,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
     }
@@ -5102,7 +5195,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 0,
-                fallidos: 1
+                fallidos: 1,
+                ..Default::default()
             }
         );
         let estado: String = connection
@@ -5206,7 +5300,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         servidor.join().unwrap();
@@ -5246,7 +5341,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         servidor.join().unwrap();
@@ -5280,7 +5376,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         let estado: String = connection
@@ -5318,7 +5415,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         let estado: String = connection
@@ -5356,7 +5454,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         let estado: String = connection
@@ -5394,7 +5493,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         let estado: String = connection
@@ -5491,7 +5591,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         servidor.join().unwrap();
@@ -5531,7 +5632,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         servidor.join().unwrap();
@@ -5678,7 +5780,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         servidor.join().unwrap();
@@ -5718,7 +5821,8 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
         servidor.join().unwrap();
@@ -5765,9 +5869,130 @@ mod tests {
             resumen,
             ResumenDrenado {
                 enviados: 1,
-                fallidos: 0
+                fallidos: 0,
+                ..Default::default()
             }
         );
+    }
+
+    /// Fase 3: el `409` que trae `code: "23505"` y nombra
+    /// `ingresos_gafete_activo_sitio_idx` en el cuerpo debe marcar la fila
+    /// `fallido` DE INMEDIATO (no `pendiente` para reintentar) y reportar
+    /// el conflicto con los datos correctos -- no cualquier `409`, sólo
+    /// éste, y sin esperar los 20 reintentos normales.
+    #[test]
+    fn apertura_de_ingreso_con_gafete_ya_activo_en_otro_dispositivo_queda_fallida_de_inmediato() {
+        let (connection, contratista_uuid) = conexion_con_contratista();
+        connection.execute("DELETE FROM cola_salida", []).unwrap();
+        connection
+            .execute("INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES ('1', 'Op', 'h', 'OPERADOR', 1)", [])
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO registro_ingresos (
+                    contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+                    usuario_ingreso_id, contratista_cedula, contratista_nombre, empresa_nombre,
+                    usuario_ingreso_nombre, es_personal_ruta, tiene_acceso, resultado_acceso,
+                    reglas_version, gafete_numero, uuid
+                ) VALUES (
+                    1, 1, '2026-01-01T08:00:00Z', 'CAMINANDO', 'PRAIND',
+                    1, '1-2345', 'Persona de prueba', 'Brisas',
+                    'Op', 0, 1, 'PERMITIDO', 1, 77, 'uuid-ingreso'
+                )",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('ingreso', 'uuid-ingreso', 'crear', '2026-01-01T08:00:00Z', '2026-01-01T08:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let _ = &contratista_uuid;
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             {\"code\":\"23505\",\"details\":\"Key (sitio_id, gafete_numero)=(s1, 77) already exists.\",\
+             \"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"ingresos_gafete_activo_sitio_idx\\\"\"}",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(resumen.enviados, 0);
+        assert_eq!(resumen.fallidos, 1);
+        assert_eq!(
+            resumen.conflictos_gafete,
+            vec![ConflictoGafeteActivo {
+                contratista_nombre: "Persona de prueba".to_string(),
+                gafete_numero: 77,
+                fecha_hora_ingreso: "2026-01-01T08:00:00Z".to_string(),
+            }]
+        );
+
+        let (estado, intentos): (String, i64) = connection
+            .query_row(
+                "SELECT estado, intentos FROM cola_salida WHERE entidad_uuid = 'uuid-ingreso'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(estado, "fallido");
+        assert_eq!(intentos, 1);
+    }
+
+    /// Espejo del test anterior, pero con un `409` que NO nombra este
+    /// índice -- un choque de unicidad genérico (o cualquier otro `409`)
+    /// no debe tratarse como conflicto de gafete: sigue el camino normal
+    /// de reintento (`pendiente`, no `fallido`).
+    #[test]
+    fn un_409_que_no_nombra_el_indice_de_gafete_sigue_el_camino_normal_de_reintento() {
+        let (connection, contratista_uuid) = conexion_con_contratista();
+        connection.execute("DELETE FROM cola_salida", []).unwrap();
+        connection
+            .execute("INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES ('1', 'Op', 'h', 'OPERADOR', 1)", [])
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO registro_ingresos (
+                    contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+                    usuario_ingreso_id, contratista_cedula, contratista_nombre, empresa_nombre,
+                    usuario_ingreso_nombre, es_personal_ruta, tiene_acceso, resultado_acceso,
+                    reglas_version, gafete_numero, uuid
+                ) VALUES (
+                    1, 1, '2026-01-01T08:00:00Z', 'CAMINANDO', 'PRAIND',
+                    1, '1-2345', 'Persona de prueba', 'Brisas',
+                    'Op', 0, 1, 'PERMITIDO', 1, 77, 'uuid-ingreso'
+                )",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO cola_salida (
+                    entidad, entidad_uuid, operacion, creado_en, actualizado_en
+                ) VALUES ('ingreso', 'uuid-ingreso', 'crear', '2026-01-01T08:00:00Z', '2026-01-01T08:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let _ = &contratista_uuid;
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+             {\"message\":\"otro choque cualquiera, no el de gafete\"}",
+        );
+
+        let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+        assert_eq!(resumen.fallidos, 1);
+        assert!(resumen.conflictos_gafete.is_empty());
+        let estado: String = connection
+            .query_row(
+                "SELECT estado FROM cola_salida WHERE entidad_uuid = 'uuid-ingreso'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(estado, "pendiente");
     }
 
     #[test]

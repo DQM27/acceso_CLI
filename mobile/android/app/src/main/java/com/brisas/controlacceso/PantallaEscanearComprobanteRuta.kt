@@ -1,11 +1,8 @@
 package com.brisas.controlacceso
 
 import android.util.Log
-import android.util.Size
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
-import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
@@ -123,100 +120,85 @@ private fun VistaCamaraComprobanteRuta(
         AndroidView(
             factory = { ctx ->
                 val previewView = PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
-                val analisis = ImageAnalysis.Builder()
-                    .setResolutionSelector(
-                        ResolutionSelector.Builder()
-                            .setResolutionStrategy(
-                                // Vuelta a 1280x720 (2026-09-20) -- la
-                                // subida a 1920x1080 fue una apuesta sin
-                                // confirmar en el dispositivo real y el
-                                // usuario reportó que empeoró (parece forzar
-                                // un modo de captura distinto). 1280x720 es
-                                // la última resolución confirmada como
-                                // funcional para este perfil (antes de
-                                // cualquiera de los experimentos de
-                                // rotación/recorte), y es la misma que usan
-                                // las otras 3 pantallas de escaneo.
-                                ResolutionStrategy(Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
-                            )
-                            .build(),
-                    )
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-                    .also { analisisConstruido ->
-                        analisisConstruido.setAnalyzer(ejecutor) { imagen ->
-                            if (!sesionActiva.get() || detectada.get()) {
-                                imagen.close()
-                                return@setAnalyzer
-                            }
-                            val onTexto: (String) -> Unit = { texto ->
-                                if (sesionActiva.get()) {
-                                    if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
-                                    val resultado = estabilizador.procesarFrame(texto)
-                                    when {
-                                        resultado != null -> {
-                                            estado = EstadoEscaneo.CONFIRMADO
-                                            ultimoMensaje = "Comprobante ${resultado.numeroRuta} confirmado"
-                                            if (detectada.compareAndSet(false, true)) {
-                                                vibrarConfirmacion(contexto)
-                                                trabajoResultado?.cancel()
-                                                trabajoResultado = alcance.launch {
-                                                    if (sesionActiva.get()) onDetectadoActual(resultado)
-                                                }
-                                            }
-                                        }
-                                        // `DetectorTextoNoReconocido` ya tolera
-                                        // frames sueltos mal leídos -- ver su
-                                        // doc-comment. Si SÍ es un comprobante pero
-                                        // todavía no se leyó el "Transporte:"
-                                        // (esComprobanteCargaRuta ya dio true), se
-                                        // queda en BUSCANDO -- eso no es un
-                                        // encuadre inválido, es "sostenga firme".
-                                        detectorInvalido.procesarFrame(texto) -> {
-                                            if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
-                                            estado = EstadoEscaneo.INVALIDO
-                                            ultimoMensaje = "Documento no reconocido"
-                                        }
-                                        else -> {
-                                            estado = EstadoEscaneo.BUSCANDO
-                                            ultimoMensaje = MENSAJE_INICIAL
+                // Resolución 1280x720 -- misma que usan las otras 3
+                // pantallas de escaneo, ahora fijada una sola vez en
+                // `construirAnalizadorOcr` (`PantallaEscanearCedula.kt`).
+                // Vuelta a 1280x720 (2026-09-20) -- la subida a 1920x1080
+                // fue una apuesta sin confirmar en el dispositivo real y el
+                // usuario reportó que empeoró (parece forzar un modo de
+                // captura distinto).
+                val analisis = construirAnalizadorOcr(
+                    ejecutorAnalisis = ejecutor,
+                    detectada = detectada,
+                    sesionActiva = sesionActiva,
+                ) { imagen ->
+                    val onTexto: (String) -> Unit = { texto ->
+                        if (sesionActiva.get()) {
+                            if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
+                            val resultado = estabilizador.procesarFrame(texto)
+                            when {
+                                resultado != null -> {
+                                    estado = EstadoEscaneo.CONFIRMADO
+                                    ultimoMensaje = "Comprobante ${resultado.numeroRuta} confirmado"
+                                    if (detectada.compareAndSet(false, true)) {
+                                        vibrarConfirmacion(contexto)
+                                        trabajoResultado?.cancel()
+                                        trabajoResultado = alcance.launch {
+                                            if (sesionActiva.get()) onDetectadoActual(resultado)
                                         }
                                     }
                                 }
+                                // `DetectorTextoNoReconocido` ya tolera
+                                // frames sueltos mal leídos -- ver su
+                                // doc-comment. Si SÍ es un comprobante pero
+                                // todavía no se leyó el "Transporte:"
+                                // (esComprobanteCargaRuta ya dio true), se
+                                // queda en BUSCANDO -- eso no es un
+                                // encuadre inválido, es "sostenga firme".
+                                detectorInvalido.procesarFrame(texto) -> {
+                                    if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
+                                    estado = EstadoEscaneo.INVALIDO
+                                    ultimoMensaje = "Documento no reconocido"
+                                }
+                                else -> {
+                                    estado = EstadoEscaneo.BUSCANDO
+                                    ultimoMensaje = MENSAJE_INICIAL
+                                }
                             }
-                            val onFallo: () -> Unit = {
-                                if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
-                            }
-                            // Mismo camino simple que usan Vehículo/Ruta y
-                            // Carnet KOF -- antes esta pantalla era la única
-                            // de las 4 con un camino aparte en debug que
-                            // además corría el detector de códigos de barras
-                            // en cada frame (sondeo exploratorio del
-                            // 2026-09-15 que nunca llegó a una conclusión
-                            // útil). Se sacó por completo (2026-09-20): tras
-                            // reportarse que el comprobante dejó de
-                            // reconocer cualquier cosa, esta pantalla era la
-                            // única con ese camino extra sin probar, así que
-                            // en vez de seguir adivinando la región de
-                            // recorte se unifica con el camino ya
-                            // comprobado que sí funciona en las otras 3.
-                            analizarCedula(
-                                imagen = imagen,
-                                recognizer = recognizer,
-                                ejecutorPrincipal = ejecutorPrincipal,
-                                sesionActiva = sesionActiva,
-                                onTexto = onTexto,
-                                onFallo = onFallo,
-                                // Región propia para el comprobante (2026-09-20,
-                                // pedido explícito del usuario) -- ver el
-                                // doc-comment de RegionGuiaOcr.COMPROBANTE_RUTA
-                                // sobre la escala (comparable a TARJETA_ID,
-                                // no el frame casi completo del intento
-                                // anterior).
-                                region = RegionGuiaOcr.COMPROBANTE_RUTA,
-                            )
                         }
                     }
+                    val onFallo: () -> Unit = {
+                        if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
+                    }
+                    // Mismo camino simple que usan Vehículo/Ruta y
+                    // Carnet KOF -- antes esta pantalla era la única
+                    // de las 4 con un camino aparte en debug que
+                    // además corría el detector de códigos de barras
+                    // en cada frame (sondeo exploratorio del
+                    // 2026-09-15 que nunca llegó a una conclusión
+                    // útil). Se sacó por completo (2026-09-20): tras
+                    // reportarse que el comprobante dejó de
+                    // reconocer cualquier cosa, esta pantalla era la
+                    // única con ese camino extra sin probar, así que
+                    // en vez de seguir adivinando la región de
+                    // recorte se unifica con el camino ya
+                    // comprobado que sí funciona en las otras 3.
+                    analizarCedula(
+                        imagen = imagen,
+                        recognizer = recognizer,
+                        ejecutorPrincipal = ejecutorPrincipal,
+                        sesionActiva = sesionActiva,
+                        onTexto = onTexto,
+                        onFallo = onFallo,
+                        // Región propia para el comprobante (2026-09-20,
+                        // pedido explícito del usuario) -- ver el
+                        // doc-comment de RegionGuiaOcr.COMPROBANTE_RUTA
+                        // sobre la escala (comparable a TARJETA_ID,
+                        // no el frame casi completo del intento
+                        // anterior).
+                        region = RegionGuiaOcr.COMPROBANTE_RUTA,
+                    )
+                }
                 analisisCamara = analisis
                 iniciarCamara(
                     ctx = ctx,

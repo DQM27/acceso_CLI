@@ -673,6 +673,8 @@ internal object IntegrityCheckingUniffiLib {
         uniffiCheckContractApiVersion(this)
         uniffiCheckApiChecksums(this)
     }
+    external fun uniffi_control_acceso_mobile_checksum_func_leer_mrz(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto(
@@ -753,11 +755,15 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_con_secreto(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_proveedor_activo_en_otro_sitio_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor(
     ): Int
@@ -887,11 +893,15 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso_con_secreto(`ptr`: Long,`contratistaId`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_proveedor_activo_en_otro_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_devolucion_gafete_provisional(`ptr`: Long,`prestamoId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_con_secreto(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor(`ptr`: Long,`cedula`: RustBuffer.ByValue,`nombre`: RustBuffer.ByValue,`empresaId`: Long,`placa`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
@@ -914,6 +924,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_leer_mrz(`lineas`: RustBuffer.ByValue,`anioActual`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1034,6 +1046,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 35831) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() and 0xFFFF) != 25039) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1154,6 +1169,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() and 0xFFFF) != 60754) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_con_secreto() and 0xFFFF) != 56092) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_proveedor_activo_en_otro_sitio_con_secreto() and 0xFFFF) != 42918) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1161,6 +1179,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() and 0xFFFF) != 38089) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_con_secreto() and 0xFFFF) != 22370) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor() and 0xFFFF) != 65024) {
@@ -1359,6 +1380,33 @@ private class JavaLangRefCleanable(
 /**
  * @suppress
  */
+public object FfiConverterUByte: FfiConverter<UByte, Byte> {
+    override fun lift(value: Byte): UByte {
+        return value.toUByte()
+    }
+
+    fun lift(value: Int): UByte {
+        return value.toUByte()
+    }
+
+    override fun read(buf: ByteBuffer): UByte {
+        return lift(buf.get())
+    }
+
+    override fun lower(value: UByte): Byte {
+        return value.toByte()
+    }
+
+    override fun allocationSize(value: UByte) = 1UL
+
+    override fun write(value: UByte, buf: ByteBuffer) {
+        buf.put(value.toByte())
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterUInt: FfiConverter<UInt, Int> {
     override fun lift(value: Int): UInt {
         return value.toUInt()
@@ -1376,6 +1424,29 @@ public object FfiConverterUInt: FfiConverter<UInt, Int> {
 
     override fun write(value: UInt, buf: ByteBuffer) {
         buf.putInt(value.toInt())
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterInt: FfiConverter<Int, Int> {
+    override fun lift(value: Int): Int {
+        return value
+    }
+
+    override fun read(buf: ByteBuffer): Int {
+        return buf.getInt()
+    }
+
+    override fun lower(value: Int): Int {
+        return value
+    }
+
+    override fun allocationSize(value: Int) = 4UL
+
+    override fun write(value: Int, buf: ByteBuffer) {
+        buf.putInt(value)
     }
 }
 
@@ -1961,6 +2032,22 @@ public interface NucleoInterface {
     fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso
     
     /**
+     * Igual que [`Nucleo::preparar_ingreso`], pero además intenta el
+     * chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo
+     * cruzado de ingresos abiertos entre sitios") cuando los chequeos
+     * locales ya dejaron pasar -- reemplaza el `if` que antes armaba
+     * Kotlin en `ActivosViewModel.elegir` con dos llamadas FFI separadas
+     * (`prepararIngreso` + `contratistaActivoEnOtroSitioConSecreto`) y su
+     * propio `puedeContinuar`/`mensajeBloqueo`. Nunca toca `core_lock()`
+     * durante la parte de red -- ver `CacheTokenDispositivo`.
+     *
+     * `secreto` vacío (dispositivo sin nube configurada) se salta el
+     * chequeo remoto sin tocar la red, igual que el resto de los
+     * `*_con_secreto` de este archivo.
+     */
+    fun `prepararIngresoConSecreto`(`contratistaId`: kotlin.Long, `secreto`: kotlin.String): PreparacionIngreso
+    
+    /**
      * Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
      * pero contra `ingresos_proveedor` -- llamar justo antes de
      * `registrar_ingreso_proveedor`.
@@ -1974,6 +2061,20 @@ public interface NucleoInterface {
     fun `registrarDevolucionGafeteProvisional`(`prestamoId`: kotlin.Long)
     
     fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?): ResultadoRegistroEntrada
+    
+    /**
+     * Igual que [`Nucleo::registrar_ingreso`], pero además chequea en vivo
+     * que el gafete (si lo hay) no esté ya activo en este sitio del lado
+     * de OTRO dispositivo antes de escribir -- reemplaza el par de
+     * llamadas separadas `gafeteOcupadoEnSitioConSecreto` +
+     * `registrarIngreso` que antes hacía `PantallaConfirmarIngreso.kt`
+     * (con su propia `GafeteOcupadoEnSitioException`), acortando la
+     * ventana entre chequear y escribir a un solo cruce FFI.
+     *
+     * `secreto` vacío se salta el chequeo sin tocar la red (mismo
+     * criterio que el resto de los `*_con_secreto`).
+     */
+    fun `registrarIngresoConSecreto`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?, `secreto`: kotlin.String): ResultadoRegistroEntrada
     
     /**
      * Registra el ingreso (apertura) del ciclo de un proveedor -- espejo
@@ -3041,6 +3142,36 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Igual que [`Nucleo::preparar_ingreso`], pero además intenta el
+     * chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo
+     * cruzado de ingresos abiertos entre sitios") cuando los chequeos
+     * locales ya dejaron pasar -- reemplaza el `if` que antes armaba
+     * Kotlin en `ActivosViewModel.elegir` con dos llamadas FFI separadas
+     * (`prepararIngreso` + `contratistaActivoEnOtroSitioConSecreto`) y su
+     * propio `puedeContinuar`/`mensajeBloqueo`. Nunca toca `core_lock()`
+     * durante la parte de red -- ver `CacheTokenDispositivo`.
+     *
+     * `secreto` vacío (dispositivo sin nube configurada) se salta el
+     * chequeo remoto sin tocar la red, igual que el resto de los
+     * `*_con_secreto` de este archivo.
+     */
+    @Throws(NucleoException::class)override fun `prepararIngresoConSecreto`(`contratistaId`: kotlin.Long, `secreto`: kotlin.String): PreparacionIngreso {
+            return FfiConverterTypePreparacionIngreso.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso_con_secreto(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),
+        FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
      * pero contra `ingresos_proveedor` -- llamar justo antes de
      * `registrar_ingreso_proveedor`.
@@ -3089,6 +3220,37 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         FfiConverterTypeMedioIngreso.lower(`medio`),
         FfiConverterOptionalLong.lower(`gafete`),
         FfiConverterOptionalString.lower(`placa`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Igual que [`Nucleo::registrar_ingreso`], pero además chequea en vivo
+     * que el gafete (si lo hay) no esté ya activo en este sitio del lado
+     * de OTRO dispositivo antes de escribir -- reemplaza el par de
+     * llamadas separadas `gafeteOcupadoEnSitioConSecreto` +
+     * `registrarIngreso` que antes hacía `PantallaConfirmarIngreso.kt`
+     * (con su propia `GafeteOcupadoEnSitioException`), acortando la
+     * ventana entre chequear y escribir a un solo cruce FFI.
+     *
+     * `secreto` vacío se salta el chequeo sin tocar la red (mismo
+     * criterio que el resto de los `*_con_secreto`).
+     */
+    @Throws(NucleoException::class)override fun `registrarIngresoConSecreto`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?, `secreto`: kotlin.String): ResultadoRegistroEntrada {
+            return FfiConverterTypeResultadoRegistroEntrada.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_con_secreto(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),
+        FfiConverterTypeMedioIngreso.lower(`medio`),
+        FfiConverterOptionalLong.lower(`gafete`),
+        FfiConverterOptionalString.lower(`placa`),
+        FfiConverterString.lower(`secreto`),_status)
 }
     }
     )
@@ -3367,6 +3529,52 @@ public object FfiConverterTypeNucleo: FfiConverter<Nucleo, Long> {
 
 
 /**
+ * Espejo de `control_acceso::nube::ConflictoGafeteActivo`.
+ */
+data class ConflictoGafeteActivo (
+    var `contratistaNombre`: kotlin.String
+    , 
+    var `gafeteNumero`: kotlin.Long
+    , 
+    var `fechaHoraIngreso`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeConflictoGafeteActivo: FfiConverterRustBuffer<ConflictoGafeteActivo> {
+    override fun read(buf: ByteBuffer): ConflictoGafeteActivo {
+        return ConflictoGafeteActivo(
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ConflictoGafeteActivo) = (
+            FfiConverterString.allocationSize(value.`contratistaNombre`) +
+            FfiConverterLong.allocationSize(value.`gafeteNumero`) +
+            FfiConverterString.allocationSize(value.`fechaHoraIngreso`)
+    )
+
+    override fun write(value: ConflictoGafeteActivo, buf: ByteBuffer) {
+            FfiConverterString.write(value.`contratistaNombre`, buf)
+            FfiConverterLong.write(value.`gafeteNumero`, buf)
+            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
+    }
+}
+
+
+
+/**
  * Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
  */
 data class ConflictoIngresoActivo (
@@ -3527,6 +3735,64 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterOptionalString.write(value.`fechaVencimientoPraind`, buf)
             FfiConverterBoolean.write(value.`tieneAcceso`, buf)
             FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
+    }
+}
+
+
+
+/**
+ * Una sustitución de carácter aplicada para que un campo pasara su
+ * checksum -- pensado para loguearse a Sentry del lado Kotlin (que ya
+ * tiene el SDK inicializado; este crate no agrega una dependencia nueva
+ * de Sentry para Rust) y así poder afinar el set de confusables con casos
+ * reales.
+ */
+data class CorreccionAplicada (
+    var `campo`: CampoMrz
+    , 
+    /**
+     * Posición del carácter dentro del campo (0-based), no de la línea.
+     */
+    var `posicion`: kotlin.UByte
+    , 
+    var `caracterLeido`: kotlin.String
+    , 
+    var `caracterCorregido`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCorreccionAplicada: FfiConverterRustBuffer<CorreccionAplicada> {
+    override fun read(buf: ByteBuffer): CorreccionAplicada {
+        return CorreccionAplicada(
+            FfiConverterTypeCampoMrz.read(buf),
+            FfiConverterUByte.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: CorreccionAplicada) = (
+            FfiConverterTypeCampoMrz.allocationSize(value.`campo`) +
+            FfiConverterUByte.allocationSize(value.`posicion`) +
+            FfiConverterString.allocationSize(value.`caracterLeido`) +
+            FfiConverterString.allocationSize(value.`caracterCorregido`)
+    )
+
+    override fun write(value: CorreccionAplicada, buf: ByteBuffer) {
+            FfiConverterTypeCampoMrz.write(value.`campo`, buf)
+            FfiConverterUByte.write(value.`posicion`, buf)
+            FfiConverterString.write(value.`caracterLeido`, buf)
+            FfiConverterString.write(value.`caracterCorregido`, buf)
     }
 }
 
@@ -3798,6 +4064,49 @@ public object FfiConverterTypeEncargadoRuta: FfiConverterRustBuffer<EncargadoRut
 
 
 
+data class FechaMrz (
+    var `dia`: kotlin.UByte
+    , 
+    var `mes`: kotlin.UByte
+    , 
+    var `anio`: kotlin.Int
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFechaMrz: FfiConverterRustBuffer<FechaMrz> {
+    override fun read(buf: ByteBuffer): FechaMrz {
+        return FechaMrz(
+            FfiConverterUByte.read(buf),
+            FfiConverterUByte.read(buf),
+            FfiConverterInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FechaMrz) = (
+            FfiConverterUByte.allocationSize(value.`dia`) +
+            FfiConverterUByte.allocationSize(value.`mes`) +
+            FfiConverterInt.allocationSize(value.`anio`)
+    )
+
+    override fun write(value: FechaMrz, buf: ByteBuffer) {
+            FfiConverterUByte.write(value.`dia`, buf)
+            FfiConverterUByte.write(value.`mes`, buf)
+            FfiConverterInt.write(value.`anio`, buf)
+    }
+}
+
+
+
 /**
  * Espejo de `IngresoActivoResumen` — `resultado_acceso` se re-evalúa con la
  * fecha de hoy (no es la decisión congelada del momento del ingreso), igual
@@ -4059,6 +4368,19 @@ data class PreparacionIngreso (
     var `activoEnOtroSitio`: kotlin.String?
     , 
     var `gafetesDeuda`: List<kotlin.Long>
+    , 
+    /**
+     * `None` si se puede continuar con este contratista; si no, el texto
+     * ya resuelto del motivo (ingreso activo local, activo en otro sitio,
+     * o acceso denegado, en ese orden de prioridad). Reemplaza
+     * `puedeContinuar`/`mensajeBloqueo`/`mensajeMotivoDenegacion`, que
+     * antes vivían duplicados en Kotlin (con su propio orden y su propio
+     * texto, ya divergido del de escritorio) -- ver
+     * `PreparacionIngreso::bloqueo` y `mensajes::mensaje_bloqueo_ingreso`
+     * en el crate raíz. Kotlin sólo debe mirar este campo: `!= null`
+     * significa bloqueado, y es el texto a mostrar tal cual.
+     */
+    var `mensajeBloqueo`: kotlin.String?
     
 ){
     
@@ -4086,6 +4408,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterSequenceLong.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
     }
 
@@ -4100,7 +4423,8 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterBoolean.allocationSize(value.`requiereGafete`) +
             FfiConverterBoolean.allocationSize(value.`tieneIngresoActivo`) +
             FfiConverterOptionalString.allocationSize(value.`activoEnOtroSitio`) +
-            FfiConverterSequenceLong.allocationSize(value.`gafetesDeuda`)
+            FfiConverterSequenceLong.allocationSize(value.`gafetesDeuda`) +
+            FfiConverterOptionalString.allocationSize(value.`mensajeBloqueo`)
     )
 
     override fun write(value: PreparacionIngreso, buf: ByteBuffer) {
@@ -4115,6 +4439,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
             FfiConverterOptionalString.write(value.`activoEnOtroSitio`, buf)
             FfiConverterSequenceLong.write(value.`gafetesDeuda`, buf)
+            FfiConverterOptionalString.write(value.`mensajeBloqueo`, buf)
     }
 }
 
@@ -4317,6 +4642,121 @@ public object FfiConverterTypeRegistroIngresoProveedorActivoResumen: FfiConverte
 
 
 
+data class RegistroMrz (
+    /**
+     * `false` cuando las líneas no calzan ni TD1 ni TD3 -- el resto de
+     * los campos quedan vacíos/`false` en ese caso, nunca se inventan.
+     */
+    var `formatoReconocido`: kotlin.Boolean
+    , 
+    var `formato`: FormatoMrz?
+    , 
+    var `codigoDocumento`: kotlin.String
+    , 
+    var `paisEmisor`: kotlin.String
+    , 
+    var `numeroDocumento`: kotlin.String
+    , 
+    var `apellidos`: kotlin.String
+    , 
+    var `nombres`: kotlin.String
+    , 
+    var `nacionalidad`: kotlin.String
+    , 
+    var `fechaNacimiento`: FechaMrz?
+    , 
+    /**
+     * `"M"`, `"F"` o vacío ("<", sin especificar) -- `String` de un
+     * carácter en vez de `char` nativo de Rust para no depender de que
+     * `char` esté entre los tipos escalares que expone esta versión de
+     * `UniFFI` hacia Kotlin (no había precedente de `char` en este crate).
+     */
+    var `sexo`: kotlin.String
+    , 
+    var `fechaVencimiento`: FechaMrz?
+    , 
+    var `checksumsValidos`: kotlin.Boolean
+    , 
+    /**
+     * Mismo significado que en el `MrzParser.kt` original: posición 15
+     * con un dígito (no relleno) y más dígitos en el campo opcional, pero
+     * sin calzar ni el mecanismo estándar de ICAO ni la convención de
+     * Costa Rica verificada -- `numero_documento` sólo trae los primeros
+     * 9 caracteres y no debe usarse como número completo.
+     */
+    var `numeroDocumentoExtendidoSinSoporte`: kotlin.Boolean
+    , 
+    var `correcciones`: List<CorreccionAplicada>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRegistroMrz: FfiConverterRustBuffer<RegistroMrz> {
+    override fun read(buf: ByteBuffer): RegistroMrz {
+        return RegistroMrz(
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalTypeFormatoMrz.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalTypeFechaMrz.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalTypeFechaMrz.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterSequenceTypeCorreccionAplicada.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: RegistroMrz) = (
+            FfiConverterBoolean.allocationSize(value.`formatoReconocido`) +
+            FfiConverterOptionalTypeFormatoMrz.allocationSize(value.`formato`) +
+            FfiConverterString.allocationSize(value.`codigoDocumento`) +
+            FfiConverterString.allocationSize(value.`paisEmisor`) +
+            FfiConverterString.allocationSize(value.`numeroDocumento`) +
+            FfiConverterString.allocationSize(value.`apellidos`) +
+            FfiConverterString.allocationSize(value.`nombres`) +
+            FfiConverterString.allocationSize(value.`nacionalidad`) +
+            FfiConverterOptionalTypeFechaMrz.allocationSize(value.`fechaNacimiento`) +
+            FfiConverterString.allocationSize(value.`sexo`) +
+            FfiConverterOptionalTypeFechaMrz.allocationSize(value.`fechaVencimiento`) +
+            FfiConverterBoolean.allocationSize(value.`checksumsValidos`) +
+            FfiConverterBoolean.allocationSize(value.`numeroDocumentoExtendidoSinSoporte`) +
+            FfiConverterSequenceTypeCorreccionAplicada.allocationSize(value.`correcciones`)
+    )
+
+    override fun write(value: RegistroMrz, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`formatoReconocido`, buf)
+            FfiConverterOptionalTypeFormatoMrz.write(value.`formato`, buf)
+            FfiConverterString.write(value.`codigoDocumento`, buf)
+            FfiConverterString.write(value.`paisEmisor`, buf)
+            FfiConverterString.write(value.`numeroDocumento`, buf)
+            FfiConverterString.write(value.`apellidos`, buf)
+            FfiConverterString.write(value.`nombres`, buf)
+            FfiConverterString.write(value.`nacionalidad`, buf)
+            FfiConverterOptionalTypeFechaMrz.write(value.`fechaNacimiento`, buf)
+            FfiConverterString.write(value.`sexo`, buf)
+            FfiConverterOptionalTypeFechaMrz.write(value.`fechaVencimiento`, buf)
+            FfiConverterBoolean.write(value.`checksumsValidos`, buf)
+            FfiConverterBoolean.write(value.`numeroDocumentoExtendidoSinSoporte`, buf)
+            FfiConverterSequenceTypeCorreccionAplicada.write(value.`correcciones`, buf)
+    }
+}
+
+
+
 /**
  * Éxito de `Nucleo::autenticar`/`autenticar_con_secreto` -- mismo motivo
  * que `desktop/src-tauri/src/comandos/autenticacion.rs::ResultadoLogin`:
@@ -4500,6 +4940,17 @@ data class ResumenSincronizacion (
      * proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
      */
     var `conflictosIngresoProveedor`: List<ConflictoIngresoProveedorActivo>
+    , 
+    /**
+     * Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
+     * la nube fue rechazado porque otro dispositivo del mismo sitio ya
+     * tiene ese número activo (índice único
+     * `ingresos_gafete_activo_sitio_idx`) -- a diferencia de
+     * `conflictos_ingreso`, se calcula con datos locales dentro del mismo
+     * `drenar_cola`, sin una consulta remota aparte -- ver
+     * `control_acceso::nube::ConflictoGafeteActivo`.
+     */
+    var `conflictosGafete`: List<ConflictoGafeteActivo>
     
 ){
     
@@ -4532,6 +4983,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterBoolean.read(buf),
             FfiConverterSequenceTypeConflictoIngresoActivo.read(buf),
             FfiConverterSequenceTypeConflictoIngresoProveedorActivo.read(buf),
+            FfiConverterSequenceTypeConflictoGafeteActivo.read(buf),
         )
     }
 
@@ -4551,7 +5003,8 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterString.allocationSize(value.`tipo`) +
             FfiConverterBoolean.allocationSize(value.`sesionExpulsada`) +
             FfiConverterSequenceTypeConflictoIngresoActivo.allocationSize(value.`conflictosIngreso`) +
-            FfiConverterSequenceTypeConflictoIngresoProveedorActivo.allocationSize(value.`conflictosIngresoProveedor`)
+            FfiConverterSequenceTypeConflictoIngresoProveedorActivo.allocationSize(value.`conflictosIngresoProveedor`) +
+            FfiConverterSequenceTypeConflictoGafeteActivo.allocationSize(value.`conflictosGafete`)
     )
 
     override fun write(value: ResumenSincronizacion, buf: ByteBuffer) {
@@ -4571,6 +5024,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterBoolean.write(value.`sesionExpulsada`, buf)
             FfiConverterSequenceTypeConflictoIngresoActivo.write(value.`conflictosIngreso`, buf)
             FfiConverterSequenceTypeConflictoIngresoProveedorActivo.write(value.`conflictosIngresoProveedor`, buf)
+            FfiConverterSequenceTypeConflictoGafeteActivo.write(value.`conflictosGafete`, buf)
     }
 }
 
@@ -5020,6 +5474,83 @@ public object FfiConverterTypeVehiculoRuta: FfiConverterRustBuffer<VehiculoRuta>
 
 
 
+/**
+ * Campo de un MRZ sobre el que se puede intentar una corrección acotada de
+ * caracteres ambiguos -- sólo los campos con su propio dígito verificador
+ * simple (no el checksum compuesto, que cubre todo el resto de la línea y
+ * no es en sí mismo un campo "tipeado" propenso a confundirse letra/dígito
+ * carácter por carácter).
+ */
+
+enum class CampoMrz {
+    
+    NUMERO_DOCUMENTO,
+    FECHA_NACIMIENTO,
+    FECHA_VENCIMIENTO,
+    DATOS_PERSONALES;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCampoMrz: FfiConverterRustBuffer<CampoMrz> {
+    override fun read(buf: ByteBuffer) = try {
+        CampoMrz.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: CampoMrz) = 4UL
+
+    override fun write(value: CampoMrz, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+enum class FormatoMrz {
+    
+    TD1,
+    TD3;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFormatoMrz: FfiConverterRustBuffer<FormatoMrz> {
+    override fun read(buf: ByteBuffer) = try {
+        FormatoMrz.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FormatoMrz) = 4UL
+
+    override fun write(value: FormatoMrz, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
 
 enum class MedioIngreso {
     
@@ -5197,6 +5728,15 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
         
         class FechaInvalida(message: String) : NucleoException(message)
         
+    /**
+     * El gafete ya está activo en este sitio del lado de OTRO
+     * dispositivo -- chequeo en vivo (`CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo`),
+     * nunca llega a tocar `registrar_ingreso` en el núcleo, se corta acá
+     * mismo. Reemplaza `GafeteOcupadoEnSitioException`, que antes vivía
+     * sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).
+     */
+        class GafeteOcupadoEnSitio(message: String) : NucleoException(message)
+        
         class Interno(message: String) : NucleoException(message)
         
 
@@ -5219,7 +5759,8 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
             5 -> NucleoException.NoAutenticado(FfiConverterString.read(buf))
             6 -> NucleoException.SesionSupabaseVencida(FfiConverterString.read(buf))
             7 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
-            8 -> NucleoException.Interno(FfiConverterString.read(buf))
+            8 -> NucleoException.GafeteOcupadoEnSitio(FfiConverterString.read(buf))
+            9 -> NucleoException.Interno(FfiConverterString.read(buf))
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
         
@@ -5259,8 +5800,12 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
                 buf.putInt(7)
                 Unit
             }
-            is NucleoException.Interno -> {
+            is NucleoException.GafeteOcupadoEnSitio -> {
                 buf.putInt(8)
+                Unit
+            }
+            is NucleoException.Interno -> {
+                buf.putInt(9)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -5627,6 +6172,70 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeFechaMrz: FfiConverterRustBuffer<FechaMrz?> {
+    override fun read(buf: ByteBuffer): FechaMrz? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeFechaMrz.read(buf)
+    }
+
+    override fun allocationSize(value: FechaMrz?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeFechaMrz.allocationSize(value)
+        }
+    }
+
+    override fun write(value: FechaMrz?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeFechaMrz.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeFormatoMrz: FfiConverterRustBuffer<FormatoMrz?> {
+    override fun read(buf: ByteBuffer): FormatoMrz? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeFormatoMrz.read(buf)
+    }
+
+    override fun allocationSize(value: FormatoMrz?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeFormatoMrz.allocationSize(value)
+        }
+    }
+
+    override fun write(value: FormatoMrz?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeFormatoMrz.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceLong: FfiConverterRustBuffer<List<kotlin.Long>> {
     override fun read(buf: ByteBuffer): List<kotlin.Long> {
         val len = buf.getInt()
@@ -5645,6 +6254,62 @@ public object FfiConverterSequenceLong: FfiConverterRustBuffer<List<kotlin.Long>
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterLong.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.String>> {
+    override fun read(buf: ByteBuffer): List<kotlin.String> {
+        val len = buf.getInt()
+        return List<kotlin.String>(len) {
+            FfiConverterString.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.String>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterString.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<kotlin.String>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterString.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeConflictoGafeteActivo: FfiConverterRustBuffer<List<ConflictoGafeteActivo>> {
+    override fun read(buf: ByteBuffer): List<ConflictoGafeteActivo> {
+        val len = buf.getInt()
+        return List<ConflictoGafeteActivo>(len) {
+            FfiConverterTypeConflictoGafeteActivo.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ConflictoGafeteActivo>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeConflictoGafeteActivo.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ConflictoGafeteActivo>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeConflictoGafeteActivo.write(it, buf)
         }
     }
 }
@@ -5729,6 +6394,34 @@ public object FfiConverterSequenceTypeContratistaResumen: FfiConverterRustBuffer
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeContratistaResumen.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeCorreccionAplicada: FfiConverterRustBuffer<List<CorreccionAplicada>> {
+    override fun read(buf: ByteBuffer): List<CorreccionAplicada> {
+        val len = buf.getInt()
+        return List<CorreccionAplicada>(len) {
+            FfiConverterTypeCorreccionAplicada.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<CorreccionAplicada>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeCorreccionAplicada.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<CorreccionAplicada>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeCorreccionAplicada.write(it, buf)
         }
     }
 }
@@ -6096,4 +6789,33 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
         }
     }
 }
+        /**
+         * Punto de entrada FFI: recibe las 2-3 líneas de MRZ que Kotlin ya aisló
+         * con `buscarLineasMrz` (extracción mecánica, se queda en Kotlin) y
+         * devuelve el resultado resuelto -- válido/inválido y, si corrigió algo,
+         * qué corrigió.
+         *
+         * `lineas.len()` decide el formato (3 → TD1, 2 → TD3) -- Kotlin ya filtró
+         * por longitud de línea (30 para TD1, 44 para TD3) y alfabeto antes de
+         * aislarlas, pero se revalida acá también (nunca confiar ciegamente en la
+         * frontera FFI): cualquier otra cosa, o líneas que no respeten el alfabeto
+         * MRZ estricto (A-Z, 0-9, '<'), devuelve `formato_reconocido = false` en
+         * vez de entrar en pánico o adivinar.
+         *
+         * `anio_actual` en vez de una fecha completa: es lo único que el
+         * desambiguado de siglo de nacimiento necesita (ver `anio_completo`) --
+         * Kotlin lo saca de `java.time.LocalDate.now()` al llamar.
+         */ fun `leerMrz`(`lineas`: List<kotlin.String>, `anioActual`: kotlin.Int): RegistroMrz {
+            return FfiConverterTypeRegistroMrz.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_leer_mrz(
+    
+        
+        FfiConverterSequenceString.lower(`lineas`),
+        FfiConverterInt.lower(`anioActual`),_status)
+}
+    )
+    }
+    
+
 

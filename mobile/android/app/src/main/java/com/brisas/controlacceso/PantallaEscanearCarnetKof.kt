@@ -1,11 +1,8 @@
 package com.brisas.controlacceso
 
 import android.util.Log
-import android.util.Size
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
-import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
@@ -113,73 +110,61 @@ private fun VistaCamaraCarnetKof(
         AndroidView(
             factory = { ctx ->
                 val previewView = PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
-                val analisis = ImageAnalysis.Builder()
-                    .setResolutionSelector(
-                        ResolutionSelector.Builder()
-                            .setResolutionStrategy(
-                                ResolutionStrategy(Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
-                            )
-                            .build(),
-                    )
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-                    .also { analisisConstruido ->
-                        analisisConstruido.setAnalyzer(ejecutor) { imagen ->
-                            if (!sesionActiva.get() || detectada.get()) {
-                                imagen.close()
-                                return@setAnalyzer
-                            }
-                            analizarCedula(
-                                imagen = imagen,
-                                recognizer = recognizer,
-                                ejecutorPrincipal = ejecutorPrincipal,
-                                sesionActiva = sesionActiva,
-                                onTexto = { texto ->
-                                    if (sesionActiva.get()) {
-                                        // Log, no overlay en pantalla -- pedido
-                                        // explícito del usuario 2026-09-20 (se
-                                        // veía mal encima de la cámara). Sigue
-                                        // disponible por `adb logcat` en un
-                                        // build debug si hace falta diagnosticar
-                                        // un perfil que no lee bien.
-                                        if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
-                                        val resultado = estabilizador.procesarFrame(texto)
-                                        when {
-                                            resultado != null -> {
-                                                estado = EstadoEscaneo.CONFIRMADO
-                                                ultimoMensaje = "Encargado ${resultado.nombre} confirmado"
-                                                if (detectada.compareAndSet(false, true)) {
-                                                    vibrarConfirmacion(contexto)
-                                                    reproducirSonidoConfirmacion()
-                                                    trabajoResultado?.cancel()
-                                                    trabajoResultado = alcance.launch {
-                                                        if (sesionActiva.get()) onDetectadoActual(resultado)
-                                                    }
-                                                }
-                                            }
-                                            // Mismo criterio que Comprobante de
-                                            // Ruta -- ver `DetectorTextoNoReconocido`.
-                                            // `esCarnetKof` ya excluye el
-                                            // comprobante (comparte la marca "Coca
-                                            // Cola FEMSA").
-                                            detectorInvalido.procesarFrame(texto) -> {
-                                                if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
-                                                estado = EstadoEscaneo.INVALIDO
-                                                ultimoMensaje = "Gafete no reconocido"
-                                            }
-                                            else -> {
-                                                estado = EstadoEscaneo.BUSCANDO
-                                                ultimoMensaje = MENSAJE_INICIAL_KOF
+                val analisis = construirAnalizadorOcr(
+                    ejecutorAnalisis = ejecutor,
+                    detectada = detectada,
+                    sesionActiva = sesionActiva,
+                ) { imagen ->
+                    analizarCedula(
+                        imagen = imagen,
+                        recognizer = recognizer,
+                        ejecutorPrincipal = ejecutorPrincipal,
+                        sesionActiva = sesionActiva,
+                        onTexto = { texto ->
+                            if (sesionActiva.get()) {
+                                // Log, no overlay en pantalla -- pedido
+                                // explícito del usuario 2026-09-20 (se
+                                // veía mal encima de la cámara). Sigue
+                                // disponible por `adb logcat` en un
+                                // build debug si hace falta diagnosticar
+                                // un perfil que no lee bien.
+                                if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
+                                val resultado = estabilizador.procesarFrame(texto)
+                                when {
+                                    resultado != null -> {
+                                        estado = EstadoEscaneo.CONFIRMADO
+                                        ultimoMensaje = "Encargado ${resultado.nombre} confirmado"
+                                        if (detectada.compareAndSet(false, true)) {
+                                            vibrarConfirmacion(contexto)
+                                            reproducirSonidoConfirmacion()
+                                            trabajoResultado?.cancel()
+                                            trabajoResultado = alcance.launch {
+                                                if (sesionActiva.get()) onDetectadoActual(resultado)
                                             }
                                         }
                                     }
-                                },
-                                onFallo = {
-                                    if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
-                                },
-                            )
-                        }
-                    }
+                                    // Mismo criterio que Comprobante de
+                                    // Ruta -- ver `DetectorTextoNoReconocido`.
+                                    // `esCarnetKof` ya excluye el
+                                    // comprobante (comparte la marca "Coca
+                                    // Cola FEMSA").
+                                    detectorInvalido.procesarFrame(texto) -> {
+                                        if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
+                                        estado = EstadoEscaneo.INVALIDO
+                                        ultimoMensaje = "Gafete no reconocido"
+                                    }
+                                    else -> {
+                                        estado = EstadoEscaneo.BUSCANDO
+                                        ultimoMensaje = MENSAJE_INICIAL_KOF
+                                    }
+                                }
+                            }
+                        },
+                        onFallo = {
+                            if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
+                        },
+                    )
+                }
                 analisisCamara = analisis
                 iniciarCamara(
                     ctx = ctx,

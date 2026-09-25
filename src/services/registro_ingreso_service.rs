@@ -65,6 +65,52 @@ pub struct PreparacionIngreso {
     pub gafetes_deuda: Vec<i64>,
 }
 
+/// Motivo por el que [`PreparacionIngreso::bloqueo`] no deja continuar --
+/// las tres condiciones que hoy evaluaban por separado, y en el mismo
+/// orden, cada plataforma que llama a `preparar_ingreso` (Kotlin en móvil,
+/// TypeScript en escritorio): un ingreso activo local gana sobre uno
+/// remoto, y ambos ganan sobre un acceso denegado por reglas de negocio.
+/// El orden de las variantes es el orden de prioridad -- ver
+/// [`PreparacionIngreso::bloqueo`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub enum BloqueoIngreso {
+    IngresoActivo,
+    ActivoEnOtroSitio {
+        sitio: String,
+    },
+    AccesoDenegado {
+        motivo: crate::domain::resultado_acceso::MotivoDenegacion,
+    },
+}
+
+impl PreparacionIngreso {
+    /// `None` si se puede continuar con este contratista. Lee únicamente
+    /// los tres campos que esta misma struct ya trae -- no hace ninguna
+    /// consulta nueva, local ni remota. Reemplaza `puedeContinuar`/
+    /// `mensajeBloqueo` (antes duplicados en Kotlin y TypeScript, cada uno
+    /// con su propio orden de prioridad y su propio texto que ya habían
+    /// empezado a divergir -- ver
+    /// `docs/auditorias/auditoria-separacion-kotlin-rust-2026-09-25.md`).
+    #[must_use]
+    pub fn bloqueo(&self) -> Option<BloqueoIngreso> {
+        if self.tiene_ingreso_activo {
+            return Some(BloqueoIngreso::IngresoActivo);
+        }
+        if let Some(sitio) = &self.activo_en_otro_sitio {
+            return Some(BloqueoIngreso::ActivoEnOtroSitio {
+                sitio: sitio.clone(),
+            });
+        }
+        if let ResultadoAcceso::Denegado(motivo) = &self.resultado_acceso {
+            return Some(BloqueoIngreso::AccesoDenegado {
+                motivo: motivo.clone(),
+            });
+        }
+        None
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct IngresoActivoResumen {
@@ -403,5 +449,95 @@ where
     ) -> Result<(), RegistroIngresoServiceError> {
         let registro = self.buscar_ingreso_activo_por_gafete(gafete_numero)?;
         self.registrar_salida(registro.id, fecha_hora_salida, usuario_salida_id)
+    }
+}
+
+#[cfg(test)]
+mod tests_bloqueo {
+    use super::{BloqueoIngreso, PreparacionIngreso, ResultadoAcceso, TipoIngreso};
+    use crate::domain::resultado_acceso::MotivoDenegacion;
+
+    /// Todo en su estado "puede continuar" -- ninguno de los tres campos
+    /// que mira `bloqueo()` está activado.
+    fn preparacion_sin_bloqueo() -> PreparacionIngreso {
+        PreparacionIngreso {
+            contratista_id: 1,
+            cedula: "1-2345-6789".into(),
+            nombre: "Persona de Prueba".into(),
+            empresa_nombre: "Empresa de Prueba".into(),
+            tipo_ingreso: TipoIngreso::Praind,
+            fecha_vencimiento_praind: None,
+            resultado_acceso: ResultadoAcceso::Permitido,
+            requiere_gafete: false,
+            tiene_ingreso_activo: false,
+            activo_en_otro_sitio: None,
+            gafetes_deuda: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn sin_ningun_bloqueo_puede_continuar() {
+        assert_eq!(preparacion_sin_bloqueo().bloqueo(), None);
+    }
+
+    /// `tiene_ingreso_activo` gana aunque los otros dos campos también
+    /// estén activados -- mismo orden de prioridad que ya tenían
+    /// `puedeContinuar`/`mensajeBloqueo` en Kotlin y TypeScript.
+    #[test]
+    fn ingreso_activo_local_tiene_prioridad_sobre_los_demas() {
+        let preparacion = PreparacionIngreso {
+            tiene_ingreso_activo: true,
+            activo_en_otro_sitio: Some("Cartago".into()),
+            resultado_acceso: ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso),
+            ..preparacion_sin_bloqueo()
+        };
+
+        assert_eq!(preparacion.bloqueo(), Some(BloqueoIngreso::IngresoActivo));
+    }
+
+    /// Sin ingreso activo local, pero sí en otro sitio: gana sobre un
+    /// acceso denegado.
+    #[test]
+    fn activo_en_otro_sitio_tiene_prioridad_sobre_acceso_denegado() {
+        let preparacion = PreparacionIngreso {
+            tiene_ingreso_activo: false,
+            activo_en_otro_sitio: Some("Cartago".into()),
+            resultado_acceso: ResultadoAcceso::Denegado(MotivoDenegacion::PraindVencido),
+            ..preparacion_sin_bloqueo()
+        };
+
+        assert_eq!(
+            preparacion.bloqueo(),
+            Some(BloqueoIngreso::ActivoEnOtroSitio {
+                sitio: "Cartago".into()
+            })
+        );
+    }
+
+    #[test]
+    fn acceso_denegado_bloquea_cuando_no_hay_ingreso_activo_en_ningun_lado() {
+        let preparacion = PreparacionIngreso {
+            resultado_acceso: ResultadoAcceso::Denegado(MotivoDenegacion::EmpresaInactiva),
+            ..preparacion_sin_bloqueo()
+        };
+
+        assert_eq!(
+            preparacion.bloqueo(),
+            Some(BloqueoIngreso::AccesoDenegado {
+                motivo: MotivoDenegacion::EmpresaInactiva
+            })
+        );
+    }
+
+    /// `PermitidoConAdvertencia` (PRAIND próximo a vencer) no bloquea --
+    /// es una advertencia, no una denegación.
+    #[test]
+    fn permitido_con_advertencia_no_bloquea() {
+        let preparacion = PreparacionIngreso {
+            resultado_acceso: ResultadoAcceso::PermitidoConAdvertencia,
+            ..preparacion_sin_bloqueo()
+        };
+
+        assert_eq!(preparacion.bloqueo(), None);
     }
 }
