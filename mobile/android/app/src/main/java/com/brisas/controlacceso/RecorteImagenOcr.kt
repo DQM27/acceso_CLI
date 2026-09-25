@@ -104,3 +104,49 @@ fun construirNv21(
     }
     return nv21
 }
+
+/// Convierte un NV21 (como el que arma [construirNv21]) directo a píxeles
+/// ARGB_8888, sin pasar por JPEG -- reemplaza el camino anterior
+/// `YuvImage.compressToJpeg` + `BitmapFactory.decodeByteArray` (auditoría de
+/// rendimiento 2026-09-25: esa ida y vuelta comprimía a JPEG con pérdida y
+/// después la descomprimía completa, el costo de CPU más alto por frame de
+/// las 4 pantallas de escaneo, y de paso perdía calidad por la compresión
+/// con pérdida -- innecesaria acá porque el resultado nunca se guarda ni se
+/// muestra, sólo se le pasa a ML Kit).
+///
+/// Coeficientes BT.601 de rango completo (Y' 0-255, no el 16-235 "TV
+/// range") -- los mismos que usa históricamente `YuvImage`/la mayoría de
+/// HALs de cámara Android para este formato, para no introducir un cambio
+/// de color perceptible frente al camino anterior.
+///
+/// Puro -- sólo bytes y enteros, nada de `android.graphics.Bitmap` -- para
+/// poder probarlo con datos sintéticos, mismo motivo que [construirNv21].
+/// El llamador arma el `Bitmap` con `Bitmap.createBitmap(pixeles, ancho,
+/// alto, Config.ARGB_8888)`.
+fun convertirNv21AArgb(nv21: ByteArray, ancho: Int, alto: Int): IntArray {
+    val pixeles = IntArray(ancho * alto)
+    val tamanoPlanoY = ancho * alto
+    for (fila in 0 until alto) {
+        var indiceY = fila * ancho
+        var indiceUv = tamanoPlanoY + (fila shr 1) * ancho
+        var u = 0
+        var v = 0
+        for (columna in 0 until ancho) {
+            val y = (nv21[indiceY].toInt() and 0xff)
+            if (columna and 1 == 0) {
+                v = (nv21[indiceUv++].toInt() and 0xff) - 128
+                u = (nv21[indiceUv++].toInt() and 0xff) - 128
+            }
+            val y1192 = 1192 * y
+            val r = (y1192 + 1634 * v).coerceIn(0, 262143)
+            val g = (y1192 - 833 * v - 400 * u).coerceIn(0, 262143)
+            val b = (y1192 + 2066 * u).coerceIn(0, 262143)
+            pixeles[indiceY] = -0x1000000 or
+                ((r shl 6) and 0xff0000) or
+                ((g shr 2) and 0xff00) or
+                ((b shr 10) and 0xff)
+            indiceY++
+        }
+    }
+    return pixeles
+}

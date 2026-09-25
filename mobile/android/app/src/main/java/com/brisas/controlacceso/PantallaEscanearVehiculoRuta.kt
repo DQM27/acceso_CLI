@@ -1,10 +1,7 @@
 package com.brisas.controlacceso
 
-import android.util.Size
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
-import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
@@ -118,70 +115,58 @@ private fun VistaCamaraVehiculoRuta(
         AndroidView(
             factory = { ctx ->
                 val previewView = PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
-                val analisis = ImageAnalysis.Builder()
-                    .setResolutionSelector(
-                        ResolutionSelector.Builder()
-                            .setResolutionStrategy(
-                                ResolutionStrategy(Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER),
-                            )
-                            .build(),
-                    )
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-                    .also { analisisConstruido ->
-                        analisisConstruido.setAnalyzer(ejecutor) { imagen ->
-                            if (!sesionActiva.get() || detectada.get()) {
-                                imagen.close()
-                                return@setAnalyzer
-                            }
-                            analizarCedula(
-                                imagen = imagen,
-                                recognizer = recognizer,
-                                ejecutorPrincipal = ejecutorPrincipal,
-                                sesionActiva = sesionActiva,
-                                onTexto = { texto ->
-                                    if (sesionActiva.get()) {
-                                        val resultado = estabilizador.procesarFrame(texto)
-                                        when {
-                                            resultado != null -> {
-                                                estado = EstadoEscaneo.CONFIRMADO
-                                                ultimoMensaje = "${resultado.valor} confirmado"
-                                                if (detectada.compareAndSet(false, true)) {
-                                                    vibrarConfirmacion(contexto)
-                                                    reproducirSonidoConfirmacion()
-                                                    trabajoResultado?.cancel()
-                                                    trabajoResultado = alcance.launch {
-                                                        if (sesionActiva.get()) onDetectadoActual(resultado)
-                                                    }
-                                                }
-                                            }
-                                            // Sin clasificador aparte acá (a
-                                            // diferencia de Comprobante/Carnet KOF):
-                                            // placa/número de unidad es un dato
-                                            // atómico, `extraerVehiculo` ya decide
-                                            // todo en un solo paso -- que falle es
-                                            // en sí mismo la señal de "esto no es
-                                            // una placa ni un número de unidad".
-                                            // Ver `DetectorTextoNoReconocido` sobre
-                                            // por qué esto tolera frames sueltos.
-                                            detectorInvalido.procesarFrame(texto) -> {
-                                                if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
-                                                estado = EstadoEscaneo.INVALIDO
-                                                ultimoMensaje = "No se reconoce como placa ni número de unidad"
-                                            }
-                                            else -> {
-                                                estado = EstadoEscaneo.BUSCANDO
-                                                ultimoMensaje = mensajeInicial
+                val analisis = construirAnalizadorOcr(
+                    ejecutorAnalisis = ejecutor,
+                    detectada = detectada,
+                    sesionActiva = sesionActiva,
+                ) { imagen ->
+                    analizarCedula(
+                        imagen = imagen,
+                        recognizer = recognizer,
+                        ejecutorPrincipal = ejecutorPrincipal,
+                        sesionActiva = sesionActiva,
+                        onTexto = { texto ->
+                            if (sesionActiva.get()) {
+                                val resultado = estabilizador.procesarFrame(texto)
+                                when {
+                                    resultado != null -> {
+                                        estado = EstadoEscaneo.CONFIRMADO
+                                        ultimoMensaje = "${resultado.valor} confirmado"
+                                        if (detectada.compareAndSet(false, true)) {
+                                            vibrarConfirmacion(contexto)
+                                            reproducirSonidoConfirmacion()
+                                            trabajoResultado?.cancel()
+                                            trabajoResultado = alcance.launch {
+                                                if (sesionActiva.get()) onDetectadoActual(resultado)
                                             }
                                         }
                                     }
-                                },
-                                onFallo = {
-                                    if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
-                                },
-                            )
-                        }
-                    }
+                                    // Sin clasificador aparte acá (a
+                                    // diferencia de Comprobante/Carnet KOF):
+                                    // placa/número de unidad es un dato
+                                    // atómico, `extraerVehiculo` ya decide
+                                    // todo en un solo paso -- que falle es
+                                    // en sí mismo la señal de "esto no es
+                                    // una placa ni un número de unidad".
+                                    // Ver `DetectorTextoNoReconocido` sobre
+                                    // por qué esto tolera frames sueltos.
+                                    detectorInvalido.procesarFrame(texto) -> {
+                                        if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
+                                        estado = EstadoEscaneo.INVALIDO
+                                        ultimoMensaje = "No se reconoce como placa ni número de unidad"
+                                    }
+                                    else -> {
+                                        estado = EstadoEscaneo.BUSCANDO
+                                        ultimoMensaje = mensajeInicial
+                                    }
+                                }
+                            }
+                        },
+                        onFallo = {
+                            if (sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
+                        },
+                    )
+                }
                 analisisCamara = analisis
                 iniciarCamara(
                     ctx = ctx,

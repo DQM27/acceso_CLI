@@ -169,15 +169,8 @@ private fun VistaCamaraCedula(
                 val previewView = PreviewView(ctx).apply {
                     scaleType = PreviewView.ScaleType.FILL_CENTER
                 }
-                val analisis = construirAnalizadorOcr(
-                    ejecutorAnalisis = ejecutor,
-                    ejecutorPrincipal = ejecutorPrincipal,
-                    recognizer = recognizer,
-                    estabilizador = estabilizador,
-                    detectada = detectada,
-                    sesionActiva = sesionActiva,
-                    onResultado = { resultado ->
-                        if (!sesionActiva.get()) return@construirAnalizadorOcr
+                val onResultado: (ResultadoEstabilizacion) -> Unit = onResultado@{ resultado ->
+                        if (!sesionActiva.get()) return@onResultado
                         if (continuo && resultado.estado != EstadoEscaneo.CONFIRMADO) {
                             framesSinUltimoValor++
                             if (framesSinUltimoValor >= FRAMES_AUSENCIA_PARA_REPETIR) {
@@ -269,14 +262,28 @@ private fun VistaCamaraCedula(
                                 }
                             }
                         }
-                    },
-                    onFallo = {
-                        if (!sesionActiva.get()) return@construirAnalizadorOcr
+                    }
+                val onFallo: () -> Unit = {
+                    if (sesionActiva.get()) {
                         estado = EstadoEscaneo.BUSCANDO
                         vencido = false
                         ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
-                    },
-                )
+                    }
+                }
+                val analisis = construirAnalizadorOcr(
+                    ejecutorAnalisis = ejecutor,
+                    detectada = detectada,
+                    sesionActiva = sesionActiva,
+                ) { imagen ->
+                    analizarCedula(
+                        imagen = imagen,
+                        recognizer = recognizer,
+                        ejecutorPrincipal = ejecutorPrincipal,
+                        sesionActiva = sesionActiva,
+                        onTexto = { texto -> onResultado(estabilizador.procesarFrame(texto)) },
+                        onFallo = onFallo,
+                    )
+                }
                 analisisCamara = analisis
                 iniciarCamara(
                     ctx = ctx,
@@ -336,19 +343,25 @@ private fun VistaCamaraCedula(
     }
 }
 
-/// Arma el caso de uso de análisis de ML Kit, incluyendo el descarte
-/// temprano de frames una vez ya se detectó un documento -- separado de
-/// [iniciarCamara] para que cada función tenga una sola responsabilidad:
-/// esta arma "qué se analiza", la otra "cómo se conecta a la cámara física".
-private fun construirAnalizadorOcr(
+/// Arma el caso de uso de análisis de ML Kit -- resolución fija y descarte
+/// temprano de frames una vez ya se detectó un documento -- compartido por
+/// las 4 pantallas de escaneo (Cédula/Gafete, Carnet KOF, Vehículo/Ruta,
+/// Comprobante de Ruta). Antes cada pantalla salvo Cédula traía su propia
+/// copia textual de este `ImageAnalysis.Builder()` (hallazgo 2026-09-25,
+/// mismo riesgo de desincronización que ya se había resuelto para
+/// [iniciarCamara]/[analizarCedula]): separado de [iniciarCamara] para que
+/// cada función tenga una sola responsabilidad, esta arma "qué se
+/// analiza", la otra "cómo se conecta a la cámara física".
+///
+/// `onFrameActivo` recibe el frame ya filtrado (sesión viva, documento aún
+/// no detectado) -- cada pantalla decide ahí cómo llamar a [analizarCedula]
+/// con su propio `onTexto`/`onFallo`/`region`, sin que este helper necesite
+/// saber nada de estabilizadores ni de qué tipo de documento se busca.
+fun construirAnalizadorOcr(
     ejecutorAnalisis: java.util.concurrent.Executor,
-    ejecutorPrincipal: java.util.concurrent.Executor,
-    recognizer: com.google.mlkit.vision.text.TextRecognizer,
-    estabilizador: EstabilizadorLectura,
     detectada: AtomicBoolean,
     sesionActiva: AtomicBoolean,
-    onResultado: (ResultadoEstabilizacion) -> Unit,
-    onFallo: () -> Unit,
+    onFrameActivo: (ImageProxy) -> Unit,
 ): ImageAnalysis =
     ImageAnalysis.Builder()
         .setResolutionSelector(
@@ -373,14 +386,7 @@ private fun construirAnalizadorOcr(
                     imagen.close()
                     return@setAnalyzer
                 }
-                analizarCedula(
-                    imagen = imagen,
-                    recognizer = recognizer,
-                    ejecutorPrincipal = ejecutorPrincipal,
-                    sesionActiva = sesionActiva,
-                    onTexto = { texto -> onResultado(estabilizador.procesarFrame(texto)) },
-                    onFallo = onFallo,
-                )
+                onFrameActivo(imagen)
             }
         }
 
@@ -560,9 +566,9 @@ fun analizarCedula(
 /// cae de vuelta al frame completo, nunca debe romper el escaneo.
 ///
 /// Por qué rota A BITMAP COMPLETO primero y recién ahí recorta, en vez de
-/// calcular el recorte directo sobre el buffer crudo (que ahorraría el
-/// paso de JPEG/rotación): el recuadro que ve la persona está expresado en
-/// coordenadas YA ROTADAS (como la pantalla, vertical), mientras que
+/// calcular el recorte directo sobre el buffer crudo (que ahorraría
+/// armar el bitmap completo): el recuadro que ve la persona está expresado
+/// en coordenadas YA ROTADAS (como la pantalla, vertical), mientras que
 /// `imagen`/sus planos vienen en la orientación nativa del sensor (normal
 /// que la cámara trasera entregue esto en apaisado incluso con el teléfono
 /// en vertical). Traducir el recuadro vertical a coordenadas del sensor sin
@@ -573,6 +579,15 @@ fun analizarCedula(
 /// Rotar primero devuelve un bitmap donde "arriba/ancho/alto" ya significan
 /// lo mismo que en pantalla, así que el recorte usa la misma aritmética que
 /// `MarcoGuiaCedula` sin ningún signo que invertir.
+///
+/// El bitmap completo se arma con [convertirNv21AArgb] directo, sin pasar
+/// por JPEG (auditoría de rendimiento 2026-09-25: `YuvImage.compressToJpeg`
+/// + `BitmapFactory.decodeByteArray` era el costo de CPU más alto por
+/// frame de las 4 pantallas de escaneo, y de paso comprimía con pérdida una
+/// imagen que nunca se guarda ni se muestra). Cada bitmap intermedio que ya
+/// no hace falta se recicla apenas se arma el siguiente -- el único que
+/// queda vivo al salir es `bitmapRecortado`, porque `recognizer.process`
+/// todavía lo necesita después de este `return`.
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
 private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int, region: RegionGuiaOcr): InputImage? {
     if (imagen.format != android.graphics.ImageFormat.YUV_420_888) return null
@@ -595,31 +610,23 @@ private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int, re
             uvRowStride = uPlano.rowStride,
             uvPixelStride = uPlano.pixelStride,
         )
-        val yuvImage = android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, imagen.width, imagen.height, null)
-        val jpegCompleto = java.io.ByteArrayOutputStream().use { salida ->
-            val ok = yuvImage.compressToJpeg(
-                android.graphics.Rect(0, 0, imagen.width, imagen.height),
-                90,
-                salida,
-            )
-            if (!ok) return null
-            salida.toByteArray()
-        }
-        val bitmapCompleto = android.graphics.BitmapFactory.decodeByteArray(jpegCompleto, 0, jpegCompleto.size)
-            ?: return null
+        val pixeles = convertirNv21AArgb(nv21, imagen.width, imagen.height)
+        val bitmapCompleto = android.graphics.Bitmap.createBitmap(
+            pixeles, imagen.width, imagen.height, android.graphics.Bitmap.Config.ARGB_8888,
+        )
         val bitmapDerecho = if (rotacionGrados == 0) {
             bitmapCompleto
         } else {
             val matriz = android.graphics.Matrix().apply { postRotate(rotacionGrados.toFloat()) }
             android.graphics.Bitmap.createBitmap(
                 bitmapCompleto, 0, 0, bitmapCompleto.width, bitmapCompleto.height, matriz, false,
-            )
+            ).also { if (it !== bitmapCompleto) bitmapCompleto.recycle() }
         }
         val recorte = region.rectanguloEnPixeles(bitmapDerecho.width, bitmapDerecho.height)
         if (recorte.width <= 0 || recorte.height <= 0) return null
         val bitmapRecortado = android.graphics.Bitmap.createBitmap(
             bitmapDerecho, recorte.left, recorte.top, recorte.width, recorte.height,
-        )
+        ).also { if (it !== bitmapDerecho) bitmapDerecho.recycle() }
         InputImage.fromBitmap(bitmapRecortado, 0)
     } catch (e: Exception) {
         null
