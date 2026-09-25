@@ -141,5 +141,4 @@ impl AppCore {
         )?;
         Ok(())
     }
-
 }
