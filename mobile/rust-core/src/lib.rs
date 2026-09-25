@@ -904,11 +904,13 @@ pub enum NucleoError {
     /// este teléfono. `Nucleo::autenticar`/`autenticar_con_secreto`
     /// interceptan esto internamente y redirigen a `autenticar_supabase`
     /// (ver el comentario ahí) -- Kotlin nunca ve este error para un
-    /// usuario global. La variante sigue existiendo por el contrato FFI;
-    /// no queda claro si algún llamador real (mobile o desktop) todavía
-    /// la deja escapar sin interceptar -- ver `AppCore::fijar_password_inicial`
-    /// en el crate raíz y `tests/bootstrap_password_usuario_global.rs`
-    /// antes de asumir que es alcanzable o no desde acá.
+    /// usuario global. La variante sigue existiendo por el contrato FFI
+    /// -- confirmado en la auditoría 2026-09-24 (NR-07/NS-25) que el único
+    /// camino que fijaba contraseña con sólo la cédula era
+    /// `AppCore::fijar_password_inicial`, ya eliminada por no tener
+    /// llamadores reales; el alta de contraseña de un usuario global pasa
+    /// siempre por `autenticar_supabase` (Supabase Auth), así que esta
+    /// variante no debería escapar sin interceptar desde acá.
     #[error("todavía no tenés contraseña en este dispositivo")]
     SinPasswordLocal,
     #[error("no hay una sesión iniciada")]
@@ -1249,15 +1251,15 @@ impl Nucleo {
         directorio: String,
         identificador_dispositivo: String,
     ) -> Result<ResultadoLogin, NucleoError> {
-        let intento = self.core_lock().autenticar(&cedula, &password);
-        let sesion = match intento {
-            Ok(sesion) => sesion,
+        let intento = self.core_lock().autenticar_con_estado(&cedula, &password);
+        let (sesion, debe_cambiar_password) = match intento {
+            Ok(resultado) => resultado,
             Err(
                 AutenticacionErrorNucleo::UsuarioInactivo
                 | AutenticacionErrorNucleo::CredencialesInvalidas,
             ) => {
                 let _ = self.refrescar_catalogo_sin_sesion(&directorio, &identificador_dispositivo);
-                self.core_lock().autenticar(&cedula, &password)?
+                self.core_lock().autenticar_con_estado(&cedula, &password)?
             }
             // Usuario global (sincronizado) sin contraseña local todavía --
             // se autentica contra Supabase Auth en vez de mostrar la
@@ -1307,7 +1309,7 @@ impl Nucleo {
         *self.sesion_lock() = Some(sesion.clone());
         Ok(ResultadoLogin {
             sesion: sesion.into(),
-            debe_cambiar_password: false,
+            debe_cambiar_password,
         })
     }
 
@@ -1321,9 +1323,9 @@ impl Nucleo {
         password: String,
         secreto: String,
     ) -> Result<ResultadoLogin, NucleoError> {
-        let intento = self.core_lock().autenticar(&cedula, &password);
-        let sesion = match intento {
-            Ok(sesion) => sesion,
+        let intento = self.core_lock().autenticar_con_estado(&cedula, &password);
+        let (sesion, debe_cambiar_password) = match intento {
+            Ok(resultado) => resultado,
             Err(
                 AutenticacionErrorNucleo::UsuarioInactivo
                 | AutenticacionErrorNucleo::CredencialesInvalidas,
@@ -1331,7 +1333,7 @@ impl Nucleo {
                 if !secreto.trim().is_empty() {
                     let _ = self.refrescar_catalogo_sin_sesion_con_secreto(&secreto);
                 }
-                self.core_lock().autenticar(&cedula, &password)?
+                self.core_lock().autenticar_con_estado(&cedula, &password)?
             }
             // Ver el comentario de `autenticar` (arriba) -- mismo criterio,
             // con el secreto ya en memoria en vez de leerlo de disco.
@@ -1375,7 +1377,7 @@ impl Nucleo {
         *self.sesion_lock() = Some(sesion.clone());
         Ok(ResultadoLogin {
             sesion: sesion.into(),
-            debe_cambiar_password: false,
+            debe_cambiar_password,
         })
     }
 
@@ -1402,6 +1404,29 @@ impl Nucleo {
             &password_actual,
             &password_nueva,
         )?;
+
+        // Best-effort, mismo criterio que en `autenticar_supabase` -- ver
+        // el doc-comment de `AppCore::cachear_password_local`. Refresca el
+        // caché con la contraseña NUEVA (y `debe_cambiar_password: false`,
+        // ya que el cambio se acaba de confirmar contra Supabase Auth):
+        // sin esto (hallazgo de auditoría 2026-09-24, MV-02), el caché
+        // seguía teniendo la contraseña VIEJA hasta el próximo login
+        // online -- la nueva contraseña quedaba rechazada offline por 24h
+        // mientras la vieja (o la temporal, si el cambio era obligatorio)
+        // seguía sirviendo para entrar sin conexión.
+        //
+        // El resultado se liga a una variable ANTES del `if let` a
+        // propósito -- mismo motivo que en `autenticar_supabase` un poco
+        // más arriba: `core_lock()` es un `MutexGuard`, y dejarlo como
+        // temporal directo en el scrutinee lo mantendría vivo durante todo
+        // el bloque, no sólo durante la llamada.
+        let resultado_cache = self
+            .core_lock()
+            .cachear_password_local(sesion.id, &password_nueva, false);
+        if let Err(error) = resultado_cache {
+            log::warn!("no se pudo refrescar el cacheo de login offline: {error}");
+        }
+
         Ok(())
     }
 
@@ -2751,14 +2776,23 @@ impl Nucleo {
         // Supabase, sólo deja sin el atajo offline a esta cuenta hasta el
         // próximo login online. Ver `Usuario::password_hash_confirmado_en`
         // y docs/decisiones-tecnicas.md, entrada 2026-09-18.
+        //
+        // Propaga `sesion_supabase.debe_cambiar_password` al caché a
+        // propósito (hallazgo de auditoría 2026-09-24, MV-01/DF-03): si la
+        // contraseña recién verificada es una temporal todavía sin
+        // cambiar, un login sin conexión más adelante debe seguir
+        // exigiendo el cambio, no aceptarla como si ya fuera definitiva.
+        //
         // El resultado se liga a una variable ANTES del `if let` a propósito
         // -- `core_lock()` es un `MutexGuard`, y dejarlo como temporal
         // directo en el scrutinee lo mantendría vivo durante todo el bloque
         // (hasta la llave de cierre), no sólo durante la llamada -- riesgo
         // real de deadlock si algo más adelante necesitara el mismo candado.
-        let resultado_cache = self
-            .core_lock()
-            .cachear_password_local(identidad.id, password);
+        let resultado_cache = self.core_lock().cachear_password_local(
+            identidad.id,
+            password,
+            sesion_supabase.debe_cambiar_password,
+        );
         if let Err(error) = resultado_cache {
             log::warn!("no se pudo cachear el login offline: {error}");
         }

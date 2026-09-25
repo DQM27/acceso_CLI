@@ -5,7 +5,6 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -76,7 +75,7 @@ class MainActivity : ComponentActivity() {
                 // claro Y oscuro). El `Surface` de acá abajo ahora sí llena
                 // toda la pantalla -- ESE es el color que se termina viendo
                 // detrás de las barras del sistema.
-                val oscuro = GestorTema.oscuroForzado ?: isSystemInDarkTheme()
+                val oscuro = temaActual().oscuro
                 val vista = LocalView.current
                 SideEffect {
                     val controlador = WindowCompat.getInsetsController(window, vista)

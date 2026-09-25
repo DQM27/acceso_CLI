@@ -18,7 +18,7 @@ fn base() -> Connection {
 }
 
 fn guardar(connection: &Connection, activo: bool, hash: String) -> i64 {
-    guardar_con_cache(connection, activo, hash, None)
+    guardar_con_cache(connection, activo, hash, None, false)
 }
 
 fn guardar_con_cache(
@@ -26,6 +26,7 @@ fn guardar_con_cache(
     activo: bool,
     hash: String,
     password_hash_confirmado_en: Option<String>,
+    password_temporal_cacheada: bool,
 ) -> i64 {
     SqliteUsuarioRepository::new(connection)
         .crear(&Usuario {
@@ -36,6 +37,7 @@ fn guardar_con_cache(
             rol: RolUsuario::Administrador,
             activo,
             password_hash_confirmado_en,
+            password_temporal_cacheada,
         })
         .unwrap()
 }
@@ -101,6 +103,7 @@ fn hash_cacheado_dentro_de_24h_se_acepta() {
         true,
         generar_hash("password1").unwrap(),
         Some(serializar_utc(ahora - chrono::Duration::hours(23))),
+        false,
     );
     let repository = SqliteUsuarioRepository::new(&connection);
     assert!(
@@ -119,12 +122,60 @@ fn hash_cacheado_pasado_24h_se_rechaza_como_sin_password_local() {
         true,
         generar_hash("password1").unwrap(),
         Some(serializar_utc(ahora - chrono::Duration::hours(25))),
+        false,
     );
     let repository = SqliteUsuarioRepository::new(&connection);
     assert!(matches!(
         AutenticacionService::new(&repository).autenticar("1001", "password1", ahora),
         Err(AutenticacionError::SinPasswordLocal)
     ));
+}
+
+// Hallazgo de auditoría 2026-09-24 (MV-01/DF-03): un login LOCAL (sin
+// pasar por Supabase Auth) con una contraseña TEMPORAL todavía cacheada
+// debía seguir exigiendo el cambio de contraseña, no dejarlo pasar como si
+// la contraseña ya fuera definitiva -- `autenticar` (que descarta el
+// estado) sigue aceptando la contraseña igual, `autenticar_con_estado` es
+// el que expone si debe forzarse el cambio.
+
+#[test]
+fn hash_cacheado_temporal_exige_cambio_de_password() {
+    let connection = base();
+    let ahora = Utc::now();
+    guardar_con_cache(
+        &connection,
+        true,
+        generar_hash("temporal1").unwrap(),
+        Some(serializar_utc(ahora - chrono::Duration::hours(1))),
+        true,
+    );
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let (sesion, debe_cambiar_password) = AutenticacionService::new(&repository)
+        .autenticar_con_estado("1001", "temporal1", ahora)
+        .unwrap();
+    assert_eq!(sesion.cedula, "1001");
+    assert!(
+        debe_cambiar_password,
+        "una contraseña temporal cacheada debe seguir exigiendo el cambio en un login local"
+    );
+}
+
+#[test]
+fn hash_cacheado_no_temporal_no_exige_cambio_de_password() {
+    let connection = base();
+    let ahora = Utc::now();
+    guardar_con_cache(
+        &connection,
+        true,
+        generar_hash("password1").unwrap(),
+        Some(serializar_utc(ahora - chrono::Duration::hours(1))),
+        false,
+    );
+    let repository = SqliteUsuarioRepository::new(&connection);
+    let (_, debe_cambiar_password) = AutenticacionService::new(&repository)
+        .autenticar_con_estado("1001", "password1", ahora)
+        .unwrap();
+    assert!(!debe_cambiar_password);
 }
 
 #[test]

@@ -1,5 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { esquema } from "./FormularioGafete";
+import { esquema, resumenCreacion } from "./FormularioGafete";
+
+const base = { modo: "individual", tipo: "contratista", numero: "", desde: "", hasta: "" } as const;
+
+describe("resumenCreacion", () => {
+  it("individual: nombra el gafete y el tipo", () => {
+    expect(resumenCreacion({ ...base, numero: "7" })).toEqual({
+      frase: "Se creará el gafete #07 de contratista.",
+      boton: "Crear gafete",
+    });
+  });
+
+  it("rango: cuenta los gafetes y los extremos", () => {
+    expect(
+      resumenCreacion({ ...base, modo: "rango", tipo: "provisional_kof", desde: "1", hasta: "20" }),
+    ).toEqual({
+      frase: "Se crearán 20 gafetes de provisional KOF, del #01 al #20.",
+      boton: "Crear 20 gafetes",
+    });
+  });
+
+  it("rango de uno: en singular", () => {
+    expect(resumenCreacion({ ...base, modo: "rango", desde: "5", hasta: "5" }).boton).toBe(
+      "Crear gafete",
+    );
+  });
+
+  it("sin números suficientes no hay frase", () => {
+    expect(resumenCreacion(base).frase).toBeNull();
+    expect(resumenCreacion({ ...base, modo: "rango", desde: "9", hasta: "3" }).frase).toBeNull();
+  });
+});
 
 describe("esquema de FormularioGafete", () => {
   it("individual: número vacío o no numérico no pasa", () => {

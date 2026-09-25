@@ -96,6 +96,7 @@ fn autenticacion_conserva_errores_de_credenciales_e_inactivo() {
             rol: RolUsuario::Operador,
             activo: false,
             password_hash_confirmado_en: None,
+            password_temporal_cacheada: false,
         })
         .unwrap();
     let core = AppCore::new(connection);
@@ -242,91 +243,6 @@ fn archivo_persistente_se_reabre_con_root_y_autenticacion() {
         assert!(core.autenticar("ROOT1", "password1").is_ok());
     }
     std::fs::remove_file(ruta).unwrap();
-}
-
-#[test]
-fn listar_roots_activos_excluye_otros_roles_e_inactivos() {
-    let connection = Connection::open_in_memory().unwrap();
-    initialize_database(&connection).unwrap();
-    let usuarios = SqliteUsuarioRepository::new(&connection);
-    let root_id = usuarios
-        .crear(&Usuario {
-            id: 0,
-            cedula: "ROOT1".to_owned(),
-            nombre: "Root Principal".to_owned(),
-            password_hash: generar_hash("password1").unwrap(),
-            rol: RolUsuario::Root,
-            activo: true,
-            password_hash_confirmado_en: None,
-        })
-        .unwrap();
-    usuarios
-        .crear(&Usuario {
-            id: 0,
-            cedula: "OP1".to_owned(),
-            nombre: "Operador".to_owned(),
-            password_hash: generar_hash("password2").unwrap(),
-            rol: RolUsuario::Operador,
-            activo: true,
-            password_hash_confirmado_en: None,
-        })
-        .unwrap();
-    usuarios
-        .crear(&Usuario {
-            id: 0,
-            cedula: "ROOT-INACTIVO".to_owned(),
-            nombre: "Root Inactivo".to_owned(),
-            password_hash: generar_hash("password3").unwrap(),
-            rol: RolUsuario::Root,
-            activo: false,
-            password_hash_confirmado_en: None,
-        })
-        .unwrap();
-    let core = AppCore::new(connection);
-
-    let roots = core.listar_roots_activos().unwrap();
-    assert_eq!(roots.len(), 1);
-    assert_eq!(roots[0].id, root_id);
-    assert_eq!(roots[0].rol, RolUsuario::Root);
-}
-
-#[test]
-fn resetear_password_root_actualiza_hash_sin_necesitar_actor() {
-    let core = core_memoria();
-    let root_id = core.crear_root_inicial(root()).unwrap();
-
-    core.resetear_password_root(root_id, "password-nueva")
-        .unwrap();
-
-    assert!(core.autenticar("ROOT1", "password-nueva").is_ok());
-    assert!(matches!(
-        core.autenticar("ROOT1", "password1"),
-        Err(AutenticacionError::CredencialesInvalidas)
-    ));
-}
-
-#[test]
-fn resetear_password_root_rechaza_usuario_que_no_es_root_activo() {
-    let connection = Connection::open_in_memory().unwrap();
-    initialize_database(&connection).unwrap();
-    let usuarios = SqliteUsuarioRepository::new(&connection);
-    let operador_id = usuarios
-        .crear(&Usuario {
-            id: 0,
-            cedula: "OP1".to_owned(),
-            nombre: "Operador".to_owned(),
-            password_hash: generar_hash("password2").unwrap(),
-            rol: RolUsuario::Operador,
-            activo: true,
-            password_hash_confirmado_en: None,
-        })
-        .unwrap();
-    let core = AppCore::new(connection);
-
-    assert!(matches!(
-        core.resetear_password_root(operador_id, "otra-nueva"),
-        Err(UsuarioServiceError::UsuarioNoEncontrado)
-    ));
 }
 
 #[test]

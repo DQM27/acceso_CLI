@@ -1,30 +1,50 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ChangeEvent } from "react";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../componentes/Modal";
+import {
+  FilaListaFlotante,
+  ListaFlotante,
+  SinResultados,
+  useListaFlotante,
+  useNavegacionFlechas,
+} from "../componentes/ListaFlotante";
 import { listarEncargadosRutaSeleccionables } from "../api/rutas";
 import type { EncargadoRuta } from "../api/rutas";
-import { entregarGafeteProvisional } from "../api/gafetesProvisionales";
+import {
+  entregarGafeteProvisional,
+  listarTodosLosGafetesProvisionalesActivos,
+} from "../api/gafetesProvisionales";
+import { coincideBusqueda, textoGafete, validarNumeroGafete } from "../busqueda";
 
-interface ValoresFormulario {
-  gafete_numero: number;
+const MAX_RESULTADOS = 5;
+
+/** Encargados cuyo nombre o código de empleado contienen todas las palabras
+ * de `texto` (sin distinguir tildes ni mayúsculas). El catálogo es chico y
+ * ya viene completo (`listarEncargadosRutaSeleccionables`), así que se
+ * filtra acá en vez de buscar del lado del servidor. */
+export function filtrarEncargados(
+  encargados: EncargadoRuta[],
+  texto: string,
+  maximo: number = MAX_RESULTADOS,
+): EncargadoRuta[] {
+  return encargados
+    .filter((encargado) =>
+      coincideBusqueda(texto, `${encargado.nombre} ${encargado.codigo_empleado}`),
+    )
+    .slice(0, maximo);
 }
 
-const esquema = z.object({
-  gafete_numero: z
-    .number()
-    .refine((n) => Number.isInteger(n) && n > 0, "El número de gafete es obligatorio"),
-});
-
-/** Mismo combobox nativo (`<input list>` + `<datalist>`) que
- * `IngresoProveedorModal` usa para empresa -- el catálogo de encargados ya
- * se carga completo en `PantallaRutas` (`listarEncargadosRuta`), así que
- * reusarlo acá evita un buscador servidor-lado aparte. Único campo
- * bloqueante (pedido explícito del usuario, mismo criterio que la versión
- * móvil): no tiene sentido prestar un gafete a texto libre sin encargado
- * real detrás. */
+/**
+ * Mismo flujo que `NuevoIngresoModal` (pedido del usuario 2026-09-24: el
+ * formulario anterior, con un `<datalist>` nativo, se veía mal): buscador
+ * arriba con lista flotante; al elegir un encargado se abre su ficha debajo
+ * con el número de gafete ya enfocado, y Enter entrega. Encargado sigue
+ * siendo el único campo bloqueante (mismo criterio que la versión móvil):
+ * no se presta un gafete a texto libre sin un encargado real detrás.
+ *
+ * Los préstamos activos (locales y del otro dispositivo) se cargan sólo
+ * para avisar en la lista y en la ficha si el encargado ya tiene un gafete
+ * provisional sin devolver; no bloquean la entrega.
+ */
 export default function EntregarGafeteProvisionalModal({
   onRegistrado,
   onCerrar,
@@ -32,117 +52,207 @@ export default function EntregarGafeteProvisionalModal({
   onRegistrado: () => void;
   onCerrar: () => void;
 }) {
-  const {
-    register,
-    handleSubmit,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<ValoresFormulario>({
-    resolver: zodResolver(esquema),
-    // String vacío, no NaN -- con `type="number"` el DOM mostraba NaN en
-    // blanco solo, pero con `type="text"` (ver abajo) NaN se refleja
-    // literal como el string "NaN" en el campo (docs/pendientes.md,
-    // "Auditar máscaras de entrada" -- mismo fix que IngresoProveedorModal).
-    defaultValues: { gafete_numero: "" as unknown as number },
-  });
-
-  // `type="number"` deja teclear "e"/"-"/"+" (notación científica) aunque
-  // el campo sea un entero positivo -- texto + filtrado en onChange, mismo
-  // criterio que FormularioGafete.tsx/IngresoProveedorModal.tsx.
-  const registroGafeteNumero = register("gafete_numero", {
-    setValueAs: (valor: string) => (valor === "" ? Number.NaN : Number(valor)),
-  });
-  const alCambiarGafeteNumero = (evento: ChangeEvent<HTMLInputElement>) => {
-    evento.target.value = evento.target.value.replace(/\D/g, "");
-    registroGafeteNumero.onChange(evento);
-  };
-
   const [encargados, setEncargados] = useState<EncargadoRuta[]>([]);
+  const [gafetesPrestados, setGafetesPrestados] = useState<Map<string, number[]>>(new Map());
+  const [filtro, setFiltro] = useState("");
+  const [elegido, setElegido] = useState<EncargadoRuta | null>(null);
+  const [gafeteTexto, setGafeteTexto] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const buscadorRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     listarEncargadosRutaSeleccionables()
       .then(setEncargados)
+      .catch((error) => setError(String(error)));
+    listarTodosLosGafetesProvisionalesActivos()
+      .then((activos) => {
+        const porCodigo = new Map<string, number[]>();
+        for (const prestamo of activos) {
+          const lista = porCodigo.get(prestamo.encargado_codigo_empleado) ?? [];
+          lista.push(prestamo.gafete_numero);
+          porCodigo.set(prestamo.encargado_codigo_empleado, lista);
+        }
+        setGafetesPrestados(porCodigo);
+      })
+      // Sólo alimenta un aviso: si falla, se entrega igual sin él.
       .catch(() => {});
   }, []);
 
-  const [encargadoTexto, setEncargadoTexto] = useState("");
-  const [errorEncargado, setErrorEncargado] = useState<string | null>(null);
+  const resultados = useMemo(() => filtrarEncargados(encargados, filtro), [encargados, filtro]);
+  const listaVisible = elegido === null && filtro.trim().length > 0;
+  const { campoRef, posicion: posicionLista } = useListaFlotante(listaVisible);
+  const { resaltado, setResaltado, manejarTecla } = useNavegacionFlechas(
+    resultados,
+    listaVisible,
+    elegirEncargado,
+  );
 
-  const etiquetaEncargado = (encargado: EncargadoRuta) =>
-    `${encargado.nombre} · ${encargado.codigo_empleado}`;
+  function cambiarFiltro(texto: string) {
+    setFiltro(texto);
+    setError(null);
+    // Escribir de nuevo abandona al elegido: vuelve a buscar.
+    if (elegido) setElegido(null);
+  }
 
-  const encargadoElegido = useMemo(() => {
-    const texto = encargadoTexto.trim().toLowerCase();
-    if (!texto) return null;
-    return encargados.find((encargado) => etiquetaEncargado(encargado).toLowerCase() === texto) ?? null;
-  }, [encargadoTexto, encargados]);
+  function elegirEncargado(encargado: EncargadoRuta) {
+    setError(null);
+    setGafeteTexto("");
+    setElegido(encargado);
+  }
 
-  async function alGuardar(valores: ValoresFormulario) {
-    if (!encargadoElegido) {
-      setErrorEncargado("Elija un encargado del catálogo");
+  function cambiarEncargado() {
+    setError(null);
+    setElegido(null);
+    buscadorRef.current?.focus();
+  }
+
+  async function entregar() {
+    if (!elegido) return;
+    const resultado = validarNumeroGafete(gafeteTexto);
+    if (!resultado.valido) {
+      setError(resultado.mensaje);
       return;
     }
-    setErrorEncargado(null);
+    setError(null);
+    setEnviando(true);
     try {
-      await entregarGafeteProvisional(encargadoElegido.id, valores.gafete_numero);
+      await entregarGafeteProvisional(elegido.id, resultado.numero);
       onRegistrado();
     } catch (error) {
-      setError("root", { message: String(error) });
+      setError(String(error));
+      setEnviando(false);
     }
   }
 
+  const prestadosElegido = elegido ? (gafetesPrestados.get(elegido.codigo_empleado) ?? []) : [];
+
   return (
     <Modal titulo="Entregar gafete provisional KOF" onCerrar={onCerrar}>
-      <form
-        onSubmit={handleSubmit(alGuardar)}
-        style={{ display: "flex", flexDirection: "column", gap: "0.75rem", width: "24rem", maxWidth: "100%" }}
-      >
-        <label className="campo">
-          Encargado
-          <input
-            list="encargados-provisional-datalist"
-            value={encargadoTexto}
-            onChange={(evento) => setEncargadoTexto(evento.target.value)}
-            autoFocus
-            autoComplete="off"
-            placeholder="Escriba para buscar por nombre o código…"
-          />
-          <datalist id="encargados-provisional-datalist">
-            {encargados.map((encargado) => (
-              <option key={encargado.id} value={etiquetaEncargado(encargado)} />
-            ))}
-          </datalist>
-        </label>
-        {errorEncargado && <span style={{ color: "var(--error)" }}>{errorEncargado}</span>}
-        {encargadoElegido && (
-          <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-            Código de empleado: {encargadoElegido.codigo_empleado} — corroborar contra lo que dice la
-            persona
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <div ref={campoRef}>
+          <label className="campo">
+            Buscar encargado
+            <input
+              ref={buscadorRef}
+              value={filtro}
+              onChange={(evento) => cambiarFiltro(evento.target.value)}
+              onKeyDown={manejarTecla}
+              autoFocus
+              autoComplete="off"
+              placeholder="Nombre o código de empleado…"
+            />
+          </label>
+        </div>
+
+        {listaVisible && posicionLista && (
+          <ListaFlotante posicion={posicionLista}>
+            {resultados.length === 0 && <SinResultados />}
+            {resultados.map((encargado, indice) => {
+              const prestados = gafetesPrestados.get(encargado.codigo_empleado) ?? [];
+              return (
+                <FilaListaFlotante
+                  key={encargado.id}
+                  resaltada={indice === resaltado}
+                  onClick={() => elegirEncargado(encargado)}
+                  onMouseEnter={() => setResaltado(indice)}
+                >
+                  <span>
+                    {encargado.nombre}{" "}
+                    <span style={{ color: "var(--muted)" }}>· {encargado.codigo_empleado}</span>
+                  </span>
+                  {prestados.length > 0 && (
+                    <span
+                      className="chip"
+                      style={{
+                        ["--chip-color" as string]: "var(--advertencia)",
+                        alignSelf: "center",
+                        flexShrink: 0,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Tiene {prestados.map(textoGafete).join(", ")}
+                    </span>
+                  )}
+                </FilaListaFlotante>
+              );
+            })}
+          </ListaFlotante>
+        )}
+
+        {error && !elegido && (
+          <p className="login-error" role="alert">
+            {error}
           </p>
         )}
 
-        <label className="campo" style={{ flex: "0 1 10rem" }}>
-          N.° de gafete provisional
-          <input
-            {...registroGafeteNumero}
-            onChange={alCambiarGafeteNumero}
-            inputMode="numeric"
-          />
-          {errors.gafete_numero && (
-            <span style={{ color: "var(--error)" }}>{errors.gafete_numero.message}</span>
-          )}
-        </label>
+        {elegido && (
+          <form
+            className="ficha-desplegable"
+            onSubmit={(evento) => {
+              evento.preventDefault();
+              entregar();
+            }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.9rem",
+              padding: "0.85rem",
+              border: "1px solid var(--borde)",
+              borderRadius: "var(--radio-chico)",
+              background: "var(--campo-fondo)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>{elegido.nombre}</p>
+                <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
+                  Código de empleado {elegido.codigo_empleado}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="boton"
+                style={{ fontSize: "0.8rem" }}
+                onClick={cambiarEncargado}
+              >
+                Cambiar
+              </button>
+            </div>
 
-        {errors.root && <p style={{ color: "var(--error)" }}>{errors.root.message}</p>}
+            {prestadosElegido.length > 0 && (
+              <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
+                ⚠ Ya tiene prestado el gafete {prestadosElegido.map(textoGafete).join(", ")} sin
+                devolver
+              </p>
+            )}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-          <button type="button" className="boton" onClick={onCerrar}>
-            Cancelar
-          </button>
-          <button type="submit" className="boton boton-primario" disabled={isSubmitting}>
-            {isSubmitting ? "Entregando…" : "Entregar"}
-          </button>
-        </div>
-      </form>
+            <label className="campo">
+              Número de gafete provisional
+              <input
+                value={gafeteTexto}
+                onChange={(evento) => setGafeteTexto(evento.target.value.replace(/\D/g, ""))}
+                inputMode="numeric"
+                autoFocus
+                autoComplete="off"
+                placeholder="Número de gafete"
+              />
+            </label>
+
+            {error && (
+              <p className="login-error" role="alert">
+                {error}
+              </p>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="submit" className="boton boton-primario" disabled={enviando}>
+                {enviando ? "Entregando…" : "Entregar gafete"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </Modal>
   );
 }

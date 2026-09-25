@@ -1,17 +1,19 @@
 package com.brisas.controlacceso
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 
-/// `GestorTema.oscuroForzado` (null = seguir al sistema) manda por encima
-/// de `isSystemInDarkTheme()` -- ver botón claro/oscuro en
+/// `GestorTema.temaForzado` (null = seguir al sistema) manda por encima
+/// de `isSystemInDarkTheme()` -- ver [temaActual] y el botón de tema en
 /// `PantallaPrincipal.kt`.
 @Composable
 fun TemaBrisas(contenido: @Composable () -> Unit) {
-    val oscuro = GestorTema.oscuroForzado ?: isSystemInDarkTheme()
     MaterialTheme(
-        colorScheme = if (oscuro) BrisasOscuro else BrisasClaro,
+        colorScheme = when (temaActual()) {
+            TemaApp.CLARO -> BrisasClaro
+            TemaApp.OSCURO -> BrisasOscuro
+            TemaApp.TOKYO_NIGHT -> TokyoNight
+        },
         shapes = FormasBrisas,
         typography = TipografiaBrisas,
         content = contenido,
