@@ -5649,11 +5649,13 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
      * este teléfono. `Nucleo::autenticar`/`autenticar_con_secreto`
      * interceptan esto internamente y redirigen a `autenticar_supabase`
      * (ver el comentario ahí) -- Kotlin nunca ve este error para un
-     * usuario global. La variante sigue existiendo por el contrato FFI;
-     * no queda claro si algún llamador real (mobile o desktop) todavía
-     * la deja escapar sin interceptar -- ver `AppCore::fijar_password_inicial`
-     * en el crate raíz y `tests/bootstrap_password_usuario_global.rs`
-     * antes de asumir que es alcanzable o no desde acá.
+     * usuario global. La variante sigue existiendo por el contrato FFI
+     * -- confirmado en la auditoría 2026-09-24 (NR-07/NS-25) que el único
+     * camino que fijaba contraseña con sólo la cédula era
+     * `AppCore::fijar_password_inicial`, ya eliminada por no tener
+     * llamadores reales; el alta de contraseña de un usuario global pasa
+     * siempre por `autenticar_supabase` (Supabase Auth), así que esta
+     * variante no debería escapar sin interceptar desde acá.
      */
         class SinPasswordLocal(message: String) : NucleoException(message)
         
