@@ -673,6 +673,8 @@ internal object IntegrityCheckingUniffiLib {
         uniffiCheckContractApiVersion(this)
         uniffiCheckApiChecksums(this)
     }
+    external fun uniffi_control_acceso_mobile_checksum_func_leer_mrz(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto(
@@ -923,6 +925,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_leer_mrz(`lineas`: RustBuffer.ByValue,`anioActual`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1042,6 +1046,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 35831) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() and 0xFFFF) != 25039) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1373,6 +1380,33 @@ private class JavaLangRefCleanable(
 /**
  * @suppress
  */
+public object FfiConverterUByte: FfiConverter<UByte, Byte> {
+    override fun lift(value: Byte): UByte {
+        return value.toUByte()
+    }
+
+    fun lift(value: Int): UByte {
+        return value.toUByte()
+    }
+
+    override fun read(buf: ByteBuffer): UByte {
+        return lift(buf.get())
+    }
+
+    override fun lower(value: UByte): Byte {
+        return value.toByte()
+    }
+
+    override fun allocationSize(value: UByte) = 1UL
+
+    override fun write(value: UByte, buf: ByteBuffer) {
+        buf.put(value.toByte())
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterUInt: FfiConverter<UInt, Int> {
     override fun lift(value: Int): UInt {
         return value.toUInt()
@@ -1390,6 +1424,29 @@ public object FfiConverterUInt: FfiConverter<UInt, Int> {
 
     override fun write(value: UInt, buf: ByteBuffer) {
         buf.putInt(value.toInt())
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterInt: FfiConverter<Int, Int> {
+    override fun lift(value: Int): Int {
+        return value
+    }
+
+    override fun read(buf: ByteBuffer): Int {
+        return buf.getInt()
+    }
+
+    override fun lower(value: Int): Int {
+        return value
+    }
+
+    override fun allocationSize(value: Int) = 4UL
+
+    override fun write(value: Int, buf: ByteBuffer) {
+        buf.putInt(value)
     }
 }
 
@@ -3684,6 +3741,64 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
 
 
 /**
+ * Una sustitución de carácter aplicada para que un campo pasara su
+ * checksum -- pensado para loguearse a Sentry del lado Kotlin (que ya
+ * tiene el SDK inicializado; este crate no agrega una dependencia nueva
+ * de Sentry para Rust) y así poder afinar el set de confusables con casos
+ * reales.
+ */
+data class CorreccionAplicada (
+    var `campo`: CampoMrz
+    , 
+    /**
+     * Posición del carácter dentro del campo (0-based), no de la línea.
+     */
+    var `posicion`: kotlin.UByte
+    , 
+    var `caracterLeido`: kotlin.String
+    , 
+    var `caracterCorregido`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCorreccionAplicada: FfiConverterRustBuffer<CorreccionAplicada> {
+    override fun read(buf: ByteBuffer): CorreccionAplicada {
+        return CorreccionAplicada(
+            FfiConverterTypeCampoMrz.read(buf),
+            FfiConverterUByte.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: CorreccionAplicada) = (
+            FfiConverterTypeCampoMrz.allocationSize(value.`campo`) +
+            FfiConverterUByte.allocationSize(value.`posicion`) +
+            FfiConverterString.allocationSize(value.`caracterLeido`) +
+            FfiConverterString.allocationSize(value.`caracterCorregido`)
+    )
+
+    override fun write(value: CorreccionAplicada, buf: ByteBuffer) {
+            FfiConverterTypeCampoMrz.write(value.`campo`, buf)
+            FfiConverterUByte.write(value.`posicion`, buf)
+            FfiConverterString.write(value.`caracterLeido`, buf)
+            FfiConverterString.write(value.`caracterCorregido`, buf)
+    }
+}
+
+
+
+/**
  * Espejo de `DatosContratista` — sólo alta, no edición (ver
  * docs/plan-app-movil.md). `fecha_vencimiento_praind` viaja como texto
  * ISO (`AAAA-MM-DD`); si no parsea se rechaza como `DatosInvalidos` antes
@@ -3944,6 +4059,49 @@ public object FfiConverterTypeEncargadoRuta: FfiConverterRustBuffer<EncargadoRut
             FfiConverterString.write(value.`codigoEmpleado`, buf)
             FfiConverterString.write(value.`nombre`, buf)
             FfiConverterBoolean.write(value.`activo`, buf)
+    }
+}
+
+
+
+data class FechaMrz (
+    var `dia`: kotlin.UByte
+    , 
+    var `mes`: kotlin.UByte
+    , 
+    var `anio`: kotlin.Int
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFechaMrz: FfiConverterRustBuffer<FechaMrz> {
+    override fun read(buf: ByteBuffer): FechaMrz {
+        return FechaMrz(
+            FfiConverterUByte.read(buf),
+            FfiConverterUByte.read(buf),
+            FfiConverterInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FechaMrz) = (
+            FfiConverterUByte.allocationSize(value.`dia`) +
+            FfiConverterUByte.allocationSize(value.`mes`) +
+            FfiConverterInt.allocationSize(value.`anio`)
+    )
+
+    override fun write(value: FechaMrz, buf: ByteBuffer) {
+            FfiConverterUByte.write(value.`dia`, buf)
+            FfiConverterUByte.write(value.`mes`, buf)
+            FfiConverterInt.write(value.`anio`, buf)
     }
 }
 
@@ -4479,6 +4637,121 @@ public object FfiConverterTypeRegistroIngresoProveedorActivoResumen: FfiConverte
             FfiConverterLong.write(value.`gafeteNumero`, buf)
             FfiConverterString.write(value.`fechaHoraIngreso`, buf)
             FfiConverterString.write(value.`usuarioIngresoNombre`, buf)
+    }
+}
+
+
+
+data class RegistroMrz (
+    /**
+     * `false` cuando las líneas no calzan ni TD1 ni TD3 -- el resto de
+     * los campos quedan vacíos/`false` en ese caso, nunca se inventan.
+     */
+    var `formatoReconocido`: kotlin.Boolean
+    , 
+    var `formato`: FormatoMrz?
+    , 
+    var `codigoDocumento`: kotlin.String
+    , 
+    var `paisEmisor`: kotlin.String
+    , 
+    var `numeroDocumento`: kotlin.String
+    , 
+    var `apellidos`: kotlin.String
+    , 
+    var `nombres`: kotlin.String
+    , 
+    var `nacionalidad`: kotlin.String
+    , 
+    var `fechaNacimiento`: FechaMrz?
+    , 
+    /**
+     * `"M"`, `"F"` o vacío ("<", sin especificar) -- `String` de un
+     * carácter en vez de `char` nativo de Rust para no depender de que
+     * `char` esté entre los tipos escalares que expone esta versión de
+     * `UniFFI` hacia Kotlin (no había precedente de `char` en este crate).
+     */
+    var `sexo`: kotlin.String
+    , 
+    var `fechaVencimiento`: FechaMrz?
+    , 
+    var `checksumsValidos`: kotlin.Boolean
+    , 
+    /**
+     * Mismo significado que en el `MrzParser.kt` original: posición 15
+     * con un dígito (no relleno) y más dígitos en el campo opcional, pero
+     * sin calzar ni el mecanismo estándar de ICAO ni la convención de
+     * Costa Rica verificada -- `numero_documento` sólo trae los primeros
+     * 9 caracteres y no debe usarse como número completo.
+     */
+    var `numeroDocumentoExtendidoSinSoporte`: kotlin.Boolean
+    , 
+    var `correcciones`: List<CorreccionAplicada>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRegistroMrz: FfiConverterRustBuffer<RegistroMrz> {
+    override fun read(buf: ByteBuffer): RegistroMrz {
+        return RegistroMrz(
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalTypeFormatoMrz.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalTypeFechaMrz.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalTypeFechaMrz.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterSequenceTypeCorreccionAplicada.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: RegistroMrz) = (
+            FfiConverterBoolean.allocationSize(value.`formatoReconocido`) +
+            FfiConverterOptionalTypeFormatoMrz.allocationSize(value.`formato`) +
+            FfiConverterString.allocationSize(value.`codigoDocumento`) +
+            FfiConverterString.allocationSize(value.`paisEmisor`) +
+            FfiConverterString.allocationSize(value.`numeroDocumento`) +
+            FfiConverterString.allocationSize(value.`apellidos`) +
+            FfiConverterString.allocationSize(value.`nombres`) +
+            FfiConverterString.allocationSize(value.`nacionalidad`) +
+            FfiConverterOptionalTypeFechaMrz.allocationSize(value.`fechaNacimiento`) +
+            FfiConverterString.allocationSize(value.`sexo`) +
+            FfiConverterOptionalTypeFechaMrz.allocationSize(value.`fechaVencimiento`) +
+            FfiConverterBoolean.allocationSize(value.`checksumsValidos`) +
+            FfiConverterBoolean.allocationSize(value.`numeroDocumentoExtendidoSinSoporte`) +
+            FfiConverterSequenceTypeCorreccionAplicada.allocationSize(value.`correcciones`)
+    )
+
+    override fun write(value: RegistroMrz, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`formatoReconocido`, buf)
+            FfiConverterOptionalTypeFormatoMrz.write(value.`formato`, buf)
+            FfiConverterString.write(value.`codigoDocumento`, buf)
+            FfiConverterString.write(value.`paisEmisor`, buf)
+            FfiConverterString.write(value.`numeroDocumento`, buf)
+            FfiConverterString.write(value.`apellidos`, buf)
+            FfiConverterString.write(value.`nombres`, buf)
+            FfiConverterString.write(value.`nacionalidad`, buf)
+            FfiConverterOptionalTypeFechaMrz.write(value.`fechaNacimiento`, buf)
+            FfiConverterString.write(value.`sexo`, buf)
+            FfiConverterOptionalTypeFechaMrz.write(value.`fechaVencimiento`, buf)
+            FfiConverterBoolean.write(value.`checksumsValidos`, buf)
+            FfiConverterBoolean.write(value.`numeroDocumentoExtendidoSinSoporte`, buf)
+            FfiConverterSequenceTypeCorreccionAplicada.write(value.`correcciones`, buf)
     }
 }
 
@@ -5201,6 +5474,83 @@ public object FfiConverterTypeVehiculoRuta: FfiConverterRustBuffer<VehiculoRuta>
 
 
 
+/**
+ * Campo de un MRZ sobre el que se puede intentar una corrección acotada de
+ * caracteres ambiguos -- sólo los campos con su propio dígito verificador
+ * simple (no el checksum compuesto, que cubre todo el resto de la línea y
+ * no es en sí mismo un campo "tipeado" propenso a confundirse letra/dígito
+ * carácter por carácter).
+ */
+
+enum class CampoMrz {
+    
+    NUMERO_DOCUMENTO,
+    FECHA_NACIMIENTO,
+    FECHA_VENCIMIENTO,
+    DATOS_PERSONALES;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCampoMrz: FfiConverterRustBuffer<CampoMrz> {
+    override fun read(buf: ByteBuffer) = try {
+        CampoMrz.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: CampoMrz) = 4UL
+
+    override fun write(value: CampoMrz, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+enum class FormatoMrz {
+    
+    TD1,
+    TD3;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFormatoMrz: FfiConverterRustBuffer<FormatoMrz> {
+    override fun read(buf: ByteBuffer) = try {
+        FormatoMrz.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FormatoMrz) = 4UL
+
+    override fun write(value: FormatoMrz, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
 
 enum class MedioIngreso {
     
@@ -5822,6 +6172,70 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeFechaMrz: FfiConverterRustBuffer<FechaMrz?> {
+    override fun read(buf: ByteBuffer): FechaMrz? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeFechaMrz.read(buf)
+    }
+
+    override fun allocationSize(value: FechaMrz?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeFechaMrz.allocationSize(value)
+        }
+    }
+
+    override fun write(value: FechaMrz?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeFechaMrz.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeFormatoMrz: FfiConverterRustBuffer<FormatoMrz?> {
+    override fun read(buf: ByteBuffer): FormatoMrz? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeFormatoMrz.read(buf)
+    }
+
+    override fun allocationSize(value: FormatoMrz?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeFormatoMrz.allocationSize(value)
+        }
+    }
+
+    override fun write(value: FormatoMrz?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeFormatoMrz.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceLong: FfiConverterRustBuffer<List<kotlin.Long>> {
     override fun read(buf: ByteBuffer): List<kotlin.Long> {
         val len = buf.getInt()
@@ -5840,6 +6254,34 @@ public object FfiConverterSequenceLong: FfiConverterRustBuffer<List<kotlin.Long>
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterLong.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.String>> {
+    override fun read(buf: ByteBuffer): List<kotlin.String> {
+        val len = buf.getInt()
+        return List<kotlin.String>(len) {
+            FfiConverterString.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.String>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterString.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<kotlin.String>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterString.write(it, buf)
         }
     }
 }
@@ -5952,6 +6394,34 @@ public object FfiConverterSequenceTypeContratistaResumen: FfiConverterRustBuffer
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeContratistaResumen.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeCorreccionAplicada: FfiConverterRustBuffer<List<CorreccionAplicada>> {
+    override fun read(buf: ByteBuffer): List<CorreccionAplicada> {
+        val len = buf.getInt()
+        return List<CorreccionAplicada>(len) {
+            FfiConverterTypeCorreccionAplicada.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<CorreccionAplicada>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeCorreccionAplicada.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<CorreccionAplicada>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeCorreccionAplicada.write(it, buf)
         }
     }
 }
@@ -6319,4 +6789,33 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
         }
     }
 }
+        /**
+         * Punto de entrada FFI: recibe las 2-3 líneas de MRZ que Kotlin ya aisló
+         * con `buscarLineasMrz` (extracción mecánica, se queda en Kotlin) y
+         * devuelve el resultado resuelto -- válido/inválido y, si corrigió algo,
+         * qué corrigió.
+         *
+         * `lineas.len()` decide el formato (3 → TD1, 2 → TD3) -- Kotlin ya filtró
+         * por longitud de línea (30 para TD1, 44 para TD3) y alfabeto antes de
+         * aislarlas, pero se revalida acá también (nunca confiar ciegamente en la
+         * frontera FFI): cualquier otra cosa, o líneas que no respeten el alfabeto
+         * MRZ estricto (A-Z, 0-9, '<'), devuelve `formato_reconocido = false` en
+         * vez de entrar en pánico o adivinar.
+         *
+         * `anio_actual` en vez de una fecha completa: es lo único que el
+         * desambiguado de siglo de nacimiento necesita (ver `anio_completo`) --
+         * Kotlin lo saca de `java.time.LocalDate.now()` al llamar.
+         */ fun `leerMrz`(`lineas`: List<kotlin.String>, `anioActual`: kotlin.Int): RegistroMrz {
+            return FfiConverterTypeRegistroMrz.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_leer_mrz(
+    
+        
+        FfiConverterSequenceString.lower(`lineas`),
+        FfiConverterInt.lower(`anioActual`),_status)
+}
+    )
+    }
+    
+
 
