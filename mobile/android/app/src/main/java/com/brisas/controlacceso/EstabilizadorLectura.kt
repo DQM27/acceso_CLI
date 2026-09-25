@@ -94,6 +94,7 @@ class EstabilizadorLectura(
                 mrz.numeroDocumentoExtendidoSinSoporte ->
                     ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
                 mrz.checksumsValidos -> {
+                    if (mrz.correcciones.isNotEmpty()) registrarCorreccionesMrzEnSentry(mrz.correcciones)
                     val documento = mrz.aDocumentoDetectado().reclasificarPorEdad(hoy)
                     if (!documento.tipo.esValidoParaModo(modo)) {
                         ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no soportado")

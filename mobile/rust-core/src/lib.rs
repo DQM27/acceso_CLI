@@ -68,6 +68,9 @@ use control_acceso::services::ruta_service::{
 use control_acceso::services::usuario_service::CrearUsuarioInput as CrearUsuarioInputNucleo;
 use control_acceso::tiempo::RelojCorregido;
 
+mod mrz;
+pub use mrz::{CampoMrz, CorreccionAplicada, FechaMrz, FormatoMrz, RegistroMrz, leer_mrz};
+
 uniffi::setup_scaffolding!();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]

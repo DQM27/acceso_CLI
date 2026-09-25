@@ -1,12 +1,16 @@
 package com.brisas.controlacceso
 
+import uniffi.control_acceso_mobile.FechaMrz
+import uniffi.control_acceso_mobile.FormatoMrz
+import uniffi.control_acceso_mobile.RegistroMrz
+
 /// Tipos de documento que el lector sabe clasificar. `DESCONOCIDO` es el
 /// resultado cuando el texto no calza ninguna señal conocida -- la pantalla
 /// de escaneo debe seguir buscando, no tratarlo como error terminal.
 enum class TipoDocumento {
     CEDULA_NACIONAL,
     // TIM: Tarjeta de Identidad de Menores -- mismo código de documento MRZ
-    // que la cédula nacional (`IDCRI`, ver ResultadoMrz.aDocumentoDetectado),
+    // que la cédula nacional (`IDCRI`, ver RegistroMrz.aDocumentoDetectado),
     // se distingue por edad calculada desde `fechaNacimiento`, no por el
     // código -- ver `reclasificarPorEdad`.
     TARJETA_IDENTIDAD_MENOR,
@@ -69,32 +73,38 @@ fun TipoDocumento.nombreLegible(): String = when (this) {
     TipoDocumento.DESCONOCIDO -> "Documento"
 }
 
-/// Traduce un MRZ ya parseado al modelo normalizado. La distinción entre
-/// cédula nacional y DIMEX (ambas TD1) es una regla de Costa Rica, no algo
-/// que ICAO estandarice -- por eso vive acá, no en `MrzParser.kt`: el
-/// código de documento (ICAO 9303 permite A/C/I como primer carácter, el
-/// segundo a discreción del emisor) usado por Costa Rica es `ID` para la
-/// cédula nacional (Decreto TSE n.° 22-2025, vigente desde oct-2025) y `C<`
-/// para el DIMEX/residencia de DGME (confirmado contra un documento real).
-/// Sin especificación pública oficial que lo documente con este nivel de
-/// detalle -- basado en las imágenes de las circulares/decreto del TSE.
-/// Un TD1 de otro país (o de Costa Rica con un código distinto de estos
-/// dos) queda como `DESCONOCIDO`: no hay regla verificada para él todavía,
-/// mejor eso que asumir uno de los dos casos costarricenses sin fundamento.
-fun ResultadoMrz.aDocumentoDetectado(): DocumentoDetectado = DocumentoDetectado(
+/// `FechaMrz` (generada por UniFFI desde `mobile/rust-core/src/mrz.rs`) al
+/// `FechaDocumento` que ya usa el resto de la app (lectores no-MRZ
+/// incluidos) -- conversión mecánica, `dia`/`mes` llegan como `UByte`.
+private fun FechaMrz.aFechaDocumento(): FechaDocumento = FechaDocumento(dia.toInt(), mes.toInt(), anio)
+
+/// Traduce un MRZ ya parseado (por Rust, ver `leerMrz` en `MrzParser.kt`) al
+/// modelo normalizado. La distinción entre cédula nacional y DIMEX (ambas
+/// TD1) es una regla de Costa Rica, no algo que ICAO estandarice -- por eso
+/// vive acá, no en el parser de Rust: el código de documento (ICAO 9303
+/// permite A/C/I como primer carácter, el segundo a discreción del emisor)
+/// usado por Costa Rica es `ID` para la cédula nacional (Decreto TSE
+/// n.° 22-2025, vigente desde oct-2025) y `C<` para el DIMEX/residencia de
+/// DGME (confirmado contra un documento real). Sin especificación pública
+/// oficial que lo documente con este nivel de detalle -- basado en las
+/// imágenes de las circulares/decreto del TSE. Un TD1 de otro país (o de
+/// Costa Rica con un código distinto de estos dos) queda como
+/// `DESCONOCIDO`: no hay regla verificada para él todavía, mejor eso que
+/// asumir uno de los dos casos costarricenses sin fundamento.
+fun RegistroMrz.aDocumentoDetectado(): DocumentoDetectado = DocumentoDetectado(
     tipo = when {
-        formato == "TD3" -> TipoDocumento.PASAPORTE
-        formato == "TD1" && paisEmisor == "CRI" && codigoDocumento == "ID" -> TipoDocumento.CEDULA_NACIONAL
-        formato == "TD1" && paisEmisor == "CRI" && codigoDocumento == "C<" -> TipoDocumento.CEDULA_RESIDENCIA
+        formato == FormatoMrz.TD3 -> TipoDocumento.PASAPORTE
+        formato == FormatoMrz.TD1 && paisEmisor == "CRI" && codigoDocumento == "ID" -> TipoDocumento.CEDULA_NACIONAL
+        formato == FormatoMrz.TD1 && paisEmisor == "CRI" && codigoDocumento == "C<" -> TipoDocumento.CEDULA_RESIDENCIA
         else -> TipoDocumento.DESCONOCIDO
     },
     numeroDocumento = numeroDocumento,
     nombre = nombres.ifBlank { null },
     apellidos = apellidos.ifBlank { null },
     nacionalidad = nacionalidad.ifBlank { null },
-    vencimiento = fechaVencimiento,
-    fechaNacimiento = fechaNacimiento,
-    sexo = sexo,
+    vencimiento = fechaVencimiento?.aFechaDocumento(),
+    fechaNacimiento = fechaNacimiento?.aFechaDocumento(),
+    sexo = sexo.firstOrNull(),
     fuenteDatos = FuenteDatos.MRZ,
     checksumValido = checksumsValidos,
 )
@@ -248,7 +258,7 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
         TipoDocumento.CARNET_BAC -> extraerBac(texto)
         TipoDocumento.GAFETE_CONTRATISTA -> extraerGafeteContratista(texto)
         // El clasificador por palabras clave del frente no distingue
-        // pasaporte todavía -- llega sólo vía MRZ (ver ResultadoMrz.aDocumentoDetectado).
+        // pasaporte todavía -- llega sólo vía MRZ (ver RegistroMrz.aDocumentoDetectado).
         TipoDocumento.PASAPORTE -> null
         // Nunca lo produce el clasificador del frente -- sólo aparece vía
         // reclasificación por edad después de leer el MRZ (reclasificarPorEdad).
