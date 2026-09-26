@@ -76,3 +76,89 @@ pub fn iniciar_shadow_run_lattis_experimental(
         });
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+
+    use super::{ObservadorLattisExperimental, iniciar_shadow_run_lattis_experimental};
+
+    struct ObservadorDePrueba {
+        recibidos: Arc<Mutex<Vec<(String, String)>>>,
+    }
+
+    impl ObservadorLattisExperimental for ObservadorDePrueba {
+        fn en_evento(&self, tipo: String, detalle: String) {
+            self.recibidos
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push((tipo, detalle));
+        }
+    }
+
+    /// Prueba manual real contra `control-acceso-staging` -- NUNCA
+    /// producción (ver el doc-comment del módulo). No corre en un `cargo
+    /// test` normal sin las variables de entorno de abajo puestas a mano
+    /// (`REALTIME_WS_URL`/`REALTIME_APIKEY` de `control-acceso-staging`,
+    /// mismo par que usan los `smoke_*` del laboratorio): sin ellas se
+    /// salta sola, sin fallar. Con ellas puestas, prueba el puente
+    /// COMPLETO de punta a punta: conecta de verdad al WebSocket real y
+    /// confirma que `iniciar_shadow_run_lattis_experimental` (la función
+    /// expuesta por `UniFFI`) efectivamente llama al `callback_interface`
+    /// que implementaría Kotlin/Swift -- la prueba de la "Etapa 4 --
+    /// shadow-run" que quedaba pendiente, sin tocar producción.
+    #[test]
+    fn el_shadow_run_conecta_a_staging_y_llama_al_observador_real() {
+        let Ok(url_base) = std::env::var("REALTIME_WS_URL") else {
+            eprintln!(
+                "saltando el_shadow_run_conecta_a_staging_y_llama_al_observador_real: \
+                 falta REALTIME_WS_URL (prueba manual, ver doc-comment)"
+            );
+            return;
+        };
+        let Ok(apikey) = std::env::var("REALTIME_APIKEY") else {
+            eprintln!(
+                "saltando el_shadow_run_conecta_a_staging_y_llama_al_observador_real: \
+                 falta REALTIME_APIKEY (prueba manual, ver doc-comment)"
+            );
+            return;
+        };
+        let url = format!("{url_base}?apikey={apikey}&vsn=1.0.0");
+
+        let recibidos = Arc::new(Mutex::new(Vec::new()));
+        let observador = Box::new(ObservadorDePrueba {
+            recibidos: Arc::clone(&recibidos),
+        });
+
+        iniciar_shadow_run_lattis_experimental(url, observador);
+
+        let limite = Instant::now() + Duration::from_secs(15);
+        while Instant::now() < limite {
+            if !recibidos
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+
+        let eventos = recibidos
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        assert!(
+            !eventos.is_empty(),
+            "no llegó ningún evento desde control-acceso-staging en 15s -- \
+             ¿la URL/apikey siguen siendo válidas?"
+        );
+        assert!(
+            eventos
+                .iter()
+                .any(|(tipo, _)| tipo == "conectado" || tipo == "latido_ok"),
+            "llegaron eventos pero ninguno fue \"conectado\"/\"latido_ok\": {eventos:?}"
+        );
+    }
+}

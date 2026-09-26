@@ -345,10 +345,12 @@ Con esto resuelto, lo que queda antes de plantear un reemplazo real de
   ambos casos). Falta sólo agregar el `listen(...)` del lado `App.tsx` y
   la implementación Kotlin/Swift del observador, documentados pero no
   aplicado a propósito.
-- **Shadow-run en producción real** -- correrlo en paralelo, sólo
-  comparando/logueando (sin tocar el sync real), antes de considerar
-  siquiera un corte real. Esta decisión NO está tomada -- este directorio
-  es el experimento que la informa, no el resultado.
+- ~~**Shadow-run en producción real**~~ -- la decisión de correrlo contra
+  `control-acceso-nube` (producción) real sigue sin tomarse a propósito
+  (ver más abajo), pero el mecanismo en sí ya se probó de punta a punta
+  contra `control-acceso-staging`, con red real, ambos lados (desktop
+  compilado, mobile compilado Y ejecutado) -- éste es el resultado de ese
+  experimento, no la decisión de producción, que sigue siendo tuya.
 
 ### Etapa 4 (parcial) -- integración real contra `desktop/src-tauri` ✅ implementado
 
@@ -477,11 +479,10 @@ nunca estuvo pensado para compilar en Linux, sólo para cross-compilar a
 Windows -- de ahí que el chequeo real tenga que ser siempre con
 `--target x86_64-pc-windows-gnu`.
 
-Con esto, de los tres pendientes que quedaban, sólo falta uno real:
-**shadow-run en producción real** (decisión no tomada -- el mecanismo de
-arriba ya sirve para eso, apuntándolo a la URL que sea vía variable de
-entorno, pero nunca se apuntó a `control-acceso-nube`, sólo se probó el
-compile).
+De los tres pendientes que quedaban, este primer paso (integración +
+puente) queda resuelto en desktop -- ver más abajo, "Etapa 4 -- el
+shadow-run probado contra `control-acceso-staging`", donde se prueba el
+mecanismo completo con red real (no sólo compile).
 
 ### Etapa 4 (parcial) -- lo mismo, espejo en `mobile/rust-core` ✅ implementado
 
@@ -562,6 +563,63 @@ disponible sin eso (compila y pasa lints/tests en el host, con el mismo
 misma versión que ya usa `desktop/src-tauri`). iOS queda en la misma
 situación -- ni siquiera hay hoy un archivo `NubeRealtime`/`Realtime` del
 lado iOS con el que comparar.
+
+### Etapa 4 -- el shadow-run probado contra `control-acceso-staging` ✅ implementado
+
+El pendiente que quedaba: nadie había probado los dos puentes de arriba
+conectados de verdad a un proyecto Realtime, sólo la maquinaria de más
+abajo (`supervisar_heartbeat`, ya cubierta por los `smoke_*`/tests del
+laboratorio). Se agregó, detrás de la misma feature en cada crate, un
+test manual real -- se salta solo sin las variables de entorno puestas
+(mismo criterio que los `smoke_*`: nunca corre en un `cargo test` normal
+por accidente), pero con `REALTIME_WS_URL`/`REALTIME_APIKEY` de
+`control-acceso-staging` puestas a mano, conecta de verdad:
+
+- **`desktop/src-tauri/src/lattis_experimental.rs`**: usa
+  `tauri::test::mock_app()` (requiere agregar `tauri` con la feature
+  `test` a `[dev-dependencies]` -- Cargo unifica las features de ambas
+  tablas, no duplica la dependencia) y un `app.listen(...)` real que
+  confirma que `iniciar_shadow_run_experimental` emite el evento `Tauri`
+  de verdad. De paso se generalizó su firma a
+  `iniciar_shadow_run_experimental<R: tauri::Runtime>(app: tauri::AppHandle<R>)`
+  (antes tomaba el `AppHandle` concreto de producción, que no acepta el
+  `MockRuntime` de los tests) -- cambio de tipo, cero cambio de
+  comportamiento para el llamador real en `configurar_arranque`.
+  Verificado con `cargo check`/`cargo clippy --target
+  x86_64-pc-windows-gnu --tests --features lattis-realtime-experimental
+  -- -D warnings` (limpio) -- **no se pudo EJECUTAR** en esta sandbox (el
+  binario de test compila para Windows y acá no hay Wine ni otro runner
+  para correr un `.exe` cross-compilado), así que este lado queda
+  validado por compilación real, no por una corrida real contra la red.
+- **`mobile/rust-core/src/lattis_experimental.rs`**: mismo test, con un
+  `ObservadorDePrueba` que junta los eventos en un `Vec` -- y como este
+  crate SÍ corre en el host de esta sandbox, se ejecutó de verdad:
+
+  ```
+  REALTIME_WS_URL="wss://pmrytjktlyiuikxuuxpr.supabase.co/realtime/v1/websocket" \
+  REALTIME_APIKEY="<publishable key de control-acceso-staging>" \
+  cargo test --features lattis-realtime-experimental \
+    el_shadow_run_conecta_a_staging_y_llama_al_observador_real -- --nocapture
+
+  test lattis_experimental::tests::el_shadow_run_conecta_a_staging_y_llama_al_observador_real ... ok
+  ```
+
+  Conectó de verdad al WebSocket de `control-acceso-staging`, recibió
+  `EventoSupervisor::Conectado`/`LatidoOk` reales, y el observador (el
+  mismo tipo de objeto que Kotlin/Swift implementaría) los recibió tal
+  cual -- prueba de punta a punta del mecanismo completo, con red real,
+  sin tocar producción. Se corrió también la suite completa con la
+  feature activada (22 tests, todos verdes) para confirmar que nada más
+  se rompió, y sin las variables puestas (para confirmar que se salta
+  sola, sin fallar).
+
+Con esto, el mecanismo de shadow-run queda probado de punta a punta contra
+el sandbox. Lo único que sigue sin resolverse -- a propósito, no por
+límite técnico -- es la decisión de apuntarlo alguna vez a
+`control-acceso-nube` real: eso necesitaría un JWT/secreto de un
+dispositivo de producción real, credenciales sensibles que este
+laboratorio nunca generó ni pidió, y que quedan fuera del alcance de este
+experimento.
 
 ## Cobertura de pruebas
 

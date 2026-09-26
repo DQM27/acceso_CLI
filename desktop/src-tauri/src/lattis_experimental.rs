@@ -61,7 +61,7 @@ impl From<&EventoSupervisor> for EventoExperimental {
 /// hacer nada. Por eso es seguro llamarla siempre desde
 /// `configurar_arranque` detrás de la feature: la puerta real es la
 /// variable de entorno, no la feature de compilación.
-pub fn iniciar_shadow_run_experimental(app: tauri::AppHandle) {
+pub fn iniciar_shadow_run_experimental<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     let Ok(url) = std::env::var(VARIABLE_URL) else {
         return;
     };
@@ -84,4 +84,96 @@ pub fn iniciar_shadow_run_experimental(app: tauri::AppHandle) {
 
         supervisor.abort();
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+
+    use tauri::Listener;
+
+    use super::{EVENTO_TAURI, VARIABLE_URL, iniciar_shadow_run_experimental};
+
+    /// Prueba manual real contra `control-acceso-staging` -- NUNCA
+    /// producción (ver el doc-comment del módulo). No corre en un `cargo
+    /// test` normal sin las variables de entorno de abajo puestas a mano
+    /// (`REALTIME_WS_URL`/`REALTIME_APIKEY` de `control-acceso-staging`,
+    /// mismo par que usan los `smoke_*` del laboratorio): sin ellas se
+    /// salta sola, sin fallar -- mismo criterio que esos binarios. Con
+    /// ellas puestas, prueba el puente COMPLETO de punta a punta: conecta
+    /// de verdad al WebSocket real, y confirma que
+    /// `iniciar_shadow_run_experimental` (la función que
+    /// `configurar_arranque` llamaría en una app real) efectivamente narra
+    /// eso como un evento `Tauri` real que un `listen(...)` del lado
+    /// frontend recibiría -- la prueba de la "Etapa 4 -- shadow-run" que
+    /// quedaba pendiente, sin tocar producción.
+    #[test]
+    fn el_shadow_run_conecta_a_staging_y_emite_el_evento_tauri_real() {
+        let Ok(url_base) = std::env::var("REALTIME_WS_URL") else {
+            eprintln!(
+                "saltando el_shadow_run_conecta_a_staging_y_emite_el_evento_tauri_real: \
+                 falta REALTIME_WS_URL (prueba manual, ver doc-comment)"
+            );
+            return;
+        };
+        let Ok(apikey) = std::env::var("REALTIME_APIKEY") else {
+            eprintln!(
+                "saltando el_shadow_run_conecta_a_staging_y_emite_el_evento_tauri_real: \
+                 falta REALTIME_APIKEY (prueba manual, ver doc-comment)"
+            );
+            return;
+        };
+
+        // SAFETY: es una seguridad de datos, no de memoria -- nada más en
+        // este binario de tests lee/escribe esta variable en paralelo, y
+        // `iniciar_shadow_run_experimental` la lee una sola vez,
+        // sincrónicamente, antes de spawnear nada. `std` pide `unsafe`
+        // acá desde la edición 2024 porque `set_var` ya no es atómico
+        // frente a otros hilos en general, no porque este uso puntual sea
+        // riesgoso.
+        unsafe {
+            std::env::set_var(VARIABLE_URL, format!("{url_base}?apikey={apikey}&vsn=1.0.0"));
+        }
+
+        let app = tauri::test::mock_app();
+        let recibidos: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let recibidos_listener = Arc::clone(&recibidos);
+        app.listen(EVENTO_TAURI, move |evento| {
+            recibidos_listener
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(evento.payload().to_owned());
+        });
+
+        iniciar_shadow_run_experimental(app.handle().clone());
+
+        let limite = Instant::now() + Duration::from_secs(15);
+        while Instant::now() < limite {
+            if !recibidos
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+
+        let eventos = recibidos
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        assert!(
+            !eventos.is_empty(),
+            "no llegó ningún evento {EVENTO_TAURI} desde control-acceso-staging en 15s -- \
+             ¿la URL/apikey siguen siendo válidas?"
+        );
+        assert!(
+            eventos
+                .iter()
+                .any(|carga| carga.contains("conectado") || carga.contains("latido_ok")),
+            "llegaron eventos pero ninguno fue \"conectado\"/\"latido_ok\": {eventos:?}"
+        );
+    }
 }

@@ -100,6 +100,13 @@ lattis_realtime_spike = { path = "../../benchmarks/realtime-rust", optional = tr
 # Sólo para los tests de recuperacion_local.rs -- misma versión que ya fija
 # el crate raíz.
 tempfile = "3"
+# Sólo para el test manual de `lattis_experimental` contra
+# `control-acceso-staging` (feature `lattis-realtime-experimental`) --
+# `tauri::test::mock_app()` necesita la feature `test` del propio `tauri`,
+# que el `[dependencies]` de arriba no pide (no hace falta para la app
+# real). Cargo unifica las features de ambas tablas para el mismo build de
+# tests, así que esto no duplica la dependencia.
+tauri = { version = "2.11.3", features = ["test"] }
 
 # Misma vara que el crate raíz: pedantic/nursery visibles y cada categoría
 # revisada queda bloqueante. Las excepciones corresponden a decisiones de API
