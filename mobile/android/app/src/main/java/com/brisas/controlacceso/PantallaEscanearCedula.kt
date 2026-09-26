@@ -98,6 +98,12 @@ private fun VistaCamaraCedula(
     // patrón para poder distinguir éxito de error.
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
     val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    // Último punto suelto de MV-07 (auditoría de rendimiento 2026-09-25) --
+    // una instancia por apertura de pantalla, igual que `ejecutor`/
+    // `recognizer`, para reusar los buffers de un frame al siguiente en vez
+    // de asignarlos desde cero cada vez. Ver el doc-comment de
+    // `BuffersOcrReutilizables`.
+    val buffersOcr = remember { BuffersOcrReutilizables() }
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
@@ -280,6 +286,7 @@ private fun VistaCamaraCedula(
                         recognizer = recognizer,
                         ejecutorPrincipal = ejecutorPrincipal,
                         sesionActiva = sesionActiva,
+                        buffersOcr = buffersOcr,
                         onTexto = { texto -> onResultado(estabilizador.procesarFrame(texto)) },
                         onFallo = onFallo,
                     )
@@ -559,6 +566,10 @@ fun analizarCedula(
     recognizer: com.google.mlkit.vision.text.TextRecognizer,
     ejecutorPrincipal: java.util.concurrent.Executor,
     sesionActiva: AtomicBoolean,
+    // `null` (default) preserva el comportamiento de siempre -- asignar los
+    // buffers desde cero por frame. Pasarlo es lo que cierra el último
+    // punto suelto de MV-07 (ver `BuffersOcrReutilizables`).
+    buffersOcr: BuffersOcrReutilizables? = null,
     onTexto: (String) -> Unit,
     onFallo: () -> Unit,
     // Angosta (proporción de tarjeta) por defecto. `null` desactiva el
@@ -607,7 +618,7 @@ fun analizarCedula(
     // `recortarParaOcr` devolviendo `null` (formato inesperado, plano
     // corrupto, lo que sea) se cae al frame completo de siempre -- nunca
     // debe romper el escaneo por un recorte que salió mal.
-    val input = region?.let { recortarParaOcr(mediaImage, cropRect, rotacion, it) }
+    val input = region?.let { recortarParaOcr(mediaImage, cropRect, rotacion, it, buffersOcr) }
         ?: InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
         .addOnSuccessListener(ejecutorPrincipal) { resultado ->
@@ -666,6 +677,9 @@ private fun recortarParaOcr(
     cropRect: android.graphics.Rect,
     rotacionGrados: Int,
     region: RegionGuiaOcr,
+    // `null` (default) preserva el comportamiento de siempre. Ver
+    // `BuffersOcrReutilizables` -- último punto suelto de MV-07.
+    buffersOcr: BuffersOcrReutilizables? = null,
 ): InputImage? {
     if (imagen.format != android.graphics.ImageFormat.YUV_420_888) return null
     val planos = imagen.planes
@@ -674,9 +688,12 @@ private fun recortarParaOcr(
         val yPlano = planos[0]
         val uPlano = planos[1]
         val vPlano = planos[2]
-        val yBytes = ByteArray(yPlano.buffer.remaining()).also { yPlano.buffer.get(it) }
-        val uBytes = ByteArray(uPlano.buffer.remaining()).also { uPlano.buffer.get(it) }
-        val vBytes = ByteArray(vPlano.buffer.remaining()).also { vPlano.buffer.get(it) }
+        val tamanoY = yPlano.buffer.remaining()
+        val tamanoU = uPlano.buffer.remaining()
+        val tamanoV = vPlano.buffer.remaining()
+        val yBytes = (buffersOcr?.yBytes(tamanoY) ?: ByteArray(tamanoY)).also { yPlano.buffer.get(it) }
+        val uBytes = (buffersOcr?.uBytes(tamanoU) ?: ByteArray(tamanoU)).also { uPlano.buffer.get(it) }
+        val vBytes = (buffersOcr?.vBytes(tamanoV) ?: ByteArray(tamanoV)).also { vPlano.buffer.get(it) }
         val nv21 = construirNv21(
             ancho = imagen.width,
             alto = imagen.height,
@@ -686,8 +703,12 @@ private fun recortarParaOcr(
             v = vBytes,
             uvRowStride = uPlano.rowStride,
             uvPixelStride = uPlano.pixelStride,
+            destino = buffersOcr?.nv21((imagen.width * imagen.height) + (imagen.width * imagen.height) / 2),
         )
-        val pixeles = convertirNv21AArgb(nv21, imagen.width, imagen.height)
+        val pixeles = convertirNv21AArgb(
+            nv21, imagen.width, imagen.height,
+            destino = buffersOcr?.pixeles(imagen.width * imagen.height),
+        )
         val bitmapCompleto = android.graphics.Bitmap.createBitmap(
             pixeles, imagen.width, imagen.height, android.graphics.Bitmap.Config.ARGB_8888,
         )

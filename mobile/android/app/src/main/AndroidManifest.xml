@@ -16,10 +16,17 @@
          una app atada a un dispositivo específico eso es una fuga de PII
          real, no un beneficio. Si algún día hace falta backup parcial
          (ej. preferencias, no la base), usar dataExtractionRules en vez
-         de reactivar esto entero. -->
+         de reactivar esto entero.
+
+         MV-03 (auditoría 2026-09-24): `allowBackup="false"` por sí solo NO
+         alcanza contra la transferencia D2D (Smart Switch y similares) en
+         Android 12+, ver `res/xml/reglas_extraccion.xml` para el detalle
+         y la referencia oficial. `dataExtractionRules` es el control que
+         sí aplica ahí, y va aparte de `allowBackup`, no en reemplazo. -->
     <application
         android:name=".AplicacionControlAcceso"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/reglas_extraccion"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="Lattis"
