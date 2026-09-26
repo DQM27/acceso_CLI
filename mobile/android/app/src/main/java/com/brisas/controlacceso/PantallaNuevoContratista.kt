@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -157,7 +158,14 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
 
     LaunchedEffect(Unit) {
         try {
-            empresas = withContext(Dispatchers.Default) { nucleo.listarEmpresas() }
+            // MV-09 (auditoría 2026-09-24): `Dispatchers.Default` es el
+            // pool de CPU (tamaño = núcleos del dispositivo) -- una llamada
+            // FFI bloqueante a SQLite no es trabajo de CPU, es E/S, y
+            // corriendo ahí le quita hilos al OCR y al resto de tareas de
+            // CPU reales mientras esta consulta hace su round-trip. `IO`
+            // es el pool pensado para esto (mismo criterio que ya usa
+            // `PantallaConfirmarIngreso.registrarIngreso`).
+            empresas = withContext(Dispatchers.IO) { nucleo.listarEmpresas() }
         } catch (excepcion: NucleoException) {
             error = excepcion.message
         }
@@ -457,7 +465,10 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                 enviando = true
                 alcance.launch {
                     try {
-                        withContext(Dispatchers.Default) {
+                        // MV-09: mismo motivo que en `listarEmpresas` --
+                        // `crearContratista` hace SQLite + FFI bloqueantes,
+                        // no cómputo de CPU.
+                        withContext(Dispatchers.IO) {
                             nucleo.crearContratista(
                                 DatosContratista(
                                     cedula = cedula,
@@ -472,7 +483,16 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                                 ),
                             )
                         }
-                        CambiosNube.solicitar()
+                        // MV-09: si `alcance` (atado a esta composición) se
+                        // cancela justo al volver del `withContext` de
+                        // arriba -- la escritura en Rust ya terminó, no es
+                        // cancelable a mitad de camino -- `CambiosNube.
+                        // solicitar()` se saltaría igual, dejando la
+                        // sincronización esperando el próximo pulso
+                        // automático en vez de dispararse al toque.
+                        // `NonCancellable` fuerza que este aviso puntual
+                        // corra siempre.
+                        withContext(NonCancellable) { CambiosNube.solicitar() }
                         cedula = ""
                         nombre = ""
                         empresaSeleccionada = null
