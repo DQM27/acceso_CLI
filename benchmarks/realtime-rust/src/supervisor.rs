@@ -15,7 +15,7 @@ use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::backoff::proxima_espera_con_jitter;
-use crate::cliente::ClienteRealtime;
+use crate::cliente::{ClienteRealtime, ErrorCliente};
 
 /// Semilla para el jitter del backoff (ver `backoff::proxima_espera_con_jitter`)
 /// -- deliberadamente NO determinista (usa el reloj real), porque acá el
@@ -116,20 +116,35 @@ pub async fn supervisar_heartbeat(
 pub enum EventoSupervisorPrivado {
     UnidoAlCanal,
     EventoRecibido(Value),
+    /// Se empujó un JWT nuevo al canal SIN reconectar (ver
+    /// `ClienteRealtime::renovar_token`).
+    TokenRenovado,
     Desconectado { motivo: String },
     Reintentando { intento: u32, espera: Duration },
 }
 
 /// Agrupa lo que es dato de configuración fijo (a diferencia de
 /// `obtener_token_fresco`/`eventos`/`detener`, que son comportamiento) --
-/// sólo para no pasar 8 parámetros sueltos a `supervisar_canal_privado`
-/// (`clippy::too_many_arguments`).
+/// sólo para no pasar demasiados parámetros sueltos a
+/// `supervisar_canal_privado` (`clippy::too_many_arguments`).
 pub struct ConfigCanalPrivado {
     pub url: String,
     pub topic: String,
     pub evento_esperado: String,
     pub backoff_base: Duration,
     pub backoff_tope: Duration,
+    /// Cada cuánto mandar un heartbeat mientras no llegue ningún broadcast
+    /// -- investigado: Phoenix cierra por defecto un socket que no manda
+    /// NADA en ~60s (ver README.md, fuentes). Antes de esta función, este
+    /// supervisor sólo escuchaba pasivo y nunca mandaba nada propio -- en
+    /// un sitio silencioso (nada cambia por un rato largo) el servidor lo
+    /// habría desconectado igual, sin que fuera un problema de red real.
+    pub intervalo_heartbeat: Duration,
+    /// `None` = nunca renovar el JWT proactivamente (sólo se pide uno
+    /// fresco al reconectar, como en la versión anterior). `Some(intervalo)`
+    /// empuja un `access_token` nuevo cada `intervalo` MIENTRAS el canal
+    /// sigue unido, sin reconectar -- ver `ClienteRealtime::renovar_token`.
+    pub renovar_token_cada: Option<Duration>,
 }
 
 /// Igual bucle que `supervisar_heartbeat`, pero uniéndose a un canal
@@ -159,6 +174,8 @@ pub async fn supervisar_canal_privado(
         evento_esperado,
         backoff_base,
         backoff_tope,
+        intervalo_heartbeat,
+        renovar_token_cada,
     } = config;
     let mut intentos_seguidos: u32 = 0;
 
@@ -186,22 +203,66 @@ pub async fn supervisar_canal_privado(
             intentos_seguidos = 0;
             let _ = eventos.send(EventoSupervisorPrivado::UnidoAlCanal);
 
-            loop {
-                match cliente
-                    .esperar_evento(&topic, &evento_esperado, Duration::from_secs(30))
-                    .await
-                {
+            let mut proximo_heartbeat = std::time::Instant::now() + intervalo_heartbeat;
+            let mut proxima_renovacion =
+                renovar_token_cada.map(|intervalo| std::time::Instant::now() + intervalo);
+
+            'canal: loop {
+                let ahora = std::time::Instant::now();
+                let mut espera = proximo_heartbeat.saturating_duration_since(ahora);
+                if let Some(instante) = proxima_renovacion {
+                    espera = espera.min(instante.saturating_duration_since(ahora));
+                }
+                // Nunca 0 -- un timeout de 0 haría que `esperar_evento`
+                // reciba como mucho un frame ya en el buffer antes de
+                // rendirse, en vez de esperar de verdad hasta el próximo
+                // mantenimiento (heartbeat/renovación).
+                let espera = espera.max(Duration::from_millis(1));
+
+                match cliente.esperar_evento(&topic, &evento_esperado, espera).await {
                     Ok(payload) => {
                         let _ = eventos.send(EventoSupervisorPrivado::EventoRecibido(payload));
                         if detener() {
                             return;
                         }
                     }
+                    Err(ErrorCliente::Timeout(_)) => {
+                        // Un timeout ACÁ no es un corte de red -- es
+                        // simplemente que no pasó nada en el sitio durante
+                        // `espera`. Se usa el hueco para el mantenimiento
+                        // que corresponda; si no toca ninguno todavía, es
+                        // un no-op y se vuelve a esperar el resto.
+                        let ahora = std::time::Instant::now();
+                        if ahora >= proximo_heartbeat {
+                            if let Err(error) = cliente.latido().await {
+                                let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
+                                    motivo: error.to_string(),
+                                });
+                                break 'canal;
+                            }
+                            proximo_heartbeat = std::time::Instant::now() + intervalo_heartbeat;
+                        }
+                        if let (Some(instante), Some(intervalo)) =
+                            (proxima_renovacion, renovar_token_cada)
+                            && ahora >= instante {
+                                let token_fresco = obtener_token_fresco();
+                                if let Err(error) =
+                                    cliente.renovar_token(&topic, &token_fresco).await
+                                {
+                                    let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
+                                        motivo: error.to_string(),
+                                    });
+                                    break 'canal;
+                                }
+                                let _ = eventos.send(EventoSupervisorPrivado::TokenRenovado);
+                                proxima_renovacion = Some(std::time::Instant::now() + intervalo);
+                            }
+                    }
                     Err(error) => {
                         let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
                             motivo: error.to_string(),
                         });
-                        break;
+                        break 'canal;
                     }
                 }
             }
@@ -488,6 +549,8 @@ mod tests {
                 evento_esperado: "aviso_lab".to_string(),
                 backoff_base: base,
                 backoff_tope: tope,
+                intervalo_heartbeat: Duration::from_secs(30),
+                renovar_token_cada: None,
             },
             obtener_token_fresco,
             tx,
@@ -522,6 +585,192 @@ mod tests {
                 .iter()
                 .any(|e| matches!(e, EventoSupervisorPrivado::Desconectado { motivo } if motivo.contains("rechazó"))),
             "el servidor rechazó un join -- señal de que se reenvió un token viejo: {eventos:?}"
+        );
+    }
+
+    /// Servidor de UNA sola conexión (si `supervisar_canal_privado`
+    /// renovara reconectando en vez de empujar `access_token` in-band, este
+    /// test se colgaría esperando una segunda conexión que nunca llega --
+    /// `listener.accept()` se llama una única vez, a propósito). Acepta el
+    /// join con `token_inicial_esperado`, después sólo entiende heartbeat
+    /// (para no interferir con el intervalo de mantenimiento) y captura el
+    /// primer `access_token` que llegue.
+    async fn servidor_que_captura_renovacion_sin_reconectar(
+        token_inicial_esperado: &'static str,
+        token_renovado: Arc<tokio::sync::Mutex<Option<String>>>,
+    ) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let direccion = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let (flujo, _remoto) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(flujo).await.unwrap();
+
+            let Some(Ok(Message::Text(texto))) = socket.next().await else {
+                return;
+            };
+            let join: serde_json::Value = serde_json::from_str(&texto).unwrap();
+            assert_eq!(
+                join["payload"]["access_token"].as_str(),
+                Some(token_inicial_esperado),
+                "el join debió usar el token inicial, no uno ya renovado"
+            );
+            let reply = serde_json::json!({
+                "topic": join["topic"], "event": "phx_reply",
+                "payload": { "status": "ok", "response": {} }, "ref": join["ref"],
+            });
+            socket.send(Message::Text(reply.to_string())).await.unwrap();
+
+            while let Some(Ok(Message::Text(texto))) = socket.next().await {
+                let entrante: serde_json::Value = serde_json::from_str(&texto).unwrap();
+                match entrante["event"].as_str() {
+                    Some("access_token") => {
+                        let token = entrante["payload"]["access_token"]
+                            .as_str()
+                            .unwrap()
+                            .to_string();
+                        *token_renovado.lock().await = Some(token);
+                        return;
+                    }
+                    Some("heartbeat") => {
+                        let reply = serde_json::json!({
+                            "topic": "phoenix", "event": "phx_reply",
+                            "payload": { "status": "ok", "response": {} }, "ref": entrante["ref"],
+                        });
+                        socket.send(Message::Text(reply.to_string())).await.unwrap();
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        format!("ws://{direccion}")
+    }
+
+    #[tokio::test]
+    async fn renueva_el_token_sin_reconectar_y_pide_uno_fresco_no_el_del_join() {
+        let token_capturado = Arc::new(tokio::sync::Mutex::new(None));
+        let url =
+            servidor_que_captura_renovacion_sin_reconectar("token-0", Arc::clone(&token_capturado))
+                .await;
+
+        // Un token DISTINTO cada vez que se llama -- "token-0" para el join,
+        // "token-1" para la primera renovación. Si el supervisor renovara
+        // con el mismo token del join (bug), este test lo detectaría
+        // comparando contra "token-1" más abajo.
+        let contador = Arc::new(AtomicUsize::new(0));
+        let contador_closure = Arc::clone(&contador);
+        let obtener_token_fresco = move || {
+            let n = contador_closure.fetch_add(1, Ordering::SeqCst);
+            format!("token-{n}")
+        };
+
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let tarea = tokio::spawn(supervisar_canal_privado(
+            ConfigCanalPrivado {
+                url,
+                topic: "realtime:lab:renovacion".to_string(),
+                evento_esperado: "no_se_usa".to_string(),
+                backoff_base: Duration::from_millis(10),
+                backoff_tope: Duration::from_millis(100),
+                // Bastante más grande que el tiempo total del test -- que
+                // NO se dispare heartbeat es parte de lo que se prueba acá
+                // (esta prueba es de renovación, no de heartbeat).
+                intervalo_heartbeat: Duration::from_secs(10),
+                renovar_token_cada: Some(Duration::from_millis(30)),
+            },
+            obtener_token_fresco,
+            tx,
+            || false,
+        ));
+
+        let resultado = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(token) = token_capturado.lock().await.clone() {
+                    return token;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        tarea.abort();
+
+        let token = resultado.expect("la renovación debió llegar dentro de 2s");
+        assert_eq!(
+            token, "token-1",
+            "debió pedir un token NUEVO para renovar (token-1), no reenviar el del join (token-0)"
+        );
+    }
+
+    /// Servidor que NUNCA manda ningún broadcast -- silencio total salvo lo
+    /// que el propio cliente inicie. Si `supervisar_canal_privado` no
+    /// mandara heartbeat durante ese silencio, un servidor Phoenix real
+    /// cerraría la conexión por inactividad a los ~60s (investigado, ver
+    /// README.md) -- acá se verifica que el cliente manda uno solo, antes
+    /// de que haga falta ninguna desconexión real.
+    async fn servidor_silencioso_que_exige_heartbeat(recibio_heartbeat: Arc<AtomicUsize>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let direccion = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let (flujo, _remoto) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(flujo).await.unwrap();
+
+            let Some(Ok(Message::Text(texto))) = socket.next().await else {
+                return;
+            };
+            let join: serde_json::Value = serde_json::from_str(&texto).unwrap();
+            let reply = serde_json::json!({
+                "topic": join["topic"], "event": "phx_reply",
+                "payload": { "status": "ok", "response": {} }, "ref": join["ref"],
+            });
+            socket.send(Message::Text(reply.to_string())).await.unwrap();
+
+            while let Some(Ok(Message::Text(texto))) = socket.next().await {
+                let entrante: serde_json::Value = serde_json::from_str(&texto).unwrap();
+                if entrante["event"] == "heartbeat" {
+                    recibio_heartbeat.fetch_add(1, Ordering::SeqCst);
+                    let reply = serde_json::json!({
+                        "topic": "phoenix", "event": "phx_reply",
+                        "payload": { "status": "ok", "response": {} }, "ref": entrante["ref"],
+                    });
+                    socket.send(Message::Text(reply.to_string())).await.unwrap();
+                }
+            }
+        });
+
+        format!("ws://{direccion}")
+    }
+
+    #[tokio::test]
+    async fn manda_heartbeat_propio_durante_silencio_para_no_morir_por_inactividad() {
+        let recibio_heartbeat = Arc::new(AtomicUsize::new(0));
+        let url = servidor_silencioso_que_exige_heartbeat(Arc::clone(&recibio_heartbeat)).await;
+
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let tarea = tokio::spawn(supervisar_canal_privado(
+            ConfigCanalPrivado {
+                url,
+                topic: "realtime:lab:silencio".to_string(),
+                evento_esperado: "no_se_usa".to_string(),
+                backoff_base: Duration::from_millis(10),
+                backoff_tope: Duration::from_millis(100),
+                intervalo_heartbeat: Duration::from_millis(30),
+                renovar_token_cada: None,
+            },
+            || "token".to_string(),
+            tx,
+            || false,
+        ));
+
+        // Suficiente para que el intervalo de 30ms dispare varias veces sin
+        // que ningún broadcast/timeout de reconexión de por medio lo tape.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        tarea.abort();
+
+        assert!(
+            recibio_heartbeat.load(Ordering::SeqCst) >= 1,
+            "el cliente debió mandar al menos un heartbeat propio durante el silencio"
         );
     }
 }

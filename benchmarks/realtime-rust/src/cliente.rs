@@ -106,6 +106,27 @@ impl ClienteRealtime {
         Ok(reply.es_reply_ok_de(&referencia))
     }
 
+    /// Renueva el JWT de un canal YA UNIDO, sin reconectar ni rehacer
+    /// `phx_join` -- el mecanismo real de Supabase Realtime para esto es un
+    /// push `access_token` in-band (investigado: `realtime-js` lo manda a
+    /// cada canal unido cuando se llama `setAuth(token)`, en vez de
+    /// desconectar y volver a unirse). Fire-and-forget a propósito: la
+    /// documentación del protocolo dice explícito que no hay reply en el
+    /// caso de éxito -- si el token nuevo fuera inválido, el servidor NO
+    /// contesta con un error acá, cierra el canal (eso lo detecta el
+    /// `esperar_evento` normal del supervisor como una desconexión, no esta
+    /// función).
+    pub async fn renovar_token(&mut self, topic: &str, token: &str) -> Result<(), ErrorCliente> {
+        let referencia = self.siguiente_referencia();
+        self.enviar(&MensajeSaliente::generico(
+            topic.to_string(),
+            "access_token".to_string(),
+            serde_json::json!({ "access_token": token }),
+            referencia,
+        ))
+        .await
+    }
+
     /// Manda un evento genérico dentro de un canal ya unido y espera su
     /// respuesta -- usado en las pruebas de punta a punta para simular el
     /// "resync" (segundo round-trip) del patrón actual de producción, ver
