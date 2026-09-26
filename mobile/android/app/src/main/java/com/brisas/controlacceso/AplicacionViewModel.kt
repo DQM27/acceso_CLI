@@ -47,7 +47,21 @@ class AplicacionViewModel(application: Application) : AndroidViewModel(applicati
             val directorio = context.filesDir.absolutePath
             val identificador =
                 Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
-            val abierto = Nucleo.abrir(File(context.filesDir, "control_acceso.db").absolutePath)
+            // MV-03 (auditoría 2026-09-24): antes `Nucleo.abrir` -- sin
+            // clave, sin importar qué motor SQLite estuviera compilado en
+            // el .so, la base quedaba en texto plano de verdad. La clave
+            // sale del Keystore (ver ClaveBaseDatosStore.kt, mismo esquema
+            // que SecretoDispositivoStore), nunca derivada acá. Si el
+            // archivo existente no es legible con esta clave -- el caso de
+            // todo teléfono con la app instalada antes de este cambio --
+            // Nucleo.abrirCifrado ya lo descarta y reconstruye solo (ver su
+            // doc-comment en mobile/rust-core/src/lib.rs); no hace falta
+            // ningún manejo especial acá.
+            val claveBaseDatos = AndroidKeystoreClaveBaseDatosStore(context).obtenerOCrear()
+            val abierto = Nucleo.abrirCifrado(
+                File(context.filesDir, "control_acceso.db").absolutePath,
+                claveBaseDatos,
+            )
             nucleo = abierto
             val store = AndroidKeystoreSecretoDispositivoStore(context, abierto, directorio, identificador)
             EstadoAplicacion.Lista(

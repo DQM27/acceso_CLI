@@ -1216,30 +1216,48 @@ pub struct Nucleo {
     sesion_supabase: Mutex<Option<SesionSupabaseCacheada>>,
 }
 
+/// Backend real de `log` (ver `interno()` más arriba) -- vuelca a Logcat,
+/// filtrable con `adb logcat -s control_acceso_mobile`. Se llama desde
+/// ambos constructores (`abrir`/`abrir_cifrado`), lo primero que Kotlin
+/// invoca (ver `ARQUITECTURA.md`) -- sin backend, todo `log::` de este
+/// crate era no-op. Mismo criterio de nivel que
+/// `configurar_plugins_condicionales` en escritorio: más ruido en debug,
+/// sólo advertencias/errores reales en release. `init_once` tolera
+/// llamadas repetidas (no rompe si Kotlin llega a instanciar `Nucleo` más
+/// de una vez en el mismo proceso).
+fn iniciar_log_android() {
+    #[cfg(target_os = "android")]
+    android_logger::init_once(
+        android_logger::Config::default()
+            .with_max_level(if cfg!(debug_assertions) {
+                log::LevelFilter::Info
+            } else {
+                log::LevelFilter::Warn
+            })
+            .with_tag("control_acceso_mobile"),
+    );
+}
+
+/// Borra el archivo de base de datos y sus sidecars WAL/journal -- MV-03
+/// (auditoría 2026-09-24), usado por `Nucleo::abrir_cifrado` cuando el
+/// archivo existente no es legible con la clave nueva (ver su
+/// doc-comment). Mejor esfuerzo: un `remove_file` que falla porque el
+/// sidecar no existe no debe abortar nada.
+fn borrar_archivo_y_sidecars(ruta_base_datos: &str) {
+    let base = std::path::Path::new(ruta_base_datos);
+    let _ = std::fs::remove_file(base);
+    for sufijo in ["-wal", "-shm", "-journal"] {
+        let mut ruta_sidecar = base.as_os_str().to_owned();
+        ruta_sidecar.push(sufijo);
+        let _ = std::fs::remove_file(std::path::Path::new(&ruta_sidecar));
+    }
+}
+
 #[uniffi::export]
 impl Nucleo {
     #[uniffi::constructor]
     pub fn abrir(ruta_base_datos: String) -> Result<Self, NucleoError> {
-        // Backend real de `log` (ver `interno()` más arriba) -- vuelca a
-        // Logcat, filtrable con `adb logcat -s control_acceso_mobile`.
-        // `abrir()` es el primer método que llama Kotlin (ver
-        // `ARQUITECTURA.md`), así que es el lugar natural para esto; sin
-        // backend, todo `log::` de este crate era no-op hasta ahora. Mismo
-        // criterio de nivel que `configurar_plugins_condicionales` en
-        // escritorio: más ruido en debug, sólo advertencias/errores reales
-        // en release. `init_once` tolera llamadas repetidas (no rompe si
-        // Kotlin llega a instanciar `Nucleo` más de una vez en el mismo
-        // proceso).
-        #[cfg(target_os = "android")]
-        android_logger::init_once(
-            android_logger::Config::default()
-                .with_max_level(if cfg!(debug_assertions) {
-                    log::LevelFilter::Info
-                } else {
-                    log::LevelFilter::Warn
-                })
-                .with_tag("control_acceso_mobile"),
-        );
+        iniciar_log_android();
 
         // `RelojCorregido`, no `RelojSistema` -- un teléfono con la hora mal
         // puesta manualmente (o sin datos/GPS para que Android la ajuste
@@ -1253,14 +1271,50 @@ impl Nucleo {
         .map_err(|origen| NucleoError::Apertura {
             mensaje: interno(origen),
         })?;
-        Ok(Self {
-            core: Mutex::new(core),
-            sesion: Mutex::new(None),
-            cache_token: control_acceso::nube::CacheTokenDispositivo::new(),
-            sincronizacion_en_curso: Mutex::new(()),
-            ruta_base_datos: PathBuf::from(&ruta_base_datos),
-            sesion_supabase: Mutex::new(None),
-        })
+        Ok(Self::desde_core(&ruta_base_datos, core))
+    }
+
+    /// MV-03 (auditoría 2026-09-24): variante cifrada de [`Self::abrir`] --
+    /// `clave` es la clave AES de 32 bytes que Kotlin resuelve del Android
+    /// Keystore (`AndroidKeystoreClaveBaseDatosStore.kt`), nunca derivada
+    /// acá. Único punto de entrada real desde `AplicacionViewModel`; `abrir`
+    /// se queda sin tocar para los tests de Kotlin (`NucleoDePrueba`) y
+    /// para quien compile con `sqlite-plano`/`cifrado-sqlcipher` en vez del
+    /// default (`cifrado-sqlite3mc`) -- ver el comentario de
+    /// `[features]` en `Cargo.toml`.
+    ///
+    /// Si el archivo en `ruta_base_datos` ya existe pero NO es legible con
+    /// esta clave -- el caso real de todo teléfono con la app instalada
+    /// antes de este cambio, que hoy tiene la base en texto plano -- se
+    /// descarta y se reconstruye vacía en vez de migrar el archivo byte a
+    /// byte. Decisión explícita del usuario (2026-09-26): la app ya
+    /// depende de la sincronización con la nube como fuente de verdad
+    /// (mismo criterio que `confirmar_reconstruccion_desde_nube` en
+    /// desktop/src-tauri/src/lib.rs para un archivo dañado); el costo es
+    /// perder el historial/auditoría LOCAL de ese dispositivo que todavía
+    /// no se hubiera subido, a cambio de no escribir ni probar en este
+    /// momento una migración `sqlcipher_export` sin verificar todavía
+    /// contra un dispositivo real.
+    #[uniffi::constructor]
+    pub fn abrir_cifrado(ruta_base_datos: String, clave: Vec<u8>) -> Result<Self, NucleoError> {
+        iniciar_log_android();
+
+        let clave: [u8; 32] = clave.try_into().map_err(|_| NucleoError::Interno {
+            mensaje: "La clave de cifrado debe tener 32 bytes".to_string(),
+        })?;
+
+        match Self::abrir_cifrado_intento(&ruta_base_datos, &clave) {
+            Ok(nucleo) => Ok(nucleo),
+            Err(error) if std::path::Path::new(&ruta_base_datos).exists() => {
+                log::warn!(
+                    "abrir_cifrado: archivo existente no legible con la clave nueva ({error:?}), \
+                     se descarta y se reconstruye vacío"
+                );
+                borrar_archivo_y_sidecars(&ruta_base_datos);
+                Self::abrir_cifrado_intento(&ruta_base_datos, &clave)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// `directorio` sólo para los intentos de sincronización (ver abajo) --
@@ -2605,6 +2659,39 @@ impl Nucleo {
 }
 
 impl Nucleo {
+    /// Helper de `abrir_cifrado` -- separado en su propia función (no
+    /// dentro del `impl` exportado por uniffi de más arriba) porque
+    /// `#[uniffi::export]` no soporta funciones asociadas sin `&self` que
+    /// no sean `#[uniffi::constructor]` (error real visto al probar esto:
+    /// "associated functions are not currently supported", que además
+    /// rompía la exportación de TODO el resto del `impl`, no sólo la de
+    /// esta función).
+    fn abrir_cifrado_intento(ruta_base_datos: &str, clave: &[u8; 32]) -> Result<Self, NucleoError> {
+        let core = AppCore::abrir_con_reloj_cifrado(
+            ruta_base_datos,
+            clave,
+            std::sync::Arc::new(RelojCorregido::nuevo()),
+        )
+        .map_err(|origen| NucleoError::Apertura {
+            mensaje: interno(origen),
+        })?;
+        Ok(Self::desde_core(ruta_base_datos, core))
+    }
+
+    /// Construye `Self` a partir de un `AppCore` ya abierto -- compartido
+    /// por `abrir`/`abrir_cifrado_intento`. Mismo motivo que la función de
+    /// arriba para no vivir en el `impl` exportado.
+    fn desde_core(ruta_base_datos: &str, core: AppCore) -> Self {
+        Self {
+            core: Mutex::new(core),
+            sesion: Mutex::new(None),
+            cache_token: control_acceso::nube::CacheTokenDispositivo::new(),
+            sincronizacion_en_curso: Mutex::new(()),
+            ruta_base_datos: PathBuf::from(ruta_base_datos),
+            sesion_supabase: Mutex::new(None),
+        }
+    }
+
     /// Recupera el guard aunque el mutex haya quedado "envenenado" (un
     /// panic anterior mientras alguien lo sostenía) en vez de propagar ese
     /// panic a cada llamada futura — con `uniffi` cada método público es una
@@ -3159,6 +3246,67 @@ mod tests {
         let resultado = Nucleo::abrir(ruta);
 
         assert!(resultado.is_ok());
+    }
+
+    // --- abrir_cifrado (MV-03, auditoría 2026-09-24) ---
+
+    #[test]
+    fn abrir_cifrado_en_archivo_nuevo_no_necesita_reconstruccion() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let resultado = Nucleo::abrir_cifrado(ruta, vec![7u8; 32]);
+
+        assert!(resultado.is_ok());
+    }
+
+    #[test]
+    fn abrir_cifrado_rechaza_una_clave_que_no_mide_32_bytes() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let resultado = Nucleo::abrir_cifrado(ruta, vec![1, 2, 3]);
+
+        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
+    }
+
+    #[test]
+    fn abrir_cifrado_reconstruye_si_el_archivo_existente_no_es_legible() {
+        // Simula el caso real de todo teléfono con la app instalada antes
+        // de este cambio (base en texto plano) o un archivo corrupto --
+        // decisión explícita del usuario (2026-09-26): en vez de fallar o
+        // migrar byte a byte, se descarta y se reconstruye vacía. El
+        // catálogo vuelve solo por la sincronización normal.
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+        std::fs::write(&ruta, b"esto no es un archivo SQLite valido").unwrap();
+
+        let resultado = Nucleo::abrir_cifrado(ruta.clone(), vec![7u8; 32]);
+        let error = resultado.as_ref().err().map(ToString::to_string);
+
+        assert!(resultado.is_ok(), "debería reconstruir en vez de fallar: {error:?}");
+        let bytes = std::fs::read(&ruta).unwrap();
+        assert_ne!(bytes, b"esto no es un archivo SQLite valido".to_vec());
+    }
+
+    // Sólo corre bajo `cifrado-sqlite3mc` (`cargo test-mobile-3mc`) --
+    // mismo criterio que `sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada`
+    // en el crate raíz (`src/database/connection.rs`): confirma que
+    // `abrir_cifrado` cifra de verdad, no sólo que compila y enlaza.
+    #[cfg(feature = "cifrado-sqlite3mc")]
+    #[test]
+    fn abrir_cifrado_sqlite3mc_cifra_de_verdad() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let nucleo = Nucleo::abrir_cifrado(ruta.clone(), vec![7u8; 32]).unwrap();
+        drop(nucleo);
+
+        let bytes = std::fs::read(&ruta).unwrap();
+        assert!(
+            !bytes.starts_with(b"SQLite format 3\0"),
+            "la base quedó sin cifrar de verdad bajo cifrado-sqlite3mc"
+        );
     }
 
     #[test]
