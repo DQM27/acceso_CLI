@@ -21,10 +21,6 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@fullcalendar/core": "^6.1.21",
-    "@fullcalendar/daygrid": "^6.1.21",
-    "@fullcalendar/list": "^6.1.21",
-    "@fullcalendar/react": "^6.1.21",
     "@supabase/supabase-js": "2.116.0",
     "bootstrap": "^5.3.8",
     "lucide-react": "1.46.0",

@@ -358,10 +358,10 @@ main:focus,
   display: flex;
   flex-direction: column;
   /* `auto`, no `hidden` -- pantallas cortas (Mis citas) nunca llegan a
-     necesitarlo porque su tarjeta ya scrollea sola adentro (`.lista-citas`/
-     `.agenda-calendario-cuerpo`, ambas `flex:1; min-height:0`); esto es el
-     resguardo para pantallas más largas que ese mismo molde (Nueva cita),
-     que no tienen ese scroll interno propio. */
+     necesitarlo porque su tarjeta ya scrollea sola adentro (`.lista-citas`,
+     `flex:1; min-height:0`); esto es el resguardo para pantallas más largas
+     que ese mismo molde (Nueva cita), que no tienen ese scroll interno
+     propio. */
   overflow-y: auto;
 }
 .pagina {
@@ -393,26 +393,16 @@ main:focus,
    hay pocas citas (encontrado con captura real). La tarjeta mide según su
    contenido, con techo en el espacio disponible y scroll propio si se
    pasa (`min-height: 0` + `overflow: hidden` alcanzan para eso en un
-   padre flex-column). `.agenda-llena` es la excepción: la vista
-   Calendario SÍ necesita ocupar todo el alto siempre, un mes chico se ve
-   mal aunque tenga pocos eventos -- ver el toggle en MisCitas.tsx. */
+   padre flex-column). */
 .agenda {
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.agenda.agenda-llena {
-  flex: 1;
-}
 .lista-citas {
   min-height: 0;
   overflow-y: auto;
-}
-.agenda-calendario-cuerpo {
-  flex: 1;
-  min-height: 0;
-  padding: 16px;
 }
 .agenda-herramientas {
   flex-shrink: 0;
@@ -1486,87 +1476,3 @@ dd {
   font-weight: 600;
 }
 
-/* Toggle Lista/Calendario de "Mis citas" -- mismos `.filtro`/`.filtro.activo`
-   que ya usan las pestañas de estado (Todas/Vigentes/...), sólo envueltos
-   en su propio grupo separado con un borde para distinguirlo visualmente
-   de los filtros de estado. */
-.toggle-vista {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-chico);
-}
-
-/* Calendario de "Mis citas" (componentes/CitasCalendario.tsx) -- mismo
-   theming que `.selector-fechas`, pero a tamaño completo (llena la
-   tarjeta) y con estados de color propios (vigente/vencida/cancelada, no
-   sólo un color de acento único). */
-.citas-calendario {
-  height: 100%;
-}
-.citas-calendario .fc {
-  --fc-border-color: var(--borde);
-  --fc-page-bg-color: transparent;
-  --fc-neutral-bg-color: var(--panel);
-  --fc-today-bg-color: var(--acento-suave);
-  --fc-highlight-color: var(--acento-suave);
-  --fc-button-bg-color: var(--panel);
-  --fc-button-border-color: var(--borde);
-  --fc-button-text-color: var(--texto);
-  --fc-button-hover-bg-color: var(--panel-suave);
-  --fc-button-hover-border-color: var(--borde-fuerte);
-  --fc-button-active-bg-color: var(--acento-relleno);
-  --fc-button-active-border-color: var(--acento-relleno);
-  height: 100%;
-  color: var(--texto);
-  font-family: inherit;
-}
-.citas-calendario .fc-toolbar-title {
-  color: var(--texto);
-  font-size: 18px;
-  font-weight: 650;
-}
-.citas-calendario .fc-col-header-cell-cushion,
-.citas-calendario .fc-daygrid-day-number,
-.citas-calendario .fc-list-day-text,
-.citas-calendario .fc-list-day-side-text {
-  color: var(--texto);
-}
-.citas-calendario .fc-day-other .fc-daygrid-day-number {
-  color: var(--muted);
-}
-.citas-calendario .fc-button {
-  text-transform: none;
-  box-shadow: none !important;
-}
-.citas-calendario .fc-icon {
-  font-family: inherit !important;
-  font-size: 14px !important;
-}
-.citas-calendario .fc-icon-chevron-left::before {
-  content: "‹";
-}
-.citas-calendario .fc-icon-chevron-right::before {
-  content: "›";
-}
-.citas-calendario .fc-list-empty {
-  background: transparent;
-  color: var(--muted);
-}
-.citas-calendario-evento-vigente {
-  background-color: var(--acento-relleno) !important;
-  border-color: var(--acento-relleno) !important;
-}
-.citas-calendario-evento-vencida {
-  background-color: var(--panel-suave) !important;
-  border-color: var(--borde-fuerte) !important;
-  color: var(--muted) !important;
-}
-.citas-calendario-evento-cancelada {
-  background-color: transparent !important;
-  border-color: var(--error) !important;
-  color: var(--error) !important;
-  text-decoration: line-through;
-  opacity: 0.75;
-}

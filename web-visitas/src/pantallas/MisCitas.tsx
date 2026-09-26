@@ -1,24 +1,21 @@
-import { startTransition, useEffect, useRef, useState, ViewTransition } from "react";
+import { useEffect, useRef, useState, ViewTransition } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   CalendarDays,
-  CalendarRange,
   ChevronLeft,
   ChevronRight,
   CirclePlus,
   Clock,
-  List,
   MapPin,
   RefreshCw,
   Users,
   X,
 } from "lucide-react";
-import { cancelarCita, listarCitas, listarCitasCalendario, mensajeError } from "../api";
+import { cancelarCita, listarCitas, mensajeError } from "../api";
 import type { Cita, FiltroEstado } from "../dominio";
 import { estadoCita, fechaLegible, horaLegible } from "../fecha";
 import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, Cargando, Modal } from "../componentes/Comunes";
-import CitasCalendario from "../componentes/CitasCalendario";
 
 const FILTROS: { valor: FiltroEstado; nombre: string }[] = [
   { valor: "TODAS", nombre: "Todas" },
@@ -46,17 +43,10 @@ export default function MisCitas() {
   const [cancelando, setCancelando] = useState(false);
   const [errorCancelar, setErrorCancelar] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
-  const [vista, setVista] = useState<"lista" | "calendario">("lista");
-  const [citasCalendario, setCitasCalendario] = useState<Cita[]>([]);
-  const [cargandoCalendario, setCargandoCalendario] = useState(true);
-  const [errorCalendario, setErrorCalendario] = useState<string | null>(null);
   const [actualizando, setActualizando] = useState(false);
-  const [actualizandoCalendario, setActualizandoCalendario] = useState(false);
   const bloqueo = useRef(false);
   const cargaHecha = useRef(false);
-  const cargaCalendarioHecha = useRef(false);
   const filtroPaginaAnterior = useRef({ filtro, pagina });
-  const filtroCalendarioAnterior = useRef(filtro);
   const ruta = useLocation();
   const navegar = useNavigate();
 
@@ -121,47 +111,6 @@ export default function MisCitas() {
     return () => controlador.abort();
   }, [anfitrion, filtro, pagina, revision]);
 
-  // Sólo se pide cuando la vista Calendario está activa -- evita traer
-  // hasta 500 citas en cada carga de la pantalla cuando la mayoría de las
-  // veces se usa la lista paginada de a 12.
-  useEffect(() => {
-    if (vista !== "calendario" || !anfitrion) return;
-    // Mismo criterio que la lista: una revalidación de fondo no reemplaza
-    // el calendario ya visible por el spinner de página completa -- sólo
-    // un cambio real de filtro (o la primera entrada a esta vista) sí.
-    const cambioFiltro = filtroCalendarioAnterior.current !== filtro;
-    filtroCalendarioAnterior.current = filtro;
-    const revalidacionDeFondo = cargaCalendarioHecha.current && !cambioFiltro;
-    const controlador = new AbortController();
-    const correo = anfitrion.correo;
-    // `Promise.resolve().then(...)` en vez de llamar `setCargandoCalendario(true)`
-    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
-    // actualización como síncrona dentro del efecto.
-    Promise.resolve()
-      .then(() => {
-        if (revalidacionDeFondo) setActualizandoCalendario(true);
-        else setCargandoCalendario(true);
-        setErrorCalendario(null);
-      })
-      .then(() => listarCitasCalendario(correo, filtro, controlador.signal))
-      .then((resultado) => {
-        if (controlador.signal.aborted) return;
-        cargaCalendarioHecha.current = true;
-        setCitasCalendario(resultado);
-      })
-      .catch((fallo) => {
-        if (controlador.signal.aborted) return;
-        if (!revalidacionDeFondo) setErrorCalendario(mensajeError(fallo));
-      })
-      .finally(() => {
-        if (!controlador.signal.aborted) {
-          setCargandoCalendario(false);
-          setActualizandoCalendario(false);
-        }
-      });
-    return () => controlador.abort();
-  }, [anfitrion, filtro, vista, revision]);
-
   // Sin pulso cada 60s a ciegas: estas citas las crea, edita y cancela
   // únicamente este mismo anfitrión (RLS de `citas` no da permiso de
   // escritura a nadie más -- ni operador ni dispositivo de sitio), así que
@@ -224,7 +173,7 @@ export default function MisCitas() {
           </div>
         </Aviso>
       )}
-      <section className={`tarjeta agenda ${vista === "calendario" ? "agenda-llena" : ""}`}>
+      <section className="tarjeta agenda">
         <div className="agenda-herramientas">
           <div
             className="btn-group filtros"
@@ -246,75 +195,19 @@ export default function MisCitas() {
               </button>
             ))}
           </div>
-          <div className="d-flex align-items-center gap-2">
-            <div
-              className="btn-group toggle-vista"
-              role="group"
-              aria-label="Cambiar cómo se muestra la agenda"
-            >
-              <button
-                type="button"
-                className={`btn btn-sm ${vista === "lista" ? "btn-primary" : "btn-outline-secondary"}`}
-                aria-pressed={vista === "lista"}
-                onClick={() => startTransition(() => setVista("lista"))}
-              >
-                <List aria-hidden="true" />
-                Lista
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm ${vista === "calendario" ? "btn-primary" : "btn-outline-secondary"}`}
-                aria-pressed={vista === "calendario"}
-                onClick={() => startTransition(() => setVista("calendario"))}
-              >
-                <CalendarRange aria-hidden="true" />
-                Calendario
-              </button>
-            </div>
-            <button
-              type="button"
-              className="btn btn-link solo-icono"
-              disabled={
-                vista === "lista"
-                  ? cargando || actualizando
-                  : cargandoCalendario || actualizandoCalendario
-              }
-              aria-label="Actualizar"
-              title="Actualizar"
-              onClick={() => setRevision((v) => v + 1)}
-            >
-              <RefreshCw
-                aria-hidden="true"
-                className={
-                  (vista === "lista" ? actualizando : actualizandoCalendario)
-                    ? "icono-girando"
-                    : ""
-                }
-              />
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn btn-link solo-icono"
+            disabled={cargando || actualizando}
+            aria-label="Actualizar"
+            title="Actualizar"
+            onClick={() => setRevision((v) => v + 1)}
+          >
+            <RefreshCw aria-hidden="true" className={actualizando ? "icono-girando" : ""} />
+          </button>
         </div>
         <ViewTransition>
-        {vista === "calendario" ? (
-          cargandoCalendario ? (
-            <Cargando texto="Consultando tu agenda…" />
-          ) : errorCalendario ? (
-            <div className="estado-agenda">
-              <Aviso>{errorCalendario}</Aviso>
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={() => setRevision((v) => v + 1)}
-              >
-                Volver a intentar
-              </button>
-            </div>
-          ) : (
-            <div className="agenda-calendario-cuerpo">
-              <CitasCalendario citas={citasCalendario} onSeleccionar={setDetalle} />
-            </div>
-          )
-        ) : cargando ? (
+        {cargando ? (
           <Cargando texto="Consultando tus citas…" />
         ) : error ? (
           <div className="estado-agenda">
@@ -430,7 +323,7 @@ export default function MisCitas() {
           </div>
         )}
         </ViewTransition>
-        {vista === "lista" && !cargando && !error && (citas.length > 0 || pagina > 0) && (
+        {!cargando && !error && (citas.length > 0 || pagina > 0) && (
           <div className="paginacion">
             <span>Página {pagina + 1}</span>
             <div className="d-flex gap-2">
