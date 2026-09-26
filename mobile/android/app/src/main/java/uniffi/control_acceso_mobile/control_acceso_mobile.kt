@@ -777,6 +777,10 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_gafete_para_formulario(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_praind_para_formulario(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube(
@@ -914,6 +918,10 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_ruta(`ptr`: Long,`solicitud`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_gafete_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,`personalRuta`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_praind_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,`personalRuta`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
@@ -1200,6 +1208,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial() and 0xFFFF) != 516) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_gafete_para_formulario() and 0xFFFF) != 50281) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_praind_para_formulario() and 0xFFFF) != 29740) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado() and 0xFFFF) != 12281) {
@@ -2110,6 +2124,25 @@ public interface NucleoInterface {
      * secreto) en vez del login (ver `MainActivity.kt`).
      */
     fun `requiereConfiguracionInicial`(): kotlin.Boolean
+    
+    /**
+     * Espejo de [`Self::requiere_praind_para_formulario`] para la otra
+     * regla del mismo formulario.
+     */
+    fun `requiereGafeteParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean
+    
+    /**
+     * MV-10 (auditoría 2026-09-24): antes de este método,
+     * `PantallaNuevoContratista.kt` reimplementaba esta regla a mano en
+     * Kotlin (necesita evaluarla ANTES de tener un `Contratista` real que
+     * consultar -- el formulario todavía no se guardó) -- riesgo real de
+     * quedar desincronizada si la regla cambia acá y nadie se acuerda de
+     * tocar también el formulario móvil. No usa ningún estado de `self` --
+     * vive como método de `Nucleo` (no función libre) porque es el único
+     * patrón de export que usa este puente hoy (ver el resto de este
+     * `impl`). Fuente de verdad real: `control_acceso::domain::contratista`.
+     */
+    fun `requierePraindParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean
     
     /**
      * No revela el secreto -- sólo si ya hay uno guardado. Ver
@@ -3364,6 +3397,51 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(
         it,
         _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Espejo de [`Self::requiere_praind_para_formulario`] para la otra
+     * regla del mismo formulario.
+     */override fun `requiereGafeteParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_requiere_gafete_para_formulario(
+        it,
+        
+        FfiConverterTypeTipoIngreso.lower(`tipoIngreso`),
+        FfiConverterBoolean.lower(`personalRuta`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * MV-10 (auditoría 2026-09-24): antes de este método,
+     * `PantallaNuevoContratista.kt` reimplementaba esta regla a mano en
+     * Kotlin (necesita evaluarla ANTES de tener un `Contratista` real que
+     * consultar -- el formulario todavía no se guardó) -- riesgo real de
+     * quedar desincronizada si la regla cambia acá y nadie se acuerda de
+     * tocar también el formulario móvil. No usa ningún estado de `self` --
+     * vive como método de `Nucleo` (no función libre) porque es el único
+     * patrón de export que usa este puente hoy (ver el resto de este
+     * `impl`). Fuente de verdad real: `control_acceso::domain::contratista`.
+     */override fun `requierePraindParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_requiere_praind_para_formulario(
+        it,
+        
+        FfiConverterTypeTipoIngreso.lower(`tipoIngreso`),
+        FfiConverterBoolean.lower(`personalRuta`),_status)
 }
     }
     )
