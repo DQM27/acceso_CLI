@@ -18,7 +18,8 @@
 use std::time::Duration;
 
 use lattis_realtime_spike::{
-    ConfigCanalPrivado, EventoSupervisorPrivado, supervisar_canal_privado,
+    ConfigCanalPrivado, EventoSupervisorPrivado, instalar_crypto_provider_tolerante,
+    supervisar_canal_privado,
 };
 
 fn variable_requerida(nombre: &str) -> String {
@@ -30,9 +31,7 @@ fn variable_requerida(nombre: &str) -> String {
 
 #[tokio::main]
 async fn main() {
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("instalar el CryptoProvider de rustls una sola vez, al arrancar");
+    instalar_crypto_provider_tolerante();
 
     let url_base = variable_requerida("REALTIME_WS_URL");
     let apikey = variable_requerida("REALTIME_APIKEY");

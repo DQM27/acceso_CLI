@@ -17,7 +17,7 @@
 
 use std::time::Duration;
 
-use lattis_realtime_spike::ClienteRealtime;
+use lattis_realtime_spike::{ClienteRealtime, instalar_crypto_provider_tolerante};
 use rusqlite::Connection;
 
 const EVENTO: &str = "fila_completa";
@@ -46,9 +46,7 @@ fn abrir_sqlite_plano(ruta: &str) -> rusqlite::Result<Connection> {
 
 #[tokio::main]
 async fn main() {
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("instalar el CryptoProvider de rustls una sola vez, al arrancar");
+    instalar_crypto_provider_tolerante();
 
     let url_base = variable_requerida("REALTIME_WS_URL");
     let apikey = variable_requerida("REALTIME_APIKEY");

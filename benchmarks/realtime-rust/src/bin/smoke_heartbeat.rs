@@ -11,15 +11,13 @@
 //! cargo run --manifest-path benchmarks/realtime-rust/Cargo.toml --bin smoke_heartbeat
 //! ```
 
-use lattis_realtime_spike::ClienteRealtime;
+use lattis_realtime_spike::{ClienteRealtime, instalar_crypto_provider_tolerante};
 
 #[tokio::main]
 async fn main() {
     // Ver el comentario de la dependencia `rustls` en Cargo.toml -- sin esto,
     // el primer `connect_async` contra `wss://` entra en pánico.
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("instalar el CryptoProvider de rustls una sola vez, al arrancar");
+    instalar_crypto_provider_tolerante();
 
     let url_base = std::env::var("REALTIME_WS_URL").unwrap_or_else(|_| {
         eprintln!(

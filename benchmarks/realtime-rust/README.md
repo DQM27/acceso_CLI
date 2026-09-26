@@ -349,6 +349,66 @@ Con esto resuelto, lo que queda antes de plantear un reemplazo real de
   siquiera un corte real. Esta decisión NO está tomada -- este directorio
   es el experimento que la informa, no el resultado.
 
+### Etapa 4 (parcial) -- integración real contra `desktop/src-tauri` ✅ implementado
+
+Primer paso del punto anterior: ¿este crate encaja de verdad en el árbol
+de dependencias de la app de escritorio, sin duplicar ni romper nada que
+ya está fijado (`tokio = "=1.53.1"`, `url = "=2.5.8"`, `windows =
+"=0.61.3"`)? Se agregó a `desktop/src-tauri/Cargo.toml` una feature
+apagada por defecto y sin ningún llamador:
+
+```toml
+[features]
+lattis-realtime-experimental = ["dep:lattis_realtime_spike"]
+
+[dependencies]
+lattis_realtime_spike = { path = "../../benchmarks/realtime-rust", optional = true }
+```
+
+Código completamente inerte -- no hay ningún `#[tauri::command]` ni
+llamada que lo use todavía, sólo prueba que el grafo de dependencias
+resuelve. `cargo metadata --features lattis-realtime-experimental`
+(exit 0) confirma versiones unificadas en todo el árbol: `rustls
+0.23.45`, `tokio-tungstenite 0.24.0`, `tokio 1.53.1`, `windows 0.61.3`,
+`url 2.5.8`, `ring 0.17.14`, `rustls-native-certs 0.8.4` -- y, importante,
+**ninguna copia de `aws-lc-rs`** (confirmando que no se coló un backend
+que necesitaría un compilador de C para cross-compilar a Windows). Esta
+sandbox no tiene instalado el target `x86_64-pc-windows-gnu` ni el
+cross-compilador MinGW, así que un `cargo check`/`build` real contra ese
+target no se pudo intentar acá -- `cargo metadata` es el chequeo más
+barato disponible y ya descarta el riesgo más caro (conflicto de
+versiones/backends), pero queda pendiente confirmarlo con un build real
+en una máquina con ese target instalado.
+
+**Bug real encontrado al razonar sobre esta integración** (antes de
+cualquier intento de compilar, sólo grepeando el árbol): ningún código de
+producción llama `rustls::crypto::ring::default_provider().install_default()`
+en ningún lado -- sólo lo hacían los binarios `smoke_*` de este
+laboratorio. `desktop/src-tauri` ya trae `reqwest` con la feature
+`rustls-tls` (vía `control_acceso/nube`, usado por los comandos que
+hablan REST con Supabase), así que `reqwest`/`hyper-rustls` deben estar
+instalando su propio `CryptoProvider` en silencio la primera vez que
+arman un cliente HTTPS. El patrón que tenían los `smoke_*`
+(`.install_default().expect(...)`) es correcto sólo porque cada binario
+corre solo, nunca junto a `reqwest` -- en un proceso real donde ambos
+coexisten (como sería `desktop/src-tauri` con la feature activada),
+quien llegue primero instala el proveedor, y el segundo `.expect()`
+entraría en pánico apenas arrancara la app.
+
+Corregido agregando una función compartida en `src/lib.rs`,
+`instalar_crypto_provider_tolerante()`, que traga el error de "ya hay uno
+instalado" a propósito (`let _ = ...install_default();`) en vez de
+`.expect()`-ear -- lo único que importa es que ambos usen el mismo
+backend (`ring`, confirmado arriba que no hay `aws-lc-rs` en el árbol),
+nunca cuál de los dos ganó la carrera de quién instala primero. Los 6
+binarios `smoke_*` de este laboratorio se migraron a esta función
+tolerante (siguen pudiendo correr solos igual que antes -- el cambio es
+sólo más seguro, no les quita nada). Verificado después del cambio:
+`cargo build --bins`, `cargo clippy --all-targets --tests` (limpio, cero
+warnings) y `cargo test` (35 tests, todos verdes) en este crate, y
+`cargo metadata --features lattis-realtime-experimental` de nuevo en
+`desktop/src-tauri` (exit 0, mismas versiones unificadas).
+
 ## Cobertura de pruebas
 
 35 tests en total, en cuatro capas distintas, cada una probando algo que
