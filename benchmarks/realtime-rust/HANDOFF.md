@@ -29,26 +29,43 @@ callback `UniFFI`) que **ya se probó conectado a staging de verdad**, sin
 autenticar, sin datos reales. Nadie del lado frontend (`App.tsx`) ni
 nativo (Kotlin/Swift) lo escucha todavía.
 
-**Desktop, canal privado real (2026-09-26, cerrado):**
-`iniciar_shadow_run_canal_privado_experimental` en
-`desktop/src-tauri/src/lattis_experimental.rs` ya conecta el canal
-PRIVADO real -- Opción A del punto 1 de abajo: reusa
-`GuiState::autenticar_con_cache` (nunca reimplementa `device-auth`),
-arma el topic real `realtime:sitio:<sitio_id>` y escucha el evento real
-`cambio_nube` (el mismo que ya usa `desktop/src/nubeRealtime.ts` en
-producción). Gateado por `LATTIS_EXPERIMENTAL_CANAL_PRIVADO` (basta con
-que exista, sin URL a pegar -- ver el doc-comment de esa constante sobre
-por qué es más peligrosa que la variable del heartbeat). Probado de
-punta a punta contra `control-acceso-staging` con un dispositivo
-descartable real: JWT real de `device-auth`, un `INSERT` real en
-`empresas` disparó el trigger real de producción
-(`empresas_emitir_cambio_nube`), y el broadcast `cambio_nube` llegó al
-cliente Rust con el payload completo (`schema`/`table`/`operation`/
-`sitio_id`/`changed_at`). Todo lo descartable (sitio, dispositivo,
-empresa de prueba) ya se limpió de staging. Mobile (`mobile/rust-core`)
-sigue con sólo el heartbeat público -- el mismo cableado de este punto,
-pendiente ahí (no hay `GuiState` en mobile: hace falta ver cómo el host
-Kotlin/Swift le pasa el token, ver "Fricción real" del punto 1 de abajo).
+**Canal privado real, desktop Y mobile (2026-09-26, cerrado en ambos):**
+
+- **Desktop:** `iniciar_shadow_run_canal_privado_experimental` en
+  `desktop/src-tauri/src/lattis_experimental.rs` reusa
+  `GuiState::autenticar_con_cache` (nunca reimplementa `device-auth`),
+  arma el topic real `realtime:sitio:<sitio_id>` y escucha el evento real
+  `cambio_nube` (el mismo que ya usa `desktop/src/nubeRealtime.ts` en
+  producción). Gateado por `LATTIS_EXPERIMENTAL_CANAL_PRIVADO` (basta con
+  que exista, sin URL a pegar -- ver el doc-comment de esa constante
+  sobre por qué es más peligrosa que la variable del heartbeat). Probado
+  de punta a punta contra `control-acceso-staging` con un dispositivo
+  descartable real: JWT real de `device-auth`, un `INSERT` real en
+  `empresas` disparó el trigger real de producción
+  (`empresas_emitir_cambio_nube`), y el broadcast `cambio_nube` llegó al
+  cliente Rust con el payload completo (`schema`/`table`/`operation`/
+  `sitio_id`/`changed_at`).
+- **Mobile:** `iniciar_shadow_run_canal_privado_lattis_experimental` en
+  `mobile/rust-core/src/lattis_experimental.rs` -- acá no hay un
+  `GuiState` equivalente, así que la Opción A se resolvió distinto: el
+  puente nunca toca `Nucleo`/`AppCore` directamente, sino que recibe un
+  `callback_interface` nuevo (`ProveedorTokenLattisExperimental`) que
+  Kotlin/Swift implementaría delegando a `Nucleo::sesion_realtime_nube`/
+  `_con_secreto` -- el mismo método `pub`/`UniFFI` que YA existe y ya usa
+  `NubeRealtime.kt` en producción, sin duplicar nada. Corre en su propio
+  hilo + runtime de `tokio` (no comparte el runtime del resto de la app,
+  a diferencia de Tauri en desktop), así que el `callback` puede bloquear
+  en red sin arriesgar nada más. Probado con un `#[test]` manual nuevo
+  (`el_shadow_run_privado_conecta_a_staging_con_jwt_real_y_se_une_al_canal`,
+  mismo criterio "salta sola sin variables de entorno" que el resto) --
+  JWT real de un dispositivo descartable, `phx_join` privado real
+  confirmado contra `control-acceso-staging`. La entrega de un broadcast
+  real ya se probó de punta a punta en el punto de desktop de arriba (el
+  mecanismo `supervisar_canal_privado` es el mismo binario compartido
+  `lattis_realtime_spike`), así que acá alcanzó con confirmar el join.
+
+Todo lo descartable de ambas pruebas (sitios, dispositivos, la empresa de
+prueba) ya se limpió de staging.
 
 **No existe todavía:** un reemplazo real de `nubeRealtime.ts`
 (desktop/web) ni de `NubeRealtime.kt` (Android). Esto sigue siendo un
@@ -148,57 +165,11 @@ sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev \
 
 ## Lo que falta, en orden, con pasos concretos
 
-### 1. Canal privado real con JWT + datos reales en el puente (el más importante)
+### 1. Canal privado real con JWT + datos reales en el puente -- CERRADO (2026-09-26), desktop y mobile
 
-**Desktop: CERRADO (2026-09-26)** -- ver el TL;DR de arriba. Sigue
-pendiente el mismo cableado en **mobile** (`mobile/rust-core`), que hoy
-sólo hace `supervisar_heartbeat` contra el topic público `"phoenix"`, sin
-autenticar -- ahí no hay un `GuiState` que ya sepa cachear el token, así
-que hace falta decidir cómo el lado nativo (Kotlin/Swift) le pasa un JWT
-vigente a la función `UniFFI` (misma pregunta de "Opción A vs B" de
-abajo, pero del lado móvil). La producción real necesita el canal PRIVADO
-por sitio
-(`sitio:<sitio_id>`, ver `supabase/migrations/*realtime*.sql`) con JWT de
-dispositivo, y `broadcast_changes` con la fila completa (no sólo un
-aviso vacío) -- ambos mecanismos YA están probados y funcionando en el
-laboratorio (`supervisar_canal_privado`, `ClienteRealtime::unirse_privado`,
-ver `README.md` Etapas 2 y 3.5), sólo falta conectarlos al puente.
-
-**Fricción real a resolver, no un simple copy-paste:**
-`supervisar_canal_privado` pide `obtener_token_fresco: impl FnMut() ->
-String` -- una función SÍNCRONA que devuelve un JWT válido cada vez que
-hace falta (al conectar y, opcionalmente, en cada renovación proactiva).
-En la app real, obtener un JWT de dispositivo implica una llamada HTTP a
-`device-auth` (ver `supabase/functions/device-auth/index.ts`) usando el
-secreto del dispositivo -- lo cual hoy ya lo hace `control_acceso::nube`
-en algún lado del crate raíz. Antes de escribir código hay que decidir:
-
-- **Opción A (recomendada):** el puente NO reimplementa la obtención del
-  JWT -- recibe un token ya vigente (y una forma de refrescarlo) desde el
-  código que lo llama (`configurar_arranque` en desktop,
-  quien-invoque-la-función-UniFFI en mobile), que a su vez se lo pide al
-  módulo `nube` real (que YA sabe cómo hacerlo, con su propio cacheo).
-  Evita duplicar la lógica de auth de dispositivo en dos lugares.
-- **Opción B:** el puente reimplementa su propia llamada HTTP a
-  `device-auth` con `reqwest` (agregar la dependencia), independiente del
-  módulo `nube`. Más simple de escribir, pero duplica lógica real de
-  producción (secreto del dispositivo, endpoint, manejo de errores) en un
-  módulo "experimental" -- riesgo de que las dos copias diverjan.
-
-Recomendación: A. Requiere mirar `control_acceso::nube` (crate raíz) para
-ver qué función expone hoy para pedir/cachear un JWT de dispositivo, y
-si se puede llamar desde `desktop/src-tauri`/`mobile/rust-core` sin pasar
-por `AppCore` completo (que trae sesión de usuario, DB, etc. -- de más
-para esto).
-
-**Para probarlo contra staging sin tocar producción:** crear un sitio +
-dispositivo descartable (mismo patrón que
-`benchmarks/realtime-rust/src/bin/smoke_private_channel.rs`), llamar a
-`device-auth` para conseguir un JWT real, usar `supervisar_canal_privado`
-con `ConfigCanalPrivado { topic: format!("sitio:{sitio_id}"), .. }`, y
-un trigger temporal con `realtime.broadcast_changes(...)` sobre una tabla
-de prueba (o una tabla real, con cuidado de no afectar datos reales) --
-limpiar todo (dispositivo, sitio, trigger) al terminar.
+Ver el TL;DR de arriba para el detalle de cómo se resolvió cada lado
+(Opción A en los dos: nunca se reimplementó la obtención del JWT). Sin
+pendientes en este punto para ninguna de las dos plataformas.
 
 ### 2. Conectar el frontend de verdad (desktop)
 
@@ -220,11 +191,17 @@ el evento) hasta decidir qué hace React con esto de verdad.
 
 Implementar `ObservadorLattisExperimental` en Kotlin
 (`mobile/android/app/src/main/java/...`) y llamar a
-`iniciar_shadow_run_lattis_experimental` desde algún punto de arranque de
+`iniciar_shadow_run_lattis_experimental` (heartbeat público) o a
+`iniciar_shadow_run_canal_privado_lattis_experimental` (canal privado
+real, cerrado 2026-09-26 -- ver punto 1) desde algún punto de arranque de
 la app -- mismo criterio que el punto 2: empezar sólo logueando
-(`Log.d`), no actuando. iOS ni siquiera tiene todavía un archivo
-Realtime -- si se llega a este punto, probablemente haga falta escribirlo
-desde cero del lado Swift (fuera del alcance de este laboratorio Rust).
+(`Log.d`), no actuando. Para la segunda función hace falta además
+implementar `ProveedorTokenLattisExperimental` (el `callback_interface`
+nuevo) delegando a algo que Kotlin YA debería tener a mano si usa
+`NubeRealtime.kt` (`Nucleo::sesion_realtime_nube`/`_con_secreto`). iOS ni
+siquiera tiene todavía un archivo Realtime -- si se llega a este punto,
+probablemente haga falta escribirlo desde cero del lado Swift (fuera del
+alcance de este laboratorio Rust).
 
 ### 4. Shadow-run real (comparar, no sólo observar)
 
