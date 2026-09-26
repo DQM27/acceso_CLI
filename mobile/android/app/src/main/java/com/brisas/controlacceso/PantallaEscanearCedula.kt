@@ -362,8 +362,26 @@ fun construirAnalizadorOcr(
     detectada: AtomicBoolean,
     sesionActiva: AtomicBoolean,
     onFrameActivo: (ImageProxy) -> Unit,
-): ImageAnalysis =
-    ImageAnalysis.Builder()
+): ImageAnalysis {
+    // Optimización #2 del relevamiento de rendimiento de cámara
+    // (2026-09-25, pospuesta a propósito en el commit c0dad75 para aislar
+    // su efecto del resto): antes de esto, con STRATEGY_KEEP_ONLY_LATEST +
+    // un solo hilo, se procesaba cada frame que CameraX llegara a entregar
+    // -- en un sensor típico de 30fps eso es un `recortarParaOcr` (NV21 ->
+    // ARGB + rotar + recortar, todo en CPU) hasta 30 veces por segundo,
+    // muchísimo más seguido de lo que ML Kit necesita para leer texto
+    // estático. `ultimoFrameProcesadoMs` vive en el closure del analyzer,
+    // no en un campo de la pantalla: una sola instancia de
+    // `ImageAnalysis`/analyzer por apertura de cámara, y `setAnalyzer` ya
+    // garantiza que un único hilo (`ejecutorAnalisis`) llama a este lambda
+    // de a un frame por vez, así que un `var` simple alcanza sin
+    // sincronización extra.
+    //
+    // `SystemClock.elapsedRealtime()`, no `System.currentTimeMillis()`:
+    // monotónico, no se mueve si cambia la hora del sistema (poco probable
+    // acá, pero es el reloj correcto para medir intervalos, no instantes).
+    var ultimoFrameProcesadoMs = 0L
+    return ImageAnalysis.Builder()
         .setResolutionSelector(
             ResolutionSelector.Builder()
                 .setResolutionStrategy(
@@ -386,9 +404,16 @@ fun construirAnalizadorOcr(
                     imagen.close()
                     return@setAnalyzer
                 }
+                val ahora = android.os.SystemClock.elapsedRealtime()
+                if (ahora - ultimoFrameProcesadoMs < INTERVALO_MINIMO_ENTRE_FRAMES_MS) {
+                    imagen.close()
+                    return@setAnalyzer
+                }
+                ultimoFrameProcesadoMs = ahora
                 onFrameActivo(imagen)
             }
         }
+}
 
 /// Conecta el preview y el análisis a la cámara física una vez que
 /// `ProcessCameraProvider` está listo, y arranca el enfoque continuo --
@@ -465,6 +490,14 @@ private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 1600L
 private const val FRAMES_AUSENCIA_PARA_REPETIR = 3
 
+// Ver el doc-comment de `construirAnalizadorOcr` (optimización #2). 150ms
+// = ~6-7 frames/s procesados como techo, muy por encima de lo que
+// `EstabilizadorLectura` necesita (2-3 lecturas consistentes para
+// confirmar) y bien por debajo de lo que se sentiría como lag al apuntar
+// la cámara -- el sensor sigue entregando a su fps normal, esto sólo
+// descarta los frames de más entre medio antes de gastar CPU en ellos.
+private const val INTERVALO_MINIMO_ENTRE_FRAMES_MS = 150L
+
 /// Compartido por las 4 pantallas de escaneo -- antes cada una tenía su
 /// propia copia textual idéntica (hallazgo 2026-09-19, riesgo de
 /// desincronizarse si alguien edita una sin las otras 3). Sin `private`:
@@ -535,6 +568,21 @@ fun analizarCedula(
 ) {
     val mediaImage = imagen.image
     if (mediaImage == null) {
+        imagen.close()
+        return
+    }
+    // Optimización #4 del relevamiento de rendimiento de cámara
+    // (2026-09-25, pospuesta a propósito junto con #2 en el commit
+    // c0dad75): `construirAnalizadorOcr` ya filtra por `sesionActiva` antes
+    // de llegar acá, pero ese chequeo pasa ANTES del trabajo pesado de esta
+    // función (recortar = NV21->ARGB + rotar + recortar Bitmap), no
+    // después. Con `setAnalyzer` en un único hilo casi nunca hay hueco
+    // entre ambos chequeos, pero repetirlo acá, justo antes de
+    // `recortarParaOcr`, es gratis (una lectura de `AtomicBoolean`) y cierra
+    // la ventana por completo: si la pantalla se cerró en el instante entre
+    // ambos chequeos, no se gasta CPU recortando un frame cuyo resultado
+    // nadie va a usar.
+    if (!sesionActiva.get()) {
         imagen.close()
         return
     }
