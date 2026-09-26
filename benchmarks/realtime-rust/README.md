@@ -189,6 +189,41 @@ inflar el alcance):
   recibir `EventoSupervisor::Conectado`, disparar la misma lógica de
   resync -- no es un problema del cliente WebSocket en sí.
 
+### Etapa 3.5 (esta) -- la fila completa por el WebSocket, sin roundtrip REST ✅ implementado
+
+Esta es la pregunta que originó todo el laboratorio (ver la conversación
+que lo arrancó): ¿se puede mandar el DATO real por Realtime, en vez de un
+aviso vacío que obliga a `sincronizarConNube()` completo después? Sí --
+`realtime.broadcast_changes()` (función nativa de Supabase, no algo
+inventado acá) arma el payload con la fila entera:
+
+```sql
+perform realtime.broadcast_changes(
+  'sitio:' || new.sitio_id::text,  -- topic (mismo canal privado de la Etapa 2)
+  'fila_completa',                  -- nombre del evento
+  tg_op, tg_table_name, tg_table_schema,
+  new, old
+);
+```
+
+`bin/smoke_broadcast_changes.rs` probó esto contra una tabla e insert
+reales (sitio y dispositivo descartables, ya borrados): el broadcast
+recibido trajo la fila completa --
+`{"id","record":{"cedula","creado_en","id","nombre","sitio_id"},"schema","table","operation","old_record"}`
+-- y el binario la escribió en SQLite local (`nombre`, `cedula`, todo)
+**sin hacer ningún `GET`/`SELECT` aparte**. Verificado releyendo la SQLite
+resultante con `sqlite3`/`python3` directo, no sólo confiando en el log
+del programa.
+
+Comparado con el trigger real de producción
+(`private.emitir_cambio_nube_sitio`, Etapa 2), que sólo manda metadata
+(`schema`,`table`,`operation`,`sitio_id`,`dispositivo_id`,`changed_at`) y
+obliga a un pull REST completo para saber qué cambió -- esto demuestra que
+el patrón actual de la app (aviso vacío + resync completo) **no es una
+limitación de Supabase Realtime**, es una elección de implementación. La
+función que lo evitaría (`broadcast_changes`) ya está disponible en el
+proyecto, sin ninguna migración nueva.
+
 ### Etapa 4 (pendiente) -- decisión de integración
 
 Recién acá se evalúa si esto reemplaza de verdad a `nubeRealtime.ts` y
