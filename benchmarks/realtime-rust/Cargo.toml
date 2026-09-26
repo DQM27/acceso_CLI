@@ -1,0 +1,37 @@
+[package]
+name = "brisas_realtime_spike"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+
+# Laboratorio aislado (ver README.md de este directorio) -- cliente propio
+# de Supabase Realtime (protocolo Phoenix Channels) escrito desde cero
+# sobre `tokio-tungstenite`, sin depender de los crates comunitarios
+# `supabase-realtime-rs`/`supabase-client-realtime` (mantenimiento chico e
+# incierto -- ver la conversación que originó este experimento). No toca
+# el `Cargo.toml` ni el código del crate raíz `control_acceso`.
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
+# `rustls-tls-native-roots` (no `-webpki-roots`): usa el almacén de
+# confianza del SISTEMA en vez de un bundle fijo de Mozilla -- necesario en
+# este sandbox, donde el tráfico HTTPS saliente pasa por un proxy que
+# reterminaliza TLS con su propia CA (ver /root/.ccr/README.md); esa CA ya
+# está instalada en el almacén del sistema, pero nunca en el bundle
+# vendorizado de `webpki-roots`. En producción real (sin este proxy) el
+# comportamiento es el mismo: valida contra CAs públicas normales.
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+# `tokio-tungstenite` no elige un `CryptoProvider` de `rustls` por nosotros
+# desde que `rustls` dejó de asumir uno solo por defecto -- hay que
+# instalarlo explícito al arrancar (`rustls::crypto::ring::default_provider()
+# .install_default()` en `main.rs`), o el primer `connect_async` contra
+# `wss://` entra en pánico. `ring`: el backend criptográfico más portable
+# entre los dos que soporta `rustls` (la alternativa, `aws-lc-rs`, necesita
+# un compilador de C -- mismo motivo que ya evitó ese camino en `jsonwebtoken`
+# del crate raíz, ver su comentario en el `Cargo.toml` de ahí).
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+url = "2"

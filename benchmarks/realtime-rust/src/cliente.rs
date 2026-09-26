@@ -1,0 +1,170 @@
+//! Cliente WebSocket mínimo sobre `tokio-tungstenite`, hablando el framing
+//! de `protocolo.rs`. Sin reconexión, sin backoff, sin renovación de JWT
+//! todavía -- eso es la SIGUIENTE etapa del laboratorio (ver README.md),
+//! una vez que el protocolo base esté probado contra el servidor real de
+//! `control-acceso-staging`.
+
+use std::time::Duration;
+
+use futures_util::{SinkExt, StreamExt};
+use tokio::net::TcpStream;
+use tokio::time::timeout;
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
+
+use crate::protocolo::{MensajeEntrante, MensajeSaliente};
+
+#[derive(Debug, thiserror::Error)]
+pub enum ErrorCliente {
+    #[error("error de WebSocket: {0}")]
+    WebSocket(#[from] tokio_tungstenite::tungstenite::Error),
+    #[error("no llegó una respuesta antes de {0:?}")]
+    Timeout(Duration),
+    #[error("el servidor cerró la conexión sin responder")]
+    ConexionCerrada,
+    #[error("mensaje entrante no es JSON válido: {0}")]
+    JsonInvalido(#[from] serde_json::Error),
+}
+
+pub struct ClienteRealtime {
+    socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
+    proxima_referencia: u64,
+}
+
+/// Cuánto esperar por un `phx_reply` antes de darlo por perdido -- Supabase
+/// responde en milisegundos en condiciones normales; 5s es generoso a
+/// propósito para no dar falsos negativos por una red lenta durante este
+/// laboratorio.
+const ESPERA_REPLY: Duration = Duration::from_secs(5);
+
+impl ClienteRealtime {
+    /// `url_websocket` ya debe incluir `?apikey=...&vsn=1.0.0` -- ver
+    /// `armar_url` en `main.rs`. No valida el certificado TLS de forma
+    /// distinta a la del sistema (usa `rustls-tls-webpki-roots`, mismos
+    /// roots que cualquier navegador).
+    pub async fn conectar(url_websocket: &str) -> Result<Self, ErrorCliente> {
+        let (socket, _respuesta_http) = connect_async(url_websocket).await?;
+        Ok(Self {
+            socket,
+            proxima_referencia: 1,
+        })
+    }
+
+    fn siguiente_referencia(&mut self) -> String {
+        let referencia = self.proxima_referencia;
+        self.proxima_referencia += 1;
+        referencia.to_string()
+    }
+
+    async fn enviar(&mut self, mensaje: &MensajeSaliente) -> Result<(), ErrorCliente> {
+        let texto = serde_json::to_string(mensaje).map_err(ErrorCliente::JsonInvalido)?;
+        self.socket.send(Message::Text(texto)).await?;
+        Ok(())
+    }
+
+    /// Lee mensajes hasta encontrar un `phx_reply` con esta `referencia`
+    /// (ok o error) o hasta `ESPERA_REPLY` -- descarta cualquier otro
+    /// mensaje que llegue mientras tanto (ej. un broadcast de otro canal),
+    /// igual que haría un cliente real que multiplexa varios canales sobre
+    /// el mismo socket.
+    async fn esperar_reply(&mut self, referencia: &str) -> Result<MensajeEntrante, ErrorCliente> {
+        let resultado = timeout(ESPERA_REPLY, async {
+            loop {
+                match self.socket.next().await {
+                    Some(Ok(Message::Text(texto))) => {
+                        let entrante: MensajeEntrante = serde_json::from_str(&texto)?;
+                        if entrante.event == "phx_reply"
+                            && entrante.referencia.as_deref() == Some(referencia)
+                        {
+                            return Ok(entrante);
+                        }
+                    }
+                    Some(Ok(_otro_tipo_de_frame)) => {}
+                    Some(Err(error)) => return Err(ErrorCliente::WebSocket(error)),
+                    None => return Err(ErrorCliente::ConexionCerrada),
+                }
+            }
+        })
+        .await;
+
+        resultado.unwrap_or(Err(ErrorCliente::Timeout(ESPERA_REPLY)))
+    }
+
+    /// El smoke test más simple del protocolo -- ver el doc-comment de
+    /// `MensajeSaliente::latido`. Devuelve `true` si el servidor confirmó
+    /// `status: "ok"`.
+    pub async fn latido(&mut self) -> Result<bool, ErrorCliente> {
+        let referencia = self.siguiente_referencia();
+        self.enviar(&MensajeSaliente::latido(referencia.clone()))
+            .await?;
+        let reply = self.esperar_reply(&referencia).await?;
+        Ok(reply.es_reply_ok_de(&referencia))
+    }
+
+    pub async fn cerrar(mut self) -> Result<(), ErrorCliente> {
+        self.socket.close(None).await?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::net::TcpListener;
+
+    /// Levanta un servidor WebSocket local (sin red externa, sin
+    /// credenciales de Supabase) que sólo entiende heartbeat -- prueba la
+    /// lógica de framing/espera-de-reply de `ClienteRealtime` de forma
+    /// determinística, reproducible en CI. El smoke test contra el
+    /// servidor REAL de `control-acceso-staging` vive aparte
+    /// (`bin/smoke_heartbeat.rs`, `#[ignore]` por defecto -- ver README.md).
+    async fn servidor_de_prueba_que_solo_responde_heartbeat() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let direccion = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let (flujo, _remoto) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(flujo).await.unwrap();
+            while let Some(Ok(Message::Text(texto))) = socket.next().await {
+                let entrante: MensajeEntrante = serde_json::from_str(&texto).unwrap();
+                if entrante.event == "heartbeat" {
+                    let reply = serde_json::json!({
+                        "topic": "phoenix",
+                        "event": "phx_reply",
+                        "payload": { "status": "ok", "response": {} },
+                        "ref": entrante.referencia,
+                    });
+                    socket
+                        .send(Message::Text(reply.to_string()))
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+
+        format!("ws://{direccion}")
+    }
+
+    #[tokio::test]
+    async fn el_heartbeat_recibe_ok_del_servidor() {
+        let url = servidor_de_prueba_que_solo_responde_heartbeat().await;
+        let mut cliente = ClienteRealtime::conectar(&url).await.unwrap();
+        assert!(cliente.latido().await.unwrap());
+        cliente.cerrar().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn dos_heartbeats_seguidos_usan_referencias_distintas() {
+        let url = servidor_de_prueba_que_solo_responde_heartbeat().await;
+        let mut cliente = ClienteRealtime::conectar(&url).await.unwrap();
+        assert!(cliente.latido().await.unwrap());
+        assert!(cliente.latido().await.unwrap());
+        cliente.cerrar().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn conectar_a_un_puerto_sin_servidor_falla() {
+        let error = ClienteRealtime::conectar("ws://127.0.0.1:1").await;
+        assert!(error.is_err());
+    }
+}
