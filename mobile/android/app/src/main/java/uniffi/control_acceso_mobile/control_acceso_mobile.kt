@@ -793,6 +793,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir_cifrado(
+    ): Int
     external fun ffi_control_acceso_mobile_uniffi_contract_version(
     ): Int
 
@@ -816,6 +818,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_free_nucleo(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_constructor_nucleo_abrir(`rutaBaseDatos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_constructor_nucleo_abrir_cifrado(`rutaBaseDatos`: RustBuffer.ByValue,`clave`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1234,6 +1238,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir() and 0xFFFF) != 57593) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir_cifrado() and 0xFFFF) != 542) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
 }
 
 /**
@@ -1587,6 +1594,25 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
         val byteBuf = toUtf8(value)
         buf.putInt(byteBuf.limit())
         buf.put(byteBuf)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterByteArray: FfiConverterRustBuffer<ByteArray> {
+    override fun read(buf: ByteBuffer): ByteArray {
+        val len = buf.getInt()
+        val byteArr = ByteArray(len)
+        buf.get(byteArr)
+        return byteArr
+    }
+    override fun allocationSize(value: ByteArray): ULong {
+        return 4UL + value.size.toULong()
+    }
+    override fun write(value: ByteArray, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        buf.put(value)
     }
 }
 
@@ -3570,6 +3596,43 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
         
         FfiConverterString.lower(`rutaBaseDatos`),_status)
+}
+    )
+    }
+    
+
+        
+    /**
+     * MV-03 (auditoría 2026-09-24): variante cifrada de [`Self::abrir`] --
+     * `clave` es la clave AES de 32 bytes que Kotlin resuelve del Android
+     * Keystore (`AndroidKeystoreClaveBaseDatosStore.kt`), nunca derivada
+     * acá. Único punto de entrada real desde `AplicacionViewModel`; `abrir`
+     * se queda sin tocar para los tests de Kotlin (`NucleoDePrueba`) y
+     * para quien compile con `sqlite-plano`/`cifrado-sqlcipher` en vez del
+     * default (`cifrado-sqlite3mc`) -- ver el comentario de
+     * `[features]` en `Cargo.toml`.
+     *
+     * Si el archivo en `ruta_base_datos` ya existe pero NO es legible con
+     * esta clave -- el caso real de todo teléfono con la app instalada
+     * antes de este cambio, que hoy tiene la base en texto plano -- se
+     * descarta y se reconstruye vacía en vez de migrar el archivo byte a
+     * byte. Decisión explícita del usuario (2026-09-26): la app ya
+     * depende de la sincronización con la nube como fuente de verdad
+     * (mismo criterio que `confirmar_reconstruccion_desde_nube` en
+     * desktop/src-tauri/src/lib.rs para un archivo dañado); el costo es
+     * perder el historial/auditoría LOCAL de ese dispositivo que todavía
+     * no se hubiera subido, a cambio de no escribir ni probar en este
+     * momento una migración `sqlcipher_export` sin verificar todavía
+     * contra un dispositivo real.
+     */
+    @Throws(NucleoException::class) fun `abrirCifrado`(`rutaBaseDatos`: kotlin.String, `clave`: kotlin.ByteArray): Nucleo {
+            return FfiConverterTypeNucleo.lift(
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_constructor_nucleo_abrir_cifrado(
+    
+        
+        FfiConverterString.lower(`rutaBaseDatos`),
+        FfiConverterByteArray.lower(`clave`),_status)
 }
     )
     }
