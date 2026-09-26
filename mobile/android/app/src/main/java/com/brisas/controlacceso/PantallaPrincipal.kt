@@ -46,6 +46,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ConflictoGafeteActivo
 import uniffi.control_acceso_mobile.ConflictoIngresoActivo
+import uniffi.control_acceso_mobile.ConflictoIngresoProveedorActivo
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.UsuarioSesion
 
@@ -95,6 +96,12 @@ fun PantallaPrincipal(
     // Alimentado desde los dos caminos de sync (pulso periódico y botón
     // manual), igual que `refrescarNube`.
     var conflictosIngreso by remember { mutableStateOf<List<ConflictoIngresoActivo>>(emptyList()) }
+    // MV-04 (auditoría 2026-09-24): mismo criterio que `conflictosIngreso`,
+    // pero para proveedores (`ResumenSincronizacion.conflictosIngresoProveedor`,
+    // ver `nube::proveedores_con_conflicto_activo`) -- ya se calculaba en
+    // Rust y desktop ya lo mostraba (`App.tsx`), pero acá nadie lo leía
+    // todavía.
+    var conflictosIngresoProveedor by remember { mutableStateOf<List<ConflictoIngresoProveedorActivo>>(emptyList()) }
     // Mismo criterio que `conflictosIngreso`, pero calculado con datos
     // locales dentro de `drenar_cola` (fase 3, PR #62) -- ver
     // `ResumenSincronizacion.conflictosGafete`.
@@ -128,6 +135,7 @@ fun PantallaPrincipal(
                 } else {
                     refrescarNube += 1
                     conflictosIngreso = resumen.conflictosIngreso
+                    conflictosIngresoProveedor = resumen.conflictosIngresoProveedor
                     conflictosGafete = resumen.conflictosGafete
                 }
             },
@@ -187,6 +195,7 @@ fun PantallaPrincipal(
         if (resumen != null) {
             refrescarNube += 1
             conflictosIngreso = resumen.conflictosIngreso
+            conflictosIngresoProveedor = resumen.conflictosIngresoProveedor
             conflictosGafete = resumen.conflictosGafete
         }
     }
@@ -259,6 +268,18 @@ fun PantallaPrincipal(
         for (conflicto in conflictosIngreso) {
             Text(
                 "${conflicto.contratistaNombre} tiene un ingreso activo acá Y en ${conflicto.sitioConflicto} — hay que resolverlo.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
+        }
+
+        // MV-04: mismo criterio que el bucle de arriba, pero para
+        // proveedores -- mismo texto que ya usa desktop (`App.tsx`), para
+        // no dar un aviso distinto según qué interfaz lo muestre.
+        for (conflicto in conflictosIngresoProveedor) {
+            Text(
+                "${conflicto.nombre} tiene un ingreso de proveedor activo acá Y en ${conflicto.sitioConflicto} — hay que resolverlo.",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),

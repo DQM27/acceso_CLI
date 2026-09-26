@@ -220,6 +220,16 @@ class ProveedoresViewModel(
                     // contra su propia base local.
                     val secreto = secretoStore.cargar()
                         ?: throw SecretoDispositivoNoEncontradoException()
+                    // MV-04 (auditoría 2026-09-24): escritorio ya bloqueaba
+                    // este caso (`desktop/src-tauri/src/comandos/proveedores.rs`),
+                    // mobile no lo llamaba pese a que la función existe en
+                    // Rust desde antes. Mismo criterio "mejor esfuerzo" que
+                    // el resto de estos chequeos: `null` (sin secreto, sin
+                    // red, o simplemente no está activo en otro lado) deja
+                    // continuar, nunca bloquea por falta de conectividad.
+                    nucleo.proveedorActivoEnOtroSitioConSecreto(secreto, cedula)?.let { sitio ->
+                        throw ProveedorActivoEnOtroSitioException(sitio)
+                    }
                     if (nucleo.gafeteDeProveedorOcupadoEnSitioConSecreto(secreto, gafeteNumero)) {
                         throw GafeteOcupadoEnSitioException(gafeteNumero)
                     }
@@ -241,6 +251,8 @@ class ProveedoresViewModel(
                 empresaSeleccionada = null
                 refrescarActivos()
                 onExito()
+            } catch (excepcion: ProveedorActivoEnOtroSitioException) {
+                error = excepcion.message
             } catch (excepcion: GafeteOcupadoEnSitioException) {
                 error = excepcion.message
             } catch (excepcion: NucleoException) {
