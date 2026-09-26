@@ -12,7 +12,7 @@ publish = false
 # incierto -- ver la conversación que originó este experimento). No toca
 # el `Cargo.toml` ni el código del crate raíz `control_acceso`.
 [dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync"] }
 # `rustls-tls-native-roots` (no `-webpki-roots`): usa el almacén de
 # confianza del SISTEMA en vez de un bundle fijo de Mozilla -- necesario en
 # este sandbox, donde el tráfico HTTPS saliente pasa por un proxy que

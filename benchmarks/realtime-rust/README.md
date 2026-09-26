@@ -152,11 +152,42 @@ curl -X POST "https://pmrytjktlyiuikxuuxpr.supabase.co/functions/v1/device-auth"
   -d '{"secret":"<tu secreto>"}'
 ```
 
-### Etapa 3 (pendiente) -- reconexión y backoff
+### Etapa 3 (esta, parcial) -- reconexión con backoff ✅ implementado
 
-Igual criterio que ya implementa `nubeRealtime.ts` hoy: backoff exponencial
-(2s → 60s tope), renovación de JWT antes de que expire, recuperar avisos
-perdidos mientras estuvo desconectado.
+`backoff.rs` -- la fórmula pura (`base * 2^intentos`, capada en `tope`),
+igual criterio que `nubeRealtime.ts` (2s → 60s). Probada con valores
+deterministas (sin async, sin tiempo real) para los casos borde: primer
+intento, crecimiento exponencial, y que nunca desborde ni supere el tope
+con una racha larguísima de fallas (`u32::MAX` intentos seguidos).
+
+`supervisor.rs` -- el bucle conectar → latir → (si se cae) reintentar,
+probado contra un servidor LOCAL que corta la primera conexión a
+propósito después de un heartbeat, simulando una caída de red real:
+
+1. Conecta, un heartbeat OK.
+2. El servidor cierra el socket.
+3. `supervisar_heartbeat` lo detecta (`Desconectado`), calcula el backoff
+   (`Reintentando`, intento 0) y espera.
+4. Reconecta solo, sin que nadie externo intervenga.
+5. Sigue latiendo -- segundo heartbeat OK, en una conexión nueva.
+
+Corrido 3 veces seguidas sin fallar (nada de sleeps largos ni timeouts
+frágiles -- el test usa canales `mpsc` y espera eventos concretos, no
+tiempo fijo). Un segundo test confirma que el contador de intentos
+arranca en 0 en la primera reconexión, no arrastra estado de nada previo.
+
+**Lo que esta etapa NO cubre todavía** (quedó fuera a propósito, para no
+inflar el alcance):
+- Renovación de JWT antes de que expire (el heartbeat no lleva JWT -- eso
+  sólo aplica a un `phx_join` privado, que el supervisor de esta etapa no
+  hace; integrarlo es la composición obvia de `unirse_privado` +
+  `supervisar_heartbeat`, pendiente).
+- Recuperar avisos perdidos mientras estuvo desconectado -- Phoenix no
+  reenvía solo lo que te perdiste; eso es responsabilidad de la app (en
+  `nubeRealtime.ts`, `programarSincronizacion()` al reconectar, que dispara
+  un `sincronizarConNube()` completo). El equivalente acá sería, al
+  recibir `EventoSupervisor::Conectado`, disparar la misma lógica de
+  resync -- no es un problema del cliente WebSocket en sí.
 
 ### Etapa 4 (pendiente) -- decisión de integración
 
@@ -168,8 +199,11 @@ experimento que la informa, no el resultado.
 
 ## Qué NO hace todavía (a propósito)
 
-- No maneja reconexión ni backoff.
-- No renueva JWT.
+- El supervisor de reconexión (Etapa 3) sólo está compuesto con heartbeat,
+  no con `phx_join` a un canal privado -- integrarlo es directo, pendiente.
+- No renueva JWT antes de que expire.
+- No recupera avisos perdidos al reconectar (ver Etapa 3, es responsabilidad
+  de la app, no del cliente).
 - No implementa Presence.
 - No está integrado a `sincronizarConNube()` ni a ningún flujo real de la
   app -- es un binario y una librería sueltos, corridos a mano.
