@@ -184,9 +184,19 @@ private fun VistaCamaraCedula(
                                     }
                                     camara.trabajoResultado?.cancel()
                                     camara.trabajoResultado = alcance.launch {
-                                        if (!continuo && resultado.vencido) {
-                                            delay(DEMORA_AVISO_VENCIDO_MS)
-                                        }
+                                        // Antes acá se esperaba
+                                        // DEMORA_AVISO_VENCIDO_MS si el
+                                        // documento estaba vencido, para
+                                        // que el operador alcanzara a leer
+                                        // el aviso antes de seguir -- se
+                                        // saca (pedido explícito del
+                                        // usuario, 2026-09-26): la pausa no
+                                        // bloqueaba nada de verdad, el
+                                        // ingreso se otorgaba igual apenas
+                                        // pasaba el segundo. Un mecanismo
+                                        // que sí bloquee de verdad (no sólo
+                                        // avisar y dejar pasar) queda para
+                                        // otra pasada.
                                         if (!camara.sesionActiva.get()) return@launch
                                         // `onDocumentoActual` es suspend: para el
                                         // caso de gafetes ya espera a que la
@@ -449,8 +459,6 @@ fun iniciarCamara(
 // las cosas pero seguía sin sentirse tan rápido como el autofocus puramente
 // por defecto -- un empujón puntual solo puede sumar latencia sin garantía
 // de ayudar, así que se sacó del todo.
-
-private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 // Subido de 900ms -- con el ciclo de salida por gafete ya sin botón de
 // confirmar (pedido explícito del usuario 2026-09-20), el mensaje de
 // resultado (nombre en verde, motivo en rojo) apenas alcanzaba a leerse

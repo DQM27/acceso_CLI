@@ -193,6 +193,22 @@ private val REGEX_DIMEX_NACIONALIDAD = Regex("""Nacionalidad:\s*\n?\s*([A-ZÁÉ�
 private val REGEX_CEDULA_APELLIDO1 = Regex("""1\D{0,4}Apellido:?[ \t]*\n?[ \t]*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_CEDULA_APELLIDO2 = Regex("""2\D{0,4}Apellido:?[ \t]*\n?[ \t]*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_LICENCIA_NUMERO = Regex("""N[º°9O]?[:.]?\s*(?:DM|CI)?[- ]?(\d{6,15})""", RegexOption.IGNORE_CASE)
+// El nombre completo en la licencia NO trae ninguna etiqueta ("Nombre:")
+// a diferencia de cédula/DIMEX -- aparece como una línea suelta en
+// mayúsculas, sin más (verificado contra una licencia real, 2026-09-26:
+// antes esto no se intentaba leer para nada, sólo el número). Una línea
+// candidata es puro texto en mayúsculas de al menos 3 palabras.
+private val REGEX_LICENCIA_NOMBRE_COMPLETO = Regex("""^[A-ZÁÉÍÓÚÑ]+(?:[ \t]+[A-ZÁÉÍÓÚÑ]+){2,}$""")
+// Palabras que SÍ aparecen impresas en mayúsculas en el resto del diseño
+// de la licencia (encabezado, sello de fondo del MOPT) -- una línea
+// candidata que contenga alguna de éstas se descarta, para no confundir
+// "REPUBLICA DE COSTA RICA" o el sello "DIRECCION GENERAL EDUCACION
+// VIAL" con el nombre real de la persona.
+private val PALABRAS_NO_NOMBRE_LICENCIA = setOf(
+    "REPUBLICA", "REPÚBLICA", "COSTA", "RICA", "LICENCIA", "CONDUCIR",
+    "EXPEDICION", "EXPEDICIÓN", "NACIMIENTO", "VENCIMIENTO", "TIPO", "DONADOR",
+    "DIRECCION", "DIRECCIÓN", "GENERAL", "EDUCACION", "EDUCACIÓN", "VIAL", "MOPT",
+)
 private val REGEX_PRAIND_CEDULA = Regex("""No\.?\s*de\s*c[ée]dula:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_NOMBRE = Regex("""Nombre:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_EMPRESA = Regex("""Empresa:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
@@ -354,13 +370,42 @@ private fun extraerLicencia(texto: String, esExtranjero: Boolean): DocumentoDete
         ?: return null
 
     val vencimiento = extraerFecha(texto, etiqueta = "Vencimiento")
+    val nombreYApellidos = extraerNombreCompletoLicencia(texto)
 
     return DocumentoDetectado(
         tipo = if (esExtranjero) TipoDocumento.LICENCIA_EXTRANJERO else TipoDocumento.LICENCIA_NACIONAL,
         numeroDocumento = numero,
         esExtranjero = esExtranjero,
         vencimiento = vencimiento,
+        nombre = nombreYApellidos?.first,
+        apellidos = nombreYApellidos?.second,
     )
+}
+
+/// Orden legal costarricense en el nombre completo impreso: 1er apellido,
+/// 2do apellido, nombre(s) -- por eso las primeras dos palabras son
+/// siempre los apellidos y el resto es el nombre, sin importar cuántas
+/// palabras tenga (un nombre compuesto como "Daniel de Jesús", tres
+/// palabras, es tan válido como uno de una sola). Se toma la ÚLTIMA línea
+/// candidata, no la primera: "REPUBLICA DE COSTA RICA" en el encabezado
+/// también es puro texto en mayúsculas de varias palabras, así que
+/// filtrar por [PALABRAS_NO_NOMBRE_LICENCIA] no alcanza sola si ML Kit
+/// llega a leer el encabezado y el nombre en un orden inesperado dentro
+/// del mismo bloque de texto.
+private fun extraerNombreCompletoLicencia(texto: String): Pair<String, String>? {
+    val candidato = texto.lines()
+        .map { it.trim().uppercase() }
+        .filter { linea ->
+            REGEX_LICENCIA_NOMBRE_COMPLETO.matches(linea) &&
+                linea.split(" ").none { it in PALABRAS_NO_NOMBRE_LICENCIA }
+        }
+        .lastOrNull() ?: return null
+
+    val palabras = candidato.split(" ").filter { it.isNotBlank() }
+    if (palabras.size < 3) return null
+    val apellidos = palabras.take(2).joinToString(" ")
+    val nombre = palabras.drop(2).joinToString(" ")
+    return nombre to apellidos
 }
 
 /// El carnet PRAIND identifica a la persona por cédula (`numeroDocumento`),

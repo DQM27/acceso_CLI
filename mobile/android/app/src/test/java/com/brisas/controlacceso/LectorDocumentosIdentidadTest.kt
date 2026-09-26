@@ -317,6 +317,42 @@ class LectorDocumentosIdentidadTest {
         assertEquals("205300606", doc?.numeroDocumento)
         assertEquals(false, doc?.esExtranjero)
         assertEquals(FechaDocumento(8, 8, 2027), doc?.vencimiento)
+        // MV-04/hallazgo 2026-09-26: antes esto no se intentaba leer para
+        // nada. Orden legal costarricense: 1er apellido, 2do apellido,
+        // nombre -- "GUTIERREZ MARTINEZ" son los apellidos, "JUAN JOSE" el
+        // nombre.
+        assertEquals("JUAN JOSE", doc?.nombre)
+        assertEquals("GUTIERREZ MARTINEZ", doc?.apellidos)
+    }
+
+    @Test
+    fun licenciaExtranjeroLeeNombreYApellidosSinEtiqueta() {
+        // Texto reconstruido de una licencia real de extranjero
+        // (2026-09-26, reporte en vivo: "reconoce el número de cédula pero
+        // no carga el nombre") -- sin ninguna etiqueta "Nombre:", el
+        // nombre completo es la última línea de puras mayúsculas antes del
+        // resto de campos administrativos/código de barras. Nombre
+        // compuesto de tres palabras ("DANIEL DE JESUS") para confirmar
+        // que no se trunca a una sola.
+        val texto = """
+            REPUBLICA DE COSTA RICA
+            Licencia de Conducir
+            Nº: DM-155824395105
+            Expedición 03-04-2023
+            Nacimiento 30-05-1989
+            Tipo: A3
+            Vencimiento 03-04-2026
+            Donador
+            R.F. R.T. T.S. NI.
+            QUINTANA MEDINA DANIEL DE JESUS
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.LICENCIA_EXTRANJERO, doc?.tipo)
+        assertEquals("155824395105", doc?.numeroDocumento)
+        assertEquals("DANIEL DE JESUS", doc?.nombre)
+        assertEquals("QUINTANA MEDINA", doc?.apellidos)
     }
 
     @Test
