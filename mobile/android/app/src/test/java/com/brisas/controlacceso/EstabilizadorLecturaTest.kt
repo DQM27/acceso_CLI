@@ -43,23 +43,56 @@ class EstabilizadorLecturaTest {
         }
     }
 
-    @Test
-    fun mrzValidoConfirmaEnUnSoloFrame() {
-        // Con checksum disponible no hace falta esperar repeticiones -- eso
-        // es justo el punto de usar el dígito verificador (plan, sección 5).
-        val estabilizador = EstabilizadorLectura(framesRequeridos = 3)
-        val r = estabilizador.procesarFrame(td1Valido)
-        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
-        assertEquals("999888777", r.documento?.numeroDocumento)
-        assertEquals(FuenteDatos.MRZ, r.documento?.fuenteDatos)
+    /// El MRZ confirma en 2 frames coincidentes (número + nombres), no en
+    /// 1: la línea de nombres no tiene dígito verificador.
+    private fun EstabilizadorLectura.procesarDosVeces(texto: String): ResultadoEstabilizacion {
+        procesarFrame(texto)
+        return procesarFrame(texto)
     }
 
     @Test
-    fun mrzCorruptoNuncaConfirmaAunqueSeRepita() {
+    fun mrzValidoConfirmaEnDosFramesAunqueElFrenteExijaMas() {
+        // Con checksum, número y fechas ya están probados; sólo se pide que
+        // la lectura (nombres incluidos) se repita una vez.
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 3)
+        val r1 = estabilizador.procesarFrame(td1Valido)
+        assertEquals(EstadoEscaneo.BUSCANDO, r1.estado)
+        val r2 = estabilizador.procesarFrame(td1Valido)
+        assertEquals(EstadoEscaneo.CONFIRMADO, r2.estado)
+        assertEquals("999888777", r2.documento?.numeroDocumento)
+        assertEquals(FuenteDatos.MRZ, r2.documento?.fuenteDatos)
+    }
+
+    @Test
+    fun mrzConNombreMalLeidoEnUnFrameNoSeConfirmaConEseNombre() {
+        val nombreMalLeido = td1Valido.replace("PEREZ<<MARIA", "PEREZ<<MAPIA")
+        val estabilizador = EstabilizadorLectura()
+        assertEquals(EstadoEscaneo.BUSCANDO, estabilizador.procesarFrame(nombreMalLeido).estado)
+        assertEquals(EstadoEscaneo.BUSCANDO, estabilizador.procesarFrame(td1Valido).estado)
+        val r = estabilizador.procesarFrame(td1Valido)
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals("MARIA JOSE", r.documento?.nombre)
+    }
+
+    @Test
+    fun mrzConNombresQueNuncaCoincidenSeDesempataTrasCuatroLecturas() {
+        val estabilizador = EstabilizadorLectura()
+        val variantes = listOf("MAPIA", "MARIA", "MARLA", "MARIA")
+        val resultados = variantes.map { estabilizador.procesarFrame(td1Valido.replace("MARIA", it)) }
+        // La segunda "MARIA" ya coincide con la primera -> confirma ahí.
+        assertEquals(EstadoEscaneo.CONFIRMADO, resultados.last().estado)
+        assertEquals("MARIA JOSE", resultados.last().documento?.nombre)
+    }
+
+    @Test
+    fun mrzCorruptoNuncaConfirmaYNoSeMarcaComoInvalido() {
+        // MRZ en cuadro pero mal leído = lectura parcial (foco/reflejo):
+        // BUSCANDO, sin marco rojo ni vibración de error.
         val estabilizador = EstabilizadorLectura(framesRequeridos = 3)
         repeat(5) {
             val r = estabilizador.procesarFrame(td1Corrupto)
-            assertEquals(EstadoEscaneo.INVALIDO, r.estado)
+            assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
+            assertEquals("Leyendo el reverso — mantenga firme", r.mensaje)
             assertNull(r.documento)
         }
     }
@@ -74,6 +107,7 @@ class EstabilizadorLecturaTest {
 
         val r = EstabilizadorLectura().procesarFrame(td1Extranjero)
 
+        // No soportado es definitivo, no depende de otra lectura.
         assertEquals(EstadoEscaneo.INVALIDO, r.estado)
         assertNull(r.documento)
         assertEquals("Documento no soportado", r.mensaje)
@@ -149,7 +183,7 @@ class EstabilizadorLecturaTest {
 
     @Test
     fun mensajeDeConfirmacionNombraElTipoDetectadoPorMrz() {
-        val r = EstabilizadorLectura().procesarFrame(td1Valido)
+        val r = EstabilizadorLectura().procesarDosVeces(td1Valido)
         assertEquals("Cédula de residencia (DIMEX) confirmado", r.mensaje)
     }
 
@@ -227,7 +261,7 @@ class EstabilizadorLecturaTest {
             9001011F3001019CRI<<<<<<<<<<<8
             PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
         """.trimIndent()
-        val r = EstabilizadorLectura().procesarFrame(td1CedulaNacional)
+        val r = EstabilizadorLectura().procesarDosVeces(td1CedulaNacional)
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals(TipoDocumento.CEDULA_NACIONAL, r.documento?.tipo)
         assertEquals("Cédula de identidad confirmado", r.mensaje)
@@ -260,7 +294,7 @@ class EstabilizadorLecturaTest {
         // td1Valido vence 01/01/2030 -- fijamos "hoy" después de esa fecha.
         val hoyFijo = FechaDocumento(1, 1, 2031)
         val estabilizador = EstabilizadorLectura(obtenerFechaHoy = { hoyFijo })
-        val r = estabilizador.procesarFrame(td1Valido)
+        val r = estabilizador.procesarDosVeces(td1Valido)
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals(true, r.vencido)
         assertEquals("Cédula de residencia (DIMEX) confirmado — DOCUMENTO VENCIDO", r.mensaje)
@@ -279,7 +313,7 @@ class EstabilizadorLecturaTest {
         val hoyFijo = FechaDocumento(8, 9, 2026) // nacido 15/06/2018 -> 8 años
         val estabilizador = EstabilizadorLectura(obtenerFechaHoy = { hoyFijo })
 
-        val r = estabilizador.procesarFrame(td1Menor)
+        val r = estabilizador.procesarDosVeces(td1Menor)
 
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals(TipoDocumento.TARJETA_IDENTIDAD_MENOR, r.documento?.tipo)
@@ -290,7 +324,7 @@ class EstabilizadorLecturaTest {
     fun sinFechaDeVencimientoNuncaSeMarcaComoVencido() {
         // Cédula nacional no trae fecha de vencimiento extraíble hoy.
         val estabilizador = EstabilizadorLectura(framesRequeridos = 1)
-        val r = estabilizador.procesarFrame("TRIBUNAL SUPREMO DE ELECCIONES\n1-1234-0567\nCOSTA RICA")
+        val r = estabilizador.procesarFrame("TRIBUNAL SUPREMO DE ELECCIONES\n1-1234-0567\nNombre: JUAN\nCOSTA RICA")
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals(false, r.vencido)
     }
@@ -325,17 +359,45 @@ class EstabilizadorLecturaTest {
         assertEquals("GOMEZ VARGAS", r.documento?.apellidos)
     }
 
+    private val frenteSinNombre = "TRIBUNAL SUPREMO DE ELECCIONES\n1-1234-0567\nCOSTA RICA"
+
     @Test
-    fun cedulaNacionalLeidaSoloDelFrenteAvisaQueFaltaVoltearla() {
-        // Sin MRZ en el texto (sólo lo que trae el frente con la foto): el
-        // número se lee bien, pero nunca hay nombre desde esa cara -- ver
-        // `LectorDocumentosIdentidad.leerDocumentoDeTexto`. El mensaje debe
-        // decírselo a quien opera en vez de confirmar en silencio sin nombre
-        // (bug reportado en pruebas reales, 2026-09-17).
-        val estabilizador = EstabilizadorLectura(framesRequeridos = 1)
-        val r = estabilizador.procesarFrame("TRIBUNAL SUPREMO DE ELECCIONES\n1-1234-0567\nCOSTA RICA")
-        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
-        assertEquals(null, r.documento?.nombre)
+    fun cedulaNacionalLeidaSoloDelFrenteEsperaElReversoSinConfirmar() {
+        // Antes confirmaba al instante con "muéstreme el reverso", pero
+        // confirmar cierra la cámara: el reverso nunca se llegaba a leer.
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 1, framesEsperaReverso = 5)
+        val r = estabilizador.procesarFrame(frenteSinNombre)
+        assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
+        assertNull(r.documento)
         assertEquals("Ya tengo el número — muéstreme el reverso para el nombre", r.mensaje)
+    }
+
+    @Test
+    fun alVoltearLaCedulaElMrzConfirmaConElNombre() {
+        val td1CedulaNacional = """
+            IDCRI1011101119<<<<<<<<<<<<<<<
+            9001011F3001019CRI<<<<<<<<<<<8
+            PEREZ<<MARIA<JOSE<<<<<<<<<<<<<
+        """.trimIndent()
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 1, framesEsperaReverso = 20)
+        estabilizador.procesarFrame(frenteSinNombre)
+        estabilizador.procesarFrame("") // volteando la tarjeta
+        val r = estabilizador.procesarDosVeces(td1CedulaNacional)
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals(FuenteDatos.MRZ, r.documento?.fuenteDatos)
+        assertEquals("MARIA JOSE", r.documento?.nombre)
+    }
+
+    @Test
+    fun sinReversoConfirmaSoloElNumeroAlAgotarLaEspera() {
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 1, framesEsperaReverso = 3)
+        estabilizador.procesarFrame(frenteSinNombre)
+        estabilizador.procesarFrame("")
+        estabilizador.procesarFrame("")
+        val r = estabilizador.procesarFrame("")
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals("112340567", r.documento?.numeroDocumento)
+        assertNull(r.documento?.nombre)
+        assertEquals("Cédula de identidad confirmado — sin nombre, complételo a mano", r.mensaje)
     }
 }

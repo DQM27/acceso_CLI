@@ -10,13 +10,11 @@
 //! `CacheTokenDispositivo` viviendo fuera del `Mutex` de `Nucleo`: no hay
 //! ninguna razón real para exigir una sesión abierta para parsear texto).
 //!
-//! División de responsabilidades con Kotlin (`buscarLineasMrz` en
+//! División de responsabilidades con Kotlin (`buscarBloquesMrz` en
 //! `MrzParser.kt`): Kotlin sigue ubicando cuáles líneas del texto crudo de
 //! ML Kit tienen forma de MRZ (extracción mecánica) y manda acá sólo esas
 //! 2-3 líneas ya aisladas. Acá se decide todo lo demás: formato, parseo,
 //! checksum, y corrección de caracteres ambiguos.
-
-const MAX_CORRECCIONES_POR_CAMPO: usize = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum FormatoMrz {
@@ -136,139 +134,98 @@ fn checksum_valido(datos: &str, esperado: char) -> bool {
 }
 
 /// Confusables ICAO estándar por OCR: `8↔B`, `0↔O`, `1↔I↔L`, `5↔S`, `2↔Z`.
-/// Devuelve las alternativas del mismo grupo, sin incluir `c`. Conjunto
+/// Devuelve el ÚNICO dígito que puede haber detrás de una letra leída por
+/// el OCR, o `None` si la letra no tiene un dígito confusable. Conjunto
 /// fijo, no configurable -- ampliarlo es una decisión de producto, no algo
 /// que deba variar por llamada FFI.
-fn confusables(c: char) -> &'static [char] {
+fn digito_confusable(c: char) -> Option<char> {
     match c {
-        '8' => &['B'],
-        'B' => &['8'],
-        '0' => &['O'],
-        'O' => &['0'],
-        '1' => &['I', 'L'],
-        'I' => &['1', 'L'],
-        'L' => &['1', 'I'],
-        '5' => &['S'],
-        'S' => &['5'],
-        '2' => &['Z'],
-        'Z' => &['2'],
-        _ => &[],
+        'B' => Some('8'),
+        'O' => Some('0'),
+        'I' | 'L' => Some('1'),
+        'S' => Some('5'),
+        'Z' => Some('2'),
+        _ => None,
     }
 }
 
-/// Intenta hacer que `datos` pase su propio checksum simple, cambiando como
-/// máximo [`MAX_CORRECCIONES_POR_CAMPO`] caracteres por alternativas
-/// confusables -- nunca combina con otros campos (cada llamada es
-/// independiente, ve sólo `datos`+`check_esperado` de ESTE campo) ni
-/// reintenta entre frames (función pura, sin memoria entre llamadas: quien
-/// llama de nuevo con el siguiente frame empieza de cero). Si ninguna
-/// combinación dentro del límite calza, se rinde y devuelve `datos` tal
-/// cual llegó, sin corrección forzada ni inventada.
-///
-/// Un candidato sólo se acepta si, además de calzar el checksum, el
-/// resultado queda compuesto enteramente por dígitos o relleno (`'<'`) --
-/// hallazgo real al escribir los tests: el alfabeto MRZ le da un valor
-/// numérico válido a CUALQUIER letra A-Z (ICAO 9303), así que sin este
-/// filtro un candidato con una letra que quedó SIN corregir (porque no era
-/// una de las posiciones elegidas para sustituir) puede calzar el checksum
-/// por pura coincidencia aritmética y colarse como "corregido" dejando una
-/// letra suelta en un campo que debe ser numérico (número de documento,
-/// fechas). Los tres campos donde se llama esto en la práctica
-/// (documento/fecha de nacimiento/fecha de vencimiento de cédulas y DIMEX
-/// costarricenses, más el campo de datos personales de TD3) son siempre
-/// numéricos -- este filtro no descarta ningún caso real, sólo colisiones
-/// espurias.
-///
-/// Acotado por construcción, no por un chequeo de tiempo aparte: el espacio
-/// de búsqueda de un campo MRZ (máximo 9 caracteres) con como mucho 2
-/// posiciones a la vez y hasta 2 alternativas por posición nunca supera un
-/// puñado de combinaciones -- del orden de C(9,2)×2×2 ≈ 140 checksums en el
-/// peor caso, microsegundos reales. Sin timeout explícito acá: un timeout
-/// sólo tendría sentido si el tamaño de entrada no estuviera acotado por el
-/// propio formato MRZ, que sí lo está.
-fn es_numerico_o_relleno(s: &str) -> bool {
-    s.chars().all(|c| c.is_ascii_digit() || c == '<')
+/// Un dígito verificador SIEMPRE es un dígito (o `'<'` en los pocos casos
+/// que ICAO lo permite, ver `resolver_numero_documento_td1` y el campo de
+/// datos personales de TD3) -- una letra confusable en esa posición es por
+/// fuerza un error de OCR, y el dígito que hay detrás es único. Antes se
+/// comparaba tal cual: un `0` leído como `O` invalidaba el campo y el
+/// compuesto sin ninguna posibilidad de corrección.
+fn normalizar_digito_verificador(c: char) -> char {
+    if c.is_ascii_digit() || c == '<' {
+        c
+    } else {
+        digito_confusable(c).unwrap_or(c)
+    }
 }
 
+/// Intenta hacer que `datos` pase su propio checksum simple reemplazando
+/// cada letra por su único dígito confusable (ver [`digito_confusable`]) --
+/// nunca combina con otros campos ni reintenta entre frames (función pura).
+/// Si queda alguna letra sin dígito confusable, o el resultado no calza el
+/// checksum, se rinde y devuelve `datos` tal cual llegó, sin corrección
+/// forzada ni inventada.
+///
+/// Sólo se corrige hacia un resultado compuesto enteramente por dígitos o
+/// relleno (`'<'`): el alfabeto MRZ le da un valor numérico válido a
+/// CUALQUIER letra A-Z (ICAO 9303), así que un resultado con letras podría
+/// calzar el checksum por pura coincidencia aritmética. Los campos donde se
+/// llama esto en la práctica (documento/fechas de cédulas y DIMEX
+/// costarricenses, más el de datos personales de TD3) son numéricos; un
+/// campo alfanumérico legítimo (ej. número de pasaporte) igual se acepta
+/// tal cual si ya calza su checksum sin corregir nada.
+///
+/// Antes esto era una búsqueda de "como mucho 2 sustituciones" con rechazo
+/// por ambigüedad. Con el filtro de arriba, cada letra tiene UN solo dígito
+/// posible, así que el único candidato numérico siempre fue el mapeo
+/// completo: la búsqueda nunca encontraba ambigüedad, sólo rechazaba de más
+/// -- una fecha como `9OO1O1` (tres `0` leídos como `O`) quedaba inválida
+/// aunque su corrección fuera única y el checksum la confirmara. La
+/// protección real contra inventar datos es el checksum del campo más el
+/// compuesto, no un tope arbitrario de sustituciones.
+///
+/// `solo_digitos`: el campo NO puede llevar letras (fechas siempre; número
+/// de documento costarricense). Ahí una lectura con letras nunca se acepta
+/// tal cual, aunque calce el checksum: el checksum es módulo 10, así que
+/// cualquier letra cuyo valor ICAO termine en el mismo dígito que el real
+/// (`G`=16 por `6`, `Q`=26 por `6`, `A`=10 por `0`...) pasa el dígito
+/// verificador Y el compuesto sin que nada lo note -- hallazgo real al
+/// escribir los tests (2026-09-26): "34G793467" se aceptaba como número de
+/// cédula. En un campo alfanumérico legítimo (número de pasaporte, datos
+/// personales de TD3) sí se acepta tal cual si calza.
 fn corregir_campo(
     datos: &str,
     check_esperado: char,
     campo: CampoMrz,
+    solo_digitos: bool,
 ) -> (String, bool, Vec<CorreccionAplicada>) {
-    if checksum_valido(datos, check_esperado) {
+    let ya_es_numerico = datos.chars().all(|c| c.is_ascii_digit() || c == '<');
+    if (ya_es_numerico || !solo_digitos) && checksum_valido(datos, check_esperado) {
         return (datos.to_string(), true, Vec::new());
     }
 
-    let caracteres: Vec<char> = datos.chars().collect();
-    let posiciones_confusables: Vec<usize> = caracteres
-        .iter()
-        .enumerate()
-        .filter(|(_, c)| !confusables(**c).is_empty())
-        .map(|(i, _)| i)
-        .collect();
-
-    // 1 corrección -- se juntan TODOS los candidatos que calzan el checksum
-    // antes de decidir, no se toma el primero que aparece. Con un checksum
-    // módulo 10, más de un candidato calzando al mismo tiempo es una
-    // colisión real, no un empate cosmético -- aceptar cualquiera de los
-    // dos sería inventar un dato (ej. un número de documento) con la misma
-    // confianza que adivinar a ciegas. Ambigüedad = rendirse, igual que
-    // "no encontré ninguno".
-    let mut candidatos_1: Vec<(String, CorreccionAplicada)> = Vec::new();
-    for &i in &posiciones_confusables {
-        for &alternativa in confusables(caracteres[i]) {
-            let mut intento = caracteres.clone();
-            intento[i] = alternativa;
-            let intento_str: String = intento.into_iter().collect();
-            if checksum_valido(&intento_str, check_esperado) && es_numerico_o_relleno(&intento_str)
-            {
-                candidatos_1.push((
-                    intento_str,
-                    correccion(campo, i, caracteres[i], alternativa),
-                ));
-            }
+    let mut corregido = String::with_capacity(datos.len());
+    let mut correcciones = Vec::new();
+    for (posicion, c) in datos.chars().enumerate() {
+        if c.is_ascii_digit() || c == '<' {
+            corregido.push(c);
+            continue;
         }
+        let Some(digito) = digito_confusable(c) else {
+            return (datos.to_string(), false, Vec::new());
+        };
+        corregido.push(digito);
+        correcciones.push(correccion(campo, posicion, c, digito));
     }
-    if candidatos_1.len() == 1 {
-        let (corregido, correccion) = candidatos_1.into_iter().next().unwrap();
-        return (corregido, true, vec![correccion]);
-    }
-    if candidatos_1.len() > 1 || MAX_CORRECCIONES_POR_CAMPO < 2 {
+
+    if correcciones.is_empty() || !checksum_valido(&corregido, check_esperado) {
         return (datos.to_string(), false, Vec::new());
     }
-
-    // 2 correcciones, dos posiciones distintas -- mismo criterio de
-    // ambigüedad que arriba.
-    let mut candidatos_2: Vec<(String, [CorreccionAplicada; 2])> = Vec::new();
-    for (idx, &i) in posiciones_confusables.iter().enumerate() {
-        for &j in &posiciones_confusables[idx + 1..] {
-            for &alt_i in confusables(caracteres[i]) {
-                for &alt_j in confusables(caracteres[j]) {
-                    let mut intento = caracteres.clone();
-                    intento[i] = alt_i;
-                    intento[j] = alt_j;
-                    let intento_str: String = intento.into_iter().collect();
-                    if checksum_valido(&intento_str, check_esperado)
-                        && es_numerico_o_relleno(&intento_str)
-                    {
-                        candidatos_2.push((
-                            intento_str,
-                            [
-                                correccion(campo, i, caracteres[i], alt_i),
-                                correccion(campo, j, caracteres[j], alt_j),
-                            ],
-                        ));
-                    }
-                }
-            }
-        }
-    }
-    if candidatos_2.len() == 1 {
-        let (corregido, correcciones) = candidatos_2.into_iter().next().unwrap();
-        return (corregido, true, correcciones.into());
-    }
-
-    (datos.to_string(), false, Vec::new())
+    (corregido, true, correcciones)
 }
 
 fn correccion(
@@ -350,6 +307,13 @@ enum ResolucionNumeroTd1 {
         numero: String,
         valido: bool,
         correcciones: Vec<CorreccionAplicada>,
+        /// Los 9 caracteres del bloque (posiciones 6-14) YA corregidos --
+        /// son los que entran en el checksum compuesto. Antes el compuesto
+        /// usaba el bloque crudo, así que corregir el número (ej. `O`->`0`)
+        /// nunca llegaba a validar: la `O` seguía pesando 24 en el
+        /// compuesto y la cédula quedaba "no reconocida" pese a la
+        /// corrección (bug confirmado con un test, 2026-09-26).
+        bloque_compuesto: String,
     },
     ExtendidoSinSoporte,
 }
@@ -379,16 +343,21 @@ fn resolver_numero_documento_td1(
         // acotada acá: el `'<'` de relleno no es un carácter "leído mal",
         // es la señal misma del mecanismo, y el punto de decisión ya está
         // resuelto por `check_numero == '<'` antes de llegar acá.
-        let valido = checksum_valido(&format!("{bloque_numero}<{continuacion}"), check_extendido);
+        let valido = checksum_valido(
+            &format!("{bloque_numero}<{continuacion}"),
+            normalizar_digito_verificador(check_extendido),
+        );
         return ResolucionNumeroTd1::Resuelto {
             numero,
             valido,
             correcciones: Vec::new(),
+            bloque_compuesto: bloque_numero.to_string(),
         };
     }
 
     let continuacion_digitos: String = opcional1.chars().take_while(|&c| c != '<').collect();
     if pais_emisor == "CRI"
+        && bloque_numero.chars().all(|c| c.is_ascii_digit())
         && checksum_valido(bloque_numero, check_numero)
         && !continuacion_digitos.is_empty()
         && continuacion_digitos.chars().all(|c| c.is_ascii_digit())
@@ -400,6 +369,7 @@ fn resolver_numero_documento_td1(
             numero,
             valido: true,
             correcciones: Vec::new(),
+            bloque_compuesto: bloque_numero.to_string(),
         };
     }
 
@@ -414,12 +384,19 @@ fn resolver_numero_documento_td1(
 
     // Único caso con corrección acotada de confusables: número de documento
     // estándar de 9 caracteres + su check digit simple.
-    let (numero, valido, correcciones) =
-        corregir_campo(bloque_numero, check_numero, CampoMrz::NumeroDocumento);
+    let (bloque_corregido, valido, correcciones) = corregir_campo(
+        bloque_numero,
+        check_numero,
+        CampoMrz::NumeroDocumento,
+        pais_emisor == "CRI",
+    );
     ResolucionNumeroTd1::Resuelto {
-        numero,
+        // Sin el relleno de un número más corto que 9 (mismo criterio que
+        // TD3); el compuesto sí lleva el bloque completo con su relleno.
+        numero: bloque_corregido.trim_end_matches('<').to_string(),
         valido,
         correcciones,
+        bloque_compuesto: bloque_corregido,
     }
 }
 
@@ -434,12 +411,12 @@ fn parsear_td1(lineas: &[String], anio_actual: i32) -> RegistroMrz {
     let codigo_documento = sub(&l1, 0, 2);
     let pais_emisor = sub(&l1, 2, 5);
     let bloque_numero = sub(&l1, 5, 14); // 9 caracteres
-    let check_numero = l1[14];
+    let check_numero = normalizar_digito_verificador(l1[14]);
     let opcional1 = sub(&l1, 15, 30); // 15 caracteres
 
     let resolucion =
         resolver_numero_documento_td1(&bloque_numero, check_numero, &pais_emisor, &opcional1);
-    let (numero_documento, numero_valido, mut correcciones) = match resolucion {
+    let (numero_documento, numero_valido, mut correcciones, bloque_compuesto) = match resolucion {
         ResolucionNumeroTd1::ExtendidoSinSoporte => {
             return RegistroMrz {
                 formato_reconocido: true,
@@ -455,34 +432,41 @@ fn parsear_td1(lineas: &[String], anio_actual: i32) -> RegistroMrz {
             numero,
             valido,
             correcciones,
-        } => (numero, valido, correcciones),
+            bloque_compuesto,
+        } => (numero, valido, correcciones, bloque_compuesto),
     };
 
     let nacimiento_str = sub(&l2, 0, 6);
-    let check_nacimiento = l2[6];
+    let check_nacimiento = normalizar_digito_verificador(l2[6]);
     let sexo = l2[7];
     let vencimiento_str = sub(&l2, 8, 14);
-    let check_vencimiento = l2[14];
+    let check_vencimiento = normalizar_digito_verificador(l2[14]);
     let nacionalidad = sub(&l2, 15, 18);
     let opcional2 = sub(&l2, 18, 29);
-    let check_compuesto = l2[29];
+    let check_compuesto = normalizar_digito_verificador(l2[29]);
 
-    let (nacimiento_corregida, nacimiento_valida, mut c) =
-        corregir_campo(&nacimiento_str, check_nacimiento, CampoMrz::FechaNacimiento);
+    let (nacimiento_corregida, nacimiento_valida, mut c) = corregir_campo(
+        &nacimiento_str,
+        check_nacimiento,
+        CampoMrz::FechaNacimiento,
+        true,
+    );
     correcciones.append(&mut c);
     let (vencimiento_corregida, vencimiento_valida, mut c) = corregir_campo(
         &vencimiento_str,
         check_vencimiento,
         CampoMrz::FechaVencimiento,
+        true,
     );
     correcciones.append(&mut c);
 
     // El checksum compuesto cubre número+check+opcional1+nacimiento+check+
     // vencimiento+check+opcional2 completo -- se valida tal cual llegó
     // (sin corrección propia, ver doc-comment de `CampoMrz`), pero contra
-    // los campos YA corregidos arriba, igual que el resto de la validación.
+    // los campos YA corregidos arriba (número incluido, ver
+    // `bloque_compuesto`), igual que el resto de la validación.
     let compuesto_input = format!(
-        "{bloque_numero}{check_numero}{opcional1}{nacimiento_corregida}{check_nacimiento}{vencimiento_corregida}{check_vencimiento}{opcional2}"
+        "{bloque_compuesto}{check_numero}{opcional1}{nacimiento_corregida}{check_nacimiento}{vencimiento_corregida}{check_vencimiento}{opcional2}"
     );
 
     let checksums_validos = numero_valido
@@ -521,35 +505,54 @@ fn parsear_td3(lineas: &[String], anio_actual: i32) -> RegistroMrz {
     let (apellidos, nombres) = separar_nombres(&sub(&l1, 5, l1.len()));
 
     let bloque_numero = sub(&l2, 0, 9);
-    let check_numero = l2[9];
+    let check_numero = normalizar_digito_verificador(l2[9]);
     let nacionalidad = sub(&l2, 10, 13);
     let nacimiento_str = sub(&l2, 13, 19);
-    let check_nacimiento = l2[19];
+    let check_nacimiento = normalizar_digito_verificador(l2[19]);
     let sexo = l2[20];
     let vencimiento_str = sub(&l2, 21, 27);
-    let check_vencimiento = l2[27];
+    let check_vencimiento = normalizar_digito_verificador(l2[27]);
     let datos_personales = sub(&l2, 28, 42);
-    let check_datos_personales = l2[42];
-    let check_compuesto = l2[43];
+    let check_datos_personales = normalizar_digito_verificador(l2[42]);
+    let check_compuesto = normalizar_digito_verificador(l2[43]);
 
     let mut correcciones = Vec::new();
-    let (numero_corregido, numero_valido, mut c) =
-        corregir_campo(&bloque_numero, check_numero, CampoMrz::NumeroDocumento);
+    let (numero_corregido, numero_valido, mut c) = corregir_campo(
+        &bloque_numero,
+        check_numero,
+        CampoMrz::NumeroDocumento,
+        false,
+    );
     correcciones.append(&mut c);
-    let (nacimiento_corregida, nacimiento_valida, mut c) =
-        corregir_campo(&nacimiento_str, check_nacimiento, CampoMrz::FechaNacimiento);
+    let (nacimiento_corregida, nacimiento_valida, mut c) = corregir_campo(
+        &nacimiento_str,
+        check_nacimiento,
+        CampoMrz::FechaNacimiento,
+        true,
+    );
     correcciones.append(&mut c);
     let (vencimiento_corregida, vencimiento_valida, mut c) = corregir_campo(
         &vencimiento_str,
         check_vencimiento,
         CampoMrz::FechaVencimiento,
+        true,
     );
     correcciones.append(&mut c);
-    let (datos_personales_corregidos, datos_personales_validos, mut c) = corregir_campo(
-        &datos_personales,
-        check_datos_personales,
-        CampoMrz::DatosPersonales,
-    );
+    // ICAO 9303 (parte 4): sin número personal, el campo va todo en
+    // relleno y su dígito verificador puede ser `'<'` además de `'0'`.
+    // Antes `'<'` se trataba como check inválido y un pasaporte así nunca
+    // validaba.
+    let (datos_personales_corregidos, datos_personales_validos, mut c) =
+        if check_datos_personales == '<' && datos_personales.chars().all(|c| c == '<') {
+            (datos_personales, true, Vec::new())
+        } else {
+            corregir_campo(
+                &datos_personales,
+                check_datos_personales,
+                CampoMrz::DatosPersonales,
+                false,
+            )
+        };
     correcciones.append(&mut c);
 
     let compuesto_input = format!(
@@ -581,7 +584,7 @@ fn parsear_td3(lineas: &[String], anio_actual: i32) -> RegistroMrz {
 }
 
 /// Punto de entrada FFI: recibe las 2-3 líneas de MRZ que Kotlin ya aisló
-/// con `buscarLineasMrz` (extracción mecánica, se queda en Kotlin) y
+/// con `buscarBloquesMrz` (extracción mecánica, se queda en Kotlin) y
 /// devuelve el resultado resuelto -- válido/inválido y, si corrigió algo,
 /// qué corrigió.
 ///
@@ -893,7 +896,7 @@ mod tests {
         assert_ne!(con_error, base_numero);
 
         let (corregido, valido, correcciones) =
-            corregir_campo(&con_error, check, CampoMrz::NumeroDocumento);
+            corregir_campo(&con_error, check, CampoMrz::NumeroDocumento, true);
         assert!(valido);
         assert_eq!(corregido, base_numero);
         assert_eq!(correcciones.len(), 1);
@@ -914,28 +917,167 @@ mod tests {
         assert_ne!(con_error, base);
 
         let (corregido, valido, correcciones) =
-            corregir_campo(con_error, check, CampoMrz::NumeroDocumento);
+            corregir_campo(con_error, check, CampoMrz::NumeroDocumento, true);
         assert!(valido);
         assert_eq!(corregido, base);
         assert_eq!(correcciones.len(), 2);
     }
 
     #[test]
-    fn se_rinde_con_tres_confusables_en_el_mismo_campo_y_no_inventa_nada() {
-        // Tres caracteres confusables alterados a la vez (tres '1' que el
-        // OCR leyó como 'I') -- supera el límite de 2 por campo, así que
-        // debe rendirse sin importar que técnicamente exista alguna
-        // combinación de 3 que calzaría.
+    fn corrige_todas_las_letras_confusables_de_un_campo_numerico() {
+        // Tres '1' leídos como 'I' -- antes superaba el tope de 2 y se
+        // rendía aunque la corrección fuera única (cada letra tiene un solo
+        // dígito posible) y el checksum la confirmara.
         let base = "314161793";
         let check = digito(base);
         let con_error = "3I4I6I793";
-        assert_ne!(con_error, base);
 
         let (corregido, valido, correcciones) =
-            corregir_campo(con_error, check, CampoMrz::NumeroDocumento);
+            corregir_campo(con_error, check, CampoMrz::NumeroDocumento, true);
+        assert!(valido);
+        assert_eq!(corregido, base);
+        assert_eq!(correcciones.len(), 3);
+    }
+
+    #[test]
+    fn se_rinde_si_una_letra_no_tiene_digito_confusable_y_no_inventa_nada() {
+        // 'G' no está en ningún grupo confusable: no hay forma honesta de
+        // saber qué dígito era.
+        let base = "346793467";
+        let check = digito(base);
+        let con_error = "34G793467";
+
+        let (corregido, valido, correcciones) =
+            corregir_campo(con_error, check, CampoMrz::NumeroDocumento, true);
         assert!(!valido);
         assert_eq!(corregido, con_error, "sin corrección forzada al rendirse");
         assert!(correcciones.is_empty());
+    }
+
+    #[test]
+    fn se_rinde_si_el_mapeo_no_calza_el_checksum() {
+        let base = "346793467";
+        // Check digit deliberadamente equivocado para el valor corregido.
+        let check_malo =
+            char::from_digit((digito_verificador_mrz(base).unwrap() + 1) % 10, 10).unwrap();
+        let (_, valido, correcciones) =
+            corregir_campo("34679346O", check_malo, CampoMrz::NumeroDocumento, true);
+        assert!(!valido);
+        assert!(correcciones.is_empty());
+    }
+
+    /// Armado de un TD1 costarricense válido, parametrizable para inyectar
+    /// errores de OCR en posiciones puntuales.
+    fn td1_cri(bloque: &str, nacimiento: &str, vencimiento: &str) -> (String, String) {
+        let check = digito(bloque);
+        let opcional1 = "<".repeat(15);
+        let cn = digito(nacimiento);
+        let cv = digito(vencimiento);
+        let opcional2 = "<".repeat(11);
+        let compuesto =
+            format!("{bloque}{check}{opcional1}{nacimiento}{cn}{vencimiento}{cv}{opcional2}");
+        let cc = digito(&compuesto);
+        (
+            format!("IDCRI{bloque}{check}{opcional1}"),
+            format!("{nacimiento}{cn}M{vencimiento}{cv}CRI{opcional2}{cc}"),
+        )
+    }
+
+    const NOMBRES_TD1: &str = "PEREZ<<JUAN<<<<<<<<<<<<<<<<<<<";
+
+    #[test]
+    fn td1_con_numero_corregido_valida_el_compuesto() {
+        // Bug real: la corrección del número se aplicaba pero el compuesto
+        // se calculaba con el bloque crudo ('O' = 24), así que la cédula
+        // quedaba inválida igual.
+        let (l1, l2) = td1_cri("103460795", "900101", "300101");
+        let l1 = l1.replacen("IDCRI10", "IDCRI1O", 1);
+        let r = leer_mrz(vec![l1, l2, NOMBRES_TD1.to_string()], 2026);
+        assert!(r.checksums_validos, "{r:?}");
+        assert_eq!(r.numero_documento, "103460795");
+        assert_eq!(r.correcciones.len(), 1);
+    }
+
+    #[test]
+    fn td1_con_digito_verificador_leido_como_letra_valida() {
+        // Se busca un número cuyo check digit sea '0' para leerlo como 'O'.
+        let bloque = (100_000_000u32..200_000_000)
+            .map(|n| n.to_string())
+            .find(|b| digito(b) == '0')
+            .unwrap();
+        let (l1, l2) = td1_cri(&bloque, "900101", "300101");
+        let mut l1: Vec<char> = l1.chars().collect();
+        assert_eq!(l1[14], '0');
+        l1[14] = 'O';
+        let r = leer_mrz(
+            vec![l1.into_iter().collect(), l2, NOMBRES_TD1.to_string()],
+            2026,
+        );
+        assert!(r.checksums_validos, "{r:?}");
+        assert_eq!(r.numero_documento, bloque);
+    }
+
+    #[test]
+    fn td1_con_fecha_de_tres_letras_confusables_valida() {
+        let (l1, l2) = td1_cri("346793467", "900101", "300101");
+        let l2 = l2.replacen("900101", "9OO1O1", 1);
+        let r = leer_mrz(vec![l1, l2, NOMBRES_TD1.to_string()], 2026);
+        assert!(r.checksums_validos, "{r:?}");
+        assert_eq!(
+            r.fecha_nacimiento,
+            Some(FechaMrz {
+                dia: 1,
+                mes: 1,
+                anio: 1990
+            })
+        );
+    }
+
+    #[test]
+    fn td1_costarricense_rechaza_letra_que_calza_el_checksum_por_coincidencia() {
+        // 'G' (16) en lugar de '6' deja el mismo dígito verificador y el
+        // mismo compuesto (módulo 10) -- antes se aceptaba "34G793467".
+        let (l1, l2) = td1_cri("346793467", "900101", "300101");
+        let l1 = l1.replacen("IDCRI346", "IDCRI34G", 1);
+        let r = leer_mrz(vec![l1, l2, NOMBRES_TD1.to_string()], 2026);
+        assert!(!r.checksums_validos, "{r:?}");
+    }
+
+    #[test]
+    fn td1_con_numero_corto_no_arrastra_el_relleno() {
+        let bloque = "AB1234<<<";
+        let check = digito(bloque);
+        let opcional1 = "<".repeat(15);
+        let (nac, ven) = ("900101", "300101");
+        let (cn, cv) = (digito(nac), digito(ven));
+        let opcional2 = "<".repeat(11);
+        let cc = digito(&format!(
+            "{bloque}{check}{opcional1}{nac}{cn}{ven}{cv}{opcional2}"
+        ));
+        let r = leer_mrz(
+            vec![
+                format!("IDARG{bloque}{check}{opcional1}"),
+                format!("{nac}{cn}M{ven}{cv}ARG{opcional2}{cc}"),
+                NOMBRES_TD1.to_string(),
+            ],
+            2026,
+        );
+        assert!(r.checksums_validos, "{r:?}");
+        assert_eq!(r.numero_documento, "AB1234");
+    }
+
+    #[test]
+    fn td3_sin_datos_personales_acepta_relleno_como_digito_verificador() {
+        let l1 = "P<CRIPEREZ<<MARIA<JOSE<<<<<<<<<<<<<<<<<<<<<<".to_string();
+        let numero = "A1234567<";
+        let (nac, ven) = ("900101", "300101");
+        let (cnum, cn, cv) = (digito(numero), digito(nac), digito(ven));
+        let datos = "<".repeat(14);
+        let cc = digito(&format!("{numero}{cnum}{nac}{cn}{ven}{cv}{datos}<"));
+        let l2 = format!("{numero}{cnum}CRI{nac}{cn}F{ven}{cv}{datos}<{cc}");
+        assert_eq!(l2.len(), 44);
+        let r = leer_mrz(vec![l1, l2], 2026);
+        assert!(r.checksums_validos, "{r:?}");
     }
 
     #[test]
@@ -952,12 +1094,17 @@ mod tests {
         let check_nacimiento = digito(nacimiento_base);
         let nacimiento_con_error = nacimiento_base.replacen('0', "O", 1);
 
-        let (num_corregido, num_valido, num_corr) =
-            corregir_campo(&numero_con_error, check_numero, CampoMrz::NumeroDocumento);
+        let (num_corregido, num_valido, num_corr) = corregir_campo(
+            &numero_con_error,
+            check_numero,
+            CampoMrz::NumeroDocumento,
+            true,
+        );
         let (nac_corregida, nac_valida, nac_corr) = corregir_campo(
             &nacimiento_con_error,
             check_nacimiento,
             CampoMrz::FechaNacimiento,
+            true,
         );
 
         assert!(num_valido && nac_valida);

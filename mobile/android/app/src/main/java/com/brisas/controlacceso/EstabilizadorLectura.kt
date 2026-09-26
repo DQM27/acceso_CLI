@@ -1,5 +1,7 @@
 package com.brisas.controlacceso
 
+import uniffi.control_acceso_mobile.RegistroMrz
+
 /// Estado central que alimenta tanto los esquineros del viewfinder como el
 /// mensaje in-cámara (ver plan, secciones 7 y 8) -- un solo lugar decide
 /// "qué está pasando", el resto de la UI sólo reacciona a este valor.
@@ -20,9 +22,10 @@ data class ResultadoEstabilizacion(
 
 /// Decide, frame a frame, si ya hay lectura suficiente para aceptarla.
 ///
-/// Regla (plan, sección 5): si el MRZ trae checksum válido, se acepta en el
-/// mismo frame -- no hace falta esperar repeticiones porque el dígito
-/// verificador ya es la prueba de que la lectura es correcta. Sin checksum
+/// Regla (plan, sección 5): si el MRZ trae checksum válido, número y fechas
+/// ya están probados por el dígito verificador -- sólo se pide que la
+/// lectura (incluidos los nombres, que el MRZ no protege con checksum)
+/// coincida en 2 frames, ver `procesarMrzValido`. Sin checksum
 /// (extracción del frente por regex), se exige que el mismo resultado
 /// aparezca `framesRequeridos` veces dentro de los últimos `ventana` frames
 /// -- no necesariamente consecutivos.
@@ -66,6 +69,14 @@ class EstabilizadorLectura(
     // Inyectable para poder fijar la fecha en tests sin depender del reloj
     // del sistema -- ver `fechaDeHoy()`.
     private val obtenerFechaHoy: () -> FechaDocumento = ::fechaDeHoy,
+    // Cuántos frames se espera, con el número de una cédula ya leído del
+    // frente pero sin nombre, a que la persona muestre el reverso (MRZ,
+    // que sí trae el nombre) antes de confirmar sólo con el número. ~3 s al
+    // ritmo real de análisis (150 ms entre frames, ver
+    // `INTERVALO_MINIMO_ENTRE_FRAMES_MS`). Antes se confirmaba al instante
+    // con el mensaje "muéstreme el reverso", pero confirmar cierra la
+    // cámara: el reverso nunca llegaba a leerse.
+    private val framesEsperaReverso: Int = 20,
 ) {
     // La ventana guarda una clave estable, no el objeto entero. Nombre,
     // fecha u otros campos opcionales pueden aparecer y desaparecer entre
@@ -87,42 +98,50 @@ class EstabilizadorLectura(
     private var claveAcumulada: String? = null
     private var documentoAcumulado: DocumentoDetectado? = null
 
+    // Lecturas de MRZ con checksum válido de los últimos frames -- la línea
+    // de nombres del MRZ NO tiene dígito verificador, así que un nombre mal
+    // leído en un único frame se confirmaba igual. Ahora número + nombres
+    // tienen que coincidir en 2 frames (ver `procesarMrzValido`).
+    private val lecturasMrzRecientes = ArrayDeque<RegistroMrzEnVentana>()
+
+    // `-1` = no se está esperando el reverso. Ver `framesEsperaReverso`.
+    private var framesEsperandoReverso = -1
+
     init {
         require(framesRequeridos > 0) { "framesRequeridos debe ser mayor que cero" }
         require(ventana >= framesRequeridos) { "ventana debe cubrir los frames requeridos" }
     }
 
     fun procesarFrame(texto: String): ResultadoEstabilizacion {
+        val hoy = obtenerFechaHoy()
+        // Cuenta TODO frame (también los vacíos mientras se voltea la
+        // tarjeta) para que la espera del reverso tenga un fin real.
+        if (framesEsperandoReverso >= 0) framesEsperandoReverso++
+        val esperaAgotada = framesEsperandoReverso >= framesEsperaReverso
+
         if (texto.isBlank() || texto.trim().length < 10) {
             registrarFrameSinCandidato()
+            if (esperaAgotada) confirmarSinReverso(hoy)?.let { return it }
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "Acerque el documento")
         }
 
-        val hoy = obtenerFechaHoy()
         val hoyLocal = java.time.LocalDate.of(hoy.anio, hoy.mes, hoy.dia)
         val mrz = if (modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA) leerMrzDeTexto(texto, hoyLocal) else null
+        if (mrz != null && mrz.checksumsValidos && !mrz.numeroDocumentoExtendidoSinSoporte) {
+            return procesarMrzValido(mrz, hoy)
+        }
+        if (esperaAgotada) confirmarSinReverso(hoy)?.let { return it }
         if (mrz != null) {
-            reiniciar() // el MRZ no depende del debounce por candidato repetido
-            return when {
-                mrz.numeroDocumentoExtendidoSinSoporte ->
-                    ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
-                mrz.checksumsValidos -> {
-                    if (mrz.correcciones.isNotEmpty()) registrarCorreccionesMrzEnSentry(mrz.correcciones)
-                    val documento = mrz.aDocumentoDetectado().reclasificarPorEdad(hoy)
-                    if (!documento.tipo.esValidoParaModo(modo)) {
-                        ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no soportado")
-                    } else {
-                        val (mensaje, vencido) = mensajeDeConfirmacion(documento, hoy)
-                        ResultadoEstabilizacion(
-                            EstadoEscaneo.CONFIRMADO,
-                            documento = documento,
-                            mensaje = mensaje,
-                            vencido = vencido,
-                        )
-                    }
-                }
-                else ->
-                    ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
+            return if (mrz.numeroDocumentoExtendidoSinSoporte) {
+                ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
+            } else {
+                // Hay un MRZ en cuadro pero todavía mal leído (foco, reflejo,
+                // ángulo) -- es lectura parcial, no un documento inválido.
+                // Antes era INVALIDO: marco rojo + vibración de error cada
+                // vez que se entraba en ese estado mientras la persona
+                // apenas acomodaba la tarjeta. Tampoco borra lo acumulado
+                // del frente.
+                ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_LEYENDO_REVERSO)
             }
         }
 
@@ -152,13 +171,21 @@ class EstabilizadorLectura(
         } else {
             documentoDeEsteFrame
         }
+        if (clave != claveAcumulada) framesEsperandoReverso = -1
         claveAcumulada = clave
         documentoAcumulado = documento
 
         registrarClave(clave)
         val repeticiones = candidatosRecientes.count { it == clave }
 
+        if (repeticiones >= framesRequeridos && faltaNombrePorFrente(documento)) {
+            if (framesEsperandoReverso < 0) framesEsperandoReverso = 0
+            if (framesEsperandoReverso < framesEsperaReverso) {
+                return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_FALTA_REVERSO)
+            }
+        }
         return if (repeticiones >= framesRequeridos) {
+            framesEsperandoReverso = -1
             val (mensaje, vencido) = mensajeDeConfirmacion(documento, hoy)
             ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
         } else {
@@ -171,16 +198,12 @@ class EstabilizadorLectura(
     /// siendo CONFIRMADO, no INVALIDO), pero quien opera necesita saberlo de
     /// inmediato sin tener que leer la fecha en la pantalla por su cuenta.
     ///
-    /// Caso especial: cédula nacional leída del FRENTE (sin MRZ). Desde
-    /// 2026-09-20 `extraerCedulaNacionalFrente` también intenta leer
-    /// "Nombre:"/"1° Apellido:"/"2° Apellido:" del frente, pero sigue
-    /// siendo una lectura por regex sin checksum (a diferencia del MRZ del
-    /// reverso) -- por ángulo/reflejo puede confirmarse el número sin haber
-    /// alcanzado a leer el nombre todavía. Este aviso sigue existiendo para
-    /// ese caso (`documento.nombre == null`), no porque el frente nunca
-    /// pueda traer nombre -- bug original reportado en pruebas reales,
-    /// 2026-09-17: sin este aviso, quien operaba no tenía forma de saber
-    /// que le faltaba el nombre hasta llenar el formulario a mano.
+    /// Caso especial: cédula nacional leída del FRENTE sin nombre. Antes se
+    /// confirmaba al instante con "muéstreme el reverso para el nombre",
+    /// pero confirmar cierra la cámara, así que el reverso nunca se llegaba
+    /// a leer. Ahora `procesarFrame` espera [framesEsperaReverso] frames al
+    /// MRZ (mensaje [MENSAJE_FALTA_REVERSO], estado BUSCANDO); sólo si no
+    /// llega se confirma con el número, avisando que el nombre falta.
     private fun mensajeDeConfirmacion(
         documento: DocumentoDetectado,
         hoy: FechaDocumento,
@@ -188,12 +211,9 @@ class EstabilizadorLectura(
         val nombreTipo = documento.tipo.nombreLegible()
         val vencimiento = documento.vencimiento
         val vencido = vencimiento != null && vencimiento.estaVencida(hoy)
-        val faltaNombrePorFrente = documento.tipo == TipoDocumento.CEDULA_NACIONAL &&
-            documento.fuenteDatos == FuenteDatos.OCR_FRENTE &&
-            documento.nombre == null
         val mensaje = when {
             vencido -> "$nombreTipo confirmado — DOCUMENTO VENCIDO"
-            faltaNombrePorFrente -> "Ya tengo el número — muéstreme el reverso para el nombre"
+            faltaNombrePorFrente(documento) -> "$nombreTipo confirmado — sin nombre, complételo a mano"
             else -> "$nombreTipo confirmado"
         }
         return mensaje to vencido
@@ -203,6 +223,51 @@ class EstabilizadorLectura(
         candidatosRecientes.clear()
         claveAcumulada = null
         documentoAcumulado = null
+        lecturasMrzRecientes.clear()
+        framesEsperandoReverso = -1
+    }
+
+    /// Se agotó la espera del reverso sin que llegara un MRZ válido: se
+    /// confirma la cédula con lo que se leyó del frente (el número).
+    private fun confirmarSinReverso(hoy: FechaDocumento): ResultadoEstabilizacion? {
+        val documento = documentoAcumulado ?: return null
+        framesEsperandoReverso = -1
+        val (mensaje, vencido) = mensajeDeConfirmacion(documento, hoy)
+        return ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
+    }
+
+    /// MRZ con checksums válidos: número, fechas y el resto ya están
+    /// verificados por dígito verificador, pero la línea de nombres no --
+    /// se confirma cuando la misma lectura completa (número + nombres)
+    /// aparece en 2 de los últimos frames. Si el número se repite
+    /// [LECTURAS_MRZ_PARA_DESEMPATAR] veces con nombres que no terminan de
+    /// coincidir (reflejo sobre esa línea), se confirma con los nombres más
+    /// repetidos en vez de trabarse para siempre.
+    private fun procesarMrzValido(mrz: RegistroMrz, hoy: FechaDocumento): ResultadoEstabilizacion {
+        val documento = mrz.aDocumentoDetectado().reclasificarPorEdad(hoy)
+        if (!documento.tipo.esValidoParaModo(modo)) {
+            return ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no soportado")
+        }
+        val lectura = RegistroMrzEnVentana(mrz, documento)
+        lecturasMrzRecientes.addLast(lectura)
+        while (lecturasMrzRecientes.size > VENTANA_LECTURAS_MRZ) lecturasMrzRecientes.removeFirst()
+
+        val mismoNumero = lecturasMrzRecientes.filter { it.documento.numeroDocumento == documento.numeroDocumento }
+        val masRepetida = mismoNumero.groupBy { it.claveNombres }.maxBy { it.value.size }.value
+        val elegida = when {
+            masRepetida.size >= LECTURAS_MRZ_COINCIDENTES -> masRepetida.last()
+            mismoNumero.size >= LECTURAS_MRZ_PARA_DESEMPATAR -> masRepetida.last()
+            else -> return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_LEYENDO_REVERSO)
+        }
+        reiniciar()
+        if (elegida.mrz.correcciones.isNotEmpty()) registrarCorreccionesMrzEnSentry(elegida.mrz.correcciones)
+        val (mensaje, vencido) = mensajeDeConfirmacion(elegida.documento, hoy)
+        return ResultadoEstabilizacion(
+            EstadoEscaneo.CONFIRMADO,
+            documento = elegida.documento,
+            mensaje = mensaje,
+            vencido = vencido,
+        )
     }
 
     private fun registrarFrameSinCandidato() = registrarClave(CLAVE_SIN_CANDIDATO)
@@ -226,6 +291,23 @@ class EstabilizadorLectura(
 }
 
 private const val CLAVE_SIN_CANDIDATO = "\u0000"
+private const val VENTANA_LECTURAS_MRZ = 6
+private const val LECTURAS_MRZ_COINCIDENTES = 2
+private const val LECTURAS_MRZ_PARA_DESEMPATAR = 4
+private const val MENSAJE_LEYENDO_REVERSO = "Leyendo el reverso — mantenga firme"
+private const val MENSAJE_FALTA_REVERSO = "Ya tengo el número — muéstreme el reverso para el nombre"
+
+private class RegistroMrzEnVentana(val mrz: RegistroMrz, val documento: DocumentoDetectado) {
+    val claveNombres: String = "${documento.apellidos}|${documento.nombre}"
+}
+
+/// Cédula nacional leída sólo del frente, todavía sin nombre -- el nombre
+/// está garantizado en el reverso (MRZ), por eso se espera a que la
+/// persona la voltee (ver `framesEsperaReverso`).
+private fun faltaNombrePorFrente(documento: DocumentoDetectado): Boolean =
+    documento.tipo == TipoDocumento.CEDULA_NACIONAL &&
+        documento.fuenteDatos == FuenteDatos.OCR_FRENTE &&
+        documento.nombre == null
 
 private fun DocumentoDetectado.claveEstabilizacion(): String =
     "${tipo.name}:${(textoBusqueda ?: numeroDocumento).trim().uppercase()}"

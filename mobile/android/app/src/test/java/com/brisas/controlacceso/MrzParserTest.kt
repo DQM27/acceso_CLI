@@ -11,7 +11,7 @@ import uniffi.control_acceso_mobile.FormatoMrz
 /// `docs/auditorias/auditoria-separacion-kotlin-rust-2026-09-25.md`) --
 /// incluidos los dos casos reales documentados (DIMEX costarricense, cédula
 /// belga issue Arg0s1080/mrz#4) y los nuevos de corrección acotada de
-/// confusables. Lo único que sigue del lado Kotlin es `buscarLineasMrz`
+/// confusables. Lo único que sigue del lado Kotlin es `buscarBloquesMrz`
 /// (extracción mecánica de líneas, privada a este archivo) -- se ejercita
 /// acá sólo indirectamente, a través del punto de entrada público
 /// `leerMrzDeTexto`, que es lo único invocable desde otro archivo.
@@ -60,5 +60,49 @@ class MrzParserTest {
         val resultado = leerMrzDeTexto(conRuido, java.time.LocalDate.of(2026, 1, 1))
         assertEquals("999888777", resultado?.numeroDocumento)
         assertEquals(true, resultado?.checksumsValidos)
+    }
+
+    private val hoy = java.time.LocalDate.of(2026, 1, 1)
+
+    @Test
+    fun toleraUnRellenoPerdidoEnLaLinea1() {
+        val lineas = td1Valido.lines()
+        // ML Kit se comió un '<' de la corrida de relleno (29 caracteres).
+        val texto = listOf(lineas[0].dropLast(1), lineas[1], lineas[2]).joinToString("\n")
+        val resultado = leerMrzDeTexto(texto, hoy)
+        assertEquals("999888777", resultado?.numeroDocumento)
+        assertEquals(true, resultado?.checksumsValidos)
+    }
+
+    @Test
+    fun toleraUnRellenoDeMasEnLaLinea2SinTocarElDigitoVerificadorFinal() {
+        val lineas = td1Valido.lines()
+        // 31 caracteres: un '<' duplicado en el relleno opcional, antes del
+        // dígito verificador compuesto (el '8' final).
+        val linea2 = lineas[1].replace("NIC<<<", "NIC<<<<")
+        val texto = listOf(lineas[0], linea2, lineas[2]).joinToString("\n")
+        val resultado = leerMrzDeTexto(texto, hoy)
+        assertEquals(true, resultado?.checksumsValidos)
+    }
+
+    @Test
+    fun toleraRellenoLeidoComoKYComoComillasAngulares() {
+        val lineas = td1Valido.lines()
+        val texto = listOf(
+            lineas[0].replace("<<<<<<<<", "KKKKKKKK"),
+            lineas[1].replace("<<<<", "««"),
+            lineas[2].replace("PEREZ<<", "PEREZKK"),
+        ).joinToString("\n")
+        val resultado = leerMrzDeTexto(texto, hoy)
+        assertEquals(true, resultado?.checksumsValidos)
+        assertEquals("PEREZ", resultado?.apellidos)
+        assertEquals("MARIA JOSE", resultado?.nombres)
+    }
+
+    @Test
+    fun unaLineaConDemasiadosCaracteresDeDiferenciaNoSeUsa() {
+        val lineas = td1Valido.lines()
+        val texto = listOf(lineas[0].dropLast(4), lineas[1], lineas[2]).joinToString("\n")
+        assertNull(leerMrzDeTexto(texto, hoy))
     }
 }

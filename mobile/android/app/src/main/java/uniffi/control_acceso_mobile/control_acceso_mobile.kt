@@ -1058,7 +1058,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 35831) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 18012) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() and 0xFFFF) != 25039) {
@@ -6934,7 +6934,7 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
 }
         /**
          * Punto de entrada FFI: recibe las 2-3 líneas de MRZ que Kotlin ya aisló
-         * con `buscarLineasMrz` (extracción mecánica, se queda en Kotlin) y
+         * con `buscarBloquesMrz` (extracción mecánica, se queda en Kotlin) y
          * devuelve el resultado resuelto -- válido/inválido y, si corrigió algo,
          * qué corrigió.
          *
