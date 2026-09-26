@@ -2,15 +2,9 @@ import { useLayoutEffect, useState } from "react";
 import { Moon, Sparkles, Sun } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useUsuarioId } from "../contexto/SesionContexto";
-import { guardarPreferencia, leerPreferencia } from "../preferencias";
-
-const CLAVE_TEMA = "escritorio:tema";
-
-export type Tema = "light" | "dark" | "tokyo-night";
-
-/** Orden en que el botón recorre los temas (claro → oscuro → Tokyo Night
- * → claro). Tokyo Night se define en `tokyo-night.css`. */
-const TEMAS: Tema[] = ["light", "dark", "tokyo-night"];
+import { guardarPreferencia } from "../preferencias";
+import { CLAVE_TEMA, leerTema, siguienteTema } from "./SelectorTema.logica";
+import type { Tema } from "./SelectorTema.logica";
 
 const NOMBRE_TEMA: Record<Tema, string> = {
   light: "modo claro",
@@ -24,25 +18,6 @@ const ICONO_TEMA: Record<Tema, LucideIcon> = {
   dark: Moon,
   "tokyo-night": Sparkles,
 };
-
-export function temaDelSistema(): Tema {
-  try {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  } catch {
-    return "light";
-  }
-}
-
-/** Tema guardado del usuario (cada usuario tiene el suyo, ver
- * `preferencias.ts`); sin guardado válido, el del sistema operativo. */
-export function leerTema(usuarioId: number | null = null): Tema {
-  const guardado = leerPreferencia(CLAVE_TEMA, usuarioId);
-  return TEMAS.includes(guardado as Tema) ? (guardado as Tema) : temaDelSistema();
-}
-
-export function siguienteTema(actual: Tema): Tema {
-  return TEMAS[(TEMAS.indexOf(actual) + 1) % TEMAS.length];
-}
 
 /**
  * Botón de tema en la barra de estado (junto a `MenuUsuario`) --

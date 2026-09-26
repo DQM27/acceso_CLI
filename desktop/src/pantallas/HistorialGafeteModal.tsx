@@ -4,6 +4,7 @@ import Modal from "../componentes/Modal";
 import { historialGafete } from "../api";
 import type { GafeteResumen, IncidenteGafete } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { textoMotivo } from "./HistorialGafeteModal.logica";
 
 /**
  * Historial de incidentes de un gafete puntual — tabla simple (sin AG Grid,
@@ -79,17 +80,6 @@ export default function HistorialGafeteModal({
       </div>
     </Modal>
   );
-}
-
-export function textoMotivo(motivo: IncidenteGafete["motivo_resolucion"]): string {
-  switch (motivo) {
-    case "Pagado":
-      return "Pagado";
-    case "Aparecido":
-      return "Apareció";
-    case null:
-      return "—";
-  }
 }
 
 function Encabezado({ children }: { children: ReactNode }) {

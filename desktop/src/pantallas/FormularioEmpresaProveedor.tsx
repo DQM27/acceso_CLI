@@ -1,21 +1,13 @@
 import type { ChangeEvent } from "react";
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
 import { crearEmpresaProveedor } from "../api/proveedores";
+import { esquema } from "./FormularioEmpresaProveedor.logica";
 
 interface ValoresFormulario {
   nombre: string;
 }
-
-// Sólo alta -- a diferencia de `FormularioEmpresa`, el núcleo no expone
-// renombrar una empresa proveedora (ver docs/features-futuras/plan-control-proveedores.md,
-// "mismo CRUD mínimo... crear, buscar, listar, activar/desactivar"). Activar/
-// desactivar se hace inline en la grilla, mismo patrón que `Empresas.tsx`.
-export const esquema = z.object({
-  nombre: z.string().min(1, "El nombre es obligatorio"),
-});
 
 export default function FormularioEmpresaProveedor({
   onGuardado,

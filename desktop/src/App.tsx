@@ -27,6 +27,7 @@ import {
   lazy,
   startTransition,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -59,7 +60,7 @@ import MenuUsuario from "./componentes/MenuUsuario";
 import SelectorTema from "./componentes/SelectorTema";
 import { guardarPreferencia, leerPreferencia } from "./preferencias";
 import BarraNube from "./componentes/BarraNube";
-import type { EstadoConexionNube } from "./componentes/BarraNube";
+import type { EstadoConexionNube } from "./componentes/BarraNube.logica";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import Login from "./pantallas/Login";
 import PrimerArranque from "./pantallas/PrimerArranque";
@@ -563,30 +564,33 @@ function Shell({
   // está haciendo otra cosa -- sin la transición, el refetch/rerender que
   // dispara en cada sección montada compite por prioridad con lo que el
   // usuario esté tipeando/clickeando en ese instante.
+  //
+  // `useEffectEvent` (React 19.2+): el efecto tiene que depender SÓLO de la
+  // sesión -- reiniciar el canal en vivo en cada render (lo que pasaría con
+  // `manejarResumenSincronizacion`, una función nueva cada vez, en las
+  // dependencias) lo reconectaría sin parar. El evento siempre ve la
+  // versión más reciente del manejador sin ser una dependencia.
+  const alSincronizarNube = useEffectEvent((resumen: ResumenSincronizacion, emitir: boolean) => {
+    if (manejarResumenSincronizacion(resumen)) return;
+    startTransition(() => setRefrescarActivos((n) => n + 1));
+    if (emitir) emitirActualizacion(resumen);
+  });
   useEffect(() => {
     const cancelarRealtime = iniciarRealtimeNube({
-      onSincronizado: (resumen) => {
-        if (!manejarResumenSincronizacion(resumen)) {
-          startTransition(() => setRefrescarActivos((n) => n + 1));
-        }
-      },
+      onSincronizado: (resumen) => alSincronizarNube(resumen, false),
       onEstado: setEstadoConexionNube,
       usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
     });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
       "nube://sincronizado",
-      ({ payload }) => {
-        if (manejarResumenSincronizacion(payload)) return;
-        startTransition(() => setRefrescarActivos((n) => n + 1));
-        emitirActualizacion(payload);
-      },
+      ({ payload }) => alSincronizarNube(payload, true),
     );
 
     return () => {
       cancelarRealtime();
       cancelarSincronizacionAutomatica.then((cancelar) => cancelar());
     };
-  }, [sesion.id]);
+  }, [sesion.id, sesion.cedula, sesion.nombre]);
 
   // Botón "Sincronizar" de la barra de estado (`BarraNube.tsx`) — visible
   // para cualquier rol activo, ver su doc-comment. `sincronizar_con_nube`

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { leerTema, siguienteTema, temaDelSistema } from "./SelectorTema";
+import { leerTema, siguienteTema, temaDelSistema } from "./SelectorTema.logica";
 
 const CLAVE_TEMA = "escritorio:tema";
 

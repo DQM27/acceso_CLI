@@ -1,37 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Modal from "../componentes/Modal";
-import {
-  FilaListaFlotante,
-  ListaFlotante,
-  SinResultados,
-  useListaFlotante,
-  useNavegacionFlechas,
-} from "../componentes/ListaFlotante";
+import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
+import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
 import { listarEncargadosRutaSeleccionables } from "../api/rutas";
 import type { EncargadoRuta } from "../api/rutas";
 import {
   entregarGafeteProvisional,
   listarTodosLosGafetesProvisionalesActivos,
 } from "../api/gafetesProvisionales";
-import { coincideBusqueda, textoGafete, validarNumeroGafete } from "../busqueda";
-
-const MAX_RESULTADOS = 5;
-
-/** Encargados cuyo nombre o código de empleado contienen todas las palabras
- * de `texto` (sin distinguir tildes ni mayúsculas). El catálogo es chico y
- * ya viene completo (`listarEncargadosRutaSeleccionables`), así que se
- * filtra acá en vez de buscar del lado del servidor. */
-export function filtrarEncargados(
-  encargados: EncargadoRuta[],
-  texto: string,
-  maximo: number = MAX_RESULTADOS,
-): EncargadoRuta[] {
-  return encargados
-    .filter((encargado) =>
-      coincideBusqueda(texto, `${encargado.nombre} ${encargado.codigo_empleado}`),
-    )
-    .slice(0, maximo);
-}
+import { textoGafete, validarNumeroGafete } from "../busqueda";
+import { filtrarEncargados } from "./EntregarGafeteProvisionalModal.logica";
 
 /**
  * Mismo flujo que `NuevoIngresoModal` (pedido del usuario 2026-09-24: el

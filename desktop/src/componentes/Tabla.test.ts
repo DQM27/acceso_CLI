@@ -7,9 +7,9 @@ import {
   identidad,
   leerEstadoGuardado,
   textoTooltip,
-} from "./Tabla";
+} from "./Tabla.logica";
 import type { ITooltipParams } from "ag-grid-community";
-import type { EstadoGuardado } from "./Tabla";
+import type { EstadoGuardado } from "./Tabla.logica";
 
 // `ColDef<unknown>` infiere `field` como `keyof unknown` (efectivamente
 // `never`) — en los tests no hay un tipo de fila real, así que se castea a

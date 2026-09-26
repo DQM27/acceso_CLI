@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esquema, resumenCreacion } from "./FormularioGafete";
+import { esquema, resumenCreacion } from "./FormularioGafete.logica";
 
 const base = { modo: "individual", tipo: "contratista", numero: "", desde: "", hasta: "" } as const;
 

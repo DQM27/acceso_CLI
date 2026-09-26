@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRESETS, etiquetaCortaRango, textoRangoFecha } from "./SelectorRangoFecha";
+import { PRESETS, etiquetaCortaRango, textoRangoFecha } from "./SelectorRangoFecha.logica";
 
 function rangoDe(etiqueta: string, hoy: Date) {
   const preset = PRESETS.find((p) => p.etiqueta === etiqueta);

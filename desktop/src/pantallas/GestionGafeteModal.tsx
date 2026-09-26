@@ -1,13 +1,8 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import Modal from "../componentes/Modal";
-import {
-  FilaListaFlotante,
-  ListaFlotante,
-  SinResultados,
-  useListaFlotante,
-  useNavegacionFlechas,
-} from "../componentes/ListaFlotante";
+import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
+import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
 import {
   buscarContratistas,
   darDeBajaGafete,
@@ -25,6 +20,7 @@ import type {
   GafeteResumen,
   MotivoResolucionGafete,
 } from "../api";
+import { textoEstado } from "./GestionGafeteModal.logica";
 
 const DEBOUNCE_MS = 120;
 const MAX_RESULTADOS = 4;
@@ -366,15 +362,4 @@ export default function GestionGafeteModal({
       </div>
     </Modal>
   );
-}
-
-export function textoEstado(estado: GafeteResumen["estado"]): string {
-  switch (estado) {
-    case "Disponible":
-      return "Disponible";
-    case "Perdido":
-      return "Perdido";
-    case "DeBaja":
-      return "De baja";
-  }
 }

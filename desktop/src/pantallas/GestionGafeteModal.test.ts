@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { textoEstado } from "./GestionGafeteModal";
+import { textoEstado } from "./GestionGafeteModal.logica";
 
 describe("textoEstado", () => {
   it("traduce cada estado a su texto visible", () => {

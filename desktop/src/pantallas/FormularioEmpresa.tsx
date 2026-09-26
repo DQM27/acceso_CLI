@@ -1,20 +1,13 @@
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
 import { actualizarEmpresa, crearEmpresa } from "../api";
 import type { EmpresaResumen } from "../api";
+import { esquema } from "./FormularioEmpresa.logica";
 
 interface ValoresFormulario {
   nombre: string;
 }
-
-// Sin restricción de caracteres más allá de "no vacío" — a diferencia del
-// nombre de un contratista, el de una empresa puede tener números o símbolos
-// (S.A., 3M, etc.), no tiene sentido restringirlo.
-export const esquema = z.object({
-  nombre: z.string().min(1, "El nombre es obligatorio"),
-});
 
 export default function FormularioEmpresa({
   empresa,

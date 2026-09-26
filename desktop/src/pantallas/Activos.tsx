@@ -16,11 +16,8 @@ import {
 } from "../api";
 import type { FilaActiva } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
-
-/** Filtro rápido por gafete (pedido del usuario 2026-09-23): ver sólo a
- * quienes entraron sin gafete ("S/G", `gafete_numero` nulo), sólo a
- * quienes tienen uno, o a todos. */
-export type FiltroGafete = "todos" | "con" | "sin";
+import { filtrarPorGafete, masDeDoceHoras } from "./Activos.logica";
+import type { FiltroGafete } from "./Activos.logica";
 
 const ETIQUETAS_FILTRO_GAFETE: Record<FiltroGafete, string> = {
   todos: "Todos",
@@ -35,15 +32,6 @@ const OPCIONES_FILTRO_GAFETE: OpcionSegmentada<FiltroGafete>[] = [
   { valor: "con", Icono: IdCard, titulo: "Con gafete" },
   { valor: "sin", Icono: CircleOff, titulo: "Sin gafete (S/G)" },
 ];
-
-export function filtrarPorGafete<T extends { gafete_numero: number | null }>(
-  filas: readonly T[],
-  filtro: FiltroGafete,
-): T[] {
-  if (filtro === "todos") return [...filas];
-  const sinGafete = filtro === "sin";
-  return filas.filter((fila) => (fila.gafete_numero == null) === sinGafete);
-}
 
 /** Pieza única de íconos con el relleno deslizante (`SegmentadoOpciones`). */
 function ToggleGafete({
@@ -61,17 +49,6 @@ function ToggleGafete({
       etiqueta="Filtrar por gafete"
     />
   );
-}
-
-const DOCE_HORAS_MS = 12 * 60 * 60 * 1000;
-
-/** Más de 12 horas adentro desde el ingreso -- único resaltado de filas
- * que pidió el usuario (2026-09-23). `ahora` inyectable para el test. */
-export function masDeDoceHoras(
-  fila: { fecha_hora_ingreso: string },
-  ahora: number = Date.now(),
-): boolean {
-  return ahora - new Date(fila.fecha_hora_ingreso).getTime() > DOCE_HORAS_MS;
 }
 
 function claseFilaActiva(fila: FilaActiva): string | undefined {

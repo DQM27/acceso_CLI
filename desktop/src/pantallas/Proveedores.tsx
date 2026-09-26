@@ -6,7 +6,8 @@ import Tabla from "../componentes/Tabla";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import type { TablaHandle } from "../componentes/Tabla";
-import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
+import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
+import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {

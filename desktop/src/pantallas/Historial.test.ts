@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filaDesdeRemoto, remotosSinDuplicarLocales, textoDispositivo } from "./Historial";
+import { filaDesdeRemoto, remotosSinDuplicarLocales, textoDispositivo } from "./Historial.logica";
 import type { MovimientoHistorialRemoto } from "../api";
 
 function remoto(overrides: Partial<MovimientoHistorialRemoto> = {}): MovimientoHistorialRemoto {

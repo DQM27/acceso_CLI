@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coincideTexto, textoGafete } from "./SalidaModal";
+import { coincideTexto, textoGafete } from "./SalidaModal.logica";
 import type { FilaActiva, FilaLocal, FilaRemota } from "../api";
 
 function activo(overrides: Partial<FilaLocal> = {}): FilaActiva {

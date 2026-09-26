@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esquemaCambioPassword } from "./CambiarPasswordModal";
+import { esquemaCambioPassword } from "./CambiarPasswordModal.logica";
 
 function primerError(valores: {
   passwordActual: string;
