@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,8 +61,15 @@ import uniffi.control_acceso_mobile.TipoIngreso
 /// El carnet PRAIND es el único tipo de documento que trae, además de
 /// cédula y nombre, la empresa y el vencimiento de la inducción -- por eso
 /// es el que de verdad ahorra tipeo acá (ver `LectorDocumentosIdentidad.extraerPraind`).
-private fun requierePraind(tipo: TipoIngreso, personalRuta: Boolean): Boolean =
-    personalRuta || tipo == TipoIngreso.PRAIND || tipo == TipoIngreso.IN_HOUSE
+///
+/// MV-10 (auditoría 2026-09-24): esto reimplementaba a mano en Kotlin la
+/// regla real de `control_acceso::domain::contratista::requiere_praind_de`
+/// -- ahora se llama a `Nucleo.requierePraindParaFormulario` (agregada para
+/// esto), que delega en esa misma función. No hace SQLite ni red (pura,
+/// sin bloquear ningún `Mutex`), así que llamarla en cada recomposición
+/// -- por ejemplo, en cada tecla mientras se tipea la fecha -- es seguro.
+private fun requierePraind(nucleo: Nucleo, tipo: TipoIngreso, personalRuta: Boolean): Boolean =
+    nucleo.requierePraindParaFormulario(tipo, personalRuta)
 
 private fun etiquetaTipo(tipo: TipoIngreso): String =
     when (tipo) {
@@ -70,23 +78,6 @@ private fun etiquetaTipo(tipo: TipoIngreso): String =
         TipoIngreso.POR_CORREO -> "Por correo"
         TipoIngreso.SWAT -> "SWAT"
     }
-
-/// Misma convención día-mes-año que el resto de la app (`Tiempo.kt`,
-/// `desktop/src/tiempo.ts`) -- Rust exige ISO (`AAAA-MM-DD`) para parsear la
-/// fecha, pero mostrarla así en el formulario rompía la convención que la
-/// persona ya espera en cualquier otra pantalla.
-private fun FechaDocumento.aTextoDDMMYYYY(): String = "%02d-%02d-%04d".format(dia, mes, anio)
-
-/// Inverso de [aTextoDDMMYYYY] -- convierte lo que la persona tipeó
-/// (día-mes-año) al formato ISO que espera `DatosContratista.fechaVencimientoPraind`
-/// en Rust. Si el texto no tiene la forma esperada se devuelve tal cual: Rust
-/// igual la rechaza con un error legible que cita el texto original.
-private fun textoDDMMYYYYaIso(texto: String): String {
-    val partes = texto.split("-")
-    if (partes.size != 3) return texto
-    val (dia, mes, anio) = partes
-    return "%s-%s-%s".format(anio.padStart(4, '0'), mes.padStart(2, '0'), dia.padStart(2, '0'))
-}
 
 /// Máscara del campo de vencimiento PRAIND -- descarta todo lo que no sea
 /// dígito (así el usuario no puede meter un "-" de más ni queda uno duplicado
@@ -157,7 +148,14 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
 
     LaunchedEffect(Unit) {
         try {
-            empresas = withContext(Dispatchers.Default) { nucleo.listarEmpresas() }
+            // MV-09 (auditoría 2026-09-24): `Dispatchers.Default` es el
+            // pool de CPU (tamaño = núcleos del dispositivo) -- una llamada
+            // FFI bloqueante a SQLite no es trabajo de CPU, es E/S, y
+            // corriendo ahí le quita hilos al OCR y al resto de tareas de
+            // CPU reales mientras esta consulta hace su round-trip. `IO`
+            // es el pool pensado para esto (mismo criterio que ya usa
+            // `PantallaConfirmarIngreso.registrarIngreso`).
+            empresas = withContext(Dispatchers.IO) { nucleo.listarEmpresas() }
         } catch (excepcion: NucleoException) {
             error = excepcion.message
         }
@@ -389,10 +387,10 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
         // abajo) porque el botón "Guardar" también lo necesita para
         // deshabilitarse -- pedido explícito del usuario 2026-09-20: si el
         // PRAIND está vencido, no debe dejar registrar.
-        val praindVencido = requierePraind(tipoIngreso, personalRuta) && fechaPraind.isNotBlank() &&
+        val praindVencido = requierePraind(nucleo, tipoIngreso, personalRuta) && fechaPraind.isNotBlank() &&
             runCatching { LocalDate.parse(textoDDMMYYYYaIso(fechaPraind)) < LocalDate.now() }.getOrDefault(false)
 
-        if (requierePraind(tipoIngreso, personalRuta)) {
+        if (requierePraind(nucleo, tipoIngreso, personalRuta)) {
             OutlinedTextField(
                 value = fechaPraind,
                 onValueChange = { fechaPraind = formatearFechaDDMMYYYY(it) },
@@ -457,7 +455,10 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                 enviando = true
                 alcance.launch {
                     try {
-                        withContext(Dispatchers.Default) {
+                        // MV-09: mismo motivo que en `listarEmpresas` --
+                        // `crearContratista` hace SQLite + FFI bloqueantes,
+                        // no cómputo de CPU.
+                        withContext(Dispatchers.IO) {
                             nucleo.crearContratista(
                                 DatosContratista(
                                     cedula = cedula,
@@ -472,7 +473,16 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                                 ),
                             )
                         }
-                        CambiosNube.solicitar()
+                        // MV-09: si `alcance` (atado a esta composición) se
+                        // cancela justo al volver del `withContext` de
+                        // arriba -- la escritura en Rust ya terminó, no es
+                        // cancelable a mitad de camino -- `CambiosNube.
+                        // solicitar()` se saltaría igual, dejando la
+                        // sincronización esperando el próximo pulso
+                        // automático en vez de dispararse al toque.
+                        // `NonCancellable` fuerza que este aviso puntual
+                        // corra siempre.
+                        withContext(NonCancellable) { CambiosNube.solicitar() }
                         cedula = ""
                         nombre = ""
                         empresaSeleccionada = null

@@ -36,11 +36,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -96,8 +92,15 @@ private fun VistaCamaraCedula(
     // Samsung real con "Interacciones táctiles" activado (hallazgo
     // 2026-09-20), y de cualquier forma esa API no deja elegir amplitud ni
     // patrón para poder distinguir éxito de error.
-    val ejecutor = remember { Executors.newSingleThreadExecutor() }
-    val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    // MV-10 (auditoría 2026-09-24): agrupa lo que antes eran 9
+    // declaraciones + un DisposableEffect idénticos a las otras 3
+    // pantallas de escaneo -- ver EstadoCamaraOcr.kt.
+    val camara = rememberEstadoCamaraOcr(contexto)
+    // Último punto suelto de MV-07 (auditoría de rendimiento 2026-09-25) --
+    // una instancia por apertura de pantalla, igual que `camara`, para
+    // reusar los buffers de un frame al siguiente en vez de asignarlos
+    // desde cero cada vez. Ver el doc-comment de `BuffersOcrReutilizables`.
+    val buffersOcr = remember { BuffersOcrReutilizables() }
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
@@ -113,44 +116,6 @@ private fun VistaCamaraCedula(
     val estabilizador = remember(modo) { EstabilizadorLectura(modo = modo) }
     var ultimoValorContinuo by remember { mutableStateOf<String?>(null) }
     var framesSinUltimoValor by remember { mutableStateOf(0) }
-    // AtomicBoolean, no `mutableStateOf` -- esta bandera se lee en el hilo
-    // del analizador de cámara (`ejecutor`) y se escribe desde el hilo
-    // principal (callback de ML Kit); un booleano de Compose no garantiza
-    // esa visibilidad entre hilos, y además el `compareAndSet` evita que
-    // dos frames en vuelo disparen `onDocumentoDetectado` dos veces.
-    val detectada = remember { AtomicBoolean(false) }
-    // Invalida callbacks de CameraX/ML Kit que terminen después de salir de
-    // esta composición. Cerrar el recognizer no garantiza que un Task que ya
-    // estaba en vuelo deje de entregar su listener.
-    val sesionActiva = remember { AtomicBoolean(true) }
-    // Guardado acá para poder desatarlo explícitamente al salir -- `bindToLifecycle`
-    // por sí solo no alcanza: en una app de una sola Activity con Compose,
-    // `LocalLifecycleOwner` suele ser la Activity, no esta pantalla, así que la
-    // cámara no se libera sola al navegar fuera de acá, sólo al morir la Activity.
-    // Sin este `unbindAll()` explícito, reabrir el escáner puede encontrar la
-    // cámara todavía atada al ciclo de vida anterior.
-    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
-    var vistaPreviaCamara by remember { mutableStateOf<Preview?>(null) }
-    var analisisCamara by remember { mutableStateOf<ImageAnalysis?>(null) }
-    var trabajoResultado by remember { mutableStateOf<Job?>(null) }
-    // Ver nota en `analizarCedula`: se pasa explícito en vez de dejar que
-    // ML Kit use su executor por defecto de forma implícita.
-    val ejecutorPrincipal = remember { ContextCompat.getMainExecutor(contexto) }
-
-    DisposableEffect(Unit) {
-        sesionActiva.set(true)
-        onDispose {
-            sesionActiva.set(false)
-            detectada.set(true)
-            trabajoResultado?.cancel()
-            analisisCamara?.clearAnalyzer()
-            val casos = listOfNotNull(vistaPreviaCamara, analisisCamara).toTypedArray()
-            if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
-            ejecutor.shutdown()
-            recognizer.close()
-        }
-    }
-
     // Colores de estado compartidos por las 4 pantallas de escaneo (ver
     // `EscaneoCompartido.kt`) -- fijos, no dependientes del tema
     // (Classic/Brisas/Negro): acá el color comunica significado
@@ -169,15 +134,8 @@ private fun VistaCamaraCedula(
                 val previewView = PreviewView(ctx).apply {
                     scaleType = PreviewView.ScaleType.FILL_CENTER
                 }
-                val analisis = construirAnalizadorOcr(
-                    ejecutorAnalisis = ejecutor,
-                    ejecutorPrincipal = ejecutorPrincipal,
-                    recognizer = recognizer,
-                    estabilizador = estabilizador,
-                    detectada = detectada,
-                    sesionActiva = sesionActiva,
-                    onResultado = { resultado ->
-                        if (!sesionActiva.get()) return@construirAnalizadorOcr
+                val onResultado: (ResultadoEstabilizacion) -> Unit = onResultado@{ resultado ->
+                        if (!camara.sesionActiva.get()) return@onResultado
                         if (continuo && resultado.estado != EstadoEscaneo.CONFIRMADO) {
                             framesSinUltimoValor++
                             if (framesSinUltimoValor >= FRAMES_AUSENCIA_PARA_REPETIR) {
@@ -198,12 +156,12 @@ private fun VistaCamaraCedula(
                         vencido = resultado.vencido
                         val documento = resultado.documento
                         if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
-                            if (detectada.compareAndSet(false, true)) {
+                            if (camara.detectada.compareAndSet(false, true)) {
                                 val valor = documento.textoBusqueda ?: documento.numeroDocumento
                                 val repetidoContinuo = continuo &&
                                     valor == ultimoValorContinuo
                                 if (repetidoContinuo) {
-                                    detectada.set(false)
+                                    camara.detectada.set(false)
                                     estabilizador.reiniciar()
                                 } else {
                                     ultimoValorContinuo = valor
@@ -224,12 +182,22 @@ private fun VistaCamaraCedula(
                                         vibrarConfirmacion(contexto)
                                         reproducirSonidoConfirmacion()
                                     }
-                                    trabajoResultado?.cancel()
-                                    trabajoResultado = alcance.launch {
-                                        if (!continuo && resultado.vencido) {
-                                            delay(DEMORA_AVISO_VENCIDO_MS)
-                                        }
-                                        if (!sesionActiva.get()) return@launch
+                                    camara.trabajoResultado?.cancel()
+                                    camara.trabajoResultado = alcance.launch {
+                                        // Antes acá se esperaba
+                                        // DEMORA_AVISO_VENCIDO_MS si el
+                                        // documento estaba vencido, para
+                                        // que el operador alcanzara a leer
+                                        // el aviso antes de seguir -- se
+                                        // saca (pedido explícito del
+                                        // usuario, 2026-09-26): la pausa no
+                                        // bloqueaba nada de verdad, el
+                                        // ingreso se otorgaba igual apenas
+                                        // pasaba el segundo. Un mecanismo
+                                        // que sí bloquee de verdad (no sólo
+                                        // avisar y dejar pasar) queda para
+                                        // otra pasada.
+                                        if (!camara.sesionActiva.get()) return@launch
                                         // `onDocumentoActual` es suspend: para el
                                         // caso de gafetes ya espera a que la
                                         // mutación en Rust termine (ver
@@ -242,7 +210,7 @@ private fun VistaCamaraCedula(
                                         // no depender de que Compose ya haya
                                         // vuelto a dibujar con el estado nuevo.
                                         onDocumentoActual(documento)
-                                        if (continuo && sesionActiva.get()) {
+                                        if (continuo && camara.sesionActiva.get()) {
                                             val resultado = obtenerResultadoActual()
                                             if (resultado != null) {
                                                 resultadoMostrado = resultado
@@ -256,8 +224,8 @@ private fun VistaCamaraCedula(
                                                 ultimoMensaje = mensajeProcesadoContinuo(modo, valor)
                                             }
                                             delay(DEMORA_REARMAR_ESCANEO_CONTINUO_MS)
-                                            if (sesionActiva.get()) {
-                                                detectada.set(false)
+                                            if (camara.sesionActiva.get()) {
+                                                camara.detectada.set(false)
                                                 estabilizador.reiniciar()
                                                 estado = EstadoEscaneo.BUSCANDO
                                                 vencido = false
@@ -269,27 +237,42 @@ private fun VistaCamaraCedula(
                                 }
                             }
                         }
-                    },
-                    onFallo = {
-                        if (!sesionActiva.get()) return@construirAnalizadorOcr
+                    }
+                val onFallo: () -> Unit = {
+                    if (camara.sesionActiva.get()) {
                         estado = EstadoEscaneo.BUSCANDO
                         vencido = false
                         ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
-                    },
-                )
-                analisisCamara = analisis
+                    }
+                }
+                val analisis = construirAnalizadorOcr(
+                    ejecutorAnalisis = camara.ejecutor,
+                    detectada = camara.detectada,
+                    sesionActiva = camara.sesionActiva,
+                ) { imagen ->
+                    analizarCedula(
+                        imagen = imagen,
+                        recognizer = camara.recognizer,
+                        ejecutorPrincipal = camara.ejecutorPrincipal,
+                        sesionActiva = camara.sesionActiva,
+                        buffersOcr = buffersOcr,
+                        onTexto = { texto -> onResultado(estabilizador.procesarFrame(texto)) },
+                        onFallo = onFallo,
+                    )
+                }
+                camara.analisisCamara = analisis
                 iniciarCamara(
                     ctx = ctx,
                     previewView = previewView,
                     lifecycleOwner = lifecycleOwner,
                     analisis = analisis,
-                    sesionActiva = sesionActiva,
+                    sesionActiva = camara.sesionActiva,
                     onCameraProviderListo = { proveedor, preview ->
-                        cameraProvider = proveedor
-                        vistaPreviaCamara = preview
+                        camara.cameraProvider = proveedor
+                        camara.vistaPreviaCamara = preview
                     },
                     onFallo = { mensaje ->
-                        if (sesionActiva.get()) {
+                        if (camara.sesionActiva.get()) {
                             estado = EstadoEscaneo.INVALIDO
                             ultimoMensaje = mensaje
                         }
@@ -336,21 +319,45 @@ private fun VistaCamaraCedula(
     }
 }
 
-/// Arma el caso de uso de análisis de ML Kit, incluyendo el descarte
-/// temprano de frames una vez ya se detectó un documento -- separado de
-/// [iniciarCamara] para que cada función tenga una sola responsabilidad:
-/// esta arma "qué se analiza", la otra "cómo se conecta a la cámara física".
-private fun construirAnalizadorOcr(
+/// Arma el caso de uso de análisis de ML Kit -- resolución fija y descarte
+/// temprano de frames una vez ya se detectó un documento -- compartido por
+/// las 4 pantallas de escaneo (Cédula/Gafete, Carnet KOF, Vehículo/Ruta,
+/// Comprobante de Ruta). Antes cada pantalla salvo Cédula traía su propia
+/// copia textual de este `ImageAnalysis.Builder()` (hallazgo 2026-09-25,
+/// mismo riesgo de desincronización que ya se había resuelto para
+/// [iniciarCamara]/[analizarCedula]): separado de [iniciarCamara] para que
+/// cada función tenga una sola responsabilidad, esta arma "qué se
+/// analiza", la otra "cómo se conecta a la cámara física".
+///
+/// `onFrameActivo` recibe el frame ya filtrado (sesión viva, documento aún
+/// no detectado) -- cada pantalla decide ahí cómo llamar a [analizarCedula]
+/// con su propio `onTexto`/`onFallo`/`region`, sin que este helper necesite
+/// saber nada de estabilizadores ni de qué tipo de documento se busca.
+fun construirAnalizadorOcr(
     ejecutorAnalisis: java.util.concurrent.Executor,
-    ejecutorPrincipal: java.util.concurrent.Executor,
-    recognizer: com.google.mlkit.vision.text.TextRecognizer,
-    estabilizador: EstabilizadorLectura,
     detectada: AtomicBoolean,
     sesionActiva: AtomicBoolean,
-    onResultado: (ResultadoEstabilizacion) -> Unit,
-    onFallo: () -> Unit,
-): ImageAnalysis =
-    ImageAnalysis.Builder()
+    onFrameActivo: (ImageProxy) -> Unit,
+): ImageAnalysis {
+    // Optimización #2 del relevamiento de rendimiento de cámara
+    // (2026-09-25, pospuesta a propósito en el commit c0dad75 para aislar
+    // su efecto del resto): antes de esto, con STRATEGY_KEEP_ONLY_LATEST +
+    // un solo hilo, se procesaba cada frame que CameraX llegara a entregar
+    // -- en un sensor típico de 30fps eso es un `recortarParaOcr` (NV21 ->
+    // ARGB + rotar + recortar, todo en CPU) hasta 30 veces por segundo,
+    // muchísimo más seguido de lo que ML Kit necesita para leer texto
+    // estático. `ultimoFrameProcesadoMs` vive en el closure del analyzer,
+    // no en un campo de la pantalla: una sola instancia de
+    // `ImageAnalysis`/analyzer por apertura de cámara, y `setAnalyzer` ya
+    // garantiza que un único hilo (`ejecutorAnalisis`) llama a este lambda
+    // de a un frame por vez, así que un `var` simple alcanza sin
+    // sincronización extra.
+    //
+    // `SystemClock.elapsedRealtime()`, no `System.currentTimeMillis()`:
+    // monotónico, no se mueve si cambia la hora del sistema (poco probable
+    // acá, pero es el reloj correcto para medir intervalos, no instantes).
+    var ultimoFrameProcesadoMs = 0L
+    return ImageAnalysis.Builder()
         .setResolutionSelector(
             ResolutionSelector.Builder()
                 .setResolutionStrategy(
@@ -373,16 +380,16 @@ private fun construirAnalizadorOcr(
                     imagen.close()
                     return@setAnalyzer
                 }
-                analizarCedula(
-                    imagen = imagen,
-                    recognizer = recognizer,
-                    ejecutorPrincipal = ejecutorPrincipal,
-                    sesionActiva = sesionActiva,
-                    onTexto = { texto -> onResultado(estabilizador.procesarFrame(texto)) },
-                    onFallo = onFallo,
-                )
+                val ahora = android.os.SystemClock.elapsedRealtime()
+                if (ahora - ultimoFrameProcesadoMs < INTERVALO_MINIMO_ENTRE_FRAMES_MS) {
+                    imagen.close()
+                    return@setAnalyzer
+                }
+                ultimoFrameProcesadoMs = ahora
+                onFrameActivo(imagen)
             }
         }
+}
 
 /// Conecta el preview y el análisis a la cámara física una vez que
 /// `ProcessCameraProvider` está listo, y arranca el enfoque continuo --
@@ -408,15 +415,18 @@ fun iniciarCamara(
                     it.surfaceProvider = previewView.surfaceProvider
                 }
                 onCameraProviderListo(proveedor, preview)
-            // `previewView.viewPort` ata el recorte de `analisis` al mismo
-            // rectángulo que en verdad se ve en pantalla (la vista previa
-            // usa FILL_CENTER, que recorta/escala el frame del sensor a la
-            // proporción de la pantalla -- casi nunca la misma proporción
-            // que el sensor). Sin esto, `filtrarTextoEnAreaGuia` compara
-            // contra las dimensiones crudas del sensor, no contra lo que la
-            // persona realmente ve dentro del recuadro guía: el recuadro en
-            // pantalla y la zona que de verdad analiza ML Kit terminan
-            // siendo rectángulos físicos distintos.
+            // `previewView.viewPort` NO recorta el búfer de `analisis` --
+            // para `ImageAnalysis`, CameraX sólo usa el `ViewPort` para
+            // calcular `ImageProxy.getCropRect()` (comentario corregido,
+            // MV-08 de la auditoría 2026-09-24: la versión anterior decía
+            // que esto "ataba el recorte", pero nada leía `cropRect`
+            // todavía). `setViewPort` sigue haciendo falta igual -- sin él,
+            // `cropRect` queda como el frame completo del sensor, que casi
+            // nunca tiene la misma proporción que lo que la vista previa en
+            // verdad muestra con FILL_CENTER. `recortarParaOcr` (llamado
+            // desde `analizarCedula`) es quien de verdad lee `cropRect` y
+            // recorta con eso antes de aplicar el recuadro guía -- ver su
+            // doc-comment.
                 val grupoUseCases = UseCaseGroup.Builder()
                     .addUseCase(preview)
                     .addUseCase(analisis)
@@ -449,8 +459,6 @@ fun iniciarCamara(
 // las cosas pero seguía sin sentirse tan rápido como el autofocus puramente
 // por defecto -- un empujón puntual solo puede sumar latencia sin garantía
 // de ayudar, así que se sacó del todo.
-
-private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 // Subido de 900ms -- con el ciclo de salida por gafete ya sin botón de
 // confirmar (pedido explícito del usuario 2026-09-20), el mensaje de
 // resultado (nombre en verde, motivo en rojo) apenas alcanzaba a leerse
@@ -458,6 +466,14 @@ private const val DEMORA_AVISO_VENCIDO_MS = 1200L
 // bastante más rápido que tener que confirmar a mano.
 private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 1600L
 private const val FRAMES_AUSENCIA_PARA_REPETIR = 3
+
+// Ver el doc-comment de `construirAnalizadorOcr` (optimización #2). 150ms
+// = ~6-7 frames/s procesados como techo, muy por encima de lo que
+// `EstabilizadorLectura` necesita (2-3 lecturas consistentes para
+// confirmar) y bien por debajo de lo que se sentiría como lag al apuntar
+// la cámara -- el sensor sigue entregando a su fps normal, esto sólo
+// descarta los frames de más entre medio antes de gastar CPU en ellos.
+private const val INTERVALO_MINIMO_ENTRE_FRAMES_MS = 150L
 
 /// Compartido por las 4 pantallas de escaneo -- antes cada una tenía su
 /// propia copia textual idéntica (hallazgo 2026-09-19, riesgo de
@@ -517,6 +533,10 @@ fun analizarCedula(
     recognizer: com.google.mlkit.vision.text.TextRecognizer,
     ejecutorPrincipal: java.util.concurrent.Executor,
     sesionActiva: AtomicBoolean,
+    // `null` (default) preserva el comportamiento de siempre -- asignar los
+    // buffers desde cero por frame. Pasarlo es lo que cierra el último
+    // punto suelto de MV-07 (ver `BuffersOcrReutilizables`).
+    buffersOcr: BuffersOcrReutilizables? = null,
     onTexto: (String) -> Unit,
     onFallo: () -> Unit,
     // Angosta (proporción de tarjeta) por defecto. `null` desactiva el
@@ -532,7 +552,31 @@ fun analizarCedula(
         imagen.close()
         return
     }
+    // Optimización #4 del relevamiento de rendimiento de cámara
+    // (2026-09-25, pospuesta a propósito junto con #2 en el commit
+    // c0dad75): `construirAnalizadorOcr` ya filtra por `sesionActiva` antes
+    // de llegar acá, pero ese chequeo pasa ANTES del trabajo pesado de esta
+    // función (recortar = NV21->ARGB + rotar + recortar Bitmap), no
+    // después. Con `setAnalyzer` en un único hilo casi nunca hay hueco
+    // entre ambos chequeos, pero repetirlo acá, justo antes de
+    // `recortarParaOcr`, es gratis (una lectura de `AtomicBoolean`) y cierra
+    // la ventana por completo: si la pantalla se cerró en el instante entre
+    // ambos chequeos, no se gasta CPU recortando un frame cuyo resultado
+    // nadie va a usar.
+    if (!sesionActiva.get()) {
+        imagen.close()
+        return
+    }
     val rotacion = imagen.imageInfo.rotationDegrees
+    // MV-08 (auditoría 2026-09-24): `imagen.cropRect` es lo único que
+    // CameraX de verdad ajusta a partir del `ViewPort` (`setViewPort` en
+    // `iniciarCamara`) -- para `ImageAnalysis` el búfer en sí NUNCA se
+    // recorta, sólo se informa qué porción de él corresponde a lo visible.
+    // Se lee acá, sobre el `ImageProxy`, porque `mediaImage`
+    // (`android.media.Image`) no expone esta información. Antes de este
+    // fix se ignoraba por completo y `recortarParaOcr` trabajaba siempre
+    // sobre el frame entero del sensor.
+    val cropRect = imagen.cropRect
     // Recorta al mismo recuadro que ve la persona en pantalla antes de
     // mandarle el frame a ML Kit -- pedido explícito del usuario 2026-09-20
     // para que el reconocimiento sea más rápido (menos píxeles) y más
@@ -541,7 +585,8 @@ fun analizarCedula(
     // `recortarParaOcr` devolviendo `null` (formato inesperado, plano
     // corrupto, lo que sea) se cae al frame completo de siempre -- nunca
     // debe romper el escaneo por un recorte que salió mal.
-    val input = region?.let { recortarParaOcr(mediaImage, rotacion, it) } ?: InputImage.fromMediaImage(mediaImage, rotacion)
+    val input = region?.let { recortarParaOcr(mediaImage, cropRect, rotacion, it, buffersOcr) }
+        ?: InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
         .addOnSuccessListener(ejecutorPrincipal) { resultado ->
             if (sesionActiva.get()) {
@@ -560,9 +605,9 @@ fun analizarCedula(
 /// cae de vuelta al frame completo, nunca debe romper el escaneo.
 ///
 /// Por qué rota A BITMAP COMPLETO primero y recién ahí recorta, en vez de
-/// calcular el recorte directo sobre el buffer crudo (que ahorraría el
-/// paso de JPEG/rotación): el recuadro que ve la persona está expresado en
-/// coordenadas YA ROTADAS (como la pantalla, vertical), mientras que
+/// calcular el recorte directo sobre el buffer crudo (que ahorraría
+/// armar el bitmap completo): el recuadro que ve la persona está expresado
+/// en coordenadas YA ROTADAS (como la pantalla, vertical), mientras que
 /// `imagen`/sus planos vienen en la orientación nativa del sensor (normal
 /// que la cámara trasera entregue esto en apaisado incluso con el teléfono
 /// en vertical). Traducir el recuadro vertical a coordenadas del sensor sin
@@ -573,8 +618,36 @@ fun analizarCedula(
 /// Rotar primero devuelve un bitmap donde "arriba/ancho/alto" ya significan
 /// lo mismo que en pantalla, así que el recorte usa la misma aritmética que
 /// `MarcoGuiaCedula` sin ningún signo que invertir.
+///
+/// El bitmap completo se arma con [convertirNv21AArgb] directo, sin pasar
+/// por JPEG (auditoría de rendimiento 2026-09-25: `YuvImage.compressToJpeg`
+/// + `BitmapFactory.decodeByteArray` era el costo de CPU más alto por
+/// frame de las 4 pantallas de escaneo, y de paso comprimía con pérdida una
+/// imagen que nunca se guarda ni se muestra). Cada bitmap intermedio que ya
+/// no hace falta se recicla apenas se arma el siguiente -- el único que
+/// queda vivo al salir es `bitmapRecortado`, porque `recognizer.process`
+/// todavía lo necesita después de este `return`.
+///
+/// `cropRect` (MV-08, auditoría 2026-09-24): antes de rotar, se recorta al
+/// rectángulo que CameraX calculó a partir del `ViewPort` (o al frame
+/// completo si todavía es `null`/no cambió nada, ej. antes de que la vista
+/// tenga tamaño) -- SIN esto, el bitmap de partida es el frame entero del
+/// sensor, que casi nunca tiene la misma proporción que lo que en verdad
+/// se ve en pantalla con `FILL_CENTER`, así que el recuadro guía terminaba
+/// analizando una región más ancha que la visible (podía leer un documento
+/// fuera del marco). `cropRect` viene en coordenadas del búfer SIN rotar
+/// (mismo espacio que `imagen.width`/`imagen.height`), así que este recorte
+/// va antes de rotar, no después.
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
-private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int, region: RegionGuiaOcr): InputImage? {
+private fun recortarParaOcr(
+    imagen: android.media.Image,
+    cropRect: android.graphics.Rect,
+    rotacionGrados: Int,
+    region: RegionGuiaOcr,
+    // `null` (default) preserva el comportamiento de siempre. Ver
+    // `BuffersOcrReutilizables` -- último punto suelto de MV-07.
+    buffersOcr: BuffersOcrReutilizables? = null,
+): InputImage? {
     if (imagen.format != android.graphics.ImageFormat.YUV_420_888) return null
     val planos = imagen.planes
     if (planos.size < 3) return null
@@ -582,9 +655,12 @@ private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int, re
         val yPlano = planos[0]
         val uPlano = planos[1]
         val vPlano = planos[2]
-        val yBytes = ByteArray(yPlano.buffer.remaining()).also { yPlano.buffer.get(it) }
-        val uBytes = ByteArray(uPlano.buffer.remaining()).also { uPlano.buffer.get(it) }
-        val vBytes = ByteArray(vPlano.buffer.remaining()).also { vPlano.buffer.get(it) }
+        val tamanoY = yPlano.buffer.remaining()
+        val tamanoU = uPlano.buffer.remaining()
+        val tamanoV = vPlano.buffer.remaining()
+        val yBytes = (buffersOcr?.yBytes(tamanoY) ?: ByteArray(tamanoY)).also { yPlano.buffer.get(it) }
+        val uBytes = (buffersOcr?.uBytes(tamanoU) ?: ByteArray(tamanoU)).also { uPlano.buffer.get(it) }
+        val vBytes = (buffersOcr?.vBytes(tamanoV) ?: ByteArray(tamanoV)).also { vPlano.buffer.get(it) }
         val nv21 = construirNv21(
             ancho = imagen.width,
             alto = imagen.height,
@@ -594,32 +670,46 @@ private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int, re
             v = vBytes,
             uvRowStride = uPlano.rowStride,
             uvPixelStride = uPlano.pixelStride,
+            destino = buffersOcr?.nv21((imagen.width * imagen.height) + (imagen.width * imagen.height) / 2),
         )
-        val yuvImage = android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, imagen.width, imagen.height, null)
-        val jpegCompleto = java.io.ByteArrayOutputStream().use { salida ->
-            val ok = yuvImage.compressToJpeg(
-                android.graphics.Rect(0, 0, imagen.width, imagen.height),
-                90,
-                salida,
-            )
-            if (!ok) return null
-            salida.toByteArray()
+        val pixeles = convertirNv21AArgb(
+            nv21, imagen.width, imagen.height,
+            destino = buffersOcr?.pixeles(imagen.width * imagen.height),
+        )
+        val bitmapCompleto = android.graphics.Bitmap.createBitmap(
+            pixeles, imagen.width, imagen.height, android.graphics.Bitmap.Config.ARGB_8888,
+        )
+        // MV-08: recorta al `cropRect` del ViewPort ANTES de rotar --
+        // `cropRect` está en el mismo espacio sin rotar que
+        // `imagen.width`/`imagen.height`. `intersect` contra el bitmap
+        // completo por seguridad (un `cropRect` corrido o más grande que el
+        // frame -- no debería pasar, pero `createBitmap` tira si el
+        // rectángulo se sale) cae de vuelta al frame entero en vez de
+        // fallar el escaneo.
+        val cropSeguro = android.graphics.Rect(cropRect)
+        if (!cropSeguro.intersect(0, 0, bitmapCompleto.width, bitmapCompleto.height)) {
+            cropSeguro.set(0, 0, bitmapCompleto.width, bitmapCompleto.height)
         }
-        val bitmapCompleto = android.graphics.BitmapFactory.decodeByteArray(jpegCompleto, 0, jpegCompleto.size)
-            ?: return null
-        val bitmapDerecho = if (rotacionGrados == 0) {
+        val bitmapAlViewport = if (cropSeguro.width() == bitmapCompleto.width && cropSeguro.height() == bitmapCompleto.height) {
             bitmapCompleto
+        } else {
+            android.graphics.Bitmap.createBitmap(
+                bitmapCompleto, cropSeguro.left, cropSeguro.top, cropSeguro.width(), cropSeguro.height(),
+            ).also { if (it !== bitmapCompleto) bitmapCompleto.recycle() }
+        }
+        val bitmapDerecho = if (rotacionGrados == 0) {
+            bitmapAlViewport
         } else {
             val matriz = android.graphics.Matrix().apply { postRotate(rotacionGrados.toFloat()) }
             android.graphics.Bitmap.createBitmap(
-                bitmapCompleto, 0, 0, bitmapCompleto.width, bitmapCompleto.height, matriz, false,
-            )
+                bitmapAlViewport, 0, 0, bitmapAlViewport.width, bitmapAlViewport.height, matriz, false,
+            ).also { if (it !== bitmapAlViewport) bitmapAlViewport.recycle() }
         }
         val recorte = region.rectanguloEnPixeles(bitmapDerecho.width, bitmapDerecho.height)
         if (recorte.width <= 0 || recorte.height <= 0) return null
         val bitmapRecortado = android.graphics.Bitmap.createBitmap(
             bitmapDerecho, recorte.left, recorte.top, recorte.width, recorte.height,
-        )
+        ).also { if (it !== bitmapDerecho) bitmapDerecho.recycle() }
         InputImage.fromBitmap(bitmapRecortado, 0)
     } catch (e: Exception) {
         null

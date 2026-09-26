@@ -73,6 +73,7 @@ import {
 } from "./api";
 import type { ResumenSincronizacion, Update, UsuarioSesion } from "./api";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
+import { textoHora } from "./tiempo";
 import { SesionProvider } from "./contexto/SesionContexto";
 import {
   AccionBarraEstadoProvider,
@@ -538,6 +539,18 @@ function Shell({
     for (const conflicto of resumen.conflictos_ingreso_proveedor) {
       toast.warning(
         `${conflicto.nombre} tiene un ingreso de proveedor activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
+      );
+    }
+    // A diferencia de los tres de arriba (simétricos: ambos lados "tienen
+    // razón" hasta que alguien decide), acá Postgres ya decidió -- el
+    // ingreso local de ESTE dispositivo es el que no quedó válido en la
+    // nube, así que el aviso lo dice con esa certeza. Sólo informativo por
+    // ahora (fase 3, PR #62): sin botón de acción directa -- se deja para
+    // una vuelta aparte si hace falta, una vez visto el comportamiento
+    // real.
+    for (const conflicto of resumen.conflictos_gafete) {
+      toast.warning(
+        `El ingreso de ${conflicto.contratista_nombre} con gafete ${conflicto.gafete_numero} (${textoHora(conflicto.fecha_hora_ingreso)}) no quedó registrado en la nube — otro dispositivo de este sitio ya lo tiene asignado.`,
       );
     }
     return false;

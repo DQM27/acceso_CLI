@@ -68,6 +68,9 @@ use control_acceso::services::ruta_service::{
 use control_acceso::services::usuario_service::CrearUsuarioInput as CrearUsuarioInputNucleo;
 use control_acceso::tiempo::RelojCorregido;
 
+mod mrz;
+pub use mrz::{CampoMrz, CorreccionAplicada, FechaMrz, FormatoMrz, RegistroMrz, leer_mrz};
+
 uniffi::setup_scaffolding!();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -287,10 +290,26 @@ pub struct PreparacionIngreso {
     /// continuar, ver `docs/pendientes.md`.
     pub activo_en_otro_sitio: Option<String>,
     pub gafetes_deuda: Vec<i64>,
+    /// `None` si se puede continuar con este contratista; si no, el texto
+    /// ya resuelto del motivo (ingreso activo local, activo en otro sitio,
+    /// o acceso denegado, en ese orden de prioridad). Reemplaza
+    /// `puedeContinuar`/`mensajeBloqueo`/`mensajeMotivoDenegacion`, que
+    /// antes vivían duplicados en Kotlin (con su propio orden y su propio
+    /// texto, ya divergido del de escritorio) -- ver
+    /// `PreparacionIngreso::bloqueo` y `mensajes::mensaje_bloqueo_ingreso`
+    /// en el crate raíz. Kotlin sólo debe mirar este campo: `!= null`
+    /// significa bloqueado, y es el texto a mostrar tal cual.
+    pub mensaje_bloqueo: Option<String>,
 }
 
 impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
     fn from(preparacion: PreparacionIngresoNucleo) -> Self {
+        // Antes de mover el resto de los campos -- `bloqueo()` sólo lee,
+        // no consume.
+        let mensaje_bloqueo = preparacion
+            .bloqueo()
+            .as_ref()
+            .map(control_acceso::mensajes::mensaje_bloqueo_ingreso);
         Self {
             contratista_id: preparacion.contratista_id,
             cedula: preparacion.cedula,
@@ -303,6 +322,7 @@ impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
             tiene_ingreso_activo: preparacion.tiene_ingreso_activo,
             activo_en_otro_sitio: preparacion.activo_en_otro_sitio,
             gafetes_deuda: preparacion.gafetes_deuda,
+            mensaje_bloqueo,
         }
     }
 }
@@ -519,6 +539,45 @@ pub struct ResumenSincronizacion {
     /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
     /// proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
     pub conflictos_ingreso_proveedor: Vec<ConflictoIngresoProveedorActivo>,
+    /// Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
+    /// la nube fue rechazado porque otro dispositivo del mismo sitio ya
+    /// tiene ese número activo (índice único
+    /// `ingresos_gafete_activo_sitio_idx`) -- a diferencia de
+    /// `conflictos_ingreso`, se calcula con datos locales dentro del mismo
+    /// `drenar_cola`, sin una consulta remota aparte -- ver
+    /// `control_acceso::nube::ConflictoGafeteActivo`.
+    pub conflictos_gafete: Vec<ConflictoGafeteActivo>,
+}
+
+/// Espejo de `control_acceso::nube::ConflictoGafeteActivo`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct ConflictoGafeteActivo {
+    pub contratista_nombre: String,
+    pub gafete_numero: i64,
+    pub fecha_hora_ingreso: String,
+}
+
+impl From<control_acceso::nube::ConflictoGafeteActivo> for ConflictoGafeteActivo {
+    fn from(conflicto: control_acceso::nube::ConflictoGafeteActivo) -> Self {
+        Self {
+            contratista_nombre: conflicto.contratista_nombre,
+            gafete_numero: conflicto.gafete_numero,
+            fecha_hora_ingreso: conflicto.fecha_hora_ingreso,
+        }
+    }
+}
+
+/// Factorizado aparte -- las dos vías de sincronización
+/// (`intentar_sincronizar_con_nube`/`_con_secreto`) repetirían, si no,
+/// exactamente la misma línea, y una de las dos ya está en el límite de
+/// `too_many_lines` del crate.
+fn mapear_conflictos_gafete(
+    conflictos: Vec<control_acceso::nube::ConflictoGafeteActivo>,
+) -> Vec<ConflictoGafeteActivo> {
+    conflictos
+        .into_iter()
+        .map(ConflictoGafeteActivo::from)
+        .collect()
 }
 
 /// Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
@@ -578,6 +637,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             sesion_expulsada: resumen.sesion_expulsada,
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
+            conflictos_gafete: Vec::new(),
         }
     }
 }
@@ -904,11 +964,13 @@ pub enum NucleoError {
     /// este teléfono. `Nucleo::autenticar`/`autenticar_con_secreto`
     /// interceptan esto internamente y redirigen a `autenticar_supabase`
     /// (ver el comentario ahí) -- Kotlin nunca ve este error para un
-    /// usuario global. La variante sigue existiendo por el contrato FFI;
-    /// no queda claro si algún llamador real (mobile o desktop) todavía
-    /// la deja escapar sin interceptar -- ver `AppCore::fijar_password_inicial`
-    /// en el crate raíz y `tests/bootstrap_password_usuario_global.rs`
-    /// antes de asumir que es alcanzable o no desde acá.
+    /// usuario global. La variante sigue existiendo por el contrato FFI
+    /// -- confirmado en la auditoría 2026-09-24 (NR-07/NS-25) que el único
+    /// camino que fijaba contraseña con sólo la cédula era
+    /// `AppCore::fijar_password_inicial`, ya eliminada por no tener
+    /// llamadores reales; el alta de contraseña de un usuario global pasa
+    /// siempre por `autenticar_supabase` (Supabase Auth), así que esta
+    /// variante no debería escapar sin interceptar desde acá.
     #[error("todavía no tenés contraseña en este dispositivo")]
     SinPasswordLocal,
     #[error("no hay una sesión iniciada")]
@@ -920,6 +982,13 @@ pub enum NucleoError {
     SesionSupabaseVencida,
     #[error("fecha de PRAIND inválida: {mensaje}")]
     FechaInvalida { mensaje: String },
+    /// El gafete ya está activo en este sitio del lado de OTRO
+    /// dispositivo -- chequeo en vivo (`CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo`),
+    /// nunca llega a tocar `registrar_ingreso` en el núcleo, se corta acá
+    /// mismo. Reemplaza `GafeteOcupadoEnSitioException`, que antes vivía
+    /// sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).
+    #[error("El gafete {numero} ya está en uso en otro dispositivo de la unidad operativa")]
+    GafeteOcupadoEnSitio { numero: i64 },
     #[error("error interno: {mensaje}")]
     Interno { mensaje: String },
 }
@@ -1082,21 +1151,10 @@ impl From<GestionNubeErrorNucleo> for NucleoError {
     }
 }
 
-/// Ver `Nucleo::autenticar_con_cache`. Duplica la idea de
-/// `application::nube::TokenCacheado` (interno a `AppCore`) en vez de
-/// reutilizarla por el mismo motivo que ya la duplicó escritorio
-/// (`desktop/src-tauri/src/estado.rs::TokenCacheado`): autenticar contra la
-/// nube acá no debe pasar por `core_lock()` -- retener ese candado durante
-/// la llamada de red es justo lo que esto evita.
-struct TokenCacheadoNucleo {
-    secreto: String,
-    token: control_acceso::nube::TokenDispositivo,
-    obtenido_en: std::time::Instant,
-}
-
 /// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,
 /// o un ROOT ya sincronizado a otro sitio) -- ver
-/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta de `TokenCacheadoNucleo`
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta del
+/// `TokenDispositivo` que cachea `Nucleo::cache_token`
 /// (identidad del DISPOSITIVO): esto es la identidad de la PERSONA. Vive
 /// sólo en memoria -- nunca se persiste a disco, mismo criterio que
 /// `desktop/src-tauri/src/estado.rs::SesionSupabaseCacheada`: cerrar la app
@@ -1127,16 +1185,16 @@ pub struct Nucleo {
     /// todavía en el piloto).
     sesion: Mutex<Option<UsuarioSesionNucleo>>,
     /// Caché del último `TokenDispositivo`, deliberadamente FUERA del
-    /// `Mutex<AppCore>` de arriba -- ver `Nucleo::autenticar_con_cache`.
-    /// Antes de esto, `autenticar`/`gafete_ocupado_en_sitio` llamaban a los
-    /// métodos de red de `AppCore` a través de `core_lock()`, que quedaba
-    /// tomado durante toda la llamada HTTP: cualquier otra pantalla
-    /// (buscar, listar activos, otro registro) se quedaba esperando ese
-    /// mismo candado mientras tanto -- se sentía como que la app se
-    /// congelaba al iniciar sesión o al confirmar un ingreso con gafete,
-    /// sobre todo si la sincronización periódica estaba en curso al mismo
-    /// tiempo.
-    token_nube_cacheado: Mutex<Option<TokenCacheadoNucleo>>,
+    /// `Mutex<AppCore>` de arriba -- ver el doc-comment de
+    /// `control_acceso::nube::CacheTokenDispositivo`. Antes de esto,
+    /// `autenticar`/`gafete_ocupado_en_sitio` llamaban a los métodos de
+    /// red de `AppCore` a través de `core_lock()`, que quedaba tomado
+    /// durante toda la llamada HTTP: cualquier otra pantalla (buscar,
+    /// listar activos, otro registro) se quedaba esperando ese mismo
+    /// candado mientras tanto -- se sentía como que la app se congelaba al
+    /// iniciar sesión o al confirmar un ingreso con gafete, sobre todo si
+    /// la sincronización periódica estaba en curso al mismo tiempo.
+    cache_token: control_acceso::nube::CacheTokenDispositivo,
     /// Serializa las sincronizaciones completas (`sincronizar_con_nube`,
     /// llamada desde el timer periódico, un aviso Realtime Y el botón
     /// manual -- ver `SincronizacionPeriodica.kt`/`NubeViewModel.kt`) para
@@ -1152,34 +1210,64 @@ pub struct Nucleo {
     /// que resuelve el path por defecto; acá ya llega como parámetro del
     /// constructor). Misma idea que `GuiState::ruta_base_datos` en escritorio.
     ruta_base_datos: PathBuf,
+    /// MV-03 (auditoría 2026-09-24) -- `None` si se abrió con `abrir()`
+    /// (sin cifrar), `Some` si se abrió con `abrir_cifrado()`. Bug real
+    /// encontrado en la prueba de fuego en dispositivo (2026-09-26):
+    /// `conexion_secundaria()` pasaba `None` siempre, sin importar con qué
+    /// clave se hubiera abierto la conexión principal -- toda la
+    /// sincronización (que usa una `Connection` secundaria para no
+    /// competir por el `Mutex<AppCore>` de la principal) intentaba abrir
+    /// el archivo YA cifrado sin clave, y `SQLite` lo rechazaba con "file
+    /// is not a database" apenas se tocaba cualquier tabla. Guardada acá
+    /// para que esa conexión secundaria pueda aplicar la misma clave que
+    /// ya usa la principal.
+    clave: Option<[u8; 32]>,
     /// Ver `SesionSupabaseCacheada`.
     sesion_supabase: Mutex<Option<SesionSupabaseCacheada>>,
+}
+
+/// Backend real de `log` (ver `interno()` más arriba) -- vuelca a Logcat,
+/// filtrable con `adb logcat -s control_acceso_mobile`. Se llama desde
+/// ambos constructores (`abrir`/`abrir_cifrado`), lo primero que Kotlin
+/// invoca (ver `ARQUITECTURA.md`) -- sin backend, todo `log::` de este
+/// crate era no-op. Mismo criterio de nivel que
+/// `configurar_plugins_condicionales` en escritorio: más ruido en debug,
+/// sólo advertencias/errores reales en release. `init_once` tolera
+/// llamadas repetidas (no rompe si Kotlin llega a instanciar `Nucleo` más
+/// de una vez en el mismo proceso).
+fn iniciar_log_android() {
+    #[cfg(target_os = "android")]
+    android_logger::init_once(
+        android_logger::Config::default()
+            .with_max_level(if cfg!(debug_assertions) {
+                log::LevelFilter::Info
+            } else {
+                log::LevelFilter::Warn
+            })
+            .with_tag("control_acceso_mobile"),
+    );
+}
+
+/// Borra el archivo de base de datos y sus sidecars WAL/journal -- MV-03
+/// (auditoría 2026-09-24), usado por `Nucleo::abrir_cifrado` cuando el
+/// archivo existente no es legible con la clave nueva (ver su
+/// doc-comment). Mejor esfuerzo: un `remove_file` que falla porque el
+/// sidecar no existe no debe abortar nada.
+fn borrar_archivo_y_sidecars(ruta_base_datos: &str) {
+    let base = std::path::Path::new(ruta_base_datos);
+    let _ = std::fs::remove_file(base);
+    for sufijo in ["-wal", "-shm", "-journal"] {
+        let mut ruta_sidecar = base.as_os_str().to_owned();
+        ruta_sidecar.push(sufijo);
+        let _ = std::fs::remove_file(std::path::Path::new(&ruta_sidecar));
+    }
 }
 
 #[uniffi::export]
 impl Nucleo {
     #[uniffi::constructor]
     pub fn abrir(ruta_base_datos: String) -> Result<Self, NucleoError> {
-        // Backend real de `log` (ver `interno()` más arriba) -- vuelca a
-        // Logcat, filtrable con `adb logcat -s control_acceso_mobile`.
-        // `abrir()` es el primer método que llama Kotlin (ver
-        // `ARQUITECTURA.md`), así que es el lugar natural para esto; sin
-        // backend, todo `log::` de este crate era no-op hasta ahora. Mismo
-        // criterio de nivel que `configurar_plugins_condicionales` en
-        // escritorio: más ruido en debug, sólo advertencias/errores reales
-        // en release. `init_once` tolera llamadas repetidas (no rompe si
-        // Kotlin llega a instanciar `Nucleo` más de una vez en el mismo
-        // proceso).
-        #[cfg(target_os = "android")]
-        android_logger::init_once(
-            android_logger::Config::default()
-                .with_max_level(if cfg!(debug_assertions) {
-                    log::LevelFilter::Info
-                } else {
-                    log::LevelFilter::Warn
-                })
-                .with_tag("control_acceso_mobile"),
-        );
+        iniciar_log_android();
 
         // `RelojCorregido`, no `RelojSistema` -- un teléfono con la hora mal
         // puesta manualmente (o sin datos/GPS para que Android la ajuste
@@ -1193,14 +1281,50 @@ impl Nucleo {
         .map_err(|origen| NucleoError::Apertura {
             mensaje: interno(origen),
         })?;
-        Ok(Self {
-            core: Mutex::new(core),
-            sesion: Mutex::new(None),
-            token_nube_cacheado: Mutex::new(None),
-            sincronizacion_en_curso: Mutex::new(()),
-            ruta_base_datos: PathBuf::from(&ruta_base_datos),
-            sesion_supabase: Mutex::new(None),
-        })
+        Ok(Self::desde_core(&ruta_base_datos, core, None))
+    }
+
+    /// MV-03 (auditoría 2026-09-24): variante cifrada de [`Self::abrir`] --
+    /// `clave` es la clave AES de 32 bytes que Kotlin resuelve del Android
+    /// Keystore (`AndroidKeystoreClaveBaseDatosStore.kt`), nunca derivada
+    /// acá. Único punto de entrada real desde `AplicacionViewModel`; `abrir`
+    /// se queda sin tocar para los tests de Kotlin (`NucleoDePrueba`) y
+    /// para quien compile con `sqlite-plano`/`cifrado-sqlcipher` en vez del
+    /// default (`cifrado-sqlite3mc`) -- ver el comentario de
+    /// `[features]` en `Cargo.toml`.
+    ///
+    /// Si el archivo en `ruta_base_datos` ya existe pero NO es legible con
+    /// esta clave -- el caso real de todo teléfono con la app instalada
+    /// antes de este cambio, que hoy tiene la base en texto plano -- se
+    /// descarta y se reconstruye vacía en vez de migrar el archivo byte a
+    /// byte. Decisión explícita del usuario (2026-09-26): la app ya
+    /// depende de la sincronización con la nube como fuente de verdad
+    /// (mismo criterio que `confirmar_reconstruccion_desde_nube` en
+    /// desktop/src-tauri/src/lib.rs para un archivo dañado); el costo es
+    /// perder el historial/auditoría LOCAL de ese dispositivo que todavía
+    /// no se hubiera subido, a cambio de no escribir ni probar en este
+    /// momento una migración `sqlcipher_export` sin verificar todavía
+    /// contra un dispositivo real.
+    #[uniffi::constructor]
+    pub fn abrir_cifrado(ruta_base_datos: String, clave: Vec<u8>) -> Result<Self, NucleoError> {
+        iniciar_log_android();
+
+        let clave: [u8; 32] = clave.try_into().map_err(|_| NucleoError::Interno {
+            mensaje: "La clave de cifrado debe tener 32 bytes".to_string(),
+        })?;
+
+        match Self::abrir_cifrado_intento(&ruta_base_datos, &clave) {
+            Ok(nucleo) => Ok(nucleo),
+            Err(error) if std::path::Path::new(&ruta_base_datos).exists() => {
+                log::warn!(
+                    "abrir_cifrado: archivo existente no legible con la clave nueva ({error:?}), \
+                     se descarta y se reconstruye vacío"
+                );
+                borrar_archivo_y_sidecars(&ruta_base_datos);
+                Self::abrir_cifrado_intento(&ruta_base_datos, &clave)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// `directorio` sólo para los intentos de sincronización (ver abajo) --
@@ -1249,15 +1373,15 @@ impl Nucleo {
         directorio: String,
         identificador_dispositivo: String,
     ) -> Result<ResultadoLogin, NucleoError> {
-        let intento = self.core_lock().autenticar(&cedula, &password);
-        let sesion = match intento {
-            Ok(sesion) => sesion,
+        let intento = self.core_lock().autenticar_con_estado(&cedula, &password);
+        let (sesion, debe_cambiar_password) = match intento {
+            Ok(resultado) => resultado,
             Err(
                 AutenticacionErrorNucleo::UsuarioInactivo
                 | AutenticacionErrorNucleo::CredencialesInvalidas,
             ) => {
                 let _ = self.refrescar_catalogo_sin_sesion(&directorio, &identificador_dispositivo);
-                self.core_lock().autenticar(&cedula, &password)?
+                self.core_lock().autenticar_con_estado(&cedula, &password)?
             }
             // Usuario global (sincronizado) sin contraseña local todavía --
             // se autentica contra Supabase Auth en vez de mostrar la
@@ -1272,7 +1396,7 @@ impl Nucleo {
             Err(otro) => return Err(otro.into()),
         };
 
-        // Ver el comentario de `token_nube_cacheado`: a diferencia de la
+        // Ver el comentario de `cache_token`: a diferencia de la
         // línea de arriba (autenticación local, SQLite puro), este chequeo
         // habla con la nube -- por eso ya no pasa por `core_lock()` más que
         // un instante para `autorizar_uso_nube` (verificar que `sesion`
@@ -1307,7 +1431,7 @@ impl Nucleo {
         *self.sesion_lock() = Some(sesion.clone());
         Ok(ResultadoLogin {
             sesion: sesion.into(),
-            debe_cambiar_password: false,
+            debe_cambiar_password,
         })
     }
 
@@ -1321,9 +1445,9 @@ impl Nucleo {
         password: String,
         secreto: String,
     ) -> Result<ResultadoLogin, NucleoError> {
-        let intento = self.core_lock().autenticar(&cedula, &password);
-        let sesion = match intento {
-            Ok(sesion) => sesion,
+        let intento = self.core_lock().autenticar_con_estado(&cedula, &password);
+        let (sesion, debe_cambiar_password) = match intento {
+            Ok(resultado) => resultado,
             Err(
                 AutenticacionErrorNucleo::UsuarioInactivo
                 | AutenticacionErrorNucleo::CredencialesInvalidas,
@@ -1331,7 +1455,7 @@ impl Nucleo {
                 if !secreto.trim().is_empty() {
                     let _ = self.refrescar_catalogo_sin_sesion_con_secreto(&secreto);
                 }
-                self.core_lock().autenticar(&cedula, &password)?
+                self.core_lock().autenticar_con_estado(&cedula, &password)?
             }
             // Ver el comentario de `autenticar` (arriba) -- mismo criterio,
             // con el secreto ya en memoria en vez de leerlo de disco.
@@ -1375,7 +1499,7 @@ impl Nucleo {
         *self.sesion_lock() = Some(sesion.clone());
         Ok(ResultadoLogin {
             sesion: sesion.into(),
-            debe_cambiar_password: false,
+            debe_cambiar_password,
         })
     }
 
@@ -1402,6 +1526,29 @@ impl Nucleo {
             &password_actual,
             &password_nueva,
         )?;
+
+        // Best-effort, mismo criterio que en `autenticar_supabase` -- ver
+        // el doc-comment de `AppCore::cachear_password_local`. Refresca el
+        // caché con la contraseña NUEVA (y `debe_cambiar_password: false`,
+        // ya que el cambio se acaba de confirmar contra Supabase Auth):
+        // sin esto (hallazgo de auditoría 2026-09-24, MV-02), el caché
+        // seguía teniendo la contraseña VIEJA hasta el próximo login
+        // online -- la nueva contraseña quedaba rechazada offline por 24h
+        // mientras la vieja (o la temporal, si el cambio era obligatorio)
+        // seguía sirviendo para entrar sin conexión.
+        //
+        // El resultado se liga a una variable ANTES del `if let` a
+        // propósito -- mismo motivo que en `autenticar_supabase` un poco
+        // más arriba: `core_lock()` es un `MutexGuard`, y dejarlo como
+        // temporal directo en el scrutinee lo mantendría vivo durante todo
+        // el bloque, no sólo durante la llamada.
+        let resultado_cache =
+            self.core_lock()
+                .cachear_password_local(sesion.id, &password_nueva, false);
+        if let Err(error) = resultado_cache {
+            log::warn!("no se pudo refrescar el cacheo de login offline: {error}");
+        }
+
         Ok(())
     }
 
@@ -1411,6 +1558,34 @@ impl Nucleo {
     /// (Kotlin) decide si deja continuar mirando los campos ya calculados.
     pub fn preparar_ingreso(&self, contratista_id: i64) -> Result<PreparacionIngreso, NucleoError> {
         Ok(self.core_lock().preparar_ingreso(contratista_id)?.into())
+    }
+
+    /// Igual que [`Nucleo::preparar_ingreso`], pero además intenta el
+    /// chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo
+    /// cruzado de ingresos abiertos entre sitios") cuando los chequeos
+    /// locales ya dejaron pasar -- reemplaza el `if` que antes armaba
+    /// Kotlin en `ActivosViewModel.elegir` con dos llamadas FFI separadas
+    /// (`prepararIngreso` + `contratistaActivoEnOtroSitioConSecreto`) y su
+    /// propio `puedeContinuar`/`mensajeBloqueo`. Nunca toca `core_lock()`
+    /// durante la parte de red -- ver `CacheTokenDispositivo`.
+    ///
+    /// `secreto` vacío (dispositivo sin nube configurada) se salta el
+    /// chequeo remoto sin tocar la red, igual que el resto de los
+    /// `*_con_secreto` de este archivo.
+    pub fn preparar_ingreso_con_secreto(
+        &self,
+        contratista_id: i64,
+        secreto: String,
+    ) -> Result<PreparacionIngreso, NucleoError> {
+        let mut preparacion = self.core_lock().preparar_ingreso(contratista_id)?;
+        // Sin sentido gastar una vuelta de red si un chequeo local ya
+        // bloquea -- `bloqueo()` no consume, sólo lee lo que ya se sabe.
+        if !secreto.trim().is_empty() && preparacion.bloqueo().is_none() {
+            preparacion.activo_en_otro_sitio = self
+                .cache_token
+                .contratista_activo_en_otro_sitio(&secreto, &preparacion.cedula);
+        }
+        Ok(preparacion.into())
     }
 
     pub fn registrar_ingreso(
@@ -1425,6 +1600,40 @@ impl Nucleo {
             .core_lock()
             .registrar_ingreso(&actor, contratista_id, medio.into(), gafete, placa)?
             .into())
+    }
+
+    /// Igual que [`Nucleo::registrar_ingreso`], pero además chequea en vivo
+    /// que el gafete (si lo hay) no esté ya activo en este sitio del lado
+    /// de OTRO dispositivo antes de escribir -- reemplaza el par de
+    /// llamadas separadas `gafeteOcupadoEnSitioConSecreto` +
+    /// `registrarIngreso` que antes hacía `PantallaConfirmarIngreso.kt`
+    /// (con su propia `GafeteOcupadoEnSitioException`), acortando la
+    /// ventana entre chequear y escribir a un solo cruce FFI.
+    ///
+    /// `secreto` vacío se salta el chequeo sin tocar la red (mismo
+    /// criterio que el resto de los `*_con_secreto`).
+    pub fn registrar_ingreso_con_secreto(
+        &self,
+        contratista_id: i64,
+        medio: MedioIngreso,
+        gafete: Option<i64>,
+        placa: Option<String>,
+        secreto: String,
+    ) -> Result<ResultadoRegistroEntrada, NucleoError> {
+        if let Some(numero) = gafete
+            && !secreto.trim().is_empty()
+        {
+            let ocupado = self
+                .cache_token
+                .gafete_ocupado_en_otro_dispositivo(&secreto, numero)
+                .map_err(|error| NucleoError::Interno {
+                    mensaje: interno(error),
+                })?;
+            if ocupado {
+                return Err(NucleoError::GafeteOcupadoEnSitio { numero });
+            }
+        }
+        self.registrar_ingreso(contratista_id, medio, gafete, placa)
     }
 
     /// Búsqueda en vivo (la vía primaria del guardia — ver
@@ -1774,6 +1983,33 @@ impl Nucleo {
         )?)
     }
 
+    /// MV-10 (auditoría 2026-09-24): antes de este método,
+    /// `PantallaNuevoContratista.kt` reimplementaba esta regla a mano en
+    /// Kotlin (necesita evaluarla ANTES de tener un `Contratista` real que
+    /// consultar -- el formulario todavía no se guardó) -- riesgo real de
+    /// quedar desincronizada si la regla cambia acá y nadie se acuerda de
+    /// tocar también el formulario móvil. No usa ningún estado de `self` --
+    /// vive como método de `Nucleo` (no función libre) porque es el único
+    /// patrón de export que usa este puente hoy (ver el resto de este
+    /// `impl`). Fuente de verdad real: `control_acceso::domain::contratista`.
+    pub fn requiere_praind_para_formulario(
+        &self,
+        tipo_ingreso: TipoIngreso,
+        personal_ruta: bool,
+    ) -> bool {
+        control_acceso::domain::contratista::requiere_praind_de(tipo_ingreso.into(), personal_ruta)
+    }
+
+    /// Espejo de [`Self::requiere_praind_para_formulario`] para la otra
+    /// regla del mismo formulario.
+    pub fn requiere_gafete_para_formulario(
+        &self,
+        tipo_ingreso: TipoIngreso,
+        personal_ruta: bool,
+    ) -> bool {
+        control_acceso::domain::contratista::requiere_gafete_de(tipo_ingreso.into(), personal_ruta)
+    }
+
     pub fn crear_empresa(&self, nombre: String) -> Result<i64, NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self.core_lock().crear_empresa(&actor, &nombre)?)
@@ -1940,6 +2176,7 @@ impl Nucleo {
             // en desktop/src-tauri/src/comandos/nube.rs.
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
+            conflictos_gafete: Vec::new(),
         })
     }
 
@@ -2138,7 +2375,7 @@ impl Nucleo {
         gafete_numero: i64,
     ) -> Result<bool, NucleoError> {
         let actor = self.actor_autenticado()?;
-        // Ver el comentario de `token_nube_cacheado`: este chequeo corre
+        // Ver el comentario de `cache_token`: este chequeo corre
         // justo antes de confirmar un ingreso con gafete, así que retener
         // `core_lock()` durante la red acá es exactamente el freeze que se
         // sentía al registrar. `autorizar_uso_nube` sigue pasando por el
@@ -2153,28 +2390,17 @@ impl Nucleo {
             // sin configurar): no hay con quién chocar, no hace falta red.
             return Ok(false);
         };
-        let token = self
-            .autenticar_con_cache(&secreto)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
         // A diferencia de `autenticar`, acá un fallo de red SÍ se propaga
         // (no `.unwrap_or`): con nube configurada, más vale bloquear el
         // ingreso que arriesgar el mismo gafete duplicado entre
-        // dispositivos -- decisión ya documentada en
-        // `application::nube::AppCore::gafete_ocupado_en_sitio`.
-        control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
-            |error| NucleoError::Interno {
+        // dispositivos -- ver el doc-comment de
+        // `CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo` sobre
+        // por qué esta asimetría (`Result`, no `Option`) es a propósito.
+        self.cache_token
+            .gafete_ocupado_en_otro_dispositivo(&secreto, gafete_numero)
+            .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
-            },
-        )
+            })
     }
 
     /// Chequeo remoto usando el secreto ya descifrado por Android Keystore.
@@ -2188,23 +2414,11 @@ impl Nucleo {
         }
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
-        let token = self
-            .autenticar_con_cache(&secreto)
+        self.cache_token
+            .gafete_ocupado_en_otro_dispositivo(&secreto, gafete_numero)
             .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
-            })?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::gafete_ocupado_en_otro_dispositivo(&contexto, gafete_numero).map_err(
-            |error| NucleoError::Interno {
-                mensaje: interno(error),
-            },
-        )
+            })
     }
 
     /// Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
@@ -2291,20 +2505,8 @@ impl Nucleo {
         secreto: String,
         cedula: String,
     ) -> Option<String> {
-        if secreto.trim().is_empty() {
-            return None;
-        }
-        let token = self.autenticar_con_cache(&secreto).ok()?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::contratista_activo_en_otro_sitio(&contexto, &cedula)
-            .ok()
-            .flatten()
+        self.cache_token
+            .contratista_activo_en_otro_sitio(&secreto, &cedula)
     }
 
     /// Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
@@ -2475,6 +2677,44 @@ impl Nucleo {
 }
 
 impl Nucleo {
+    /// Helper de `abrir_cifrado` -- separado en su propia función (no
+    /// dentro del `impl` exportado por uniffi de más arriba) porque
+    /// `#[uniffi::export]` no soporta funciones asociadas sin `&self` que
+    /// no sean `#[uniffi::constructor]` (error real visto al probar esto:
+    /// "associated functions are not currently supported", que además
+    /// rompía la exportación de TODO el resto del `impl`, no sólo la de
+    /// esta función).
+    fn abrir_cifrado_intento(ruta_base_datos: &str, clave: &[u8; 32]) -> Result<Self, NucleoError> {
+        let core = AppCore::abrir_con_reloj_cifrado(
+            ruta_base_datos,
+            clave,
+            std::sync::Arc::new(RelojCorregido::nuevo()),
+        )
+        .map_err(|origen| NucleoError::Apertura {
+            mensaje: interno(origen),
+        })?;
+        Ok(Self::desde_core(ruta_base_datos, core, Some(*clave)))
+    }
+
+    /// Construye `Self` a partir de un `AppCore` ya abierto -- compartido
+    /// por `abrir`/`abrir_cifrado_intento`. Mismo motivo que la función de
+    /// arriba para no vivir en el `impl` exportado. `clave` se guarda
+    /// (bug real encontrado en la prueba de fuego en dispositivo,
+    /// 2026-09-26: `conexion_secundaria()` pasaba `None` siempre, sin
+    /// importar con qué clave se hubiera abierto la principal) para que
+    /// `conexion_secundaria()` pueda aplicar la misma clave.
+    fn desde_core(ruta_base_datos: &str, core: AppCore, clave: Option<[u8; 32]>) -> Self {
+        Self {
+            core: Mutex::new(core),
+            sesion: Mutex::new(None),
+            cache_token: control_acceso::nube::CacheTokenDispositivo::new(),
+            sincronizacion_en_curso: Mutex::new(()),
+            ruta_base_datos: PathBuf::from(ruta_base_datos),
+            clave,
+            sesion_supabase: Mutex::new(None),
+        }
+    }
+
     /// Recupera el guard aunque el mutex haya quedado "envenenado" (un
     /// panic anterior mientras alguien lo sostenía) en vez de propagar ese
     /// panic a cada llamada futura — con `uniffi` cada método público es una
@@ -2490,16 +2730,14 @@ impl Nucleo {
     }
 
     /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
-    /// autenticar de cero -- mismo margen y misma lógica que
-    /// `GuiState::autenticar_con_cache` en escritorio (y que
-    /// `AppCore::autenticar_con_cache`, que este método reemplaza para
-    /// móvil: ver el comentario de `token_nube_cacheado`). Nunca toca
-    /// `core_lock()`.
+    /// autenticar de cero -- delega en `Nucleo::cache_token`, que
+    /// reemplaza para móvil lo que antes hacía `AppCore::autenticar_con_cache`
+    /// (ver el comentario de ese campo). Nunca toca `core_lock()`.
     fn autenticar_con_cache(
         &self,
         secreto: &str,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        self.autenticar_y_cachear(secreto, None)
+        self.cache_token.autenticar_con_cache(secreto)
     }
 
     /// Igual que [`Nucleo::autenticar_con_cache`], pero permite adjuntar
@@ -2511,38 +2749,7 @@ impl Nucleo {
         secreto: &str,
         metadata: Option<&control_acceso::nube::MetadatosDispositivo>,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        const MARGEN_EXPIRACION: std::time::Duration = std::time::Duration::from_secs(30);
-
-        {
-            let cache = self
-                .token_nube_cacheado
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(entrada) = cache.as_ref() {
-                let vigente_por = std::time::Duration::from_secs(entrada.token.expires_in)
-                    .saturating_sub(MARGEN_EXPIRACION);
-                if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
-                    let mut token = entrada.token.clone();
-                    token.desfase_reloj_ms = None;
-                    return Ok(token);
-                }
-            }
-        }
-
-        let token = control_acceso::nube::autenticar_dispositivo(
-            control_acceso::nube::base_url(),
-            secreto,
-            metadata,
-        )?;
-        *self
-            .token_nube_cacheado
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(TokenCacheadoNucleo {
-            secreto: secreto.to_string(),
-            token: token.clone(),
-            obtenido_en: std::time::Instant::now(),
-        });
-        Ok(token)
+        self.cache_token.autenticar_y_cachear(secreto, metadata)
     }
 
     /// Ver `AppCore::refrescar_catalogo_sin_sesion` -- misma idea (la
@@ -2627,7 +2834,7 @@ impl Nucleo {
     fn conexion_secundaria(&self) -> Result<rusqlite::Connection, NucleoError> {
         control_acceso::database::connection::abrir_conexion_secundaria_escritura(
             &self.ruta_base_datos,
-            None,
+            self.clave.as_ref(),
         )
         .map_err(|error| NucleoError::Interno {
             mensaje: interno(error),
@@ -2694,10 +2901,7 @@ impl Nucleo {
     /// vigente. La próxima llamada pide uno nuevo sin esperar a que el
     /// "`vigente_por`" calculado localmente se cumpla solo.
     fn invalidar_token_cacheado(&self) {
-        *self
-            .token_nube_cacheado
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.cache_token.invalidar();
     }
 
     /// Login contra Supabase Auth para un usuario global (Administrador/
@@ -2751,14 +2955,23 @@ impl Nucleo {
         // Supabase, sólo deja sin el atajo offline a esta cuenta hasta el
         // próximo login online. Ver `Usuario::password_hash_confirmado_en`
         // y docs/decisiones-tecnicas.md, entrada 2026-09-18.
+        //
+        // Propaga `sesion_supabase.debe_cambiar_password` al caché a
+        // propósito (hallazgo de auditoría 2026-09-24, MV-01/DF-03): si la
+        // contraseña recién verificada es una temporal todavía sin
+        // cambiar, un login sin conexión más adelante debe seguir
+        // exigiendo el cambio, no aceptarla como si ya fuera definitiva.
+        //
         // El resultado se liga a una variable ANTES del `if let` a propósito
         // -- `core_lock()` es un `MutexGuard`, y dejarlo como temporal
         // directo en el scrutinee lo mantendría vivo durante todo el bloque
         // (hasta la llave de cierre), no sólo durante la llamada -- riesgo
         // real de deadlock si algo más adelante necesitara el mismo candado.
-        let resultado_cache = self
-            .core_lock()
-            .cachear_password_local(identidad.id, password);
+        let resultado_cache = self.core_lock().cachear_password_local(
+            identidad.id,
+            password,
+            sesion_supabase.debe_cambiar_password,
+        );
         if let Err(error) = resultado_cache {
             log::warn!("no se pudo cachear el login offline: {error}");
         }
@@ -2900,6 +3113,10 @@ impl Nucleo {
                 .into_iter()
                 .map(ConflictoIngresoProveedorActivo::from)
                 .collect();
+        // A diferencia de los dos de arriba, éste no pide nada a la nube --
+        // ya viene calculado con datos locales dentro del mismo
+        // `drenar_cola` (`resumen_cola`).
+        let conflictos_gafete = mapear_conflictos_gafete(resumen_cola.conflictos_gafete);
 
         // Igual que en escritorio: si esta sincronización trajo la baja de
         // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
@@ -2927,6 +3144,7 @@ impl Nucleo {
             sesion_expulsada,
             conflictos_ingreso,
             conflictos_ingreso_proveedor,
+            conflictos_gafete,
         })
     }
 
@@ -3010,6 +3228,7 @@ impl Nucleo {
                 .into_iter()
                 .map(Into::into)
                 .collect();
+        let conflictos_gafete = mapear_conflictos_gafete(resumen_cola.conflictos_gafete);
 
         let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
         if sesion_expulsada {
@@ -3033,6 +3252,7 @@ impl Nucleo {
             sesion_expulsada,
             conflictos_ingreso,
             conflictos_ingreso_proveedor,
+            conflictos_gafete,
         })
     }
 }
@@ -3049,6 +3269,96 @@ mod tests {
         let resultado = Nucleo::abrir(ruta);
 
         assert!(resultado.is_ok());
+    }
+
+    // --- abrir_cifrado (MV-03, auditoría 2026-09-24) ---
+
+    #[test]
+    fn abrir_cifrado_en_archivo_nuevo_no_necesita_reconstruccion() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let resultado = Nucleo::abrir_cifrado(ruta, vec![7u8; 32]);
+
+        assert!(resultado.is_ok());
+    }
+
+    #[test]
+    fn abrir_cifrado_rechaza_una_clave_que_no_mide_32_bytes() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let resultado = Nucleo::abrir_cifrado(ruta, vec![1, 2, 3]);
+
+        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
+    }
+
+    #[test]
+    fn abrir_cifrado_reconstruye_si_el_archivo_existente_no_es_legible() {
+        // Simula el caso real de todo teléfono con la app instalada antes
+        // de este cambio (base en texto plano) o un archivo corrupto --
+        // decisión explícita del usuario (2026-09-26): en vez de fallar o
+        // migrar byte a byte, se descarta y se reconstruye vacía. El
+        // catálogo vuelve solo por la sincronización normal.
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+        std::fs::write(&ruta, b"esto no es un archivo SQLite valido").unwrap();
+
+        let resultado = Nucleo::abrir_cifrado(ruta.clone(), vec![7u8; 32]);
+        let error = resultado.as_ref().err().map(ToString::to_string);
+
+        assert!(
+            resultado.is_ok(),
+            "debería reconstruir en vez de fallar: {error:?}"
+        );
+        let bytes = std::fs::read(&ruta).unwrap();
+        assert_ne!(bytes, b"esto no es un archivo SQLite valido".to_vec());
+    }
+
+    // Sólo corre bajo `cifrado-sqlite3mc` (`cargo test-mobile-3mc`) --
+    // mismo criterio que `sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada`
+    // en el crate raíz (`src/database/connection.rs`): confirma que
+    // `abrir_cifrado` cifra de verdad, no sólo que compila y enlaza.
+    #[cfg(feature = "cifrado-sqlite3mc")]
+    #[test]
+    fn abrir_cifrado_sqlite3mc_cifra_de_verdad() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let nucleo = Nucleo::abrir_cifrado(ruta.clone(), vec![7u8; 32]).unwrap();
+        drop(nucleo);
+
+        let bytes = std::fs::read(&ruta).unwrap();
+        assert!(
+            !bytes.starts_with(b"SQLite format 3\0"),
+            "la base quedó sin cifrar de verdad bajo cifrado-sqlite3mc"
+        );
+    }
+
+    // Bug real encontrado en la prueba de fuego en un dispositivo real
+    // (2026-09-26): `conexion_secundaria()` pasaba `None` siempre, sin
+    // importar con qué clave se hubiera abierto la conexión principal --
+    // cualquier flujo que la usara (toda la sincronización) reventaba con
+    // "file is not a database" apenas tocaba la base ya cifrada. Sólo
+    // corre bajo `cifrado-sqlite3mc`: con el motor plano, `PRAGMA key` es
+    // un no-op sin importar si se le pasa la clave o `None`, así que no
+    // distinguiría el bug del fix.
+    #[cfg(feature = "cifrado-sqlite3mc")]
+    #[test]
+    fn conexion_secundaria_usa_la_misma_clave_que_abrir_cifrado() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+        let nucleo = Nucleo::abrir_cifrado(ruta, vec![7u8; 32]).unwrap();
+
+        let conexion = nucleo.conexion_secundaria();
+        let error = conexion.as_ref().err().map(ToString::to_string);
+        assert!(conexion.is_ok(), "conexion_secundaria() falló: {error:?}");
+
+        let cuenta: i64 = conexion
+            .unwrap()
+            .query_row("SELECT count(*) FROM usuarios", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(cuenta, 0);
     }
 
     #[test]
@@ -3119,6 +3429,156 @@ mod tests {
         let resultado = nucleo
             .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
             .unwrap();
+        assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
+    }
+
+    /// Con `secreto` vacío ninguno de los dos métodos `_con_secreto` debe
+    /// tocar la red -- `CacheTokenDispositivo` corta antes de intentar
+    /// nada, así que el resultado tiene que ser idéntico al de las
+    /// versiones sin secreto. Corre en CI (sin acceso a Internet) sin
+    /// necesitar mockear HTTP.
+    #[test]
+    fn con_secreto_vacio_los_metodos_con_secreto_no_tocan_la_red() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+
+        let preparacion = nucleo
+            .preparar_ingreso_con_secreto(1, String::new())
+            .unwrap();
+        assert_eq!(preparacion.mensaje_bloqueo, None);
+        assert_eq!(preparacion.activo_en_otro_sitio, None);
+
+        let resultado = nucleo
+            .registrar_ingreso_con_secreto(1, MedioIngreso::Caminando, None, None, String::new())
+            .unwrap();
+        assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
+    }
+
+    /// Cuando el bloqueo YA es local (ingreso activo) `preparar_ingreso_con_secreto`
+    /// ni siquiera debe intentar el chequeo remoto -- de eso depende que
+    /// este test pueda correr sin red: si tocara `CacheTokenDispositivo`
+    /// con un secreto no vacío, fallaría por falta de conexión en CI. El
+    /// campo que le interesa a Kotlin es `mensaje_bloqueo`: antes tenía
+    /// que recalcularlo con `puedeContinuar`/`mensajeBloqueo` propios.
+    #[test]
+    fn preparar_ingreso_con_secreto_no_toca_la_red_si_ya_hay_bloqueo_local() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+        nucleo
+            .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
+            .unwrap();
+
+        // Secreto NO vacío a propósito -- si el chequeo remoto se
+        // intentara igual, este test colgaría o fallaría por falta de red
+        // en vez de terminar en microsegundos.
+        let preparacion = nucleo
+            .preparar_ingreso_con_secreto(1, "secreto-de-prueba".to_string())
+            .unwrap();
+
+        assert!(preparacion.tiene_ingreso_activo);
+        assert_eq!(
+            preparacion.mensaje_bloqueo,
+            Some("El contratista ya tiene un ingreso activo.".to_string())
+        );
+    }
+
+    /// `registrar_ingreso_con_secreto` sin gafete tampoco debe tocar la
+    /// red -- el chequeo de "gafete ocupado en otro dispositivo" sólo
+    /// tiene sentido cuando de verdad hay un número que chequear.
+    #[test]
+    fn registrar_ingreso_con_secreto_sin_gafete_no_toca_la_red() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO contratistas (
+                     cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+                 ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+
+        // Secreto NO vacío, pero SIN gafete -- SWAT no lo requiere.
+        let resultado = nucleo
+            .registrar_ingreso_con_secreto(
+                1,
+                MedioIngreso::Caminando,
+                None,
+                None,
+                "secreto-de-prueba".to_string(),
+            )
+            .unwrap();
+
         assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
     }
 

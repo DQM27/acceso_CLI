@@ -24,7 +24,6 @@ import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
-import uniffi.control_acceso_mobile.ResultadoAcceso
 
 /// Mismo árbol de estados que `Seleccion` en NuevoIngresoModal.tsx: sin
 /// selección (buscador visible), verificando (prepararIngreso en vuelo),
@@ -293,30 +292,47 @@ class ActivosViewModel(
         viewModelScope.launch {
             seleccionIngreso = SeleccionIngreso.Cargando(contratista)
             try {
-                var preparacion = withContext(dispatcherIO) { nucleo.prepararIngreso(contratista.id) }
-                // Chequeo cruzado entre sitios (`docs/pendientes.md`) -- sólo
-                // si los chequeos locales ya dejaron pasar, mejor esfuerzo:
-                // sin secreto guardado o sin red, sigue sin bloquear (mismo
-                // criterio que desktop, `comandos/ingresos.rs`). Nunca lanza
-                // -- `contratistaActivoEnOtroSitioConSecreto` ya devuelve
-                // `null` ante cualquier falla de red.
-                if (!preparacion.tieneIngresoActivo && preparacion.resultadoAcceso !is ResultadoAcceso.Denegado) {
-                    val secreto = withContext(dispatcherIO) { secretoStore.cargar() }
-                    if (secreto != null) {
-                        val sitio = withContext(dispatcherIO) {
-                            nucleo.contratistaActivoEnOtroSitioConSecreto(secreto, preparacion.cedula)
-                        }
-                        preparacion = preparacion.copy(activoEnOtroSitio = sitio)
-                    }
+                // Un solo cruce FFI: Rust decide localmente y, si los
+                // chequeos locales ya dejaron pasar, intenta además el
+                // chequeo cruzado entre sitios (`docs/pendientes.md`) --
+                // mejor esfuerzo, nunca bloquea por falta de secreto o de
+                // red. `mensajeBloqueo` llega ya resuelto (o `null` si se
+                // puede continuar); acá no se evalúa ninguna condición
+                // propia, sólo se lee el resultado.
+                //
+                // MV-05 (auditoría 2026-09-24): `secretoStore.cargar()`
+                // puede lanzar `SecretoDispositivoStoreException` (archivo
+                // del secreto corrupto, `AEADBadTagException` tras una
+                // restauración/migración, fallo del propio Keystore -- ver
+                // `SecretoDispositivoStore.kt`). Antes esa excepción no se
+                // capturaba acá (sólo `NucleoException` más abajo) y
+                // escapaba de `viewModelScope` sin manejador, tirando la
+                // app entera cada vez que se elegía un contratista. Se
+                // captura sólo alrededor de este cruce puntual y se sigue
+                // igual que el resto del archivo trata la falta de secreto:
+                // "sin chequeo cruzado", mejor esfuerzo, nunca bloquea la
+                // operación principal por esto.
+                val secreto = try {
+                    withContext(dispatcherIO) { secretoStore.cargar() }.orEmpty()
+                } catch (excepcion: SecretoDispositivoStoreException) {
+                    ""
                 }
-                seleccionIngreso = if (puedeContinuar(preparacion)) {
-                    SeleccionIngreso.Formulario(preparacion)
-                } else {
-                    SeleccionIngreso.Bloqueada(preparacion, mensajeBloqueo(preparacion))
+                val preparacion = withContext(dispatcherIO) {
+                    nucleo.prepararIngresoConSecreto(contratista.id, secreto)
                 }
+                seleccionIngreso = preparacion.mensajeBloqueo?.let { mensaje ->
+                    SeleccionIngreso.Bloqueada(preparacion, mensaje)
+                } ?: SeleccionIngreso.Formulario(preparacion)
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
                 seleccionIngreso = SeleccionIngreso.Ninguna
+            } finally {
+                // Red de seguridad: si algo inesperado escapó de los catch
+                // de arriba, no dejar la pantalla trabada en "Cargando"
+                // para siempre (parte del hallazgo MV-05).
+                if (seleccionIngreso is SeleccionIngreso.Cargando) {
+                    seleccionIngreso = SeleccionIngreso.Ninguna
+                }
             }
         }
     }
@@ -453,8 +469,13 @@ class ActivosViewModel(
     companion object {
         // Ver el comentario en `cambiarTexto`. Bajado de 300ms a 150ms
         // (pedido explícito del usuario, 2026-09-21, tras probar 200ms y
-        // confirmar que la búsqueda local no lo resiente), mismo valor en
-        // los 5 buscadores con debounce de la app.
+        // confirmar que la búsqueda local no lo resiente) -- mismo valor
+        // que el default de `BuscadorConDebounce` (MV-10, auditoría
+        // 2026-09-24), que usan los otros 6 buscadores de la app. Este
+        // ViewModel se queda con su propio `Job`/constante porque comparte
+        // ese `Job` con `versionBusqueda`/`cargando` para varios modos a la
+        // vez -- no encaja en la forma genérica sin exponer esos dos
+        // conceptos también ahí.
         private const val DEBOUNCE_BUSQUEDA_MS = 150L
 
         fun factory(

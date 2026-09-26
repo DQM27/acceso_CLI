@@ -83,4 +83,28 @@ class RecorteImagenOcrTest {
         // Croma 1x1 (ancho/2 x alto/2 = 1x1) -- sólo el primer par V,U.
         assertEquals(listOf<Byte>(0, 0, 0, 0, 20, 10), nv21.toList())
     }
+
+    // --- convertirNv21AArgb ---
+
+    @Test
+    fun convertirNv21AArgbDaBlancoParaYMaximoYCromaNeutro() {
+        // Y=255 (blanco), croma neutro (U=V=128, sin color) -- imagen 2x2,
+        // un solo par de croma para los 4 píxeles.
+        val nv21 = byteArrayOf(255.toByte(), 255.toByte(), 255.toByte(), 255.toByte(), 128.toByte(), 128.toByte())
+
+        val pixeles = convertirNv21AArgb(nv21, ancho = 2, alto = 2)
+
+        // 0xFFFFFFFF (alpha 255, R=G=B=255) como Int con signo = -1.
+        assertEquals(listOf(-1, -1, -1, -1), pixeles.toList())
+    }
+
+    @Test
+    fun convertirNv21AArgbDaNegroParaYMinimoYCromaNeutro() {
+        val nv21 = byteArrayOf(0, 0, 0, 0, 128.toByte(), 128.toByte())
+
+        val pixeles = convertirNv21AArgb(nv21, ancho = 2, alto = 2)
+
+        // 0xFF000000 (alpha 255, R=G=B=0) como Int con signo = -16777216.
+        assertEquals(listOf(-16777216, -16777216, -16777216, -16777216), pixeles.toList())
+    }
 }

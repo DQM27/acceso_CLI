@@ -66,8 +66,12 @@ pub enum BootstrapError {
 pub struct AppCore {
     connection: Connection,
     reloj: Arc<dyn Reloj>,
+    /// Campo HERMANO de `connection`, nunca protegido por el mismo candado
+    /// que envuelve a este `AppCore` entero (`core_lock()`/`GuiState::core()`
+    /// del lado de quien lo sostiene) -- ver el doc-comment de
+    /// `crate::nube::CacheTokenDispositivo` sobre por qué.
     #[cfg(feature = "nube")]
-    token_nube_cacheado: std::sync::Mutex<Option<nube::TokenCacheado>>,
+    cache_token: crate::nube::CacheTokenDispositivo,
     /// Versión de la app que abrió este `AppCore` (`env!("CARGO_PKG_VERSION")`
     /// de escritorio/móvil, cada uno la suya -- este crate no puede saberla
     /// solo). `None` hasta que quien llama la fija con
@@ -86,7 +90,7 @@ impl AppCore {
             connection,
             reloj,
             #[cfg(feature = "nube")]
-            token_nube_cacheado: std::sync::Mutex::new(None),
+            cache_token: crate::nube::CacheTokenDispositivo::new(),
             #[cfg(feature = "nube")]
             version_app: None,
         }

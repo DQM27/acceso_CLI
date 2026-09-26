@@ -14,7 +14,6 @@
 // generador en vez de reintroducir un archivo "Generado" que nadie genera.
 package com.brisas.controlacceso
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Typography
@@ -106,6 +105,47 @@ internal val BrisasOscuro = darkColorScheme(
     surfaceContainerLowest = Color(0xFF0F1115),
 )
 
+// Tokyo Night (pedido del usuario 2026-09-24): la paleta del tema de VS Code
+// (enkia.tokyo-night), la misma que `desktop/src/tokyo-night.css`.
+internal val TokyoNight = darkColorScheme(
+    primary = Color(0xFF7AA2F7),
+    onPrimary = Color(0xFF16161E),
+    primaryContainer = Color(0xFF283457),
+    onPrimaryContainer = Color(0xFF7AA2F7),
+    inversePrimary = Color(0xFF3D59A1),
+    secondary = Color(0xFF7AA2F7),
+    onSecondary = Color(0xFF16161E),
+    secondaryContainer = Color(0xFF283457),
+    onSecondaryContainer = Color(0xFF7AA2F7),
+    tertiary = Color(0xFF7DCFFF),
+    onTertiary = Color(0xFF16161E),
+    tertiaryContainer = Color(0xFF1D3445),
+    onTertiaryContainer = Color(0xFF7DCFFF),
+    background = Color(0xFF16161E),
+    onBackground = Color(0xFFC0CAF5),
+    surface = Color(0xFF1A1B26),
+    onSurface = Color(0xFFC0CAF5),
+    surfaceVariant = Color(0xFF292E42),
+    onSurfaceVariant = Color(0xFF9AA5CE),
+    surfaceTint = Color(0xFF7AA2F7),
+    inverseSurface = Color(0xFFC0CAF5),
+    inverseOnSurface = Color(0xFF1A1B26),
+    error = Color(0xFFF7768E),
+    onError = Color(0xFF16161E),
+    errorContainer = Color(0xFF3A2230),
+    onErrorContainer = Color(0xFFF7768E),
+    outline = Color(0xFF545C7E),
+    outlineVariant = Color(0xFF292E42),
+    scrim = Color(0xFF16161E),
+    surfaceBright = Color(0xFF292E42),
+    surfaceDim = Color(0xFF16161E),
+    surfaceContainer = Color(0xFF1A1B26),
+    surfaceContainerHigh = Color(0xFF24283B),
+    surfaceContainerHighest = Color(0xFF292E42),
+    surfaceContainerLow = Color(0xFF1A1B26),
+    surfaceContainerLowest = Color(0xFF16161E),
+)
+
 internal val FormaControlBrisas = RoundedCornerShape(16.dp)
 internal val FormasBrisas = Shapes(
     extraSmall = FormaControlBrisas,
@@ -114,16 +154,21 @@ internal val FormasBrisas = Shapes(
     large = RoundedCornerShape(20.dp),
     extraLarge = RoundedCornerShape(20.dp),
 )
+// Siguen el tema elegido en la app ([temaActual]), no sólo el del sistema.
 internal val ColorRellenoBrisas: Color
-    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF0B7EB0) else Color(0xFF0B7EB0)
+    @Composable get() = if (temaActual() == TemaApp.TOKYO_NIGHT) Color(0xFF3D59A1) else Color(0xFF0B7EB0)
 internal val ColorSobreRellenoBrisas: Color
-    @Composable get() = if (isSystemInDarkTheme()) Color(0xFFFFFFFF) else Color(0xFFFFFFFF)
+    @Composable get() = Color(0xFFFFFFFF)
 internal val EspacioControlBrisas = 12.dp
 // 20% más chico que los 48.dp originales, a pedido explícito (2026-09-15) --
 // no estaba "muy grande", pero se veía mejor un poco más compacto.
 internal val AlturaControlBrisas = 38.dp
 internal val ColorExitoBrisas: Color
-    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF8BC49B) else Color(0xFF35724F)
+    @Composable get() = when (temaActual()) {
+        TemaApp.CLARO -> Color(0xFF35724F)
+        TemaApp.OSCURO -> Color(0xFF8BC49B)
+        TemaApp.TOKYO_NIGHT -> Color(0xFF9ECE6A)
+    }
 internal val TipografiaBrisas = Typography(
     bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 14.sp, lineHeight = 21.sp),
     bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 14.sp, lineHeight = 21.sp),

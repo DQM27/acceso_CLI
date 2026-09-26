@@ -10,8 +10,6 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.EmpresaProveedor
@@ -94,7 +92,7 @@ class ProveedoresViewModel(
         private set
     var creandoEmpresa by mutableStateOf(false)
         private set
-    private var trabajoBusquedaEmpresa: Job? = null
+    private val buscadorEmpresa = BuscadorConDebounce(viewModelScope)
 
     init {
         refrescarActivos()
@@ -146,13 +144,12 @@ class ProveedoresViewModel(
         val texto = valor.uppercase()
         textoEmpresa = texto
         empresaSeleccionada = null
-        trabajoBusquedaEmpresa?.cancel()
+        buscadorEmpresa.cancelar()
         if (texto.isBlank()) {
             resultadosEmpresa = emptyList()
             return
         }
-        trabajoBusquedaEmpresa = viewModelScope.launch {
-            delay(DEBOUNCE_MS)
+        buscadorEmpresa.buscar {
             try {
                 resultadosEmpresa = withContext(dispatcherIO) { nucleo.buscarEmpresasProveedor(texto) }
             } catch (excepcion: NucleoException) {
@@ -162,7 +159,7 @@ class ProveedoresViewModel(
     }
 
     fun elegirEmpresa(empresa: EmpresaProveedor) {
-        trabajoBusquedaEmpresa?.cancel()
+        buscadorEmpresa.cancelar()
         textoEmpresa = empresa.nombre
         empresaSeleccionada = empresa
         resultadosEmpresa = emptyList()
@@ -194,7 +191,7 @@ class ProveedoresViewModel(
 
     /// `nombreLeido`/`apellidosLeido` llegan separados de un documento MRZ
     /// (`DocumentoDetectado.nombre`/`.apellidos` -- ver
-    /// `LectorDocumentosIdentidad.kt`, `ResultadoMrz.aDocumentoDetectado`);
+    /// `LectorDocumentosIdentidad.kt`, `RegistroMrz.aDocumentoDetectado`);
     /// usar sólo `nombre` (como hacía antes) dejaba el campo vacío o
     /// incompleto cada vez que el nombre de pila viajaba en un campo MRZ
     /// distinto al apellido -- bug reportado en pruebas reales en
@@ -220,6 +217,16 @@ class ProveedoresViewModel(
                     // contra su propia base local.
                     val secreto = secretoStore.cargar()
                         ?: throw SecretoDispositivoNoEncontradoException()
+                    // MV-04 (auditoría 2026-09-24): escritorio ya bloqueaba
+                    // este caso (`desktop/src-tauri/src/comandos/proveedores.rs`),
+                    // mobile no lo llamaba pese a que la función existe en
+                    // Rust desde antes. Mismo criterio "mejor esfuerzo" que
+                    // el resto de estos chequeos: `null` (sin secreto, sin
+                    // red, o simplemente no está activo en otro lado) deja
+                    // continuar, nunca bloquea por falta de conectividad.
+                    nucleo.proveedorActivoEnOtroSitioConSecreto(secreto, cedula)?.let { sitio ->
+                        throw ProveedorActivoEnOtroSitioException(sitio)
+                    }
                     if (nucleo.gafeteDeProveedorOcupadoEnSitioConSecreto(secreto, gafeteNumero)) {
                         throw GafeteOcupadoEnSitioException(gafeteNumero)
                     }
@@ -241,6 +248,8 @@ class ProveedoresViewModel(
                 empresaSeleccionada = null
                 refrescarActivos()
                 onExito()
+            } catch (excepcion: ProveedorActivoEnOtroSitioException) {
+                error = excepcion.message
             } catch (excepcion: GafeteOcupadoEnSitioException) {
                 error = excepcion.message
             } catch (excepcion: NucleoException) {
@@ -303,10 +312,6 @@ class ProveedoresViewModel(
     }
 
     companion object {
-        // Bajado a 150ms (pedido explícito del usuario, 2026-09-21), mismo
-        // valor en los 5 buscadores con debounce de la app.
-        private const val DEBOUNCE_MS = 150L
-
         // Mismo texto que `IngresoProveedorServiceError::IngresoActivo` en
         // Rust (`src/services/error.rs`) -- el chequeo local en
         // `cambiarCedula` es un adelanto de UX, no un reemplazo; que diga

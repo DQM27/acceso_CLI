@@ -9,11 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.PersonAdd
@@ -44,7 +44,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import uniffi.control_acceso_mobile.ConflictoGafeteActivo
 import uniffi.control_acceso_mobile.ConflictoIngresoActivo
+import uniffi.control_acceso_mobile.ConflictoIngresoProveedorActivo
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.UsuarioSesion
 
@@ -94,6 +96,16 @@ fun PantallaPrincipal(
     // Alimentado desde los dos caminos de sync (pulso periódico y botón
     // manual), igual que `refrescarNube`.
     var conflictosIngreso by remember { mutableStateOf<List<ConflictoIngresoActivo>>(emptyList()) }
+    // MV-04 (auditoría 2026-09-24): mismo criterio que `conflictosIngreso`,
+    // pero para proveedores (`ResumenSincronizacion.conflictosIngresoProveedor`,
+    // ver `nube::proveedores_con_conflicto_activo`) -- ya se calculaba en
+    // Rust y desktop ya lo mostraba (`App.tsx`), pero acá nadie lo leía
+    // todavía.
+    var conflictosIngresoProveedor by remember { mutableStateOf<List<ConflictoIngresoProveedorActivo>>(emptyList()) }
+    // Mismo criterio que `conflictosIngreso`, pero calculado con datos
+    // locales dentro de `drenar_cola` (fase 3, PR #62) -- ver
+    // `ResumenSincronizacion.conflictosGafete`.
+    var conflictosGafete by remember { mutableStateOf<List<ConflictoGafeteActivo>>(emptyList()) }
     val nubeViewModel: NubeViewModel =
         viewModel(
             factory = NubeViewModel.factory(nucleo, secretoStore, onCerrarSesion),
@@ -123,6 +135,8 @@ fun PantallaPrincipal(
                 } else {
                     refrescarNube += 1
                     conflictosIngreso = resumen.conflictosIngreso
+                    conflictosIngresoProveedor = resumen.conflictosIngresoProveedor
+                    conflictosGafete = resumen.conflictosGafete
                 }
             },
         )
@@ -181,6 +195,8 @@ fun PantallaPrincipal(
         if (resumen != null) {
             refrescarNube += 1
             conflictosIngreso = resumen.conflictosIngreso
+            conflictosIngresoProveedor = resumen.conflictosIngresoProveedor
+            conflictosGafete = resumen.conflictosGafete
         }
     }
 
@@ -209,12 +225,15 @@ fun PantallaPrincipal(
                 BotonIconoCuadradoBrisas(onClick = { mostrarNuevoContratista = true }) {
                     Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
                 }
-                val oscuroActual = GestorTema.oscuroForzado ?: isSystemInDarkTheme()
-                BotonIconoCuadradoBrisas(onClick = { GestorTema.alternar(oscuroActual) }) {
-                    Icon(
-                        if (oscuroActual) Icons.Default.LightMode else Icons.Default.DarkMode,
-                        contentDescription = if (oscuroActual) "Cambiar a modo claro" else "Cambiar a modo oscuro",
-                    )
+                // Recorre claro → oscuro → Tokyo Night; el ícono muestra el
+                // tema al que se pasa con el próximo toque.
+                val tema = temaActual()
+                BotonIconoCuadradoBrisas(onClick = { GestorTema.alternar(tema) }) {
+                    when (tema.siguiente()) {
+                        TemaApp.CLARO -> Icon(Icons.Default.LightMode, contentDescription = "Cambiar a modo claro")
+                        TemaApp.OSCURO -> Icon(Icons.Default.DarkMode, contentDescription = "Cambiar a modo oscuro")
+                        TemaApp.TOKYO_NIGHT -> Icon(Icons.Default.AutoAwesome, contentDescription = "Cambiar a Tokyo Night")
+                    }
                 }
                 BotonIconoCuadradoBrisas(
                     onClick = { nubeViewModel.sincronizar() },
@@ -249,6 +268,36 @@ fun PantallaPrincipal(
         for (conflicto in conflictosIngreso) {
             Text(
                 "${conflicto.contratistaNombre} tiene un ingreso activo acá Y en ${conflicto.sitioConflicto} — hay que resolverlo.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
+        }
+
+        // MV-04: mismo criterio que el bucle de arriba, pero para
+        // proveedores -- mismo texto que ya usa desktop (`App.tsx`), para
+        // no dar un aviso distinto según qué interfaz lo muestre.
+        for (conflicto in conflictosIngresoProveedor) {
+            Text(
+                "${conflicto.nombre} tiene un ingreso de proveedor activo acá Y en ${conflicto.sitioConflicto} — hay que resolverlo.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
+        }
+
+        // A diferencia del de arriba (simétrico: ambos lados "tienen
+        // razón" hasta que alguien decide), acá Postgres ya decidió -- el
+        // ingreso local de ESTE dispositivo es el que no quedó válido en
+        // la nube, así que el aviso lo dice con esa certeza. Sólo
+        // informativo por ahora (fase 3, PR #62): sin botón de acción
+        // directa -- se deja para una vuelta aparte si hace falta, una
+        // vez visto el comportamiento real.
+        for (conflicto in conflictosGafete) {
+            Text(
+                "El ingreso de ${conflicto.contratistaNombre} con gafete ${conflicto.gafeteNumero} " +
+                    "(${textoFechaHora(conflicto.fechaHoraIngreso)}) no quedó registrado en la nube — " +
+                    "otro dispositivo de este sitio ya lo tiene asignado.",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),

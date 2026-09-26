@@ -32,6 +32,13 @@ pub struct UsuarioSesion {
 pub struct CandidatoAutenticacion {
     pub sesion: UsuarioSesion,
     pub password_hash: String,
+    /// Ver `Usuario::password_temporal_cacheada` -- `true` significa que,
+    /// si `password` verifica contra `password_hash`, el login todavía
+    /// debe exigir un cambio de contraseña antes de dejar operar (mismo
+    /// significado que `debe_cambiar_password` en el login online). Quien
+    /// llama debe leer este campo ANTES de pasar `self` a
+    /// `verificar_candidato`, que lo consume.
+    pub debe_cambiar_password: bool,
 }
 
 impl std::fmt::Debug for CandidatoAutenticacion {
@@ -40,6 +47,7 @@ impl std::fmt::Debug for CandidatoAutenticacion {
             .debug_struct("CandidatoAutenticacion")
             .field("sesion", &self.sesion)
             .field("password_hash", &"«redactado»")
+            .field("debe_cambiar_password", &self.debe_cambiar_password)
             .finish()
     }
 }
@@ -65,8 +73,29 @@ where
         password: &str,
         ahora: DateTime<Utc>,
     ) -> Result<UsuarioSesion, AutenticacionError> {
+        let (sesion, _debe_cambiar_password) =
+            self.autenticar_con_estado(cedula, password, ahora)?;
+        Ok(sesion)
+    }
+
+    /// Igual que [`Self::autenticar`], pero además devuelve si el hash que
+    /// acaba de verificar era una contraseña TEMPORAL todavía cacheada
+    /// (`Usuario::password_temporal_cacheada`) -- necesario para que un
+    /// login LOCAL (sin pasar por Supabase Auth) siga exigiendo el cambio
+    /// de contraseña en vez de devolver siempre `false` como si la
+    /// contraseña verificada ya fuera definitiva. Ver
+    /// `CandidatoAutenticacion::debe_cambiar_password` y el hallazgo de
+    /// auditoría 2026-09-24 (MV-01/DF-03).
+    pub fn autenticar_con_estado(
+        &self,
+        cedula: &str,
+        password: &str,
+        ahora: DateTime<Utc>,
+    ) -> Result<(UsuarioSesion, bool), AutenticacionError> {
         let candidato = self.buscar_candidato(cedula, ahora)?;
-        verificar_candidato(candidato, password)
+        let debe_cambiar_password = candidato.debe_cambiar_password;
+        let sesion = verificar_candidato(candidato, password)?;
+        Ok((sesion, debe_cambiar_password))
     }
 
     /// Resuelve la cédula y confirma que el usuario está activo, sin verificar todavía la
@@ -125,6 +154,7 @@ where
                 rol: usuario.rol,
             },
             password_hash: usuario.password_hash,
+            debe_cambiar_password: usuario.password_temporal_cacheada,
         })
     }
 

@@ -1,12 +1,23 @@
 package com.brisas.controlacceso
 
+import uniffi.control_acceso_mobile.FechaMrz
+import uniffi.control_acceso_mobile.FormatoMrz
+import uniffi.control_acceso_mobile.RegistroMrz
+
+/// Origen de los datos de un documento leído: el frente (texto libre, vía
+/// regex por etiqueta) o el MRZ del reverso (con checksum verificable) --
+/// vivía en `MrzParser.kt` antes de la migración a Rust del 2026-09-25, se
+/// mueve acá porque describe el origen de un `DocumentoDetectado` (este
+/// archivo), no es parte del parseo de MRZ en sí.
+enum class FuenteDatos { OCR_FRENTE, MRZ }
+
 /// Tipos de documento que el lector sabe clasificar. `DESCONOCIDO` es el
 /// resultado cuando el texto no calza ninguna señal conocida -- la pantalla
 /// de escaneo debe seguir buscando, no tratarlo como error terminal.
 enum class TipoDocumento {
     CEDULA_NACIONAL,
     // TIM: Tarjeta de Identidad de Menores -- mismo código de documento MRZ
-    // que la cédula nacional (`IDCRI`, ver ResultadoMrz.aDocumentoDetectado),
+    // que la cédula nacional (`IDCRI`, ver RegistroMrz.aDocumentoDetectado),
     // se distingue por edad calculada desde `fechaNacimiento`, no por el
     // código -- ver `reclasificarPorEdad`.
     TARJETA_IDENTIDAD_MENOR,
@@ -69,32 +80,38 @@ fun TipoDocumento.nombreLegible(): String = when (this) {
     TipoDocumento.DESCONOCIDO -> "Documento"
 }
 
-/// Traduce un MRZ ya parseado al modelo normalizado. La distinción entre
-/// cédula nacional y DIMEX (ambas TD1) es una regla de Costa Rica, no algo
-/// que ICAO estandarice -- por eso vive acá, no en `MrzParser.kt`: el
-/// código de documento (ICAO 9303 permite A/C/I como primer carácter, el
-/// segundo a discreción del emisor) usado por Costa Rica es `ID` para la
-/// cédula nacional (Decreto TSE n.° 22-2025, vigente desde oct-2025) y `C<`
-/// para el DIMEX/residencia de DGME (confirmado contra un documento real).
-/// Sin especificación pública oficial que lo documente con este nivel de
-/// detalle -- basado en las imágenes de las circulares/decreto del TSE.
-/// Un TD1 de otro país (o de Costa Rica con un código distinto de estos
-/// dos) queda como `DESCONOCIDO`: no hay regla verificada para él todavía,
-/// mejor eso que asumir uno de los dos casos costarricenses sin fundamento.
-fun ResultadoMrz.aDocumentoDetectado(): DocumentoDetectado = DocumentoDetectado(
+/// `FechaMrz` (generada por UniFFI desde `mobile/rust-core/src/mrz.rs`) al
+/// `FechaDocumento` que ya usa el resto de la app (lectores no-MRZ
+/// incluidos) -- conversión mecánica, `dia`/`mes` llegan como `UByte`.
+private fun FechaMrz.aFechaDocumento(): FechaDocumento = FechaDocumento(dia.toInt(), mes.toInt(), anio)
+
+/// Traduce un MRZ ya parseado (por Rust, ver `leerMrz` en `MrzParser.kt`) al
+/// modelo normalizado. La distinción entre cédula nacional y DIMEX (ambas
+/// TD1) es una regla de Costa Rica, no algo que ICAO estandarice -- por eso
+/// vive acá, no en el parser de Rust: el código de documento (ICAO 9303
+/// permite A/C/I como primer carácter, el segundo a discreción del emisor)
+/// usado por Costa Rica es `ID` para la cédula nacional (Decreto TSE
+/// n.° 22-2025, vigente desde oct-2025) y `C<` para el DIMEX/residencia de
+/// DGME (confirmado contra un documento real). Sin especificación pública
+/// oficial que lo documente con este nivel de detalle -- basado en las
+/// imágenes de las circulares/decreto del TSE. Un TD1 de otro país (o de
+/// Costa Rica con un código distinto de estos dos) queda como
+/// `DESCONOCIDO`: no hay regla verificada para él todavía, mejor eso que
+/// asumir uno de los dos casos costarricenses sin fundamento.
+fun RegistroMrz.aDocumentoDetectado(): DocumentoDetectado = DocumentoDetectado(
     tipo = when {
-        formato == "TD3" -> TipoDocumento.PASAPORTE
-        formato == "TD1" && paisEmisor == "CRI" && codigoDocumento == "ID" -> TipoDocumento.CEDULA_NACIONAL
-        formato == "TD1" && paisEmisor == "CRI" && codigoDocumento == "C<" -> TipoDocumento.CEDULA_RESIDENCIA
+        formato == FormatoMrz.TD3 -> TipoDocumento.PASAPORTE
+        formato == FormatoMrz.TD1 && paisEmisor == "CRI" && codigoDocumento == "ID" -> TipoDocumento.CEDULA_NACIONAL
+        formato == FormatoMrz.TD1 && paisEmisor == "CRI" && codigoDocumento == "C<" -> TipoDocumento.CEDULA_RESIDENCIA
         else -> TipoDocumento.DESCONOCIDO
     },
     numeroDocumento = numeroDocumento,
     nombre = nombres.ifBlank { null },
     apellidos = apellidos.ifBlank { null },
     nacionalidad = nacionalidad.ifBlank { null },
-    vencimiento = fechaVencimiento,
-    fechaNacimiento = fechaNacimiento,
-    sexo = sexo,
+    vencimiento = fechaVencimiento?.aFechaDocumento(),
+    fechaNacimiento = fechaNacimiento?.aFechaDocumento(),
+    sexo = sexo.firstOrNull(),
     fuenteDatos = FuenteDatos.MRZ,
     checksumValido = checksumsValidos,
 )
@@ -176,6 +193,22 @@ private val REGEX_DIMEX_NACIONALIDAD = Regex("""Nacionalidad:\s*\n?\s*([A-ZÁÉ�
 private val REGEX_CEDULA_APELLIDO1 = Regex("""1\D{0,4}Apellido:?[ \t]*\n?[ \t]*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_CEDULA_APELLIDO2 = Regex("""2\D{0,4}Apellido:?[ \t]*\n?[ \t]*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_LICENCIA_NUMERO = Regex("""N[º°9O]?[:.]?\s*(?:DM|CI)?[- ]?(\d{6,15})""", RegexOption.IGNORE_CASE)
+// El nombre completo en la licencia NO trae ninguna etiqueta ("Nombre:")
+// a diferencia de cédula/DIMEX -- aparece como una línea suelta en
+// mayúsculas, sin más (verificado contra una licencia real, 2026-09-26:
+// antes esto no se intentaba leer para nada, sólo el número). Una línea
+// candidata es puro texto en mayúsculas de al menos 3 palabras.
+private val REGEX_LICENCIA_NOMBRE_COMPLETO = Regex("""^[A-ZÁÉÍÓÚÑ]+(?:[ \t]+[A-ZÁÉÍÓÚÑ]+){2,}$""")
+// Palabras que SÍ aparecen impresas en mayúsculas en el resto del diseño
+// de la licencia (encabezado, sello de fondo del MOPT) -- una línea
+// candidata que contenga alguna de éstas se descarta, para no confundir
+// "REPUBLICA DE COSTA RICA" o el sello "DIRECCION GENERAL EDUCACION
+// VIAL" con el nombre real de la persona.
+private val PALABRAS_NO_NOMBRE_LICENCIA = setOf(
+    "REPUBLICA", "REPÚBLICA", "COSTA", "RICA", "LICENCIA", "CONDUCIR",
+    "EXPEDICION", "EXPEDICIÓN", "NACIMIENTO", "VENCIMIENTO", "TIPO", "DONADOR",
+    "DIRECCION", "DIRECCIÓN", "GENERAL", "EDUCACION", "EDUCACIÓN", "VIAL", "MOPT",
+)
 private val REGEX_PRAIND_CEDULA = Regex("""No\.?\s*de\s*c[ée]dula:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_NOMBRE = Regex("""Nombre:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_EMPRESA = Regex("""Empresa:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
@@ -248,7 +281,7 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
         TipoDocumento.CARNET_BAC -> extraerBac(texto)
         TipoDocumento.GAFETE_CONTRATISTA -> extraerGafeteContratista(texto)
         // El clasificador por palabras clave del frente no distingue
-        // pasaporte todavía -- llega sólo vía MRZ (ver ResultadoMrz.aDocumentoDetectado).
+        // pasaporte todavía -- llega sólo vía MRZ (ver RegistroMrz.aDocumentoDetectado).
         TipoDocumento.PASAPORTE -> null
         // Nunca lo produce el clasificador del frente -- sólo aparece vía
         // reclasificación por edad después de leer el MRZ (reclasificarPorEdad).
@@ -337,13 +370,42 @@ private fun extraerLicencia(texto: String, esExtranjero: Boolean): DocumentoDete
         ?: return null
 
     val vencimiento = extraerFecha(texto, etiqueta = "Vencimiento")
+    val nombreYApellidos = extraerNombreCompletoLicencia(texto)
 
     return DocumentoDetectado(
         tipo = if (esExtranjero) TipoDocumento.LICENCIA_EXTRANJERO else TipoDocumento.LICENCIA_NACIONAL,
         numeroDocumento = numero,
         esExtranjero = esExtranjero,
         vencimiento = vencimiento,
+        nombre = nombreYApellidos?.first,
+        apellidos = nombreYApellidos?.second,
     )
+}
+
+/// Orden legal costarricense en el nombre completo impreso: 1er apellido,
+/// 2do apellido, nombre(s) -- por eso las primeras dos palabras son
+/// siempre los apellidos y el resto es el nombre, sin importar cuántas
+/// palabras tenga (un nombre compuesto como "Daniel de Jesús", tres
+/// palabras, es tan válido como uno de una sola). Se toma la ÚLTIMA línea
+/// candidata, no la primera: "REPUBLICA DE COSTA RICA" en el encabezado
+/// también es puro texto en mayúsculas de varias palabras, así que
+/// filtrar por [PALABRAS_NO_NOMBRE_LICENCIA] no alcanza sola si ML Kit
+/// llega a leer el encabezado y el nombre en un orden inesperado dentro
+/// del mismo bloque de texto.
+private fun extraerNombreCompletoLicencia(texto: String): Pair<String, String>? {
+    val candidato = texto.lines()
+        .map { it.trim().uppercase() }
+        .filter { linea ->
+            REGEX_LICENCIA_NOMBRE_COMPLETO.matches(linea) &&
+                linea.split(" ").none { it in PALABRAS_NO_NOMBRE_LICENCIA }
+        }
+        .lastOrNull() ?: return null
+
+    val palabras = candidato.split(" ").filter { it.isNotBlank() }
+    if (palabras.size < 3) return null
+    val apellidos = palabras.take(2).joinToString(" ")
+    val nombre = palabras.drop(2).joinToString(" ")
+    return nombre to apellidos
 }
 
 /// El carnet PRAIND identifica a la persona por cédula (`numeroDocumento`),

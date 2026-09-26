@@ -51,6 +51,24 @@ impl AppCore {
         AutenticacionService::new(&repository).autenticar(cedula, password, self.reloj.ahora_utc())
     }
 
+    /// Ver `AutenticacionService::autenticar_con_estado` -- para un login
+    /// LOCAL (mobile: `Nucleo::autenticar`/`autenticar_con_secreto`) que
+    /// necesita saber si debe exigir el cambio de contraseña, en vez de
+    /// asumir siempre que no (hallazgo de auditoría 2026-09-24,
+    /// MV-01/DF-03).
+    pub fn autenticar_con_estado(
+        &self,
+        cedula: &str,
+        password: &str,
+    ) -> Result<(UsuarioSesion, bool), AutenticacionError> {
+        let repository = SqliteUsuarioRepository::new(&self.connection);
+        AutenticacionService::new(&repository).autenticar_con_estado(
+            cedula,
+            password,
+            self.reloj.ahora_utc(),
+        )
+    }
+
     /// `false` si `sesion` ya no corresponde a un usuario activo -- por
     /// ejemplo, lo desactivaron en otro dispositivo y esta base recién lo
     /// recibió por sync (ver `nube::AppCore::sincronizar_con_nube`,
@@ -98,45 +116,29 @@ impl AppCore {
     /// no cachear no debe tumbar un login que de por sí ya fue exitoso
     /// contra Supabase, sólo significa que el próximo corte de internet no
     /// va a tener este atajo disponible para esta cuenta.
+    /// `debe_cambiar_password` queda grabado junto al hash
+    /// (`Usuario::password_temporal_cacheada`) -- pasar `true` cuando la
+    /// contraseña que se está cacheando es una temporal todavía sin
+    /// cambiar (login online con `debe_cambiar_password` en `true`) es lo
+    /// que le permite a un login sin conexión seguir exigiendo el cambio
+    /// en vez de dejarlo pasar (hallazgo de auditoría 2026-09-24,
+    /// MV-01/DF-03). Un refresco de caché tras un cambio de contraseña
+    /// real (`cambiar_password_supabase`) debe pasar `false`.
     pub fn cachear_password_local(
         &self,
         id: i64,
         password: &str,
+        debe_cambiar_password: bool,
     ) -> Result<(), UsuarioServiceError> {
         let hash = crate::services::password::generar_hash(password)?;
         let confirmado_en = crate::tiempo::serializar_utc(self.reloj.ahora_utc());
         let repository = SqliteUsuarioRepository::new(&self.connection);
-        repository.actualizar_password_cacheada(id, &hash, &confirmado_en)?;
+        repository.actualizar_password_cacheada(
+            id,
+            &hash,
+            &confirmado_en,
+            debe_cambiar_password,
+        )?;
         Ok(())
-    }
-
-    /// Completa el alta de contraseña de un usuario global (Administrador/Operador,
-    /// sincronizado por catálogo -- ver `nube::sincronizacion::recibir_catalogo_del_sitio`)
-    /// que todavía no inició sesión EN ESTE dispositivo (`AutenticacionError::SinPasswordLocal`).
-    /// No exige conocer una contraseña anterior (nunca existió acá) -- sólo la cédula, que la
-    /// pantalla de login ya tiene de haber intentado entrar. Deja logueada la sesión directo
-    /// en vez de forzar un segundo intento con la contraseña recién fijada.
-    pub fn fijar_password_inicial(
-        &self,
-        cedula: &str,
-        nueva_password: &str,
-    ) -> Result<UsuarioSesion, UsuarioServiceError> {
-        let repository = SqliteUsuarioRepository::new(&self.connection);
-        let usuario = repository
-            .buscar_por_cedula(cedula.trim())?
-            .ok_or(UsuarioServiceError::UsuarioNoEncontrado)?;
-        if !usuario.activo {
-            return Err(UsuarioServiceError::UsuarioInactivo);
-        }
-        if usuario.password_hash != crate::services::password::SIN_PASSWORD_LOCAL {
-            return Err(UsuarioServiceError::YaTienePasswordLocal);
-        }
-        UsuarioService::new(&repository).cambiar_password(usuario.id, nueva_password)?;
-        Ok(UsuarioSesion {
-            id: usuario.id,
-            cedula: usuario.cedula,
-            nombre: usuario.nombre,
-            rol: usuario.rol,
-        })
     }
 }

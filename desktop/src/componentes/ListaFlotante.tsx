@@ -30,8 +30,42 @@ export interface PosicionLista {
   rightDesdeIzquierda: number;
 }
 
-/** Recalcula la posición del campo (`campoRef`) mientras `visible` sea
- * `true`, incluyendo al cambiar el tamaño de la ventana. */
+/** Posición de la lista para el rectángulo del campo -- aparte para poder
+ * testearla y compararla. */
+export function posicionParaCampo(
+  rect: Pick<DOMRect, "top" | "bottom" | "left" | "right" | "width">,
+  ventana: { ancho: number; alto: number },
+): PosicionLista {
+  return {
+    top: rect.bottom + 4,
+    bottom: ventana.alto - rect.top + 4,
+    left: rect.left,
+    right: ventana.ancho - rect.right,
+    width: rect.width,
+    topCampo: rect.top,
+    rightDesdeIzquierda: ventana.ancho - rect.left + 4,
+  };
+}
+
+function mismaPosicion(a: PosicionLista | null, b: PosicionLista): boolean {
+  return (
+    a !== null &&
+    a.top === b.top &&
+    a.bottom === b.bottom &&
+    a.left === b.left &&
+    a.right === b.right &&
+    a.width === b.width
+  );
+}
+
+/** Sigue la posición del campo (`campoRef`) mientras `visible` sea `true`.
+ *
+ * Se mide en cada cuadro (`requestAnimationFrame`) y sólo se actualiza si
+ * cambió: el campo puede moverse sin que cambie la ventana -- p. ej. el
+ * modal se estira o encoge animado al abrir o cerrar una ficha
+ * (`.modal-cuerpo`). Antes se medía una sola vez al aparecer la lista, y si
+ * se escribía mientras el modal se encogía, la lista quedaba desfasada del
+ * buscador (reportado 2026-09-24). */
 export function useListaFlotante(visible: boolean) {
   const campoRef = useRef<HTMLDivElement>(null);
   const [posicion, setPosicion] = useState<PosicionLista | null>(null);
@@ -41,22 +75,19 @@ export function useListaFlotante(visible: boolean) {
       setPosicion(null);
       return;
     }
-    const actualizar = () => {
-      if (!campoRef.current) return;
-      const rect = campoRef.current.getBoundingClientRect();
-      setPosicion({
-        top: rect.bottom + 4,
-        bottom: window.innerHeight - rect.top + 4,
-        left: rect.left,
-        right: window.innerWidth - rect.right,
-        width: rect.width,
-        topCampo: rect.top,
-        rightDesdeIzquierda: window.innerWidth - rect.left + 4,
-      });
+    let cuadro = 0;
+    const medir = () => {
+      if (campoRef.current) {
+        const nueva = posicionParaCampo(campoRef.current.getBoundingClientRect(), {
+          ancho: window.innerWidth,
+          alto: window.innerHeight,
+        });
+        setPosicion((actual) => (mismaPosicion(actual, nueva) ? actual : nueva));
+      }
+      cuadro = requestAnimationFrame(medir);
     };
-    actualizar();
-    window.addEventListener("resize", actualizar);
-    return () => window.removeEventListener("resize", actualizar);
+    medir();
+    return () => cancelAnimationFrame(cuadro);
   }, [visible]);
 
   return { campoRef, posicion };

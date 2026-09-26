@@ -76,6 +76,15 @@ data class RegionGuiaOcr(
 /// pueden no ser contiguas (`pixelStride` > 1) -- copiar ignorando esto
 /// produce una imagen corrida/basura en cualquier dispositivo cuyo HAL de
 /// cámara no entregue los planos ya empaquetados.
+/// `destino`, si se pasa y ya tiene el tamaño exacto que hace falta, se
+/// reusa en vez de asignar un `ByteArray` nuevo -- último punto suelto de
+/// MV-07 (auditoría de rendimiento 2026-09-25, cerrado junto con #1-#5):
+/// con resolución fija (1280x720, ver `construirAnalizadorOcr`) el tamaño
+/// no cambia entre frames de una misma sesión de escaneo, así que asignar
+/// un array nuevo por frame es basura de más para el recolector sin
+/// ninguna ganancia. `null` (el default, y lo que usan los tests) sigue
+/// asignando uno nuevo -- no cambia el comportamiento de nadie que no pase
+/// este parámetro.
 fun construirNv21(
     ancho: Int,
     alto: Int,
@@ -85,8 +94,10 @@ fun construirNv21(
     v: ByteArray,
     uvRowStride: Int,
     uvPixelStride: Int,
+    destino: ByteArray? = null,
 ): ByteArray {
-    val nv21 = ByteArray(ancho * alto + (ancho * alto) / 2)
+    val tamano = ancho * alto + (ancho * alto) / 2
+    val nv21 = if (destino != null && destino.size == tamano) destino else ByteArray(tamano)
     var posicion = 0
     for (fila in 0 until alto) {
         val inicio = fila * yRowStride
@@ -103,4 +114,93 @@ fun construirNv21(
         }
     }
     return nv21
+}
+
+/// Convierte un NV21 (como el que arma [construirNv21]) directo a píxeles
+/// ARGB_8888, sin pasar por JPEG -- reemplaza el camino anterior
+/// `YuvImage.compressToJpeg` + `BitmapFactory.decodeByteArray` (auditoría de
+/// rendimiento 2026-09-25: esa ida y vuelta comprimía a JPEG con pérdida y
+/// después la descomprimía completa, el costo de CPU más alto por frame de
+/// las 4 pantallas de escaneo, y de paso perdía calidad por la compresión
+/// con pérdida -- innecesaria acá porque el resultado nunca se guarda ni se
+/// muestra, sólo se le pasa a ML Kit).
+///
+/// Coeficientes BT.601 de rango completo (Y' 0-255, no el 16-235 "TV
+/// range") -- los mismos que usa históricamente `YuvImage`/la mayoría de
+/// HALs de cámara Android para este formato, para no introducir un cambio
+/// de color perceptible frente al camino anterior.
+///
+/// Puro -- sólo bytes y enteros, nada de `android.graphics.Bitmap` -- para
+/// poder probarlo con datos sintéticos, mismo motivo que [construirNv21].
+/// El llamador arma el `Bitmap` con `Bitmap.createBitmap(pixeles, ancho,
+/// alto, Config.ARGB_8888)`.
+///
+/// `destino`: mismo criterio que el parámetro homónimo de [construirNv21]
+/// -- se reusa si ya tiene el tamaño exacto, en vez de asignar un
+/// `IntArray` nuevo por frame.
+fun convertirNv21AArgb(nv21: ByteArray, ancho: Int, alto: Int, destino: IntArray? = null): IntArray {
+    val tamano = ancho * alto
+    val pixeles = if (destino != null && destino.size == tamano) destino else IntArray(tamano)
+    val tamanoPlanoY = ancho * alto
+    for (fila in 0 until alto) {
+        var indiceY = fila * ancho
+        var indiceUv = tamanoPlanoY + (fila shr 1) * ancho
+        var u = 0
+        var v = 0
+        for (columna in 0 until ancho) {
+            val y = (nv21[indiceY].toInt() and 0xff)
+            if (columna and 1 == 0) {
+                v = (nv21[indiceUv++].toInt() and 0xff) - 128
+                u = (nv21[indiceUv++].toInt() and 0xff) - 128
+            }
+            val y1192 = 1192 * y
+            val r = (y1192 + 1634 * v).coerceIn(0, 262143)
+            val g = (y1192 - 833 * v - 400 * u).coerceIn(0, 262143)
+            val b = (y1192 + 2066 * u).coerceIn(0, 262143)
+            pixeles[indiceY] = -0x1000000 or
+                ((r shl 6) and 0xff0000) or
+                ((g shr 2) and 0xff00) or
+                ((b shr 10) and 0xff)
+            indiceY++
+        }
+    }
+    return pixeles
+}
+
+/// Último punto suelto de MV-07 (auditoría de rendimiento 2026-09-25,
+/// cerrado junto con #1-#5): reune los buffers de un frame
+/// (`yBytes`/`uBytes`/`vBytes` copiados de los planos, más `nv21` y
+/// `pixeles` intermedios) para reusarlos entre frames en vez de asignarlos
+/// desde cero cada vez -- con resolución fija (1280x720, ver
+/// `construirAnalizadorOcr`) el tamaño de cada uno no cambia dentro de una
+/// misma sesión de escaneo. Cada método reasigna solo si el tamaño pedido
+/// cambió (no debería pasar en la práctica, pero cubre el caso sin
+/// romper nada).
+///
+/// Una instancia por apertura de pantalla, igual que `EstabilizadorLectura`
+/// -- no compartir entre sesiones de escaneo distintas ni entre hilos:
+/// pensada para usarse desde el único hilo del analizador de cámara
+/// (`ejecutorAnalisis`), igual que el resto de este archivo.
+class BuffersOcrReutilizables {
+    private var yBytes: ByteArray? = null
+    private var uBytes: ByteArray? = null
+    private var vBytes: ByteArray? = null
+    private var nv21: ByteArray? = null
+    private var pixeles: IntArray? = null
+
+    fun yBytes(tamano: Int): ByteArray = reusarByteArray(yBytes, tamano) { yBytes = it }
+    fun uBytes(tamano: Int): ByteArray = reusarByteArray(uBytes, tamano) { uBytes = it }
+    fun vBytes(tamano: Int): ByteArray = reusarByteArray(vBytes, tamano) { vBytes = it }
+    fun nv21(tamano: Int): ByteArray = reusarByteArray(nv21, tamano) { nv21 = it }
+
+    fun pixeles(tamano: Int): IntArray {
+        val actual = pixeles
+        if (actual != null && actual.size == tamano) return actual
+        return IntArray(tamano).also { pixeles = it }
+    }
+
+    private inline fun reusarByteArray(actual: ByteArray?, tamano: Int, guardar: (ByteArray) -> Unit): ByteArray {
+        if (actual != null && actual.size == tamano) return actual
+        return ByteArray(tamano).also(guardar)
+    }
 }

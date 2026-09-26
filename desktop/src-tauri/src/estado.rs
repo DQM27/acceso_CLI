@@ -5,29 +5,16 @@ use std::time::{Duration, Instant};
 use control_acceso::application::AppCore;
 use control_acceso::database::connection::abrir_conexion_secundaria_escritura;
 use control_acceso::instancia::InstanciaGuard;
-use control_acceso::nube::{self, NubeError, TokenDispositivo};
+use control_acceso::nube::{CacheTokenDispositivo, NubeError, SesionSupabase, TokenDispositivo};
 use control_acceso::services::autenticacion_service::UsuarioSesion;
 use rusqlite::Connection;
 use zeroize::Zeroizing;
 
-/// Ver `GuiState::autenticar_con_cache` -- último `TokenDispositivo`
-/// obtenido mientras siga vigente, para no autenticar de cero en cada
-/// comando que necesita hablar con la nube (login, registrar un ingreso
-/// con gafete, etc.). Duplica la idea de `application::nube::TokenCacheado`
-/// (interno a `AppCore`, usado por móvil) en vez de reutilizarla porque acá
-/// varios comandos autentican SIN pasar por `AppCore`/`state.core()` a
-/// propósito -- retener el candado compartido durante la llamada de red es
-/// justo lo que esos comandos evitan (ver doc-comment de `GuiState::core`).
-struct TokenCacheado {
-    secreto: String,
-    token: TokenDispositivo,
-    obtenido_en: Instant,
-}
-
 /// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,
 /// o un ROOT ya sincronizado a otro sitio) -- ver
-/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta de `TokenCacheado`
-/// (identidad del DISPOSITIVO ante el receptor): esto es la identidad de
+/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta del
+/// `TokenDispositivo` que cachea `CacheTokenDispositivo` (identidad del
+/// DISPOSITIVO ante el receptor): esto es la identidad de
 /// la PERSONA. Vive sólo en memoria -- nunca se persiste a disco, así que
 /// cerrar la app siempre la pierde y el próximo arranque exige un login
 /// real de nuevo contra Supabase, sin importar cuánto quedara del tope de
@@ -66,7 +53,12 @@ pub struct GuiState {
     /// lee, sólo existe para que no se libere antes de tiempo (mismo patrón
     /// que `main.rs` con `_instancia`).
     _instancia: InstanciaGuard,
-    token_nube_cacheado: Mutex<Option<TokenCacheado>>,
+    /// Campo HERMANO de `core`, nunca protegido por el mismo candado --
+    /// ver el doc-comment de `control_acceso::nube::CacheTokenDispositivo`
+    /// sobre por qué (varios comandos autentican sin pasar por
+    /// `state.core()` a propósito, para no retener ese candado compartido
+    /// durante la llamada de red).
+    cache_token: CacheTokenDispositivo,
     sesion_supabase: Mutex<Option<SesionSupabaseCacheada>>,
     /// Ruta del archivo de base de datos, resuelta una sola vez al arrancar
     /// (ver `lib.rs::run`) — el núcleo ya no expone `ruta_base_datos()`
@@ -91,7 +83,7 @@ impl GuiState {
             core: Mutex::new(core),
             sesion: Mutex::new(None),
             _instancia: instancia,
-            token_nube_cacheado: Mutex::new(None),
+            cache_token: CacheTokenDispositivo::new(),
             sesion_supabase: Mutex::new(None),
             ruta_base_datos,
             clave_base_datos,
@@ -99,45 +91,14 @@ impl GuiState {
     }
 
     /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
-    /// autenticar de cero -- ver `TokenCacheado`. Reproducido en producción:
-    /// "Registrar" con gafete pagaba una autenticación completa contra la
-    /// nube en cada registro (`gafete_libre_en_otro_dispositivo`), aunque
-    /// el dispositivo ya se hubiera autenticado segundos antes para
-    /// sincronizar o loguearse -- se sentía como que la app se colgaba en
-    /// cada registro. Margen de 30s antes del vencimiento real para no
-    /// arrancar una operación con un token que puede vencer a mitad de
-    /// camino. Un acierto de caché no vuelve a medir el desfase de reloj
-    /// (`desfase_reloj_ms` queda en `None`) -- no hace falta remedirlo en
-    /// cada llamada, sólo cuando de verdad se habla con el receptor.
+    /// autenticar de cero -- ver `CacheTokenDispositivo`. Reproducido en
+    /// producción: "Registrar" con gafete pagaba una autenticación
+    /// completa contra la nube en cada registro
+    /// (`gafete_libre_en_otro_dispositivo`), aunque el dispositivo ya se
+    /// hubiera autenticado segundos antes para sincronizar o loguearse --
+    /// se sentía como que la app se colgaba en cada registro.
     pub fn autenticar_con_cache(&self, secreto: &str) -> Result<TokenDispositivo, NubeError> {
-        const MARGEN_EXPIRACION: Duration = Duration::from_secs(30);
-
-        {
-            let cache = self
-                .token_nube_cacheado
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(entrada) = cache.as_ref() {
-                let vigente_por =
-                    Duration::from_secs(entrada.token.expires_in).saturating_sub(MARGEN_EXPIRACION);
-                if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
-                    let mut token = entrada.token.clone();
-                    token.desfase_reloj_ms = None;
-                    return Ok(token);
-                }
-            }
-        }
-
-        let token = nube::autenticar_dispositivo(nube::base_url(), secreto, None)?;
-        *self
-            .token_nube_cacheado
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(TokenCacheado {
-            secreto: secreto.to_string(),
-            token: token.clone(),
-            obtenido_en: Instant::now(),
-        });
-        Ok(token)
+        self.cache_token.autenticar_con_cache(secreto)
     }
 
     /// Descarta el `TokenDispositivo` cacheado -- ver
@@ -148,10 +109,7 @@ impl GuiState {
     /// `autenticar_con_cache` pide uno nuevo sin esperar a que este
     /// "`vigente_por`" calculado localmente se cumpla solo.
     pub fn invalidar_token_cacheado(&self) {
-        *self
-            .token_nube_cacheado
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.cache_token.invalidar();
     }
 
     /// Acceso al núcleo compartido por todos los comandos.
@@ -206,7 +164,7 @@ impl GuiState {
     /// Guarda (o reemplaza) la sesión de Supabase Auth -- se llama tanto
     /// en el login inicial como en cada renovación exitosa en segundo
     /// plano, siempre con una marca de tiempo nueva (`confirmada_en`).
-    pub fn iniciar_sesion_supabase(&self, sesion: nube::SesionSupabase) {
+    pub fn iniciar_sesion_supabase(&self, sesion: SesionSupabase) {
         *self.lock_sesion_supabase() = Some(SesionSupabaseCacheada {
             access_token: sesion.access_token,
             refresh_token: sesion.refresh_token,

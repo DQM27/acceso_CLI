@@ -23,15 +23,6 @@ use crate::services::autenticacion_service::UsuarioSesion;
 
 use super::{AppCore, verificar_actor_activo};
 
-/// Campo interno de `AppCore` (ver `token_nube_cacheado` en `application::mod`)
-/// -- guarda el último `TokenDispositivo` obtenido junto con cuándo, para
-/// que `AppCore::autenticar_con_cache` decida si todavía es reutilizable.
-pub(super) struct TokenCacheado {
-    pub(super) secreto: String,
-    pub(super) token: crate::nube::TokenDispositivo,
-    pub(super) obtenido_en: std::time::Instant,
-}
-
 /// Movimiento del espejo de Supabase, sin inventar valores para datos antiguos ausentes.
 #[derive(Debug, Clone)]
 pub struct MovimientoHistorialSitio {
@@ -382,8 +373,11 @@ impl AppCore {
     /// incluidos), para que el próximo Login tenga con quién autenticar.
     /// Cada usuario que llega así arranca con el centinela
     /// `SIN_PASSWORD_LOCAL` (ver `recibir_catalogo_del_sitio`), así que el
-    /// primer login de cualquiera de ellos cae solo en el flujo de "fijar
-    /// contraseña" ya existente (`AppCore::fijar_password_inicial`).
+    /// primer login de cualquiera de ellos cae en `AutenticacionError::SinPasswordLocal`
+    /// y de ahí al login contra Supabase Auth (`login_supabase`/
+    /// `autenticar_supabase`, ver docs/planes-implementados/plan-autenticacion-supabase-auth.md)
+    /// -- no en `AppCore::fijar_password_inicial`, eliminada en la
+    /// auditoría 2026-09-24 (NR-07/NS-25) por no tener ningún llamador real.
     ///
     /// Se rechaza a propósito si ya existe algún usuario local -- este
     /// camino es sólo el bootstrap de una base vacía, no una forma
@@ -876,24 +870,6 @@ impl AppCore {
         secreto: &str,
         metadata: Option<&crate::nube::MetadatosDispositivo>,
     ) -> Result<crate::nube::TokenDispositivo, GestionNubeError> {
-        const MARGEN_EXPIRACION: std::time::Duration = std::time::Duration::from_secs(30);
-
-        {
-            let cache = self
-                .token_nube_cacheado
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(entrada) = cache.as_ref() {
-                let vigente_por = std::time::Duration::from_secs(entrada.token.expires_in)
-                    .saturating_sub(MARGEN_EXPIRACION);
-                if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
-                    let mut token = entrada.token.clone();
-                    token.desfase_reloj_ms = None;
-                    return Ok(token);
-                }
-            }
-        }
-
         let metadata_con_version;
         let metadata = match (metadata, &self.version_app) {
             (Some(metadata), _) => Some(metadata),
@@ -906,17 +882,12 @@ impl AppCore {
             }
             (None, None) => None,
         };
-        let token =
-            crate::nube::autenticar_dispositivo(crate::nube::base_url(), secreto, metadata)?;
+        // `cache_token` ya deja `desfase_reloj_ms` en `None` en un acierto
+        // de caché (ver su doc-comment) -- `aplicar_desfase_reloj` es
+        // entonces no-op ahí solo, sin necesidad de distinguir acá si esta
+        // llamada habló con el receptor o no.
+        let token = self.cache_token.autenticar_y_cachear(secreto, metadata)?;
         self.aplicar_desfase_reloj(&token);
-        *self
-            .token_nube_cacheado
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(TokenCacheado {
-            secreto: secreto.to_string(),
-            token: token.clone(),
-            obtenido_en: std::time::Instant::now(),
-        });
         Ok(token)
     }
 

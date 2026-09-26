@@ -45,7 +45,20 @@ data class ResultadoEstabilizacion(
 /// principal, hay que agregar sincronización acá.
 class EstabilizadorLectura(
     private val modo: ModoEscaneoDocumento = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
-    private val framesRequeridos: Int = 2,
+    // MV-06 (auditoría 2026-09-24): en modo gafete, el número sale de una
+    // regex sin dígito verificador (a diferencia del MRZ, que si trae
+    // checksum válido se acepta en el mismo frame más arriba en
+    // `procesarFrame`) y dispara una mutación real sin confirmación humana
+    // (salida automática, ver `PantallaActivos`/`ActivosViewModel`). Con
+    // sólo 2 repeticiones alcanzaba para que una confusión de OCR
+    // (3/8, 1/7, 0/6) que se repite en el mismo reflejo cerrara el ingreso
+    // de la persona equivocada. 3 en vez de 2 no elimina el riesgo (sigue
+    // sin dígito verificador -- eso queda para una mejora aparte, QR o
+    // checksum en el gafete), pero exige una confusión más consistente
+    // para colarse. DOCUMENTO_CONTRATISTA se queda en 2: ese modo sí abre
+    // un formulario para que el operador revise antes de guardar, no
+    // dispara nada solo.
+    private val framesRequeridos: Int = if (modo == ModoEscaneoDocumento.GAFETE_CONTRATISTA) 3 else 2,
     // Un poco más grande que `framesRequeridos` -- da lugar a tolerar algún
     // frame malo salteado sin exigir tampoco una ventana tan larga que
     // acepte una racha vieja de candidatos ya abandonados.
@@ -94,6 +107,7 @@ class EstabilizadorLectura(
                 mrz.numeroDocumentoExtendidoSinSoporte ->
                     ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
                 mrz.checksumsValidos -> {
+                    if (mrz.correcciones.isNotEmpty()) registrarCorreccionesMrzEnSentry(mrz.correcciones)
                     val documento = mrz.aDocumentoDetectado().reclasificarPorEdad(hoy)
                     if (!documento.tipo.esValidoParaModo(modo)) {
                         ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no soportado")
