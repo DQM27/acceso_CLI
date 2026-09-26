@@ -17,7 +17,9 @@
 
 use std::time::Duration;
 
-use lattis_realtime_spike::{ConfigCanalPrivado, EventoSupervisorPrivado, supervisar_canal_privado};
+use lattis_realtime_spike::{
+    ConfigCanalPrivado, EventoSupervisorPrivado, supervisar_canal_privado,
+};
 
 fn variable_requerida(nombre: &str) -> String {
     std::env::var(nombre).unwrap_or_else(|_| {
@@ -104,7 +106,9 @@ async fn main() {
              nunca habría llegado a la segunda renovación."
         );
     } else {
-        eprintln!("Esperaba al menos 2 renovaciones en 90s (una cada 5s) -- sólo hubo {renovaciones}.");
+        eprintln!(
+            "Esperaba al menos 2 renovaciones en 90s (una cada 5s) -- sólo hubo {renovaciones}."
+        );
         std::process::exit(1);
     }
 }

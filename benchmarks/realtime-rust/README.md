@@ -224,26 +224,77 @@ limitación de Supabase Realtime**, es una elección de implementación. La
 función que lo evitaría (`broadcast_changes`) ya está disponible en el
 proyecto, sin ninguna migración nueva.
 
-### Etapa 4 (pendiente) -- decisión de integración
+### Etapa 4 (parcial) -- renovación proactiva de JWT + heartbeat en canal privado ✅ implementado
 
-Recién acá se evalúa si esto reemplaza de verdad a `nubeRealtime.ts` y
-`NubeRealtime.kt`, o si el costo de mantenimiento de un cliente Phoenix
-Channels a mano no se justifica frente a mantener las dos implementaciones
-actuales. Esta decisión NO está tomada -- este directorio es el
-experimento que la informa, no el resultado.
+Faltaba esto para que el canal privado (Etapa 2) aguantara una sesión
+larga de verdad, no sólo el smoke test de un par de mensajes:
+
+- **`ClienteRealtime::renovar_token`** -- push `access_token` in-band,
+  investigado en `realtime-js`: refresca el JWT de un canal YA UNIDO sin
+  `phx_join` de nuevo. Fire-and-forget (el protocolo no contesta en éxito;
+  en falla, cierra el canal -- eso lo detecta el `esperar_evento` normal
+  como una desconexión más).
+- **Heartbeat propio en `supervisar_canal_privado`** -- bug real
+  encontrado al implementar esto: el supervisor de canal privado sólo
+  escuchaba pasivo, nunca mandaba nada. Phoenix cierra por defecto un
+  socket que no manda NADA en ~60s (investigado, ver fuentes) -- un sitio
+  silencioso habría desconectado al dispositivo sin que fuera un problema
+  de red real. Ahora manda heartbeat cada `intervalo_heartbeat`.
+
+**Probado contra `control-acceso-staging` REAL, no sólo mocks**
+(`bin/smoke_supervisor_privado.rs`, dispositivo/sitio descartables, ya
+borrados): 90 segundos corriendo, renovando el JWT cada 5s --
+
+```
+[  0.0s] Unido al canal privado real.
+[  5.0s] Token renovado SIN reconectar (van 1).
+...
+[ 85.2s] Token renovado SIN reconectar (van 17).
+OK -- 17 renovaciones de JWT sin reconectar contra el servidor REAL de Supabase.
+```
+
+**17 renovaciones reales, cero desconexiones.** Si el heartbeat propio no
+funcionara, el socket habría muerto por inactividad mucho antes de la
+renovación número 2 (a los ~60s sin heartbeat) -- llegar a la 17 en 90s es
+la prueba de que ambos mecanismos (heartbeat + renovación) conviven bien
+en la misma conexión.
+
+Contra mocks locales (deterministas, sin red): un servidor de **una sola
+conexión** captura el `access_token` renovado -- si el supervisor
+reconectara para "renovar" (en vez de empujarlo in-band), el test se
+colgaría esperando una segunda conexión que nunca llega. Otro mock,
+completamente silencioso (nunca manda ningún broadcast), confirma que el
+cliente manda heartbeat solo, sin que nadie se lo pida.
+
+### Etapa 4 (falta) -- decisión final de integración
+
+Con JWT proactivo y heartbeat ya resueltos, lo que queda antes de plantear
+un reemplazo real de `nubeRealtime.ts`/`NubeRealtime.kt`:
+
+- **Presence** -- no implementado; `nubeRealtime.ts` sí lo usa (panel de
+  "quién está conectado").
+- **Meterlo de verdad en el árbol de dependencias real** -- hoy es un
+  crate standalone en `benchmarks/`, no `desktop/src-tauri` ni
+  `mobile/rust-core`.
+- **Puente Rust → frontend** -- eventos Tauri que reemplacen lo que hoy
+  hace `iniciarRealtimeNube()` para que React se entere del estado.
+- **Shadow-run en producción real** -- correrlo en paralelo, sólo
+  comparando/logueando (sin tocar el sync real), antes de considerar
+  siquiera un corte real. Esta decisión NO está tomada -- este directorio
+  es el experimento que la informa, no el resultado.
 
 ## Cobertura de pruebas
 
-32 tests en total, en cuatro capas distintas, cada una probando algo que
+34 tests en total, en cuatro capas distintas, cada una probando algo que
 las otras no cubren. `cargo test --manifest-path benchmarks/realtime-rust/Cargo.toml`
 corre las cuatro. Ninguna toca red externa ni credenciales reales --
 eso queda en los binarios `smoke_*` de `src/bin/` (manuales, contra
 `control-acceso-staging`, documentados arriba).
 
-### 1. Unitarias (`src/*.rs`, `mod tests`) -- 25 tests
+### 1. Unitarias (`src/*.rs`, `mod tests`) -- 27 tests
 
 Los detalles internos: framing del protocolo, el cliente WebSocket, el
-supervisor de reconexión. Incluye 4 pruebas de CAOS basadas en fallas
+supervisor de reconexión. Incluye 6 pruebas de CAOS basadas en fallas
 reales documentadas (no imaginadas -- ver fuentes al final del README):
 
 - **Basura no-JSON del servidor** → error tipado, nunca pánico.
@@ -252,6 +303,11 @@ reales documentadas (no imaginadas -- ver fuentes al final del README):
   load balancer/proxy que mata la conexión sin avisar.
 - **Servidor mudo** (acepta, no responde nunca) → `Timeout` a los 5s, no
   espera para siempre.
+- **Canal privado en silencio total** → el cliente manda heartbeat solo,
+  sin que nadie se lo pida (Etapa 4).
+- **Renovación de JWT capturada en una única conexión** → si el supervisor
+  reconectara para "renovar" en vez de empujar el token in-band, el test
+  se colgaría esperando una segunda conexión que nunca llega (Etapa 4).
 - **Token viejo reenviado al reconectar** (`nunca_reenvia_un_token_viejo_al_reconectar`)
   → reproduce el bug real de `supabase-py`/`supabase-js` donde el cliente
   cachea el JWT en el payload de join y lo reenvía tal cual tras
@@ -347,3 +403,5 @@ servidor y mida percentiles de latencia -- no está hecho todavía.
 - [Realtime connection unable to reconnect after TIMED_OUT · supabase/realtime#1088](https://github.com/supabase/realtime/issues/1088)
 - [Debugging WebSocket Real-Time Features: Packet Loss & Reconnect Storms](https://buglyst.com/blog/debugging-real-time-features)
 - [Writing a Channels Client — Phoenix docs (heartbeat/timeout, entrega at-most-once)](https://phoenix.hexdocs.pm/writing_a_channels_client.html)
+- [PR #117 realtime-js "push access token only to joined channels" (el mecanismo `access_token` in-band que usa `ClienteRealtime::renovar_token`)](https://github.com/supabase/realtime-js/pull/117)
+- [JavaScript: Update the access token — Supabase docs](https://supabase.com/docs/reference/javascript/auth-setauth)

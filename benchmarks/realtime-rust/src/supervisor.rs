@@ -119,8 +119,13 @@ pub enum EventoSupervisorPrivado {
     /// Se empujó un JWT nuevo al canal SIN reconectar (ver
     /// `ClienteRealtime::renovar_token`).
     TokenRenovado,
-    Desconectado { motivo: String },
-    Reintentando { intento: u32, espera: Duration },
+    Desconectado {
+        motivo: String,
+    },
+    Reintentando {
+        intento: u32,
+        espera: Duration,
+    },
 }
 
 /// Agrupa lo que es dato de configuración fijo (a diferencia de
@@ -219,7 +224,10 @@ pub async fn supervisar_canal_privado(
                 // mantenimiento (heartbeat/renovación).
                 let espera = espera.max(Duration::from_millis(1));
 
-                match cliente.esperar_evento(&topic, &evento_esperado, espera).await {
+                match cliente
+                    .esperar_evento(&topic, &evento_esperado, espera)
+                    .await
+                {
                     Ok(payload) => {
                         let _ = eventos.send(EventoSupervisorPrivado::EventoRecibido(payload));
                         if detener() {
@@ -244,19 +252,18 @@ pub async fn supervisar_canal_privado(
                         }
                         if let (Some(instante), Some(intervalo)) =
                             (proxima_renovacion, renovar_token_cada)
-                            && ahora >= instante {
-                                let token_fresco = obtener_token_fresco();
-                                if let Err(error) =
-                                    cliente.renovar_token(&topic, &token_fresco).await
-                                {
-                                    let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
-                                        motivo: error.to_string(),
-                                    });
-                                    break 'canal;
-                                }
-                                let _ = eventos.send(EventoSupervisorPrivado::TokenRenovado);
-                                proxima_renovacion = Some(std::time::Instant::now() + intervalo);
+                            && ahora >= instante
+                        {
+                            let token_fresco = obtener_token_fresco();
+                            if let Err(error) = cliente.renovar_token(&topic, &token_fresco).await {
+                                let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
+                                    motivo: error.to_string(),
+                                });
+                                break 'canal;
                             }
+                            let _ = eventos.send(EventoSupervisorPrivado::TokenRenovado);
+                            proxima_renovacion = Some(std::time::Instant::now() + intervalo);
+                        }
                     }
                     Err(error) => {
                         let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
@@ -708,7 +715,9 @@ mod tests {
     /// cerraría la conexión por inactividad a los ~60s (investigado, ver
     /// README.md) -- acá se verifica que el cliente manda uno solo, antes
     /// de que haga falta ninguna desconexión real.
-    async fn servidor_silencioso_que_exige_heartbeat(recibio_heartbeat: Arc<AtomicUsize>) -> String {
+    async fn servidor_silencioso_que_exige_heartbeat(
+        recibio_heartbeat: Arc<AtomicUsize>,
+    ) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let direccion = listener.local_addr().unwrap();
 
