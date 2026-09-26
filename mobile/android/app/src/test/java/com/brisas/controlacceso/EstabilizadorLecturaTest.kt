@@ -191,6 +191,32 @@ class EstabilizadorLecturaTest {
     }
 
     @Test
+    fun modoGafeteExigeMasRepeticionesQueDocumentoContratistaPorDefecto() {
+        // MV-06 (auditoría 2026-09-24): en modo gafete el default sube a 3
+        // repeticiones (antes 2, igual que DOCUMENTO_CONTRATISTA) porque acá
+        // no hay formulario de revisión -- confirmar dispara una salida real
+        // sola. Sin el `framesRequeridos` explícito de
+        // `modoGafeteAceptaSoloGafeteContratista` (que fija 1 a propósito
+        // para no depender de este default), para probar justo el número
+        // que trae la clase por sí sola en este modo.
+        val texto = """
+            CARNÉ
+            PROVISIONAL
+            CRC - 16
+            CONTRATISTAS
+            Costa Rica
+        """.trimIndent()
+        val estabilizador = EstabilizadorLectura(modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA)
+
+        estabilizador.procesarFrame(texto)
+        val segundaRepeticion = estabilizador.procesarFrame(texto)
+        assertEquals(EstadoEscaneo.BUSCANDO, segundaRepeticion.estado)
+
+        val terceraRepeticion = estabilizador.procesarFrame(texto)
+        assertEquals(EstadoEscaneo.CONFIRMADO, terceraRepeticion.estado)
+    }
+
+    @Test
     fun distingueCedulaNacionalDeDimexUsandoSoloElMrz() {
         // Mismo formato TD1 que el DIMEX, distinto código de documento en
         // posiciones 1-2 (ID en vez de C<) -- código real confirmado contra
