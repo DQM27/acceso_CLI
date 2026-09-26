@@ -1210,6 +1210,18 @@ pub struct Nucleo {
     /// que resuelve el path por defecto; acá ya llega como parámetro del
     /// constructor). Misma idea que `GuiState::ruta_base_datos` en escritorio.
     ruta_base_datos: PathBuf,
+    /// MV-03 (auditoría 2026-09-24) -- `None` si se abrió con `abrir()`
+    /// (sin cifrar), `Some` si se abrió con `abrir_cifrado()`. Bug real
+    /// encontrado en la prueba de fuego en dispositivo (2026-09-26):
+    /// `conexion_secundaria()` pasaba `None` siempre, sin importar con qué
+    /// clave se hubiera abierto la conexión principal -- toda la
+    /// sincronización (que usa una `Connection` secundaria para no
+    /// competir por el `Mutex<AppCore>` de la principal) intentaba abrir
+    /// el archivo YA cifrado sin clave, y `SQLite` lo rechazaba con "file
+    /// is not a database" apenas se tocaba cualquier tabla. Guardada acá
+    /// para que esa conexión secundaria pueda aplicar la misma clave que
+    /// ya usa la principal.
+    clave: Option<[u8; 32]>,
     /// Ver `SesionSupabaseCacheada`.
     sesion_supabase: Mutex<Option<SesionSupabaseCacheada>>,
 }
@@ -1269,7 +1281,7 @@ impl Nucleo {
         .map_err(|origen| NucleoError::Apertura {
             mensaje: interno(origen),
         })?;
-        Ok(Self::desde_core(&ruta_base_datos, core))
+        Ok(Self::desde_core(&ruta_base_datos, core, None))
     }
 
     /// MV-03 (auditoría 2026-09-24): variante cifrada de [`Self::abrir`] --
@@ -1980,13 +1992,21 @@ impl Nucleo {
     /// vive como método de `Nucleo` (no función libre) porque es el único
     /// patrón de export que usa este puente hoy (ver el resto de este
     /// `impl`). Fuente de verdad real: `control_acceso::domain::contratista`.
-    pub fn requiere_praind_para_formulario(&self, tipo_ingreso: TipoIngreso, personal_ruta: bool) -> bool {
+    pub fn requiere_praind_para_formulario(
+        &self,
+        tipo_ingreso: TipoIngreso,
+        personal_ruta: bool,
+    ) -> bool {
         control_acceso::domain::contratista::requiere_praind_de(tipo_ingreso.into(), personal_ruta)
     }
 
     /// Espejo de [`Self::requiere_praind_para_formulario`] para la otra
     /// regla del mismo formulario.
-    pub fn requiere_gafete_para_formulario(&self, tipo_ingreso: TipoIngreso, personal_ruta: bool) -> bool {
+    pub fn requiere_gafete_para_formulario(
+        &self,
+        tipo_ingreso: TipoIngreso,
+        personal_ruta: bool,
+    ) -> bool {
         control_acceso::domain::contratista::requiere_gafete_de(tipo_ingreso.into(), personal_ruta)
     }
 
@@ -2673,19 +2693,24 @@ impl Nucleo {
         .map_err(|origen| NucleoError::Apertura {
             mensaje: interno(origen),
         })?;
-        Ok(Self::desde_core(ruta_base_datos, core))
+        Ok(Self::desde_core(ruta_base_datos, core, Some(*clave)))
     }
 
     /// Construye `Self` a partir de un `AppCore` ya abierto -- compartido
     /// por `abrir`/`abrir_cifrado_intento`. Mismo motivo que la función de
-    /// arriba para no vivir en el `impl` exportado.
-    fn desde_core(ruta_base_datos: &str, core: AppCore) -> Self {
+    /// arriba para no vivir en el `impl` exportado. `clave` se guarda
+    /// (bug real encontrado en la prueba de fuego en dispositivo,
+    /// 2026-09-26: `conexion_secundaria()` pasaba `None` siempre, sin
+    /// importar con qué clave se hubiera abierto la principal) para que
+    /// `conexion_secundaria()` pueda aplicar la misma clave.
+    fn desde_core(ruta_base_datos: &str, core: AppCore, clave: Option<[u8; 32]>) -> Self {
         Self {
             core: Mutex::new(core),
             sesion: Mutex::new(None),
             cache_token: control_acceso::nube::CacheTokenDispositivo::new(),
             sincronizacion_en_curso: Mutex::new(()),
             ruta_base_datos: PathBuf::from(ruta_base_datos),
+            clave,
             sesion_supabase: Mutex::new(None),
         }
     }
@@ -2809,7 +2834,7 @@ impl Nucleo {
     fn conexion_secundaria(&self) -> Result<rusqlite::Connection, NucleoError> {
         control_acceso::database::connection::abrir_conexion_secundaria_escritura(
             &self.ruta_base_datos,
-            None,
+            self.clave.as_ref(),
         )
         .map_err(|error| NucleoError::Interno {
             mensaje: interno(error),
@@ -3282,7 +3307,10 @@ mod tests {
         let resultado = Nucleo::abrir_cifrado(ruta.clone(), vec![7u8; 32]);
         let error = resultado.as_ref().err().map(ToString::to_string);
 
-        assert!(resultado.is_ok(), "debería reconstruir en vez de fallar: {error:?}");
+        assert!(
+            resultado.is_ok(),
+            "debería reconstruir en vez de fallar: {error:?}"
+        );
         let bytes = std::fs::read(&ruta).unwrap();
         assert_ne!(bytes, b"esto no es un archivo SQLite valido".to_vec());
     }
@@ -3305,6 +3333,32 @@ mod tests {
             !bytes.starts_with(b"SQLite format 3\0"),
             "la base quedó sin cifrar de verdad bajo cifrado-sqlite3mc"
         );
+    }
+
+    // Bug real encontrado en la prueba de fuego en un dispositivo real
+    // (2026-09-26): `conexion_secundaria()` pasaba `None` siempre, sin
+    // importar con qué clave se hubiera abierto la conexión principal --
+    // cualquier flujo que la usara (toda la sincronización) reventaba con
+    // "file is not a database" apenas tocaba la base ya cifrada. Sólo
+    // corre bajo `cifrado-sqlite3mc`: con el motor plano, `PRAGMA key` es
+    // un no-op sin importar si se le pasa la clave o `None`, así que no
+    // distinguiría el bug del fix.
+    #[cfg(feature = "cifrado-sqlite3mc")]
+    #[test]
+    fn conexion_secundaria_usa_la_misma_clave_que_abrir_cifrado() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+        let nucleo = Nucleo::abrir_cifrado(ruta, vec![7u8; 32]).unwrap();
+
+        let conexion = nucleo.conexion_secundaria();
+        let error = conexion.as_ref().err().map(ToString::to_string);
+        assert!(conexion.is_ok(), "conexion_secundaria() falló: {error:?}");
+
+        let cuenta: i64 = conexion
+            .unwrap()
+            .query_row("SELECT count(*) FROM usuarios", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(cuenta, 0);
     }
 
     #[test]

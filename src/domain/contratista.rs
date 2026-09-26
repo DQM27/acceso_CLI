@@ -11,7 +11,7 @@ pub fn requiere_praind(contratista: &Contratista) -> bool {
 
 /// Misma regla que [`requiere_praind`], sin depender de un `Contratista`
 /// completo -- MV-10 (auditoría 2026-09-24): `mobile/rust-core` la expone
-/// por UniFFI (`Nucleo::requiere_praind_para_formulario`) para que
+/// por `UniFFI` (`Nucleo::requiere_praind_para_formulario`) para que
 /// `PantallaNuevoContratista` deje de reimplementarla a mano en Kotlin
 /// (antes de tener un `Contratista` real que consultar, sólo con lo que la
 /// persona ya tipeó en el formulario).
