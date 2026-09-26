@@ -104,14 +104,53 @@ cargo run --manifest-path benchmarks/realtime-rust/Cargo.toml --bin smoke_end_to
 # INSERT INTO public._lab_lattis_avisos (mensaje) VALUES ('...');
 ```
 
-### Etapa 2 (pendiente) -- `phx_join` a un canal privado real
+### Etapa 2 (esta) -- `phx_join` a un canal privado real ✅ implementado
 
-Requiere resolver el flujo `device-auth` real (JWT ES256 del dispositivo)
-contra staging para poder pasar `access_token` en el `phx_join` a
-`realtime:sitio:<uuid>` y que la política de RLS lo acepte. Sin esto, el
-join a un canal privado devuelve `phx_reply` con `status: "error"` -- que
-en sí mismo también es una prueba válida (confirma que el rechazo
-funciona), pero no cierra el caso de uso real.
+`bin/smoke_private_channel.rs`, con un dispositivo y un sitio DESCARTABLES
+registrados a mano en staging (ver abajo), probó el flujo real completo:
+
+1. `INSERT` directo en `public.dispositivos` con
+   `secret_hash = sha256hex("<secreto de laboratorio>")` -- el mismo
+   algoritmo que usa la Edge Function `device-auth` (confirmado leyendo su
+   código fuente: `sha256Hex` sobre el `secret` en texto plano).
+2. `POST` real a `.../functions/v1/device-auth` con ese secreto → devuelve
+   un JWT ES256 real, firmado con la `DEVICE_SIGNING_KEY` de staging,
+   `sitio_id` incluido.
+3. `phx_join` a `realtime:sitio:<uuid del sitio de laboratorio>` con ese
+   `access_token` -- **aceptado a la primera**: la política
+   `"dispositivos reciben broadcast de su sitio"` de `realtime.messages`
+   validó el JWT real sin ajustes.
+4. Un `INSERT` real en `contratistas` (tabla con el trigger
+   `contratistas_emitir_cambio_nube`), scoped al `sitio_id` del
+   laboratorio, disparó el broadcast privado real.
+5. El cliente lo recibió con la forma EXACTA que arma
+   `private.emitir_cambio_nube_sitio()` en producción:
+   `{"schema","table","operation","sitio_id","dispositivo_id","changed_at"}`.
+
+Nota sin importancia para el resultado, pero digna de dejar anotada:
+`dispositivo_id` llegó `null` en el payload -- porque el `INSERT` se hizo
+por SQL directo (rol de servicio, sin JWT de dispositivo en el contexto de
+la sesión), no vía PostgREST autenticado como el dispositivo. Un `INSERT`
+real de la app (que sí pasa por PostgREST con el JWT del dispositivo en el
+header) llevaría ese campo poblado -- `auth.jwt()->>'sub'` sólo resuelve
+algo cuando la conexión que hace el `INSERT` está autenticada como tal.
+
+Objetos descartables usados y ya borrados (sitio, dispositivo,
+contratista de prueba) -- no quedó nada en staging. Para repetir esta
+etapa hace falta recrearlos:
+
+```sql
+insert into public.sitios (nombre) values ('_lab_lattis_sitio') returning id;
+insert into public.dispositivos (sitio_id, tipo, etiqueta, secret_hash)
+  values ('<sitio_id de arriba>', 'pc', '_lab_lattis_dispositivo',
+          '<sha256hex de tu secreto>')
+  returning id;
+```
+```sh
+curl -X POST "https://pmrytjktlyiuikxuuxpr.supabase.co/functions/v1/device-auth" \
+  -H "Content-Type: application/json" -H "apikey: <anon key>" \
+  -d '{"secret":"<tu secreto>"}'
+```
 
 ### Etapa 3 (pendiente) -- reconexión y backoff
 

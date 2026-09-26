@@ -104,6 +104,26 @@ impl ClienteRealtime {
         Ok(reply.es_reply_ok_de(&referencia))
     }
 
+    /// `phx_join` a un canal privado real (ej. `realtime:sitio:<uuid>`) con
+    /// el `access_token` que devuelve `device-auth` -- Etapa 2: acá sí pasa
+    /// por la política de `realtime.messages` (`private = true`), a
+    /// diferencia de `unirse_publico`.
+    pub async fn unirse_privado(&mut self, topic: &str, access_token: &str) -> Result<(), ErrorCliente> {
+        let referencia = self.siguiente_referencia();
+        self.enviar(&MensajeSaliente::unirse(
+            topic.to_string(),
+            referencia.clone(),
+            Some(access_token),
+        ))
+        .await?;
+        let reply = self.esperar_reply(&referencia).await?;
+        if reply.es_reply_ok_de(&referencia) {
+            Ok(())
+        } else {
+            Err(ErrorCliente::JoinRechazado(reply.payload))
+        }
+    }
+
     /// `phx_join` a un canal público (ver
     /// `MensajeSaliente::unirse_publico`) -- sólo para el laboratorio de
     /// prueba de punta a punta, nunca para un canal real de la app.
