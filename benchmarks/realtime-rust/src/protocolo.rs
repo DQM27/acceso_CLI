@@ -57,23 +57,16 @@ impl MensajeSaliente {
     /// `realtime-js` lo manda siempre, se use o no Presence -- se replica
     /// ese mismo comportamiento acá.
     pub fn unirse(topic: String, referencia: String, access_token: Option<&str>) -> Self {
-        let payload = match access_token {
-            Some(token) => serde_json::json!({
-                "config": {
-                    "broadcast": { "self": false },
-                    "presence": { "key": "" },
-                    "private": true,
-                },
-                "access_token": token,
-            }),
-            None => serde_json::json!({
-                "config": {
-                    "broadcast": { "self": false },
-                    "presence": { "key": "" },
-                    "private": true,
-                },
-            }),
-        };
+        let mut payload = serde_json::json!({
+            "config": {
+                "broadcast": { "self": false },
+                "presence": { "key": "" },
+                "private": true,
+            },
+        });
+        if let Some(token) = access_token {
+            payload["access_token"] = serde_json::Value::String(token.to_string());
+        }
         Self {
             topic,
             event: "phx_join".to_string(),
@@ -249,7 +242,7 @@ mod propiedades {
             topic in ".*",
             referencia in ".*",
         ) {
-            let mensaje = MensajeSaliente::unirse_publico(topic.clone(), referencia.clone());
+            let mensaje = MensajeSaliente::unirse_publico(topic.clone(), referencia);
             let texto = serde_json::to_string(&mensaje).unwrap();
             let releido: MensajeEntrante = serde_json::from_str(&texto).unwrap();
             prop_assert_eq!(releido.topic, topic);
@@ -308,10 +301,11 @@ mod propiedades {
             referencia_esperada in ".*",
         ) {
             let payload = if payload_es_objeto {
-                match &status {
-                    Some(s) => serde_json::json!({ "status": s }),
-                    None => serde_json::json!({}),
+                let mut objeto = serde_json::json!({});
+                if let Some(s) = &status {
+                    objeto["status"] = serde_json::Value::String(s.clone());
                 }
+                objeto
             } else {
                 serde_json::json!(null)
             };

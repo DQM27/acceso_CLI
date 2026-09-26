@@ -107,16 +107,13 @@ async fn main() {
         .expect("A no recibió el presence_diff de B");
     println!("[A] presence_diff recibido: {diff}");
 
-    let tiene_a_b = diff["joins"]
-        .as_object()
-        .map(|mapa| {
-            mapa.values().any(|valor| {
-                valor["metas"]
-                    .as_array()
-                    .is_some_and(|metas| metas.iter().any(|m| m["cedula"] == "B"))
-            })
+    let tiene_a_b = diff["joins"].as_object().is_some_and(|mapa| {
+        mapa.values().any(|valor| {
+            valor["metas"]
+                .as_array()
+                .is_some_and(|metas| metas.iter().any(|m| m["cedula"] == "B"))
         })
-        .unwrap_or(false);
+    });
 
     if tiene_a_b {
         println!("OK -- A vio en vivo, por Presence real, que B se conectó (cedula=B).");

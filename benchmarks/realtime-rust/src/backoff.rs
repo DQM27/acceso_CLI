@@ -7,6 +7,17 @@
 
 use std::time::Duration;
 
+/// `Duration::as_millis()` devuelve `u128` (puede representar milenios) --
+/// para cualquier `base`/`tope` que alguien pase con sentido (segundos,
+/// como mucho minutos) nunca se acerca a desbordar un `u64`, pero
+/// `as u64` a secas igual dispara `cast_possible_truncation`. `try_from`
+/// con `unwrap_or(u64::MAX)` documenta la garantía en vez de silenciar el
+/// lint a ciegas: si alguna vez SÍ desbordara, satura al máximo en lugar
+/// de envolver a un número chico (que sería peor: un backoff casi nulo).
+fn duracion_a_ms_saturado(duracion: Duration) -> u64 {
+    u64::try_from(duracion.as_millis()).unwrap_or(u64::MAX)
+}
+
 pub fn proxima_espera(intentos_seguidos: u32, base: Duration, tope: Duration) -> Duration {
     // `saturating_pow`/`saturating_mul`: con `intentos_seguidos` grande (una
     // racha larga de fallas) `2^intentos` desborda un u64 mucho antes de
@@ -14,8 +25,8 @@ pub fn proxima_espera(intentos_seguidos: u32, base: Duration, tope: Duration) ->
     // `.min(tope)` de abajo lo recorte es más simple que acotar el
     // exponente a mano, y da el mismo resultado.
     let factor = 2u64.saturating_pow(intentos_seguidos);
-    let espera_ms = (base.as_millis() as u64).saturating_mul(factor);
-    let tope_ms = tope.as_millis() as u64;
+    let espera_ms = duracion_a_ms_saturado(base).saturating_mul(factor);
+    let tope_ms = duracion_a_ms_saturado(tope);
     Duration::from_millis(espera_ms.min(tope_ms))
 }
 
@@ -40,7 +51,7 @@ pub fn proxima_espera_con_jitter(
     tope: Duration,
     semilla: u64,
 ) -> Duration {
-    let techo_ms = proxima_espera(intentos_seguidos, base, tope).as_millis() as u64;
+    let techo_ms = duracion_a_ms_saturado(proxima_espera(intentos_seguidos, base, tope));
     if techo_ms == 0 {
         return Duration::ZERO;
     }
@@ -49,8 +60,17 @@ pub fn proxima_espera_con_jitter(
     let mezclada = semilla
         .wrapping_mul(6_364_136_223_846_793_005)
         .wrapping_add(1_442_695_040_888_963_407);
+    // La pérdida de precisión de `u64`/`u32::MAX` a `f64` (mantisa de 52
+    // bits) es aceptable a propósito: esto sólo necesita una proporción
+    // APROXIMADA para esparcir reintentos, no un valor exacto -- perder
+    // algunos bits bajos de la semilla no cambia el propósito del jitter.
+    #[allow(clippy::cast_precision_loss)]
     let proporcion = (mezclada >> 32) as f64 / f64::from(u32::MAX);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
     let espera_ms = (techo_ms as f64 * proporcion) as u64;
     Duration::from_millis(espera_ms)
 }

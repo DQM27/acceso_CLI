@@ -309,14 +309,39 @@ El dispositivo A vio en vivo, por Presence real (no por polling ni por un
 mock), que el dispositivo B se conectó -- el mismo caso de uso exacto que
 usa hoy el panel de presencia de `nubeRealtime.ts`.
 
-### Etapa 4 (falta) -- decisión final de integración
+### Etapa 4 (parcial) -- chequeo de lints reales ✅ implementado
 
-Con JWT proactivo, heartbeat y Presence ya resueltos, lo que queda antes
-de plantear un reemplazo real de `nubeRealtime.ts`/`NubeRealtime.kt`:
+Antes de tocar `desktop/src-tauri`/`mobile/rust-core` de verdad, un chequeo
+más barato: ¿este código pasaría los lints del crate raíz
+(`control_acceso`), que son bastante más estrictos que el default de
+`cargo clippy` (`pedantic`+`nursery` en warn, y ~35 lints puntuales en
+`deny`)? El `[lints.clippy]` de este `Cargo.toml` es una copia EXACTA del
+de la raíz -- si se desincroniza del original, este chequeo deja de servir
+de nada.
+
+Encontró limpieza real que valía la pena hacer de todos modos: casts
+`u128→u64`/`u64→f64` sin manejar el caso de desborde
+(`cast_possible_truncation`/`cast_precision_loss`), dos `match`/`if-let`
+reemplazables por `map_or_else` (`option_if_let_else`), una función que se
+pasó de 100 líneas (`too_many_lines` -- se separó
+`supervisar_canal_privado` en una función `mantener_canal_unido` aparte),
+un `if let` sobre una variante de enum que clippy prefiere como
+`matches!()` (`equatable_if_let`), y un lock de `tokio::sync::Mutex`
+retenido más de lo necesario dentro de un `if let` (`significant_drop_in_scrutinee`,
+puede llevar a deadlocks reales bajo carga). Todo corregido -- el crate
+entero (librería, tests, los binarios `smoke_*`) pasa hoy los mismos lints
+que exige `control_acceso` real, sin ningún `#[allow]` genérico, sólo los
+puntuales y documentados donde la pérdida de precisión es aceptable a
+propósito (el jitter del backoff).
+
+Con esto resuelto, lo que queda antes de plantear un reemplazo real de
+`nubeRealtime.ts`/`NubeRealtime.kt`:
 
 - **Meterlo de verdad en el árbol de dependencias real** -- hoy es un
   crate standalone en `benchmarks/`, no `desktop/src-tauri` ni
-  `mobile/rust-core`.
+  `mobile/rust-core`. El chequeo de lints de arriba reduce el riesgo de
+  esta parte, no la reemplaza -- falta la integración real de Cargo.toml,
+  cross-compile a Windows, etc.
 - **Puente Rust → frontend** -- eventos Tauri que reemplacen lo que hoy
   hace `iniciarRealtimeNube()` para que React se entere del estado.
 - **Shadow-run en producción real** -- correrlo en paralelo, sólo

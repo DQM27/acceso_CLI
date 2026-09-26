@@ -12,8 +12,8 @@
 //! reemplazaría el patrón actual de `nubeRealtime.ts`
 //! (aviso vacío → `sincronizarConNube()` completo).
 //!
-//! Uso: igual que `smoke_private_channel`, con REALTIME_DEVICE_JWT y
-//! REALTIME_SITIO_ID del dispositivo/sitio de laboratorio de esta etapa.
+//! Uso: igual que `smoke_private_channel`, con `REALTIME_DEVICE_JWT` y
+//! `REALTIME_SITIO_ID` del dispositivo/sitio de laboratorio de esta etapa.
 
 use std::time::Duration;
 

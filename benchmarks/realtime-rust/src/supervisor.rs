@@ -26,7 +26,10 @@ use crate::cliente::{ClienteRealtime, ErrorCliente};
 fn semilla_de_ahora() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
+        // Igual criterio que `backoff::duracion_a_ms_saturado` -- nanosegundos
+        // desde 1970 desborda un u64 recién en el año 2554, saturar en el
+        // máximo en vez de envolver es la opción segura si eso pasara.
+        .map(|d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX))
         .unwrap_or(0)
 }
 
@@ -112,7 +115,7 @@ pub async fn supervisar_heartbeat(
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EventoSupervisorPrivado {
     UnidoAlCanal,
     EventoRecibido(Value),
@@ -150,6 +153,95 @@ pub struct ConfigCanalPrivado {
     /// empuja un `access_token` nuevo cada `intervalo` MIENTRAS el canal
     /// sigue unido, sin reconectar -- ver `ClienteRealtime::renovar_token`.
     pub renovar_token_cada: Option<Duration>,
+}
+
+/// Qué hacer después de que `mantener_canal_unido` vuelve -- separado del
+/// bucle externo de `supervisar_canal_privado` sólo para no pasar de 100
+/// líneas en una función (`clippy::too_many_lines`), no porque haga falta
+/// más de dos casos.
+enum ResultadoCanal {
+    /// `detener()` dijo que sí -- no reconectar, salir del todo.
+    Detener,
+    /// El canal se cayó (heartbeat, renovación o el propio broadcast
+    /// fallaron) -- volver al bucle externo para reintentar con backoff.
+    Reconectar,
+}
+
+/// El mantenimiento de UNA conexión ya unida: escuchar broadcasts,
+/// heartbeat propio durante silencios largos, renovación proactiva de JWT
+/// -- todo lo que antes vivía inline dentro de `supervisar_canal_privado`.
+#[allow(clippy::too_many_arguments)]
+async fn mantener_canal_unido(
+    cliente: &mut ClienteRealtime,
+    topic: &str,
+    evento_esperado: &str,
+    intervalo_heartbeat: Duration,
+    renovar_token_cada: Option<Duration>,
+    obtener_token_fresco: &mut impl FnMut() -> String,
+    eventos: &UnboundedSender<EventoSupervisorPrivado>,
+    detener: &mut impl FnMut() -> bool,
+) -> ResultadoCanal {
+    let mut proximo_heartbeat = std::time::Instant::now() + intervalo_heartbeat;
+    let mut proxima_renovacion =
+        renovar_token_cada.map(|intervalo| std::time::Instant::now() + intervalo);
+
+    loop {
+        let ahora = std::time::Instant::now();
+        let mut espera = proximo_heartbeat.saturating_duration_since(ahora);
+        if let Some(instante) = proxima_renovacion {
+            espera = espera.min(instante.saturating_duration_since(ahora));
+        }
+        // Nunca 0 -- un timeout de 0 haría que `esperar_evento` reciba
+        // como mucho un frame ya en el buffer antes de rendirse, en vez de
+        // esperar de verdad hasta el próximo mantenimiento
+        // (heartbeat/renovación).
+        let espera = espera.max(Duration::from_millis(1));
+
+        match cliente.esperar_evento(topic, evento_esperado, espera).await {
+            Ok(payload) => {
+                let _ = eventos.send(EventoSupervisorPrivado::EventoRecibido(payload));
+                if detener() {
+                    return ResultadoCanal::Detener;
+                }
+            }
+            Err(ErrorCliente::Timeout(_)) => {
+                // Un timeout ACÁ no es un corte de red -- es simplemente
+                // que no pasó nada en el sitio durante `espera`. Se usa el
+                // hueco para el mantenimiento que corresponda; si no toca
+                // ninguno todavía, es un no-op y se vuelve a esperar el
+                // resto.
+                let ahora = std::time::Instant::now();
+                if ahora >= proximo_heartbeat {
+                    if let Err(error) = cliente.latido().await {
+                        let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
+                            motivo: error.to_string(),
+                        });
+                        return ResultadoCanal::Reconectar;
+                    }
+                    proximo_heartbeat = std::time::Instant::now() + intervalo_heartbeat;
+                }
+                if let (Some(instante), Some(intervalo)) = (proxima_renovacion, renovar_token_cada)
+                    && ahora >= instante
+                {
+                    let token_fresco = obtener_token_fresco();
+                    if let Err(error) = cliente.renovar_token(topic, &token_fresco).await {
+                        let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
+                            motivo: error.to_string(),
+                        });
+                        return ResultadoCanal::Reconectar;
+                    }
+                    let _ = eventos.send(EventoSupervisorPrivado::TokenRenovado);
+                    proxima_renovacion = Some(std::time::Instant::now() + intervalo);
+                }
+            }
+            Err(error) => {
+                let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
+                    motivo: error.to_string(),
+                });
+                return ResultadoCanal::Reconectar;
+            }
+        }
+    }
 }
 
 /// Igual bucle que `supervisar_heartbeat`, pero uniéndose a un canal
@@ -208,70 +300,19 @@ pub async fn supervisar_canal_privado(
             intentos_seguidos = 0;
             let _ = eventos.send(EventoSupervisorPrivado::UnidoAlCanal);
 
-            let mut proximo_heartbeat = std::time::Instant::now() + intervalo_heartbeat;
-            let mut proxima_renovacion =
-                renovar_token_cada.map(|intervalo| std::time::Instant::now() + intervalo);
-
-            'canal: loop {
-                let ahora = std::time::Instant::now();
-                let mut espera = proximo_heartbeat.saturating_duration_since(ahora);
-                if let Some(instante) = proxima_renovacion {
-                    espera = espera.min(instante.saturating_duration_since(ahora));
-                }
-                // Nunca 0 -- un timeout de 0 haría que `esperar_evento`
-                // reciba como mucho un frame ya en el buffer antes de
-                // rendirse, en vez de esperar de verdad hasta el próximo
-                // mantenimiento (heartbeat/renovación).
-                let espera = espera.max(Duration::from_millis(1));
-
-                match cliente
-                    .esperar_evento(&topic, &evento_esperado, espera)
-                    .await
-                {
-                    Ok(payload) => {
-                        let _ = eventos.send(EventoSupervisorPrivado::EventoRecibido(payload));
-                        if detener() {
-                            return;
-                        }
-                    }
-                    Err(ErrorCliente::Timeout(_)) => {
-                        // Un timeout ACÁ no es un corte de red -- es
-                        // simplemente que no pasó nada en el sitio durante
-                        // `espera`. Se usa el hueco para el mantenimiento
-                        // que corresponda; si no toca ninguno todavía, es
-                        // un no-op y se vuelve a esperar el resto.
-                        let ahora = std::time::Instant::now();
-                        if ahora >= proximo_heartbeat {
-                            if let Err(error) = cliente.latido().await {
-                                let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
-                                    motivo: error.to_string(),
-                                });
-                                break 'canal;
-                            }
-                            proximo_heartbeat = std::time::Instant::now() + intervalo_heartbeat;
-                        }
-                        if let (Some(instante), Some(intervalo)) =
-                            (proxima_renovacion, renovar_token_cada)
-                            && ahora >= instante
-                        {
-                            let token_fresco = obtener_token_fresco();
-                            if let Err(error) = cliente.renovar_token(&topic, &token_fresco).await {
-                                let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
-                                    motivo: error.to_string(),
-                                });
-                                break 'canal;
-                            }
-                            let _ = eventos.send(EventoSupervisorPrivado::TokenRenovado);
-                            proxima_renovacion = Some(std::time::Instant::now() + intervalo);
-                        }
-                    }
-                    Err(error) => {
-                        let _ = eventos.send(EventoSupervisorPrivado::Desconectado {
-                            motivo: error.to_string(),
-                        });
-                        break 'canal;
-                    }
-                }
+            let resultado_canal = mantener_canal_unido(
+                &mut cliente,
+                &topic,
+                &evento_esperado,
+                intervalo_heartbeat,
+                renovar_token_cada,
+                &mut obtener_token_fresco,
+                &eventos,
+                &mut detener,
+            )
+            .await;
+            if matches!(resultado_canal, ResultadoCanal::Detener) {
+                return;
             }
         }
 
@@ -693,7 +734,8 @@ mod tests {
 
         let resultado = tokio::time::timeout(Duration::from_secs(2), async {
             loop {
-                if let Some(token) = token_capturado.lock().await.clone() {
+                let valor = token_capturado.lock().await.clone();
+                if let Some(token) = valor {
                     return token;
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;

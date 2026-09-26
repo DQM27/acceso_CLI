@@ -74,7 +74,7 @@ async fn main() {
 
     loop {
         tokio::select! {
-            _ = tokio::time::sleep_until(deadline) => break,
+            () = tokio::time::sleep_until(deadline) => break,
             evento = rx.recv() => {
                 match evento {
                     Some(EventoSupervisorPrivado::UnidoAlCanal) => println!("[{:>5.1}s] Unido al canal privado real.", tiempo_transcurrido()),

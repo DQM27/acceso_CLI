@@ -1,5 +1,5 @@
 //! Prueba de punta a punta real: Postgres → trigger de Broadcast → WebSocket
-//! → este cliente Rust → fila en SQLite local (motor "plano", sin cifrar --
+//! → este cliente Rust → fila en `SQLite` local (motor "plano", sin cifrar --
 //! sólo para este laboratorio, ver README.md).
 //!
 //! Requiere los objetos descartables `_lab_lattis_avisos` /

@@ -2,7 +2,7 @@
 //! Etapa 3.5 del README): la fila completa viaja en el mismo broadcast,
 //! CERO round-trips extra. Contraparte directa de
 //! `e2e_aviso_vacio_y_resync.rs` -- mismo dato final, mismo destino
-//! (SQLite), la única diferencia es cuántos mensajes hicieron falta.
+//! (`SQLite`), la única diferencia es cuántos mensajes hicieron falta.
 
 mod comun;
 
