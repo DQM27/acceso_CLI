@@ -11,7 +11,7 @@
 //! cargo run --manifest-path benchmarks/realtime-rust/Cargo.toml --bin smoke_heartbeat
 //! ```
 
-use brisas_realtime_spike::ClienteRealtime;
+use lattis_realtime_spike::ClienteRealtime;
 
 #[tokio::main]
 async fn main() {
