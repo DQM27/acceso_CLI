@@ -65,6 +65,22 @@ impl MensajeSaliente {
             referencia_join: Some(referencia),
         }
     }
+
+    /// `phx_join` a un canal PÚBLICO (`realtime.send(..., private => false)`
+    /// del lado de Postgres) -- sin `access_token` ni `private: true` en el
+    /// `config`, porque un canal público no pasa por ninguna política de
+    /// `realtime.messages`: cualquiera con la `apikey` puede escucharlo.
+    /// Sólo para el laboratorio de prueba (`_lab_lattis_avisos`, ver
+    /// README.md) -- un canal real de la app siempre es privado.
+    pub fn unirse_publico(topic: String, referencia: String) -> Self {
+        Self {
+            topic,
+            event: "phx_join".to_string(),
+            payload: serde_json::json!({ "config": { "broadcast": { "self": false } } }),
+            referencia: referencia.clone(),
+            referencia_join: Some(referencia),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -106,6 +122,14 @@ mod tests {
         let mensaje = MensajeSaliente::unirse("realtime:sitio:abc".to_string(), "7".to_string(), None);
         assert_eq!(mensaje.referencia, "7");
         assert_eq!(mensaje.referencia_join.as_deref(), Some("7"));
+    }
+
+    #[test]
+    fn unirse_publico_no_lleva_private_ni_access_token() {
+        let mensaje = MensajeSaliente::unirse_publico("lab:lattis".to_string(), "3".to_string());
+        let json = serde_json::to_value(&mensaje).unwrap();
+        assert!(json["payload"].get("access_token").is_none());
+        assert!(json["payload"]["config"].get("private").is_none());
     }
 
     #[test]

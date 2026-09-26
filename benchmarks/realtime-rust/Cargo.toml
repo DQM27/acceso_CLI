@@ -35,3 +35,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 url = "2"
+# Motor "plano" (sin cifrar) -- sólo para este laboratorio local, nunca para
+# datos reales (mismo criterio que `sqlite-plano` del crate raíz: rápido de
+# compilar, deja el archivo legible por cualquiera). El test de punta a
+# punta (`bin/smoke_end_to_end.rs`) escribe acá lo que llega por Realtime.
+rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"] }

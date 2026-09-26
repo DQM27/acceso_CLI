@@ -58,6 +58,52 @@ contra el servidor real (`smoke_heartbeat`) es manual a propósito: no
 tiene sentido en un pipeline de CI (depende de red externa y de un
 proyecto Supabase real).
 
+### Etapa 1.5 (esta) -- punta a punta real: Postgres → WebSocket → SQLite ✅ implementado
+
+`bin/smoke_end_to_end.rs` cierra el círculo completo, con datos reales
+(no simulados) en cada paso:
+
+1. Se crean objetos DESCARTABLES en staging (tabla `_lab_lattis_avisos` +
+   función `private.lab_lattis_emitir_aviso` + trigger), calcados del
+   patrón real de `*_emitir_cambio_nube` (ver arquitectura-supabase.md 4.2)
+   pero con `realtime.send(..., private => false)` -- canal PÚBLICO, sin
+   política de `realtime.messages` de por medio, para no necesitar
+   todavía el JWT de dispositivo (eso sigue siendo la Etapa 2).
+2. El binario hace `phx_join` a `realtime:lab:lattis` (el prefijo
+   `realtime:` es obligatorio del lado del cliente -- Postgres lo espera
+   SIN el prefijo; sin este matiz, `phx_join` devuelve
+   `{"reason":"unmatched topic"}`, primer error real encontrado).
+3. Un `INSERT` real en `_lab_lattis_avisos` dispara el trigger.
+4. El cliente recibe el broadcast -- segundo hallazgo real: un broadcast
+   NO llega con tu nombre de evento en el campo `event` de nivel superior;
+   Phoenix lo envuelve siempre como `event: "broadcast"`, con el nombre
+   real y el payload real ANIDADOS adentro (`payload.event`/
+   `payload.payload`). Así es como `supabase-js` implementa
+   `.on("broadcast", { event: X }, cb)` por debajo -- documentado en el
+   doc-comment de `ClienteRealtime::esperar_evento`.
+5. El payload recibido se escribe en una SQLite LOCAL real (motor
+   `sqlite-plano`/`rusqlite bundled`, sin cifrar -- sólo para este
+   laboratorio) y se relee para confirmar que quedó persistido.
+6. Los objetos de staging se borran al terminar -- no queda rastro.
+
+Verificado a mano de punta a punta: `INSERT` en staging → fila visible en
+`realtime.messages` → `phx_join` aceptado → broadcast recibido con el
+envelope correcto → fila en `avisos_recibidos` de la SQLite local,
+releída con éxito.
+
+Los objetos de staging se borraron al cerrar esta etapa -- para repetir la
+prueba hace falta recrearlos primero (SQL en el historial de este
+laboratorio, no vive en el repo a propósito: son objetos descartables, no
+una migración real del esquema). Uso del binario:
+
+```sh
+REALTIME_WS_URL="wss://pmrytjktlyiuikxuuxpr.supabase.co/realtime/v1/websocket" \
+REALTIME_APIKEY="<anon key de control-acceso-staging>" \
+cargo run --manifest-path benchmarks/realtime-rust/Cargo.toml --bin smoke_end_to_end
+# en otra sesión, mientras el binario de arriba espera:
+# INSERT INTO public._lab_lattis_avisos (mensaje) VALUES ('...');
+```
+
 ### Etapa 2 (pendiente) -- `phx_join` a un canal privado real
 
 Requiere resolver el flujo `device-auth` real (JWT ES256 del dispositivo)

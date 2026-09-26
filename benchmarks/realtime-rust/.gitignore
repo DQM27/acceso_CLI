@@ -1,1 +1,4 @@
 /target/
+# Generada por bin/smoke_end_to_end.rs (motor plano, sólo local) -- nunca
+# se versiona, cada corrida la recrea.
+/lattis_lab.sqlite3

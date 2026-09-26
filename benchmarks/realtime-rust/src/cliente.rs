@@ -7,6 +7,7 @@
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
+use serde_json::Value;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
@@ -24,6 +25,8 @@ pub enum ErrorCliente {
     ConexionCerrada,
     #[error("mensaje entrante no es JSON válido: {0}")]
     JsonInvalido(#[from] serde_json::Error),
+    #[error("el servidor rechazó el phx_join: {0}")]
+    JoinRechazado(Value),
 }
 
 pub struct ClienteRealtime {
@@ -99,6 +102,73 @@ impl ClienteRealtime {
             .await?;
         let reply = self.esperar_reply(&referencia).await?;
         Ok(reply.es_reply_ok_de(&referencia))
+    }
+
+    /// `phx_join` a un canal público (ver
+    /// `MensajeSaliente::unirse_publico`) -- sólo para el laboratorio de
+    /// prueba de punta a punta, nunca para un canal real de la app.
+    pub async fn unirse_publico(&mut self, topic: &str) -> Result<(), ErrorCliente> {
+        let referencia = self.siguiente_referencia();
+        self.enviar(&MensajeSaliente::unirse_publico(
+            topic.to_string(),
+            referencia.clone(),
+        ))
+        .await?;
+        let reply = self.esperar_reply(&referencia).await?;
+        if reply.es_reply_ok_de(&referencia) {
+            Ok(())
+        } else {
+            Err(ErrorCliente::JoinRechazado(reply.payload))
+        }
+    }
+
+    /// Lee mensajes hasta encontrar un broadcast de este `topic` con este
+    /// `event`, o hasta `espera`. A diferencia de `esperar_reply`, acá no
+    /// hay una `ref` que matchear -- un broadcast del servidor no lleva la
+    /// referencia de ningún mensaje saliente nuestro, así que se filtra por
+    /// topic+event, tal como haría un cliente real multiplexando canales.
+    ///
+    /// Un broadcast NO llega con `event` = tu nombre de evento a nivel
+    /// superior -- Phoenix lo envuelve: el `event` del mensaje siempre es
+    /// el string literal `"broadcast"`, y el nombre real (el que Postgres
+    /// pasó como segundo argumento a `realtime.send`, ej. `"lab_aviso"`)
+    /// junto con el payload real viven ANIDADOS adentro
+    /// (`payload.event`/`payload.payload`) -- así es como
+    /// `supabase-js` implementa `.on("broadcast", { event: X }, cb)` por
+    /// debajo. Devuelve `payload.payload`, no el sobre completo.
+    pub async fn esperar_evento(
+        &mut self,
+        topic: &str,
+        event: &str,
+        espera: Duration,
+    ) -> Result<Value, ErrorCliente> {
+        let resultado = timeout(espera, async {
+            loop {
+                match self.socket.next().await {
+                    Some(Ok(Message::Text(texto))) => {
+                        let entrante: MensajeEntrante = serde_json::from_str(&texto)?;
+                        let evento_interno = entrante.payload.get("event").and_then(Value::as_str);
+                        if entrante.topic == topic
+                            && entrante.event == "broadcast"
+                            && evento_interno == Some(event)
+                        {
+                            let carga = entrante
+                                .payload
+                                .get("payload")
+                                .cloned()
+                                .unwrap_or(Value::Null);
+                            return Ok(carga);
+                        }
+                    }
+                    Some(Ok(_otro_tipo_de_frame)) => {}
+                    Some(Err(error)) => return Err(ErrorCliente::WebSocket(error)),
+                    None => return Err(ErrorCliente::ConexionCerrada),
+                }
+            }
+        })
+        .await;
+
+        resultado.unwrap_or(Err(ErrorCliente::Timeout(espera)))
     }
 
     pub async fn cerrar(mut self) -> Result<(), ErrorCliente> {
