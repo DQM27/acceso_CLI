@@ -127,6 +127,83 @@ impl ClienteRealtime {
         .await
     }
 
+    /// SOLO para diagnóstico manual (ver `bin/smoke_presence.rs`) -- imprime
+    /// por stdout cada mensaje crudo que llegue durante `espera`, sin
+    /// filtrar por topic/event. Útil cuando el formato real del servidor no
+    /// coincide con lo que dice la documentación (ya pasó una vez con el
+    /// prefijo `realtime:` del topic) y hace falta ver la verdad en vez de
+    /// seguir adivinando.
+    pub async fn diagnostico_mostrar_todo(&mut self, espera: Duration) {
+        let _ = timeout(espera, async {
+            loop {
+                match self.socket.next().await {
+                    Some(Ok(Message::Text(texto))) => println!("  [crudo] {texto}"),
+                    Some(Ok(otro)) => println!("  [crudo, no-texto] {otro:?}"),
+                    Some(Err(error)) => {
+                        println!("  [crudo, error] {error}");
+                        break;
+                    }
+                    None => {
+                        println!("  [crudo] conexión cerrada");
+                        break;
+                    }
+                }
+            }
+        })
+        .await;
+    }
+
+    /// Publica tu propio estado de Presence en el canal (ej.
+    /// `{cedula, nombre}`) -- fire-and-forget, igual criterio que
+    /// `renovar_token`: el servidor no contesta un `phx_reply` para esto,
+    /// lo que responde es un `presence_state`/`presence_diff` aparte, que
+    /// se recibe con `esperar_mensaje`.
+    pub async fn trackear_presencia(
+        &mut self,
+        topic: &str,
+        metadata: Value,
+    ) -> Result<(), ErrorCliente> {
+        let referencia = self.siguiente_referencia();
+        self.enviar(&MensajeSaliente::presencia_track(
+            topic.to_string(),
+            referencia,
+            metadata,
+        ))
+        .await
+    }
+
+    /// Lee mensajes hasta encontrar uno de este `topic` con este `event`
+    /// EXACTO (sin desenvolver nada) -- a diferencia de `esperar_evento`,
+    /// que espera específicamente un broadcast (`event: "broadcast"` con el
+    /// nombre real anidado). `presence_state`/`presence_diff` viajan como
+    /// eventos de nivel superior propios, no como broadcasts -- por eso
+    /// hace falta un método aparte en vez de reusar `esperar_evento`.
+    pub async fn esperar_mensaje(
+        &mut self,
+        topic: &str,
+        event: &str,
+        espera: Duration,
+    ) -> Result<Value, ErrorCliente> {
+        let resultado = timeout(espera, async {
+            loop {
+                match self.socket.next().await {
+                    Some(Ok(Message::Text(texto))) => {
+                        let entrante: MensajeEntrante = serde_json::from_str(&texto)?;
+                        if entrante.topic == topic && entrante.event == event {
+                            return Ok(entrante.payload);
+                        }
+                    }
+                    Some(Ok(_otro_tipo_de_frame)) => {}
+                    Some(Err(error)) => return Err(ErrorCliente::WebSocket(error)),
+                    None => return Err(ErrorCliente::ConexionCerrada),
+                }
+            }
+        })
+        .await;
+
+        resultado.unwrap_or(Err(ErrorCliente::Timeout(espera)))
+    }
+
     /// Manda un evento genérico dentro de un canal ya unido y espera su
     /// respuesta -- usado en las pruebas de punta a punta para simular el
     /// "resync" (segundo round-trip) del patrón actual de producción, ver

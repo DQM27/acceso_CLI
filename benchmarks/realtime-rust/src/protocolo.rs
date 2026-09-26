@@ -47,14 +47,31 @@ impl MensajeSaliente {
     /// `realtime.messages` (ver arquitectura-supabase.md, 4.2) lo exigen
     /// para canales privados; queda `None` acá porque este laboratorio
     /// todavía no integra el flujo de `device-auth` real.
+    ///
+    /// `"presence": {"key": ""}` en el `config`: sin esto, el servidor NO
+    /// manda `presence_state` al unirse ni `presence_diff` después --
+    /// Presence, igual que Broadcast, hay que declararlo explícito en el
+    /// join, no es automático por el sólo hecho de unirse al canal. Bug
+    /// real encontrado al implementar Presence: el primer intento sin este
+    /// campo se quedó esperando `presence_state` para siempre (timeout).
+    /// `realtime-js` lo manda siempre, se use o no Presence -- se replica
+    /// ese mismo comportamiento acá.
     pub fn unirse(topic: String, referencia: String, access_token: Option<&str>) -> Self {
         let payload = match access_token {
             Some(token) => serde_json::json!({
-                "config": { "broadcast": { "self": false }, "private": true },
+                "config": {
+                    "broadcast": { "self": false },
+                    "presence": { "key": "" },
+                    "private": true,
+                },
                 "access_token": token,
             }),
             None => serde_json::json!({
-                "config": { "broadcast": { "self": false }, "private": true },
+                "config": {
+                    "broadcast": { "self": false },
+                    "presence": { "key": "" },
+                    "private": true,
+                },
             }),
         };
         Self {
@@ -79,6 +96,24 @@ impl MensajeSaliente {
             topic,
             event,
             payload,
+            referencia,
+            referencia_join: None,
+        }
+    }
+
+    /// El "track" de Presence -- publica tu propio estado en el canal
+    /// (ej. `{cedula, nombre}`, lo mismo que ya hace `nubeRealtime.ts` con
+    /// `track()` para el panel de "quién está conectado"). Formato
+    /// verificado contra la documentación oficial del protocolo (no
+    /// adivinado -- ya nos mordió una vez asumir el formato del broadcast):
+    /// `event` es literalmente `"presence"`, y el `type`/`event` REALES
+    /// ("track") van anidados adentro del `payload`, con la metadata del
+    /// usuario un nivel más adentro todavía.
+    pub fn presencia_track(topic: String, referencia: String, metadata: Value) -> Self {
+        Self {
+            topic,
+            event: "presence".to_string(),
+            payload: serde_json::json!({ "type": "presence", "event": "track", "payload": metadata }),
             referencia,
             referencia_join: None,
         }
@@ -219,6 +254,26 @@ mod propiedades {
             let releido: MensajeEntrante = serde_json::from_str(&texto).unwrap();
             prop_assert_eq!(releido.topic, topic);
             prop_assert_eq!(releido.event, "phx_join");
+        }
+
+        /// `presencia_track` arma exactamente el sobre que confirma la
+        /// documentación oficial (`event: "presence"`, con `type`/`event`
+        /// reales anidados) -- una metadata arbitraria (cédula con
+        /// caracteres raros, nombre con unicode) llega intacta.
+        #[test]
+        fn presencia_track_arma_el_sobre_correcto(cedula in ".*", nombre in ".*") {
+            let metadata = serde_json::json!({ "cedula": cedula, "nombre": nombre });
+            let mensaje = MensajeSaliente::presencia_track(
+                "realtime:sitio:abc".to_string(),
+                "1".to_string(),
+                metadata,
+            );
+            let json = serde_json::to_value(&mensaje).unwrap();
+            prop_assert_eq!(json["event"].as_str(), Some("presence"));
+            prop_assert_eq!(json["payload"]["type"].as_str(), Some("presence"));
+            prop_assert_eq!(json["payload"]["event"].as_str(), Some("track"));
+            prop_assert_eq!(json["payload"]["payload"]["cedula"].as_str(), Some(cedula.as_str()));
+            prop_assert_eq!(json["payload"]["payload"]["nombre"].as_str(), Some(nombre.as_str()));
         }
 
         /// `unirse` con un `access_token` arbitrario (un JWT real tiene

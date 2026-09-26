@@ -266,13 +266,54 @@ colgaría esperando una segunda conexión que nunca llega. Otro mock,
 completamente silencioso (nunca manda ningún broadcast), confirma que el
 cliente manda heartbeat solo, sin que nadie se lo pida.
 
+### Etapa 4 (parcial) -- Presence ✅ implementado
+
+`nubeRealtime.ts` usa Presence para el panel de "quién está conectado" --
+faltaba probar si eso también se podía hacer desde cero. Formato del
+protocolo verificado contra la documentación oficial primero (`event:
+"presence"`, con `type`/`event: "track"` anidados en el payload), pero
+la documentación no alcanzó -- dos comportamientos reales que sólo
+aparecieron corriendo esto contra `control-acceso-staging` de verdad
+(`ClienteRealtime::diagnostico_mostrar_todo`, un modo de depuración que
+imprime cada mensaje crudo sin filtrar, hizo falta para verlos):
+
+1. **`presence_state`/`presence_diff` NO llegan automáticamente al hacer
+   `phx_join`** -- recién aparecen después de que EL PROPIO cliente hace
+   su primer `track()`. La documentación sugiere que `presence_state`
+   "se entrega al unirse al canal"; contra el servidor real, unirse sin
+   trackear nunca dispara nada.
+2. **El `track` SÍ recibe un `phx_reply` normal** -- a diferencia de
+   `access_token` (que la documentación confirma que no responde nada en
+   éxito), el push de presence sí generó una respuesta `status: ok`.
+3. (bug de orden, no de protocolo) El propio `track()` de un cliente
+   genera DOS mensajes propios (`presence_state`, el snapshot completo, y
+   `presence_diff`, tu propio join) -- si esperás sólo uno y asumís que el
+   siguiente mensaje es de OTRO dispositivo, te comés tu propio eco.
+   `bin/smoke_presence.rs` lo consume explícito antes de esperar el diff
+   real de un segundo dispositivo.
+
+**Probado con DOS dispositivos reales simultáneos** contra staging (sitio
+y ambos dispositivos descartables, ya borrados):
+
+```
+[A] track()...
+[A] presence_state (debería traer sólo a A): {"...":{"metas":[{"cedula":"A",...}]}}
+[A] (descartado, es el propio) presence_diff de A: {"joins":{"...":{"cedula":"A"...}}}
+[B] conectando, uniéndose y publicando su presencia...
+[A] esperando el presence_diff con el join de B...
+[A] presence_diff recibido: {"joins":{"...":{"cedula":"B",...}},"leaves":{}}
+OK -- A vio en vivo, por Presence real, que B se conectó (cedula=B).
+```
+
+El dispositivo A vio en vivo, por Presence real (no por polling ni por un
+mock), que el dispositivo B se conectó -- el mismo caso de uso exacto que
+usa hoy el panel de presencia de `nubeRealtime.ts`.
+
 ### Etapa 4 (falta) -- decisión final de integración
 
-Con JWT proactivo y heartbeat ya resueltos, lo que queda antes de plantear
-un reemplazo real de `nubeRealtime.ts`/`NubeRealtime.kt`:
+Con JWT proactivo, heartbeat y Presence ya resueltos, lo que queda antes
+de plantear un reemplazo real de `nubeRealtime.ts`/`NubeRealtime.kt`:
 
-- **Presence** -- no implementado; `nubeRealtime.ts` sí lo usa (panel de
-  "quién está conectado").
 - **Meterlo de verdad en el árbol de dependencias real** -- hoy es un
   crate standalone en `benchmarks/`, no `desktop/src-tauri` ni
   `mobile/rust-core`.
@@ -285,13 +326,13 @@ un reemplazo real de `nubeRealtime.ts`/`NubeRealtime.kt`:
 
 ## Cobertura de pruebas
 
-34 tests en total, en cuatro capas distintas, cada una probando algo que
+35 tests en total, en cuatro capas distintas, cada una probando algo que
 las otras no cubren. `cargo test --manifest-path benchmarks/realtime-rust/Cargo.toml`
 corre las cuatro. Ninguna toca red externa ni credenciales reales --
 eso queda en los binarios `smoke_*` de `src/bin/` (manuales, contra
 `control-acceso-staging`, documentados arriba).
 
-### 1. Unitarias (`src/*.rs`, `mod tests`) -- 27 tests
+### 1. Unitarias (`src/*.rs`, `mod tests`) -- 21 tests
 
 Los detalles internos: framing del protocolo, el cliente WebSocket, el
 supervisor de reconexión. Incluye 6 pruebas de CAOS basadas en fallas
@@ -315,7 +356,7 @@ reales documentadas (no imaginadas -- ver fuentes al final del README):
   existe ningún campo donde un token viejo pueda sobrevivir entre
   conexiones, `obtener_token_fresco` se llama de nuevo en cada intento.
 
-### 2. Basadas en propiedades (`proptest`, dentro de `src/*.rs`) -- 6 tests
+### 2. Basadas en propiedades (`proptest`, dentro de `src/*.rs`) -- 7 tests
 
 En vez de elegir a mano cada string rara, se le piden a `proptest` cientos
 de entradas al azar por corrida (unicode, comillas, backslashes, strings
@@ -405,3 +446,5 @@ servidor y mida percentiles de latencia -- no está hecho todavía.
 - [Writing a Channels Client — Phoenix docs (heartbeat/timeout, entrega at-most-once)](https://phoenix.hexdocs.pm/writing_a_channels_client.html)
 - [PR #117 realtime-js "push access token only to joined channels" (el mecanismo `access_token` in-band que usa `ClienteRealtime::renovar_token`)](https://github.com/supabase/realtime-js/pull/117)
 - [JavaScript: Update the access token — Supabase docs](https://supabase.com/docs/reference/javascript/auth-setauth)
+- [Realtime Protocol — Supabase docs (formato exacto de `presence_state`/`presence_diff`/`track`; el comportamiento real de CUÁNDO se disparan no coincidió del todo con lo que sugiere el texto, ver Etapa 4)](https://supabase.com/docs/guides/realtime/protocol)
+- [Presence — Supabase docs](https://supabase.com/docs/guides/realtime/presence)
