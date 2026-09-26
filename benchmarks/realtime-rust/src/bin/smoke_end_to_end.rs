@@ -53,8 +53,8 @@ async fn main() {
         eprintln!("Falta REALTIME_APIKEY -- la anon key de control-acceso-staging");
         std::process::exit(2);
     });
-    let ruta_sqlite =
-        std::env::var("LATTIS_LAB_SQLITE_PATH").unwrap_or_else(|_| "./lattis_lab.sqlite3".to_string());
+    let ruta_sqlite = std::env::var("LATTIS_LAB_SQLITE_PATH")
+        .unwrap_or_else(|_| "./lattis_lab.sqlite3".to_string());
 
     let url = format!("{url_base}?apikey={apikey}&vsn=1.0.0");
 
@@ -77,7 +77,10 @@ async fn main() {
          (hacé el INSERT en _lab_lattis_avisos de control-acceso-staging ahora)..."
     );
 
-    let payload = match cliente.esperar_evento(TOPIC_LAB, EVENTO_LAB, ESPERA_EVENTO).await {
+    let payload = match cliente
+        .esperar_evento(TOPIC_LAB, EVENTO_LAB, ESPERA_EVENTO)
+        .await
+    {
         Ok(payload) => payload,
         Err(error) => {
             eprintln!("FALLÓ esperando el evento: {error}");
@@ -87,7 +90,10 @@ async fn main() {
     println!("Broadcast recibido: {payload}");
 
     let id_remoto = payload["id"].as_i64().expect("payload sin 'id'");
-    let mensaje = payload["mensaje"].as_str().expect("payload sin 'mensaje'").to_string();
+    let mensaje = payload["mensaje"]
+        .as_str()
+        .expect("payload sin 'mensaje'")
+        .to_string();
     let creado_en = payload["creado_en"]
         .as_str()
         .expect("payload sin 'creado_en'")
@@ -108,7 +114,9 @@ async fn main() {
         });
 
     let total: i64 = conexion_sqlite
-        .query_row("SELECT COUNT(*) FROM avisos_recibidos", [], |fila| fila.get(0))
+        .query_row("SELECT COUNT(*) FROM avisos_recibidos", [], |fila| {
+            fila.get(0)
+        })
         .unwrap();
     println!(
         "OK -- escrito en {ruta_sqlite} (motor plano). Total de avisos acumulados ahí: {total}."

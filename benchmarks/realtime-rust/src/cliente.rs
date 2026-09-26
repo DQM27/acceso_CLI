@@ -27,6 +27,8 @@ pub enum ErrorCliente {
     JsonInvalido(#[from] serde_json::Error),
     #[error("el servidor rechazó el phx_join: {0}")]
     JoinRechazado(Value),
+    #[error("el servidor rechazó la solicitud: {0}")]
+    SolicitudRechazada(Value),
 }
 
 pub struct ClienteRealtime {
@@ -104,11 +106,46 @@ impl ClienteRealtime {
         Ok(reply.es_reply_ok_de(&referencia))
     }
 
+    /// Manda un evento genérico dentro de un canal ya unido y espera su
+    /// respuesta -- usado en las pruebas de punta a punta para simular el
+    /// "resync" (segundo round-trip) del patrón actual de producción, ver
+    /// `MensajeSaliente::generico`. Devuelve `payload.response` de la
+    /// respuesta ok, o `SolicitudRechazada` si no vino `status: "ok"`.
+    pub async fn solicitar(
+        &mut self,
+        topic: &str,
+        event: &str,
+        payload: Value,
+    ) -> Result<Value, ErrorCliente> {
+        let referencia = self.siguiente_referencia();
+        self.enviar(&MensajeSaliente::generico(
+            topic.to_string(),
+            event.to_string(),
+            payload,
+            referencia.clone(),
+        ))
+        .await?;
+        let reply = self.esperar_reply(&referencia).await?;
+        if reply.es_reply_ok_de(&referencia) {
+            Ok(reply
+                .payload
+                .get("response")
+                .cloned()
+                .unwrap_or(Value::Null))
+        } else {
+            Err(ErrorCliente::SolicitudRechazada(reply.payload))
+        }
+    }
+
     /// `phx_join` a un canal privado real (ej. `realtime:sitio:<uuid>`) con
     /// el `access_token` que devuelve `device-auth` -- Etapa 2: acá sí pasa
     /// por la política de `realtime.messages` (`private = true`), a
     /// diferencia de `unirse_publico`.
-    pub async fn unirse_privado(&mut self, topic: &str, access_token: &str) -> Result<(), ErrorCliente> {
+    pub async fn unirse_privado(
+        &mut self,
+        topic: &str,
+        access_token: &str,
+    ) -> Result<(), ErrorCliente> {
         let referencia = self.siguiente_referencia();
         self.enviar(&MensajeSaliente::unirse(
             topic.to_string(),
@@ -224,10 +261,7 @@ mod tests {
                         "payload": { "status": "ok", "response": {} },
                         "ref": entrante.referencia,
                     });
-                    socket
-                        .send(Message::Text(reply.to_string()))
-                        .await
-                        .unwrap();
+                    socket.send(Message::Text(reply.to_string())).await.unwrap();
                 }
             }
         });
@@ -256,5 +290,97 @@ mod tests {
     async fn conectar_a_un_puerto_sin_servidor_falla() {
         let error = ClienteRealtime::conectar("ws://127.0.0.1:1").await;
         assert!(error.is_err());
+    }
+
+    /// Caos: ¿qué pasa si el servidor manda basura que no es JSON? (un bug
+    /// de Supabase, un proxy que corrompe el frame, lo que sea). Tiene que
+    /// devolver un error tipado (`JsonInvalido`), NUNCA entrar en pánico --
+    /// un cliente real no puede caerse entero porque un solo mensaje vino
+    /// mal formado.
+    async fn servidor_que_manda_basura_no_json() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let direccion = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (flujo, _remoto) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(flujo).await.unwrap();
+            let _ = socket.next().await; // consume el heartbeat saliente
+            socket
+                .send(Message::Text("esto no es JSON { { {".to_string()))
+                .await
+                .unwrap();
+        });
+        format!("ws://{direccion}")
+    }
+
+    #[tokio::test]
+    async fn basura_no_json_del_servidor_da_error_tipado_no_panico() {
+        let url = servidor_que_manda_basura_no_json().await;
+        let mut cliente = ClienteRealtime::conectar(&url).await.unwrap();
+        let resultado = cliente.latido().await;
+        assert!(
+            matches!(resultado, Err(ErrorCliente::JsonInvalido(_))),
+            "{resultado:?}"
+        );
+    }
+
+    /// Caos: un corte de red real casi nunca manda un frame `close` prolijo
+    /// -- un proxy/load balancer que mata la conexión, o el proceso del
+    /// servidor que muere, simplemente cierra el socket TCP en seco (visto
+    /// en la investigación: un load balancer con idle timeout de 60s que
+    /// tumba la conexión sin FIN cuando el heartbeat llega con jitter).
+    /// `drop(socket)` sin `.close()` reproduce exactamente eso -- tiene que
+    /// dar un error de conexión, no colgarse esperando para siempre.
+    async fn servidor_que_corta_en_seco_sin_close_frame() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let direccion = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (flujo, _remoto) = listener.accept().await.unwrap();
+            let socket = tokio_tungstenite::accept_async(flujo).await.unwrap();
+            drop(socket); // corte en seco -- sin close frame, sin FIN prolijo
+        });
+        format!("ws://{direccion}")
+    }
+
+    #[tokio::test]
+    async fn corte_en_seco_sin_close_frame_da_error_no_cuelga() {
+        let url = servidor_que_corta_en_seco_sin_close_frame().await;
+        let mut cliente = ClienteRealtime::conectar(&url).await.unwrap();
+        // `tokio::test` no tiene timeout automático -- si esto colgara para
+        // siempre, este test colgaría el proceso entero de `cargo test`.
+        // Envolverlo en `tokio::time::timeout` convierte un cuelgue en un
+        // fallo de test legible en vez de una corrida de CI que nunca
+        // termina.
+        let resultado = tokio::time::timeout(Duration::from_secs(10), cliente.latido()).await;
+        let resultado = resultado.expect("no debería tardar 10s en darse cuenta del corte");
+        assert!(resultado.is_err(), "{resultado:?}");
+    }
+
+    /// Caos: el servidor se queda mudo (ni reply, ni error, ni cierre) --
+    /// una conexión colgada a medio TLS handshake de otro proceso, un
+    /// proxy que traga el paquete. `latido()` tiene que rendirse sola
+    /// después de `ESPERA_REPLY`, no esperar para siempre. Este test tarda
+    /// ~5s de verdad (es justamente lo que está probando).
+    async fn servidor_mudo_que_nunca_responde_nada() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let direccion = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (flujo, _remoto) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_async(flujo).await.unwrap();
+            let _ = socket.next().await; // recibe el heartbeat, no contesta nunca
+            std::future::pending::<()>().await; // mantiene el socket vivo, mudo
+        });
+        format!("ws://{direccion}")
+    }
+
+    #[tokio::test]
+    async fn servidor_mudo_da_timeout_en_vez_de_colgar_para_siempre() {
+        let url = servidor_mudo_que_nunca_responde_nada().await;
+        let mut cliente = ClienteRealtime::conectar(&url).await.unwrap();
+        let resultado = tokio::time::timeout(Duration::from_secs(8), cliente.latido()).await;
+        let resultado = resultado.expect("ESPERA_REPLY es 5s -- 8s de margen alcanza de sobra");
+        assert!(
+            matches!(resultado, Err(ErrorCliente::Timeout(_))),
+            "{resultado:?}"
+        );
     }
 }

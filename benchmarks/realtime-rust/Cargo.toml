@@ -40,3 +40,11 @@ url = "2"
 # compilar, deja el archivo legible por cualquiera). El test de punta a
 # punta (`bin/smoke_end_to_end.rs`) escribe acá lo que llega por Realtime.
 rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"] }
+
+[dev-dependencies]
+# Pruebas basadas en propiedades -- en vez de escribir a mano cada caso
+# borde (topic vacío, con emoji, con comillas, kilométrico...), se le pide
+# a `proptest` que genere cientos de entradas al azar (incluidas las que a
+# nadie se le hubiera ocurrido escribir a mano) y verifique que la
+# propiedad se sostiene siempre. Ver `protocolo.rs`/`backoff.rs`.
+proptest = "1"

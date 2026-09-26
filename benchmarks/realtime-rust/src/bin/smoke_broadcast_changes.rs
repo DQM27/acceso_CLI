@@ -54,8 +54,8 @@ async fn main() {
     let apikey = variable_requerida("REALTIME_APIKEY");
     let jwt_dispositivo = variable_requerida("REALTIME_DEVICE_JWT");
     let sitio_id = variable_requerida("REALTIME_SITIO_ID");
-    let ruta_sqlite =
-        std::env::var("LATTIS_LAB_SQLITE_PATH").unwrap_or_else(|_| "./lattis_lab.sqlite3".to_string());
+    let ruta_sqlite = std::env::var("LATTIS_LAB_SQLITE_PATH")
+        .unwrap_or_else(|_| "./lattis_lab.sqlite3".to_string());
 
     let topic = format!("realtime:sitio:{sitio_id}");
     let url = format!("{url_base}?apikey={apikey}&vsn=1.0.0");
@@ -95,8 +95,14 @@ async fn main() {
     let fila = &payload["record"];
 
     let id_remoto = fila["id"].as_i64().expect("record sin 'id'");
-    let nombre = fila["nombre"].as_str().expect("record sin 'nombre'").to_string();
-    let cedula = fila["cedula"].as_str().expect("record sin 'cedula'").to_string();
+    let nombre = fila["nombre"]
+        .as_str()
+        .expect("record sin 'nombre'")
+        .to_string();
+    let cedula = fila["cedula"]
+        .as_str()
+        .expect("record sin 'cedula'")
+        .to_string();
     let creado_en = fila["creado_en"]
         .as_str()
         .expect("record sin 'creado_en'")

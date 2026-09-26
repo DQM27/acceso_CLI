@@ -8,4 +8,7 @@ pub mod protocolo;
 pub mod supervisor;
 
 pub use cliente::{ClienteRealtime, ErrorCliente};
-pub use supervisor::{EventoSupervisor, supervisar_heartbeat};
+pub use supervisor::{
+    ConfigCanalPrivado, EventoSupervisor, EventoSupervisorPrivado, supervisar_canal_privado,
+    supervisar_heartbeat,
+};

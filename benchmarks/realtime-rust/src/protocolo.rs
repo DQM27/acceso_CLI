@@ -66,6 +66,24 @@ impl MensajeSaliente {
         }
     }
 
+    /// Un mensaje genérico dentro de un canal ya unido -- ej. el "resync"
+    /// que hoy dispara `sincronizarConNube()` tras un aviso vacío
+    /// (`EventoSupervisor::Conectado`/un broadcast de metadata). No es
+    /// parte del protocolo Phoenix en sí (Phoenix no tiene un evento
+    /// "resync"), es un evento de aplicación como cualquier otro que uno
+    /// define -- `ClienteRealtime::solicitar` lo usa para simular ese
+    /// segundo viaje en las pruebas de punta a punta (ver
+    /// `tests/e2e_aviso_vacio_y_resync.rs`).
+    pub fn generico(topic: String, event: String, payload: Value, referencia: String) -> Self {
+        Self {
+            topic,
+            event,
+            payload,
+            referencia,
+            referencia_join: None,
+        }
+    }
+
     /// `phx_join` a un canal PÚBLICO (`realtime.send(..., private => false)`
     /// del lado de Postgres) -- sin `access_token` ni `private: true` en el
     /// `config`, porque un canal público no pasa por ninguna política de
@@ -119,7 +137,8 @@ mod tests {
 
     #[test]
     fn unirse_repite_la_referencia_como_join_ref() {
-        let mensaje = MensajeSaliente::unirse("realtime:sitio:abc".to_string(), "7".to_string(), None);
+        let mensaje =
+            MensajeSaliente::unirse("realtime:sitio:abc".to_string(), "7".to_string(), None);
         assert_eq!(mensaje.referencia, "7");
         assert_eq!(mensaje.referencia_join.as_deref(), Some("7"));
     }
@@ -142,7 +161,10 @@ mod tests {
         }))
         .unwrap();
         assert!(entrante.es_reply_ok_de("1"));
-        assert!(!entrante.es_reply_ok_de("2"), "no debe matchear otra referencia");
+        assert!(
+            !entrante.es_reply_ok_de("2"),
+            "no debe matchear otra referencia"
+        );
     }
 
     #[test]
@@ -155,5 +177,98 @@ mod tests {
         }))
         .unwrap();
         assert!(!entrante.es_reply_ok_de("1"));
+    }
+}
+
+/// Pruebas basadas en propiedades (`proptest`): en vez de elegir a mano
+/// cada string rara (vacía, con comillas, con emoji, kilométrica...),
+/// `proptest` genera cientos de entradas al azar por corrida y verifica que
+/// la propiedad se sostiene siempre -- si alguna falla, la reduce
+/// automáticamente al caso mínimo que la rompe ("shrinking"), en vez de
+/// dejarte un string de 3000 caracteres para depurar a mano.
+#[cfg(test)]
+mod propiedades {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Cualquier `topic`/`referencia` -- incluidos unicode, comillas,
+        /// backslashes, saltos de línea -- tiene que sobrevivir intactos un
+        /// viaje de ida y vuelta por JSON. Si esto fallara, algún caracter
+        /// estaría rompiendo el escapado de `serde_json` en `enviar()`.
+        #[test]
+        fn latido_sobrevive_serializar_y_deserializar(referencia in ".*") {
+            let mensaje = MensajeSaliente::latido(referencia.clone());
+            let texto = serde_json::to_string(&mensaje).unwrap();
+            let releido: MensajeEntrante = serde_json::from_str(&texto).unwrap();
+            prop_assert_eq!(releido.topic, "phoenix");
+            prop_assert_eq!(releido.event, "heartbeat");
+            prop_assert_eq!(releido.referencia, Some(referencia));
+        }
+
+        /// Mismo criterio para `unirse_publico` -- el topic es justamente
+        /// donde más plata de negocio circula (`sitio:<uuid>`), así que acá
+        /// es donde más duele un bug de escapado.
+        #[test]
+        fn unirse_publico_preserva_el_topic_exacto(
+            topic in ".*",
+            referencia in ".*",
+        ) {
+            let mensaje = MensajeSaliente::unirse_publico(topic.clone(), referencia.clone());
+            let texto = serde_json::to_string(&mensaje).unwrap();
+            let releido: MensajeEntrante = serde_json::from_str(&texto).unwrap();
+            prop_assert_eq!(releido.topic, topic);
+            prop_assert_eq!(releido.event, "phx_join");
+        }
+
+        /// `unirse` con un `access_token` arbitrario (un JWT real tiene
+        /// puntos, símbolos base64url y es largo) -- el token tiene que
+        /// llegar exacto adentro de `payload.access_token`, ni truncado ni
+        /// escapado de más.
+        #[test]
+        fn unirse_privado_preserva_el_access_token_exacto(
+            topic in ".*",
+            referencia in ".*",
+            token in ".*",
+        ) {
+            let mensaje = MensajeSaliente::unirse(topic, referencia, Some(&token));
+            let json = serde_json::to_value(&mensaje).unwrap();
+            prop_assert_eq!(
+                json["payload"]["access_token"].as_str(),
+                Some(token.as_str())
+            );
+        }
+
+        /// `es_reply_ok_de` nunca debe entrar en pánico sin importar qué
+        /// forma tenga `payload` -- ni un `status` que no sea string, ni un
+        /// payload que directamente no sea un objeto (`null`, un array, un
+        /// número). Un servidor comprometido o un bug del lado de Supabase
+        /// no debería poder tumbar este cliente con una respuesta rara.
+        #[test]
+        fn es_reply_ok_de_nunca_entra_en_panico(
+            evento in ".*",
+            referencia_recibida in proptest::option::of(".*"),
+            payload_es_objeto in any::<bool>(),
+            status in proptest::option::of(".*"),
+            referencia_esperada in ".*",
+        ) {
+            let payload = if payload_es_objeto {
+                match &status {
+                    Some(s) => serde_json::json!({ "status": s }),
+                    None => serde_json::json!({}),
+                }
+            } else {
+                serde_json::json!(null)
+            };
+            let entrante = MensajeEntrante {
+                topic: "t".to_string(),
+                event: evento,
+                payload,
+                referencia: referencia_recibida,
+            };
+            // No importa el resultado -- lo único que se verifica es que
+            // llegar hasta acá no entró en pánico.
+            let _ = entrante.es_reply_ok_de(&referencia_esperada);
+        }
     }
 }

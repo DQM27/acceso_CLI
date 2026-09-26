@@ -232,13 +232,118 @@ Channels a mano no se justifica frente a mantener las dos implementaciones
 actuales. Esta decisión NO está tomada -- este directorio es el
 experimento que la informa, no el resultado.
 
+## Cobertura de pruebas
+
+32 tests en total, en cuatro capas distintas, cada una probando algo que
+las otras no cubren. `cargo test --manifest-path benchmarks/realtime-rust/Cargo.toml`
+corre las cuatro. Ninguna toca red externa ni credenciales reales --
+eso queda en los binarios `smoke_*` de `src/bin/` (manuales, contra
+`control-acceso-staging`, documentados arriba).
+
+### 1. Unitarias (`src/*.rs`, `mod tests`) -- 25 tests
+
+Los detalles internos: framing del protocolo, el cliente WebSocket, el
+supervisor de reconexión. Incluye 4 pruebas de CAOS basadas en fallas
+reales documentadas (no imaginadas -- ver fuentes al final del README):
+
+- **Basura no-JSON del servidor** → error tipado, nunca pánico.
+- **Corte en seco sin `close` frame** (`drop(socket)`, no `.close()`) →
+  error de conexión, no un cuelgue eterno -- reproduce el caso real de un
+  load balancer/proxy que mata la conexión sin avisar.
+- **Servidor mudo** (acepta, no responde nunca) → `Timeout` a los 5s, no
+  espera para siempre.
+- **Token viejo reenviado al reconectar** (`nunca_reenvia_un_token_viejo_al_reconectar`)
+  → reproduce el bug real de `supabase-py`/`supabase-js` donde el cliente
+  cachea el JWT en el payload de join y lo reenvía tal cual tras
+  reconectar, incluso renovado. Acá es estructuralmente imposible: no
+  existe ningún campo donde un token viejo pueda sobrevivir entre
+  conexiones, `obtener_token_fresco` se llama de nuevo en cada intento.
+
+### 2. Basadas en propiedades (`proptest`, dentro de `src/*.rs`) -- 6 tests
+
+En vez de elegir a mano cada string rara, se le piden a `proptest` cientos
+de entradas al azar por corrida (unicode, comillas, backslashes, strings
+vacíos o kilométricos) y se verifica que la propiedad se sostiene siempre;
+si falla, `proptest` reduce el caso al mínimo que lo rompe:
+
+- Cualquier topic/referencia/access_token sobrevive intacto un viaje de
+  ida y vuelta por JSON.
+- `es_reply_ok_de` nunca entra en pánico sin importar la forma del
+  `payload` (ni siquiera si no es un objeto).
+- El backoff (con o sin jitter) nunca supera el tope, para cualquier
+  combinación de intentos/base/tope/semilla.
+
+### 3. De integración (`tests/integracion_*.rs`) -- 5 tests
+
+Ejercitan el crate por su API PÚBLICA únicamente (`lattis_realtime_spike::...`,
+sin acceso a nada `pub(crate)`) -- si el contrato público se rompe, esto lo
+detecta antes que cualquier consumidor real:
+
+- `integracion_heartbeat.rs`: `ClienteRealtime`/`supervisar_heartbeat`
+  funcionan desde afuera del crate.
+- `integracion_autorizacion_canal_privado.rs`: codifica de forma
+  permanente el contrato de autorización validado a mano contra staging en
+  la Etapa 2 -- token correcto se acepta, token incorrecto o vacío se
+  rechaza, sin depender de que staging esté arriba.
+
+### 4. De punta a punta (`tests/e2e_*.rs`) -- 2 tests
+
+Automatizados (a diferencia de los `smoke_*` manuales) -- corren en cada
+`cargo test`, contra un mock local que representa un servidor Phoenix
+completo. Son la comparación directa que responde "¿es más rápido?" --
+ver la sección siguiente.
+
+## ¿Es más rápido?
+
+Depende de qué pregunta sea esa. Hay dos preguntas distintas y sólo una
+tiene una respuesta rigurosa hoy:
+
+**"¿El patrón `broadcast_changes` es más rápido que el aviso-vacío-actual?"
+-- SÍ, y es medible sin ambigüedad**, con los dos tests de punta a punta:
+
+| Test | Round-trips cliente→servidor tras el join |
+|---|---|
+| `e2e_aviso_vacio_y_resync.rs` (patrón actual de producción) | 1 (`resync_fetch`) |
+| `e2e_fila_completa.rs` (`broadcast_changes`) | 0 |
+
+No es un cronómetro sobre `localhost` (eso sería ruido, no evidencia --
+loopback no tiene latencia real que medir). Es un CONTEO de mensajes,
+determinístico y reproducible: el patrón actual estructuralmente necesita
+un mensaje más para tener el dato. En una red real (no loopback), ese
+mensaje de más cuesta como mínimo un RTT completo cliente↔Supabase --
+típicamente decenas de milisegundos, más si el dispositivo está en una
+conexión mala. Eliminar ese round-trip es una ganancia real y
+cuantificable, independiente de qué lenguaje lo implemente.
+
+**"¿Es más rápido que `nubeRealtime.ts`/`NubeRealtime.kt` porque está en
+Rust?" -- Eso NO está probado, y hay que decirlo con la misma claridad.**
+Comparar la velocidad de un cliente WebSocket en Rust contra uno en
+JS/Kotlin de forma justa requiere un benchmark controlado con ambos
+corriendo bajo las mismas condiciones de red -- algo que este crate,
+por sí solo, no puede hacer (no tiene un cliente JS al lado para
+comparar). Lo que SÍ se puede afirmar con evidencia real de esta sesión:
+la conexión y el parseo de mensajes en Rust no tienen el overhead de un
+motor JS/runtime de WebView -- pero eso es una expectativa razonable, no
+un número medido. Si en algún momento se quiere esa comparación real, hace
+falta un harness aparte que levante ambos clientes contra el mismo
+servidor y mida percentiles de latencia -- no está hecho todavía.
+
 ## Qué NO hace todavía (a propósito)
 
-- El supervisor de reconexión (Etapa 3) sólo está compuesto con heartbeat,
-  no con `phx_join` a un canal privado -- integrarlo es directo, pendiente.
-- No renueva JWT antes de que expire.
+- El supervisor de reconexión con canal privado (`supervisar_canal_privado`)
+  siempre pide un token fresco al reconectar, pero no renueva el JWT de
+  forma PROACTIVA mientras la conexión sigue viva y a punto de expirar --
+  sólo reacciona cuando de todos modos tiene que reconectar.
 - No recupera avisos perdidos al reconectar (ver Etapa 3, es responsabilidad
   de la app, no del cliente).
 - No implementa Presence.
 - No está integrado a `sincronizarConNube()` ni a ningún flujo real de la
   app -- es un binario y una librería sueltos, corridos a mano.
+
+## Fuentes de la investigación de fallas reales
+
+- [Access token not refreshed for realtime channels after being offline or in standby · supabase/realtime-js#274](https://github.com/supabase/realtime-js/issues/274)
+- [Realtime set_auth doesn't update the join payload, so rejoins send the old token · supabase/supabase-py#1655](https://github.com/supabase/supabase-py/issues/1655)
+- [Realtime connection unable to reconnect after TIMED_OUT · supabase/realtime#1088](https://github.com/supabase/realtime/issues/1088)
+- [Debugging WebSocket Real-Time Features: Packet Loss & Reconnect Storms](https://buglyst.com/blog/debugging-real-time-features)
+- [Writing a Channels Client — Phoenix docs (heartbeat/timeout, entrega at-most-once)](https://phoenix.hexdocs.pm/writing_a_channels_client.html)
