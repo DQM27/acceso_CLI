@@ -337,13 +337,13 @@ propósito (el jitter del backoff).
 Con esto resuelto, lo que queda antes de plantear un reemplazo real de
 `nubeRealtime.ts`/`NubeRealtime.kt`:
 
-- **Meterlo de verdad en el árbol de dependencias real** -- hoy es un
-  crate standalone en `benchmarks/`, no `desktop/src-tauri` ni
-  `mobile/rust-core`. El chequeo de lints de arriba reduce el riesgo de
-  esta parte, no la reemplaza -- falta la integración real de Cargo.toml,
-  cross-compile a Windows, etc.
-- **Puente Rust → frontend** -- eventos Tauri que reemplacen lo que hoy
-  hace `iniciarRealtimeNube()` para que React se entere del estado.
+- ~~**Meterlo de verdad en el árbol de dependencias real**~~ ✅ hecho para
+  `desktop/src-tauri` (ver más abajo) -- `mobile/rust-core` sigue
+  pendiente, no se tocó todavía.
+- ~~**Puente Rust → frontend**~~ ✅ hecho -- evento `Tauri` real,
+  verificado compilando de verdad contra Windows (ver más abajo). Falta
+  sólo agregar el `listen(...)` del lado `App.tsx`, documentado pero no
+  aplicado a propósito.
 - **Shadow-run en producción real** -- correrlo en paralelo, sólo
   comparando/logueando (sin tocar el sync real), antes de considerar
   siquiera un corte real. Esta decisión NO está tomada -- este directorio
@@ -372,13 +372,16 @@ resuelve. `cargo metadata --features lattis-realtime-experimental`
 0.23.45`, `tokio-tungstenite 0.24.0`, `tokio 1.53.1`, `windows 0.61.3`,
 `url 2.5.8`, `ring 0.17.14`, `rustls-native-certs 0.8.4` -- y, importante,
 **ninguna copia de `aws-lc-rs`** (confirmando que no se coló un backend
-que necesitaría un compilador de C para cross-compilar a Windows). Esta
-sandbox no tiene instalado el target `x86_64-pc-windows-gnu` ni el
-cross-compilador MinGW, así que un `cargo check`/`build` real contra ese
-target no se pudo intentar acá -- `cargo metadata` es el chequeo más
-barato disponible y ya descarta el riesgo más caro (conflicto de
-versiones/backends), pero queda pendiente confirmarlo con un build real
-en una máquina con ese target instalado.
+que necesitaría un compilador de C para cross-compilar a Windows).
+
+Actualización: se instaló el target `x86_64-pc-windows-gnu`
+(`rustup target add`) y el cross-compilador `gcc-mingw-w64-x86-64`
+(variante `posix`, la que necesita el `std` de Rust -- la variante `win32`
+que trae el paquete por default NO sirve) en esta sandbox, así que el
+chequeo barato de `cargo metadata` quedó reemplazado por uno real: ver
+"Etapa 4 -- el puente Rust → frontend" más abajo, donde se confirma con
+`cargo check`/`clippy --target x86_64-pc-windows-gnu` de verdad, no sólo
+resolución de dependencias.
 
 **Bug real encontrado al razonar sobre esta integración** (antes de
 cualquier intento de compilar, sólo grepeando el árbol): ningún código de
@@ -408,6 +411,76 @@ sólo más seguro, no les quita nada). Verificado después del cambio:
 warnings) y `cargo test` (35 tests, todos verdes) en este crate, y
 `cargo metadata --features lattis-realtime-experimental` de nuevo en
 `desktop/src-tauri` (exit 0, mismas versiones unificadas).
+
+### Etapa 4 (parcial) -- el puente Rust → frontend ✅ implementado
+
+Con la integración de Cargo.toml resuelta, el siguiente pendiente de la
+lista de arriba: un evento `Tauri` real, emitido desde código que usa
+`lattis_realtime_spike`, que el frontend pueda escuchar -- sin tocar
+`comandos::nube`/`AppCore`, sin reemplazar `nubeRealtime.ts`, sin correr
+en ninguna máquina real todavía.
+
+Se agregó `desktop/src-tauri/src/lattis_experimental.rs`, un módulo
+completo detrás de `#[cfg(feature = "lattis-realtime-experimental")]`
+(ni se compila en un build normal) que además exige la variable de
+entorno `LATTIS_EXPERIMENTAL_WS_URL` para hacer algo -- la variable, no
+la feature, es la puerta real, así que llamarlo siempre desde
+`configurar_arranque` (detrás de la misma feature) es seguro incluso en
+una máquina con la feature activada pero sin esa variable configurada.
+Cuando está configurada, usa `supervisar_heartbeat` del laboratorio
+contra la URL que le den (pensada para `control-acceso-staging`, jamás
+producción sin que esa decisión esté tomada -- ver "Shadow-run en
+producción real" abajo) y por cada `EventoSupervisor` emite
+`app.emit("lattis://experimental", …)` con un DTO aplanado y
+serializable -- mismo patrón exacto que ya usa
+`iniciar_sincronizacion_automatica` con `"nube://sincronizado"` en
+`lib.rs`. El frontend lo escucharía igual que ya escucha ese evento
+(`desktop/src/App.tsx`, `listen<T>("nube://sincronizado", cb)`) -- no se
+agregó ese listener todavía (sería tocar `App.tsx`, código real de UI,
+sin que haga falta para probar el mecanismo), queda documentado acá como
+el próximo paso obvio si se decide seguir por este camino:
+
+```ts
+import { listen } from "@tauri-apps/api/event";
+
+listen<{ tipo: string; detalle: string }>("lattis://experimental", ({ payload }) => {
+  console.debug("[lattis experimental]", payload.tipo, payload.detalle);
+});
+```
+
+**Validación real, no sólo `cargo metadata`**: esta sandbox no tenía el
+target `x86_64-pc-windows-gnu` ni un cross-compilador MinGW -- se
+instalaron ambos (`rustup target add x86_64-pc-windows-gnu`,
+`apt install gcc-mingw-w64-x86-64`, forzando la variante `posix` con
+`update-alternatives` -- la `win32` que trae el paquete por default no
+sirve para el `std` de Rust) para poder compilar de verdad contra
+Windows, el target real de `desktop/src-tauri`. Con eso:
+
+- `cargo check --target x86_64-pc-windows-gnu` (sin la feature): limpio,
+  confirma que la base no se rompió.
+- `cargo check --target x86_64-pc-windows-gnu --features
+  lattis-realtime-experimental`: limpio -- `lattis_experimental.rs`
+  compila de verdad contra el árbol real (`tauri 2.11.5`, `tokio 1.53.1`,
+  `tokio-tungstenite 0.24.0`, etc.), no sólo resuelve en `cargo metadata`.
+- `cargo clippy --target x86_64-pc-windows-gnu --features
+  lattis-realtime-experimental -- -D warnings`: exit 0, cero warnings --
+  pasa el mismo `[lints.clippy]` estricto que el resto de
+  `desktop/src-tauri`.
+
+De paso se confirmó algo que no era obvio antes: en Linux, sin la
+feature ni con ella, `cargo check` normal (target del host) siempre
+falla en este crate -- `zeroize`/`intentar_abrir_nucleo` sólo existen
+bajo `[target.'cfg(windows)'.dependencies]`/`#[cfg(windows)]` (DPAPI,
+MessageBox nativo). No es un bug de esta integración: `desktop/src-tauri`
+nunca estuvo pensado para compilar en Linux, sólo para cross-compilar a
+Windows -- de ahí que el chequeo real tenga que ser siempre con
+`--target x86_64-pc-windows-gnu`.
+
+Con esto, de los tres pendientes que quedaban, sólo falta uno real:
+**shadow-run en producción real** (decisión no tomada -- el mecanismo de
+arriba ya sirve para eso, apuntándolo a la URL que sea vía variable de
+entorno, pero nunca se apuntó a `control-acceso-nube`, sólo se probó el
+compile).
 
 ## Cobertura de pruebas
 

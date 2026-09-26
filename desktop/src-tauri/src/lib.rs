@@ -14,6 +14,8 @@ mod clave_cifrado;
 mod comandos;
 mod dto;
 mod estado;
+#[cfg(feature = "lattis-realtime-experimental")]
+mod lattis_experimental;
 mod pdf;
 #[cfg(windows)]
 mod recuperacion_local;
@@ -481,6 +483,8 @@ fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
     configurar_plugins_condicionales(app.handle())?;
     precargar_catalogo_durante_splash(app.handle().clone());
     iniciar_sincronizacion_automatica(app.handle().clone());
+    #[cfg(feature = "lattis-realtime-experimental")]
+    lattis_experimental::iniciar_shadow_run_experimental(app.handle().clone());
     configurar_cierre_de_splash(app);
     Ok(())
 }
