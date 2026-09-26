@@ -439,15 +439,18 @@ fun iniciarCamara(
                     it.surfaceProvider = previewView.surfaceProvider
                 }
                 onCameraProviderListo(proveedor, preview)
-            // `previewView.viewPort` ata el recorte de `analisis` al mismo
-            // rectángulo que en verdad se ve en pantalla (la vista previa
-            // usa FILL_CENTER, que recorta/escala el frame del sensor a la
-            // proporción de la pantalla -- casi nunca la misma proporción
-            // que el sensor). Sin esto, `filtrarTextoEnAreaGuia` compara
-            // contra las dimensiones crudas del sensor, no contra lo que la
-            // persona realmente ve dentro del recuadro guía: el recuadro en
-            // pantalla y la zona que de verdad analiza ML Kit terminan
-            // siendo rectángulos físicos distintos.
+            // `previewView.viewPort` NO recorta el búfer de `analisis` --
+            // para `ImageAnalysis`, CameraX sólo usa el `ViewPort` para
+            // calcular `ImageProxy.getCropRect()` (comentario corregido,
+            // MV-08 de la auditoría 2026-09-24: la versión anterior decía
+            // que esto "ataba el recorte", pero nada leía `cropRect`
+            // todavía). `setViewPort` sigue haciendo falta igual -- sin él,
+            // `cropRect` queda como el frame completo del sensor, que casi
+            // nunca tiene la misma proporción que lo que la vista previa en
+            // verdad muestra con FILL_CENTER. `recortarParaOcr` (llamado
+            // desde `analizarCedula`) es quien de verdad lee `cropRect` y
+            // recorta con eso antes de aplicar el recuadro guía -- ver su
+            // doc-comment.
                 val grupoUseCases = UseCaseGroup.Builder()
                     .addUseCase(preview)
                     .addUseCase(analisis)
@@ -587,6 +590,15 @@ fun analizarCedula(
         return
     }
     val rotacion = imagen.imageInfo.rotationDegrees
+    // MV-08 (auditoría 2026-09-24): `imagen.cropRect` es lo único que
+    // CameraX de verdad ajusta a partir del `ViewPort` (`setViewPort` en
+    // `iniciarCamara`) -- para `ImageAnalysis` el búfer en sí NUNCA se
+    // recorta, sólo se informa qué porción de él corresponde a lo visible.
+    // Se lee acá, sobre el `ImageProxy`, porque `mediaImage`
+    // (`android.media.Image`) no expone esta información. Antes de este
+    // fix se ignoraba por completo y `recortarParaOcr` trabajaba siempre
+    // sobre el frame entero del sensor.
+    val cropRect = imagen.cropRect
     // Recorta al mismo recuadro que ve la persona en pantalla antes de
     // mandarle el frame a ML Kit -- pedido explícito del usuario 2026-09-20
     // para que el reconocimiento sea más rápido (menos píxeles) y más
@@ -595,7 +607,8 @@ fun analizarCedula(
     // `recortarParaOcr` devolviendo `null` (formato inesperado, plano
     // corrupto, lo que sea) se cae al frame completo de siempre -- nunca
     // debe romper el escaneo por un recorte que salió mal.
-    val input = region?.let { recortarParaOcr(mediaImage, rotacion, it) } ?: InputImage.fromMediaImage(mediaImage, rotacion)
+    val input = region?.let { recortarParaOcr(mediaImage, cropRect, rotacion, it) }
+        ?: InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
         .addOnSuccessListener(ejecutorPrincipal) { resultado ->
             if (sesionActiva.get()) {
@@ -636,8 +649,24 @@ fun analizarCedula(
 /// no hace falta se recicla apenas se arma el siguiente -- el único que
 /// queda vivo al salir es `bitmapRecortado`, porque `recognizer.process`
 /// todavía lo necesita después de este `return`.
+///
+/// `cropRect` (MV-08, auditoría 2026-09-24): antes de rotar, se recorta al
+/// rectángulo que CameraX calculó a partir del `ViewPort` (o al frame
+/// completo si todavía es `null`/no cambió nada, ej. antes de que la vista
+/// tenga tamaño) -- SIN esto, el bitmap de partida es el frame entero del
+/// sensor, que casi nunca tiene la misma proporción que lo que en verdad
+/// se ve en pantalla con `FILL_CENTER`, así que el recuadro guía terminaba
+/// analizando una región más ancha que la visible (podía leer un documento
+/// fuera del marco). `cropRect` viene en coordenadas del búfer SIN rotar
+/// (mismo espacio que `imagen.width`/`imagen.height`), así que este recorte
+/// va antes de rotar, no después.
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
-private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int, region: RegionGuiaOcr): InputImage? {
+private fun recortarParaOcr(
+    imagen: android.media.Image,
+    cropRect: android.graphics.Rect,
+    rotacionGrados: Int,
+    region: RegionGuiaOcr,
+): InputImage? {
     if (imagen.format != android.graphics.ImageFormat.YUV_420_888) return null
     val planos = imagen.planes
     if (planos.size < 3) return null
@@ -662,13 +691,31 @@ private fun recortarParaOcr(imagen: android.media.Image, rotacionGrados: Int, re
         val bitmapCompleto = android.graphics.Bitmap.createBitmap(
             pixeles, imagen.width, imagen.height, android.graphics.Bitmap.Config.ARGB_8888,
         )
-        val bitmapDerecho = if (rotacionGrados == 0) {
+        // MV-08: recorta al `cropRect` del ViewPort ANTES de rotar --
+        // `cropRect` está en el mismo espacio sin rotar que
+        // `imagen.width`/`imagen.height`. `intersect` contra el bitmap
+        // completo por seguridad (un `cropRect` corrido o más grande que el
+        // frame -- no debería pasar, pero `createBitmap` tira si el
+        // rectángulo se sale) cae de vuelta al frame entero en vez de
+        // fallar el escaneo.
+        val cropSeguro = android.graphics.Rect(cropRect)
+        if (!cropSeguro.intersect(0, 0, bitmapCompleto.width, bitmapCompleto.height)) {
+            cropSeguro.set(0, 0, bitmapCompleto.width, bitmapCompleto.height)
+        }
+        val bitmapAlViewport = if (cropSeguro.width() == bitmapCompleto.width && cropSeguro.height() == bitmapCompleto.height) {
             bitmapCompleto
+        } else {
+            android.graphics.Bitmap.createBitmap(
+                bitmapCompleto, cropSeguro.left, cropSeguro.top, cropSeguro.width(), cropSeguro.height(),
+            ).also { if (it !== bitmapCompleto) bitmapCompleto.recycle() }
+        }
+        val bitmapDerecho = if (rotacionGrados == 0) {
+            bitmapAlViewport
         } else {
             val matriz = android.graphics.Matrix().apply { postRotate(rotacionGrados.toFloat()) }
             android.graphics.Bitmap.createBitmap(
-                bitmapCompleto, 0, 0, bitmapCompleto.width, bitmapCompleto.height, matriz, false,
-            ).also { if (it !== bitmapCompleto) bitmapCompleto.recycle() }
+                bitmapAlViewport, 0, 0, bitmapAlViewport.width, bitmapAlViewport.height, matriz, false,
+            ).also { if (it !== bitmapAlViewport) bitmapAlViewport.recycle() }
         }
         val recorte = region.rectanguloEnPixeles(bitmapDerecho.width, bitmapDerecho.height)
         if (recorte.width <= 0 || recorte.height <= 0) return null

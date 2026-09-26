@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -163,7 +164,20 @@ fun PantallaConfirmarIngreso(
                     // donde otro dispositivo podía colarse.
                     nucleo.registrarIngresoConSecreto(preparacion.contratistaId, medio, gafete, placa, secreto)
                 }
-                onRegistrado()
+                // MV-09 (auditoría 2026-09-24): si esta composición se
+                // desmonta (Atrás, cierre automático de sesión) justo al
+                // volver de `withContext` de arriba, la corrutina de
+                // `alcance` (atada a la composición, no a la sesión) se
+                // cancela ahí mismo -- la escritura en Rust YA terminó (no
+                // es cancelable a mitad de camino), pero `onRegistrado()`
+                // (que dispara `CambiosNube.solicitar()` vía
+                // `ActivosViewModel.onIngresoRegistrado`) se saltaría
+                // igual, dejando la sincronización esperando el próximo
+                // pulso automático de 2 min en vez de dispararse al toque.
+                // `NonCancellable` fuerza que este aviso puntual corra
+                // siempre, sin reabrir el resto del rediseño a ViewModels
+                // que pide la auditoría.
+                withContext(NonCancellable) { onRegistrado() }
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             } catch (excepcion: SecretoDispositivoStoreException) {
