@@ -68,9 +68,8 @@ use control_acceso::services::ruta_service::{
 use control_acceso::services::usuario_service::CrearUsuarioInput as CrearUsuarioInputNucleo;
 use control_acceso::tiempo::RelojCorregido;
 
-#[cfg(feature = "lattis-realtime-experimental")]
-mod lattis_experimental;
 mod mrz;
+mod realtime_nube;
 pub use mrz::{CampoMrz, CorreccionAplicada, FechaMrz, FormatoMrz, RegistroMrz, leer_mrz};
 
 uniffi::setup_scaffolding!();

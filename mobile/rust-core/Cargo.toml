@@ -34,18 +34,6 @@ default = ["cifrado-sqlcipher"]
 cifrado-sqlcipher = ["control_acceso/cifrado-sqlcipher"]
 sqlite-plano = ["control_acceso/sqlite-plano"]
 cifrado-sqlite3mc = ["control_acceso/cifrado-sqlite3mc"]
-# EXPERIMENTAL, apagado por defecto -- laboratorio de
-# `benchmarks/realtime-rust/` (rama `claude/realtime-rust-spike`), agregado
-# acá SÓLO para probar que compila de verdad contra el árbol de
-# dependencias real de mobile. Espejo de la misma feature ya agregada en
-# `desktop/src-tauri/Cargo.toml` -- ver
-# benchmarks/realtime-rust/README.md, "Etapa 4 -- integración real". A
-# diferencia de desktop, acá no hay ningún punto de arranque donde
-# encadenar una llamada automática: la función que expone (ver
-# `src/lattis_experimental.rs`) sólo existe vía UniFFI, y ningún código de
-# `mobile/android`/`mobile/ios` la invoca todavía -- ésa es la puerta
-# real, no la feature.
-lattis-realtime-experimental = ["dep:lattis_realtime_spike", "dep:tokio"]
 
 [[bin]]
 name = "uniffi-bindgen"
@@ -68,14 +56,19 @@ log = "0.4"
 # `rusqlite::Connection` que usa `control_acceso::application::AppCore`
 # internamente, no una version incompatible.
 rusqlite = "0.40.2"
-# Ver la feature `lattis-realtime-experimental` de arriba -- opcionales,
-# apagados por defecto, sin llamador todavía. Este crate no corre un
-# runtime async de por sí (UniFFI expone funciones síncronas), por eso
-# `tokio` entra directo acá (con "rt-multi-thread" para poder armar un
-# `Runtime` propio en un hilo aparte) y no sólo transitivo vía
-# `lattis_realtime_spike`.
-lattis_realtime_spike = { path = "../../benchmarks/realtime-rust", optional = true }
-tokio = { version = "1", features = ["rt-multi-thread", "sync"], optional = true }
+# Sólo para armar el JSON de Presence (`realtime_nube.rs`) -- ya viaja
+# transitivo vía `lattis_realtime_spike`, se declara directo acá para
+# poder usar `serde_json::json!` sin depender de un detalle interno del
+# laboratorio.
+serde_json = "1.0"
+# Cliente Realtime (Phoenix Channels) escrito a medida -- reemplaza a
+# io.github.jan.supabase.realtime del lado Kotlin (ver `realtime_nube.rs`,
+# `NubeRealtime.kt`). Este crate no corre un runtime async de por sí
+# (UniFFI expone funciones síncronas), por eso `tokio` entra directo acá
+# (con "rt-multi-thread" para poder armar un `Runtime` propio) y no sólo
+# transitivo vía `lattis_realtime_spike`.
+lattis_realtime_spike = { path = "../../benchmarks/realtime-rust" }
+tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 # Backend real de `log` en Android -- vuelca al mismo Logcat que ve
