@@ -10,8 +10,6 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.EmpresaProveedor
@@ -94,7 +92,7 @@ class ProveedoresViewModel(
         private set
     var creandoEmpresa by mutableStateOf(false)
         private set
-    private var trabajoBusquedaEmpresa: Job? = null
+    private val buscadorEmpresa = BuscadorConDebounce(viewModelScope)
 
     init {
         refrescarActivos()
@@ -146,13 +144,12 @@ class ProveedoresViewModel(
         val texto = valor.uppercase()
         textoEmpresa = texto
         empresaSeleccionada = null
-        trabajoBusquedaEmpresa?.cancel()
+        buscadorEmpresa.cancelar()
         if (texto.isBlank()) {
             resultadosEmpresa = emptyList()
             return
         }
-        trabajoBusquedaEmpresa = viewModelScope.launch {
-            delay(DEBOUNCE_MS)
+        buscadorEmpresa.buscar {
             try {
                 resultadosEmpresa = withContext(dispatcherIO) { nucleo.buscarEmpresasProveedor(texto) }
             } catch (excepcion: NucleoException) {
@@ -162,7 +159,7 @@ class ProveedoresViewModel(
     }
 
     fun elegirEmpresa(empresa: EmpresaProveedor) {
-        trabajoBusquedaEmpresa?.cancel()
+        buscadorEmpresa.cancelar()
         textoEmpresa = empresa.nombre
         empresaSeleccionada = empresa
         resultadosEmpresa = emptyList()
@@ -315,10 +312,6 @@ class ProveedoresViewModel(
     }
 
     companion object {
-        // Bajado a 150ms (pedido explícito del usuario, 2026-09-21), mismo
-        // valor en los 5 buscadores con debounce de la app.
-        private const val DEBOUNCE_MS = 150L
-
         // Mismo texto que `IngresoProveedorServiceError::IngresoActivo` en
         // Rust (`src/services/error.rs`) -- el chequeo local en
         // `cambiarCedula` es un adelanto de UX, no un reemplazo; que diga

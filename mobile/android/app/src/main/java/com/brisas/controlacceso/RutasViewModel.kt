@@ -10,8 +10,6 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.EncargadoRuta
@@ -59,7 +57,7 @@ class RutasViewModel(
         private set
     var encargadoSeleccionado by mutableStateOf<EncargadoRuta?>(null)
         private set
-    private var trabajoBusquedaEncargado: Job? = null
+    private val buscadorEncargado = BuscadorConDebounce(viewModelScope)
 
     // Buscador de número de ruta (paso 2) -- BLOQUEANTE (pedido explícito
     // del usuario, 2026-09-15: "sin restricción podrías poner la ruta 222
@@ -72,7 +70,7 @@ class RutasViewModel(
         private set
     var rutaSeleccionada by mutableStateOf<Ruta?>(null)
         private set
-    private var trabajoBusquedaRuta: Job? = null
+    private val buscadorRuta = BuscadorConDebounce(viewModelScope)
 
     // Buscador de vehículo (paso 3) -- por placa o número de unidad,
     // BLOQUEANTE (pedido explícito del usuario, 2026-09-19: "es un buscador,
@@ -87,7 +85,7 @@ class RutasViewModel(
         private set
     var vehiculoSeleccionado by mutableStateOf<VehiculoRuta?>(null)
         private set
-    private var trabajoBusquedaVehiculo: Job? = null
+    private val buscadorVehiculo = BuscadorConDebounce(viewModelScope)
 
     init {
         refrescarActivas()
@@ -113,13 +111,12 @@ class RutasViewModel(
     fun cambiarTextoEncargado(nuevo: String) {
         textoEncargado = nuevo
         encargadoSeleccionado = null
-        trabajoBusquedaEncargado?.cancel()
+        buscadorEncargado.cancelar()
         if (nuevo.isBlank()) {
             resultadosEncargado = emptyList()
             return
         }
-        trabajoBusquedaEncargado = viewModelScope.launch {
-            delay(DEBOUNCE_MS)
+        buscadorEncargado.buscar {
             try {
                 resultadosEncargado = withContext(dispatcherIO) { nucleo.buscarEncargadosRuta(nuevo) }
             } catch (excepcion: NucleoException) {
@@ -129,7 +126,7 @@ class RutasViewModel(
     }
 
     fun elegirEncargado(encargado: EncargadoRuta) {
-        trabajoBusquedaEncargado?.cancel()
+        buscadorEncargado.cancelar()
         textoEncargado = encargado.nombre
         encargadoSeleccionado = encargado
         resultadosEncargado = emptyList()
@@ -143,8 +140,7 @@ class RutasViewModel(
     /// guardia elija a mano.
     fun usarEncargadoEscaneado(texto: String) {
         cambiarTextoEncargado(texto)
-        trabajoBusquedaEncargado?.cancel()
-        trabajoBusquedaEncargado = viewModelScope.launch {
+        buscadorEncargado.buscar(inmediato = true) {
             try {
                 val resultados = withContext(dispatcherIO) { nucleo.buscarEncargadosRuta(texto) }
                 resultadosEncargado = resultados
@@ -160,13 +156,12 @@ class RutasViewModel(
     fun cambiarTextoRuta(nuevo: String) {
         textoRuta = nuevo
         rutaSeleccionada = null
-        trabajoBusquedaRuta?.cancel()
+        buscadorRuta.cancelar()
         if (nuevo.isBlank()) {
             resultadosRuta = emptyList()
             return
         }
-        trabajoBusquedaRuta = viewModelScope.launch {
-            delay(DEBOUNCE_MS)
+        buscadorRuta.buscar {
             try {
                 resultadosRuta = withContext(dispatcherIO) { nucleo.buscarRutas(nuevo) }
             } catch (excepcion: NucleoException) {
@@ -176,7 +171,7 @@ class RutasViewModel(
     }
 
     fun elegirRuta(ruta: Ruta) {
-        trabajoBusquedaRuta?.cancel()
+        buscadorRuta.cancelar()
         textoRuta = ruta.numero.toString()
         rutaSeleccionada = ruta
         resultadosRuta = emptyList()
@@ -189,8 +184,7 @@ class RutasViewModel(
     /// resultados para que el guardia elija a mano.
     fun usarNumeroRutaEscaneado(numero: Int) {
         cambiarTextoRuta(numero.toString())
-        trabajoBusquedaRuta?.cancel()
-        trabajoBusquedaRuta = viewModelScope.launch {
+        buscadorRuta.buscar(inmediato = true) {
             try {
                 val resultados = withContext(dispatcherIO) { nucleo.buscarRutas(numero.toString()) }
                 resultadosRuta = resultados
@@ -206,13 +200,12 @@ class RutasViewModel(
     fun cambiarTextoVehiculo(nuevo: String) {
         textoVehiculo = nuevo
         vehiculoSeleccionado = null
-        trabajoBusquedaVehiculo?.cancel()
+        buscadorVehiculo.cancelar()
         if (nuevo.isBlank()) {
             resultadosVehiculo = emptyList()
             return
         }
-        trabajoBusquedaVehiculo = viewModelScope.launch {
-            delay(DEBOUNCE_MS)
+        buscadorVehiculo.buscar {
             try {
                 resultadosVehiculo = withContext(dispatcherIO) { nucleo.buscarVehiculosRuta(nuevo) }
             } catch (excepcion: NucleoException) {
@@ -222,7 +215,7 @@ class RutasViewModel(
     }
 
     fun elegirVehiculo(vehiculo: VehiculoRuta) {
-        trabajoBusquedaVehiculo?.cancel()
+        buscadorVehiculo.cancelar()
         textoVehiculo = vehiculo.placa
         vehiculoSeleccionado = vehiculo
         resultadosVehiculo = emptyList()
@@ -235,8 +228,7 @@ class RutasViewModel(
     /// resultados para que el guardia elija a mano.
     fun usarVehiculoEscaneado(texto: String) {
         cambiarTextoVehiculo(texto)
-        trabajoBusquedaVehiculo?.cancel()
-        trabajoBusquedaVehiculo = viewModelScope.launch {
+        buscadorVehiculo.buscar(inmediato = true) {
             try {
                 val resultados = withContext(dispatcherIO) { nucleo.buscarVehiculosRuta(texto) }
                 resultadosVehiculo = resultados
@@ -287,11 +279,6 @@ class RutasViewModel(
     }
 
     companion object {
-        // Bajado a 150ms (pedido explícito del usuario, 2026-09-21), mismo
-        // valor en los 5 buscadores con debounce -- ver el comentario de
-        // `ActivosViewModel`.
-        private const val DEBOUNCE_MS = 150L
-
         fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
             initializer { RutasViewModel(nucleo) }
         }

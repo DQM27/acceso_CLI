@@ -469,8 +469,13 @@ class ActivosViewModel(
     companion object {
         // Ver el comentario en `cambiarTexto`. Bajado de 300ms a 150ms
         // (pedido explícito del usuario, 2026-09-21, tras probar 200ms y
-        // confirmar que la búsqueda local no lo resiente), mismo valor en
-        // los 5 buscadores con debounce de la app.
+        // confirmar que la búsqueda local no lo resiente) -- mismo valor
+        // que el default de `BuscadorConDebounce` (MV-10, auditoría
+        // 2026-09-24), que usan los otros 6 buscadores de la app. Este
+        // ViewModel se queda con su propio `Job`/constante porque comparte
+        // ese `Job` con `versionBusqueda`/`cargando` para varios modos a la
+        // vez -- no encaja en la forma genérica sin exponer esos dos
+        // conceptos también ahí.
         private const val DEBOUNCE_BUSQUEDA_MS = 150L
 
         fun factory(
