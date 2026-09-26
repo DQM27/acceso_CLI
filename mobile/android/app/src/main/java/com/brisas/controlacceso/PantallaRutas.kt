@@ -255,7 +255,7 @@ fun PantallaRutas(nucleo: Nucleo) {
                         numeroRuta = ruta.numero,
                         subNumero = (subNumeroTexto.toLongOrNull() ?: 1L),
                         numeroDocumento = numeroDocumento,
-                        fechaDocumento = textoDDMMYYYYaIsoRuta(fechaDocumentoTexto),
+                        fechaDocumento = textoDDMMYYYYaIso(fechaDocumentoTexto),
                         tieneCorreoAutorizacion = tieneCorreo,
                     ),
                     onExito = {
@@ -321,23 +321,7 @@ private fun etiquetaSubNumero(texto: String): String {
 
 private fun fechaHoyTextoRuta(): String {
     val hoy = fechaDeHoy()
-    return hoy.aTextoDDMMYYYYRuta()
-}
-
-/// Mismo formato que `FechaDocumento.aTextoDDMMYYYY` en
-/// `PantallaNuevoContratista.kt` (día-mes-año con guiones) -- cada pantalla
-/// dueña de su propia conversión de fecha, sin un util compartido, mismo
-/// criterio que ya existe ahí.
-private fun FechaDocumento.aTextoDDMMYYYYRuta(): String = "%02d-%02d-%04d".format(dia, mes, anio)
-
-/// Inverso de [aTextoDDMMYYYYRuta] -- si el texto no tiene la forma
-/// esperada se devuelve tal cual: Rust igual la rechaza con un error
-/// legible que cita el texto original.
-private fun textoDDMMYYYYaIsoRuta(texto: String): String {
-    val partes = texto.split("-")
-    if (partes.size != 3) return texto
-    val (dia, mes, anio) = partes
-    return "%s-%s-%s".format(anio.padStart(4, '0'), mes.padStart(2, '0'), dia.padStart(2, '0'))
+    return hoy.aTextoDDMMYYYY()
 }
 
 @Composable

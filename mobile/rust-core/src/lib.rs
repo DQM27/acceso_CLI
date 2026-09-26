@@ -1919,6 +1919,25 @@ impl Nucleo {
         )?)
     }
 
+    /// MV-10 (auditoría 2026-09-24): antes de este método,
+    /// `PantallaNuevoContratista.kt` reimplementaba esta regla a mano en
+    /// Kotlin (necesita evaluarla ANTES de tener un `Contratista` real que
+    /// consultar -- el formulario todavía no se guardó) -- riesgo real de
+    /// quedar desincronizada si la regla cambia acá y nadie se acuerda de
+    /// tocar también el formulario móvil. No usa ningún estado de `self` --
+    /// vive como método de `Nucleo` (no función libre) porque es el único
+    /// patrón de export que usa este puente hoy (ver el resto de este
+    /// `impl`). Fuente de verdad real: `control_acceso::domain::contratista`.
+    pub fn requiere_praind_para_formulario(&self, tipo_ingreso: TipoIngreso, personal_ruta: bool) -> bool {
+        control_acceso::domain::contratista::requiere_praind_de(tipo_ingreso.into(), personal_ruta)
+    }
+
+    /// Espejo de [`Self::requiere_praind_para_formulario`] para la otra
+    /// regla del mismo formulario.
+    pub fn requiere_gafete_para_formulario(&self, tipo_ingreso: TipoIngreso, personal_ruta: bool) -> bool {
+        control_acceso::domain::contratista::requiere_gafete_de(tipo_ingreso.into(), personal_ruta)
+    }
+
     pub fn crear_empresa(&self, nombre: String) -> Result<i64, NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self.core_lock().crear_empresa(&actor, &nombre)?)
