@@ -338,11 +338,12 @@ Con esto resuelto, lo que queda antes de plantear un reemplazo real de
 `nubeRealtime.ts`/`NubeRealtime.kt`:
 
 - ~~**Meterlo de verdad en el árbol de dependencias real**~~ ✅ hecho para
-  `desktop/src-tauri` (ver más abajo) -- `mobile/rust-core` sigue
-  pendiente, no se tocó todavía.
-- ~~**Puente Rust → frontend**~~ ✅ hecho -- evento `Tauri` real,
-  verificado compilando de verdad contra Windows (ver más abajo). Falta
-  sólo agregar el `listen(...)` del lado `App.tsx`, documentado pero no
+  `desktop/src-tauri` Y `mobile/rust-core` (ver más abajo en ambos casos).
+- ~~**Puente Rust → frontend**~~ ✅ hecho -- evento `Tauri` real para
+  desktop (verificado compilando de verdad contra Windows) y
+  `callback_interface` de `UniFFI` real para mobile (ver más abajo en
+  ambos casos). Falta sólo agregar el `listen(...)` del lado `App.tsx` y
+  la implementación Kotlin/Swift del observador, documentados pero no
   aplicado a propósito.
 - **Shadow-run en producción real** -- correrlo en paralelo, sólo
   comparando/logueando (sin tocar el sync real), antes de considerar
@@ -481,6 +482,86 @@ Con esto, de los tres pendientes que quedaban, sólo falta uno real:
 arriba ya sirve para eso, apuntándolo a la URL que sea vía variable de
 entorno, pero nunca se apuntó a `control-acceso-nube`, sólo se probó el
 compile).
+
+### Etapa 4 (parcial) -- lo mismo, espejo en `mobile/rust-core` ✅ implementado
+
+Mismo patrón que las dos secciones de arriba, ahora del lado mobile. Se
+agregó a `mobile/rust-core/Cargo.toml` la misma feature apagada por
+defecto:
+
+```toml
+[features]
+lattis-realtime-experimental = ["dep:lattis_realtime_spike", "dep:tokio"]
+
+[dependencies]
+lattis_realtime_spike = { path = "../../benchmarks/realtime-rust", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "sync"], optional = true }
+```
+
+`tokio` entra como dependencia directa (a diferencia de desktop, que ya
+lo tenía) porque este crate no corre un runtime async de por sí -- `UniFFI`
+expone funciones síncronas normales, así que el runtime hay que armarlo a
+mano.
+
+El puente del lado mobile no puede ser un evento `Tauri` (esto no es
+Tauri) -- el equivalente en `UniFFI` es un `callback_interface`: un trait
+que implementa el lado Kotlin/Swift y que Rust invoca. Se agregó
+`mobile/rust-core/src/lattis_experimental.rs`, detrás de la misma
+feature, con:
+
+```rust
+#[uniffi::export(callback_interface)]
+pub trait ObservadorLattisExperimental: Send + Sync {
+    fn en_evento(&self, tipo: String, detalle: String);
+}
+
+#[uniffi::export]
+pub fn iniciar_shadow_run_lattis_experimental(
+    url: String,
+    observador: Box<dyn ObservadorLattisExperimental>,
+);
+```
+
+`iniciar_shadow_run_lattis_experimental` arranca un hilo propio con su
+propio `tokio::runtime::Runtime`, conecta `supervisar_heartbeat` del
+laboratorio contra la `url` que le pasen y llama a
+`observador.en_evento(tipo, detalle)` por cada `EventoSupervisor`
+aplanado a dos strings (mismo criterio que el DTO del lado desktop) --
+nunca toca el resto del crate (`Nucleo`/`AppCore`). A diferencia de
+desktop, acá no hay ningún punto de arranque propio donde encadenar una
+llamada automática (UniFFI sólo expone funciones, no hay un
+`configurar_arranque`) -- la puerta real es, directamente, que ningún
+código Kotlin/Swift la llama todavía. Documentado como siguiente paso, no
+aplicado a propósito (tocar `mobile/android`/`mobile/ios` es código real
+de la app, no del experimento):
+
+```kotlin
+class ObservadorDebug : ObservadorLattisExperimental {
+    override fun enEvento(tipo: String, detalle: String) {
+        Log.d("LattisExperimental", "$tipo: $detalle")
+    }
+}
+```
+
+**Validado en el host** (`x86_64-unknown-linux-gnu`, target por defecto
+de esta sandbox): `cargo check`/`cargo clippy -- -D warnings` (limpios,
+con y sin la feature) y `cargo test --features
+lattis-realtime-experimental` (los 21 tests preexistentes del crate,
+todos verdes -- este experimento no rompió nada de lo que ya había). Se
+agregó también el target `aarch64-linux-android` con `rustup target add`
+-- **sin embargo, no se llegó a compilar contra Android de verdad**: hace
+falta además el NDK de Android (el `apt` de esta sandbox sólo ofrece
+versiones viejas, r10e a r19c, y la instalación completa es pesada --
+varios cientos de MB), configurar el linker (`cargo-ndk`/variables de
+entorno) y probablemente ajustar `mobile/android/app/build.gradle.kts`.
+Se prioriza dejar esto documentado como pendiente real en vez de forzar
+una instalación grande de infraestructura sólo para validar una feature
+experimental que, igual que en desktop, ya pasó el checkeo más fuerte
+disponible sin eso (compila y pasa lints/tests en el host, con el mismo
+árbol de dependencias real -- `uniffi 0.32.1`, `tokio` resolviendo a la
+misma versión que ya usa `desktop/src-tauri`). iOS queda en la misma
+situación -- ni siquiera hay hoy un archivo `NubeRealtime`/`Realtime` del
+lado iOS con el que comparar.
 
 ## Cobertura de pruebas
 
