@@ -56,6 +56,7 @@ async fn main() {
             // ver VARIOS ciclos de renovación reales en poco tiempo, no
             // esperar a que el JWT real esté por expirar.
             renovar_token_cada: Some(Duration::from_secs(5)),
+            presencia: None,
         },
         // Mismo JWT real en cada llamada -- alcanza para probar que el
         // MECANISMO de push in-band funciona contra el servidor real; no

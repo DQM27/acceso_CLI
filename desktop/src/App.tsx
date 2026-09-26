@@ -582,33 +582,9 @@ function Shell({
       },
     );
 
-    // Laboratorio Realtime (`benchmarks/realtime-rust`, feature
-    // `lattis-realtime-experimental`, apagada por default) -- estos dos
-    // eventos sólo existen si ese laboratorio está compilado Y las
-    // variables de entorno correspondientes están puestas (ver
-    // `desktop/src-tauri/src/lattis_experimental.rs`), así que en
-    // cualquier build normal jamás se disparan. Observación pura: sólo
-    // loguear, nunca actuar sobre el evento (no dispara sync, no cambia
-    // estado de UI) -- ver HANDOFF.md del laboratorio, punto 5 (decisión
-    // de arquitectura todavía sin tomar).
-    const cancelarLattisExperimental = listen<{ tipo: string; detalle: string }>(
-      "lattis://experimental",
-      ({ payload }) => {
-        console.debug("[lattis experimental]", payload.tipo, payload.detalle);
-      },
-    );
-    const cancelarLattisExperimentalPrivado = listen<{ tipo: string; detalle: string }>(
-      "lattis://experimental-privado",
-      ({ payload }) => {
-        console.debug("[lattis experimental privado]", payload.tipo, payload.detalle);
-      },
-    );
-
     return () => {
       cancelarRealtime();
       cancelarSincronizacionAutomatica.then((cancelar) => cancelar());
-      cancelarLattisExperimental.then((cancelar) => cancelar());
-      cancelarLattisExperimentalPrivado.then((cancelar) => cancelar());
     };
   }, [sesion.id]);
 

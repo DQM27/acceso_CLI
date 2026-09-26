@@ -52,14 +52,6 @@ default = ["cifrado-sqlite3mc"]
 cifrado-sqlcipher = ["control_acceso/cifrado-sqlcipher"]
 sqlite-plano = ["control_acceso/sqlite-plano"]
 cifrado-sqlite3mc = ["control_acceso/cifrado-sqlite3mc"]
-# EXPERIMENTAL, apagado por defecto -- laboratorio de
-# `benchmarks/realtime-rust/` (rama `claude/realtime-rust-spike`), agregado
-# acá SÓLO para probar que compila de verdad contra el árbol de
-# dependencias real (reqwest+rustls-tls que ya trae `nube`, tokio pineado a
-# 1.53.1, etc.) -- código completamente inerte, no conectado a ningún
-# comando ni usado por nada todavía. Ver benchmarks/realtime-rust/README.md,
-# sección "Etapa 4 -- integración real".
-lattis-realtime-experimental = ["dep:lattis_realtime_spike"]
 
 [dependencies]
 control_acceso = { path = "../..", default-features = false, features = ["serde", "nube", "cifrado-secreto-dispositivo"] }
@@ -92,21 +84,14 @@ tauri-plugin-process = "2"
 sentry = "0.49"
 url = "=2.5.8"
 tokio = { version = "=1.53.1", features = ["sync", "time"] }
-# Ver el feature `lattis-realtime-experimental` de arriba -- opcional,
-# apagado por defecto, sin llamador todavía.
-lattis_realtime_spike = { path = "../../benchmarks/realtime-rust", optional = true }
+# Cliente Realtime (Phoenix Channels) escrito a medida -- reemplaza a
+# supabase-js del lado JS (ver `realtime_nube.rs`, `desktop/src/nubeRealtime.ts`).
+lattis_realtime_spike = { path = "../../benchmarks/realtime-rust" }
 
 [dev-dependencies]
 # Sólo para los tests de recuperacion_local.rs -- misma versión que ya fija
 # el crate raíz.
 tempfile = "3"
-# Sólo para el test manual de `lattis_experimental` contra
-# `control-acceso-staging` (feature `lattis-realtime-experimental`) --
-# `tauri::test::mock_app()` necesita la feature `test` del propio `tauri`,
-# que el `[dependencies]` de arriba no pide (no hace falta para la app
-# real). Cargo unifica las features de ambas tablas para el mismo build de
-# tests, así que esto no duplica la dependencia.
-tauri = { version = "2.11.3", features = ["test"] }
 
 # Misma vara que el crate raíz: pedantic/nursery visibles y cada categoría
 # revisada queda bloqueante. Las excepciones corresponden a decisiones de API

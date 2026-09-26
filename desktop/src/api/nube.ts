@@ -86,17 +86,6 @@ export interface ConflictoGafeteActivo {
   fecha_hora_ingreso: string;
 }
 
-export interface SesionRealtimeNube {
-  base_url: string;
-  apikey: string;
-  access_token: string;
-  expires_in: number;
-  sitio_id: string;
-  dispositivo_id: string;
-  tipo: string;
-  topic: string;
-}
-
 /** Ingreso abierto por el otro dispositivo del mismo sitio -- no vive en el
  * historial local (ver `database::schema`, tabla `ingresos_remotos`, y el
  * comentario en `nube::sincronizacion::IngresoRemoto`). */
@@ -174,8 +163,18 @@ export function sincronizarConNube(): Promise<ResumenSincronizacion> {
   return invoke("sincronizar_con_nube");
 }
 
-export function sesionRealtimeNube(): Promise<SesionRealtimeNube> {
-  return invoke("sesion_realtime_nube");
+/** Arranca el canal privado real de Supabase Realtime del lado Rust (ver
+ * `desktop/src-tauri/src/realtime_nube.rs`) -- reemplazó al cliente
+ * `supabase-js` que corría acá. `nubeRealtime.ts` es quien la llama. */
+export function iniciarRealtimeNubeComando(
+  usuarioCedula: string,
+  usuarioNombre: string,
+): Promise<void> {
+  return invoke("iniciar_realtime_nube", { usuarioCedula, usuarioNombre });
+}
+
+export function detenerRealtimeNubeComando(): Promise<void> {
+  return invoke("detener_realtime_nube");
 }
 
 export function listarIngresosRemotos(): Promise<IngresoRemoto[]> {

@@ -88,19 +88,6 @@ pub struct ResumenSincronizacion {
     pub conflictos_gafete: Vec<nube::ConflictoGafeteActivo>,
 }
 
-/// Datos temporales para que el frontend abra un canal Realtime privado.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct SesionRealtimeNube {
-    pub base_url: String,
-    pub apikey: String,
-    pub access_token: String,
-    pub expires_in: u64,
-    pub sitio_id: String,
-    pub dispositivo_id: String,
-    pub tipo: String,
-    pub topic: String,
-}
-
 /// Espejo de `nube::IngresoRemoto` -- un ingreso abierto por el otro
 /// dispositivo del mismo sitio, listo para mostrarse y, si hace falta,
 /// cerrarse desde acá.
@@ -393,27 +380,23 @@ pub async fn sincronizar_con_nube(app: tauri::AppHandle) -> Result<ResumenSincro
         .map_err(|error| format!("No se pudo completar la sincronización: {error}"))?
 }
 
+/// Arranca el canal privado real de Supabase Realtime para esta sesión --
+/// ver `crate::realtime_nube`. `usuario_cedula`/`usuario_nombre` sólo se
+/// usan para Presence (panel "quién está en línea").
 #[tauri::command]
-pub async fn sesion_realtime_nube(app: tauri::AppHandle) -> Result<SesionRealtimeNube, String> {
-    tauri::async_runtime::spawn_blocking(move || preparar_sesion_realtime(&app.state::<GuiState>()))
-        .await
-        .map_err(|error| format!("No se pudo preparar la sesión de nube: {error}"))?
+pub fn iniciar_realtime_nube(
+    app: tauri::AppHandle,
+    usuario_cedula: String,
+    usuario_nombre: String,
+) {
+    crate::realtime_nube::iniciar(app, usuario_cedula, usuario_nombre);
 }
 
-fn preparar_sesion_realtime(state: &GuiState) -> Result<SesionRealtimeNube, String> {
-    // Autoriza con el candado y lo suelta antes de la petición de red.
-    let sesion = autenticar(state)?;
-
-    Ok(SesionRealtimeNube {
-        base_url: nube::base_url().to_string(),
-        apikey: nube::apikey().to_string(),
-        access_token: sesion.access_token,
-        expires_in: sesion.expires_in,
-        topic: format!("sitio:{}", sesion.sitio_id),
-        sitio_id: sesion.sitio_id,
-        dispositivo_id: sesion.dispositivo_id,
-        tipo: sesion.tipo,
-    })
+/// Detiene el canal privado real (logout, cambio de sesión) -- ver
+/// `crate::realtime_nube`.
+#[tauri::command]
+pub fn detener_realtime_nube(app: tauri::AppHandle) {
+    crate::realtime_nube::detener(&app);
 }
 
 /// Cuántas filas de `cola_salida` ya agotaron los reintentos automáticos

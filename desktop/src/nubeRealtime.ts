@@ -1,6 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
-import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
-import { sesionRealtimeNube, sincronizarConNube } from "./api/nube";
+import { listen } from "@tauri-apps/api/event";
+import {
+  detenerRealtimeNubeComando,
+  iniciarRealtimeNubeComando,
+  sincronizarConNube,
+} from "./api/nube";
 import type { ResumenSincronizacion } from "./api/nube";
 import { EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 
@@ -11,21 +14,20 @@ export interface NubeActualizadaDetalle {
   resumen: ResumenSincronizacion;
 }
 
-/** Mismos 4 valores que entrega `RealtimeChannel.subscribe` de
+/** Mismos 4 valores que entregaba `RealtimeChannel.subscribe` de
  * supabase-js -- ver `EstadoConexionNube` en `componentes/BarraNube.tsx`,
- * que agrega el `null` de "todavía no se intentó conectar". */
+ * que agrega el `null` de "todavía no se intentó conectar". Ahora los
+ * emite `desktop/src-tauri/src/realtime_nube.rs` (evento Tauri
+ * `nube://estado_realtime`). */
 export type EstadoCanalRealtime = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" | "CLOSED";
 
 interface OpcionesRealtimeNube {
   onSincronizado?: (resumen: ResumenSincronizacion) => void;
   onEstado?: (estado: EstadoCanalRealtime) => void;
-  // Quién tiene la sesión abierta en esta PC ahora -- viaja en el mismo
-  // `track()` que ya marca el dispositivo como presente, para que el panel
-  // pueda mostrar "usuarios en línea y desde dónde" (ver
-  // docs/features-futuras/plan-sesion-unica-dispositivos.md). Cédula, no el `id` local (el
-  // rowid de este SQLite no es el id global de `usuarios` en Supabase que
-  // ve el panel -- la cédula es la única clave que coincide en los dos
-  // lados).
+  // Quién tiene la sesión abierta en esta PC ahora -- viaja como Presence
+  // (ver `realtime_nube::iniciar`), para que el panel pueda mostrar
+  // "usuarios en línea y desde dónde" sin abrir una conexión nueva (ver
+  // docs/features-futuras/plan-sesion-unica-dispositivos.md).
   usuario?: { cedula: string; nombre: string };
 }
 
@@ -44,153 +46,66 @@ export function emitirActualizacion(
   );
 }
 
-// Espacia los reintentos cuando falta conexión o la sesión no está lista.
-const REINTENTO_BASE_MS = 2_000;
-const REINTENTO_TOPE_MS = 60_000;
+// Debounce de un cambio LOCAL (registro en ESTA PC) -- mismo valor que
+// usaba la versión anterior (`supabase-js`) para coalescer varias altas
+// seguidas en una sola sincronización.
+const DEBOUNCE_CAMBIO_LOCAL_MS = 600;
 
+/**
+ * Arranca el canal privado real de Supabase Realtime -- desde 2026-09-26,
+ * mantenido enteramente del lado Rust (`desktop/src-tauri/src/realtime_nube.rs`,
+ * cliente Phoenix Channels escrito a medida: reconexión con backoff, JWT de
+ * dispositivo con renovación sin reconectar, Presence -- ver
+ * `benchmarks/realtime-rust/HANDOFF.md`). Esta función sólo pide que
+ * arranque/pare y traduce sus eventos Tauri a los mismos callbacks que ya
+ * usaban `App.tsx`/`BarraNube.tsx`, así que ninguno de los dos cambió.
+ */
 export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => void {
   let cancelado = false;
-  let cliente: SupabaseClient | null = null;
-  let canal: RealtimeChannel | null = null;
-  let temporizadorRenovar: ReturnType<typeof window.setTimeout> | null = null;
-  let temporizadorReconectar: ReturnType<typeof window.setTimeout> | null = null;
-  let temporizadorSincronizar: ReturnType<typeof window.setTimeout> | null = null;
-  let sincronizando = false;
-  let sincronizacionPendiente = false;
-  // Intentos fallidos seguidos desde la última vez que el canal quedó
-  // realmente suscrito -- crece el backoff (2s, 4s, 8s… hasta el tope) en
-  // vez de reintentar siempre a los 2s. Se reinicia a 0 en cuanto
-  // `subscribe` avisa "SUBSCRIBED", así una falla puntual después de mucho
-  // andar bien no arranca desde el tope.
-  let intentosSeguidos = 0;
+  let temporizadorCambioLocal: ReturnType<typeof window.setTimeout> | null = null;
 
-  function limpiarCanal() {
-    if (temporizadorRenovar) window.clearTimeout(temporizadorRenovar);
-    if (temporizadorReconectar) window.clearTimeout(temporizadorReconectar);
-    temporizadorRenovar = null;
-    temporizadorReconectar = null;
+  void iniciarRealtimeNubeComando(opciones.usuario?.cedula ?? "", opciones.usuario?.nombre ?? "").catch(
+    (error) => console.info("Realtime de nube no quedó activo todavía:", error),
+  );
 
-    const clienteAnterior = cliente;
-    const canalAnterior = canal;
-    canal = null;
-    cliente = null;
-    if (canalAnterior && clienteAnterior) {
-      void clienteAnterior.removeChannel(canalAnterior);
-    }
-    clienteAnterior?.realtime.disconnect();
-  }
-
-  function reconectar() {
-    if (cancelado || temporizadorReconectar) return;
-    const espera = Math.min(REINTENTO_BASE_MS * 2 ** intentosSeguidos, REINTENTO_TOPE_MS);
-    intentosSeguidos += 1;
-    temporizadorReconectar = window.setTimeout(() => {
-      temporizadorReconectar = null;
-      limpiarCanal();
-      void conectar();
-    }, espera);
-  }
-
-  async function sincronizarPorAviso() {
-    if (cancelado) return;
-    if (sincronizando) {
-      sincronizacionPendiente = true;
-      return;
-    }
-    sincronizacionPendiente = false;
-    sincronizando = true;
-    try {
-      const resumen = await sincronizarConNube();
-      if (!cancelado) {
-        opciones.onSincronizado?.(resumen);
-        emitirActualizacion(resumen);
-      }
-    } catch (error) {
-      console.error("No se pudo sincronizar tras aviso Realtime:", error);
-    } finally {
-      sincronizando = false;
-      if (sincronizacionPendiente && !cancelado) programarSincronizacion();
-    }
-  }
-
-  function programarSincronizacion() {
-    if (cancelado) return;
-    if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
-    temporizadorSincronizar = window.setTimeout(() => {
-      temporizadorSincronizar = null;
-      void sincronizarPorAviso();
-    }, 600);
-  }
-
-  async function conectar() {
-    if (cancelado) return;
-    try {
-      const sesion = await sesionRealtimeNube();
+  const cancelarEstado = listen<EstadoCanalRealtime>("nube://estado_realtime", ({ payload }) => {
+    if (!cancelado) opciones.onEstado?.(payload);
+  });
+  const cancelarSincronizado = listen<ResumenSincronizacion>(
+    "nube://sincronizado_realtime",
+    ({ payload }) => {
       if (cancelado) return;
+      opciones.onSincronizado?.(payload);
+      emitirActualizacion(payload);
+    },
+  );
 
-      const clienteActual = createClient(sesion.base_url, sesion.apikey, {
-        // Supabase vuelve a consultar este callback al conectar y renovar.
-        // setAuth por sí solo se reemplaza por la sesión de Auth (aquí vacía).
-        accessToken: async () => sesion.access_token,
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-          detectSessionInUrl: false,
-        },
-      });
-      cliente = clienteActual;
-      await clienteActual.realtime.setAuth(sesion.access_token);
-      if (cancelado || cliente !== clienteActual) {
-        clienteActual.realtime.disconnect();
-        return;
-      }
-
-      canal = cliente
-        .channel(sesion.topic, { config: { private: true } })
-        .on("broadcast", { event: "cambio_nube" }, ({ payload }) => {
-          if (cancelado || cliente !== clienteActual) return;
-          if (payload?.dispositivo_id !== sesion.dispositivo_id) programarSincronizacion();
+  // Un cambio LOCAL (alta/registro en ESTA PC) dispara un sync casi
+  // inmediato para no esperar al pulso periódico de 2 minutos -- separado
+  // del canal privado (que sólo reacciona a cambios REMOTOS): un alta local
+  // ya está reflejada acá mismo, lo único que falta es subirla.
+  function programarSincronizacionLocal() {
+    if (cancelado) return;
+    if (temporizadorCambioLocal) window.clearTimeout(temporizadorCambioLocal);
+    temporizadorCambioLocal = window.setTimeout(() => {
+      temporizadorCambioLocal = null;
+      sincronizarConNube()
+        .then((resumen) => {
+          if (cancelado) return;
+          opciones.onSincronizado?.(resumen);
+          emitirActualizacion(resumen, "manual");
         })
-        .subscribe((estado, error) => {
-          if (cancelado || cliente !== clienteActual) return;
-          opciones.onEstado?.(estado);
-          if (estado === "SUBSCRIBED") {
-            intentosSeguidos = 0;
-            // Recupera cambios ocurridos mientras el cliente estuvo desconectado.
-            programarSincronizacion();
-            // Presencia (docs/features-futuras/plan-sesion-unica-dispositivos.md, "Panel de
-            // presencia en tiempo real"): marca este dispositivo como
-            // conectado mientras dure la suscripción -- sin "untrack"
-            // explícito, `limpiarCanal`/el cierre del socket ya lo saca de
-            // la lista de presentes del lado del servidor.
-            void canal?.track({
-              dispositivo_id: sesion.dispositivo_id,
-              usuario_cedula: opciones.usuario?.cedula,
-              usuario_nombre: opciones.usuario?.nombre,
-            });
-          } else if (estado === "CHANNEL_ERROR" || estado === "TIMED_OUT" || estado === "CLOSED") {
-            if (error) console.info("No se pudo suscribir al canal de nube:", error.message);
-            reconectar();
-          }
-        });
-
-      const renovarEnSegundos = Math.max(60, sesion.expires_in - 60);
-      temporizadorRenovar = window.setTimeout(reconectar, renovarEnSegundos * 1000);
-    } catch (error) {
-      if (cancelado) return;
-      opciones.onEstado?.("CHANNEL_ERROR");
-      console.info("Realtime de nube no quedó activo todavía:", error);
-      reconectar();
-    }
+        .catch((error) => console.error("No se pudo sincronizar tras un cambio local:", error));
+    }, DEBOUNCE_CAMBIO_LOCAL_MS);
   }
-
-  window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, programarSincronizacion);
-  void conectar();
+  window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, programarSincronizacionLocal);
 
   return () => {
     cancelado = true;
-    window.removeEventListener(EVENTO_CAMBIO_LOCAL_NUBE, programarSincronizacion);
-    if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
-    limpiarCanal();
+    window.removeEventListener(EVENTO_CAMBIO_LOCAL_NUBE, programarSincronizacionLocal);
+    if (temporizadorCambioLocal) window.clearTimeout(temporizadorCambioLocal);
+    cancelarEstado.then((cancelar) => cancelar());
+    cancelarSincronizado.then((cancelar) => cancelar());
+    void detenerRealtimeNubeComando().catch(() => {});
   };
 }

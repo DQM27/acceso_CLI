@@ -14,11 +14,11 @@ mod clave_cifrado;
 mod comandos;
 mod dto;
 mod estado;
-#[cfg(feature = "lattis-realtime-experimental")]
-mod lattis_experimental;
 mod pdf;
+mod realtime_nube;
 #[cfg(windows)]
 mod recuperacion_local;
+
 
 use estado::GuiState;
 
@@ -483,11 +483,6 @@ fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
     configurar_plugins_condicionales(app.handle())?;
     precargar_catalogo_durante_splash(app.handle().clone());
     iniciar_sincronizacion_automatica(app.handle().clone());
-    #[cfg(feature = "lattis-realtime-experimental")]
-    {
-        lattis_experimental::iniciar_shadow_run_experimental(app.handle().clone());
-        lattis_experimental::iniciar_shadow_run_canal_privado_experimental(app.handle().clone());
-    }
     configurar_cierre_de_splash(app);
     Ok(())
 }
@@ -507,6 +502,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .manage(estado)
+        .manage(realtime_nube::EstadoRealtimeNube::default())
         .setup(configurar_arranque)
         .invoke_handler(tauri::generate_handler![
             comandos::autenticacion::requiere_configuracion_inicial,
@@ -585,7 +581,8 @@ pub fn run() {
             comandos::gafetes::resolver_gafete,
             comandos::nube::configurar_dispositivo_inicial,
             comandos::nube::sincronizar_con_nube,
-            comandos::nube::sesion_realtime_nube,
+            comandos::nube::iniciar_realtime_nube,
+            comandos::nube::detener_realtime_nube,
             comandos::nube::listar_ingresos_remotos,
             comandos::nube::cerrar_ingreso_remoto,
             comandos::nube::listar_ingresos_proveedor_remotos,

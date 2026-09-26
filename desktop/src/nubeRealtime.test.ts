@@ -2,114 +2,99 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { iniciarRealtimeNube } from "./nubeRealtime";
 import { solicitarSincronizacionNube } from "./eventosNube";
 
-const mocks = vi.hoisted(() => ({ sesion: vi.fn(), sincronizar: vi.fn(), crear: vi.fn() }));
-vi.mock("./api/nube", () => ({ sesionRealtimeNube: mocks.sesion, sincronizarConNube: mocks.sincronizar }));
-vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.crear }));
+// El canal privado real (reconexión, JWT, Presence) vive del lado Rust
+// desde 2026-09-26 (`desktop/src-tauri/src/realtime_nube.rs`, ver
+// `benchmarks/realtime-rust/HANDOFF.md`) -- estos tests sólo verifican el
+// puente hacia React: que arranca/para el comando correcto y que traduce
+// los dos eventos Tauri a los mismos callbacks que ya usaban
+// `App.tsx`/`BarraNube.tsx`.
+const mocks = vi.hoisted(() => ({
+  iniciarComando: vi.fn(),
+  detenerComando: vi.fn(),
+  sincronizar: vi.fn(),
+  listen: vi.fn(),
+}));
+vi.mock("./api/nube", () => ({
+  iniciarRealtimeNubeComando: mocks.iniciarComando,
+  detenerRealtimeNubeComando: mocks.detenerComando,
+  sincronizarConNube: mocks.sincronizar,
+}));
+vi.mock("@tauri-apps/api/event", () => ({ listen: mocks.listen }));
 
-interface CanalPrueba {
-  estado: (estado: string, error?: Error) => void;
-  aviso: (mensaje: { payload: { dispositivo_id: string } }) => void;
-  accessToken: () => Promise<string>;
-}
-const canales: CanalPrueba[] = [];
+type Escucha<T> = (evento: { payload: T }) => void;
+const escuchas = new Map<string, Escucha<unknown>>();
 let detener: (() => void) | undefined;
-const sesion = {
-  base_url: "https://ejemplo.supabase.co", apikey: "publicable-prueba",
-  access_token: "jwt-dispositivo", expires_in: 3600,
-  sitio_id: "sitio-a", dispositivo_id: "equipo-a", topic: "sitio:sitio-a",
-};
 const resumen = { enviados: 0 };
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
-  canales.length = 0;
-  mocks.sesion.mockResolvedValue(sesion);
+  escuchas.clear();
+  mocks.iniciarComando.mockResolvedValue(undefined);
+  mocks.detenerComando.mockResolvedValue(undefined);
   mocks.sincronizar.mockResolvedValue(resumen);
-  mocks.crear.mockImplementation((_url, _key, opciones) => {
-    const control: CanalPrueba = { estado: () => {}, aviso: () => {}, accessToken: opciones.accessToken };
-    const canal = {
-      on: vi.fn((_tipo, _filtro, callback) => { control.aviso = callback; return canal; }),
-      subscribe: vi.fn((callback) => { control.estado = callback; return canal; }),
-      track: vi.fn().mockResolvedValue(undefined),
-    };
-    canales.push(control);
-    return {
-      channel: vi.fn((_topic, config) => { expect(config.config.private).toBe(true); return canal; }),
-      realtime: { setAuth: vi.fn().mockResolvedValue(undefined), disconnect: vi.fn() },
-      removeChannel: vi.fn(() => { control.estado("CLOSED"); return Promise.resolve("ok"); }),
-    };
+  mocks.listen.mockImplementation((evento: string, callback: Escucha<unknown>) => {
+    escuchas.set(evento, callback);
+    return Promise.resolve(vi.fn());
   });
 });
-afterEach(() => { detener?.(); detener = undefined; vi.useRealTimers(); });
+afterEach(() => {
+  detener?.();
+  detener = undefined;
+  vi.useRealTimers();
+});
 
-async function iniciar() {
-  detener = iniciarRealtimeNube();
-  await vi.advanceTimersByTimeAsync(0);
-  return canales[0];
+function emitirEstado(estado: string) {
+  escuchas.get("nube://estado_realtime")?.({ payload: estado });
+}
+function emitirSincronizado(payload: unknown) {
+  escuchas.get("nube://sincronizado_realtime")?.({ payload });
 }
 
-describe("sincronización por Realtime", () => {
-  it("conserva el JWT del dispositivo cuando el SDK vuelve a pedirlo", async () => {
-    const canal = await iniciar();
-    expect(await canal.accessToken()).toBe("jwt-dispositivo");
-    canal.estado("SUBSCRIBED");
-    await vi.advanceTimersByTimeAsync(600);
-    expect(mocks.sincronizar).toHaveBeenCalledTimes(1);
+describe("puente de Realtime con el backend Rust", () => {
+  it("arranca el canal real con la cédula/nombre del usuario", () => {
+    detener = iniciarRealtimeNube({ usuario: { cedula: "123", nombre: "Ana" } });
+    expect(mocks.iniciarComando).toHaveBeenCalledWith("123", "Ana");
   });
 
-  it("agrupa avisos remotos y evita sincronizar por el eco del propio dispositivo", async () => {
-    const canal = await iniciar();
-    canal.aviso({ payload: { dispositivo_id: "equipo-a" } });
-    await vi.advanceTimersByTimeAsync(600);
-    expect(mocks.sincronizar).not.toHaveBeenCalled();
-    for (let i = 0; i < 5; i++) canal.aviso({ payload: { dispositivo_id: "equipo-b" } });
-    await vi.advanceTimersByTimeAsync(600);
-    expect(mocks.sincronizar).toHaveBeenCalledTimes(1);
-  });
-
-  it("conserva cambios que llegan mientras la sincronización sigue en curso", async () => {
-    let resolver: (valor: unknown) => void = () => {};
-    mocks.sincronizar.mockImplementationOnce(() => new Promise((resolve) => { resolver = resolve; }));
-    const canal = await iniciar();
-    solicitarSincronizacionNube();
-    await vi.advanceTimersByTimeAsync(600);
-    canal.aviso({ payload: { dispositivo_id: "equipo-b" } });
-    await vi.advanceTimersByTimeAsync(600);
-    expect(mocks.sincronizar).toHaveBeenCalledTimes(1);
-    resolver(resumen);
-    await vi.advanceTimersByTimeAsync(600);
-    expect(mocks.sincronizar).toHaveBeenCalledTimes(2);
-  });
-
-  it("renueva el token sin reconectar otra vez por el cierre del canal anterior", async () => {
-    await iniciar();
-    mocks.sesion.mockResolvedValue({ ...sesion, access_token: "jwt-renovado" });
-    await vi.advanceTimersByTimeAsync(3_542_000);
-    expect(canales).toHaveLength(2);
-    expect(await canales[1].accessToken()).toBe("jwt-renovado");
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(canales).toHaveLength(2);
-  });
-
-  it("no abre un cliente si se cierra sesión mientras espera autenticación", async () => {
-    let resolver: (valor: unknown) => void = () => {};
-    mocks.sesion.mockImplementationOnce(() => new Promise((resolve) => { resolver = resolve; }));
-    detener = iniciarRealtimeNube();
-    detener();
-    resolver(sesion);
+  it("traduce nube://estado_realtime al callback onEstado", async () => {
+    const onEstado = vi.fn();
+    detener = iniciarRealtimeNube({ onEstado });
     await vi.advanceTimersByTimeAsync(0);
-    expect(mocks.crear).not.toHaveBeenCalled();
+    emitirEstado("SUBSCRIBED");
+    expect(onEstado).toHaveBeenCalledWith("SUBSCRIBED");
   });
 
-  it("ignora avisos y cambios locales después de detenerse", async () => {
-    const canal = await iniciar();
-    detener?.();
+  it("traduce nube://sincronizado_realtime al callback onSincronizado", async () => {
+    const onSincronizado = vi.fn();
+    detener = iniciarRealtimeNube({ onSincronizado });
+    await vi.advanceTimersByTimeAsync(0);
+    emitirSincronizado(resumen);
+    expect(onSincronizado).toHaveBeenCalledWith(resumen);
+  });
+
+  it("debounce de un cambio local dispara sincronizar_con_nube una sola vez", async () => {
+    detener = iniciarRealtimeNube();
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < 5; i++) solicitarSincronizacionNube();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizar).toHaveBeenCalledTimes(1);
+  });
+
+  it("detener() para el canal real y deja de reaccionar a eventos", async () => {
+    const onEstado = vi.fn();
+    const onSincronizado = vi.fn();
+    detener = iniciarRealtimeNube({ onEstado, onSincronizado });
+    await vi.advanceTimersByTimeAsync(0);
+    detener();
+    expect(mocks.detenerComando).toHaveBeenCalledTimes(1);
+
+    emitirEstado("SUBSCRIBED");
+    emitirSincronizado(resumen);
     solicitarSincronizacionNube();
-    canal.aviso({ payload: { dispositivo_id: "equipo-b" } });
-    canal.estado("CLOSED");
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(onEstado).not.toHaveBeenCalled();
+    expect(onSincronizado).not.toHaveBeenCalled();
     expect(mocks.sincronizar).not.toHaveBeenCalled();
-    expect(canales).toHaveLength(1);
   });
 });

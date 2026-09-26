@@ -153,6 +153,13 @@ pub struct ConfigCanalPrivado {
     /// empuja un `access_token` nuevo cada `intervalo` MIENTRAS el canal
     /// sigue unido, sin reconectar -- ver `ClienteRealtime::renovar_token`.
     pub renovar_token_cada: Option<Duration>,
+    /// `Some(metadata)` publica Presence (`ClienteRealtime::trackear_presencia`)
+    /// justo después de cada `phx_join` exitoso (incluidas las
+    /// reconexiones) -- `None` no trackea nada. Fire-and-forget: un fallo
+    /// acá no cuenta como caída del canal (a diferencia del heartbeat/
+    /// renovación), Presence es informativo, no crítico para que el canal
+    /// siga sirviendo broadcasts.
+    pub presencia: Option<Value>,
 }
 
 /// Qué hacer después de que `mantener_canal_unido` vuelve -- separado del
@@ -273,6 +280,7 @@ pub async fn supervisar_canal_privado(
         backoff_tope,
         intervalo_heartbeat,
         renovar_token_cada,
+        presencia,
     } = config;
     let mut intentos_seguidos: u32 = 0;
 
@@ -299,6 +307,9 @@ pub async fn supervisar_canal_privado(
         if let Some(mut cliente) = resultado_join {
             intentos_seguidos = 0;
             let _ = eventos.send(EventoSupervisorPrivado::UnidoAlCanal);
+            if let Some(metadata) = presencia.clone() {
+                let _ = cliente.trackear_presencia(&topic, metadata).await;
+            }
 
             let resultado_canal = mantener_canal_unido(
                 &mut cliente,
@@ -599,6 +610,7 @@ mod tests {
                 backoff_tope: tope,
                 intervalo_heartbeat: Duration::from_secs(30),
                 renovar_token_cada: None,
+                presencia: None,
             },
             obtener_token_fresco,
             tx,
@@ -726,6 +738,7 @@ mod tests {
                 // (esta prueba es de renovación, no de heartbeat).
                 intervalo_heartbeat: Duration::from_secs(10),
                 renovar_token_cada: Some(Duration::from_millis(30)),
+                presencia: None,
             },
             obtener_token_fresco,
             tx,
@@ -808,6 +821,7 @@ mod tests {
                 backoff_tope: Duration::from_millis(100),
                 intervalo_heartbeat: Duration::from_millis(30),
                 renovar_token_cada: None,
+                presencia: None,
             },
             || "token".to_string(),
             tx,
