@@ -10,8 +10,6 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.EncargadoRuta
@@ -66,7 +64,7 @@ class GafetesProvisionalesViewModel(
         private set
     var encargadoSeleccionado by mutableStateOf<EncargadoRuta?>(null)
         private set
-    private var trabajoBusquedaEncargado: Job? = null
+    private val buscadorEncargado = BuscadorConDebounce(viewModelScope)
 
     init {
         refrescarActivos()
@@ -94,13 +92,12 @@ class GafetesProvisionalesViewModel(
     fun cambiarTextoEncargado(nuevo: String) {
         textoEncargado = nuevo
         encargadoSeleccionado = null
-        trabajoBusquedaEncargado?.cancel()
+        buscadorEncargado.cancelar()
         if (nuevo.isBlank()) {
             resultadosEncargado = emptyList()
             return
         }
-        trabajoBusquedaEncargado = viewModelScope.launch {
-            delay(DEBOUNCE_MS)
+        buscadorEncargado.buscar {
             try {
                 resultadosEncargado = withContext(dispatcherIO) { nucleo.buscarEncargadosRuta(nuevo) }
             } catch (excepcion: NucleoException) {
@@ -110,7 +107,7 @@ class GafetesProvisionalesViewModel(
     }
 
     fun elegirEncargado(encargado: EncargadoRuta) {
-        trabajoBusquedaEncargado?.cancel()
+        buscadorEncargado.cancelar()
         textoEncargado = "${encargado.nombre} · ${encargado.codigoEmpleado}"
         encargadoSeleccionado = encargado
         resultadosEncargado = emptyList()
@@ -188,10 +185,6 @@ class GafetesProvisionalesViewModel(
     }
 
     companion object {
-        // Bajado a 150ms (pedido explícito del usuario, 2026-09-21), mismo
-        // valor en los 5 buscadores con debounce de la app.
-        private const val DEBOUNCE_MS = 150L
-
         fun factory(
             nucleo: Nucleo,
             secretoStore: SecretoDispositivoStore,
