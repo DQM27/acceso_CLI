@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    MV-03 (auditoría 2026-09-24): "allowBackup=false" en el manifiesto NO
+    alcanza para bloquear la transferencia de dispositivo a dispositivo
+    (D2D, ej. Smart Switch en el Samsung A25) a partir de Android 12
+    (targetSdk mayor o igual a 31): la documentación oficial de Android lo
+    dice explícito: "On devices from some device manufacturers, you can't
+    disable device-to-device migration of your app's files" mediante
+    allowBackup. "dataExtractionRules" es el único control que sí aplica a
+    D2D en API 31+, y hace falta declararlo aparte del backup en la nube.
+
+    Se excluyen los 3 dominios (todo el contenido de la app, no hay nada
+    pensado para viajar entre dispositivos): "database" (por si algún día
+    se usa Room o SQLiteOpenHelper "de verdad"), "file" (donde HOY viven
+    control_acceso.db y el secreto envuelto por Keystore, ver
+    AplicacionViewModel.kt y SecretoDispositivoStore.kt, ambos con
+    context.filesDir) y "sharedpref" (preferencia de tema, sin PII, pero
+    sin motivo para copiarla tampoco). El secreto igual no se podría
+    descifrar en el equipo nuevo (la clave vive en el Keystore, que no
+    viaja), pero la base con cédulas, nombres e historial sí es texto
+    plano hoy (cifrado en reposo sigue pendiente, ver docs/pendientes.md):
+    este archivo es la barrera de "no copiar nada", independiente de esa
+    deuda.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" />
+        <exclude domain="file" />
+        <exclude domain="sharedpref" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" />
+        <exclude domain="file" />
+        <exclude domain="sharedpref" />
+    </device-transfer>
+</data-extraction-rules>
