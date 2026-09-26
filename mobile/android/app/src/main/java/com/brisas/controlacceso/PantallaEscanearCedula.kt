@@ -36,11 +36,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -96,13 +92,14 @@ private fun VistaCamaraCedula(
     // Samsung real con "Interacciones táctiles" activado (hallazgo
     // 2026-09-20), y de cualquier forma esa API no deja elegir amplitud ni
     // patrón para poder distinguir éxito de error.
-    val ejecutor = remember { Executors.newSingleThreadExecutor() }
-    val recognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    // MV-10 (auditoría 2026-09-24): agrupa lo que antes eran 9
+    // declaraciones + un DisposableEffect idénticos a las otras 3
+    // pantallas de escaneo -- ver EstadoCamaraOcr.kt.
+    val camara = rememberEstadoCamaraOcr(contexto)
     // Último punto suelto de MV-07 (auditoría de rendimiento 2026-09-25) --
-    // una instancia por apertura de pantalla, igual que `ejecutor`/
-    // `recognizer`, para reusar los buffers de un frame al siguiente en vez
-    // de asignarlos desde cero cada vez. Ver el doc-comment de
-    // `BuffersOcrReutilizables`.
+    // una instancia por apertura de pantalla, igual que `camara`, para
+    // reusar los buffers de un frame al siguiente en vez de asignarlos
+    // desde cero cada vez. Ver el doc-comment de `BuffersOcrReutilizables`.
     val buffersOcr = remember { BuffersOcrReutilizables() }
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
@@ -119,44 +116,6 @@ private fun VistaCamaraCedula(
     val estabilizador = remember(modo) { EstabilizadorLectura(modo = modo) }
     var ultimoValorContinuo by remember { mutableStateOf<String?>(null) }
     var framesSinUltimoValor by remember { mutableStateOf(0) }
-    // AtomicBoolean, no `mutableStateOf` -- esta bandera se lee en el hilo
-    // del analizador de cámara (`ejecutor`) y se escribe desde el hilo
-    // principal (callback de ML Kit); un booleano de Compose no garantiza
-    // esa visibilidad entre hilos, y además el `compareAndSet` evita que
-    // dos frames en vuelo disparen `onDocumentoDetectado` dos veces.
-    val detectada = remember { AtomicBoolean(false) }
-    // Invalida callbacks de CameraX/ML Kit que terminen después de salir de
-    // esta composición. Cerrar el recognizer no garantiza que un Task que ya
-    // estaba en vuelo deje de entregar su listener.
-    val sesionActiva = remember { AtomicBoolean(true) }
-    // Guardado acá para poder desatarlo explícitamente al salir -- `bindToLifecycle`
-    // por sí solo no alcanza: en una app de una sola Activity con Compose,
-    // `LocalLifecycleOwner` suele ser la Activity, no esta pantalla, así que la
-    // cámara no se libera sola al navegar fuera de acá, sólo al morir la Activity.
-    // Sin este `unbindAll()` explícito, reabrir el escáner puede encontrar la
-    // cámara todavía atada al ciclo de vida anterior.
-    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
-    var vistaPreviaCamara by remember { mutableStateOf<Preview?>(null) }
-    var analisisCamara by remember { mutableStateOf<ImageAnalysis?>(null) }
-    var trabajoResultado by remember { mutableStateOf<Job?>(null) }
-    // Ver nota en `analizarCedula`: se pasa explícito en vez de dejar que
-    // ML Kit use su executor por defecto de forma implícita.
-    val ejecutorPrincipal = remember { ContextCompat.getMainExecutor(contexto) }
-
-    DisposableEffect(Unit) {
-        sesionActiva.set(true)
-        onDispose {
-            sesionActiva.set(false)
-            detectada.set(true)
-            trabajoResultado?.cancel()
-            analisisCamara?.clearAnalyzer()
-            val casos = listOfNotNull(vistaPreviaCamara, analisisCamara).toTypedArray()
-            if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
-            ejecutor.shutdown()
-            recognizer.close()
-        }
-    }
-
     // Colores de estado compartidos por las 4 pantallas de escaneo (ver
     // `EscaneoCompartido.kt`) -- fijos, no dependientes del tema
     // (Classic/Brisas/Negro): acá el color comunica significado
@@ -176,7 +135,7 @@ private fun VistaCamaraCedula(
                     scaleType = PreviewView.ScaleType.FILL_CENTER
                 }
                 val onResultado: (ResultadoEstabilizacion) -> Unit = onResultado@{ resultado ->
-                        if (!sesionActiva.get()) return@onResultado
+                        if (!camara.sesionActiva.get()) return@onResultado
                         if (continuo && resultado.estado != EstadoEscaneo.CONFIRMADO) {
                             framesSinUltimoValor++
                             if (framesSinUltimoValor >= FRAMES_AUSENCIA_PARA_REPETIR) {
@@ -197,12 +156,12 @@ private fun VistaCamaraCedula(
                         vencido = resultado.vencido
                         val documento = resultado.documento
                         if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
-                            if (detectada.compareAndSet(false, true)) {
+                            if (camara.detectada.compareAndSet(false, true)) {
                                 val valor = documento.textoBusqueda ?: documento.numeroDocumento
                                 val repetidoContinuo = continuo &&
                                     valor == ultimoValorContinuo
                                 if (repetidoContinuo) {
-                                    detectada.set(false)
+                                    camara.detectada.set(false)
                                     estabilizador.reiniciar()
                                 } else {
                                     ultimoValorContinuo = valor
@@ -223,12 +182,12 @@ private fun VistaCamaraCedula(
                                         vibrarConfirmacion(contexto)
                                         reproducirSonidoConfirmacion()
                                     }
-                                    trabajoResultado?.cancel()
-                                    trabajoResultado = alcance.launch {
+                                    camara.trabajoResultado?.cancel()
+                                    camara.trabajoResultado = alcance.launch {
                                         if (!continuo && resultado.vencido) {
                                             delay(DEMORA_AVISO_VENCIDO_MS)
                                         }
-                                        if (!sesionActiva.get()) return@launch
+                                        if (!camara.sesionActiva.get()) return@launch
                                         // `onDocumentoActual` es suspend: para el
                                         // caso de gafetes ya espera a que la
                                         // mutación en Rust termine (ver
@@ -241,7 +200,7 @@ private fun VistaCamaraCedula(
                                         // no depender de que Compose ya haya
                                         // vuelto a dibujar con el estado nuevo.
                                         onDocumentoActual(documento)
-                                        if (continuo && sesionActiva.get()) {
+                                        if (continuo && camara.sesionActiva.get()) {
                                             val resultado = obtenerResultadoActual()
                                             if (resultado != null) {
                                                 resultadoMostrado = resultado
@@ -255,8 +214,8 @@ private fun VistaCamaraCedula(
                                                 ultimoMensaje = mensajeProcesadoContinuo(modo, valor)
                                             }
                                             delay(DEMORA_REARMAR_ESCANEO_CONTINUO_MS)
-                                            if (sesionActiva.get()) {
-                                                detectada.set(false)
+                                            if (camara.sesionActiva.get()) {
+                                                camara.detectada.set(false)
                                                 estabilizador.reiniciar()
                                                 estado = EstadoEscaneo.BUSCANDO
                                                 vencido = false
@@ -270,40 +229,40 @@ private fun VistaCamaraCedula(
                         }
                     }
                 val onFallo: () -> Unit = {
-                    if (sesionActiva.get()) {
+                    if (camara.sesionActiva.get()) {
                         estado = EstadoEscaneo.BUSCANDO
                         vencido = false
                         ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
                     }
                 }
                 val analisis = construirAnalizadorOcr(
-                    ejecutorAnalisis = ejecutor,
-                    detectada = detectada,
-                    sesionActiva = sesionActiva,
+                    ejecutorAnalisis = camara.ejecutor,
+                    detectada = camara.detectada,
+                    sesionActiva = camara.sesionActiva,
                 ) { imagen ->
                     analizarCedula(
                         imagen = imagen,
-                        recognizer = recognizer,
-                        ejecutorPrincipal = ejecutorPrincipal,
-                        sesionActiva = sesionActiva,
+                        recognizer = camara.recognizer,
+                        ejecutorPrincipal = camara.ejecutorPrincipal,
+                        sesionActiva = camara.sesionActiva,
                         buffersOcr = buffersOcr,
                         onTexto = { texto -> onResultado(estabilizador.procesarFrame(texto)) },
                         onFallo = onFallo,
                     )
                 }
-                analisisCamara = analisis
+                camara.analisisCamara = analisis
                 iniciarCamara(
                     ctx = ctx,
                     previewView = previewView,
                     lifecycleOwner = lifecycleOwner,
                     analisis = analisis,
-                    sesionActiva = sesionActiva,
+                    sesionActiva = camara.sesionActiva,
                     onCameraProviderListo = { proveedor, preview ->
-                        cameraProvider = proveedor
-                        vistaPreviaCamara = preview
+                        camara.cameraProvider = proveedor
+                        camara.vistaPreviaCamara = preview
                     },
                     onFallo = { mensaje ->
-                        if (sesionActiva.get()) {
+                        if (camara.sesionActiva.get()) {
                             estado = EstadoEscaneo.INVALIDO
                             ultimoMensaje = mensaje
                         }
