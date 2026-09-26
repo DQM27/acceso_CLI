@@ -3,28 +3,17 @@ import { toast } from "sonner";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
-import {
-  listarAgendaVisitas,
-  listarHistorialVisitasSitio,
-  listarVisitasActivas,
-  registrarSalidaVisita,
-} from "../api";
-import type {
-  AgendaVisitaResumen,
-  MovimientoHistorialVisitaRemoto,
-  MovimientoVisitaActivoResumen,
-} from "../api";
+import { listarHistorialVisitasSitio, listarVisitasActivas, registrarSalidaVisita } from "../api";
+import type { MovimientoHistorialVisitaRemoto, MovimientoVisitaActivoResumen } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 const VisitaCheckInModal = lazy(() => import("./VisitaCheckInModal"));
-const AgendaCalendario = lazy(() => import("../componentes/AgendaCalendario"));
 
-type Vista = "activas" | "historial" | "agenda";
+type Vista = "activas" | "historial";
 
 const ETIQUETAS_VISTA: Record<Vista, string> = {
   activas: "Activas",
   historial: "Historial",
-  agenda: "Agenda",
 };
 
 function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista) => void }) {
@@ -50,15 +39,12 @@ function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista)
  * modal -- mismo patrón que Activos/NuevoIngresoModal, sin ningún buscador
  * suelto sobre la pantalla (el único campo de búsqueda vive dentro del
  * modal; acá arriba de la grilla sólo va el filtro rápido, igual que
- * Activos). El toggle "Activas/Historial/Agenda" cambia sólo qué consulta
+ * Activos). El toggle "Activas/Historial" cambia sólo qué consulta
  * trae la grilla -- misma pantalla, no una pantalla nueva:
  * - "Activas": `listar_visitas_activas`, quienes están adentro ahora mismo.
  * - "Historial": `historial_visitas_sitio` (sólo se llena en PC, ver
  *   `mobile/rust-core/src/lib.rs`) -- movimientos abiertos o cerrados de
  *   cualquier dispositivo del sitio.
- * - "Agenda": lectura pura de `citas`/`cita_visitantes` local, ya
- *   sincronizadas -- quién está programado desde hoy en adelante, sin
- *   tocar la nube de nuevo. De sólo lectura, no dispara ningún check-in.
  *
  * `refrescarSenal` (de `Shell`, mismo contador que ya usa Activos) hace que
  * la vista activa se recargue sola cuando llega cualquier sincronización
@@ -69,18 +55,12 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
   const [vista, setVista] = useState<Vista>("activas");
   const [filasActivas, setFilasActivas] = useState<MovimientoVisitaActivoResumen[]>([]);
   const [filasHistorial, setFilasHistorial] = useState<MovimientoHistorialVisitaRemoto[]>([]);
-  const [filasAgenda, setFilasAgenda] = useState<AgendaVisitaResumen[]>([]);
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
 
-  const total =
-    vista === "activas"
-      ? filasActivas.length
-      : vista === "historial"
-        ? filasHistorial.length
-        : filasAgenda.length;
-  useBarraEstado(cargando ? "Cargando…" : `${total} ${vista === "agenda" ? "programados" : vista === "historial" ? "movimientos" : "visitantes adentro"}`);
+  const total = vista === "activas" ? filasActivas.length : filasHistorial.length;
+  useBarraEstado(cargando ? "Cargando…" : `${total} ${vista === "historial" ? "movimientos" : "visitantes adentro"}`);
 
   const recargarActivas = useCallback(() => {
     setCargando(true);
@@ -96,17 +76,9 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       .finally(() => setCargando(false));
   }, []);
 
-  const recargarAgenda = useCallback(() => {
-    setCargando(true);
-    return listarAgendaVisitas()
-      .then(setFilasAgenda)
-      .finally(() => setCargando(false));
-  }, []);
-
   useEffect(() => {
     let vigente = true;
-    const recargar =
-      vista === "activas" ? recargarActivas : vista === "historial" ? recargarHistorial : recargarAgenda;
+    const recargar = vista === "activas" ? recargarActivas : recargarHistorial;
     recargar().catch((error) => vigente && toast.error(String(error)));
     return () => {
       vigente = false;
@@ -116,7 +88,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
     // registrada desde otro dispositivo del sitio sólo aparecía acá
     // después de cambiar de pestaña y volver, aunque el resto de la app
     // (Activos) ya reaccionaba sola.
-  }, [vista, refrescarSenal, recargarActivas, recargarHistorial, recargarAgenda]);
+  }, [vista, refrescarSenal, recargarActivas, recargarHistorial]);
 
   const salida = useCallback(
     async (fila: MovimientoVisitaActivoResumen) => {
@@ -270,18 +242,6 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
               }
               accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
             />
-          )}
-          {vista === "agenda" && (
-            <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "0.6rem" }}>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <ToggleVista vista={vista} onCambiar={setVista} />
-              </div>
-              <div style={{ flex: 1, minHeight: 0 }}>
-                <Suspense fallback={null}>
-                  <AgendaCalendario filas={filasAgenda} />
-                </Suspense>
-              </div>
-            </div>
           )}
         </div>
       </div>
