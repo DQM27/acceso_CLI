@@ -59,6 +59,17 @@ import uniffi.control_acceso_mobile.ResultadoAcceso
 class GafeteOcupadoEnSitioException(numero: Long) :
     Exception("El gafete $numero ya está en uso en otro dispositivo de la unidad operativa")
 
+/// MV-04 (auditoría 2026-09-24): usada por [ProveedoresViewModel] --
+/// `Nucleo.proveedorActivoEnOtroSitioConSecreto` ya existía en Rust
+/// (espejo de `contratistaActivoEnOtroSitioConSecreto`) desde antes, pero
+/// nada en Kotlin la llamaba, así que un proveedor con ingreso abierto en
+/// otro sitio podía entrar acá también sin ningún aviso. Mismo texto que
+/// `proveedor_activo_en_otro_sitio` en
+/// `desktop/src-tauri/src/comandos/proveedores.rs`, para no dar un mensaje
+/// distinto según qué interfaz se use.
+class ProveedorActivoEnOtroSitioException(sitio: String) :
+    Exception("Esta cédula ya tiene un ingreso de proveedor activo en $sitio")
+
 /// Espejo de `mensajeVencimientoPraind` (`desktop/src/api/ingresos.ts`) --
 /// antes esta pantalla sólo mostraba "PRAIND próximo a vencer" sin decir
 /// cuánto quedaba, mientras desktop ya avisaba "vence en N días (fecha)".
