@@ -484,7 +484,10 @@ fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
     precargar_catalogo_durante_splash(app.handle().clone());
     iniciar_sincronizacion_automatica(app.handle().clone());
     #[cfg(feature = "lattis-realtime-experimental")]
-    lattis_experimental::iniciar_shadow_run_experimental(app.handle().clone());
+    {
+        lattis_experimental::iniciar_shadow_run_experimental(app.handle().clone());
+        lattis_experimental::iniciar_shadow_run_canal_privado_experimental(app.handle().clone());
+    }
     configurar_cierre_de_splash(app);
     Ok(())
 }

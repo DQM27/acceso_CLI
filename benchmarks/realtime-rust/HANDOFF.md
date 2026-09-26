@@ -24,10 +24,31 @@ el proyecto **sandbox** `control-acceso-staging`
 **Integrado, pero a medias:** ese cliente ya compila e integra de verdad
 en `desktop/src-tauri` (Windows real) y `mobile/rust-core` (host +
 transitivo Android), detrás de una feature `lattis-realtime-experimental`
-apagada por defecto. Hay un puente mínimo (evento `Tauri` / callback
-`UniFFI`) que **ya se probó conectado a staging de verdad** -- pero sólo
-hace **heartbeat público, sin autenticar, sin datos reales**. Nadie del
-lado frontend (`App.tsx`) ni nativo (Kotlin/Swift) lo escucha todavía.
+apagada por defecto. Hay un puente de heartbeat público (evento `Tauri` /
+callback `UniFFI`) que **ya se probó conectado a staging de verdad**, sin
+autenticar, sin datos reales. Nadie del lado frontend (`App.tsx`) ni
+nativo (Kotlin/Swift) lo escucha todavía.
+
+**Desktop, canal privado real (2026-09-26, cerrado):**
+`iniciar_shadow_run_canal_privado_experimental` en
+`desktop/src-tauri/src/lattis_experimental.rs` ya conecta el canal
+PRIVADO real -- Opción A del punto 1 de abajo: reusa
+`GuiState::autenticar_con_cache` (nunca reimplementa `device-auth`),
+arma el topic real `realtime:sitio:<sitio_id>` y escucha el evento real
+`cambio_nube` (el mismo que ya usa `desktop/src/nubeRealtime.ts` en
+producción). Gateado por `LATTIS_EXPERIMENTAL_CANAL_PRIVADO` (basta con
+que exista, sin URL a pegar -- ver el doc-comment de esa constante sobre
+por qué es más peligrosa que la variable del heartbeat). Probado de
+punta a punta contra `control-acceso-staging` con un dispositivo
+descartable real: JWT real de `device-auth`, un `INSERT` real en
+`empresas` disparó el trigger real de producción
+(`empresas_emitir_cambio_nube`), y el broadcast `cambio_nube` llegó al
+cliente Rust con el payload completo (`schema`/`table`/`operation`/
+`sitio_id`/`changed_at`). Todo lo descartable (sitio, dispositivo,
+empresa de prueba) ya se limpió de staging. Mobile (`mobile/rust-core`)
+sigue con sólo el heartbeat público -- el mismo cableado de este punto,
+pendiente ahí (no hay `GuiState` en mobile: hace falta ver cómo el host
+Kotlin/Swift le pasa el token, ver "Fricción real" del punto 1 de abajo).
 
 **No existe todavía:** un reemplazo real de `nubeRealtime.ts`
 (desktop/web) ni de `NubeRealtime.kt` (Android). Esto sigue siendo un
@@ -129,9 +150,14 @@ sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev \
 
 ### 1. Canal privado real con JWT + datos reales en el puente (el más importante)
 
-Hoy `lattis_experimental.rs` (desktop y mobile) sólo hace
-`supervisar_heartbeat` contra el topic público `"phoenix"`, sin
-autenticar. La producción real necesita el canal PRIVADO por sitio
+**Desktop: CERRADO (2026-09-26)** -- ver el TL;DR de arriba. Sigue
+pendiente el mismo cableado en **mobile** (`mobile/rust-core`), que hoy
+sólo hace `supervisar_heartbeat` contra el topic público `"phoenix"`, sin
+autenticar -- ahí no hay un `GuiState` que ya sepa cachear el token, así
+que hace falta decidir cómo el lado nativo (Kotlin/Swift) le pasa un JWT
+vigente a la función `UniFFI` (misma pregunta de "Opción A vs B" de
+abajo, pero del lado móvil). La producción real necesita el canal PRIVADO
+por sitio
 (`sitio:<sitio_id>`, ver `supabase/migrations/*realtime*.sql`) con JWT de
 dispositivo, y `broadcast_changes` con la fila completa (no sólo un
 aviso vacío) -- ambos mecanismos YA están probados y funcionando en el
