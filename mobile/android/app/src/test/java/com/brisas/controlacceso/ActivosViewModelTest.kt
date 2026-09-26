@@ -43,10 +43,10 @@ class ActivosViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(): ActivosViewModel =
+    private fun viewModel(secretoStore: SecretoDispositivoStore = SecretoDispositivoStoreDePrueba()): ActivosViewModel =
         ActivosViewModel(
             nucleo,
-            secretoStore = SecretoDispositivoStoreDePrueba(),
+            secretoStore = secretoStore,
             dispatcherIO = dispatcher,
         )
 
@@ -96,6 +96,37 @@ class ActivosViewModelTest {
             NucleoDePrueba.sqlUsuarioRoot(),
         )
         val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.cambiarTexto("Contratista")
+        advanceUntilIdle()
+        val contratista = viewModel.resultadosBusqueda.single()
+
+        viewModel.elegir(contratista)
+        advanceUntilIdle()
+
+        val seleccion = viewModel.seleccionIngreso
+        assertTrue(seleccion is SeleccionIngreso.Formulario)
+        assertEquals("Contratista Test", (seleccion as SeleccionIngreso.Formulario).preparacion.nombre)
+    }
+
+    @Test
+    fun `elegir sigue funcionando sin chequeo cruzado si falla el Keystore al leer el secreto`() = runTest(dispatcher) {
+        // MV-05 (auditoría 2026-09-24): antes, `SecretoDispositivoStoreException`
+        // al cargar el secreto escapaba de `viewModelScope` sin manejador y
+        // tiraba la app entera. Ahora se trata como "sin chequeo cruzado" --
+        // mejor esfuerzo, igual que la falta de secreto por cualquier otro
+        // motivo -- y la selección no debe quedar trabada en `Cargando`.
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        val viewModel = viewModel(SecretoDispositivoStoreDePrueba(lanzarAlCargar = true))
         advanceUntilIdle()
         viewModel.cambiarTexto("Contratista")
         advanceUntilIdle()

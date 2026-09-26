@@ -299,7 +299,24 @@ class ActivosViewModel(
                 // red. `mensajeBloqueo` llega ya resuelto (o `null` si se
                 // puede continuar); acá no se evalúa ninguna condición
                 // propia, sólo se lee el resultado.
-                val secreto = withContext(dispatcherIO) { secretoStore.cargar() }.orEmpty()
+                //
+                // MV-05 (auditoría 2026-09-24): `secretoStore.cargar()`
+                // puede lanzar `SecretoDispositivoStoreException` (archivo
+                // del secreto corrupto, `AEADBadTagException` tras una
+                // restauración/migración, fallo del propio Keystore -- ver
+                // `SecretoDispositivoStore.kt`). Antes esa excepción no se
+                // capturaba acá (sólo `NucleoException` más abajo) y
+                // escapaba de `viewModelScope` sin manejador, tirando la
+                // app entera cada vez que se elegía un contratista. Se
+                // captura sólo alrededor de este cruce puntual y se sigue
+                // igual que el resto del archivo trata la falta de secreto:
+                // "sin chequeo cruzado", mejor esfuerzo, nunca bloquea la
+                // operación principal por esto.
+                val secreto = try {
+                    withContext(dispatcherIO) { secretoStore.cargar() }.orEmpty()
+                } catch (excepcion: SecretoDispositivoStoreException) {
+                    ""
+                }
                 val preparacion = withContext(dispatcherIO) {
                     nucleo.prepararIngresoConSecreto(contratista.id, secreto)
                 }
@@ -309,6 +326,13 @@ class ActivosViewModel(
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
                 seleccionIngreso = SeleccionIngreso.Ninguna
+            } finally {
+                // Red de seguridad: si algo inesperado escapó de los catch
+                // de arriba, no dejar la pantalla trabada en "Cargando"
+                // para siempre (parte del hallazgo MV-05).
+                if (seleccionIngreso is SeleccionIngreso.Cargando) {
+                    seleccionIngreso = SeleccionIngreso.Ninguna
+                }
             }
         }
     }
