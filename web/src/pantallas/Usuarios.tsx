@@ -5,6 +5,7 @@ import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import AvisoTruncado from "../componentes/AvisoTruncado";
+import EncabezadoPagina from "../componentes/EncabezadoPagina";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import {
   actualizarActivoUsuario,
@@ -289,8 +290,7 @@ export default function Usuarios() {
         cellRenderer: ({ data }: { data: FilaUsuario }) => (
           <button
             type="button"
-            className="boton"
-            style={{ fontSize: "0.78rem", padding: "0.2rem 0.5rem" }}
+            className="boton text-[0.78rem] px-2 py-[0.2rem]"
             disabled={reseteando === data.id}
             onClick={() => manejarResetPassword(data)}
           >
@@ -303,14 +303,18 @@ export default function Usuarios() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+    <div className="flex h-full flex-col">
+      <EncabezadoPagina
+        titulo="Usuarios"
+        descripcion="Personas que operan los puestos de control."
+      />
+      <div className="pantalla-cuerpo min-h-0 flex-1">
         {truncado && (
           <AvisoTruncado
             mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} usuarios -- se muestran solo los primeros (la búsqueda de acá arriba sólo filtra entre esos, no trae más).`}
           />
         )}
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div className="min-h-0 flex-1">
           <Tabla<FilaUsuario>
             id="usuarios"
             columnas={columnas}
@@ -323,7 +327,7 @@ export default function Usuarios() {
                 <button type="button" className="boton" onClick={abrirModal}>
                   + Nuevo
                 </button>
-                <div className="campo" style={{ flex: "0 1 16rem" }}>
+                <div className="campo flex-[0_1_16rem]">
                   <input
                     placeholder="Cédula o nombre…"
                     value={busqueda}
@@ -339,7 +343,7 @@ export default function Usuarios() {
 
       {modalAbierto && (
         <Modal titulo="Nuevo usuario" onCerrar={cerrarModal}>
-          <form onSubmit={alEnviarFormulario} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <form onSubmit={alEnviarFormulario} className="flex flex-col gap-3">
             <label className="campo">
               Cédula
               <input
@@ -362,9 +366,9 @@ export default function Usuarios() {
               />
             </label>
 
-            <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.8rem" }}>
+            <p className="m-0 text-[0.8rem] text-muted">
               Se genera una contraseña temporal de un solo uso -- se muestra acá apenas se
-              cree, para copiar y mandarle a la persona. La va a tener que cambiar en su
+              cree, para copiar y enviarle a la persona. La va a tener que cambiar en su
               primer inicio de sesión.
             </p>
 
@@ -374,7 +378,7 @@ export default function Usuarios() {
               </p>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <div className="flex justify-end gap-2">
               <button type="button" className="boton" disabled={creando} onClick={cerrarModal}>
                 Cancelar
               </button>
@@ -391,26 +395,14 @@ export default function Usuarios() {
           titulo="Contraseña temporal generada"
           onCerrar={() => setCredencialGenerada(null)}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.85rem" }}>
-              Cédula <strong>{credencialGenerada.cedula}</strong> -- copiá esto y mandáselo a
+          <div className="flex flex-col gap-3">
+            <p className="m-0 text-[0.85rem] text-muted">
+              Cédula <strong>{credencialGenerada.cedula}</strong> -- copie esto y envíeselo a
               la persona (WhatsApp, en persona, lo que sea). No se vuelve a mostrar después de
               cerrar esta ventana.
             </p>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                padding: "0.6rem 0.8rem",
-                border: "1px solid var(--borde)",
-                borderRadius: "0.4rem",
-                fontFamily: "monospace",
-                fontSize: "1.1rem",
-                letterSpacing: "0.05em",
-              }}
-            >
-              <span style={{ flex: 1 }}>{credencialGenerada.password_temporal}</span>
+            <div className="flex items-center gap-2 rounded-[0.4rem] border border-borde px-[0.8rem] py-[0.6rem] font-mono text-[1.1rem] tracking-wider">
+              <span className="flex-1">{credencialGenerada.password_temporal}</span>
               <button
                 type="button"
                 className="boton"
@@ -422,7 +414,7 @@ export default function Usuarios() {
                 Copiar
               </button>
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div className="flex justify-end">
               <button
                 type="button"
                 className="boton boton-primario"

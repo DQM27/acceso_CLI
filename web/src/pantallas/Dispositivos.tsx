@@ -4,6 +4,7 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
+import EncabezadoPagina from "../componentes/EncabezadoPagina";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { usePresenciaPorSitio } from "../presenciaSitios";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
@@ -285,7 +286,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const alSuspender = useCallback((fila: FilaDispositivo) => {
     setConfirmacion({
       titulo: "Suspender dispositivo",
-      mensaje: `¿Suspender "${fila.etiqueta}"? Va a dejar de poder sincronizar hasta que lo reactivés.`,
+      mensaje: `¿Suspender "${fila.etiqueta}"? Va a dejar de poder sincronizar hasta que lo reactive.`,
       textoConfirmar: "Suspender",
       accion: async () => {
         await suspenderDispositivo(fila.id, true);
@@ -404,15 +405,12 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         sortable: false,
         filter: false,
         cellRenderer: ({ data }: { data: FilaDispositivo }) => (
-          <div
-            style={{ display: "flex", gap: "0.4rem", justifyContent: "center", alignItems: "center", height: "100%" }}
-          >
+          <div className="flex h-full items-center justify-center gap-[0.4rem]">
             {!data.revoked_at &&
               (data.suspended_at ? (
                 <button
                   type="button"
-                  className="boton"
-                  style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                  className="boton px-[0.6rem] py-[0.2rem] text-[0.8rem]"
                   onClick={() => alReactivar(data)}
                 >
                   Reactivar
@@ -420,8 +418,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
               ) : (
                 <button
                   type="button"
-                  className="boton"
-                  style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                  className="boton px-[0.6rem] py-[0.2rem] text-[0.8rem]"
                   onClick={() => alSuspender(data)}
                 >
                   Suspender
@@ -430,8 +427,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
             {!data.revoked_at && (
               <button
                 type="button"
-                className="boton"
-                style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                className="boton px-[0.6rem] py-[0.2rem] text-[0.8rem]"
                 onClick={() => alRevocar(data)}
               >
                 Revocar
@@ -439,8 +435,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
             )}
             <button
               type="button"
-              className="boton"
-              style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+              className="boton px-[0.6rem] py-[0.2rem] text-[0.8rem]"
               onClick={() => alEliminar(data)}
             >
               Eliminar
@@ -453,9 +448,13 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        <div style={{ flex: 1, minHeight: 0 }}>
+    <div className="flex h-full flex-col">
+      <EncabezadoPagina
+        titulo="Unidades y dispositivos"
+        descripcion="Equipos autorizados a sincronizar con cada unidad operativa."
+      />
+      <div className="pantalla-cuerpo min-h-0 flex-1">
+        <div className="min-h-0 flex-1">
           <Tabla<FilaDispositivo>
             id="dispositivos"
             columnas={columnas}
@@ -468,23 +467,23 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
             }
           />
         </div>
-        {cargando && filas.length === 0 && <p style={{ color: "var(--muted)" }}>Cargando…</p>}
+        {cargando && filas.length === 0 && <p className="text-muted">Cargando…</p>}
       </div>
 
       {modalAbierto && (
         <Modal titulo="Nuevo dispositivo" onCerrar={cerrarModal}>
           {provisionado ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <p style={{ margin: 0 }}>
-                Dispositivo creado en <strong>{provisionado.sitio_nombre}</strong>. Pegá este
+            <div className="flex flex-col gap-4">
+              <p className="m-0">
+                Dispositivo creado en <strong>{provisionado.sitio_nombre}</strong>. Pegue este
                 secreto en la app del dispositivo — no se va a volver a mostrar acá.
               </p>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
+              <div className="flex items-stretch gap-2">
                 <input
                   readOnly
                   value={provisionado.secret}
                   onFocus={(evento) => evento.currentTarget.select()}
-                  style={{ flex: 1, fontFamily: "monospace", fontSize: "0.8rem" }}
+                  className="flex-1 font-mono text-[0.8rem]"
                 />
                 <button
                   type="button"
@@ -494,24 +493,21 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
                   Copiar
                 </button>
               </div>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div className="flex justify-end">
                 <button type="button" className="boton boton-primario" onClick={cerrarModal}>
                   Listo
                 </button>
               </div>
             </div>
           ) : (
-            <form
-              onSubmit={alEnviarFormulario}
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
+            <form onSubmit={alEnviarFormulario} className="flex flex-col gap-4">
               <label className="campo">
                 Unidad operativa
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+                <div className="flex gap-2">
                   <select
                     required
                     autoFocus
-                    style={{ flex: 1 }}
+                    className="flex-1"
                     value={sitioId}
                     disabled={creando}
                     onChange={(evento) => setSitioId(evento.target.value)}
@@ -561,7 +557,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
                 </p>
               )}
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+              <div className="flex justify-end gap-2">
                 <button type="button" className="boton" disabled={creando} onClick={cerrarModal}>
                   Cancelar
                 </button>
@@ -576,7 +572,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
 
       {modalSitioAbierto && (
         <Modal titulo="Nueva unidad operativa" onCerrar={cerrarModalSitio}>
-          <form onSubmit={alCrearSitio} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <form onSubmit={alCrearSitio} className="flex flex-col gap-3">
             <label className="campo">
               Nombre
               <input
@@ -595,7 +591,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
               </p>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <div className="flex justify-end gap-2">
               <button type="button" className="boton" disabled={creandoSitio} onClick={cerrarModalSitio}>
                 Cancelar
               </button>
@@ -609,8 +605,8 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
 
       {confirmacion && (
         <Modal titulo={confirmacion.titulo} onCerrar={() => setConfirmacion(null)}>
-          <p style={{ marginTop: 0 }}>{confirmacion.mensaje}</p>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+          <p className="mt-0">{confirmacion.mensaje}</p>
+          <div className="flex justify-end gap-2">
             <button
               type="button"
               className="boton"

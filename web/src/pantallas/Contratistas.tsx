@@ -5,6 +5,7 @@ import type { CellStyle, ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import AvisoTruncado from "../componentes/AvisoTruncado";
+import EncabezadoPagina from "../componentes/EncabezadoPagina";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { actualizarAccesoContratista, listarContratistas } from "../api/contratistas";
 import type { Contratista } from "../api/contratistas";
@@ -135,14 +136,18 @@ export default function Contratistas() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+    <div className="flex h-full flex-col">
+      <EncabezadoPagina
+        titulo="Contratistas"
+        descripcion="Personas con acceso autorizado y su estado de PRAIND."
+      />
+      <div className="pantalla-cuerpo min-h-0 flex-1">
         {truncado && (
           <AvisoTruncado
             mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} contratistas -- se muestran solo los primeros (la búsqueda de acá arriba sólo filtra entre esos, no trae más).`}
           />
         )}
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div className="min-h-0 flex-1">
           <Tabla<Contratista>
             id="contratistas"
             columnas={columnas}
@@ -151,7 +156,7 @@ export default function Contratistas() {
             filtrosPorColumna
             onCeldaEditada={manejarEdicion}
             controles={
-              <div className="campo" style={{ flex: "0 1 16rem" }}>
+              <div className="campo flex-[0_1_16rem]">
                 <input
                   placeholder="Cédula o nombre…"
                   value={busqueda}
