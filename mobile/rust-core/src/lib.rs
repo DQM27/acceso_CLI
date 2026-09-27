@@ -424,7 +424,7 @@ impl From<EmpresaProveedorNucleo> for EmpresaProveedor {
 /// docs/plan-app-movil.md). `fecha_vencimiento_praind` viaja como texto
 /// ISO (`AAAA-MM-DD`); si no parsea se rechaza como `FechaInvalida`. Sin
 /// `tiene_acceso`: el alta en persona siempre queda con acceso y eso lo
-/// decide el núcleo (`ContratistaService::crear_en_persona`), no Kotlin.
+/// decide el núcleo (`ContratistaService::crear`), no Kotlin.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct DatosContratista {
     pub cedula: String,
@@ -2068,7 +2068,7 @@ impl Nucleo {
     /// Alta de contratista en persona, sólo creación (ver
     /// docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
     /// PRAIND requerido y vigente, personal de ruta según el tipo, acceso
-    /// habilitado) viven en `ContratistaService::crear_en_persona`; esto
+    /// habilitado) viven en `ContratistaService::crear`; esto
     /// sólo convierte tipos en la frontera uniffi.
     pub fn crear_contratista(&self, datos: DatosContratista) -> Result<i64, NucleoError> {
         let actor = self.actor_autenticado()?;
@@ -2082,7 +2082,7 @@ impl Nucleo {
             })
             .transpose()?;
 
-        Ok(self.core_lock().crear_contratista_en_persona(
+        Ok(self.core_lock().crear_contratista(
             &actor,
             DatosContratistaNucleo {
                 cedula: datos.cedula,
@@ -2091,7 +2091,7 @@ impl Nucleo {
                 tipo_ingreso: datos.tipo_ingreso.into(),
                 fecha_vencimiento_praind,
                 es_personal_ruta: datos.es_personal_ruta,
-                // Lo fija `crear_en_persona` (siempre con acceso).
+                // Lo fija el núcleo: el alta siempre queda con acceso.
                 tiene_acceso: true,
             },
         )?)
@@ -3862,7 +3862,8 @@ mod tests {
 
         let resultados = nucleo.buscar_contratistas("Nuevo".to_string()).unwrap();
         assert_eq!(resultados.len(), 1);
-        assert_eq!(resultados[0].nombre, "Nuevo Contratista");
+        // El núcleo guarda el nombre en mayúsculas.
+        assert_eq!(resultados[0].nombre, "NUEVO CONTRATISTA");
     }
 
     #[test]
@@ -3908,7 +3909,7 @@ mod tests {
     /// Las reglas del alta en persona salen del núcleo con un mensaje listo
     /// para mostrar (`Rechazado`), no como error interno.
     #[test]
-    fn crear_contratista_aplica_reglas_del_alta_en_persona() {
+    fn crear_contratista_aplica_reglas_del_alta() {
         let archivo = tempfile::NamedTempFile::new().unwrap();
         let ruta = archivo.path().to_str().unwrap().to_string();
         let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();

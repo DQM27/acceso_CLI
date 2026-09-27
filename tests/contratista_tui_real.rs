@@ -86,11 +86,11 @@ fn persistencia_busqueda_fts_y_empresa_id_sobreviven_reapertura() {
             .crear_contratista(
                 &actor,
                 datos(
-                    "001-09",
+                    "00109",
                     "José Hernández",
                     e,
                     TipoIngreso::Praind,
-                    NaiveDate::from_ymd_opt(2027, 1, 1),
+                    NaiveDate::from_ymd_opt(2099, 1, 1),
                     false,
                 ),
             )
@@ -108,7 +108,7 @@ fn persistencia_busqueda_fts_y_empresa_id_sobreviven_reapertura() {
     {
         let core = AppCore::new(open_database(&ruta).unwrap());
         assert_eq!(
-            core.buscar_contratistas(&filtro("001-09")).unwrap().items[0].id,
+            core.buscar_contratistas(&filtro("00109")).unwrap().items[0].id,
             id
         );
     }
@@ -131,7 +131,7 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         .crear_contratista(
             &actor,
             datos(
-                "CEDULA-VIEJA-997",
+                "997",
                 "José Hernández",
                 e,
                 TipoIngreso::PorCorreo,
@@ -143,14 +143,14 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
     let _b = core
         .crear_contratista(
             &actor,
-            datos("B", "Otro", e, TipoIngreso::Swat, None, false),
+            datos("2002", "Otro", e, TipoIngreso::Swat, None, false),
         )
         .unwrap();
     core.actualizar_contratista(
         &actor,
         a,
         actualizacion(
-            "CEDULA-NUEVA-998",
+            "998",
             "José Álvarez",
             e,
             TipoIngreso::PorCorreo,
@@ -170,36 +170,37 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         a
     );
     assert!(
-        core.buscar_contratistas(&filtro("CEDULA-VIEJA-997"))
+        core.buscar_contratistas(&filtro("997"))
             .unwrap()
             .items
             .is_empty()
     );
     assert_eq!(
-        core.buscar_contratistas(&filtro("CEDULA-NUEVA-998"))
-            .unwrap()
-            .items[0]
-            .id,
+        core.buscar_contratistas(&filtro("998")).unwrap().items[0].id,
         a
     );
     assert!(matches!(
         core.actualizar_contratista(
             &actor,
             a,
-            actualizacion("B", "No debe persistir", e, TipoIngreso::Swat, None, false)
+            actualizacion(
+                "2002",
+                "No debe persistir",
+                e,
+                TipoIngreso::Swat,
+                None,
+                false
+            )
         ),
         Err(ContratistaServiceError::CedulaDuplicada)
     ));
-    let conservado = &core
-        .buscar_contratistas(&filtro("CEDULA-NUEVA-998"))
-        .unwrap()
-        .items[0];
-    assert_eq!(conservado.nombre, "José Álvarez");
+    let conservado = &core.buscar_contratistas(&filtro("998")).unwrap().items[0];
+    assert_eq!(conservado.nombre, "JOSÉ ÁLVAREZ");
     assert_eq!(conservado.tipo_ingreso, TipoIngreso::PorCorreo);
     assert!(matches!(
         core.crear_contratista(
             &actor,
-            datos("D", "Sin empresa", 999, TipoIngreso::Swat, None, false)
+            datos("4004", "Sin empresa", 999, TipoIngreso::Swat, None, false)
         ),
         Err(ContratistaServiceError::EmpresaNoEncontrada)
     ));
@@ -224,21 +225,14 @@ fn matrices_praind_ruta_acceso_y_cedula_string_se_persisten() {
         (TipoIngreso::InHouse, false, true),
         (TipoIngreso::PorCorreo, false, false),
         (TipoIngreso::Swat, false, false),
-        (TipoIngreso::PorCorreo, true, true),
+        (TipoIngreso::Praind, true, true),
     ];
     for (i, (tipo, ruta_personal, requiere)) in casos.into_iter().enumerate() {
-        let fecha = requiere.then(|| NaiveDate::from_ymd_opt(2027, 1, 1).unwrap());
-        let cedula = format!("00-{i}");
+        let fecha = requiere.then(|| NaiveDate::from_ymd_opt(2099, 1, 1).unwrap());
+        let cedula = format!("00{i}");
         core.crear_contratista(
             &actor,
-            datos(
-                &cedula,
-                &format!("Persona {i}"),
-                e,
-                tipo,
-                fecha,
-                ruta_personal,
-            ),
+            datos(&cedula, "Persona", e, tipo, fecha, ruta_personal),
         )
         .unwrap();
         let r = &core.buscar_contratistas(&filtro(&cedula)).unwrap().items[0];

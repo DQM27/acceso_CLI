@@ -36,9 +36,7 @@ pub fn requiere_gafete_de(tipo_ingreso: TipoIngreso, personal_ruta: bool) -> boo
 
 /// Regla de negocio (pedido del usuario 2026-09-20): "personal de ruta"
 /// sólo existe para `Praind` e `InHouse`. `PorCorreo` y `Swat` no lo
-/// admiten. Hoy sólo la aplica el alta en persona
-/// (`ContratistaService::crear_en_persona`); el formulario de escritorio
-/// todavía no (ver `docs/auditorias/reglas-duplicadas-escritorio-2026-09-27.md`).
+/// admiten. La aplica `ContratistaService` al crear y al editar.
 pub fn admite_personal_ruta(tipo_ingreso: TipoIngreso) -> bool {
     matches!(tipo_ingreso, TipoIngreso::Praind | TipoIngreso::InHouse)
 }
@@ -48,6 +46,25 @@ pub fn admite_personal_ruta(tipo_ingreso: TipoIngreso) -> bool {
 /// no está "vencido" (eso es `PraindRequerido`, otra regla).
 pub fn praind_vencido(fecha_vencimiento: Option<NaiveDate>, hoy: NaiveDate) -> bool {
     fecha_vencimiento.is_some_and(|fecha| fecha < hoy)
+}
+
+/// Regla de negocio: la cédula sólo tiene dígitos (sin guiones ni
+/// espacios). Vacía no es válida.
+pub fn cedula_valida(cedula: &str) -> bool {
+    !cedula.is_empty() && cedula.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Regla de negocio: el nombre sólo tiene letras (con tildes), espacios,
+/// apóstrofo y guion -- sin números ni símbolos -- y se guarda en
+/// MAYÚSCULAS con los espacios de más colapsados. `None` si no cumple o
+/// queda vacío.
+pub fn normalizar_nombre(nombre: &str) -> Option<String> {
+    let limpio = nombre.split_whitespace().collect::<Vec<_>>().join(" ");
+    let valido = !limpio.is_empty()
+        && limpio
+            .chars()
+            .all(|c| c.is_alphabetic() || c == ' ' || c == '\'' || c == '-');
+    valido.then(|| limpio.to_uppercase())
 }
 
 #[cfg(test)]
@@ -100,5 +117,23 @@ mod tests {
         assert!(!praind_vencido(Some(hoy), hoy));
         assert!(!praind_vencido(NaiveDate::from_ymd_opt(2027, 1, 1), hoy));
         assert!(!praind_vencido(None, hoy));
+    }
+
+    #[test]
+    fn cedula_valida_solo_digitos() {
+        assert!(cedula_valida("701000000"));
+        assert!(!cedula_valida("7-0100-0000"));
+        assert!(!cedula_valida(""));
+    }
+
+    #[test]
+    fn normalizar_nombre_mayusculas_sin_numeros_ni_simbolos() {
+        assert_eq!(
+            normalizar_nombre("  maría  josé o'neil-rojas "),
+            Some("MARÍA JOSÉ O'NEIL-ROJAS".to_string())
+        );
+        assert_eq!(normalizar_nombre("Ana 2"), None);
+        assert_eq!(normalizar_nombre("Ana@"), None);
+        assert_eq!(normalizar_nombre("   "), None);
     }
 }

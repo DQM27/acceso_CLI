@@ -63,15 +63,18 @@ pub fn mensaje_empresa(error: EmpresaServiceError) -> String {
 
 pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
     use ContratistaServiceError::{
-        CedulaDuplicada, CedulaVacia, ContratistaNoEncontrado, Database, EmpresaNoEncontrada,
-        NombreVacio, OperacionNoAutorizada, PersonalRutaNoAdmitido, PraindRequerido, PraindVencido,
+        CedulaDuplicada, CedulaInvalida, CedulaVacia, ContratistaNoEncontrado, Database,
+        EmpresaNoEncontrada, NombreInvalido, NombreVacio, OperacionNoAutorizada,
+        PersonalRutaNoAdmitido, PraindRequerido, PraindVencido,
     };
 
     match error {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),
         EmpresaNoEncontrada => "La empresa seleccionada ya no existe".into(),
         CedulaVacia => "La cédula es obligatoria".into(),
+        CedulaInvalida => "La cédula sólo puede tener números".into(),
         NombreVacio => "El nombre es obligatorio".into(),
+        NombreInvalido => "El nombre no puede tener números ni símbolos".into(),
         PraindRequerido => "Fecha PRAIND requerida".into(),
         PraindVencido => "El PRAIND está vencido — ingrese una fecha vigente".into(),
         PersonalRutaNoAdmitido => "Personal de ruta sólo aplica a PRAIND e IN HOUSE".into(),

@@ -7,9 +7,12 @@ use crate::database::queries::contratistas::{
 };
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
-use crate::domain::contratista::{admite_personal_ruta, praind_vencido, requiere_praind_de};
+use crate::domain::contratista::{
+    admite_personal_ruta, cedula_valida, normalizar_nombre, praind_vencido,
+};
 use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
+use crate::tiempo::fecha_costa_rica;
 
 use super::error::ContratistaServiceError;
 
@@ -63,6 +66,10 @@ where
 {
     contratistas: &'a C,
     empresas: &'a E,
+    /// Fecha de Costa Rica contra la que se decide si un PRAIND está
+    /// vencido. `AppCore` pasa la de su reloj (`con_hoy`); `new` usa la del
+    /// sistema.
+    hoy: NaiveDate,
 }
 
 impl<'a, C, E> ContratistaService<'a, C, E>
@@ -71,48 +78,32 @@ where
     E: EmpresaRepository + ?Sized,
 {
     pub fn new(contratistas: &'a C, empresas: &'a E) -> Self {
+        Self::con_hoy(contratistas, empresas, fecha_costa_rica(Utc::now()))
+    }
+
+    pub fn con_hoy(contratistas: &'a C, empresas: &'a E, hoy: NaiveDate) -> Self {
         Self {
             contratistas,
             empresas,
+            hoy,
         }
     }
 
+    /// Alta de contratista. Siempre queda con acceso: se registra a quien
+    /// está presente y, si corresponde, se le niega después editando
+    /// (decisión del dueño 2026-09-27). `datos.tiene_acceso` se ignora.
+    /// El resto de las reglas, ver `validar_datos`.
     pub fn crear(&self, datos: DatosContratista) -> Result<i64, ContratistaServiceError> {
-        let contratista = self.construir_contratista(0, datos)?;
+        let contratista = self.construir_contratista(
+            0,
+            DatosContratista {
+                tiene_acceso: true,
+                ..datos
+            },
+        )?;
         self.contratistas
             .crear(&contratista)
             .map_err(mapear_cedula_duplicada)
-    }
-
-    /// Alta hecha frente a la persona, en el punto de acceso (hoy la usa
-    /// la app móvil). Además de lo que valida [`Self::crear`]:
-    /// - personal de ruta sólo para los tipos que lo admiten
-    ///   (`domain::contratista::admite_personal_ruta`);
-    /// - un PRAIND vencido no se registra (`praind_vencido`);
-    /// - queda siempre con acceso: se registra a quien está presente
-    ///   (pedido del usuario 2026-09-20), `datos.tiene_acceso` se ignora.
-    ///
-    /// `hoy` lo pasa quien llama (fecha de Costa Rica) para poder probarlo.
-    /// El formulario de escritorio todavía usa [`Self::crear`] y no aplica
-    /// estas reglas -- ver
-    /// `docs/auditorias/reglas-duplicadas-escritorio-2026-09-27.md`.
-    pub fn crear_en_persona(
-        &self,
-        datos: DatosContratista,
-        hoy: NaiveDate,
-    ) -> Result<i64, ContratistaServiceError> {
-        if datos.es_personal_ruta && !admite_personal_ruta(datos.tipo_ingreso) {
-            return Err(ContratistaServiceError::PersonalRutaNoAdmitido);
-        }
-        if requiere_praind_de(datos.tipo_ingreso, datos.es_personal_ruta)
-            && praind_vencido(datos.fecha_vencimiento_praind, hoy)
-        {
-            return Err(ContratistaServiceError::PraindVencido);
-        }
-        self.crear(DatosContratista {
-            tiene_acceso: true,
-            ..datos
-        })
     }
 
     pub fn buscar_por_id(&self, id: i64) -> Result<Contratista, ContratistaServiceError> {
@@ -251,37 +242,16 @@ where
         id: i64,
         datos: DatosContratista,
     ) -> Result<Contratista, ContratistaServiceError> {
-        let cedula = datos.cedula.trim();
-        if cedula.is_empty() {
-            return Err(ContratistaServiceError::CedulaVacia);
-        }
-
-        let nombre = datos.nombre.trim();
-        if nombre.is_empty() {
-            return Err(ContratistaServiceError::NombreVacio);
-        }
-
-        let empresa = self
-            .empresas
-            .buscar_por_id(datos.empresa_id)?
-            .ok_or(ContratistaServiceError::EmpresaNoEncontrada)?;
-
-        let contratista = Contratista::nuevo(
+        self.armar(
             id,
-            cedula.to_string(),
-            nombre.to_string(),
-            &empresa,
+            &datos.cedula,
+            &datos.nombre,
+            datos.empresa_id,
             datos.tipo_ingreso,
             datos.fecha_vencimiento_praind,
             datos.es_personal_ruta,
             datos.tiene_acceso,
-        );
-
-        if contratista.requiere_praind() && contratista.fecha_vencimiento_praind.is_none() {
-            return Err(ContratistaServiceError::PraindRequerido);
-        }
-
-        Ok(contratista)
+        )
     }
 
     fn construir_actualizacion(
@@ -289,34 +259,77 @@ where
         actual: Contratista,
         datos: DatosActualizacionContratista,
     ) -> Result<Contratista, ContratistaServiceError> {
-        let cedula = datos.cedula.trim();
-        if cedula.is_empty() {
-            return Err(ContratistaServiceError::CedulaVacia);
-        }
-
-        let nombre = datos.nombre.trim();
-        if nombre.is_empty() {
-            return Err(ContratistaServiceError::NombreVacio);
-        }
-
-        let empresa = self
-            .empresas
-            .buscar_por_id(datos.empresa_id)?
-            .ok_or(ContratistaServiceError::EmpresaNoEncontrada)?;
-
-        let contratista = Contratista::nuevo(
+        self.armar(
             actual.id,
-            cedula.to_string(),
-            nombre.to_string(),
-            &empresa,
+            &datos.cedula,
+            &datos.nombre,
+            datos.empresa_id,
             datos.tipo_ingreso,
             datos.fecha_vencimiento_praind,
             datos.es_personal_ruta,
             datos.tiene_acceso,
+        )
+    }
+
+    /// Todas las reglas del contratista, iguales al crear y al editar y
+    /// para cualquier interfaz (escritorio, móvil):
+    /// - cédula obligatoria, sólo dígitos;
+    /// - nombre obligatorio, sólo letras, guardado en mayúsculas;
+    /// - la empresa existe;
+    /// - personal de ruta sólo para PRAIND e IN HOUSE;
+    /// - PRAIND obligatorio si el tipo lo requiere, y vigente.
+    #[allow(clippy::too_many_arguments)]
+    fn armar(
+        &self,
+        id: i64,
+        cedula: &str,
+        nombre: &str,
+        empresa_id: i64,
+        tipo_ingreso: TipoIngreso,
+        fecha_vencimiento_praind: Option<NaiveDate>,
+        es_personal_ruta: bool,
+        tiene_acceso: bool,
+    ) -> Result<Contratista, ContratistaServiceError> {
+        let cedula = cedula.trim();
+        if cedula.is_empty() {
+            return Err(ContratistaServiceError::CedulaVacia);
+        }
+        if !cedula_valida(cedula) {
+            return Err(ContratistaServiceError::CedulaInvalida);
+        }
+
+        if nombre.trim().is_empty() {
+            return Err(ContratistaServiceError::NombreVacio);
+        }
+        let nombre = normalizar_nombre(nombre).ok_or(ContratistaServiceError::NombreInvalido)?;
+
+        let empresa = self
+            .empresas
+            .buscar_por_id(empresa_id)?
+            .ok_or(ContratistaServiceError::EmpresaNoEncontrada)?;
+
+        if es_personal_ruta && !admite_personal_ruta(tipo_ingreso) {
+            return Err(ContratistaServiceError::PersonalRutaNoAdmitido);
+        }
+
+        let contratista = Contratista::nuevo(
+            id,
+            cedula.to_string(),
+            nombre,
+            &empresa,
+            tipo_ingreso,
+            fecha_vencimiento_praind,
+            es_personal_ruta,
+            tiene_acceso,
         );
 
-        if contratista.requiere_praind() && contratista.fecha_vencimiento_praind.is_none() {
-            return Err(ContratistaServiceError::PraindRequerido);
+        if contratista.requiere_praind() {
+            if contratista.fecha_vencimiento_praind.is_none() {
+                return Err(ContratistaServiceError::PraindRequerido);
+            }
+            if praind_vencido(contratista.fecha_vencimiento_praind, self.hoy) {
+                return Err(ContratistaServiceError::PraindVencido);
+            }
         }
 
         Ok(contratista)

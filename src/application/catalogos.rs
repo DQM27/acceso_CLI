@@ -146,9 +146,10 @@ impl AppCore {
         verificar_actor_activo(&transaction, actor)
             .map_err(ContratistaServiceError::Database)?
             .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
-        ContratistaService::new(
+        ContratistaService::con_hoy(
             &SqliteContratistaRepository::new(&transaction),
             &SqliteEmpresaRepository::new(&transaction),
+            fecha_costa_rica(self.reloj.ahora_utc()),
         )
         .crear(datos)
         .and_then(|id| {
@@ -163,38 +164,12 @@ impl AppCore {
     /// `domain::contratista::praind_vencido` contra el "hoy" del reloj del
     /// núcleo (corregido con la hora del servidor en escritorio/móvil):
     /// lo usa el formulario para avisar antes de guardar, con la misma
-    /// regla y el mismo reloj que [`Self::crear_contratista_en_persona`].
+    /// regla y el mismo reloj que [`Self::crear_contratista`].
     pub fn praind_vencido(&self, fecha_vencimiento: NaiveDate) -> bool {
         praind_vencido(
             Some(fecha_vencimiento),
             fecha_costa_rica(self.reloj.ahora_utc()),
         )
-    }
-
-    /// Alta en persona (app móvil): ver `ContratistaService::crear_en_persona`.
-    pub fn crear_contratista_en_persona(
-        &self,
-        actor: &UsuarioSesion,
-        datos: DatosContratista,
-    ) -> Result<i64, ContratistaServiceError> {
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        verificar_actor_activo(&transaction, actor)
-            .map_err(ContratistaServiceError::Database)?
-            .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
-        ContratistaService::new(
-            &SqliteContratistaRepository::new(&transaction),
-            &SqliteEmpresaRepository::new(&transaction),
-        )
-        .crear_en_persona(datos, fecha_costa_rica(self.reloj.ahora_utc()))
-        .and_then(|id| {
-            transaction
-                .commit()
-                .map_err(DatabaseError::from)
-                .map_err(ContratistaServiceError::Database)?;
-            Ok(id)
-        })
     }
 
     pub fn actualizar_contratista(
@@ -211,7 +186,11 @@ impl AppCore {
             .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
         let contratistas = SqliteContratistaRepository::new(&transaction);
         let empresas = SqliteEmpresaRepository::new(&transaction);
-        let servicio = ContratistaService::new(&contratistas, &empresas);
+        let servicio = ContratistaService::con_hoy(
+            &contratistas,
+            &empresas,
+            fecha_costa_rica(self.reloj.ahora_utc()),
+        );
         let actual = servicio.buscar_por_id(id)?;
         if actual.cedula != datos.cedula.trim()
             && !actor_actual.rol.puede(Operacion::EditarCedulaContratista)

@@ -79,8 +79,12 @@ pub enum ContratistaServiceError {
     EmpresaNoEncontrada,
     #[error("La cédula es obligatoria")]
     CedulaVacia,
+    #[error("La cédula sólo puede tener números")]
+    CedulaInvalida,
     #[error("El nombre es obligatorio")]
     NombreVacio,
+    #[error("El nombre no puede tener números ni símbolos")]
+    NombreInvalido,
     #[error("La fecha de PRAIND es obligatoria")]
     PraindRequerido,
     #[error("El PRAIND está vencido")]
