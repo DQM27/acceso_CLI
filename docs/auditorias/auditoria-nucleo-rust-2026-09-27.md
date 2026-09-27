@@ -128,7 +128,20 @@ documentarlo).
 **Regla a dejar escrita** en el doc-comment de `AppCore`: *nunca red con
 el candado tomado*.
 
-### N3 (alta): el historial local crece para siempre
+### N3 (alta): el historial local crece para siempre — HECHO en `claude/nucleo-n1-n3`
+
+Resuelto (decisiones del dueño, 2026-09-27):
+- Móvil: desde N1 no descarga ningún historial. Lo que bajaron las
+  instalaciones viejas no importa: se reinstala con la base limpia.
+- Escritorio: guarda como máximo 24 meses (`nube::retencion`); lo más
+  viejo se consulta en el panel web. Al final de cada sincronización se
+  borran de las cuatro cachés de historial del sitio los movimientos
+  cerrados más viejos que el límite (nunca los abiertos ni los registros
+  propios con su cola de salida), y corre `PRAGMA optimize`.
+- `VACUUM` / `incremental_vacuum` no se hizo: SQLite reutiliza las páginas
+  liberadas, así que el archivo deja de crecer; achicarlo en disco pediría
+  una migración (`auto_vacuum`) que no hace falta por ahora.
+
 
 No hay retención, ni `PRAGMA optimize`, ni `VACUUM` en `src/`. Escritorio
 **y móvil** (`recibir_historial_del_sitio`, `lib.rs` ~l. 3089) guardan

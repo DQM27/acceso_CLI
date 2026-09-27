@@ -13,11 +13,13 @@
 //!   activación inicial).
 //! - Qué guarda cada equipo: [`PerfilDispositivo`]. El móvil no guarda
 //!   ningún historial del sitio (decisión del dueño: el historial vive en
-//!   el escritorio y el panel web; el celular es para operar).
+//!   el escritorio y el panel web; el celular es para operar). El
+//!   escritorio guarda los últimos 24 meses (`retencion`).
 
 use rusqlite::Connection;
 
 use super::alcance::AlcanceSincronizacion;
+use super::retencion;
 use super::sincronizacion::{
     self, ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
     ConflictoMovimientoVisitaActivo, ContextoSincronizacion, ResumenCatalogo, ResumenCatalogoRutas,
@@ -83,7 +85,24 @@ pub fn sincronizar(
     resumen.enviados = drenado.enviados;
     resumen.fallidos = drenado.fallidos;
     resumen.conflictos_gafete = drenado.conflictos_gafete;
+    mantener_base_local(conexion, perfil);
     Ok(resumen)
+}
+
+/// Mantenimiento al final de cada sincronización: retención del historial
+/// (sólo quien lo guarda, ver `retencion`) y `PRAGMA optimize`. Mejor
+/// esfuerzo: si falla, la sincronización ya anduvo y no se tumba por esto.
+fn mantener_base_local(conexion: &Connection, perfil: PerfilDispositivo) {
+    if perfil.guarda_historiales() {
+        let limite =
+            retencion::limite_retencion(chrono::Utc::now(), retencion::MESES_HISTORIAL_ESCRITORIO);
+        if let Err(error) = retencion::purgar_historiales_del_sitio(conexion, limite) {
+            log::warn!("retención del historial: {error}");
+        }
+    }
+    if let Err(error) = conexion.execute_batch("PRAGMA optimize") {
+        log::warn!("PRAGMA optimize: {error}");
+    }
 }
 
 /// Sólo la parte de recepción, sin mandar nada: para cuando todavía no hay

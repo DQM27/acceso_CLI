@@ -12,6 +12,7 @@ pub mod cache_token;
 pub mod cliente;
 pub mod credenciales;
 pub mod orquestacion;
+pub mod retencion;
 pub mod sincronizacion;
 
 pub use alcance::AlcanceSincronizacion;
