@@ -276,7 +276,7 @@ class LectorDocumentosIdentidadTest {
         assertEquals("999888777", doc?.numeroDocumento)
         assertEquals("MARIA JOSE", doc?.nombre)
         assertEquals("PEREZ RAMIREZ", doc?.apellidos)
-        assertEquals("NICARAGUA", doc?.nacionalidad)
+        assertNull(doc?.nacionalidad) // el frente del DIMEX ya no la lee
         assertEquals(FechaDocumento(28, 7, 2026), doc?.vencimiento)
     }
 
@@ -496,10 +496,9 @@ class LectorDocumentosIdentidadTest {
         assertEquals(TipoDocumento.CEDULA_RESIDENCIA, doc?.tipo)
         assertNull(doc?.nombre)
         assertNull(doc?.apellidos)
-        // Nacionalidad no se toca -- ver el comentario en
-        // LectorDocumentosIdentidad.kt sobre por qué ese caso queda
-        // pendiente de una muestra real.
-        assertEquals("NICARAGUENSE", doc?.nacionalidad)
+        // El frente del DIMEX ya no lee nacionalidad (sólo nombre,
+        // apellidos, número y vencimiento).
+        assertNull(doc?.nacionalidad)
     }
 
     @Test
@@ -587,7 +586,7 @@ class LectorDocumentosIdentidadTest {
         assertEquals("155800000001", doc?.numeroDocumento)
         assertEquals("JUAN CARLOS", doc?.nombre)
         assertEquals("PEREZ MORA", doc?.apellidos)
-        assertEquals("NICARAGUA", doc?.nacionalidad)
+        assertNull(doc?.nacionalidad) // se descarta a propósito
         assertEquals(1, doc?.vencimiento?.dia)
         assertEquals(2027, doc?.vencimiento?.anio)
     }
@@ -607,7 +606,6 @@ class LectorDocumentosIdentidadTest {
 
         assertEquals("JUAN CARLOS", doc?.nombre)
         assertEquals("PEREZ MORA", doc?.apellidos)
-        assertEquals("NICARAGUA", doc?.nacionalidad)
     }
 
     @Test

@@ -288,19 +288,11 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
     }
 }
 
-// El DIMEX tiene varios campos de una sola palabra (Sexo, y a veces
-// Nacionalidad) impresos cerca de Nombre/Apellidos -- si el orden en que
-// ML Kit linealiza el texto no respeta el layout visual real de la
-// tarjeta (columnas, no un único renglón de arriba a abajo), la regex de
-// "Nombre:" puede terminar capturando el valor de OTRO campo que quedó
-// pegado justo después en el texto crudo, no el nombre real (hallazgo
-// 2026-09-20, reportado contra una DIMEX real: el nombre salía como
-// "MASCULINO"). Sexo es un conjunto cerrado y chico -- fácil de detectar y
-// descartar sin arriesgar nada. Nacionalidad NO lo es (decenas de
-// gentilicios posibles): sin una muestra real del texto crudo tal como lo
-// entrega ML Kit en ese caso, cualquier lista de exclusión sería a ciegas
-// y podría estar igual de equivocada -- queda pendiente hasta tener ese
-// dato (ver `TAG_DEBUG_OCR_LECTURA` en `EscaneoCompartido.kt`).
+// Red de seguridad adicional al esquema de abajo: si ML Kit ordena las
+// columnas de forma que el valor de Sexo/Género queda sólo en el renglón
+// que sigue a "Nombre:" o "Apellidos:" (hallazgo 2026-09-20 con una DIMEX
+// real: el nombre salía "MASCULINO"), ese valor se descarta y se sigue
+// buscando en el renglón siguiente.
 private val VALORES_SEXO_DIMEX = setOf("M", "F", "MASCULINO", "FEMENINO")
 
 // Esquema del frente del DIMEX (Documento de Identidad Migratorio para
@@ -323,9 +315,12 @@ private val VALORES_SEXO_DIMEX = setOf("M", "F", "MASCULINO", "FEMENINO")
 // se toma del resto del renglón de su etiqueta (o del renglón siguiente si
 // la etiqueta quedó sola) y se corta en la primera etiqueta vecina.
 //
-// "Documento No." ES el número de la cédula de residencia (el que se
-// guarda). "Expediente No." es el número de trámite de la DGME y nunca se
-// usa como identificación.
+// Sólo se extraen 4 campos: nombre, apellidos, "Documento No." (ES el
+// número de la cédula de residencia) y "Vence". Todo lo demás (categoría,
+// nacionalidad, género, fecha de nacimiento, emisión y "Expediente No.",
+// que es el número de trámite de la DGME) se descarta a propósito: cuanto
+// menos se lee, menos riesgo de que un campo contamine a otro del mismo
+// renglón. Sus etiquetas sólo sirven como límite para cortar los valores.
 private val PATRON_ETIQUETAS_IZQ_DIMEX = """APELLIDOS|NOMBRE|NACIONALIDAD|DOCUMENTO|EXPEDIENTE"""
 // `\S{0,3}` tolera la tilde de "Género" leída como otra cosa ("GÉNERO",
 // "Genero", "Gènero", "Gnero").
@@ -344,7 +339,6 @@ private val REGEX_EMPIEZA_CON_ETIQUETA_IZQ_DIMEX = Regex(
 )
 private val REGEX_DIMEX_ETIQUETA_APELLIDOS = Regex("""APELLIDOS\s*:?""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_ETIQUETA_NOMBRE = Regex("""(?<![$LETRA])NOMBRE\s*:?""", RegexOption.IGNORE_CASE)
-private val REGEX_DIMEX_ETIQUETA_NACIONALIDAD = Regex("""NACIONALIDAD\s*:?""", RegexOption.IGNORE_CASE)
 private val REGEX_PREFIJO_LETRAS = Regex("""^[$LETRA ]+""")
 // Respaldo cuando "Documento No.:" y su número quedaron separados por el
 // orden de lectura: el número DIMEX tiene 11-12 dígitos seguidos; el de
@@ -382,7 +376,6 @@ private fun extraerDimex(texto: String): DocumentoDetectado? {
 
     val nombre = valorTextoDimex(texto, REGEX_DIMEX_ETIQUETA_NOMBRE)
     val apellidos = valorTextoDimex(texto, REGEX_DIMEX_ETIQUETA_APELLIDOS)
-    val nacionalidad = valorTextoDimex(texto, REGEX_DIMEX_ETIQUETA_NACIONALIDAD)
     val vencimiento = extraerFecha(texto, etiqueta = "Vence")
         ?: extraerFecha(texto, etiqueta = "Fecha Vencimiento")
 
@@ -391,7 +384,6 @@ private fun extraerDimex(texto: String): DocumentoDetectado? {
         numeroDocumento = numero,
         nombre = nombre,
         apellidos = apellidos,
-        nacionalidad = nacionalidad,
         vencimiento = vencimiento,
     )
 }
