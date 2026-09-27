@@ -25,3 +25,16 @@ Qué hacer en el refactor del escritorio:
 2. Reemplazar `requierePraind()` de TS por un comando Tauri que llame a
    `requiere_praind_de`, igual que el móvil (`requierePraindParaFormulario`).
 3. Ocultar la casilla de personal de ruta con `admite_personal_ruta`.
+
+## 2. Ingreso de proveedor
+
+| Regla | Dónde vive ahora | Escritorio hoy |
+|---|---|---|
+| Cédula con ingreso abierto en el sitio (este equipo **o el otro dispositivo**) | `AppCore::proveedor_con_ingreso_activo_en_sitio` | Sólo lo local (`IngresoProveedorService` → `IngresoActivo`); no mira la caché `ingresos_proveedor_remotos` |
+| Activo en otro sitio + gafete en uso en el otro dispositivo, antes de escribir | Móvil: `Nucleo::registrar_ingreso_proveedor_con_secreto` (una llamada) | **Orquestado en el comando Tauri**: `desktop/src-tauri/src/comandos/proveedores.rs` (`proveedor_activo_en_otro_sitio`, `gafete_proveedor_libre_en_otro_dispositivo`) |
+
+Qué hacer: llevar la orquestación de `comandos/proveedores.rs` a una
+función del núcleo (`src/application/proveedores.rs`) que usen ambos, con
+`proveedor_con_ingreso_activo_en_sitio` como primer chequeo. Ojo: el
+escritorio frena si la consulta del gafete falla (a propósito); el móvil
+hace lo mismo al usar `gafete_de_proveedor_ocupado_en_sitio_con_secreto`.

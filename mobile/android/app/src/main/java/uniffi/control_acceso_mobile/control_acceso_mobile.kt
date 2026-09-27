@@ -681,6 +681,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_borrar_secreto_dispositivo_legado(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
@@ -771,6 +773,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor_con_secreto(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida(
@@ -830,6 +834,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar_con_secreto(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_aviso_proveedor_con_ingreso_activo(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_borrar_secreto_dispositivo_legado(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -920,6 +926,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_con_secreto(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor(`ptr`: Long,`cedula`: RustBuffer.ByValue,`nombre`: RustBuffer.ByValue,`empresaId`: Long,`placa`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor_con_secreto(`ptr`: Long,`cedula`: RustBuffer.ByValue,`nombre`: RustBuffer.ByValue,`empresaId`: Long,`placa`: RustBuffer.ByValue,`gafeteNumero`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_retorno_ruta(`ptr`: Long,`salidaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -1078,6 +1086,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto() and 0xFFFF) != 39907) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 38298) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_borrar_secreto_dispositivo_legado() and 0xFFFF) != 50777) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1211,6 +1222,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor() and 0xFFFF) != 65024) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor_con_secreto() and 0xFFFF) != 3353) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta() and 0xFFFF) != 56331) {
@@ -1793,6 +1807,14 @@ public interface NucleoInterface {
     fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): ResultadoLogin
     
     /**
+     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
+     * ya tiene un ingreso de proveedor abierto en este sitio (este equipo
+     * o el otro dispositivo), `None` si puede entrar. La regla y el texto
+     * son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+     */
+    fun `avisoProveedorConIngresoActivo`(`cedula`: kotlin.String): kotlin.String?
+    
+    /**
      * Borra el archivo legado de `cargar_secreto_dispositivo_legado` --
      * Kotlin lo llama justo después de migrar ese secreto al Keystore, para
      * no dejar la copia vieja (en texto plano, ver el módulo
@@ -2152,6 +2174,22 @@ public interface NucleoInterface {
     fun `registrarIngresoProveedor`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long): kotlin.Long
     
     /**
+     * Ingreso de proveedor con TODAS sus reglas en una sola llamada (antes
+     * `ProveedoresViewModel` encadenaba tres llamadas y decidía él):
+     * 1. la cédula no tiene otro ingreso abierto en este sitio, ni en este
+     * equipo ni en el otro dispositivo
+     * (`AppCore::proveedor_con_ingreso_activo_en_sitio`);
+     * 2. ni en otro sitio (nube, mejor esfuerzo: sin red deja pasar);
+     * 3. el gafete no está en uso en el otro dispositivo del sitio (nube;
+     * si la consulta falla, se frena);
+     * 4. recién ahí escribe (`registrar_ingreso_proveedor`).
+     *
+     * `secreto` vacío se salta los chequeos de nube (2 y 3), mismo
+     * criterio que el resto de los `*_con_secreto`.
+     */
+    fun `registrarIngresoProveedorConSecreto`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long
+    
+    /**
      * Registra el retorno (cierre) de una salida de ruta activa --
      * espejo de `AppCore::registrar_retorno_ruta`.
      */
@@ -2444,6 +2482,27 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         FfiConverterString.lower(`cedula`),
         FfiConverterString.lower(`password`),
         FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
+     * ya tiene un ingreso de proveedor abierto en este sitio (este equipo
+     * o el otro dispositivo), `None` si puede entrar. La regla y el texto
+     * son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+     */
+    @Throws(NucleoException::class)override fun `avisoProveedorConIngresoActivo`(`cedula`: kotlin.String): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_aviso_proveedor_con_ingreso_activo(
+        it,
+        
+        FfiConverterString.lower(`cedula`),_status)
 }
     }
     )
@@ -3401,6 +3460,40 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         FfiConverterLong.lower(`empresaId`),
         FfiConverterOptionalString.lower(`placa`),
         FfiConverterLong.lower(`gafeteNumero`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Ingreso de proveedor con TODAS sus reglas en una sola llamada (antes
+     * `ProveedoresViewModel` encadenaba tres llamadas y decidía él):
+     * 1. la cédula no tiene otro ingreso abierto en este sitio, ni en este
+     * equipo ni en el otro dispositivo
+     * (`AppCore::proveedor_con_ingreso_activo_en_sitio`);
+     * 2. ni en otro sitio (nube, mejor esfuerzo: sin red deja pasar);
+     * 3. el gafete no está en uso en el otro dispositivo del sitio (nube;
+     * si la consulta falla, se frena);
+     * 4. recién ahí escribe (`registrar_ingreso_proveedor`).
+     *
+     * `secreto` vacío se salta los chequeos de nube (2 y 3), mismo
+     * criterio que el resto de los `*_con_secreto`.
+     */
+    @Throws(NucleoException::class)override fun `registrarIngresoProveedorConSecreto`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`cedula`),
+        FfiConverterString.lower(`nombre`),
+        FfiConverterLong.lower(`empresaId`),
+        FfiConverterOptionalString.lower(`placa`),
+        FfiConverterLong.lower(`gafeteNumero`),
+        FfiConverterString.lower(`secreto`),_status)
 }
     }
     )
@@ -5942,6 +6035,13 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
         class GafeteOcupadoEnSitio(message: String) : NucleoException(message)
         
     /**
+     * La cédula ya tiene un ingreso de proveedor abierto en OTRO sitio
+     * (chequeo en vivo contra la nube, de mejor esfuerzo). Mismo texto que
+     * `desktop/src-tauri/src/comandos/proveedores.rs`.
+     */
+        class ProveedorActivoEnOtroSitio(message: String) : NucleoException(message)
+        
+    /**
      * Una regla de negocio rechazó la operación (dato inválido, PRAIND
      * vencido, ...). `mensaje` ya viene listo para mostrar tal cual, sin
      * prefijo técnico -- sale de `control_acceso::mensajes`.
@@ -5971,8 +6071,9 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
             6 -> NucleoException.SesionSupabaseVencida(FfiConverterString.read(buf))
             7 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
             8 -> NucleoException.GafeteOcupadoEnSitio(FfiConverterString.read(buf))
-            9 -> NucleoException.Rechazado(FfiConverterString.read(buf))
-            10 -> NucleoException.Interno(FfiConverterString.read(buf))
+            9 -> NucleoException.ProveedorActivoEnOtroSitio(FfiConverterString.read(buf))
+            10 -> NucleoException.Rechazado(FfiConverterString.read(buf))
+            11 -> NucleoException.Interno(FfiConverterString.read(buf))
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
         
@@ -6016,12 +6117,16 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
                 buf.putInt(8)
                 Unit
             }
-            is NucleoException.Rechazado -> {
+            is NucleoException.ProveedorActivoEnOtroSitio -> {
                 buf.putInt(9)
                 Unit
             }
-            is NucleoException.Interno -> {
+            is NucleoException.Rechazado -> {
                 buf.putInt(10)
+                Unit
+            }
+            is NucleoException.Interno -> {
+                buf.putInt(11)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

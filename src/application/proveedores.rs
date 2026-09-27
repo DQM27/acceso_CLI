@@ -10,7 +10,9 @@ use rusqlite::{Transaction, TransactionBehavior};
 use crate::database::error::DatabaseError;
 use crate::database::repositories::empresa_proveedor_repository::SqliteEmpresaProveedorRepository;
 use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
-use crate::database::repositories::registro_ingreso_proveedor_repository::SqliteRegistroIngresoProveedorRepository;
+use crate::database::repositories::registro_ingreso_proveedor_repository::{
+    RegistroIngresoProveedorRepository, SqliteRegistroIngresoProveedorRepository,
+};
 use crate::models::empresa_proveedor::EmpresaProveedor;
 use crate::models::registro_ingreso_proveedor::RegistroIngresoProveedorActivoResumen;
 use crate::services::autenticacion_service::UsuarioSesion;
@@ -202,6 +204,35 @@ impl AppCore {
         let gafetes = SqliteGafeteRepository::new(&self.connection);
         IngresoProveedorService::new(&registros, &empresas, &gafetes).listar_activos()
     }
+
+    /// Regla: una cédula no puede tener dos ingresos de proveedor abiertos
+    /// en el mismo sitio. Mira los de este equipo y los del otro
+    /// dispositivo del sitio (caché `ingresos_proveedor_remotos`, que llena
+    /// la sincronización). El registro local vuelve a chequear lo suyo
+    /// (`IngresoProveedorService::registrar_ingreso` → `IngresoActivo`);
+    /// esto es para avisar antes, mientras se tipea la cédula, y para
+    /// frenar el caso del otro dispositivo, que el registro local no ve.
+    pub fn proveedor_con_ingreso_activo_en_sitio(
+        &self,
+        cedula: &str,
+    ) -> Result<bool, IngresoProveedorServiceError> {
+        let cedula = cedula.trim();
+        if cedula.is_empty() {
+            return Ok(false);
+        }
+        let registros = SqliteRegistroIngresoProveedorRepository::new(&self.connection);
+        if registros.buscar_ingreso_activo(cedula)?.is_some() {
+            return Ok(true);
+        }
+        self.connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM ingresos_proveedor_remotos WHERE cedula = ?1)",
+                [cedula],
+                |fila| fila.get(0),
+            )
+            .map_err(DatabaseError::from)
+            .map_err(IngresoProveedorServiceError::Database)
+    }
 }
 
 #[cfg(test)]
@@ -260,6 +291,44 @@ mod tests {
         core.registrar_salida_proveedor(&actor, id).unwrap();
 
         assert!(core.listar_proveedores_activos().unwrap().is_empty());
+    }
+
+    #[test]
+    fn proveedor_con_ingreso_activo_mira_local_y_otro_dispositivo() {
+        let (core, actor, empresa_id) = nucleo_con_usuario_empresa_y_gafete();
+        assert!(
+            !core
+                .proveedor_con_ingreso_activo_en_sitio("1-1111")
+                .unwrap()
+        );
+
+        core.registrar_ingreso_proveedor(&actor, "1-1111", "Juan Perez", empresa_id, None, 7)
+            .unwrap();
+        assert!(
+            core.proveedor_con_ingreso_activo_en_sitio(" 1-1111 ")
+                .unwrap()
+        );
+
+        core.connection
+            .execute(
+                "INSERT INTO ingresos_proveedor_remotos (uuid, sitio_id, cedula, nombre,
+                     empresa_nombre, placa, gafete_numero, hora_entrada,
+                     usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en)
+                 VALUES ('u1', 's1', '2-2222', 'Ana', 'Maika', NULL, 8,
+                     '2026-09-16T11:00:00Z', 'Otro', 'd2', '2026-09-16T11:00:00Z')",
+                [],
+            )
+            .unwrap();
+        assert!(
+            core.proveedor_con_ingreso_activo_en_sitio("2-2222")
+                .unwrap()
+        );
+        assert!(
+            !core
+                .proveedor_con_ingreso_activo_en_sitio("3-3333")
+                .unwrap()
+        );
+        assert!(!core.proveedor_con_ingreso_activo_en_sitio("  ").unwrap());
     }
 
     #[test]

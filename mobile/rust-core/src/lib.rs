@@ -989,6 +989,11 @@ pub enum NucleoError {
     /// sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).
     #[error("El gafete {numero} ya está en uso en otro dispositivo de la unidad operativa")]
     GafeteOcupadoEnSitio { numero: i64 },
+    /// La cédula ya tiene un ingreso de proveedor abierto en OTRO sitio
+    /// (chequeo en vivo contra la nube, de mejor esfuerzo). Mismo texto que
+    /// `desktop/src-tauri/src/comandos/proveedores.rs`.
+    #[error("Esta cédula ya tiene un ingreso de proveedor activo en {sitio}")]
+    ProveedorActivoEnOtroSitio { sitio: String },
     /// Una regla de negocio rechazó la operación (dato inválido, PRAIND
     /// vencido, ...). `mensaje` ya viene listo para mostrar tal cual, sin
     /// prefijo técnico -- sale de `control_acceso::mensajes`.
@@ -1147,10 +1152,17 @@ impl From<EmpresaProveedorServiceErrorNucleo> for NucleoError {
     }
 }
 
+/// Mismo criterio que contratistas: las reglas llegan con su mensaje,
+/// sólo la falla de base es `Interno`.
 impl From<IngresoProveedorServiceErrorNucleo> for NucleoError {
     fn from(error: IngresoProveedorServiceErrorNucleo) -> Self {
-        Self::Interno {
-            mensaje: interno(error),
+        match error {
+            IngresoProveedorServiceErrorNucleo::Database(_) => Self::Interno {
+                mensaje: interno(error),
+            },
+            regla => Self::Rechazado {
+                mensaje: control_acceso::mensajes::mensaje_ingreso_proveedor(regla),
+            },
         }
     }
 }
@@ -1924,6 +1936,61 @@ impl Nucleo {
             placa,
             gafete_numero,
         )?)
+    }
+
+    /// Ingreso de proveedor con TODAS sus reglas en una sola llamada (antes
+    /// `ProveedoresViewModel` encadenaba tres llamadas y decidía él):
+    /// 1. la cédula no tiene otro ingreso abierto en este sitio, ni en este
+    ///    equipo ni en el otro dispositivo
+    ///    (`AppCore::proveedor_con_ingreso_activo_en_sitio`);
+    /// 2. ni en otro sitio (nube, mejor esfuerzo: sin red deja pasar);
+    /// 3. el gafete no está en uso en el otro dispositivo del sitio (nube;
+    ///    si la consulta falla, se frena);
+    /// 4. recién ahí escribe (`registrar_ingreso_proveedor`).
+    ///
+    /// `secreto` vacío se salta los chequeos de nube (2 y 3), mismo
+    /// criterio que el resto de los `*_con_secreto`.
+    pub fn registrar_ingreso_proveedor_con_secreto(
+        &self,
+        cedula: String,
+        nombre: String,
+        empresa_id: i64,
+        placa: Option<String>,
+        gafete_numero: i64,
+        secreto: String,
+    ) -> Result<i64, NucleoError> {
+        if let Some(mensaje) = self.aviso_proveedor_con_ingreso_activo(cedula.clone())? {
+            return Err(NucleoError::Rechazado { mensaje });
+        }
+        if let Some(sitio) =
+            self.proveedor_activo_en_otro_sitio_con_secreto(secreto.clone(), cedula.clone())
+        {
+            return Err(NucleoError::ProveedorActivoEnOtroSitio { sitio });
+        }
+        if self.gafete_de_proveedor_ocupado_en_sitio_con_secreto(secreto, gafete_numero)? {
+            return Err(NucleoError::GafeteOcupadoEnSitio {
+                numero: gafete_numero,
+            });
+        }
+        self.registrar_ingreso_proveedor(cedula, nombre, empresa_id, placa, gafete_numero)
+    }
+
+    /// Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
+    /// ya tiene un ingreso de proveedor abierto en este sitio (este equipo
+    /// o el otro dispositivo), `None` si puede entrar. La regla y el texto
+    /// son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+    pub fn aviso_proveedor_con_ingreso_activo(
+        &self,
+        cedula: String,
+    ) -> Result<Option<String>, NucleoError> {
+        let activo = self
+            .core_lock()
+            .proveedor_con_ingreso_activo_en_sitio(&cedula)?;
+        Ok(activo.then(|| {
+            control_acceso::mensajes::mensaje_ingreso_proveedor(
+                IngresoProveedorServiceErrorNucleo::IngresoActivo,
+            )
+        }))
     }
 
     /// Registra la salida (cierre) de un ingreso de proveedor activo --
@@ -4244,6 +4311,49 @@ mod tests {
             7,
         );
 
-        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
+        assert!(matches!(
+            resultado,
+            Err(NucleoError::Rechazado { mensaje }) if mensaje == "Empresa proveedora no encontrada"
+        ));
+    }
+
+    /// La llamada combinada aplica la regla de "un ingreso abierto por
+    /// cédula" antes de escribir (secreto vacío: sin chequeos de nube).
+    #[test]
+    fn registrar_ingreso_proveedor_con_secreto_rechaza_cedula_ya_activa() {
+        let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
+        let empresa_id = nucleo
+            .buscar_empresas_proveedor("maika".to_string())
+            .unwrap()[0]
+            .id;
+        let registrar = || {
+            nucleo.registrar_ingreso_proveedor_con_secreto(
+                "1-1111".to_string(),
+                "Juan Perez".to_string(),
+                empresa_id,
+                None,
+                7,
+                String::new(),
+            )
+        };
+
+        assert!(
+            nucleo
+                .aviso_proveedor_con_ingreso_activo("1-1111".to_string())
+                .unwrap()
+                .is_none()
+        );
+        registrar().unwrap();
+        assert!(matches!(
+            registrar(),
+            Err(NucleoError::Rechazado { mensaje })
+                if mensaje == "Esta cédula ya tiene un ingreso de proveedor activo"
+        ));
+        assert!(
+            nucleo
+                .aviso_proveedor_con_ingreso_activo("1-1111".to_string())
+                .unwrap()
+                .is_some()
+        );
     }
 }

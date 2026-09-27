@@ -74,4 +74,29 @@ class ProveedoresViewModelTest {
         assertEquals("Ingreso registrado", viewModel.mensaje)
         assertEquals(true, seExecutoOnExito)
     }
+
+    @Test
+    fun `la cedula con ingreso abierto avisa con el texto del nucleo y no deja registrar`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'PROVEEDOR', 'DISPONIBLE');",
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (8, 'PROVEEDOR', 'DISPONIBLE');",
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        val empresaId = nucleo.crearEmpresaProveedor("Empresa Proveedora Test")
+        nucleo.registrarIngresoProveedor("111222333", "Proveedor Test", empresaId, null, 7L)
+        val viewModel = viewModel(SecretoDispositivoStoreDePrueba(secreto = ""))
+        advanceUntilIdle()
+
+        viewModel.cambiarCedula("111-222-333")
+        advanceUntilIdle()
+        assertEquals(true, viewModel.cedulaConIngresoActivo)
+        assertEquals("Esta cédula ya tiene un ingreso de proveedor activo", viewModel.error)
+
+        viewModel.cambiarCedula("444555666")
+        advanceUntilIdle()
+        assertEquals(false, viewModel.cedulaConIngresoActivo)
+        assertNull(viewModel.error)
+    }
 }
