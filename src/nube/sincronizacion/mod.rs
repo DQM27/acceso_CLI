@@ -42,7 +42,8 @@ pub use gafetes_provisionales::*;
 pub use historial::*;
 pub use ingresos::*;
 use paginado::{
-    DIAS_TRASLAPE_HISTORIAL, obtener_json, obtener_json_paginado, obtener_json_paginado_con,
+    DIAS_TRASLAPE_HISTORIAL, avanzar_marca, guardar_por_pagina, obtener_json,
+    obtener_json_paginado_con,
 };
 pub use proveedores::*;
 

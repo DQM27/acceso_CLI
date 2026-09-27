@@ -3592,3 +3592,60 @@ fn recibir_catalogo_salta_un_contratista_remoto_sin_identificacion_o_tipo_ingres
         "una fila sin datos suficientes para las reglas de acceso no se inventa"
     );
 }
+
+/// N6: el catálogo baja página por página y cada página se guarda en su
+/// propia transacción. Si la red se corta a mitad, lo que ya llegó queda
+/// guardado, pero la marca de agua NO avanza: el próximo sync vuelve a
+/// pedir desde la marca anterior y no se pierde nada de lo que faltó.
+#[test]
+fn catalogo_cortado_a_mitad_conserva_lo_bajado_y_no_avanza_la_marca() {
+    use std::fmt::Write as _;
+
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+
+    let mut filas = String::new();
+    for i in 0..TAMANO_PAGINA_REMOTA {
+        if i > 0 {
+            filas.push(',');
+        }
+        write!(
+            filas,
+            "{{\"id\":\"uuid-vehiculo-{i}\",\"numero_unidad\":\"{i}\",\"placa\":\"P{i:05}\",\
+             \"activo\":true,\"updated_at\":\"2026-01-01T00:00:00Z\"}}"
+        )
+        .unwrap();
+    }
+    let cuerpo = format!("[{filas}]");
+    let pagina_1 = Box::leak(
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+            cuerpo.len()
+        )
+        .into_boxed_str(),
+    ) as &'static str;
+    let base_url = servidor_de_respuestas(vec![
+        pagina_1,
+        "HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+    ]);
+
+    let resultado = recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url));
+
+    assert!(resultado.is_err(), "la segunda página falló: {resultado:?}");
+    let guardados: i64 = connection
+        .query_row("SELECT COUNT(*) FROM vehiculos_ruta", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        guardados,
+        i64::try_from(TAMANO_PAGINA_REMOTA).unwrap(),
+        "la página que sí llegó queda guardada"
+    );
+    let marca: Option<String> = connection
+        .query_row(
+            "SELECT catalogo_rutas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(marca, None, "sin todas las páginas, la marca no avanza");
+}

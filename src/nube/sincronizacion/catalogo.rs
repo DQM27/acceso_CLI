@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use rusqlite::{Connection, params};
 
-use super::{ContextoSincronizacion, SincronizacionError, obtener_json_paginado};
+use super::{ContextoSincronizacion, SincronizacionError, avanzar_marca, guardar_por_pagina};
 use crate::nube::cliente::cliente_http;
 
 /// Cuántas filas se aplicaron localmente al traer el catálogo del sitio --
@@ -86,38 +86,6 @@ pub(super) struct FilaRutaRemota {
     pub(super) updated_at: String,
 }
 
-/// Trae de la nube las empresas y contratistas de *este mismo sitio* que
-/// este dispositivo todavía no tiene localmente -- el "pull" que le
-/// faltaba al espejo (hasta ahora sólo empujaba: local → nube, nunca al
-/// revés). Usa la misma política RLS que ya existe, sin tocarla, así que
-/// sólo trae lo del propio sitio -- esto no es el seed global entre
-/// sitios (`docs/planes-implementados/plan-persistencia-nube.md`, diferido), sólo lo que el
-/// otro dispositivo de este sitio ya empujó.
-///
-/// Mismo patrón `ON CONFLICT` que usa el archivo de seed
-/// (`contratistas_base_final_limpia_v15.sql`): si ya existe localmente una
-/// fila con el mismo nombre/cédula (la creó este dispositivo, o un import
-/// anterior), la actualiza y le completa el `uuid` en vez de duplicarla --
-/// `COALESCE(tabla.uuid, excluded.uuid)` nunca pisa un `uuid` que ya tenía.
-///
-/// Una fila remota sin `identificacion`/`tipo_ingreso` (contratista creado
-/// antes de que el espejo mandara estos campos) se salta -- ambos son
-/// `NOT NULL` en la tabla local, y en una app de control de acceso no se
-/// inventan datos de clasificación para completar el hueco.
-/// Resultado de la descarga (sin tocar la base todavía) -- separado de
-/// `recibir_catalogo_del_sitio` sólo para que esa función no crezca más allá
-/// del límite de líneas del lint `too_many_lines`; el corte natural ya
-/// existía en el código (todo el HTTP primero, todo el `INSERT` después).
-pub(super) struct CatalogoRemotoDescargado {
-    pub(super) empresas: Vec<FilaEmpresaRemota>,
-    pub(super) contratistas: Vec<FilaContratistaRemota>,
-    pub(super) usuarios: Vec<FilaUsuarioRemota>,
-    pub(super) gafetes: Vec<FilaGafeteRemota>,
-    pub(super) rutas: Vec<FilaRutaRemota>,
-    pub(super) empresas_proveedor: Vec<FilaEmpresaProveedorRemota>,
-    pub(super) marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>>,
-}
-
 /// Catálogo por sitio, como rutas (ver `FilaRutaRemota`) -- a diferencia de
 /// `empresas` (contratistas), que es global entre sitios, cada sitio
 /// maneja su propio directorio de empresas proveedoras.
@@ -127,131 +95,6 @@ pub(super) struct FilaEmpresaProveedorRemota {
     pub(super) nombre: String,
     pub(super) activa: bool,
     pub(super) updated_at: String,
-}
-
-/// Trae empresas/contratistas/usuarios/gafetes, cada uno incremental según
-/// su propia marca -- ver los comentarios que tenían estas mismas consultas
-/// en `recibir_catalogo_del_sitio` antes del corte.
-pub(super) fn descargar_catalogo_remoto(
-    contexto: &ContextoSincronizacion<'_>,
-    marca_anterior: Option<&str>,
-    marca_gafetes_anterior: Option<&str>,
-) -> Result<CatalogoRemotoDescargado, SincronizacionError> {
-    let cliente = cliente_http();
-    let filtro_incremental = marca_anterior
-        .map(|marca| format!("&updated_at=gt.{marca}"))
-        .unwrap_or_default();
-
-    // Sin `sitio_id=eq...` a propósito -- contratistas y empresas son
-    // globales (ver docs/planes-implementados/plan-panel-administrativo-web.md, "Modelo de
-    // datos"): si a un contratista se le niega el acceso en un sitio, tiene
-    // que quedar negado en TODOS. El nombre de la función quedó del modelo
-    // viejo (un solo sitio por dispositivo); lo que trae ahora es el
-    // catálogo global completo, no "del sitio" de `contexto`.
-    let empresas: Vec<FilaEmpresaRemota> = obtener_json_paginado(
-        &cliente,
-        contexto,
-        &format!(
-            "{}/rest/v1/empresas?select=id,nombre,activa,updated_at{filtro_incremental}",
-            contexto.base_url
-        ),
-    )?;
-    let contratistas: Vec<FilaContratistaRemota> = obtener_json_paginado(
-        &cliente,
-        contexto,
-        &format!(
-            "{}/rest/v1/contratistas?select=id,nombre,identificacion,empresa_id,empresa_nombre,\
-             activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta,updated_at{filtro_incremental}",
-            contexto.base_url
-        ),
-    )?;
-    let usuarios: Vec<FilaUsuarioRemota> = obtener_json_paginado(
-        &cliente,
-        contexto,
-        &format!(
-            "{}/rest/v1/usuarios?select=id,cedula,nombre,rol,activo,updated_at{filtro_incremental}",
-            contexto.base_url
-        ),
-    )?;
-    // Incremental con marca PROPIA (`gafetes_actualizado_hasta`, no la misma
-    // `marca_anterior` de arriba) -- antes se descargaba completo cada vez,
-    // justamente para no depender de un cursor compartido que podía ser
-    // anterior a que gafetes se sumara al pull. Una columna propia (nace en
-    // `NULL`) resuelve eso sin ayuda: el primer sync de cualquier
-    // dispositivo siempre baja todo. La otra razón de bajar todo siempre
-    // -- reintentar gafetes PERDIDOS cuyo deudor todavía no resolvía
-    // localmente -- la resuelve `guardar_gafetes`, capando cuánto puede
-    // avanzar esta marca. Con `sitio_id=eq...` a diferencia de las tres de
-    // arriba -- ver comentario de `FilaGafeteRemota`.
-    let filtro_incremental_gafetes = marca_gafetes_anterior
-        .map(|marca| format!("&updated_at=gt.{marca}"))
-        .unwrap_or_default();
-    let gafetes: Vec<FilaGafeteRemota> = obtener_json_paginado(
-        &cliente,
-        contexto,
-        &format!(
-            "{}/rest/v1/gafetes?sitio_id=eq.{}&select=id,numero,tipo,estado,\
-             contratista_portador_id,contratista_portador_nombre,\
-             visita_portador_id,updated_at{filtro_incremental_gafetes}",
-            contexto.base_url, contexto.sitio_id
-        ),
-    )?;
-    // Comparte `filtro_incremental` (marca general), no una propia -- ver
-    // el doc-comment de `FilaRutaRemota`. Con `sitio_id=eq...`, mismo
-    // motivo que gafetes: catálogo por sitio.
-    let rutas: Vec<FilaRutaRemota> = obtener_json_paginado(
-        &cliente,
-        contexto,
-        &format!(
-            "{}/rest/v1/rutas?sitio_id=eq.{}&select=id,numero,activo,updated_at{filtro_incremental}",
-            contexto.base_url, contexto.sitio_id
-        ),
-    )?;
-    // Comparte `filtro_incremental` (marca general), no una propia -- mismo
-    // criterio que rutas: catálogo por sitio, sin la complejidad de
-    // "portador pendiente" que sí justifica la marca separada de gafetes.
-    let empresas_proveedor: Vec<FilaEmpresaProveedorRemota> = obtener_json_paginado(
-        &cliente,
-        contexto,
-        &format!(
-            "{}/rest/v1/empresas_proveedor?sitio_id=eq.{}&select=id,nombre,activa,updated_at{filtro_incremental}",
-            contexto.base_url, contexto.sitio_id
-        ),
-    )?;
-
-    // Máximo `updated_at` real entre empresas/contratistas/usuarios/rutas/
-    // empresas_proveedor -- gafetes lleva su propia marca por separado
-    // (`guardar_gafetes` la calcula después, capada por lo que haya
-    // quedado pendiente de resolver, ver su doc-comment). Sin filas
-    // nuevas, la marca no avanza -- preferible repetir la misma consulta
-    // (ya sabemos que no trae nada) a arriesgar perder una fila por un
-    // reloj local desviado.
-    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> =
-        marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
-    for actualizado_en in empresas
-        .iter()
-        .map(|f| &f.updated_at)
-        .chain(contratistas.iter().map(|f| &f.updated_at))
-        .chain(usuarios.iter().map(|f| &f.updated_at))
-        .chain(rutas.iter().map(|f| &f.updated_at))
-        .chain(empresas_proveedor.iter().map(|f| &f.updated_at))
-    {
-        let actualizado_en = crate::tiempo::parsear_utc(actualizado_en)
-            .map_err(|_| SincronizacionError::FechaInvalida(actualizado_en.clone()))?;
-        if marca_mas_nueva.is_none_or(|marca| actualizado_en > marca) {
-            marca_mas_nueva = Some(actualizado_en);
-        }
-    }
-
-    Ok(CatalogoRemotoDescargado {
-        empresas,
-        contratistas,
-        usuarios,
-        gafetes,
-        rutas,
-        empresas_proveedor,
-        marca_mas_nueva,
-    })
 }
 
 pub(super) fn guardar_rutas(
@@ -583,6 +426,30 @@ pub(super) fn guardar_gafetes(
     Ok((recibidos, marca_segura))
 }
 
+/// Trae de la nube las empresas y contratistas de *este mismo sitio* que
+/// este dispositivo todavía no tiene localmente -- el "pull" que le
+/// faltaba al espejo (hasta ahora sólo empujaba: local → nube, nunca al
+/// revés). Usa la misma política RLS que ya existe, sin tocarla, así que
+/// sólo trae lo del propio sitio -- esto no es el seed global entre
+/// sitios (`docs/planes-implementados/plan-persistencia-nube.md`, diferido), sólo lo que el
+/// otro dispositivo de este sitio ya empujó.
+///
+/// Mismo patrón `ON CONFLICT` que usa el archivo de seed
+/// (`contratistas_base_final_limpia_v15.sql`): si ya existe localmente una
+/// fila con el mismo nombre/cédula (la creó este dispositivo, o un import
+/// anterior), la actualiza y le completa el `uuid` en vez de duplicarla --
+/// `COALESCE(tabla.uuid, excluded.uuid)` nunca pisa un `uuid` que ya tenía.
+///
+/// Una fila remota sin `identificacion`/`tipo_ingreso` (contratista creado
+/// antes de que el espejo mandara estos campos) se salta -- ambos son
+/// `NOT NULL` en la tabla local, y en una app de control de acceso no se
+/// inventan datos de clasificación para completar el hueco.
+///
+/// Cada tabla baja página por página y cada página se guarda en su propia
+/// transacción corta (N6, ver [`guardar_por_pagina`]): el primer sync de un
+/// equipo nuevo trae el catálogo completo, y antes se juntaba entero en
+/// memoria antes de guardar nada. Las marcas de agua se guardan recién al
+/// final, cuando llegaron todas las tablas.
 pub fn recibir_catalogo_del_sitio(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
@@ -609,36 +476,54 @@ pub fn recibir_catalogo_del_sitio(
         [],
         |row| row.get(0),
     )?;
-    let descarga = descargar_catalogo_remoto(
+
+    let cliente = cliente_http();
+    let mut resumen = ResumenCatalogo::default();
+    // Máximo `updated_at` real entre empresas/contratistas/usuarios/rutas/
+    // empresas_proveedor -- gafetes lleva su propia marca por separado. Sin
+    // filas nuevas, la marca no avanza -- preferible repetir la misma
+    // consulta (ya sabemos que no trae nada) a arriesgar perder una fila
+    // por un reloj local desviado.
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_anterior
+        .as_deref()
+        .and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
+    let filtro_incremental = marca_anterior
+        .as_deref()
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
+
+    // Orden explícito: `guardar_contratistas` necesita que
+    // `guardar_empresas` ya haya corrido (resuelve `empresa_id` local), y
+    // `guardar_gafetes` necesita que `guardar_contratistas` ya haya corrido
+    // (resuelve `contratista_deudor_id` local) -- ver sus propios
+    // comentarios. Cada tabla termina de guardarse antes de pedir la
+    // siguiente.
+    recibir_catalogo_global(
+        connection,
+        &cliente,
         contexto,
-        marca_anterior.as_deref(),
+        &filtro_incremental,
+        &mut resumen,
+        &mut marca_mas_nueva,
+    )?;
+    let marca_gafetes_nueva = recibir_gafetes(
+        connection,
+        &cliente,
+        contexto,
         marca_gafetes_anterior.as_deref(),
+        &mut resumen,
+    )?;
+    recibir_catalogo_propio_del_sitio(
+        connection,
+        &cliente,
+        contexto,
+        &filtro_incremental,
+        &mut resumen,
+        &mut marca_mas_nueva,
     )?;
 
     let transaction = connection.unchecked_transaction()?;
-    // Orden explícito (no evaluación implícita de un literal de struct):
-    // `guardar_contratistas` necesita que `guardar_empresas` ya haya
-    // corrido (resuelve `empresa_id` local), y `guardar_gafetes` necesita
-    // que `guardar_contratistas` ya haya corrido (resuelve
-    // `contratista_deudor_id` local) -- ver sus propios comentarios.
-    let empresas_recibidas = guardar_empresas(&transaction, &descarga.empresas)?;
-    let contratistas_recibidos = guardar_contratistas(&transaction, &descarga.contratistas)?;
-    let usuarios_recibidos = guardar_usuarios(&transaction, &descarga.usuarios)?;
-    let (gafetes_recibidos, marca_gafetes_nueva) =
-        guardar_gafetes(&transaction, &descarga.gafetes)?;
-    let rutas_recibidas = guardar_rutas(&transaction, &descarga.rutas)?;
-    let empresas_proveedor_recibidas =
-        guardar_empresas_proveedor(&transaction, &descarga.empresas_proveedor)?;
-    let resumen = ResumenCatalogo {
-        empresas_recibidas,
-        contratistas_recibidos,
-        usuarios_recibidos,
-        gafetes_recibidos,
-        rutas_recibidas,
-        empresas_proveedor_recibidas,
-    };
-
-    if let Some(marca) = descarga.marca_mas_nueva {
+    if let Some(marca) = marca_mas_nueva {
         transaction.execute(
             "UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = ?1 WHERE id = 1",
             params![crate::tiempo::serializar_utc(marca)],
@@ -650,9 +535,161 @@ pub fn recibir_catalogo_del_sitio(
             params![crate::tiempo::serializar_utc(marca)],
         )?;
     }
-
     transaction.commit()?;
     Ok(resumen)
+}
+
+/// Empresas, contratistas y usuarios. Sin `sitio_id=eq...` a propósito --
+/// son globales (ver docs/planes-implementados/plan-panel-administrativo-web.md,
+/// "Modelo de datos"): si a un contratista se le niega el acceso en un
+/// sitio, tiene que quedar negado en TODOS.
+fn recibir_catalogo_global(
+    connection: &Connection,
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    filtro_incremental: &str,
+    resumen: &mut ResumenCatalogo,
+    marca_mas_nueva: &mut Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<(), SincronizacionError> {
+    guardar_por_pagina(
+        connection,
+        cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/empresas?select=id,nombre,activa,updated_at{filtro_incremental}",
+            contexto.base_url
+        ),
+        |transaction, pagina: &[FilaEmpresaRemota]| {
+            avanzar_marca(marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
+            resumen.empresas_recibidas += guardar_empresas(transaction, pagina)?;
+            Ok(())
+        },
+    )?;
+    guardar_por_pagina(
+        connection,
+        cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/contratistas?select=id,nombre,identificacion,empresa_id,empresa_nombre,\
+             activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta,updated_at{filtro_incremental}",
+            contexto.base_url
+        ),
+        |transaction, pagina: &[FilaContratistaRemota]| {
+            avanzar_marca(marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
+            resumen.contratistas_recibidos += guardar_contratistas(transaction, pagina)?;
+            Ok(())
+        },
+    )?;
+    guardar_por_pagina(
+        connection,
+        cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/usuarios?select=id,cedula,nombre,rol,activo,updated_at{filtro_incremental}",
+            contexto.base_url
+        ),
+        |transaction, pagina: &[FilaUsuarioRemota]| {
+            avanzar_marca(marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
+            resumen.usuarios_recibidos += guardar_usuarios(transaction, pagina)?;
+            Ok(())
+        },
+    )
+}
+
+/// Gafetes del sitio, incremental con marca PROPIA
+/// (`gafetes_actualizado_hasta`, no la general) -- una columna propia (nace
+/// en `NULL`) hace que el primer sync de cualquier dispositivo baje todo.
+/// Reintentar gafetes PERDIDOS cuyo deudor todavía no resolvía localmente
+/// lo resuelve `guardar_gafetes`, capando cuánto puede avanzar esta marca.
+/// Con `sitio_id=eq...` a diferencia de las globales -- ver
+/// `FilaGafeteRemota`. Devuelve la marca nueva, o `None` si no debe
+/// avanzar (nada nuevo, o quedó algún gafete pendiente en cualquier
+/// página).
+fn recibir_gafetes(
+    connection: &Connection,
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    marca_gafetes_anterior: Option<&str>,
+    resumen: &mut ResumenCatalogo,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>, SincronizacionError> {
+    let filtro_incremental_gafetes = marca_gafetes_anterior
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
+    let mut marca_maxima: Option<chrono::DateTime<chrono::Utc>> = None;
+    let mut quedo_pendiente = false;
+    guardar_por_pagina(
+        connection,
+        cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/gafetes?sitio_id=eq.{}&select=id,numero,tipo,estado,\
+             contratista_portador_id,contratista_portador_nombre,\
+             visita_portador_id,updated_at{filtro_incremental_gafetes}",
+            contexto.base_url, contexto.sitio_id
+        ),
+        |transaction, pagina: &[FilaGafeteRemota]| {
+            let (recibidos, marca_segura) = guardar_gafetes(transaction, pagina)?;
+            resumen.gafetes_recibidos += recibidos;
+            // `guardar_gafetes` devuelve `None` sólo si la página vino
+            // vacía o si dejó algún gafete pendiente: una página con filas
+            // y sin marca significa pendiente, y entonces la marca no
+            // avanza en todo este ciclo (mismo criterio que con una sola
+            // página, ver su doc-comment).
+            match marca_segura {
+                Some(marca) => {
+                    if marca_maxima.is_none_or(|actual| marca > actual) {
+                        marca_maxima = Some(marca);
+                    }
+                }
+                None if !pagina.is_empty() => quedo_pendiente = true,
+                None => {}
+            }
+            Ok(())
+        },
+    )?;
+    Ok(if quedo_pendiente { None } else { marca_maxima })
+}
+
+/// Rutas y empresas proveedoras: catálogos por sitio (`sitio_id=eq...`),
+/// que comparten la marca general -- sin la complejidad de "portador
+/// pendiente" que sí justifica la marca separada de gafetes.
+fn recibir_catalogo_propio_del_sitio(
+    connection: &Connection,
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    filtro_incremental: &str,
+    resumen: &mut ResumenCatalogo,
+    marca_mas_nueva: &mut Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<(), SincronizacionError> {
+    guardar_por_pagina(
+        connection,
+        cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/rutas?sitio_id=eq.{}&select=id,numero,activo,updated_at{filtro_incremental}",
+            contexto.base_url, contexto.sitio_id
+        ),
+        |transaction, pagina: &[FilaRutaRemota]| {
+            avanzar_marca(marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
+            resumen.rutas_recibidas += guardar_rutas(transaction, pagina)?;
+            Ok(())
+        },
+    )?;
+    guardar_por_pagina(
+        connection,
+        cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/empresas_proveedor?sitio_id=eq.{}&select=id,nombre,activa,updated_at{filtro_incremental}",
+            contexto.base_url, contexto.sitio_id
+        ),
+        |transaction, pagina: &[FilaEmpresaProveedorRemota]| {
+            avanzar_marca(marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
+            resumen.empresas_proveedor_recibidas +=
+                guardar_empresas_proveedor(transaction, pagina)?;
+            Ok(())
+        },
+    )
 }
 
 /// Índice en memoria de una tabla local por `uuid` y por `nombre`,

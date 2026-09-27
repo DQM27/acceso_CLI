@@ -1,6 +1,6 @@
 use rusqlite::{Connection, params};
 
-use super::{ContextoSincronizacion, SincronizacionError, obtener_json_paginado};
+use super::{ContextoSincronizacion, SincronizacionError, avanzar_marca, guardar_por_pagina};
 use crate::nube::cliente::cliente_http;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -30,66 +30,6 @@ pub(super) struct FilaEncargadoRutaRemota {
     pub(super) nombre: String,
     pub(super) activo: bool,
     pub(super) updated_at: String,
-}
-
-pub(super) struct CatalogoRutasRemotoDescargado {
-    pub(super) vehiculos: Vec<FilaVehiculoRutaRemota>,
-    pub(super) encargados: Vec<FilaEncargadoRutaRemota>,
-    pub(super) marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Trae vehículos/encargados de ruta que este dispositivo todavía no tiene
-/// localmente -- mismo motivo que `descargar_catalogo_remoto`
-/// (empresas/contratistas/usuarios): hasta ahora `vehiculos_ruta`/
-/// `encargados_ruta` sólo empujaban (local -> nube), nunca al revés. Sin
-/// `sitio_id=eq...` a propósito -- ambas tablas son globales (ver
-/// `docs/planes-implementados/plan-control-rutas.md`, "Alcance de RLS por tabla"),
-/// mismo criterio que empresas/contratistas.
-pub(super) fn descargar_catalogo_rutas_remoto(
-    contexto: &ContextoSincronizacion<'_>,
-    marca_anterior: Option<&str>,
-) -> Result<CatalogoRutasRemotoDescargado, SincronizacionError> {
-    let cliente = cliente_http();
-    let filtro_incremental = marca_anterior
-        .map(|marca| format!("&updated_at=gt.{marca}"))
-        .unwrap_or_default();
-
-    let vehiculos: Vec<FilaVehiculoRutaRemota> = obtener_json_paginado(
-        &cliente,
-        contexto,
-        &format!(
-            "{}/rest/v1/vehiculos_ruta?select=id,numero_unidad,placa,activo,updated_at{filtro_incremental}",
-            contexto.base_url
-        ),
-    )?;
-    let encargados: Vec<FilaEncargadoRutaRemota> = obtener_json_paginado(
-        &cliente,
-        contexto,
-        &format!(
-            "{}/rest/v1/encargados_ruta?select=id,codigo_empleado,nombre,activo,updated_at{filtro_incremental}",
-            contexto.base_url
-        ),
-    )?;
-
-    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> =
-        marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
-    for actualizado_en in vehiculos
-        .iter()
-        .map(|f| &f.updated_at)
-        .chain(encargados.iter().map(|f| &f.updated_at))
-    {
-        let actualizado_en = crate::tiempo::parsear_utc(actualizado_en)
-            .map_err(|_| SincronizacionError::FechaInvalida(actualizado_en.clone()))?;
-        if marca_mas_nueva.is_none_or(|marca| actualizado_en > marca) {
-            marca_mas_nueva = Some(actualizado_en);
-        }
-    }
-
-    Ok(CatalogoRutasRemotoDescargado {
-        vehiculos,
-        encargados,
-        marca_mas_nueva,
-    })
 }
 
 pub(super) fn guardar_vehiculos_ruta(
@@ -161,22 +101,57 @@ pub fn recibir_catalogo_rutas_del_sitio(
         [],
         |row| row.get(0),
     )?;
-    let descarga = descargar_catalogo_rutas_remoto(contexto, marca_anterior.as_deref())?;
+    let filtro_incremental = marca_anterior
+        .as_deref()
+        .map(|marca| format!("&updated_at=gt.{marca}"))
+        .unwrap_or_default();
+    let mut marca_mas_nueva: Option<chrono::DateTime<chrono::Utc>> = marca_anterior
+        .as_deref()
+        .and_then(|marca| crate::tiempo::parsear_utc(marca).ok());
+    let mut resumen = ResumenCatalogoRutas::default();
+    let cliente = cliente_http();
 
-    let transaction = connection.unchecked_transaction()?;
-    let vehiculos_recibidos = guardar_vehiculos_ruta(&transaction, &descarga.vehiculos)?;
-    let encargados_recibidos = guardar_encargados_ruta(&transaction, &descarga.encargados)?;
+    // Trae vehículos/encargados de ruta que este dispositivo todavía no
+    // tiene localmente. Sin `sitio_id=eq...` a propósito -- ambas tablas son
+    // globales (ver `docs/planes-implementados/plan-control-rutas.md`,
+    // "Alcance de RLS por tabla"), mismo criterio que empresas/contratistas.
+    // Página por página, cada una en su propia transacción corta, y la
+    // marca de agua recién al final -- mismo criterio que
+    // `recibir_catalogo_del_sitio` (N6).
+    guardar_por_pagina(
+        connection,
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/vehiculos_ruta?select=id,numero_unidad,placa,activo,updated_at{filtro_incremental}",
+            contexto.base_url
+        ),
+        |transaction, pagina: &[FilaVehiculoRutaRemota]| {
+            avanzar_marca(&mut marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
+            resumen.vehiculos_recibidos += guardar_vehiculos_ruta(transaction, pagina)?;
+            Ok(())
+        },
+    )?;
+    guardar_por_pagina(
+        connection,
+        &cliente,
+        contexto,
+        &format!(
+            "{}/rest/v1/encargados_ruta?select=id,codigo_empleado,nombre,activo,updated_at{filtro_incremental}",
+            contexto.base_url
+        ),
+        |transaction, pagina: &[FilaEncargadoRutaRemota]| {
+            avanzar_marca(&mut marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
+            resumen.encargados_recibidos += guardar_encargados_ruta(transaction, pagina)?;
+            Ok(())
+        },
+    )?;
 
-    if let Some(marca) = descarga.marca_mas_nueva {
-        transaction.execute(
+    if let Some(marca) = marca_mas_nueva {
+        connection.execute(
             "UPDATE sincronizacion_estado SET catalogo_rutas_actualizado_hasta = ?1 WHERE id = 1",
             params![crate::tiempo::serializar_utc(marca)],
         )?;
     }
-
-    transaction.commit()?;
-    Ok(ResumenCatalogoRutas {
-        vehiculos_recibidos,
-        encargados_recibidos,
-    })
+    Ok(resumen)
 }
