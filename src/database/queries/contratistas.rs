@@ -42,6 +42,10 @@ pub struct ContratistaResumen {
     /// Indica si existe un movimiento sin salida para mostrar el estado
     /// actual antes de intentar preparar un nuevo ingreso.
     pub tiene_ingreso_activo: bool,
+    /// "ACCESO DENEGADO" / "PRAIND VENCIDO" listo para mostrar en la fila.
+    /// Lo llena `AppCore::buscar_contratistas` con el reloj del núcleo; la
+    /// consulta lo deja en `None`.
+    pub aviso_acceso: Option<String>,
 }
 
 /// Estado de vencimiento de PRAIND a filtrar. `hoy` viaja con la variante en
@@ -311,6 +315,7 @@ fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<ContratistaResumen> {
         es_personal_ruta: row.get::<_, i64>(7)? != 0,
         tiene_acceso: row.get::<_, i64>(8)? != 0,
         tiene_ingreso_activo: row.get::<_, i64>(9)? != 0,
+        aviso_acceso: None,
     })
 }
 

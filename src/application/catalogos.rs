@@ -14,8 +14,10 @@ use crate::database::queries::gafetes_incidentes::{
 };
 use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
+use crate::domain::acceso::aviso_acceso_en_lista;
 use crate::domain::autorizacion::Operacion;
 use crate::domain::contratista::praind_vencido;
+use crate::mensajes::mensaje_aviso_acceso_lista;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::contratista_service::{
     ContratistaConsultaService, ContratistaService, DatosActualizacionContratista, DatosContratista,
@@ -81,7 +83,17 @@ impl AppCore {
         filtro: &FiltroContratistas,
     ) -> Result<PaginaContratistas, ContratistaServiceError> {
         let query = SqliteContratistasQuery::new(&self.connection);
-        ContratistaConsultaService::new(&query).buscar_para_tabla(filtro)
+        let mut pagina = ContratistaConsultaService::new(&query).buscar_para_tabla(filtro)?;
+        let hoy = fecha_costa_rica(self.reloj.ahora_utc());
+        for contratista in &mut pagina.items {
+            contratista.aviso_acceso = aviso_acceso_en_lista(
+                contratista.tiene_acceso,
+                contratista.fecha_vencimiento_praind,
+                hoy,
+            )
+            .map(mensaje_aviso_acceso_lista);
+        }
+        Ok(pagina)
     }
 
     /// Auditoría genérica (contratistas, empresas, usuarios — ver

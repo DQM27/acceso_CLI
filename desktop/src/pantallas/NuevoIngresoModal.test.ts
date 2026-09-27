@@ -2,25 +2,19 @@ import { describe, expect, it } from "vitest";
 import { avisosContratista, numeroDeGafete } from "./NuevoIngresoModal.logica";
 
 describe("avisosContratista (chips del buscador)", () => {
-  const hoy = "2026-09-23";
   type Datos = Parameters<typeof avisosContratista>[0];
-  const base: Datos = { tiene_ingreso_activo: false, tiene_acceso: true, fecha_vencimiento_praind: "2027-01-01" };
-  const textos = (c: Partial<Datos>) =>
-    avisosContratista({ ...base, ...c }, hoy).map((aviso) => aviso.texto);
+  const base: Datos = { tiene_ingreso_activo: false, aviso_acceso: null };
+  const textos = (c: Partial<Datos>) => avisosContratista({ ...base, ...c }).map((aviso) => aviso.texto);
 
   it("sin nada que avisar, no hay chips", () => {
     expect(textos({})).toEqual([]);
   });
 
-  it("avisa adentro, sin acceso y PRAIND vencido, en ese orden", () => {
-    expect(
-      textos({ tiene_ingreso_activo: true, tiene_acceso: false, fecha_vencimiento_praind: "2026-09-22" }),
-    ).toEqual(["Adentro", "Sin acceso", "PRAIND vencido"]);
-  });
-
-  it("el PRAIND que vence hoy todavía no está vencido; sin fecha no avisa", () => {
-    expect(textos({ fecha_vencimiento_praind: "2026-09-23" })).toEqual([]);
-    expect(textos({ fecha_vencimiento_praind: null })).toEqual([]);
+  it("muestra adentro y el aviso del núcleo tal cual, en ese orden", () => {
+    expect(textos({ tiene_ingreso_activo: true, aviso_acceso: "ACCESO DENEGADO" })).toEqual([
+      "Adentro",
+      "ACCESO DENEGADO",
+    ]);
   });
 });
 

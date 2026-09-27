@@ -39,6 +39,8 @@ export interface ContratistaResumen {
   es_personal_ruta: boolean;
   tiene_acceso: boolean;
   tiene_ingreso_activo: boolean;
+  /** "ACCESO DENEGADO" / "PRAIND VENCIDO", resuelto por el núcleo. */
+  aviso_acceso: string | null;
 }
 
 export interface PaginaContratistas {

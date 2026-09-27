@@ -258,3 +258,63 @@ fn apertura_productiva_lleva_base_nueva_a_version_actual() {
     drop(connection);
     std::fs::remove_file(ruta).unwrap();
 }
+
+#[test]
+fn buscar_contratistas_trae_el_aviso_de_acceso_con_el_reloj_del_nucleo() {
+    use chrono::{NaiveDate, TimeZone, Utc};
+    use control_acceso::tiempo::RelojFijo;
+    use std::sync::Arc;
+
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    let empresa_id = SqliteEmpresaRepository::new(&connection)
+        .crear(&Empresa {
+            id: 0,
+            nombre: "Brisas".to_owned(),
+            activo: true,
+        })
+        .unwrap();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let vencido = NaiveDate::from_ymd_opt(2026, 9, 26);
+    for (cedula, fecha, tiene_acceso) in [
+        ("1001", None, true),
+        ("1002", vencido, true),
+        ("1003", vencido, false),
+    ] {
+        contratistas
+            .crear(&Contratista::reconstruir(
+                0,
+                cedula.to_owned(),
+                format!("CONTRATISTA {cedula}"),
+                empresa_id,
+                TipoIngreso::Praind,
+                fecha,
+                false,
+                tiene_acceso,
+                true,
+            ))
+            .unwrap();
+    }
+    let reloj = Arc::new(RelojFijo::new(
+        Utc.with_ymd_and_hms(2026, 9, 27, 15, 0, 0).unwrap(),
+    ));
+    let core = AppCore::con_reloj(connection, reloj);
+
+    let mut avisos: Vec<_> = core
+        .buscar_contratistas(&FiltroContratistas::default())
+        .unwrap()
+        .items
+        .into_iter()
+        .map(|fila| (fila.cedula, fila.aviso_acceso))
+        .collect();
+    avisos.sort();
+
+    assert_eq!(
+        avisos,
+        vec![
+            ("1001".to_owned(), None),
+            ("1002".to_owned(), Some("PRAIND VENCIDO".to_owned())),
+            ("1003".to_owned(), Some("ACCESO DENEGADO".to_owned())),
+        ]
+    );
+}

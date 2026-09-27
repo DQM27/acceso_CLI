@@ -251,6 +251,17 @@ pub fn mensaje_vencimiento_praind(fecha: chrono::NaiveDate, hoy: chrono::NaiveDa
     format!("PRAIND {cuenta} ({})", fecha.format("%d-%m-%Y"))
 }
 
+/// Texto del aviso de una fila en las listas de contratistas. Mayúscula
+/// a propósito, para que se lea con fuerza (pedido del dueño 2026-09-20).
+pub fn mensaje_aviso_acceso_lista(aviso: crate::domain::acceso::AvisoAccesoLista) -> String {
+    use crate::domain::acceso::AvisoAccesoLista;
+
+    match aviso {
+        AvisoAccesoLista::AccesoDenegado => "ACCESO DENEGADO".into(),
+        AvisoAccesoLista::PraindVencido => "PRAIND VENCIDO".into(),
+    }
+}
+
 /// Texto de [`crate::services::registro_ingreso_service::BloqueoIngreso`],
 /// el mismo motivo que antes calculaban por separado `mensajeBloqueo`/
 /// `mensajeMotivoDenegacion` en Kotlin y en TypeScript -- con un texto que

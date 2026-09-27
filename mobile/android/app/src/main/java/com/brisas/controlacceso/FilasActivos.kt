@@ -16,7 +16,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import java.time.LocalDate
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
 import uniffi.control_acceso_mobile.IngresoRemoto
@@ -126,30 +125,11 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (!contratista.tieneAcceso) {
-            // Mismo criterio que el motivo SIN_ACCESO del texto que Rust
-            // ya resuelve para el bloqueo de ingreso (`PreparacionIngreso.mensajeBloqueo`,
-            // `mensajes::mensaje_bloqueo_ingreso` en el crate raíz) -- acá
-            // esta fila sólo conoce el toggle crudo (`tieneAcceso`), no el
-            // resto de `verificar_acceso` (PRAIND, empresa, etc.), así que
-            // el único motivo posible en este catálogo es justo ese.
-            // Mayúscula y negrita, pedido explícito del usuario
-            // 2026-09-20 para que se lea con fuerza.
+        // Texto y regla del núcleo (`ContratistaResumen.avisoAcceso`), con
+        // su reloj: sólo se muestra, en negrita para que se lea con fuerza.
+        contratista.avisoAcceso?.let { aviso ->
             Text(
-                "ACCESO DENEGADO",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                fontWeight = FontWeight.Bold,
-            )
-        } else if (contratista.fechaVencimientoPraind?.let { LocalDate.parse(it) < LocalDate.now() } == true) {
-            // Independiente del toggle de arriba -- acá sí hay fecha
-            // (`ContratistaResumen.fechaVencimientoPraind`), a diferencia
-            // del "Acceso denegado" de arriba que no la necesita. Sin fecha
-            // en el texto a propósito (pedido explícito del usuario
-            // 2026-09-20): sólo "PRAIND VENCIDO", el detalle con la fecha ya
-            // aparece en la pantalla de confirmar ingreso.
-            Text(
-                "PRAIND VENCIDO",
+                aviso,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 fontWeight = FontWeight.Bold,

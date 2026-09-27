@@ -185,6 +185,9 @@ pub struct ContratistaResumen {
     pub fecha_vencimiento_praind: Option<String>,
     pub tiene_acceso: bool,
     pub tiene_ingreso_activo: bool,
+    /// "ACCESO DENEGADO" / "PRAIND VENCIDO", resuelto por el núcleo con su
+    /// reloj; Kotlin sólo lo muestra.
+    pub aviso_acceso: Option<String>,
 }
 
 impl From<ContratistaResumenNucleo> for ContratistaResumen {
@@ -198,6 +201,7 @@ impl From<ContratistaResumenNucleo> for ContratistaResumen {
             fecha_vencimiento_praind: resumen.fecha_vencimiento_praind.map(|f| f.to_string()),
             tiene_acceso: resumen.tiene_acceso,
             tiene_ingreso_activo: resumen.tiene_ingreso_activo,
+            aviso_acceso: resumen.aviso_acceso,
         }
     }
 }

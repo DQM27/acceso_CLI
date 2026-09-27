@@ -1162,7 +1162,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional() and 0xFFFF) != 43280) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto() and 0xFFFF) != 2592) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto() and 0xFFFF) != 33806) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto() and 0xFFFF) != 42761) {
@@ -1231,7 +1231,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor() and 0xFFFF) != 65024) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor_con_secreto() and 0xFFFF) != 3353) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor_con_secreto() and 0xFFFF) != 25163) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta() and 0xFFFF) != 56331) {
@@ -2014,12 +2014,9 @@ public interface NucleoInterface {
     fun `entregarGafeteProvisional`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long): kotlin.Long
     
     /**
-     * Entrega con su regla en la misma llamada (antes la decidía
-     * `GafetesProvisionalesViewModel` en dos pasos): si el gafete ya está
-     * prestado en el otro dispositivo del sitio (nube) no se entrega; si
-     * la consulta falla, se frena. Recién ahí escribe
-     * (`entregar_gafete_provisional`, que aplica las reglas locales).
-     * `secreto` vacío se salta el chequeo de nube.
+     * Entrega con su regla en la misma llamada; la decide
+     * `application::entregar_gafete_provisional_verificado`, la misma que
+     * usa escritorio. `secreto` vacío se salta el chequeo de nube.
      */
     fun `entregarGafeteProvisionalConSecreto`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long
     
@@ -2191,18 +2188,10 @@ public interface NucleoInterface {
     fun `registrarIngresoProveedor`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long): kotlin.Long
     
     /**
-     * Ingreso de proveedor con TODAS sus reglas en una sola llamada (antes
-     * `ProveedoresViewModel` encadenaba tres llamadas y decidía él):
-     * 1. la cédula no tiene otro ingreso abierto en este sitio, ni en este
-     * equipo ni en el otro dispositivo
-     * (`AppCore::proveedor_con_ingreso_activo_en_sitio`);
-     * 2. ni en otro sitio (nube, mejor esfuerzo: sin red deja pasar);
-     * 3. el gafete no está en uso en el otro dispositivo del sitio (nube;
-     * si la consulta falla, se frena);
-     * 4. recién ahí escribe (`registrar_ingreso_proveedor`).
-     *
-     * `secreto` vacío se salta los chequeos de nube (2 y 3), mismo
-     * criterio que el resto de los `*_con_secreto`.
+     * Ingreso de proveedor con todas sus reglas en una sola llamada; el
+     * orden y qué falla frena los decide
+     * `application::registrar_ingreso_proveedor_verificado`, la misma que
+     * usa escritorio. `secreto` vacío se salta los chequeos de nube.
      */
     fun `registrarIngresoProveedorConSecreto`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long
     
@@ -3023,12 +3012,9 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Entrega con su regla en la misma llamada (antes la decidía
-     * `GafetesProvisionalesViewModel` en dos pasos): si el gafete ya está
-     * prestado en el otro dispositivo del sitio (nube) no se entrega; si
-     * la consulta falla, se frena. Recién ahí escribe
-     * (`entregar_gafete_provisional`, que aplica las reglas locales).
-     * `secreto` vacío se salta el chequeo de nube.
+     * Entrega con su regla en la misma llamada; la decide
+     * `application::entregar_gafete_provisional_verificado`, la misma que
+     * usa escritorio. `secreto` vacío se salta el chequeo de nube.
      */
     @Throws(NucleoException::class)override fun `entregarGafeteProvisionalConSecreto`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long {
             return FfiConverterLong.lift(
@@ -3510,18 +3496,10 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Ingreso de proveedor con TODAS sus reglas en una sola llamada (antes
-     * `ProveedoresViewModel` encadenaba tres llamadas y decidía él):
-     * 1. la cédula no tiene otro ingreso abierto en este sitio, ni en este
-     * equipo ni en el otro dispositivo
-     * (`AppCore::proveedor_con_ingreso_activo_en_sitio`);
-     * 2. ni en otro sitio (nube, mejor esfuerzo: sin red deja pasar);
-     * 3. el gafete no está en uso en el otro dispositivo del sitio (nube;
-     * si la consulta falla, se frena);
-     * 4. recién ahí escribe (`registrar_ingreso_proveedor`).
-     *
-     * `secreto` vacío se salta los chequeos de nube (2 y 3), mismo
-     * criterio que el resto de los `*_con_secreto`.
+     * Ingreso de proveedor con todas sus reglas en una sola llamada; el
+     * orden y qué falla frena los decide
+     * `application::registrar_ingreso_proveedor_verificado`, la misma que
+     * usa escritorio. `secreto` vacío se salta los chequeos de nube.
      */
     @Throws(NucleoException::class)override fun `registrarIngresoProveedorConSecreto`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long {
             return FfiConverterLong.lift(
@@ -4029,6 +4007,12 @@ data class ContratistaResumen (
     var `tieneAcceso`: kotlin.Boolean
     , 
     var `tieneIngresoActivo`: kotlin.Boolean
+    , 
+    /**
+     * "ACCESO DENEGADO" / "PRAIND VENCIDO", resuelto por el núcleo con su
+     * reloj; Kotlin sólo lo muestra.
+     */
+    var `avisoAcceso`: kotlin.String?
     
 ){
     
@@ -4053,6 +4037,7 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
     }
 
@@ -4064,7 +4049,8 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterTypeTipoIngreso.allocationSize(value.`tipoIngreso`) +
             FfiConverterOptionalString.allocationSize(value.`fechaVencimientoPraind`) +
             FfiConverterBoolean.allocationSize(value.`tieneAcceso`) +
-            FfiConverterBoolean.allocationSize(value.`tieneIngresoActivo`)
+            FfiConverterBoolean.allocationSize(value.`tieneIngresoActivo`) +
+            FfiConverterOptionalString.allocationSize(value.`avisoAcceso`)
     )
 
     override fun write(value: ContratistaResumen, buf: ByteBuffer) {
@@ -4076,6 +4062,7 @@ public object FfiConverterTypeContratistaResumen: FfiConverterRustBuffer<Contrat
             FfiConverterOptionalString.write(value.`fechaVencimientoPraind`, buf)
             FfiConverterBoolean.write(value.`tieneAcceso`, buf)
             FfiConverterBoolean.write(value.`tieneIngresoActivo`, buf)
+            FfiConverterOptionalString.write(value.`avisoAcceso`, buf)
     }
 }
 
