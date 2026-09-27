@@ -852,4 +852,44 @@ class LectorDocumentosIdentidadTest {
         val texto = reversoCedulaAnterior.replace("Número de Cédula: 1 2345 6789\n", "")
         assertNull(leerDocumentoDeTexto(texto))
     }
+
+    // --- Cédula nueva real (2026-09-27): etiquetas pegadas al valor ---
+
+    @Test
+    fun cedulaNuevaConEtiquetasPegadasAlValor() {
+        val texto = """
+            REPÚBLICA DE COSTA RICA
+            TRIBUNAL SUPREMO DE ELECCIONES
+            CÉDULA DE IDENTIDAD
+            1 0000 0219
+            Nombre:JUAN
+            1ºApellido:PEREZ
+            2ºApellido:MORA
+            F. Nac:26/03/1969 Vence:27/05/2036
+            26/03/1969
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("100000219", doc?.numeroDocumento)
+        assertEquals("JUAN", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+        assertEquals(FechaDocumento(27, 5, 2036), doc?.vencimiento)
+    }
+
+    @Test
+    fun reversoCedulaNuevaNoSeLeeComoFrente() {
+        // El reverso nuevo trae "Nombre: <nombre completo>", número y MRZ;
+        // se resuelve por el MRZ (con checksum) en el estabilizador, no
+        // por el extractor del frente.
+        val texto = """
+            Nombre: JUAN PEREZ MORA
+            C.C.:
+            1 0000 0219
+            TSECR
+            C004780077
+            IDCRI1000002190<C004780077<<<<
+        """.trimIndent()
+        assertNull(leerDocumentoDeTexto(texto))
+    }
 }
