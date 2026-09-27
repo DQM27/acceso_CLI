@@ -116,7 +116,7 @@ Trampas conocidas:
 - Contenedor nuevo: hay que instalar mingw (`gcc-mingw-w64-x86-64`), el
   target `x86_64-pc-windows-gnu`, el SDK de Android en `/opt/android-sdk`
   (cmdline-tools + `platforms;android-36`, `build-tools;36.0.0`) y
-  `npm ci` en `desktop/`. La núcleo con nube se prueba con
+  `npm ci` en `desktop/`. El núcleo con nube se prueba con
   `cargo test --features nube,cifrado-secreto-dispositivo-portable`.
 - Disco chico: si cargo falla con "No space left", borrar
   `target/debug/incremental` y `mobile/rust-core/target/debug`.
