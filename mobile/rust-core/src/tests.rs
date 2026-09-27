@@ -308,6 +308,43 @@ fn registrar_ingreso_con_secreto_vacio_no_toca_la_red() {
     assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
 }
 
+/// El aviso en vivo con la fila deja al contratista adentro "por el
+/// otro equipo" al instante, sin consultar a la nube.
+#[test]
+fn aplicar_cambio_nube_deja_el_ingreso_del_otro_equipo_al_instante() {
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let ruta = archivo.path().to_str().unwrap().to_string();
+    let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+    conexion
+        .execute_batch(
+            "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                 '999999999', 'Actor Test',
+                 '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                 'ROOT', 1
+             );",
+        )
+        .unwrap();
+    drop(conexion);
+    let nucleo = Nucleo::abrir(ruta).unwrap();
+    nucleo
+        .autenticar_con_secreto(
+            "999999999".to_string(),
+            "clave_prueba_123".to_string(),
+            String::new(),
+        )
+        .unwrap();
+
+    let aviso = r#"{"table":"ingresos","operation":"INSERT","id":"u1","sitio_id":"s1",
+        "registro":{"id":"u1","sitio_id":"s1","contratista_nombre":"PERSONA",
+        "contratista_cedula":"101110111","hora_entrada":"2026-09-27T12:00:00+00:00",
+        "dispositivo_entrada_id":"otro","hora_salida":null}}"#;
+    assert!(nucleo.aplicar_cambio_nube(aviso.to_string()).unwrap());
+
+    let remotos = nucleo.listar_ingresos_remotos().unwrap();
+    assert_eq!(remotos.len(), 1);
+    assert_eq!(remotos[0].contratista_nombre, "PERSONA");
+}
+
 #[test]
 fn listar_activos_y_registrar_salida() {
     let archivo = tempfile::NamedTempFile::new().unwrap();

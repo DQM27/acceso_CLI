@@ -41,6 +41,11 @@ pub use consultas_en_vivo::*;
 pub use gafetes_provisionales::*;
 pub use historial::*;
 pub use ingresos::*;
+// Para el aviso en vivo (`nube::en_vivo`), que aplica la misma fila sin
+// pasar por la sincronización.
+pub(in crate::nube) use ingresos::{
+    FilaIngresoRemoto, aplicar_cierre_de_ingreso_propio, guardar_ingreso_remoto,
+};
 use paginado::{
     DIAS_TRASLAPE_HISTORIAL, obtener_json, obtener_json_paginado, obtener_json_paginado_con,
 };

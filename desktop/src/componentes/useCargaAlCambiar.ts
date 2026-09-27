@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { EVENTO_NUBE_ACTUALIZADA } from "../eventosNube";
+import { EVENTO_CAMBIO_EN_VIVO, EVENTO_NUBE_ACTUALIZADA } from "../eventosNube";
 
 /**
  * Corre `recargar(estaVigente)` cada vez que cambia su identidad
@@ -24,10 +24,14 @@ export function useCargaAlCambiar(recargar: (estaVigente: () => boolean) => Prom
       recargar(estaVigente).catch((error) => estaVigente() && toast.error(String(error)));
     };
     cargar();
-    if (escucharNube) window.addEventListener(EVENTO_NUBE_ACTUALIZADA, cargar);
+    if (escucharNube) {
+      window.addEventListener(EVENTO_NUBE_ACTUALIZADA, cargar);
+      window.addEventListener(EVENTO_CAMBIO_EN_VIVO, cargar);
+    }
     return () => {
       vigente = false;
       window.removeEventListener(EVENTO_NUBE_ACTUALIZADA, cargar);
+      window.removeEventListener(EVENTO_CAMBIO_EN_VIVO, cargar);
     };
   }, [recargar, escucharNube]);
 }

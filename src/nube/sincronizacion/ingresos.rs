@@ -23,7 +23,7 @@ pub struct IngresoRemoto {
 }
 
 #[derive(serde::Deserialize)]
-pub(super) struct FilaIngresoRemoto {
+pub(in crate::nube) struct FilaIngresoRemoto {
     pub(super) id: String,
     pub(super) contratista_nombre: String,
     pub(super) hora_entrada: String,
@@ -87,35 +87,50 @@ pub fn recibir_cierres_de_ingresos_propios(
     let transaction = connection.unchecked_transaction()?;
     let mut aplicados = 0_u32;
     for fila in &filas {
-        let nombre_salida = fila
-            .usuario_salida_nombre
-            .as_deref()
-            .unwrap_or("Salida registrada en nube");
-        // El receptor devuelve el `timestamptz` de Postgres serializado a su
-        // manera (milisegundos, offset "+00:00") -- no necesariamente el
-        // formato único y reversible que exige `registro_ingresos_salida_utc`.
-        // Se reparsea y reformatea acá antes de escribirlo local.
-        let hora_salida = crate::tiempo::parsear_utc(&fila.hora_salida)
-            .map(crate::tiempo::serializar_utc)
-            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_salida.clone()))?;
-        let filas_afectadas = transaction.execute(
-            "
-            UPDATE registro_ingresos
-            SET
-                fecha_hora_salida = ?1,
-                usuario_salida_id = NULL,
-                usuario_salida_nombre = ?2
-            WHERE uuid = ?3
-              AND fecha_hora_salida IS NULL
-            ",
-            params![hora_salida, nombre_salida, fila.id],
+        let aplicado = aplicar_cierre_de_ingreso_propio(
+            &transaction,
+            &fila.id,
+            &fila.hora_salida,
+            fila.usuario_salida_nombre.as_deref(),
         )?;
-        let filas_afectadas = u32::try_from(filas_afectadas).unwrap_or(u32::MAX);
-        aplicados = aplicados.saturating_add(filas_afectadas);
+        aplicados = aplicados.saturating_add(u32::from(aplicado));
     }
     transaction.commit()?;
 
     Ok(aplicados)
+}
+
+/// Cierra en `registro_ingresos` un ingreso propio que la nube ya tiene
+/// cerrado (lo cerró el otro dispositivo o el panel). `true` si había uno
+/// abierto con ese `id`. Compartida por la sincronización y el aviso en
+/// vivo (`nube::en_vivo`).
+pub(in crate::nube) fn aplicar_cierre_de_ingreso_propio(
+    connection: &Connection,
+    id: &str,
+    hora_salida: &str,
+    usuario_salida_nombre: Option<&str>,
+) -> Result<bool, SincronizacionError> {
+    let nombre_salida = usuario_salida_nombre.unwrap_or("Salida registrada en nube");
+    // El receptor devuelve el `timestamptz` de Postgres serializado a su
+    // manera (milisegundos, offset "+00:00") -- no necesariamente el
+    // formato único y reversible que exige `registro_ingresos_salida_utc`.
+    // Se reparsea y reformatea acá antes de escribirlo local.
+    let hora_salida = crate::tiempo::parsear_utc(hora_salida)
+        .map(crate::tiempo::serializar_utc)
+        .map_err(|_| SincronizacionError::FechaInvalida(hora_salida.to_string()))?;
+    let filas_afectadas = connection.execute(
+        "
+        UPDATE registro_ingresos
+        SET
+            fecha_hora_salida = ?1,
+            usuario_salida_id = NULL,
+            usuario_salida_nombre = ?2
+        WHERE uuid = ?3
+          AND fecha_hora_salida IS NULL
+        ",
+        params![hora_salida, nombre_salida, id],
+    )?;
+    Ok(filas_afectadas > 0)
 }
 
 /// Refresca la caché local `ingresos_remotos` con lo que hay abierto ahora
@@ -154,63 +169,75 @@ pub fn recibir_ingresos_abiertos(
     )?;
     let mut remotos = Vec::with_capacity(filas.len());
     for fila in filas {
-        // Lo que ya vive en `registro_ingresos` de este dispositivo sigue
-        // siendo la fuente de verdad de ahí -- no se duplica en la caché
-        // remota. Ver el doc-comment de la función.
-        let existe_localmente: bool = transaction.query_row(
-            "SELECT EXISTS(SELECT 1 FROM registro_ingresos WHERE uuid = ?1)",
-            params![fila.id],
-            |row| row.get(0),
-        )?;
-        if existe_localmente {
-            continue;
+        if let Some(remoto) = guardar_ingreso_remoto(&transaction, contexto.sitio_id, fila)? {
+            remotos.push(remoto);
         }
-        // Mismo motivo que en `recibir_cierres_de_ingresos_propios`: el
-        // receptor no devuelve necesariamente el formato único que usa el
-        // resto de la app para persistir fechas.
-        let hora_entrada = crate::tiempo::parsear_utc(&fila.hora_entrada)
-            .map(crate::tiempo::serializar_utc)
-            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrada.clone()))?;
-        transaction.execute(
-            "
-            INSERT INTO ingresos_remotos (
-                uuid, sitio_id, contratista_nombre, hora_entrada,
-                usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en,
-                contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero,
-                placa
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?7, ?8, ?9, ?10, ?11, ?12)
-            ",
-            params![
-                fila.id,
-                contexto.sitio_id,
-                fila.contratista_nombre,
-                hora_entrada,
-                fila.usuario_entrada_nombre,
-                fila.dispositivo_entrada_id,
-                fila.contratista_cedula,
-                fila.empresa_nombre,
-                fila.tipo_ingreso,
-                fila.medio_ingreso,
-                fila.gafete_numero,
-                fila.placa,
-            ],
-        )?;
-        remotos.push(IngresoRemoto {
-            uuid: fila.id,
-            contratista_nombre: fila.contratista_nombre,
-            hora_entrada,
-            usuario_entrada_nombre: fila.usuario_entrada_nombre,
-            contratista_cedula: fila.contratista_cedula,
-            empresa_nombre: fila.empresa_nombre,
-            tipo_ingreso: fila.tipo_ingreso,
-            medio_ingreso: fila.medio_ingreso,
-            gafete_numero: fila.gafete_numero,
-            placa: fila.placa,
-        });
     }
     transaction.commit()?;
 
     Ok(remotos)
+}
+
+/// Guarda en la caché `ingresos_remotos` un ingreso abierto por el otro
+/// dispositivo del sitio. `None` si ya vive en `registro_ingresos` de este
+/// equipo (lo propio no se duplica en la caché, ver
+/// [`recibir_ingresos_abiertos`]). Reemplaza la fila si ya estaba.
+/// Compartida por la sincronización y el aviso en vivo (`nube::en_vivo`).
+pub(in crate::nube) fn guardar_ingreso_remoto(
+    connection: &Connection,
+    sitio_id: &str,
+    fila: FilaIngresoRemoto,
+) -> Result<Option<IngresoRemoto>, SincronizacionError> {
+    let existe_localmente: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM registro_ingresos WHERE uuid = ?1)",
+        params![fila.id],
+        |row| row.get(0),
+    )?;
+    if existe_localmente {
+        return Ok(None);
+    }
+    // Mismo motivo que en `aplicar_cierre_de_ingreso_propio`: el receptor
+    // no devuelve necesariamente el formato único que usa el resto de la
+    // app para persistir fechas.
+    let hora_entrada = crate::tiempo::parsear_utc(&fila.hora_entrada)
+        .map(crate::tiempo::serializar_utc)
+        .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrada.clone()))?;
+    connection.execute(
+        "
+        INSERT OR REPLACE INTO ingresos_remotos (
+            uuid, sitio_id, contratista_nombre, hora_entrada,
+            usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en,
+            contratista_cedula, empresa_nombre, tipo_ingreso, medio_ingreso, gafete_numero,
+            placa
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?7, ?8, ?9, ?10, ?11, ?12)
+        ",
+        params![
+            fila.id,
+            sitio_id,
+            fila.contratista_nombre,
+            hora_entrada,
+            fila.usuario_entrada_nombre,
+            fila.dispositivo_entrada_id,
+            fila.contratista_cedula,
+            fila.empresa_nombre,
+            fila.tipo_ingreso,
+            fila.medio_ingreso,
+            fila.gafete_numero,
+            fila.placa,
+        ],
+    )?;
+    Ok(Some(IngresoRemoto {
+        uuid: fila.id,
+        contratista_nombre: fila.contratista_nombre,
+        hora_entrada,
+        usuario_entrada_nombre: fila.usuario_entrada_nombre,
+        contratista_cedula: fila.contratista_cedula,
+        empresa_nombre: fila.empresa_nombre,
+        tipo_ingreso: fila.tipo_ingreso,
+        medio_ingreso: fila.medio_ingreso,
+        gafete_numero: fila.gafete_numero,
+        placa: fila.placa,
+    }))
 }
 
 /// Cierra, directo contra la nube, un ingreso que abrió el otro
