@@ -13,7 +13,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.Nucleo
-import uniffi.control_acceso_mobile.NucleoException
 
 /// Dueño del estado de [PantallaPrimerArranque] -- ver el doc-comment de esa
 /// pantalla. Un solo intento a la vez, sin reintento automático: si el
@@ -49,10 +48,8 @@ class PrimerArranqueViewModel(
                     )
                 }
                 onListo()
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoStoreException) {
-                error = excepcion.message
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 conectando = false
             }

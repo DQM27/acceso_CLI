@@ -13,7 +13,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.Nucleo
-import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.ResumenSincronizacion
 
 /// Dueño del estado del botón manual "Sincronizar" (ver
@@ -67,12 +66,8 @@ class NubeViewModel(
                 }
                 ultimoResumen = resumen
                 if (resumen.sesionExpulsada) onSesionExpulsada()
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoStoreException) {
-                error = excepcion.message
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 sincronizando = false
             }

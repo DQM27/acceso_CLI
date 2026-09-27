@@ -321,8 +321,8 @@ fun PantallaPrincipal(
                 // control de rutas sin terminar, que no se vea a medias en
                 // una demostración). `PantallaRutas` sigue intacta; para
                 // volver a mostrarla basta con sacarla de
-                // `PESTANAS_EN_DESARROLLO`.
-                opciones = PESTANAS.filterNot { it in PESTANAS_EN_DESARROLLO },
+                // `enDesarrollo` en `SeccionPrincipal`.
+                opciones = SECCIONES_VISIBLES.map { it.etiqueta },
                 seleccionado = pestana,
                 onSeleccionar = { pestana = it },
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -334,13 +334,14 @@ fun PantallaPrincipal(
             // cambio le pasa a su único hijo las restricciones ya acotadas
             // que le tocaron acá (el resto de la pantalla, vía `weight(1f)`).
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                // Por nombre, no por índice -- con pestañas ocultas el índice
-                // visible ya no coincide con la posición en `PESTANAS`.
-                when (PESTANAS.filterNot { it in PESTANAS_EN_DESARROLLO }.getOrNull(pestana)) {
-                    "Rutas" -> PantallaRutas(nucleo)
-                    "KOF" -> PantallaGafetesProvisionales(nucleo, secretoStore, refrescarNube)
-                    "Proveedores" -> PantallaProveedores(nucleo, secretoStore, refrescarNube)
-                    else -> PantallaActivos(nucleo, secretoStore, refrescarNube)
+                // `when` exhaustivo sobre el enum: agregar una sección sin
+                // su pantalla no compila (antes eran textos y un `else`
+                // que caía en Activos en silencio ante un error de tipeo).
+                when (SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }) {
+                    SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, secretoStore, refrescarNube)
+                    SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
+                    SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, secretoStore, refrescarNube)
+                    SeccionPrincipal.PROVEEDORES -> PantallaProveedores(nucleo, secretoStore, refrescarNube)
                 }
             }
         }
@@ -349,8 +350,15 @@ fun PantallaPrincipal(
 
 private const val DEMORA_BLOQUEO_SESION_MS = 2 * 60_000L
 
-private val PESTANAS = listOf("Activos", "Rutas", "KOF", "Proveedores")
+/// Secciones de la pantalla principal, en el orden de la fila de pestañas
+/// (punto M5 de la auditoría móvil: antes eran textos sueltos).
+/// `enDesarrollo` las oculta de la fila sin borrar su pantalla (ver el
+/// comentario junto a `FilaPildoras`).
+enum class SeccionPrincipal(val etiqueta: String, val enDesarrollo: Boolean = false) {
+    ACTIVOS("Activos"),
+    RUTAS("Rutas", enDesarrollo = true),
+    KOF("KOF"),
+    PROVEEDORES("Proveedores"),
+}
 
-/** Pestañas sin terminar, ocultas de la fila (ver comentario en
- * `FilaPildoras` arriba). */
-private val PESTANAS_EN_DESARROLLO = setOf("Rutas")
+private val SECCIONES_VISIBLES = SeccionPrincipal.entries.filterNot { it.enDesarrollo }

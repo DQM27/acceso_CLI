@@ -142,12 +142,8 @@ class GafetesProvisionalesViewModel(
                 onExito()
             } catch (excepcion: GafeteOcupadoEnSitioException) {
                 error = excepcion.message
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoStoreException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
-                error = excepcion.message
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 registrando = false
             }
@@ -174,12 +170,8 @@ class GafetesProvisionalesViewModel(
                 }
                 CambiosNube.solicitar()
                 refrescarActivos()
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoStoreException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
-                error = excepcion.message
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
             }
         }
     }
