@@ -47,3 +47,21 @@ hace lo mismo al usar `gafete_de_proveedor_ocupado_en_sitio_con_secreto`.
 
 Qué hacer: mismo movimiento que en proveedores, una función del núcleo
 que chequea y escribe, usada por ambos.
+
+## 4. Placa y gafete al registrar el ingreso de un contratista
+
+| Regla | Dónde vive ahora | Escritorio hoy |
+|---|---|---|
+| La placa sólo existe en vehículo; con "Caminando" se descarta, sin espacios en los bordes | `domain::registro_ingreso::placa_segun_medio` (lo aplica `Nucleo::registrar_ingreso`) | **Duplicada en TS**: `desktop/src/pantallas/NuevoIngresoModal.tsx` (`confirmarIngreso` + `validarPlaca`) |
+| Placa obligatoria en vehículo, gafete obligatorio según el contratista | `RegistroIngresoService` (`PlacaRequerida`, `GafeteRequerido`), ya existía | **Pre-validada en TS** con su propio texto antes de llamar al núcleo |
+
+Qué hacer: que el modal mande lo tipeado y muestre el mensaje del núcleo
+(`mensaje_ingreso`); para eso el comando Tauri debe aplicar
+`placa_segun_medio` igual que el puente móvil.
+
+## Otros restos de lógica en Kotlin detectados (fuera de esta rama)
+
+- `mensajeVencimientoPraind` (`PantallaConfirmarIngreso.kt`): arma "vence
+  en N días (fecha)" con `LocalDate.now()`. Es espejo de
+  `desktop/src/api/ingresos.ts`; debería salir del núcleo junto con
+  `PreparacionIngreso` (mismo reloj que el resto de las reglas).

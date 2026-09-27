@@ -354,7 +354,8 @@ class ActivosViewModel(
 
     /// Registra el ingreso del contratista del formulario abierto (punto M2
     /// de la auditoría móvil: antes lo hacía `PantallaConfirmarIngreso`
-    /// directo contra el núcleo). Valida gafete y placa, y hace el chequeo
+    /// directo contra el núcleo). Las reglas de gafete y placa las aplica el
+    /// núcleo; acá sólo se hace el chequeo
     /// de "gafete ocupado en otro dispositivo del sitio" + la escritura en
     /// UNA sola llamada (`registrarIngresoConSecreto`): antes eran dos
     /// cruces FFI con una ventana entre medio donde otro dispositivo podía
@@ -364,18 +365,15 @@ class ActivosViewModel(
         val preparacion = (seleccionIngreso as? SeleccionIngreso.Formulario)?.preparacion ?: return
         if (registrandoIngreso) return
         errorIngreso = null
-        val gafete: Long? = if (preparacion.requiereGafete) {
+        // Sólo se convierte el texto a número; si el gafete falta, o la
+        // placa no corresponde al medio, lo decide y lo dice el núcleo.
+        val gafete: Long? = if (preparacion.requiereGafete && gafeteTexto.isNotBlank()) {
             gafeteTexto.trim().toLongOrNull() ?: run {
-                errorIngreso = if (gafeteTexto.isBlank()) "El gafete es requerido" else "Ingrese un número de gafete válido"
+                errorIngreso = "Ingrese un número de gafete válido"
                 return
             }
         } else {
             null
-        }
-        val placa = placaSiCorresponde(medio, placaTexto)
-        if (medio == MedioIngreso.VEHICULO && placa.isNullOrBlank()) {
-            errorIngreso = "La placa es requerida"
-            return
         }
         registrandoIngreso = true
         viewModelScope.launch {
@@ -389,7 +387,7 @@ class ActivosViewModel(
                     } else {
                         secretoStore.cargar().orEmpty()
                     }
-                    nucleo.registrarIngresoConSecreto(preparacion.contratistaId, medio, gafete, placa, secreto)
+                    nucleo.registrarIngresoConSecreto(preparacion.contratistaId, medio, gafete, placaTexto, secreto)
                 }
                 onIngresoRegistrado()
             } catch (excepcion: Exception) {

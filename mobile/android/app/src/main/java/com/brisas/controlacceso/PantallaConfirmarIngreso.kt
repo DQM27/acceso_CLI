@@ -63,13 +63,6 @@ fun mensajeVencimientoPraind(fecha: String): String {
     return "$cuenta ($fechaTexto)"
 }
 
-/// Mismo criterio que `NuevoIngresoModal.tsx` (`confirmarIngreso`): la placa
-/// sólo se manda (y sólo existe) cuando el medio es Vehículo -- con
-/// Caminando se descarta lo tipeado, aunque el operador haya escrito algo
-/// antes de cambiar de radio.
-fun placaSiCorresponde(medio: MedioIngreso, placaTexto: String): String? =
-    if (medio == MedioIngreso.VEHICULO) placaTexto.trim() else null
-
 /// Formulario de ingreso de un contratista ya preparado. El registro (la
 /// validación de gafete/placa y la llamada al núcleo) vive en
 /// [ActivosViewModel.registrarIngreso] -- punto M2 de la auditoría móvil;
@@ -187,7 +180,7 @@ fun PantallaConfirmarIngreso(
         Row(modifier = Modifier.padding(bottom = 16.dp)) {
             listOf(MedioIngreso.CAMINANDO to "Caminando", MedioIngreso.VEHICULO to "Vehículo").forEach { (opcion, etiqueta) ->
                 // Descarta la placa tipeada antes si el operador vuelve a
-                // Caminando -- ver el doc-comment de `placaSiCorresponde`.
+                // Caminando: el núcleo descarta la placa (`placa_segun_medio`).
                 val elegir = {
                     medio = opcion
                     if (opcion == MedioIngreso.CAMINANDO) placaTexto = ""

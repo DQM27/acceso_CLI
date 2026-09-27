@@ -278,7 +278,7 @@ class ActivosViewModelTest {
     }
 
     @Test
-    fun `gafete requerido y vacio no llama al nucleo`() = runTest(dispatcher) {
+    fun `gafete requerido y vacio lo rechaza el nucleo con su mensaje`() = runTest(dispatcher) {
         val viewModel = formularioAbierto("PRAIND")
 
         viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "  ", "")
@@ -306,9 +306,22 @@ class ActivosViewModelTest {
         val viewModel = formularioAbierto("SWAT")
 
         viewModel.registrarIngreso(MedioIngreso.VEHICULO, "", " ")
-        assertEquals("La placa es requerida", viewModel.errorIngreso)
+        advanceUntilIdle()
+        assertEquals("La placa es obligatoria cuando el ingreso es en vehículo", viewModel.errorIngreso)
+        assertTrue(nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).isEmpty())
 
         viewModel.cancelarSeleccionIngreso()
         assertNull(viewModel.errorIngreso)
+    }
+
+    @Test
+    fun `caminando descarta la placa tipeada y registra`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "ABC123")
+        advanceUntilIdle()
+
+        assertNull(viewModel.errorIngreso)
+        assertEquals(1, nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).size)
     }
 }

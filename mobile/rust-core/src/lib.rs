@@ -1089,10 +1089,17 @@ fn convertir_fallo_sincronizacion(fallo: FalloSincronizacion) -> NucleoError {
     }
 }
 
+/// Mismo criterio que contratistas: las reglas llegan con su mensaje
+/// (`mensaje_ingreso`), sólo la falla de base es `Interno`.
 impl From<RegistroIngresoServiceErrorNucleo> for NucleoError {
     fn from(error: RegistroIngresoServiceErrorNucleo) -> Self {
-        Self::Interno {
-            mensaje: interno(error),
+        match error {
+            RegistroIngresoServiceErrorNucleo::Database(_) => Self::Interno {
+                mensaje: interno(error),
+            },
+            regla => Self::Rechazado {
+                mensaje: control_acceso::mensajes::mensaje_ingreso(regla),
+            },
         }
     }
 }
@@ -1623,9 +1630,13 @@ impl Nucleo {
         placa: Option<String>,
     ) -> Result<ResultadoRegistroEntrada, NucleoError> {
         let actor = self.actor_autenticado()?;
+        // Kotlin manda lo tipeado tal cual; qué placa corresponde al medio
+        // lo decide el dominio.
+        let medio: MedioIngresoNucleo = medio.into();
+        let placa = control_acceso::domain::registro_ingreso::placa_segun_medio(medio, placa);
         Ok(self
             .core_lock()
-            .registrar_ingreso(&actor, contratista_id, medio.into(), gafete, placa)?
+            .registrar_ingreso(&actor, contratista_id, medio, gafete, placa)?
             .into())
     }
 
