@@ -1,23 +1,15 @@
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
 import { actualizarEncargadoRuta, crearEncargadoRuta } from "../api";
 import type { EncargadoRuta } from "../api";
+import { esquema } from "./FormularioEncargadoRuta.logica";
 
 interface ValoresFormulario {
   codigo_empleado: string;
   nombre: string;
   activo: boolean;
 }
-
-export const esquema = z.object({
-  codigo_empleado: z
-    .string()
-    .regex(/^\d{5,7}$/, "El código de empleado debe tener entre 5 y 7 dígitos"),
-  nombre: z.string().min(1, "El nombre es obligatorio"),
-  activo: z.boolean(),
-});
 
 export default function FormularioEncargadoRuta({
   encargado,

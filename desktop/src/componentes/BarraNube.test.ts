@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { descripcion } from "./BarraNube";
+import { descripcion } from "./BarraNube.logica";
 
 describe("descripcion (BarraNube)", () => {
   it("sin red del SO, manda 'sin conexión' sin importar el estado del canal", () => {

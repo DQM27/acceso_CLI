@@ -3,38 +3,20 @@ import { IdCard, UserSearch } from "lucide-react";
 import Modal from "../componentes/Modal";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
-import {
-  FilaListaFlotante,
-  ListaFlotante,
-  SinResultados,
-  useListaFlotante,
-  useNavegacionFlechas,
-} from "../componentes/ListaFlotante";
+import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
+import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
 import { cerrarFilaActiva, claveFilaActiva, gafetesDe, listarTodosLosActivos, sanearGafetes } from "../api";
 import type { FilaActiva } from "../api";
+import { textoGafete, coincideTexto } from "./SalidaModal.logica";
 
 const MAX_RESULTADOS = 4;
 
 type ModoBusqueda = "nombre" | "gafete";
 
-/** "GAFETE 2" / "S/G" (sin gafete), en mayúsculas como el resto de los
- * datos del contratista. */
-export function textoGafete(numero: number | null): string {
-  return numero == null ? "S/G" : `GAFETE ${numero}`;
-}
-
 const OPCIONES_MODO: OpcionSegmentada<ModoBusqueda>[] = [
   { valor: "nombre", Icono: UserSearch, titulo: "Nombre o cédula" },
   { valor: "gafete", Icono: IdCard, titulo: "Gafete" },
 ];
-
-export function coincideTexto(activo: FilaActiva, textoBuscado: string): boolean {
-  const buscado = textoBuscado.toLowerCase();
-  return (
-    activo.contratista_nombre.toLowerCase().includes(buscado) ||
-    (activo.cedula?.toLowerCase().includes(buscado) ?? false)
-  );
-}
 
 type Seleccion = { tipo: "ninguna" } | { tipo: "elegido"; activo: FilaActiva };
 

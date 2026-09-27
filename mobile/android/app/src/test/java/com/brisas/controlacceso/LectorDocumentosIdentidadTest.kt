@@ -276,7 +276,7 @@ class LectorDocumentosIdentidadTest {
         assertEquals("999888777", doc?.numeroDocumento)
         assertEquals("MARIA JOSE", doc?.nombre)
         assertEquals("PEREZ RAMIREZ", doc?.apellidos)
-        assertEquals("NICARAGUA", doc?.nacionalidad)
+        assertNull(doc?.nacionalidad) // el frente del DIMEX ya no la lee
         assertEquals(FechaDocumento(28, 7, 2026), doc?.vencimiento)
     }
 
@@ -496,10 +496,9 @@ class LectorDocumentosIdentidadTest {
         assertEquals(TipoDocumento.CEDULA_RESIDENCIA, doc?.tipo)
         assertNull(doc?.nombre)
         assertNull(doc?.apellidos)
-        // Nacionalidad no se toca -- ver el comentario en
-        // LectorDocumentosIdentidad.kt sobre por qué ese caso queda
-        // pendiente de una muestra real.
-        assertEquals("NICARAGUENSE", doc?.nacionalidad)
+        // El frente del DIMEX ya no lee nacionalidad (sólo nombre,
+        // apellidos, número y vencimiento).
+        assertNull(doc?.nacionalidad)
     }
 
     @Test
@@ -517,5 +516,419 @@ class LectorDocumentosIdentidadTest {
 
         assertEquals("JUAN CARLOS", doc?.nombre)
         assertEquals("PEREZ MORA", doc?.apellidos)
+    }
+
+    // --- DIMEX: "Género: M" en la misma línea que el nombre ---
+
+    @Test
+    fun dimexIgnoraGeneroEnLaMismaLineaDelNombre() {
+        // Layout real de la DIMEX: "Género: M" está a la derecha del nombre,
+        // y ML Kit los devuelve en la misma línea.
+        val texto = """
+            RESIDENTE PERMANENTE
+            LIBRE CONDICIÓN
+            Apellidos:
+            PEREZ MORA
+            Nombre:
+            JUAN CARLOS Género: M
+            Nacionalidad:
+            NICARAGUA
+            Documento No.: 155824395105
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+    }
+
+    @Test
+    fun dimexIgnoraGeneroSinTildeOLeidoRaro() {
+        for (linea in listOf("JUAN CARLOS Genero: F", "JUAN CARLOS GÉNERO M", "JUAN CARLOS Gnero: M", "Nombre: JUAN CARLOS   Sexo: M")) {
+            val texto = "RESIDENTE PERMANENTE\nDocumento No.: 155824395105\n" +
+                (if (linea.startsWith("Nombre:")) linea else "Nombre:\n$linea")
+            assertEquals(linea, "JUAN CARLOS", leerDocumentoDeTexto(texto)?.nombre)
+        }
+    }
+
+    @Test
+    fun dimexNoCortaNombresQueEmpiezanComoGenero() {
+        val texto = "RESIDENTE PERMANENTE\nDocumento No.: 155824395105\nNombre:\nGENEROSO ANTONIO"
+        assertEquals("GENEROSO ANTONIO", leerDocumentoDeTexto(texto)?.nombre)
+    }
+
+    // --- DIMEX: esquema completo, cada renglón visual con su campo vecino ---
+
+    @Test
+    fun dimexLeeTarjetaCompletaConCamposVecinosEnElMismoRenglon() {
+        // Así devuelve ML Kit el frente real: un renglón por línea visual,
+        // con la columna derecha pegada al valor de la izquierda.
+        val texto = """
+            DIRECCIÓN GENERAL DE MIGRACIÓN Y EXTRANJERÍA
+            REPÚBLICA DE COSTA RICA
+            RESIDENTE PERMANENTE
+            LIBRE CONDICIÓN
+            Apellidos:
+            PEREZ MORA
+            Nombre:
+            JUAN CARLOS Género: M
+            Nacionalidad:
+            NICARAGUA F.nac.: 01 01 1990
+            Documento No.: 155800000001 Emitido: 01 01 2023
+            Expediente No.: 135 - 000000 Vence: 01 01 2027
+            DGME
+            DOCUMENTO DE IDENTIDAD MIGRATORIO PARA EXTRANJEROS
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CEDULA_RESIDENCIA, doc?.tipo)
+        assertEquals("155800000001", doc?.numeroDocumento)
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+        assertNull(doc?.nacionalidad) // se descarta a propósito
+        assertEquals(1, doc?.vencimiento?.dia)
+        assertEquals(2027, doc?.vencimiento?.anio)
+    }
+
+    @Test
+    fun dimexConEtiquetaYGeneroEnUnRenglonYNombreEnElSiguiente() {
+        val texto = """
+            RESIDENTE PERMANENTE
+            Apellidos: PEREZ MORA
+            Nombre: Género: M
+            JUAN CARLOS
+            Nacionalidad: NICARAGUA
+            Documento No.: 155800000001
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+    }
+
+    @Test
+    fun dimexSinValorNoRobaLaEtiquetaSiguiente() {
+        val texto = "RESIDENTE PERMANENTE\nApellidos:\nNombre:\nJUAN CARLOS\nDocumento No.: 155800000001"
+        val doc = leerDocumentoDeTexto(texto)
+        assertEquals(null, doc?.apellidos)
+        assertEquals("JUAN CARLOS", doc?.nombre)
+    }
+
+    @Test
+    fun dimexNumeroSeparadoDeSuEtiquetaUsaElDeOnceODoceDigitosNuncaElExpediente() {
+        val texto = """
+            RESIDENTE PERMANENTE
+            Documento No.: Emitido: 01 01 2023
+            Expediente No.: 135 - 000000
+            155800000001
+        """.trimIndent()
+        assertEquals("155800000001", leerDocumentoDeTexto(texto)?.numeroDocumento)
+    }
+
+    // --- Licencia: esquema completo, sólo número/nombre/apellidos/vencimiento ---
+
+    @Test
+    fun licenciaExtranjeroIgnoraPieDeImpresionYNumerosSueltos() {
+        // Frente real completo, con el pie "... N0940950 ... BCR GOB DIGITAL"
+        // partido en líneas como a veces lo devuelve ML Kit.
+        val texto = """
+            REPUBLICA DE COSTA RICA
+            Licencia de Conducir
+            Nº: DM-155800000001
+            Expedición 03-04-2023
+            Nacimiento 30-05-1989
+            Tipo: A3
+            Vencimiento 03-04-2026
+            Donador
+            R.F. R.T. T.S. NI.
+            PEREZ MORA JUAN CARLOS
+            DIRECCION GENERAL EDUCACION VIAL MOPT
+            08770445
+            053323202302
+            03/04/2023 11:54 PR-C151 N0940950 830
+            BCR GOB DIGITAL
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.LICENCIA_EXTRANJERO, doc?.tipo)
+        assertEquals("155800000001", doc?.numeroDocumento)
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+        assertEquals(FechaDocumento(3, 4, 2026), doc?.vencimiento)
+        assertNull(doc?.fechaNacimiento)
+    }
+
+    @Test
+    fun licenciaNoTomaElNumeroDelPieSiFaltaElSimboloDeNumero() {
+        val texto = """
+            Licencia de Conducir
+            CI-205300606
+            Vencimiento 08-08-2027
+            03/04/2023 11:54 PR-C151 N0940950 830
+        """.trimIndent()
+        assertEquals("205300606", leerDocumentoDeTexto(texto)?.numeroDocumento)
+    }
+
+    @Test
+    fun licenciaNacionalConCedulaConGuiones() {
+        val texto = "Licencia de Conducir\nNº: 1-1234-0567\nVencimiento 03-04-2026"
+        assertEquals("112340567", leerDocumentoDeTexto(texto)?.numeroDocumento)
+    }
+
+    @Test
+    fun licenciaRespetaApellidosCompuestosConParticulas() {
+        val texto = "Licencia de Conducir\nNº: CI-205300606\nVencimiento 08-08-2027\nDE LA O CASTRO ANA MARIA"
+        val doc = leerDocumentoDeTexto(texto)
+        assertEquals("ANA MARIA", doc?.nombre)
+        assertEquals("DE LA O CASTRO", doc?.apellidos)
+    }
+
+    // --- Cédula nacional: esquema, bloques separados y sólo 4 campos ---
+
+    @Test
+    fun cedulaNuevaLeeNombreApellidosNumeroYVenceIgnorandoFechaDeNacimiento() {
+        val texto = """
+            REPÚBLICA DE COSTA RICA
+            TRIBUNAL SUPREMO DE ELECCIONES
+            CÉDULA DE IDENTIDAD
+            1 2345 6789
+            JUAN.C.G
+            Nombre: JUAN CARLOS
+            1ºApellido: GOMEZ
+            2ºApellido: VARGAS F. Nac:22/08/2003 Vence:08/04/2036
+            22/08/2003
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("123456789", doc?.numeroDocumento)
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("GOMEZ VARGAS", doc?.apellidos)
+        assertEquals(FechaDocumento(8, 4, 2036), doc?.vencimiento)
+        assertNull(doc?.fechaNacimiento)
+    }
+
+    @Test
+    fun cedulaAzulConEtiquetasYValoresEnBloquesSeparados() {
+        // Etiquetas alineadas a la derecha en su propia columna: ML Kit
+        // devuelve primero todas las etiquetas y después todos los valores.
+        val texto = """
+            REPÚBLICA DE COSTA RICA
+            Tribunal Supremo de Elecciones
+            Cédula de Identidad
+            1 9876 5432
+            Ana L.S
+            Nombre:
+            1° Apellido:
+            2° Apellido:
+            C.C:
+            ANA LUCIA
+            RODRIGUEZ
+            SOLIS
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("198765432", doc?.numeroDocumento)
+        assertEquals("ANA LUCIA", doc?.nombre)
+        assertEquals("RODRIGUEZ SOLIS", doc?.apellidos)
+        assertNull(doc?.vencimiento)
+    }
+
+    @Test
+    fun cedulaAzulConValoresAntesQueLasEtiquetas() {
+        val texto = """
+            REPÚBLICA DE COSTA RICA
+            Cédula de Identidad
+            1 9876 5432
+            ANA LUCIA
+            RODRIGUEZ
+            SOLIS
+            Nombre:
+            1° Apellido:
+            2° Apellido:
+            C.C:
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("ANA LUCIA", doc?.nombre)
+        assertEquals("RODRIGUEZ SOLIS", doc?.apellidos)
+    }
+
+    @Test
+    fun cedulaNoTomaLaEtiquetaSiguienteComoValor() {
+        val texto = "Cédula de Identidad\n1 9876 5432\nNombre:\n1° Apellido: RODRIGUEZ\n2° Apellido: SOLIS"
+        val doc = leerDocumentoDeTexto(texto)
+        assertNull(doc?.nombre)
+        assertEquals("RODRIGUEZ SOLIS", doc?.apellidos)
+    }
+
+    // --- In House en estuche: "COSTA RICA" perdido y basura del reflejo ---
+
+    @Test
+    fun inHouseSinCostaRicaSeReconocePorLaFranjaContratista() {
+        val texto = """
+            Ana Maria
+            Muñoz Rojas
+            CONTRATISTA
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CARNET_IN_HOUSE, doc?.tipo)
+        assertEquals("Ana Maria Muñoz Rojas", doc?.nombre)
+    }
+
+    @Test
+    fun inHouseIgnoraBasuraDelReflejoDelEstuche() {
+        val texto = """
+            Ana Maria
+            Muñoz Rojas
+            l.
+            CONTRATISTA
+            COSTA RICA
+        """.trimIndent()
+
+        assertEquals("Ana Maria Muñoz Rojas", leerDocumentoDeTexto(texto)?.nombre)
+    }
+
+    // --- Reverso de la cédula azul anterior ---
+
+    private val reversoCedulaAnterior = """
+        Número de Cédula: 1 2345 6789
+        Fecha de Nacimiento: 01 01 1970
+        Lugar de Nacimiento: TURRUBARES SAN JOSE
+        Nombre del Padre: JUAN PEREZ MORA
+        Nombre de la Madre: ANA ROJAS VEGA
+        Domicilio Electoral: RINCON CENTRAL ALAJUELA
+        Vencimiento: 18 10 2028
+        Sexo:
+        001234567
+    """.trimIndent()
+
+    @Test
+    fun reversoCedulaAnteriorLeeNumeroYVencimientoSinNombresDeLosPadres() {
+        val doc = leerDocumentoDeTexto(reversoCedulaAnterior)
+
+        assertEquals(TipoDocumento.CEDULA_NACIONAL, doc?.tipo)
+        assertEquals("123456789", doc?.numeroDocumento)
+        assertEquals(FechaDocumento(18, 10, 2028), doc?.vencimiento)
+        assertNull(doc?.nombre)
+        assertNull(doc?.apellidos)
+    }
+
+    @Test
+    fun reversoCedulaAnteriorConEtiquetasYValoresEnBloquesSeparados() {
+        val texto = """
+            Número de Cédula:
+            Fecha de Nacimiento:
+            Lugar de Nacimiento:
+            Nombre del Padre:
+            Nombre de la Madre:
+            Domicilio Electoral:
+            Vencimiento: 18 10 2028
+            1 2345 6789
+            01 01 1970
+            TURRUBARES SAN JOSE
+            JUAN PEREZ MORA
+            ANA ROJAS VEGA
+            RINCON CENTRAL ALAJUELA
+            001234567
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("123456789", doc?.numeroDocumento)
+        assertNull(doc?.nombre)
+        assertNull(doc?.apellidos)
+    }
+
+    @Test
+    fun reversoCedulaAnteriorNoTomaElNumeroDeControlQueEmpiezaEnCero() {
+        val texto = reversoCedulaAnterior.replace("Número de Cédula: 1 2345 6789\n", "")
+        assertNull(leerDocumentoDeTexto(texto))
+    }
+
+    // --- Cédula nueva real (2026-09-27): etiquetas pegadas al valor ---
+
+    @Test
+    fun cedulaNuevaConEtiquetasPegadasAlValor() {
+        val texto = """
+            REPÚBLICA DE COSTA RICA
+            TRIBUNAL SUPREMO DE ELECCIONES
+            CÉDULA DE IDENTIDAD
+            1 0000 0219
+            Nombre:JUAN
+            1ºApellido:PEREZ
+            2ºApellido:MORA
+            F. Nac:26/03/1969 Vence:27/05/2036
+            26/03/1969
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("100000219", doc?.numeroDocumento)
+        assertEquals("JUAN", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+        assertEquals(FechaDocumento(27, 5, 2036), doc?.vencimiento)
+    }
+
+    @Test
+    fun reversoCedulaNuevaNoSeLeeComoFrente() {
+        // El reverso nuevo trae "Nombre: <nombre completo>", número y MRZ;
+        // se resuelve por el MRZ (con checksum) en el estabilizador, no
+        // por el extractor del frente.
+        val texto = """
+            Nombre: JUAN PEREZ MORA
+            C.C.:
+            1 0000 0219
+            TSECR
+            C004780077
+            IDCRI1000002190<C004780077<<<<
+        """.trimIndent()
+        assertNull(leerDocumentoDeTexto(texto))
+    }
+
+    // --- Gafete de contratista (CRC) ---
+
+    @Test
+    fun gafeteContratistaConCarneProvisionalEnUnRenglonNoSeConfundeConDimex() {
+        val texto = "CARNÉ PROVISIONAL\nCRC - 12\nCONTRATISTAS\nCosta Rica"
+        val doc = leerDocumentoDeTexto(texto)
+        assertEquals(TipoDocumento.GAFETE_CONTRATISTA, doc?.tipo)
+        assertEquals("12", doc?.numeroDocumento)
+    }
+
+    @Test
+    fun gafeteContratistaSinCostaRicaNiFranjaVerdeSeReconocePorCrcYProvisional() {
+        val doc = leerDocumentoDeTexto("CARNÉ\nPROVISIONAL\nCRC - 12")
+        assertEquals(TipoDocumento.GAFETE_CONTRATISTA, doc?.tipo)
+        assertEquals("12", doc?.numeroDocumento)
+    }
+
+    // --- PRAIND vertical: título/pie fuera del recuadro horizontal ---
+
+    @Test
+    fun praindSinTituloNiPieSeReconocePorSusEtiquetas() {
+        val texto = """
+            Nombre: Ana Maria Rojas Vega
+            No. de cédula: 701000000
+            Empresa: Sodexo
+            Fecha de inducción: 03/08/2026
+            Fecha de vencimiento de
+            inducción: 03/08/2027
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CARNET_INDUCCION_PRAIND, doc?.tipo)
+        assertEquals("701000000", doc?.numeroDocumento)
+        assertEquals("Ana Maria Rojas Vega", doc?.nombre)
+        assertEquals("Sodexo", doc?.empresa)
+        assertEquals(FechaDocumento(3, 8, 2027), doc?.vencimiento)
     }
 }

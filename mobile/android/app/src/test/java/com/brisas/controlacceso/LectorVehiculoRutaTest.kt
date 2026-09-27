@@ -104,4 +104,13 @@ class LectorVehiculoRutaTest {
         assertEquals("807ACL", resultado?.valor)
         assertEquals(TipoVehiculoDetectado.PLACA, resultado?.tipo)
     }
+
+    @Test
+    fun palabrasDeTresLetrasRotuladasNoTapanElNumeroDeUnidad() {
+        // Antes "KOF"/"CRC" se leían como placa de moto (se intenta antes
+        // que el número de unidad) y la calcomanía real se perdía.
+        val resultado = extraerVehiculo("KOF\nCRC\n22906")
+        assertEquals("22906", resultado?.valor)
+        assertEquals(TipoVehiculoDetectado.NUMERO_UNIDAD, resultado?.tipo)
+    }
 }

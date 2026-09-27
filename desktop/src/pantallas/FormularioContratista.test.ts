@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esquema } from "./FormularioContratista";
+import { esquema } from "./FormularioContratista.logica";
 
 function valores(overrides: Partial<Record<string, unknown>> = {}) {
   return {

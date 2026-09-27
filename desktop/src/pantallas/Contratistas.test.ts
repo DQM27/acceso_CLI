@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { columnasPara } from "./Contratistas";
+import { columnasPara } from "./Contratistas.logica";
 
 function campos(actorRol: Parameters<typeof columnasPara>[0]): (string | undefined)[] {
   return columnasPara(actorRol).map((c) => c.field);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esquemaCambioObligatorio, esquemaLogin } from "./Login";
+import { esquemaCambioObligatorio, esquemaLogin } from "./Login.logica";
 
 describe("esquema de Login", () => {
   it("acepta cédula y contraseña no vacías", () => {

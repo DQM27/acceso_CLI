@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filtrarEncargados } from "./EntregarGafeteProvisionalModal";
+import { filtrarEncargados } from "./EntregarGafeteProvisionalModal.logica";
 import type { EncargadoRuta } from "../api/rutas";
 
 const encargado = (id: number, nombre: string, codigo_empleado: string): EncargadoRuta => ({

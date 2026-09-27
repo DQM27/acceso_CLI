@@ -7,13 +7,19 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
-    // AG Grid Community (~870 KB, ver el grupo "ag-grid-vendor" abajo) ya
-    // está deliberadamente aislado en su propio chunk cacheable -- no es
-    // bloat sin partir, es el tamaño real de la librería. Subir el límite
-    // reconoce ese caso conocido en vez de que el build avise sobre él en
-    // cada build; sigue avisando si aparece un chunk nuevo grande de
-    // verdad por accidente (cualquiera por encima de este número).
-    chunkSizeWarningLimit: 900,
+    // AG Grid Community (~945 KB desde la 36.2, antes ~870 KB; ver el grupo
+    // "ag-grid-vendor" abajo) ya está deliberadamente aislado en su propio
+    // chunk cacheable -- no es bloat sin partir, es el tamaño real de la
+    // librería: se importa en su build ESM y `modulosTabla.ts` registra
+    // sólo los módulos que se usan, así que el tree-shaking ya hizo lo que
+    // podía (verificado 2026-09-26; partirlo en más grupos no ayuda, el
+    // adaptador de React arrastra el núcleo entero). Además, en Tauri se
+    // carga desde disco local, no por red, y sólo al abrir una tabla (las
+    // pantallas son `lazy`). Subir el límite reconoce ese caso conocido;
+    // el margen es chico a propósito para que siga avisando si aparece un
+    // chunk nuevo grande de verdad por accidente (o si AG Grid vuelve a
+    // crecer mucho, para revisarlo en vez de subir el número a ciegas).
+    chunkSizeWarningLimit: 1000,
     rolldownOptions: {
       output: {
         codeSplitting: {

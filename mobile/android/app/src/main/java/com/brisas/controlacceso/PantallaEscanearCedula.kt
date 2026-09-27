@@ -104,6 +104,15 @@ private fun VistaCamaraCedula(
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
+    var progreso by remember { mutableStateOf(0f) }
+    val encuadre = remember {
+        ControladorEncuadre(
+            regionHorizontal = RegionGuiaOcr.TARJETA_ID,
+            regionVertical = RegionGuiaOcr.GAFETE_VERTICAL,
+            orientacionDelTexto = ::orientacionDeTextoDocumento,
+        )
+    }
+    var orientacionEncuadre by remember { mutableStateOf(encuadre.orientacion) }
     // Resultado real de la última mutación (nombre en éxito, motivo en
     // fallo), no sólo "se leyó el gafete" -- ver `resultadoUltimoEscaneo`.
     // `null` mientras no hay nada que mostrar todavía o el llamador no usa
@@ -154,6 +163,7 @@ private fun VistaCamaraCedula(
                         estado = resultado.estado
                         ultimoMensaje = resultado.mensaje
                         vencido = resultado.vencido
+                        progreso = if (resultado.estado == EstadoEscaneo.CONFIRMADO) 1f else resultado.progreso
                         val documento = resultado.documento
                         if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
                             if (camara.detectada.compareAndSet(false, true)) {
@@ -245,19 +255,29 @@ private fun VistaCamaraCedula(
                         ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
                     }
                 }
+                // Encuadre que gira según el documento (ver
+                // `ControladorEncuadre`): horizontal para cédula/licencia/
+                // DIMEX, vertical para PRAIND, In House y gafete CRC.
                 val analisis = construirAnalizadorOcr(
                     ejecutorAnalisis = camara.ejecutor,
                     detectada = camara.detectada,
                     sesionActiva = camara.sesionActiva,
                 ) { imagen ->
+                    val (region, leidoCon) = encuadre.regionParaFrame()
                     analizarCedula(
                         imagen = imagen,
                         recognizer = camara.recognizer,
                         ejecutorPrincipal = camara.ejecutorPrincipal,
                         sesionActiva = camara.sesionActiva,
                         buffersOcr = buffersOcr,
-                        onTexto = { texto -> onResultado(estabilizador.procesarFrame(texto)) },
+                        onTexto = { texto ->
+                            if (encuadre.registrarTexto(texto, leidoCon)) {
+                                orientacionEncuadre = encuadre.orientacion
+                            }
+                            onResultado(estabilizador.procesarFrame(texto))
+                        },
                         onFallo = onFallo,
+                        region = region,
                     )
                 }
                 camara.analisisCamara = analisis
@@ -282,7 +302,13 @@ private fun VistaCamaraCedula(
             },
             modifier = Modifier.fillMaxSize(),
         )
-        MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
+        MarcoGuiaCedula(
+            color = colorMarco,
+            estado = estado,
+            progreso = progreso,
+            region = regionAnimada(encuadre.region(orientacionEncuadre)),
+            modifier = Modifier.fillMaxSize(),
+        )
         // Con resultado real (éxito/fallo de la mutación, no sólo "se leyó
         // el texto"), el mismo mensaje se pinta verde/rojo en vez de negro
         // neutro -- pedido explícito del usuario 2026-09-20: antes, en
@@ -343,8 +369,8 @@ fun construirAnalizadorOcr(
     // (2026-09-25, pospuesta a propósito en el commit c0dad75 para aislar
     // su efecto del resto): antes de esto, con STRATEGY_KEEP_ONLY_LATEST +
     // un solo hilo, se procesaba cada frame que CameraX llegara a entregar
-    // -- en un sensor típico de 30fps eso es un `recortarParaOcr` (NV21 ->
-    // ARGB + rotar + recortar, todo en CPU) hasta 30 veces por segundo,
+    // -- en un sensor típico de 30fps eso es un `recortarParaOcr` (copiar planos
+    // + recortar a NV21, todo en CPU) hasta 30 veces por segundo,
     // muchísimo más seguido de lo que ML Kit necesita para leer texto
     // estático. `ultimoFrameProcesadoMs` vive en el closure del analyzer,
     // no en un campo de la pantalla: una sola instancia de
@@ -362,7 +388,15 @@ fun construirAnalizadorOcr(
             ResolutionSelector.Builder()
                 .setResolutionStrategy(
                     ResolutionStrategy(
-                        Size(1280, 720),
+                        // 1080p: a 720p el MRZ de una cédula dentro del
+                        // recuadro guía quedaba con letras de ~17 px de alto,
+                        // justo en el mínimo que pide ML Kit (~16 px; ideal
+                        // ~24) -- de ahí buena parte de los `<` perdidos y
+                        // las confusiones de caracteres. El costo extra ya no
+                        // pesa: se recorta sólo el recuadro sobre los planos
+                        // crudos (ver `recortarParaOcr`), sin convertir el
+                        // frame completo a ARGB.
+                        Size(1920, 1080),
                         ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
                     ),
                 )
@@ -480,7 +514,7 @@ private const val INTERVALO_MINIMO_ENTRE_FRAMES_MS = 150L
 /// desincronizarse si alguien edita una sin las otras 3). Sin `private`:
 /// vive acá porque [analizarCedula]/[iniciarCamara] (el resto de lo
 /// compartido) también viven en este archivo.
-const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer el texto. Intente acercar."
+const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer. Acerque el documento y evite reflejos."
 
 // El reverso (con el MRZ -- las líneas de texto tipo código de barras) trae
 // nombre Y cédula en un solo escaneo con checksum verificado; el frente
@@ -490,8 +524,8 @@ const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer el texto. Intente acercar
 // igual termina mostrando el frente).
 private fun mensajeInicialEscaneo(modo: ModoEscaneoDocumento): String =
     when (modo) {
-        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Muéstreme el reverso de la cédula"
-        ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Apunte al gafete"
+        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Coloque el documento dentro del recuadro"
+        ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Coloque el gafete dentro del recuadro"
     }
 
 private fun mensajeProcesadoContinuo(modo: ModoEscaneoDocumento, valor: String): String =
@@ -556,7 +590,7 @@ fun analizarCedula(
     // (2026-09-25, pospuesta a propósito junto con #2 en el commit
     // c0dad75): `construirAnalizadorOcr` ya filtra por `sesionActiva` antes
     // de llegar acá, pero ese chequeo pasa ANTES del trabajo pesado de esta
-    // función (recortar = NV21->ARGB + rotar + recortar Bitmap), no
+    // función (copiar los planos y recortar a NV21), no
     // después. Con `setAnalyzer` en un único hilo casi nunca hay hueco
     // entre ambos chequeos, pero repetirlo acá, justo antes de
     // `recortarParaOcr`, es gratis (una lectura de `AtomicBoolean`) y cierra
@@ -604,48 +638,33 @@ fun analizarCedula(
 /// mandarlo a ML Kit. `null` si algo no sale como se espera -- el llamador
 /// cae de vuelta al frame completo, nunca debe romper el escaneo.
 ///
-/// Por qué rota A BITMAP COMPLETO primero y recién ahí recorta, en vez de
-/// calcular el recorte directo sobre el buffer crudo (que ahorraría
-/// armar el bitmap completo): el recuadro que ve la persona está expresado
-/// en coordenadas YA ROTADAS (como la pantalla, vertical), mientras que
-/// `imagen`/sus planos vienen en la orientación nativa del sensor (normal
-/// que la cámara trasera entregue esto en apaisado incluso con el teléfono
-/// en vertical). Traducir el recuadro vertical a coordenadas del sensor sin
-/// rotar exige invertir a mano el giro de 90°/270° que aplica la cámara --
-/// exactamente el tipo de mapeo de coordenadas que ya salió mal una vez en
-/// este archivo (ver el comentario de `analizarCedula`, sección 0.6 del
-/// plan, sobre por qué el recuadro de guía es deliberadamente estático).
-/// Rotar primero devuelve un bitmap donde "arriba/ancho/alto" ya significan
-/// lo mismo que en pantalla, así que el recorte usa la misma aritmética que
-/// `MarcoGuiaCedula` sin ningún signo que invertir.
+/// Recorta DIRECTO sobre los planos YUV del sensor: [rectanguloEnSensor]
+/// traduce el recuadro (coordenadas de pantalla, ya rotadas) al espacio sin
+/// rotar del sensor -- con tests para las 4 rotaciones, que es justo el
+/// mapeo que antes se evitaba rotando un bitmap completo primero -- y
+/// [recortarYuvANv21] copia sólo esa región a NV21. ML Kit recibe el NV21 con
+/// la rotación y la aplica él. Antes: frame entero a ARGB en un bucle de
+/// Kotlin, bitmap de ~4 MB, recorte al viewport, rotación del bitmap
+/// entero y otro recorte -- el costo de CPU más alto por frame, y además
+/// con una conversión de color que saturaba los reflejos (ver
+/// [recortarYuvANv21]).
 ///
-/// El bitmap completo se arma con [convertirNv21AArgb] directo, sin pasar
-/// por JPEG (auditoría de rendimiento 2026-09-25: `YuvImage.compressToJpeg`
-/// + `BitmapFactory.decodeByteArray` era el costo de CPU más alto por
-/// frame de las 4 pantallas de escaneo, y de paso comprimía con pérdida una
-/// imagen que nunca se guarda ni se muestra). Cada bitmap intermedio que ya
-/// no hace falta se recicla apenas se arma el siguiente -- el único que
-/// queda vivo al salir es `bitmapRecortado`, porque `recognizer.process`
-/// todavía lo necesita después de este `return`.
+/// `cropRect` (MV-08, auditoría 2026-09-24): el rectángulo que CameraX
+/// calculó a partir del `ViewPort`, en coordenadas del búfer SIN rotar --
+/// sin él, el recuadro guía se calculaba sobre el frame entero del sensor,
+/// que casi nunca tiene la misma proporción que lo que se ve en pantalla
+/// con `FILL_CENTER` (podía leer un documento fuera del marco).
 ///
-/// `cropRect` (MV-08, auditoría 2026-09-24): antes de rotar, se recorta al
-/// rectángulo que CameraX calculó a partir del `ViewPort` (o al frame
-/// completo si todavía es `null`/no cambió nada, ej. antes de que la vista
-/// tenga tamaño) -- SIN esto, el bitmap de partida es el frame entero del
-/// sensor, que casi nunca tiene la misma proporción que lo que en verdad
-/// se ve en pantalla con `FILL_CENTER`, así que el recuadro guía terminaba
-/// analizando una región más ancha que la visible (podía leer un documento
-/// fuera del marco). `cropRect` viene en coordenadas del búfer SIN rotar
-/// (mismo espacio que `imagen.width`/`imagen.height`), así que este recorte
-/// va antes de rotar, no después.
+/// Los planos se leen con `duplicate()`: no mueve la posición de los
+/// `ByteBuffer` de la imagen, así que si algo falla después, el fallback
+/// `InputImage.fromMediaImage` todavía encuentra los planos intactos (antes
+/// quedaban ya consumidos).
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
 private fun recortarParaOcr(
     imagen: android.media.Image,
     cropRect: android.graphics.Rect,
     rotacionGrados: Int,
     region: RegionGuiaOcr,
-    // `null` (default) preserva el comportamiento de siempre. Ver
-    // `BuffersOcrReutilizables` -- último punto suelto de MV-07.
     buffersOcr: BuffersOcrReutilizables? = null,
 ): InputImage? {
     if (imagen.format != android.graphics.ImageFormat.YUV_420_888) return null
@@ -655,62 +674,37 @@ private fun recortarParaOcr(
         val yPlano = planos[0]
         val uPlano = planos[1]
         val vPlano = planos[2]
-        val tamanoY = yPlano.buffer.remaining()
-        val tamanoU = uPlano.buffer.remaining()
-        val tamanoV = vPlano.buffer.remaining()
-        val yBytes = (buffersOcr?.yBytes(tamanoY) ?: ByteArray(tamanoY)).also { yPlano.buffer.get(it) }
-        val uBytes = (buffersOcr?.uBytes(tamanoU) ?: ByteArray(tamanoU)).also { uPlano.buffer.get(it) }
-        val vBytes = (buffersOcr?.vBytes(tamanoV) ?: ByteArray(tamanoV)).also { vPlano.buffer.get(it) }
-        val nv21 = construirNv21(
-            ancho = imagen.width,
-            alto = imagen.height,
+        val yBuffer = yPlano.buffer.duplicate()
+        val uBuffer = uPlano.buffer.duplicate()
+        val vBuffer = vPlano.buffer.duplicate()
+        val yBytes = (buffersOcr?.yBytes(yBuffer.remaining()) ?: ByteArray(yBuffer.remaining())).also { yBuffer.get(it) }
+        val uBytes = (buffersOcr?.uBytes(uBuffer.remaining()) ?: ByteArray(uBuffer.remaining())).also { uBuffer.get(it) }
+        val vBytes = (buffersOcr?.vBytes(vBuffer.remaining()) ?: ByteArray(vBuffer.remaining())).also { vBuffer.get(it) }
+
+        val cropSeguro = android.graphics.Rect(cropRect)
+        if (!cropSeguro.intersect(0, 0, imagen.width, imagen.height)) {
+            cropSeguro.set(0, 0, imagen.width, imagen.height)
+        }
+        val recorte = rectanguloEnSensor(
+            RectanguloEntero(cropSeguro.left, cropSeguro.top, cropSeguro.right, cropSeguro.bottom),
+            rotacionGrados,
+            region,
+        )
+        if (recorte.width <= 0 || recorte.height <= 0 ||
+            recorte.right > imagen.width || recorte.bottom > imagen.height
+        ) {
+            return null
+        }
+        val nv21 = recortarYuvANv21(
+            recorte,
             y = yBytes,
             yRowStride = yPlano.rowStride,
             u = uBytes,
             v = vBytes,
             uvRowStride = uPlano.rowStride,
             uvPixelStride = uPlano.pixelStride,
-            destino = buffersOcr?.nv21((imagen.width * imagen.height) + (imagen.width * imagen.height) / 2),
         )
-        val pixeles = convertirNv21AArgb(
-            nv21, imagen.width, imagen.height,
-            destino = buffersOcr?.pixeles(imagen.width * imagen.height),
-        )
-        val bitmapCompleto = android.graphics.Bitmap.createBitmap(
-            pixeles, imagen.width, imagen.height, android.graphics.Bitmap.Config.ARGB_8888,
-        )
-        // MV-08: recorta al `cropRect` del ViewPort ANTES de rotar --
-        // `cropRect` está en el mismo espacio sin rotar que
-        // `imagen.width`/`imagen.height`. `intersect` contra el bitmap
-        // completo por seguridad (un `cropRect` corrido o más grande que el
-        // frame -- no debería pasar, pero `createBitmap` tira si el
-        // rectángulo se sale) cae de vuelta al frame entero en vez de
-        // fallar el escaneo.
-        val cropSeguro = android.graphics.Rect(cropRect)
-        if (!cropSeguro.intersect(0, 0, bitmapCompleto.width, bitmapCompleto.height)) {
-            cropSeguro.set(0, 0, bitmapCompleto.width, bitmapCompleto.height)
-        }
-        val bitmapAlViewport = if (cropSeguro.width() == bitmapCompleto.width && cropSeguro.height() == bitmapCompleto.height) {
-            bitmapCompleto
-        } else {
-            android.graphics.Bitmap.createBitmap(
-                bitmapCompleto, cropSeguro.left, cropSeguro.top, cropSeguro.width(), cropSeguro.height(),
-            ).also { if (it !== bitmapCompleto) bitmapCompleto.recycle() }
-        }
-        val bitmapDerecho = if (rotacionGrados == 0) {
-            bitmapAlViewport
-        } else {
-            val matriz = android.graphics.Matrix().apply { postRotate(rotacionGrados.toFloat()) }
-            android.graphics.Bitmap.createBitmap(
-                bitmapAlViewport, 0, 0, bitmapAlViewport.width, bitmapAlViewport.height, matriz, false,
-            ).also { if (it !== bitmapAlViewport) bitmapAlViewport.recycle() }
-        }
-        val recorte = region.rectanguloEnPixeles(bitmapDerecho.width, bitmapDerecho.height)
-        if (recorte.width <= 0 || recorte.height <= 0) return null
-        val bitmapRecortado = android.graphics.Bitmap.createBitmap(
-            bitmapDerecho, recorte.left, recorte.top, recorte.width, recorte.height,
-        ).also { if (it !== bitmapDerecho) bitmapDerecho.recycle() }
-        InputImage.fromBitmap(bitmapRecortado, 0)
+        InputImage.fromByteArray(nv21, recorte.width, recorte.height, rotacionGrados, InputImage.IMAGE_FORMAT_NV21)
     } catch (e: Exception) {
         null
     }

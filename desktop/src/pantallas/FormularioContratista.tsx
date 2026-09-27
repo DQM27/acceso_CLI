@@ -1,12 +1,10 @@
-import { z } from "zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
 import { actualizarContratista, crearContratista, requierePraind } from "../api";
 import type { ContratistaResumen, DatosContratista, Empresa, TipoIngreso } from "../api";
-import { cedulaSchema, nombreSchema, sanearSoloDigitos, sanearSoloLetras } from "../validacion";
-
-const TIPOS = ["Praind", "InHouse", "PorCorreo", "Swat"] as const;
+import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
+import { TIPOS, esquema } from "./FormularioContratista.logica";
 
 interface ValoresFormulario {
   cedula: string;
@@ -17,23 +15,6 @@ interface ValoresFormulario {
   es_personal_ruta: boolean;
   tiene_acceso: boolean;
 }
-
-// La validación real vive en el core (services/contratista_service.rs) — este
-// esquema es sólo para dar feedback inmediato sin ida y vuelta al backend.
-export const esquema = z
-  .object({
-    cedula: cedulaSchema,
-    nombre: nombreSchema,
-    empresa_id: z.string().min(1, "Seleccioná una empresa"),
-    tipo_ingreso: z.enum(TIPOS),
-    fecha_vencimiento_praind: z.string(),
-    es_personal_ruta: z.boolean(),
-    tiene_acceso: z.boolean(),
-  })
-  .refine((datos) => !requierePraind(datos) || datos.fecha_vencimiento_praind !== "", {
-    message: "Obligatoria para este tipo de contratista",
-    path: ["fecha_vencimiento_praind"],
-  });
 
 export default function FormularioContratista({
   contratista,
@@ -50,7 +31,7 @@ export default function FormularioContratista({
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<ValoresFormulario>({
@@ -76,7 +57,14 @@ export default function FormularioContratista({
         },
   });
 
-  const mostrarPraind = requierePraind(watch());
+  const [esPersonalRuta, tipoIngreso] = useWatch({
+    control,
+    name: ["es_personal_ruta", "tipo_ingreso"],
+  });
+  const mostrarPraind = requierePraind({
+    es_personal_ruta: esPersonalRuta,
+    tipo_ingreso: tipoIngreso,
+  });
 
   async function alGuardar(valores: ValoresFormulario) {
     const datos: DatosContratista = {

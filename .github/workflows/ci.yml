@@ -49,9 +49,34 @@ jobs:
         working-directory: mobile/rust-core
         run: cargo audit
 
+      # Motor SQLite único (SQLite3MC, sin features): `libsqlite3-sys` enlaza
+      # esta librería estática al compilarse a sí misma, antes de que corra
+      # el build script de cualquier crate río abajo (ver
+      # sqlite3mc-vendor-lib/build.rs y `[env]` en .cargo/config.toml). Sin
+      # este paso previo, todo lo que compila de acá abajo falla en el link.
+      - name: Compilar SQLite3MC vendorizado (paso previo obligatorio)
+        run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+
       - name: Clippy (mobile/rust-core)
         working-directory: mobile/rust-core
         run: cargo clippy --all-targets
+
+      # Los bindings Kotlin de UniFFI se commitean a mano (ver mobile/README.md)
+      # y nada verificaba que siguieran al día con el núcleo Rust: pasó de
+      # verdad (2026-09-26) que `ResumenSincronizacion` ganó un campo en Rust
+      # y el `.kt` no -- UniFFI rechaza el buffer ("junk remaining") y TODA
+      # sincronización fallaba en Android. Se regeneran desde la librería
+      # del host (misma interfaz que el `.so` de Android) y se exige que no
+      # haya diferencias.
+      - name: Bindings Kotlin de UniFFI al día con el núcleo Rust
+        working-directory: mobile/rust-core
+        run: |
+          cargo build --lib
+          cargo run --features bindgen --bin uniffi-bindgen -- generate \
+            --library target/debug/libcontrol_acceso_mobile.so \
+            --language kotlin --no-format --out-dir "$RUNNER_TEMP/bindings"
+          diff -u ../android/app/src/main/java/uniffi/control_acceso_mobile/control_acceso_mobile.kt \
+            "$RUNNER_TEMP/bindings/uniffi/control_acceso_mobile/control_acceso_mobile.kt"
 
       - name: Tests unitarios Android y compilación Kotlin
         working-directory: mobile/android
@@ -73,6 +98,14 @@ jobs:
 
       - name: Formato (rustfmt)
         run: cargo fmt --check
+
+      # Motor SQLite único (SQLite3MC, sin features): `libsqlite3-sys` enlaza
+      # esta librería estática al compilarse a sí misma, antes de que corra
+      # el build script de cualquier crate río abajo (ver
+      # sqlite3mc-vendor-lib/build.rs y `[env]` en .cargo/config.toml). Sin
+      # este paso previo, todo lo que compila de acá abajo falla en el link.
+      - name: Compilar SQLite3MC vendorizado (paso previo obligatorio)
+        run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
 
       - name: Instalar cargo-audit
         uses: taiki-e/install-action@dfae9bf3d6f6c6f20ef4ebb3486c01a51341ff12 # v2
@@ -131,8 +164,8 @@ jobs:
             desktop/src-tauri
             sqlite3mc-vendor-lib
 
-      # cifrado-sqlite3mc (default de desktop/src-tauri desde 2026-09-12, ver
-      # docs/decisiones-tecnicas.md) enlaza esta librería estática como paso
+      # SQLite3MC (motor único, ver docs/decisiones-tecnicas.md) enlaza
+      # esta librería estática como paso
       # PREVIO obligatorio -- libsqlite3-sys la busca al compilarse a sí
       # misma, antes de que corra el build script de cualquier crate río
       # abajo (ver sqlite3mc-vendor-lib/build.rs). Sin este paso, Clippy/Tests

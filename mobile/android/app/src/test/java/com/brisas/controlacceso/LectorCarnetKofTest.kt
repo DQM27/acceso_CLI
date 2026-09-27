@@ -98,4 +98,64 @@ class LectorCarnetKofTest {
     fun sinSenalesDeCarnetNoHayResultado() {
         assertNull(extraerCarnetKof("texto cualquiera sin relación"))
     }
+
+    // --- Caras reales (2026-09-27): nombre en tipo oración y código entre franjas ---
+
+    @Test
+    fun caraConCodigoLeeNombreYCodigoEntreLasFranjasIgnorandoElMarco() {
+        val texto = """
+            XT
+            Juan Carlos
+            Perez Mora
+            1819000
+            Tpo. Sangre: Alergia:
+            En caso de Accidente o Emergencia llamar a:
+            CENTRAL
+            COSTA RICA
+            DE ALERTA Y RESPUESTA
+            800-2256327
+            3 6D*1466922 E 1151055208-1
+            HID Seos ADP
+        """.trimIndent()
+
+        val resultado = extraerCarnetKof(texto)
+
+        assertEquals("JUAN CARLOS PEREZ MORA", resultado?.nombre)
+        assertEquals("1819000", resultado?.codigoEmpleado)
+    }
+
+    @Test
+    fun elCodigoSeBuscaDebajoDelNombreAntesQueEnElTextoVertical() {
+        // El texto vertical del borde a veces sale partido y deja una
+        // corrida de 7 dígitos sola, ANTES del nombre en el orden del OCR.
+        val texto = """
+            1466922
+            Juan Carlos
+            Perez Mora
+            1819000
+            DE ALERTA Y RESPUESTA
+        """.trimIndent()
+        assertEquals("1819000", extraerCarnetKof(texto)?.codigoEmpleado)
+    }
+
+    @Test
+    fun caraSinCodigoSoloDevuelveElNombre() {
+        val texto = """
+            Ana Maria
+            Sanchez Lopez
+            Cca-Cola
+            FEMSA
+        """.trimIndent()
+
+        val resultado = extraerCarnetKof(texto)
+
+        assertEquals("ANA MARIA SANCHEZ LOPEZ", resultado?.nombre)
+        assertNull(resultado?.codigoEmpleado)
+    }
+
+    @Test
+    fun nombreConParticulasEnTipoOracion() {
+        val texto = "Maria de los Angeles\nRojas Vega\nFEMSA"
+        assertEquals("MARIA DE LOS ANGELES ROJAS VEGA", extraerCarnetKof(texto)?.nombre)
+    }
 }

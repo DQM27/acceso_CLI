@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nombresActuales } from "./Auditoria";
+import { nombresActuales } from "./Auditoria.logica";
 import type { CambioAuditado } from "../api";
 
 // fechaLocalYMD/textoHora/textoFechaDDMMYYYY se probaron en

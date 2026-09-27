@@ -41,8 +41,7 @@ jobs:
             sqlite3mc-vendor-lib
           lookup-only: true
 
-      # cifrado-sqlite3mc (default de desktop/src-tauri desde 2026-09-12, ver
-      # docs/decisiones-tecnicas.md) enlaza esta librería estática como paso
+      # SQLite3MC (motor único, ver docs/decisiones-tecnicas.md) enlaza esta librería estática como paso
       # PREVIO obligatorio -- libsqlite3-sys la busca al compilarse a sí
       # misma, antes de que corra el build script de cualquier crate río
       # abajo (ver sqlite3mc-vendor-lib/build.rs). Sin este paso, tanto los
@@ -159,10 +158,8 @@ jobs:
       - name: Instalar cargo-ndk
         run: cargo install cargo-ndk
 
-      # Mismo motor que desktop (`cifrado-sqlite3mc`, ver el job de arriba)
-      # en vez del `cifrado-sqlcipher` que traía por default mobile/rust-core
-      # -- decisión explícita del usuario 2026-09-21 para que ambas
-      # plataformas usen el mismo cifrado de verdad, no sólo en dev. El
+      # Mismo motor que desktop: SQLite3MC, el único (sin features desde
+      # 2026-09-26; antes mobile/rust-core traía SQLCipher por default). El
       # vendorizado es un paso previo obligatorio (mismo motivo que el job de
       # escritorio) y, a diferencia de ahí, hay que repetirlo UNA VEZ POR
       # ABI: `sqlite3mc-vendor-lib/dist` es una ruta fija (no por-target), así
@@ -179,7 +176,7 @@ jobs:
           mkdir -p mobile/android/app/src/main/jniLibs/arm64-v8a
           cargo ndk -t aarch64-linux-android build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
           cd mobile/rust-core
-          cargo ndk -t aarch64-linux-android build --release --no-default-features --features cifrado-sqlite3mc
+          cargo ndk -t aarch64-linux-android build --release
           cp target/aarch64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/arm64-v8a/
 
       - name: Compilar el núcleo Rust para Android (x86_64)
@@ -189,7 +186,7 @@ jobs:
           mkdir -p mobile/android/app/src/main/jniLibs/x86_64
           cargo ndk -t x86_64-linux-android build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
           cd mobile/rust-core
-          cargo ndk -t x86_64-linux-android build --release --no-default-features --features cifrado-sqlite3mc
+          cargo ndk -t x86_64-linux-android build --release
           cp target/x86_64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/x86_64/
 
       # El keystore real nunca está en el repo (ver mobile/.gitignore) --

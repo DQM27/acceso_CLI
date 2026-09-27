@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estaYaAdentro, validarGafeteOpcional } from "./VisitaCheckInModal";
+import { estaYaAdentro, validarGafeteOpcional } from "./VisitaCheckInModal.logica";
 import type { MovimientoVisitaActivoResumen } from "../api";
 
 function visitaActiva(overrides: Partial<MovimientoVisitaActivoResumen> = {}): MovimientoVisitaActivoResumen {

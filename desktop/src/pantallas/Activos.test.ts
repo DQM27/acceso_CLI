@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filtrarPorGafete, masDeDoceHoras } from "./Activos";
+import { filtrarPorGafete, masDeDoceHoras } from "./Activos.logica";
 
 const filas = [
   { id: 1, gafete_numero: 10 },

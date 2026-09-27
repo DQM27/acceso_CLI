@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { z } from "zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
-import {
-  FilaListaFlotante,
-  ListaFlotante,
-  SinResultados,
-  useListaFlotante,
-  useNavegacionFlechas,
-} from "../componentes/ListaFlotante";
+import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
+import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
 import {
   listarEncargadosRutaSeleccionables,
   listarRutasSeleccionables,
@@ -112,7 +107,7 @@ export default function SalidaRutaModal({
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     setValue,
     setError,
     formState: { errors, isSubmitting },
@@ -152,10 +147,10 @@ export default function SalidaRutaModal({
     listarRutasSeleccionables().then(setRutasActivas).catch(() => {});
   }, []);
 
-  const placaTexto = watch("vehiculo_placa");
-  const numeroUnidad = watch("vehiculo_numero_unidad");
-  const encargadoTexto = watch("encargado_nombre");
-  const codigoEmpleado = watch("encargado_codigo_empleado");
+  const placaTexto = useWatch({ control, name: "vehiculo_placa" });
+  const numeroUnidad = useWatch({ control, name: "vehiculo_numero_unidad" });
+  const encargadoTexto = useWatch({ control, name: "encargado_nombre" });
+  const codigoEmpleado = useWatch({ control, name: "encargado_codigo_empleado" });
 
   const [campoVehiculoEnfocado, setCampoVehiculoEnfocado] = useState(false);
   const [campoEncargadoEnfocado, setCampoEncargadoEnfocado] = useState(false);
@@ -214,7 +209,7 @@ export default function SalidaRutaModal({
     manejarTecla: manejarTeclaEncargado,
   } = useNavegacionFlechas(resultadosEncargado, listaEncargadoVisible, elegirEncargado);
 
-  const fechaDocumento = watch("fecha_documento");
+  const fechaDocumento = useWatch({ control, name: "fecha_documento" });
   const documentoRequiereAutorizacion = fechaDocumento !== hoy();
 
   async function alGuardar(valores: ValoresFormulario) {

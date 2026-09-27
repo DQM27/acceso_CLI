@@ -1,6 +1,7 @@
 package com.brisas.controlacceso
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RecorteImagenOcrTest {
@@ -45,66 +46,102 @@ class RecorteImagenOcrTest {
         assertEquals(true, rect.bottom in 0..10)
     }
 
-    // --- construirNv21 ---
+    // --- rectanguloEnSensor: el recuadro de pantalla llevado al sensor ---
 
-    @Test
-    fun construirNv21CopiaElPlanoYRespetandoElRelleno() {
-        // Imagen 2x2 con rowStride de 3 (un byte de relleno al final de
-        // cada fila) -- si el recorte no respetara el stride, el segundo
-        // byte de la fila 2 arrastraría el relleno de la fila 1.
-        val y = byteArrayOf(1, 2, 9, 3, 4, 9) // fila0: [1,2,relleno] fila1: [3,4,relleno]
-        val u = byteArrayOf(5)
-        val v = byteArrayOf(6)
+    /// Rota un punto (x, y) del sensor (ancho w, alto h) como lo verá la
+    /// pantalla: `rotationDegrees` en sentido horario. Referencia
+    /// independiente para comprobar el mapeo inverso.
+    private fun rotarPunto(x: Int, y: Int, w: Int, h: Int, grados: Int): Pair<Int, Int> = when (grados) {
+        90 -> (h - 1 - y) to x
+        180 -> (w - 1 - x) to (h - 1 - y)
+        270 -> y to (w - 1 - x)
+        else -> x to y
+    }
 
-        val nv21 = construirNv21(
-            ancho = 2, alto = 2,
-            y = y, yRowStride = 3,
-            u = u, v = v, uvRowStride = 1, uvPixelStride = 1,
-        )
-
-        // Plano Y sin relleno: 1,2,3,4 -- después VU intercalado: v,u = 6,5.
-        assertEquals(listOf<Byte>(1, 2, 3, 4, 6, 5), nv21.toList())
+    private fun comprobarMapeo(grados: Int) {
+        val (w, h) = 1920 to 1080
+        val crop = RectanguloEntero(0, 0, w, h)
+        val enSensor = rectanguloEnSensor(crop, grados, RegionGuiaOcr.TARJETA_ID)
+        val (anchoRot, altoRot) = if (grados % 180 == 0) w to h else h to w
+        val guia = RegionGuiaOcr.TARJETA_ID.rectanguloEnPixeles(anchoRot, altoRot)
+        // Las 4 esquinas del recorte en el sensor, rotadas como las ve la
+        // pantalla, caen (salvo el redondeo a pares) sobre el recuadro guía.
+        val esquinas = listOf(
+            enSensor.left to enSensor.top,
+            (enSensor.right - 1) to enSensor.top,
+            enSensor.left to (enSensor.bottom - 1),
+            (enSensor.right - 1) to (enSensor.bottom - 1),
+        ).map { (x, y) -> rotarPunto(x, y, w, h, grados) }
+        val xs = esquinas.map { it.first }
+        val ys = esquinas.map { it.second }
+        assertTrue("x min ${xs.min()} vs ${guia.left} ($grados°)", kotlin.math.abs(xs.min() - guia.left) <= 2)
+        assertTrue("x max ${xs.max()} vs ${guia.right - 1} ($grados°)", kotlin.math.abs(xs.max() - (guia.right - 1)) <= 2)
+        assertTrue("y min ${ys.min()} vs ${guia.top} ($grados°)", kotlin.math.abs(ys.min() - guia.top) <= 2)
+        assertTrue("y max ${ys.max()} vs ${guia.bottom - 1} ($grados°)", kotlin.math.abs(ys.max() - (guia.bottom - 1)) <= 2)
+        assertTrue(enSensor.left % 2 == 0 && enSensor.top % 2 == 0 && enSensor.width % 2 == 0 && enSensor.height % 2 == 0)
+        assertTrue(enSensor.left >= 0 && enSensor.top >= 0 && enSensor.right <= w && enSensor.bottom <= h)
     }
 
     @Test
-    fun construirNv21IntercalaVURespetandoPixelStride() {
-        // Croma con pixelStride 2 (por ejemplo, un plano semi-planar donde U
-        // y V comparten buffer intercalado y sólo se toma cada 2 bytes).
-        val y = byteArrayOf(0, 0, 0, 0) // 2x2, sin relleno (rowStride=ancho)
-        val u = byteArrayOf(10, 99, 11, 99) // valores reales en índices 0 y 2
-        val v = byteArrayOf(20, 99, 21, 99)
-
-        val nv21 = construirNv21(
-            ancho = 2, alto = 2,
-            y = y, yRowStride = 2,
-            u = u, v = v, uvRowStride = 2, uvPixelStride = 2,
-        )
-
-        // Croma 1x1 (ancho/2 x alto/2 = 1x1) -- sólo el primer par V,U.
-        assertEquals(listOf<Byte>(0, 0, 0, 0, 20, 10), nv21.toList())
-    }
-
-    // --- convertirNv21AArgb ---
+    fun rectanguloEnSensorSinRotacion() = comprobarMapeo(0)
 
     @Test
-    fun convertirNv21AArgbDaBlancoParaYMaximoYCromaNeutro() {
-        // Y=255 (blanco), croma neutro (U=V=128, sin color) -- imagen 2x2,
-        // un solo par de croma para los 4 píxeles.
-        val nv21 = byteArrayOf(255.toByte(), 255.toByte(), 255.toByte(), 255.toByte(), 128.toByte(), 128.toByte())
+    fun rectanguloEnSensorRotado90ComoLaCamaraTraseraEnVertical() = comprobarMapeo(90)
 
-        val pixeles = convertirNv21AArgb(nv21, ancho = 2, alto = 2)
+    @Test
+    fun rectanguloEnSensorRotado180() = comprobarMapeo(180)
 
-        // 0xFFFFFFFF (alpha 255, R=G=B=255) como Int con signo = -1.
-        assertEquals(listOf(-1, -1, -1, -1), pixeles.toList())
+    @Test
+    fun rectanguloEnSensorRotado270() = comprobarMapeo(270)
+
+    @Test
+    fun rectanguloEnSensorRespetaElDesplazamientoDelCropDelViewport() {
+        val sinDesplazar = rectanguloEnSensor(RectanguloEntero(0, 0, 1600, 1080), 90, RegionGuiaOcr.TARJETA_ID)
+        val desplazado = rectanguloEnSensor(RectanguloEntero(160, 0, 1760, 1080), 90, RegionGuiaOcr.TARJETA_ID)
+        assertEquals(sinDesplazar.left + 160, desplazado.left)
+        assertEquals(sinDesplazar.top, desplazado.top)
+    }
+
+    // --- recortarYuvANv21 ---
+
+    @Test
+    fun recortarYuvANv21CopiaSoloLaRegionDelPlanoYRespetandoElRelleno() {
+        // Plano Y de 6x4 con rowStride 8 (2 bytes de relleno por fila);
+        // cada byte = fila*10 + columna para reconocer de dónde vino.
+        val (ancho, alto, stride) = Triple(6, 4, 8)
+        val y = ByteArray(stride * alto) { i -> if (i % stride < ancho) ((i / stride) * 10 + i % stride).toByte() else 99 }
+        val u = ByteArray(8) { 50 }
+        val v = ByteArray(8) { 60 }
+        val rect = RectanguloEntero(left = 2, top = 2, right = 6, bottom = 4)
+
+        val nv21 = recortarYuvANv21(rect, y, stride, u, v, uvRowStride = 4, uvPixelStride = 1)
+
+        assertEquals(4 * 2 + 4, nv21.size)
+        assertEquals(listOf(22, 23, 24, 25, 32, 33, 34, 35), nv21.take(8).map { it.toInt() })
     }
 
     @Test
-    fun convertirNv21AArgbDaNegroParaYMinimoYCromaNeutro() {
-        val nv21 = byteArrayOf(0, 0, 0, 0, 128.toByte(), 128.toByte())
+    fun recortarYuvANv21IntercalaVURespetandoPixelStride() {
+        // Croma de 4x2 (imagen 8x4) con pixelStride 2: las muestras válidas
+        // están en índices pares; en los impares hay basura.
+        val y = ByteArray(8 * 4)
+        val u = ByteArray(16) { i -> if (i % 2 == 0) (100 + i / 2).toByte() else 0 }
+        val v = ByteArray(16) { i -> if (i % 2 == 0) (200 + i / 2).toByte() else 0 }
+        val rect = RectanguloEntero(left = 4, top = 2, right = 8, bottom = 4) // 4x2 -> croma 2x1
 
-        val pixeles = convertirNv21AArgb(nv21, ancho = 2, alto = 2)
+        val nv21 = recortarYuvANv21(rect, y, 8, u, v, uvRowStride = 8, uvPixelStride = 2)
 
-        // 0xFF000000 (alpha 255, R=G=B=0) como Int con signo = -16777216.
-        assertEquals(listOf(-16777216, -16777216, -16777216, -16777216), pixeles.toList())
+        // Croma: fila 1 (top/2), columnas 2 y 3 (left/2) -> índices 8+4, 8+6.
+        val croma = nv21.drop(4 * 2).map { it.toInt() and 0xff }
+        assertEquals(listOf(200 + 6, 100 + 6, 200 + 7, 100 + 7), croma)
+    }
+
+    @Test
+    fun regionGafeteVerticalContieneElRecuadroDeTarjetaYEsMasAltaQueAncha() {
+        val tarjeta = RegionGuiaOcr.TARJETA_ID.rectanguloEnPixeles(anchoVisible = 1080, altoVisible = 2000)
+        val gafete = RegionGuiaOcr.GAFETE_VERTICAL.rectanguloEnPixeles(anchoVisible = 1080, altoVisible = 2000)
+        assertTrue(gafete.height > gafete.width)
+        assertTrue(gafete.left <= tarjeta.left && gafete.right >= tarjeta.right)
+        assertTrue(gafete.top <= tarjeta.top && gafete.bottom >= tarjeta.bottom)
     }
 }

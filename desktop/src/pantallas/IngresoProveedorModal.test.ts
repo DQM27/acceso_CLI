@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { datosNuevoDesdeBusqueda, proveedoresConocidos } from "./IngresoProveedorModal";
+import { datosNuevoDesdeBusqueda, proveedoresConocidos } from "./IngresoProveedorModal.logica";
 
 const ingreso = (cedula: string, nombre: string, empresa: string | null, fecha: string) => ({
   cedula,

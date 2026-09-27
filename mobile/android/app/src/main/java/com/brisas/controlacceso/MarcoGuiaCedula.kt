@@ -55,6 +55,10 @@ fun MarcoGuiaCedula(
     // recuadro angosto cuando en realidad se está analizando el frame
     // completo sería peor que no mostrar ningún límite.
     region: RegionGuiaOcr? = RegionGuiaOcr.TARJETA_ID,
+    // 0..1 -- lecturas coincidentes sobre las necesarias para confirmar
+    // (`ResultadoEstabilizacion.progreso`). Se dibuja como barra en el
+    // borde inferior del recuadro: "ya lo vi, falta poco, no lo mueva".
+    progreso: Float = 0f,
 ) {
     val transicion = rememberInfiniteTransition(label = "marcoOcr")
     val pulso by transicion.animateFloat(
@@ -142,6 +146,26 @@ fun MarcoGuiaCedula(
         esquina(Offset(guia.right, guia.top), haciaX = -1f, haciaY = 1f)
         esquina(Offset(guia.left, guia.bottom), haciaX = 1f, haciaY = -1f)
         esquina(Offset(guia.right, guia.bottom), haciaX = -1f, haciaY = -1f)
+
+        if (progreso > 0f) {
+            val margen = 10.dp.toPx()
+            val y = guia.bottom - 8.dp.toPx()
+            val anchoUtil = guia.width - 2 * margen
+            drawLine(
+                color = Color.White.copy(alpha = 0.35f),
+                start = Offset(guia.left + margen, y),
+                end = Offset(guia.right - margen, y),
+                strokeWidth = 5.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = color,
+                start = Offset(guia.left + margen, y),
+                end = Offset(guia.left + margen + anchoUtil * progreso.coerceIn(0f, 1f), y),
+                strokeWidth = 5.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+        }
 
         // Barrido vertical dentro del recuadro -- sólo mientras se busca
         // (una vez confirmado/inválido, un barrido en movimiento contradice

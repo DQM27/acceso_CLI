@@ -1,7 +1,7 @@
 import { act, render, renderHook, screen } from "@testing-library/react";
 import type { KeyboardEvent } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { useListaFlotante, useNavegacionFlechas } from "./ListaFlotante";
+import { useListaFlotante, useNavegacionFlechas } from "./ListaFlotante.logica";
 
 /** Evento de teclado mínimo — `manejarTecla` sólo lee `.key` y llama
  * `.preventDefault()`, no hace falta un evento real de DOM para probarlo. */

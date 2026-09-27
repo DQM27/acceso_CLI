@@ -1058,7 +1058,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 35831) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 18012) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() and 0xFFFF) != 25039) {
@@ -1238,7 +1238,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir() and 0xFFFF) != 57593) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir_cifrado() and 0xFFFF) != 542) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir_cifrado() and 0xFFFF) != 4932) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -3607,10 +3607,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * `clave` es la clave AES de 32 bytes que Kotlin resuelve del Android
      * Keystore (`AndroidKeystoreClaveBaseDatosStore.kt`), nunca derivada
      * acá. Único punto de entrada real desde `AplicacionViewModel`; `abrir`
-     * se queda sin tocar para los tests de Kotlin (`NucleoDePrueba`) y
-     * para quien compile con `sqlite-plano`/`cifrado-sqlcipher` en vez del
-     * default (`cifrado-sqlite3mc`) -- ver el comentario de
-     * `[features]` en `Cargo.toml`.
+     * se queda sin tocar para los tests de Kotlin (`NucleoDePrueba`).
      *
      * Si el archivo en `ruta_base_datos` ya existe pero NO es legible con
      * esta clave -- el caso real de todo teléfono con la app instalada
@@ -3622,8 +3619,8 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * desktop/src-tauri/src/lib.rs para un archivo dañado); el costo es
      * perder el historial/auditoría LOCAL de ese dispositivo que todavía
      * no se hubiera subido, a cambio de no escribir ni probar en este
-     * momento una migración `sqlcipher_export` sin verificar todavía
-     * contra un dispositivo real.
+     * momento una migración byte a byte sin verificar todavía contra un
+     * dispositivo real.
      */
     @Throws(NucleoException::class) fun `abrirCifrado`(`rutaBaseDatos`: kotlin.String, `clave`: kotlin.ByteArray): Nucleo {
             return FfiConverterTypeNucleo.lift(
@@ -6934,7 +6931,7 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
 }
         /**
          * Punto de entrada FFI: recibe las 2-3 líneas de MRZ que Kotlin ya aisló
-         * con `buscarLineasMrz` (extracción mecánica, se queda en Kotlin) y
+         * con `buscarBloquesMrz` (extracción mecánica, se queda en Kotlin) y
          * devuelve el resultado resuelto -- válido/inválido y, si corrigió algo,
          * qué corrigió.
          *

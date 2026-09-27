@@ -29,6 +29,9 @@ data class CarnetKofDetectado(
 // explícitamente el comprobante (que también imprime "Coca Cola FEMSA" en
 // su encabezado).
 private val REGEX_MARCA_FEMSA = Regex("""COCA[\s-]*COLA\s+FEMSA""", RegexOption.IGNORE_CASE)
+// El logo "Coca-Cola" va en letra script y el OCR lo lee mal a menudo
+// ("Cca-Cola", "CocaCola"); "FEMSA" en bloque sí sale limpio y alcanza solo.
+private val REGEX_FEMSA_SOLO = Regex("""\bFEMSA\b""", RegexOption.IGNORE_CASE)
 private val REGEX_MARCADOR_COMPROBANTE = Regex("""Ruta\s*/\s*No\.?\s*de\s*Carga""", RegexOption.IGNORE_CASE)
 
 // Texto decorativo de antigüedad visto en la muestra real ("5 AÑOS") --
@@ -67,8 +70,35 @@ fun esCarnetKof(texto: String): Boolean {
     if (REGEX_MARCADOR_COMPROBANTE.containsMatchIn(texto)) return false
     return REGEX_ANTIGUEDAD.containsMatchIn(texto) ||
         REGEX_RESPALDO_KOF.containsMatchIn(texto) ||
-        REGEX_MARCA_FEMSA.containsMatchIn(texto)
+        REGEX_MARCA_FEMSA.containsMatchIn(texto) ||
+        REGEX_FEMSA_SOLO.containsMatchIn(texto)
 }
+
+// Esquema de las dos caras reales vistas (2026-09-27, personas distintas):
+//
+//   Cara con código                      Cara sin código
+//   Erick Steven        [foto]           [foto + bandera]
+//   Portuguez Chacon                     Bayron Andrey
+//   ════════════                         Sanchez Lezcano
+//   1819584            <- código         Coca-Cola / FEMSA
+//   ════════════
+//   Tpo. Sangre: Alergia:
+//   En caso de Accidente o Emergencia llamar a:
+//   CENTRAL / COSTA RICA / DE ALERTA Y RESPUESTA / 800-2256327
+//   [código de barras]  + texto vertical "3 6D*1466922 E 1151055208-1", "HID Seos ADP"
+//
+// Sólo se leen nombre (renglón de nombres + renglón de apellidos, en ese
+// orden) y código de empleado (5-7 dígitos solos, entre las dos franjas
+// rojas, justo DEBAJO del nombre). Todo lo demás es marco: el texto
+// vertical del borde y el teléfono esconden corridas de 7 dígitos, por eso
+// el código se busca primero después del nombre.
+private val PALABRAS_NO_NOMBRE_KOF = setOf(
+    "CENTRAL", "COSTA", "RICA", "ALERTA", "RESPUESTA", "EMERGENCIA", "ACCIDENTE",
+    "LLAMAR", "SANGRE", "ALERGIA", "TPO", "COCA", "COLA", "FEMSA", "SEOS", "ADP",
+    "HID", "XT", "AÑOS", "ANOS",
+)
+private val PARTICULAS_NOMBRE = setOf("de", "del", "la", "las", "los", "y")
+private val REGEX_PALABRA_CAPITALIZADA = Regex("""^\p{Lu}\p{Ll}+$""")
 
 /// Punto de entrada del perfil. Nombre y código de empleado son
 /// independientes a propósito -- frente y reverso son escaneos separados
@@ -78,30 +108,37 @@ fun esCarnetKof(texto: String): Boolean {
 /// además quiere pedir el reverso para el código de empleado.
 fun extraerCarnetKof(texto: String): CarnetKofDetectado? {
     if (!esCarnetKof(texto)) return null
-    val nombre = extraerNombreCarnetKof(texto)
-    val codigo = texto.lines().map { it.trim() }.firstOrNull { REGEX_CODIGO_EMPLEADO_LINEA.matches(it) }
+    val lineas = texto.lines().map { it.trim() }
+    val (nombre, finNombre) = extraerNombreCarnetKof(lineas)
+    val codigo = lineas.drop(finNombre).firstOrNull { REGEX_CODIGO_EMPLEADO_LINEA.matches(it) }
+        ?: lineas.firstOrNull { REGEX_CODIGO_EMPLEADO_LINEA.matches(it) }
     if (nombre == null && codigo == null) return null
     return CarnetKofDetectado(nombre = nombre, codigoEmpleado = codigo)
 }
 
-/// Heurística del nombre (frente): la muestra real trae el nombre en 2
-/// líneas seguidas ("Brasly Daniel" / "Chaves Bonilla"), sin dígitos, sin
-/// la marca ni el texto de antigüedad. Se descartan líneas cortas (menos
-/// de 4 caracteres -- iniciales, decorativos sueltos) y se toman las
-/// primeras 2 líneas candidatas que sobreviven el filtro.
-private fun extraerNombreCarnetKof(texto: String): String? {
-    val lineasCandidatas = texto
-        .lines()
-        .map { it.trim() }
-        .filter { it.length >= 4 }
-        .filterNot { linea ->
-            REGEX_MARCA_FEMSA.containsMatchIn(linea) ||
-                REGEX_ANTIGUEDAD.containsMatchIn(linea) ||
-                REGEX_RESPALDO_KOF.containsMatchIn(linea) ||
-                linea.any(Char::isDigit)
-        }
-        .filter { linea -> linea.all { it.isLetter() || it == ' ' } }
+/// Nombre: en los carnets reales va en tipo oración ("Erick Steven" /
+/// "Portuguez Chacon"): primero se buscan DOS renglones seguidos así
+/// (nombres, luego apellidos). Si no aparecen (OCR que lo devuelve todo en
+/// mayúsculas), se toman los 2 primeros renglones de sólo letras que no
+/// sean palabras del diseño del carnet. Devuelve el nombre en mayúsculas y
+/// el índice del renglón que sigue al nombre (para buscar el código ahí).
+private fun extraerNombreCarnetKof(lineas: List<String>): Pair<String?, Int> {
+    fun esCandidata(linea: String) =
+        linea.length >= 4 &&
+            linea.all { it.isLetter() || it == ' ' } &&
+            linea.uppercase().split(" ").none { it in PALABRAS_NO_NOMBRE_KOF }
+    fun esCapitalizada(linea: String) =
+        esCandidata(linea) &&
+            linea.split(" ").filter { it.isNotBlank() }
+                .all { REGEX_PALABRA_CAPITALIZADA.matches(it) || it in PARTICULAS_NOMBRE }
 
-    if (lineasCandidatas.isEmpty()) return null
-    return lineasCandidatas.take(2).joinToString(" ").trim().takeIf { it.isNotBlank() }
+    for (i in 0 until lineas.size - 1) {
+        if (esCapitalizada(lineas[i]) && esCapitalizada(lineas[i + 1])) {
+            return "${lineas[i]} ${lineas[i + 1]}".uppercase() to i + 2
+        }
+    }
+    val indices = lineas.indices.filter { esCandidata(lineas[it]) }.take(2)
+    if (indices.isEmpty()) return null to 0
+    val nombre = indices.joinToString(" ") { lineas[it] }.uppercase().takeIf { it.isNotBlank() }
+    return nombre to indices.last() + 1
 }

@@ -1,21 +1,15 @@
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
 import { actualizarVehiculoRuta, crearVehiculoRuta } from "../api";
 import type { VehiculoRuta } from "../api";
+import { esquema } from "./FormularioVehiculoRuta.logica";
 
 interface ValoresFormulario {
   placa: string;
   numero_unidad: string;
   activo: boolean;
 }
-
-export const esquema = z.object({
-  placa: z.string().min(1, "La placa es obligatoria"),
-  numero_unidad: z.string(),
-  activo: z.boolean(),
-});
 
 export default function FormularioVehiculoRuta({
   vehiculo,

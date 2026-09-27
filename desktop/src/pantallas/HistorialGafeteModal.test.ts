@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { textoMotivo } from "./HistorialGafeteModal";
+import { textoMotivo } from "./HistorialGafeteModal.logica";
 
 describe("textoMotivo", () => {
   it("traduce cada motivo de resolución a su texto visible", () => {

@@ -1,47 +1,30 @@
 [alias]
 build-native = ["--config", "build.rustflags=['-C','target-cpu=native']", "build", "--profile", "release-native"]
-# SQLite sin cifrar, sin OpenSSL vendorizado -- para iterar local rápido.
-# NUNCA usar contra una base de producción real (ver Cargo.toml,
-# feature `sqlite-plano`).
-build-plano = ["build", "--no-default-features", "--features", "nube,sqlite-plano"]
-test-plano = ["test", "--no-default-features", "--features", "nube,sqlite-plano"]
-# Alias para `desktop/src-tauri` (ver el comentario sobre `[features]` en su
-# Cargo.toml) -- ese crate quedó con `sqlite-plano` como default porque el
-# CLI de Tauri no soporta `--no-default-features`; estos alias, en cambio,
-# usan `cargo build` directo (sí lo soporta) para compilar/verificar los
-# motores reales explícitamente. Funcionan desde cualquier directorio del
-# repo gracias a `--manifest-path`. No hay hot-reload de Tauri con estos --
-# son para verificación puntual del motor, no iteración de UI.
-build-desktop-cipher = ["build", "--manifest-path", "desktop/src-tauri/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlcipher"]
-build-desktop-3mc = ["build", "--manifest-path", "desktop/src-tauri/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlite3mc"]
-# Alias para `mobile/rust-core` (ver el comentario sobre `[features]` en su
-# Cargo.toml). Acá sí funcionan con `--no-default-features` normal porque
-# ni `cargo build`/`test` ni `cargo ndk` tienen la limitación de CLI de
-# Tauri -- default se queda en el motor real, estos alias son sólo para
-# iterar rápido. Compilan para el host (no Android/NDK); para el `.so` de
-# dispositivo agregar las mismas flags a `cargo ndk -t <target> build
-# --release` a mano (cargo-ndk reenvía argumentos desconocidos a `cargo
-# build`, ver mobile/README.md).
-build-mobile-plano = ["build", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "sqlite-plano"]
-test-mobile-plano = ["test", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "sqlite-plano"]
-build-mobile-3mc = ["build", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlite3mc"]
-test-mobile-3mc = ["test", "--manifest-path", "mobile/rust-core/Cargo.toml", "--no-default-features", "--features", "cifrado-sqlite3mc"]
-# Motor candidato para el crate raíz -- sin esto no hay forma de correr los
-# tests del núcleo bajo SQLite3MC (`test-plano`/default sólo cubren los otros
-# dos). Requiere haber compilado antes `sqlite3mc-vendor-lib` (ver [env]
-# abajo): `cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml`.
-test-3mc = ["test", "--no-default-features", "--features", "nube,cifrado-sqlite3mc"]
+# Motor SQLite único: SQLite3MC (ver `rusqlite` en Cargo.toml). Cualquier
+# build o test -- raíz, `desktop/src-tauri`, `mobile/rust-core` -- necesita
+# haber compilado antes `sqlite3mc-vendor-lib` UNA vez por máquina/target:
+#   cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+# (ver [env] abajo). Ya no hay alias por motor: antes existían
+# `build-plano`/`test-3mc`/`build-desktop-cipher`/... para elegir entre
+# SQLite3MC, SQLCipher y SQLite plano.
 
 [env]
 # SQLite3 Multiple Ciphers (ChaCha20-Poly1305) -- el amalgamation vendorizado
-# se compila aparte, ANTES de cualquier build que use `cifrado-sqlite3mc`, en
+# se compila aparte, ANTES de cualquier build, en
 # `sqlite3mc-vendor-lib/` (ver ese crate y su build.rs para el porqué de las
 # dos fases: `libsqlite3-sys` resuelve `-lstatic=sqlite3` al compilarse a sí
 # mismo, antes de que corra el build script de cualquier crate río abajo).
-# Sin ninguna de las features `bundled`/`bundled-sqlcipher-vendored-openssl`
-# activas (o sea, con sólo `cifrado-sqlite3mc` prendida), `libsqlite3-sys` cae
-# a su modo de link externo y lee estas dos variables -- inofensivas para
-# `cifrado-sqlcipher`/`sqlite-plano`, que ya traen su propio motor vendorizado
-# y nunca las consultan.
+# Sin ninguna feature `bundled*` de `rusqlite` activa (ninguna dependencia
+# debe activarla, ver Cargo.toml), `libsqlite3-sys` cae a su modo de link
+# externo y lee estas variables.
 SQLITE3_STATIC = "1"
 SQLITE3_LIB_DIR = { value = "sqlite3mc-vendor-lib/dist", relative = true }
+# Obligatorio junto con SQLITE3_LIB_DIR: aun con esa variable puesta,
+# `libsqlite3-sys` consulta primero `pkg-config`, y si la máquina tiene un
+# SQLite del sistema instalado (cualquier Linux con `libsqlite3-dev`, que
+# llega como dependencia de las librerías de GTK/WebKit, y los runners de
+# CI) enlaza ESE -- plano, sin cifrado -- en vez de SQLite3MC, sin ningún
+# error. Visto de verdad el 2026-09-26; lo vigilan los tests
+# `sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada` (raíz) y
+# `abrir_cifrado_sqlite3mc_cifra_de_verdad` (mobile/rust-core).
+SQLITE3_NO_PKG_CONFIG = "1"

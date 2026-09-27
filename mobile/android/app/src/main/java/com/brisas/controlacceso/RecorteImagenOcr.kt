@@ -58,57 +58,93 @@ data class RegionGuiaOcr(
     companion object {
         val TARJETA_ID = RegionGuiaOcr(fraccionAncho = 0.84f, proporcionAnchoAlto = 1.586f, fraccionTopCentro = 0.52f)
         val COMPROBANTE_RUTA = RegionGuiaOcr(fraccionAncho = 0.85f, proporcionAnchoAlto = 1.3f, fraccionTopCentro = 0.52f)
+
+        // Gafete VERTICAL (In House, KOF) sostenido en la pantalla de
+        // escaneo general, cuyo recuadro es de tarjeta horizontal: el
+        // gafete no entra entero y la franja "CONTRATISTA" / "COSTA RICA"
+        // queda debajo del recuadro -- peor con estuche, que lo agranda.
+        // Mismo ancho que `TARJETA_ID`, pero más alta que ancha, centrada
+        // en el mismo punto. La usa `ControladorEncuadre` (ver
+        // `EncuadreAdaptativo.kt`): como sonda sin dibujar y, cuando se
+        // reconoce un documento vertical, como recuadro visible.
+        val GAFETE_VERTICAL = RegionGuiaOcr(fraccionAncho = 0.84f, proporcionAnchoAlto = 0.75f, fraccionTopCentro = 0.52f)
     }
 }
 
-/// Arma un byte array NV21 (plano Y completo + planos U/V intercalados como
-/// VU) a partir de los planos crudos de una imagen YUV_420_888 -- formato
-/// que entrega CameraX en `ImageAnalysis` frame a frame. Necesario porque
-/// `android.graphics.YuvImage` (la única clase de Android que sabe recortar
-/// + comprimir YUV sin decodificar antes a Bitmap) sólo acepta NV21, nunca
-/// YUV_420_888 crudo.
+/// Lleva el recuadro guía de [RegionGuiaOcr] -- expresado como la pantalla,
+/// YA rotado -- a coordenadas del sensor SIN rotar, dentro de `crop` (el
+/// `cropRect` de CameraX, lo visible en pantalla, en coordenadas del
+/// sensor). Así se recorta directo sobre los planos YUV que entrega la
+/// cámara y ML Kit recibe sólo esa región en NV21, rotada por él mismo --
+/// en vez de convertir el frame ENTERO a ARGB, armar un bitmap, rotarlo
+/// completo y recién ahí recortar (4 bitmaps grandes por frame, ver
+/// historial de `recortarParaOcr`).
+///
+/// `rotacionGrados` es la de `ImageInfo.rotationDegrees`: cuánto hay que
+/// girar el sensor en sentido horario para verlo derecho. Girar 90° lleva
+/// el punto (x, y) del sensor (ancho W, alto H) a (H-1-y, x) en la imagen
+/// derecha; se invierte eso para cada una de las 4 rotaciones posibles.
+///
+/// El resultado queda alineado a coordenadas PARES: en NV21 el croma
+/// viene submuestreado de a bloques de 2x2, un borde impar partiría un
+/// bloque.
+fun rectanguloEnSensor(crop: RectanguloEntero, rotacionGrados: Int, region: RegionGuiaOcr): RectanguloEntero {
+    val w = crop.width
+    val h = crop.height
+    val rotada = rotacionGrados % 180 != 0
+    val r = region.rectanguloEnPixeles(if (rotada) h else w, if (rotada) w else h)
+    val enCrop = when (rotacionGrados) {
+        90 -> RectanguloEntero(left = r.top, top = h - r.right, right = r.bottom, bottom = h - r.left)
+        180 -> RectanguloEntero(left = w - r.right, top = h - r.bottom, right = w - r.left, bottom = h - r.top)
+        270 -> RectanguloEntero(left = w - r.bottom, top = r.left, right = w - r.top, bottom = r.right)
+        else -> r
+    }
+    val par = 1.inv()
+    return RectanguloEntero(
+        left = (crop.left + enCrop.left) and par,
+        top = (crop.top + enCrop.top) and par,
+        right = (crop.left + enCrop.right) and par,
+        bottom = (crop.top + enCrop.bottom) and par,
+    )
+}
+
+/// Copia sólo `rect` (en coordenadas del sensor, alineado a pares -- ver
+/// [rectanguloEnSensor]) de los planos crudos de una imagen YUV_420_888 a
+/// un byte array NV21 (plano Y + croma intercalado VU), el formato que
+/// `InputImage.fromByteArray` acepta directo. Ningún paso de color: ML Kit
+/// lee la luminancia tal cual la entrega el sensor. Antes se convertía el
+/// frame completo a ARGB con coeficientes de rango TV aplicados sin restar
+/// el offset de 16 (la imagen salía ~16% más clara y todo lo que tuviera
+/// Y >= ~220 se saturaba a blanco -- justo los reflejos de la cédula
+/// plastificada, donde el texto ya cuesta leer).
 ///
 /// Puro -- sólo bytes y enteros, nada de `android.media.Image` -- para
-/// poder probar la conversión con datos sintéticos, sin cámara real ni
-/// Robolectric. `yRowStride`/`uvRowStride`/`uvPixelStride` importan porque
-/// ninguno de los tres está garantizado: el plano Y puede traer relleno al
-/// final de cada fila (`rowStride` > ancho real), y las muestras de croma
-/// pueden no ser contiguas (`pixelStride` > 1) -- copiar ignorando esto
-/// produce una imagen corrida/basura en cualquier dispositivo cuyo HAL de
-/// cámara no entregue los planos ya empaquetados.
-/// `destino`, si se pasa y ya tiene el tamaño exacto que hace falta, se
-/// reusa en vez de asignar un `ByteArray` nuevo -- último punto suelto de
-/// MV-07 (auditoría de rendimiento 2026-09-25, cerrado junto con #1-#5):
-/// con resolución fija (1280x720, ver `construirAnalizadorOcr`) el tamaño
-/// no cambia entre frames de una misma sesión de escaneo, así que asignar
-/// un array nuevo por frame es basura de más para el recolector sin
-/// ninguna ganancia. `null` (el default, y lo que usan los tests) sigue
-/// asignando uno nuevo -- no cambia el comportamiento de nadie que no pase
-/// este parámetro.
-fun construirNv21(
-    ancho: Int,
-    alto: Int,
+/// poder probarlo con datos sintéticos. `yRowStride`/`uvRowStride`/
+/// `uvPixelStride` importan porque ninguno está garantizado: el plano Y
+/// puede traer relleno al final de cada fila y las muestras de croma
+/// pueden no ser contiguas (`pixelStride` > 1).
+fun recortarYuvANv21(
+    rect: RectanguloEntero,
     y: ByteArray,
     yRowStride: Int,
     u: ByteArray,
     v: ByteArray,
     uvRowStride: Int,
     uvPixelStride: Int,
-    destino: ByteArray? = null,
 ): ByteArray {
-    val tamano = ancho * alto + (ancho * alto) / 2
-    val nv21 = if (destino != null && destino.size == tamano) destino else ByteArray(tamano)
-    var posicion = 0
+    val ancho = rect.width
+    val alto = rect.height
+    val nv21 = ByteArray(ancho * alto + (ancho * alto) / 2)
     for (fila in 0 until alto) {
-        val inicio = fila * yRowStride
-        System.arraycopy(y, inicio, nv21, posicion, ancho)
-        posicion += ancho
+        System.arraycopy(y, (rect.top + fila) * yRowStride + rect.left, nv21, fila * ancho, ancho)
     }
-    val anchoUv = ancho / 2
-    val altoUv = alto / 2
-    for (fila in 0 until altoUv) {
-        for (columna in 0 until anchoUv) {
-            val indice = fila * uvRowStride + columna * uvPixelStride
+    var posicion = ancho * alto
+    val columnaUv = rect.left / 2
+    val filaUv = rect.top / 2
+    for (fila in 0 until alto / 2) {
+        val inicio = (filaUv + fila) * uvRowStride
+        for (columna in 0 until ancho / 2) {
+            val indice = inicio + (columnaUv + columna) * uvPixelStride
             nv21[posicion++] = v[indice]
             nv21[posicion++] = u[indice]
         }
@@ -116,88 +152,25 @@ fun construirNv21(
     return nv21
 }
 
-/// Convierte un NV21 (como el que arma [construirNv21]) directo a píxeles
-/// ARGB_8888, sin pasar por JPEG -- reemplaza el camino anterior
-/// `YuvImage.compressToJpeg` + `BitmapFactory.decodeByteArray` (auditoría de
-/// rendimiento 2026-09-25: esa ida y vuelta comprimía a JPEG con pérdida y
-/// después la descomprimía completa, el costo de CPU más alto por frame de
-/// las 4 pantallas de escaneo, y de paso perdía calidad por la compresión
-/// con pérdida -- innecesaria acá porque el resultado nunca se guarda ni se
-/// muestra, sólo se le pasa a ML Kit).
-///
-/// Coeficientes BT.601 de rango completo (Y' 0-255, no el 16-235 "TV
-/// range") -- los mismos que usa históricamente `YuvImage`/la mayoría de
-/// HALs de cámara Android para este formato, para no introducir un cambio
-/// de color perceptible frente al camino anterior.
-///
-/// Puro -- sólo bytes y enteros, nada de `android.graphics.Bitmap` -- para
-/// poder probarlo con datos sintéticos, mismo motivo que [construirNv21].
-/// El llamador arma el `Bitmap` con `Bitmap.createBitmap(pixeles, ancho,
-/// alto, Config.ARGB_8888)`.
-///
-/// `destino`: mismo criterio que el parámetro homónimo de [construirNv21]
-/// -- se reusa si ya tiene el tamaño exacto, en vez de asignar un
-/// `IntArray` nuevo por frame.
-fun convertirNv21AArgb(nv21: ByteArray, ancho: Int, alto: Int, destino: IntArray? = null): IntArray {
-    val tamano = ancho * alto
-    val pixeles = if (destino != null && destino.size == tamano) destino else IntArray(tamano)
-    val tamanoPlanoY = ancho * alto
-    for (fila in 0 until alto) {
-        var indiceY = fila * ancho
-        var indiceUv = tamanoPlanoY + (fila shr 1) * ancho
-        var u = 0
-        var v = 0
-        for (columna in 0 until ancho) {
-            val y = (nv21[indiceY].toInt() and 0xff)
-            if (columna and 1 == 0) {
-                v = (nv21[indiceUv++].toInt() and 0xff) - 128
-                u = (nv21[indiceUv++].toInt() and 0xff) - 128
-            }
-            val y1192 = 1192 * y
-            val r = (y1192 + 1634 * v).coerceIn(0, 262143)
-            val g = (y1192 - 833 * v - 400 * u).coerceIn(0, 262143)
-            val b = (y1192 + 2066 * u).coerceIn(0, 262143)
-            pixeles[indiceY] = -0x1000000 or
-                ((r shl 6) and 0xff0000) or
-                ((g shr 2) and 0xff00) or
-                ((b shr 10) and 0xff)
-            indiceY++
-        }
-    }
-    return pixeles
-}
-
-/// Último punto suelto de MV-07 (auditoría de rendimiento 2026-09-25,
-/// cerrado junto con #1-#5): reune los buffers de un frame
-/// (`yBytes`/`uBytes`/`vBytes` copiados de los planos, más `nv21` y
-/// `pixeles` intermedios) para reusarlos entre frames en vez de asignarlos
-/// desde cero cada vez -- con resolución fija (1280x720, ver
-/// `construirAnalizadorOcr`) el tamaño de cada uno no cambia dentro de una
-/// misma sesión de escaneo. Cada método reasigna solo si el tamaño pedido
-/// cambió (no debería pasar en la práctica, pero cubre el caso sin
-/// romper nada).
+/// Reune los buffers donde se copian los planos crudos de cada frame
+/// (`yBytes`/`uBytes`/`vBytes`) para reusarlos entre frames en vez de
+/// asignarlos desde cero cada vez (MV-07, auditoría de rendimiento
+/// 2026-09-25) -- con resolución fija (ver `construirAnalizadorOcr`) el
+/// tamaño no cambia dentro de una sesión de escaneo. El recorte NV21 que
+/// recibe ML Kit NO se reusa: `recognizer.process` lo lee de forma
+/// asíncrona, después de que el analizador ya soltó el frame.
 ///
 /// Una instancia por apertura de pantalla, igual que `EstabilizadorLectura`
-/// -- no compartir entre sesiones de escaneo distintas ni entre hilos:
-/// pensada para usarse desde el único hilo del analizador de cámara
-/// (`ejecutorAnalisis`), igual que el resto de este archivo.
+/// -- pensada para el único hilo del analizador de cámara
+/// (`ejecutorAnalisis`).
 class BuffersOcrReutilizables {
     private var yBytes: ByteArray? = null
     private var uBytes: ByteArray? = null
     private var vBytes: ByteArray? = null
-    private var nv21: ByteArray? = null
-    private var pixeles: IntArray? = null
 
     fun yBytes(tamano: Int): ByteArray = reusarByteArray(yBytes, tamano) { yBytes = it }
     fun uBytes(tamano: Int): ByteArray = reusarByteArray(uBytes, tamano) { uBytes = it }
     fun vBytes(tamano: Int): ByteArray = reusarByteArray(vBytes, tamano) { vBytes = it }
-    fun nv21(tamano: Int): ByteArray = reusarByteArray(nv21, tamano) { nv21 = it }
-
-    fun pixeles(tamano: Int): IntArray {
-        val actual = pixeles
-        if (actual != null && actual.size == tamano) return actual
-        return IntArray(tamano).also { pixeles = it }
-    }
 
     private inline fun reusarByteArray(actual: ByteArray?, tamano: Int, guardar: (ByteArray) -> Unit): ByteArray {
         if (actual != null && actual.size == tamano) return actual

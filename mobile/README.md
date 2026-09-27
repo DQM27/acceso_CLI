@@ -21,11 +21,14 @@ Requisitos: Android Studio (para el JDK/SDK), NDK instalado vía SDK Manager,
 `rustup target add aarch64-linux-android`, `cargo install cargo-ndk`.
 
 ```sh
-# 1. Compilar el núcleo de Rust para Android
+# 1. Compilar el núcleo de Rust para Android. Motor SQLite único: SQLite3MC,
+#    que se compila ANTES y para el mismo ABI (ver release.yml).
+cargo ndk -t aarch64-linux-android build --release --manifest-path ../sqlite3mc-vendor-lib/Cargo.toml
 cd rust-core
 cargo ndk -t aarch64-linux-android build --release
 
-# 2. Generar los bindings Kotlin
+# 2. Generar los bindings Kotlin -- OBLIGATORIO cada vez que cambie la API
+#    pública de rust-core (el CI lo verifica: si el .kt no coincide, falla)
 cargo run --features bindgen --bin uniffi-bindgen -- generate \
   --library target/aarch64-linux-android/release/libcontrol_acceso_mobile.so \
   --language kotlin --out-dir bindings

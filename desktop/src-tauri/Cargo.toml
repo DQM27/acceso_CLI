@@ -22,36 +22,12 @@ crate-type = ["staticlib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 
-# Espejo del switch de motor SQLite del crate raíz (ver `[features]` en
-# `../../Cargo.toml` y el `compile_error!` en `../../src/lib.rs`).
-#
-# Default = `cifrado-sqlite3mc` (2026-09-12, ver `docs/decisiones-tecnicas.md`)
-# -- ANTES fue `sqlite-plano` a propósito, mientras `bench/sqlite-3way-*`
-# evaluaba los tres motores: eso resultó en que `.github/workflows/release.yml`
-# (que corre `tauri-action` SIN ningún `--features`/override) publicara
-# v1.5.0/v1.5.1/v1.5.2 sin cifrado real de la base local -- `PRAGMA key` se
-# llamaba igual, pero con SQLite plano no hace nada. `cifrado-sqlite3mc`
-# reemplaza ese default porque, a diferencia de `cifrado-sqlcipher`, compila
-# en segundos una vez que `sqlite3mc-vendor-lib/` está compilada (ver ese
-# crate) -- mismo objetivo de "rápido sin acordarse de nada" que tenía
-# `sqlite-plano`, pero sin el riesgo de publicar sin cifrar. Requiere, la
-# PRIMERA vez en una máquina nueva:
+# Motor SQLite: SIEMPRE SQLite3MC, sin features (lo decide el crate raíz,
+# ver `rusqlite` en `../../Cargo.toml`). Antes había tres motores
+# intercambiables por feature (SQLite3MC, SQLCipher y SQLite plano), y el
+# plano llegó a publicarse por error en v1.5.0-v1.5.2 sin cifrado real.
+# Requiere, la PRIMERA vez en una máquina nueva:
 #   cargo build --release --manifest-path ../../sqlite3mc-vendor-lib/Cargo.toml
-#
-# El CLI de Tauri (`tauri dev -f <feature>`, `tauri-cli` 2.11.4, verificado
-# acá) sólo agrega features, no tiene `--no-default-features` -- pedir otro
-# motor con `-f` activaría dos a la vez y dispararía el `compile_error!` de
-# exclusión mutua. Para compilar/verificar `cifrado-sqlcipher` (el motor
-# legado) específicamente, usar `cargo build` directo (sí soporta
-# `--no-default-features`) en vez de `tauri dev`/`-f` -- ver el alias
-# `build-desktop-cipher` en `../../.cargo/config.toml`.
-# NUNCA usar `sqlite-plano` para un build que se distribuye o toca datos
-# reales -- el archivo queda sin cifrar.
-[features]
-default = ["cifrado-sqlite3mc"]
-cifrado-sqlcipher = ["control_acceso/cifrado-sqlcipher"]
-sqlite-plano = ["control_acceso/sqlite-plano"]
-cifrado-sqlite3mc = ["control_acceso/cifrado-sqlite3mc"]
 
 [dependencies]
 control_acceso = { path = "../..", default-features = false, features = ["serde", "nube", "cifrado-secreto-dispositivo"] }

@@ -86,11 +86,20 @@ private val REGEX_NUMERO_UNIDAD = Regex("""\b(\d{4,6})\b""")
 /// intenta DESPUÉS de placa de carga/particular (que exigen letras + más
 /// dígitos, no calzan con esto) y ANTES de número de unidad (que por sí
 /// solo nunca matchea un grupo de sólo 3 dígitos, mínimo son 4).
+///
+/// Sólo cuenta un par de grupos seguidos donde AL MENOS uno trae dígitos:
+/// dos palabras de 3 letras cualesquiera rotuladas en el camión (ej. "KOF"
+/// y "CRC") se tomaban antes como placa de moto -- y como esto se intenta
+/// antes que el número de unidad, tapaban la calcomanía real (ej. `22906`).
+/// Las dos motos reales vistas ("947"/"369" y "807"/"ACL") tienen dígitos
+/// en al menos un grupo.
 private fun extraerMoto(textoNormalizado: String): VehiculoRutaDetectado? {
     val grupos = REGEX_GRUPO_TRIPLE_MOTO.findAll(textoNormalizado).map { it.value }.toList()
-    if (grupos.size < 2) return null
+    val (primero, segundo) = grupos.zipWithNext()
+        .firstOrNull { (a, b) -> a.any(Char::isDigit) || b.any(Char::isDigit) }
+        ?: return null
     val prefijo = if (REGEX_PREFIJO_MOTO.containsMatchIn(textoNormalizado)) "M" else ""
-    return VehiculoRutaDetectado("$prefijo${grupos[0]}${grupos[1]}", TipoVehiculoDetectado.PLACA)
+    return VehiculoRutaDetectado("$prefijo$primero$segundo", TipoVehiculoDetectado.PLACA)
 }
 
 /// Punto de entrada del perfil. Intenta placa primero -- es el patrón más

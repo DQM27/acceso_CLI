@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avisosContratista, validarGafete, validarPlaca } from "./NuevoIngresoModal";
+import { avisosContratista, validarGafete, validarPlaca } from "./NuevoIngresoModal.logica";
 
 describe("avisosContratista (chips del buscador)", () => {
   const hoy = "2026-09-23";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { esquema } from "./FormularioEmpresa";
+import { esquema } from "./FormularioEmpresa.logica";
 
 describe("esquema de FormularioEmpresa", () => {
   it("nombre vacío no pasa", () => {
