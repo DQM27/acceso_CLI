@@ -286,11 +286,8 @@ pub struct PreparacionIngreso {
     pub resultado_acceso: ResultadoAcceso,
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
-    /// Siempre `None` al volver de `preparar_ingreso` -- ese método no toca
-    /// la red (mismo motivo que en el núcleo). Kotlin lo completa llamando
-    /// a `contratista_activo_en_otro_sitio_con_secreto` (mejor esfuerzo)
-    /// antes de dejar
-    /// continuar, ver `docs/pendientes.md`.
+    /// Siempre `None`: el ingreso activo en otro sitio llega resuelto en
+    /// `mensaje_bloqueo` (ver `preparar_ingreso_con_secreto`).
     pub activo_en_otro_sitio: Option<String>,
     pub gafetes_deuda: Vec<i64>,
     /// `None` si se puede continuar con este contratista; si no, el texto
@@ -963,7 +960,7 @@ pub enum NucleoError {
     #[error("fecha de PRAIND inválida: {mensaje}")]
     FechaInvalida { mensaje: String },
     /// El gafete ya está activo en este sitio del lado de OTRO
-    /// dispositivo -- chequeo en vivo (`CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo`),
+    /// dispositivo -- chequeo en vivo (`application::registrar_ingreso_verificado`),
     /// nunca llega a tocar `registrar_ingreso` en el núcleo, se corta acá
     /// mismo. Reemplaza `GafeteOcupadoEnSitioException`, que antes vivía
     /// sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).
@@ -1490,32 +1487,34 @@ impl Nucleo {
         Ok(self.core_lock().preparar_ingreso(contratista_id)?.into())
     }
 
-    /// Igual que [`Nucleo::preparar_ingreso`], pero además intenta el
-    /// chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo
-    /// cruzado de ingresos abiertos entre sitios") cuando los chequeos
-    /// locales ya dejaron pasar -- reemplaza el `if` que antes armaba
-    /// Kotlin en `ActivosViewModel.elegir` con dos llamadas FFI separadas
-    /// (`prepararIngreso` + `contratistaActivoEnOtroSitioConSecreto`) y su
-    /// propio `puedeContinuar`/`mensajeBloqueo`. Nunca toca `core_lock()`
-    /// durante la parte de red -- ver `CacheTokenDispositivo`.
-    ///
-    /// `secreto` vacío (dispositivo sin nube configurada) se salta el
-    /// chequeo remoto sin tocar la red, igual que el resto de los
-    /// `*_con_secreto` de este archivo.
+    /// Vista previa con TODAS las reglas: las locales (este equipo y el
+    /// otro equipo del sitio) y, con nube, la verificación en vivo de que la
+    /// persona no tenga un ingreso activo en ningún sitio. Las decide
+    /// `application::preparar_ingreso_verificado`, la misma que usa
+    /// escritorio; Kotlin sólo muestra `mensaje_bloqueo`. `secreto` vacío =
+    /// nube sin configurar (sólo reglas locales). Nunca toca `core_lock()`
+    /// durante la red.
     pub fn preparar_ingreso_con_secreto(
         &self,
         contratista_id: i64,
         secreto: String,
     ) -> Result<PreparacionIngreso, NucleoError> {
-        let mut preparacion = self.core_lock().preparar_ingreso(contratista_id)?;
-        // Sin sentido gastar una vuelta de red si un chequeo local ya
-        // bloquea -- `bloqueo()` no consume, sólo lee lo que ya se sabe.
-        if !secreto.trim().is_empty() && preparacion.bloqueo().is_none() {
-            preparacion.activo_en_otro_sitio = self
-                .cache_token
-                .contratista_activo_en_otro_sitio(&secreto, &preparacion.cedula);
-        }
-        Ok(preparacion.into())
+        let actor = self.actor_autenticado().ok();
+        let nube = control_acceso::application::NubeDelDispositivo {
+            cache_token: &self.cache_token,
+            secreto: Some(secreto.as_str()),
+        };
+        let (preparacion, bloqueo) = control_acceso::application::preparar_ingreso_verificado(
+            || self.core_lock(),
+            nube,
+            actor.as_ref(),
+            contratista_id,
+        )?;
+        let mut preparacion: PreparacionIngreso = preparacion.into();
+        preparacion.mensaje_bloqueo = bloqueo
+            .as_ref()
+            .map(control_acceso::mensajes::mensaje_bloqueo_ingreso);
+        Ok(preparacion)
     }
 
     pub fn registrar_ingreso(
@@ -1534,16 +1533,11 @@ impl Nucleo {
             .into())
     }
 
-    /// Igual que [`Nucleo::registrar_ingreso`], pero además chequea en vivo
-    /// que el gafete (si lo hay) no esté ya activo en este sitio del lado
-    /// de OTRO dispositivo antes de escribir -- reemplaza el par de
-    /// llamadas separadas `gafeteOcupadoEnSitioConSecreto` +
-    /// `registrarIngreso` que antes hacía `PantallaConfirmarIngreso.kt`
-    /// (con su propia `GafeteOcupadoEnSitioException`), acortando la
-    /// ventana entre chequear y escribir a un solo cruce FFI.
-    ///
-    /// `secreto` vacío se salta el chequeo sin tocar la red (mismo
-    /// criterio que el resto de los `*_con_secreto`).
+    /// Ingreso con TODAS sus reglas en una sola llamada: locales, y con nube
+    /// la persona sin ingreso activo en ningún sitio y el gafete libre en el
+    /// otro dispositivo; si no se puede verificar, no se registra. Las
+    /// decide `application::registrar_ingreso_verificado`, la misma que usa
+    /// escritorio. `secreto` vacío = nube sin configurar.
     pub fn registrar_ingreso_con_secreto(
         &self,
         contratista_id: i64,
@@ -1552,20 +1546,32 @@ impl Nucleo {
         placa: Option<String>,
         secreto: String,
     ) -> Result<ResultadoRegistroEntrada, NucleoError> {
-        if let Some(numero) = gafete
-            && !secreto.trim().is_empty()
-        {
-            let ocupado = self
-                .cache_token
-                .gafete_ocupado_en_otro_dispositivo(&secreto, numero)
-                .map_err(|error| NucleoError::Interno {
-                    mensaje: interno(error),
-                })?;
-            if ocupado {
-                return Err(NucleoError::GafeteOcupadoEnSitio { numero });
+        use control_acceso::application::{IngresoVerificadoError, NubeDelDispositivo};
+
+        let actor = self.actor_autenticado()?;
+        let nube = NubeDelDispositivo {
+            cache_token: &self.cache_token,
+            secreto: Some(secreto.as_str()),
+        };
+        control_acceso::application::registrar_ingreso_verificado(
+            || self.core_lock(),
+            nube,
+            &actor,
+            contratista_id,
+            medio.into(),
+            gafete,
+            placa,
+        )
+        .map(Into::into)
+        .map_err(|error| match error {
+            IngresoVerificadoError::Servicio(error) => error.into(),
+            IngresoVerificadoError::Bloqueado(bloqueo) => NucleoError::Rechazado {
+                mensaje: control_acceso::mensajes::mensaje_bloqueo_ingreso(&bloqueo),
+            },
+            IngresoVerificadoError::GafeteOcupadoEnSitio { numero } => {
+                NucleoError::GafeteOcupadoEnSitio { numero }
             }
-        }
-        self.registrar_ingreso(contratista_id, medio, gafete, placa)
+        })
     }
 
     /// Búsqueda en vivo (la vía primaria del guardia — ver
@@ -2303,23 +2309,6 @@ impl Nucleo {
             .into_iter()
             .map(Into::into)
             .collect())
-    }
-
-    /// Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
-    /// de ingresos abiertos entre sitios"), de mejor esfuerzo: sin
-    /// secreto, o si la red falla, `Ok(None)` en vez de propagar el error
-    /// (acá SÍ hay con qué chocar sin red -- un ingreso registrado offline
-    /// queda local igual, y el conflicto se detecta después al sincronizar,
-    /// ver `sincronizar_con_secreto`/`ResumenSincronizacion::conflictos_ingreso`).
-    /// Kotlin la llama después de `preparar_ingreso`, sólo si los chequeos
-    /// locales ya dejaron pasar.
-    pub fn contratista_activo_en_otro_sitio_con_secreto(
-        &self,
-        secreto: String,
-        cedula: String,
-    ) -> Option<String> {
-        self.cache_token
-            .contratista_activo_en_otro_sitio(&secreto, &cedula)
     }
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
@@ -3067,11 +3056,13 @@ mod tests {
         );
     }
 
-    /// `registrar_ingreso_con_secreto` sin gafete tampoco debe tocar la
-    /// red -- el chequeo de "gafete ocupado en otro dispositivo" sólo
-    /// tiene sentido cuando de verdad hay un número que chequear.
+    /// Secreto vacío = nube sin configurar: se registra con las reglas
+    /// locales sin tocar la red. Con secreto, la verificación en vivo es
+    /// estricta (si no se puede verificar, no se registra); eso lo prueban
+    /// los tests de `application::con_nube` contra un servidor falso, nunca
+    /// contra la nube real.
     #[test]
-    fn registrar_ingreso_con_secreto_sin_gafete_no_toca_la_red() {
+    fn registrar_ingreso_con_secreto_vacio_no_toca_la_red() {
         let archivo = tempfile::NamedTempFile::new().unwrap();
         let ruta = archivo.path().to_str().unwrap().to_string();
 
@@ -3100,15 +3091,8 @@ mod tests {
             )
             .unwrap();
 
-        // Secreto NO vacío, pero SIN gafete -- SWAT no lo requiere.
         let resultado = nucleo
-            .registrar_ingreso_con_secreto(
-                1,
-                MedioIngreso::Caminando,
-                None,
-                None,
-                "secreto-de-prueba".to_string(),
-            )
+            .registrar_ingreso_con_secreto(1, MedioIngreso::Caminando, None, None, String::new())
             .unwrap();
 
         assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);

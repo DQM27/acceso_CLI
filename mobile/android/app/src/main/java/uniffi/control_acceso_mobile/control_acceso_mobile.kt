@@ -707,8 +707,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_contratista_activo_en_otro_sitio_con_secreto(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa(
@@ -834,8 +832,6 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_contratista_activo_en_otro_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
@@ -1073,9 +1069,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() and 0xFFFF) != 27163) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_contratista_activo_en_otro_sitio_con_secreto() and 0xFFFF) != 45399) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() and 0xFFFF) != 20948) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1127,7 +1120,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() and 0xFFFF) != 60754) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_con_secreto() and 0xFFFF) != 56092) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_con_secreto() and 0xFFFF) != 60867) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional() and 0xFFFF) != 33923) {
@@ -1136,7 +1129,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() and 0xFFFF) != 38089) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_con_secreto() and 0xFFFF) != 22370) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_con_secreto() and 0xFFFF) != 40488) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor() and 0xFFFF) != 65024) {
@@ -1832,18 +1825,6 @@ public interface NucleoInterface {
     fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
     
     /**
-     * Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
-     * de ingresos abiertos entre sitios"), de mejor esfuerzo: sin
-     * secreto, o si la red falla, `Ok(None)` en vez de propagar el error
-     * (acá SÍ hay con qué chocar sin red -- un ingreso registrado offline
-     * queda local igual, y el conflicto se detecta después al sincronizar,
-     * ver `sincronizar_con_secreto`/`ResumenSincronizacion::conflictos_ingreso`).
-     * Kotlin la llama después de `preparar_ingreso`, sólo si los chequeos
-     * locales ya dejaron pasar.
-     */
-    fun `contratistaActivoEnOtroSitioConSecreto`(`secreto`: kotlin.String, `cedula`: kotlin.String): kotlin.String?
-    
-    /**
      * Alta de contratista en persona, sólo creación (ver
      * docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
      * PRAIND requerido y vigente, personal de ruta según el tipo, acceso
@@ -1962,18 +1943,13 @@ public interface NucleoInterface {
     fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso
     
     /**
-     * Igual que [`Nucleo::preparar_ingreso`], pero además intenta el
-     * chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo
-     * cruzado de ingresos abiertos entre sitios") cuando los chequeos
-     * locales ya dejaron pasar -- reemplaza el `if` que antes armaba
-     * Kotlin en `ActivosViewModel.elegir` con dos llamadas FFI separadas
-     * (`prepararIngreso` + `contratistaActivoEnOtroSitioConSecreto`) y su
-     * propio `puedeContinuar`/`mensajeBloqueo`. Nunca toca `core_lock()`
-     * durante la parte de red -- ver `CacheTokenDispositivo`.
-     *
-     * `secreto` vacío (dispositivo sin nube configurada) se salta el
-     * chequeo remoto sin tocar la red, igual que el resto de los
-     * `*_con_secreto` de este archivo.
+     * Vista previa con TODAS las reglas: las locales (este equipo y el
+     * otro equipo del sitio) y, con nube, la verificación en vivo de que la
+     * persona no tenga un ingreso activo en ningún sitio. Las decide
+     * `application::preparar_ingreso_verificado`, la misma que usa
+     * escritorio; Kotlin sólo muestra `mensaje_bloqueo`. `secreto` vacío =
+     * nube sin configurar (sólo reglas locales). Nunca toca `core_lock()`
+     * durante la red.
      */
     fun `prepararIngresoConSecreto`(`contratistaId`: kotlin.Long, `secreto`: kotlin.String): PreparacionIngreso
     
@@ -1986,16 +1962,11 @@ public interface NucleoInterface {
     fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?): ResultadoRegistroEntrada
     
     /**
-     * Igual que [`Nucleo::registrar_ingreso`], pero además chequea en vivo
-     * que el gafete (si lo hay) no esté ya activo en este sitio del lado
-     * de OTRO dispositivo antes de escribir -- reemplaza el par de
-     * llamadas separadas `gafeteOcupadoEnSitioConSecreto` +
-     * `registrarIngreso` que antes hacía `PantallaConfirmarIngreso.kt`
-     * (con su propia `GafeteOcupadoEnSitioException`), acortando la
-     * ventana entre chequear y escribir a un solo cruce FFI.
-     *
-     * `secreto` vacío se salta el chequeo sin tocar la red (mismo
-     * criterio que el resto de los `*_con_secreto`).
+     * Ingreso con TODAS sus reglas en una sola llamada: locales, y con nube
+     * la persona sin ingreso activo en ningún sitio y el gafete libre en el
+     * otro dispositivo; si no se puede verificar, no se registra. Las
+     * decide `application::registrar_ingreso_verificado`, la misma que usa
+     * escritorio. `secreto` vacío = nube sin configurar.
      */
     fun `registrarIngresoConSecreto`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?, `secreto`: kotlin.String): ResultadoRegistroEntrada
     
@@ -2570,31 +2541,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
-     * de ingresos abiertos entre sitios"), de mejor esfuerzo: sin
-     * secreto, o si la red falla, `Ok(None)` en vez de propagar el error
-     * (acá SÍ hay con qué chocar sin red -- un ingreso registrado offline
-     * queda local igual, y el conflicto se detecta después al sincronizar,
-     * ver `sincronizar_con_secreto`/`ResumenSincronizacion::conflictos_ingreso`).
-     * Kotlin la llama después de `preparar_ingreso`, sólo si los chequeos
-     * locales ya dejaron pasar.
-     */override fun `contratistaActivoEnOtroSitioConSecreto`(`secreto`: kotlin.String, `cedula`: kotlin.String): kotlin.String? {
-            return FfiConverterOptionalString.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_contratista_activo_en_otro_sitio_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),
-        FfiConverterString.lower(`cedula`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
      * Alta de contratista en persona, sólo creación (ver
      * docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
      * PRAIND requerido y vigente, personal de ruta según el tipo, acceso
@@ -2930,18 +2876,13 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Igual que [`Nucleo::preparar_ingreso`], pero además intenta el
-     * chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo
-     * cruzado de ingresos abiertos entre sitios") cuando los chequeos
-     * locales ya dejaron pasar -- reemplaza el `if` que antes armaba
-     * Kotlin en `ActivosViewModel.elegir` con dos llamadas FFI separadas
-     * (`prepararIngreso` + `contratistaActivoEnOtroSitioConSecreto`) y su
-     * propio `puedeContinuar`/`mensajeBloqueo`. Nunca toca `core_lock()`
-     * durante la parte de red -- ver `CacheTokenDispositivo`.
-     *
-     * `secreto` vacío (dispositivo sin nube configurada) se salta el
-     * chequeo remoto sin tocar la red, igual que el resto de los
-     * `*_con_secreto` de este archivo.
+     * Vista previa con TODAS las reglas: las locales (este equipo y el
+     * otro equipo del sitio) y, con nube, la verificación en vivo de que la
+     * persona no tenga un ingreso activo en ningún sitio. Las decide
+     * `application::preparar_ingreso_verificado`, la misma que usa
+     * escritorio; Kotlin sólo muestra `mensaje_bloqueo`. `secreto` vacío =
+     * nube sin configurar (sólo reglas locales). Nunca toca `core_lock()`
+     * durante la red.
      */
     @Throws(NucleoException::class)override fun `prepararIngresoConSecreto`(`contratistaId`: kotlin.Long, `secreto`: kotlin.String): PreparacionIngreso {
             return FfiConverterTypePreparacionIngreso.lift(
@@ -2996,16 +2937,11 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Igual que [`Nucleo::registrar_ingreso`], pero además chequea en vivo
-     * que el gafete (si lo hay) no esté ya activo en este sitio del lado
-     * de OTRO dispositivo antes de escribir -- reemplaza el par de
-     * llamadas separadas `gafeteOcupadoEnSitioConSecreto` +
-     * `registrarIngreso` que antes hacía `PantallaConfirmarIngreso.kt`
-     * (con su propia `GafeteOcupadoEnSitioException`), acortando la
-     * ventana entre chequear y escribir a un solo cruce FFI.
-     *
-     * `secreto` vacío se salta el chequeo sin tocar la red (mismo
-     * criterio que el resto de los `*_con_secreto`).
+     * Ingreso con TODAS sus reglas en una sola llamada: locales, y con nube
+     * la persona sin ingreso activo en ningún sitio y el gafete libre en el
+     * otro dispositivo; si no se puede verificar, no se registra. Las
+     * decide `application::registrar_ingreso_verificado`, la misma que usa
+     * escritorio. `secreto` vacío = nube sin configurar.
      */
     @Throws(NucleoException::class)override fun `registrarIngresoConSecreto`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?, `secreto`: kotlin.String): ResultadoRegistroEntrada {
             return FfiConverterTypeResultadoRegistroEntrada.lift(
@@ -4169,11 +4105,8 @@ data class PreparacionIngreso (
     var `tieneIngresoActivo`: kotlin.Boolean
     , 
     /**
-     * Siempre `None` al volver de `preparar_ingreso` -- ese método no toca
-     * la red (mismo motivo que en el núcleo). Kotlin lo completa llamando
-     * a `contratista_activo_en_otro_sitio_con_secreto` (mejor esfuerzo)
-     * antes de dejar
-     * continuar, ver `docs/pendientes.md`.
+     * Siempre `None`: el ingreso activo en otro sitio llega resuelto en
+     * `mensaje_bloqueo` (ver `preparar_ingreso_con_secreto`).
      */
     var `activoEnOtroSitio`: kotlin.String?
     , 
@@ -5552,7 +5485,7 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
         
     /**
      * El gafete ya está activo en este sitio del lado de OTRO
-     * dispositivo -- chequeo en vivo (`CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo`),
+     * dispositivo -- chequeo en vivo (`application::registrar_ingreso_verificado`),
      * nunca llega a tocar `registrar_ingreso` en el núcleo, se corta acá
      * mismo. Reemplaza `GafeteOcupadoEnSitioException`, que antes vivía
      * sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).

@@ -25,11 +25,11 @@ pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo, autenticar_
 pub use orquestacion::{PerfilDispositivo, ResumenSincronizacionNube, recibir, sincronizar};
 pub use sincronizacion::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
-    ConflictoMovimientoVisitaActivo, ContextoSincronizacion, IngresoProveedorRemoto, IngresoRemoto,
-    PrestamoGafeteProvisionalRemoto, ResumenCatalogo, ResumenCatalogoRutas, ResumenDrenado,
-    SincronizacionError, cerrar_ingreso_proveedor_remoto, cerrar_ingreso_remoto,
-    cerrar_prestamo_gafete_provisional_remoto, contar_fallos_permanentes,
-    contratista_activo_en_otro_sitio, contratistas_con_conflicto_activo, drenar_cola,
+    ConflictoMovimientoVisitaActivo, ContextoSincronizacion, IngresoActivoEnLaNube,
+    IngresoProveedorRemoto, IngresoRemoto, PrestamoGafeteProvisionalRemoto, ResumenCatalogo,
+    ResumenCatalogoRutas, ResumenDrenado, SincronizacionError, cerrar_ingreso_proveedor_remoto,
+    cerrar_ingreso_remoto, cerrar_prestamo_gafete_provisional_remoto, contar_fallos_permanentes,
+    contratista_con_ingreso_activo, contratistas_con_conflicto_activo, drenar_cola,
     gafete_de_proveedor_ocupado_en_otro_dispositivo, gafete_de_visita_ocupado_en_otro_dispositivo,
     gafete_ocupado_en_otro_dispositivo, gafete_provisional_ocupado_en_otro_dispositivo,
     proveedor_activo_en_otro_sitio, proveedores_con_conflicto_activo, recibir_catalogo_del_sitio,

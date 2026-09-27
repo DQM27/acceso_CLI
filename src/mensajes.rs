@@ -291,6 +291,11 @@ pub fn mensaje_bloqueo_ingreso(
         BloqueoIngreso::IngresoActivoEnOtroDispositivo => {
             "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio.".into()
         }
+        BloqueoIngreso::SinVerificarEnLaNube => {
+            "No se pudo verificar en la nube si el contratista ya tiene un ingreso activo. \
+             Revise la conexión e intente de nuevo."
+                .into()
+        }
         BloqueoIngreso::ActivoEnOtroSitio { sitio } => {
             format!("El contratista ya tiene un ingreso activo en {sitio}.")
         }
@@ -453,6 +458,19 @@ pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String 
         IngresoProveedorServiceError::Database(error) => {
             log::error!("ingreso de proveedor: {error}");
             "No se pudo registrar el movimiento".into()
+        }
+    }
+}
+
+#[cfg(feature = "nube")]
+pub fn mensaje_ingreso_verificado(error: crate::application::IngresoVerificadoError) -> String {
+    use crate::application::IngresoVerificadoError;
+
+    match error {
+        IngresoVerificadoError::Servicio(error) => mensaje_ingreso(error),
+        IngresoVerificadoError::Bloqueado(bloqueo) => mensaje_bloqueo_ingreso(&bloqueo),
+        IngresoVerificadoError::GafeteOcupadoEnSitio { numero } => {
+            format!("El gafete {numero} ya está en uso en otro dispositivo del sitio")
         }
     }
 }

@@ -92,6 +92,10 @@ pub enum BloqueoIngreso {
     AccesoDenegado {
         motivo: crate::domain::resultado_acceso::MotivoDenegacion,
     },
+    /// Con la nube configurada no se pudo confirmar que la persona no tenga
+    /// un ingreso activo en otro lugar: no se registra (decisión del
+    /// dueño, igual que el gafete). Lo arma `con_nube`, nunca `bloqueo()`.
+    SinVerificarEnLaNube,
 }
 
 impl PreparacionIngreso {

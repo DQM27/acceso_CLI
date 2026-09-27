@@ -2360,39 +2360,51 @@ struct FilaIngresoActivoOtroSitio {
     sitios: Option<SitioEmbebido>,
 }
 
-/// `docs/pendientes.md`, "Chequeo cruzado de ingresos abiertos entre
-/// sitios": a diferencia de `gafete_ocupado_en_otro_dispositivo` (mismo
-/// sitio, otro dispositivo), esto excluye el sitio ACTUAL en vez del
-/// dispositivo actual -- lo que se busca es si esta cédula tiene un ingreso
-/// abierto en cualquier OTRA unidad operativa. Devuelve el nombre del sitio
-/// donde está activo (para el mensaje al operador), o `None` si no hay
-/// conflicto. Pensada para llamarse desde `preparar_ingreso`, con el mismo
-/// criterio de "mejor esfuerzo, nunca bloqueante si no hay red" que ya usa
-/// `usuario_sigue_activo_remoto` en el login -- sin conexión, el registro
-/// sigue local (`docs/pendientes.md`: "offline, registrar y alertar luego
-/// al sincronizar").
-pub fn contratista_activo_en_otro_sitio(
-    contexto: &ContextoSincronizacion<'_>,
-    cedula: &str,
-) -> Result<Option<String>, SincronizacionError> {
-    let cliente = cliente_http();
-    let url = format!(
-        "{}/rest/v1/ingresos?contratista_cedula=eq.{cedula}&sitio_id=neq.{}&hora_salida=is.null\
-         &select=sitios(nombre)&limit=1",
-        contexto.base_url, contexto.sitio_id,
-    );
-    let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
-    Ok(filas
-        .into_iter()
-        .next()
-        .and_then(|fila| fila.sitios)
-        .map(|sitio| sitio.nombre))
+/// Dónde tiene un contratista un ingreso abierto ahora mismo, según la
+/// nube (ver [`contratista_con_ingreso_activo`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IngresoActivoEnLaNube {
+    /// `true` si es en este mismo sitio (lo abrió el otro dispositivo).
+    pub mismo_sitio: bool,
+    pub sitio_nombre: String,
 }
 
-/// Mismo criterio y misma forma que `contratista_activo_en_otro_sitio`,
-/// pero contra `movimientos_visita` -- la regla es idéntica (un mismo
-/// visitante no puede estar activo en dos sitios a la vez, mismo criterio
-/// que un contratista), sólo cambia la tabla remota. Pensada para llamarse
+#[derive(serde::Deserialize)]
+struct FilaIngresoActivoCualquierSitio {
+    sitio_id: String,
+    sitios: Option<SitioEmbebido>,
+}
+
+/// Regla "un contratista no puede tener dos ingresos activos, ni en este
+/// sitio ni en otro": busca en la nube un ingreso abierto con esta cédula
+/// en CUALQUIER sitio. Quien llama propaga el error: si no se puede
+/// verificar, no se registra (decisión del dueño, igual que el gafete).
+/// Lo abierto por ESTE equipo ya lo frena antes el chequeo local.
+pub fn contratista_con_ingreso_activo(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+) -> Result<Option<IngresoActivoEnLaNube>, SincronizacionError> {
+    let cliente = cliente_http();
+    let url = format!(
+        "{}/rest/v1/ingresos?contratista_cedula=eq.{cedula}&hora_salida=is.null\
+         &select=sitio_id,sitios(nombre)&limit=1",
+        contexto.base_url,
+    );
+    let filas: Vec<FilaIngresoActivoCualquierSitio> = obtener_json(&cliente, contexto, &url)?;
+    Ok(filas.into_iter().next().map(|fila| {
+        let mismo_sitio = fila.sitio_id == contexto.sitio_id;
+        IngresoActivoEnLaNube {
+            mismo_sitio,
+            sitio_nombre: fila
+                .sitios
+                .map_or_else(|| "otro sitio".to_string(), |sitio| sitio.nombre),
+        }
+    }))
+}
+
+/// Un mismo visitante no puede estar activo en dos sitios a la vez: busca
+/// en `movimientos_visita` un movimiento abierto con esta cédula en OTRO
+/// sitio y devuelve su nombre. Pensada para llamarse
 /// desde `verificar_check_in_visita` (desktop), mejor esfuerzo, nunca
 /// bloqueante si no hay red.
 pub fn visitante_activo_en_otro_sitio(
@@ -2431,9 +2443,9 @@ struct FilaConflictoActivo {
 }
 
 /// `docs/pendientes.md`, mitad "offline, registrar y alertar luego al
-/// sincronizar" de la misma regla que `contratista_activo_en_otro_sitio`:
-/// esa función chequea UNA cédula puntual al momento de registrar (mejor
-/// esfuerzo, no bloquea sin red); ésta, en cambio, corre después de un sync
+/// sincronizar" de la regla de ingresos activos:
+/// `contratista_con_ingreso_activo` chequea UNA cédula puntual al momento
+/// de registrar; ésta, en cambio, corre después de un sync
 /// exitoso (ya hay red, por definición) y revisa TODOS los ingresos que
 /// quedaron activos localmente, para encontrar los que igual se colaron --
 /// por ejemplo, registrados mientras este dispositivo estaba offline.
@@ -2559,7 +2571,7 @@ pub fn visitantes_con_conflicto_activo(
         .collect())
 }
 
-/// Espejo de [`contratista_activo_en_otro_sitio`]/[`visitante_activo_en_otro_sitio`],
+/// Espejo de [`visitante_activo_en_otro_sitio`],
 /// pero contra `ingresos_proveedor` -- misma cédula, no puede estar activa
 /// físicamente en dos sitios a la vez.
 pub fn proveedor_activo_en_otro_sitio(
@@ -6701,7 +6713,7 @@ mod tests {
     }
 
     #[test]
-    fn contratista_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
+    fn contratista_con_ingreso_activo_busca_en_todos_los_sitios() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let servidor = thread::spawn(move || {
@@ -6718,9 +6730,9 @@ mod tests {
             }
             let pedido = String::from_utf8(pedido).unwrap();
             assert!(pedido.contains("contratista_cedula=eq.2001"));
-            assert!(pedido.contains("sitio_id=neq.sitio-1"));
+            assert!(!pedido.contains("sitio_id=neq"));
             assert!(pedido.contains("hora_salida=is.null"));
-            let cuerpo = "[{\"sitios\":{\"nombre\":\"Cartago\"}}]";
+            let cuerpo = "[{\"sitio_id\":\"otro\",\"sitios\":{\"nombre\":\"Cartago\"}}]";
             write!(
                 socket,
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
@@ -6729,21 +6741,27 @@ mod tests {
             .unwrap();
         });
 
-        let sitio = contratista_activo_en_otro_sitio(&contexto(&base_url), "2001").unwrap();
+        let activo = contratista_con_ingreso_activo(&contexto(&base_url), "2001").unwrap();
 
-        assert_eq!(sitio, Some("Cartago".to_string()));
+        assert_eq!(
+            activo,
+            Some(IngresoActivoEnLaNube {
+                mismo_sitio: false,
+                sitio_nombre: "Cartago".to_string(),
+            })
+        );
         servidor.join().unwrap();
     }
 
     #[test]
-    fn contratista_activo_en_otro_sitio_sin_conflicto_devuelve_none() {
+    fn contratista_con_ingreso_activo_sin_ingresos_abiertos_devuelve_none() {
         let base_url = servidor_de_una_respuesta(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
         );
 
-        let sitio = contratista_activo_en_otro_sitio(&contexto(&base_url), "2001").unwrap();
+        let activo = contratista_con_ingreso_activo(&contexto(&base_url), "2001").unwrap();
 
-        assert_eq!(sitio, None);
+        assert_eq!(activo, None);
     }
 
     fn conexion_con_dos_ingresos_activos() -> Connection {
