@@ -1,3 +1,5 @@
+use control_acceso::application::NuevoIngresoProveedor;
+
 /// Espejo de los argumentos de `AppCore::registrar_ingreso_proveedor` --
 /// mismo criterio que `SolicitudSalidaRutaEntrada`: recorta espacios y
 /// convierte placa en blanco a `None` (la placa es opcional, sin catálogo
@@ -11,17 +13,9 @@ pub struct SolicitudIngresoProveedorEntrada {
     pub gafete_numero: i64,
 }
 
-pub struct DatosIngresoProveedor {
-    pub cedula: String,
-    pub nombre: String,
-    pub empresa_id: i64,
-    pub placa: Option<String>,
-    pub gafete_numero: i64,
-}
-
 impl SolicitudIngresoProveedorEntrada {
-    pub fn construir(self) -> DatosIngresoProveedor {
-        DatosIngresoProveedor {
+    pub fn construir(self) -> NuevoIngresoProveedor {
+        NuevoIngresoProveedor {
             cedula: self.cedula.trim().to_owned(),
             nombre: self.nombre.trim().to_owned(),
             empresa_id: self.empresa_id,

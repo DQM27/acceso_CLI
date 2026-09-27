@@ -16,6 +16,8 @@ use crate::tiempo::{Reloj, RelojSistema};
 mod accesos;
 mod autenticacion;
 mod citas;
+#[cfg(feature = "nube")]
+mod con_nube;
 // Reusa `lenguaje_comandos` (parser+resolver), que no depende de terminal —
 // sin feature gate, a diferencia de `cli/` (el loop real).
 mod catalogos;
@@ -29,6 +31,11 @@ mod rutas;
 mod usuarios;
 
 pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion};
+#[cfg(feature = "nube")]
+pub use con_nube::{
+    IngresoProveedorVerificadoError, NubeDelDispositivo, NuevoIngresoProveedor,
+    registrar_ingreso_proveedor_verificado,
+};
 pub use historial::{
     ExportarHistorialError, buscar_historial_completo_con_conexion,
     exportar_historial_seleccion_con_conexion, exportar_tabla_xlsx,

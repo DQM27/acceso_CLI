@@ -18,18 +18,21 @@ El formulario de escritorio pregunta qué mostrar a
 `reglas_formulario_contratista` (Tauri) y ya no tiene `requierePraind()`
 ni los esquemas de cédula/nombre en TS.
 
-## 2. Ingreso de proveedor
+## 2. Ingreso de proveedor — RESUELTO en `claude/dominio-escritorio`
 
-| Regla | Dónde vive ahora | Escritorio hoy |
-|---|---|---|
-| Cédula con ingreso abierto en el sitio (este equipo **o el otro dispositivo**) | `AppCore::proveedor_con_ingreso_activo_en_sitio` | Sólo lo local (`IngresoProveedorService` → `IngresoActivo`); no mira la caché `ingresos_proveedor_remotos` |
-| Activo en otro sitio + gafete en uso en el otro dispositivo, antes de escribir | Móvil: `Nucleo::registrar_ingreso_proveedor_con_secreto` (una llamada) | **Orquestado en el comando Tauri**: `desktop/src-tauri/src/comandos/proveedores.rs` (`proveedor_activo_en_otro_sitio`, `gafete_proveedor_libre_en_otro_dispositivo`) |
+`application::registrar_ingreso_proveedor_verificado` (`src/application/con_nube.rs`)
+decide el orden y qué falla frena: cédula abierta en el sitio (este equipo
+o el otro dispositivo), activa en otro sitio (mejor esfuerzo), gafete en
+uso en el otro dispositivo (si no se puede verificar, frena) y recién ahí
+escribe. Toma el candado del núcleo sólo para lo local, nunca durante la
+red. La usan el comando Tauri `registrar_ingreso_proveedor` y
+`Nucleo::registrar_ingreso_proveedor_con_secreto`; el texto sale de
+`mensajes::mensaje_ingreso_proveedor_verificado`.
 
-Qué hacer: llevar la orquestación de `comandos/proveedores.rs` a una
-función del núcleo (`src/application/proveedores.rs`) que usen ambos, con
-`proveedor_con_ingreso_activo_en_sitio` como primer chequeo. Ojo: el
-escritorio frena si la consulta del gafete falla (a propósito); el móvil
-hace lo mismo al usar `gafete_de_proveedor_ocupado_en_sitio_con_secreto`.
+Pendiente de limpieza (requiere regenerar bindings y probar Android):
+`Nucleo::proveedor_activo_en_otro_sitio_con_secreto` y
+`Nucleo::gafete_de_proveedor_ocupado_en_sitio_con_secreto` ya no los usa
+nadie.
 
 ## 3. Entrega de gafete provisional KOF
 

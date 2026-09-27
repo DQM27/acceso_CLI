@@ -440,6 +440,24 @@ pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String 
     }
 }
 
+#[cfg(feature = "nube")]
+pub fn mensaje_ingreso_proveedor_verificado(
+    error: crate::application::IngresoProveedorVerificadoError,
+) -> String {
+    use crate::application::IngresoProveedorVerificadoError;
+
+    match error {
+        IngresoProveedorVerificadoError::Servicio(error) => mensaje_ingreso_proveedor(error),
+        IngresoProveedorVerificadoError::ActivoEnOtroSitio { sitio } => {
+            format!("Esta cédula ya tiene un ingreso de proveedor activo en {sitio}")
+        }
+        IngresoProveedorVerificadoError::GafeteOcupadoEnSitio { numero } => {
+            format!("El gafete {numero} ya está en uso en otro dispositivo del sitio")
+        }
+        IngresoProveedorVerificadoError::Nube(error) => mensaje_gestion_nube(error),
+    }
+}
+
 /// `RespuestaInesperada` trae el cuerpo crudo de la respuesta del receptor
 /// (puede incluir detalles internos de Postgres/PostgREST) -- nunca pasa a
 /// pantalla, mismo criterio que el resto de este módulo con los errores de

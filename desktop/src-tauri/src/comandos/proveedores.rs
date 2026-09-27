@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
+use control_acceso::application::registrar_ingreso_proveedor_verificado;
 use control_acceso::mensajes::{
-    mensaje_empresa_proveedor, mensaje_gestion_nube, mensaje_ingreso_proveedor,
-    mensaje_sincronizacion,
+    mensaje_empresa_proveedor, mensaje_ingreso_proveedor, mensaje_ingreso_proveedor_verificado,
 };
 use control_acceso::models::empresa_proveedor::EmpresaProveedor;
 use control_acceso::models::registro_ingreso_proveedor::RegistroIngresoProveedorActivoResumen;
@@ -11,79 +11,6 @@ use rusqlite::params;
 use crate::comandos::historial::rango_utc;
 use crate::dto::proveedores::SolicitudIngresoProveedorEntrada;
 use crate::estado::GuiState;
-
-/// Chequeo en vivo (no la caché `ingresos_proveedor_remotos`) contra
-/// Supabase de si `numero` ya está activo en este sitio del lado de OTRO
-/// dispositivo -- mismo criterio y misma forma que
-/// `comandos::ingresos::gafete_libre_en_otro_dispositivo` (contratista):
-/// sin secreto guardado no hay con quién chocar, `Ok(true)` ("libre")
-/// directo sin tocar la red. Con nube configurada, en cambio, exige estar
-/// en línea -- si la consulta falla, el error se propaga en vez de asumir
-/// que el gafete está libre. Nunca usa `state.core()` para la parte de red:
-/// llamar `AppCore::gafete_de_proveedor_ocupado_en_sitio` directo desde acá
-/// retendría el candado compartido durante toda la llamada HTTP, colgando
-/// cualquier otro comando que necesite el núcleo mientras tanto -- mismo
-/// motivo por el que `gafete_libre_en_otro_dispositivo` tampoco lo usa.
-fn gafete_proveedor_libre_en_otro_dispositivo(
-    state: &GuiState,
-    numero: i64,
-) -> Result<bool, String> {
-    let Some(secreto) = nube::credenciales::cargar_secreto() else {
-        return Ok(true);
-    };
-    let actor = state.sesion_activa()?;
-    state
-        .core()
-        .autorizar_uso_nube(&actor)
-        .map_err(mensaje_gestion_nube)?;
-
-    let token = state
-        .autenticar_con_cache(&secreto)
-        .map_err(control_acceso::mensajes::mensaje_nube)?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
-    let contexto = nube::ContextoSincronizacion {
-        base_url: nube::base_url(),
-        apikey: nube::apikey(),
-        token: &token.access_token,
-        dispositivo_id: &token.dispositivo_id,
-        sitio_id: &token.sitio_id,
-    };
-    let ocupado = nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(&contexto, numero)
-        .map_err(mensaje_sincronizacion)?;
-    Ok(!ocupado)
-}
-
-/// Chequeo cruzado entre sitios -- misma cédula no puede estar activa
-/// físicamente en dos sitios a la vez. Mismo criterio y misma forma que
-/// `comandos::ingresos::chequear_activo_en_otro_sitio` (contratista):
-/// best-effort de verdad -- sin secreto guardado, o si la consulta falla
-/// por cualquier motivo (sin red, timeout, receptor caído), `None` y no
-/// bloquea nada; el registro sigue local y el conflicto, si existe, se
-/// detecta después al sincronizar (`nube::proveedores_con_conflicto_activo`).
-/// A diferencia del chequeo de gafete de arriba, acá un fallo de red NUNCA
-/// se propaga como error -- es la diferencia deliberada entre "un recurso
-/// físico compartido no puede duplicarse" (gafete, si falla la consulta
-/// mejor frenar) y "esta alerta es una ayuda, no motivo para trabar a
-/// alguien parado en la puerta sin señal".
-fn proveedor_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Option<String> {
-    let secreto = nube::credenciales::cargar_secreto()?;
-    let token = state.autenticar_con_cache(&secreto).ok()?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
-    let contexto = nube::ContextoSincronizacion {
-        base_url: nube::base_url(),
-        apikey: nube::apikey(),
-        token: &token.access_token,
-        dispositivo_id: &token.dispositivo_id,
-        sitio_id: &token.sitio_id,
-    };
-    nube::proveedor_activo_en_otro_sitio(&contexto, cedula)
-        .ok()
-        .flatten()
-}
 
 // ---- Catálogo: empresas proveedoras ----
 
@@ -160,29 +87,14 @@ pub fn registrar_ingreso_proveedor(
     state: tauri::State<GuiState>,
 ) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
-    let datos = solicitud.construir();
-    if let Some(sitio) = proveedor_activo_en_otro_sitio(&state, &datos.cedula) {
-        return Err(format!(
-            "Esta cédula ya tiene un ingreso de proveedor activo en {sitio}"
-        ));
-    }
-    if !gafete_proveedor_libre_en_otro_dispositivo(&state, datos.gafete_numero)? {
-        return Err(format!(
-            "El gafete {} ya está en uso en otro dispositivo del sitio",
-            datos.gafete_numero
-        ));
-    }
-    state
-        .core()
-        .registrar_ingreso_proveedor(
-            &sesion,
-            &datos.cedula,
-            &datos.nombre,
-            datos.empresa_id,
-            datos.placa,
-            datos.gafete_numero,
-        )
-        .map_err(mensaje_ingreso_proveedor)
+    let secreto = nube::credenciales::cargar_secreto();
+    registrar_ingreso_proveedor_verificado(
+        || state.core(),
+        state.nube_del_dispositivo(secreto.as_deref()),
+        &sesion,
+        solicitud.construir(),
+    )
+    .map_err(mensaje_ingreso_proveedor_verificado)
 }
 
 #[tauri::command]

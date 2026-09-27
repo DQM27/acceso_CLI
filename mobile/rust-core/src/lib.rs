@@ -1978,18 +1978,10 @@ impl Nucleo {
         )?)
     }
 
-    /// Ingreso de proveedor con TODAS sus reglas en una sola llamada (antes
-    /// `ProveedoresViewModel` encadenaba tres llamadas y decidía él):
-    /// 1. la cédula no tiene otro ingreso abierto en este sitio, ni en este
-    ///    equipo ni en el otro dispositivo
-    ///    (`AppCore::proveedor_con_ingreso_activo_en_sitio`);
-    /// 2. ni en otro sitio (nube, mejor esfuerzo: sin red deja pasar);
-    /// 3. el gafete no está en uso en el otro dispositivo del sitio (nube;
-    ///    si la consulta falla, se frena);
-    /// 4. recién ahí escribe (`registrar_ingreso_proveedor`).
-    ///
-    /// `secreto` vacío se salta los chequeos de nube (2 y 3), mismo
-    /// criterio que el resto de los `*_con_secreto`.
+    /// Ingreso de proveedor con todas sus reglas en una sola llamada; el
+    /// orden y qué falla frena los decide
+    /// `application::registrar_ingreso_proveedor_verificado`, la misma que
+    /// usa escritorio. `secreto` vacío se salta los chequeos de nube.
     pub fn registrar_ingreso_proveedor_con_secreto(
         &self,
         cedula: String,
@@ -1999,20 +1991,35 @@ impl Nucleo {
         gafete_numero: i64,
         secreto: String,
     ) -> Result<i64, NucleoError> {
-        if let Some(mensaje) = self.aviso_proveedor_con_ingreso_activo(cedula.clone())? {
-            return Err(NucleoError::Rechazado { mensaje });
-        }
-        if let Some(sitio) =
-            self.proveedor_activo_en_otro_sitio_con_secreto(secreto.clone(), cedula.clone())
-        {
-            return Err(NucleoError::ProveedorActivoEnOtroSitio { sitio });
-        }
-        if self.gafete_de_proveedor_ocupado_en_sitio_con_secreto(secreto, gafete_numero)? {
-            return Err(NucleoError::GafeteOcupadoEnSitio {
-                numero: gafete_numero,
-            });
-        }
-        self.registrar_ingreso_proveedor(cedula, nombre, empresa_id, placa, gafete_numero)
+        use control_acceso::application::{
+            IngresoProveedorVerificadoError, NubeDelDispositivo, NuevoIngresoProveedor,
+            registrar_ingreso_proveedor_verificado,
+        };
+
+        let actor = self.actor_autenticado()?;
+        let nube = NubeDelDispositivo {
+            cache_token: &self.cache_token,
+            secreto: Some(secreto.as_str()),
+        };
+        let datos = NuevoIngresoProveedor {
+            cedula,
+            nombre,
+            empresa_id,
+            placa,
+            gafete_numero,
+        };
+        registrar_ingreso_proveedor_verificado(|| self.core_lock(), nube, &actor, datos).map_err(
+            |error| match error {
+                IngresoProveedorVerificadoError::Servicio(error) => error.into(),
+                IngresoProveedorVerificadoError::ActivoEnOtroSitio { sitio } => {
+                    NucleoError::ProveedorActivoEnOtroSitio { sitio }
+                }
+                IngresoProveedorVerificadoError::GafeteOcupadoEnSitio { numero } => {
+                    NucleoError::GafeteOcupadoEnSitio { numero }
+                }
+                IngresoProveedorVerificadoError::Nube(error) => error.into(),
+            },
+        )
     }
 
     /// Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
