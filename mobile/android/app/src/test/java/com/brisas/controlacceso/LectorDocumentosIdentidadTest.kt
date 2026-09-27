@@ -795,4 +795,61 @@ class LectorDocumentosIdentidadTest {
 
         assertEquals("Ana Maria Muñoz Rojas", leerDocumentoDeTexto(texto)?.nombre)
     }
+
+    // --- Reverso de la cédula azul anterior ---
+
+    private val reversoCedulaAnterior = """
+        Número de Cédula: 1 2345 6789
+        Fecha de Nacimiento: 01 01 1970
+        Lugar de Nacimiento: TURRUBARES SAN JOSE
+        Nombre del Padre: JUAN PEREZ MORA
+        Nombre de la Madre: ANA ROJAS VEGA
+        Domicilio Electoral: RINCON CENTRAL ALAJUELA
+        Vencimiento: 18 10 2028
+        Sexo:
+        001234567
+    """.trimIndent()
+
+    @Test
+    fun reversoCedulaAnteriorLeeNumeroYVencimientoSinNombresDeLosPadres() {
+        val doc = leerDocumentoDeTexto(reversoCedulaAnterior)
+
+        assertEquals(TipoDocumento.CEDULA_NACIONAL, doc?.tipo)
+        assertEquals("123456789", doc?.numeroDocumento)
+        assertEquals(FechaDocumento(18, 10, 2028), doc?.vencimiento)
+        assertNull(doc?.nombre)
+        assertNull(doc?.apellidos)
+    }
+
+    @Test
+    fun reversoCedulaAnteriorConEtiquetasYValoresEnBloquesSeparados() {
+        val texto = """
+            Número de Cédula:
+            Fecha de Nacimiento:
+            Lugar de Nacimiento:
+            Nombre del Padre:
+            Nombre de la Madre:
+            Domicilio Electoral:
+            Vencimiento: 18 10 2028
+            1 2345 6789
+            01 01 1970
+            TURRUBARES SAN JOSE
+            JUAN PEREZ MORA
+            ANA ROJAS VEGA
+            RINCON CENTRAL ALAJUELA
+            001234567
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("123456789", doc?.numeroDocumento)
+        assertNull(doc?.nombre)
+        assertNull(doc?.apellidos)
+    }
+
+    @Test
+    fun reversoCedulaAnteriorNoTomaElNumeroDeControlQueEmpiezaEnCero() {
+        val texto = reversoCedulaAnterior.replace("Número de Cédula: 1 2345 6789\n", "")
+        assertNull(leerDocumentoDeTexto(texto))
+    }
 }

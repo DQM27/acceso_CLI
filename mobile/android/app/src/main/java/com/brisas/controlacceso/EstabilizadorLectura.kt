@@ -295,7 +295,7 @@ private const val VENTANA_LECTURAS_MRZ = 6
 private const val LECTURAS_MRZ_COINCIDENTES = 2
 private const val LECTURAS_MRZ_PARA_DESEMPATAR = 4
 private const val MENSAJE_LEYENDO_REVERSO = "Leyendo el reverso — mantenga firme"
-private const val MENSAJE_FALTA_REVERSO = "Ya tengo el número — muéstreme el reverso para el nombre"
+private const val MENSAJE_FALTA_REVERSO = "Ya tengo el número — muéstreme la otra cara para el nombre"
 
 private class RegistroMrzEnVentana(val mrz: RegistroMrz, val documento: DocumentoDetectado) {
     val claveNombres: String = "${documento.apellidos}|${documento.nombre}"

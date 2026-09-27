@@ -288,6 +288,10 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
             "CÉDULA DE IDENTIDAD" in mayus || "CEDULA DE IDENTIDAD" in mayus) &&
             extraerCedulaDeTexto(texto) != null ->
             TipoDocumento.CEDULA_NACIONAL
+        // Reverso de la cédula azul anterior: no trae "Tribunal Supremo de
+        // Elecciones" escrito (sólo el logo TSE), sí sus etiquetas propias.
+        esReversoCedulaAnterior(texto) && numeroReversoCedulaAnterior(texto) != null ->
+            TipoDocumento.CEDULA_NACIONAL
         else -> TipoDocumento.DESCONOCIDO
     }
 }
@@ -427,6 +431,7 @@ private fun extraerDimex(texto: String): DocumentoDetectado? {
 /// apellidos quedan en `null` si por ángulo/reflejo no se leyeron todavía,
 /// nunca deben bloquear que se acepte la lectura por el número.
 private fun extraerCedulaNacionalFrente(texto: String): DocumentoDetectado? {
+    if (esReversoCedulaAnterior(texto)) return extraerReversoCedulaAnterior(texto)
     val numero = extraerCedulaDeTexto(texto) ?: return null
     val (nombre, apellido1, apellido2) = nombresCedulaNacional(texto)
     val apellidos = listOfNotNull(apellido1, apellido2).joinToString(" ").ifBlank { null }
@@ -476,7 +481,8 @@ private val REGEX_EMPIEZA_CON_ETIQUETA_CEDULA = Regex(
     """^\s*(?:$PATRON_ETIQUETAS_CEDULA)""",
     RegexOption.IGNORE_CASE,
 )
-private val REGEX_CEDULA_ETIQUETA_NOMBRE = Regex("""(?<![a-zA-Z])NOMBRE\s*:?""", RegexOption.IGNORE_CASE)
+// "Nombre:" de la persona, nunca "Nombre del Padre:" / "Nombre de la Madre:".
+private val REGEX_CEDULA_ETIQUETA_NOMBRE = Regex("""(?<![a-zA-Z])NOMBRE(?!\s+DE)\s*:?""", RegexOption.IGNORE_CASE)
 private val REGEX_CEDULA_ETIQUETA_APELLIDO1 = Regex("""1\D{0,4}APELLIDO\s*:?""", RegexOption.IGNORE_CASE)
 private val REGEX_CEDULA_ETIQUETA_APELLIDO2 = Regex("""2\D{0,4}APELLIDO\s*:?""", RegexOption.IGNORE_CASE)
 // Valor impreso: sólo mayúsculas (sensible a mayúsculas a propósito, para
@@ -513,6 +519,51 @@ private fun bloqueDeValoresCedula(texto: String): Triple<String, String, String>
         if (tres.all(esValor)) return Triple(tres[0], tres[1], tres[2])
     }
     return null
+}
+
+// Esquema del REVERSO de la cédula azul anterior (valores ficticios). Las
+// etiquetas van alineadas a la derecha en su propia columna, igual que en
+// el frente:
+//
+//        Número de Cédula: 1 2345 6789
+//     Fecha de Nacimiento: 01 01 1970
+//     Lugar de Nacimiento: SAN JOSE
+//         Nombre del Padre: JUAN PEREZ MORA        <- NO es la persona
+//       Nombre de la Madre: ANA ROJAS VEGA         <- NO es la persona
+//      Domicilio Electoral: ...
+//            Vencimiento: 01 01 2030      Sexo:
+//   [PDF417]   001234567                            <- control, no es la cédula
+//
+// Sólo se leen número y "Vencimiento" (que el frente azul NO trae). El
+// nombre de la persona no está en esta cara: los de padre y madre jamás se
+// usan como nombre (antes el bloque de valores podía tomarlos). El número
+// suelto bajo el código de barras empieza en 0 y una cédula nunca
+// (el primer dígito es la provincia, 1-9).
+private val MARCAS_REVERSO_CEDULA_ANTERIOR = listOf(
+    "NOMBRE DEL PADRE", "NOMBRE DE LA MADRE", "DOMICILIO ELECTORAL", "LUGAR DE NACIMIENTO",
+)
+private val REGEX_NUMERO_REVERSO_CEDULA = Regex(
+    """N[ÚU]MERO\s*DE\s*C[ÉE]DULA\s*:?\s*(\d[- ]?\d{4}[- ]?\d{4})""",
+    RegexOption.IGNORE_CASE,
+)
+
+private fun esReversoCedulaAnterior(texto: String): Boolean {
+    val mayus = texto.uppercase()
+    return MARCAS_REVERSO_CEDULA_ANTERIOR.count { it in mayus } >= 2 ||
+        (REGEX_NUMERO_REVERSO_CEDULA.containsMatchIn(texto) && MARCAS_REVERSO_CEDULA_ANTERIOR.any { it in mayus })
+}
+
+private fun numeroReversoCedulaAnterior(texto: String): String? =
+    REGEX_NUMERO_REVERSO_CEDULA.find(texto)?.groupValues?.get(1)?.filter(Char::isDigit)
+        ?: extraerCedulaDeTexto(texto)?.takeUnless { it.startsWith('0') }
+
+private fun extraerReversoCedulaAnterior(texto: String): DocumentoDetectado? {
+    val numero = numeroReversoCedulaAnterior(texto) ?: return null
+    return DocumentoDetectado(
+        tipo = TipoDocumento.CEDULA_NACIONAL,
+        numeroDocumento = numero,
+        vencimiento = extraerFecha(texto, etiqueta = "Vencimiento"),
+    )
 }
 
 private fun nombresCedulaNacional(texto: String): Triple<String?, String?, String?> {

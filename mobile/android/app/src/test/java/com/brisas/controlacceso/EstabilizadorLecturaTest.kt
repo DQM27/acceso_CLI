@@ -369,7 +369,7 @@ class EstabilizadorLecturaTest {
         val r = estabilizador.procesarFrame(frenteSinNombre)
         assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
         assertNull(r.documento)
-        assertEquals("Ya tengo el número — muéstreme el reverso para el nombre", r.mensaje)
+        assertEquals("Ya tengo el número — muéstreme la otra cara para el nombre", r.mensaje)
     }
 
     @Test
