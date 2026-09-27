@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAnfitrion(null);
           setVerificado(false);
           setError(
-            "Tu cuenta no está autorizada para agendar visitas. Contactá a administración para solicitar acceso.",
+            "Su cuenta no está autorizada para agendar visitas. Contacte a administración para solicitar acceso.",
           );
           await supabase.auth.signOut({ scope: "local" });
           return;
@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!actual()) return;
         setVerificado(false);
         setError(
-          "No pudimos verificar tu acceso. Revisá tu conexión y volvé a intentarlo.",
+          "No pudimos verificar su acceso. Revise su conexión y vuelva a intentarlo.",
         );
       } finally {
         if (actual()) setCargando(false);
@@ -127,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         programar(data.session);
       } catch {
         if (!activo || turno !== revision.current) return;
-        setError("No pudimos recuperar tu sesión. Volvé a iniciar sesión.");
+        setError("No pudimos recuperar su sesión. Vuelva a iniciar sesión.");
         setVerificado(false);
         setCargando(false);
       }
@@ -147,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ++revision.current;
       setVerificado(false);
       setError(
-        "Estás sin conexión. Tus cambios siguen en esta pestaña; reconectá para continuar.",
+        "Está sin conexión. Sus cambios siguen en esta pestaña; reconecte para continuar.",
       );
     };
     const intervalo = setInterval(alVolver, 60_000);

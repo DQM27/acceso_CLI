@@ -124,11 +124,7 @@ export default function MisVisitas() {
             <CalendarX2 aria-hidden="true" size={28} />
           </span>
           <h2 className="text-lg font-semibold">Todavía no tiene visitas agendadas</h2>
-          <p>Agende una visita para que la persona pueda ingresar el día que la espera.</p>
-          <button type="button" className="boton boton-primario" onClick={() => navegar("/agendar")}>
-            <CalendarPlus aria-hidden="true" size={18} />
-            Agendar visita
-          </button>
+          <p>Use el botón &ldquo;Agendar visita&rdquo; de arriba para que la persona pueda ingresar el día que la espera.</p>
         </div>
       ) : (
         <>
