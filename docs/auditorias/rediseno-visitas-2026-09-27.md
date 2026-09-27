@@ -10,8 +10,20 @@ esquema en Supabase (`anfitriones`, `citas`, `cita_sitios`,
 Pedido del dueño: **el diseño actual es un MVP, no se toma como base.**
 Se propone un rediseño desde cero, apoyado en cómo funcionan los sistemas
 de gestión de visitantes en plantas industriales. Documento pensado para
-que un agente lo implemente por fases, con decisiones marcadas
-**[DECIDIR]** que el dueño debe confirmar antes de empezar.
+que un agente lo implemente por fases. Las decisiones del dueño están
+cerradas (ver "Decisiones tomadas", 2026-09-27).
+
+## Decisiones tomadas (2026-09-27)
+
+| Tema | Decisión |
+|---|---|
+| Alcance de una visita | **Una visita = un sitio.** El anfitrión puede elegir varios sitios en un solo paso; se crea una visita por sitio unida por `grupo_id`. |
+| Duración | **Rango de fechas** (`fecha_desde`–`fecha_hasta`), que puede ser un solo día, con **ventana horaria diaria** (`hora_desde`–`hora_hasta`) que aplica a cada día del rango. |
+| Tolerancia | **±60 min** sobre la ventana, configurable por sitio. |
+| Gafete | **Obligatorio** en toda entrada de visita. |
+| Retención | Los movimientos se guardan **para siempre**. Sin purga automática. |
+| Web de anfitriones | **Rediseño total** de UX/UI (no sólo colores): ver 3.8. |
+
 
 ## Reglas para el agente
 
@@ -106,9 +118,9 @@ Resumen de prácticas habituales en plantas (fuentes al final):
    excede la ventana.
 8. **Emergencia**: lista en tiempo real de quién está adentro para
    evacuación y pase de lista.
-9. **Retención de datos** y registro de consentimiento (en Costa Rica,
-   Ley 8968: consentimiento informado y expreso, derecho de acceso,
-   rectificación y supresión).
+9. **Registro de consentimiento** (en Costa Rica, Ley 8968:
+   consentimiento informado y expreso, derecho de acceso y
+   rectificación) y política de retención.
 
 ---
 
@@ -133,7 +145,8 @@ anfitrion_sitios          (dónde puede recibir visitas)
 
 visitas                   (la autorización; UNA por sitio)
   id uuid, sitio_id, anfitrion_id, tipo_visita, motivo,
-  fecha, hora_desde, hora_hasta,         -- ventana real
+  fecha_desde, fecha_hasta,              -- rango (puede ser un día)
+  hora_desde, hora_hasta,                -- ventana diaria real
   requiere_escolta bool, grupo_id?,      -- agrupa un "tour" multi-sitio
   origen (PRE_REGISTRO|WALK_IN), estado, creado_por, creado_en, actualizado_en
 
@@ -159,17 +172,17 @@ Claves del diseño:
 - **Visitante como entidad**: historial por persona, reconocimiento al
   volver (el anfitrión elige de "mis visitantes frecuentes"), restricción,
   derechos de datos.
-- **Una visita = un sitio** **[DECIDIR]**. Un "tour" por varias unidades
+- **Una visita = un sitio** (decidido). Un "tour" por varias unidades
   se crea en un solo paso pero genera una visita por sitio unida por
   `grupo_id`. Ventajas: cada sitio tiene su propia ventana y estado, el
   puesto de control sólo ve lo suyo, RLS por igualdad simple (desaparece
   el patrón `EXISTS` sobre `cita_sitios`). Cambia la decisión anterior
   de citas multi-sitio; la experiencia del anfitrión no cambia.
 - **Ventana horaria real** con tolerancia configurable por sitio (p. ej.
-  60 min antes / 60 min después) **[DECIDIR valores]**.
-- **Visitas de varios días** **[DECIDIR]**: una visita por día (generada en
-  lote por el formulario) en vez de un rango, para que la ventana y los
-  estados sean por día. Alternativa: rango + ventana diaria.
+  60 min antes / 60 min después; decidido ±60 min por defecto).
+- **Rango de fechas + ventana diaria** (decidido): una visita del 10 al
+  12 de 8:00 a 17:00 permite entrar esos tres días dentro de esa franja
+  (±tolerancia). Un solo día = `fecha_desde = fecha_hasta`.
 
 ### 3.2 Estados
 
@@ -178,11 +191,11 @@ Por invitado (lo que ve el puesto de control):
 ```
                 ┌──────────── CANCELADA (anfitrión/admin)
 PROGRAMADO ─────┤
-   │            └──────────── NO_SE_PRESENTO (al cerrar la ventana, automático)
+   │            └──────────── NO_SE_PRESENTO (terminó el rango sin ninguna entrada)
    │ llega
    ▼
-EN_SITIO ◄────► FUERA (salió y puede volver dentro de la ventana)
-   │ sale y termina la ventana (o salida definitiva)
+EN_SITIO ◄────► FUERA (salió; puede volver otro momento del rango)
+   │ termina el rango (o el guardia marca salida definitiva)
    ▼
 FINALIZADO
 
@@ -227,7 +240,7 @@ movimiento (como contratistas).
 2. Ficha: foto opcional, datos, anfitrión, ventana, requisitos.
 3. Requisitos pendientes: consentimiento de datos + reglamento
    (texto corto, "El visitante acepta" registrado con versión).
-4. Gafete rojo (obligatorio u opcional por sitio **[DECIDIR]**), escolta si
+4. Gafete rojo **obligatorio** (decidido), escolta si
    aplica → registrar entrada → aviso automático al anfitrión.
 5. Salida: escanear gafete o cédula → confirmar devolución de gafete.
 6. Pantalla **"Adentro ahora"**: visitas con tiempo en sitio y alerta de
@@ -243,8 +256,7 @@ panel.
 - Lista de restricción.
 - Requisitos por sitio (textos y versiones).
 - Historial y reportes de visitas; revisión de walk-ins sin conexión.
-- Datos personales: consultar, corregir o suprimir un visitante;
-  retención automática.
+- Datos del visitante: consultar y corregir.
 
 **Emergencia (todas las apps):** "Adentro ahora" consolidado por sitio
 (contratistas + proveedores + visitas + rutas), disponible **sin
@@ -256,16 +268,23 @@ conexión** en el puesto de control e imprimible.
   web de anfitriones. WhatsApp/SMS más adelante.
 - Permanencia excedida: al puesto de control y al anfitrión.
 
-### 3.6 Datos personales (Ley 8968)
+### 3.6 Datos personales
 
-- Consentimiento informado y expreso registrado en `aceptaciones`
-  (versión del texto + fecha).
-- Retención **[DECIDIR plazos]**: p. ej. movimientos 24 meses; datos del
-  visitante se suprimen si no tiene visitas en 24 meses y no está
-  restringido.
-- Acceso / rectificación / supresión desde el panel.
-- El dispositivo sólo guarda los visitantes con visita en su sitio en los
-  próximos/últimos N días más la lista de restricción (mínimo necesario).
+Se guardan sólo documento, nombre, empresa (y placa si aplica): datos
+personales comunes, **no** datos sensibles en el sentido de la Ley 8968.
+Decisión del dueño: los movimientos se conservan **para siempre**, sin
+purga.
+
+Aun así la Ley 8968 pide informar y obtener consentimiento al recoger
+datos personales, así que se mantiene un requisito mínimo:
+
+- Aviso corto de uso de datos que el guardia muestra/lee la **primera
+  vez** que se registra a una persona; queda registrado en `aceptaciones`
+  (versión del texto + fecha). No se repite en visitas siguientes salvo
+  que cambie la versión.
+- El panel permite consultar y corregir datos de un visitante.
+- El dispositivo sólo guarda los visitantes con visita en su sitio en
+  el rango vigente/próximo más la lista de restricción (mínimo necesario).
 
 ### 3.7 Arquitectura
 
@@ -283,18 +302,86 @@ conexión** en el puesto de control e imprimible.
   `adentro_ahora` con `security_invoker`.
 - **Móvil**: nueva pestaña Visitas reutilizando el OCR de cédula.
 - **Escritorio**: pantallas rehechas (ficha, adentro ahora, walk-in).
-- **Web de anfitriones**: rehecha. **[DECIDIR]** sistema de diseño:
-  recomendación, volver a los tokens compartidos (`design/brisas.json`)
-  con acento rojo propio de esta app, para no mantener dos sistemas;
-  alternativa, conservar Bootstrap como decidió el plan anterior.
-  Tono: *usted* en todos los textos.
+- **Web de anfitriones**: rehecha desde cero (ver 3.8). Usa los tokens
+  compartidos (`design/brisas.json`) con acento rojo propio y deja
+  Bootstrap + Sass. Tono: *usted* en todos los textos.
 
-### 3.8 Migración desde el MVP
+### 3.8 Web de anfitriones: rediseño de UX/UI
+
+Usuario: persona de oficina, no técnica, que agenda pocas veces al mes,
+a menudo desde el celular. Tiene que poder agendar **sin instrucciones**
+y en **menos de un minuto**.
+
+**Qué se elimina del actual:**
+- Wizard de varios pasos con barra de progreso, selector de fechas con
+  calendario propio y reglas de CSP alrededor, filtros de estado con
+  cuatro opciones técnicas (`TODAS`/`VIGENTE`/`CANCELADA`/`VENCIDA`),
+  paginación de 12 en 12.
+- Textos técnicos y voseo.
+
+**Estructura (tres pantallas y nada más):**
+
+1. **Inicio = "Mis visitas"**
+   - Arriba, un solo botón primario grande: **Agendar visita**.
+   - Dos bloques: **Hoy** (tarjetas con estado en vivo por persona:
+     "Esperando", "Llegó 9:12 · gafete 7", "Salió 11:40") y
+     **Próximas**. Las anteriores, en un enlace "Ver historial".
+   - Si hay **solicitudes de ingreso sin cita** pendientes, aparecen
+     primero, en un aviso destacado con botones **Aprobar** / **Rechazar**.
+   - Estado vacío: "Todavía no tiene visitas agendadas" + botón.
+
+2. **Agendar visita** (una sola página, sin wizard, con secciones que se
+   completan de arriba hacia abajo):
+   - **¿Quién viene?** Buscador "Nombre o documento" que sugiere
+     **visitantes anteriores** del anfitrión (un toque los agrega) o
+     "Agregar persona nueva" (documento, nombre, empresa; placa sólo si
+     marca "viene en vehículo"). Lista de personas como chips
+     removibles. Pegar varias filas desde Excel crea varias personas.
+   - **¿Cuándo?** Campo de fecha nativo "Desde" y "Hasta" (por defecto el
+     mismo día) + atajos **Hoy** / **Mañana**; horario "De" / "A" con
+     valores por defecto del sitio (p. ej. 8:00–17:00).
+   - **¿Dónde?** Si el anfitrión tiene un solo sitio, no se pregunta. Si
+     tiene varios, casillas grandes con el nombre de cada sitio.
+   - **Motivo** (opcional, una línea).
+   - Resumen en lenguaje natural sobre el botón: "3 personas · Brisas ·
+     jueves 10 de octubre, 8:00 a 17:00" → **Agendar**.
+   - Validación en línea, en español claro, sin bloquear hasta que
+     intente enviar.
+   - Al confirmar: pantalla de éxito con **"Agendar otra"** y **"Volver a
+     mis visitas"**.
+
+3. **Detalle de visita** (al tocar una tarjeta):
+   - Personas con su estado y horas de entrada/salida.
+   - Acciones: **Editar** (fechas, horario, personas; sólo mientras nadie
+     haya entrado), **Cancelar visita** (confirmación con consecuencia
+     clara), **Duplicar** (reagendar lo mismo otro día).
+
+**Avisos:** correo al anfitrión cuando llega su visita y cuando hay una
+solicitud sin cita (con botones Aprobar/Rechazar que funcionan desde el
+correo con un enlace firmado de un solo uso). En la web, actualización en
+vivo sin recargar.
+
+**Principios visuales:**
+- Mobile-first; en escritorio, columna central de ~720 px.
+- Tipografía y espaciado de `design/brisas.json`; acento rojo sólo en la
+  acción principal y en alertas, no decorativo.
+- Estados siempre con texto + ícono, nunca sólo color.
+- Controles nativos accesibles (fecha, hora, casillas) en vez de
+  componentes propios; foco visible; objetivos táctiles ≥ 44 px.
+- Nada de tablas: tarjetas.
+
+**Criterios de aceptación:** prueba con 3 personas que no conocen el
+sistema: agendan una visita de 2 personas para mañana en < 60 s sin
+ayuda; entienden el estado de su visita de hoy sin explicación.
+
+### 3.9 Migración desde el MVP
 
 1. `cita_visitantes` → `visitantes` (deduplicar por documento
    normalizado) + `visita_invitados`.
-2. `citas` × `cita_sitios` → una `visitas` por sitio (y por día si se
-   decide así), `grupo_id` = id de la cita original.
+2. `citas` × `cita_sitios` → una `visitas` por sitio con el mismo rango;
+   `hora_desde`/`hora_hasta` = ventana por defecto del sitio (o
+   `hora_estimada` ±tolerancia si existía); `grupo_id` = id de la cita
+   original.
 3. `movimientos_visita` → nuevo `movimientos_visita` apuntando al
    invitado.
 4. `anfitriones` → nueva tabla con `id` y `anfitrion_sitios` = todos los
@@ -308,11 +395,10 @@ conexión** en el puesto de control e imprimible.
 
 | Fase | Contenido | Terminado cuando |
 |---|---|---|
-| **V0 Decisiones** | El dueño responde los **[DECIDIR]**. | Documento actualizado con las respuestas. |
 | **V1 Núcleo** | Dominio `visitas` (estados, `verificar_llegada`), servicio, repos, esquema local, tests. | 100 % de reglas con tests; sin UI todavía. |
 | **V2 Nube** | Migraciones Supabase + RLS + RPC + migración de datos (staging). | Cuenta ajena ve cero filas; datos del MVP migrados sin pérdida. |
 | **V3 Puesto de control** | Escritorio y móvil: llegada, requisitos, gafete, salida, adentro ahora, walk-in. | Flujo completo en ambos, también sin conexión. |
-| **V4 Anfitriones** | Web nueva: nueva visita, mis visitas en vivo, visitantes frecuentes, solicitudes walk-in, avisos por correo. | Un anfitrión sin capacitación agenda en < 1 min. |
+| **V4 Anfitriones** | Web nueva según 3.8: mis visitas en vivo, agendar en una página, detalle con editar/cancelar/duplicar, solicitudes sin cita, avisos por correo. | Criterios de aceptación de 3.8. |
 | **V5 Panel** | Anfitriones, restricciones, requisitos, historial/reportes, datos personales. | Nada de visitas requiere SQL a mano. |
 | **V6 Emergencia** | "Adentro ahora" consolidado de todos los tipos, imprimible y sin conexión. | Pase de lista posible con la red caída. |
 
