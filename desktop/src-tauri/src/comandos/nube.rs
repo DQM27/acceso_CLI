@@ -382,6 +382,27 @@ pub async fn configurar_dispositivo_inicial(
     .map_err(|error| format!("No se pudo completar el arranque inicial: {error}"))?
 }
 
+/// Aviso en vivo con los datos (`cambio_nube` con `registro`): guarda la
+/// fila directo en la base local, sin consultar a la nube -- ver
+/// `nube::en_vivo`. `true` si la aplicó; `false` si el aviso no trae datos
+/// o la tabla todavía no los manda (queda para `sincronizar_cambios_nube`,
+/// que corre igual detrás como red de seguridad). Sobre la conexión
+/// secundaria: nunca toma el candado del núcleo.
+#[tauri::command]
+pub async fn aplicar_cambio_nube(
+    app: tauri::AppHandle,
+    cambio: serde_json::Value,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<GuiState>();
+        state.sesion_activa()?;
+        let conexion = state.conexion_secundaria()?;
+        nube::aplicar_cambio_en_vivo(&conexion, &cambio).map_err(mensaje_sincronizacion)
+    })
+    .await
+    .map_err(|error| format!("No se pudo aplicar el cambio en vivo: {error}"))?
+}
+
 /// Sincronización disparada por avisos en vivo (`cambio_nube`) -- corre
 /// sólo las etapas de las tablas que cambiaron (`tablas`, tal cual las
 /// manda el aviso en `payload.table`), ver `nube::AlcanceSincronizacion`.

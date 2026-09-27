@@ -48,6 +48,9 @@ class NubeRealtime(
     // `tabla` = la que cambió según el aviso (`payload.table`), o `null` =
     // sincronizar todo (al (re)suscribirse, para recuperar lo perdido).
     private val onCambio: (tabla: String?) -> Unit = { tabla -> CambiosNube.solicitar(tabla) },
+    // Se guardó en la base local la fila que trajo un aviso en vivo: la
+    // pantalla puede refrescarse sin esperar la sincronización.
+    private val onCambioAplicado: () -> Unit = {},
 ) {
     private var trabajo: Job? = null
 
@@ -109,6 +112,18 @@ class NubeRealtime(
                         // `nubeRealtime.ts` en escritorio.
                         if (aviso.texto("dispositivo_id") == sesion.dispositivoId) return@onEach
                         val tabla = aviso.texto("table")
+                        // El aviso trae la fila: se guarda al instante (el
+                        // núcleo decide qué hacer con ella). La descarga por
+                        // tabla corre igual detrás, como red de seguridad.
+                        if (aviso["registro"] is JsonObject || aviso.texto("operation") == "DELETE") {
+                            val aplicado = try {
+                                withContext(dispatcherIO) { nucleo.aplicarCambioNube(aviso.toString()) }
+                            } catch (excepcion: NucleoException) {
+                                Log.w("SincronizacionNube", "No se pudo aplicar el cambio en vivo", excepcion)
+                                false
+                            }
+                            if (aplicado) onCambioAplicado()
+                        }
                         Log.i("SincronizacionNube", "Aviso remoto recibido (${tabla ?: "sin tabla"}); solicitando descarga")
                         onCambio(tabla)
                     }

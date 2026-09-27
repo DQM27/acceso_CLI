@@ -2,8 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { iniciarRealtimeNube } from "./nubeRealtime";
 import { solicitarSincronizacionNube } from "./eventosNube";
 
-const mocks = vi.hoisted(() => ({ sesion: vi.fn(), sincronizar: vi.fn(), sincronizarCambios: vi.fn(), crear: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  sesion: vi.fn(),
+  sincronizar: vi.fn(),
+  sincronizarCambios: vi.fn(),
+  aplicarCambio: vi.fn(),
+  crear: vi.fn(),
+}));
 vi.mock("./api/nube", () => ({
+  aplicarCambioNube: mocks.aplicarCambio,
   sesionRealtimeNube: mocks.sesion,
   sincronizarConNube: mocks.sincronizar,
   sincronizarCambiosNube: mocks.sincronizarCambios,
@@ -12,7 +19,9 @@ vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.crear }));
 
 interface CanalPrueba {
   estado: (estado: string, error?: Error) => void;
-  aviso: (mensaje: { payload: { dispositivo_id: string; table?: string } }) => void;
+  aviso: (mensaje: {
+    payload: { dispositivo_id: string; table?: string; operation?: string; registro?: unknown };
+  }) => void;
   accessToken: () => Promise<string>;
 }
 const canales: CanalPrueba[] = [];
@@ -31,6 +40,7 @@ beforeEach(() => {
   mocks.sesion.mockResolvedValue(sesion);
   mocks.sincronizar.mockResolvedValue(resumen);
   mocks.sincronizarCambios.mockResolvedValue(resumen);
+  mocks.aplicarCambio.mockResolvedValue(true);
   mocks.crear.mockImplementation((_url, _key, opciones) => {
     const control: CanalPrueba = { estado: () => {}, aviso: () => {}, accessToken: opciones.accessToken };
     const canal = {
@@ -55,6 +65,30 @@ async function iniciar() {
 }
 
 describe("sincronización por Realtime", () => {
+  it("un aviso con la fila se aplica al instante y la sincronización por tabla sigue detrás", async () => {
+    const recargas = vi.fn();
+    window.addEventListener("nube:cambio-en-vivo", recargas);
+    const canal = await iniciar();
+    const payload = { dispositivo_id: "equipo-b", table: "ingresos", operation: "INSERT", registro: { id: "u1" } };
+
+    canal.aviso({ payload });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mocks.aplicarCambio).toHaveBeenCalledWith(payload);
+    expect(recargas).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizarCambios).toHaveBeenCalledWith(["ingresos"]);
+    window.removeEventListener("nube:cambio-en-vivo", recargas);
+  });
+
+  it("un aviso sin datos no intenta aplicar nada", async () => {
+    const canal = await iniciar();
+    canal.aviso({ payload: { dispositivo_id: "equipo-b", table: "empresas", operation: "UPDATE" } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.aplicarCambio).not.toHaveBeenCalled();
+    expect(mocks.sincronizarCambios).toHaveBeenCalledWith(["empresas"]);
+  });
+
   it("conserva el JWT del dispositivo cuando el SDK vuelve a pedirlo", async () => {
     const canal = await iniciar();
     expect(await canal.accessToken()).toBe("jwt-dispositivo");

@@ -677,6 +677,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_cambio_nube(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo(
@@ -804,6 +806,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_constructor_nucleo_abrir_cifrado(`rutaBaseDatos`: RustBuffer.ByValue,`clave`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_admite_personal_ruta_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_cambio_nube(`ptr`: Long,`avisoJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar_con_secreto(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1026,6 +1030,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario() and 0xFFFF) != 15830) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_cambio_nube() and 0xFFFF) != 40352) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto() and 0xFFFF) != 20687) {
@@ -1665,6 +1672,17 @@ public interface NucleoInterface {
     fun `admitePersonalRutaParaFormulario`(`tipoIngreso`: TipoIngreso): kotlin.Boolean
     
     /**
+     * Aviso en vivo con los datos (`cambio_nube` con `registro`, tal cual
+     * llega por el canal, en JSON): guarda la fila directo en la base local
+     * sin consultar a la nube -- ver `control_acceso::nube::en_vivo`.
+     * `true` si la aplicó; `false` si el aviso no trae datos o su tabla
+     * todavía no los manda (queda para `sincronizar_cambios_con_secreto`,
+     * que corre igual detrás). Sobre la conexión secundaria: nunca toma el
+     * candado del núcleo.
+     */
+    fun `aplicarCambioNube`(`avisoJson`: kotlin.String): kotlin.Boolean
+    
+    /**
      * Login con el secreto que Kotlin descifra de Android Keystore (vacío =
      * nube sin configurar: no se toca la red).
      *
@@ -2186,6 +2204,30 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterTypeTipoIngreso.lower(`tipoIngreso`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Aviso en vivo con los datos (`cambio_nube` con `registro`, tal cual
+     * llega por el canal, en JSON): guarda la fila directo en la base local
+     * sin consultar a la nube -- ver `control_acceso::nube::en_vivo`.
+     * `true` si la aplicó; `false` si el aviso no trae datos o su tabla
+     * todavía no los manda (queda para `sincronizar_cambios_con_secreto`,
+     * que corre igual detrás). Sobre la conexión secundaria: nunca toma el
+     * candado del núcleo.
+     */
+    @Throws(NucleoException::class)override fun `aplicarCambioNube`(`avisoJson`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_cambio_nube(
+        it,
+        
+        FfiConverterString.lower(`avisoJson`),_status)
 }
     }
     )

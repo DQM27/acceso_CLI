@@ -178,6 +178,13 @@ export function sincronizarConNube(): Promise<ResumenSincronizacion> {
  * cambiaron (`payload.table` de `cambio_nube`) -- ver
  * `nube::AlcanceSincronizacion` en el núcleo. Una tabla desconocida cae en
  * la sincronización completa del lado Rust. */
+/** Guarda la fila que trae un aviso en vivo (`registro`) directo en la base
+ * local, sin consultar a la nube. `true` si la aplicó; `false` si el aviso
+ * no trae datos (queda para `sincronizarCambiosNube`). */
+export function aplicarCambioNube(cambio: unknown): Promise<boolean> {
+  return invoke("aplicar_cambio_nube", { cambio });
+}
+
 export function sincronizarCambiosNube(tablas: string[]): Promise<ResumenSincronizacion> {
   return invoke("sincronizar_cambios_nube", { tablas });
 }

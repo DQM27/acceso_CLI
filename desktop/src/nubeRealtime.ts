@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
-import { sesionRealtimeNube, sincronizarCambiosNube, sincronizarConNube } from "./api/nube";
+import { aplicarCambioNube, sesionRealtimeNube, sincronizarCambiosNube, sincronizarConNube } from "./api/nube";
 import type { ResumenSincronizacion } from "./api/nube";
-import { EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
+import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 
 export { EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 
@@ -176,6 +176,15 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
           if (cancelado || cliente !== clienteActual) return;
           if (payload?.dispositivo_id === sesion.dispositivo_id) return;
           const tabla = typeof payload?.table === "string" ? payload.table : undefined;
+          // El aviso trae la fila: se guarda al instante y se refresca la
+          // pantalla. La sincronización por tabla corre igual detrás.
+          if (payload?.registro || payload?.operation === "DELETE") {
+            void aplicarCambioNube(payload)
+              .then((aplicado) => {
+                if (aplicado && !cancelado) window.dispatchEvent(new Event(EVENTO_CAMBIO_EN_VIVO));
+              })
+              .catch((error) => console.info("No se pudo aplicar el cambio en vivo:", error));
+          }
           programarSincronizacion(tabla);
         })
         .subscribe((estado, error) => {

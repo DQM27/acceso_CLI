@@ -368,6 +368,7 @@ dependencies = [
  "control_acceso",
  "log",
  "rusqlite",
+ "serde_json",
  "tempfile",
  "thiserror",
  "uniffi",
