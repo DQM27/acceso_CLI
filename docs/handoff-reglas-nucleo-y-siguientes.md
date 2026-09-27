@@ -23,6 +23,8 @@ Para la sesión que continúa este trabajo. Leer completo antes de tocar nada.
 | `main` | Tiene OCR (PR #77) y refactor móvil M1–M7 (PR #79) |
 | `claude/dominio-en-nucleo` | Terminada. Reglas del móvil al núcleo |
 | `claude/dominio-escritorio` | Paso 1 terminado. Sale de la anterior; mismas reglas para escritorio |
+| `claude/nucleo-n1-n3` | N1–N3 del núcleo. Sale de `claude/dominio-escritorio` |
+| `claude/pruebas-realtime-rust` | Rama de pruebas: `dominio-escritorio` + realtime en Rust (spike) + N1–N3 |
 | `claude/realtime-rust-spike` | Cliente realtime en Rust. **No borrar** (ver paso 4) |
 | `refactor-panel-web`, `claude/rediseno-web-visitas` | Otras sesiones. No tocar `web/` ni `web-visitas/` |
 
@@ -63,13 +65,17 @@ Reemplazar "personal de ruta" por la casilla **"requiere gafete"**:
   móvil y panel web (~50 archivos). Migración probada **sólo en staging**;
   producción la aplica el dueño. Presentar plan al dueño antes de empezar.
 
-## Paso 3: refactor del núcleo (`docs/auditorias/auditoria-nucleo-rust-2026-09-27.md`)
+## Paso 3: refactor del núcleo — N1, N2 y N3 HECHOS en `claude/nucleo-n1-n3`
 
-Rama nueva `claude/nucleo-n1-n3`:
-- **N1 (crítica):** la orquestación de la sincronización está copiada 4
-  veces → un solo lugar.
-- **N2 (alta):** el móvil hace red con el candado del núcleo tomado.
-- **N3 (alta):** el historial local crece para siempre.
+Detalle en `docs/auditorias/auditoria-nucleo-rust-2026-09-27.md`.
+- **N1:** una sola sincronización (`nube::sincronizar`/`nube::recibir`,
+  `src/nube/orquestacion.rs`) con `AlcanceSincronizacion` y
+  `PerfilDispositivo`. El móvil no descarga ningún historial (decisión
+  del dueño: el celular sólo registra; buscar es de la PC y la web).
+- **N2:** nunca red con el candado del núcleo tomado; se fue el código
+  "legado" del puente que lo hacía (Kotlin no lo usaba).
+- **N3:** el escritorio guarda 24 meses de historial del sitio
+  (`nube::retencion`); lo más viejo, en el panel web.
 - N4–N8 después, si el dueño quiere.
 
 ## Paso 4: consolidar realtime (después de N1)
@@ -119,5 +125,5 @@ Trampas conocidas:
   `cargo test --features nube,cifrado-secreto-dispositivo-portable`.
 - Disco chico: si cargo falla con "No space left", borrar
   `target/debug/incremental` y `mobile/rust-core/target/debug`.
-- Estado al cerrar el Paso 1: núcleo 667 (802 con nube), rust-core 58,
+- Estado al cerrar N1–N3: núcleo 667 (812 con nube), rust-core 58,
   Android 219, vitest 244 tests, todo en verde.
