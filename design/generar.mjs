@@ -48,8 +48,6 @@ salidas.set('desktop/src/diseno.css', css);
 salidas.set('desktop/src/controles.css', leer('design/controles.css'));
 salidas.set('web/src/diseno.css', css);
 salidas.set('web/src/controles.css', leer('design/controles.css'));
-salidas.set('web-visitas/src/diseno.css', css);
-salidas.set('web-visitas/src/controles.css', leer('design/controles.css'));
 salidas.set('design/brisas.css', css + '\n' + leer('design/controles.css'));
 
 // Android/mobile YA NO sale de acá (2026-09-15) -- tiene su propia identidad
@@ -57,12 +55,10 @@ salidas.set('design/brisas.css', css + '\n' + leer('design/controles.css'));
 // redondeadas), a pedido explícito y a propósito distinta de desktop/web.
 // Ver `mobile/android/.../DisenoMovil.kt`, que ahora se edita a mano.
 //
-// web-visitas SÍ sale de acá (mismos tokens que desktop/web -- tipografía,
-// espaciado, formas, superficies) pero pisa `--acento*` con un rojo propio
-// en `web-visitas/src/acento-visitas.css` (mantenido a mano, no generado),
-// importado después de diseno.css -- ver docs/auditorias/
-// rediseno-visitas-2026-09-27.md, 3.7: "acento rojo sólo en la acción
-// principal y en alertas, no decorativo".
+// web-visitas (rediseño V4, docs/auditorias/rediseno-visitas-2026-09-27.md)
+// TAMPOCO sale de acá a propósito, mismo criterio que Android/mobile:
+// sistema de diseño propio e independiente, ver `web-visitas/src/diseno.css`
+// (editado a mano, no generado).
 
 let errores = 0;
 for (const [ruta, contenido] of salidas) {
