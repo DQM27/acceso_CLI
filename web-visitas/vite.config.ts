@@ -1,9 +1,10 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   // `quietDeps` -- Bootstrap 5.3 todavía usa funciones de color de Sass que
   // Dart Sass reciente marca obsoletas (red()/green()/blue(), etc.); son
   // warnings de la librería, no de nuestro código, así que no hace sentido
