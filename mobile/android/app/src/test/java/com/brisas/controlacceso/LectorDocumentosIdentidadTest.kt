@@ -518,4 +518,114 @@ class LectorDocumentosIdentidadTest {
         assertEquals("JUAN CARLOS", doc?.nombre)
         assertEquals("PEREZ MORA", doc?.apellidos)
     }
+
+    // --- DIMEX: "Género: M" en la misma línea que el nombre ---
+
+    @Test
+    fun dimexIgnoraGeneroEnLaMismaLineaDelNombre() {
+        // Layout real de la DIMEX: "Género: M" está a la derecha del nombre,
+        // y ML Kit los devuelve en la misma línea.
+        val texto = """
+            RESIDENTE PERMANENTE
+            LIBRE CONDICIÓN
+            Apellidos:
+            PEREZ MORA
+            Nombre:
+            JUAN CARLOS Género: M
+            Nacionalidad:
+            NICARAGUA
+            Documento No.: 155824395105
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+    }
+
+    @Test
+    fun dimexIgnoraGeneroSinTildeOLeidoRaro() {
+        for (linea in listOf("JUAN CARLOS Genero: F", "JUAN CARLOS GÉNERO M", "JUAN CARLOS Gnero: M", "Nombre: JUAN CARLOS   Sexo: M")) {
+            val texto = "RESIDENTE PERMANENTE\nDocumento No.: 155824395105\n" +
+                (if (linea.startsWith("Nombre:")) linea else "Nombre:\n$linea")
+            assertEquals(linea, "JUAN CARLOS", leerDocumentoDeTexto(texto)?.nombre)
+        }
+    }
+
+    @Test
+    fun dimexNoCortaNombresQueEmpiezanComoGenero() {
+        val texto = "RESIDENTE PERMANENTE\nDocumento No.: 155824395105\nNombre:\nGENEROSO ANTONIO"
+        assertEquals("GENEROSO ANTONIO", leerDocumentoDeTexto(texto)?.nombre)
+    }
+
+    // --- DIMEX: esquema completo, cada renglón visual con su campo vecino ---
+
+    @Test
+    fun dimexLeeTarjetaCompletaConCamposVecinosEnElMismoRenglon() {
+        // Así devuelve ML Kit el frente real: un renglón por línea visual,
+        // con la columna derecha pegada al valor de la izquierda.
+        val texto = """
+            DIRECCIÓN GENERAL DE MIGRACIÓN Y EXTRANJERÍA
+            REPÚBLICA DE COSTA RICA
+            RESIDENTE PERMANENTE
+            LIBRE CONDICIÓN
+            Apellidos:
+            PEREZ MORA
+            Nombre:
+            JUAN CARLOS Género: M
+            Nacionalidad:
+            NICARAGUA F.nac.: 01 01 1990
+            Documento No.: 155800000001 Emitido: 01 01 2023
+            Expediente No.: 135 - 000000 Vence: 01 01 2027
+            DGME
+            DOCUMENTO DE IDENTIDAD MIGRATORIO PARA EXTRANJEROS
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CEDULA_RESIDENCIA, doc?.tipo)
+        assertEquals("155800000001", doc?.numeroDocumento)
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+        assertEquals("NICARAGUA", doc?.nacionalidad)
+        assertEquals(1, doc?.vencimiento?.dia)
+        assertEquals(2027, doc?.vencimiento?.anio)
+    }
+
+    @Test
+    fun dimexConEtiquetaYGeneroEnUnRenglonYNombreEnElSiguiente() {
+        val texto = """
+            RESIDENTE PERMANENTE
+            Apellidos: PEREZ MORA
+            Nombre: Género: M
+            JUAN CARLOS
+            Nacionalidad: NICARAGUA
+            Documento No.: 155800000001
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+        assertEquals("NICARAGUA", doc?.nacionalidad)
+    }
+
+    @Test
+    fun dimexSinValorNoRobaLaEtiquetaSiguiente() {
+        val texto = "RESIDENTE PERMANENTE\nApellidos:\nNombre:\nJUAN CARLOS\nDocumento No.: 155800000001"
+        val doc = leerDocumentoDeTexto(texto)
+        assertEquals(null, doc?.apellidos)
+        assertEquals("JUAN CARLOS", doc?.nombre)
+    }
+
+    @Test
+    fun dimexNumeroSeparadoDeSuEtiquetaUsaElDeOnceODoceDigitosNuncaElExpediente() {
+        val texto = """
+            RESIDENTE PERMANENTE
+            Documento No.: Emitido: 01 01 2023
+            Expediente No.: 135 - 000000
+            155800000001
+        """.trimIndent()
+        assertEquals("155800000001", leerDocumentoDeTexto(texto)?.numeroDocumento)
+    }
 }

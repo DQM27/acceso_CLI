@@ -182,8 +182,6 @@ private val REGEX_DIMEX_NUMERO_PROVISIONAL = Regex("""N[°ºO]?\s*DOCUMENTO\s*:?
 // Compartida con la cédula nacional de frente (misma etiqueta "Nombre:"
 // exacta en ambos documentos) -- ver `extraerCedulaNacionalFrente`.
 private val REGEX_NOMBRE_ETIQUETA = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
-private val REGEX_DIMEX_APELLIDOS = Regex("""Apellidos:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
-private val REGEX_DIMEX_NACIONALIDAD = Regex("""Nacionalidad:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 // Cédula nacional de frente: el apellido viene partido en dos campos, no
 // uno solo como en DIMEX -- "1°Apellido:"/"1° Apellido:" según el diseño
 // (formato nuevo con orquídeas vs. el azul anterior, dos fotos reales del
@@ -305,23 +303,86 @@ fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
 // dato (ver `TAG_DEBUG_OCR_LECTURA` en `EscaneoCompartido.kt`).
 private val VALORES_SEXO_DIMEX = setOf("M", "F", "MASCULINO", "FEMENINO")
 
-private fun valorSiNoEsSexo(match: MatchResult?): String? {
-    val valor = match?.groupValues?.get(1)?.trim() ?: return null
-    return valor.takeUnless { it.uppercase() in VALORES_SEXO_DIMEX }
+// Esquema del frente del DIMEX (Documento de Identidad Migratorio para
+// Extranjeros, DGME), tal como está impreso -- dos columnas de texto a la
+// derecha de la foto (valores de ejemplo, ficticios):
+//
+//   RESIDENTE PERMANENTE / LIBRE CONDICIÓN        <- categoría (2 renglones)
+//   Apellidos:
+//   PEREZ MORA
+//   Nombre:
+//   JUAN CARLOS                    Género: M      <- mismo renglón visual
+//   Nacionalidad:
+//   NICARAGUA                      F.nac.: 01 01 1990
+//   Documento No.: 155800000000    Emitido: 01 01 2023
+//   Expediente No.: 135 - 000000   Vence:   01 01 2026
+//
+// ML Kit suele devolver cada renglón visual como UNA línea, así que el
+// valor de la columna izquierda llega pegado al campo de la derecha
+// ("JUAN CARLOS Género: M", "NICARAGUA F.nac.: ..."). Por eso cada valor
+// se toma del resto del renglón de su etiqueta (o del renglón siguiente si
+// la etiqueta quedó sola) y se corta en la primera etiqueta vecina.
+//
+// "Documento No." ES el número de la cédula de residencia (el que se
+// guarda). "Expediente No." es el número de trámite de la DGME y nunca se
+// usa como identificación.
+private val PATRON_ETIQUETAS_IZQ_DIMEX = """APELLIDOS|NOMBRE|NACIONALIDAD|DOCUMENTO|EXPEDIENTE"""
+// `\S{0,3}` tolera la tilde de "Género" leída como otra cosa ("GÉNERO",
+// "Genero", "Gènero", "Gnero").
+private val PATRON_ETIQUETAS_DER_DIMEX = """G\S{0,3}NERO|SEXO|F\.?\s*NAC|EMITIDO|VENCE"""
+private const val LETRA = """A-Za-zÁÉÍÓÚÑáéíóúñ"""
+// Etiqueta vecina en cualquier parte del renglón: se corta desde ahí. El
+// lookahead negativo evita cortar un nombre real que empiece igual
+// ("GENEROSO", "VENCESLAO").
+private val REGEX_CORTE_ETIQUETA_DIMEX = Regex(
+    """(?:^|\s)(?:$PATRON_ETIQUETAS_IZQ_DIMEX|$PATRON_ETIQUETAS_DER_DIMEX)(?![$LETRA]).*$""",
+    RegexOption.IGNORE_CASE,
+)
+private val REGEX_EMPIEZA_CON_ETIQUETA_IZQ_DIMEX = Regex(
+    """^\s*(?:$PATRON_ETIQUETAS_IZQ_DIMEX)(?![$LETRA])""",
+    RegexOption.IGNORE_CASE,
+)
+private val REGEX_DIMEX_ETIQUETA_APELLIDOS = Regex("""APELLIDOS\s*:?""", RegexOption.IGNORE_CASE)
+private val REGEX_DIMEX_ETIQUETA_NOMBRE = Regex("""(?<![$LETRA])NOMBRE\s*:?""", RegexOption.IGNORE_CASE)
+private val REGEX_DIMEX_ETIQUETA_NACIONALIDAD = Regex("""NACIONALIDAD\s*:?""", RegexOption.IGNORE_CASE)
+private val REGEX_PREFIJO_LETRAS = Regex("""^[$LETRA ]+""")
+// Respaldo cuando "Documento No.:" y su número quedaron separados por el
+// orden de lectura: el número DIMEX tiene 11-12 dígitos seguidos; el de
+// expediente ("135 - 453544") nunca, y su renglón se descarta igual.
+private val REGEX_DIMEX_NUMERO_SUELTO = Regex("""(?<!\d)\d{11,12}(?!\d)""")
+
+/// Valor de texto de un campo del DIMEX: el resto del renglón de la
+/// etiqueta o, si ahí no queda nada (etiqueta sola, o sólo el campo de la
+/// columna derecha), los renglones siguientes -- hasta toparse con la
+/// siguiente etiqueta de la columna izquierda.
+private fun valorTextoDimex(texto: String, etiqueta: Regex): String? {
+    val match = etiqueta.find(texto) ?: return null
+    val renglones = texto.substring(match.range.last + 1).split('\n')
+    for ((indice, renglon) in renglones.take(3).withIndex()) {
+        if (indice > 0 && REGEX_EMPIEZA_CON_ETIQUETA_IZQ_DIMEX.containsMatchIn(renglon)) return null
+        val sinVecino = renglon.replace(REGEX_CORTE_ETIQUETA_DIMEX, "").trim()
+        val valor = REGEX_PREFIJO_LETRAS.find(sinVecino)?.value?.trim()
+        if (!valor.isNullOrBlank() && valor.uppercase() !in VALORES_SEXO_DIMEX) return valor
+    }
+    return null
 }
 
-/// Extrae el número de "Documento No.:", nunca el de "Expediente No.:" --
-/// este es el caso que motivó todo el refinamiento (ver plan, sección 1):
-/// ambos son números de longitud similar en el mismo bloque de texto, y una
-/// regex genérica sin contexto de etiqueta puede agarrar el equivocado.
-private fun extraerDimex(texto: String): DocumentoDetectado? {
-    val numero = REGEX_DIMEX_NUMERO.find(texto)?.groupValues?.get(1)
+private fun numeroDimex(texto: String): String? =
+    REGEX_DIMEX_NUMERO.find(texto)?.groupValues?.get(1)
         ?: REGEX_DIMEX_NUMERO_PROVISIONAL.find(texto)?.groupValues?.get(1)
-        ?: return null
+        ?: texto.lineSequence()
+            .filterNot { "EXPEDIENTE" in it.uppercase() }
+            .firstNotNullOfOrNull { REGEX_DIMEX_NUMERO_SUELTO.find(it)?.value }
 
-    val nombre = valorSiNoEsSexo(REGEX_NOMBRE_ETIQUETA.find(texto))
-    val apellidos = valorSiNoEsSexo(REGEX_DIMEX_APELLIDOS.find(texto))
-    val nacionalidad = REGEX_DIMEX_NACIONALIDAD.find(texto)?.groupValues?.get(1)?.trim()
+/// Extrae el número de "Documento No.:", nunca el de "Expediente No.:" --
+/// ambos son números en el mismo bloque de texto, y una regex genérica sin
+/// contexto de etiqueta puede agarrar el equivocado. Ver el esquema arriba.
+private fun extraerDimex(texto: String): DocumentoDetectado? {
+    val numero = numeroDimex(texto) ?: return null
+
+    val nombre = valorTextoDimex(texto, REGEX_DIMEX_ETIQUETA_NOMBRE)
+    val apellidos = valorTextoDimex(texto, REGEX_DIMEX_ETIQUETA_APELLIDOS)
+    val nacionalidad = valorTextoDimex(texto, REGEX_DIMEX_ETIQUETA_NACIONALIDAD)
     val vencimiento = extraerFecha(texto, etiqueta = "Vence")
         ?: extraerFecha(texto, etiqueta = "Fecha Vencimiento")
 
