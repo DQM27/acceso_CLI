@@ -13,7 +13,7 @@ use std::ops::Deref;
 use super::{AppCore, GestionNubeError};
 use crate::nube::{CacheTokenDispositivo, ContextoSincronizacion, TokenDispositivo};
 use crate::services::autenticacion_service::UsuarioSesion;
-use crate::services::error::IngresoProveedorServiceError;
+use crate::services::error::{GafeteProvisionalServiceError, IngresoProveedorServiceError};
 
 /// Con qué hablar con la nube desde este dispositivo. `secreto: None`
 /// significa nube sin configurar: no hay con quién chocar y ningún
@@ -128,6 +128,48 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
     )?)
 }
 
+// ---- Entrega de gafete provisional KOF ----
+
+#[derive(Debug, thiserror::Error)]
+pub enum EntregaGafeteProvisionalVerificadaError {
+    #[error(transparent)]
+    Servicio(#[from] GafeteProvisionalServiceError),
+    #[error("el gafete {numero} ya está prestado en otro dispositivo del sitio")]
+    GafeteOcupadoEnSitio { numero: i64 },
+    #[error(transparent)]
+    Nube(#[from] GestionNubeError),
+}
+
+/// Entrega de gafete provisional: si el gafete ya está prestado en el otro
+/// dispositivo del sitio (nube) no se entrega, y si no se puede verificar
+/// tampoco (un gafete físico no puede duplicarse). Recién ahí escribe
+/// (`AppCore::entregar_gafete_provisional`, reglas locales).
+pub fn entregar_gafete_provisional_verificado<G: Deref<Target = AppCore>>(
+    nucleo: impl Fn() -> G,
+    nube: NubeDelDispositivo<'_>,
+    actor: &UsuarioSesion,
+    encargado_id: i64,
+    gafete_numero: i64,
+) -> Result<i64, EntregaGafeteProvisionalVerificadaError> {
+    if let Some(secreto) = nube.secreto() {
+        let token = autenticar(&nucleo, nube, secreto, actor)?;
+        if crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(
+            &contexto(&token),
+            gafete_numero,
+        )
+        .map_err(GestionNubeError::from)?
+        {
+            return Err(
+                EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio {
+                    numero: gafete_numero,
+                },
+            );
+        }
+    }
+
+    Ok(nucleo().entregar_gafete_provisional(actor, encargado_id, gafete_numero)?)
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
@@ -138,11 +180,15 @@ mod tests {
     use crate::database::repositories::empresa_proveedor_repository::{
         EmpresaProveedorRepository, SqliteEmpresaProveedorRepository,
     };
+    use crate::database::repositories::encargado_ruta_repository::{
+        EncargadoRutaRepository, SqliteEncargadoRutaRepository,
+    };
     use crate::database::repositories::gafete_repository::{
         GafeteRepository, SqliteGafeteRepository,
     };
     use crate::database::schema::initialize_database;
     use crate::models::empresa_proveedor::EmpresaProveedor;
+    use crate::models::encargado_ruta::EncargadoRuta;
     use crate::models::gafete::TipoGafete;
     use crate::models::usuario::RolUsuario;
     use crate::tiempo::RelojFijo;
@@ -255,5 +301,38 @@ mod tests {
             secreto: Some("   "),
         };
         assert!(nube.secreto().is_none());
+    }
+
+    #[test]
+    fn sin_nube_la_entrega_aplica_las_reglas_locales() {
+        let (core, actor, _) = nucleo_con_empresa_y_gafete();
+        let encargado_id = SqliteEncargadoRutaRepository::new(&core.lock().unwrap().connection)
+            .crear(&EncargadoRuta {
+                id: 0,
+                codigo_empleado: "5040017".to_string(),
+                nombre: "ANA MORA".to_string(),
+                cedula: None,
+                activo: true,
+            })
+            .unwrap();
+        let cache = CacheTokenDispositivo::new();
+        let entregar = || {
+            entregar_gafete_provisional_verificado(
+                || core.lock().unwrap(),
+                sin_nube(&cache),
+                &actor,
+                encargado_id,
+                12,
+            )
+        };
+
+        assert!(entregar().unwrap() > 0);
+        assert!(matches!(
+            entregar().unwrap_err(),
+            EntregaGafeteProvisionalVerificadaError::Servicio(
+                GafeteProvisionalServiceError::EncargadoYaTienePrestamoActivo
+                    | GafeteProvisionalServiceError::GafeteYaPrestado
+            )
+        ));
     }
 }

@@ -1884,24 +1884,39 @@ impl Nucleo {
             .entregar_gafete_provisional(&actor, encargado_id, gafete_numero)?)
     }
 
-    /// Entrega con su regla en la misma llamada (antes la decidía
-    /// `GafetesProvisionalesViewModel` en dos pasos): si el gafete ya está
-    /// prestado en el otro dispositivo del sitio (nube) no se entrega; si
-    /// la consulta falla, se frena. Recién ahí escribe
-    /// (`entregar_gafete_provisional`, que aplica las reglas locales).
-    /// `secreto` vacío se salta el chequeo de nube.
+    /// Entrega con su regla en la misma llamada; la decide
+    /// `application::entregar_gafete_provisional_verificado`, la misma que
+    /// usa escritorio. `secreto` vacío se salta el chequeo de nube.
     pub fn entregar_gafete_provisional_con_secreto(
         &self,
         encargado_id: i64,
         gafete_numero: i64,
         secreto: String,
     ) -> Result<i64, NucleoError> {
-        if self.gafete_provisional_ocupado_en_sitio_con_secreto(secreto, gafete_numero)? {
-            return Err(NucleoError::GafeteOcupadoEnSitio {
-                numero: gafete_numero,
-            });
-        }
-        self.entregar_gafete_provisional(encargado_id, gafete_numero)
+        use control_acceso::application::{
+            EntregaGafeteProvisionalVerificadaError, NubeDelDispositivo,
+            entregar_gafete_provisional_verificado,
+        };
+
+        let actor = self.actor_autenticado()?;
+        let nube = NubeDelDispositivo {
+            cache_token: &self.cache_token,
+            secreto: Some(secreto.as_str()),
+        };
+        entregar_gafete_provisional_verificado(
+            || self.core_lock(),
+            nube,
+            &actor,
+            encargado_id,
+            gafete_numero,
+        )
+        .map_err(|error| match error {
+            EntregaGafeteProvisionalVerificadaError::Servicio(error) => error.into(),
+            EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio { numero } => {
+                NucleoError::GafeteOcupadoEnSitio { numero }
+            }
+            EntregaGafeteProvisionalVerificadaError::Nube(error) => error.into(),
+        })
     }
 
     /// Registra la devolución de un préstamo de gafete provisional KOF --

@@ -458,6 +458,23 @@ pub fn mensaje_ingreso_proveedor_verificado(
     }
 }
 
+#[cfg(feature = "nube")]
+pub fn mensaje_entrega_gafete_provisional_verificada(
+    error: crate::application::EntregaGafeteProvisionalVerificadaError,
+) -> String {
+    use crate::application::EntregaGafeteProvisionalVerificadaError;
+
+    match error {
+        EntregaGafeteProvisionalVerificadaError::Servicio(error) => {
+            mensaje_gafete_provisional(error)
+        }
+        EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio { numero } => {
+            format!("El gafete {numero} ya está prestado en otro dispositivo del sitio")
+        }
+        EntregaGafeteProvisionalVerificadaError::Nube(error) => mensaje_gestion_nube(error),
+    }
+}
+
 /// `RespuestaInesperada` trae el cuerpo crudo de la respuesta del receptor
 /// (puede incluir detalles internos de Postgres/PostgREST) -- nunca pasa a
 /// pantalla, mismo criterio que el resto de este módulo con los errores de

@@ -34,14 +34,17 @@ Pendiente de limpieza (requiere regenerar bindings y probar Android):
 `Nucleo::gafete_de_proveedor_ocupado_en_sitio_con_secreto` ya no los usa
 nadie.
 
-## 3. Entrega de gafete provisional KOF
+## 3. Entrega de gafete provisional KOF — RESUELTO en `claude/dominio-escritorio`
 
-| Regla | Dónde vive ahora | Escritorio hoy |
-|---|---|---|
-| Gafete prestado en el otro dispositivo del sitio, antes de escribir | Móvil: `Nucleo::entregar_gafete_provisional_con_secreto` (una llamada) | **Orquestado en el comando Tauri**: `desktop/src-tauri/src/comandos/gafetes_provisionales.rs` (chequeo de nube + `entregar_gafete_provisional`) |
+`application::entregar_gafete_provisional_verificado` (`con_nube.rs`):
+si el gafete está prestado en el otro dispositivo del sitio, o no se
+puede verificar, no se entrega; recién ahí escribe. La usan el comando
+Tauri `entregar_gafete_provisional` y
+`Nucleo::entregar_gafete_provisional_con_secreto`; el texto sale de
+`mensajes::mensaje_entrega_gafete_provisional_verificada`.
 
-Qué hacer: mismo movimiento que en proveedores, una función del núcleo
-que chequea y escribe, usada por ambos.
+Pendiente de limpieza: `Nucleo::gafete_provisional_ocupado_en_sitio_con_secreto`
+ya no lo usa nadie.
 
 ## 4. Placa y gafete al registrar el ingreso de un contratista
 
