@@ -41,19 +41,8 @@ import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.MedioIngreso
-import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
 import uniffi.control_acceso_mobile.ResultadoAcceso
-
-/// El gafete ya está activo en este sitio del lado de otro dispositivo --
-/// usada por [GafetesProvisionalesViewModel]/[ProveedoresViewModel], que
-/// todavía hacen el chequeo y la escritura como dos pasos separados. Esta
-/// misma pantalla ([PantallaConfirmarIngreso]) ya NO la usa -- desde que
-/// `Nucleo.registrarIngresoConSecreto` fusiona el chequeo con la
-/// escritura, el mismo caso llega acá como [NucleoException]
-/// (`NucleoError::GafeteOcupadoEnSitio` en Rust), con el mismo texto.
-class GafeteOcupadoEnSitioException(numero: Long) :
-    Exception("El gafete $numero ya está en uso en otro dispositivo de la unidad operativa")
 
 /// Espejo de `mensajeVencimientoPraind` (`desktop/src/api/ingresos.ts`) --
 /// antes esta pantalla sólo mostraba "PRAIND próximo a vencer" sin decir

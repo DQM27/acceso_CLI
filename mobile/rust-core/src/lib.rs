@@ -1136,10 +1136,16 @@ impl From<RutaServiceErrorNucleo> for NucleoError {
     }
 }
 
+/// Mismo criterio que contratistas y proveedores.
 impl From<GafeteProvisionalServiceErrorNucleo> for NucleoError {
     fn from(error: GafeteProvisionalServiceErrorNucleo) -> Self {
-        Self::Interno {
-            mensaje: interno(error),
+        match error {
+            GafeteProvisionalServiceErrorNucleo::Database(_) => Self::Interno {
+                mensaje: interno(error),
+            },
+            regla => Self::Rechazado {
+                mensaje: control_acceso::mensajes::mensaje_gafete_provisional(regla),
+            },
         }
     }
 }
@@ -1862,6 +1868,26 @@ impl Nucleo {
         Ok(self
             .core_lock()
             .entregar_gafete_provisional(&actor, encargado_id, gafete_numero)?)
+    }
+
+    /// Entrega con su regla en la misma llamada (antes la decidía
+    /// `GafetesProvisionalesViewModel` en dos pasos): si el gafete ya está
+    /// prestado en el otro dispositivo del sitio (nube) no se entrega; si
+    /// la consulta falla, se frena. Recién ahí escribe
+    /// (`entregar_gafete_provisional`, que aplica las reglas locales).
+    /// `secreto` vacío se salta el chequeo de nube.
+    pub fn entregar_gafete_provisional_con_secreto(
+        &self,
+        encargado_id: i64,
+        gafete_numero: i64,
+        secreto: String,
+    ) -> Result<i64, NucleoError> {
+        if self.gafete_provisional_ocupado_en_sitio_con_secreto(secreto, gafete_numero)? {
+            return Err(NucleoError::GafeteOcupadoEnSitio {
+                numero: gafete_numero,
+            });
+        }
+        self.entregar_gafete_provisional(encargado_id, gafete_numero)
     }
 
     /// Registra la devolución de un préstamo de gafete provisional KOF --
@@ -4210,7 +4236,26 @@ mod tests {
 
         let resultado = nucleo.entregar_gafete_provisional(999, 12);
 
-        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
+        assert!(matches!(resultado, Err(NucleoError::Rechazado { .. })));
+    }
+
+    /// Secreto vacío: sin chequeo de nube; las reglas locales siguen
+    /// aplicando en la misma llamada (el mismo gafete no se presta dos veces).
+    #[test]
+    fn entregar_gafete_provisional_con_secreto_aplica_las_reglas_locales() {
+        let nucleo = nucleo_con_actor_y_ruta_79();
+        let encargado_id = nucleo
+            .buscar_encargados_ruta("5040017".to_string())
+            .unwrap()[0]
+            .id;
+
+        nucleo
+            .entregar_gafete_provisional_con_secreto(encargado_id, 12, String::new())
+            .unwrap();
+        assert!(matches!(
+            nucleo.entregar_gafete_provisional_con_secreto(encargado_id, 12, String::new()),
+            Err(NucleoError::Rechazado { .. })
+        ));
     }
 
     fn nucleo_con_actor_empresa_proveedora_y_gafete() -> Nucleo {

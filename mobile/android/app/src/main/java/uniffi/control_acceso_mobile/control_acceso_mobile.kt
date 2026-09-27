@@ -729,6 +729,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio(
@@ -882,6 +884,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional(`ptr`: Long,`encargadoId`: Long,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional_con_secreto(`ptr`: Long,`encargadoId`: Long,`gafeteNumero`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
@@ -1156,6 +1160,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional() and 0xFFFF) != 43280) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto() and 0xFFFF) != 2592) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto() and 0xFFFF) != 42761) {
@@ -2005,6 +2012,16 @@ public interface NucleoInterface {
      * `UniFFI` para eso.
      */
     fun `entregarGafeteProvisional`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long): kotlin.Long
+    
+    /**
+     * Entrega con su regla en la misma llamada (antes la decidía
+     * `GafetesProvisionalesViewModel` en dos pasos): si el gafete ya está
+     * prestado en el otro dispositivo del sitio (nube) no se entrega; si
+     * la consulta falla, se frena. Recién ahí escribe
+     * (`entregar_gafete_provisional`, que aplica las reglas locales).
+     * `secreto` vacío se salta el chequeo de nube.
+     */
+    fun `entregarGafeteProvisionalConSecreto`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long
     
     /**
      * Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
@@ -2998,6 +3015,31 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         
         FfiConverterLong.lower(`encargadoId`),
         FfiConverterLong.lower(`gafeteNumero`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Entrega con su regla en la misma llamada (antes la decidía
+     * `GafetesProvisionalesViewModel` en dos pasos): si el gafete ya está
+     * prestado en el otro dispositivo del sitio (nube) no se entrega; si
+     * la consulta falla, se frena. Recién ahí escribe
+     * (`entregar_gafete_provisional`, que aplica las reglas locales).
+     * `secreto` vacío se salta el chequeo de nube.
+     */
+    @Throws(NucleoException::class)override fun `entregarGafeteProvisionalConSecreto`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional_con_secreto(
+        it,
+        
+        FfiConverterLong.lower(`encargadoId`),
+        FfiConverterLong.lower(`gafeteNumero`),
+        FfiConverterString.lower(`secreto`),_status)
 }
     }
     )

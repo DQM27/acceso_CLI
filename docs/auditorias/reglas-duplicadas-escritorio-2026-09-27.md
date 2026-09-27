@@ -38,3 +38,12 @@ función del núcleo (`src/application/proveedores.rs`) que usen ambos, con
 `proveedor_con_ingreso_activo_en_sitio` como primer chequeo. Ojo: el
 escritorio frena si la consulta del gafete falla (a propósito); el móvil
 hace lo mismo al usar `gafete_de_proveedor_ocupado_en_sitio_con_secreto`.
+
+## 3. Entrega de gafete provisional KOF
+
+| Regla | Dónde vive ahora | Escritorio hoy |
+|---|---|---|
+| Gafete prestado en el otro dispositivo del sitio, antes de escribir | Móvil: `Nucleo::entregar_gafete_provisional_con_secreto` (una llamada) | **Orquestado en el comando Tauri**: `desktop/src-tauri/src/comandos/gafetes_provisionales.rs` (chequeo de nube + `entregar_gafete_provisional`) |
+
+Qué hacer: mismo movimiento que en proveedores, una función del núcleo
+que chequea y escribe, usada por ambos.
