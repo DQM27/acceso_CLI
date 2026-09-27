@@ -206,6 +206,18 @@ impl From<nube::SincronizacionError> for FalloSincronizacion {
 /// quien usa la app tenía que notarlo y volver a apretar "Sincronizar" a
 /// mano -- ahora se recupera sola.
 pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, String> {
+    ejecutar_sincronizacion_con_alcance(state, nube::AlcanceSincronizacion::completo())
+}
+
+/// Igual que [`ejecutar_sincronizacion`], pero corriendo sólo las etapas de
+/// recepción de `alcance` -- ver `nube::AlcanceSincronizacion`. Lo usa el
+/// aviso en vivo (`sincronizar_cambios_nube`): antes cada aviso corría la
+/// sincronización COMPLETA (~13 consultas a la nube) aunque sólo hubiera
+/// cambiado una tabla. La bandeja de salida se drena siempre.
+pub fn ejecutar_sincronizacion_con_alcance(
+    state: &GuiState,
+    alcance: nube::AlcanceSincronizacion,
+) -> Result<ResumenSincronizacion, String> {
     // El timer, los avisos remotos y el botón manual comparten la misma cola.
     // Sólo una ejecución puede drenarla a la vez; el núcleo queda libre.
     static SINCRONIZACION: Mutex<()> = Mutex::new(());
@@ -213,10 +225,10 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    match intentar_sincronizacion(state) {
+    match intentar_sincronizacion(state, alcance) {
         Err(FalloSincronizacion::TokenVencido) => {
             state.invalidar_token_cacheado();
-            intentar_sincronizacion(state).map_err(|fallo| match fallo {
+            intentar_sincronizacion(state, alcance).map_err(|fallo| match fallo {
                 FalloSincronizacion::TokenVencido => {
                     "El token de este dispositivo venció y no se pudo renovar -- revisá la conexión"
                         .to_string()
@@ -229,7 +241,11 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
     }
 }
 
-fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, FalloSincronizacion> {
+#[allow(clippy::too_many_lines)] // Una etapa por bloque, cada una con su condición de alcance.
+fn intentar_sincronizacion(
+    state: &GuiState,
+    alcance: nube::AlcanceSincronizacion,
+) -> Result<ResumenSincronizacion, FalloSincronizacion> {
     let token = autenticar(state).map_err(FalloSincronizacion::Mensaje)?;
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
@@ -246,7 +262,10 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     // del arranque inicial) o sin red, simplemente no hace nada -- el
     // tope de 12h en `GuiState::access_token_supabase_vigente` sigue
     // aplicando igual si esto no logra renovar a tiempo.
-    if let Some(refresh_token) = state.refresh_token_supabase()
+    // Sólo en la sincronización completa: es una llamada de red más, y el
+    // pulso periódico (completo) ya la corre cada 2 minutos.
+    if alcance.es_completo()
+        && let Some(refresh_token) = state.refresh_token_supabase()
         && let Ok(sesion) = nube::refrescar(nube::base_url(), nube::apikey(), &refresh_token)
     {
         state.iniciar_sesion_supabase(sesion);
@@ -255,41 +274,91 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     let conexion = state
         .conexion_secundaria()
         .map_err(FalloSincronizacion::Mensaje)?;
+    // Cada etapa corre sólo si el alcance la pide; si no, su contador
+    // queda en cero (el resumen describe lo que se recibió en ESTA
+    // sincronización, no el estado total).
     let resumen = nube::drenar_cola(&conexion, &contexto, 200)?;
-    let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
-    let cierres_recibidos_proveedor =
-        nube::recibir_cierres_de_ingresos_propios_proveedor(&conexion, &contexto)?;
-    let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
-    let _remotos_proveedor = nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
-    let _remotos_gafete_provisional =
-        nube::recibir_prestamos_gafete_provisional_abiertos(&conexion, &contexto)?;
-    let _devoluciones_propias_gafete_provisional =
-        nube::recibir_devoluciones_propias_gafete_provisional(&conexion, &contexto)?;
-    let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
-    let catalogo_rutas = nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
-    let movimientos_historial_recibidos = nube::recibir_historial_del_sitio(&conexion, &contexto)?;
-    let citas_recibidas = nube::recibir_citas_del_sitio(&conexion, &contexto)?;
-    let historial_visitas_recibidos =
-        nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)?;
-    let historial_ingresos_proveedor_recibidos =
-        nube::recibir_historial_ingresos_proveedor_del_sitio(&conexion, &contexto)?;
+    let (cierres_recibidos, remotos_abiertos, movimientos_historial_recibidos) = if alcance.ingresos
+    {
+        (
+            nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?,
+            u32::try_from(nube::recibir_ingresos_abiertos(&conexion, &contexto)?.len())
+                .unwrap_or(u32::MAX),
+            nube::recibir_historial_del_sitio(&conexion, &contexto)?,
+        )
+    } else {
+        (0, 0, 0)
+    };
+    let (cierres_recibidos_proveedor, historial_ingresos_proveedor_recibidos) = if alcance
+        .ingresos_proveedor
+    {
+        let cierres = nube::recibir_cierres_de_ingresos_propios_proveedor(&conexion, &contexto)?;
+        nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
+        let historial = nube::recibir_historial_ingresos_proveedor_del_sitio(&conexion, &contexto)?;
+        (cierres, historial)
+    } else {
+        (0, 0)
+    };
+    let (empresas_recibidas, contratistas_recibidos, gafetes_recibidos) = if alcance.catalogo {
+        let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
+        (
+            catalogo.empresas_recibidas,
+            catalogo.contratistas_recibidos,
+            catalogo.gafetes_recibidos,
+        )
+    } else {
+        (0, 0, 0)
+    };
+    let (vehiculos_ruta_recibidos, encargados_ruta_recibidos) = if alcance.catalogo_rutas {
+        let catalogo_rutas = nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
+        (
+            catalogo_rutas.vehiculos_recibidos,
+            catalogo_rutas.encargados_recibidos,
+        )
+    } else {
+        (0, 0)
+    };
+    let citas_recibidas = if alcance.citas {
+        nube::recibir_citas_del_sitio(&conexion, &contexto)?
+    } else {
+        0
+    };
+    let historial_visitas_recibidos = if alcance.visitas {
+        nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)?
+    } else {
+        0
+    };
     // Faltaba acá (bug 2026-09-22): la feature de historial de gafetes
     // provisionales sólo cableó `AppCore::sincronizar_con_nube`, que el
     // escritorio NO usa -- sin esta llamada la caché
     // `prestamos_gafete_provisional_historial_sitio` nunca se llenaba y la
     // vista "Historial" quedaba siempre vacía.
-    let historial_gafetes_provisionales_recibidos =
-        nube::recibir_historial_gafetes_provisionales_del_sitio(&conexion, &contexto)?;
+    let historial_gafetes_provisionales_recibidos = if alcance.gafetes_provisionales {
+        nube::recibir_prestamos_gafete_provisional_abiertos(&conexion, &contexto)?;
+        nube::recibir_devoluciones_propias_gafete_provisional(&conexion, &contexto)?;
+        nube::recibir_historial_gafetes_provisionales_del_sitio(&conexion, &contexto)?
+    } else {
+        0
+    };
     // Mejor esfuerzo a propósito -- ya se llegó hasta acá con la nube
     // respondiendo bien, pero si este chequeo puntual falla no tiene
     // sentido tumbar un sync que por lo demás anduvo. Vacío en ese caso, no
     // error.
-    let conflictos_ingreso =
-        nube::contratistas_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
-    let conflictos_movimiento_visita =
-        nube::visitantes_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
-    let conflictos_ingreso_proveedor =
-        nube::proveedores_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
+    let conflictos_ingreso = if alcance.ingresos {
+        nube::contratistas_con_conflicto_activo(&conexion, &contexto).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let conflictos_movimiento_visita = if alcance.visitas {
+        nube::visitantes_con_conflicto_activo(&conexion, &contexto).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let conflictos_ingreso_proveedor = if alcance.ingresos_proveedor {
+        nube::proveedores_con_conflicto_activo(&conexion, &contexto).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
 
     // Si a quien disparó esto lo desactivaron en otro dispositivo, el
     // catálogo recién recibido ya lo refleja -- lo saca de la sesión acá
@@ -307,7 +376,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     Ok(ResumenSincronizacion {
         enviados: resumen.enviados,
         fallidos: resumen.fallidos,
-        remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
+        remotos_abiertos,
         cierres_recibidos,
         cierres_recibidos_proveedor,
         movimientos_historial_recibidos,
@@ -315,11 +384,11 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
         historial_visitas_recibidos,
         historial_ingresos_proveedor_recibidos,
         historial_gafetes_provisionales_recibidos,
-        empresas_recibidas: catalogo.empresas_recibidas,
-        contratistas_recibidos: catalogo.contratistas_recibidos,
-        gafetes_recibidos: catalogo.gafetes_recibidos,
-        vehiculos_ruta_recibidos: catalogo_rutas.vehiculos_recibidos,
-        encargados_ruta_recibidos: catalogo_rutas.encargados_recibidos,
+        empresas_recibidas,
+        contratistas_recibidos,
+        gafetes_recibidos,
+        vehiculos_ruta_recibidos,
+        encargados_ruta_recibidos,
         sitio_id: token.sitio_id,
         dispositivo_id: token.dispositivo_id,
         tipo: token.tipo,
@@ -384,6 +453,26 @@ pub async fn configurar_dispositivo_inicial(
     })
     .await
     .map_err(|error| format!("No se pudo completar el arranque inicial: {error}"))?
+}
+
+/// Sincronización disparada por avisos en vivo (`cambio_nube`) -- corre
+/// sólo las etapas de las tablas que cambiaron (`tablas`, tal cual las
+/// manda el aviso en `payload.table`), ver `nube::AlcanceSincronizacion`.
+/// Una tabla desconocida o una lista vacía caen en la sincronización
+/// completa.
+#[tauri::command]
+pub async fn sincronizar_cambios_nube(
+    app: tauri::AppHandle,
+    tablas: Vec<String>,
+) -> Result<ResumenSincronizacion, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ejecutar_sincronizacion_con_alcance(
+            &app.state::<GuiState>(),
+            nube::AlcanceSincronizacion::desde_tablas(&tablas),
+        )
+    })
+    .await
+    .map_err(|error| format!("No se pudo completar la sincronización: {error}"))?
 }
 
 #[tauri::command]

@@ -2275,7 +2275,28 @@ impl Nucleo {
         &self,
         secreto: String,
     ) -> Result<ResumenSincronizacion, NucleoError> {
-        self.sincronizar_con_secreto(&secreto)
+        self.sincronizar_con_secreto(
+            &secreto,
+            control_acceso::nube::AlcanceSincronizacion::completo(),
+        )
+    }
+
+    /// Sincronización disparada por avisos en vivo (`cambio_nube`, ver
+    /// `NubeRealtime.kt`): corre sólo las etapas de las tablas que
+    /// cambiaron (`payload.table`), ver
+    /// `control_acceso::nube::AlcanceSincronizacion`. Antes cada aviso
+    /// corría la sincronización completa (~12 consultas a la nube por un
+    /// solo cambio). Una tabla desconocida o una lista vacía caen en la
+    /// completa. La bandeja de salida se drena siempre.
+    pub fn sincronizar_cambios_con_secreto(
+        &self,
+        secreto: String,
+        tablas: Vec<String>,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
+        self.sincronizar_con_secreto(
+            &secreto,
+            control_acceso::nube::AlcanceSincronizacion::desde_tablas(&tablas),
+        )
     }
 
     /// Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
@@ -2984,16 +3005,20 @@ impl Nucleo {
 
     /// Mismo reintento que `Nucleo::sincronizar_con_nube` -- ver su
     /// doc-comment.
-    fn sincronizar_con_secreto(&self, secreto: &str) -> Result<ResumenSincronizacion, NucleoError> {
+    fn sincronizar_con_secreto(
+        &self,
+        secreto: &str,
+        alcance: control_acceso::nube::AlcanceSincronizacion,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
         let _sincronizacion = self
             .sincronizacion_en_curso
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        match self.intentar_sincronizar_con_secreto(secreto) {
+        match self.intentar_sincronizar_con_secreto(secreto, alcance) {
             Err(FalloSincronizacion::TokenVencido) => {
                 self.invalidar_token_cacheado();
-                self.intentar_sincronizar_con_secreto(secreto)
+                self.intentar_sincronizar_con_secreto(secreto, alcance)
                     .map_err(convertir_fallo_sincronizacion)
             }
             Err(otro) => Err(convertir_fallo_sincronizacion(otro)),
@@ -3148,15 +3173,19 @@ impl Nucleo {
         })
     }
 
+    #[allow(clippy::too_many_lines)] // Una etapa por bloque, cada una con su condición de alcance.
     fn intentar_sincronizar_con_secreto(
         &self,
         secreto: &str,
+        alcance: control_acceso::nube::AlcanceSincronizacion,
     ) -> Result<ResumenSincronizacion, FalloSincronizacion> {
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
 
         // Ver el comentario del otro método de sync en este mismo archivo.
-        if let Some(refresh_token) = self.refresh_token_supabase()
+        // Sólo en la completa: una llamada de red más que el pulso ya hace.
+        if alcance.es_completo()
+            && let Some(refresh_token) = self.refresh_token_supabase()
             && let Ok(sesion) = control_acceso::nube::refrescar(
                 control_acceso::nube::base_url(),
                 control_acceso::nube::apikey(),
@@ -3183,51 +3212,82 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         let conexion = self.conexion_secundaria()?;
+        // Cada etapa corre sólo si el alcance la pide; si no, su contador
+        // queda en cero (el resumen describe lo recibido en ESTA corrida).
         let resumen_cola = control_acceso::nube::drenar_cola(&conexion, &contexto, 200)?;
-        let cierres_recibidos =
-            control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
-        let _cierres_recibidos_proveedor =
+        let (cierres_recibidos, remotos_abiertos, movimientos_historial_recibidos) = if alcance
+            .ingresos
+        {
+            (
+                control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?,
+                u32::try_from(
+                    control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?.len(),
+                )
+                .unwrap_or(u32::MAX),
+                control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)?,
+            )
+        } else {
+            (0, 0, 0)
+        };
+        if alcance.ingresos_proveedor {
             control_acceso::nube::recibir_cierres_de_ingresos_propios_proveedor(
                 &conexion, &contexto,
             )?;
-        let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
-        let _remotos_proveedor =
             control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
-        let _remotos_gafete_provisional =
+        }
+        if alcance.gafetes_provisionales {
             control_acceso::nube::recibir_prestamos_gafete_provisional_abiertos(
                 &conexion, &contexto,
             )?;
-        let _devoluciones_propias_gafete_provisional =
             control_acceso::nube::recibir_devoluciones_propias_gafete_provisional(
                 &conexion, &contexto,
             )?;
-        let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
+        }
+        let (empresas_recibidas, contratistas_recibidos, gafetes_recibidos) = if alcance.catalogo {
+            let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
+            (
+                catalogo.empresas_recibidas,
+                catalogo.contratistas_recibidos,
+                catalogo.gafetes_recibidos,
+            )
+        } else {
+            (0, 0, 0)
+        };
         // Ver el comentario del otro método de sync en este mismo archivo
         // sobre por qué hacía falta esto (buscador de "Gafetes KOF" sin
         // encargados sincronizados).
-        let _catalogo_rutas =
+        if alcance.catalogo_rutas {
             control_acceso::nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
-        let movimientos_historial_recibidos =
-            control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)?;
-        let citas_recibidas = control_acceso::nube::recibir_citas_del_sitio(&conexion, &contexto)?;
+        }
+        let citas_recibidas = if alcance.citas {
+            control_acceso::nube::recibir_citas_del_sitio(&conexion, &contexto)?
+        } else {
+            0
+        };
         // Ver el comentario del otro método de sync en este mismo archivo:
         // el celular no trae historial de visitas a propósito.
         let historial_visitas_recibidos = 0;
         // Mejor esfuerzo -- ya se llegó hasta acá con la nube respondiendo
         // bien, pero si este chequeo puntual falla no tiene sentido tumbar
         // un sync que por lo demás anduvo.
-        let conflictos_ingreso =
+        let conflictos_ingreso = if alcance.ingresos {
             control_acceso::nube::contratistas_con_conflicto_activo(&conexion, &contexto)
                 .unwrap_or_default()
                 .into_iter()
                 .map(Into::into)
-                .collect();
-        let conflictos_ingreso_proveedor =
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let conflictos_ingreso_proveedor = if alcance.ingresos_proveedor {
             control_acceso::nube::proveedores_con_conflicto_activo(&conexion, &contexto)
                 .unwrap_or_default()
                 .into_iter()
                 .map(Into::into)
-                .collect();
+                .collect()
+        } else {
+            Vec::new()
+        };
         let conflictos_gafete = mapear_conflictos_gafete(resumen_cola.conflictos_gafete);
 
         let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
@@ -3238,11 +3298,11 @@ impl Nucleo {
         Ok(ResumenSincronizacion {
             enviados: resumen_cola.enviados,
             fallidos: resumen_cola.fallidos,
-            remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
+            remotos_abiertos,
             cierres_recibidos,
-            empresas_recibidas: catalogo.empresas_recibidas,
-            contratistas_recibidos: catalogo.contratistas_recibidos,
-            gafetes_recibidos: catalogo.gafetes_recibidos,
+            empresas_recibidas,
+            contratistas_recibidos,
+            gafetes_recibidos,
             movimientos_historial_recibidos,
             citas_recibidas,
             historial_visitas_recibidos,

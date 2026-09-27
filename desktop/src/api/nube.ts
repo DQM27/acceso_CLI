@@ -174,6 +174,14 @@ export function sincronizarConNube(): Promise<ResumenSincronizacion> {
   return invoke("sincronizar_con_nube");
 }
 
+/** Sincronización de un aviso en vivo: sólo las etapas de las tablas que
+ * cambiaron (`payload.table` de `cambio_nube`) -- ver
+ * `nube::AlcanceSincronizacion` en el núcleo. Una tabla desconocida cae en
+ * la sincronización completa del lado Rust. */
+export function sincronizarCambiosNube(tablas: string[]): Promise<ResumenSincronizacion> {
+  return invoke("sincronizar_cambios_nube", { tablas });
+}
+
 export function sesionRealtimeNube(): Promise<SesionRealtimeNube> {
   return invoke("sesion_realtime_nube");
 }

@@ -578,6 +578,7 @@ pub fn run() {
             comandos::gafetes::resolver_gafete,
             comandos::nube::configurar_dispositivo_inicial,
             comandos::nube::sincronizar_con_nube,
+            comandos::nube::sincronizar_cambios_nube,
             comandos::nube::sesion_realtime_nube,
             comandos::nube::listar_ingresos_remotos,
             comandos::nube::cerrar_ingreso_remoto,
