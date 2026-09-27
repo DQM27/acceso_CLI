@@ -2581,76 +2581,6 @@ impl Nucleo {
             })
     }
 
-    /// Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
-    /// gafetes provisionales KOF -- llamar justo antes de
-    /// `entregar_gafete_provisional`. Ver
-    /// `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
-    pub fn gafete_provisional_ocupado_en_sitio_con_secreto(
-        &self,
-        secreto: String,
-        gafete_numero: i64,
-    ) -> Result<bool, NucleoError> {
-        if secreto.trim().is_empty() {
-            return Ok(false);
-        }
-        let actor = self.actor_autenticado()?;
-        self.core_lock().autorizar_uso_nube(&actor)?;
-        let token = self
-            .autenticar_con_cache(&secreto)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::gafete_provisional_ocupado_en_otro_dispositivo(
-            &contexto,
-            gafete_numero,
-        )
-        .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
-        })
-    }
-
-    /// Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
-    /// gafetes de proveedor -- llamar justo antes de
-    /// `registrar_ingreso_proveedor`. Ver
-    /// `docs/features-futuras/plan-control-proveedores.md`.
-    pub fn gafete_de_proveedor_ocupado_en_sitio_con_secreto(
-        &self,
-        secreto: String,
-        gafete_numero: i64,
-    ) -> Result<bool, NucleoError> {
-        if secreto.trim().is_empty() {
-            return Ok(false);
-        }
-        let actor = self.actor_autenticado()?;
-        self.core_lock().autorizar_uso_nube(&actor)?;
-        let token = self
-            .autenticar_con_cache(&secreto)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(
-            &contexto,
-            gafete_numero,
-        )
-        .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
-        })
-    }
-
     /// Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
     /// de ingresos abiertos entre sitios") -- mismo patrón que
     /// `gafete_ocupado_en_sitio_con_secreto`, pero de mejor esfuerzo: sin
@@ -2667,30 +2597,6 @@ impl Nucleo {
     ) -> Option<String> {
         self.cache_token
             .contratista_activo_en_otro_sitio(&secreto, &cedula)
-    }
-
-    /// Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
-    /// pero contra `ingresos_proveedor` -- llamar justo antes de
-    /// `registrar_ingreso_proveedor`.
-    pub fn proveedor_activo_en_otro_sitio_con_secreto(
-        &self,
-        secreto: String,
-        cedula: String,
-    ) -> Option<String> {
-        if secreto.trim().is_empty() {
-            return None;
-        }
-        let token = self.autenticar_con_cache(&secreto).ok()?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::proveedor_activo_en_otro_sitio(&contexto, &cedula)
-            .ok()
-            .flatten()
     }
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo

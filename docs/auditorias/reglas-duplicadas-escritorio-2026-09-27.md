@@ -12,12 +12,3 @@ muestran. Queda como referencia de dónde vive cada regla.
 | Entrega de gafete provisional KOF (gafete prestado en el otro dispositivo) | `application::entregar_gafete_provisional_verificado` (`con_nube.rs`) |
 | Placa según medio, placa y gafete obligatorios, bloqueo y aviso de PRAIND al ingresar | `domain::registro_ingreso::placa_segun_medio`, `RegistroIngresoService`, `PreparacionIngreso` |
 | Aviso de la fila en listas ("ACCESO DENEGADO" / "PRAIND VENCIDO") | `domain::acceso::aviso_acceso_en_lista`, llenado en `AppCore::buscar_contratistas` (`ContratistaResumen::aviso_acceso`) |
-
-## Pendiente de limpieza
-
-Funciones del puente móvil que ya nadie usa (quitarlas cambia la API
-FFI: regenerar bindings y correr los tests de Android):
-
-- `Nucleo::proveedor_activo_en_otro_sitio_con_secreto`
-- `Nucleo::gafete_de_proveedor_ocupado_en_sitio_con_secreto`
-- `Nucleo::gafete_provisional_ocupado_en_sitio_con_secreto`

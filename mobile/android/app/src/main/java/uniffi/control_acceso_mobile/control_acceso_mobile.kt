@@ -731,13 +731,9 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio_con_secreto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_provisional_ocupado_en_sitio_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo(
     ): Int
@@ -764,8 +760,6 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_con_secreto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_proveedor_activo_en_otro_sitio_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional(
     ): Int
@@ -887,13 +881,9 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional_con_secreto(`ptr`: Long,`encargadoId`: Long,`gafeteNumero`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(`ptr`: Long,`directorio`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_provisional_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -920,8 +910,6 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso_con_secreto(`ptr`: Long,`contratistaId`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_proveedor_activo_en_otro_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_devolucion_gafete_provisional(`ptr`: Long,`prestamoId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -1165,16 +1153,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto() and 0xFFFF) != 33806) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto() and 0xFFFF) != 42761) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio() and 0xFFFF) != 35345) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio_con_secreto() and 0xFFFF) != 40319) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_provisional_ocupado_en_sitio_con_secreto() and 0xFFFF) != 37221) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo() and 0xFFFF) != 28439) {
@@ -1214,9 +1196,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_con_secreto() and 0xFFFF) != 56092) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_proveedor_activo_en_otro_sitio_con_secreto() and 0xFFFF) != 42918) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional() and 0xFFFF) != 33923) {
@@ -2021,14 +2000,6 @@ public interface NucleoInterface {
     fun `entregarGafeteProvisionalConSecreto`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long
     
     /**
-     * Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
-     * gafetes de proveedor -- llamar justo antes de
-     * `registrar_ingreso_proveedor`. Ver
-     * `docs/features-futuras/plan-control-proveedores.md`.
-     */
-    fun `gafeteDeProveedorOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean
-    
-    /**
      * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
      * activo en este sitio del lado de OTRO dispositivo -- llamar justo
      * antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
@@ -2043,14 +2014,6 @@ public interface NucleoInterface {
      * Chequeo remoto usando el secreto ya descifrado por Android Keystore.
      */
     fun `gafeteOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean
-    
-    /**
-     * Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
-     * gafetes provisionales KOF -- llamar justo antes de
-     * `entregar_gafete_provisional`. Ver
-     * `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
-     */
-    fun `gafeteProvisionalOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean
     
     /**
      * Guarda el secreto de este dispositivo en el archivo administrado por
@@ -2151,13 +2114,6 @@ public interface NucleoInterface {
      * `*_con_secreto` de este archivo.
      */
     fun `prepararIngresoConSecreto`(`contratistaId`: kotlin.Long, `secreto`: kotlin.String): PreparacionIngreso
-    
-    /**
-     * Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
-     * pero contra `ingresos_proveedor` -- llamar justo antes de
-     * `registrar_ingreso_proveedor`.
-     */
-    fun `proveedorActivoEnOtroSitioConSecreto`(`secreto`: kotlin.String, `cedula`: kotlin.String): kotlin.String?
     
     /**
      * Registra la devolución de un préstamo de gafete provisional KOF --
@@ -3034,28 +2990,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
-     * gafetes de proveedor -- llamar justo antes de
-     * `registrar_ingreso_proveedor`. Ver
-     * `docs/features-futuras/plan-control-proveedores.md`.
-     */
-    @Throws(NucleoException::class)override fun `gafeteDeProveedorOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_de_proveedor_ocupado_en_sitio_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),
-        FfiConverterLong.lower(`gafeteNumero`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
      * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
      * activo en este sitio del lado de OTRO dispositivo -- llamar justo
      * antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
@@ -3088,28 +3022,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),
-        FfiConverterLong.lower(`gafeteNumero`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
-     * gafetes provisionales KOF -- llamar justo antes de
-     * `entregar_gafete_provisional`. Ver
-     * `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
-     */
-    @Throws(NucleoException::class)override fun `gafeteProvisionalOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_provisional_ocupado_en_sitio_con_secreto(
         it,
         
         FfiConverterString.lower(`secreto`),
@@ -3378,26 +3290,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         
         FfiConverterLong.lower(`contratistaId`),
         FfiConverterString.lower(`secreto`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
-     * pero contra `ingresos_proveedor` -- llamar justo antes de
-     * `registrar_ingreso_proveedor`.
-     */override fun `proveedorActivoEnOtroSitioConSecreto`(`secreto`: kotlin.String, `cedula`: kotlin.String): kotlin.String? {
-            return FfiConverterOptionalString.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_proveedor_activo_en_otro_sitio_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),
-        FfiConverterString.lower(`cedula`),_status)
 }
     }
     )

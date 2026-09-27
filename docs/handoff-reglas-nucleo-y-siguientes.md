@@ -51,8 +51,7 @@ proveedores y gafete KOF verificados en `src/application/con_nube.rs`
 (los usan Tauri y `mobile/rust-core`), y el aviso "ACCESO DENEGADO" /
 "PRAIND VENCIDO" de las listas sale de `ContratistaResumen::aviso_acceso`.
 
-Queda de este paso: quitar tres funciones del puente móvil que ya nadie
-usa (listadas en la auditoría) y, si el dueño lo pide, la PR a `main`.
+Queda de este paso sólo la PR a `main`, si el dueño la pide.
 `main` sólo tiene los merges de #77 y #79, sin contenido que falte acá.
 
 ## Paso 2: rama nueva `claude/requiere-gafete` (desde `main` ya con paso 1)
