@@ -245,19 +245,33 @@ private fun VistaCamaraCedula(
                         ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
                     }
                 }
+                // Un gafete vertical (In House) no entra en el recuadro
+                // horizontal de tarjeta: si un frame con ese recuadro no
+                // reconoce NINGÚN documento, el siguiente se lee con una
+                // región más alta (`RegionGuiaOcr.GAFETE_VERTICAL`). Una
+                // cédula/licencia que sí se reconoce nunca activa el
+                // cambio, así que su lectura queda exactamente igual.
+                val probarRegionVertical = AtomicBoolean(false)
                 val analisis = construirAnalizadorOcr(
                     ejecutorAnalisis = camara.ejecutor,
                     detectada = camara.detectada,
                     sesionActiva = camara.sesionActiva,
                 ) { imagen ->
+                    val vertical = probarRegionVertical.getAndSet(false)
                     analizarCedula(
                         imagen = imagen,
                         recognizer = camara.recognizer,
                         ejecutorPrincipal = camara.ejecutorPrincipal,
                         sesionActiva = camara.sesionActiva,
                         buffersOcr = buffersOcr,
-                        onTexto = { texto -> onResultado(estabilizador.procesarFrame(texto)) },
+                        onTexto = { texto ->
+                            if (!vertical && clasificarTipoDocumento(texto) == TipoDocumento.DESCONOCIDO) {
+                                probarRegionVertical.set(true)
+                            }
+                            onResultado(estabilizador.procesarFrame(texto))
+                        },
                         onFallo = onFallo,
+                        region = if (vertical) RegionGuiaOcr.GAFETE_VERTICAL else RegionGuiaOcr.TARJETA_ID,
                     )
                 }
                 camara.analisisCamara = analisis

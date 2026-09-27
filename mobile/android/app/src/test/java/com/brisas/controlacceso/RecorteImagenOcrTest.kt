@@ -135,4 +135,13 @@ class RecorteImagenOcrTest {
         val croma = nv21.drop(4 * 2).map { it.toInt() and 0xff }
         assertEquals(listOf(200 + 6, 100 + 6, 200 + 7, 100 + 7), croma)
     }
+
+    @Test
+    fun regionGafeteVerticalContieneElRecuadroDeTarjetaYEsMasAltaQueAncha() {
+        val tarjeta = RegionGuiaOcr.TARJETA_ID.rectanguloEnPixeles(anchoVisible = 1080, altoVisible = 2000)
+        val gafete = RegionGuiaOcr.GAFETE_VERTICAL.rectanguloEnPixeles(anchoVisible = 1080, altoVisible = 2000)
+        assertTrue(gafete.height > gafete.width)
+        assertTrue(gafete.left <= tarjeta.left && gafete.right >= tarjeta.right)
+        assertTrue(gafete.top <= tarjeta.top && gafete.bottom >= tarjeta.bottom)
+    }
 }

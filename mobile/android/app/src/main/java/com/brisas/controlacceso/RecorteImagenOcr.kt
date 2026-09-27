@@ -58,6 +58,16 @@ data class RegionGuiaOcr(
     companion object {
         val TARJETA_ID = RegionGuiaOcr(fraccionAncho = 0.84f, proporcionAnchoAlto = 1.586f, fraccionTopCentro = 0.52f)
         val COMPROBANTE_RUTA = RegionGuiaOcr(fraccionAncho = 0.85f, proporcionAnchoAlto = 1.3f, fraccionTopCentro = 0.52f)
+
+        // Gafete VERTICAL (In House, KOF) sostenido en la pantalla de
+        // escaneo general, cuyo recuadro es de tarjeta horizontal: el
+        // gafete no entra entero y la franja "CONTRATISTA" / "COSTA RICA"
+        // queda debajo del recuadro -- peor con estuche, que lo agranda.
+        // Mismo ancho que `TARJETA_ID`, pero más alta que ancha, centrada
+        // en el mismo punto. No se dibuja: sólo se prueba en el frame
+        // siguiente a uno horizontal que no reconoció ningún documento
+        // (ver `PantallaEscanearCedula`).
+        val GAFETE_VERTICAL = RegionGuiaOcr(fraccionAncho = 0.84f, proporcionAnchoAlto = 0.75f, fraccionTopCentro = 0.52f)
     }
 }
 
