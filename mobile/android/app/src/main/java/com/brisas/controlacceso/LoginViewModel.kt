@@ -84,10 +84,8 @@ class LoginViewModel(
                 }
                 abrirSesion(resultado.sesion)
                 lanzarSincronizacionDeFondo()
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoStoreException) {
-                error = excepcion.message
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 autenticando = false
             }

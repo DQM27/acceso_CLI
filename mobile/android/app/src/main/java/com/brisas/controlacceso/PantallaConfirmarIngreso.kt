@@ -189,12 +189,8 @@ fun PantallaConfirmarIngreso(
                 // siempre, sin reabrir el resto del rediseño a ViewModels
                 // que pide la auditoría.
                 withContext(NonCancellable) { onRegistrado() }
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoStoreException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
-                error = excepcion.message
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 enviando = false
             }

@@ -276,12 +276,8 @@ class ActivosViewModel(
                     }
                 }
                 error = null
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoStoreException) {
-                error = excepcion.message
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 if (version == versionBusqueda) cargando = false
             }
@@ -374,12 +370,8 @@ class ActivosViewModel(
                 }
                 CambiosNube.solicitar()
                 buscar()
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoStoreException) {
-                error = excepcion.message
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
             }
         }
     }

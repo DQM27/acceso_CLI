@@ -252,12 +252,8 @@ class ProveedoresViewModel(
                 error = excepcion.message
             } catch (excepcion: GafeteOcupadoEnSitioException) {
                 error = excepcion.message
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoStoreException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
-                error = excepcion.message
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 registrando = false
             }
@@ -301,12 +297,8 @@ class ProveedoresViewModel(
                 }
                 CambiosNube.solicitar()
                 refrescarActivos()
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoStoreException) {
-                error = excepcion.message
-            } catch (excepcion: SecretoDispositivoNoEncontradoException) {
-                error = excepcion.message
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
             }
         }
     }
