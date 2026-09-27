@@ -182,17 +182,6 @@ private val REGEX_LICENCIA_DM_DIRECTO = Regex("""\bDM[- ]?(\d{6,15})\b""", Regex
 private val REGEX_LICENCIA_CI_DIRECTO = Regex("""\bCI[- ]?(\d{9})\b""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NUMERO = Regex("""DOCUMENTO\s*NO\.?:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NUMERO_PROVISIONAL = Regex("""N[°ºO]?\s*DOCUMENTO\s*:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
-// Compartida con la cédula nacional de frente (misma etiqueta "Nombre:"
-// exacta en ambos documentos) -- ver `extraerCedulaNacionalFrente`.
-private val REGEX_NOMBRE_ETIQUETA = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
-// Cédula nacional de frente: el apellido viene partido en dos campos, no
-// uno solo como en DIMEX -- "1°Apellido:"/"1° Apellido:" según el diseño
-// (formato nuevo con orquídeas vs. el azul anterior, dos fotos reales del
-// 2026-09-20), y lo mismo para el segundo. `\D{0,4}` entre el dígito y
-// "Apellido" tolera el símbolo de grado, el espacio, o ambos, sin
-// necesitar saber cuál de los dos diseños es.
-private val REGEX_CEDULA_APELLIDO1 = Regex("""1\D{0,4}Apellido:?[ \t]*\n?[ \t]*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
-private val REGEX_CEDULA_APELLIDO2 = Regex("""2\D{0,4}Apellido:?[ \t]*\n?[ \t]*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 // Esquema del frente de la licencia (MOPT / Educación Vial), valores ficticios:
 //
 //   REPUBLICA DE COSTA RICA
@@ -430,17 +419,102 @@ private fun extraerDimex(texto: String): DocumentoDetectado? {
 /// nunca deben bloquear que se acepte la lectura por el número.
 private fun extraerCedulaNacionalFrente(texto: String): DocumentoDetectado? {
     val numero = extraerCedulaDeTexto(texto) ?: return null
-    val nombre = REGEX_NOMBRE_ETIQUETA.find(texto)?.groupValues?.get(1)?.trim()
-    val apellido1 = REGEX_CEDULA_APELLIDO1.find(texto)?.groupValues?.get(1)?.trim()
-    val apellido2 = REGEX_CEDULA_APELLIDO2.find(texto)?.groupValues?.get(1)?.trim()
-    val apellidos = listOfNotNull(apellido1, apellido2).filter { it.isNotBlank() }.joinToString(" ").ifBlank { null }
+    val (nombre, apellido1, apellido2) = nombresCedulaNacional(texto)
+    val apellidos = listOfNotNull(apellido1, apellido2).joinToString(" ").ifBlank { null }
+    // Sólo el diseño nuevo trae "Vence:" en el frente (junto a "F. Nac:",
+    // que se ignora); en el azul anterior queda en null.
+    val vencimiento = extraerFecha(texto, etiqueta = "Vence")
 
     return DocumentoDetectado(
         tipo = TipoDocumento.CEDULA_NACIONAL,
         numeroDocumento = numero,
         nombre = nombre,
         apellidos = apellidos,
+        vencimiento = vencimiento,
     )
+}
+
+// Esquema del frente de la cédula nacional (TSE), dos diseños con las
+// mismas etiquetas (valores ficticios):
+//
+//   Nuevo (orquídeas, tonos rosa)       Anterior (azul, cielo)
+//   1 2345 6789                         1 2345 6789
+//   Nombre: JUAN CARLOS                          Nombre: JUAN CARLOS
+//   1°Apellido: GOMEZ                        1° Apellido: GOMEZ
+//   2°Apellido: VARGAS                       2° Apellido: VARGAS
+//   F. Nac:01/01/2000 Vence:01/01/2030             C.C:
+//
+// Sólo se leen número (el que va suelto sobre la firma), nombre, los dos
+// apellidos y "Vence" (sólo el diseño nuevo lo trae en el frente). F. Nac,
+// C.C, firma y encabezado se ignoran. En el diseño anterior
+// las etiquetas están alineadas a la derecha en su propia columna, y ML
+// Kit a veces devuelve TODAS las etiquetas en un bloque y TODOS los valores
+// en otro ("Nombre:\n1° Apellido:\n2° Apellido:\nC.C:\nJUAN CARLOS\n
+// GOMEZ\nVARGAS") -- por eso a veces "no captaba el nombre o ignoraba los
+// apellidos". Se prueba primero etiqueta -> valor en el mismo renglón o el
+// siguiente; si falta algún campo, se toma el bloque de valores: 3
+// renglones seguidos sólo en MAYÚSCULAS, en el orden impreso (nombre,
+// 1er apellido, 2do apellido). Las etiquetas se escriben en minúscula y la
+// firma lleva puntos o minúsculas, así que nunca pasan por valor.
+private const val LETRAS_MAYUS = """A-ZÁÉÍÓÚÑÜ"""
+private val PATRON_ETIQUETAS_CEDULA =
+    """NOMBRE|[12]\D{0,4}APELLIDO|C\.?\s*C\b|F\.?\s*NAC|VENCE"""
+private val REGEX_CORTE_ETIQUETA_CEDULA = Regex(
+    """(?:^|\s)(?:$PATRON_ETIQUETAS_CEDULA)(?![a-zA-ZáéíóúñÁÉÍÓÚÑ]).*$""",
+    RegexOption.IGNORE_CASE,
+)
+private val REGEX_EMPIEZA_CON_ETIQUETA_CEDULA = Regex(
+    """^\s*(?:$PATRON_ETIQUETAS_CEDULA)""",
+    RegexOption.IGNORE_CASE,
+)
+private val REGEX_CEDULA_ETIQUETA_NOMBRE = Regex("""(?<![a-zA-Z])NOMBRE\s*:?""", RegexOption.IGNORE_CASE)
+private val REGEX_CEDULA_ETIQUETA_APELLIDO1 = Regex("""1\D{0,4}APELLIDO\s*:?""", RegexOption.IGNORE_CASE)
+private val REGEX_CEDULA_ETIQUETA_APELLIDO2 = Regex("""2\D{0,4}APELLIDO\s*:?""", RegexOption.IGNORE_CASE)
+// Valor impreso: sólo mayúsculas (sensible a mayúsculas a propósito, para
+// no tomar nunca "Apellido" ni otra etiqueta como valor).
+private val REGEX_VALOR_MAYUS = Regex("""^[$LETRAS_MAYUS]+(?: [$LETRAS_MAYUS]+)*""")
+private val REGEX_RENGLON_SOLO_MAYUS = Regex("""^[$LETRAS_MAYUS]+(?: [$LETRAS_MAYUS]+)*$""")
+private val PALABRAS_ENCABEZADO_CEDULA = setOf(
+    "REPÚBLICA", "REPUBLICA", "COSTA", "RICA", "TRIBUNAL", "SUPREMO", "ELECCIONES",
+    "CÉDULA", "CEDULA", "IDENTIDAD",
+)
+
+private fun valorCedulaTrasEtiqueta(texto: String, etiqueta: Regex): String? {
+    val match = etiqueta.find(texto) ?: return null
+    val renglones = texto.substring(match.range.last + 1).split('\n')
+    for ((indice, renglon) in renglones.take(2).withIndex()) {
+        if (indice > 0 && REGEX_EMPIEZA_CON_ETIQUETA_CEDULA.containsMatchIn(renglon)) return null
+        val sinVecino = renglon.replace(REGEX_CORTE_ETIQUETA_CEDULA, "").trim()
+        val valor = REGEX_VALOR_MAYUS.find(sinVecino)?.value?.trim()
+        if (!valor.isNullOrBlank()) return valor
+    }
+    return null
+}
+
+/// Bloque de valores separado de sus etiquetas: primeros 3 renglones
+/// SEGUIDOS sólo en mayúsculas que no sean el encabezado de la tarjeta.
+private fun bloqueDeValoresCedula(texto: String): Triple<String, String, String>? {
+    val renglones = texto.lines().map { it.trim() }
+    val esValor = { renglon: String ->
+        REGEX_RENGLON_SOLO_MAYUS.matches(renglon) &&
+            renglon.split(" ").none { it in PALABRAS_ENCABEZADO_CEDULA }
+    }
+    for (inicio in 0..renglones.size - 3) {
+        val tres = renglones.subList(inicio, inicio + 3)
+        if (tres.all(esValor)) return Triple(tres[0], tres[1], tres[2])
+    }
+    return null
+}
+
+private fun nombresCedulaNacional(texto: String): Triple<String?, String?, String?> {
+    val nombre = valorCedulaTrasEtiqueta(texto, REGEX_CEDULA_ETIQUETA_NOMBRE)
+    val apellido1 = valorCedulaTrasEtiqueta(texto, REGEX_CEDULA_ETIQUETA_APELLIDO1)
+    val apellido2 = valorCedulaTrasEtiqueta(texto, REGEX_CEDULA_ETIQUETA_APELLIDO2)
+    if (nombre != null && apellido1 != null && apellido2 != null) return Triple(nombre, apellido1, apellido2)
+    val hayEtiquetas = REGEX_CEDULA_ETIQUETA_NOMBRE.containsMatchIn(texto) ||
+        REGEX_CEDULA_ETIQUETA_APELLIDO1.containsMatchIn(texto)
+    val bloque = if (hayEtiquetas) bloqueDeValoresCedula(texto) else null
+    return bloque ?: Triple(nombre, apellido1, apellido2)
 }
 
 /// El prefijo "DM-" es la señal de que es una licencia de extranjero (ver

@@ -685,4 +685,85 @@ class LectorDocumentosIdentidadTest {
         assertEquals("ANA MARIA", doc?.nombre)
         assertEquals("DE LA O CASTRO", doc?.apellidos)
     }
+
+    // --- Cédula nacional: esquema, bloques separados y sólo 4 campos ---
+
+    @Test
+    fun cedulaNuevaLeeNombreApellidosNumeroYVenceIgnorandoFechaDeNacimiento() {
+        val texto = """
+            REPÚBLICA DE COSTA RICA
+            TRIBUNAL SUPREMO DE ELECCIONES
+            CÉDULA DE IDENTIDAD
+            1 2345 6789
+            JUAN.C.G
+            Nombre: JUAN CARLOS
+            1ºApellido: GOMEZ
+            2ºApellido: VARGAS F. Nac:22/08/2003 Vence:08/04/2036
+            22/08/2003
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("123456789", doc?.numeroDocumento)
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("GOMEZ VARGAS", doc?.apellidos)
+        assertEquals(FechaDocumento(8, 4, 2036), doc?.vencimiento)
+        assertNull(doc?.fechaNacimiento)
+    }
+
+    @Test
+    fun cedulaAzulConEtiquetasYValoresEnBloquesSeparados() {
+        // Etiquetas alineadas a la derecha en su propia columna: ML Kit
+        // devuelve primero todas las etiquetas y después todos los valores.
+        val texto = """
+            REPÚBLICA DE COSTA RICA
+            Tribunal Supremo de Elecciones
+            Cédula de Identidad
+            1 9876 5432
+            Ana L.S
+            Nombre:
+            1° Apellido:
+            2° Apellido:
+            C.C:
+            ANA LUCIA
+            RODRIGUEZ
+            SOLIS
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("198765432", doc?.numeroDocumento)
+        assertEquals("ANA LUCIA", doc?.nombre)
+        assertEquals("RODRIGUEZ SOLIS", doc?.apellidos)
+        assertNull(doc?.vencimiento)
+    }
+
+    @Test
+    fun cedulaAzulConValoresAntesQueLasEtiquetas() {
+        val texto = """
+            REPÚBLICA DE COSTA RICA
+            Cédula de Identidad
+            1 9876 5432
+            ANA LUCIA
+            RODRIGUEZ
+            SOLIS
+            Nombre:
+            1° Apellido:
+            2° Apellido:
+            C.C:
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals("ANA LUCIA", doc?.nombre)
+        assertEquals("RODRIGUEZ SOLIS", doc?.apellidos)
+    }
+
+    @Test
+    fun cedulaNoTomaLaEtiquetaSiguienteComoValor() {
+        val texto = "Cédula de Identidad\n1 9876 5432\nNombre:\n1° Apellido: RODRIGUEZ\n2° Apellido: SOLIS"
+        val doc = leerDocumentoDeTexto(texto)
+        assertNull(doc?.nombre)
+        assertEquals("RODRIGUEZ SOLIS", doc?.apellidos)
+    }
 }
