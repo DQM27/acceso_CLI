@@ -195,6 +195,13 @@ pasa de ~200, agrupar en sub-fachadas (`core.rutas()`, `core.nube()`).
    `CambiosNube.kt`, `SincronizacionPeriodica.kt`) y el caché de token se
    pueden traer de esa rama casi sin cambios.
 
+> **No descartar el cliente realtime en Rust** (rama
+> `claude/realtime-rust-spike`, crate `lattis-realtime`). Decisión del
+> dueño (2026-09-27): primero se prueba el núcleo rediseñado (N1-N3) con
+> los clientes oficiales; si el realtime sigue fallando, la causa no era
+> el cliente y se compara contra esa rama antes de decidir. No borrar la
+> rama ni su código hasta esa prueba.
+
 ## Verificación (antes de cada push)
 
 ```bash
