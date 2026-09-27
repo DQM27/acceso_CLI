@@ -909,4 +909,26 @@ class LectorDocumentosIdentidadTest {
         assertEquals(TipoDocumento.GAFETE_CONTRATISTA, doc?.tipo)
         assertEquals("12", doc?.numeroDocumento)
     }
+
+    // --- PRAIND vertical: título/pie fuera del recuadro horizontal ---
+
+    @Test
+    fun praindSinTituloNiPieSeReconocePorSusEtiquetas() {
+        val texto = """
+            Nombre: Ana Maria Rojas Vega
+            No. de cédula: 701000000
+            Empresa: Sodexo
+            Fecha de inducción: 03/08/2026
+            Fecha de vencimiento de
+            inducción: 03/08/2027
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CARNET_INDUCCION_PRAIND, doc?.tipo)
+        assertEquals("701000000", doc?.numeroDocumento)
+        assertEquals("Ana Maria Rojas Vega", doc?.nombre)
+        assertEquals("Sodexo", doc?.empresa)
+        assertEquals(FechaDocumento(3, 8, 2027), doc?.vencimiento)
+    }
 }

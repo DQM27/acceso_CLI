@@ -280,6 +280,15 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
         // abajo y el carnet se leería como si fuera la cédula misma.
         "CARNET DE INDUCCIÓN" in mayus || "CARNET DE INDUCCION" in mayus ->
             TipoDocumento.CARNET_INDUCCION_PRAIND
+        // El carnet PRAIND se sostiene VERTICAL y el recuadro guía es
+        // horizontal: en la variante con el título en el pie rojo ("CARNET
+        // DE INDUCCIÓN EN NORMAS DE SEGURIDAD...") ese pie queda fuera del
+        // recorte. Sus propias etiquetas, que van en el centro, alcanzan:
+        // "No. de cédula:" + "inducción" (Fecha de inducción / de
+        // vencimiento de inducción) no aparecen juntas en ningún otro
+        // documento.
+        REGEX_PRAIND_CEDULA.containsMatchIn(texto) && "INDUCCI" in mayus ->
+            TipoDocumento.CARNET_INDUCCION_PRAIND
         "BAC" in mayus && REGEX_DIGITOS_BAC.containsMatchIn(mayus) ->
             TipoDocumento.CARNET_BAC
         "CONTRATISTAS" in mayus && "COSTA RICA" in mayus && REGEX_GAFETE_CONTRATISTA.containsMatchIn(mayus) ->
