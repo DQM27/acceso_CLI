@@ -38,13 +38,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.MedioIngreso
-import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
 import uniffi.control_acceso_mobile.ResultadoAcceso
@@ -96,42 +92,26 @@ fun mensajeVencimientoPraind(fecha: String): String {
 fun placaSiCorresponde(medio: MedioIngreso, placaTexto: String): String? =
     if (medio == MedioIngreso.VEHICULO) placaTexto.trim() else null
 
-/// A diferencia de `PantallaActivos`/`PantallaLogin`, esta pantalla se
-/// queda con `remember`/`rememberSaveable` en vez de un `ViewModel` — a
-/// propósito, ver mobile/android/arquitectura.md sobre cuándo uno hace falta y
-/// cuándo no:
-///
-/// El árbol de estados `SeleccionIngreso` en `ActivosViewModel` desmonta
-/// por completo esta pantalla al cancelar o al confirmar (vuelve a
-/// `Ninguna`), así que cada vez que se entra acá es una tentativa nueva —
-/// exactamente el estado "fresco" que ya da gratis `remember` al perderse
-/// junto con la composición. Un `ViewModel`, en cambio, sobrevive aunque el
-/// Composable se desmonte — con el alcance por defecto de esta app (sin
-/// Navigation-Compose, todos los `viewModel()` comparten el mismo dueño:
-/// la Activity) eso arrastraría el `error`/`gafeteTexto` de un intento
-/// fallido con el contratista A a la pantalla del contratista B, salvo que
-/// se le pase una key que distinga cada intento — complejidad real que acá
-/// no compra nada, porque no hay ninguna razón de negocio para que este
-/// formulario sobreviva más que la propia pantalla.
-///
-/// Lo que sí se corrige: `medio`/`gafeteTexto` pasan a `rememberSaveable`
-/// (sobreviven una rotación de pantalla a medio llenar, algo que
-/// `remember` no da) y el `catch` pasa de `Exception` genérico a
-/// [NucleoException] específico — mismo criterio que en los ViewModel de
-/// las otras pantallas.
+/// Formulario de ingreso de un contratista ya preparado. El registro (la
+/// validación de gafete/placa y la llamada al núcleo) vive en
+/// [ActivosViewModel.registrarIngreso] -- punto M2 de la auditoría móvil;
+/// antes esta pantalla llamaba al núcleo directo y manejaba sus propias
+/// corrutinas y errores. Acá sólo quedan los campos del formulario:
+/// `medio`/`gafeteTexto`/`placaTexto` en `rememberSaveable` (sobreviven a
+/// una rotación) y se pierden con la pantalla, así cada contratista
+/// arranca con un formulario fresco.
 @Composable
 fun PantallaConfirmarIngreso(
-    nucleo: Nucleo,
-    secretoStore: SecretoDispositivoStore,
     preparacion: PreparacionIngreso,
-    onRegistrado: () -> Unit,
+    error: String?,
+    registrando: Boolean,
+    onRegistrar: (medio: MedioIngreso, gafeteTexto: String, placaTexto: String) -> Unit,
+    onLimpiarError: () -> Unit,
     onCambiar: () -> Unit,
 ) {
     var medio by rememberSaveable { mutableStateOf(MedioIngreso.CAMINANDO) }
     var gafeteTexto by rememberSaveable { mutableStateOf("") }
     var placaTexto by rememberSaveable { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
-    var enviando by remember { mutableStateOf(false) }
     var escanerGafeteAbierto by remember { mutableStateOf(false) }
     BackHandler(enabled = !escanerGafeteAbierto, onBack = onCambiar)
     val alcance = rememberCoroutineScope()
@@ -150,60 +130,13 @@ fun PantallaConfirmarIngreso(
         }
     }
 
-    fun registrarIngreso(gafete: Long?, placa: String?) {
-        if (enviando) return
-        error = null
-        enviando = true
-        alcance.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    // Con gafete, hace falta el secreto para el chequeo
-                    // cruzado entre dispositivos del sitio -- sin él no
-                    // hay forma de descartar que otro ya lo esté usando,
-                    // mismo criterio que antes. Sin gafete, no hace falta
-                    // ningún secreto -- `registrarIngresoConSecreto` sólo
-                    // toca la red cuando `gafete != null`.
-                    val secreto = if (gafete != null) {
-                        secretoStore.cargar() ?: throw SecretoDispositivoNoEncontradoException()
-                    } else {
-                        secretoStore.cargar().orEmpty()
-                    }
-                    // Chequeo de "gafete ocupado en otro dispositivo del
-                    // sitio" y escritura en una sola llamada -- antes eran
-                    // dos cruces FFI separados (`gafeteOcupadoEnSitioConSecreto`
-                    // + `registrarIngreso`), con una ventana entre medio
-                    // donde otro dispositivo podía colarse.
-                    nucleo.registrarIngresoConSecreto(preparacion.contratistaId, medio, gafete, placa, secreto)
-                }
-                // MV-09 (auditoría 2026-09-24): si esta composición se
-                // desmonta (Atrás, cierre automático de sesión) justo al
-                // volver de `withContext` de arriba, la corrutina de
-                // `alcance` (atada a la composición, no a la sesión) se
-                // cancela ahí mismo -- la escritura en Rust YA terminó (no
-                // es cancelable a mitad de camino), pero `onRegistrado()`
-                // (que dispara `CambiosNube.solicitar()` vía
-                // `ActivosViewModel.onIngresoRegistrado`) se saltaría
-                // igual, dejando la sincronización esperando el próximo
-                // pulso automático de 2 min en vez de dispararse al toque.
-                // `NonCancellable` fuerza que este aviso puntual corra
-                // siempre, sin reabrir el resto del rediseño a ViewModels
-                // que pide la auditoría.
-                withContext(NonCancellable) { onRegistrado() }
-            } catch (excepcion: Exception) {
-                error = excepcion.mensajeDeErrorEsperado()
-            } finally {
-                enviando = false
-            }
-        }
-    }
-
     if (escanerGafeteAbierto) {
         PantallaEscanearCedula(
             modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA,
             onDocumentoDetectado = { documento ->
                 val limpio = documento.numeroDocumento.filter(Char::isDigit)
                 gafeteTexto = limpio
-                error = null
+                onLimpiarError()
                 escanerGafeteAbierto = false
                 // Escanear ya es una acción deliberada -- a diferencia de
                 // tipear a mano, no hace falta un check "Automático" aparte
@@ -217,7 +150,7 @@ fun PantallaConfirmarIngreso(
                 // "Tipeado a mano sigue requiriendo el botón" arriba.
                 val placaLista = medio == MedioIngreso.CAMINANDO || placaTexto.isNotBlank()
                 if (gafete != null && placaLista) {
-                    registrarIngreso(gafete, placaSiCorresponde(medio, placaTexto))
+                    onRegistrar(medio, limpio, placaTexto)
                 }
             },
             onCerrar = { escanerGafeteAbierto = false },
@@ -367,29 +300,11 @@ fun PantallaConfirmarIngreso(
         val gafeteListo = !preparacion.requiereGafete || gafeteTexto.trim().toLongOrNull() != null
         val placaLista = medio != MedioIngreso.VEHICULO || placaTexto.isNotBlank()
         BotonBrisas(
-            onClick = {
-                error = null
-                val gafete: Long? = if (preparacion.requiereGafete) {
-                    val numero = gafeteTexto.trim().toLongOrNull()
-                    if (numero == null) {
-                        error = if (gafeteTexto.isBlank()) "El gafete es requerido" else "Ingrese un número de gafete válido"
-                        return@BotonBrisas
-                    }
-                    numero
-                } else {
-                    null
-                }
-                val placa = placaSiCorresponde(medio, placaTexto)
-                if (medio == MedioIngreso.VEHICULO && placa.isNullOrBlank()) {
-                    error = "La placa es requerida"
-                    return@BotonBrisas
-                }
-                registrarIngreso(gafete, placa)
-            },
-            enabled = !enviando && gafeteListo && placaLista,
+            onClick = { onRegistrar(medio, gafeteTexto, placaTexto) },
+            enabled = !registrando && gafeteListo && placaLista,
             modifier = Modifier.fillMaxWidth().focusRequester(focoConfirmar),
         ) {
-            Text(if (enviando) "Registrando…" else "Registrar ingreso")
+            Text(if (registrando) "Registrando…" else "Registrar ingreso")
         }
     }
     }

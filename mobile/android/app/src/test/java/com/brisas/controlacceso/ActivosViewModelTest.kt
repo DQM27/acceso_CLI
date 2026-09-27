@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -238,4 +239,76 @@ class ActivosViewModelTest {
         assertEquals("", viewModel.texto)
     }
 
+
+    // --- Registro de ingreso desde el formulario (M2) ---
+
+    private fun kotlinx.coroutines.test.TestScope.formularioAbierto(tipo: String, secreto: String? = null): ActivosViewModel {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso,
+                fecha_vencimiento_praind
+            ) VALUES ('111111111', 'Contratista Test', 1, '$tipo', 0, 1, '2099-12-31');
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        val viewModel = viewModel(SecretoDispositivoStoreDePrueba(secreto))
+        advanceUntilIdle()
+        viewModel.cambiarTexto("Contratista")
+        advanceUntilIdle()
+        viewModel.elegir(viewModel.resultadosBusqueda.single())
+        advanceUntilIdle()
+        assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Formulario)
+        return viewModel
+    }
+
+    @Test
+    fun `registrar ingreso sin gafete lo guarda y cierra el formulario`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")
+        advanceUntilIdle()
+
+        assertEquals(SeleccionIngreso.Ninguna, viewModel.seleccionIngreso)
+        assertNull(viewModel.errorIngreso)
+        assertEquals(1, nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).size)
+    }
+
+    @Test
+    fun `gafete requerido y vacio no llama al nucleo`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("PRAIND")
+
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "  ", "")
+        advanceUntilIdle()
+
+        assertEquals("El gafete es requerido", viewModel.errorIngreso)
+        assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Formulario)
+        assertTrue(nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).isEmpty())
+    }
+
+    @Test
+    fun `con gafete y sin secreto del dispositivo muestra el error y no registra`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("PRAIND", secreto = null)
+
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "7", "")
+        advanceUntilIdle()
+
+        assertEquals(SecretoDispositivoNoEncontradoException().message, viewModel.errorIngreso)
+        assertFalse(viewModel.registrandoIngreso)
+        assertTrue(nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).isEmpty())
+    }
+
+    @Test
+    fun `vehiculo sin placa pide la placa y cancelar limpia el error`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+
+        viewModel.registrarIngreso(MedioIngreso.VEHICULO, "", " ")
+        assertEquals("La placa es requerida", viewModel.errorIngreso)
+
+        viewModel.cancelarSeleccionIngreso()
+        assertNull(viewModel.errorIngreso)
+    }
 }

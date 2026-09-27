@@ -103,10 +103,11 @@ fun PantallaActivos(
     when (val actual = viewModel.seleccionIngreso) {
         is SeleccionIngreso.Formulario -> {
             PantallaConfirmarIngreso(
-                nucleo = nucleo,
-                secretoStore = secretoStore,
                 preparacion = actual.preparacion,
-                onRegistrado = { viewModel.onIngresoRegistrado() },
+                error = viewModel.errorIngreso,
+                registrando = viewModel.registrandoIngreso,
+                onRegistrar = viewModel::registrarIngreso,
+                onLimpiarError = viewModel::limpiarErrorIngreso,
                 onCambiar = { viewModel.cancelarSeleccionIngreso() },
             )
             return

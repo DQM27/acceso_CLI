@@ -20,6 +20,7 @@ import kotlinx.coroutines.sync.withLock
 import uniffi.control_acceso_mobile.ContratistaResumen
 import uniffi.control_acceso_mobile.IngresoActivoResumen
 import uniffi.control_acceso_mobile.IngresoRemoto
+import uniffi.control_acceso_mobile.MedioIngreso
 import uniffi.control_acceso_mobile.ModoBusquedaActivos
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
@@ -287,6 +288,7 @@ class ActivosViewModel(
     fun elegir(contratista: ContratistaResumen) {
         viewModelScope.launch {
             seleccionIngreso = SeleccionIngreso.Cargando(contratista)
+            errorIngreso = null
             try {
                 // Un solo cruce FFI: Rust decide localmente y, si los
                 // chequeos locales ya dejaron pasar, intenta además el
@@ -335,11 +337,73 @@ class ActivosViewModel(
 
     fun cancelarSeleccionIngreso() {
         seleccionIngreso = SeleccionIngreso.Ninguna
+        errorIngreso = null
+    }
+
+    /// Error del formulario de ingreso abierto (validación o del núcleo).
+    /// Se limpia al abrir/cerrar/registrar, así no arrastra el intento de un
+    /// contratista al siguiente.
+    var errorIngreso by mutableStateOf<String?>(null)
+        private set
+    var registrandoIngreso by mutableStateOf(false)
+        private set
+
+    fun limpiarErrorIngreso() {
+        errorIngreso = null
+    }
+
+    /// Registra el ingreso del contratista del formulario abierto (punto M2
+    /// de la auditoría móvil: antes lo hacía `PantallaConfirmarIngreso`
+    /// directo contra el núcleo). Valida gafete y placa, y hace el chequeo
+    /// de "gafete ocupado en otro dispositivo del sitio" + la escritura en
+    /// UNA sola llamada (`registrarIngresoConSecreto`): antes eran dos
+    /// cruces FFI con una ventana entre medio donde otro dispositivo podía
+    /// colarse. Corre en `viewModelScope`, así que salir de la pantalla a
+    /// mitad de camino ya no se salta el aviso a la nube.
+    fun registrarIngreso(medio: MedioIngreso, gafeteTexto: String, placaTexto: String) {
+        val preparacion = (seleccionIngreso as? SeleccionIngreso.Formulario)?.preparacion ?: return
+        if (registrandoIngreso) return
+        errorIngreso = null
+        val gafete: Long? = if (preparacion.requiereGafete) {
+            gafeteTexto.trim().toLongOrNull() ?: run {
+                errorIngreso = if (gafeteTexto.isBlank()) "El gafete es requerido" else "Ingrese un número de gafete válido"
+                return
+            }
+        } else {
+            null
+        }
+        val placa = placaSiCorresponde(medio, placaTexto)
+        if (medio == MedioIngreso.VEHICULO && placa.isNullOrBlank()) {
+            errorIngreso = "La placa es requerida"
+            return
+        }
+        registrandoIngreso = true
+        viewModelScope.launch {
+            try {
+                withContext(dispatcherIO) {
+                    // Con gafete hace falta el secreto para el chequeo
+                    // cruzado entre dispositivos del sitio; sin gafete no se
+                    // toca la red y ningún secreto hace falta.
+                    val secreto = if (gafete != null) {
+                        secretoStore.cargar() ?: throw SecretoDispositivoNoEncontradoException()
+                    } else {
+                        secretoStore.cargar().orEmpty()
+                    }
+                    nucleo.registrarIngresoConSecreto(preparacion.contratistaId, medio, gafete, placa, secreto)
+                }
+                onIngresoRegistrado()
+            } catch (excepcion: Exception) {
+                errorIngreso = excepcion.mensajeDeErrorEsperado()
+            } finally {
+                registrandoIngreso = false
+            }
+        }
     }
 
     fun onIngresoRegistrado() {
         CambiosNube.solicitar()
         seleccionIngreso = SeleccionIngreso.Ninguna
+        errorIngreso = null
         texto = ""
         buscar()
     }
