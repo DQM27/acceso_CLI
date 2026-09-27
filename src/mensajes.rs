@@ -206,13 +206,16 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
 pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     use RegistroIngresoServiceError::{
         AccesoDenegado, ContratistaNoEncontrado, GafeteNoDisponible, GafeteNoRegistrado,
-        GafeteOcupado, GafeteRequerido, IngresoActivo, PlacaNoAplica, PlacaRequerida,
-        RelojRetrocedido,
+        GafeteOcupado, GafeteRequerido, IngresoActivo, IngresoActivoEnOtroDispositivo,
+        PlacaNoAplica, PlacaRequerida, RelojRetrocedido,
     };
 
     match error {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),
         IngresoActivo => "El contratista ya tiene un ingreso activo".into(),
+        IngresoActivoEnOtroDispositivo => {
+            "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio".into()
+        }
         GafeteRequerido => "El gafete es requerido".into(),
         PlacaRequerida => "La placa es obligatoria cuando el ingreso es en vehículo".into(),
         PlacaNoAplica => "No se puede indicar placa cuando el ingreso es a pie".into(),
@@ -285,6 +288,14 @@ pub fn mensaje_bloqueo_ingreso(
 
     match bloqueo {
         BloqueoIngreso::IngresoActivo => "El contratista ya tiene un ingreso activo.".into(),
+        BloqueoIngreso::IngresoActivoEnOtroDispositivo => {
+            "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio.".into()
+        }
+        BloqueoIngreso::SinVerificarEnLaNube => {
+            "No se pudo verificar en la nube si el contratista ya tiene un ingreso activo. \
+             Revise la conexión e intente de nuevo."
+                .into()
+        }
         BloqueoIngreso::ActivoEnOtroSitio { sitio } => {
             format!("El contratista ya tiene un ingreso activo en {sitio}.")
         }
@@ -447,6 +458,19 @@ pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String 
         IngresoProveedorServiceError::Database(error) => {
             log::error!("ingreso de proveedor: {error}");
             "No se pudo registrar el movimiento".into()
+        }
+    }
+}
+
+#[cfg(feature = "nube")]
+pub fn mensaje_ingreso_verificado(error: crate::application::IngresoVerificadoError) -> String {
+    use crate::application::IngresoVerificadoError;
+
+    match error {
+        IngresoVerificadoError::Servicio(error) => mensaje_ingreso(error),
+        IngresoVerificadoError::Bloqueado(bloqueo) => mensaje_bloqueo_ingreso(&bloqueo),
+        IngresoVerificadoError::GafeteOcupadoEnSitio { numero } => {
+            format!("El gafete {numero} ya está en uso en otro dispositivo del sitio")
         }
     }
 }

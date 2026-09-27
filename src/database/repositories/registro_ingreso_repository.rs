@@ -22,6 +22,14 @@ pub trait RegistroIngresoRepository {
         contratista_id: i64,
     ) -> Result<Option<RegistroIngreso>, DatabaseError>;
 
+    /// ¿El otro dispositivo del sitio tiene abierto un ingreso con esta
+    /// cédula? Lee la caché `ingresos_remotos` (la llena la sincronización;
+    /// nunca incluye lo que ya vive en `registro_ingresos` de este equipo).
+    fn cedula_con_ingreso_abierto_en_otro_dispositivo(
+        &self,
+        cedula: &str,
+    ) -> Result<bool, DatabaseError>;
+
     /// Busca quién tiene actualmente asignado un gafete.
     ///
     /// Solo considera ingresos activos, es decir,
@@ -295,6 +303,17 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
 
             Err(error) => Err(DatabaseError::from(error)),
         }
+    }
+
+    fn cedula_con_ingreso_abierto_en_otro_dispositivo(
+        &self,
+        cedula: &str,
+    ) -> Result<bool, DatabaseError> {
+        Ok(self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM ingresos_remotos WHERE contratista_cedula = ?1)",
+            params![cedula],
+            |fila| fila.get(0),
+        )?)
     }
 
     fn buscar_ingreso_activo_por_gafete(

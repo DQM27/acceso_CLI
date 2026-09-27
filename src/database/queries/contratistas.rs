@@ -262,6 +262,10 @@ impl ContratistasQuery for SqliteContratistasQuery<'_> {
                     FROM registro_ingresos AS r
                     WHERE r.contratista_id = c.id
                       AND r.fecha_hora_salida IS NULL
+                ) OR EXISTS (
+                    SELECT 1
+                    FROM ingresos_remotos AS rr
+                    WHERE rr.contratista_cedula = c.cedula
                 )
              {CONTRATISTAS_FROM} {where_sql}
              ORDER BY CASE WHEN c.cedula = :texto_literal COLLATE NOCASE THEN 0 ELSE 1 END,

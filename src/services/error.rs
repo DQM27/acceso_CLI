@@ -121,6 +121,8 @@ pub enum RegistroIngresoServiceError {
     AccesoDenegado(MotivoDenegacion),
     #[error("El contratista ya tiene un ingreso activo")]
     IngresoActivo,
+    #[error("El contratista ya tiene un ingreso activo en el otro dispositivo del sitio")]
+    IngresoActivoEnOtroDispositivo,
     #[error("El contratista requiere gafete")]
     GafeteRequerido,
     /// El medio de ingreso es `Vehiculo` y no se indicó placa -- mismo
