@@ -105,6 +105,14 @@ private fun VistaCamaraCedula(
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
     var progreso by remember { mutableStateOf(0f) }
+    val encuadre = remember {
+        ControladorEncuadre(
+            regionHorizontal = RegionGuiaOcr.TARJETA_ID,
+            regionVertical = RegionGuiaOcr.GAFETE_VERTICAL,
+            orientacionDelTexto = ::orientacionDeTextoDocumento,
+        )
+    }
+    var orientacionEncuadre by remember { mutableStateOf(encuadre.orientacion) }
     // Resultado real de la última mutación (nombre en éxito, motivo en
     // fallo), no sólo "se leyó el gafete" -- ver `resultadoUltimoEscaneo`.
     // `null` mientras no hay nada que mostrar todavía o el llamador no usa
@@ -247,19 +255,15 @@ private fun VistaCamaraCedula(
                         ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
                     }
                 }
-                // Un gafete vertical (In House) no entra en el recuadro
-                // horizontal de tarjeta: si un frame con ese recuadro no
-                // reconoce NINGÚN documento, el siguiente se lee con una
-                // región más alta (`RegionGuiaOcr.GAFETE_VERTICAL`). Una
-                // cédula/licencia que sí se reconoce nunca activa el
-                // cambio, así que su lectura queda exactamente igual.
-                val probarRegionVertical = AtomicBoolean(false)
+                // Encuadre que gira según el documento (ver
+                // `ControladorEncuadre`): horizontal para cédula/licencia/
+                // DIMEX, vertical para PRAIND, In House y gafete CRC.
                 val analisis = construirAnalizadorOcr(
                     ejecutorAnalisis = camara.ejecutor,
                     detectada = camara.detectada,
                     sesionActiva = camara.sesionActiva,
                 ) { imagen ->
-                    val vertical = probarRegionVertical.getAndSet(false)
+                    val (region, leidoCon) = encuadre.regionParaFrame()
                     analizarCedula(
                         imagen = imagen,
                         recognizer = camara.recognizer,
@@ -267,13 +271,13 @@ private fun VistaCamaraCedula(
                         sesionActiva = camara.sesionActiva,
                         buffersOcr = buffersOcr,
                         onTexto = { texto ->
-                            if (!vertical && clasificarTipoDocumento(texto) == TipoDocumento.DESCONOCIDO) {
-                                probarRegionVertical.set(true)
+                            if (encuadre.registrarTexto(texto, leidoCon)) {
+                                orientacionEncuadre = encuadre.orientacion
                             }
                             onResultado(estabilizador.procesarFrame(texto))
                         },
                         onFallo = onFallo,
-                        region = if (vertical) RegionGuiaOcr.GAFETE_VERTICAL else RegionGuiaOcr.TARJETA_ID,
+                        region = region,
                     )
                 }
                 camara.analisisCamara = analisis
@@ -298,7 +302,13 @@ private fun VistaCamaraCedula(
             },
             modifier = Modifier.fillMaxSize(),
         )
-        MarcoGuiaCedula(color = colorMarco, estado = estado, progreso = progreso, modifier = Modifier.fillMaxSize())
+        MarcoGuiaCedula(
+            color = colorMarco,
+            estado = estado,
+            progreso = progreso,
+            region = regionAnimada(encuadre.region(orientacionEncuadre)),
+            modifier = Modifier.fillMaxSize(),
+        )
         // Con resultado real (éxito/fallo de la mutación, no sólo "se leyó
         // el texto"), el mismo mensaje se pinta verde/rojo en vez de negro
         // neutro -- pedido explícito del usuario 2026-09-20: antes, en

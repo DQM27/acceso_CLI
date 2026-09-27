@@ -64,9 +64,9 @@ data class RegionGuiaOcr(
         // gafete no entra entero y la franja "CONTRATISTA" / "COSTA RICA"
         // queda debajo del recuadro -- peor con estuche, que lo agranda.
         // Mismo ancho que `TARJETA_ID`, pero más alta que ancha, centrada
-        // en el mismo punto. No se dibuja: sólo se prueba en el frame
-        // siguiente a uno horizontal que no reconoció ningún documento
-        // (ver `PantallaEscanearCedula`).
+        // en el mismo punto. La usa `ControladorEncuadre` (ver
+        // `EncuadreAdaptativo.kt`): como sonda sin dibujar y, cuando se
+        // reconoce un documento vertical, como recuadro visible.
         val GAFETE_VERTICAL = RegionGuiaOcr(fraccionAncho = 0.84f, proporcionAnchoAlto = 0.75f, fraccionTopCentro = 0.52f)
     }
 }
