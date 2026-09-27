@@ -37,10 +37,15 @@ export function horaLegible(hora: string | null | undefined): string | null {
   }).format(fecha);
 }
 
-export function estadoCita(
-  cita: { estado: "VIGENTE" | "CANCELADA"; fecha_hasta: string },
-  hoy = hoyCostaRica(),
-) {
-  if (cita.estado === "CANCELADA") return "CANCELADA";
-  return cita.fecha_hasta < hoy ? "VENCIDA" : "VIGENTE";
+/** Hora local de Costa Rica de un timestamptz (ej. `visita_movimientos.
+ * entrada_en`) -- distinto de `horaLegible`, que es para la columna `time`
+ * sin zona de la ventana de la visita. */
+export function horaCostaRicaDe(timestamptz: string): string {
+  return new Intl.DateTimeFormat("es-CR", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "America/Costa_Rica",
+  }).format(new Date(timestamptz));
 }
+

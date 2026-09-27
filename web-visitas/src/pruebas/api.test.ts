@@ -1,144 +1,98 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { crearCita, cancelarCita, listarCitas, mensajeError } from "../api";
+import {
+  cancelarVisita,
+  crearVisitas,
+  duplicarVisita,
+  mensajeError,
+  responderSolicitud,
+} from "../api";
 import { hoyCostaRica } from "../fecha";
 
 const dobles = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock("../lib/supabase", () => ({ supabase: dobles }));
-const id = "00000000-0000-4000-8000-000000000001";
-const correo = "prueba@example.invalid";
+
+const grupoId = "00000000-0000-4000-8000-000000000001";
+const sitioId = "00000000-0000-4000-8000-000000000002";
+const visitaId = "00000000-0000-4000-8000-000000000003";
+const invitadoId = "00000000-0000-4000-8000-000000000004";
+
 const datos = () => ({
   fecha_desde: hoyCostaRica(),
   fecha_hasta: hoyCostaRica(),
-  hora_estimada: "",
+  hora_desde: "08:00",
+  hora_hasta: "17:00",
+  tipo_visita: "",
   motivo: "",
-  sitios: [id],
-  visitantes: [
+  requiere_escolta: false,
+  sitios: [sitioId],
+  invitados: [
     {
+      tipo_documento: "CEDULA" as const,
+      numero_documento: "AB-123",
       nombre: "Persona de prueba",
-      cedula: "AB-123",
       empresa: "",
+      telefono: "",
+      correo: "",
       placa_vehiculo: "",
     },
   ],
 });
 
-function consulta(respuesta: unknown) {
-  const resultado = Promise.resolve(respuesta);
-  const cadena = Object.assign(resultado, {
-    select: vi.fn(),
-    update: vi.fn(),
-    eq: vi.fn(),
-    gte: vi.fn(),
-    lt: vi.fn(),
-    order: vi.fn(),
-    range: vi.fn(),
-    single: vi.fn(),
-  });
-  for (const metodo of [
-    cadena.select,
-    cadena.update,
-    cadena.eq,
-    cadena.gte,
-    cadena.lt,
-    cadena.order,
-    cadena.range,
-    cadena.single,
-  ])
-    metodo.mockReturnValue(cadena);
-  dobles.from.mockReturnValue(cadena);
-  return cadena;
-}
 beforeEach(() => vi.resetAllMocks());
-describe("guardado atómico", () => {
-  it("manda una sola RPC, normaliza y no permite elegir propietario", async () => {
-    dobles.rpc.mockResolvedValue({ data: id, error: null });
-    expect(await crearCita(id, datos())).toBe(id);
+
+describe("crearVisitas", () => {
+  it("manda una sola RPC con los invitados normalizados", async () => {
+    dobles.rpc.mockResolvedValue({ data: [visitaId], error: null });
+    expect(await crearVisitas(grupoId, datos())).toEqual([visitaId]);
     expect(dobles.rpc).toHaveBeenCalledWith(
-      "crear_cita_anfitrion",
+      "crear_visitas",
       expect.objectContaining({
-        p_id: id,
-        p_visitantes: [expect.objectContaining({ cedula: "AB123" })],
+        p_grupo_id: grupoId,
+        p_sitios: [sitioId],
+        p_invitados: [expect.objectContaining({ numero_documento: "AB123" })],
       }),
     );
-    const llamada = dobles.rpc.mock.calls[0];
-    if (!llamada) throw new Error("crear_cita_anfitrion no fue llamado");
-    expect(llamada[1]).not.toHaveProperty("anfitrion_correo");
-    expect(dobles.from).not.toHaveBeenCalled();
   });
-  it("manda p_hora_estimada en el payload, null si no se cargó", async () => {
-    dobles.rpc.mockResolvedValue({ data: id, error: null });
-    await crearCita(id, datos());
-    expect(dobles.rpc).toHaveBeenCalledWith(
-      "crear_cita_anfitrion",
-      expect.objectContaining({ p_hora_estimada: null }),
-    );
-    dobles.rpc.mockResolvedValue({
-      data: "00000000-0000-4000-8000-000000000003",
-      error: null,
-    });
-    await crearCita("00000000-0000-4000-8000-000000000003", {
-      ...datos(),
-      hora_estimada: "14:30",
-    });
-    expect(dobles.rpc).toHaveBeenCalledWith(
-      "crear_cita_anfitrion",
-      expect.objectContaining({ p_hora_estimada: "14:30" }),
-    );
-  });
-  it("rechaza datos inválidos antes de hacer peticiones", async () => {
-    await expect(crearCita(id, { ...datos(), sitios: [] })).rejects.toThrow();
+  it("rechaza datos inválidos antes de llamar a la RPC", async () => {
+    await expect(crearVisitas(grupoId, { ...datos(), sitios: [] })).rejects.toThrow();
     expect(dobles.rpc).not.toHaveBeenCalled();
   });
-  it("si no existe la RPC no hace escrituras parciales", async () => {
+  it("propaga el error de la RPC sin escrituras parciales del lado del cliente", async () => {
     dobles.rpc.mockResolvedValue({ data: null, error: { code: "PGRST202" } });
-    await expect(crearCita(id, datos())).rejects.toEqual({ code: "PGRST202" });
+    await expect(crearVisitas(grupoId, datos())).rejects.toEqual({ code: "PGRST202" });
     expect(dobles.from).not.toHaveBeenCalled();
   });
-  it("permite recuperar una solicitud incierta después de medianoche", async () => {
-    dobles.rpc.mockResolvedValue({ data: id, error: null });
-    const anterior = {
-      ...datos(),
-      fecha_desde: "2026-01-01",
-      fecha_hasta: "2026-01-01",
-    };
-    await expect(crearCita(id, anterior, "2026-01-01")).resolves.toBe(id);
-    await expect(crearCita(id, anterior, "2026-01-02")).rejects.toThrow();
+});
+
+describe("cancelarVisita / duplicarVisita / responderSolicitud", () => {
+  it("cancelarVisita llama a la RPC con el id de la visita", async () => {
+    dobles.rpc.mockResolvedValue({ error: null });
+    await cancelarVisita(visitaId);
+    expect(dobles.rpc).toHaveBeenCalledWith("cancelar_visita", { p_visita_id: visitaId });
   });
-  it("un reintento conserva la misma clave y comprueba el UUID devuelto", async () => {
-    dobles.rpc
-      .mockResolvedValueOnce({ data: null, error: { code: "timeout" } })
-      .mockResolvedValue({ data: id, error: null });
-    await expect(crearCita(id, datos())).rejects.toBeDefined();
-    await crearCita(id, datos());
-    expect(dobles.rpc.mock.calls[0]).toEqual(dobles.rpc.mock.calls[1]);
-    dobles.rpc.mockResolvedValue({
-      data: "00000000-0000-4000-8000-000000000002",
-      error: null,
+  it("duplicarVisita valida las fechas antes de llamar a la RPC", async () => {
+    await expect(duplicarVisita(visitaId, grupoId, "fecha-invalida", "2026-09-10")).rejects.toThrow();
+    expect(dobles.rpc).not.toHaveBeenCalled();
+  });
+  it("responderSolicitud manda aprobar/rechazar con el motivo", async () => {
+    dobles.rpc.mockResolvedValue({ error: null });
+    await responderSolicitud(invitadoId, false, "no corresponde");
+    expect(dobles.rpc).toHaveBeenCalledWith("responder_solicitud", {
+      p_invitado_id: invitadoId,
+      p_aprobar: false,
+      p_motivo_rechazo: "no corresponde",
     });
-    await expect(crearCita(id, datos())).rejects.toThrow("no corresponde");
   });
 });
-describe("lectura y cancelación", () => {
-  it("acota propietario, estado y paginación en la consulta", async () => {
-    const cadena = consulta({ data: [], error: null });
-    await listarCitas(correo, "VENCIDA", 2);
-    expect(cadena.eq).toHaveBeenCalledWith("anfitrion_correo", correo);
-    expect(cadena.eq).toHaveBeenCalledWith("estado", "VIGENTE");
-    expect(cadena.lt).toHaveBeenCalledWith("fecha_hasta", hoyCostaRica());
-    expect(cadena.range).toHaveBeenCalledWith(24, 36);
-  });
-  it("solo confirma cancelación si el servidor devuelve la fila", async () => {
-    const cadena = consulta({ data: null, error: null });
-    await expect(cancelarCita(id, correo)).rejects.toThrow();
-    expect(cadena.eq).toHaveBeenCalledWith("anfitrion_correo", correo);
-    expect(cadena.eq).toHaveBeenCalledWith("estado", "VIGENTE");
-    expect(cadena.update).toHaveBeenCalledWith({ estado: "CANCELADA" });
-    consulta({ data: { id }, error: null });
-    await expect(cancelarCita(id, correo)).resolves.toBeUndefined();
-  });
+
+describe("mensajeError", () => {
   it("no muestra mensajes internos del servidor", () => {
     expect(
       mensajeError({ message: "SQL privado con datos de visitante" }),
     ).not.toContain("SQL");
+  });
+  it("da un mensaje claro para permisos y solicitudes repetidas", () => {
+    expect(mensajeError({ code: "42501" })).toContain("permiso");
+    expect(mensajeError({ code: "23505" })).toContain("existe");
   });
 });

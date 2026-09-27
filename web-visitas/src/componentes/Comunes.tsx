@@ -1,26 +1,20 @@
 import { Component, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ErrorInfo, ReactNode } from "react";
-import { AlertCircle, Moon, Sun, X } from "lucide-react";
+import { AlertCircle, Loader2, Moon, Sun, X } from "lucide-react";
 
 export function Cargando({ texto = "Cargando…" }: { texto?: string }) {
   return (
-    <div
-      className="d-flex align-items-center justify-content-center gap-2 text-body-secondary py-5"
-      role="status"
-    >
-      <span
-        className="spinner-border spinner-border-sm"
-        aria-hidden="true"
-      ></span>
+    <div className="flex items-center justify-center gap-2 py-12 text-muted" role="status">
+      <Loader2 aria-hidden="true" className="girando" />
       <span>{texto}</span>
     </div>
   );
 }
 
-const CLASE_ALERTA = {
-  error: "alert-danger",
-  exito: "alert-success",
-  info: "alert-info",
+const CLASE_AVISO = {
+  error: "aviso-error",
+  exito: "aviso-exito",
+  info: "aviso-info",
 } as const;
 
 export function Aviso({
@@ -31,14 +25,9 @@ export function Aviso({
   tipo?: "error" | "exito" | "info";
 }) {
   return (
-    <div
-      className={`alert ${CLASE_ALERTA[tipo]} d-flex align-items-start gap-2`}
-      role={tipo === "error" ? "alert" : "status"}
-    >
-      <AlertCircle aria-hidden="true" className="flex-shrink-0" />
-      <div className="flex-grow-1" style={{ minWidth: 0 }}>
-        {children}
-      </div>
+    <div className={`aviso ${CLASE_AVISO[tipo]}`} role={tipo === "error" ? "alert" : "status"}>
+      <AlertCircle aria-hidden="true" />
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
@@ -46,26 +35,21 @@ export function Aviso({
 export function SelectorTema() {
   const [tema, setTema] = useState(() => {
     try {
-      const guardado = localStorage.getItem("brisas:tema");
+      const guardado = localStorage.getItem("visitas:tema");
       if (guardado === "light" || guardado === "dark") return guardado;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     } catch {
       return "light";
     }
   });
   useLayoutEffect(() => {
-    // `data-bs-theme` es el atributo propio de Bootstrap 5.3 para modo
-    // oscuro -- un solo atributo, sin sistemas de tema paralelos (ver
-    // docs/features-futuras/plan-rediseno-web-visitas.md).
-    document.documentElement.dataset.bsTheme = tema;
+    document.documentElement.dataset.theme = tema;
   }, [tema]);
   const alternar = () => {
     const siguiente = tema === "light" ? "dark" : "light";
     setTema(siguiente);
     try {
-      localStorage.setItem("brisas:tema", siguiente);
+      localStorage.setItem("visitas:tema", siguiente);
     } catch {
       /* La preferencia no es necesaria para usar la web. */
     }
@@ -73,15 +57,11 @@ export function SelectorTema() {
   return (
     <button
       type="button"
-      className="btn btn-link solo-icono"
+      className="boton boton-fantasma boton-icono"
       onClick={alternar}
       aria-label={`Cambiar a tema ${tema === "light" ? "oscuro" : "claro"}`}
     >
-      {tema === "light" ? (
-        <Moon aria-hidden="true" />
-      ) : (
-        <Sun aria-hidden="true" />
-      )}
+      {tema === "light" ? <Moon aria-hidden="true" /> : <Sun aria-hidden="true" />}
     </button>
   );
 }
@@ -111,24 +91,20 @@ export function Modal({
   return (
     <dialog
       ref={referencia}
-      className="modal modal-content"
+      className="modal"
       aria-labelledby="titulo-modal"
       onCancel={(e) => {
         e.preventDefault();
         if (!ocupado) onCerrar();
       }}
     >
-      <div className="modal-header">
-        <h2 className="modal-title fs-5" id="titulo-modal">
+      <div className="modal-encabezado">
+        <h2 className="text-base font-semibold" id="titulo-modal">
           {titulo}
         </h2>
-        {/* No usamos .btn-close de Bootstrap: pinta su ícono con un
-            background-image data:image/svg+xml, que la CSP estricta de esta
-            app bloquea (img-src 'self', sin data:) -- mismo motivo que ya
-            resolvió parcheCspFullcalendar.ts para otro componente. */}
         <button
           type="button"
-          className="btn btn-link solo-icono"
+          className="boton boton-fantasma boton-icono"
           aria-label="Cerrar diálogo"
           onClick={onCerrar}
           disabled={ocupado}
@@ -136,15 +112,12 @@ export function Modal({
           <X aria-hidden="true" />
         </button>
       </div>
-      <div className="modal-body">{children}</div>
+      <div className="modal-cuerpo">{children}</div>
     </dialog>
   );
 }
 
-export class LimiteErrores extends Component<
-  { children: ReactNode },
-  { fallo: boolean }
-> {
+export class LimiteErrores extends Component<{ children: ReactNode }, { fallo: boolean }> {
   state = { fallo: false };
   static getDerivedStateFromError() {
     return { fallo: true };
@@ -155,14 +128,10 @@ export class LimiteErrores extends Component<
   render() {
     if (this.state.fallo)
       return (
-        <main className="error-fatal">
-          <h1>No pudimos abrir esta pantalla</h1>
-          <p>Recargá la página para volver a intentarlo.</p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => window.location.reload()}
-          >
+        <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
+          <h1 className="text-xl font-semibold">No pudimos abrir esta pantalla</h1>
+          <p className="text-muted">Recargue la página para volver a intentarlo.</p>
+          <button type="button" className="boton boton-primario" onClick={() => window.location.reload()}>
             Recargar
           </button>
         </main>

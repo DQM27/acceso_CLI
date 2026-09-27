@@ -23,11 +23,11 @@
   "dependencies": {
     "@supabase/supabase-js": "2.116.0",
     "@tanstack/react-query": "^5.104.0",
-    "bootstrap": "^5.3.8",
     "lucide-react": "1.46.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "7.18.3",
+    "sonner": "^2.0.8",
     "zod": "4.6.5"
   },
   "devDependencies": {
@@ -44,7 +44,6 @@
     "eslint-plugin-react-refresh": "0.5.7",
     "globals": "17.12.0",
     "jsdom": "30.0.1",
-    "sass": "^1.104.1",
     "tailwindcss": "^4.3.3",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.0",

@@ -2,56 +2,72 @@ import { z } from "./lib/validacion";
 import { hoyCostaRica } from "./fecha";
 
 export const MAX_VISITANTES = 50;
-export const MAX_SITIOS = 100;
-// Intencional: valida que NO haya caracteres de control (requisito de
-// seguridad del contrato de backend, ver docs/auditorias/contrato-web-visitas.md
-// "Rechazar caracteres de control") -- no es una regex mal escrita.
+export const MAX_SITIOS = 20;
+// Intencional: valida que NO haya caracteres de control (mismo criterio que
+// tenía el esquema viejo de citas) -- no es una regex mal escrita.
 // eslint-disable-next-line no-control-regex
 const sinControl = /^[^\u0000-\u001f\u007f]*$/u;
 const texto = (maximo: number) =>
   z
     .string()
     .trim()
-    .max(maximo, `Usá hasta ${maximo} caracteres.`)
+    .max(maximo, `Use hasta ${maximo} caracteres.`)
     .regex(
       sinControl,
-      "Ese texto tiene un carácter que no podemos guardar (por ejemplo, pegado desde otro programa). Borralo y escribilo de nuevo.",
+      "Ese texto tiene un carácter que no podemos guardar (por ejemplo, pegado desde otro programa). Bórrelo y escríbalo de nuevo.",
     );
 const opcional = (maximo: number) => texto(maximo).transform((v) => v || null);
-// "HH:MM" de un <input type="time">. Vacío -> null (es opcional). El tipo de
-// entrada se queda en `string` (no `string | null`) a propósito -- es lo que
-// siempre entrega un <input> controlado, y `FormularioCita` (z.input) lo
-// necesita así para que `value={formulario.hora_estimada}` tipe bien.
-const horaOpcional = z
+const horaHHMM = z
   .string()
-  .refine((v) => v === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(v), {
-    message: "Ingresá una hora válida (HH:MM).",
-  })
-  .transform((v) => (v === "" ? null : v));
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Ingrese una hora válida (HH:MM).");
 
 export function normalizarDocumento(valor: string) {
   return valor.trim().replace(/[\s-]/g, "").toUpperCase();
 }
 
-const visitanteEntrada = z.object({
-  nombre: texto(150).min(2, "Ingresá el nombre completo."),
-  cedula: texto(60)
+export const TIPOS_DOCUMENTO = ["CEDULA", "DIMEX", "PASAPORTE", "OTRO"] as const;
+export type TipoDocumento = (typeof TIPOS_DOCUMENTO)[number];
+export const ETIQUETAS_TIPO_DOCUMENTO: Record<TipoDocumento, string> = {
+  CEDULA: "Cédula",
+  DIMEX: "DIMEX",
+  PASAPORTE: "Pasaporte",
+  OTRO: "Otro documento",
+};
+
+const invitadoEntrada = z.object({
+  tipo_documento: z.enum(TIPOS_DOCUMENTO),
+  numero_documento: texto(30)
     .transform(normalizarDocumento)
     .pipe(
       z
         .string()
-        .min(3, "Ingresá un documento válido.")
+        .min(3, "Ingrese un documento válido.")
         .max(30, "El documento admite hasta 30 caracteres.")
-        .regex(/^[A-Z0-9]+$/, "Usá letras, números, espacios o guiones."),
+        .regex(/^[A-Z0-9]+$/, "Use letras, números, espacios o guiones."),
     ),
+  nombre: texto(150).min(2, "Ingrese el nombre completo."),
   empresa: opcional(150),
+  telefono: opcional(30),
+  correo: z
+    .string()
+    .trim()
+    .transform((v) => (v === "" ? null : v))
+    .pipe(z.email("Ingrese un correo válido.").nullable()),
   placa_vehiculo: opcional(20).transform((v) => v?.toUpperCase() ?? null),
 });
+export type InvitadoFormulario = z.input<typeof invitadoEntrada>;
+export const invitadoVacio = (): InvitadoFormulario => ({
+  tipo_documento: "CEDULA",
+  numero_documento: "",
+  nombre: "",
+  empresa: "",
+  telefono: "",
+  correo: "",
+  placa_vehiculo: "",
+});
 
-/** Reglas de fecha compartidas entre la validación final (`esquemaNuevaCita`)
- * y la validación en vivo de `componentes/CampoFechas.tsx` (al tipear o
- * elegir en el calendario) -- una sola fuente de verdad, sin duplicar las
- * reglas en dos lugares. */
+/** Reglas de fecha/hora compartidas entre la validación final y la de la
+ * pantalla "Agendar visita" -- una sola fuente de verdad. */
 export function validarRangoFechas(
   desde: string,
   hasta: string,
@@ -65,18 +81,21 @@ export function validarRangoFechas(
   return errores;
 }
 
-export function esquemaNuevaCita(hoy = hoyCostaRica()) {
+export function esquemaNuevaVisita(hoy = hoyCostaRica()) {
   return z
     .object({
-      fecha_desde: z.iso.date("Seleccioná una fecha válida."),
-      fecha_hasta: z.iso.date("Seleccioná una fecha válida."),
-      hora_estimada: horaOpcional,
+      fecha_desde: z.iso.date("Seleccione una fecha válida."),
+      fecha_hasta: z.iso.date("Seleccione una fecha válida."),
+      hora_desde: horaHHMM,
+      hora_hasta: horaHHMM,
+      tipo_visita: opcional(80),
       motivo: opcional(1000),
+      requiere_escolta: z.boolean(),
       sitios: z
         .array(z.uuid())
-        .min(1, "Seleccioná al menos un sitio.")
+        .min(1, "Seleccione al menos un sitio.")
         .max(MAX_SITIOS),
-      visitantes: z.array(visitanteEntrada).min(1).max(MAX_VISITANTES),
+      invitados: z.array(invitadoEntrada).min(1).max(MAX_VISITANTES),
     })
     .superRefine((datos, contexto) => {
       const erroresFecha = validarRangoFechas(
@@ -96,6 +115,12 @@ export function esquemaNuevaCita(hoy = hoyCostaRica()) {
           path: ["fecha_hasta"],
           message: erroresFecha.fecha_hasta,
         });
+      if (datos.hora_hasta <= datos.hora_desde)
+        contexto.addIssue({
+          code: "custom",
+          path: ["hora_hasta"],
+          message: "La hora de fin debe ser posterior a la de inicio.",
+        });
       if (new Set(datos.sitios).size !== datos.sitios.length)
         contexto.addIssue({
           code: "custom",
@@ -103,54 +128,141 @@ export function esquemaNuevaCita(hoy = hoyCostaRica()) {
           message: "Hay sitios repetidos.",
         });
       const documentos = new Set<string>();
-      datos.visitantes.forEach((visitante, i) => {
-        if (documentos.has(visitante.cedula))
+      datos.invitados.forEach((invitado, i) => {
+        const clave = `${invitado.tipo_documento}|${invitado.numero_documento}`;
+        if (documentos.has(clave))
           contexto.addIssue({
             code: "custom",
-            path: ["visitantes", i, "cedula"],
+            path: ["invitados", i, "numero_documento"],
             message: "Este documento ya está en la lista.",
           });
-        documentos.add(visitante.cedula);
+        documentos.add(clave);
       });
     });
 }
+export type FormularioNuevaVisita = z.input<ReturnType<typeof esquemaNuevaVisita>>;
+export type NuevaVisita = z.output<ReturnType<typeof esquemaNuevaVisita>>;
 
-export type FormularioCita = z.input<ReturnType<typeof esquemaNuevaCita>>;
-export type NuevaCita = z.output<ReturnType<typeof esquemaNuevaCita>>;
 export const sitioEsquema = z.object({
   id: z.uuid(),
   nombre: z.string(),
 });
 export type Sitio = z.infer<typeof sitioEsquema>;
-export const citaEsquema = z.object({
-  id: z.uuid(),
-  anfitrion_correo: z.email(),
+
+export const ESTADOS_INVITADO = [
+  "PROGRAMADO",
+  "EN_SITIO",
+  "FUERA",
+  "FINALIZADO",
+  "CANCELADA",
+  "NO_SE_PRESENTO",
+  "SOLICITADO",
+  "APROBADO",
+  "RECHAZADO",
+] as const;
+export type EstadoInvitado = (typeof ESTADOS_INVITADO)[number];
+
+/** Una fila de la vista `mis_visitas` -- una por invitado (ver
+ * supabase/migrations/20260927150000_..._vista_busqueda.sql). */
+export const misVisitasFilaEsquema = z.object({
+  visita_id: z.uuid(),
+  sitio_id: z.uuid(),
+  sitio_nombre: z.string(),
+  anfitrion_id: z.uuid(),
+  tipo_visita: z.string().nullable(),
   motivo: z.string().nullable(),
   fecha_desde: z.iso.date(),
   fecha_hasta: z.iso.date(),
-  // "HH:MM:SS" tal cual la devuelve Postgres (columna `time`) -- sólo se
-  // muestra, nunca se re-envía, así que no hace falta validar el formato acá.
-  hora_estimada: z.string().nullable(),
-  estado: z.enum(["VIGENTE", "CANCELADA"]),
-  created_at: z.string(),
-  cita_visitantes: z.array(
-    z.object({
-      id: z.uuid(),
-      nombre: z.string(),
-      cedula: z.string(),
-      empresa: z.string().nullable(),
-      placa_vehiculo: z.string().nullable(),
-    }),
-  ),
-  cita_sitios: z.array(
-    z.object({ sitio_id: z.uuid(), sitios: sitioEsquema.nullable() }),
-  ),
+  hora_desde: z.string(),
+  hora_hasta: z.string(),
+  requiere_escolta: z.boolean(),
+  grupo_id: z.uuid().nullable(),
+  origen: z.enum(["PRE_REGISTRO", "WALK_IN"]),
+  visita_estado: z.enum(["VIGENTE", "CANCELADA"]),
+  invitado_id: z.uuid(),
+  visitante_id: z.uuid(),
+  tipo_documento: z.enum(TIPOS_DOCUMENTO),
+  numero_documento: z.string(),
+  visitante_nombre: z.string(),
+  visitante_empresa: z.string().nullable(),
+  placa_vehiculo: z.string().nullable(),
+  invitado_estado: z.enum(ESTADOS_INVITADO),
+  aprobado_por: z.string().nullable(),
+  aprobado_en: z.string().nullable(),
+  motivo_rechazo: z.string().nullable(),
+  ultima_entrada: z.string().nullable(),
+  ultima_salida: z.string().nullable(),
+  ultimo_gafete_numero: z.number().nullable(),
 });
-export type Cita = z.infer<typeof citaEsquema>;
-export type FiltroEstado = "TODAS" | "VIGENTE" | "CANCELADA" | "VENCIDA";
-export const visitanteVacio = (): FormularioCita["visitantes"][number] => ({
-  nombre: "",
-  cedula: "",
-  empresa: "",
-  placa_vehiculo: "",
+export type MisVisitasFila = z.infer<typeof misVisitasFilaEsquema>;
+
+export const visitanteAnteriorEsquema = z.object({
+  id: z.uuid(),
+  tipo_documento: z.enum(TIPOS_DOCUMENTO),
+  numero_documento: z.string(),
+  nombre: z.string(),
+  empresa: z.string().nullable(),
 });
+export type VisitanteAnterior = z.infer<typeof visitanteAnteriorEsquema>;
+
+/** Estado de una VISITA (no de un invitado), derivado de sus invitados --
+ * no se persigue en la base (ver 3.2 del rediseño): "programada" mientras
+ * el rango no arrancó, "en curso" si el rango ya empezó y no terminó,
+ * "finalizada" si el rango ya pasó. */
+export function estadoVisita(
+  visita: { visita_estado: "VIGENTE" | "CANCELADA"; fecha_desde: string; fecha_hasta: string },
+  hoy = hoyCostaRica(),
+): "CANCELADA" | "PROGRAMADA" | "EN_CURSO" | "FINALIZADA" {
+  if (visita.visita_estado === "CANCELADA") return "CANCELADA";
+  if (hoy < visita.fecha_desde) return "PROGRAMADA";
+  if (hoy > visita.fecha_hasta) return "FINALIZADA";
+  return "EN_CURSO";
+}
+
+/** Agrupa las filas (una por invitado) de `mis_visitas` en visitas -- la UI
+ * trabaja por visita (una tarjeta) con su lista de personas adentro. */
+export interface VisitaAgrupada {
+  visita_id: string;
+  sitio_id: string;
+  sitio_nombre: string;
+  anfitrion_id: string;
+  tipo_visita: string | null;
+  motivo: string | null;
+  fecha_desde: string;
+  fecha_hasta: string;
+  hora_desde: string;
+  hora_hasta: string;
+  requiere_escolta: boolean;
+  grupo_id: string | null;
+  origen: "PRE_REGISTRO" | "WALK_IN";
+  visita_estado: "VIGENTE" | "CANCELADA";
+  invitados: MisVisitasFila[];
+}
+export function agruparVisitas(filas: MisVisitasFila[]): VisitaAgrupada[] {
+  const porVisita = new Map<string, VisitaAgrupada>();
+  for (const fila of filas) {
+    let visita = porVisita.get(fila.visita_id);
+    if (!visita) {
+      visita = {
+        visita_id: fila.visita_id,
+        sitio_id: fila.sitio_id,
+        sitio_nombre: fila.sitio_nombre,
+        anfitrion_id: fila.anfitrion_id,
+        tipo_visita: fila.tipo_visita,
+        motivo: fila.motivo,
+        fecha_desde: fila.fecha_desde,
+        fecha_hasta: fila.fecha_hasta,
+        hora_desde: fila.hora_desde,
+        hora_hasta: fila.hora_hasta,
+        requiere_escolta: fila.requiere_escolta,
+        grupo_id: fila.grupo_id,
+        origen: fila.origen,
+        visita_estado: fila.visita_estado,
+        invitados: [],
+      };
+      porVisita.set(fila.visita_id, visita);
+    }
+    visita.invitados.push(fila);
+  }
+  return [...porVisita.values()];
+}

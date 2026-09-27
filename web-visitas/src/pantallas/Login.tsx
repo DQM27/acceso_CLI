@@ -16,90 +16,65 @@ export default function Login() {
     }
   }
   return (
-    <div className="acceso">
-      <header className="acceso-barra">
-        <a href="/" className="marca">
-          <img src={marca} alt="" />
+    <div className="flex min-h-dvh flex-col">
+      <header className="flex items-center justify-between px-6 py-5">
+        <a href="/" className="flex items-center gap-3 text-lg font-semibold">
+          <img src={marca} alt="" className="h-10 w-10 rounded-[var(--radio)]" />
           <span>
-            Brisas<span className="marca-subtitulo">Agenda de visitas</span>
+            Visitas
+            <span className="block text-xs font-normal text-muted">Portal de anfitriones</span>
           </span>
         </a>
         <SelectorTema />
       </header>
-      <main className="acceso-contenido">
-        <section className="acceso-presentacion">
-          <p className="antetitulo">PORTAL DE ANFITRIONES</p>
-          <h1>
-            Una buena visita
-            <br />
-            empieza aquí.
-          </h1>
-          <p className="entrada">
-            Prepará la llegada de tus visitantes. Elegí las fechas, los sitios y
-            las personas que vas a recibir.
-          </p>
-          <ol className="pasos-acceso">
-            <li>
-              <CalendarDays aria-hidden="true" />
-              <div>
-                <strong>Elegí cuándo</strong>
-                <span>Un día o un rango de fechas.</span>
-              </div>
-            </li>
-            <li>
-              <MapPin aria-hidden="true" />
-              <div>
-                <strong>Indicá dónde</strong>
-                <span>Uno o varios sitios en la misma cita.</span>
-              </div>
-            </li>
-            <li>
-              <Users aria-hidden="true" />
-              <div>
-                <strong>Agregá a tus visitantes</strong>
-                <span>Una persona o todo un grupo.</span>
-              </div>
-            </li>
-          </ol>
-        </section>
-        <section className="tarjeta acceso-tarjeta">
-          <span className="sello-icono">
+      <main className="mx-auto grid w-full max-w-[420px] flex-1 items-center px-6 py-8">
+        <section className="tarjeta flex flex-col gap-5 p-8 shadow-[var(--sombra-panel)]">
+          <span className="grid h-12 w-12 place-items-center rounded-[var(--radio)] bg-[var(--acento-suave)] text-[var(--acento)]">
             <CalendarDays aria-hidden="true" />
           </span>
-          <p className="antetitulo">TU AGENDA, EN UN SOLO LUGAR</p>
-          <h2>Te damos la bienvenida</h2>
-          <p>
-            Ingresá con la cuenta de Google que tenés autorizada para agendar
-            visitas.
-          </p>
+          <div>
+            <h1 className="text-xl font-semibold">Bienvenido</h1>
+            <p className="mt-1 text-sm text-muted">
+              Ingrese con la cuenta de Google que tiene autorizada para agendar visitas.
+            </p>
+          </div>
+          <ul className="flex flex-col gap-3 text-sm">
+            <li className="flex items-center gap-3">
+              <CalendarDays aria-hidden="true" className="text-[var(--acento)]" size={18} />
+              Elija cuándo: un día o un rango de fechas.
+            </li>
+            <li className="flex items-center gap-3">
+              <MapPin aria-hidden="true" className="text-[var(--acento)]" size={18} />
+              Indique dónde: uno o varios sitios en un mismo paso.
+            </li>
+            <li className="flex items-center gap-3">
+              <Users aria-hidden="true" className="text-[var(--acento)]" size={18} />
+              Agregue a sus visitantes: una persona o todo un grupo.
+            </li>
+          </ul>
           {error && (
             <Aviso>
-              {error}
-              <button
-                type="button"
-                className="btn btn-link p-0 align-baseline"
-                onClick={verificar}
-              >
+              {error}{" "}
+              <button type="button" className="underline" onClick={verificar}>
                 Volver a verificar
               </button>
             </Aviso>
           )}
           <button
             type="button"
-            className="btn btn-primary acceso-boton"
+            className="boton boton-primario justify-between px-5"
             disabled={enviando}
             onClick={() => void entrar()}
           >
             {enviando ? "Conectando…" : "Continuar con Google"}
             <ArrowRight aria-hidden="true" />
           </button>
-          <p className="nota-acceso">
-            ¿Necesitás acceso? Contactá a administración para autorizar tu
-            cuenta.
+          <p className="border-t border-borde pt-4 text-xs text-muted">
+            ¿Necesita acceso? Contacte a administración para autorizar su cuenta.
           </p>
         </section>
       </main>
-      <footer className="acceso-pie">
+      <footer className="flex items-center justify-between px-6 py-4 text-xs text-muted">
         <span>Lattis · Control de acceso</span>
         <span>Portal de anfitriones</span>
       </footer>

@@ -58,7 +58,11 @@ beforeEach(() => {
   resolverConsulta = vi
     .fn()
     .mockResolvedValue({
-      data: { correo: "A@example.invalid", nombre: "Anfitrión A" },
+      data: {
+        id: "00000000-0000-4000-8000-000000000001",
+        correo: "A@example.invalid",
+        nombre: "Anfitrión A",
+      },
       error: null,
     });
   const consulta = {
@@ -129,7 +133,11 @@ describe("autorización de anfitriones", () => {
     act(() => evento("SIGNED_OUT", null));
     await act(async () =>
       resolver({
-        data: { correo: "A@example.invalid", nombre: "Cuenta anterior" },
+        data: {
+          id: "00000000-0000-4000-8000-000000000001",
+          correo: "A@example.invalid",
+          nombre: "Cuenta anterior",
+        },
         error: null,
       }),
     );

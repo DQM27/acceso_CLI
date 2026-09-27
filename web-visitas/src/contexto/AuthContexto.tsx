@@ -13,6 +13,7 @@ import { supabase, CLAVE_SESION } from "../lib/supabase";
 
 interface Anfitrion {
   id: string;
+  anfitrionId: string;
   correo: string;
   nombre: string;
 }
@@ -27,6 +28,7 @@ interface EstadoAuth {
 }
 const Contexto = createContext<EstadoAuth | null>(null);
 const filaAnfitrion = z.object({
+  id: z.uuid(),
   correo: z.email(),
   nombre: z.string().min(1),
 });
@@ -80,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Identidad no verificada");
         const { data, error: errorConsulta } = await supabase
           .from("anfitriones")
-          .select("correo,nombre")
+          .select("id,correo,nombre")
           .eq("correo", usuario.user.email)
           .maybeSingle();
         if (!actual()) return;
@@ -97,7 +99,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const fila = filaAnfitrion.parse(data);
         if (fila.correo !== usuario.user.email)
           throw new Error("La autorización no corresponde a la cuenta");
-        setAnfitrion({ id: usuario.user.id, ...fila });
+        setAnfitrion({
+          id: usuario.user.id,
+          anfitrionId: fila.id,
+          correo: fila.correo,
+          nombre: fila.nombre,
+        });
         setVerificado(true);
         setError(null);
       } catch {
