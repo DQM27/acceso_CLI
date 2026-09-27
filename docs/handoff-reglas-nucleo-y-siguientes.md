@@ -22,7 +22,7 @@ Para la sesión que continúa este trabajo. Leer completo antes de tocar nada.
 |---|---|
 | `main` | Tiene OCR (PR #77) y refactor móvil M1–M7 (PR #79) |
 | `claude/dominio-en-nucleo` | Terminada. Reglas del móvil al núcleo |
-| `claude/dominio-escritorio` | **Trabajar aquí.** Sale de la anterior; mismas reglas para escritorio |
+| `claude/dominio-escritorio` | Paso 1 terminado. Sale de la anterior; mismas reglas para escritorio |
 | `claude/realtime-rust-spike` | Cliente realtime en Rust. **No borrar** (ver paso 4) |
 | `refactor-panel-web`, `claude/rediseno-web-visitas` | Otras sesiones. No tocar `web/` ni `web-visitas/` |
 
@@ -43,25 +43,17 @@ Valen para escritorio y móvil, al crear y editar:
 - Aviso en listas: **"ACCESO DENEGADO"** (el del móvil).
 - PRAIND exigido a todos menos SWAT y POR CORREO.
 
-## Paso 1: terminar reglas en `claude/dominio-escritorio`
+## Paso 1: reglas en el núcleo — TERMINADO
 
-Detalle en `docs/auditorias/reglas-duplicadas-escritorio-2026-09-27.md`.
+Hecho en `claude/dominio-escritorio` (ver
+`docs/auditorias/reglas-duplicadas-escritorio-2026-09-27.md`):
+proveedores y gafete KOF verificados en `src/application/con_nube.rs`
+(los usan Tauri y `mobile/rust-core`), y el aviso "ACCESO DENEGADO" /
+"PRAIND VENCIDO" de las listas sale de `ContratistaResumen::aviso_acceso`.
 
-1. **Proveedores (escritorio):** `desktop/src-tauri/src/comandos/proveedores.rs`
-   orquesta chequeos de nube por su cuenta. Llevarlo al núcleo
-   (`src/application/proveedores.rs` o un helper en `src/nube`) para que lo
-   usen Tauri y `mobile/rust-core` (`registrar_ingreso_proveedor_con_secreto`).
-   Primer chequeo: `AppCore::proveedor_con_ingreso_activo_en_sitio`.
-   Cuidado: no retener el candado del núcleo durante llamadas HTTP.
-2. **Gafete KOF (escritorio):** igual con
-   `comandos/gafetes_provisionales.rs` (mismo patrón que
-   `entregar_gafete_provisional_con_secreto` del móvil).
-3. **Aviso "ACCESO DENEGADO" / "PRAIND VENCIDO" en listas:** hoy lo calculan
-   `desktop/src/pantallas/NuevoIngresoModal.logica.ts` (`avisosContratista`,
-   dice "Sin acceso") y `FilasActivos.kt`, cada uno con su reloj. Hacer que
-   el núcleo lo devuelva en `ContratistaResumen` (texto listo) y que ambos
-   sólo lo muestren.
-4. Borrar del doc de duplicados cada punto resuelto.
+Queda de este paso: quitar tres funciones del puente móvil que ya nadie
+usa (listadas en la auditoría) y, si el dueño lo pide, la PR a `main`.
+`main` sólo tiene los merges de #77 y #79, sin contenido que falte acá.
 
 ## Paso 2: rama nueva `claude/requiere-gafete` (desde `main` ya con paso 1)
 
@@ -113,7 +105,20 @@ cd src-tauri && cargo check --target x86_64-pc-windows-gnu   # sólo compila par
 
 Trampas conocidas:
 - **No usar Prettier**: el proyecto no lo usa y reformatea todo.
+- **UniFFI incluye los doc-comments en el checksum**: cambiar sólo el
+  comentario de una función exportada de `mobile/rust-core` obliga a
+  regenerar los bindings, o la app falla al arrancar ("checksum mismatch").
+- `sqlite3mc-vendor-lib/dist` guarda **un solo target**: compilarlo para
+  Windows pisa el de Linux y la `.so` de los tests de Android queda sin
+  SQLite (`undefined symbol: sqlite3_*`). Después de un chequeo para
+  Windows: `touch sqlite3mc-vendor-lib/build.rs` y recompilarlo sin
+  `--target`.
+- Contenedor nuevo: hay que instalar mingw (`gcc-mingw-w64-x86-64`), el
+  target `x86_64-pc-windows-gnu`, el SDK de Android en `/opt/android-sdk`
+  (cmdline-tools + `platforms;android-36`, `build-tools;36.0.0`) y
+  `npm ci` en `desktop/`. La núcleo con nube se prueba con
+  `cargo test --features nube,cifrado-secreto-dispositivo-portable`.
 - Disco chico: si cargo falla con "No space left", borrar
   `target/debug/incremental` y `mobile/rust-core/target/debug`.
-- Estado al cerrar esta sesión: núcleo 664, rust-core 58, Android 219,
-  vitest 245 tests, todo en verde.
+- Estado al cerrar el Paso 1: núcleo 667 (802 con nube), rust-core 58,
+  Android 219, vitest 244 tests, todo en verde.
