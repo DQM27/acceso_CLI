@@ -766,4 +766,33 @@ class LectorDocumentosIdentidadTest {
         assertNull(doc?.nombre)
         assertEquals("RODRIGUEZ SOLIS", doc?.apellidos)
     }
+
+    // --- In House en estuche: "COSTA RICA" perdido y basura del reflejo ---
+
+    @Test
+    fun inHouseSinCostaRicaSeReconocePorLaFranjaContratista() {
+        val texto = """
+            Ana Maria
+            Muñoz Rojas
+            CONTRATISTA
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.CARNET_IN_HOUSE, doc?.tipo)
+        assertEquals("Ana Maria Muñoz Rojas", doc?.nombre)
+    }
+
+    @Test
+    fun inHouseIgnoraBasuraDelReflejoDelEstuche() {
+        val texto = """
+            Ana Maria
+            Muñoz Rojas
+            l.
+            CONTRATISTA
+            COSTA RICA
+        """.trimIndent()
+
+        assertEquals("Ana Maria Muñoz Rojas", leerDocumentoDeTexto(texto)?.nombre)
+    }
 }

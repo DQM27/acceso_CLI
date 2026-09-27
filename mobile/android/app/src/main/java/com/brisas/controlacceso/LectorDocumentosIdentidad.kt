@@ -239,6 +239,8 @@ private val REGEX_PRAIND_FECHA_VENCIMIENTO = Regex(
     """Fecha\s+de\s+vencimiento\s+de\s+inducci[oó]n:?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})""",
     RegexOption.IGNORE_CASE,
 )
+// "CONTRATISTA" solo en su renglón (tolera un signo suelto del OCR).
+private val REGEX_RENGLON_CONTRATISTA = Regex("""(?m)^\W*CONTRATISTA\W*$""", RegexOption.IGNORE_CASE)
 private val REGEX_INHOUSE_CEDULA = Regex("""C[ÉE]DULA:?\s*\n?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_DIGITOS_BAC = Regex("""\b\d{9,15}\b""")
 private val REGEX_GAFETE_CONTRATISTA = Regex("""\bCRC\s*[-:]?\s*(\d{1,4})\b""", RegexOption.IGNORE_CASE)
@@ -274,6 +276,13 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
         "CONTRATISTA" in mayus && "COSTA RICA" in mayus && ("EMPRESA" in mayus || REGEX_INHOUSE_CEDULA.containsMatchIn(texto)) ->
             TipoDocumento.CARNET_IN_HOUSE
         "CONTRATISTA" in mayus && "COSTA RICA" in mayus && extraerNombreInHouseFrente(texto) != null ->
+            TipoDocumento.CARNET_IN_HOUSE
+        // "COSTA RICA" va chiquito en la esquina inferior de la franja azul
+        // del gafete: es lo primero que se pierde cuando el gafete viene en
+        // un estuche (borde blanco, reflejo del plástico, o el gafete
+        // vertical no entra entero en el recuadro horizontal). La franja
+        // "CONTRATISTA" como renglón propio + un nombre arriba alcanza.
+        REGEX_RENGLON_CONTRATISTA.containsMatchIn(texto) && extraerNombreInHouseFrente(texto) != null ->
             TipoDocumento.CARNET_IN_HOUSE
         ("TRIBUNAL SUPREMO DE ELECCIONES" in mayus ||
             "CÉDULA DE IDENTIDAD" in mayus || "CEDULA DE IDENTIDAD" in mayus) &&
@@ -661,11 +670,15 @@ private fun extraerNombreInHouseFrente(texto: String): String? {
     val indiceContratista = lineas.indexOfFirst { "CONTRATISTA" in it.uppercase() }
     if (indiceContratista <= 0) return null
 
+    // Sólo renglones de letras y espacios de 3+ caracteres: el reflejo del
+    // estuche plástico genera renglones basura ("l.", "~ ,") que antes
+    // podían colarse entre el nombre y la franja "CONTRATISTA".
     val candidatas = lineas
         .take(indiceContratista)
         .filter { linea ->
             val mayus = linea.uppercase()
-            linea.any(Char::isLetter) &&
+            linea.length >= 3 &&
+                linea.all { it.isLetter() || it == ' ' } &&
                 "EMPRESA" !in mayus &&
                 "CÉDULA" !in mayus &&
                 "CEDULA" !in mayus &&
