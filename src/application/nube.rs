@@ -415,8 +415,17 @@ impl AppCore {
     /// punto para devolver lo medido. Cada autenticación exitosa vuelve a
     /// medir y sobrescribe -- no acumula, así que un desfase que ya se
     /// corrigió (o empeoró) en Windows se refleja solo, sin reiniciar la
-    /// app.
+    /// app. También se guarda en la base (ver
+    /// `database::queries::desfase_reloj`) para aplicarlo desde el próximo
+    /// arranque, antes de hablar con la nube o si no hay internet.
     pub fn actualizar_desfase_reloj(&self, desfase_ms: i64) {
         self.reloj.actualizar_desfase_ms(desfase_ms);
+        if let Err(error) =
+            crate::database::queries::desfase_reloj::guardar(&self.connection, desfase_ms)
+        {
+            // La corrección en memoria ya quedó aplicada; sólo se pierde
+            // tenerla lista en el próximo arranque.
+            log::warn!("no se pudo guardar el desfase de reloj medido: {error}");
+        }
     }
 }
