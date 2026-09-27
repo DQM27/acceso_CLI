@@ -374,30 +374,22 @@ vivo sin recargar.
 sistema: agendan una visita de 2 personas para mañana en < 60 s sin
 ayuda; entienden el estado de su visita de hoy sin explicación.
 
-### 3.9 Migración desde el MVP
+### 3.9 Transición desde el MVP
 
-1. `cita_visitantes` → `visitantes` (deduplicar por documento
-   normalizado) + `visita_invitados`.
-2. `citas` × `cita_sitios` → una `visitas` por sitio con el mismo rango;
-   `hora_desde`/`hora_hasta` = ventana por defecto del sitio (o
-   `hora_estimada` ±tolerancia si existía); `grupo_id` = id de la cita
-   original.
-3. `movimientos_visita` → nuevo `movimientos_visita` apuntando al
-   invitado.
-4. `anfitriones` → nueva tabla con `id` y `anfitrion_sitios` = todos los
-   sitios (comportamiento actual) hasta que un admin los acote.
-5. Migración probada en staging con copia de datos; las apps viejas dejan
-   de escribir antes del corte (versión mínima de app).
-
----
+Visitas **no está en uso en producción**: no hay datos reales que
+migrar. El modelo nuevo se crea limpio. Las tablas viejas (`citas`,
+`cita_sitios`, `cita_visitantes`, `movimientos_visita`) y la RPC
+`crear_cita_anfitrion` se mantienen intactas hasta V3 sólo porque el
+núcleo las consulta en cada sincronización; en V3 se retira ese código y
+se eliminan con una migración.
 
 ## Fases
 
 | Fase | Contenido | Terminado cuando |
 |---|---|---|
 | **V1 Núcleo** | Dominio `visitas` (estados, `verificar_llegada`), servicio, repos, esquema local, tests. | 100 % de reglas con tests; sin UI todavía. |
-| **V2 Nube** | Migraciones Supabase + RLS + RPC + migración de datos (staging). | Cuenta ajena ve cero filas; datos del MVP migrados sin pérdida. |
-| **V3 Puesto de control** | Escritorio y móvil: llegada, requisitos, gafete, salida, adentro ahora, walk-in. | Flujo completo en ambos, también sin conexión. |
+| **V2 Nube** | Migraciones Supabase (tablas nuevas) + RLS + RPC (staging). | Cuenta ajena ve cero filas; tablas viejas intactas. |
+| **V3 Puesto de control** | Escritorio y móvil: llegada, requisitos, gafete, salida, adentro ahora, walk-in. Retirar el código de citas del núcleo y borrar las tablas viejas. | Flujo completo en ambos, también sin conexión. |
 | **V4 Anfitriones** | Web nueva según 3.8: mis visitas en vivo, agendar en una página, detalle con editar/cancelar/duplicar, solicitudes sin cita, avisos por correo. | Criterios de aceptación de 3.8. |
 | **V5 Panel** | Anfitriones, restricciones, requisitos, historial/reportes, datos personales. | Nada de visitas requiere SQL a mano. |
 | **V6 Emergencia** | "Adentro ahora" consolidado de todos los tipos, imprimible y sin conexión. | Pase de lista posible con la red caída. |

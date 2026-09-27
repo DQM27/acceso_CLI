@@ -37,35 +37,32 @@ La otra sesión trabaja en el núcleo (N1-N3 de
 el esquema de visitas. Si algo de esta sesión obligara a tocar `src/`,
 `desktop/` o `mobile/`, **parar y avisar al dueño**: no se hace aquí.
 
-## Ojo: la web sí depende del esquema de la nube
+## Esquema: libre, pero sin borrar lo viejo todavía
 
-La web nueva necesita el modelo nuevo (visitantes, visitas por sitio con
-rango + ventana diaria, invitados con estado). Pero el escritorio actual
-todavía lee las tablas viejas (`citas`, `cita_sitios`,
-`cita_visitantes`) para hacer el check-in. Por eso esta sesión trabaja
-**en modo aditivo y compatible**:
+Visitas **no está en uso en producción** (es un feature en desarrollo):
+no hay datos reales que migrar ni usuarios que proteger. Por eso **no
+hace falta puente ni migración de datos**: el modelo nuevo se diseña
+limpio, tal cual la sección 3.1 del diseño.
 
-1. **Tablas nuevas al lado de las viejas.** No borrar, renombrar ni
-   cambiar `citas`, `cita_sitios`, `cita_visitantes`,
-   `movimientos_visita` ni `anfitriones`. Crear las nuevas con nombres
-   propios (`visitantes`, `visitas`, `visita_invitados`,
-   `anfitrion_sitios`, `restricciones_visitante`, `aceptaciones`,
-   `requisitos_sitio`; y `anfitriones_v2` o columnas **nuevas** en
-   `anfitriones` sin romper las existentes).
-2. **Puente hacia el modelo viejo.** Toda visita creada, editada o
-   cancelada con el modelo nuevo se refleja en `citas` +
-   `cita_sitios` + `cita_visitantes` (trigger o dentro de la misma RPC,
-   en la misma transacción), para que el puesto de control actual la vea
-   sin cambios. Mapeo: una visita nueva → una `citas` con un solo
-   `cita_sitios`; `fecha_desde/fecha_hasta` iguales; `hora_estimada` =
-   `hora_desde`; cancelar → `estado = 'CANCELADA'`.
-3. **Estado en vivo desde el modelo viejo.** Mientras el puesto de
-   control siga escribiendo `movimientos_visita` (viejo), el estado por
-   persona que ve el anfitrión ("Llegó 9:12 · gafete 7") se calcula con
-   una vista que lee esos movimientos a través del puente. Cuando la otra
-   línea de trabajo haga V1/V3, el puente se retira.
-4. **Datos existentes**: migrar las citas vigentes y futuras al modelo
-   nuevo (sección 3.9 del diseño) sin borrar las viejas.
+Única restricción: **no borrar ni alterar** las tablas viejas (`citas`,
+`cita_sitios`, `cita_visitantes`, `movimientos_visita`, `anfitriones`)
+ni la RPC `crear_cita_anfitrion`. El núcleo Rust las consulta en **cada
+sincronización** (`recibir_citas_del_sitio`,
+`recibir_historial_visitas_del_sitio`); si desaparecen, la
+sincronización de escritorio y móvil falla completa en staging y bloquea
+a la otra sesión. Se eliminan más adelante, cuando se haga V1/V3 (núcleo
+y puesto de control de visitas).
+
+Consecuencia: hasta V1/V3 la web nueva **no se conecta con el check-in
+del escritorio**. Es aceptable: el estado en vivo ("Llegó 9:12") se
+construye sobre las tablas nuevas (`visita_movimientos`) y se prueba
+insertando movimientos de prueba en staging.
+
+Nombres de tablas nuevas sin chocar con las viejas: `visitantes`,
+`visitas`, `visita_invitados`, `visita_movimientos`, `anfitrion_sitios`,
+`restricciones_visitante`, `aceptaciones`, `requisitos_sitio`; para
+anfitriones, columnas **nuevas** en `anfitriones` (p. ej. `id`,
+`activo`) sin romper las existentes, o `anfitriones_v2`.
 
 ## Qué construir
 
@@ -120,9 +117,10 @@ Además:
 - Migraciones aplicadas y probadas **sólo en staging**
   (`control-acceso-staging`). **Nunca** producción
   (`control-acceso-nube`): esa la aplica el dueño.
-- Probar en staging que una visita creada con la web nueva **aparece en
-  el check-in del escritorio actual** (a través del puente) y que su
-  llegada se ve en la web en vivo.
+- Probar en staging que la llegada de un invitado (movimiento de prueba
+  insertado en `visita_movimientos`) se ve en la web en vivo.
+- Comprobar que la sincronización de escritorio contra staging sigue
+  funcionando (las tablas viejas siguen intactas).
 - Limpiar en staging todo dato de prueba creado.
 - Criterios de aceptación de 3.8 (agendar 2 personas para mañana en
   menos de 60 s sin ayuda).
@@ -132,4 +130,4 @@ Además:
 - No crear PR salvo que el dueño lo pida.
 - Dejar en `docs/` un resumen corto: qué quedó, qué migraciones hay que
   aplicar en producción y en qué orden, y qué queda pendiente para V1/V3
-  (retirar el puente).
+  (conectar el puesto de control a las tablas nuevas y borrar las viejas).
