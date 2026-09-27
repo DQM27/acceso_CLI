@@ -124,9 +124,14 @@ const ULTIMO_INSTANTE_MOVIMIENTO_SQL: &str = "
         SELECT MAX(fecha_hora_ingreso) AS instante
         FROM registro_ingresos
         UNION ALL
-        SELECT MAX(fecha_hora_salida) AS instante
-        FROM registro_ingresos
-        WHERE fecha_hora_salida IS NOT NULL
+        SELECT (
+            SELECT fecha_hora_salida
+            FROM registro_ingresos
+            WHERE fecha_hora_salida IS NOT NULL
+              AND usuario_salida_id IS NOT NULL
+            ORDER BY fecha_hora_salida DESC
+            LIMIT 1
+        ) AS instante
     )";
 
 /// Instante más reciente entre todos los movimientos de entrada/salida
@@ -134,6 +139,16 @@ const ULTIMO_INSTANTE_MOVIMIENTO_SQL: &str = "
 /// detectar si el reloj del equipo retrocedió respecto al último movimiento
 /// conocido; vive aquí (no en `application`) para que la única consulta SQL
 /// de esa validación quede junto al resto del acceso a `registro_ingresos`.
+///
+/// Sólo cuentan los instantes que selló el reloj de ESTE equipo. Una salida
+/// que dio el otro dispositivo del sitio llega por la sincronización con
+/// `usuario_salida_id = NULL` y la hora del reloj de ese otro equipo; si
+/// ese reloj va adelantado, compararse contra ella bloqueaba aquí todo
+/// registro ("Revise la fecha y hora del equipo") hasta que la hora real lo
+/// alcanzara, aunque el reloj propio estuviera bien. La salida se busca con
+/// `ORDER BY ... DESC LIMIT 1` y no con `MAX`: con el filtro extra, `MAX`
+/// pierde su atajo y recorrería todas las salidas del historial; así se
+/// camina el índice desde la más reciente y se para en la primera propia.
 pub fn ultimo_instante_movimiento(
     connection: &Connection,
 ) -> Result<Option<DateTime<Utc>>, DatabaseError> {
@@ -226,7 +241,31 @@ mod tests {
     }
 
     #[test]
-    fn ultimo_instante_movimiento_usa_indices_cubrientes() {
+    fn ultimo_instante_movimiento_ignora_la_salida_que_dio_el_otro_dispositivo() {
+        let connection = conexion_con_referencias();
+        insertar_ingreso(&connection, 1, "2026-08-21T10:00:00Z");
+
+        // Lo que deja `recibir_cierres_de_ingresos_propios`: la salida la dio
+        // el otro equipo, con su reloj (adelantado una hora).
+        connection
+            .execute(
+                "UPDATE registro_ingresos
+                 SET fecha_hora_salida = '2026-08-21T11:00:00Z',
+                     usuario_salida_id = NULL,
+                     usuario_salida_nombre = 'Operador de la PC'
+                 WHERE id = 1",
+                [],
+            )
+            .unwrap();
+
+        assert_eq!(
+            ultimo_instante_movimiento(&connection).unwrap(),
+            Some(parsear_utc("2026-08-21T10:00:00Z").unwrap())
+        );
+    }
+
+    #[test]
+    fn ultimo_instante_movimiento_camina_los_indices() {
         let connection = conexion_con_referencias();
         let mut statement = connection
             .prepare(&format!(
@@ -239,16 +278,25 @@ mod tests {
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
 
-        for indice in [
-            "idx_registro_ingresos_fecha_ingreso",
-            "idx_registro_ingresos_fecha_salida",
-        ] {
-            assert!(
-                detalles
-                    .iter()
-                    .any(|detalle| { detalle.contains(&format!("USING COVERING INDEX {indice}")) }),
-                "el plan no usa el índice cubriente {indice}: {detalles:?}"
-            );
-        }
+        assert!(
+            detalles.iter().any(|detalle| {
+                detalle.contains("USING COVERING INDEX idx_registro_ingresos_fecha_ingreso")
+            }),
+            "el plan no usa el índice cubriente de entradas: {detalles:?}"
+        );
+        // Las salidas filtran por `usuario_salida_id`, que no está en el
+        // índice: basta con que lo recorra ordenado, sin ordenar aparte.
+        assert!(
+            detalles
+                .iter()
+                .any(|detalle| detalle.contains("USING INDEX idx_registro_ingresos_fecha_salida")),
+            "el plan no usa el índice de salidas: {detalles:?}"
+        );
+        assert!(
+            !detalles
+                .iter()
+                .any(|detalle| detalle.contains("TEMP B-TREE")),
+            "el plan ordena aparte en vez de caminar el índice: {detalles:?}"
+        );
     }
 }
