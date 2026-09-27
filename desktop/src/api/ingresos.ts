@@ -65,6 +65,12 @@ export interface PreparacionIngreso {
    * (`docs/plan-gafetes.md`) — puramente informativo, no bloquea el
    * ingreso. */
   gafetes_deuda: number[];
+  /** Motivo por el que no se puede continuar, ya resuelto por el núcleo
+   * (`mensaje_bloqueo_ingreso`); `null` = se puede continuar. */
+  mensaje_bloqueo: string | null;
+  /** Con `PermitidoConAdvertencia`, el aviso listo para mostrar ("PRAIND
+   * vence en 3 días (15-09-2026)"), con el reloj del núcleo. */
+  aviso_praind: string | null;
 }
 
 export interface ResultadoRegistroEntrada {
@@ -99,64 +105,6 @@ export interface IngresoActivoResumen {
 export interface ListaIngresosActivosResumen {
   items: IngresoActivoResumen[];
   total: number;
-}
-
-/// Espejo de `puede_continuar`/`mensaje_bloqueo`
-/// (`src/tui/nuevo_ingreso/state.rs`) — `preparar_ingreso` no rechaza estos
-/// casos (devuelve `Ok` igual, con el motivo adentro), así que quien llama
-/// decide si deja continuar. La validación real y definitiva la vuelve a
-/// hacer el backend en `registrar_ingreso` de todos modos.
-export function puedeContinuar(p: PreparacionIngreso): boolean {
-  return (
-    !p.tiene_ingreso_activo && p.activo_en_otro_sitio === null && typeof p.resultado_acceso !== "object"
-  );
-}
-
-export function mensajeBloqueo(p: PreparacionIngreso): string {
-  if (p.tiene_ingreso_activo) {
-    return "El contratista ya tiene un ingreso activo.";
-  }
-  if (p.activo_en_otro_sitio !== null) {
-    return `El contratista ya tiene un ingreso activo en ${p.activo_en_otro_sitio}.`;
-  }
-  if (typeof p.resultado_acceso === "object") {
-    return mensajeMotivoDenegacion(p.resultado_acceso.Denegado);
-  }
-  return "No se puede continuar con este contratista.";
-}
-
-/** Días de calendario hasta `fecha` (puede dar negativo si ya venció --
- * no debería pasar acá, `PermitidoConAdvertencia` sólo se da ANTES del
- * vencimiento, pero no se asume). Redondea hacia arriba: "vence mañana"
- * cuenta como 1 día, no 0. */
-function diasHasta(fecha: string): number {
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const objetivo = new Date(`${fecha}T00:00:00`);
-  return Math.ceil((objetivo.getTime() - hoy.getTime()) / 86_400_000);
-}
-
-/** Texto para la advertencia de `PermitidoConAdvertencia` en
- * `NuevoIngresoModal` -- "vence en 3 días (2026-09-15)" en vez de sólo
- * "PRAIND próximo a vencer", que no decía cuánto quedaba. */
-export function mensajeVencimientoPraind(fecha: string): string {
-  const dias = diasHasta(fecha);
-  const cuenta =
-    dias <= 0 ? "vence hoy" : dias === 1 ? "vence mañana" : `vence en ${dias} días`;
-  return `${cuenta} (${fecha})`;
-}
-
-export function mensajeMotivoDenegacion(motivo: MotivoDenegacion): string {
-  switch (motivo) {
-    case "SinAcceso":
-      return "Acceso denegado · no tiene acceso autorizado";
-    case "PraindVencido":
-      return "Acceso denegado · PRAIND vencido";
-    case "PraindNoRegistrado":
-      return "Acceso denegado · PRAIND sin fecha registrada";
-    case "EmpresaInactiva":
-      return "Acceso denegado · la empresa está inactiva";
-  }
 }
 
 const MAX_LARGO_GAFETES = 60;

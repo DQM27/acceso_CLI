@@ -15,9 +15,7 @@ pub fn salida_es_cronologicamente_valida(
 /// los bordes no cuentan. Una placa vacía en vehículo queda `None` y la
 /// rechaza `RegistroIngresoService` (`PlacaRequerida`).
 ///
-/// La usa el puente móvil antes de registrar; el escritorio hace lo mismo
-/// en TypeScript (`NuevoIngresoModal.tsx`), ver
-/// `docs/auditorias/reglas-duplicadas-escritorio-2026-09-27.md`.
+/// La aplica `AppCore::registrar_ingreso`, para escritorio y móvil.
 pub fn placa_segun_medio(medio: MedioIngreso, placa: Option<String>) -> Option<String> {
     match medio {
         MedioIngreso::Vehiculo => placa

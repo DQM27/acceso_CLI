@@ -1147,7 +1147,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_contratista_activo_en_otro_sitio_con_secreto() and 0xFFFF) != 8502) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() and 0xFFFF) != 1304) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() and 0xFFFF) != 20948) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa() and 0xFFFF) != 5879) {
@@ -1983,7 +1983,7 @@ public interface NucleoInterface {
      * Alta de contratista en persona, sólo creación (ver
      * docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
      * PRAIND requerido y vigente, personal de ruta según el tipo, acceso
-     * habilitado) viven en `ContratistaService::crear_en_persona`; esto
+     * habilitado) viven en `ContratistaService::crear`; esto
      * sólo convierte tipos en la frontera uniffi.
      */
     fun `crearContratista`(`datos`: DatosContratista): kotlin.Long
@@ -2926,7 +2926,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * Alta de contratista en persona, sólo creación (ver
      * docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
      * PRAIND requerido y vigente, personal de ruta según el tipo, acceso
-     * habilitado) viven en `ContratistaService::crear_en_persona`; esto
+     * habilitado) viven en `ContratistaService::crear`; esto
      * sólo convierte tipos en la frontera uniffi.
      */
     @Throws(NucleoException::class)override fun `crearContratista`(`datos`: DatosContratista): kotlin.Long {
@@ -4144,7 +4144,7 @@ public object FfiConverterTypeCorreccionAplicada: FfiConverterRustBuffer<Correcc
  * docs/plan-app-movil.md). `fecha_vencimiento_praind` viaja como texto
  * ISO (`AAAA-MM-DD`); si no parsea se rechaza como `FechaInvalida`. Sin
  * `tiene_acceso`: el alta en persona siempre queda con acceso y eso lo
- * decide el núcleo (`ContratistaService::crear_en_persona`), no Kotlin.
+ * decide el núcleo (`ContratistaService::crear`), no Kotlin.
  */
 data class DatosContratista (
     var `cedula`: kotlin.String
@@ -4718,6 +4718,13 @@ data class PreparacionIngreso (
      * significa bloqueado, y es el texto a mostrar tal cual.
      */
     var `mensajeBloqueo`: kotlin.String?
+    , 
+    /**
+     * Con `PermitidoConAdvertencia`, el aviso listo para mostrar ("PRAIND
+     * vence en 3 días (15-09-2026)"), con el reloj del núcleo. Reemplaza
+     * `mensajeVencimientoPraind` de Kotlin.
+     */
+    var `avisoPraind`: kotlin.String?
     
 ){
     
@@ -4746,6 +4753,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterOptionalString.read(buf),
             FfiConverterSequenceLong.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
     }
 
@@ -4761,7 +4769,8 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterBoolean.allocationSize(value.`tieneIngresoActivo`) +
             FfiConverterOptionalString.allocationSize(value.`activoEnOtroSitio`) +
             FfiConverterSequenceLong.allocationSize(value.`gafetesDeuda`) +
-            FfiConverterOptionalString.allocationSize(value.`mensajeBloqueo`)
+            FfiConverterOptionalString.allocationSize(value.`mensajeBloqueo`) +
+            FfiConverterOptionalString.allocationSize(value.`avisoPraind`)
     )
 
     override fun write(value: PreparacionIngreso, buf: ByteBuffer) {
@@ -4777,6 +4786,7 @@ public object FfiConverterTypePreparacionIngreso: FfiConverterRustBuffer<Prepara
             FfiConverterOptionalString.write(value.`activoEnOtroSitio`, buf)
             FfiConverterSequenceLong.write(value.`gafetesDeuda`, buf)
             FfiConverterOptionalString.write(value.`mensajeBloqueo`, buf)
+            FfiConverterOptionalString.write(value.`avisoPraind`, buf)
     }
 }
 

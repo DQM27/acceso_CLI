@@ -9,8 +9,6 @@ describe("sanearSoloDigitos", () => {
 
 describe("sanearSoloLetras", () => {
   it("descarta números y símbolos, conserva acentos/espacio/apóstrofe/guión", () => {
-    expect(sanearSoloLetras("José O'Neill Pérez-Ruiz 2")).toBe(
-      "José O'Neill Pérez-Ruiz ",
-    );
+    expect(sanearSoloLetras("José O'Neill Pérez-Ruiz 2")).toBe("José O'Neill Pérez-Ruiz ");
   });
 });

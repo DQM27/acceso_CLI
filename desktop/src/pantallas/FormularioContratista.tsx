@@ -2,11 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
-import {
-  actualizarContratista,
-  crearContratista,
-  reglasFormularioContratista,
-} from "../api";
+import { actualizarContratista, crearContratista, reglasFormularioContratista } from "../api";
 import type {
   ContratistaResumen,
   DatosContratista,
@@ -101,8 +97,7 @@ export default function FormularioContratista({
   useEffect(() => {
     // La casilla se oculta para los tipos que no la admiten; sin esto un
     // `true` que quedó de otro tipo se mandaría igual.
-    if (!reglas.admite_personal_ruta && esPersonalRuta)
-      setValue("es_personal_ruta", false);
+    if (!reglas.admite_personal_ruta && esPersonalRuta) setValue("es_personal_ruta", false);
   }, [reglas.admite_personal_ruta, esPersonalRuta, setValue]);
   const mostrarPraind = reglas.requiere_praind;
 
@@ -134,10 +129,7 @@ export default function FormularioContratista({
   }
 
   return (
-    <Modal
-      titulo={contratista ? "Editar contratista" : "Nuevo contratista"}
-      onCerrar={onCerrar}
-    >
+    <Modal titulo={contratista ? "Editar contratista" : "Nuevo contratista"} onCerrar={onCerrar}>
       <form
         onSubmit={handleSubmit(alGuardar)}
         style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
@@ -153,11 +145,7 @@ export default function FormularioContratista({
             inputMode="numeric"
             disabled={!!contratista}
           />
-          {errors.cedula && (
-            <span style={{ color: "var(--error)" }}>
-              {errors.cedula.message}
-            </span>
-          )}
+          {errors.cedula && <span style={{ color: "var(--error)" }}>{errors.cedula.message}</span>}
         </label>
 
         <label className="campo">
@@ -169,11 +157,7 @@ export default function FormularioContratista({
               },
             })}
           />
-          {errors.nombre && (
-            <span style={{ color: "var(--error)" }}>
-              {errors.nombre.message}
-            </span>
-          )}
+          {errors.nombre && <span style={{ color: "var(--error)" }}>{errors.nombre.message}</span>}
         </label>
 
         <label className="campo">
@@ -185,9 +169,7 @@ export default function FormularioContratista({
                 única excepción, marcada, para no perderla de la vista ni
                 reasignarla en silencio a otra empresa al guardar. */}
             {contratista &&
-              !empresas.some(
-                (empresa) => empresa.id === contratista.empresa_id,
-              ) && (
+              !empresas.some((empresa) => empresa.id === contratista.empresa_id) && (
                 <option value={contratista.empresa_id}>
                   {contratista.empresa_nombre} (inactiva)
                 </option>
@@ -199,9 +181,7 @@ export default function FormularioContratista({
             ))}
           </select>
           {errors.empresa_id && (
-            <span style={{ color: "var(--error)" }}>
-              {errors.empresa_id.message}
-            </span>
+            <span style={{ color: "var(--error)" }}>{errors.empresa_id.message}</span>
           )}
         </label>
 
@@ -218,12 +198,7 @@ export default function FormularioContratista({
 
         {reglas.admite_personal_ruta && (
           <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              color: "var(--texto)",
-            }}
+            style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
           >
             <input type="checkbox" {...register("es_personal_ruta")} />
             Personal de ruta
@@ -232,12 +207,7 @@ export default function FormularioContratista({
 
         {contratista && (
           <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              color: "var(--texto)",
-            }}
+            style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
           >
             <input type="checkbox" {...register("tiene_acceso")} />
             Con acceso
@@ -249,29 +219,18 @@ export default function FormularioContratista({
             Fecha de vencimiento PRAIND
             <input type="date" {...register("fecha_vencimiento_praind")} />
             {reglas.aviso_praind && (
-              <span style={{ color: "var(--error)" }}>
-                {reglas.aviso_praind}
-              </span>
+              <span style={{ color: "var(--error)" }}>{reglas.aviso_praind}</span>
             )}
           </label>
         )}
 
-        {errors.root && (
-          <p style={{ color: "var(--error)" }}>{errors.root.message}</p>
-        )}
+        {errors.root && <p style={{ color: "var(--error)" }}>{errors.root.message}</p>}
 
-        <div
-          style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}
-        >
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
           <button type="button" className="boton" onClick={onCerrar}>
             Cancelar
           </button>
-          <button
-            type="submit"
-            className="boton boton-primario"
-            disabled={
-              isSubmitting || (mostrarPraind && reglas.aviso_praind !== null)
-            }
+          <button type="submit" className="boton boton-primario" disabled={isSubmitting || (mostrarPraind && reglas.aviso_praind !== null)}
           >
             {isSubmitting ? "Guardando…" : "Guardar"}
           </button>

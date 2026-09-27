@@ -36,32 +36,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.MedioIngreso
 import uniffi.control_acceso_mobile.PreparacionIngreso
-import uniffi.control_acceso_mobile.ResultadoAcceso
-
-/// Espejo de `mensajeVencimientoPraind` (`desktop/src/api/ingresos.ts`) --
-/// antes esta pantalla sólo mostraba "PRAIND próximo a vencer" sin decir
-/// cuánto quedaba, mientras desktop ya avisaba "vence en N días (fecha)".
-/// `fecha` en ISO (`AAAA-MM-DD`), igual que la manda `PreparacionIngreso`,
-/// pero se muestra día-mes-año -- misma convención que el resto de la app
-/// (`FechaDocumento.aTextoDDMMYYYY`) -- mostrar el ISO crudo entre
-/// paréntesis era inconsistente con eso (hallazgo 2026-09-20).
-fun mensajeVencimientoPraind(fecha: String): String {
-    val fechaParseada = LocalDate.parse(fecha)
-    val dias = ChronoUnit.DAYS.between(LocalDate.now(), fechaParseada)
-    val cuenta = when {
-        dias <= 0 -> "vence hoy"
-        dias == 1L -> "vence mañana"
-        else -> "vence en $dias días"
-    }
-    val fechaTexto = "%02d-%02d-%04d".format(fechaParseada.dayOfMonth, fechaParseada.monthValue, fechaParseada.year)
-    return "$cuenta ($fechaTexto)"
-}
 
 /// Formulario de ingreso de un contratista ya preparado. El registro (la
 /// validación de gafete/placa y la llamada al núcleo) vive en
@@ -159,10 +137,10 @@ fun PantallaConfirmarIngreso(
             modifier = Modifier.padding(bottom = 20.dp),
         )
 
-        if (preparacion.resultadoAcceso == ResultadoAcceso.PermitidoConAdvertencia) {
-            val fecha = preparacion.fechaVencimientoPraind
+        // Texto y cuenta de días del núcleo (`aviso_praind`, con su reloj).
+        preparacion.avisoPraind?.let { aviso ->
             Text(
-                "⚠ PRAIND " + (fecha?.let { mensajeVencimientoPraind(it) } ?: "próximo a vencer"),
+                "⚠ $aviso",
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(bottom = 12.dp),
             )

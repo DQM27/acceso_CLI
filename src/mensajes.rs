@@ -237,6 +237,20 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     }
 }
 
+/// Aviso de `PermitidoConAdvertencia`: "PRAIND vence hoy / mañana / en N
+/// días (dd-mm-aaaa)". Un solo texto para escritorio y móvil, con el reloj
+/// del núcleo.
+#[must_use]
+pub fn mensaje_vencimiento_praind(fecha: chrono::NaiveDate, hoy: chrono::NaiveDate) -> String {
+    let dias = (fecha - hoy).num_days();
+    let cuenta = match dias {
+        ..=0 => "vence hoy".to_string(),
+        1 => "vence mañana".to_string(),
+        n => format!("vence en {n} días"),
+    };
+    format!("PRAIND {cuenta} ({})", fecha.format("%d-%m-%Y"))
+}
+
 /// Texto de [`crate::services::registro_ingreso_service::BloqueoIngreso`],
 /// el mismo motivo que antes calculaban por separado `mensajeBloqueo`/
 /// `mensajeMotivoDenegacion` en Kotlin y en TypeScript -- con un texto que
@@ -510,6 +524,24 @@ pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> Stri
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn mensaje_vencimiento_praind_cuenta_dias() {
+        let hoy = chrono::NaiveDate::from_ymd_opt(2026, 9, 12).unwrap();
+        let en = |d| chrono::NaiveDate::from_ymd_opt(2026, 9, d).unwrap();
+        assert_eq!(
+            super::mensaje_vencimiento_praind(en(12), hoy),
+            "PRAIND vence hoy (12-09-2026)"
+        );
+        assert_eq!(
+            super::mensaje_vencimiento_praind(en(13), hoy),
+            "PRAIND vence mañana (13-09-2026)"
+        );
+        assert_eq!(
+            super::mensaje_vencimiento_praind(en(15), hoy),
+            "PRAIND vence en 3 días (15-09-2026)"
+        );
+    }
+
     use super::*;
     use crate::database::error::DatabaseError;
 

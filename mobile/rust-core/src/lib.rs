@@ -300,6 +300,10 @@ pub struct PreparacionIngreso {
     /// en el crate raíz. Kotlin sólo debe mirar este campo: `!= null`
     /// significa bloqueado, y es el texto a mostrar tal cual.
     pub mensaje_bloqueo: Option<String>,
+    /// Con `PermitidoConAdvertencia`, el aviso listo para mostrar ("PRAIND
+    /// vence en 3 días (15-09-2026)"), con el reloj del núcleo. Reemplaza
+    /// `mensajeVencimientoPraind` de Kotlin.
+    pub aviso_praind: Option<String>,
 }
 
 impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
@@ -323,6 +327,7 @@ impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
             activo_en_otro_sitio: preparacion.activo_en_otro_sitio,
             gafetes_deuda: preparacion.gafetes_deuda,
             mensaje_bloqueo,
+            aviso_praind: preparacion.aviso_praind,
         }
     }
 }
@@ -1631,12 +1636,10 @@ impl Nucleo {
     ) -> Result<ResultadoRegistroEntrada, NucleoError> {
         let actor = self.actor_autenticado()?;
         // Kotlin manda lo tipeado tal cual; qué placa corresponde al medio
-        // lo decide el dominio.
-        let medio: MedioIngresoNucleo = medio.into();
-        let placa = control_acceso::domain::registro_ingreso::placa_segun_medio(medio, placa);
+        // lo decide `AppCore::registrar_ingreso` (`placa_segun_medio`).
         Ok(self
             .core_lock()
-            .registrar_ingreso(&actor, contratista_id, medio, gafete, placa)?
+            .registrar_ingreso(&actor, contratista_id, medio.into(), gafete, placa)?
             .into())
     }
 

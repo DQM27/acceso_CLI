@@ -7,12 +7,7 @@ import { solicitarSincronizacionNube } from "../eventosNube";
 // exponerle al webview tal cual).
 
 export type TipoIngreso = "Praind" | "InHouse" | "PorCorreo" | "Swat";
-export const TIPOS_INGRESO: TipoIngreso[] = [
-  "Praind",
-  "InHouse",
-  "PorCorreo",
-  "Swat",
-];
+export const TIPOS_INGRESO: TipoIngreso[] = ["Praind", "InHouse", "PorCorreo", "Swat"];
 
 /** Texto de un tipo de ingreso en las grillas: en mayúsculas y con las
  * palabras separadas ("IN HOUSE", no el nombre interno "InHouse") --
@@ -91,24 +86,17 @@ export function reglasFormularioContratista(datos: {
   });
 }
 
-export function buscarContratistas(
-  filtro: FiltroContratistas = {},
-): Promise<PaginaContratistas> {
+export function buscarContratistas(filtro: FiltroContratistas = {}): Promise<PaginaContratistas> {
   return invoke("buscar_contratistas", { filtro });
 }
 
-export async function crearContratista(
-  datos: DatosContratista,
-): Promise<number> {
+export async function crearContratista(datos: DatosContratista): Promise<number> {
   const id = await invoke<number>("crear_contratista", { datos });
   solicitarSincronizacionNube();
   return id;
 }
 
-export async function actualizarContratista(
-  id: number,
-  datos: DatosContratista,
-): Promise<void> {
+export async function actualizarContratista(id: number, datos: DatosContratista): Promise<void> {
   await invoke("actualizar_contratista", { id, datos });
   solicitarSincronizacionNube();
 }
