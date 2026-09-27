@@ -71,7 +71,7 @@ impl AppCore {
 
     /// `false` si `sesion` ya no corresponde a un usuario activo -- por
     /// ejemplo, lo desactivaron en otro dispositivo y esta base recién lo
-    /// recibió por sync (ver `nube::AppCore::sincronizar_con_nube`,
+    /// recibió por sync (ver `nube::sincronizar`,
     /// `ResumenSincronizacion::sesion_expulsada`). Falla "abierto" (`true`)
     /// ante un error de base de datos -- un glitch transitorio durante un
     /// sync no debería expulsar a nadie por las dudas.

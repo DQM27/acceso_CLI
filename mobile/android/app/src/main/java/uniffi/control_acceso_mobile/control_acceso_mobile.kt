@@ -791,8 +791,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir(
@@ -940,8 +938,6 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1174,7 +1170,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos() and 0xFFFF) != 45562) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos() and 0xFFFF) != 40530) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos() and 0xFFFF) != 41563) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_prestamos_gafete_provisional_remotos() and 0xFFFF) != 22618) {
@@ -1241,9 +1237,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto() and 0xFFFF) != 45842) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube() and 0xFFFF) != 44131) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube_con_secreto() and 0xFFFF) != 16587) {
@@ -2057,7 +2050,7 @@ public interface NucleoInterface {
     
     /**
      * Lectura pura de la caché local `ingresos_remotos` -- no hace falta
-     * red para mostrarla, ya la llenó la última `sincronizar_con_nube`.
+     * red para mostrarla, ya la llenó la última sincronización.
      */
     fun `listarIngresosRemotos`(): List<IngresoRemoto>
     
@@ -2217,21 +2210,6 @@ public interface NucleoInterface {
      * Rust.
      */
     fun `sesionRealtimeNubeConSecreto`(`secreto`: kotlin.String): SesionRealtimeNube
-    
-    /**
-     * Autentica este dispositivo, drena la bandeja de salida pendiente y
-     * refresca la caché de lo que el otro dispositivo del mismo sitio
-     * tiene abierto ahora mismo.
-     * Reintenta UNA vez si el intento falla porque el token de dispositivo
-     * cacheado, que `autenticar_con_cache` creía vigente, resultó
-     * rechazado por el receptor a mitad de camino -- ver
-     * `SincronizacionError::token_dispositivo_vencido` y el mismo patrón en
-     * `desktop/src-tauri/src/comandos/nube.rs::ejecutar_sincronizacion`.
-     * El candado de `sincronizacion_en_curso` se toma acá, envolviendo los
-     * DOS intentos -- así ninguna otra sincronización se cuela entre el
-     * primer fallo y el reintento.
-     */
-    fun `sincronizarConNube`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResumenSincronizacion
     
     /**
      * Sincroniza usando el secreto ya descifrado por Android Keystore.
@@ -3139,7 +3117,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
     /**
      * Lectura pura de la caché local `ingresos_remotos` -- no hace falta
-     * red para mostrarla, ya la llenó la última `sincronizar_con_nube`.
+     * red para mostrarla, ya la llenó la última sincronización.
      */
     @Throws(NucleoException::class)override fun `listarIngresosRemotos`(): List<IngresoRemoto> {
             return FfiConverterSequenceTypeIngresoRemoto.lift(
@@ -3600,35 +3578,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterString.lower(`secreto`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Autentica este dispositivo, drena la bandeja de salida pendiente y
-     * refresca la caché de lo que el otro dispositivo del mismo sitio
-     * tiene abierto ahora mismo.
-     * Reintenta UNA vez si el intento falla porque el token de dispositivo
-     * cacheado, que `autenticar_con_cache` creía vigente, resultó
-     * rechazado por el receptor a mitad de camino -- ver
-     * `SincronizacionError::token_dispositivo_vencido` y el mismo patrón en
-     * `desktop/src-tauri/src/comandos/nube.rs::ejecutar_sincronizacion`.
-     * El candado de `sincronizacion_en_curso` se toma acá, envolviendo los
-     * DOS intentos -- así ninguna otra sincronización se cuela entre el
-     * primer fallo y el reintento.
-     */
-    @Throws(NucleoException::class)override fun `sincronizarConNube`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResumenSincronizacion {
-            return FfiConverterTypeResumenSincronizacion.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`identificadorDispositivo`),_status)
 }
     }
     )

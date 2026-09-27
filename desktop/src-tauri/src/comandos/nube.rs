@@ -255,41 +255,12 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     let conexion = state
         .conexion_secundaria()
         .map_err(FalloSincronizacion::Mensaje)?;
-    let resumen = nube::drenar_cola(&conexion, &contexto, 200)?;
-    let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
-    let cierres_recibidos_proveedor =
-        nube::recibir_cierres_de_ingresos_propios_proveedor(&conexion, &contexto)?;
-    let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
-    let _remotos_proveedor = nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
-    let _remotos_gafete_provisional =
-        nube::recibir_prestamos_gafete_provisional_abiertos(&conexion, &contexto)?;
-    let _devoluciones_propias_gafete_provisional =
-        nube::recibir_devoluciones_propias_gafete_provisional(&conexion, &contexto)?;
-    let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
-    let catalogo_rutas = nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
-    let movimientos_historial_recibidos = nube::recibir_historial_del_sitio(&conexion, &contexto)?;
-    let citas_recibidas = nube::recibir_citas_del_sitio(&conexion, &contexto)?;
-    let historial_visitas_recibidos =
-        nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)?;
-    let historial_ingresos_proveedor_recibidos =
-        nube::recibir_historial_ingresos_proveedor_del_sitio(&conexion, &contexto)?;
-    // Faltaba acá (bug 2026-09-22): la feature de historial de gafetes
-    // provisionales sólo cableó `AppCore::sincronizar_con_nube`, que el
-    // escritorio NO usa -- sin esta llamada la caché
-    // `prestamos_gafete_provisional_historial_sitio` nunca se llenaba y la
-    // vista "Historial" quedaba siempre vacía.
-    let historial_gafetes_provisionales_recibidos =
-        nube::recibir_historial_gafetes_provisionales_del_sitio(&conexion, &contexto)?;
-    // Mejor esfuerzo a propósito -- ya se llegó hasta acá con la nube
-    // respondiendo bien, pero si este chequeo puntual falla no tiene
-    // sentido tumbar un sync que por lo demás anduvo. Vacío en ese caso, no
-    // error.
-    let conflictos_ingreso =
-        nube::contratistas_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
-    let conflictos_movimiento_visita =
-        nube::visitantes_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
-    let conflictos_ingreso_proveedor =
-        nube::proveedores_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
+    let resumen = nube::sincronizar(
+        &conexion,
+        &contexto,
+        nube::AlcanceSincronizacion::completo(),
+        nube::PerfilDispositivo::Escritorio,
+    )?;
 
     // Si a quien disparó esto lo desactivaron en otro dispositivo, el
     // catálogo recién recibido ya lo refleja -- lo saca de la sesión acá
@@ -307,26 +278,27 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     Ok(ResumenSincronizacion {
         enviados: resumen.enviados,
         fallidos: resumen.fallidos,
-        remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
-        cierres_recibidos,
-        cierres_recibidos_proveedor,
-        movimientos_historial_recibidos,
-        citas_recibidas,
-        historial_visitas_recibidos,
-        historial_ingresos_proveedor_recibidos,
-        historial_gafetes_provisionales_recibidos,
-        empresas_recibidas: catalogo.empresas_recibidas,
-        contratistas_recibidos: catalogo.contratistas_recibidos,
-        gafetes_recibidos: catalogo.gafetes_recibidos,
-        vehiculos_ruta_recibidos: catalogo_rutas.vehiculos_recibidos,
-        encargados_ruta_recibidos: catalogo_rutas.encargados_recibidos,
+        remotos_abiertos: resumen.remotos_abiertos,
+        cierres_recibidos: resumen.cierres_recibidos,
+        cierres_recibidos_proveedor: resumen.cierres_recibidos_proveedor,
+        movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
+        citas_recibidas: resumen.citas_recibidas,
+        historial_visitas_recibidos: resumen.historial_visitas_recibidos,
+        historial_ingresos_proveedor_recibidos: resumen.historial_ingresos_proveedor_recibidos,
+        historial_gafetes_provisionales_recibidos: resumen
+            .historial_gafetes_provisionales_recibidos,
+        empresas_recibidas: resumen.catalogo.empresas_recibidas,
+        contratistas_recibidos: resumen.catalogo.contratistas_recibidos,
+        gafetes_recibidos: resumen.catalogo.gafetes_recibidos,
+        vehiculos_ruta_recibidos: resumen.catalogo_rutas.vehiculos_recibidos,
+        encargados_ruta_recibidos: resumen.catalogo_rutas.encargados_recibidos,
         sitio_id: token.sitio_id,
         dispositivo_id: token.dispositivo_id,
         tipo: token.tipo,
         sesion_expulsada,
-        conflictos_ingreso,
-        conflictos_movimiento_visita,
-        conflictos_ingreso_proveedor,
+        conflictos_ingreso: resumen.conflictos_ingreso,
+        conflictos_movimiento_visita: resumen.conflictos_movimiento_visita,
+        conflictos_ingreso_proveedor: resumen.conflictos_ingreso_proveedor,
         conflictos_gafete: resumen.conflictos_gafete,
     })
 }
@@ -348,7 +320,13 @@ pub async fn configurar_dispositivo_inicial(
         let metadata = metadata_de_esta_maquina();
         let resumen = state
             .core()
-            .configurar_dispositivo_inicial(None, None, &secreto, Some(&metadata))
+            .configurar_dispositivo_inicial(
+                None,
+                None,
+                &secreto,
+                Some(&metadata),
+                nube::PerfilDispositivo::Escritorio,
+            )
             .map_err(mensaje_gestion_nube)?;
         Ok(ResumenSincronizacion {
             enviados: resumen.enviados,

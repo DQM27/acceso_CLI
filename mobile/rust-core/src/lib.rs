@@ -576,19 +576,6 @@ impl From<control_acceso::nube::ConflictoGafeteActivo> for ConflictoGafeteActivo
     }
 }
 
-/// Factorizado aparte -- las dos vías de sincronización
-/// (`intentar_sincronizar_con_nube`/`_con_secreto`) repetirían, si no,
-/// exactamente la misma línea, y una de las dos ya está en el límite de
-/// `too_many_lines` del crate.
-fn mapear_conflictos_gafete(
-    conflictos: Vec<control_acceso::nube::ConflictoGafeteActivo>,
-) -> Vec<ConflictoGafeteActivo> {
-    conflictos
-        .into_iter()
-        .map(ConflictoGafeteActivo::from)
-        .collect()
-}
-
 /// Espejo de `control_acceso::nube::ConflictoIngresoActivo`.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ConflictoIngresoActivo {
@@ -1241,7 +1228,7 @@ pub struct Nucleo {
     /// iniciar sesión o al confirmar un ingreso con gafete, sobre todo si
     /// la sincronización periódica estaba en curso al mismo tiempo.
     cache_token: control_acceso::nube::CacheTokenDispositivo,
-    /// Serializa las sincronizaciones completas (`sincronizar_con_nube`,
+    /// Serializa las sincronizaciones completas (`sincronizar_con_nube_con_secreto`,
     /// llamada desde el timer periódico, un aviso Realtime Y el botón
     /// manual -- ver `SincronizacionPeriodica.kt`/`NubeViewModel.kt`) para
     /// que nunca corran dos en simultáneo pisándose la cola de salida --
@@ -2247,6 +2234,7 @@ impl Nucleo {
                 Some(&identificador_dispositivo),
                 &secreto,
                 None,
+                control_acceso::nube::PerfilDispositivo::Movil,
             )?
             .into())
     }
@@ -2302,27 +2290,26 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         let conexion = self.conexion_secundaria()?;
-        let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
-        // Mismo motivo que en `sincronizar_con_secreto` -- sin esto, un
-        // dispositivo recién configurado tampoco traía encargados/vehículos
-        // de ruta hasta el próximo pulso de sync.
-        control_acceso::nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto).map_err(
-            |error| NucleoError::Interno {
-                mensaje: interno(error),
-            },
-        )?;
+        // Base vacía: sólo catálogo y rutas, para que el primer login tenga
+        // con quién autenticar y "Gafetes KOF" tenga encargados.
+        let recibido = control_acceso::nube::recibir(
+            &conexion,
+            &contexto,
+            control_acceso::nube::AlcanceSincronizacion::catalogo_y_rutas(),
+            control_acceso::nube::PerfilDispositivo::Movil,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: interno(error),
+        })?;
 
         Ok(ResumenSincronizacion {
             enviados: 0,
             fallidos: 0,
             remotos_abiertos: 0,
             cierres_recibidos: 0,
-            empresas_recibidas: catalogo.empresas_recibidas,
-            contratistas_recibidos: catalogo.contratistas_recibidos,
-            gafetes_recibidos: catalogo.gafetes_recibidos,
+            empresas_recibidas: recibido.catalogo.empresas_recibidas,
+            contratistas_recibidos: recibido.catalogo.contratistas_recibidos,
+            gafetes_recibidos: recibido.catalogo.gafetes_recibidos,
             movimientos_historial_recibidos: 0,
             citas_recibidas: 0,
             historial_visitas_recibidos: 0,
@@ -2397,38 +2384,6 @@ impl Nucleo {
             })
     }
 
-    /// Autentica este dispositivo, drena la bandeja de salida pendiente y
-    /// refresca la caché de lo que el otro dispositivo del mismo sitio
-    /// tiene abierto ahora mismo.
-    /// Reintenta UNA vez si el intento falla porque el token de dispositivo
-    /// cacheado, que `autenticar_con_cache` creía vigente, resultó
-    /// rechazado por el receptor a mitad de camino -- ver
-    /// `SincronizacionError::token_dispositivo_vencido` y el mismo patrón en
-    /// `desktop/src-tauri/src/comandos/nube.rs::ejecutar_sincronizacion`.
-    /// El candado de `sincronizacion_en_curso` se toma acá, envolviendo los
-    /// DOS intentos -- así ninguna otra sincronización se cuela entre el
-    /// primer fallo y el reintento.
-    pub fn sincronizar_con_nube(
-        &self,
-        directorio: String,
-        identificador_dispositivo: String,
-    ) -> Result<ResumenSincronizacion, NucleoError> {
-        let _sincronizacion = self
-            .sincronizacion_en_curso
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        match self.intentar_sincronizar_con_nube(&directorio, &identificador_dispositivo) {
-            Err(FalloSincronizacion::TokenVencido) => {
-                self.invalidar_token_cacheado();
-                self.intentar_sincronizar_con_nube(&directorio, &identificador_dispositivo)
-                    .map_err(convertir_fallo_sincronizacion)
-            }
-            Err(otro) => Err(convertir_fallo_sincronizacion(otro)),
-            Ok(resumen) => Ok(resumen),
-        }
-    }
-
     /// Sincroniza usando el secreto ya descifrado por Android Keystore.
     /// Evita que el núcleo móvil lea un secreto persistido en texto plano.
     pub fn sincronizar_con_nube_con_secreto(
@@ -2483,7 +2438,7 @@ impl Nucleo {
     }
 
     /// Lectura pura de la caché local `ingresos_remotos` -- no hace falta
-    /// red para mostrarla, ya la llenó la última `sincronizar_con_nube`.
+    /// red para mostrarla, ya la llenó la última sincronización.
     pub fn listar_ingresos_remotos(&self) -> Result<Vec<IngresoRemoto>, NucleoError> {
         let actor = self.actor_autenticado()?;
         Ok(self
@@ -2850,11 +2805,15 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         let conexion = self.conexion_secundaria()?;
-        control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(
-            |error| NucleoError::Interno {
-                mensaje: interno(error),
-            },
-        )?;
+        control_acceso::nube::recibir(
+            &conexion,
+            &contexto,
+            control_acceso::nube::AlcanceSincronizacion::solo_catalogo(),
+            control_acceso::nube::PerfilDispositivo::Movil,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: interno(error),
+        })?;
         Ok(())
     }
 
@@ -2871,17 +2830,21 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         let conexion = self.conexion_secundaria()?;
-        control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(
-            |error| NucleoError::Interno {
-                mensaje: interno(error),
-            },
-        )?;
+        control_acceso::nube::recibir(
+            &conexion,
+            &contexto,
+            control_acceso::nube::AlcanceSincronizacion::solo_catalogo(),
+            control_acceso::nube::PerfilDispositivo::Movil,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: interno(error),
+        })?;
         Ok(())
     }
 
     /// Conexión propia al mismo archivo, independiente de `core` -- mismo
     /// patrón y mismo motivo que `GuiState::conexion_secundaria` en
-    /// escritorio: `sincronizar_con_nube` hace varias llamadas HTTP
+    /// escritorio: la sincronización hace varias llamadas HTTP
     /// seguidas (drenar cola, cierres, ingresos abiertos, catálogo,
     /// historial) y cada una escribe lo que trae -- sin esto, esa cadena
     /// entera retendría `core_lock()`, bloqueando cualquier otra pantalla
@@ -2917,7 +2880,7 @@ impl Nucleo {
 
     /// Guarda (o reemplaza) la sesión de Supabase Auth -- se llama tanto en
     /// el login inicial (`autenticar_supabase`) como en cada renovación
-    /// exitosa en segundo plano (`sincronizar_con_nube`/`_con_secreto`),
+    /// exitosa en segundo plano (`sincronizar_con_secreto`),
     /// siempre con una marca de tiempo nueva.
     fn iniciar_sesion_supabase(&self, sesion: control_acceso::nube::SesionSupabase) {
         *self.lock_sesion_supabase() = Some(SesionSupabaseCacheada {
@@ -3046,8 +3009,15 @@ impl Nucleo {
         })
     }
 
-    /// Mismo reintento que `Nucleo::sincronizar_con_nube` -- ver su
-    /// doc-comment.
+    /// Reintenta UNA vez si el intento falla porque el token de dispositivo
+    /// cacheado, que `autenticar_con_cache` creía vigente, resultó
+    /// rechazado por el receptor a mitad de camino -- ver
+    /// `SincronizacionError::token_dispositivo_vencido` y el mismo patrón en
+    /// `desktop/src-tauri/src/comandos/nube.rs::ejecutar_sincronizacion`.
+    /// El candado de `sincronizacion_en_curso` envuelve los DOS intentos,
+    /// así ninguna otra sincronización se cuela entre el fallo y el
+    /// reintento. Las etapas las decide `control_acceso::nube::sincronizar`
+    /// con el perfil móvil (sin historiales).
     fn sincronizar_con_secreto(&self, secreto: &str) -> Result<ResumenSincronizacion, NucleoError> {
         let _sincronizacion = self
             .sincronizacion_en_curso
@@ -3063,153 +3033,6 @@ impl Nucleo {
             Err(otro) => Err(convertir_fallo_sincronizacion(otro)),
             Ok(resumen) => Ok(resumen),
         }
-    }
-
-    /// Cuerpo de `sincronizar_con_nube`, sin el candado de
-    /// `sincronizacion_en_curso` (lo toma el wrapper, envolviendo los dos
-    /// intentos) ni la conversión final a `NucleoError` (la hace
-    /// `convertir_fallo_sincronizacion`, para poder distinguir un token
-    /// vencido de cualquier otro fallo y reintentar sólo en ese caso).
-    fn intentar_sincronizar_con_nube(
-        &self,
-        directorio: &str,
-        identificador_dispositivo: &str,
-    ) -> Result<ResumenSincronizacion, FalloSincronizacion> {
-        let actor = self.actor_autenticado()?;
-        self.core_lock().autorizar_uso_nube(&actor)?;
-
-        // Renovación silenciosa de la sesión de Supabase Auth del usuario
-        // (distinta del token del DISPOSITIVO de abajo) -- mejor esfuerzo,
-        // igual que en escritorio (`ejecutar_sincronizacion`): sin sesión de
-        // Supabase o sin red, no hace nada.
-        if let Some(refresh_token) = self.refresh_token_supabase()
-            && let Ok(sesion) = control_acceso::nube::refrescar(
-                control_acceso::nube::base_url(),
-                control_acceso::nube::apikey(),
-                &refresh_token,
-            )
-        {
-            self.iniciar_sesion_supabase(sesion);
-        }
-
-        let secreto = control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
-            std::path::Path::new(directorio),
-            identificador_dispositivo,
-        )
-        .ok_or_else(|| {
-            FalloSincronizacion::Nucleo(NucleoError::Interno {
-                mensaje: "Todavía no se guardó el secreto de este dispositivo".to_string(),
-            })
-        })?;
-        let token = self.autenticar_con_cache(&secreto).map_err(|error| {
-            FalloSincronizacion::Nucleo(NucleoError::Interno {
-                mensaje: interno(error),
-            })
-        })?;
-        if let Some(desfase_ms) = token.desfase_reloj_ms {
-            self.core_lock().actualizar_desfase_reloj(desfase_ms);
-        }
-
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        // A partir de acá, ninguna llamada más toca `core_lock()` hasta el
-        // chequeo de `sesion_sigue_activa` al final -- toda la cadena de
-        // red corre sobre `conexion`, propia, sin bloquear ninguna otra
-        // pantalla mientras dura.
-        let conexion = self.conexion_secundaria()?;
-        let resumen_cola = control_acceso::nube::drenar_cola(&conexion, &contexto, 200)?;
-        let cierres_recibidos =
-            control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
-        let _cierres_recibidos_proveedor =
-            control_acceso::nube::recibir_cierres_de_ingresos_propios_proveedor(
-                &conexion, &contexto,
-            )?;
-        let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
-        let _remotos_proveedor =
-            control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
-        let _remotos_gafete_provisional =
-            control_acceso::nube::recibir_prestamos_gafete_provisional_abiertos(
-                &conexion, &contexto,
-            )?;
-        let _devoluciones_propias_gafete_provisional =
-            control_acceso::nube::recibir_devoluciones_propias_gafete_provisional(
-                &conexion, &contexto,
-            )?;
-        let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
-        // Faltaba -- `encargados_ruta`/`vehiculos_ruta` nunca se traían de
-        // vuelta en mobile, así que el buscador de "Gafetes KOF" (que
-        // busca encargados en la tabla local) sólo veía lo que ESTE
-        // dispositivo había creado él mismo, nunca lo sincronizado desde
-        // otro dispositivo o el panel admin -- bug reportado en pruebas
-        // reales, 2026-09-17.
-        let _catalogo_rutas =
-            control_acceso::nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
-        let movimientos_historial_recibidos =
-            control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)?;
-        let citas_recibidas = control_acceso::nube::recibir_citas_del_sitio(&conexion, &contexto)?;
-        // Sin `recibir_historial_visitas_del_sitio` a propósito -- decisión
-        // explícita del usuario: el celular es para acciones rápidas del
-        // guardia (check-in/check-out), auditar el historial de visitas es
-        // algo esporádico que le corresponde a la PC. Mismo campo en el
-        // struct compartido (con `0` acá) para no bifurcar el tipo entre
-        // plataformas, no porque el celular lo necesite.
-        let historial_visitas_recibidos = 0;
-
-        // Mejor esfuerzo a propósito, igual que en escritorio -- ya se llegó
-        // hasta acá con la nube respondiendo bien, pero si este chequeo
-        // puntual falla no tiene sentido tumbar un sync que por lo demás
-        // anduvo. Vacío en ese caso, no error (ver
-        // `ConflictoIngresoActivo`/`nube::contratistas_con_conflicto_activo`).
-        let conflictos_ingreso =
-            control_acceso::nube::contratistas_con_conflicto_activo(&conexion, &contexto)
-                .unwrap_or_default()
-                .into_iter()
-                .map(ConflictoIngresoActivo::from)
-                .collect();
-        let conflictos_ingreso_proveedor =
-            control_acceso::nube::proveedores_con_conflicto_activo(&conexion, &contexto)
-                .unwrap_or_default()
-                .into_iter()
-                .map(ConflictoIngresoProveedorActivo::from)
-                .collect();
-        // A diferencia de los dos de arriba, éste no pide nada a la nube --
-        // ya viene calculado con datos locales dentro del mismo
-        // `drenar_cola` (`resumen_cola`).
-        let conflictos_gafete = mapear_conflictos_gafete(resumen_cola.conflictos_gafete);
-
-        // Igual que en escritorio: si esta sincronización trajo la baja de
-        // quien la disparó, la sesión de ESTE teléfono se cierra sola acá
-        // mismo, no sólo se avisa -- cualquier llamada siguiente que
-        // dependa de `actor_autenticado()` debe fallar de inmediato.
-        let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
-        if sesion_expulsada {
-            *self.sesion_lock() = None;
-        }
-
-        Ok(ResumenSincronizacion {
-            enviados: resumen_cola.enviados,
-            fallidos: resumen_cola.fallidos,
-            remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
-            cierres_recibidos,
-            empresas_recibidas: catalogo.empresas_recibidas,
-            contratistas_recibidos: catalogo.contratistas_recibidos,
-            gafetes_recibidos: catalogo.gafetes_recibidos,
-            movimientos_historial_recibidos,
-            citas_recibidas,
-            historial_visitas_recibidos,
-            sitio_id: token.sitio_id,
-            dispositivo_id: token.dispositivo_id,
-            tipo: token.tipo,
-            sesion_expulsada,
-            conflictos_ingreso,
-            conflictos_ingreso_proveedor,
-            conflictos_gafete,
-        })
     }
 
     fn intentar_sincronizar_con_secreto(
@@ -3247,52 +3070,12 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         let conexion = self.conexion_secundaria()?;
-        let resumen_cola = control_acceso::nube::drenar_cola(&conexion, &contexto, 200)?;
-        let cierres_recibidos =
-            control_acceso::nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
-        let _cierres_recibidos_proveedor =
-            control_acceso::nube::recibir_cierres_de_ingresos_propios_proveedor(
-                &conexion, &contexto,
-            )?;
-        let remotos = control_acceso::nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
-        let _remotos_proveedor =
-            control_acceso::nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
-        let _remotos_gafete_provisional =
-            control_acceso::nube::recibir_prestamos_gafete_provisional_abiertos(
-                &conexion, &contexto,
-            )?;
-        let _devoluciones_propias_gafete_provisional =
-            control_acceso::nube::recibir_devoluciones_propias_gafete_provisional(
-                &conexion, &contexto,
-            )?;
-        let catalogo = control_acceso::nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
-        // Ver el comentario del otro método de sync en este mismo archivo
-        // sobre por qué hacía falta esto (buscador de "Gafetes KOF" sin
-        // encargados sincronizados).
-        let _catalogo_rutas =
-            control_acceso::nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
-        let movimientos_historial_recibidos =
-            control_acceso::nube::recibir_historial_del_sitio(&conexion, &contexto)?;
-        let citas_recibidas = control_acceso::nube::recibir_citas_del_sitio(&conexion, &contexto)?;
-        // Ver el comentario del otro método de sync en este mismo archivo:
-        // el celular no trae historial de visitas a propósito.
-        let historial_visitas_recibidos = 0;
-        // Mejor esfuerzo -- ya se llegó hasta acá con la nube respondiendo
-        // bien, pero si este chequeo puntual falla no tiene sentido tumbar
-        // un sync que por lo demás anduvo.
-        let conflictos_ingreso =
-            control_acceso::nube::contratistas_con_conflicto_activo(&conexion, &contexto)
-                .unwrap_or_default()
-                .into_iter()
-                .map(Into::into)
-                .collect();
-        let conflictos_ingreso_proveedor =
-            control_acceso::nube::proveedores_con_conflicto_activo(&conexion, &contexto)
-                .unwrap_or_default()
-                .into_iter()
-                .map(Into::into)
-                .collect();
-        let conflictos_gafete = mapear_conflictos_gafete(resumen_cola.conflictos_gafete);
+        let resumen = control_acceso::nube::sincronizar(
+            &conexion,
+            &contexto,
+            control_acceso::nube::AlcanceSincronizacion::completo(),
+            control_acceso::nube::PerfilDispositivo::Movil,
+        )?;
 
         let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
         if sesion_expulsada {
@@ -3300,23 +3083,35 @@ impl Nucleo {
         }
 
         Ok(ResumenSincronizacion {
-            enviados: resumen_cola.enviados,
-            fallidos: resumen_cola.fallidos,
-            remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
-            cierres_recibidos,
-            empresas_recibidas: catalogo.empresas_recibidas,
-            contratistas_recibidos: catalogo.contratistas_recibidos,
-            gafetes_recibidos: catalogo.gafetes_recibidos,
-            movimientos_historial_recibidos,
-            citas_recibidas,
-            historial_visitas_recibidos,
+            enviados: resumen.enviados,
+            fallidos: resumen.fallidos,
+            remotos_abiertos: resumen.remotos_abiertos,
+            cierres_recibidos: resumen.cierres_recibidos,
+            empresas_recibidas: resumen.catalogo.empresas_recibidas,
+            contratistas_recibidos: resumen.catalogo.contratistas_recibidos,
+            gafetes_recibidos: resumen.catalogo.gafetes_recibidos,
+            movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
+            citas_recibidas: resumen.citas_recibidas,
+            historial_visitas_recibidos: resumen.historial_visitas_recibidos,
             sitio_id: token.sitio_id,
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             sesion_expulsada,
-            conflictos_ingreso,
-            conflictos_ingreso_proveedor,
-            conflictos_gafete,
+            conflictos_ingreso: resumen
+                .conflictos_ingreso
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            conflictos_ingreso_proveedor: resumen
+                .conflictos_ingreso_proveedor
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            conflictos_gafete: resumen
+                .conflictos_gafete
+                .into_iter()
+                .map(Into::into)
+                .collect(),
         })
     }
 }

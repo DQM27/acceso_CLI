@@ -180,12 +180,11 @@ impl std::fmt::Debug for SesionRealtimeNube {
 /// Único punto que resuelve "¿cuál es el secreto guardado?" a partir de las
 /// mismas dos variables que ya usan `guardar_secreto_dispositivo`/
 /// `configurar_dispositivo_inicial` -- antes cada método con acceso a la
-/// nube (`refrescar_catalogo_sin_sesion`, `sincronizar_con_nube`,
-/// `usuario_sigue_activo_remoto`) repetía un `directorio.map_or_else(...)`
+/// nube (entre ellos `usuario_sigue_activo_remoto`) repetía un `directorio.map_or_else(...)`
 /// que llamaba a `cargar_secreto_en` (SIN identificador) incluso en móvil,
 /// donde el archivo está cifrado con el `ANDROID_ID` -- `cargar_secreto_en`
 /// no sabe descifrarlo (cae al camino de texto plano, falla en silencio) y
-/// esos tres métodos quedaban rotos en cualquier teléfono con el secreto
+/// esos métodos quedaban rotos en cualquier teléfono con el secreto
 /// cifrado: nunca podían reautenticar el dispositivo para nada que no fuera
 /// el primer arranque. Bug real, no un caso de espera -- reportado en vivo
 /// (un usuario sembrado en Supabase después del primer arranque de un
@@ -262,110 +261,6 @@ impl AppCore {
         Ok(guardado.is_some())
     }
 
-    /// Trae sólo el catálogo (usuarios/contratistas/empresas/gafetes), sin
-    /// exigir una sesión de aplicación como el resto de los métodos de este
-    /// archivo (`autorizar_uso_nube`) -- a propósito: pensado para el caso
-    /// "a este usuario lo reactivaron en otro dispositivo y acá todavía
-    /// figura inactivo" (ver `Nucleo::autenticar` en móvil, y su equivalente
-    /// en `desktop/src-tauri/src/comandos/autenticacion.rs::login`). En ese
-    /// momento el chequeo local "¿está activo?" falla ANTES de que exista
-    /// ninguna sesión válida que autorice sincronizar -- es justo lo que se
-    /// está tratando de determinar. La identidad ante la nube es del
-    /// dispositivo (el secreto), no del usuario que intenta entrar, así que
-    /// no hace falta una sesión para esto.
-    pub fn refrescar_catalogo_sin_sesion(
-        &self,
-        directorio: Option<&Path>,
-        identificador_dispositivo: Option<&str>,
-    ) -> Result<(), GestionNubeError> {
-        let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
-            .ok_or(GestionNubeError::SinSecreto)?;
-        let token = crate::nube::autenticar_dispositivo(crate::nube::base_url(), &secreto, None)?;
-        self.aplicar_desfase_reloj(&token);
-        let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::base_url(),
-            apikey: crate::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
-        crate::nube::recibir_catalogo_rutas_del_sitio(&self.connection, &contexto)?;
-        Ok(())
-    }
-
-    /// Autentica este dispositivo, drena la bandeja de salida y refresca
-    /// la caché de lo que el otro dispositivo del mismo sitio tiene
-    /// abierto. Pensado para el celular, que no tiene el concepto de
-    /// "conexión secundaria" del escritorio (ver comentario de
-    /// `autorizar_gestion_nube`) -- en un teléfono de un solo usuario,
-    /// retener el candado durante la llamada de red es una simplificación
-    /// razonable, no un cuello de botella real.
-    pub fn sincronizar_con_nube(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-        identificador_dispositivo: Option<&str>,
-    ) -> Result<ResumenSincronizacion, GestionNubeError> {
-        self.autorizar_uso_nube(actor)?;
-
-        let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
-            .ok_or(GestionNubeError::SinSecreto)?;
-        let token = self.autenticar_con_cache(&secreto)?;
-
-        let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::base_url(),
-            apikey: crate::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        let resumen = crate::nube::drenar_cola(&self.connection, &contexto, 200)?;
-        let cierres_recibidos =
-            crate::nube::recibir_cierres_de_ingresos_propios(&self.connection, &contexto)?;
-        let remotos = crate::nube::recibir_ingresos_abiertos(&self.connection, &contexto)?;
-        let _remotos_proveedor =
-            crate::nube::recibir_ingresos_proveedor_abiertos(&self.connection, &contexto)?;
-        let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
-        let catalogo_rutas =
-            crate::nube::recibir_catalogo_rutas_del_sitio(&self.connection, &contexto)?;
-        let movimientos_historial_recibidos =
-            crate::nube::recibir_historial_del_sitio(&self.connection, &contexto)?;
-        let citas_recibidas = crate::nube::recibir_citas_del_sitio(&self.connection, &contexto)?;
-        let historial_visitas_recibidos =
-            crate::nube::recibir_historial_visitas_del_sitio(&self.connection, &contexto)?;
-        // Descartado a propósito, igual que `_remotos_proveedor` arriba --
-        // sin contador en `ResumenSincronizacion` porque nadie lo pidió
-        // (falencia detectada 2026-09-21: la pantalla de escritorio no
-        // tenía historial de gafetes provisionales). Sólo desktop -- mobile
-        // no tiene pantalla que lo use, mismo criterio documentado para
-        // `historial_visitas_recibidos` en `mobile/rust-core/src/lib.rs`.
-        let _gafetes_provisionales_historial_recibidos =
-            crate::nube::recibir_historial_gafetes_provisionales_del_sitio(
-                &self.connection,
-                &contexto,
-            )?;
-
-        Ok(ResumenSincronizacion {
-            enviados: resumen.enviados,
-            fallidos: resumen.fallidos,
-            remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
-            cierres_recibidos,
-            empresas_recibidas: catalogo.empresas_recibidas,
-            contratistas_recibidos: catalogo.contratistas_recibidos,
-            gafetes_recibidos: catalogo.gafetes_recibidos,
-            vehiculos_ruta_recibidos: catalogo_rutas.vehiculos_recibidos,
-            encargados_ruta_recibidos: catalogo_rutas.encargados_recibidos,
-            movimientos_historial_recibidos,
-            citas_recibidas,
-            historial_visitas_recibidos,
-            sitio_id: token.sitio_id,
-            dispositivo_id: token.dispositivo_id,
-            tipo: token.tipo,
-            sesion_expulsada: !self.sesion_sigue_activa(actor),
-        })
-    }
-
     /// Bootstrap de una base sin ningún usuario todavía
     /// (`requiere_configuracion_inicial() == true`) -- sin sesión posible,
     /// porque no hay con quién autenticar todavía. Guarda el secreto pegado
@@ -396,6 +291,7 @@ impl AppCore {
         identificador_dispositivo: Option<&str>,
         secreto: &str,
         metadata: Option<&crate::nube::MetadatosDispositivo>,
+        perfil: crate::nube::PerfilDispositivo,
     ) -> Result<ResumenSincronizacion, GestionNubeError> {
         if !self.requiere_configuracion_inicial()? {
             return Err(GestionNubeError::YaConfigurado);
@@ -423,20 +319,25 @@ impl AppCore {
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
         };
-        let catalogo = crate::nube::recibir_catalogo_del_sitio(&self.connection, &contexto)?;
-        let catalogo_rutas =
-            crate::nube::recibir_catalogo_rutas_del_sitio(&self.connection, &contexto)?;
+        // Base vacía: nada propio que mandar, sólo el catálogo para que el
+        // primer login tenga con quién autenticar.
+        let recibido = crate::nube::recibir(
+            &self.connection,
+            &contexto,
+            crate::nube::AlcanceSincronizacion::catalogo_y_rutas(),
+            perfil,
+        )?;
 
         Ok(ResumenSincronizacion {
             enviados: 0,
             fallidos: 0,
             remotos_abiertos: 0,
             cierres_recibidos: 0,
-            empresas_recibidas: catalogo.empresas_recibidas,
-            contratistas_recibidos: catalogo.contratistas_recibidos,
-            gafetes_recibidos: catalogo.gafetes_recibidos,
-            vehiculos_ruta_recibidos: catalogo_rutas.vehiculos_recibidos,
-            encargados_ruta_recibidos: catalogo_rutas.encargados_recibidos,
+            empresas_recibidas: recibido.catalogo.empresas_recibidas,
+            contratistas_recibidos: recibido.catalogo.contratistas_recibidos,
+            gafetes_recibidos: recibido.catalogo.gafetes_recibidos,
+            vehiculos_ruta_recibidos: recibido.catalogo_rutas.vehiculos_recibidos,
+            encargados_ruta_recibidos: recibido.catalogo_rutas.encargados_recibidos,
             movimientos_historial_recibidos: 0,
             citas_recibidas: 0,
             historial_visitas_recibidos: 0,
@@ -448,7 +349,7 @@ impl AppCore {
     }
 
     /// Confirma en vivo si `actor` sigue activo en el catálogo remoto, sin
-    /// sincronizar nada más -- mucho más rápido que `sincronizar_con_nube`
+    /// sincronizar nada más -- mucho más rápido que `nube::sincronizar`
     /// (una fila, una columna, vs. cola de salida + cierres + ingresos
     /// abiertos + catálogo + historial completos). Pensado para el login:
     /// medido como el causante real del retraso de "un par de segundos"
@@ -481,7 +382,7 @@ impl AppCore {
 
     /// Autentica este dispositivo y devuelve lo mínimo para que la capa de
     /// plataforma escuche Broadcast privado por sitio. No abre sockets ni
-    /// interpreta mensajes: cada aviso debe disparar `sincronizar_con_nube`.
+    /// interpreta mensajes: cada aviso debe disparar `nube::sincronizar`.
     pub fn sesion_realtime_nube(
         &self,
         actor: &UsuarioSesion,
@@ -510,7 +411,7 @@ impl AppCore {
     }
 
     /// Lectura pura de la caché local `ingresos_remotos` -- ya la llenó la
-    /// última `sincronizar_con_nube`, no hace falta red para mostrarla.
+    /// última `nube::sincronizar`, no hace falta red para mostrarla.
     pub fn listar_ingresos_remotos(
         &self,
         actor: &UsuarioSesion,

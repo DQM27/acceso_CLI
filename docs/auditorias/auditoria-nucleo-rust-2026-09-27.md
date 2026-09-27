@@ -46,7 +46,17 @@ de **organización**, no del diseño en sí.
 
 ## Hallazgos
 
-### N1 (crítica): la orquestación de la sincronización está copiada 4 veces
+### N1 (crítica): la orquestación de la sincronización está copiada 4 veces — HECHO en `claude/nucleo-n1-n3`
+
+Resuelto: `nube::sincronizar` / `nube::recibir` (`src/nube/orquestacion.rs`)
+con `AlcanceSincronizacion` (`src/nube/alcance.rs`, traído de
+`claude/realtime-oficial`) y `PerfilDispositivo` (el móvil no guarda
+ningún historial del sitio: decisión del dueño, el historial vive en el
+escritorio y el panel web). Eran cinco copias, no cuatro (también
+`configurar_dispositivo_inicial_con_secreto` del puente). Se quitaron
+`AppCore::sincronizar_con_nube`, `AppCore::refrescar_catalogo_sin_sesion`
+y `Nucleo::sincronizar_con_nube`, que nadie llamaba.
+
 
 La misma secuencia de ~13 etapas (`drenar_cola`, `recibir_cierres_*`,
 `recibir_*_abiertos`, `recibir_catalogo_*`, `recibir_historial_*`,

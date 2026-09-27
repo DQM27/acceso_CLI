@@ -6,18 +6,22 @@
 //! recepción (`recibir_ingresos_abiertos`/`cerrar_ingreso_remoto`) de lo
 //! que el otro dispositivo del mismo sitio tiene abierto ahora mismo.
 
+pub mod alcance;
 pub mod auth_supabase;
 pub mod cache_token;
 pub mod cliente;
 pub mod credenciales;
+pub mod orquestacion;
 pub mod sincronizacion;
 
+pub use alcance::AlcanceSincronizacion;
 pub use auth_supabase::{
     AuthSupabaseError, Jwk, SesionSupabase, cambiar_password, login, obtener_jwks, refrescar,
     verificar_token_offline,
 };
 pub use cache_token::CacheTokenDispositivo;
 pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo, autenticar_dispositivo};
+pub use orquestacion::{PerfilDispositivo, ResumenSincronizacionNube, recibir, sincronizar};
 pub use sincronizacion::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
     ConflictoMovimientoVisitaActivo, ContextoSincronizacion, IngresoProveedorRemoto, IngresoRemoto,
