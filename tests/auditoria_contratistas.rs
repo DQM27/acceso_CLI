@@ -33,7 +33,7 @@ fn conexion() -> Connection {
              INSERT INTO contratistas(
                 id,cedula,nombre,empresa_id,tipo_ingreso,fecha_vencimiento_praind,
                 es_personal_ruta,tiene_acceso
-             ) VALUES(1,'C1','Persona',1,'SWAT',NULL,0,1);",
+             ) VALUES(1,'1001','PERSONA',1,'SWAT',NULL,0,1);",
         )
         .unwrap();
     connection
@@ -41,7 +41,7 @@ fn conexion() -> Connection {
 
 fn datos(tipo: TipoIngreso, fecha: Option<NaiveDate>) -> DatosActualizacionContratista {
     DatosActualizacionContratista {
-        cedula: "C1".into(),
+        cedula: "1001".into(),
         nombre: "Persona".into(),
         empresa_id: 1,
         tipo_ingreso: tipo,
@@ -56,7 +56,7 @@ fn registra_cambio_de_cedula_normalizada() {
     let core = AppCore::new(conexion());
     let actor = actor();
     let mut cambio = datos(TipoIngreso::Swat, None);
-    cambio.cedula = "  C2  ".into();
+    cambio.cedula = "  1002  ".into();
 
     core.actualizar_contratista(&actor, 1, cambio).unwrap();
 
@@ -65,13 +65,13 @@ fn registra_cambio_de_cedula_normalizada() {
         .unwrap();
     assert_eq!(pagina.total, 1);
     assert_eq!(pagina.items[0].campo, "cedula");
-    assert_eq!(pagina.items[0].valor_anterior.as_deref(), Some("C1"));
-    assert_eq!(pagina.items[0].valor_nuevo.as_deref(), Some("C2"));
+    assert_eq!(pagina.items[0].valor_anterior.as_deref(), Some("1001"));
+    assert_eq!(pagina.items[0].valor_nuevo.as_deref(), Some("1002"));
     assert_eq!(pagina.items[0].entidad, EntidadAuditada::Contratista);
     assert_eq!(pagina.items[0].entidad_id, 1);
-    // "C2": el nombre ya actualizado en el mismo lote de cambios, no el
+    // "1002": el nombre ya actualizado en el mismo lote de cambios, no el
     // que tenía el contratista antes de este `actualizar_contratista`.
-    assert_eq!(pagina.items[0].entidad_nombre, "Persona");
+    assert_eq!(pagina.items[0].entidad_nombre, "PERSONA");
     assert_eq!(pagina.items[0].usuario_id, actor.id);
     assert_eq!(pagina.items[0].usuario_nombre, actor.nombre);
 }
@@ -96,8 +96,8 @@ fn audita_tambien_nombre_y_empresa() {
     assert_eq!(pagina.total, 2);
     assert!(pagina.items.iter().any(|cambio| {
         cambio.campo == "nombre"
-            && cambio.valor_anterior.as_deref() == Some("Persona")
-            && cambio.valor_nuevo.as_deref() == Some("Persona Nueva")
+            && cambio.valor_anterior.as_deref() == Some("PERSONA")
+            && cambio.valor_nuevo.as_deref() == Some("PERSONA NUEVA")
     }));
     assert!(pagina.items.iter().any(|cambio| {
         cambio.campo == "empresa_id"
@@ -170,7 +170,7 @@ fn fallo_de_auditoria_revierte_tambien_la_actualizacion() {
     let contratista = core
         .buscar_contratistas(
             &control_acceso::database::queries::contratistas::FiltroContratistas {
-                texto: Some("C1".into()),
+                texto: Some("1001".into()),
                 ..Default::default()
             },
         )

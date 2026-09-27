@@ -120,18 +120,11 @@ class GafetesProvisionalesViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    // Chequeo en vivo: dos dispositivos del mismo sitio sólo
-                    // validan el gafete contra su propia base local, así que
-                    // sin esto ambos podían aceptar el mismo número como
-                    // activo a la vez -- mismo criterio que
-                    // `PantallaConfirmarIngreso.registrarIngreso` para
-                    // gafetes de contratista (`Nucleo.gafeteOcupadoEnSitio`).
+                    // El núcleo chequea en la misma llamada que el gafete
+                    // no esté prestado en el otro dispositivo del sitio.
                     val secreto = secretoStore.cargar()
                         ?: throw SecretoDispositivoNoEncontradoException()
-                    if (nucleo.gafeteProvisionalOcupadoEnSitioConSecreto(secreto, gafeteNumero)) {
-                        throw GafeteOcupadoEnSitioException(gafeteNumero)
-                    }
-                    nucleo.entregarGafeteProvisional(encargado.id, gafeteNumero)
+                    nucleo.entregarGafeteProvisionalConSecreto(encargado.id, gafeteNumero, secreto)
                 }
                 CambiosNube.solicitar()
                 mensaje = "Gafete entregado"
@@ -140,8 +133,6 @@ class GafetesProvisionalesViewModel(
                 encargadoSeleccionado = null
                 refrescarActivos()
                 onExito()
-            } catch (excepcion: GafeteOcupadoEnSitioException) {
-                error = excepcion.message
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {

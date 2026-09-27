@@ -79,10 +79,18 @@ pub enum ContratistaServiceError {
     EmpresaNoEncontrada,
     #[error("La cédula es obligatoria")]
     CedulaVacia,
+    #[error("La cédula sólo puede tener números")]
+    CedulaInvalida,
     #[error("El nombre es obligatorio")]
     NombreVacio,
+    #[error("El nombre no puede tener números ni símbolos")]
+    NombreInvalido,
     #[error("La fecha de PRAIND es obligatoria")]
     PraindRequerido,
+    #[error("El PRAIND está vencido")]
+    PraindVencido,
+    #[error("Este tipo de ingreso no admite personal de ruta")]
+    PersonalRutaNoAdmitido,
     #[error("La cédula del contratista ya existe")]
     CedulaDuplicada,
     #[error("La sesión actual no está autorizada para realizar esta operación")]

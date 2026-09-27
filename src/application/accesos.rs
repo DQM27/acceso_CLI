@@ -8,6 +8,7 @@ use crate::database::repositories::contratista_repository::SqliteContratistaRepo
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
 use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
+use crate::domain::resultado_acceso::ResultadoAcceso;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::RegistroIngresoServiceError;
 use crate::services::registro_ingreso_service::{
@@ -27,11 +28,15 @@ impl AppCore {
         let empresas = SqliteEmpresaRepository::new(&self.connection);
         let registros = SqliteRegistroIngresoRepository::new(&self.connection);
         let gafetes = SqliteGafeteRepository::new(&self.connection);
-        RegistroIngresoService::new(&contratistas, &registros, &gafetes).preparar_ingreso(
-            &empresas,
-            contratista_id,
-            fecha_costa_rica(self.reloj.ahora_utc()),
-        )
+        let hoy = fecha_costa_rica(self.reloj.ahora_utc());
+        let mut preparacion = RegistroIngresoService::new(&contratistas, &registros, &gafetes)
+            .preparar_ingreso(&empresas, contratista_id, hoy)?;
+        if preparacion.resultado_acceso == ResultadoAcceso::PermitidoConAdvertencia {
+            preparacion.aviso_praind = preparacion
+                .fecha_vencimiento_praind
+                .map(|fecha| crate::mensajes::mensaje_vencimiento_praind(fecha, hoy));
+        }
+        Ok(preparacion)
     }
 
     /// Abre una transacción `Immediate` (el bloqueo se adquiere antes de la
@@ -89,6 +94,9 @@ impl AppCore {
         gafete: Option<i64>,
         placa: Option<String>,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
+        // Las interfaces mandan la placa tal cual se tipeó; qué placa
+        // corresponde al medio lo decide el dominio (escritorio y móvil).
+        let placa = crate::domain::registro_ingreso::placa_segun_medio(medio, placa);
         self.en_transaccion_con_reloj_validado(actor, |transaction, ahora| {
             let contratistas = SqliteContratistaRepository::new(transaction);
             let registros = SqliteRegistroIngresoRepository::new(transaction);

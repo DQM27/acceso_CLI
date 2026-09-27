@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use control_acceso::application::AppCore;
+use control_acceso::application::{AppCore, NubeDelDispositivo};
 use control_acceso::database::connection::abrir_conexion_secundaria_escritura;
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::nube::{CacheTokenDispositivo, NubeError, SesionSupabase, TokenDispositivo};
@@ -110,6 +110,15 @@ impl GuiState {
     /// "`vigente_por`" calculado localmente se cumpla solo.
     pub fn invalidar_token_cacheado(&self) {
         self.cache_token.invalidar();
+    }
+
+    /// Para las operaciones del núcleo que consultan la nube antes de
+    /// escribir (`control_acceso::application::con_nube`).
+    pub fn nube_del_dispositivo<'a>(&'a self, secreto: Option<&'a str>) -> NubeDelDispositivo<'a> {
+        NubeDelDispositivo {
+            cache_token: &self.cache_token,
+            secreto,
+        }
     }
 
     /// Acceso al núcleo compartido por todos los comandos.

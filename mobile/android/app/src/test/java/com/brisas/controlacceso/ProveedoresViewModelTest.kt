@@ -41,17 +41,14 @@ class ProveedoresViewModelTest {
 
     @Test
     fun `registrar ingreso de proveedor sigue funcionando con el chequeo cruzado agregado por MV-04`() = runTest(dispatcher) {
-        // MV-04 (auditoría 2026-09-24): antes de este fix, nada en Kotlin
-        // llamaba a `proveedorActivoEnOtroSitioConSecreto` -- este test
-        // cubre que agregarlo (`ProveedoresViewModel.registrarIngreso`) no
-        // rompe el camino feliz. Secreto vacío (no `null`, eso tiraría
-        // `SecretoDispositivoNoEncontradoException` antes de llegar acá) --
-        // tanto `proveedor_activo_en_otro_sitio_con_secreto` como el
-        // chequeo de gafete que ya existía devuelven de inmediato
-        // `None`/`Ok(false)` con secreto vacío (mobile/rust-core/src/lib.rs),
-        // sin tocar la red -- un secreto NO vacío pero inválido sí la toca
-        // (autenticación real contra Supabase) y no es reproducible en un
-        // test unitario sin red.
+        // MV-04 (auditoría 2026-09-24): el chequeo cruzado entre sitios no
+        // rompe el camino feliz. Hoy vive en el núcleo
+        // (`application::registrar_ingreso_proveedor_verificado`). Secreto
+        // vacío (no `null`, eso tiraría `SecretoDispositivoNoEncontradoException`
+        // antes de llegar acá) cuenta como nube sin configurar: los chequeos
+        // de nube no tocan la red. Un secreto NO vacío pero inválido sí la
+        // toca (autenticación real contra Supabase) y no es reproducible en
+        // un test unitario sin red.
         nucleo = NucleoDePrueba.abrir(
             archivo,
             "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'PROVEEDOR', 'DISPONIBLE');",
@@ -73,5 +70,30 @@ class ProveedoresViewModelTest {
         assertNull(viewModel.error)
         assertEquals("Ingreso registrado", viewModel.mensaje)
         assertEquals(true, seExecutoOnExito)
+    }
+
+    @Test
+    fun `la cedula con ingreso abierto avisa con el texto del nucleo y no deja registrar`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'PROVEEDOR', 'DISPONIBLE');",
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (8, 'PROVEEDOR', 'DISPONIBLE');",
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        val empresaId = nucleo.crearEmpresaProveedor("Empresa Proveedora Test")
+        nucleo.registrarIngresoProveedor("111222333", "Proveedor Test", empresaId, null, 7L)
+        val viewModel = viewModel(SecretoDispositivoStoreDePrueba(secreto = ""))
+        advanceUntilIdle()
+
+        viewModel.cambiarCedula("111-222-333")
+        advanceUntilIdle()
+        assertEquals(true, viewModel.cedulaConIngresoActivo)
+        assertEquals("Esta cédula ya tiene un ingreso de proveedor activo", viewModel.error)
+
+        viewModel.cambiarCedula("444555666")
+        advanceUntilIdle()
+        assertEquals(false, viewModel.cedulaConIngresoActivo)
+        assertNull(viewModel.error)
     }
 }

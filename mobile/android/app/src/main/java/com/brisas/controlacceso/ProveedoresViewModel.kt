@@ -66,19 +66,15 @@ class ProveedoresViewModel(
     var placa by mutableStateOf("")
         private set
 
-    // Pedido explícito del usuario 2026-09-20: antes el aviso de "esta
-    // cédula ya tiene un ingreso activo" sólo salía al presionar "Registrar
-    // ingreso" (el chequeo real vive en Rust, `IngresoProveedorServiceError::IngresoActivo`)
-    // -- quien opera llenaba empresa/placa/gafete completos para recién ahí
-    // enterarse. Se adelanta la misma validación acá contra `activos` (ya
-    // cargado al entrar a la pantalla y refrescado tras cada alta/baja) en
-    // cuanto la cédula cambia -- por escaneo o tecleada a mano, ambas pasan
-    // por `cambiarCedula`. No reemplaza el chequeo de Rust (que sigue
-    // siendo la fuente de verdad si otro dispositivo registró un ingreso
-    // justo en el medio), sólo evita hacer avanzar a alguien con un dato ya
-    // conocido como inválido.
+    // Aviso adelantado mientras se tipea o escanea la cédula: si ya tiene
+    // un ingreso de proveedor abierto en este sitio (este equipo o el otro
+    // dispositivo), quien opera se entera antes de llenar el resto. La
+    // regla y el texto son del núcleo
+    // (`Nucleo.avisoProveedorConIngresoActivo`); al registrar,
+    // `registrarIngresoProveedorConSecreto` la vuelve a aplicar.
     var cedulaConIngresoActivo by mutableStateOf(false)
         private set
+    private var avisoCedulaActiva: String? = null
 
     // Buscador de empresa proveedora -- mismo criterio que el buscador de
     // encargado en `GafetesProvisionalesViewModel`, con la diferencia de
@@ -118,13 +114,25 @@ class ProveedoresViewModel(
 
     fun cambiarCedula(nuevo: String) {
         cedula = nuevo.filter(Char::isDigit)
-        cedulaConIngresoActivo = cedula.isNotBlank() && activos.any { it.cedula() == cedula }
-        error = if (cedulaConIngresoActivo) {
-            MENSAJE_CEDULA_CON_INGRESO_ACTIVO
-        } else if (error == MENSAJE_CEDULA_CON_INGRESO_ACTIVO) {
-            null
-        } else {
-            error
+        val consultada = cedula
+        viewModelScope.launch {
+            val aviso = try {
+                withContext(dispatcherIO) { nucleo.avisoProveedorConIngresoActivo(consultada) }
+            } catch (excepcion: Exception) {
+                // Sin aviso si la consulta falla: al registrar, el núcleo
+                // vuelve a aplicar la regla. Lo inesperado se relanza.
+                excepcion.mensajeDeErrorEsperado()
+                null
+            }
+            if (consultada != cedula) return@launch // ya se tipeó otra
+            val anterior = avisoCedulaActiva
+            avisoCedulaActiva = aviso
+            cedulaConIngresoActivo = aviso != null
+            if (aviso != null) {
+                error = aviso
+            } else if (anterior != null && error == anterior) {
+                error = null
+            }
         }
     }
 
@@ -211,31 +219,18 @@ class ProveedoresViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    // Chequeo en vivo: mismo criterio que
-                    // `GafetesProvisionalesViewModel.entregar` -- dos
-                    // dispositivos del mismo sitio sólo validan el gafete
-                    // contra su propia base local.
+                    // Todas las reglas (cédula activa aquí o en otro sitio,
+                    // gafete en uso en el otro dispositivo) las aplica el
+                    // núcleo en esta misma llamada.
                     val secreto = secretoStore.cargar()
                         ?: throw SecretoDispositivoNoEncontradoException()
-                    // MV-04 (auditoría 2026-09-24): escritorio ya bloqueaba
-                    // este caso (`desktop/src-tauri/src/comandos/proveedores.rs`),
-                    // mobile no lo llamaba pese a que la función existe en
-                    // Rust desde antes. Mismo criterio "mejor esfuerzo" que
-                    // el resto de estos chequeos: `null` (sin secreto, sin
-                    // red, o simplemente no está activo en otro lado) deja
-                    // continuar, nunca bloquea por falta de conectividad.
-                    nucleo.proveedorActivoEnOtroSitioConSecreto(secreto, cedula)?.let { sitio ->
-                        throw ProveedorActivoEnOtroSitioException(sitio)
-                    }
-                    if (nucleo.gafeteDeProveedorOcupadoEnSitioConSecreto(secreto, gafeteNumero)) {
-                        throw GafeteOcupadoEnSitioException(gafeteNumero)
-                    }
-                    nucleo.registrarIngresoProveedor(
+                    nucleo.registrarIngresoProveedorConSecreto(
                         cedula,
                         nombre,
                         empresa.id,
                         placa.trim().ifBlank { null },
                         gafeteNumero,
+                        secreto,
                     )
                 }
                 CambiosNube.solicitar()
@@ -248,10 +243,6 @@ class ProveedoresViewModel(
                 empresaSeleccionada = null
                 refrescarActivos()
                 onExito()
-            } catch (excepcion: ProveedorActivoEnOtroSitioException) {
-                error = excepcion.message
-            } catch (excepcion: GafeteOcupadoEnSitioException) {
-                error = excepcion.message
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {
@@ -275,6 +266,7 @@ class ProveedoresViewModel(
         textoEmpresa = ""
         empresaSeleccionada = null
         cedulaConIngresoActivo = false
+        avisoCedulaActiva = null
         error = null
     }
 
@@ -304,13 +296,6 @@ class ProveedoresViewModel(
     }
 
     companion object {
-        // Mismo texto que `IngresoProveedorServiceError::IngresoActivo` en
-        // Rust (`src/services/error.rs`) -- el chequeo local en
-        // `cambiarCedula` es un adelanto de UX, no un reemplazo; que diga
-        // lo mismo evita que alguien vea dos redacciones distintas para el
-        // mismo motivo según en qué momento se entera.
-        const val MENSAJE_CEDULA_CON_INGRESO_ACTIVO = "Esta cédula ya tiene un ingreso de proveedor activo"
-
         fun factory(
             nucleo: Nucleo,
             secretoStore: SecretoDispositivoStore,

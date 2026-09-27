@@ -185,6 +185,9 @@ pub struct ContratistaResumen {
     pub fecha_vencimiento_praind: Option<String>,
     pub tiene_acceso: bool,
     pub tiene_ingreso_activo: bool,
+    /// "ACCESO DENEGADO" / "PRAIND VENCIDO", resuelto por el núcleo con su
+    /// reloj; Kotlin sólo lo muestra.
+    pub aviso_acceso: Option<String>,
 }
 
 impl From<ContratistaResumenNucleo> for ContratistaResumen {
@@ -198,6 +201,7 @@ impl From<ContratistaResumenNucleo> for ContratistaResumen {
             fecha_vencimiento_praind: resumen.fecha_vencimiento_praind.map(|f| f.to_string()),
             tiene_acceso: resumen.tiene_acceso,
             tiene_ingreso_activo: resumen.tiene_ingreso_activo,
+            aviso_acceso: resumen.aviso_acceso,
         }
     }
 }
@@ -300,6 +304,10 @@ pub struct PreparacionIngreso {
     /// en el crate raíz. Kotlin sólo debe mirar este campo: `!= null`
     /// significa bloqueado, y es el texto a mostrar tal cual.
     pub mensaje_bloqueo: Option<String>,
+    /// Con `PermitidoConAdvertencia`, el aviso listo para mostrar ("PRAIND
+    /// vence en 3 días (15-09-2026)"), con el reloj del núcleo. Reemplaza
+    /// `mensajeVencimientoPraind` de Kotlin.
+    pub aviso_praind: Option<String>,
 }
 
 impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
@@ -323,6 +331,7 @@ impl From<PreparacionIngresoNucleo> for PreparacionIngreso {
             activo_en_otro_sitio: preparacion.activo_en_otro_sitio,
             gafetes_deuda: preparacion.gafetes_deuda,
             mensaje_bloqueo,
+            aviso_praind: preparacion.aviso_praind,
         }
     }
 }
@@ -420,10 +429,11 @@ impl From<EmpresaProveedorNucleo> for EmpresaProveedor {
     }
 }
 
-/// Espejo de `DatosContratista` — sólo alta, no edición (ver
+/// Espejo de `DatosContratista` — sólo alta en persona, no edición (ver
 /// docs/plan-app-movil.md). `fecha_vencimiento_praind` viaja como texto
-/// ISO (`AAAA-MM-DD`); si no parsea se rechaza como `DatosInvalidos` antes
-/// de tocar Rust, sin ida y vuelta.
+/// ISO (`AAAA-MM-DD`); si no parsea se rechaza como `FechaInvalida`. Sin
+/// `tiene_acceso`: el alta en persona siempre queda con acceso y eso lo
+/// decide el núcleo (`ContratistaService::crear`), no Kotlin.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct DatosContratista {
     pub cedula: String,
@@ -432,7 +442,6 @@ pub struct DatosContratista {
     pub tipo_ingreso: TipoIngreso,
     pub fecha_vencimiento_praind: Option<String>,
     pub es_personal_ruta: bool,
-    pub tiene_acceso: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -989,6 +998,16 @@ pub enum NucleoError {
     /// sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).
     #[error("El gafete {numero} ya está en uso en otro dispositivo de la unidad operativa")]
     GafeteOcupadoEnSitio { numero: i64 },
+    /// La cédula ya tiene un ingreso de proveedor abierto en OTRO sitio
+    /// (chequeo en vivo contra la nube, de mejor esfuerzo). Mismo texto que
+    /// `desktop/src-tauri/src/comandos/proveedores.rs`.
+    #[error("Esta cédula ya tiene un ingreso de proveedor activo en {sitio}")]
+    ProveedorActivoEnOtroSitio { sitio: String },
+    /// Una regla de negocio rechazó la operación (dato inválido, PRAIND
+    /// vencido, ...). `mensaje` ya viene listo para mostrar tal cual, sin
+    /// prefijo técnico -- sale de `control_acceso::mensajes`.
+    #[error("{mensaje}")]
+    Rechazado { mensaje: String },
     #[error("error interno: {mensaje}")]
     Interno { mensaje: String },
 }
@@ -1079,18 +1098,32 @@ fn convertir_fallo_sincronizacion(fallo: FalloSincronizacion) -> NucleoError {
     }
 }
 
+/// Mismo criterio que contratistas: las reglas llegan con su mensaje
+/// (`mensaje_ingreso`), sólo la falla de base es `Interno`.
 impl From<RegistroIngresoServiceErrorNucleo> for NucleoError {
     fn from(error: RegistroIngresoServiceErrorNucleo) -> Self {
-        Self::Interno {
-            mensaje: interno(error),
+        match error {
+            RegistroIngresoServiceErrorNucleo::Database(_) => Self::Interno {
+                mensaje: interno(error),
+            },
+            regla => Self::Rechazado {
+                mensaje: control_acceso::mensajes::mensaje_ingreso(regla),
+            },
         }
     }
 }
 
+/// Las reglas del alta se muestran tal cual a quien opera; sólo la falla
+/// de base queda como `Interno`.
 impl From<ContratistaServiceErrorNucleo> for NucleoError {
     fn from(error: ContratistaServiceErrorNucleo) -> Self {
-        Self::Interno {
-            mensaje: interno(error),
+        match error {
+            ContratistaServiceErrorNucleo::Database(_) => Self::Interno {
+                mensaje: interno(error),
+            },
+            regla => Self::Rechazado {
+                mensaje: control_acceso::mensajes::mensaje_contratista(regla),
+            },
         }
     }
 }
@@ -1119,10 +1152,16 @@ impl From<RutaServiceErrorNucleo> for NucleoError {
     }
 }
 
+/// Mismo criterio que contratistas y proveedores.
 impl From<GafeteProvisionalServiceErrorNucleo> for NucleoError {
     fn from(error: GafeteProvisionalServiceErrorNucleo) -> Self {
-        Self::Interno {
-            mensaje: interno(error),
+        match error {
+            GafeteProvisionalServiceErrorNucleo::Database(_) => Self::Interno {
+                mensaje: interno(error),
+            },
+            regla => Self::Rechazado {
+                mensaje: control_acceso::mensajes::mensaje_gafete_provisional(regla),
+            },
         }
     }
 }
@@ -1135,10 +1174,17 @@ impl From<EmpresaProveedorServiceErrorNucleo> for NucleoError {
     }
 }
 
+/// Mismo criterio que contratistas: las reglas llegan con su mensaje,
+/// sólo la falla de base es `Interno`.
 impl From<IngresoProveedorServiceErrorNucleo> for NucleoError {
     fn from(error: IngresoProveedorServiceErrorNucleo) -> Self {
-        Self::Interno {
-            mensaje: interno(error),
+        match error {
+            IngresoProveedorServiceErrorNucleo::Database(_) => Self::Interno {
+                mensaje: interno(error),
+            },
+            regla => Self::Rechazado {
+                mensaje: control_acceso::mensajes::mensaje_ingreso_proveedor(regla),
+            },
         }
     }
 }
@@ -1593,6 +1639,8 @@ impl Nucleo {
         placa: Option<String>,
     ) -> Result<ResultadoRegistroEntrada, NucleoError> {
         let actor = self.actor_autenticado()?;
+        // Kotlin manda lo tipeado tal cual; qué placa corresponde al medio
+        // lo decide `AppCore::registrar_ingreso` (`placa_segun_medio`).
         Ok(self
             .core_lock()
             .registrar_ingreso(&actor, contratista_id, medio.into(), gafete, placa)?
@@ -1840,6 +1888,41 @@ impl Nucleo {
             .entregar_gafete_provisional(&actor, encargado_id, gafete_numero)?)
     }
 
+    /// Entrega con su regla en la misma llamada; la decide
+    /// `application::entregar_gafete_provisional_verificado`, la misma que
+    /// usa escritorio. `secreto` vacío se salta el chequeo de nube.
+    pub fn entregar_gafete_provisional_con_secreto(
+        &self,
+        encargado_id: i64,
+        gafete_numero: i64,
+        secreto: String,
+    ) -> Result<i64, NucleoError> {
+        use control_acceso::application::{
+            EntregaGafeteProvisionalVerificadaError, NubeDelDispositivo,
+            entregar_gafete_provisional_verificado,
+        };
+
+        let actor = self.actor_autenticado()?;
+        let nube = NubeDelDispositivo {
+            cache_token: &self.cache_token,
+            secreto: Some(secreto.as_str()),
+        };
+        entregar_gafete_provisional_verificado(
+            || self.core_lock(),
+            nube,
+            &actor,
+            encargado_id,
+            gafete_numero,
+        )
+        .map_err(|error| match error {
+            EntregaGafeteProvisionalVerificadaError::Servicio(error) => error.into(),
+            EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio { numero } => {
+                NucleoError::GafeteOcupadoEnSitio { numero }
+            }
+            EntregaGafeteProvisionalVerificadaError::Nube(error) => error.into(),
+        })
+    }
+
     /// Registra la devolución de un préstamo de gafete provisional KOF --
     /// espejo de `AppCore::registrar_devolucion_gafete_provisional`.
     pub fn registrar_devolucion_gafete_provisional(
@@ -1914,6 +1997,68 @@ impl Nucleo {
         )?)
     }
 
+    /// Ingreso de proveedor con todas sus reglas en una sola llamada; el
+    /// orden y qué falla frena los decide
+    /// `application::registrar_ingreso_proveedor_verificado`, la misma que
+    /// usa escritorio. `secreto` vacío se salta los chequeos de nube.
+    pub fn registrar_ingreso_proveedor_con_secreto(
+        &self,
+        cedula: String,
+        nombre: String,
+        empresa_id: i64,
+        placa: Option<String>,
+        gafete_numero: i64,
+        secreto: String,
+    ) -> Result<i64, NucleoError> {
+        use control_acceso::application::{
+            IngresoProveedorVerificadoError, NubeDelDispositivo, NuevoIngresoProveedor,
+            registrar_ingreso_proveedor_verificado,
+        };
+
+        let actor = self.actor_autenticado()?;
+        let nube = NubeDelDispositivo {
+            cache_token: &self.cache_token,
+            secreto: Some(secreto.as_str()),
+        };
+        let datos = NuevoIngresoProveedor {
+            cedula,
+            nombre,
+            empresa_id,
+            placa,
+            gafete_numero,
+        };
+        registrar_ingreso_proveedor_verificado(|| self.core_lock(), nube, &actor, datos).map_err(
+            |error| match error {
+                IngresoProveedorVerificadoError::Servicio(error) => error.into(),
+                IngresoProveedorVerificadoError::ActivoEnOtroSitio { sitio } => {
+                    NucleoError::ProveedorActivoEnOtroSitio { sitio }
+                }
+                IngresoProveedorVerificadoError::GafeteOcupadoEnSitio { numero } => {
+                    NucleoError::GafeteOcupadoEnSitio { numero }
+                }
+                IngresoProveedorVerificadoError::Nube(error) => error.into(),
+            },
+        )
+    }
+
+    /// Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
+    /// ya tiene un ingreso de proveedor abierto en este sitio (este equipo
+    /// o el otro dispositivo), `None` si puede entrar. La regla y el texto
+    /// son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+    pub fn aviso_proveedor_con_ingreso_activo(
+        &self,
+        cedula: String,
+    ) -> Result<Option<String>, NucleoError> {
+        let activo = self
+            .core_lock()
+            .proveedor_con_ingreso_activo_en_sitio(&cedula)?;
+        Ok(activo.then(|| {
+            control_acceso::mensajes::mensaje_ingreso_proveedor(
+                IngresoProveedorServiceErrorNucleo::IngresoActivo,
+            )
+        }))
+    }
+
     /// Registra la salida (cierre) de un ingreso de proveedor activo --
     /// espejo de `AppCore::registrar_salida_proveedor`.
     pub fn registrar_salida_proveedor(&self, registro_id: i64) -> Result<(), NucleoError> {
@@ -1949,11 +2094,11 @@ impl Nucleo {
             .collect())
     }
 
-    /// Alta de contratista — mismo formulario que
-    /// `desktop/src/pantallas/FormularioContratista.tsx`, sólo creación
-    /// (ver docs/plan-app-movil.md). La validación real y definitiva vuelve
-    /// a correr en Rust (`ContratistaService::crear`); esto no duplica esa
-    /// lógica, sólo convierte tipos en la frontera uniffi.
+    /// Alta de contratista en persona, sólo creación (ver
+    /// docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
+    /// PRAIND requerido y vigente, personal de ruta según el tipo, acceso
+    /// habilitado) viven en `ContratistaService::crear`; esto
+    /// sólo convierte tipos en la frontera uniffi.
     pub fn crear_contratista(&self, datos: DatosContratista) -> Result<i64, NucleoError> {
         let actor = self.actor_autenticado()?;
 
@@ -1975,7 +2120,8 @@ impl Nucleo {
                 tipo_ingreso: datos.tipo_ingreso.into(),
                 fecha_vencimiento_praind,
                 es_personal_ruta: datos.es_personal_ruta,
-                tiene_acceso: datos.tiene_acceso,
+                // Lo fija el núcleo: el alta siempre queda con acceso.
+                tiene_acceso: true,
             },
         )?)
     }
@@ -2005,6 +2151,23 @@ impl Nucleo {
         personal_ruta: bool,
     ) -> bool {
         control_acceso::domain::contratista::requiere_gafete_de(tipo_ingreso.into(), personal_ruta)
+    }
+
+    /// Si el formulario muestra la casilla "personal de ruta" para este
+    /// tipo -- `domain::contratista::admite_personal_ruta`, la misma regla
+    /// que después aplica `crear_contratista`.
+    pub fn admite_personal_ruta_para_formulario(&self, tipo_ingreso: TipoIngreso) -> bool {
+        control_acceso::domain::contratista::admite_personal_ruta(tipo_ingreso.into())
+    }
+
+    /// Aviso inmediato de PRAIND vencido mientras se tipea la fecha (ISO
+    /// `AAAA-MM-DD`). Una fecha incompleta o inválida todavía no es
+    /// "vencida" (`false`): eso lo rechaza `crear_contratista` al guardar.
+    /// Misma regla y mismo reloj que el alta (`AppCore::praind_vencido`).
+    pub fn praind_vencido_para_formulario(&self, fecha_iso: String) -> bool {
+        fecha_iso
+            .parse()
+            .is_ok_and(|fecha| self.core_lock().praind_vencido(fecha))
     }
 
     pub fn crear_empresa(&self, nombre: String) -> Result<i64, NucleoError> {
@@ -2418,76 +2581,6 @@ impl Nucleo {
             })
     }
 
-    /// Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
-    /// gafetes provisionales KOF -- llamar justo antes de
-    /// `entregar_gafete_provisional`. Ver
-    /// `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
-    pub fn gafete_provisional_ocupado_en_sitio_con_secreto(
-        &self,
-        secreto: String,
-        gafete_numero: i64,
-    ) -> Result<bool, NucleoError> {
-        if secreto.trim().is_empty() {
-            return Ok(false);
-        }
-        let actor = self.actor_autenticado()?;
-        self.core_lock().autorizar_uso_nube(&actor)?;
-        let token = self
-            .autenticar_con_cache(&secreto)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::gafete_provisional_ocupado_en_otro_dispositivo(
-            &contexto,
-            gafete_numero,
-        )
-        .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
-        })
-    }
-
-    /// Mismo criterio que `gafete_ocupado_en_sitio_con_secreto`, pero para
-    /// gafetes de proveedor -- llamar justo antes de
-    /// `registrar_ingreso_proveedor`. Ver
-    /// `docs/features-futuras/plan-control-proveedores.md`.
-    pub fn gafete_de_proveedor_ocupado_en_sitio_con_secreto(
-        &self,
-        secreto: String,
-        gafete_numero: i64,
-    ) -> Result<bool, NucleoError> {
-        if secreto.trim().is_empty() {
-            return Ok(false);
-        }
-        let actor = self.actor_autenticado()?;
-        self.core_lock().autorizar_uso_nube(&actor)?;
-        let token = self
-            .autenticar_con_cache(&secreto)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(
-            &contexto,
-            gafete_numero,
-        )
-        .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
-        })
-    }
-
     /// Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
     /// de ingresos abiertos entre sitios") -- mismo patrón que
     /// `gafete_ocupado_en_sitio_con_secreto`, pero de mejor esfuerzo: sin
@@ -2504,30 +2597,6 @@ impl Nucleo {
     ) -> Option<String> {
         self.cache_token
             .contratista_activo_en_otro_sitio(&secreto, &cedula)
-    }
-
-    /// Espejo de [`Self::contratista_activo_en_otro_sitio_con_secreto`],
-    /// pero contra `ingresos_proveedor` -- llamar justo antes de
-    /// `registrar_ingreso_proveedor`.
-    pub fn proveedor_activo_en_otro_sitio_con_secreto(
-        &self,
-        secreto: String,
-        cedula: String,
-    ) -> Option<String> {
-        if secreto.trim().is_empty() {
-            return None;
-        }
-        let token = self.autenticar_con_cache(&secreto).ok()?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        control_acceso::nube::proveedor_activo_en_otro_sitio(&contexto, &cedula)
-            .ok()
-            .flatten()
     }
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
@@ -3722,14 +3791,14 @@ mod tests {
                 tipo_ingreso: TipoIngreso::Swat,
                 fecha_vencimiento_praind: None,
                 es_personal_ruta: false,
-                tiene_acceso: true,
             })
             .unwrap();
         assert!(id > 0);
 
         let resultados = nucleo.buscar_contratistas("Nuevo".to_string()).unwrap();
         assert_eq!(resultados.len(), 1);
-        assert_eq!(resultados[0].nombre, "Nuevo Contratista");
+        // El núcleo guarda el nombre en mayúsculas.
+        assert_eq!(resultados[0].nombre, "NUEVO CONTRATISTA");
     }
 
     #[test]
@@ -3767,10 +3836,66 @@ mod tests {
             tipo_ingreso: TipoIngreso::Praind,
             fecha_vencimiento_praind: Some("no-es-una-fecha".to_string()),
             es_personal_ruta: false,
-            tiene_acceso: true,
         });
 
         assert!(matches!(resultado, Err(NucleoError::FechaInvalida { .. })));
+    }
+
+    /// Las reglas del alta en persona salen del núcleo con un mensaje listo
+    /// para mostrar (`Rechazado`), no como error interno.
+    #[test]
+    fn crear_contratista_aplica_reglas_del_alta() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+        let datos = |tipo, fecha: &str, ruta| DatosContratista {
+            cedula: "444444444".to_string(),
+            nombre: "Contratista Regla".to_string(),
+            empresa_id: 1,
+            tipo_ingreso: tipo,
+            fecha_vencimiento_praind: Some(fecha.to_string()),
+            es_personal_ruta: ruta,
+        };
+
+        match nucleo.crear_contratista(datos(TipoIngreso::Praind, "2000-01-01", false)) {
+            Err(NucleoError::Rechazado { mensaje }) => assert!(mensaje.contains("vencido")),
+            otro => panic!("se esperaba PRAIND vencido, llegó {otro:?}"),
+        }
+        match nucleo.crear_contratista(datos(TipoIngreso::Swat, "2999-01-01", true)) {
+            Err(NucleoError::Rechazado { mensaje }) => assert!(mensaje.contains("ruta")),
+            otro => panic!("se esperaba personal de ruta no admitido, llegó {otro:?}"),
+        }
+        assert!(
+            nucleo
+                .crear_contratista(datos(TipoIngreso::InHouse, "2999-01-01", true))
+                .is_ok()
+        );
+
+        assert!(nucleo.praind_vencido_para_formulario("2000-01-01".to_string()));
+        assert!(!nucleo.praind_vencido_para_formulario("2999-01-01".to_string()));
+        assert!(!nucleo.praind_vencido_para_formulario("2000-01".to_string()));
+        assert!(nucleo.admite_personal_ruta_para_formulario(TipoIngreso::InHouse));
+        assert!(!nucleo.admite_personal_ruta_para_formulario(TipoIngreso::PorCorreo));
     }
 
     #[test]
@@ -4058,7 +4183,26 @@ mod tests {
 
         let resultado = nucleo.entregar_gafete_provisional(999, 12);
 
-        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
+        assert!(matches!(resultado, Err(NucleoError::Rechazado { .. })));
+    }
+
+    /// Secreto vacío: sin chequeo de nube; las reglas locales siguen
+    /// aplicando en la misma llamada (el mismo gafete no se presta dos veces).
+    #[test]
+    fn entregar_gafete_provisional_con_secreto_aplica_las_reglas_locales() {
+        let nucleo = nucleo_con_actor_y_ruta_79();
+        let encargado_id = nucleo
+            .buscar_encargados_ruta("5040017".to_string())
+            .unwrap()[0]
+            .id;
+
+        nucleo
+            .entregar_gafete_provisional_con_secreto(encargado_id, 12, String::new())
+            .unwrap();
+        assert!(matches!(
+            nucleo.entregar_gafete_provisional_con_secreto(encargado_id, 12, String::new()),
+            Err(NucleoError::Rechazado { .. })
+        ));
     }
 
     fn nucleo_con_actor_empresa_proveedora_y_gafete() -> Nucleo {
@@ -4159,6 +4303,49 @@ mod tests {
             7,
         );
 
-        assert!(matches!(resultado, Err(NucleoError::Interno { .. })));
+        assert!(matches!(
+            resultado,
+            Err(NucleoError::Rechazado { mensaje }) if mensaje == "Empresa proveedora no encontrada"
+        ));
+    }
+
+    /// La llamada combinada aplica la regla de "un ingreso abierto por
+    /// cédula" antes de escribir (secreto vacío: sin chequeos de nube).
+    #[test]
+    fn registrar_ingreso_proveedor_con_secreto_rechaza_cedula_ya_activa() {
+        let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
+        let empresa_id = nucleo
+            .buscar_empresas_proveedor("maika".to_string())
+            .unwrap()[0]
+            .id;
+        let registrar = || {
+            nucleo.registrar_ingreso_proveedor_con_secreto(
+                "1-1111".to_string(),
+                "Juan Perez".to_string(),
+                empresa_id,
+                None,
+                7,
+                String::new(),
+            )
+        };
+
+        assert!(
+            nucleo
+                .aviso_proveedor_con_ingreso_activo("1-1111".to_string())
+                .unwrap()
+                .is_none()
+        );
+        registrar().unwrap();
+        assert!(matches!(
+            registrar(),
+            Err(NucleoError::Rechazado { mensaje })
+                if mensaje == "Esta cédula ya tiene un ingreso de proveedor activo"
+        ));
+        assert!(
+            nucleo
+                .aviso_proveedor_con_ingreso_activo("1-1111".to_string())
+                .unwrap()
+                .is_some()
+        );
     }
 }

@@ -103,11 +103,22 @@ pub fn listar_ingresos_activos(
 /// esfuerzo, ver `chequear_activo_en_otro_sitio`) -- sólo el segundo
 /// necesita `async`/tope de tiempo, por eso el comando entero lo es (mismo
 /// motivo que `login` en `comandos/autenticacion.rs`).
+/// `PreparacionIngreso` más el motivo de bloqueo ya resuelto por el núcleo
+/// (`PreparacionIngreso::bloqueo` + `mensajes::mensaje_bloqueo_ingreso`),
+/// igual que recibe el móvil: el frontend no decide si se puede continuar
+/// ni arma el texto. `None` = se puede continuar.
+#[derive(serde::Serialize)]
+pub struct PreparacionIngresoConBloqueo {
+    #[serde(flatten)]
+    preparacion: PreparacionIngreso,
+    mensaje_bloqueo: Option<String>,
+}
+
 #[tauri::command]
 pub async fn preparar_ingreso(
     contratista_id: i64,
     app: tauri::AppHandle,
-) -> Result<PreparacionIngreso, String> {
+) -> Result<PreparacionIngresoConBloqueo, String> {
     let state = app.state::<GuiState>();
     state.sesion_activa()?;
     let mut preparacion = state
@@ -132,7 +143,14 @@ pub async fn preparar_ingreso(
         }
     }
 
-    Ok(preparacion)
+    let mensaje_bloqueo = preparacion
+        .bloqueo()
+        .as_ref()
+        .map(control_acceso::mensajes::mensaje_bloqueo_ingreso);
+    Ok(PreparacionIngresoConBloqueo {
+        preparacion,
+        mensaje_bloqueo,
+    })
 }
 
 #[tauri::command]

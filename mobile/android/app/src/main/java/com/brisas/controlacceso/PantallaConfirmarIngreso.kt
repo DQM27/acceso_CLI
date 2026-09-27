@@ -36,61 +36,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.MedioIngreso
-import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.PreparacionIngreso
-import uniffi.control_acceso_mobile.ResultadoAcceso
-
-/// El gafete ya está activo en este sitio del lado de otro dispositivo --
-/// usada por [GafetesProvisionalesViewModel]/[ProveedoresViewModel], que
-/// todavía hacen el chequeo y la escritura como dos pasos separados. Esta
-/// misma pantalla ([PantallaConfirmarIngreso]) ya NO la usa -- desde que
-/// `Nucleo.registrarIngresoConSecreto` fusiona el chequeo con la
-/// escritura, el mismo caso llega acá como [NucleoException]
-/// (`NucleoError::GafeteOcupadoEnSitio` en Rust), con el mismo texto.
-class GafeteOcupadoEnSitioException(numero: Long) :
-    Exception("El gafete $numero ya está en uso en otro dispositivo de la unidad operativa")
-
-/// MV-04 (auditoría 2026-09-24): usada por [ProveedoresViewModel] --
-/// `Nucleo.proveedorActivoEnOtroSitioConSecreto` ya existía en Rust
-/// (espejo de `contratistaActivoEnOtroSitioConSecreto`) desde antes, pero
-/// nada en Kotlin la llamaba, así que un proveedor con ingreso abierto en
-/// otro sitio podía entrar acá también sin ningún aviso. Mismo texto que
-/// `proveedor_activo_en_otro_sitio` en
-/// `desktop/src-tauri/src/comandos/proveedores.rs`, para no dar un mensaje
-/// distinto según qué interfaz se use.
-class ProveedorActivoEnOtroSitioException(sitio: String) :
-    Exception("Esta cédula ya tiene un ingreso de proveedor activo en $sitio")
-
-/// Espejo de `mensajeVencimientoPraind` (`desktop/src/api/ingresos.ts`) --
-/// antes esta pantalla sólo mostraba "PRAIND próximo a vencer" sin decir
-/// cuánto quedaba, mientras desktop ya avisaba "vence en N días (fecha)".
-/// `fecha` en ISO (`AAAA-MM-DD`), igual que la manda `PreparacionIngreso`,
-/// pero se muestra día-mes-año -- misma convención que el resto de la app
-/// (`FechaDocumento.aTextoDDMMYYYY`) -- mostrar el ISO crudo entre
-/// paréntesis era inconsistente con eso (hallazgo 2026-09-20).
-fun mensajeVencimientoPraind(fecha: String): String {
-    val fechaParseada = LocalDate.parse(fecha)
-    val dias = ChronoUnit.DAYS.between(LocalDate.now(), fechaParseada)
-    val cuenta = when {
-        dias <= 0 -> "vence hoy"
-        dias == 1L -> "vence mañana"
-        else -> "vence en $dias días"
-    }
-    val fechaTexto = "%02d-%02d-%04d".format(fechaParseada.dayOfMonth, fechaParseada.monthValue, fechaParseada.year)
-    return "$cuenta ($fechaTexto)"
-}
-
-/// Mismo criterio que `NuevoIngresoModal.tsx` (`confirmarIngreso`): la placa
-/// sólo se manda (y sólo existe) cuando el medio es Vehículo -- con
-/// Caminando se descarta lo tipeado, aunque el operador haya escrito algo
-/// antes de cambiar de radio.
-fun placaSiCorresponde(medio: MedioIngreso, placaTexto: String): String? =
-    if (medio == MedioIngreso.VEHICULO) placaTexto.trim() else null
 
 /// Formulario de ingreso de un contratista ya preparado. El registro (la
 /// validación de gafete/placa y la llamada al núcleo) vive en
@@ -188,10 +137,10 @@ fun PantallaConfirmarIngreso(
             modifier = Modifier.padding(bottom = 20.dp),
         )
 
-        if (preparacion.resultadoAcceso == ResultadoAcceso.PermitidoConAdvertencia) {
-            val fecha = preparacion.fechaVencimientoPraind
+        // Texto y cuenta de días del núcleo (`aviso_praind`, con su reloj).
+        preparacion.avisoPraind?.let { aviso ->
             Text(
-                "⚠ PRAIND " + (fecha?.let { mensajeVencimientoPraind(it) } ?: "próximo a vencer"),
+                "⚠ $aviso",
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(bottom = 12.dp),
             )
@@ -209,7 +158,7 @@ fun PantallaConfirmarIngreso(
         Row(modifier = Modifier.padding(bottom = 16.dp)) {
             listOf(MedioIngreso.CAMINANDO to "Caminando", MedioIngreso.VEHICULO to "Vehículo").forEach { (opcion, etiqueta) ->
                 // Descarta la placa tipeada antes si el operador vuelve a
-                // Caminando -- ver el doc-comment de `placaSiCorresponde`.
+                // Caminando: el núcleo descarta la placa (`placa_segun_medio`).
                 val elegir = {
                     medio = opcion
                     if (opcion == MedioIngreso.CAMINANDO) placaTexto = ""

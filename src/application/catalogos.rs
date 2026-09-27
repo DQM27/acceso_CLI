@@ -1,5 +1,6 @@
 //! Contratistas y Empresas.
 
+use chrono::NaiveDate;
 use rusqlite::{Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
@@ -13,13 +14,17 @@ use crate::database::queries::gafetes_incidentes::{
 };
 use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
+use crate::domain::acceso::aviso_acceso_en_lista;
 use crate::domain::autorizacion::Operacion;
+use crate::domain::contratista::praind_vencido;
+use crate::mensajes::mensaje_aviso_acceso_lista;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::contratista_service::{
     ContratistaConsultaService, ContratistaService, DatosActualizacionContratista, DatosContratista,
 };
 use crate::services::empresa_service::{EmpresaConsultaService, EmpresaService};
 use crate::services::error::{ContratistaServiceError, EmpresaServiceError};
+use crate::tiempo::fecha_costa_rica;
 
 use super::{AppCore, CargaCompleta, LIMITE_CARGA_COMPLETA_MAXIMO, verificar_actor_activo};
 
@@ -78,7 +83,17 @@ impl AppCore {
         filtro: &FiltroContratistas,
     ) -> Result<PaginaContratistas, ContratistaServiceError> {
         let query = SqliteContratistasQuery::new(&self.connection);
-        ContratistaConsultaService::new(&query).buscar_para_tabla(filtro)
+        let mut pagina = ContratistaConsultaService::new(&query).buscar_para_tabla(filtro)?;
+        let hoy = fecha_costa_rica(self.reloj.ahora_utc());
+        for contratista in &mut pagina.items {
+            contratista.aviso_acceso = aviso_acceso_en_lista(
+                contratista.tiene_acceso,
+                contratista.fecha_vencimiento_praind,
+                hoy,
+            )
+            .map(mensaje_aviso_acceso_lista);
+        }
+        Ok(pagina)
     }
 
     /// Auditoría genérica (contratistas, empresas, usuarios — ver
@@ -143,9 +158,10 @@ impl AppCore {
         verificar_actor_activo(&transaction, actor)
             .map_err(ContratistaServiceError::Database)?
             .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
-        ContratistaService::new(
+        ContratistaService::con_hoy(
             &SqliteContratistaRepository::new(&transaction),
             &SqliteEmpresaRepository::new(&transaction),
+            fecha_costa_rica(self.reloj.ahora_utc()),
         )
         .crear(datos)
         .and_then(|id| {
@@ -155,6 +171,17 @@ impl AppCore {
                 .map_err(ContratistaServiceError::Database)?;
             Ok(id)
         })
+    }
+
+    /// `domain::contratista::praind_vencido` contra el "hoy" del reloj del
+    /// núcleo (corregido con la hora del servidor en escritorio/móvil):
+    /// lo usa el formulario para avisar antes de guardar, con la misma
+    /// regla y el mismo reloj que [`Self::crear_contratista`].
+    pub fn praind_vencido(&self, fecha_vencimiento: NaiveDate) -> bool {
+        praind_vencido(
+            Some(fecha_vencimiento),
+            fecha_costa_rica(self.reloj.ahora_utc()),
+        )
     }
 
     pub fn actualizar_contratista(
@@ -171,7 +198,11 @@ impl AppCore {
             .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
         let contratistas = SqliteContratistaRepository::new(&transaction);
         let empresas = SqliteEmpresaRepository::new(&transaction);
-        let servicio = ContratistaService::new(&contratistas, &empresas);
+        let servicio = ContratistaService::con_hoy(
+            &contratistas,
+            &empresas,
+            fecha_costa_rica(self.reloj.ahora_utc()),
+        );
         let actual = servicio.buscar_por_id(id)?;
         if actual.cedula != datos.cedula.trim()
             && !actor_actual.rol.puede(Operacion::EditarCedulaContratista)

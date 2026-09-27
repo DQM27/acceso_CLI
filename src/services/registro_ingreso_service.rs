@@ -63,6 +63,11 @@ pub struct PreparacionIngreso {
     /// ingreso. `Vec` y no `Option<i64>`: nada impide más de una deuda
     /// simultánea.
     pub gafetes_deuda: Vec<i64>,
+    /// Con `PermitidoConAdvertencia`, el texto listo para mostrar ("PRAIND
+    /// vence en 3 días (15-09-2026)"). Lo completa `AppCore::preparar_ingreso`
+    /// con su reloj (`mensajes::mensaje_vencimiento_praind`); antes lo
+    /// calculaban por separado TypeScript y Kotlin, cada uno con su reloj.
+    pub aviso_praind: Option<String>,
 }
 
 /// Motivo por el que [`PreparacionIngreso::bloqueo`] no deja continuar --
@@ -281,6 +286,7 @@ where
             tiene_ingreso_activo,
             activo_en_otro_sitio: None,
             gafetes_deuda,
+            aviso_praind: None,
         })
     }
 
@@ -472,6 +478,7 @@ mod tests_bloqueo {
             tiene_ingreso_activo: false,
             activo_en_otro_sitio: None,
             gafetes_deuda: Vec::new(),
+            aviso_praind: None,
         }
     }
 

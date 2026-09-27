@@ -1,8 +1,15 @@
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
-import { actualizarContratista, crearContratista, requierePraind } from "../api";
-import type { ContratistaResumen, DatosContratista, Empresa, TipoIngreso } from "../api";
+import { actualizarContratista, crearContratista, reglasFormularioContratista } from "../api";
+import type {
+  ContratistaResumen,
+  DatosContratista,
+  Empresa,
+  ReglasFormularioContratista,
+  TipoIngreso,
+} from "../api";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 import { TIPOS, esquema } from "./FormularioContratista.logica";
 
@@ -33,6 +40,7 @@ export default function FormularioContratista({
     handleSubmit,
     control,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ValoresFormulario>({
     resolver: zodResolver(esquema),
@@ -57,14 +65,41 @@ export default function FormularioContratista({
         },
   });
 
-  const [esPersonalRuta, tipoIngreso] = useWatch({
+  const [esPersonalRuta, tipoIngreso, fechaPraind] = useWatch({
     control,
-    name: ["es_personal_ruta", "tipo_ingreso"],
+    name: ["es_personal_ruta", "tipo_ingreso", "fecha_vencimiento_praind"],
   });
-  const mostrarPraind = requierePraind({
-    es_personal_ruta: esPersonalRuta,
-    tipo_ingreso: tipoIngreso,
+
+  // Qué mostrar lo decide el núcleo (`reglas_formulario_contratista`); acá
+  // no se replica ninguna regla. Al guardar el núcleo las vuelve a aplicar.
+  const [reglas, setReglas] = useState<ReglasFormularioContratista>({
+    requiere_praind: true,
+    admite_personal_ruta: true,
+    aviso_praind: null,
   });
+  useEffect(() => {
+    let vigente = true;
+    reglasFormularioContratista({
+      tipo_ingreso: tipoIngreso,
+      es_personal_ruta: esPersonalRuta,
+      fecha_vencimiento_praind: fechaPraind || null,
+    })
+      .then((nuevas) => {
+        if (vigente) setReglas(nuevas);
+      })
+      .catch(() => {
+        // Sin reglas no se bloquea nada: al guardar decide el núcleo.
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [tipoIngreso, esPersonalRuta, fechaPraind]);
+  useEffect(() => {
+    // La casilla se oculta para los tipos que no la admiten; sin esto un
+    // `true` que quedó de otro tipo se mandaría igual.
+    if (!reglas.admite_personal_ruta && esPersonalRuta) setValue("es_personal_ruta", false);
+  }, [reglas.admite_personal_ruta, esPersonalRuta, setValue]);
+  const mostrarPraind = reglas.requiere_praind;
 
   async function alGuardar(valores: ValoresFormulario) {
     const datos: DatosContratista = {
@@ -76,8 +111,10 @@ export default function FormularioContratista({
         mostrarPraind && valores.fecha_vencimiento_praind
           ? valores.fecha_vencimiento_praind
           : null,
-      es_personal_ruta: valores.es_personal_ruta,
-      tiene_acceso: valores.tiene_acceso,
+      es_personal_ruta: reglas.admite_personal_ruta && valores.es_personal_ruta,
+      // El alta siempre queda con acceso (lo fija el núcleo); sólo al
+      // editar se puede quitar.
+      tiene_acceso: contratista ? valores.tiene_acceso : true,
     };
     try {
       if (contratista) {
@@ -159,28 +196,30 @@ export default function FormularioContratista({
           </select>
         </label>
 
-        <label
-          style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
-        >
-          <input type="checkbox" {...register("es_personal_ruta")} />
-          Personal de ruta
-        </label>
+        {reglas.admite_personal_ruta && (
+          <label
+            style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
+          >
+            <input type="checkbox" {...register("es_personal_ruta")} />
+            Personal de ruta
+          </label>
+        )}
 
-        <label
-          style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
-        >
-          <input type="checkbox" {...register("tiene_acceso")} />
-          Con acceso
-        </label>
+        {contratista && (
+          <label
+            style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
+          >
+            <input type="checkbox" {...register("tiene_acceso")} />
+            Con acceso
+          </label>
+        )}
 
         {mostrarPraind && (
           <label className="campo">
             Fecha de vencimiento PRAIND
             <input type="date" {...register("fecha_vencimiento_praind")} />
-            {errors.fecha_vencimiento_praind && (
-              <span style={{ color: "var(--error)" }}>
-                {errors.fecha_vencimiento_praind.message}
-              </span>
+            {reglas.aviso_praind && (
+              <span style={{ color: "var(--error)" }}>{reglas.aviso_praind}</span>
             )}
           </label>
         )}
@@ -191,7 +230,8 @@ export default function FormularioContratista({
           <button type="button" className="boton" onClick={onCerrar}>
             Cancelar
           </button>
-          <button type="submit" className="boton boton-primario" disabled={isSubmitting}>
+          <button type="submit" className="boton boton-primario" disabled={isSubmitting || (mostrarPraind && reglas.aviso_praind !== null)}
+          >
             {isSubmitting ? "Guardando…" : "Guardar"}
           </button>
         </div>

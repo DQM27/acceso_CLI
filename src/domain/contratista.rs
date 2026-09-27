@@ -1,3 +1,5 @@
+use chrono::NaiveDate;
+
 use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
 
@@ -30,6 +32,39 @@ pub fn requiere_gafete(contratista: &Contratista) -> bool {
 /// (MV-10, expuesta como `Nucleo::requiere_gafete_para_formulario`).
 pub fn requiere_gafete_de(tipo_ingreso: TipoIngreso, personal_ruta: bool) -> bool {
     !personal_ruta && matches!(tipo_ingreso, TipoIngreso::Praind | TipoIngreso::PorCorreo)
+}
+
+/// Regla de negocio (pedido del usuario 2026-09-20): "personal de ruta"
+/// sólo existe para `Praind` e `InHouse`. `PorCorreo` y `Swat` no lo
+/// admiten. La aplica `ContratistaService` al crear y al editar.
+pub fn admite_personal_ruta(tipo_ingreso: TipoIngreso) -> bool {
+    matches!(tipo_ingreso, TipoIngreso::Praind | TipoIngreso::InHouse)
+}
+
+/// Regla de negocio: un PRAIND cuya fecha de vencimiento ya pasó (`< hoy`)
+/// no habilita a nadie. Vencer HOY todavía cuenta como vigente. Sin fecha
+/// no está "vencido" (eso es `PraindRequerido`, otra regla).
+pub fn praind_vencido(fecha_vencimiento: Option<NaiveDate>, hoy: NaiveDate) -> bool {
+    fecha_vencimiento.is_some_and(|fecha| fecha < hoy)
+}
+
+/// Regla de negocio: la cédula sólo tiene dígitos (sin guiones ni
+/// espacios). Vacía no es válida.
+pub fn cedula_valida(cedula: &str) -> bool {
+    !cedula.is_empty() && cedula.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Regla de negocio: el nombre sólo tiene letras (con tildes), espacios,
+/// apóstrofo y guion -- sin números ni símbolos -- y se guarda en
+/// MAYÚSCULAS con los espacios de más colapsados. `None` si no cumple o
+/// queda vacío.
+pub fn normalizar_nombre(nombre: &str) -> Option<String> {
+    let limpio = nombre.split_whitespace().collect::<Vec<_>>().join(" ");
+    let valido = !limpio.is_empty()
+        && limpio
+            .chars()
+            .all(|c| c.is_alphabetic() || c == ' ' || c == '\'' || c == '-');
+    valido.then(|| limpio.to_uppercase())
 }
 
 #[cfg(test)]
@@ -65,5 +100,40 @@ mod tests {
         assert!(requiere_gafete_de(TipoIngreso::PorCorreo, false));
         assert!(!requiere_gafete_de(TipoIngreso::InHouse, false));
         assert!(!requiere_gafete_de(TipoIngreso::Swat, false));
+    }
+
+    #[test]
+    fn admite_personal_ruta_solo_praind_e_in_house() {
+        assert!(admite_personal_ruta(TipoIngreso::Praind));
+        assert!(admite_personal_ruta(TipoIngreso::InHouse));
+        assert!(!admite_personal_ruta(TipoIngreso::PorCorreo));
+        assert!(!admite_personal_ruta(TipoIngreso::Swat));
+    }
+
+    #[test]
+    fn praind_vencido_solo_si_la_fecha_ya_paso() {
+        let hoy = NaiveDate::from_ymd_opt(2026, 9, 27).unwrap();
+        assert!(praind_vencido(NaiveDate::from_ymd_opt(2026, 9, 26), hoy));
+        assert!(!praind_vencido(Some(hoy), hoy));
+        assert!(!praind_vencido(NaiveDate::from_ymd_opt(2027, 1, 1), hoy));
+        assert!(!praind_vencido(None, hoy));
+    }
+
+    #[test]
+    fn cedula_valida_solo_digitos() {
+        assert!(cedula_valida("701000000"));
+        assert!(!cedula_valida("7-0100-0000"));
+        assert!(!cedula_valida(""));
+    }
+
+    #[test]
+    fn normalizar_nombre_mayusculas_sin_numeros_ni_simbolos() {
+        assert_eq!(
+            normalizar_nombre("  maría  josé o'neil-rojas "),
+            Some("MARÍA JOSÉ O'NEIL-ROJAS".to_string())
+        );
+        assert_eq!(normalizar_nombre("Ana 2"), None);
+        assert_eq!(normalizar_nombre("Ana@"), None);
+        assert_eq!(normalizar_nombre("   "), None);
     }
 }

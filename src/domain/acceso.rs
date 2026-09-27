@@ -61,3 +61,55 @@ pub fn verificar_acceso(contratista: &Contratista, hoy: NaiveDate) -> ResultadoA
     // PRAIND vigente y con más de 30 días.
     ResultadoAcceso::Permitido
 }
+
+/// Aviso de una fila en las listas de contratistas (escritorio y móvil).
+/// Sólo informa: si puede entrar lo decide `verificar_acceso` al preparar
+/// el ingreso.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AvisoAccesoLista {
+    AccesoDenegado,
+    PraindVencido,
+}
+
+/// Sin acceso pesa más que el PRAIND vencido: se muestra un solo aviso.
+pub fn aviso_acceso_en_lista(
+    tiene_acceso: bool,
+    fecha_vencimiento_praind: Option<NaiveDate>,
+    hoy: NaiveDate,
+) -> Option<AvisoAccesoLista> {
+    if !tiene_acceso {
+        return Some(AvisoAccesoLista::AccesoDenegado);
+    }
+    super::contratista::praind_vencido(fecha_vencimiento_praind, hoy)
+        .then_some(AvisoAccesoLista::PraindVencido)
+}
+
+#[cfg(test)]
+mod tests_aviso_lista {
+    use super::*;
+
+    fn fecha(dia: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(2026, 9, dia).unwrap()
+    }
+
+    #[test]
+    fn sin_acceso_pesa_mas_que_el_praind_vencido() {
+        assert_eq!(
+            aviso_acceso_en_lista(false, Some(fecha(1)), fecha(27)),
+            Some(AvisoAccesoLista::AccesoDenegado)
+        );
+    }
+
+    #[test]
+    fn praind_vencido_solo_si_la_fecha_ya_paso() {
+        assert_eq!(
+            aviso_acceso_en_lista(true, Some(fecha(26)), fecha(27)),
+            Some(AvisoAccesoLista::PraindVencido)
+        );
+        assert_eq!(
+            aviso_acceso_en_lista(true, Some(fecha(27)), fecha(27)),
+            None
+        );
+        assert_eq!(aviso_acceso_en_lista(true, None, fecha(27)), None);
+    }
+}

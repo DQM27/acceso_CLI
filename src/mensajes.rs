@@ -63,16 +63,21 @@ pub fn mensaje_empresa(error: EmpresaServiceError) -> String {
 
 pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
     use ContratistaServiceError::{
-        CedulaDuplicada, CedulaVacia, ContratistaNoEncontrado, Database, EmpresaNoEncontrada,
-        NombreVacio, OperacionNoAutorizada, PraindRequerido,
+        CedulaDuplicada, CedulaInvalida, CedulaVacia, ContratistaNoEncontrado, Database,
+        EmpresaNoEncontrada, NombreInvalido, NombreVacio, OperacionNoAutorizada,
+        PersonalRutaNoAdmitido, PraindRequerido, PraindVencido,
     };
 
     match error {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),
         EmpresaNoEncontrada => "La empresa seleccionada ya no existe".into(),
         CedulaVacia => "La cédula es obligatoria".into(),
+        CedulaInvalida => "La cédula sólo puede tener números".into(),
         NombreVacio => "El nombre es obligatorio".into(),
+        NombreInvalido => "El nombre no puede tener números ni símbolos".into(),
         PraindRequerido => "Fecha PRAIND requerida".into(),
+        PraindVencido => "El PRAIND está vencido — ingrese una fecha vigente".into(),
+        PersonalRutaNoAdmitido => "Personal de ruta sólo aplica a PRAIND e IN HOUSE".into(),
         CedulaDuplicada => "Ya existe un contratista con esa cédula".into(),
         OperacionNoAutorizada => "Su sesión no está autorizada para esta operación".into(),
         Database(error) => {
@@ -229,6 +234,31 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
             "No se pudo registrar el ingreso".into()
         }
         _ => "No se pudo registrar el ingreso".into(),
+    }
+}
+
+/// Aviso de `PermitidoConAdvertencia`: "PRAIND vence hoy / mañana / en N
+/// días (dd-mm-aaaa)". Un solo texto para escritorio y móvil, con el reloj
+/// del núcleo.
+#[must_use]
+pub fn mensaje_vencimiento_praind(fecha: chrono::NaiveDate, hoy: chrono::NaiveDate) -> String {
+    let dias = (fecha - hoy).num_days();
+    let cuenta = match dias {
+        ..=0 => "vence hoy".to_string(),
+        1 => "vence mañana".to_string(),
+        n => format!("vence en {n} días"),
+    };
+    format!("PRAIND {cuenta} ({})", fecha.format("%d-%m-%Y"))
+}
+
+/// Texto del aviso de una fila en las listas de contratistas. Mayúscula
+/// a propósito, para que se lea con fuerza (pedido del dueño 2026-09-20).
+pub fn mensaje_aviso_acceso_lista(aviso: crate::domain::acceso::AvisoAccesoLista) -> String {
+    use crate::domain::acceso::AvisoAccesoLista;
+
+    match aviso {
+        AvisoAccesoLista::AccesoDenegado => "ACCESO DENEGADO".into(),
+        AvisoAccesoLista::PraindVencido => "PRAIND VENCIDO".into(),
     }
 }
 
@@ -421,6 +451,41 @@ pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String 
     }
 }
 
+#[cfg(feature = "nube")]
+pub fn mensaje_ingreso_proveedor_verificado(
+    error: crate::application::IngresoProveedorVerificadoError,
+) -> String {
+    use crate::application::IngresoProveedorVerificadoError;
+
+    match error {
+        IngresoProveedorVerificadoError::Servicio(error) => mensaje_ingreso_proveedor(error),
+        IngresoProveedorVerificadoError::ActivoEnOtroSitio { sitio } => {
+            format!("Esta cédula ya tiene un ingreso de proveedor activo en {sitio}")
+        }
+        IngresoProveedorVerificadoError::GafeteOcupadoEnSitio { numero } => {
+            format!("El gafete {numero} ya está en uso en otro dispositivo del sitio")
+        }
+        IngresoProveedorVerificadoError::Nube(error) => mensaje_gestion_nube(error),
+    }
+}
+
+#[cfg(feature = "nube")]
+pub fn mensaje_entrega_gafete_provisional_verificada(
+    error: crate::application::EntregaGafeteProvisionalVerificadaError,
+) -> String {
+    use crate::application::EntregaGafeteProvisionalVerificadaError;
+
+    match error {
+        EntregaGafeteProvisionalVerificadaError::Servicio(error) => {
+            mensaje_gafete_provisional(error)
+        }
+        EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio { numero } => {
+            format!("El gafete {numero} ya está prestado en otro dispositivo del sitio")
+        }
+        EntregaGafeteProvisionalVerificadaError::Nube(error) => mensaje_gestion_nube(error),
+    }
+}
+
 /// `RespuestaInesperada` trae el cuerpo crudo de la respuesta del receptor
 /// (puede incluir detalles internos de Postgres/PostgREST) -- nunca pasa a
 /// pantalla, mismo criterio que el resto de este módulo con los errores de
@@ -505,6 +570,24 @@ pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> Stri
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn mensaje_vencimiento_praind_cuenta_dias() {
+        let hoy = chrono::NaiveDate::from_ymd_opt(2026, 9, 12).unwrap();
+        let en = |d| chrono::NaiveDate::from_ymd_opt(2026, 9, d).unwrap();
+        assert_eq!(
+            super::mensaje_vencimiento_praind(en(12), hoy),
+            "PRAIND vence hoy (12-09-2026)"
+        );
+        assert_eq!(
+            super::mensaje_vencimiento_praind(en(13), hoy),
+            "PRAIND vence mañana (13-09-2026)"
+        );
+        assert_eq!(
+            super::mensaje_vencimiento_praind(en(15), hoy),
+            "PRAIND vence en 3 días (15-09-2026)"
+        );
+    }
+
     use super::*;
     use crate::database::error::DatabaseError;
 

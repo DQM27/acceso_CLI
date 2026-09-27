@@ -15,7 +15,9 @@ use control_acceso::models::registro_ingreso::{
     SalidaRegistroIngreso, VERSION_REGLAS_ACCESO,
 };
 use control_acceso::models::tipo_ingreso::TipoIngreso;
-use control_acceso::services::contratista_service::{ContratistaService, DatosContratista};
+use control_acceso::services::contratista_service::{
+    ContratistaService, DatosActualizacionContratista, DatosContratista,
+};
 use control_acceso::services::empresa_service::EmpresaService;
 use control_acceso::services::error::RegistroIngresoServiceError;
 use control_acceso::services::registro_ingreso_service::RegistroIngresoService;
@@ -80,17 +82,43 @@ fn crear_contratista(
 ) -> i64 {
     let contratistas = SqliteContratistaRepository::new(connection);
     let empresas = SqliteEmpresaRepository::new(connection);
-    ContratistaService::new(&contratistas, &empresas)
+    // Fixture del flujo de INGRESO: se registra "en el pasado" para poder
+    // tener un PRAIND ya vencido hoy, y el acceso se quita después editando
+    // (el alta siempre queda con acceso, regla del núcleo).
+    let servicio = ContratistaService::con_hoy(
+        &contratistas,
+        &empresas,
+        NaiveDate::from_ymd_opt(2000, 1, 1).unwrap(),
+    );
+    let nombre = "Contratista Prueba".to_string();
+    let id = servicio
         .crear(DatosContratista {
             cedula: cedula.to_string(),
-            nombre: format!("Contratista {cedula}"),
+            nombre: nombre.clone(),
             empresa_id,
             tipo_ingreso,
             fecha_vencimiento_praind,
             es_personal_ruta,
-            tiene_acceso,
+            tiene_acceso: true,
         })
-        .unwrap()
+        .unwrap();
+    if !tiene_acceso {
+        servicio
+            .actualizar(
+                id,
+                DatosActualizacionContratista {
+                    cedula: cedula.to_string(),
+                    nombre,
+                    empresa_id,
+                    tipo_ingreso,
+                    fecha_vencimiento_praind,
+                    es_personal_ruta,
+                    tiene_acceso: false,
+                },
+            )
+            .unwrap();
+    }
+    id
 }
 
 #[test]
@@ -283,7 +311,7 @@ fn flujo_swat_ignora_gafete_y_guarda_none() {
 
 #[test]
 fn flujo_personal_de_ruta_vigente_ignora_gafete_y_guarda_none() {
-    comprobar_flujo_sin_gafete(TipoIngreso::PorCorreo, Some(praind_vigente()), true);
+    comprobar_flujo_sin_gafete(TipoIngreso::Praind, Some(praind_vigente()), true);
 }
 
 #[test]
@@ -396,7 +424,7 @@ fn flujo_rechaza_in_house_con_praind_vencido() {
 #[test]
 fn flujo_rechaza_personal_de_ruta_con_praind_vencido() {
     assert!(matches!(
-        intentar_ingreso_restringido(TipoIngreso::PorCorreo, Some(praind_vencido()), true, true,),
+        intentar_ingreso_restringido(TipoIngreso::Praind, Some(praind_vencido()), true, true,),
         RegistroIngresoServiceError::AccesoDenegado(MotivoDenegacion::PraindVencido)
     ));
 }

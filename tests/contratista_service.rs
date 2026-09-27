@@ -27,7 +27,7 @@ fn preparar_base() -> (Connection, i64) {
 }
 
 fn fecha_praind() -> NaiveDate {
-    NaiveDate::from_ymd_opt(2027, 12, 31).unwrap()
+    NaiveDate::from_ymd_opt(2099, 12, 31).unwrap()
 }
 
 fn datos(empresa_id: i64, tipo_ingreso: TipoIngreso) -> DatosContratista {
@@ -107,13 +107,13 @@ fn debe_crear_swat_sin_fecha() {
 
 #[test]
 fn debe_crear_personal_de_ruta_con_fecha() {
-    crear_y_recuperar(TipoIngreso::PorCorreo, Some(fecha_praind()), true);
+    crear_y_recuperar(TipoIngreso::Praind, Some(fecha_praind()), true);
 }
 
 #[test]
 fn debe_rechazar_personal_de_ruta_sin_fecha() {
     assert!(matches!(
-        crear_resultado(TipoIngreso::PorCorreo, None, true),
+        crear_resultado(TipoIngreso::InHouse, None, true),
         Err(ContratistaServiceError::PraindRequerido)
     ));
 }
@@ -225,7 +225,7 @@ fn debe_aplicar_trim_a_nombre_al_crear() {
 
     let id = servicio.crear(entrada).unwrap();
 
-    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "Persona Uno");
+    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "PERSONA UNO");
 }
 
 #[test]
@@ -310,7 +310,7 @@ fn debe_actualizar_contratista() {
     let actualizado = servicio.buscar_por_id(id).unwrap();
 
     assert_eq!(actualizado.cedula, "3001");
-    assert_eq!(actualizado.nombre, "Nombre actualizado");
+    assert_eq!(actualizado.nombre, "NOMBRE ACTUALIZADO");
     assert!(matches!(
         servicio.buscar_por_cedula("2001"),
         Err(ContratistaServiceError::ContratistaNoEncontrado)
@@ -371,7 +371,7 @@ fn actualizar_conserva_personal_de_ruta_solicitado() {
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
-    let mut entrada = actualizacion(empresa_id, TipoIngreso::Swat);
+    let mut entrada = actualizacion(empresa_id, TipoIngreso::InHouse);
     entrada.es_personal_ruta = true;
     entrada.fecha_vencimiento_praind = Some(fecha_praind());
 
@@ -491,7 +491,7 @@ fn actualizar_con_cedula_duplicada_devuelve_error_semantico_y_conserva_registro(
     ));
     let conservado = servicio.buscar_por_id(segundo_id).unwrap();
     assert_eq!(conservado.cedula, "2002");
-    assert_eq!(conservado.nombre, "Persona Dos");
+    assert_eq!(conservado.nombre, "PERSONA DOS");
 }
 
 // Bandeja de salida hacia la nube (`docs/planes-implementados/plan-persistencia-nube.md`): crear
@@ -546,4 +546,144 @@ fn debe_encolar_hacia_la_nube_al_actualizar() {
         .unwrap();
 
     assert_eq!(contar_cola_salida(&connection, &uuid, "actualizar"), 1);
+}
+
+// --- Reglas del núcleo (iguales para escritorio y móvil) ---
+
+fn hoy() -> NaiveDate {
+    NaiveDate::from_ymd_opt(2026, 9, 27).unwrap()
+}
+
+fn crear_con_reglas(
+    tipo: TipoIngreso,
+    fecha: Option<NaiveDate>,
+    ruta: bool,
+) -> (Connection, Result<i64, ContratistaServiceError>) {
+    let (connection, empresa_id) = preparar_base();
+    let resultado = {
+        let contratistas = SqliteContratistaRepository::new(&connection);
+        let empresas = SqliteEmpresaRepository::new(&connection);
+        let servicio = ContratistaService::con_hoy(&contratistas, &empresas, hoy());
+        let mut entrada = datos(empresa_id, tipo);
+        entrada.fecha_vencimiento_praind = fecha;
+        entrada.es_personal_ruta = ruta;
+        entrada.tiene_acceso = false;
+        servicio.crear(entrada)
+    };
+    (connection, resultado)
+}
+
+#[test]
+fn rechaza_personal_de_ruta_en_tipos_que_no_lo_admiten() {
+    for tipo in [TipoIngreso::PorCorreo, TipoIngreso::Swat] {
+        let (_c, resultado) = crear_con_reglas(tipo, Some(fecha_praind()), true);
+        assert!(matches!(
+            resultado,
+            Err(ContratistaServiceError::PersonalRutaNoAdmitido)
+        ));
+    }
+}
+
+#[test]
+fn rechaza_praind_vencido() {
+    let (_c, resultado) = crear_con_reglas(TipoIngreso::Praind, hoy().pred_opt(), false);
+    assert!(matches!(
+        resultado,
+        Err(ContratistaServiceError::PraindVencido)
+    ));
+}
+
+#[test]
+fn acepta_praind_que_vence_hoy_y_el_alta_queda_con_acceso() {
+    let (connection, resultado) = crear_con_reglas(TipoIngreso::InHouse, Some(hoy()), true);
+    let id = resultado.unwrap();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    let creado = ContratistaService::new(&contratistas, &empresas)
+        .buscar_por_id(id)
+        .unwrap();
+    assert!(creado.tiene_acceso, "el alta ignora tiene_acceso = false");
+    assert!(creado.es_personal_ruta);
+}
+
+#[test]
+fn no_mira_fecha_vieja_si_el_tipo_no_requiere_praind() {
+    let (_c, resultado) = crear_con_reglas(TipoIngreso::Swat, hoy().pred_opt(), false);
+    assert!(resultado.is_ok());
+}
+
+#[test]
+fn cedula_solo_digitos_y_nombre_solo_letras_en_mayusculas() {
+    let (connection, empresa_id) = preparar_base();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    let servicio = ContratistaService::new(&contratistas, &empresas);
+
+    let mut entrada = datos(empresa_id, TipoIngreso::Swat);
+    entrada.cedula = "7-0100-0000".to_string();
+    assert!(matches!(
+        servicio.crear(entrada),
+        Err(ContratistaServiceError::CedulaInvalida)
+    ));
+
+    let mut entrada = datos(empresa_id, TipoIngreso::Swat);
+    entrada.nombre = "Ana 2".to_string();
+    assert!(matches!(
+        servicio.crear(entrada),
+        Err(ContratistaServiceError::NombreInvalido)
+    ));
+
+    let mut entrada = datos(empresa_id, TipoIngreso::Swat);
+    entrada.nombre = "  ana   rojas ".to_string();
+    let id = servicio.crear(entrada).unwrap();
+    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "ANA ROJAS");
+}
+
+#[test]
+fn editar_aplica_las_mismas_reglas() {
+    let (connection, empresa_id) = preparar_base();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    let servicio = ContratistaService::con_hoy(&contratistas, &empresas, hoy());
+    let mut entrada = datos(empresa_id, TipoIngreso::Praind);
+    entrada.fecha_vencimiento_praind = Some(fecha_praind());
+    let id = servicio.crear(entrada).unwrap();
+
+    let mut cambio = actualizacion(empresa_id, TipoIngreso::Praind);
+    cambio.fecha_vencimiento_praind = hoy().pred_opt();
+    assert!(matches!(
+        servicio.actualizar(id, cambio),
+        Err(ContratistaServiceError::PraindVencido)
+    ));
+
+    let mut cambio = actualizacion(empresa_id, TipoIngreso::Swat);
+    cambio.es_personal_ruta = true;
+    assert!(matches!(
+        servicio.actualizar(id, cambio),
+        Err(ContratistaServiceError::PersonalRutaNoAdmitido)
+    ));
+}
+
+#[test]
+fn editar_sin_tocar_el_praind_vencido_deja_quitar_el_acceso() {
+    let (connection, empresa_id) = preparar_base();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    // Registrado cuando el PRAIND estaba vigente...
+    let antes = ContratistaService::con_hoy(
+        &contratistas,
+        &empresas,
+        NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+    );
+    let mut entrada = datos(empresa_id, TipoIngreso::Praind);
+    entrada.fecha_vencimiento_praind = NaiveDate::from_ymd_opt(2026, 6, 1);
+    let id = antes.crear(entrada).unwrap();
+
+    // ...y hoy ya venció: quitarle el acceso sin tocar la fecha se permite.
+    let servicio = ContratistaService::con_hoy(&contratistas, &empresas, hoy());
+    let mut cambio = actualizacion(empresa_id, TipoIngreso::Praind);
+    cambio.fecha_vencimiento_praind = NaiveDate::from_ymd_opt(2026, 6, 1);
+    cambio.tiene_acceso = false;
+    servicio.actualizar(id, cambio).unwrap();
+    assert!(!servicio.buscar_por_id(id).unwrap().tiene_acceso);
 }

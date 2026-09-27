@@ -1,5 +1,8 @@
 use chrono::NaiveDate;
-use control_acceso::mensajes::{mensaje_gafete_provisional, mensaje_gestion_nube, mensaje_nube};
+use control_acceso::application::entregar_gafete_provisional_verificado;
+use control_acceso::mensajes::{
+    mensaje_entrega_gafete_provisional_verificada, mensaje_gafete_provisional,
+};
 use control_acceso::models::encargado_ruta::EncargadoRuta;
 use control_acceso::models::prestamo_gafete_provisional::PrestamoGafeteProvisionalActivoResumen;
 use control_acceso::nube;
@@ -7,42 +10,6 @@ use rusqlite::params;
 
 use crate::comandos::historial::rango_utc;
 use crate::estado::GuiState;
-
-/// Mismo criterio y misma forma que
-/// `comandos::proveedores::gafete_proveedor_libre_en_otro_dispositivo`: sin
-/// secreto guardado no hay con quién chocar (`Ok(true)`, libre); con nube
-/// configurada exige estar en línea -- si la consulta falla, el error se
-/// propaga en vez de asumir que el gafete está libre. Nunca usa
-/// `state.core()` para la parte de red, mismo motivo de siempre (no
-/// retener el candado del núcleo durante la llamada HTTP).
-fn gafete_provisional_libre_en_otro_dispositivo(
-    state: &GuiState,
-    numero: i64,
-) -> Result<bool, String> {
-    let Some(secreto) = nube::credenciales::cargar_secreto() else {
-        return Ok(true);
-    };
-    let actor = state.sesion_activa()?;
-    state
-        .core()
-        .autorizar_uso_nube(&actor)
-        .map_err(mensaje_gestion_nube)?;
-
-    let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
-    let contexto = nube::ContextoSincronizacion {
-        base_url: nube::base_url(),
-        apikey: nube::apikey(),
-        token: &token.access_token,
-        dispositivo_id: &token.dispositivo_id,
-        sitio_id: &token.sitio_id,
-    };
-    let ocupado = nube::gafete_provisional_ocupado_en_otro_dispositivo(&contexto, numero)
-        .map_err(control_acceso::mensajes::mensaje_sincronizacion)?;
-    Ok(!ocupado)
-}
 
 /// Buscador por nombre o código de empleado -- mismo catálogo
 /// (`encargados_ruta`) que ya usa `PantallaRutas`/`listar_encargados_ruta`,
@@ -71,15 +38,15 @@ pub fn entregar_gafete_provisional(
     state: tauri::State<GuiState>,
 ) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
-    if !gafete_provisional_libre_en_otro_dispositivo(&state, gafete_numero)? {
-        return Err(format!(
-            "El gafete {gafete_numero} ya está prestado en otro dispositivo del sitio"
-        ));
-    }
-    state
-        .core()
-        .entregar_gafete_provisional(&sesion, encargado_id, gafete_numero)
-        .map_err(mensaje_gafete_provisional)
+    let secreto = nube::credenciales::cargar_secreto();
+    entregar_gafete_provisional_verificado(
+        || state.core(),
+        state.nube_del_dispositivo(secreto.as_deref()),
+        &sesion,
+        encargado_id,
+        gafete_numero,
+    )
+    .map_err(mensaje_entrega_gafete_provisional_verificada)
 }
 
 #[tauri::command]

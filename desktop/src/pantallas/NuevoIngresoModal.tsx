@@ -3,16 +3,9 @@ import { Loader2 } from "lucide-react";
 import Modal from "../componentes/Modal";
 import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
 import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
-import {
-  buscarContratistas,
-  mensajeBloqueo,
-  mensajeVencimientoPraind,
-  prepararIngreso,
-  puedeContinuar,
-  registrarIngreso,
-} from "../api";
+import { buscarContratistas, prepararIngreso, registrarIngreso } from "../api";
 import type { ContratistaResumen, MedioIngreso, PreparacionIngreso } from "../api";
-import { validarGafete, avisosContratista, validarPlaca } from "./NuevoIngresoModal.logica";
+import { avisosContratista, numeroDeGafete } from "./NuevoIngresoModal.logica";
 
 const DEBOUNCE_MS = 120;
 const MAX_RESULTADOS = 4;
@@ -111,13 +104,13 @@ export default function NuevoIngresoModal({
     setSeleccion({ tipo: "cargando", contratista });
     try {
       const preparacion = await prepararIngreso(contratista.id);
-      if (puedeContinuar(preparacion)) {
+      if (preparacion.mensaje_bloqueo === null) {
         setMedio("Caminando");
         setGafeteTexto("");
         setPlacaTexto("");
         setSeleccion({ tipo: "formulario", contratista, preparacion });
       } else {
-        setSeleccion({ tipo: "bloqueada", contratista, mensaje: mensajeBloqueo(preparacion) });
+        setSeleccion({ tipo: "bloqueada", contratista, mensaje: preparacion.mensaje_bloqueo });
       }
     } catch (error) {
       setError(String(error));
@@ -133,28 +126,17 @@ export default function NuevoIngresoModal({
   async function confirmarIngreso() {
     if (seleccion.tipo !== "formulario") return;
     const { preparacion } = seleccion;
-    const resultadoGafete = validarGafete(gafeteTexto, preparacion.requiere_gafete);
-    if (!resultadoGafete.valido) {
-      setError(resultadoGafete.mensaje);
+    // Sólo se convierte el texto a número; si el gafete falta o la placa
+    // no corresponde al medio, lo decide y lo dice el núcleo.
+    const gafete = numeroDeGafete(gafeteTexto, preparacion.requiere_gafete);
+    if (gafete === undefined) {
+      setError("Ingrese un número de gafete válido");
       return;
-    }
-    // Sólo se valida (y se manda) la placa cuando el medio es Vehículo --
-    // con Caminando, `placaTexto` se descarta aunque el operador haya
-    // escrito algo antes de cambiar de radio (mismo criterio que el núcleo,
-    // `RegistroIngresoServiceError::PlacaNoAplica`).
-    let placa: string | null = null;
-    if (medio === "Vehiculo") {
-      const resultadoPlaca = validarPlaca(placaTexto);
-      if (!resultadoPlaca.valido) {
-        setError(resultadoPlaca.mensaje);
-        return;
-      }
-      placa = resultadoPlaca.placa;
     }
     setError(null);
     setEnviando(true);
     try {
-      await registrarIngreso(preparacion.contratista_id, medio, resultadoGafete.numero, placa);
+      await registrarIngreso(preparacion.contratista_id, medio, gafete, placaTexto);
       setMensaje(`✓ Ingreso registrado — ${preparacion.nombre}`);
       setSeleccion({ tipo: "ninguna" });
       setFiltro("");
@@ -296,13 +278,11 @@ export default function NuevoIngresoModal({
                 }}
                 style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}
               >
-                {seleccion.preparacion.resultado_acceso === "PermitidoConAdvertencia" &&
-                  seleccion.preparacion.fecha_vencimiento_praind && (
-                    <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
-                      ⚠ PRAIND{" "}
-                      {mensajeVencimientoPraind(seleccion.preparacion.fecha_vencimiento_praind)}
-                    </p>
-                  )}
+                {seleccion.preparacion.aviso_praind && (
+                  <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
+                    ⚠ {seleccion.preparacion.aviso_praind}
+                  </p>
+                )}
 
                 {seleccion.preparacion.gafetes_deuda.length > 0 && (
                   <p style={{ margin: 0, color: "var(--advertencia)", fontSize: "0.85rem" }}>
