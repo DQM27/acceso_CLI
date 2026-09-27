@@ -3,9 +3,8 @@
 //! una sola vez, en el arranque inicial (`configurar_dispositivo_inicial`)
 //! -- ya no hay una pantalla aparte para tocarlo desde una sesión abierta
 //! (ver docs/decisiones-tecnicas.md, "eliminación de `GestionarNube`").
-//! `guardar_secreto_dispositivo`/`secreto_dispositivo_guardado` quedan
-//! sólo por la API de `mobile/rust-core`, sin ninguna pantalla que los
-//! llame hoy. Sincronizar, leer y cerrar ingresos remotos
+//! El móvil guarda el secreto con Android Keystore desde Kotlin. Sincronizar,
+//! leer y cerrar ingresos remotos
 //! (`Operacion::UsarNube`) es de cualquier rol -- uso diario normal (la
 //! pantalla Activos los usa), no administración.
 //!
@@ -149,61 +148,6 @@ pub struct ResumenSincronizacion {
 }
 
 impl AppCore {
-    /// `identificador_dispositivo` cifra el secreto en disco con una clave
-    /// derivada de ese identificador (ver `nube::credenciales`, "Protección
-    /// del secreto del dispositivo en reposo") -- escritorio pasa `None`
-    /// (resuelve el Machine GUID de Windows solo); móvil pasa
-    /// `Some(ANDROID_ID)`, el único identificador de dispositivo estable que
-    /// Android expone, porque a diferencia de escritorio no hay forma de
-    /// resolverlo desde este lado sin que Kotlin lo lea primero.
-    pub fn guardar_secreto_dispositivo(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-        identificador_dispositivo: Option<&str>,
-        secreto: &str,
-    ) -> Result<(), GestionNubeError> {
-        self.autorizar_gestion_nube(actor)?;
-        match (directorio, identificador_dispositivo) {
-            (Some(directorio), Some(identificador)) => {
-                crate::nube::credenciales::guardar_secreto_en_con_identificador(
-                    directorio,
-                    secreto,
-                    identificador,
-                )?;
-            }
-            (Some(directorio), None) => {
-                crate::nube::credenciales::guardar_secreto_en(directorio, secreto)?;
-            }
-            (None, _) => crate::nube::credenciales::guardar_secreto(secreto)?,
-        }
-        Ok(())
-    }
-
-    /// No revela el secreto ya guardado -- sólo si hay uno o no, para que
-    /// la pantalla sepa si mostrar "pegá el secreto" o "dispositivo ya
-    /// configurado". Ver [`Self::guardar_secreto_dispositivo`] sobre
-    /// `identificador_dispositivo`.
-    pub fn secreto_dispositivo_guardado(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-        identificador_dispositivo: Option<&str>,
-    ) -> Result<bool, GestionNubeError> {
-        self.autorizar_gestion_nube(actor)?;
-        let guardado = match (directorio, identificador_dispositivo) {
-            (Some(directorio), Some(identificador)) => {
-                crate::nube::credenciales::cargar_secreto_en_con_identificador(
-                    directorio,
-                    identificador,
-                )
-            }
-            (Some(directorio), None) => crate::nube::credenciales::cargar_secreto_en(directorio),
-            (None, _) => crate::nube::credenciales::cargar_secreto(),
-        };
-        Ok(guardado.is_some())
-    }
-
     /// Bootstrap de una base sin ningún usuario todavía
     /// (`requiere_configuracion_inicial() == true`) -- sin sesión posible,
     /// porque no hay con quién autenticar todavía. Guarda el secreto pegado

@@ -180,10 +180,9 @@ class ActivosViewModelTest {
             "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'CONTRATISTA', 'DISPONIBLE');",
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticar(
+        nucleo.autenticarConSecreto(
             "999999999",
             NucleoDePrueba.CLAVE_PRUEBA,
-            "",
             "",
         )
         nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, 7L, null)
@@ -254,7 +253,7 @@ class ActivosViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = viewModel(SecretoDispositivoStoreDePrueba(secreto))
         advanceUntilIdle()
         viewModel.cambiarTexto("Contratista")

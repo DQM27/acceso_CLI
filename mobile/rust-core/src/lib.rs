@@ -1198,13 +1198,13 @@ pub struct Nucleo {
     core: Mutex<AppCore>,
     /// Actor autenticado — lo necesitan `registrar_ingreso`/`registrar_salida`
     /// como `usuario_ingreso_id`/`usuario_salida_id`. Se llena en
-    /// `autenticar` y vive mientras dure el proceso (no hay "cerrar sesión"
+    /// `autenticar_con_secreto` y vive mientras dure el proceso (no hay "cerrar sesión"
     /// todavía en el piloto).
     sesion: Mutex<Option<UsuarioSesionNucleo>>,
     /// Caché del último `TokenDispositivo`, deliberadamente FUERA del
     /// `Mutex<AppCore>` de arriba -- ver el doc-comment de
     /// `control_acceso::nube::CacheTokenDispositivo`. Antes de esto,
-    /// `autenticar`/`gafete_ocupado_en_sitio` llamaban a los métodos de
+    /// el login y el chequeo de gafete llamaban a los métodos de
     /// red de `AppCore` a través de `core_lock()`, que quedaba tomado
     /// durante toda la llamada HTTP: cualquier otra pantalla (buscar,
     /// listar activos, otro registro) se quedaba esperando ese mismo
@@ -1341,9 +1341,8 @@ impl Nucleo {
         }
     }
 
-    /// `directorio` sólo para los intentos de sincronización (ver abajo) --
-    /// el resto del login sigue sin necesitarlo, la base ya está abierta
-    /// desde `abrir`.
+    /// Login con el secreto que Kotlin descifra de Android Keystore (vacío =
+    /// nube sin configurar: no se toca la red).
     ///
     /// Dos chequeos contra la nube, uno para cada dirección de un cambio de
     /// estado remoto -- decisión explícita: "por seguridad, pero nunca
@@ -1357,7 +1356,7 @@ impl Nucleo {
     ///    que a este usuario lo hayan reactivado en otro dispositivo, o
     ///    creado en el panel/otro sitio DESPUÉS del primer arranque de este
     ///    teléfono, y esta base todavía no se enteró -- antes de rendirse,
-    ///    refresca sólo el catálogo (`refrescar_catalogo_sin_sesion`, sin
+    ///    refresca sólo el catálogo (`refrescar_catalogo_sin_sesion_con_secreto`, sin
     ///    sesión) y reintenta el login local una vez más. Sin esto, un
     ///    usuario nuevo o una reactivación remota nunca se podían reflejar
     ///    acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
@@ -1380,79 +1379,6 @@ impl Nucleo {
     ///    aparte (ver `LoginViewModel.autenticar`) sin que este método la
     ///    espere -- acá retener el candado durante una sincronización
     ///    entera hubiera vuelto a sentirse lento.
-    pub fn autenticar(
-        &self,
-        cedula: String,
-        password: String,
-        directorio: String,
-        identificador_dispositivo: String,
-    ) -> Result<ResultadoLogin, NucleoError> {
-        let intento = self.core_lock().autenticar_con_estado(&cedula, &password);
-        let (sesion, debe_cambiar_password) = match intento {
-            Ok(resultado) => resultado,
-            Err(
-                AutenticacionErrorNucleo::UsuarioInactivo
-                | AutenticacionErrorNucleo::CredencialesInvalidas,
-            ) => {
-                let _ = self.refrescar_catalogo_sin_sesion(&directorio, &identificador_dispositivo);
-                self.core_lock().autenticar_con_estado(&cedula, &password)?
-            }
-            // Usuario global (sincronizado) sin contraseña local todavía --
-            // se autentica contra Supabase Auth en vez de mostrar la
-            // pantalla de "fijar contraseña" (ver `autenticar_supabase` y
-            // docs/planes-implementados/plan-autenticacion-supabase-auth.md). El ROOT del
-            // arranque inicial nunca cae acá porque nace con hash real.
-            Err(AutenticacionErrorNucleo::SinPasswordLocal) => {
-                return self.autenticar_supabase(&cedula, &password, &|| {
-                    self.refrescar_catalogo_sin_sesion(&directorio, &identificador_dispositivo)
-                });
-            }
-            Err(otro) => return Err(otro.into()),
-        };
-
-        // Ver el comentario de `cache_token`: a diferencia de la
-        // línea de arriba (autenticación local, SQLite puro), este chequeo
-        // habla con la nube -- por eso ya no pasa por `core_lock()` más que
-        // un instante para `autorizar_uso_nube` (verificar que `sesion`
-        // todavía puede usar la nube, chequeo local rápido). El resto
-        // (caché de token + la llamada HTTP en sí) corre sin el candado de
-        // `AppCore` tomado.
-        let autorizado_para_nube = self.core_lock().autorizar_uso_nube(&sesion).is_ok();
-        let sigue_activo = if autorizado_para_nube {
-            control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
-                std::path::Path::new(&directorio),
-                &identificador_dispositivo,
-            )
-            .and_then(|secreto| {
-                let token = self.autenticar_con_cache(&secreto).ok()?;
-                let contexto = control_acceso::nube::ContextoSincronizacion {
-                    base_url: control_acceso::nube::base_url(),
-                    apikey: control_acceso::nube::apikey(),
-                    token: &token.access_token,
-                    dispositivo_id: &token.dispositivo_id,
-                    sitio_id: &token.sitio_id,
-                };
-                control_acceso::nube::usuario_sigue_activo_remoto(&contexto, &sesion.cedula).ok()
-            })
-            .unwrap_or(true)
-        } else {
-            true
-        };
-        if !sigue_activo {
-            return Err(NucleoError::UsuarioInactivo);
-        }
-
-        *self.sesion_lock() = Some(sesion.clone());
-        Ok(ResultadoLogin {
-            sesion: sesion.into(),
-            debe_cambiar_password,
-        })
-    }
-
-    /// Igual que [`Nucleo::autenticar`], pero con el secreto ya descifrado
-    /// por Android Keystore. Si el login local necesita refrescar catálogo
-    /// por un usuario recién creado/reactivado, usa este secreto en memoria
-    /// sin leer credenciales desde disco.
     pub fn autenticar_con_secreto(
         &self,
         cedula: String,
@@ -1471,18 +1397,8 @@ impl Nucleo {
                 }
                 self.core_lock().autenticar_con_estado(&cedula, &password)?
             }
-            // Ver el comentario de `autenticar` (arriba) -- mismo criterio,
-            // con el secreto ya en memoria en vez de leerlo de disco.
             Err(AutenticacionErrorNucleo::SinPasswordLocal) => {
-                return self.autenticar_supabase(&cedula, &password, &|| {
-                    if secreto.trim().is_empty() {
-                        return Err(NucleoError::Interno {
-                            mensaje: "Todavía no se guardó el secreto de este dispositivo"
-                                .to_string(),
-                        });
-                    }
-                    self.refrescar_catalogo_sin_sesion_con_secreto(&secreto)
-                });
+                return self.autenticar_supabase(&cedula, &password, &secreto);
             }
             Err(otro) => return Err(otro.into()),
         };
@@ -1518,7 +1434,7 @@ impl Nucleo {
     }
 
     /// Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-    /// tras `autenticar`/`autenticar_con_secreto`) o rutinario --
+    /// tras `autenticar_con_secreto`) o rutinario --
     /// `nube::cambiar_password` ya revalida `password_actual` con un login
     /// real antes de aceptar la nueva, no confía en que la sesión siga
     /// abierta.
@@ -2285,39 +2201,6 @@ impl Nucleo {
         })
     }
 
-    /// Guarda el secreto de este dispositivo en el archivo administrado por
-    /// Rust. Método legado: Android nuevo usa Android Keystore desde Kotlin
-    /// y sólo mantiene este camino para compatibilidad/migración.
-    pub fn guardar_secreto_dispositivo(
-        &self,
-        directorio: String,
-        identificador_dispositivo: String,
-        secreto: String,
-    ) -> Result<(), NucleoError> {
-        let actor = self.actor_autenticado()?;
-        Ok(self.core_lock().guardar_secreto_dispositivo(
-            &actor,
-            Some(std::path::Path::new(&directorio)),
-            Some(&identificador_dispositivo),
-            &secreto,
-        )?)
-    }
-
-    /// No revela el secreto -- sólo si ya hay uno guardado. Ver
-    /// [`Nucleo::guardar_secreto_dispositivo`] sobre `identificador_dispositivo`.
-    pub fn secreto_dispositivo_guardado(
-        &self,
-        directorio: String,
-        identificador_dispositivo: String,
-    ) -> Result<bool, NucleoError> {
-        let actor = self.actor_autenticado()?;
-        Ok(self.core_lock().secreto_dispositivo_guardado(
-            &actor,
-            Some(std::path::Path::new(&directorio)),
-            Some(&identificador_dispositivo),
-        )?)
-    }
-
     /// Lee el secreto guardado por versiones móviles anteriores a Android
     /// Keystore. Kotlin lo usa sólo para migrarlo al almacén seguro nuevo.
     pub fn cargar_secreto_dispositivo_legado(
@@ -2615,50 +2498,6 @@ impl Nucleo {
         self.cache_token.autenticar_y_cachear(secreto, metadata)
     }
 
-    /// Ver `AppCore::refrescar_catalogo_sin_sesion` -- misma idea (la
-    /// identidad ante la nube es del dispositivo, no de un usuario que
-    /// todavía no logró entrar), reimplementada acá para no retener
-    /// `core_lock()` durante la red ni la escritura del catálogo -- mismo
-    /// motivo que el resto de este archivo. Sólo se llama desde el camino
-    /// de reintento de `autenticar` (usuario recién reactivado o creado en
-    /// otro dispositivo), best-effort a propósito: el `let _ =` de quien
-    /// llama ya ignora el resultado.
-    fn refrescar_catalogo_sin_sesion(
-        &self,
-        directorio: &str,
-        identificador_dispositivo: &str,
-    ) -> Result<(), NucleoError> {
-        let mapear_nube = |error: control_acceso::nube::NubeError| NucleoError::Interno {
-            mensaje: interno(error),
-        };
-        let secreto = control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
-            std::path::Path::new(directorio),
-            identificador_dispositivo,
-        )
-        .ok_or_else(|| NucleoError::Interno {
-            mensaje: "Todavía no se guardó el secreto de este dispositivo".to_string(),
-        })?;
-        let token = self.autenticar_con_cache(&secreto).map_err(mapear_nube)?;
-        let contexto = control_acceso::nube::ContextoSincronizacion {
-            base_url: control_acceso::nube::base_url(),
-            apikey: control_acceso::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        let conexion = self.conexion_secundaria()?;
-        control_acceso::nube::recibir(
-            &conexion,
-            &contexto,
-            control_acceso::nube::AlcanceSincronizacion::solo_catalogo(),
-            control_acceso::nube::PerfilDispositivo::Movil,
-        )
-        .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
-        })?;
-        Ok(())
-    }
-
     fn refrescar_catalogo_sin_sesion_con_secreto(&self, secreto: &str) -> Result<(), NucleoError> {
         let mapear_nube = |error: control_acceso::nube::NubeError| NucleoError::Interno {
             mensaje: interno(error),
@@ -2778,18 +2617,16 @@ impl Nucleo {
     /// tiene contraseña local en este teléfono -- ver
     /// docs/planes-implementados/plan-autenticacion-supabase-auth.md y el equivalente en
     /// escritorio (`desktop/src-tauri/src/comandos/autenticacion.rs::login_supabase`).
-    /// `refrescar_catalogo` es best-effort, sólo se intenta si la identidad
-    /// todavía no está en el catálogo local (sitio recién conectado, o el
-    /// alta acaba de ocurrir) -- mismo criterio en los dos llamadores
-    /// (`autenticar`/`autenticar_con_secreto`), que sólo difieren en de
-    /// dónde sale el secreto para ese refresco. No exportado a `uniffi`
-    /// (vive en este `impl Nucleo` plano) -- una firma con `&dyn Fn` no es
-    /// representable en la frontera FFI.
+    /// El refresco del catálogo con `secreto` es best-effort y sólo se
+    /// intenta si la identidad todavía no está en el catálogo local (sitio
+    /// recién conectado, o el alta acaba de ocurrir); secreto vacío = sin
+    /// nube, no se intenta. No exportado a `uniffi` (vive en este
+    /// `impl Nucleo` plano).
     fn autenticar_supabase(
         &self,
         cedula: &str,
         password: &str,
-        refrescar_catalogo: &dyn Fn() -> Result<(), NucleoError>,
+        secreto: &str,
     ) -> Result<ResultadoLogin, NucleoError> {
         let sesion_supabase = control_acceso::nube::login(
             control_acceso::nube::base_url(),
@@ -2809,7 +2646,9 @@ impl Nucleo {
                 AutenticacionErrorNucleo::CredencialesInvalidas
                 | AutenticacionErrorNucleo::UsuarioInactivo,
             ) => {
-                let _ = refrescar_catalogo();
+                if !secreto.trim().is_empty() {
+                    let _ = self.refrescar_catalogo_sin_sesion_con_secreto(secreto);
+                }
                 self.core_lock().resolver_identidad_local(cedula)?
             }
             Err(otro) => return Err(otro.into()),
@@ -3065,10 +2904,9 @@ mod tests {
         let ruta = archivo.path().to_str().unwrap().to_string();
         let nucleo = Nucleo::abrir(ruta).unwrap();
 
-        let resultado = nucleo.autenticar(
+        let resultado = nucleo.autenticar_con_secreto(
             "000000000".to_string(),
             "loquesea".to_string(),
-            String::new(),
             String::new(),
         );
 
@@ -3112,10 +2950,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3158,10 +2995,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3207,10 +3043,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3258,10 +3093,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3303,10 +3137,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3358,10 +3191,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3408,10 +3240,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3458,10 +3289,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3498,10 +3328,9 @@ mod tests {
         drop(conexion);
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3553,10 +3382,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3601,10 +3429,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3625,10 +3452,9 @@ mod tests {
 
         nucleo.cerrar_sesion();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "888888888".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3685,10 +3511,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();
@@ -3862,10 +3687,9 @@ mod tests {
 
         let nucleo = Nucleo::abrir(ruta).unwrap();
         nucleo
-            .autenticar(
+            .autenticar_con_secreto(
                 "999999999".to_string(),
                 "clave_prueba_123".to_string(),
-                String::new(),
                 String::new(),
             )
             .unwrap();

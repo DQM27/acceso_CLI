@@ -677,8 +677,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo(
@@ -722,8 +720,6 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
     ): Int
@@ -773,8 +769,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_praind_para_formulario(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube_con_secreto(
@@ -811,8 +805,6 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_admite_personal_ruta_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar_con_secreto(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_aviso_proveedor_con_ingreso_activo(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -857,8 +849,6 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional_con_secreto(`ptr`: Long,`encargadoId`: Long,`gafeteNumero`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_gafetes_provisionales_activos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -906,8 +896,6 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_gafete_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,`personalRuta`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_praind_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,`personalRuta`: Byte,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1040,10 +1028,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario() and 0xFFFF) != 15830) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() and 0xFFFF) != 25039) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto() and 0xFFFF) != 39907) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto() and 0xFFFF) != 20687) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 38298) {
@@ -1067,7 +1052,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_vehiculos_ruta() and 0xFFFF) != 54159) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase() and 0xFFFF) != 21021) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase() and 0xFFFF) != 62650) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_secreto_dispositivo_legado() and 0xFFFF) != 52509) {
@@ -1107,9 +1092,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto() and 0xFFFF) != 33806) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo() and 0xFFFF) != 28439) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() and 0xFFFF) != 27279) {
@@ -1182,9 +1164,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_praind_para_formulario() and 0xFFFF) != 29740) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado() and 0xFFFF) != 12281) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto() and 0xFFFF) != 36164) {
@@ -1686,9 +1665,8 @@ public interface NucleoInterface {
     fun `admitePersonalRutaParaFormulario`(`tipoIngreso`: TipoIngreso): kotlin.Boolean
     
     /**
-     * `directorio` sólo para los intentos de sincronización (ver abajo) --
-     * el resto del login sigue sin necesitarlo, la base ya está abierta
-     * desde `abrir`.
+     * Login con el secreto que Kotlin descifra de Android Keystore (vacío =
+     * nube sin configurar: no se toca la red).
      *
      * Dos chequeos contra la nube, uno para cada dirección de un cambio de
      * estado remoto -- decisión explícita: "por seguridad, pero nunca
@@ -1702,7 +1680,7 @@ public interface NucleoInterface {
      * que a este usuario lo hayan reactivado en otro dispositivo, o
      * creado en el panel/otro sitio DESPUÉS del primer arranque de este
      * teléfono, y esta base todavía no se enteró -- antes de rendirse,
-     * refresca sólo el catálogo (`refrescar_catalogo_sin_sesion`, sin
+     * refresca sólo el catálogo (`refrescar_catalogo_sin_sesion_con_secreto`, sin
      * sesión) y reintenta el login local una vez más. Sin esto, un
      * usuario nuevo o una reactivación remota nunca se podían reflejar
      * acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
@@ -1725,14 +1703,6 @@ public interface NucleoInterface {
      * aparte (ver `LoginViewModel.autenticar`) sin que este método la
      * espere -- acá retener el candado durante una sincronización
      * entera hubiera vuelto a sentirse lento.
-     */
-    fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResultadoLogin
-    
-    /**
-     * Igual que [`Nucleo::autenticar`], pero con el secreto ya descifrado
-     * por Android Keystore. Si el login local necesita refrescar catálogo
-     * por un usuario recién creado/reactivado, usa este secreto en memoria
-     * sin leer credenciales desde disco.
      */
     fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): ResultadoLogin
     
@@ -1804,7 +1774,7 @@ public interface NucleoInterface {
     
     /**
      * Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-     * tras `autenticar`/`autenticar_con_secreto`) o rutinario --
+     * tras `autenticar_con_secreto`) o rutinario --
      * `nube::cambiar_password` ya revalida `password_actual` con un login
      * real antes de aceptar la nueva, no confía en que la sesión siga
      * abierta.
@@ -1913,13 +1883,6 @@ public interface NucleoInterface {
      * usa escritorio. `secreto` vacío se salta el chequeo de nube.
      */
     fun `entregarGafeteProvisionalConSecreto`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long
-    
-    /**
-     * Guarda el secreto de este dispositivo en el archivo administrado por
-     * Rust. Método legado: Android nuevo usa Android Keystore desde Kotlin
-     * y sólo mantiene este camino para compatibilidad/migración.
-     */
-    fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String)
     
     /**
      * Es el selector del wizard de "Nuevo contratista" -- una empresa
@@ -2099,12 +2062,6 @@ public interface NucleoInterface {
     fun `requierePraindParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean
     
     /**
-     * No revela el secreto -- sólo si ya hay uno guardado. Ver
-     * [`Nucleo::guardar_secreto_dispositivo`] sobre `identificador_dispositivo`.
-     */
-    fun `secretoDispositivoGuardado`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): kotlin.Boolean
-    
-    /**
      * Lo mínimo para que Kotlin escuche Broadcast privado por sitio, con el
      * secreto que Kotlin descifra de Android Keystore. El socket y sus
      * reconexiones viven fuera del núcleo.
@@ -2248,9 +2205,8 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * `directorio` sólo para los intentos de sincronización (ver abajo) --
-     * el resto del login sigue sin necesitarlo, la base ya está abierta
-     * desde `abrir`.
+     * Login con el secreto que Kotlin descifra de Android Keystore (vacío =
+     * nube sin configurar: no se toca la red).
      *
      * Dos chequeos contra la nube, uno para cada dirección de un cambio de
      * estado remoto -- decisión explícita: "por seguridad, pero nunca
@@ -2264,7 +2220,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * que a este usuario lo hayan reactivado en otro dispositivo, o
      * creado en el panel/otro sitio DESPUÉS del primer arranque de este
      * teléfono, y esta base todavía no se enteró -- antes de rendirse,
-     * refresca sólo el catálogo (`refrescar_catalogo_sin_sesion`, sin
+     * refresca sólo el catálogo (`refrescar_catalogo_sin_sesion_con_secreto`, sin
      * sesión) y reintenta el login local una vez más. Sin esto, un
      * usuario nuevo o una reactivación remota nunca se podían reflejar
      * acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
@@ -2287,30 +2243,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * aparte (ver `LoginViewModel.autenticar`) sin que este método la
      * espere -- acá retener el candado durante una sincronización
      * entera hubiera vuelto a sentirse lento.
-     */
-    @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResultadoLogin {
-            return FfiConverterTypeResultadoLogin.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(
-        it,
-        
-        FfiConverterString.lower(`cedula`),
-        FfiConverterString.lower(`password`),
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`identificadorDispositivo`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Igual que [`Nucleo::autenticar`], pero con el secreto ya descifrado
-     * por Android Keystore. Si el login local necesita refrescar catálogo
-     * por un usuario recién creado/reactivado, usa este secreto en memoria
-     * sin leer credenciales desde disco.
      */
     @Throws(NucleoException::class)override fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): ResultadoLogin {
             return FfiConverterTypeResultadoLogin.lift(
@@ -2487,7 +2419,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
     /**
      * Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-     * tras `autenticar`/`autenticar_con_secreto`) o rutinario --
+     * tras `autenticar_con_secreto`) o rutinario --
      * `nube::cambiar_password` ya revalida `password_actual` con un login
      * real antes de aceptar la nueva, no confía en que la sesión siga
      * abierta.
@@ -2781,27 +2713,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     }
     )
     }
-    
-
-    
-    /**
-     * Guarda el secreto de este dispositivo en el archivo administrado por
-     * Rust. Método legado: Android nuevo usa Android Keystore desde Kotlin
-     * y sólo mantiene este camino para compatibilidad/migración.
-     */
-    @Throws(NucleoException::class)override fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`identificadorDispositivo`),
-        FfiConverterString.lower(`secreto`),_status)
-}
-    }
-    
     
 
     
@@ -3292,26 +3203,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         
         FfiConverterTypeTipoIngreso.lower(`tipoIngreso`),
         FfiConverterBoolean.lower(`personalRuta`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * No revela el secreto -- sólo si ya hay uno guardado. Ver
-     * [`Nucleo::guardar_secreto_dispositivo`] sobre `identificador_dispositivo`.
-     */
-    @Throws(NucleoException::class)override fun `secretoDispositivoGuardado`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`identificadorDispositivo`),_status)
 }
     }
     )
