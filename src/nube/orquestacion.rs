@@ -85,11 +85,14 @@ pub fn sincronizar(
     resumen.enviados = drenado.enviados;
     resumen.fallidos = drenado.fallidos;
     resumen.conflictos_gafete = drenado.conflictos_gafete;
-    mantener_base_local(conexion, perfil);
+    if alcance.es_completo() {
+        mantener_base_local(conexion, perfil);
+    }
     Ok(resumen)
 }
 
-/// Mantenimiento al final de cada sincronización: retención del historial
+/// Mantenimiento al final de cada sincronización COMPLETA (el pulso y el
+/// botón; no cada aviso en vivo): retención del historial
 /// (sólo quien lo guarda, ver `retencion`) y `PRAGMA optimize`. Mejor
 /// esfuerzo: si falla, la sincronización ya anduvo y no se tumba por esto.
 fn mantener_base_local(conexion: &Connection, perfil: PerfilDispositivo) {

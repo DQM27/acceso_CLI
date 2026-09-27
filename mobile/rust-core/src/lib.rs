@@ -2231,7 +2231,28 @@ impl Nucleo {
         &self,
         secreto: String,
     ) -> Result<ResumenSincronizacion, NucleoError> {
-        self.sincronizar_con_secreto(&secreto)
+        self.sincronizar_con_secreto(
+            &secreto,
+            control_acceso::nube::AlcanceSincronizacion::completo(),
+        )
+    }
+
+    /// Sincronización disparada por avisos en vivo (`cambio_nube`, ver
+    /// `NubeRealtime.kt`): corre sólo las etapas de las tablas que
+    /// cambiaron (`payload.table`), ver
+    /// `control_acceso::nube::AlcanceSincronizacion`. Antes cada aviso
+    /// corría la sincronización completa (~12 consultas a la nube por un
+    /// solo cambio). Una tabla desconocida o una lista vacía caen en la
+    /// completa. La bandeja de salida se drena siempre.
+    pub fn sincronizar_cambios_con_secreto(
+        &self,
+        secreto: String,
+        tablas: Vec<String>,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
+        self.sincronizar_con_secreto(
+            &secreto,
+            control_acceso::nube::AlcanceSincronizacion::desde_tablas(&tablas),
+        )
     }
 
     /// Lo mínimo para que Kotlin escuche Broadcast privado por sitio, con el
@@ -2698,17 +2719,21 @@ impl Nucleo {
     /// El candado de `sincronizacion_en_curso` envuelve los DOS intentos,
     /// así ninguna otra sincronización se cuela entre el fallo y el
     /// reintento. Las etapas las decide `control_acceso::nube::sincronizar`
-    /// con el perfil móvil (sin historiales).
-    fn sincronizar_con_secreto(&self, secreto: &str) -> Result<ResumenSincronizacion, NucleoError> {
+    /// con `alcance` y el perfil móvil (sin historiales).
+    fn sincronizar_con_secreto(
+        &self,
+        secreto: &str,
+        alcance: control_acceso::nube::AlcanceSincronizacion,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
         let _sincronizacion = self
             .sincronizacion_en_curso
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        match self.intentar_sincronizar_con_secreto(secreto) {
+        match self.intentar_sincronizar_con_secreto(secreto, alcance) {
             Err(FalloSincronizacion::TokenVencido) => {
                 self.invalidar_token_cacheado();
-                self.intentar_sincronizar_con_secreto(secreto)
+                self.intentar_sincronizar_con_secreto(secreto, alcance)
                     .map_err(convertir_fallo_sincronizacion)
             }
             Err(otro) => Err(convertir_fallo_sincronizacion(otro)),
@@ -2719,12 +2744,16 @@ impl Nucleo {
     fn intentar_sincronizar_con_secreto(
         &self,
         secreto: &str,
+        alcance: control_acceso::nube::AlcanceSincronizacion,
     ) -> Result<ResumenSincronizacion, FalloSincronizacion> {
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
 
-        // Ver el comentario del otro método de sync en este mismo archivo.
-        if let Some(refresh_token) = self.refresh_token_supabase()
+        // Renovación silenciosa de la sesión de Supabase Auth (mejor
+        // esfuerzo). Sólo en la completa: una llamada de red más que el
+        // pulso ya hace.
+        if alcance.es_completo()
+            && let Some(refresh_token) = self.refresh_token_supabase()
             && let Ok(sesion) = control_acceso::nube::refrescar(
                 control_acceso::nube::base_url(),
                 control_acceso::nube::apikey(),
@@ -2754,7 +2783,7 @@ impl Nucleo {
         let resumen = control_acceso::nube::sincronizar(
             &conexion,
             &contexto,
-            control_acceso::nube::AlcanceSincronizacion::completo(),
+            alcance,
             control_acceso::nube::PerfilDispositivo::Movil,
         )?;
 

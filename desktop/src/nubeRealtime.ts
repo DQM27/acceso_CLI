@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
-import { sesionRealtimeNube, sincronizarConNube } from "./api/nube";
+import { sesionRealtimeNube, sincronizarCambiosNube, sincronizarConNube } from "./api/nube";
 import type { ResumenSincronizacion } from "./api/nube";
 import { EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 
@@ -57,6 +57,14 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   let temporizadorSincronizar: ReturnType<typeof window.setTimeout> | null = null;
   let sincronizando = false;
   let sincronizacionPendiente = false;
+  // Qué hay que sincronizar en la próxima corrida. Un aviso remoto que
+  // trae su tabla (`payload.table`) pide sólo esa parte (ver
+  // `sincronizarCambiosNube`); un cambio local, la (re)conexión del canal o
+  // un aviso sin tabla piden la sincronización completa. Antes TODO aviso
+  // corría la completa (~13 consultas a la nube por un solo cambio) -- el
+  // aviso llegaba al instante, lo que tardaba era lo que se hacía después.
+  let pendienteCompleta = false;
+  const tablasPendientes = new Set<string>();
   // Intentos fallidos seguidos desde la última vez que el canal quedó
   // realmente suscrito -- crece el backoff (2s, 4s, 8s… hasta el tope) en
   // vez de reintentar siempre a los 2s. Se reinicia a 0 en cuanto
@@ -99,8 +107,12 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
     }
     sincronizacionPendiente = false;
     sincronizando = true;
+    const completa = pendienteCompleta || tablasPendientes.size === 0;
+    const tablas = [...tablasPendientes];
+    pendienteCompleta = false;
+    tablasPendientes.clear();
     try {
-      const resumen = await sincronizarConNube();
+      const resumen = completa ? await sincronizarConNube() : await sincronizarCambiosNube(tablas);
       if (!cancelado) {
         opciones.onSincronizado?.(resumen);
         emitirActualizacion(resumen);
@@ -109,12 +121,25 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
       console.error("No se pudo sincronizar tras aviso Realtime:", error);
     } finally {
       sincronizando = false;
-      if (sincronizacionPendiente && !cancelado) programarSincronizacion();
+      // Lo que llegó mientras corría ya quedó anotado en
+      // `tablasPendientes`/`pendienteCompleta`.
+      if (sincronizacionPendiente && !cancelado) reprogramar();
     }
   }
 
-  function programarSincronizacion() {
+  function reprogramar() {
     if (cancelado) return;
+    if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
+    temporizadorSincronizar = window.setTimeout(() => {
+      temporizadorSincronizar = null;
+      void sincronizarPorAviso();
+    }, 600);
+  }
+
+  function programarSincronizacion(tabla?: string) {
+    if (cancelado) return;
+    if (tabla) tablasPendientes.add(tabla);
+    else pendienteCompleta = true;
     if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
     temporizadorSincronizar = window.setTimeout(() => {
       temporizadorSincronizar = null;
@@ -149,7 +174,9 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
         .channel(sesion.topic, { config: { private: true } })
         .on("broadcast", { event: "cambio_nube" }, ({ payload }) => {
           if (cancelado || cliente !== clienteActual) return;
-          if (payload?.dispositivo_id !== sesion.dispositivo_id) programarSincronizacion();
+          if (payload?.dispositivo_id === sesion.dispositivo_id) return;
+          const tabla = typeof payload?.table === "string" ? payload.table : undefined;
+          programarSincronizacion(tabla);
         })
         .subscribe((estado, error) => {
           if (cancelado || cliente !== clienteActual) return;
@@ -184,12 +211,16 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
     }
   }
 
-  window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, programarSincronizacion);
+  // Envoltorio propio: `addEventListener` le pasaría el `Event` como primer
+  // argumento, y `programarSincronizacion` lo tomaría como nombre de tabla.
+  // Un cambio local sube lo pendiente y refresca todo (completa).
+  const alCambioLocal = () => programarSincronizacion();
+  window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, alCambioLocal);
   void conectar();
 
   return () => {
     cancelado = true;
-    window.removeEventListener(EVENTO_CAMBIO_LOCAL_NUBE, programarSincronizacion);
+    window.removeEventListener(EVENTO_CAMBIO_LOCAL_NUBE, alCambioLocal);
     if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
     limpiarCanal();
   };

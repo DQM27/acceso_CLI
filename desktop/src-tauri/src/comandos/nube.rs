@@ -206,6 +206,18 @@ impl From<nube::SincronizacionError> for FalloSincronizacion {
 /// quien usa la app tenía que notarlo y volver a apretar "Sincronizar" a
 /// mano -- ahora se recupera sola.
 pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, String> {
+    ejecutar_sincronizacion_con_alcance(state, nube::AlcanceSincronizacion::completo())
+}
+
+/// Igual que [`ejecutar_sincronizacion`], pero corriendo sólo las etapas de
+/// recepción de `alcance` -- ver `nube::AlcanceSincronizacion`. Lo usa el
+/// aviso en vivo (`sincronizar_cambios_nube`): antes cada aviso corría la
+/// sincronización COMPLETA (~13 consultas a la nube) aunque sólo hubiera
+/// cambiado una tabla. La bandeja de salida se drena siempre.
+pub fn ejecutar_sincronizacion_con_alcance(
+    state: &GuiState,
+    alcance: nube::AlcanceSincronizacion,
+) -> Result<ResumenSincronizacion, String> {
     // El timer, los avisos remotos y el botón manual comparten la misma cola.
     // Sólo una ejecución puede drenarla a la vez; el núcleo queda libre.
     static SINCRONIZACION: Mutex<()> = Mutex::new(());
@@ -213,10 +225,10 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    match intentar_sincronizacion(state) {
+    match intentar_sincronizacion(state, alcance) {
         Err(FalloSincronizacion::TokenVencido) => {
             state.invalidar_token_cacheado();
-            intentar_sincronizacion(state).map_err(|fallo| match fallo {
+            intentar_sincronizacion(state, alcance).map_err(|fallo| match fallo {
                 FalloSincronizacion::TokenVencido => {
                     "El token de este dispositivo venció y no se pudo renovar -- revisá la conexión"
                         .to_string()
@@ -229,7 +241,10 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
     }
 }
 
-fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, FalloSincronizacion> {
+fn intentar_sincronizacion(
+    state: &GuiState,
+    alcance: nube::AlcanceSincronizacion,
+) -> Result<ResumenSincronizacion, FalloSincronizacion> {
     let token = autenticar(state).map_err(FalloSincronizacion::Mensaje)?;
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
@@ -246,7 +261,10 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     // del arranque inicial) o sin red, simplemente no hace nada -- el
     // tope de 12h en `GuiState::access_token_supabase_vigente` sigue
     // aplicando igual si esto no logra renovar a tiempo.
-    if let Some(refresh_token) = state.refresh_token_supabase()
+    // Sólo en la sincronización completa: es una llamada de red más, y el
+    // pulso periódico (completo) ya la corre cada 2 minutos.
+    if alcance.es_completo()
+        && let Some(refresh_token) = state.refresh_token_supabase()
         && let Ok(sesion) = nube::refrescar(nube::base_url(), nube::apikey(), &refresh_token)
     {
         state.iniciar_sesion_supabase(sesion);
@@ -258,7 +276,7 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     let resumen = nube::sincronizar(
         &conexion,
         &contexto,
-        nube::AlcanceSincronizacion::completo(),
+        alcance,
         nube::PerfilDispositivo::Escritorio,
     )?;
 
@@ -362,6 +380,26 @@ pub async fn configurar_dispositivo_inicial(
     })
     .await
     .map_err(|error| format!("No se pudo completar el arranque inicial: {error}"))?
+}
+
+/// Sincronización disparada por avisos en vivo (`cambio_nube`) -- corre
+/// sólo las etapas de las tablas que cambiaron (`tablas`, tal cual las
+/// manda el aviso en `payload.table`), ver `nube::AlcanceSincronizacion`.
+/// Una tabla desconocida o una lista vacía caen en la sincronización
+/// completa.
+#[tauri::command]
+pub async fn sincronizar_cambios_nube(
+    app: tauri::AppHandle,
+    tablas: Vec<String>,
+) -> Result<ResumenSincronizacion, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ejecutar_sincronizacion_con_alcance(
+            &app.state::<GuiState>(),
+            nube::AlcanceSincronizacion::desde_tablas(&tablas),
+        )
+    })
+    .await
+    .map_err(|error| format!("No se pudo completar la sincronización: {error}"))?
 }
 
 #[tauri::command]

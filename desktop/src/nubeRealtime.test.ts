@@ -2,13 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { iniciarRealtimeNube } from "./nubeRealtime";
 import { solicitarSincronizacionNube } from "./eventosNube";
 
-const mocks = vi.hoisted(() => ({ sesion: vi.fn(), sincronizar: vi.fn(), crear: vi.fn() }));
-vi.mock("./api/nube", () => ({ sesionRealtimeNube: mocks.sesion, sincronizarConNube: mocks.sincronizar }));
+const mocks = vi.hoisted(() => ({ sesion: vi.fn(), sincronizar: vi.fn(), sincronizarCambios: vi.fn(), crear: vi.fn() }));
+vi.mock("./api/nube", () => ({
+  sesionRealtimeNube: mocks.sesion,
+  sincronizarConNube: mocks.sincronizar,
+  sincronizarCambiosNube: mocks.sincronizarCambios,
+}));
 vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.crear }));
 
 interface CanalPrueba {
   estado: (estado: string, error?: Error) => void;
-  aviso: (mensaje: { payload: { dispositivo_id: string } }) => void;
+  aviso: (mensaje: { payload: { dispositivo_id: string; table?: string } }) => void;
   accessToken: () => Promise<string>;
 }
 const canales: CanalPrueba[] = [];
@@ -26,6 +30,7 @@ beforeEach(() => {
   canales.length = 0;
   mocks.sesion.mockResolvedValue(sesion);
   mocks.sincronizar.mockResolvedValue(resumen);
+  mocks.sincronizarCambios.mockResolvedValue(resumen);
   mocks.crear.mockImplementation((_url, _key, opciones) => {
     const control: CanalPrueba = { estado: () => {}, aviso: () => {}, accessToken: opciones.accessToken };
     const canal = {
@@ -111,5 +116,49 @@ describe("sincronización por Realtime", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(mocks.sincronizar).not.toHaveBeenCalled();
     expect(canales).toHaveLength(1);
+  });
+
+  it("un aviso con tabla sincroniza sólo esa parte y junta las tablas de la ráfaga", async () => {
+    const canal = await iniciar();
+    canal.aviso({ payload: { dispositivo_id: "equipo-b", table: "ingresos" } });
+    canal.aviso({ payload: { dispositivo_id: "equipo-b", table: "gafetes" } });
+    canal.aviso({ payload: { dispositivo_id: "equipo-b", table: "ingresos" } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizar).not.toHaveBeenCalled();
+    expect(mocks.sincronizarCambios).toHaveBeenCalledTimes(1);
+    expect(mocks.sincronizarCambios).toHaveBeenCalledWith(["ingresos", "gafetes"]);
+  });
+
+  it("un cambio local en la misma ráfaga fuerza la sincronización completa", async () => {
+    const canal = await iniciar();
+    canal.aviso({ payload: { dispositivo_id: "equipo-b", table: "empresas" } });
+    solicitarSincronizacionNube();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizar).toHaveBeenCalledTimes(1);
+    expect(mocks.sincronizarCambios).not.toHaveBeenCalled();
+  });
+
+  it("la reconexión del canal sincroniza todo para recuperar lo perdido", async () => {
+    const canal = await iniciar();
+    canal.aviso({ payload: { dispositivo_id: "equipo-b", table: "empresas" } });
+    canal.estado("SUBSCRIBED");
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizar).toHaveBeenCalledTimes(1);
+    expect(mocks.sincronizarCambios).not.toHaveBeenCalled();
+  });
+
+  it("las tablas que llegan durante una sincronización en curso van en la siguiente", async () => {
+    let resolver: (valor: unknown) => void = () => {};
+    mocks.sincronizarCambios.mockImplementationOnce(() => new Promise((resolve) => { resolver = resolve; }));
+    const canal = await iniciar();
+    canal.aviso({ payload: { dispositivo_id: "equipo-b", table: "ingresos" } });
+    await vi.advanceTimersByTimeAsync(600);
+    canal.aviso({ payload: { dispositivo_id: "equipo-b", table: "citas" } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizarCambios).toHaveBeenCalledTimes(1);
+    resolver(resumen);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizarCambios).toHaveBeenCalledTimes(2);
+    expect(mocks.sincronizarCambios).toHaveBeenLastCalledWith(["citas"]);
   });
 });

@@ -24,6 +24,13 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
  * También atiende [CambiosNube] al guardar datos o recibir un Broadcast.
  * Serializa las ejecuciones y conserva un aviso pendiente si llega mientras
  * hay una sincronización en curso. El timer es respaldo ante desconexiones.
+ *
+ * Un aviso en vivo que trae su tabla corre sólo esa parte
+ * (`sincronizarCambiosConSecreto`, ver `AlcanceSincronizacion` en el
+ * núcleo); el pulso, un registro local y la reconexión del canal corren la
+ * completa. Antes cada aviso corría la completa (~12 consultas a la nube
+ * por un solo cambio) -- el aviso llegaba al instante, lo que tardaba era
+ * lo que se hacía al recibirlo.
  */
 class SincronizacionPeriodica(
     private val nucleo: Nucleo,
@@ -38,15 +45,28 @@ class SincronizacionPeriodica(
         trabajo = scope.launch {
             coroutineScope {
                 val pendientes = Channel<Unit>(Channel.CONFLATED)
-                launch { CambiosNube.cambios.collect { pendientes.trySend(Unit) } }
+                val porSincronizar = PendientesSincronizacion()
+                launch {
+                    CambiosNube.cambios.collect { tabla ->
+                        porSincronizar.anotar(tabla)
+                        pendientes.trySend(Unit)
+                    }
+                }
                 withTimeoutOrNull(ESPERA_INICIAL_MS) { pendientes.receive() }
+                // La primera corrida siempre es completa.
+                porSincronizar.anotar(null)
                 while (true) {
                     delay(600)
+                    val tablas = porSincronizar.tomar()
                     try {
                         val resumen = withContext(Dispatchers.IO) {
                             val secreto = secretoStore.cargar()
                                 ?: throw SecretoDispositivoNoEncontradoException()
-                            nucleo.sincronizarConNubeConSecreto(secreto)
+                            if (tablas == null) {
+                                nucleo.sincronizarConNubeConSecreto(secreto)
+                            } else {
+                                nucleo.sincronizarCambiosConSecreto(secreto, tablas)
+                            }
                         }
                         Log.i("SincronizacionNube", "Recibidos: gafetes=${resumen.gafetesRecibidos}, historial=${resumen.movimientosHistorialRecibidos}, abiertos=${resumen.remotosAbiertos}")
                         onSincronizado(resumen)
@@ -56,7 +76,12 @@ class SincronizacionPeriodica(
                         Log.w("SincronizacionNube", "No se completó la sincronización: ${error.javaClass.simpleName}")
                         // La cola local conserva lo pendiente hasta recuperar la conexión.
                     }
-                    withTimeoutOrNull(INTERVALO_MS) { pendientes.receive() }
+                    // Sin avisos durante el intervalo = pulso periódico:
+                    // siempre completo (es la red de seguridad para
+                    // cualquier aviso perdido o sincronización parcial que
+                    // haya fallado).
+                    val llegoAviso = withTimeoutOrNull(INTERVALO_MS) { pendientes.receive() } != null
+                    if (!llegoAviso) porSincronizar.anotar(null)
                 }
             }
         }

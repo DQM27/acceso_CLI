@@ -771,6 +771,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_cambios_con_secreto(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir(
@@ -898,6 +900,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_praind_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,`personalRuta`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_cambios_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`tablas`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1167,6 +1171,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto() and 0xFFFF) != 36164) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_cambios_con_secreto() and 0xFFFF) != 36174) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube_con_secreto() and 0xFFFF) != 16587) {
@@ -2067,6 +2074,17 @@ public interface NucleoInterface {
      * reconexiones viven fuera del núcleo.
      */
     fun `sesionRealtimeNubeConSecreto`(`secreto`: kotlin.String): SesionRealtimeNube
+    
+    /**
+     * Sincronización disparada por avisos en vivo (`cambio_nube`, ver
+     * `NubeRealtime.kt`): corre sólo las etapas de las tablas que
+     * cambiaron (`payload.table`), ver
+     * `control_acceso::nube::AlcanceSincronizacion`. Antes cada aviso
+     * corría la sincronización completa (~12 consultas a la nube por un
+     * solo cambio). Una tabla desconocida o una lista vacía caen en la
+     * completa. La bandeja de salida se drena siempre.
+     */
+    fun `sincronizarCambiosConSecreto`(`secreto`: kotlin.String, `tablas`: List<kotlin.String>): ResumenSincronizacion
     
     /**
      * Sincroniza usando el secreto ya descifrado por Android Keystore.
@@ -3223,6 +3241,31 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Sincronización disparada por avisos en vivo (`cambio_nube`, ver
+     * `NubeRealtime.kt`): corre sólo las etapas de las tablas que
+     * cambiaron (`payload.table`), ver
+     * `control_acceso::nube::AlcanceSincronizacion`. Antes cada aviso
+     * corría la sincronización completa (~12 consultas a la nube por un
+     * solo cambio). Una tabla desconocida o una lista vacía caen en la
+     * completa. La bandeja de salida se drena siempre.
+     */
+    @Throws(NucleoException::class)override fun `sincronizarCambiosConSecreto`(`secreto`: kotlin.String, `tablas`: List<kotlin.String>): ResumenSincronizacion {
+            return FfiConverterTypeResumenSincronizacion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_cambios_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),
+        FfiConverterSequenceString.lower(`tablas`),_status)
 }
     }
     )
