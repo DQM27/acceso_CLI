@@ -29,13 +29,19 @@ class EstabilizadorLecturaTest {
 
     @Test
     fun textoSinPalabrasClaveEsInvalido() {
-        val r = EstabilizadorLectura().procesarFrame("Un papel cualquiera sin ningun documento reconocible")
-        assertEquals(EstadoEscaneo.INVALIDO, r.estado)
+        val estabilizador = EstabilizadorLectura()
+        val texto = "Un papel cualquiera sin ningun documento reconocible"
+        // Los primeros frames no reconocibles siguen "buscando" (transición:
+        // la mano moviéndose, un cartel de fondo); recién al 3ro seguido es
+        // inválido.
+        assertEquals(EstadoEscaneo.BUSCANDO, estabilizador.procesarFrame(texto).estado)
+        assertEquals(EstadoEscaneo.BUSCANDO, estabilizador.procesarFrame(texto).estado)
+        assertEquals(EstadoEscaneo.INVALIDO, estabilizador.procesarFrame(texto).estado)
     }
 
     @Test
     fun numeroDeNueveDigitosSinSenalesNoSeAceptaComoCedula() {
-        val estabilizador = EstabilizadorLectura(framesRequeridos = 2)
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 2, framesParaInvalido = 1)
         repeat(3) {
             val r = estabilizador.procesarFrame("Teléfono de contacto 888888888")
             assertEquals(EstadoEscaneo.INVALIDO, r.estado)
@@ -170,7 +176,7 @@ class EstabilizadorLecturaTest {
     fun mensajeNombraElTipoDetectadoAunqueTodavíaNoConfirme() {
         val texto = "Licencia de Conducir\nVencimiento 03-04-2030"
         val r = EstabilizadorLectura().procesarFrame(texto)
-        assertEquals("Licencia de conducir detectado — mantenga firme", r.mensaje)
+        assertEquals("Licencia de conducir — no lo mueva", r.mensaje)
     }
 
     @Test
@@ -178,13 +184,13 @@ class EstabilizadorLecturaTest {
         val estabilizador = EstabilizadorLectura(framesRequeridos = 1)
         val r = estabilizador.procesarFrame(licenciaTexto)
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
-        assertEquals("Licencia de conducir confirmado", r.mensaje)
+        assertEquals("Listo: Licencia de conducir", r.mensaje)
     }
 
     @Test
     fun mensajeDeConfirmacionNombraElTipoDetectadoPorMrz() {
         val r = EstabilizadorLectura().procesarDosVeces(td1Valido)
-        assertEquals("Cédula de residencia (DIMEX) confirmado", r.mensaje)
+        assertEquals("Listo: Cédula de residencia (DIMEX)", r.mensaje)
     }
 
     @Test
@@ -201,7 +207,7 @@ class EstabilizadorLecturaTest {
 
         assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
         assertNull(r.documento)
-        assertEquals("Apunte al documento del contratista", r.mensaje)
+        assertEquals("Detecté Gafete de contratista — aquí va el documento del contratista", r.mensaje)
     }
 
     @Test
@@ -264,7 +270,7 @@ class EstabilizadorLecturaTest {
         val r = EstabilizadorLectura().procesarDosVeces(td1CedulaNacional)
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals(TipoDocumento.CEDULA_NACIONAL, r.documento?.tipo)
-        assertEquals("Cédula de identidad confirmado", r.mensaje)
+        assertEquals("Listo: Cédula de identidad", r.mensaje)
     }
 
     // --- Vigencia (fecha inyectada, no depende del reloj real) ---
@@ -276,7 +282,7 @@ class EstabilizadorLecturaTest {
         val r = estabilizador.procesarFrame(licenciaTexto)
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals(false, r.vencido)
-        assertEquals("Licencia de conducir confirmado", r.mensaje)
+        assertEquals("Listo: Licencia de conducir", r.mensaje)
     }
 
     @Test
@@ -286,7 +292,7 @@ class EstabilizadorLecturaTest {
         val r = estabilizador.procesarFrame(licenciaTexto)
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals(true, r.vencido)
-        assertEquals("Licencia de conducir confirmado — DOCUMENTO VENCIDO", r.mensaje)
+        assertEquals("Listo: Licencia de conducir — VENCIDO el 03-04-2030", r.mensaje)
     }
 
     @Test
@@ -297,7 +303,7 @@ class EstabilizadorLecturaTest {
         val r = estabilizador.procesarDosVeces(td1Valido)
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals(true, r.vencido)
-        assertEquals("Cédula de residencia (DIMEX) confirmado — DOCUMENTO VENCIDO", r.mensaje)
+        assertEquals("Listo: Cédula de residencia (DIMEX) — VENCIDO el 01-01-2030", r.mensaje)
     }
 
     @Test
@@ -317,7 +323,7 @@ class EstabilizadorLecturaTest {
 
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals(TipoDocumento.TARJETA_IDENTIDAD_MENOR, r.documento?.tipo)
-        assertEquals("Tarjeta de Identidad de Menores confirmado", r.mensaje)
+        assertEquals("Listo: Tarjeta de Identidad de Menores", r.mensaje)
     }
 
     @Test
@@ -398,6 +404,25 @@ class EstabilizadorLecturaTest {
         assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
         assertEquals("112340567", r.documento?.numeroDocumento)
         assertNull(r.documento?.nombre)
-        assertEquals("Cédula de identidad confirmado — sin nombre, complételo a mano", r.mensaje)
+        assertEquals("Listo: Cédula de identidad — sin nombre, complételo a mano", r.mensaje)
+    }
+
+    // --- Retroalimentación en cámara ---
+
+    @Test
+    fun informaAvanceHaciaLaConfirmacion() {
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 2)
+        val r = estabilizador.procesarFrame("Licencia de Conducir\nNº: 112340567\nVencimiento 03-04-2099")
+        assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
+        assertEquals(0.5f, r.progreso)
+    }
+
+    @Test
+    fun sugiereQuitarElReflejoSiElTipoSeVePeroLosDatosNo() {
+        val estabilizador = EstabilizadorLectura()
+        var r = estabilizador.procesarFrame("REPUBLICA DE COSTA RICA\nLicencia de Conducir")
+        assertEquals("Licencia de conducir — no lo mueva", r.mensaje)
+        repeat(5) { r = estabilizador.procesarFrame("REPUBLICA DE COSTA RICA\nLicencia de Conducir") }
+        assertEquals("Licencia de conducir — incline un poco para quitar el reflejo", r.mensaje)
     }
 }

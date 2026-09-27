@@ -18,6 +18,10 @@ data class ResultadoEstabilizacion(
     // "no se detectó como vencido" (puede ser vigente, o simplemente no
     // haber fecha de vencimiento disponible para ese tipo de documento).
     val vencido: Boolean = false,
+    // 0..1: cuántas lecturas coincidentes lleva el candidato actual sobre
+    // las que hacen falta para confirmar. La pantalla lo dibuja como barra
+    // de avance en el recuadro ("ya casi, no lo mueva").
+    val progreso: Float = 0f,
 )
 
 /// Decide, frame a frame, si ya hay lectura suficiente para aceptarla.
@@ -77,6 +81,15 @@ class EstabilizadorLectura(
     // con el mensaje "muéstreme el reverso", pero confirmar cierra la
     // cámara: el reverso nunca llegaba a leerse.
     private val framesEsperaReverso: Int = 20,
+    // Frames SEGUIDOS con texto no reconocible antes de mostrarlo como
+    // inválido (marco rojo + vibración de error). Con 1, cualquier frame
+    // de transición -- la mano moviéndose, un cartel de fondo, el
+    // documento entrando al cuadro -- hacía parpadear el rojo y vibrar.
+    private val framesParaInvalido: Int = 3,
+    // Frames en que el tipo se reconoce pero sus datos no terminan de
+    // leerse (típico de un reflejo sobre el número) antes de sugerir
+    // inclinar el documento.
+    private val framesParaSugerirReflejo: Int = 6,
 ) {
     // La ventana guarda una clave estable, no el objeto entero. Nombre,
     // fecha u otros campos opcionales pueden aparecer y desaparecer entre
@@ -106,6 +119,8 @@ class EstabilizadorLectura(
 
     // `-1` = no se está esperando el reverso. Ver `framesEsperaReverso`.
     private var framesEsperandoReverso = -1
+    private var framesDesconocidosSeguidos = 0
+    private var framesTipoSinDatosSeguidos = 0
 
     init {
         require(framesRequeridos > 0) { "framesRequeridos debe ser mayor que cero" }
@@ -120,6 +135,7 @@ class EstabilizadorLectura(
         val esperaAgotada = framesEsperandoReverso >= framesEsperaReverso
 
         if (texto.isBlank() || texto.trim().length < 10) {
+            framesDesconocidosSeguidos = 0
             registrarFrameSinCandidato()
             if (esperaAgotada) confirmarSinReverso(hoy)?.let { return it }
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "Acerque el documento")
@@ -148,11 +164,17 @@ class EstabilizadorLectura(
         val tipo = clasificarTipoDocumento(texto)
         if (tipo == TipoDocumento.DESCONOCIDO) {
             registrarFrameSinCandidato()
-            return ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = mensajeNoReconocido())
+            framesDesconocidosSeguidos++
+            return if (framesDesconocidosSeguidos >= framesParaInvalido) {
+                ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = mensajeNoReconocido())
+            } else {
+                ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_BUSCANDO)
+            }
         }
+        framesDesconocidosSeguidos = 0
         if (!tipo.esValidoParaModo(modo)) {
             registrarFrameSinCandidato()
-            return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = mensajeApuntar())
+            return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = mensajeTipoEquivocado(tipo))
         }
 
         val documentoDeEsteFrame = leerDocumentoDeTexto(texto)
@@ -162,8 +184,15 @@ class EstabilizadorLectura(
             // un documento inválido. Ya se sabe qué es: se lo decimos a
             // quien opera en vez de un "mantenga firme" genérico.
             registrarFrameSinCandidato()
-            return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "${tipo.nombreLegible()} detectado — mantenga firme")
+            framesTipoSinDatosSeguidos++
+            val mensaje = if (framesTipoSinDatosSeguidos >= framesParaSugerirReflejo) {
+                "${tipo.nombreLegible()} — incline un poco para quitar el reflejo"
+            } else {
+                "${tipo.nombreLegible()} — no lo mueva"
+            }
+            return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = mensaje)
         }
+        framesTipoSinDatosSeguidos = 0
 
         val clave = documentoDeEsteFrame.claveEstabilizacion()
         val documento = if (clave == claveAcumulada) {
@@ -189,7 +218,11 @@ class EstabilizadorLectura(
             val (mensaje, vencido) = mensajeDeConfirmacion(documento, hoy)
             ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
         } else {
-            ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "${tipo.nombreLegible()} detectado — mantenga firme")
+            ResultadoEstabilizacion(
+                EstadoEscaneo.BUSCANDO,
+                mensaje = "${tipo.nombreLegible()} — no lo mueva",
+                progreso = repeticiones.toFloat() / framesRequeridos,
+            )
         }
     }
 
@@ -211,10 +244,14 @@ class EstabilizadorLectura(
         val nombreTipo = documento.tipo.nombreLegible()
         val vencimiento = documento.vencimiento
         val vencido = vencimiento != null && vencimiento.estaVencida(hoy)
+        // "Listo: <tipo>" en vez de "<tipo> confirmado": la mayoría de los
+        // tipos son femeninos ("Cédula...", "Licencia...") y el participio
+        // no concordaba. El vencido dice CUÁNDO venció, que es lo que quien
+        // opera necesita para decidir.
         val mensaje = when {
-            vencido -> "$nombreTipo confirmado — DOCUMENTO VENCIDO"
-            faltaNombrePorFrente(documento) -> "$nombreTipo confirmado — sin nombre, complételo a mano"
-            else -> "$nombreTipo confirmado"
+            vencido -> "Listo: $nombreTipo — VENCIDO el ${vencimiento!!.aTextoDDMMYYYY()}"
+            faltaNombrePorFrente(documento) -> "Listo: $nombreTipo — sin nombre, complételo a mano"
+            else -> "Listo: $nombreTipo"
         }
         return mensaje to vencido
     }
@@ -225,6 +262,8 @@ class EstabilizadorLectura(
         documentoAcumulado = null
         lecturasMrzRecientes.clear()
         framesEsperandoReverso = -1
+        framesDesconocidosSeguidos = 0
+        framesTipoSinDatosSeguidos = 0
     }
 
     /// Se agotó la espera del reverso sin que llegara un MRZ válido: se
@@ -277,10 +316,15 @@ class EstabilizadorLectura(
         while (candidatosRecientes.size > ventana) candidatosRecientes.removeFirst()
     }
 
-    private fun mensajeApuntar(): String =
+    /// Dice QUÉ vio la cámara, no sólo "apunte a...": así quien opera sabe
+    /// que tiene en la mano el objeto equivocado (p. ej. el gafete en vez
+    /// de la cédula) y no que la cámara "no lee".
+    private fun mensajeTipoEquivocado(tipo: TipoDocumento): String =
         when (modo) {
-            ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Apunte al documento del contratista"
-            ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Apunte al gafete de contratista"
+            ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA ->
+                "Detecté ${tipo.nombreLegible()} — aquí va el documento del contratista"
+            ModoEscaneoDocumento.GAFETE_CONTRATISTA ->
+                "Detecté ${tipo.nombreLegible()} — aquí va el gafete de contratista"
         }
 
     private fun mensajeNoReconocido(): String =
@@ -294,6 +338,7 @@ private const val CLAVE_SIN_CANDIDATO = "\u0000"
 private const val VENTANA_LECTURAS_MRZ = 6
 private const val LECTURAS_MRZ_COINCIDENTES = 2
 private const val LECTURAS_MRZ_PARA_DESEMPATAR = 4
+private const val MENSAJE_BUSCANDO = "Buscando un documento…"
 private const val MENSAJE_LEYENDO_REVERSO = "Leyendo el reverso — mantenga firme"
 private const val MENSAJE_FALTA_REVERSO = "Ya tengo el número — muéstreme la otra cara para el nombre"
 

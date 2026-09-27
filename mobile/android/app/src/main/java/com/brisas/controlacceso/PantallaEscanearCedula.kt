@@ -104,6 +104,7 @@ private fun VistaCamaraCedula(
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
+    var progreso by remember { mutableStateOf(0f) }
     // Resultado real de la última mutación (nombre en éxito, motivo en
     // fallo), no sólo "se leyó el gafete" -- ver `resultadoUltimoEscaneo`.
     // `null` mientras no hay nada que mostrar todavía o el llamador no usa
@@ -154,6 +155,7 @@ private fun VistaCamaraCedula(
                         estado = resultado.estado
                         ultimoMensaje = resultado.mensaje
                         vencido = resultado.vencido
+                        progreso = if (resultado.estado == EstadoEscaneo.CONFIRMADO) 1f else resultado.progreso
                         val documento = resultado.documento
                         if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
                             if (camara.detectada.compareAndSet(false, true)) {
@@ -296,7 +298,7 @@ private fun VistaCamaraCedula(
             },
             modifier = Modifier.fillMaxSize(),
         )
-        MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
+        MarcoGuiaCedula(color = colorMarco, estado = estado, progreso = progreso, modifier = Modifier.fillMaxSize())
         // Con resultado real (éxito/fallo de la mutación, no sólo "se leyó
         // el texto"), el mismo mensaje se pinta verde/rojo en vez de negro
         // neutro -- pedido explícito del usuario 2026-09-20: antes, en
@@ -502,7 +504,7 @@ private const val INTERVALO_MINIMO_ENTRE_FRAMES_MS = 150L
 /// desincronizarse si alguien edita una sin las otras 3). Sin `private`:
 /// vive acá porque [analizarCedula]/[iniciarCamara] (el resto de lo
 /// compartido) también viven en este archivo.
-const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer el texto. Intente acercar."
+const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer. Acerque el documento y evite reflejos."
 
 // El reverso (con el MRZ -- las líneas de texto tipo código de barras) trae
 // nombre Y cédula en un solo escaneo con checksum verificado; el frente
@@ -512,8 +514,8 @@ const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer el texto. Intente acercar
 // igual termina mostrando el frente).
 private fun mensajeInicialEscaneo(modo: ModoEscaneoDocumento): String =
     when (modo) {
-        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Muéstreme el reverso de la cédula"
-        ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Apunte al gafete"
+        ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA -> "Coloque el documento dentro del recuadro"
+        ModoEscaneoDocumento.GAFETE_CONTRATISTA -> "Coloque el gafete dentro del recuadro"
     }
 
 private fun mensajeProcesadoContinuo(modo: ModoEscaneoDocumento, valor: String): String =
