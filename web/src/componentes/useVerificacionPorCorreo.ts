@@ -67,8 +67,8 @@ export function useVerificacionPorCorreo(correo: string) {
       // sólo hace falta reintentar.
       const mensaje =
         error.status === undefined
-          ? "No se pudo verificar el código (falla de conexión) -- probá de nuevo."
-          : "Código inválido o vencido -- pedí uno nuevo.";
+          ? "No se pudo verificar el código (falla de conexión) -- pruebe de nuevo."
+          : "Código inválido o vencido -- pida uno nuevo.";
       setError(mensaje);
       throw new Error(mensaje);
     }

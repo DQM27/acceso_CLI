@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // válida, se mantiene tal cual hasta el próximo re-chequeo exitoso.
       if (errorConsulta) {
         setError(
-          "No se pudo confirmar tu acceso al panel (falla de conexión) -- probá iniciar sesión de nuevo.",
+          "No se pudo confirmar su acceso al panel (falla de conexión) -- pruebe iniciar sesión de nuevo.",
         );
         setCargando(false);
         return;

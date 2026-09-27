@@ -193,7 +193,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     evento.preventDefault();
     const sitio = sitios.find((s) => s.id === sitioId);
     if (!sitio) {
-      setErrorForm("Elegí una unidad operativa (o creá una con el botón +).");
+      setErrorForm("Elija una unidad operativa (o cree una con el botón +).");
       return;
     }
     setCreando(true);
@@ -313,7 +313,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       await navigator.clipboard.writeText(secret);
       toast.success("Secreto copiado.");
     } catch {
-      toast.error("No se pudo copiar -- seleccioná el texto a mano.");
+      toast.error("No se pudo copiar -- seleccione el texto a mano.");
     }
   }
 

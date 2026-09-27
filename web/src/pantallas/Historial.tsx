@@ -5,6 +5,7 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
 import AvisoTruncado from "../componentes/AvisoTruncado";
+import EncabezadoPagina from "../componentes/EncabezadoPagina";
 import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
 import SelectorUnidadesOperativas, {
   textoUnidadesOperativas,
@@ -463,14 +464,18 @@ export default function Historial() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+    <div className="flex h-full flex-col">
+      <EncabezadoPagina
+        titulo="Historial"
+        descripcion="Movimientos de contratistas registrados por los puestos de control."
+      />
+      <div className="pantalla-cuerpo min-h-0 flex-1">
         {truncado && (
           <AvisoTruncado
-            mensaje={`Este rango tiene más de ${filas.length.toLocaleString("es-CR")} movimientos — se muestran solo los primeros, y Excel/PDF exportan lo mismo que está cargado acá (a diferencia de escritorio, acá no hay un rango "completo" aparte). Acotá las fechas para ver/exportar el resto.`}
+            mensaje={`Este rango tiene más de ${filas.length.toLocaleString("es-CR")} movimientos — se muestran solo los primeros, y Excel/PDF exportan lo mismo que está cargado acá (a diferencia de escritorio, acá no hay un rango "completo" aparte). Acote las fechas para ver/exportar el resto.`}
           />
         )}
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div className="min-h-0 flex-1">
           <Tabla<MovimientoHistorial>
             ref={tablaRef}
             id="historial"
@@ -479,7 +484,7 @@ export default function Historial() {
             filtrosPorColumna
             busqueda={busqueda}
             controles={
-              <div className="campo" style={{ flex: "0 1 16rem" }}>
+              <div className="campo flex-[0_1_16rem]">
                 <input
                   placeholder="Cédula, nombre, empresa…"
                   value={busqueda}
