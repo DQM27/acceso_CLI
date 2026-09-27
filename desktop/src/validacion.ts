@@ -1,22 +1,7 @@
-import { z } from "zod";
-
 /**
- * Reglas de cédula/nombre compartidas por los formularios que las editan
- * (Contratista, Usuario) — estaban duplicadas byte a byte, esquema de zod y
- * sanitizador de input incluidos. La validación real y definitiva vive en
- * el núcleo (`services/*_service.rs`); esto es sólo feedback inmediato sin
- * ida y vuelta al backend.
+ * Filtros de entrada mientras se escribe (no son reglas: las reglas de
+ * cédula y nombre las aplica el núcleo, `domain::contratista`).
  */
-
-export const cedulaSchema = z
-  .string()
-  .min(1, "La cédula es obligatoria")
-  .regex(/^\d+$/, "La cédula sólo puede tener números");
-
-export const nombreSchema = z
-  .string()
-  .min(1, "El nombre es obligatorio")
-  .regex(/^[\p{L}\s'-]+$/u, "El nombre no puede tener números ni símbolos");
 
 /** Sanitiza en vivo mientras se escribe (`onChange`) — deja sólo dígitos.
  * Complementa a `cedulaSchema`, no lo reemplaza: la regex sigue validando

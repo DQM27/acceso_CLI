@@ -663,3 +663,27 @@ fn editar_aplica_las_mismas_reglas() {
         Err(ContratistaServiceError::PersonalRutaNoAdmitido)
     ));
 }
+
+#[test]
+fn editar_sin_tocar_el_praind_vencido_deja_quitar_el_acceso() {
+    let (connection, empresa_id) = preparar_base();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    // Registrado cuando el PRAIND estaba vigente...
+    let antes = ContratistaService::con_hoy(
+        &contratistas,
+        &empresas,
+        NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+    );
+    let mut entrada = datos(empresa_id, TipoIngreso::Praind);
+    entrada.fecha_vencimiento_praind = NaiveDate::from_ymd_opt(2026, 6, 1);
+    let id = antes.crear(entrada).unwrap();
+
+    // ...y hoy ya venció: quitarle el acceso sin tocar la fecha se permite.
+    let servicio = ContratistaService::con_hoy(&contratistas, &empresas, hoy());
+    let mut cambio = actualizacion(empresa_id, TipoIngreso::Praind);
+    cambio.fecha_vencimiento_praind = NaiveDate::from_ymd_opt(2026, 6, 1);
+    cambio.tiene_acceso = false;
+    servicio.actualizar(id, cambio).unwrap();
+    assert!(!servicio.buscar_por_id(id).unwrap().tiene_acceso);
+}

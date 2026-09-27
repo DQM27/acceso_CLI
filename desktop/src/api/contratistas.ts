@@ -7,7 +7,12 @@ import { solicitarSincronizacionNube } from "../eventosNube";
 // exponerle al webview tal cual).
 
 export type TipoIngreso = "Praind" | "InHouse" | "PorCorreo" | "Swat";
-export const TIPOS_INGRESO: TipoIngreso[] = ["Praind", "InHouse", "PorCorreo", "Swat"];
+export const TIPOS_INGRESO: TipoIngreso[] = [
+  "Praind",
+  "InHouse",
+  "PorCorreo",
+  "Swat",
+];
 
 /** Texto de un tipo de ingreso en las grillas: en mayúsculas y con las
  * palabras separadas ("IN HOUSE", no el nombre interno "InHouse") --
@@ -65,32 +70,45 @@ export interface DatosContratista {
   tiene_acceso: boolean;
 }
 
-/// Espejo de Contratista::requiere_praind() (src/models/contratista.rs) — el
-/// core es quien manda esta regla, acá sólo se replica para decidir cuándo
-/// mostrar/exigir el campo de fecha en el formulario. La validación real
-/// sigue pasando por el backend de todos modos.
-export function requierePraind(datos: {
-  es_personal_ruta: boolean;
-  tipo_ingreso: TipoIngreso;
-}): boolean {
-  return (
-    datos.es_personal_ruta ||
-    datos.tipo_ingreso === "Praind" ||
-    datos.tipo_ingreso === "InHouse"
-  );
+/** Reglas del formulario, calculadas por el núcleo
+ * (`reglas_formulario_contratista`): el frontend no replica ninguna. */
+export interface ReglasFormularioContratista {
+  requiere_praind: boolean;
+  admite_personal_ruta: boolean;
+  /** Texto del núcleo si la fecha ya venció; `null` si está vigente. */
+  aviso_praind: string | null;
 }
 
-export function buscarContratistas(filtro: FiltroContratistas = {}): Promise<PaginaContratistas> {
+export function reglasFormularioContratista(datos: {
+  tipo_ingreso: TipoIngreso;
+  es_personal_ruta: boolean;
+  fecha_vencimiento_praind: string | null;
+}): Promise<ReglasFormularioContratista> {
+  return invoke("reglas_formulario_contratista", {
+    tipoIngreso: datos.tipo_ingreso,
+    esPersonalRuta: datos.es_personal_ruta,
+    fechaVencimientoPraind: datos.fecha_vencimiento_praind,
+  });
+}
+
+export function buscarContratistas(
+  filtro: FiltroContratistas = {},
+): Promise<PaginaContratistas> {
   return invoke("buscar_contratistas", { filtro });
 }
 
-export async function crearContratista(datos: DatosContratista): Promise<number> {
+export async function crearContratista(
+  datos: DatosContratista,
+): Promise<number> {
   const id = await invoke<number>("crear_contratista", { datos });
   solicitarSincronizacionNube();
   return id;
 }
 
-export async function actualizarContratista(id: number, datos: DatosContratista): Promise<void> {
+export async function actualizarContratista(
+  id: number,
+  datos: DatosContratista,
+): Promise<void> {
   await invoke("actualizar_contratista", { id, datos });
   solicitarSincronizacionNube();
 }

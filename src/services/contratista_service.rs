@@ -244,6 +244,7 @@ where
     ) -> Result<Contratista, ContratistaServiceError> {
         self.armar(
             id,
+            None,
             &datos.cedula,
             &datos.nombre,
             datos.empresa_id,
@@ -261,6 +262,7 @@ where
     ) -> Result<Contratista, ContratistaServiceError> {
         self.armar(
             actual.id,
+            Some(&actual),
             &datos.cedula,
             &datos.nombre,
             datos.empresa_id,
@@ -278,10 +280,16 @@ where
     /// - la empresa existe;
     /// - personal de ruta sólo para PRAIND e IN HOUSE;
     /// - PRAIND obligatorio si el tipo lo requiere, y vigente.
+    ///
+    /// Al editar (`anterior` presente), "vigente" y "personal de ruta" sólo
+    /// se revisan si cambió lo que deciden (fecha, tipo o la casilla): si
+    /// no, a alguien con el PRAIND ya vencido no se le podría ni quitar el
+    /// acceso ni corregir el nombre.
     #[allow(clippy::too_many_arguments)]
     fn armar(
         &self,
         id: i64,
+        anterior: Option<&Contratista>,
         cedula: &str,
         nombre: &str,
         empresa_id: i64,
@@ -308,7 +316,14 @@ where
             .buscar_por_id(empresa_id)?
             .ok_or(ContratistaServiceError::EmpresaNoEncontrada)?;
 
-        if es_personal_ruta && !admite_personal_ruta(tipo_ingreso) {
+        let cambia_tipo_o_ruta = anterior.is_none_or(|previo| {
+            previo.tipo_ingreso != tipo_ingreso || previo.es_personal_ruta != es_personal_ruta
+        });
+        let cambia_praind = cambia_tipo_o_ruta
+            || anterior
+                .is_none_or(|previo| previo.fecha_vencimiento_praind != fecha_vencimiento_praind);
+
+        if cambia_tipo_o_ruta && es_personal_ruta && !admite_personal_ruta(tipo_ingreso) {
             return Err(ContratistaServiceError::PersonalRutaNoAdmitido);
         }
 
@@ -327,7 +342,7 @@ where
             if contratista.fecha_vencimiento_praind.is_none() {
                 return Err(ContratistaServiceError::PraindRequerido);
             }
-            if praind_vencido(contratista.fecha_vencimiento_praind, self.hoy) {
+            if cambia_praind && praind_vencido(contratista.fecha_vencimiento_praind, self.hoy) {
                 return Err(ContratistaServiceError::PraindVencido);
             }
         }
