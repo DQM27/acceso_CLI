@@ -177,6 +177,9 @@ fun fechaDeHoy(): FechaDocumento {
 // donde se usan; `private` a nivel de archivo en Kotlin no cruza archivos.)
 private val REGEX_LICENCIA_EXTRANJERO = Regex("""N[º9O]?[:.]?\s*DM[- ]""")
 private val REGEX_LICENCIA_DM_DIRECTO = Regex("""\bDM[- ]?(\d{6,15})\b""", RegexOption.IGNORE_CASE)
+// Mismo respaldo para la licencia nacional cuando el OCR pierde el "Nº":
+// "CI-" seguido de la cédula de 9 dígitos.
+private val REGEX_LICENCIA_CI_DIRECTO = Regex("""\bCI[- ]?(\d{9})\b""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NUMERO = Regex("""DOCUMENTO\s*NO\.?:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_DIMEX_NUMERO_PROVISIONAL = Regex("""N[°ºO]?\s*DOCUMENTO\s*:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 // Compartida con la cédula nacional de frente (misma etiqueta "Nombre:"
@@ -190,7 +193,26 @@ private val REGEX_NOMBRE_ETIQUETA = Regex("""Nombre:\s*\n?\s*([A-ZÁÉÍÓÚÑ ]
 // necesitar saber cuál de los dos diseños es.
 private val REGEX_CEDULA_APELLIDO1 = Regex("""1\D{0,4}Apellido:?[ \t]*\n?[ \t]*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_CEDULA_APELLIDO2 = Regex("""2\D{0,4}Apellido:?[ \t]*\n?[ \t]*([A-ZÁÉÍÓÚÑ ]+)""", RegexOption.IGNORE_CASE)
-private val REGEX_LICENCIA_NUMERO = Regex("""N[º°9O]?[:.]?\s*(?:DM|CI)?[- ]?(\d{6,15})""", RegexOption.IGNORE_CASE)
+// Esquema del frente de la licencia (MOPT / Educación Vial), valores ficticios:
+//
+//   REPUBLICA DE COSTA RICA
+//   Licencia de Conducir
+//   Nº: DM-155800000001         <- CI-<cédula> (nacional) / DM-<DIMEX> (extranjero)
+//   Expedición  01-01-2023
+//   Nacimiento  01-01-1990                       Tipo: A3
+//   Vencimiento 01-01-2026                       Donador
+//   R.F.   R.T.   T.S. NI.
+//   PEREZ MORA JUAN CARLOS      <- SIN etiqueta: 1er apellido, 2do apellido, nombre(s)
+//   [código de barras]  08770000
+//   053300000000
+//   01/01/2023 11:54 PR-C151 N0940000 830 BCR GOB DIGITAL   <- pie de impresión
+//
+// Sólo se extraen número, apellidos, nombre y "Vencimiento". Expedición,
+// nacimiento, tipo, donador, R.F./R.T./T.S. y los números del pie se
+// ignoran. El símbolo de "Nº" es OBLIGATORIO en la etiqueta: sin él, el
+// "N0940950" del pie de impresión pasaba por número de licencia. Los
+// guiones internos (cédula impresa "1-1234-0567") se toleran y se quitan.
+private val REGEX_LICENCIA_NUMERO = Regex("""N\s*[º°9O][:.]?\s*(?:DM|CI)?[- ]?(\d(?:-?\d){5,14})""", RegexOption.IGNORE_CASE)
 // El nombre completo en la licencia NO trae ninguna etiqueta ("Nombre:")
 // a diferencia de cédula/DIMEX -- aparece como una línea suelta en
 // mayúsculas, sin más (verificado contra una licencia real, 2026-09-26:
@@ -206,7 +228,14 @@ private val PALABRAS_NO_NOMBRE_LICENCIA = setOf(
     "REPUBLICA", "REPÚBLICA", "COSTA", "RICA", "LICENCIA", "CONDUCIR",
     "EXPEDICION", "EXPEDICIÓN", "NACIMIENTO", "VENCIMIENTO", "TIPO", "DONADOR",
     "DIRECCION", "DIRECCIÓN", "GENERAL", "EDUCACION", "EDUCACIÓN", "VIAL", "MOPT",
+    // Pie de impresión ("... BCR GOB DIGITAL") -- ML Kit a veces lo parte en
+    // su propia línea de 3 palabras, que pasaba por nombre.
+    "BCR", "GOB", "DIGITAL",
 )
+// Partículas que forman parte de un apellido compuesto cuando lo ANTECEDEN
+// ("DE LA O", "DEL VALLE", "DE LOS SANTOS") -- se usan sólo para partir
+// la línea de la licencia (apellidos primero) sin cortar el apellido.
+private val PARTICULAS_APELLIDO = setOf("DE", "DEL", "LA", "LAS", "LOS", "Y", "SAN", "SANTA")
 private val REGEX_PRAIND_CEDULA = Regex("""No\.?\s*de\s*c[ée]dula:?\s*(\d{6,15})""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_NOMBRE = Regex("""Nombre:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
 private val REGEX_PRAIND_EMPRESA = Regex("""Empresa:?[ \t]*\n?[ \t]*([^\n]+)""", RegexOption.IGNORE_CASE)
@@ -418,8 +447,9 @@ private fun extraerCedulaNacionalFrente(texto: String): DocumentoDetectado? {
 /// plan, sección 3) -- se remueve del número final pero ya se usó para
 /// clasificar, así que `esExtranjero` llega como parámetro ya decidido.
 private fun extraerLicencia(texto: String, esExtranjero: Boolean): DocumentoDetectado? {
-    val numero = REGEX_LICENCIA_NUMERO.find(texto)?.groupValues?.get(1)
+    val numero = REGEX_LICENCIA_NUMERO.find(texto)?.groupValues?.get(1)?.filter(Char::isDigit)
         ?: REGEX_LICENCIA_DM_DIRECTO.find(texto)?.groupValues?.get(1)
+        ?: REGEX_LICENCIA_CI_DIRECTO.find(texto)?.groupValues?.get(1)
         ?: return null
 
     val vencimiento = extraerFecha(texto, etiqueta = "Vencimiento")
@@ -445,6 +475,11 @@ private fun extraerLicencia(texto: String, esExtranjero: Boolean): DocumentoDete
 /// filtrar por [PALABRAS_NO_NOMBRE_LICENCIA] no alcanza sola si ML Kit
 /// llega a leer el encabezado y el nombre en un orden inesperado dentro
 /// del mismo bloque de texto.
+/// La línea del nombre no tiene etiqueta: de las líneas candidatas (sólo
+/// mayúsculas, 3+ palabras, sin palabras del diseño de la tarjeta) se toma
+/// la de más palabras -- el nombre completo es la más larga; el pie o un
+/// sello que se cuele son más cortos. Orden legal: 1er apellido, 2do
+/// apellido, nombre(s). Devuelve (nombre, apellidos).
 private fun extraerNombreCompletoLicencia(texto: String): Pair<String, String>? {
     val candidato = texto.lines()
         .map { it.trim().uppercase() }
@@ -452,13 +487,24 @@ private fun extraerNombreCompletoLicencia(texto: String): Pair<String, String>? 
             REGEX_LICENCIA_NOMBRE_COMPLETO.matches(linea) &&
                 linea.split(" ").none { it in PALABRAS_NO_NOMBRE_LICENCIA }
         }
-        .lastOrNull() ?: return null
+        .maxByOrNull { linea -> linea.split(" ").count { it.isNotBlank() } } ?: return null
 
     val palabras = candidato.split(" ").filter { it.isNotBlank() }
     if (palabras.size < 3) return null
-    val apellidos = palabras.take(2).joinToString(" ")
-    val nombre = palabras.drop(2).joinToString(" ")
-    return nombre to apellidos
+    return partirApellidosPrimero(palabras)
+}
+
+/// "DE LA O CASTRO ANA" -> ("ANA", "DE LA O CASTRO"). Si las partículas
+/// dejarían sin nombre, cae al corte simple (2 apellidos + resto).
+private fun partirApellidosPrimero(palabras: List<String>): Pair<String, String> {
+    fun finDeApellido(desde: Int): Int {
+        var i = desde
+        while (i < palabras.size - 1 && palabras[i] in PARTICULAS_APELLIDO) i++
+        return i + 1
+    }
+    val finApellidos = finDeApellido(finDeApellido(0))
+    val corte = if (finApellidos < palabras.size) finApellidos else 2
+    return palabras.drop(corte).joinToString(" ") to palabras.take(corte).joinToString(" ")
 }
 
 /// El carnet PRAIND identifica a la persona por cédula (`numeroDocumento`),

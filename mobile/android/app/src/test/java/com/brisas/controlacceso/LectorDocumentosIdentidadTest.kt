@@ -626,4 +626,63 @@ class LectorDocumentosIdentidadTest {
         """.trimIndent()
         assertEquals("155800000001", leerDocumentoDeTexto(texto)?.numeroDocumento)
     }
+
+    // --- Licencia: esquema completo, sólo número/nombre/apellidos/vencimiento ---
+
+    @Test
+    fun licenciaExtranjeroIgnoraPieDeImpresionYNumerosSueltos() {
+        // Frente real completo, con el pie "... N0940950 ... BCR GOB DIGITAL"
+        // partido en líneas como a veces lo devuelve ML Kit.
+        val texto = """
+            REPUBLICA DE COSTA RICA
+            Licencia de Conducir
+            Nº: DM-155800000001
+            Expedición 03-04-2023
+            Nacimiento 30-05-1989
+            Tipo: A3
+            Vencimiento 03-04-2026
+            Donador
+            R.F. R.T. T.S. NI.
+            PEREZ MORA JUAN CARLOS
+            DIRECCION GENERAL EDUCACION VIAL MOPT
+            08770445
+            053323202302
+            03/04/2023 11:54 PR-C151 N0940950 830
+            BCR GOB DIGITAL
+        """.trimIndent()
+
+        val doc = leerDocumentoDeTexto(texto)
+
+        assertEquals(TipoDocumento.LICENCIA_EXTRANJERO, doc?.tipo)
+        assertEquals("155800000001", doc?.numeroDocumento)
+        assertEquals("JUAN CARLOS", doc?.nombre)
+        assertEquals("PEREZ MORA", doc?.apellidos)
+        assertEquals(FechaDocumento(3, 4, 2026), doc?.vencimiento)
+        assertNull(doc?.fechaNacimiento)
+    }
+
+    @Test
+    fun licenciaNoTomaElNumeroDelPieSiFaltaElSimboloDeNumero() {
+        val texto = """
+            Licencia de Conducir
+            CI-205300606
+            Vencimiento 08-08-2027
+            03/04/2023 11:54 PR-C151 N0940950 830
+        """.trimIndent()
+        assertEquals("205300606", leerDocumentoDeTexto(texto)?.numeroDocumento)
+    }
+
+    @Test
+    fun licenciaNacionalConCedulaConGuiones() {
+        val texto = "Licencia de Conducir\nNº: 1-1234-0567\nVencimiento 03-04-2026"
+        assertEquals("112340567", leerDocumentoDeTexto(texto)?.numeroDocumento)
+    }
+
+    @Test
+    fun licenciaRespetaApellidosCompuestosConParticulas() {
+        val texto = "Licencia de Conducir\nNº: CI-205300606\nVencimiento 08-08-2027\nDE LA O CASTRO ANA MARIA"
+        val doc = leerDocumentoDeTexto(texto)
+        assertEquals("ANA MARIA", doc?.nombre)
+        assertEquals("DE LA O CASTRO", doc?.apellidos)
+    }
 }
