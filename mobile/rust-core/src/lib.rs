@@ -14,7 +14,6 @@ use std::sync::Mutex;
 use control_acceso::application::AppCore;
 use control_acceso::application::GestionNubeError as GestionNubeErrorNucleo;
 use control_acceso::application::ResumenSincronizacion as ResumenSincronizacionNucleo;
-use control_acceso::application::SesionRealtimeNube as SesionRealtimeNubeNucleo;
 use control_acceso::database::queries::Igualdad;
 use control_acceso::database::queries::contratistas::{
     ContratistaResumen as ContratistaResumenNucleo, FiltroContratistas as FiltroContratistasNucleo,
@@ -289,8 +288,8 @@ pub struct PreparacionIngreso {
     pub tiene_ingreso_activo: bool,
     /// Siempre `None` al volver de `preparar_ingreso` -- ese método no toca
     /// la red (mismo motivo que en el núcleo). Kotlin lo completa llamando
-    /// a `contratista_activo_en_otro_sitio_con_secreto` (mejor esfuerzo,
-    /// igual que `gafete_ocupado_en_sitio_con_secreto`) antes de dejar
+    /// a `contratista_activo_en_otro_sitio_con_secreto` (mejor esfuerzo)
+    /// antes de dejar
     /// continuar, ver `docs/pendientes.md`.
     pub activo_en_otro_sitio: Option<String>,
     pub gafetes_deuda: Vec<i64>,
@@ -648,21 +647,6 @@ pub struct SesionRealtimeNube {
     pub dispositivo_id: String,
     pub tipo: String,
     pub topic: String,
-}
-
-impl From<SesionRealtimeNubeNucleo> for SesionRealtimeNube {
-    fn from(sesion: SesionRealtimeNubeNucleo) -> Self {
-        Self {
-            base_url: sesion.base_url,
-            apikey: sesion.apikey,
-            access_token: sesion.access_token,
-            expires_in: sesion.expires_in,
-            sitio_id: sesion.sitio_id,
-            dispositivo_id: sesion.dispositivo_id,
-            tipo: sesion.tipo,
-            topic: sesion.topic,
-        }
-    }
 }
 
 /// Un ingreso abierto por el otro dispositivo del mismo sitio -- no vive
@@ -2213,36 +2197,10 @@ impl Nucleo {
         Ok(self.core_lock().requiere_configuracion_inicial()?)
     }
 
-    /// Arranque de una base vacía -- sin sesión, porque todavía no existe
-    /// ningún usuario con quien autenticar. Guarda el secreto pegado en la
-    /// pantalla de arranque y trae el catálogo remoto (usuarios incluidos),
-    /// para que el próximo intento de login ya tenga con quién autenticar
-    /// (con el centinela `SIN_PASSWORD_LOCAL`, cae solo en "fijar
-    /// contraseña"). Método legado: la app Android nueva usa
-    /// [`Nucleo::configurar_dispositivo_inicial_con_secreto`] y persiste el
-    /// secreto con Android Keystore.
-    pub fn configurar_dispositivo_inicial(
-        &self,
-        directorio: String,
-        identificador_dispositivo: String,
-        secreto: String,
-    ) -> Result<ResumenSincronizacion, NucleoError> {
-        Ok(self
-            .core_lock()
-            .configurar_dispositivo_inicial(
-                Some(std::path::Path::new(&directorio)),
-                Some(&identificador_dispositivo),
-                &secreto,
-                None,
-                control_acceso::nube::PerfilDispositivo::Movil,
-            )?
-            .into())
-    }
-
-    /// Igual que [`Nucleo::configurar_dispositivo_inicial`], pero sin
-    /// persistir el secreto desde Rust. Android lo guarda con Android
-    /// Keystore y sólo entrega el secreto descifrado en memoria para esta
-    /// autenticación inicial.
+    /// Activación inicial de una base vacía. No persiste el secreto desde
+    /// Rust: Android lo guarda con Android Keystore y sólo entrega el
+    /// secreto descifrado en memoria para esta autenticación inicial. El
+    /// candado del núcleo sólo se toma para lo local, nunca durante la red.
     ///
     /// Los parámetros de metadata (todos opcionales, `""` = no disponible)
     /// viajan una única vez, en esta primera autenticación -- ver
@@ -2393,22 +2351,9 @@ impl Nucleo {
         self.sincronizar_con_secreto(&secreto)
     }
 
-    /// Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
-    /// sitio; el socket y sus reconexiones viven fuera del núcleo.
-    pub fn sesion_realtime_nube(
-        &self,
-        directorio: String,
-    ) -> Result<SesionRealtimeNube, NucleoError> {
-        let actor = self.actor_autenticado()?;
-        Ok(self
-            .core_lock()
-            .sesion_realtime_nube(&actor, Some(std::path::Path::new(&directorio)))?
-            .into())
-    }
-
-    /// Igual que [`Nucleo::sesion_realtime_nube`], pero tomando el secreto
-    /// desde Android Keystore en Kotlin en vez del archivo administrado por
-    /// Rust.
+    /// Lo mínimo para que Kotlin escuche Broadcast privado por sitio, con el
+    /// secreto que Kotlin descifra de Android Keystore. El socket y sus
+    /// reconexiones viven fuera del núcleo.
     pub fn sesion_realtime_nube_con_secreto(
         &self,
         secreto: String,
@@ -2477,68 +2422,8 @@ impl Nucleo {
             .collect())
     }
 
-    /// Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
-    /// activo en este sitio del lado de OTRO dispositivo -- llamar justo
-    /// antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
-    /// dispositivo sólo valida el gafete contra su propia base `SQLite`,
-    /// que nunca ve lo que hizo el otro hasta sincronizar, así que dos
-    /// dispositivos del mismo sitio podían aceptar el mismo número como
-    /// activo a la vez.
-    pub fn gafete_ocupado_en_sitio(
-        &self,
-        directorio: String,
-        gafete_numero: i64,
-    ) -> Result<bool, NucleoError> {
-        let actor = self.actor_autenticado()?;
-        // Ver el comentario de `cache_token`: este chequeo corre
-        // justo antes de confirmar un ingreso con gafete, así que retener
-        // `core_lock()` durante la red acá es exactamente el freeze que se
-        // sentía al registrar. `autorizar_uso_nube` sigue pasando por el
-        // candado -- es SQLite puro, dura microsegundos -- pero se libera
-        // antes de tocar la red.
-        self.core_lock().autorizar_uso_nube(&actor)?;
-
-        let Some(secreto) = control_acceso::nube::credenciales::cargar_secreto_en(
-            std::path::Path::new(&directorio),
-        ) else {
-            // Sin secreto guardado (sitio de un solo dispositivo, o nube
-            // sin configurar): no hay con quién chocar, no hace falta red.
-            return Ok(false);
-        };
-        // A diferencia de `autenticar`, acá un fallo de red SÍ se propaga
-        // (no `.unwrap_or`): con nube configurada, más vale bloquear el
-        // ingreso que arriesgar el mismo gafete duplicado entre
-        // dispositivos -- ver el doc-comment de
-        // `CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo` sobre
-        // por qué esta asimetría (`Result`, no `Option`) es a propósito.
-        self.cache_token
-            .gafete_ocupado_en_otro_dispositivo(&secreto, gafete_numero)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })
-    }
-
-    /// Chequeo remoto usando el secreto ya descifrado por Android Keystore.
-    pub fn gafete_ocupado_en_sitio_con_secreto(
-        &self,
-        secreto: String,
-        gafete_numero: i64,
-    ) -> Result<bool, NucleoError> {
-        if secreto.trim().is_empty() {
-            return Ok(false);
-        }
-        let actor = self.actor_autenticado()?;
-        self.core_lock().autorizar_uso_nube(&actor)?;
-        self.cache_token
-            .gafete_ocupado_en_otro_dispositivo(&secreto, gafete_numero)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })
-    }
-
     /// Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
-    /// de ingresos abiertos entre sitios") -- mismo patrón que
-    /// `gafete_ocupado_en_sitio_con_secreto`, pero de mejor esfuerzo: sin
+    /// de ingresos abiertos entre sitios"), de mejor esfuerzo: sin
     /// secreto, o si la red falla, `Ok(None)` en vez de propagar el error
     /// (acá SÍ hay con qué chocar sin red -- un ingreso registrado offline
     /// queda local igual, y el conflicto se detecta después al sincronizar,
@@ -2556,21 +2441,8 @@ impl Nucleo {
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
     /// del mismo sitio -- nunca toca el historial local de este teléfono.
-    pub fn cerrar_ingreso_remoto(
-        &self,
-        directorio: String,
-        uuid: String,
-    ) -> Result<(), NucleoError> {
-        let actor = self.actor_autenticado()?;
-        Ok(self.core_lock().cerrar_ingreso_remoto(
-            &actor,
-            Some(std::path::Path::new(&directorio)),
-            &uuid,
-        )?)
-    }
-
-    /// Cierra un ingreso remoto usando el secreto ya descifrado por Android
-    /// Keystore.
+    /// Usa el secreto que Kotlin descifra de Android Keystore; el candado
+    /// del núcleo sólo se toma para autorizar, nunca durante la red.
     pub fn cerrar_ingreso_remoto_con_secreto(
         &self,
         secreto: String,
@@ -2596,21 +2468,6 @@ impl Nucleo {
                 mensaje: interno(error),
             })?;
         Ok(())
-    }
-
-    /// Espejo de [`Self::cerrar_ingreso_remoto`], pero contra
-    /// `ingresos_proveedor`.
-    pub fn cerrar_ingreso_proveedor_remoto(
-        &self,
-        directorio: String,
-        uuid: String,
-    ) -> Result<(), NucleoError> {
-        let actor = self.actor_autenticado()?;
-        Ok(self.core_lock().cerrar_ingreso_proveedor_remoto(
-            &actor,
-            Some(std::path::Path::new(&directorio)),
-            &uuid,
-        )?)
     }
 
     /// Espejo de [`Self::cerrar_ingreso_remoto_con_secreto`], pero contra
@@ -2645,21 +2502,6 @@ impl Nucleo {
             mensaje: interno(error),
         })?;
         Ok(())
-    }
-
-    /// Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], pero contra
-    /// `prestamos_gafete_provisional`.
-    pub fn cerrar_prestamo_gafete_provisional_remoto(
-        &self,
-        directorio: String,
-        uuid: String,
-    ) -> Result<(), NucleoError> {
-        let actor = self.actor_autenticado()?;
-        Ok(self.core_lock().cerrar_prestamo_gafete_provisional_remoto(
-            &actor,
-            Some(std::path::Path::new(&directorio)),
-            &uuid,
-        )?)
     }
 
     /// Espejo de [`Self::cerrar_ingreso_proveedor_remoto_con_secreto`],

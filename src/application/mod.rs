@@ -43,9 +43,7 @@ pub use historial::{
     movimientos_completos_con_conexion, movimientos_en_orden_con_conexion,
 };
 #[cfg(feature = "nube")]
-pub use nube::{
-    GestionNubeError, MovimientoHistorialSitio, ResumenSincronizacion, SesionRealtimeNube,
-};
+pub use nube::{GestionNubeError, MovimientoHistorialSitio, ResumenSincronizacion};
 
 /// Tope de seguridad para las cargas "todo en un `Vec`" que alimentan AG
 /// Grid (`buscar_historial_completo`, `buscar_auditoria_completo`) — la
@@ -71,6 +69,15 @@ pub enum BootstrapError {
 }
 
 /// Fachada de aplicación y propietario único de la conexión `SQLite`.
+///
+/// Regla: **nunca red con el candado del núcleo tomado.** Escritorio y
+/// móvil guardan `AppCore` detrás de un `Mutex` compartido por toda la app;
+/// una llamada HTTP con ese candado tomado congela cualquier otra pantalla
+/// hasta el timeout (10 s). Por eso `AppCore` no hace red: la hacen
+/// `nube::sincronizar`/`nube::recibir` sobre una conexión secundaria y las
+/// funciones de `application::con_nube`, que toman el candado sólo para lo
+/// local. La única excepción, documentada, es
+/// [`AppCore::configurar_dispositivo_inicial`].
 pub struct AppCore {
     connection: Connection,
     reloj: Arc<dyn Reloj>,

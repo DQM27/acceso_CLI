@@ -95,7 +95,18 @@ devuelve sólo la función nueva (o nada fuera de `src/nube`); tests
 existentes pasan; test nuevo de la función con alcance completo y
 parcial.
 
-### N2 (alta): red con el candado del núcleo tomado (móvil)
+### N2 (alta): red con el candado del núcleo tomado (móvil) — HECHO en `claude/nucleo-n1-n3`
+
+Resuelto: las funciones que hacían red con el candado tomado eran las
+variantes "legado" del puente que reciben un directorio
+(`cerrar_ingreso_remoto`, `cerrar_ingreso_proveedor_remoto`,
+`cerrar_prestamo_gafete_provisional_remoto`, `sesion_realtime_nube`,
+`configurar_dispositivo_inicial`, `gafete_ocupado_en_sitio`); Kotlin sólo
+usaba las `_con_secreto`, que ya soltaban el candado. Se quitaron, junto
+con los métodos de red de `AppCore` que quedaron sin llamadores. La regla
+quedó escrita en el doc-comment de `AppCore`; única excepción documentada:
+`configurar_dispositivo_inicial` del escritorio (una sola vez, base vacía).
+
 
 `Nucleo::cerrar_ingreso_remoto` / `cerrar_ingreso_remoto_con_secreto`
 (`mobile/rust-core/src/lib.rs` ~l. 2538-2600) y los de proveedor llaman

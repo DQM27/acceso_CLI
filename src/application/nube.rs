@@ -148,63 +148,6 @@ pub struct ResumenSincronizacion {
     pub sesion_expulsada: bool,
 }
 
-/// Datos temporales para que una capa de plataforma abra un canal Realtime.
-/// El núcleo autentica y autoriza; el WebSocket queda fuera de esta capa.
-#[derive(Clone, PartialEq, Eq)]
-pub struct SesionRealtimeNube {
-    pub base_url: String,
-    pub apikey: String,
-    pub access_token: String,
-    pub expires_in: u64,
-    pub sitio_id: String,
-    pub dispositivo_id: String,
-    pub tipo: String,
-    pub topic: String,
-}
-
-impl std::fmt::Debug for SesionRealtimeNube {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SesionRealtimeNube")
-            .field("base_url", &self.base_url)
-            .field("apikey", &"<redactado>")
-            .field("access_token", &"<redactado>")
-            .field("expires_in", &self.expires_in)
-            .field("sitio_id", &self.sitio_id)
-            .field("dispositivo_id", &self.dispositivo_id)
-            .field("tipo", &self.tipo)
-            .field("topic", &self.topic)
-            .finish()
-    }
-}
-
-/// Único punto que resuelve "¿cuál es el secreto guardado?" a partir de las
-/// mismas dos variables que ya usan `guardar_secreto_dispositivo`/
-/// `configurar_dispositivo_inicial` -- antes cada método con acceso a la
-/// nube (entre ellos `usuario_sigue_activo_remoto`) repetía un `directorio.map_or_else(...)`
-/// que llamaba a `cargar_secreto_en` (SIN identificador) incluso en móvil,
-/// donde el archivo está cifrado con el `ANDROID_ID` -- `cargar_secreto_en`
-/// no sabe descifrarlo (cae al camino de texto plano, falla en silencio) y
-/// esos métodos quedaban rotos en cualquier teléfono con el secreto
-/// cifrado: nunca podían reautenticar el dispositivo para nada que no fuera
-/// el primer arranque. Bug real, no un caso de espera -- reportado en vivo
-/// (un usuario sembrado en Supabase después del primer arranque de un
-/// teléfono no podía entrar nunca, ni esperando el pulso periódico).
-fn cargar_secreto_de(
-    directorio: Option<&Path>,
-    identificador_dispositivo: Option<&str>,
-) -> Option<String> {
-    match (directorio, identificador_dispositivo) {
-        (Some(directorio), Some(identificador)) => {
-            crate::nube::credenciales::cargar_secreto_en_con_identificador(
-                directorio,
-                identificador,
-            )
-        }
-        (Some(directorio), None) => crate::nube::credenciales::cargar_secreto_en(directorio),
-        (None, _) => crate::nube::credenciales::cargar_secreto(),
-    }
-}
-
 impl AppCore {
     /// `identificador_dispositivo` cifra el secreto en disco con una clave
     /// derivada de ese identificador (ver `nube::credenciales`, "Protección
@@ -282,9 +225,15 @@ impl AppCore {
     /// `metadata`, si viene, viaja en el mismo request que la autenticación
     /// inicial -- ver `nube::MetadatosDispositivo`. Cada plataforma decide
     /// qué mandar (o `None`): escritorio arma la suya en
-    /// `comandos::nube::configurar_dispositivo_inicial`, el camino legado de
-    /// móvil (`Nucleo::configurar_dispositivo_inicial`, reemplazado por
-    /// `configurar_dispositivo_inicial_con_secreto`) sigue sin mandar nada.
+    /// `comandos::nube::configurar_dispositivo_inicial`.
+    ///
+    /// Única excepción a la regla "nunca red con el candado del núcleo
+    /// tomado" (ver `AppCore`): quien la llama la usa con el candado tomado
+    /// y habla con la nube. Se acepta porque corre una sola vez, con la base
+    /// vacía y la pantalla de activación esperando: no hay otra operación
+    /// que pueda quedar trabada. El móvil ni siquiera la usa
+    /// (`Nucleo::configurar_dispositivo_inicial_con_secreto` suelta el
+    /// candado antes de la red).
     pub fn configurar_dispositivo_inicial(
         &self,
         directorio: Option<&Path>,
@@ -345,68 +294,6 @@ impl AppCore {
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             sesion_expulsada: false,
-        })
-    }
-
-    /// Confirma en vivo si `actor` sigue activo en el catálogo remoto, sin
-    /// sincronizar nada más -- mucho más rápido que `nube::sincronizar`
-    /// (una fila, una columna, vs. cola de salida + cierres + ingresos
-    /// abiertos + catálogo + historial completos). Pensado para el login:
-    /// medido como el causante real del retraso de "un par de segundos"
-    /// que se sentía al entrar -- ver `desktop/src-tauri/src/comandos/autenticacion.rs::login`
-    /// y `Nucleo::autenticar` en móvil, que ahora usan esto para el chequeo
-    /// de seguridad y dejan la sincronización completa corriendo aparte,
-    /// sin bloquear la entrada.
-    pub fn usuario_sigue_activo_remoto(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-        identificador_dispositivo: Option<&str>,
-    ) -> Result<bool, GestionNubeError> {
-        self.autorizar_uso_nube(actor)?;
-        let secreto = cargar_secreto_de(directorio, identificador_dispositivo)
-            .ok_or(GestionNubeError::SinSecreto)?;
-        let token = self.autenticar_con_cache(&secreto)?;
-        let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::base_url(),
-            apikey: crate::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        Ok(crate::nube::usuario_sigue_activo_remoto(
-            &contexto,
-            &actor.cedula,
-        )?)
-    }
-
-    /// Autentica este dispositivo y devuelve lo mínimo para que la capa de
-    /// plataforma escuche Broadcast privado por sitio. No abre sockets ni
-    /// interpreta mensajes: cada aviso debe disparar `nube::sincronizar`.
-    pub fn sesion_realtime_nube(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-    ) -> Result<SesionRealtimeNube, GestionNubeError> {
-        self.autorizar_uso_nube(actor)?;
-        let secreto = directorio
-            .map_or_else(
-                crate::nube::credenciales::cargar_secreto,
-                crate::nube::credenciales::cargar_secreto_en,
-            )
-            .ok_or(GestionNubeError::SinSecreto)?;
-        let token = self.autenticar_con_cache(&secreto)?;
-        let topic = format!("sitio:{}", token.sitio_id);
-
-        Ok(SesionRealtimeNube {
-            base_url: crate::nube::base_url().to_string(),
-            apikey: crate::nube::apikey().to_string(),
-            access_token: token.access_token,
-            expires_in: token.expires_in,
-            sitio_id: token.sitio_id,
-            dispositivo_id: token.dispositivo_id,
-            tipo: token.tipo,
-            topic,
         })
     }
 
@@ -471,40 +358,6 @@ impl AppCore {
         Ok(filas)
     }
 
-    /// Espejo de [`Self::cerrar_ingreso_remoto`], pero contra
-    /// `ingresos_proveedor`.
-    pub fn cerrar_ingreso_proveedor_remoto(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-        uuid: &str,
-    ) -> Result<(), GestionNubeError> {
-        self.autorizar_uso_nube(actor)?;
-
-        let secreto = directorio
-            .map_or_else(
-                crate::nube::credenciales::cargar_secreto,
-                crate::nube::credenciales::cargar_secreto_en,
-            )
-            .ok_or(GestionNubeError::SinSecreto)?;
-        let token = self.autenticar_con_cache(&secreto)?;
-
-        let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::base_url(),
-            apikey: crate::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        crate::nube::cerrar_ingreso_proveedor_remoto(
-            &self.connection,
-            &contexto,
-            uuid,
-            &actor.nombre,
-        )?;
-        Ok(())
-    }
-
     /// Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
     /// la caché `prestamos_gafete_provisional_remotos`.
     pub fn listar_prestamos_gafete_provisional_remotos(
@@ -530,171 +383,6 @@ impl AppCore {
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(filas)
-    }
-
-    /// Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], pero contra
-    /// `prestamos_gafete_provisional`.
-    pub fn cerrar_prestamo_gafete_provisional_remoto(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-        uuid: &str,
-    ) -> Result<(), GestionNubeError> {
-        self.autorizar_uso_nube(actor)?;
-
-        let secreto = directorio
-            .map_or_else(
-                crate::nube::credenciales::cargar_secreto,
-                crate::nube::credenciales::cargar_secreto_en,
-            )
-            .ok_or(GestionNubeError::SinSecreto)?;
-        let token = self.autenticar_con_cache(&secreto)?;
-
-        let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::base_url(),
-            apikey: crate::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        crate::nube::cerrar_prestamo_gafete_provisional_remoto(
-            &self.connection,
-            &contexto,
-            uuid,
-            &actor.nombre,
-        )?;
-        Ok(())
-    }
-
-    /// Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
-    /// activo en este sitio del lado de OTRO dispositivo -- ver
-    /// `nube::gafete_ocupado_en_otro_dispositivo`. Pensada para llamarse
-    /// justo antes de confirmar un ingreso nuevo con gafete: sin secreto
-    /// guardado (dispositivo sin nube configurada, o un sitio de un solo
-    /// dispositivo) no hay con quién chocar, así que no hace falta red --
-    /// se resuelve `Ok(false)` directo. Con nube configurada, en cambio,
-    /// esto exige estar en línea: si la consulta falla, el error se
-    /// propaga (`Autenticacion`/`Sincronizacion`) en vez de asumir que el
-    /// gafete está libre -- decisión explícita del usuario, prefiere
-    /// bloquear el ingreso a arriesgar el mismo número duplicado entre
-    /// dispositivos otra vez.
-    pub fn gafete_ocupado_en_sitio(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-        gafete_numero: i64,
-    ) -> Result<bool, GestionNubeError> {
-        self.autorizar_uso_nube(actor)?;
-        let secreto = directorio.map_or_else(
-            crate::nube::credenciales::cargar_secreto,
-            crate::nube::credenciales::cargar_secreto_en,
-        );
-        let Some(secreto) = secreto else {
-            return Ok(false);
-        };
-        let token = self.autenticar_con_cache(&secreto)?;
-        let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::base_url(),
-            apikey: crate::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        Ok(crate::nube::gafete_ocupado_en_otro_dispositivo(
-            &contexto,
-            gafete_numero,
-        )?)
-    }
-
-    /// Mismo criterio y misma forma que `gafete_ocupado_en_sitio`, pero
-    /// para gafetes provisionales KOF -- ver
-    /// `nube::gafete_provisional_ocupado_en_otro_dispositivo`. Pensada para
-    /// llamarse justo antes de confirmar la entrega de un gafete
-    /// provisional.
-    pub fn gafete_provisional_ocupado_en_sitio(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-        gafete_numero: i64,
-    ) -> Result<bool, GestionNubeError> {
-        self.autorizar_uso_nube(actor)?;
-        let secreto = directorio.map_or_else(
-            crate::nube::credenciales::cargar_secreto,
-            crate::nube::credenciales::cargar_secreto_en,
-        );
-        let Some(secreto) = secreto else {
-            return Ok(false);
-        };
-        let token = self.autenticar_con_cache(&secreto)?;
-        let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::base_url(),
-            apikey: crate::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        Ok(crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(
-            &contexto,
-            gafete_numero,
-        )?)
-    }
-
-    /// Mismo criterio y misma forma que `gafete_ocupado_en_sitio`, pero
-    /// para gafetes de proveedor -- ver
-    /// `nube::gafete_de_proveedor_ocupado_en_otro_dispositivo`. Pensada
-    /// para llamarse justo antes de confirmar un ingreso de proveedor.
-    pub fn gafete_de_proveedor_ocupado_en_sitio(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-        gafete_numero: i64,
-    ) -> Result<bool, GestionNubeError> {
-        self.autorizar_uso_nube(actor)?;
-        let secreto = directorio.map_or_else(
-            crate::nube::credenciales::cargar_secreto,
-            crate::nube::credenciales::cargar_secreto_en,
-        );
-        let Some(secreto) = secreto else {
-            return Ok(false);
-        };
-        let token = self.autenticar_con_cache(&secreto)?;
-        let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::base_url(),
-            apikey: crate::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        Ok(crate::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(&contexto, gafete_numero)?)
-    }
-
-    /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
-    /// del mismo sitio -- ver `nube::cerrar_ingreso_remoto`.
-    pub fn cerrar_ingreso_remoto(
-        &self,
-        actor: &UsuarioSesion,
-        directorio: Option<&Path>,
-        uuid: &str,
-    ) -> Result<(), GestionNubeError> {
-        self.autorizar_uso_nube(actor)?;
-
-        let secreto = directorio
-            .map_or_else(
-                crate::nube::credenciales::cargar_secreto,
-                crate::nube::credenciales::cargar_secreto_en,
-            )
-            .ok_or(GestionNubeError::SinSecreto)?;
-        let token = self.autenticar_con_cache(&secreto)?;
-
-        let contexto = crate::nube::ContextoSincronizacion {
-            base_url: crate::nube::base_url(),
-            apikey: crate::nube::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        crate::nube::cerrar_ingreso_remoto(&self.connection, &contexto, uuid, &actor.nombre)?;
-        Ok(())
     }
 
     /// Exclusivo de ROOT a propósito (no pasa por `RolUsuario::puede()`, que
@@ -737,28 +425,9 @@ impl AppCore {
         }
     }
 
-    /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
-    /// autenticar de cero en cada llamada -- reproducido en el celular:
-    /// confirmar un ingreso con gafete (`gafete_ocupado_en_sitio`) hacía
-    /// una autenticación completa contra la nube aunque el dispositivo ya
-    /// se hubiera autenticado segundos antes para sincronizar, sintiéndose
-    /// como que la app se colgaba en cada registro. Margen de 30s antes del
-    /// vencimiento real para no arrancar una operación con un token que
-    /// puede vencer a mitad de camino. Un acierto de caché no vuelve a
-    /// medir el desfase de reloj (`desfase_reloj_ms` queda en `None`) --
-    /// no hace falta remedirlo en cada llamada, sólo cuando de verdad se
-    /// habla con el receptor.
-    fn autenticar_con_cache(
-        &self,
-        secreto: &str,
-    ) -> Result<crate::nube::TokenDispositivo, GestionNubeError> {
-        self.autenticar_y_cachear(secreto, None)
-    }
-
-    /// Igual que [`Self::autenticar_con_cache`], pero permite adjuntar
-    /// `metadata` completa cuando hace falta mandarla -- sólo la activación
-    /// inicial (ver [`Self::configurar_dispositivo_inicial`]). El resto de
-    /// los llamadores pasan `None` a través de `autenticar_con_cache`, pero
+    /// Autentica (reusando el token cacheado si sigue vigente) y permite
+    /// adjuntar `metadata` completa -- sólo la activación inicial (ver
+    /// [`Self::configurar_dispositivo_inicial`]). Sin `metadata`, pero
     /// si ya se llamó [`AppCore::establecer_version_app`], acá igual se arma
     /// una `MetadatosDispositivo` mínima (sólo `app_version`) para que el
     /// receptor pueda aplicar `VERSION_MINIMA_ACEPTADA` en cualquier
@@ -805,31 +474,5 @@ impl AppCore {
     /// app.
     pub fn actualizar_desfase_reloj(&self, desfase_ms: i64) {
         self.reloj.actualizar_desfase_ms(desfase_ms);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::SesionRealtimeNube;
-
-    #[test]
-    fn debug_de_sesion_realtime_no_expone_credenciales() {
-        let sesion = SesionRealtimeNube {
-            base_url: "https://example.test".to_string(),
-            apikey: "apikey-super-secreta".to_string(),
-            access_token: "token-super-secreto".to_string(),
-            expires_in: 3600,
-            sitio_id: "s1".to_string(),
-            dispositivo_id: "d1".to_string(),
-            tipo: "pc".to_string(),
-            topic: "sitio:s1".to_string(),
-        };
-
-        let debug = format!("{sesion:?}");
-
-        assert!(!debug.contains("apikey-super-secreta"));
-        assert!(!debug.contains("token-super-secreto"));
-        assert!(debug.contains("<redactado>"));
-        assert!(debug.contains("sitio:s1"));
     }
 }
