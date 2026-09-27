@@ -1,0 +1,3 @@
+
+DROP TRIGGER registro_ingresos_entrada_inmutable;
+DROP TRIGGER registro_ingresos_salida_unica;
