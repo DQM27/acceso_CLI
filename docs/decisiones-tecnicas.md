@@ -673,3 +673,41 @@ sección "Sesión y modo offline": cerrar la app siempre pierde la sesión).
   limpio. **No probado todavía con la app real corriendo** -- falta un
   login de verdad con un usuario Administrador/Operador, cortar la red, y
   confirmar que puede volver a entrar dentro de las 24h y no después.
+
+---
+
+## 2026-09-26 — SQLite3MC, motor SQLite único (fin del switch de tres vías)
+
+Decisión del usuario: SQLite3 Multiple Ciphers (ChaCha20-Poly1305) es el
+motor definitivo. Se eliminan las features `cifrado-sqlcipher` y
+`sqlite-plano` (y `cifrado-sqlite3mc`, que ya no hace falta elegir) del
+crate raíz, de `desktop/src-tauri` y de `mobile/rust-core`, los alias de
+`.cargo/config.toml` por motor, `examples/benchmark_3way.rs`,
+`benchmarks/sqlite-3way/` y los workflows `db-cipher-e2e.yml`/
+`db-cipher-lab.yml` (apuntaban a `experiments/`, que ni está en git). Los
+releases ya compilaban con SQLite3MC en las dos plataformas; SQLCipher y
+el plano sólo quedaban como default de desarrollo/CI. Sin migración: todo
+vive en la nube, un dispositivo con otra base se reinstala.
+
+Paso previo obligatorio para CUALQUIER build o test (host, Windows o cada
+ABI de Android): `cargo build --release --manifest-path
+sqlite3mc-vendor-lib/Cargo.toml` (con `cargo ndk -t <abi>` delante para
+Android). Los workflows ya lo hacen.
+
+Dos trampas reales encontradas al hacerlo, las dos silenciosas (el build
+compila, la app arranca, la base queda SIN cifrar):
+
+1. **Unificación de features de Cargo.** `libsqlite3-sys` es uno solo por
+   binario; si CUALQUIER dependencia activa `rusqlite/bundled`, se compila
+   un SQLite plano en vez de enlazar SQLite3MC. Pasó con `lattis_realtime`
+   (ahora `rusqlite` es opcional ahí, feature `smoke-sqlite`). Ninguna
+   dependencia puede activar `rusqlite/bundled*`.
+2. **`pkg-config` gana a `SQLITE3_LIB_DIR`.** Aun con esa variable puesta,
+   `libsqlite3-sys` enlaza el SQLite del sistema si `pkg-config` lo
+   encuentra (cualquier Linux con `libsqlite3-dev`). Por eso
+   `SQLITE3_NO_PKG_CONFIG = "1"` en `[env]`.
+
+Guardas: `sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada`
+(raíz) y `abrir_cifrado_sqlite3mc_cifra_de_verdad` (mobile) verifican que
+el archivo en disco no quede en claro -- ahora corren siempre, no sólo
+bajo una feature.

@@ -97,10 +97,9 @@ pub fn open_database(path: impl AsRef<Path>) -> Result<Connection, SchemaError> 
     abrir_conexion(path, None)
 }
 
-/// Igual que [`open_database`], pero cifrada con `SQLCipher` usando `clave`
-/// como clave binaria cruda (no una passphrase -- `SQLCipher` se salta la
-/// derivación PBKDF2 de una vez, ver `PRAGMA key = "x'...'"` en su
-/// documentación). Quien llama resuelve y protege esa clave (ver
+/// Igual que [`open_database`], pero cifrada con `SQLite3MC` (ChaCha20-Poly1305)
+/// usando `clave` como clave binaria cruda (no una passphrase -- se salta la
+/// derivación de clave, ver `PRAGMA key = "x'...'"`). Quien llama resuelve y protege esa clave (ver
 /// `desktop/src-tauri/src/clave_cifrado.rs` para el esquema con DPAPI en
 /// escritorio) -- este módulo sólo la aplica.
 pub fn open_database_cifrada(
@@ -110,18 +109,16 @@ pub fn open_database_cifrada(
     abrir_conexion(path, Some(clave))
 }
 
-/// Aplica la clave de `SQLCipher` a una conexión recién abierta con
+/// Aplica la clave de `SQLite3MC` a una conexión recién abierta con
 /// `Connection::open` -- para conexiones secundarias al mismo archivo que no
 /// deben repetir `initialize_database` (ya migrada por la conexión
 /// principal). Debe llamarse antes de cualquier otra operación sobre la
-/// conexión: sin la clave, `SQLCipher` ni siquiera puede leer el schema.
+/// conexión: sin la clave, `SQLite3MC` ni siquiera puede leer el schema.
 pub fn aplicar_clave(connection: &Connection, clave: &[u8; 32]) -> rusqlite::Result<()> {
     // SQLite3MC necesita elegir el cipher ANTES de aplicar la clave -- sin
     // esto, `PRAGMA key` sola deja el archivo sin cifrar de verdad (ver
-    // benchmarks/sqlite-3way/sqlite3mc/src/main.rs, `configurar()`, el smoke
-    // test aislado que confirmó este orden). `SQLCipher`/`sqlite-plano` no
-    // tienen este pragma -- por eso va gated a la feature, no genérico.
-    #[cfg(feature = "cifrado-sqlite3mc")]
+    // el test `sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada`
+    // de este archivo, que lo confirma).
     connection.pragma_update(None, "cipher", "chacha20")?;
     connection.pragma_update(None, "key", format!("x'{}'", clave_a_hex(clave)))
 }
@@ -305,13 +302,12 @@ mod tests {
         fs::remove_dir_all(&raiz).unwrap();
     }
 
-    // Sólo corre bajo `cifrado-sqlite3mc` -- mismo criterio de aprobación que
-    // el smoke test aislado de `benchmarks/sqlite-3way/sqlite3mc/` (cabecera
-    // no queda en claro, clave incorrecta no lee, clave correcta reabre),
-    // pero contra `open_database_cifrada`/`aplicar_clave` REALES en vez de
-    // una conexión de laboratorio -- lo que confirma que `AppCore` con este
-    // motor cifra de verdad, no que sólo compila y enlaza.
-    #[cfg(feature = "cifrado-sqlite3mc")]
+    // Criterio de aprobación del motor (cabecera no queda en claro, clave
+    // incorrecta no lee, clave correcta reabre) contra
+    // `open_database_cifrada`/`aplicar_clave` REALES -- confirma que
+    // `AppCore` cifra de verdad, no que sólo compila y enlaza.
+    // También es la guarda contra un motor plano colado por unificación de
+    // features de Cargo (pasó de verdad el 2026-09-26, ver docs/decisiones-tecnicas.md).
     #[test]
     fn sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada() {
         let ruta = directorio_temporal("sqlite3mc_cifrado").with_extension("db");
@@ -329,7 +325,7 @@ mod tests {
         let bytes = fs::read(&ruta).unwrap();
         assert!(
             !bytes.starts_with(b"SQLite format 3\0"),
-            "la base quedo sin cifrar de verdad bajo cifrado-sqlite3mc"
+            "la base quedo sin cifrar de verdad: se enlazo un SQLite plano en vez de SQLite3MC"
         );
 
         {

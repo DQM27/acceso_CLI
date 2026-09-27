@@ -25,22 +25,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Mismas features que los alias -plano de .cargo/config.toml --
-          # evita arrastrar OpenSSL vendorizado (cifrado-sqlcipher, default
-          # de root/mobile) sólo para un reporte informativo. La raíz
-          # necesita "nube" además de "sqlite-plano" para no dejar afuera
-          # del reporte todo `src/nube/` (reqwest, jsonwebtoken); desktop y
-          # mobile ya traen "nube" fijo en su propia dependencia a
-          # `control_acceso`, no como feature propia.
+          # La raíz necesita "nube" para no dejar afuera del reporte todo
+          # `src/nube/` (reqwest, jsonwebtoken); desktop y mobile ya traen
+          # "nube" fijo en su propia dependencia a `control_acceso`.
           - crate: raíz
             directorio: .
-            features: "nube,sqlite-plano"
+            argumentos: "--features nube"
           - crate: desktop
             directorio: desktop/src-tauri
-            features: "sqlite-plano"
+            argumentos: ""
           - crate: mobile
             directorio: mobile/rust-core
-            features: "sqlite-plano"
+            argumentos: ""
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,6 +48,11 @@ jobs:
         with:
           workspaces: ${{ matrix.directorio }}
 
+      # Motor SQLite único (SQLite3MC): paso previo obligatorio para
+      # compilar cualquiera de los tres crates (ver ci.yml).
+      - name: Compilar SQLite3MC vendorizado (paso previo obligatorio)
+        run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+
       - name: Instalar cargo-geiger
         run: cargo install cargo-geiger --locked
 
@@ -61,4 +62,4 @@ jobs:
       # ya deja pasar `cargo audit` en este repo, ver docs/pendientes.md).
       - name: Reporte de unsafe (${{ matrix.crate }})
         working-directory: ${{ matrix.directorio }}
-        run: cargo geiger --no-default-features --features ${{ matrix.features }} || true
+        run: cargo geiger ${{ matrix.argumentos }} || true

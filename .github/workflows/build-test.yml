@@ -63,6 +63,9 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
           mkdir -p ../android/app/src/main/jniLibs/arm64-v8a
+          # Motor SQLite único (SQLite3MC): el vendorizado se compila antes,
+          # para el mismo ABI (ver release.yml).
+          cargo ndk -t aarch64-linux-android build --release --manifest-path ../../sqlite3mc-vendor-lib/Cargo.toml
           cargo ndk -t aarch64-linux-android build --release
           cp target/aarch64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/arm64-v8a/
 

@@ -29,9 +29,36 @@ pub use super::cliente::{MetadatosDispositivo, NubeError, TokenDispositivo};
 
 /// Margen antes del vencimiento real del token en el que ya no se
 /// considera "vigente" -- no arrancar una operación con un token que
-/// puede vencer a mitad de camino. Mismo valor en las tres copias que
-/// este tipo reemplaza.
-const MARGEN_EXPIRACION: Duration = Duration::from_secs(30);
+/// puede vencer a mitad de camino.
+///
+/// Antes eran 30s, y eso rompía el canal de Realtime en sesiones largas:
+/// el canal (`desktop/src/nubeRealtime.ts`, `NubeRealtime.kt`) le pide su
+/// JWT a ESTA caché al (re)conectarse y programa la renovación a partir de
+/// `expires_in`; la caché devolvía el mismo token viejo hasta 30s antes de
+/// vencer, así que una renovación que caía en esa ventana se llevaba un
+/// token a punto de vencer, Supabase cerraba el canal y la app quedaba
+/// sólo con el pulso de 2 minutos. Con este margen, una renovación
+/// programada a tiempo siempre recibe un token nuevo. Costo: pedir el
+/// token (12h de vida) 15 minutos antes.
+const MARGEN_EXPIRACION: Duration = Duration::from_secs(15 * 60);
+
+/// El token cacheado, si todavía sirve pasado `transcurrido` desde que se
+/// obtuvo -- con `expires_in` AJUSTADO a lo que de verdad le queda. Antes
+/// se devolvía con el `expires_in` original (12h) aunque el token ya
+/// tuviera horas encima: quien programaba su propia renovación a partir de
+/// ese número (el canal de Realtime, ver arriba) la programaba horas tarde
+/// y el canal moría con el token vencido. Separada
+/// de `CacheTokenDispositivo` para poder probarla sin red.
+fn reutilizable(token: &TokenDispositivo, transcurrido: Duration) -> Option<TokenDispositivo> {
+    let vigente_por = Duration::from_secs(token.expires_in).saturating_sub(MARGEN_EXPIRACION);
+    if transcurrido >= vigente_por {
+        return None;
+    }
+    let mut vigente = token.clone();
+    vigente.expires_in = token.expires_in.saturating_sub(transcurrido.as_secs());
+    vigente.desfase_reloj_ms = None;
+    Some(vigente)
+}
 
 struct EntradaCache {
     secreto: String,
@@ -91,14 +118,11 @@ impl CacheTokenDispositivo {
                 .entrada
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(entrada) = cache.as_ref() {
-                let vigente_por =
-                    Duration::from_secs(entrada.token.expires_in).saturating_sub(MARGEN_EXPIRACION);
-                if entrada.secreto == secreto && entrada.obtenido_en.elapsed() < vigente_por {
-                    let mut token = entrada.token.clone();
-                    token.desfase_reloj_ms = None;
-                    return Ok(token);
-                }
+            if let Some(entrada) = cache.as_ref()
+                && entrada.secreto == secreto
+                && let Some(token) = reutilizable(&entrada.token, entrada.obtenido_en.elapsed())
+            {
+                return Ok(token);
             }
         }
 
@@ -118,7 +142,7 @@ impl CacheTokenDispositivo {
     /// `SincronizacionError::token_dispositivo_vencido`: el receptor lo
     /// rechazó a mitad de una sincronización aunque `autenticar_con_cache`
     /// lo creía vigente (desfase de reloj, o el dispositivo estuvo
-    /// inactivo más de lo que el margen de 30s contemplaba). La próxima
+    /// inactivo más de lo que el margen de expiración contemplaba). La próxima
     /// llamada pide uno nuevo sin esperar a que el "vigente por" calculado
     /// localmente se cumpla solo.
     pub fn invalidar(&self) {
@@ -198,5 +222,66 @@ impl CacheTokenDispositivo {
             sitio_id: &token.sitio_id,
         };
         super::gafete_ocupado_en_otro_dispositivo(&contexto, numero)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::{MARGEN_EXPIRACION, TokenDispositivo, reutilizable};
+
+    fn token_de_12_horas() -> TokenDispositivo {
+        TokenDispositivo {
+            access_token: "jwt".to_string(),
+            expires_in: 12 * 60 * 60,
+            sitio_id: "s1".to_string(),
+            dispositivo_id: "d1".to_string(),
+            tipo: "pc".to_string(),
+            desfase_reloj_ms: Some(42),
+        }
+    }
+
+    #[test]
+    fn un_acierto_de_cache_informa_lo_que_de_verdad_le_queda_al_token() {
+        let token = reutilizable(&token_de_12_horas(), Duration::from_secs(11 * 60 * 60))
+            .expect("a 11h todavía está vigente");
+        assert_eq!(
+            token.expires_in,
+            60 * 60,
+            "a las 11h de obtenido le queda 1h, no las 12h originales"
+        );
+        assert_eq!(
+            token.desfase_reloj_ms, None,
+            "un acierto no vuelve a medir el reloj"
+        );
+    }
+
+    #[test]
+    fn deja_de_reusarlo_con_margen_suficiente_para_la_renovacion_del_canal() {
+        // El canal de Realtime renueva cada 10 minutos: en cualquier
+        // instante de los últimos 10 minutos del token, la caché ya tiene
+        // que estar entregando uno NUEVO.
+        let limite = Duration::from_secs(12 * 60 * 60)
+            .checked_sub(MARGEN_EXPIRACION)
+            .unwrap();
+        let justo_antes = limite.checked_sub(Duration::from_secs(1)).unwrap();
+        assert!(MARGEN_EXPIRACION > Duration::from_secs(10 * 60));
+        assert!(reutilizable(&token_de_12_horas(), justo_antes).is_some());
+        assert!(reutilizable(&token_de_12_horas(), limite).is_none());
+        assert!(
+            reutilizable(
+                &token_de_12_horas(),
+                Duration::from_secs(12 * 60 * 60 - 10 * 60)
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn un_token_de_vida_menor_al_margen_nunca_se_reusa() {
+        let mut corto = token_de_12_horas();
+        corto.expires_in = 60;
+        assert!(reutilizable(&corto, Duration::ZERO).is_none());
     }
 }

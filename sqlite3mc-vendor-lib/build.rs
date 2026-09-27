@@ -4,19 +4,18 @@
 //! library en tiempo de ejecución. Mismos flags que usa `libsqlite3-sys`
 //! para compilar su propio `sqlite3.c` bajo la feature `bundled` (ver ese
 //! `build.rs` en el registry de Cargo) -- replicados a propósito para que
-//! el benchmark de 3 motores compare sobre la misma superficie de
-//! features (FTS5/JSON1/RTREE/etc.), no sólo sobre el cifrado.
+//! el motor cifrado tenga la misma superficie de features (FTS5/JSON1/
+//! RTREE/etc.) que el SQLite estándar.
 //!
 //! El resultado se deja en `dist/` (ruta FIJA dentro de este crate, no el
-//! `OUT_DIR` con hash que usa Cargo normalmente) a propósito: el crate
-//! hermano `sqlite3mc` apunta `SQLITE3_LIB_DIR` ahí vía su
-//! `.cargo/config.toml`. Tiene que ser una ruta fija y existir ANTES de
-//! que arranque `cargo build/run` de `sqlite3mc` -- `libsqlite3-sys`
+//! `OUT_DIR` con hash que usa Cargo normalmente) a propósito: el
+//! `.cargo/config.toml` de la raíz del repo apunta `SQLITE3_LIB_DIR` ahí.
+//! Tiene que ser una ruta fija y existir ANTES de que arranque cualquier
+//! build de la app -- `libsqlite3-sys`
 //! resuelve su propio `-lstatic=sqlite3` cuando SE COMPILA A SÍ MISMO,
 //! antes de que cualquier build script río abajo llegue a ejecutarse, así
-//! que no alcanza con que este crate sea sólo una `build-dependency` de
-//! `sqlite3mc`: hay que compilarlo aparte, como paso previo (ver
-//! `experiments/db-cipher-lab/README.md`).
+//! que no alcanza con que este crate sea sólo una `build-dependency`: hay
+//! que compilarlo aparte, como paso previo.
 
 use std::path::PathBuf;
 

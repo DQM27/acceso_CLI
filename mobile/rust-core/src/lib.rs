@@ -1288,10 +1288,7 @@ impl Nucleo {
     /// `clave` es la clave AES de 32 bytes que Kotlin resuelve del Android
     /// Keystore (`AndroidKeystoreClaveBaseDatosStore.kt`), nunca derivada
     /// acá. Único punto de entrada real desde `AplicacionViewModel`; `abrir`
-    /// se queda sin tocar para los tests de Kotlin (`NucleoDePrueba`) y
-    /// para quien compile con `sqlite-plano`/`cifrado-sqlcipher` en vez del
-    /// default (`cifrado-sqlite3mc`) -- ver el comentario de
-    /// `[features]` en `Cargo.toml`.
+    /// se queda sin tocar para los tests de Kotlin (`NucleoDePrueba`).
     ///
     /// Si el archivo en `ruta_base_datos` ya existe pero NO es legible con
     /// esta clave -- el caso real de todo teléfono con la app instalada
@@ -1303,8 +1300,8 @@ impl Nucleo {
     /// desktop/src-tauri/src/lib.rs para un archivo dañado); el costo es
     /// perder el historial/auditoría LOCAL de ese dispositivo que todavía
     /// no se hubiera subido, a cambio de no escribir ni probar en este
-    /// momento una migración `sqlcipher_export` sin verificar todavía
-    /// contra un dispositivo real.
+    /// momento una migración byte a byte sin verificar todavía contra un
+    /// dispositivo real.
     #[uniffi::constructor]
     pub fn abrir_cifrado(ruta_base_datos: String, clave: Vec<u8>) -> Result<Self, NucleoError> {
         iniciar_log_android();
@@ -2826,11 +2823,9 @@ impl Nucleo {
     /// el mismo candado. Reusa la fábrica central de escritura (mismos
     /// pragmas que `GuiState::conexion_secundaria` en escritorio: antes
     /// esta sólo aplicaba `busy_timeout`/`foreign_keys`, le faltaban
-    /// `synchronous`/`trusted_schema`/`secure_delete`). `clave` en `None`
-    /// -- Android todavía no aplica ninguna clave de `SQLCipher` a la base
-    /// (pendiente aparte, ver `docs/auditorias/auditoria-integral-android-2026-09-09.md`);
-    /// el día que se active acá, pasa a la vez por la conexión principal y
-    /// por ésta.
+    /// `synchronous`/`trusted_schema`/`secure_delete`). Usa la misma clave
+    /// de `SQLite3MC` que la conexión principal (`None` sólo con `abrir`,
+    /// sin cifrar).
     fn conexion_secundaria(&self) -> Result<rusqlite::Connection, NucleoError> {
         control_acceso::database::connection::abrir_conexion_secundaria_escritura(
             &self.ruta_base_datos,
@@ -3315,11 +3310,12 @@ mod tests {
         assert_ne!(bytes, b"esto no es un archivo SQLite valido".to_vec());
     }
 
-    // Sólo corre bajo `cifrado-sqlite3mc` (`cargo test-mobile-3mc`) --
-    // mismo criterio que `sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada`
+    // Mismo criterio que `sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada`
     // en el crate raíz (`src/database/connection.rs`): confirma que
-    // `abrir_cifrado` cifra de verdad, no sólo que compila y enlaza.
-    #[cfg(feature = "cifrado-sqlite3mc")]
+    // `abrir_cifrado` cifra de verdad, no sólo que compila y enlaza. Es
+    // también la guarda contra un SQLite plano colado por unificación de
+    // features de Cargo (pasó de verdad el 2026-09-26, ver
+    // docs/decisiones-tecnicas.md).
     #[test]
     fn abrir_cifrado_sqlite3mc_cifra_de_verdad() {
         let archivo = tempfile::NamedTempFile::new().unwrap();
@@ -3331,7 +3327,7 @@ mod tests {
         let bytes = std::fs::read(&ruta).unwrap();
         assert!(
             !bytes.starts_with(b"SQLite format 3\0"),
-            "la base quedó sin cifrar de verdad bajo cifrado-sqlite3mc"
+            "la base quedó sin cifrar de verdad: se enlazó un SQLite plano en vez de SQLite3MC"
         );
     }
 
@@ -3339,11 +3335,7 @@ mod tests {
     // (2026-09-26): `conexion_secundaria()` pasaba `None` siempre, sin
     // importar con qué clave se hubiera abierto la conexión principal --
     // cualquier flujo que la usara (toda la sincronización) reventaba con
-    // "file is not a database" apenas tocaba la base ya cifrada. Sólo
-    // corre bajo `cifrado-sqlite3mc`: con el motor plano, `PRAGMA key` es
-    // un no-op sin importar si se le pasa la clave o `None`, así que no
-    // distinguiría el bug del fix.
-    #[cfg(feature = "cifrado-sqlite3mc")]
+    // "file is not a database" apenas tocaba la base ya cifrada.
     #[test]
     fn conexion_secundaria_usa_la_misma_clave_que_abrir_cifrado() {
         let archivo = tempfile::NamedTempFile::new().unwrap();
