@@ -47,7 +47,8 @@ pub(in crate::nube) use ingresos::{
     FilaIngresoRemoto, aplicar_cierre_de_ingreso_propio, guardar_ingreso_remoto,
 };
 use paginado::{
-    DIAS_TRASLAPE_HISTORIAL, obtener_json, obtener_json_paginado, obtener_json_paginado_con,
+    DIAS_TRASLAPE_HISTORIAL, avanzar_marca, guardar_por_pagina, obtener_json,
+    obtener_json_paginado_con,
 };
 pub use proveedores::*;
 
