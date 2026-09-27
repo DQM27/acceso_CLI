@@ -258,6 +258,17 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
             TipoDocumento.LICENCIA_EXTRANJERO
         "LICENCIA DE CONDUCIR" in mayus ->
             TipoDocumento.LICENCIA_NACIONAL
+        // Gafete de contratista ("CARNÉ PROVISIONAL / CRC - 12 /
+        // CONTRATISTAS / Costa Rica"), ANTES que la DIMEX a propósito: la
+        // regla de DIMEX incluye "CARNÉ PROVISIONAL" (carné migratorio) y,
+        // si el OCR junta esas dos palabras en un renglón, el gafete se
+        // leía como DIMEX y nunca daba número. El código "CRC - n" no
+        // aparece en ningún documento migratorio. Tampoco exige "Costa
+        // Rica": va chiquito en la esquina de la franja verde y es lo
+        // primero que se pierde con un gafete vertical.
+        REGEX_GAFETE_CONTRATISTA.containsMatchIn(mayus) &&
+            ("CONTRATISTAS" in mayus || "PROVISIONAL" in mayus) ->
+            TipoDocumento.GAFETE_CONTRATISTA
         "DGME" in mayus || "MIGRACIÓN Y EXTRANJERÍA" in mayus || "MIGRACION Y EXTRANJERIA" in mayus ||
             "CÉDULA DE RESIDENCIA" in mayus || "CEDULA DE RESIDENCIA" in mayus ||
             "RESIDENTE PERMANENTE" in mayus || "RESIDENTE TEMPORAL" in mayus ||

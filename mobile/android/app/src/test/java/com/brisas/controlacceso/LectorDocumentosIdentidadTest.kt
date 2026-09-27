@@ -892,4 +892,21 @@ class LectorDocumentosIdentidadTest {
         """.trimIndent()
         assertNull(leerDocumentoDeTexto(texto))
     }
+
+    // --- Gafete de contratista (CRC) ---
+
+    @Test
+    fun gafeteContratistaConCarneProvisionalEnUnRenglonNoSeConfundeConDimex() {
+        val texto = "CARNÉ PROVISIONAL\nCRC - 12\nCONTRATISTAS\nCosta Rica"
+        val doc = leerDocumentoDeTexto(texto)
+        assertEquals(TipoDocumento.GAFETE_CONTRATISTA, doc?.tipo)
+        assertEquals("12", doc?.numeroDocumento)
+    }
+
+    @Test
+    fun gafeteContratistaSinCostaRicaNiFranjaVerdeSeReconocePorCrcYProvisional() {
+        val doc = leerDocumentoDeTexto("CARNÉ\nPROVISIONAL\nCRC - 12")
+        assertEquals(TipoDocumento.GAFETE_CONTRATISTA, doc?.tipo)
+        assertEquals("12", doc?.numeroDocumento)
+    }
 }
