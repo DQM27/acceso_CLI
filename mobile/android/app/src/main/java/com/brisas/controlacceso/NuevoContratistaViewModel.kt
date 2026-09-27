@@ -8,7 +8,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import java.time.LocalDate
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -25,17 +24,17 @@ import uniffi.control_acceso_mobile.TipoIngreso
 /// lee este estado y reporta eventos. Antes la pantalla llamaba al núcleo
 /// directo, manejaba sus corrutinas y decidía si el PRAIND estaba vencido.
 ///
-/// Sólo alta, no edición (ver docs/plan-app-movil.md). La validación real
-/// vuelve a correr en Rust (`ContratistaService::crear`); lo de acá es
-/// feedback inmediato. `requierePraind` delega en
-/// `Nucleo.requierePraindParaFormulario` (la regla real de
-/// `domain::contratista::requiere_praind_de`, pura: sin SQLite ni red).
+/// Sólo alta, no edición (ver docs/plan-app-movil.md). Este ViewModel no
+/// decide ninguna regla de negocio: `requierePraind`, `praindVencido` y
+/// `muestraPersonalRuta` le preguntan al núcleo (`domain::contratista`), y
+/// al guardar `ContratistaService::crear_en_persona` vuelve a aplicarlas
+/// todas (además deja el acceso habilitado). Lo de acá es sólo el aviso
+/// inmediato mientras se completa el formulario.
 class NuevoContratistaViewModel(
     private val nucleo: Nucleo,
     // Inyectable para tests con un dispatcher de tiempo controlado, mismo
     // motivo que en `ActivosViewModel`.
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
-    private val hoy: () -> LocalDate = LocalDate::now,
 ) : ViewModel() {
     var empresas by mutableStateOf<List<Empresa>>(emptyList())
         private set
@@ -67,18 +66,15 @@ class NuevoContratistaViewModel(
     val requierePraind: Boolean
         get() = nucleo.requierePraindParaFormulario(tipoIngreso, personalRuta)
 
-    /// Vencido en el instante en que se tipea, no recién al guardar --
-    /// `runCatching` porque mientras se escribe la fecha pasa por formas
-    /// incompletas ("10-09-202") que todavía no parsean. Bloquea el botón
-    /// Guardar (pedido del usuario 2026-09-20).
+    /// Vencido en el instante en que se tipea, no recién al guardar. Una
+    /// fecha a medio escribir ("10-09-202") el núcleo la toma como no
+    /// vencida. Bloquea el botón Guardar (pedido del usuario 2026-09-20).
     val praindVencido: Boolean
         get() = requierePraind && fechaPraind.isNotBlank() &&
-            runCatching { LocalDate.parse(textoDDMMYYYYaIso(fechaPraind)) < hoy() }.getOrDefault(false)
+            nucleo.praindVencidoParaFormulario(textoDDMMYYYYaIso(fechaPraind))
 
-    /// "Personal de ruta" sólo tiene sentido para PRAIND / IN HOUSE (pedido
-    /// del usuario 2026-09-20).
     val muestraPersonalRuta: Boolean
-        get() = tipoIngreso != TipoIngreso.POR_CORREO && tipoIngreso != TipoIngreso.SWAT
+        get() = nucleo.admitePersonalRutaParaFormulario(tipoIngreso)
 
     init {
         viewModelScope.launch {
@@ -168,13 +164,11 @@ class NuevoContratistaViewModel(
     fun guardar(onGuardado: () -> Unit) {
         error = null
         mensaje = null
+        // Sin empresa no hay `empresa_id` que mandar; el resto (cédula,
+        // nombre, PRAIND) lo valida el núcleo y su mensaje se muestra tal cual.
         val empresa = empresaSeleccionada
-        if (cedula.isBlank() || nombre.isBlank() || empresa == null) {
-            error = "Complete cédula, nombre y empresa"
-            return
-        }
-        if (praindVencido) {
-            error = "El PRAIND está vencido — ingrese una fecha vigente"
+        if (empresa == null) {
+            error = "Elija la empresa"
             return
         }
         if (enviando) return
@@ -190,9 +184,6 @@ class NuevoContratistaViewModel(
                             tipoIngreso = tipoIngreso,
                             fechaVencimientoPraind = fechaPraind.ifBlank { null }?.let(::textoDDMMYYYYaIso),
                             esPersonalRuta = personalRuta,
-                            // Siempre true: registrar acá es en persona,
-                            // frente a quien opera (pedido 2026-09-20).
-                            tieneAcceso = true,
                         ),
                     )
                 }

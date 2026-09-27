@@ -7,6 +7,7 @@ use crate::database::queries::contratistas::{
 };
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
+use crate::domain::contratista::{admite_personal_ruta, praind_vencido, requiere_praind_de};
 use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
 
@@ -81,6 +82,37 @@ where
         self.contratistas
             .crear(&contratista)
             .map_err(mapear_cedula_duplicada)
+    }
+
+    /// Alta hecha frente a la persona, en el punto de acceso (hoy la usa
+    /// la app móvil). Además de lo que valida [`Self::crear`]:
+    /// - personal de ruta sólo para los tipos que lo admiten
+    ///   (`domain::contratista::admite_personal_ruta`);
+    /// - un PRAIND vencido no se registra (`praind_vencido`);
+    /// - queda siempre con acceso: se registra a quien está presente
+    ///   (pedido del usuario 2026-09-20), `datos.tiene_acceso` se ignora.
+    ///
+    /// `hoy` lo pasa quien llama (fecha de Costa Rica) para poder probarlo.
+    /// El formulario de escritorio todavía usa [`Self::crear`] y no aplica
+    /// estas reglas -- ver
+    /// `docs/auditorias/reglas-duplicadas-escritorio-2026-09-27.md`.
+    pub fn crear_en_persona(
+        &self,
+        datos: DatosContratista,
+        hoy: NaiveDate,
+    ) -> Result<i64, ContratistaServiceError> {
+        if datos.es_personal_ruta && !admite_personal_ruta(datos.tipo_ingreso) {
+            return Err(ContratistaServiceError::PersonalRutaNoAdmitido);
+        }
+        if requiere_praind_de(datos.tipo_ingreso, datos.es_personal_ruta)
+            && praind_vencido(datos.fecha_vencimiento_praind, hoy)
+        {
+            return Err(ContratistaServiceError::PraindVencido);
+        }
+        self.crear(DatosContratista {
+            tiene_acceso: true,
+            ..datos
+        })
     }
 
     pub fn buscar_por_id(&self, id: i64) -> Result<Contratista, ContratistaServiceError> {

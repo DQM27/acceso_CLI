@@ -1,7 +1,6 @@
 package com.brisas.controlacceso
 
 import java.io.File
-import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -26,7 +25,6 @@ class NuevoContratistaViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private lateinit var archivo: File
     private lateinit var nucleo: Nucleo
-    private val hoy = LocalDate.of(2026, 9, 27)
 
     @Before
     fun preparar() {
@@ -51,7 +49,7 @@ class NuevoContratistaViewModelTest {
         nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
     }
 
-    private fun viewModel() = NuevoContratistaViewModel(nucleo, dispatcherIO = dispatcher, hoy = { hoy })
+    private fun viewModel() = NuevoContratistaViewModel(nucleo, dispatcherIO = dispatcher)
 
     private fun praind(empresa: String?, vence: FechaDocumento?) = DocumentoDetectado(
         tipo = TipoDocumento.CARNET_INDUCCION_PRAIND,
@@ -76,12 +74,12 @@ class NuevoContratistaViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        vm.aplicarDocumentoEscaneado(praind("sodexo", FechaDocumento(3, 8, 2027)))
+        vm.aplicarDocumentoEscaneado(praind("sodexo", FechaDocumento(3, 8, 2099)))
 
         assertEquals("701000000", vm.cedula)
         assertEquals("ANA ROJAS VEGA", vm.nombre)
         assertEquals("Sodexo", vm.empresaSeleccionada?.nombre)
-        assertEquals("03-08-2027", vm.fechaPraind)
+        assertEquals("03-08-2099", vm.fechaPraind)
         assertNull(vm.empresaSugeridaTexto)
         assertFalse(vm.praindVencido)
     }
@@ -112,7 +110,7 @@ class NuevoContratistaViewModelTest {
         abrirConEmpresas()
         val vm = viewModel()
         advanceUntilIdle()
-        vm.aplicarDocumentoEscaneado(praind("Sodexo", FechaDocumento(1, 1, 2026)))
+        vm.aplicarDocumentoEscaneado(praind("Sodexo", FechaDocumento(1, 1, 2000)))
         assertTrue(vm.praindVencido)
         var guardado = false
         vm.guardar { guardado = true }
@@ -122,15 +120,30 @@ class NuevoContratistaViewModelTest {
     }
 
     @Test
-    fun `sin empresa pide completar los campos`() = runTest(dispatcher) {
+    fun `sin empresa pide elegirla`() = runTest(dispatcher) {
         abrirConEmpresas()
         val vm = viewModel()
         advanceUntilIdle()
         vm.cambiarCedula("7-0100-0000")
         vm.cambiarNombre("ana")
         vm.guardar { }
-        assertEquals("Complete cédula, nombre y empresa", vm.error)
+        assertEquals("Elija la empresa", vm.error)
         assertEquals("701000000", vm.cedula)
+    }
+
+    @Test
+    fun `sin cedula el mensaje lo da el nucleo`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.elegirEmpresa(vm.empresas.first())
+        vm.cambiarTipoIngreso(TipoIngreso.SWAT)
+        vm.cambiarNombre("ana")
+        var guardado = false
+        vm.guardar { guardado = true }
+        advanceUntilIdle()
+        assertFalse(guardado)
+        assertEquals("La cédula es obligatoria", vm.error)
     }
 
     @Test
@@ -154,7 +167,7 @@ class NuevoContratistaViewModelTest {
         abrirConEmpresas()
         val vm = viewModel()
         advanceUntilIdle()
-        vm.aplicarDocumentoEscaneado(praind("Sodexo", FechaDocumento(3, 8, 2027)))
+        vm.aplicarDocumentoEscaneado(praind("Sodexo", FechaDocumento(3, 8, 2099)))
         var guardado = false
         vm.guardar { guardado = true }
         advanceUntilIdle()

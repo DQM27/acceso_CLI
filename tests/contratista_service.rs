@@ -547,3 +547,69 @@ fn debe_encolar_hacia_la_nube_al_actualizar() {
 
     assert_eq!(contar_cola_salida(&connection, &uuid, "actualizar"), 1);
 }
+
+// --- Alta en persona (app móvil): reglas extra de `crear_en_persona` ---
+
+fn hoy() -> NaiveDate {
+    NaiveDate::from_ymd_opt(2026, 9, 27).unwrap()
+}
+
+fn crear_en_persona_resultado(
+    tipo: TipoIngreso,
+    fecha: Option<NaiveDate>,
+    ruta: bool,
+) -> (Connection, Result<i64, ContratistaServiceError>) {
+    let (connection, empresa_id) = preparar_base();
+    let resultado = {
+        let contratistas = SqliteContratistaRepository::new(&connection);
+        let empresas = SqliteEmpresaRepository::new(&connection);
+        let servicio = ContratistaService::new(&contratistas, &empresas);
+        let mut entrada = datos(empresa_id, tipo);
+        entrada.fecha_vencimiento_praind = fecha;
+        entrada.es_personal_ruta = ruta;
+        entrada.tiene_acceso = false;
+        servicio.crear_en_persona(entrada, hoy())
+    };
+    (connection, resultado)
+}
+
+#[test]
+fn en_persona_rechaza_personal_de_ruta_en_tipos_que_no_lo_admiten() {
+    for tipo in [TipoIngreso::PorCorreo, TipoIngreso::Swat] {
+        let (_c, resultado) = crear_en_persona_resultado(tipo, Some(fecha_praind()), true);
+        assert!(matches!(
+            resultado,
+            Err(ContratistaServiceError::PersonalRutaNoAdmitido)
+        ));
+    }
+}
+
+#[test]
+fn en_persona_rechaza_praind_vencido() {
+    let ayer = hoy().pred_opt();
+    let (_c, resultado) = crear_en_persona_resultado(TipoIngreso::Praind, ayer, false);
+    assert!(matches!(
+        resultado,
+        Err(ContratistaServiceError::PraindVencido)
+    ));
+}
+
+#[test]
+fn en_persona_acepta_praind_que_vence_hoy_y_queda_con_acceso() {
+    let (connection, resultado) =
+        crear_en_persona_resultado(TipoIngreso::InHouse, Some(hoy()), true);
+    let id = resultado.unwrap();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    let creado = ContratistaService::new(&contratistas, &empresas)
+        .buscar_por_id(id)
+        .unwrap();
+    assert!(creado.tiene_acceso);
+    assert!(creado.es_personal_ruta);
+}
+
+#[test]
+fn en_persona_no_mira_fecha_vieja_si_el_tipo_no_requiere_praind() {
+    let (_c, resultado) = crear_en_persona_resultado(TipoIngreso::Swat, hoy().pred_opt(), false);
+    assert!(resultado.is_ok());
+}

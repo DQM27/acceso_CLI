@@ -420,10 +420,11 @@ impl From<EmpresaProveedorNucleo> for EmpresaProveedor {
     }
 }
 
-/// Espejo de `DatosContratista` — sólo alta, no edición (ver
+/// Espejo de `DatosContratista` — sólo alta en persona, no edición (ver
 /// docs/plan-app-movil.md). `fecha_vencimiento_praind` viaja como texto
-/// ISO (`AAAA-MM-DD`); si no parsea se rechaza como `DatosInvalidos` antes
-/// de tocar Rust, sin ida y vuelta.
+/// ISO (`AAAA-MM-DD`); si no parsea se rechaza como `FechaInvalida`. Sin
+/// `tiene_acceso`: el alta en persona siempre queda con acceso y eso lo
+/// decide el núcleo (`ContratistaService::crear_en_persona`), no Kotlin.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct DatosContratista {
     pub cedula: String,
@@ -432,7 +433,6 @@ pub struct DatosContratista {
     pub tipo_ingreso: TipoIngreso,
     pub fecha_vencimiento_praind: Option<String>,
     pub es_personal_ruta: bool,
-    pub tiene_acceso: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -989,6 +989,11 @@ pub enum NucleoError {
     /// sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).
     #[error("El gafete {numero} ya está en uso en otro dispositivo de la unidad operativa")]
     GafeteOcupadoEnSitio { numero: i64 },
+    /// Una regla de negocio rechazó la operación (dato inválido, PRAIND
+    /// vencido, ...). `mensaje` ya viene listo para mostrar tal cual, sin
+    /// prefijo técnico -- sale de `control_acceso::mensajes`.
+    #[error("{mensaje}")]
+    Rechazado { mensaje: String },
     #[error("error interno: {mensaje}")]
     Interno { mensaje: String },
 }
@@ -1087,10 +1092,17 @@ impl From<RegistroIngresoServiceErrorNucleo> for NucleoError {
     }
 }
 
+/// Las reglas del alta se muestran tal cual a quien opera; sólo la falla
+/// de base queda como `Interno`.
 impl From<ContratistaServiceErrorNucleo> for NucleoError {
     fn from(error: ContratistaServiceErrorNucleo) -> Self {
-        Self::Interno {
-            mensaje: interno(error),
+        match error {
+            ContratistaServiceErrorNucleo::Database(_) => Self::Interno {
+                mensaje: interno(error),
+            },
+            regla => Self::Rechazado {
+                mensaje: control_acceso::mensajes::mensaje_contratista(regla),
+            },
         }
     }
 }
@@ -1949,11 +1961,11 @@ impl Nucleo {
             .collect())
     }
 
-    /// Alta de contratista — mismo formulario que
-    /// `desktop/src/pantallas/FormularioContratista.tsx`, sólo creación
-    /// (ver docs/plan-app-movil.md). La validación real y definitiva vuelve
-    /// a correr en Rust (`ContratistaService::crear`); esto no duplica esa
-    /// lógica, sólo convierte tipos en la frontera uniffi.
+    /// Alta de contratista en persona, sólo creación (ver
+    /// docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
+    /// PRAIND requerido y vigente, personal de ruta según el tipo, acceso
+    /// habilitado) viven en `ContratistaService::crear_en_persona`; esto
+    /// sólo convierte tipos en la frontera uniffi.
     pub fn crear_contratista(&self, datos: DatosContratista) -> Result<i64, NucleoError> {
         let actor = self.actor_autenticado()?;
 
@@ -1966,7 +1978,7 @@ impl Nucleo {
             })
             .transpose()?;
 
-        Ok(self.core_lock().crear_contratista(
+        Ok(self.core_lock().crear_contratista_en_persona(
             &actor,
             DatosContratistaNucleo {
                 cedula: datos.cedula,
@@ -1975,7 +1987,8 @@ impl Nucleo {
                 tipo_ingreso: datos.tipo_ingreso.into(),
                 fecha_vencimiento_praind,
                 es_personal_ruta: datos.es_personal_ruta,
-                tiene_acceso: datos.tiene_acceso,
+                // Lo fija `crear_en_persona` (siempre con acceso).
+                tiene_acceso: true,
             },
         )?)
     }
@@ -2005,6 +2018,23 @@ impl Nucleo {
         personal_ruta: bool,
     ) -> bool {
         control_acceso::domain::contratista::requiere_gafete_de(tipo_ingreso.into(), personal_ruta)
+    }
+
+    /// Si el formulario muestra la casilla "personal de ruta" para este
+    /// tipo -- `domain::contratista::admite_personal_ruta`, la misma regla
+    /// que después aplica `crear_contratista`.
+    pub fn admite_personal_ruta_para_formulario(&self, tipo_ingreso: TipoIngreso) -> bool {
+        control_acceso::domain::contratista::admite_personal_ruta(tipo_ingreso.into())
+    }
+
+    /// Aviso inmediato de PRAIND vencido mientras se tipea la fecha (ISO
+    /// `AAAA-MM-DD`). Una fecha incompleta o inválida todavía no es
+    /// "vencida" (`false`): eso lo rechaza `crear_contratista` al guardar.
+    /// Misma regla y mismo reloj que el alta (`AppCore::praind_vencido`).
+    pub fn praind_vencido_para_formulario(&self, fecha_iso: String) -> bool {
+        fecha_iso
+            .parse()
+            .is_ok_and(|fecha| self.core_lock().praind_vencido(fecha))
     }
 
     pub fn crear_empresa(&self, nombre: String) -> Result<i64, NucleoError> {
@@ -3722,7 +3752,6 @@ mod tests {
                 tipo_ingreso: TipoIngreso::Swat,
                 fecha_vencimiento_praind: None,
                 es_personal_ruta: false,
-                tiene_acceso: true,
             })
             .unwrap();
         assert!(id > 0);
@@ -3767,10 +3796,66 @@ mod tests {
             tipo_ingreso: TipoIngreso::Praind,
             fecha_vencimiento_praind: Some("no-es-una-fecha".to_string()),
             es_personal_ruta: false,
-            tiene_acceso: true,
         });
 
         assert!(matches!(resultado, Err(NucleoError::FechaInvalida { .. })));
+    }
+
+    /// Las reglas del alta en persona salen del núcleo con un mensaje listo
+    /// para mostrar (`Rechazado`), no como error interno.
+    #[test]
+    fn crear_contratista_aplica_reglas_del_alta_en_persona() {
+        let archivo = tempfile::NamedTempFile::new().unwrap();
+        let ruta = archivo.path().to_str().unwrap().to_string();
+        let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+        conexion
+            .execute_batch(
+                "INSERT INTO empresas (nombre) VALUES ('Empresa Test');
+                 INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                     '999999999', 'Actor Test',
+                     '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                     'ROOT', 1
+                 );",
+            )
+            .unwrap();
+        drop(conexion);
+        let nucleo = Nucleo::abrir(ruta).unwrap();
+        nucleo
+            .autenticar(
+                "999999999".to_string(),
+                "clave_prueba_123".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap();
+        let datos = |tipo, fecha: &str, ruta| DatosContratista {
+            cedula: "444444444".to_string(),
+            nombre: "Contratista Regla".to_string(),
+            empresa_id: 1,
+            tipo_ingreso: tipo,
+            fecha_vencimiento_praind: Some(fecha.to_string()),
+            es_personal_ruta: ruta,
+        };
+
+        match nucleo.crear_contratista(datos(TipoIngreso::Praind, "2000-01-01", false)) {
+            Err(NucleoError::Rechazado { mensaje }) => assert!(mensaje.contains("vencido")),
+            otro => panic!("se esperaba PRAIND vencido, llegó {otro:?}"),
+        }
+        match nucleo.crear_contratista(datos(TipoIngreso::Swat, "2999-01-01", true)) {
+            Err(NucleoError::Rechazado { mensaje }) => assert!(mensaje.contains("ruta")),
+            otro => panic!("se esperaba personal de ruta no admitido, llegó {otro:?}"),
+        }
+        assert!(
+            nucleo
+                .crear_contratista(datos(TipoIngreso::InHouse, "2999-01-01", true))
+                .is_ok()
+        );
+
+        assert!(nucleo.praind_vencido_para_formulario("2000-01-01".to_string()));
+        assert!(!nucleo.praind_vencido_para_formulario("2999-01-01".to_string()));
+        assert!(!nucleo.praind_vencido_para_formulario("2000-01".to_string()));
+        assert!(nucleo.admite_personal_ruta_para_formulario(TipoIngreso::InHouse));
+        assert!(!nucleo.admite_personal_ruta_para_formulario(TipoIngreso::PorCorreo));
     }
 
     #[test]

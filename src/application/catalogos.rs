@@ -1,5 +1,6 @@
 //! Contratistas y Empresas.
 
+use chrono::NaiveDate;
 use rusqlite::{Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
@@ -14,12 +15,14 @@ use crate::database::queries::gafetes_incidentes::{
 use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
 use crate::domain::autorizacion::Operacion;
+use crate::domain::contratista::praind_vencido;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::contratista_service::{
     ContratistaConsultaService, ContratistaService, DatosActualizacionContratista, DatosContratista,
 };
 use crate::services::empresa_service::{EmpresaConsultaService, EmpresaService};
 use crate::services::error::{ContratistaServiceError, EmpresaServiceError};
+use crate::tiempo::fecha_costa_rica;
 
 use super::{AppCore, CargaCompleta, LIMITE_CARGA_COMPLETA_MAXIMO, verificar_actor_activo};
 
@@ -148,6 +151,43 @@ impl AppCore {
             &SqliteEmpresaRepository::new(&transaction),
         )
         .crear(datos)
+        .and_then(|id| {
+            transaction
+                .commit()
+                .map_err(DatabaseError::from)
+                .map_err(ContratistaServiceError::Database)?;
+            Ok(id)
+        })
+    }
+
+    /// `domain::contratista::praind_vencido` contra el "hoy" del reloj del
+    /// núcleo (corregido con la hora del servidor en escritorio/móvil):
+    /// lo usa el formulario para avisar antes de guardar, con la misma
+    /// regla y el mismo reloj que [`Self::crear_contratista_en_persona`].
+    pub fn praind_vencido(&self, fecha_vencimiento: NaiveDate) -> bool {
+        praind_vencido(
+            Some(fecha_vencimiento),
+            fecha_costa_rica(self.reloj.ahora_utc()),
+        )
+    }
+
+    /// Alta en persona (app móvil): ver `ContratistaService::crear_en_persona`.
+    pub fn crear_contratista_en_persona(
+        &self,
+        actor: &UsuarioSesion,
+        datos: DatosContratista,
+    ) -> Result<i64, ContratistaServiceError> {
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
+                .map_err(DatabaseError::from)?;
+        verificar_actor_activo(&transaction, actor)
+            .map_err(ContratistaServiceError::Database)?
+            .ok_or(ContratistaServiceError::OperacionNoAutorizada)?;
+        ContratistaService::new(
+            &SqliteContratistaRepository::new(&transaction),
+            &SqliteEmpresaRepository::new(&transaction),
+        )
+        .crear_en_persona(datos, fecha_costa_rica(self.reloj.ahora_utc()))
         .and_then(|id| {
             transaction
                 .commit()
