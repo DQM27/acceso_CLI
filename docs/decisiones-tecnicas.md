@@ -711,3 +711,35 @@ Guardas: `sqlite3mc_cifra_de_verdad_a_traves_de_open_database_cifrada`
 (raíz) y `abrir_cifrado_sqlite3mc_cifra_de_verdad` (mobile) verifican que
 el archivo en disco no quede en claro -- ahora corren siempre, no sólo
 bajo una feature.
+
+---
+
+## 2026-09-28 — Sincronización completa sólo al abrir la app; un aviso toca sólo su fila
+
+Medido en producción (registros de peticiones del 28/09): un ingreso hecho
+en el celular tardaba ~10 s en aparecer en el escritorio. El aviso llegaba
+en menos de 1 s, pero el escritorio corría una sincronización completa
+antes de refrescar Activos: catálogo, los 1.438 encargados de ruta (~2,3 s)
+y 7 días de historial (390 ingresos, ~4,7 s). El celular no guarda
+historial y por eso se sentía instantáneo.
+
+Regla desde ahora:
+
+- **Al abrir la app** (primera vuelta del pulso,
+  `AlcanceSincronizacion::arranque`): sincronización completa, con los
+  historiales reconciliados 7 días hacia atrás.
+- **Pulso periódico, botón y reconexión**: completa pero incremental; los
+  historiales retroceden sólo 5 minutos (`MINUTOS_TRASLAPE_CORTO`, ver
+  NS-09 en `docs/auditorias/auditoria-integral-2026-09-24`).
+- **Aviso en vivo con la fila** (`registro`): se guarda sólo esa fila, en
+  Activos y en su línea del Historial (`nube::en_vivo`), sin consultar la
+  nube. Si no se pudo aplicar (aviso sin fila, otra tabla), se sincroniza
+  sólo su tabla.
+- **Cambio registrado en el escritorio**: sólo se envía
+  (`AlcanceSincronizacion::solo_envio`).
+
+Además, las marcas de agua se guardan con microsegundos
+(`tiempo::serializar_marca_utc`): guardadas al segundo quedaban por debajo
+del `updated_at` real y `updated_at=gt.<marca>` volvía a traer todas las
+filas de ese segundo, para siempre (los encargados de ruta se cargaron en
+lote, todos en el mismo segundo).

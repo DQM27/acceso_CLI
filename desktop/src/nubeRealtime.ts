@@ -1,6 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
-import { aplicarCambioNube, sesionRealtimeNube, sincronizarCambiosNube, sincronizarConNube } from "./api/nube";
+import {
+  aplicarCambioNube,
+  enviarCambiosNube,
+  sesionRealtimeNube,
+  sincronizarCambiosNube,
+  sincronizarConNube,
+} from "./api/nube";
 import type { ResumenSincronizacion } from "./api/nube";
 import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 
@@ -57,12 +63,14 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   let temporizadorSincronizar: ReturnType<typeof window.setTimeout> | null = null;
   let sincronizando = false;
   let sincronizacionPendiente = false;
-  // Qué hay que sincronizar en la próxima corrida. Un aviso remoto que
-  // trae su tabla (`payload.table`) pide sólo esa parte (ver
-  // `sincronizarCambiosNube`); un cambio local, la (re)conexión del canal o
-  // un aviso sin tabla piden la sincronización completa. Antes TODO aviso
-  // corría la completa (~13 consultas a la nube por un solo cambio) -- el
-  // aviso llegaba al instante, lo que tardaba era lo que se hacía después.
+  // Qué hay que sincronizar en la próxima corrida. Un aviso remoto que no
+  // se pudo aplicar con su fila pide sólo su tabla (`payload.table`, ver
+  // `sincronizarCambiosNube`); la (re)conexión del canal o un aviso sin
+  // tabla piden la sincronización completa (incremental: sólo lo que
+  // cambió). Un cambio local no pide nada de eso: con nada pendiente, la
+  // corrida sólo envía (`enviarCambiosNube`). Antes TODO aviso corría la
+  // completa (~13 consultas a la nube por un solo cambio) -- el aviso
+  // llegaba al instante, lo que tardaba era lo que se hacía después.
   let pendienteCompleta = false;
   const tablasPendientes = new Set<string>();
   // Intentos fallidos seguidos desde la última vez que el canal quedó
@@ -107,12 +115,16 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
     }
     sincronizacionPendiente = false;
     sincronizando = true;
-    const completa = pendienteCompleta || tablasPendientes.size === 0;
+    const completa = pendienteCompleta;
     const tablas = [...tablasPendientes];
     pendienteCompleta = false;
     tablasPendientes.clear();
     try {
-      const resumen = completa ? await sincronizarConNube() : await sincronizarCambiosNube(tablas);
+      const resumen = completa
+        ? await sincronizarConNube()
+        : tablas.length > 0
+          ? await sincronizarCambiosNube(tablas)
+          : await enviarCambiosNube();
       if (!cancelado) {
         opciones.onSincronizado?.(resumen);
         emitirActualizacion(resumen);
@@ -123,23 +135,19 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
       sincronizando = false;
       // Lo que llegó mientras corría ya quedó anotado en
       // `tablasPendientes`/`pendienteCompleta`.
-      if (sincronizacionPendiente && !cancelado) reprogramar();
+      if (sincronizacionPendiente && !cancelado) programarCorrida();
     }
-  }
-
-  function reprogramar() {
-    if (cancelado) return;
-    if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
-    temporizadorSincronizar = window.setTimeout(() => {
-      temporizadorSincronizar = null;
-      void sincronizarPorAviso();
-    }, 600);
   }
 
   function programarSincronizacion(tabla?: string) {
     if (cancelado) return;
     if (tabla) tablasPendientes.add(tabla);
     else pendienteCompleta = true;
+    programarCorrida();
+  }
+
+  function programarCorrida() {
+    if (cancelado) return;
     if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
     temporizadorSincronizar = window.setTimeout(() => {
       temporizadorSincronizar = null;
@@ -176,14 +184,22 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
           if (cancelado || cliente !== clienteActual) return;
           if (payload?.dispositivo_id === sesion.dispositivo_id) return;
           const tabla = typeof payload?.table === "string" ? payload.table : undefined;
-          // El aviso trae la fila: se guarda al instante y se refresca la
-          // pantalla. La sincronización por tabla corre igual detrás.
+          // El aviso trae la fila: se guarda SÓLO esa fila (Activos e
+          // Historial) y se refresca la pantalla, sin consultar la nube. Si
+          // no se pudo aplicar, se sincroniza sólo su tabla. El pulso
+          // periódico sigue siendo la red de seguridad.
           if (payload?.registro || payload?.operation === "DELETE") {
             void aplicarCambioNube(payload)
               .then((aplicado) => {
-                if (aplicado && !cancelado) window.dispatchEvent(new Event(EVENTO_CAMBIO_EN_VIVO));
+                if (cancelado) return;
+                if (aplicado) window.dispatchEvent(new Event(EVENTO_CAMBIO_EN_VIVO));
+                else programarSincronizacion(tabla);
               })
-              .catch((error) => console.info("No se pudo aplicar el cambio en vivo:", error));
+              .catch((error) => {
+                console.info("No se pudo aplicar el cambio en vivo:", error);
+                programarSincronizacion(tabla);
+              });
+            return;
           }
           programarSincronizacion(tabla);
         })
@@ -221,9 +237,9 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   }
 
   // Envoltorio propio: `addEventListener` le pasaría el `Event` como primer
-  // argumento, y `programarSincronizacion` lo tomaría como nombre de tabla.
-  // Un cambio local sube lo pendiente y refresca todo (completa).
-  const alCambioLocal = () => programarSincronizacion();
+  // argumento. Un cambio local sólo sube lo pendiente: no hay nada que bajar
+  // por un ingreso/salida que se registró acá mismo.
+  const alCambioLocal = () => programarCorrida();
   window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, alCambioLocal);
   void conectar();
 

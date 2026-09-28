@@ -1340,7 +1340,9 @@ fn recibe_historial_del_sitio_y_guarda_el_tipo_de_dispositivo_embebido() {
          \"dispositivo_entrada\":{\"tipo\":\"mobile\"}}]",
     );
 
-    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos =
+        recibir_historial_del_sitio(&connection, &contexto(&base_url), traslape_historial(true))
+            .unwrap();
 
     assert_eq!(recibidos, 1);
     let tipo: Option<String> = connection
@@ -1386,7 +1388,8 @@ fn recibir_historial_del_sitio_incluye_movimientos_del_dispositivo_actual() {
         .unwrap();
     });
 
-    recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    recibir_historial_del_sitio(&connection, &contexto(&base_url), traslape_historial(true))
+        .unwrap();
     servidor.join().unwrap();
 }
 
@@ -1446,7 +1449,9 @@ fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_e
     ) as &'static str;
     let base_url = servidor_de_respuestas(vec![respuesta_pagina_1, respuesta_pagina_2]);
 
-    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos =
+        recibir_historial_del_sitio(&connection, &contexto(&base_url), traslape_historial(true))
+            .unwrap();
 
     assert_eq!(recibidos, u32::try_from(TAMANO_PAGINA_REMOTA).unwrap() + 1);
     let guardadas: i64 = connection
@@ -1465,7 +1470,7 @@ fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_e
         )
         .unwrap();
     assert_eq!(
-        marca, "2026-01-01T00:08:19Z",
+        marca, "2026-01-01T00:08:19.000000Z",
         "la marca de agua es el máximo de TODAS las páginas, no el de la última"
     );
 }
@@ -1474,7 +1479,11 @@ fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_e
 fn marca_historial_para_consulta_retrocede_una_semana() {
     let ahora = crate::tiempo::parsear_utc("2026-09-09T12:00:00Z").unwrap();
 
-    let marca = marca_historial_para_consulta(Some("2026-09-09T10:00:00Z"), ahora);
+    let marca = marca_historial_para_consulta(
+        Some("2026-09-09T10:00:00Z"),
+        ahora,
+        traslape_historial(true),
+    );
 
     assert_eq!(
         marca,
@@ -1486,11 +1495,33 @@ fn marca_historial_para_consulta_retrocede_una_semana() {
 fn marca_historial_para_consulta_sanea_marcas_en_futuro() {
     let ahora = crate::tiempo::parsear_utc("2026-09-09T12:00:00Z").unwrap();
 
-    let marca = marca_historial_para_consulta(Some("2026-12-01T00:00:00Z"), ahora);
+    let marca = marca_historial_para_consulta(
+        Some("2026-12-01T00:00:00Z"),
+        ahora,
+        traslape_historial(true),
+    );
 
     assert_eq!(
         marca,
         Some(crate::tiempo::parsear_utc("2026-09-02T12:00:00Z").unwrap())
+    );
+}
+
+#[test]
+fn fuera_del_arranque_el_historial_retrocede_solo_minutos() {
+    // El pulso y los avisos no vuelven a bajar la semana entera (visto en
+    // producción: ~4 s reescribiendo 390 ingresos en cada aviso).
+    let ahora = crate::tiempo::parsear_utc("2026-09-09T12:00:00Z").unwrap();
+
+    let marca = marca_historial_para_consulta(
+        Some("2026-09-09T10:00:00.123456Z"),
+        ahora,
+        traslape_historial(false),
+    );
+
+    assert_eq!(
+        marca,
+        Some(crate::tiempo::parsear_utc("2026-09-09T09:55:00.123456Z").unwrap())
     );
 }
 
@@ -1506,7 +1537,9 @@ fn recibe_historial_del_sitio_sin_dispositivo_embebido_no_falla() {
          \"updated_at\":\"2026-01-01T08:00:05Z\"}]",
     );
 
-    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos =
+        recibir_historial_del_sitio(&connection, &contexto(&base_url), traslape_historial(true))
+            .unwrap();
 
     assert_eq!(recibidos, 1);
     let tipo: Option<String> = connection
@@ -1682,8 +1715,8 @@ fn segunda_sincronizacion_de_citas_pide_solo_lo_actualizado_desde_la_marca_previ
         }
         let pedido = String::from_utf8(pedido).unwrap();
         assert!(
-            pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00Z")
-                || pedido.contains("updated_at=gt.2026-09-09T08:00:00Z")
+            pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00")
+                || pedido.contains("updated_at=gt.2026-09-09T08:00:00")
         );
         assert!(
             !pedido.contains("sitio_id="),
@@ -1717,7 +1750,12 @@ fn recibe_el_historial_de_visitas_del_sitio_y_lo_guarda_local() {
          \"dispositivo_salida_id\":null,\"updated_at\":\"2026-01-01T08:00:05Z\"}]",
     );
 
-    let recibidos = recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos = recibir_historial_visitas_del_sitio(
+        &connection,
+        &contexto(&base_url),
+        traslape_historial(true),
+    )
+    .unwrap();
 
     assert_eq!(recibidos, 1);
     let (cedula, nombre, empresa, anfitrion): (String, String, Option<String>, Option<String>) =
@@ -1755,7 +1793,12 @@ fn una_fila_de_historial_de_visitas_con_fecha_ilegible_se_omite_sin_abortar_las_
          \"updated_at\":\"2026-01-01T08:00:05Z\"}]",
     );
 
-    let recibidos = recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos = recibir_historial_visitas_del_sitio(
+        &connection,
+        &contexto(&base_url),
+        traslape_historial(true),
+    )
+    .unwrap();
 
     assert_eq!(recibidos, 1, "la fila con hora_entrada ilegible no cuenta");
     let total: i64 = connection
@@ -1801,7 +1844,12 @@ fn segunda_sincronizacion_de_historial_de_visitas_pide_solo_lo_actualizado_desde
         .unwrap();
     });
 
-    recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    recibir_historial_visitas_del_sitio(
+        &connection,
+        &contexto(&base_url),
+        traslape_historial(true),
+    )
+    .unwrap();
     servidor.join().unwrap();
 }
 
@@ -1819,8 +1867,12 @@ fn recibe_el_historial_de_ingresos_proveedor_del_sitio_y_lo_guarda_local() {
          \"dispositivo_salida_id\":null,\"updated_at\":\"2026-01-01T08:00:05Z\"}]",
     );
 
-    let recibidos =
-        recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos = recibir_historial_ingresos_proveedor_del_sitio(
+        &connection,
+        &contexto(&base_url),
+        traslape_historial(true),
+    )
+    .unwrap();
 
     assert_eq!(recibidos, 1);
     let (cedula, nombre, empresa): (String, String, Option<String>) = connection
@@ -1856,8 +1908,12 @@ fn una_fila_de_historial_de_ingresos_proveedor_con_fecha_ilegible_se_omite_sin_a
          \"updated_at\":\"2026-01-01T08:00:05Z\"}]",
     );
 
-    let recibidos =
-        recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos = recibir_historial_ingresos_proveedor_del_sitio(
+        &connection,
+        &contexto(&base_url),
+        traslape_historial(true),
+    )
+    .unwrap();
 
     assert_eq!(recibidos, 1, "la fila con hora_entrada ilegible no cuenta");
     let total: i64 = connection
@@ -1907,7 +1963,12 @@ fn segunda_sincronizacion_de_historial_de_ingresos_proveedor_pide_solo_lo_actual
         .unwrap();
     });
 
-    recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    recibir_historial_ingresos_proveedor_del_sitio(
+        &connection,
+        &contexto(&base_url),
+        traslape_historial(true),
+    )
+    .unwrap();
     servidor.join().unwrap();
 }
 
@@ -2543,8 +2604,8 @@ fn segunda_sincronizacion_de_historial_gafetes_provisionales_pide_solo_lo_actual
         }
         let pedido = String::from_utf8(pedido).unwrap();
         assert!(
-            pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00Z")
-                || pedido.contains("updated_at=gt.2026-09-09T08:00:00Z")
+            pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00")
+                || pedido.contains("updated_at=gt.2026-09-09T08:00:00")
         );
         let cuerpo = "[]";
         write!(
@@ -3030,8 +3091,8 @@ fn segundo_sync_de_catalogo_pide_gafetes_con_su_propia_marca_guardada() {
             } else if paso == 9 {
                 let pedido = String::from_utf8(pedido).unwrap();
                 assert!(
-                    pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
-                        || pedido.contains("updated_at=gt.2026-01-05T00:00:00Z"),
+                    pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00")
+                        || pedido.contains("updated_at=gt.2026-01-05T00:00:00"),
                     "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {pedido}"
                 );
                 "[]"
@@ -3050,7 +3111,10 @@ fn segundo_sync_de_catalogo_pide_gafetes_con_su_propia_marca_guardada() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(marca_guardada.as_deref(), Some("2026-01-05T00:00:00Z"));
+    assert_eq!(
+        marca_guardada.as_deref(),
+        Some("2026-01-05T00:00:00.000000Z")
+    );
 
     recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
     servidor.join().unwrap();
@@ -3354,7 +3418,10 @@ fn recibe_catalogo_rutas_del_sitio_y_lo_guarda_local() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(marca_guardada.as_deref(), Some("2026-01-01T00:00:00Z"));
+    assert_eq!(
+        marca_guardada.as_deref(),
+        Some("2026-01-01T00:00:00.000000Z")
+    );
 }
 
 #[test]
@@ -3432,8 +3499,8 @@ fn segundo_sync_de_catalogo_rutas_pide_solo_lo_nuevo_con_la_marca_guardada() {
             } else if paso == 2 {
                 let pedido = String::from_utf8(pedido).unwrap();
                 assert!(
-                    pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
-                        || pedido.contains("updated_at=gt.2026-01-05T00:00:00Z"),
+                    pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00")
+                        || pedido.contains("updated_at=gt.2026-01-05T00:00:00"),
                     "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {pedido}"
                 );
                 "[]"
@@ -3452,7 +3519,10 @@ fn segundo_sync_de_catalogo_rutas_pide_solo_lo_nuevo_con_la_marca_guardada() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(marca_guardada.as_deref(), Some("2026-01-05T00:00:00Z"));
+    assert_eq!(
+        marca_guardada.as_deref(),
+        Some("2026-01-05T00:00:00.000000Z")
+    );
 
     recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
     servidor.join().unwrap();

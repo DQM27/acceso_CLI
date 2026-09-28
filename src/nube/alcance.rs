@@ -12,9 +12,13 @@
 //! [`AlcanceSincronizacion::desde_tablas`] traduce las tablas de los
 //! avisos a las etapas que de verdad hay que correr. La bandeja de salida
 //! (`drenar_cola`) se vacía SIEMPRE, sea cual sea el alcance: es local y
-//! barata si está vacía. El pulso periódico, el botón manual, un cambio
-//! local y una reconexión del canal siguen usando el alcance completo --
-//! son la red de seguridad para cualquier aviso perdido.
+//! barata si está vacía. El pulso periódico, el botón manual y una
+//! reconexión del canal usan el alcance completo -- son la red de
+//! seguridad para cualquier aviso perdido --, pero incremental: sólo lo que
+//! cambió desde la última marca. La reconciliación de los historiales (7
+//! días hacia atrás) queda para la primera sincronización al abrir la app
+//! ([`AlcanceSincronizacion::arranque`]). Un cambio registrado en este
+//! mismo equipo sólo envía ([`AlcanceSincronizacion::solo_envio`]).
 
 /// Etapas de recepción de una sincronización. `true` = se corre.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -37,6 +41,14 @@ pub struct AlcanceSincronizacion {
     pub citas: bool,
     /// Movimientos de visita: historial y conflictos de visitantes.
     pub visitas: bool,
+    /// Los historiales se piden con el traslape largo
+    /// (`DIAS_TRASLAPE_HISTORIAL`, 7 días) en vez del corto (minutos):
+    /// reconciliación para recuperar filas que un traslape corto pudiera
+    /// haber dejado afuera. Cuesta segundos (vuelve a bajar y reescribir la
+    /// última semana del sitio), así que sólo lo pide la primera
+    /// sincronización al abrir la app ([`Self::arranque`]) -- nunca el
+    /// pulso ni un aviso en vivo.
+    pub reconciliar_historial: bool,
 }
 
 impl AlcanceSincronizacion {
@@ -50,6 +62,32 @@ impl AlcanceSincronizacion {
             gafetes_provisionales: true,
             citas: true,
             visitas: true,
+            reconciliar_historial: false,
+        }
+    }
+
+    /// La primera sincronización al abrir la app: todas las etapas y los
+    /// historiales reconciliados (ver `reconciliar_historial`).
+    pub const fn arranque() -> Self {
+        Self {
+            reconciliar_historial: true,
+            ..Self::completo()
+        }
+    }
+
+    /// Ninguna etapa de recepción: sólo se vacía la bandeja de salida. Un
+    /// ingreso o salida registrado en este equipo no necesita bajar nada de
+    /// la nube para subirse.
+    pub const fn solo_envio() -> Self {
+        Self {
+            catalogo: false,
+            catalogo_rutas: false,
+            ingresos: false,
+            ingresos_proveedor: false,
+            gafetes_provisionales: false,
+            citas: false,
+            visitas: false,
+            reconciliar_historial: false,
         }
     }
 
@@ -65,6 +103,7 @@ impl AlcanceSincronizacion {
             gafetes_provisionales: false,
             citas: false,
             visitas: false,
+            reconciliar_historial: false,
         }
     }
 
@@ -110,6 +149,8 @@ impl AlcanceSincronizacion {
     }
 
     pub const fn es_completo(&self) -> bool {
+        // `reconciliar_historial` no cuenta: dice CÓMO se piden los
+        // historiales, no si se piden.
         self.catalogo
             && self.catalogo_rutas
             && self.ingresos

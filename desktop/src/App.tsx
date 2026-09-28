@@ -73,6 +73,7 @@ import {
   sincronizarConNube,
 } from "./api";
 import type { ResumenSincronizacion, Update, UsuarioSesion } from "./api";
+import { EVENTO_CAMBIO_EN_VIVO } from "./eventosNube";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { textoHora } from "./tiempo";
 import { SesionProvider } from "./contexto/SesionContexto";
@@ -585,10 +586,15 @@ function Shell({
       "nube://sincronizado",
       ({ payload }) => alSincronizarNube(payload, true),
     );
+    // Un aviso en vivo ya guardó su fila (ver `aplicarCambioNube`): Activos
+    // se recarga en ese momento, sin esperar ninguna sincronización.
+    const alCambiarEnVivo = () => startTransition(() => setRefrescarActivos((n) => n + 1));
+    window.addEventListener(EVENTO_CAMBIO_EN_VIVO, alCambiarEnVivo);
 
     return () => {
       cancelarRealtime();
       cancelarSincronizacionAutomatica.then((cancelar) => cancelar());
+      window.removeEventListener(EVENTO_CAMBIO_EN_VIVO, alCambiarEnVivo);
     };
   }, [sesion.id, sesion.cedula, sesion.nombre]);
 

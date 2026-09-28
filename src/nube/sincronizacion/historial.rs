@@ -1,9 +1,6 @@
 use rusqlite::{Connection, params};
 
-use super::{
-    ContextoSincronizacion, DIAS_TRASLAPE_HISTORIAL, SincronizacionError, obtener_json,
-    obtener_json_paginado_con,
-};
+use super::{ContextoSincronizacion, SincronizacionError, obtener_json, obtener_json_paginado_con};
 use crate::nube::cliente::cliente_http;
 
 #[derive(serde::Deserialize)]
@@ -49,10 +46,12 @@ pub(super) struct FilaHistorialRemota {
 /// `catalogo_actualizado_hasta` -- ritmos de sync independientes). `ON
 /// CONFLICT` actualiza en vez de insertar de nuevo: un movimiento que
 /// nace abierto y se cierra después reaparece con `updated_at` más nuevo,
-/// trayendo ya el cierre.
+/// trayendo ya el cierre. `traslape`: cuánto se retrocede respecto de la
+/// marca, ver [`traslape_historial`](super::traslape_historial).
 pub fn recibir_historial_del_sitio(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
+    traslape: chrono::Duration,
 ) -> Result<u32, SincronizacionError> {
     let cliente = cliente_http();
 
@@ -63,10 +62,15 @@ pub fn recibir_historial_del_sitio(
     )?;
     let ahora_remoto_seguro = chrono::Utc::now();
     let marca_consulta =
-        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro);
+        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro, traslape);
     let filtro_incremental = marca_consulta
         .as_ref()
-        .map(|marca| format!("&updated_at=gt.{}", crate::tiempo::serializar_utc(*marca)))
+        .map(|marca| {
+            format!(
+                "&updated_at=gt.{}",
+                crate::tiempo::serializar_marca_utc(*marca)
+            )
+        })
         .unwrap_or_default();
 
     // No se excluye el dispositivo actual: tras reinstalar Android, la base
@@ -148,68 +152,9 @@ pub(super) fn aplicar_pagina_historial(
     // no bloquea al resto).
     let mut marca_mas_nueva = marca_previa;
     for fila in pagina {
-        let Ok(hora_entrada) =
-            crate::tiempo::parsear_utc(&fila.hora_entrada).map(crate::tiempo::serializar_utc)
-        else {
+        if !guardar_fila_historial(&transaction, contexto.sitio_id, fila, &ahora)? {
             continue;
-        };
-        let hora_salida = match fila
-            .hora_salida
-            .as_deref()
-            .map(crate::tiempo::parsear_utc)
-            .transpose()
-        {
-            Ok(valor) => valor.map(crate::tiempo::serializar_utc),
-            Err(_) => continue,
-        };
-
-        transaction.execute(
-            "
-            INSERT INTO historial_sitio (
-                uuid, sitio_id, contratista_cedula, contratista_nombre, empresa_nombre,
-                tipo_ingreso, medio_ingreso, hora_entrada, hora_salida, gafete_numero,
-                usuario_entrada_nombre, usuario_salida_nombre, resultado_acceso,
-                motivo_resultado, reglas_version, empresa_activa_snapshot,
-                dispositivo_entrada_id, dispositivo_salida_id, actualizado_en,
-                dispositivo_entrada_tipo, placa
-            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)
-            ON CONFLICT(uuid) DO UPDATE SET
-                hora_salida = excluded.hora_salida,
-                usuario_salida_nombre = excluded.usuario_salida_nombre,
-                dispositivo_salida_id = excluded.dispositivo_salida_id,
-                resultado_acceso = excluded.resultado_acceso,
-                motivo_resultado = excluded.motivo_resultado,
-                reglas_version = excluded.reglas_version,
-                empresa_activa_snapshot = excluded.empresa_activa_snapshot,
-                actualizado_en = excluded.actualizado_en,
-                dispositivo_entrada_tipo = excluded.dispositivo_entrada_tipo
-            ",
-            params![
-                fila.id,
-                contexto.sitio_id,
-                fila.contratista_cedula,
-                fila.contratista_nombre,
-                fila.empresa_nombre,
-                fila.tipo_ingreso,
-                fila.medio_ingreso,
-                hora_entrada,
-                hora_salida,
-                fila.gafete_numero,
-                fila.usuario_entrada_nombre,
-                fila.usuario_salida_nombre,
-                fila.resultado_acceso,
-                fila.motivo_resultado,
-                fila.reglas_version,
-                fila.empresa_activa_snapshot,
-                fila.dispositivo_entrada_id,
-                fila.dispositivo_salida_id,
-                ahora,
-                fila.dispositivo_entrada
-                    .as_ref()
-                    .and_then(|d| d.tipo.clone()),
-                fila.placa,
-            ],
-        )?;
+        }
         recibidos += 1;
 
         // `updated_at` es una columna de servidor (trigger de Postgres), no
@@ -227,20 +172,119 @@ pub(super) fn aplicar_pagina_historial(
     if let Some(marca) = marca_mas_nueva {
         transaction.execute(
             "UPDATE sincronizacion_estado SET historial_actualizado_hasta = ?1 WHERE id = 1",
-            params![crate::tiempo::serializar_utc(marca)],
+            params![crate::tiempo::serializar_marca_utc(marca)],
         )?;
     }
     transaction.commit()?;
     Ok((recibidos, marca_mas_nueva))
 }
 
+/// Guarda (o actualiza) un movimiento en `historial_sitio`. `false` si la
+/// fila trae una fecha ilegible y se omitió (ver `aplicar_pagina_historial`).
+/// No toca la marca de agua: la usan tanto la sincronización (que la mueve
+/// aparte) como el aviso en vivo (que no debe moverla).
+fn guardar_fila_historial(
+    transaction: &Connection,
+    sitio_id: &str,
+    fila: &FilaHistorialRemota,
+    ahora: &str,
+) -> Result<bool, SincronizacionError> {
+    let Ok(hora_entrada) =
+        crate::tiempo::parsear_utc(&fila.hora_entrada).map(crate::tiempo::serializar_utc)
+    else {
+        return Ok(false);
+    };
+    let hora_salida = match fila
+        .hora_salida
+        .as_deref()
+        .map(crate::tiempo::parsear_utc)
+        .transpose()
+    {
+        Ok(valor) => valor.map(crate::tiempo::serializar_utc),
+        Err(_) => return Ok(false),
+    };
+
+    transaction.execute(
+        "
+        INSERT INTO historial_sitio (
+            uuid, sitio_id, contratista_cedula, contratista_nombre, empresa_nombre,
+            tipo_ingreso, medio_ingreso, hora_entrada, hora_salida, gafete_numero,
+            usuario_entrada_nombre, usuario_salida_nombre, resultado_acceso,
+            motivo_resultado, reglas_version, empresa_activa_snapshot,
+            dispositivo_entrada_id, dispositivo_salida_id, actualizado_en,
+            dispositivo_entrada_tipo, placa
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)
+        ON CONFLICT(uuid) DO UPDATE SET
+            hora_salida = excluded.hora_salida,
+            usuario_salida_nombre = excluded.usuario_salida_nombre,
+            dispositivo_salida_id = excluded.dispositivo_salida_id,
+            resultado_acceso = excluded.resultado_acceso,
+            motivo_resultado = excluded.motivo_resultado,
+            reglas_version = excluded.reglas_version,
+            empresa_activa_snapshot = excluded.empresa_activa_snapshot,
+            actualizado_en = excluded.actualizado_en,
+            dispositivo_entrada_tipo = COALESCE(
+                excluded.dispositivo_entrada_tipo,
+                historial_sitio.dispositivo_entrada_tipo
+            )
+        ",
+        params![
+            fila.id,
+            sitio_id,
+            fila.contratista_cedula,
+            fila.contratista_nombre,
+            fila.empresa_nombre,
+            fila.tipo_ingreso,
+            fila.medio_ingreso,
+            hora_entrada,
+            hora_salida,
+            fila.gafete_numero,
+            fila.usuario_entrada_nombre,
+            fila.usuario_salida_nombre,
+            fila.resultado_acceso,
+            fila.motivo_resultado,
+            fila.reglas_version,
+            fila.empresa_activa_snapshot,
+            fila.dispositivo_entrada_id,
+            fila.dispositivo_salida_id,
+            ahora,
+            fila.dispositivo_entrada
+                .as_ref()
+                .and_then(|d| d.tipo.clone()),
+            fila.placa,
+        ],
+    )?;
+    Ok(true)
+}
+
+/// Aviso en vivo con la fila de un ingreso (`nube::en_vivo`): la misma fila
+/// que traería la sincronización, guardada sin consultar a la nube. Sin
+/// `dispositivo_entrada_tipo` (el aviso no trae el `JOIN` con
+/// `dispositivos`): una fila nueva queda sin tipo hasta el próximo pulso,
+/// que la vuelve a traer completa porque esto no mueve la marca de agua.
+/// `false` si la fila no se pudo interpretar.
+pub(in crate::nube) fn guardar_historial_en_vivo(
+    transaction: &Connection,
+    sitio_id: &str,
+    registro: serde_json::Value,
+) -> Result<bool, SincronizacionError> {
+    let Ok(fila) = serde_json::from_value::<FilaHistorialRemota>(registro) else {
+        return Ok(false);
+    };
+    let ahora = crate::tiempo::serializar_utc(chrono::Utc::now());
+    guardar_fila_historial(transaction, sitio_id, &fila, &ahora)
+}
+
+/// La marca desde la que se pide un historial: la guardada menos
+/// `traslape` (ver `traslape_historial`), saneada si quedó en el futuro.
 pub(super) fn marca_historial_para_consulta(
     marca_anterior: Option<&str>,
     ahora: chrono::DateTime<chrono::Utc>,
+    traslape: chrono::Duration,
 ) -> Option<chrono::DateTime<chrono::Utc>> {
     let marca = marca_anterior.and_then(|marca| crate::tiempo::parsear_utc(marca).ok())?;
     let base = if marca > ahora { ahora } else { marca };
-    Some(base - chrono::Duration::days(DIAS_TRASLAPE_HISTORIAL))
+    Some(base - traslape)
 }
 
 #[derive(serde::Deserialize)]
@@ -337,11 +381,11 @@ pub(super) fn guardar_fila_historial_visita(
 /// Trae a `historial_visitas_sitio` todo movimiento de visita (abierto o
 /// cerrado) del sitio, de cualquier dispositivo -- mismo mecanismo
 /// incremental que `recibir_historial_del_sitio` (marca de agua propia,
-/// `historial_visitas_actualizado_hasta`, mismo traslape de
-/// `DIAS_TRASLAPE_HISTORIAL` días).
+/// `historial_visitas_actualizado_hasta`, mismo `traslape`).
 pub fn recibir_historial_visitas_del_sitio(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
+    traslape: chrono::Duration,
 ) -> Result<u32, SincronizacionError> {
     let cliente = cliente_http();
 
@@ -352,10 +396,15 @@ pub fn recibir_historial_visitas_del_sitio(
     )?;
     let ahora_remoto_seguro = chrono::Utc::now();
     let marca_consulta =
-        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro);
+        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro, traslape);
     let filtro_incremental = marca_consulta
         .as_ref()
-        .map(|marca| format!("&updated_at=gt.{}", crate::tiempo::serializar_utc(*marca)))
+        .map(|marca| {
+            format!(
+                "&updated_at=gt.{}",
+                crate::tiempo::serializar_marca_utc(*marca)
+            )
+        })
         .unwrap_or_default();
 
     let url = format!(
@@ -416,7 +465,7 @@ pub(super) fn aplicar_pagina_historial_visitas(
     if let Some(marca) = marca_mas_nueva {
         transaction.execute(
             "UPDATE sincronizacion_estado SET historial_visitas_actualizado_hasta = ?1 WHERE id = 1",
-            params![crate::tiempo::serializar_utc(marca)],
+            params![crate::tiempo::serializar_marca_utc(marca)],
         )?;
     }
     transaction.commit()?;
@@ -510,11 +559,12 @@ pub(super) fn guardar_fila_historial_ingreso_proveedor(
 /// Espejo de `recibir_historial_visitas_del_sitio`, pero contra
 /// `ingresos_proveedor` -- mismo mecanismo incremental (marca de agua
 /// propia, `historial_ingresos_proveedor_actualizado_hasta`, mismo
-/// traslape de `DIAS_TRASLAPE_HISTORIAL` días). Sólo tiene sentido
+/// `traslape`). Sólo tiene sentido
 /// llamarla en escritorio -- ver el doc-comment de `MIGRACION_43`.
 pub fn recibir_historial_ingresos_proveedor_del_sitio(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
+    traslape: chrono::Duration,
 ) -> Result<u32, SincronizacionError> {
     let cliente = cliente_http();
 
@@ -525,10 +575,15 @@ pub fn recibir_historial_ingresos_proveedor_del_sitio(
     )?;
     let ahora_remoto_seguro = chrono::Utc::now();
     let marca_consulta =
-        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro);
+        marca_historial_para_consulta(marca_anterior.as_deref(), ahora_remoto_seguro, traslape);
     let filtro_incremental = marca_consulta
         .as_ref()
-        .map(|marca| format!("&updated_at=gt.{}", crate::tiempo::serializar_utc(*marca)))
+        .map(|marca| {
+            format!(
+                "&updated_at=gt.{}",
+                crate::tiempo::serializar_marca_utc(*marca)
+            )
+        })
         .unwrap_or_default();
 
     let url = format!(
@@ -588,7 +643,7 @@ pub(super) fn aplicar_pagina_historial_ingresos_proveedor(
     if let Some(marca) = marca_mas_nueva {
         transaction.execute(
             "UPDATE sincronizacion_estado SET historial_ingresos_proveedor_actualizado_hasta = ?1 WHERE id = 1",
-            params![crate::tiempo::serializar_utc(marca)],
+            params![crate::tiempo::serializar_marca_utc(marca)],
         )?;
     }
     transaction.commit()?;
@@ -711,7 +766,7 @@ pub fn recibir_historial_gafetes_provisionales_del_sitio(
         transaction.execute(
             "UPDATE sincronizacion_estado
              SET gafetes_provisionales_historial_actualizado_hasta = ?1 WHERE id = 1",
-            params![crate::tiempo::serializar_utc(marca)],
+            params![crate::tiempo::serializar_marca_utc(marca)],
         )?;
     }
     transaction.commit()?;

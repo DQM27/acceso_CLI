@@ -203,7 +203,7 @@ pub(super) fn aplicar_pagina_citas(
     if let Some(marca) = marca_mas_nueva {
         transaction.execute(
             "UPDATE sincronizacion_estado SET citas_actualizado_hasta = ?1 WHERE id = 1",
-            params![crate::tiempo::serializar_utc(marca)],
+            params![crate::tiempo::serializar_marca_utc(marca)],
         )?;
     }
     transaction.commit()?;

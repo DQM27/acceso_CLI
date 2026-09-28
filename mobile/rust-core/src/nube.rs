@@ -154,10 +154,13 @@ impl Nucleo {
                 mensaje: interno(error),
             })?;
         let conexion = self.conexion_secundaria()?;
-        control_acceso::nube::aplicar_cambio_en_vivo(&conexion, &aviso).map_err(|error| {
-            NucleoError::Interno {
-                mensaje: interno(error),
-            }
+        control_acceso::nube::aplicar_cambio_en_vivo(
+            &conexion,
+            &aviso,
+            control_acceso::nube::PerfilDispositivo::Movil,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: interno(error),
         })
     }
 

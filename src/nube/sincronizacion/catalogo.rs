@@ -641,13 +641,13 @@ pub fn recibir_catalogo_del_sitio(
     if let Some(marca) = descarga.marca_mas_nueva {
         transaction.execute(
             "UPDATE sincronizacion_estado SET catalogo_actualizado_hasta = ?1 WHERE id = 1",
-            params![crate::tiempo::serializar_utc(marca)],
+            params![crate::tiempo::serializar_marca_utc(marca)],
         )?;
     }
     if let Some(marca) = marca_gafetes_nueva {
         transaction.execute(
             "UPDATE sincronizacion_estado SET gafetes_actualizado_hasta = ?1 WHERE id = 1",
-            params![crate::tiempo::serializar_utc(marca)],
+            params![crate::tiempo::serializar_marca_utc(marca)],
         )?;
     }
 

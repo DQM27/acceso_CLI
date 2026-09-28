@@ -31,7 +31,27 @@ pub(super) fn obtener_json<T: serde::de::DeserializeOwned>(
 /// chocar con ese límite y perder el resto en silencio.
 pub(super) const TAMANO_PAGINA_REMOTA: usize = 500;
 
+/// Traslape largo de los historiales: la reconciliación al abrir la app
+/// (`AlcanceSincronizacion::arranque`).
 pub(super) const DIAS_TRASLAPE_HISTORIAL: i64 = 7;
+
+/// Traslape corto de los historiales: el pulso y los avisos en vivo.
+/// `updated_at = now()` es la hora de INICIO de la transacción, así que una
+/// fila puede hacerse visible con un `updated_at` apenas anterior a la
+/// marca ya guardada; unos minutos alcanzan de sobra para eso (ver
+/// docs/auditorias/auditoria-integral-2026-09-24, NS-09) sin volver a
+/// bajar la semana entera en cada consulta.
+pub(super) const MINUTOS_TRASLAPE_CORTO: i64 = 5;
+
+/// Cuánto retrocede la consulta incremental de un historial respecto de su
+/// marca de agua.
+pub fn traslape_historial(reconciliar: bool) -> chrono::Duration {
+    if reconciliar {
+        chrono::Duration::days(DIAS_TRASLAPE_HISTORIAL)
+    } else {
+        chrono::Duration::minutes(MINUTOS_TRASLAPE_CORTO)
+    }
+}
 
 /// Igual que `obtener_json`, pero para listas que pueden superar el tope de
 /// filas por respuesta de `PostgREST` -- sin esto, un catálogo o un

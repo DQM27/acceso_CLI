@@ -109,6 +109,17 @@ pub fn serializar_utc(instante: DateTime<Utc>) -> String {
     instante.format(FORMATO_UTC).to_string()
 }
 
+/// Marca de agua de una sincronización incremental (`updated_at=gt.<marca>`),
+/// con microsegundos -- la misma precisión que `timestamptz` en Postgres.
+/// Con [`serializar_utc`] (al segundo) la marca quedaba por DEBAJO del
+/// `updated_at` real de la última fila recibida, y `gt.` volvía a traer
+/// todas las filas de ese segundo en cada sincronización, para siempre:
+/// visto en producción con los 1.438 encargados de ruta, cargados todos en
+/// el mismo segundo y re-descargados (3 páginas) en cada pulso y cada aviso.
+pub fn serializar_marca_utc(instante: DateTime<Utc>) -> String {
+    instante.format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string()
+}
+
 pub fn parsear_utc(valor: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
     DateTime::parse_from_rfc3339(valor).map(|instante| instante.with_timezone(&Utc))
 }
@@ -131,8 +142,27 @@ mod tests {
 
     use super::{
         Reloj, RelojCorregido, a_costa_rica, fecha_costa_rica, inicio_dia_costa_rica_utc,
-        local_costa_rica_a_utc, parsear_utc, serializar_utc,
+        local_costa_rica_a_utc, parsear_utc, serializar_marca_utc, serializar_utc,
     };
+
+    #[test]
+    fn la_marca_de_agua_conserva_los_microsegundos_de_postgres() {
+        // `updated_at` tal cual lo devuelve PostgREST para los encargados de
+        // ruta cargados en lote (todos en el mismo segundo).
+        let ultima = parsear_utc("2026-09-15T19:18:26.954576+00:00").unwrap();
+
+        let marca = serializar_marca_utc(ultima);
+
+        assert_eq!(marca, "2026-09-15T19:18:26.954576Z");
+        assert_eq!(
+            parsear_utc(&marca).unwrap(),
+            ultima,
+            "ida y vuelta sin pérdida"
+        );
+        // Al segundo (el formato viejo) la marca queda por debajo de la fila,
+        // y `updated_at=gt.<marca>` la vuelve a traer para siempre.
+        assert!(parsear_utc(&serializar_utc(ultima)).unwrap() < ultima);
+    }
 
     #[test]
     fn reloj_corregido_sin_desfase_medido_todavia_se_comporta_como_el_sistema() {

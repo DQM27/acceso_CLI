@@ -43,12 +43,12 @@ pub use historial::*;
 pub use ingresos::*;
 // Para el aviso en vivo (`nube::en_vivo`), que aplica la misma fila sin
 // pasar por la sincronización.
+pub(in crate::nube) use historial::guardar_historial_en_vivo;
 pub(in crate::nube) use ingresos::{
     FilaIngresoRemoto, aplicar_cierre_de_ingreso_propio, guardar_ingreso_remoto,
 };
-use paginado::{
-    DIAS_TRASLAPE_HISTORIAL, obtener_json, obtener_json_paginado, obtener_json_paginado_con,
-};
+pub use paginado::traslape_historial;
+use paginado::{obtener_json, obtener_json_paginado, obtener_json_paginado_con};
 pub use proveedores::*;
 
 /// Todo lo que hace falta para hablar con el receptor en nombre de este
