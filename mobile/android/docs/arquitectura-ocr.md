@@ -81,5 +81,17 @@ CameraX entre ambos sistemas de coordenadas.
   durante el primer uso.
 - Se conserva `STRATEGY_KEEP_ONLY_LATEST`: para OCR en tiempo real interesa
   el frame actual, no procesar una cola atrasada.
-- Se usa una sola háptica semántica de Compose. La vibración cruda duplicaba
-  el efecto y obligaba a declarar `VIBRATE` sin necesidad.
+- La vibración usa `Vibrator`/`VibrationEffect` con atributos de alarma
+  (`EscaneoCompartido.kt`), no la háptica semántica de Compose: ésta no
+  vibraba en el Samsung real con "Interacciones táctiles" y no deja
+  distinguir éxito de error. Por eso el manifiesto declara `VIBRATE`
+  (permiso normal, sin diálogo).
+- El recorte al recuadro guía lee sólo las filas necesarias directo de los
+  `ByteBuffer` de cada plano YUV; nunca se copian los planos enteros.
+- El número de cédula del frente exige primer dígito 1-9 (provincia). Las
+  placas corrigen como máximo UNA confusión letra/dígito según la posición
+  (formato fijo: letras, luego dígitos), porque no tienen dígito
+  verificador que confirme una corrección.
+- Un escaneo abre sólo el formulario del contratista cuya cédula es
+  EXACTAMENTE el número leído (`CoincidenciaEscaneo.kt`); un único
+  resultado de la búsqueda parcial ya no alcanza.

@@ -319,8 +319,15 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento {
 /// Punto de entrada único: clasifica y extrae en un solo paso. Devuelve
 /// `null` cuando no hay suficiente información todavía (la pantalla de
 /// escaneo debe seguir esperando más frames, no tratarlo como fallo).
-fun leerDocumentoDeTexto(texto: String): DocumentoDetectado? {
-    return when (clasificarTipoDocumento(texto)) {
+///
+/// `tipo` se puede pasar ya calculado: `EstabilizadorLectura` clasifica
+/// antes para decidir el mensaje, y sin esto el mismo texto se volvía a
+/// clasificar (todas las regex de nuevo) en el mismo frame.
+fun leerDocumentoDeTexto(
+    texto: String,
+    tipo: TipoDocumento = clasificarTipoDocumento(texto),
+): DocumentoDetectado? {
+    return when (tipo) {
         TipoDocumento.CEDULA_NACIONAL -> extraerCedulaNacionalFrente(texto)
         TipoDocumento.CEDULA_RESIDENCIA -> extraerDimex(texto)
         TipoDocumento.LICENCIA_NACIONAL -> extraerLicencia(texto, esExtranjero = false)
@@ -557,8 +564,9 @@ private fun bloqueDeValoresCedula(texto: String): Triple<String, String, String>
 // Sólo se leen número y "Vencimiento" (que el frente azul NO trae). El
 // nombre de la persona no está en esta cara: los de padre y madre jamás se
 // usan como nombre (antes el bloque de valores podía tomarlos). El número
-// suelto bajo el código de barras empieza en 0 y una cédula nunca
-// (el primer dígito es la provincia, 1-9).
+// suelto bajo el código de barras empieza en 0 y una cédula nunca (el
+// primer dígito es la provincia, 1-9): `extraerCedulaDeTexto` ya lo
+// descarta por sí sola.
 private val MARCAS_REVERSO_CEDULA_ANTERIOR = listOf(
     "NOMBRE DEL PADRE", "NOMBRE DE LA MADRE", "DOMICILIO ELECTORAL", "LUGAR DE NACIMIENTO",
 )
@@ -575,7 +583,7 @@ private fun esReversoCedulaAnterior(texto: String): Boolean {
 
 private fun numeroReversoCedulaAnterior(texto: String): String? =
     REGEX_NUMERO_REVERSO_CEDULA.find(texto)?.groupValues?.get(1)?.filter(Char::isDigit)
-        ?: extraerCedulaDeTexto(texto)?.takeUnless { it.startsWith('0') }
+        ?: extraerCedulaDeTexto(texto)
 
 private fun extraerReversoCedulaAnterior(texto: String): DocumentoDetectado? {
     val numero = numeroReversoCedulaAnterior(texto) ?: return null

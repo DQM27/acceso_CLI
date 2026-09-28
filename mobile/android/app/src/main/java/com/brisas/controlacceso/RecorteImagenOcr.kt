@@ -1,5 +1,7 @@
 package com.brisas.controlacceso
 
+import java.nio.ByteBuffer
+
 /// Rectángulo de enteros sin depender de `android.graphics.Rect` -- ese tipo
 /// no se puede instanciar en tests unitarios de JVM sin Robolectric (el
 /// stub de Android tira "not mocked"), y toda la aritmética de acá no
@@ -118,62 +120,70 @@ fun rectanguloEnSensor(crop: RectanguloEntero, rotacionGrados: Int, region: Regi
 /// Y >= ~220 se saturaba a blanco -- justo los reflejos de la cédula
 /// plastificada, donde el texto ya cuesta leer).
 ///
-/// Puro -- sólo bytes y enteros, nada de `android.media.Image` -- para
+/// Lee DIRECTO de los `ByteBuffer` de cada plano, fila por fila y sólo
+/// dentro de `rect` (auditoría OCR 2026-09-28). Antes se copiaban los tres
+/// planos ENTEROS a arreglos (~4 MB por frame a 1080p, retenidos además
+/// entre frames en `BuffersOcrReutilizables`) y recién ahí se recortaba --
+/// el recuadro guía es cerca de un cuarto del frame, así que casi todo lo
+/// copiado se tiraba. Cada búfer se lee sobre un `duplicate()`: no mueve
+/// la posición del original, así el fallback `InputImage.fromMediaImage`
+/// sigue encontrando los planos intactos. Las posiciones se cuentan desde
+/// la posición inicial de cada búfer (lo mismo que leía la copia anterior).
+///
+/// Puro -- sólo búferes y enteros, nada de `android.media.Image` -- para
 /// poder probarlo con datos sintéticos. `yRowStride`/`uvRowStride`/
 /// `uvPixelStride` importan porque ninguno está garantizado: el plano Y
 /// puede traer relleno al final de cada fila y las muestras de croma
 /// pueden no ser contiguas (`pixelStride` > 1).
 fun recortarYuvANv21(
     rect: RectanguloEntero,
-    y: ByteArray,
+    y: ByteBuffer,
     yRowStride: Int,
-    u: ByteArray,
-    v: ByteArray,
+    u: ByteBuffer,
+    v: ByteBuffer,
     uvRowStride: Int,
     uvPixelStride: Int,
 ): ByteArray {
     val ancho = rect.width
     val alto = rect.height
-    val nv21 = ByteArray(ancho * alto + (ancho * alto) / 2)
-    for (fila in 0 until alto) {
-        System.arraycopy(y, (rect.top + fila) * yRowStride + rect.left, nv21, fila * ancho, ancho)
+    require(ancho > 0 && alto > 0 && ancho % 2 == 0 && alto % 2 == 0) {
+        "El recorte NV21 necesita ancho y alto pares y positivos: ${ancho}x$alto"
     }
-    var posicion = ancho * alto
+    val nv21 = ByteArray(ancho * alto + (ancho * alto) / 2)
+
+    val lecturaY = y.duplicate()
+    val baseY = lecturaY.position()
+    for (fila in 0 until alto) {
+        lecturaY.position(baseY + (rect.top + fila) * yRowStride + rect.left)
+        lecturaY.get(nv21, fila * ancho, ancho)
+    }
+
+    val anchoCroma = ancho / 2
+    // Bytes que ocupa una fila de croma del recorte dentro del plano: hasta
+    // la última muestra inclusive, no `anchoCroma * pixelStride` -- la
+    // última fila de un plano con `pixelStride` 2 no trae el byte de relleno
+    // final y leerlo se saldría del búfer.
+    val largoFilaCroma = (anchoCroma - 1) * uvPixelStride + 1
+    val filaU = ByteArray(largoFilaCroma)
+    val filaV = ByteArray(largoFilaCroma)
+    val lecturaU = u.duplicate()
+    val lecturaV = v.duplicate()
+    val baseU = lecturaU.position()
+    val baseV = lecturaV.position()
     val columnaUv = rect.left / 2
     val filaUv = rect.top / 2
+    var posicion = ancho * alto
     for (fila in 0 until alto / 2) {
-        val inicio = (filaUv + fila) * uvRowStride
-        for (columna in 0 until ancho / 2) {
-            val indice = inicio + (columnaUv + columna) * uvPixelStride
-            nv21[posicion++] = v[indice]
-            nv21[posicion++] = u[indice]
+        val desplazamiento = (filaUv + fila) * uvRowStride + columnaUv * uvPixelStride
+        lecturaU.position(baseU + desplazamiento)
+        lecturaU.get(filaU)
+        lecturaV.position(baseV + desplazamiento)
+        lecturaV.get(filaV)
+        for (columna in 0 until anchoCroma) {
+            val indice = columna * uvPixelStride
+            nv21[posicion++] = filaV[indice]
+            nv21[posicion++] = filaU[indice]
         }
     }
     return nv21
-}
-
-/// Reune los buffers donde se copian los planos crudos de cada frame
-/// (`yBytes`/`uBytes`/`vBytes`) para reusarlos entre frames en vez de
-/// asignarlos desde cero cada vez (MV-07, auditoría de rendimiento
-/// 2026-09-25) -- con resolución fija (ver `construirAnalizadorOcr`) el
-/// tamaño no cambia dentro de una sesión de escaneo. El recorte NV21 que
-/// recibe ML Kit NO se reusa: `recognizer.process` lo lee de forma
-/// asíncrona, después de que el analizador ya soltó el frame.
-///
-/// Una instancia por apertura de pantalla, igual que `EstabilizadorLectura`
-/// -- pensada para el único hilo del analizador de cámara
-/// (`ejecutorAnalisis`).
-class BuffersOcrReutilizables {
-    private var yBytes: ByteArray? = null
-    private var uBytes: ByteArray? = null
-    private var vBytes: ByteArray? = null
-
-    fun yBytes(tamano: Int): ByteArray = reusarByteArray(yBytes, tamano) { yBytes = it }
-    fun uBytes(tamano: Int): ByteArray = reusarByteArray(uBytes, tamano) { uBytes = it }
-    fun vBytes(tamano: Int): ByteArray = reusarByteArray(vBytes, tamano) { vBytes = it }
-
-    private inline fun reusarByteArray(actual: ByteArray?, tamano: Int, guardar: (ByteArray) -> Unit): ByteArray {
-        if (actual != null && actual.size == tamano) return actual
-        return ByteArray(tamano).also(guardar)
-    }
 }

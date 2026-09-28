@@ -177,7 +177,7 @@ class EstabilizadorLectura(
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = mensajeTipoEquivocado(tipo))
         }
 
-        val documentoDeEsteFrame = leerDocumentoDeTexto(texto)
+        val documentoDeEsteFrame = leerDocumentoDeTexto(texto, tipo)
         if (documentoDeEsteFrame == null) {
             // Tipo reconocible por palabras clave, pero todavía no se pudo
             // extraer el número -- lectura parcial (glare, ángulo, foco), no

@@ -540,10 +540,3 @@ class ActivosViewModel(
         }
     }
 }
-
-private fun contratistaEscaneadoClaro(valor: String, resultados: List<ContratistaResumen>): ContratistaResumen? {
-    if (resultados.size == 1) return resultados.single()
-    val digitos = valor.filter(Char::isDigit)
-    if (digitos.isEmpty()) return null
-    return resultados.singleOrNull { it.cedula.filter(Char::isDigit) == digitos }
-}

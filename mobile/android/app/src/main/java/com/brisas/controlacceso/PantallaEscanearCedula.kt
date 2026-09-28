@@ -83,11 +83,6 @@ private fun VistaCamaraCedula(
     // declaraciones + un DisposableEffect idénticos a las otras 3
     // pantallas de escaneo -- ver EstadoCamaraOcr.kt.
     val camara = rememberEstadoCamaraOcr(contexto)
-    // Último punto suelto de MV-07 (auditoría de rendimiento 2026-09-25) --
-    // una instancia por apertura de pantalla, igual que `camara`, para
-    // reusar los buffers de un frame al siguiente en vez de asignarlos
-    // desde cero cada vez. Ver el doc-comment de `BuffersOcrReutilizables`.
-    val buffersOcr = remember { BuffersOcrReutilizables() }
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
@@ -256,7 +251,6 @@ private fun VistaCamaraCedula(
                         recognizer = camara.recognizer,
                         ejecutorPrincipal = camara.ejecutorPrincipal,
                         sesionActiva = camara.sesionActiva,
-                        buffersOcr = buffersOcr,
                         onTexto = { texto ->
                             if (encuadre.registrarTexto(texto, leidoCon)) {
                                 orientacionEncuadre = encuadre.orientacion

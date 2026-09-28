@@ -8,8 +8,12 @@ package com.brisas.controlacceso
 // frame mientras la cámara escanea (ver nota equivalente en
 // LectorDocumentosIdentidad.kt).
 private val REGEX_CARACTERES_NO_CEDULA = Regex("[^0-9\\n -]")
-private val REGEX_CEDULA_CON_GUIONES_O_ESPACIOS = Regex("""\b\d[- ]?\d{4}[- ]?\d{4}\b""")
-private val REGEX_CEDULA_PEGADA = Regex("""\b\d{9}\b""")
+// El primer dígito de una cédula es la provincia (1-9), nunca 0: así un
+// número de control impreso junto a la cédula ("001234567" bajo el PDF417
+// del reverso anterior) no se toma por cédula, y si hay ambos en el mismo
+// texto se sigue buscando hasta la cédula real en vez de rendirse.
+private val REGEX_CEDULA_CON_GUIONES_O_ESPACIOS = Regex("""\b[1-9][- ]?\d{4}[- ]?\d{4}\b""")
+private val REGEX_CEDULA_PEGADA = Regex("""\b[1-9]\d{8}\b""")
 private val REGEX_LINEA_NUMERO_AJENO = Regex(
     """\bEXPEDIENTE\s*(?:N[O°º.]*)?""",
     RegexOption.IGNORE_CASE,

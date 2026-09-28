@@ -113,4 +113,45 @@ class LectorVehiculoRutaTest {
         assertEquals("22906", resultado?.valor)
         assertEquals(TipoVehiculoDetectado.NUMERO_UNIDAD, resultado?.tipo)
     }
+
+    // --- Confusiones letra/dígito corregidas por posición (auditoría OCR 2026-09-28) ---
+
+    @Test
+    fun corrigeLetraLeidaComoDigitoEnLaParteNumericaDeUnaParticular() {
+        val resultado = extraerVehiculo("BPH48S")
+        assertEquals("BPH485", resultado?.valor)
+        assertEquals(TipoVehiculoDetectado.PLACA, resultado?.tipo)
+    }
+
+    @Test
+    fun corrigeDigitoLeidoComoLetraEnLaParteDeLetrasDeUnaParticular() {
+        assertEquals("BPH485", extraerVehiculo("8PH-485")?.valor)
+    }
+
+    @Test
+    fun corrigeLetraLeidaComoDigitoEnUnaPlacaDeCarga() {
+        assertEquals("CL371931", extraerVehiculo("CL 37I931")?.valor)
+    }
+
+    @Test
+    fun conDosCorreccionesNoSeInventaUnaPlaca() {
+        // Sin dígito verificador, más de una corrección ya es adivinar.
+        assertNull(extraerVehiculo("8PH48S"))
+    }
+
+    @Test
+    fun ganaLaLecturaQueNoNecesitoCorreccion() {
+        // Leída tal cual es una particular; como placa de carga haría falta
+        // cambiar la `B` por `8` (`SG8123`), así que no debe ganar la de carga.
+        assertEquals("SGB123", extraerVehiculo("SGB123")?.valor)
+    }
+
+    @Test
+    fun unNumeroDeUnidadDeSeisDigitosNoSeConvierteEnPlaca() {
+        // "228" como letras serían 3 correcciones ("ZZB"): sigue siendo
+        // número de unidad, no una placa fabricada.
+        val resultado = extraerVehiculo("228051")
+        assertEquals("228051", resultado?.valor)
+        assertEquals(TipoVehiculoDetectado.NUMERO_UNIDAD, resultado?.tipo)
+    }
 }

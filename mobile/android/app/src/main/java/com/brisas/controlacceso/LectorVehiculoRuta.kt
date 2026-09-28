@@ -38,17 +38,87 @@ enum class TipoVehiculoDetectado { PLACA, NUMERO_UNIDAD }
 //    perdiendo los primeros 2 dígitos -- de ahí el reporte real de "solo me
 //    reconoce los últimos números". Ahora tolera un separador opcional
 //    entre dos tandas de dígitos y las junta.
+//
+// Las posiciones de dígito aceptan también las letras que el OCR confunde
+// con un dígito (ver [DIGITO_POR_LETRA]); cuáles se aceptan de verdad lo
+// decide [corregirGrupo], con un máximo de [MAXIMO_CORRECCIONES_POR_PLACA].
 private val REGEX_PLACA_CARGA = Regex(
-    """\b([A-Z]{1,2})[\s-]?(\d{2,3})[\s-]?(\d{2,4})\b""",
+    """\b([A-Z]{1,2})[\s-]?([0-9ODQILZSGB]{2,3})[\s-]?([0-9ODQILZSGB]{2,4})\b""",
     RegexOption.IGNORE_CASE,
 )
 // Vehículos particulares (los camiones de apoyo/H, que no tienen número de
 // unidad): 3 letras + 3 dígitos, ej. `BPH485` -- formato estándar
-// documentado, confirmado sin problemas de lectura.
+// documentado, confirmado sin problemas de lectura. Mismo criterio de
+// confusiones que la de carga, en las dos direcciones: `8PH485` -> `BPH485`
+// y `BPH48S` -> `BPH485`.
 private val REGEX_PLACA_PARTICULAR = Regex(
-    """\b([A-Z]{3})[\s-]?(\d{3})\b""",
+    """\b([A-Z0-2568]{3})[\s-]?([0-9ODQILZSGB]{3})\b""",
     RegexOption.IGNORE_CASE,
 )
+
+// Confusiones de forma típicas del OCR entre letras y dígitos (auditoría
+// OCR 2026-09-28). Una placa tiene formato fijo -- letras primero, dígitos
+// después -- así que la posición dice cuál de los dos era el carácter real
+// y se puede corregir sin adivinar, igual que el MRZ corrige confusables
+// guiado por su checksum.
+private val DIGITO_POR_LETRA = mapOf(
+    'O' to '0', 'D' to '0', 'Q' to '0', 'I' to '1', 'L' to '1',
+    'Z' to '2', 'S' to '5', 'G' to '6', 'B' to '8',
+)
+private val LETRA_POR_DIGITO = mapOf('0' to 'O', '1' to 'I', '2' to 'Z', '5' to 'S', '6' to 'G', '8' to 'B')
+
+// Sin dígito verificador no hay forma de confirmar una corrección, así que
+// se admite UNA por placa: suficiente para el carácter suelto mal leído y
+// lo bastante estricto como para que una palabra rotulada o un número de
+// unidad (`228051` -> "ZZB051" serían 3) nunca pase por placa.
+private const val MAXIMO_CORRECCIONES_POR_PLACA = 1
+
+/// Placa candidata y cuántos caracteres hubo que corregir para leerla.
+private class PlacaCandidata(val valor: String, val correcciones: Int)
+
+/// Lleva cada carácter de `grupo` a la clase que pide su posición
+/// (`esValido`), usando `reemplazos` para las confusiones conocidas.
+/// Devuelve el grupo corregido y cuántos cambios hizo, o `null` si algún
+/// carácter no es válido ni tiene reemplazo.
+private fun corregirGrupo(grupo: String, esValido: (Char) -> Boolean, reemplazos: Map<Char, Char>): Pair<String, Int>? {
+    var correcciones = 0
+    val corregido = buildString {
+        for (c in grupo) {
+            when {
+                esValido(c) -> append(c)
+                c in reemplazos -> {
+                    append(reemplazos.getValue(c))
+                    correcciones++
+                }
+                else -> return null
+            }
+        }
+    }
+    return corregido to correcciones
+}
+
+private fun esDigito(c: Char) = c in '0'..'9'
+private fun esLetra(c: Char) = c in 'A'..'Z'
+
+private fun placaDeCarga(textoNormalizado: String): PlacaCandidata? =
+    REGEX_PLACA_CARGA.findAll(textoNormalizado).mapNotNull { match ->
+        val (prefijo, primeraTanda, segundaTanda) = match.destructured
+        val (digitos, correcciones) = corregirGrupo(primeraTanda + segundaTanda, ::esDigito, DIGITO_POR_LETRA)
+            ?: return@mapNotNull null
+        PlacaCandidata("$prefijo$digitos", correcciones)
+            .takeIf { digitos.length in 4..6 && correcciones <= MAXIMO_CORRECCIONES_POR_PLACA }
+    }.minByOrNull { it.correcciones }
+
+private fun placaParticular(textoNormalizado: String): PlacaCandidata? =
+    REGEX_PLACA_PARTICULAR.findAll(textoNormalizado).mapNotNull { match ->
+        val (letrasLeidas, digitosLeidos) = match.destructured
+        val (letras, correccionesLetras) = corregirGrupo(letrasLeidas, ::esLetra, LETRA_POR_DIGITO)
+            ?: return@mapNotNull null
+        val (digitos, correccionesDigitos) = corregirGrupo(digitosLeidos, ::esDigito, DIGITO_POR_LETRA)
+            ?: return@mapNotNull null
+        val correcciones = correccionesLetras + correccionesDigitos
+        PlacaCandidata("$letras$digitos", correcciones).takeIf { correcciones <= MAXIMO_CORRECCIONES_POR_PLACA }
+    }.minByOrNull { it.correcciones }
 
 // Placa de moto: dos grupos de 3 caracteres (dígitos, o dígitos+letras) en
 // líneas separadas de la placa física, con un prefijo `M` que a veces
@@ -106,19 +176,16 @@ private fun extraerMoto(textoNormalizado: String): VehiculoRutaDetectado? {
 /// específico (exige letras) -- y sólo cae a número de unidad (sólo
 /// dígitos) si no hay placa reconocible, para no leer la parte numérica de
 /// una placa como si fuera un número de unidad.
+///
+/// Entre placa de carga y particular gana la que necesitó MENOS
+/// correcciones (a igualdad, la de carga, como antes): así `SGB123`, leída
+/// tal cual como particular, no se convierte en la de carga `SG8123`
+/// (que requeriría cambiar la `B`).
 fun extraerVehiculo(texto: String): VehiculoRutaDetectado? {
     val textoNormalizado = texto.uppercase()
-    REGEX_PLACA_CARGA.find(textoNormalizado)?.let { match ->
-        val (prefijo, primeraTanda, segundaTanda) = match.destructured
-        val digitos = primeraTanda + segundaTanda
-        if (digitos.length in 4..6) {
-            return VehiculoRutaDetectado("$prefijo$digitos", TipoVehiculoDetectado.PLACA)
-        }
-    }
-    REGEX_PLACA_PARTICULAR.find(textoNormalizado)?.let { match ->
-        val (letras, digitos) = match.destructured
-        return VehiculoRutaDetectado("$letras$digitos", TipoVehiculoDetectado.PLACA)
-    }
+    listOfNotNull(placaDeCarga(textoNormalizado), placaParticular(textoNormalizado))
+        .minByOrNull { it.correcciones }
+        ?.let { return VehiculoRutaDetectado(it.valor, TipoVehiculoDetectado.PLACA) }
     extraerMoto(textoNormalizado)?.let { return it }
     REGEX_NUMERO_UNIDAD.find(textoNormalizado)?.let { match ->
         return VehiculoRutaDetectado(match.groupValues[1], TipoVehiculoDetectado.NUMERO_UNIDAD)

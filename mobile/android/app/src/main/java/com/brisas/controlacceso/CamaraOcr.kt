@@ -191,15 +191,12 @@ const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer. Acerque el documento y e
 /// lectura viven en [EstabilizadorLectura], no acá (separar esto evita que
 /// esta función termine "sabiendo" de cédulas/DIMEX/licencias/MRZ).
 ///
-/// Analiza el frame completo, sin recortar al recuadro guía -- el plan
-/// (sección 9) proponía filtrar los `TextBlock` de ML Kit por su
-/// `boundingBox` contra el recuadro para "no distraer" a ML Kit con texto de
-/// fondo, pero en la práctica volvía el escaneo mucho más incómodo (había
-/// que encuadrar el documento con precisión milimétrica para que
-/// reconociera algo, contra el reconocimiento casi instantáneo de antes) sin
-/// aportar la velocidad prometida -- ML Kit igual procesa el frame entero
-/// antes de filtrar, el recorte solo descartaba resultados después. El
-/// recuadro (`MarcoGuiaCedula`) queda como guía visual, no como filtro.
+/// Con `region` no nula, ML Kit recibe SÓLO el recuadro guía (recortado
+/// sobre los planos YUV antes de reconocer, ver [recortarParaOcr]): menos
+/// píxeles que procesar y sin texto de fondo compitiendo. Esto es distinto
+/// de lo que el plan (sección 9) proponía y se descartó -- filtrar los
+/// `TextBlock` por `boundingBox` DESPUÉS de reconocer el frame entero, que
+/// no ahorraba nada. Con `region = null` se analiza el frame completo.
 ///
 /// `ejecutorPrincipal` se pasa explícito a los listeners en vez de dejar que
 /// la Tasks API use su default (que también es el hilo principal, pero de
@@ -219,10 +216,6 @@ fun analizarCedula(
     recognizer: com.google.mlkit.vision.text.TextRecognizer,
     ejecutorPrincipal: java.util.concurrent.Executor,
     sesionActiva: AtomicBoolean,
-    // `null` (default) preserva el comportamiento de siempre -- asignar los
-    // buffers desde cero por frame. Pasarlo es lo que cierra el último
-    // punto suelto de MV-07 (ver `BuffersOcrReutilizables`).
-    buffersOcr: BuffersOcrReutilizables? = null,
     onTexto: (String) -> Unit,
     onFallo: () -> Unit,
     // Angosta (proporción de tarjeta) por defecto. `null` desactiva el
@@ -271,7 +264,7 @@ fun analizarCedula(
     // `recortarParaOcr` devolviendo `null` (formato inesperado, plano
     // corrupto, lo que sea) se cae al frame completo de siempre -- nunca
     // debe romper el escaneo por un recorte que salió mal.
-    val input = region?.let { recortarParaOcr(mediaImage, cropRect, rotacion, it, buffersOcr) }
+    val input = region?.let { recortarParaOcr(mediaImage, cropRect, rotacion, it) }
         ?: InputImage.fromMediaImage(mediaImage, rotacion)
     recognizer.process(input)
         .addOnSuccessListener(ejecutorPrincipal) { resultado ->
@@ -307,17 +300,16 @@ fun analizarCedula(
 /// que casi nunca tiene la misma proporción que lo que se ve en pantalla
 /// con `FILL_CENTER` (podía leer un documento fuera del marco).
 ///
-/// Los planos se leen con `duplicate()`: no mueve la posición de los
-/// `ByteBuffer` de la imagen, así que si algo falla después, el fallback
-/// `InputImage.fromMediaImage` todavía encuentra los planos intactos (antes
-/// quedaban ya consumidos).
+/// Los planos NO se copian enteros: [recortarYuvANv21] lee sólo las filas
+/// del recorte directo de cada `ByteBuffer` (sobre un `duplicate()`, así
+/// que si algo falla después, el fallback `InputImage.fromMediaImage`
+/// todavía encuentra los planos intactos).
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
 private fun recortarParaOcr(
     imagen: android.media.Image,
     cropRect: android.graphics.Rect,
     rotacionGrados: Int,
     region: RegionGuiaOcr,
-    buffersOcr: BuffersOcrReutilizables? = null,
 ): InputImage? {
     if (imagen.format != android.graphics.ImageFormat.YUV_420_888) return null
     val planos = imagen.planes
@@ -326,12 +318,10 @@ private fun recortarParaOcr(
         val yPlano = planos[0]
         val uPlano = planos[1]
         val vPlano = planos[2]
-        val yBuffer = yPlano.buffer.duplicate()
-        val uBuffer = uPlano.buffer.duplicate()
-        val vBuffer = vPlano.buffer.duplicate()
-        val yBytes = (buffersOcr?.yBytes(yBuffer.remaining()) ?: ByteArray(yBuffer.remaining())).also { yBuffer.get(it) }
-        val uBytes = (buffersOcr?.uBytes(uBuffer.remaining()) ?: ByteArray(uBuffer.remaining())).also { uBuffer.get(it) }
-        val vBytes = (buffersOcr?.vBytes(vBuffer.remaining()) ?: ByteArray(vBuffer.remaining())).also { vBuffer.get(it) }
+        // U y V comparten geometría en YUV_420_888 salvo en implementaciones
+        // de cámara anómalas; si no, mejor el frame completo que un croma
+        // leído con los pasos equivocados.
+        if (uPlano.rowStride != vPlano.rowStride || uPlano.pixelStride != vPlano.pixelStride) return null
 
         val cropSeguro = android.graphics.Rect(cropRect)
         if (!cropSeguro.intersect(0, 0, imagen.width, imagen.height)) {
@@ -349,10 +339,10 @@ private fun recortarParaOcr(
         }
         val nv21 = recortarYuvANv21(
             recorte,
-            y = yBytes,
+            y = yPlano.buffer,
             yRowStride = yPlano.rowStride,
-            u = uBytes,
-            v = vBytes,
+            u = uPlano.buffer,
+            v = vPlano.buffer,
             uvRowStride = uPlano.rowStride,
             uvPixelStride = uPlano.pixelStride,
         )
