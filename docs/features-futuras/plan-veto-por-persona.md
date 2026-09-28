@@ -45,6 +45,19 @@ Sólo se le puede negar el acceso a alguien que exista como contratista.
 Para bloquear a un proveedor que nunca fue contratista, se lo da de alta
 como contratista con el acceso apagado.
 
+## Apuntes sobre visitas (dueño, 2026-09-28: bajo riesgo, se dejan anotados)
+
+Las visitas son personas seleccionadas por un anfitrión, así que estos
+casos son poco probables. No se implementan por ahora:
+
+- **La web de anfitriones deja agendar la cita** a alguien con el acceso
+  negado. El bloqueo ocurre al llegar a la portería (check-in), no al
+  agendar. Si hiciera falta avisar antes, se agregaría el mismo chequeo en
+  la RPC `crear_cita_anfitrion` de la web de visitas.
+- **Pasaporte en vez de cédula:** si la persona llega como visita con
+  pasaporte, no coincide con la cédula de su ficha de contratista y entra.
+  Es otro documento y el sistema no puede saber que es la misma persona.
+
 ## Descartado
 
 Se llegó a construir un veto aparte, con tabla propia, motivo, historial y
