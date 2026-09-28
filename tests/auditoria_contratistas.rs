@@ -33,7 +33,7 @@ fn conexion() -> Connection {
              INSERT INTO contratistas(
                 id,cedula,nombre,empresa_id,tipo_ingreso,fecha_vencimiento_praind,
                 es_personal_ruta,tiene_acceso
-             ) VALUES(1,'1001','PERSONA',1,'SWAT',NULL,0,1);",
+             ) VALUES(1,'100100100','PERSONA',1,'SWAT',NULL,0,1);",
         )
         .unwrap();
     connection
@@ -41,7 +41,7 @@ fn conexion() -> Connection {
 
 fn datos(tipo: TipoIngreso, fecha: Option<NaiveDate>) -> DatosActualizacionContratista {
     DatosActualizacionContratista {
-        cedula: "1001".into(),
+        cedula: "100100100".into(),
         nombre: "Persona".into(),
         empresa_id: 1,
         tipo_ingreso: tipo,
@@ -56,7 +56,8 @@ fn registra_cambio_de_cedula_normalizada() {
     let core = AppCore::new(conexion());
     let actor = actor();
     let mut cambio = datos(TipoIngreso::Swat, None);
-    cambio.cedula = "  1002  ".into();
+    // Con espacios y guiones: se guarda y se audita en su forma única.
+    cambio.cedula = "  1-0020-0200  ".into();
 
     core.actualizar_contratista(&actor, 1, cambio).unwrap();
 
@@ -65,11 +66,11 @@ fn registra_cambio_de_cedula_normalizada() {
         .unwrap();
     assert_eq!(pagina.total, 1);
     assert_eq!(pagina.items[0].campo, "cedula");
-    assert_eq!(pagina.items[0].valor_anterior.as_deref(), Some("1001"));
-    assert_eq!(pagina.items[0].valor_nuevo.as_deref(), Some("1002"));
+    assert_eq!(pagina.items[0].valor_anterior.as_deref(), Some("100100100"));
+    assert_eq!(pagina.items[0].valor_nuevo.as_deref(), Some("100200200"));
     assert_eq!(pagina.items[0].entidad, EntidadAuditada::Contratista);
     assert_eq!(pagina.items[0].entidad_id, 1);
-    // "1002": el nombre ya actualizado en el mismo lote de cambios, no el
+    // "100200200": el nombre ya actualizado en el mismo lote de cambios, no el
     // que tenía el contratista antes de este `actualizar_contratista`.
     assert_eq!(pagina.items[0].entidad_nombre, "PERSONA");
     assert_eq!(pagina.items[0].usuario_id, actor.id);
@@ -170,7 +171,7 @@ fn fallo_de_auditoria_revierte_tambien_la_actualizacion() {
     let contratista = core
         .buscar_contratistas(
             &control_acceso::database::queries::contratistas::FiltroContratistas {
-                texto: Some("1001".into()),
+                texto: Some("100100100".into()),
                 ..Default::default()
             },
         )

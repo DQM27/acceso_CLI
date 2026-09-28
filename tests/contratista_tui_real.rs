@@ -86,7 +86,7 @@ fn persistencia_busqueda_fts_y_empresa_id_sobreviven_reapertura() {
             .crear_contratista(
                 &actor,
                 datos(
-                    "00109",
+                    "001090001",
                     "José Hernández",
                     e,
                     TipoIngreso::Praind,
@@ -108,7 +108,10 @@ fn persistencia_busqueda_fts_y_empresa_id_sobreviven_reapertura() {
     {
         let core = AppCore::new(open_database(&ruta).unwrap());
         assert_eq!(
-            core.buscar_contratistas(&filtro("00109")).unwrap().items[0].id,
+            core.buscar_contratistas(&filtro("001090001"))
+                .unwrap()
+                .items[0]
+                .id,
             id
         );
     }
@@ -131,7 +134,7 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         .crear_contratista(
             &actor,
             datos(
-                "997",
+                "997997997",
                 "José Hernández",
                 e,
                 TipoIngreso::PorCorreo,
@@ -140,17 +143,13 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
             ),
         )
         .unwrap();
-    let _b = core
-        .crear_contratista(
-            &actor,
-            datos("2002", "Otro", e, TipoIngreso::Swat, None, false),
-        )
-        .unwrap();
+    let otro = datos("200200200", "Otro", e, TipoIngreso::Swat, None, false);
+    core.crear_contratista(&actor, otro).unwrap();
     core.actualizar_contratista(
         &actor,
         a,
         actualizacion(
-            "998",
+            "998998998",
             "José Álvarez",
             e,
             TipoIngreso::PorCorreo,
@@ -170,13 +169,16 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         a
     );
     assert!(
-        core.buscar_contratistas(&filtro("997"))
+        core.buscar_contratistas(&filtro("997997997"))
             .unwrap()
             .items
             .is_empty()
     );
     assert_eq!(
-        core.buscar_contratistas(&filtro("998")).unwrap().items[0].id,
+        core.buscar_contratistas(&filtro("998998998"))
+            .unwrap()
+            .items[0]
+            .id,
         a
     );
     assert!(matches!(
@@ -184,7 +186,7 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
             &actor,
             a,
             actualizacion(
-                "2002",
+                "200200200",
                 "No debe persistir",
                 e,
                 TipoIngreso::Swat,
@@ -194,13 +196,23 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         ),
         Err(ContratistaServiceError::CedulaDuplicada)
     ));
-    let conservado = &core.buscar_contratistas(&filtro("998")).unwrap().items[0];
+    let conservado = &core
+        .buscar_contratistas(&filtro("998998998"))
+        .unwrap()
+        .items[0];
     assert_eq!(conservado.nombre, "JOSÉ ÁLVAREZ");
     assert_eq!(conservado.tipo_ingreso, TipoIngreso::PorCorreo);
     assert!(matches!(
         core.crear_contratista(
             &actor,
-            datos("4004", "Sin empresa", 999, TipoIngreso::Swat, None, false)
+            datos(
+                "400400400",
+                "Sin empresa",
+                999,
+                TipoIngreso::Swat,
+                None,
+                false
+            )
         ),
         Err(ContratistaServiceError::EmpresaNoEncontrada)
     ));
@@ -229,7 +241,7 @@ fn matrices_praind_ruta_acceso_y_cedula_string_se_persisten() {
     ];
     for (i, (tipo, ruta_personal, requiere)) in casos.into_iter().enumerate() {
         let fecha = requiere.then(|| NaiveDate::from_ymd_opt(2099, 1, 1).unwrap());
-        let cedula = format!("00{i}");
+        let cedula = format!("00{i:07}");
         core.crear_contratista(
             &actor,
             datos(&cedula, "Persona", e, tipo, fecha, ruta_personal),

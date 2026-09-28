@@ -79,7 +79,7 @@ pub enum ContratistaServiceError {
     EmpresaNoEncontrada,
     #[error("La cédula es obligatoria")]
     CedulaVacia,
-    #[error("La cédula sólo puede tener números")]
+    #[error("La cédula debe tener sólo números, entre 9 y 13 dígitos")]
     CedulaInvalida,
     #[error("El nombre es obligatorio")]
     NombreVacio,
@@ -366,6 +366,10 @@ pub enum EmpresaProveedorServiceError {
 pub enum IngresoProveedorServiceError {
     #[error("La cédula es obligatoria")]
     CedulaVacia,
+    /// Misma regla que contratistas: sólo cédula nacional o de extranjero
+    /// (`Cedula::es_nacional_o_de_extranjero`).
+    #[error("La cédula debe tener sólo números, entre 9 y 13 dígitos")]
+    CedulaInvalida,
     #[error("El nombre es obligatorio")]
     NombreVacio,
     #[error("Empresa proveedora no encontrada")]

@@ -101,9 +101,9 @@ const SELECT_CITA_VISITANTE: &str = "
 
 impl CitaRepository for SqliteCitaRepository<'_> {
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError> {
-        let mut statement = self
-            .connection
-            .prepare(&format!("{SELECT_CITA_VISITANTE} WHERE v.cedula = ?1"))?;
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_CITA_VISITANTE} WHERE NORMALIZAR_CEDULA(v.cedula) = NORMALIZAR_CEDULA(?1)"
+        ))?;
         let filas = statement
             .query_map(params![cedula], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;

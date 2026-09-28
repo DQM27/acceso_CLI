@@ -84,7 +84,7 @@ fn fijar_pragmas_iniciales(connection: &Connection) -> Result<(), SchemaError> {
 }
 
 pub fn initialize_database(connection: &Connection) -> Result<(), SchemaError> {
-    registrar_funcion_plegar(connection)?;
+    registrar_funciones_propias(connection)?;
 
     // `foreign_keys`, `journal_mode` y `trusted_schema` no pueden cambiarse
     // dentro de una transacción activa, así que se fijan antes de abrir la
@@ -774,7 +774,7 @@ fn ejecutar_migracion_46(connection: &Connection) -> Result<(), SchemaError> {
 /// choque exacto -- "Dos Pinos" y "DOS PINOS" se colaban como dos empresas
 /// distintas (hallazgo del usuario, 2026-09-18). Un índice único sobre
 /// `PLEGAR(nombre)` (misma función que ya usan los buscadores, ver
-/// `registrar_funcion_plegar`) cierra el hueco sin tocar el valor guardado
+/// `registrar_funciones_propias`) cierra el hueco sin tocar el valor guardado
 /// -- el nombre se sigue mostrando tal como se escribió, sólo la
 /// comparación de unicidad ignora mayúsculas y diacríticos. Sin recrear
 /// tablas: un índice nuevo no necesita el patrón `_nueva`/copiar/`DROP` de
@@ -937,20 +937,26 @@ fn adoptar_application_id(connection: &Connection) -> Result<(), SchemaError> {
 /// Es correcto marcarla: `PLEGAR` no lee ni escribe nada fuera de su
 /// argumento, mismo motivo por el que ya es seguro registrarla sin
 /// sincronización entre threads.
-pub(crate) fn registrar_funcion_plegar(connection: &Connection) -> Result<(), SchemaError> {
-    connection
-        .create_scalar_function(
-            "PLEGAR",
-            1,
-            FunctionFlags::SQLITE_UTF8
-                | FunctionFlags::SQLITE_DETERMINISTIC
-                | FunctionFlags::SQLITE_INNOCUOUS,
-            |contexto| {
-                let texto: Option<String> = contexto.get(0)?;
-                Ok(texto.map(|texto| plegar_para_busqueda(&texto)))
-            },
-        )
-        .map_err(SchemaError::from)
+pub(crate) fn registrar_funciones_propias(connection: &Connection) -> Result<(), SchemaError> {
+    let banderas = FunctionFlags::SQLITE_UTF8
+        | FunctionFlags::SQLITE_DETERMINISTIC
+        | FunctionFlags::SQLITE_INNOCUOUS;
+    connection.create_scalar_function("PLEGAR", 1, banderas, |contexto| {
+        let texto: Option<String> = contexto.get(0)?;
+        Ok(texto.map(|texto| plegar_para_busqueda(&texto)))
+    })?;
+    // Forma única de una cédula (`domain::cedula::Cedula::normalizar`), para
+    // comparar contra valores guardados antes de que existiera (con guiones,
+    // con el cero del TSE). Lo que no se puede normalizar queda tal cual:
+    // nunca coincide con una cédula válida, pero no rompe la consulta.
+    connection.create_scalar_function("NORMALIZAR_CEDULA", 1, banderas, |contexto| {
+        let texto: Option<String> = contexto.get(0)?;
+        Ok(texto.map(|texto| {
+            crate::domain::cedula::Cedula::normalizar(&texto)
+                .map_or(texto, crate::domain::cedula::Cedula::into_string)
+        }))
+    })?;
+    Ok(())
 }
 
 /// Chequeo estructural barato en cada apertura (`quick_check`, no

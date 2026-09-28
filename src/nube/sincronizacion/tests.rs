@@ -1554,7 +1554,8 @@ fn recibe_una_cita_con_su_grupo_de_visitantes_y_el_nombre_del_anfitrion_embebido
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(cedula, "1-1111");
+    // La web la guardó con guiones; baja en su forma única (`domain::cedula`).
+    assert_eq!(cedula, "11111");
 }
 
 #[test]

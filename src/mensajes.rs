@@ -72,7 +72,7 @@ pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),
         EmpresaNoEncontrada => "La empresa seleccionada ya no existe".into(),
         CedulaVacia => "La cédula es obligatoria".into(),
-        CedulaInvalida => "La cédula sólo puede tener números".into(),
+        CedulaInvalida => "La cédula debe tener sólo números, entre 9 y 13 dígitos".into(),
         NombreVacio => "El nombre es obligatorio".into(),
         NombreInvalido => "El nombre no puede tener números ni símbolos".into(),
         PraindRequerido => "Fecha PRAIND requerida".into(),
@@ -435,13 +435,14 @@ pub fn mensaje_empresa_proveedor(error: EmpresaProveedorServiceError) -> String 
 
 pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String {
     use IngresoProveedorServiceError::{
-        CedulaVacia, EmpresaInactiva, EmpresaNoEncontrada, GafeteNoDisponible, GafeteNoRegistrado,
-        GafeteOcupado, IngresoActivo, NombreVacio, OperadorNoAutorizado, RegistroNoActivo,
-        RelojRetrocedido, SalidaAnteriorAIngreso,
+        CedulaInvalida, CedulaVacia, EmpresaInactiva, EmpresaNoEncontrada, GafeteNoDisponible,
+        GafeteNoRegistrado, GafeteOcupado, IngresoActivo, NombreVacio, OperadorNoAutorizado,
+        RegistroNoActivo, RelojRetrocedido, SalidaAnteriorAIngreso,
     };
 
     match error {
         CedulaVacia => "La cédula es obligatoria".into(),
+        CedulaInvalida => "La cédula debe tener sólo números, entre 9 y 13 dígitos".into(),
         NombreVacio => "El nombre es obligatorio".into(),
         EmpresaNoEncontrada => "Empresa proveedora no encontrada".into(),
         EmpresaInactiva => "La empresa proveedora está dada de baja".into(),

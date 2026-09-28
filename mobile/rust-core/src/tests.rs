@@ -965,7 +965,7 @@ fn registrar_ingreso_y_salida_de_proveedor_redondea_el_viaje() {
 
     let registro_id = nucleo
         .registrar_ingreso_proveedor(
-            "1-1111".to_string(),
+            "1-1111-1111".to_string(),
             "Juan Perez".to_string(),
             empresa.id,
             None,
@@ -988,7 +988,7 @@ fn registrar_ingreso_proveedor_con_empresa_inexistente_falla() {
     let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
 
     let resultado = nucleo.registrar_ingreso_proveedor(
-        "1-1111".to_string(),
+        "1-1111-1111".to_string(),
         "Juan Perez".to_string(),
         999,
         None,
@@ -1012,7 +1012,7 @@ fn registrar_ingreso_proveedor_con_secreto_rechaza_cedula_ya_activa() {
         .id;
     let registrar = || {
         nucleo.registrar_ingreso_proveedor_con_secreto(
-            "1-1111".to_string(),
+            "1-1111-1111".to_string(),
             "Juan Perez".to_string(),
             empresa_id,
             None,
@@ -1023,7 +1023,7 @@ fn registrar_ingreso_proveedor_con_secreto_rechaza_cedula_ya_activa() {
 
     assert!(
         nucleo
-            .aviso_proveedor_con_ingreso_activo("1-1111".to_string())
+            .aviso_proveedor_con_ingreso_activo("1-1111-1111".to_string())
             .unwrap()
             .is_none()
     );
@@ -1035,7 +1035,7 @@ fn registrar_ingreso_proveedor_con_secreto_rechaza_cedula_ya_activa() {
     ));
     assert!(
         nucleo
-            .aviso_proveedor_con_ingreso_activo("1-1111".to_string())
+            .aviso_proveedor_con_ingreso_activo("1-1111-1111".to_string())
             .unwrap()
             .is_some()
     );

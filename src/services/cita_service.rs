@@ -10,6 +10,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use crate::database::repositories::cita_repository::CitaRepository;
 use crate::database::repositories::gafete_repository::GafeteRepository;
 use crate::database::repositories::movimiento_visita_repository::MovimientoVisitaRepository;
+use crate::domain::cedula::Cedula;
 use crate::domain::cita::{MotivoDenegacionVisita, ResultadoVisita, verificar_cita};
 use crate::domain::gafete::ValidacionAsignacion;
 use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
@@ -52,20 +53,21 @@ where
     /// vencieron juntas) no hay un criterio de prioridad entre motivos
     /// todavía, se informa el de la última que se miró.
     ///
-    /// Sólo recorta espacios -- `CitaRepository::buscar_por_cedula` compara
-    /// por igualdad exacta (`v.cedula = ?1`, sin `UPPER`/`TRIM` de guiones
-    /// en SQL), y la RPC `crear_cita_anfitrion` que guarda la cédula del
-    /// lado de la web (`docs/auditorias/contrato-web-visitas.md`) tampoco cambia
-    /// mayúsculas ni quita guiones, sólo hace `btrim` -- si un lado
-    /// normalizara distinto del otro, una cédula agendada dejaría de
-    /// encontrarse acá aunque el guardia la escribiera/escaneara igual.
+    /// Busca por la forma única de la cédula (ver `domain::cedula`), igual
+    /// que la guarda la sincronización al bajar las citas
+    /// (`recibir_citas_del_sitio`): así una cédula agendada en la web con
+    /// guiones o con el cero del TSE se encuentra igual, la escriba o la
+    /// escanee la portería como sea. Las visitas sí admiten pasaporte
+    /// (letras); contratistas y proveedores no.
     pub fn verificar_check_in(
         &self,
         cedula: &str,
         hoy: NaiveDate,
     ) -> Result<(Cita, CitaVisitante), CitaServiceError> {
-        let cedula = cedula.trim();
-        let candidatas = self.citas.buscar_por_cedula(cedula)?;
+        let Ok(cedula) = Cedula::normalizar(cedula) else {
+            return Err(CitaServiceError::SinCitaRegistrada);
+        };
+        let candidatas = self.citas.buscar_por_cedula(cedula.as_str())?;
         if candidatas.is_empty() {
             return Err(CitaServiceError::SinCitaRegistrada);
         }

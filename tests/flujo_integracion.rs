@@ -131,7 +131,7 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
     let primer_contratista_id = crear_contratista(
         &connection,
         empresa_id,
-        "2001",
+        "200100100",
         TipoIngreso::Praind,
         Some(praind_vigente()),
         false,
@@ -195,7 +195,7 @@ fn flujo_completo_praind_libera_y_reutiliza_gafete() {
     let segundo_contratista_id = crear_contratista(
         &connection,
         empresa_id,
-        "2002",
+        "200200200",
         TipoIngreso::Praind,
         Some(praind_vigente()),
         false,
@@ -267,7 +267,7 @@ fn comprobar_flujo_sin_gafete(
     let contratista_id = crear_contratista(
         &connection,
         empresa_id,
-        "2001",
+        "200100100",
         tipo_ingreso,
         fecha_praind,
         es_personal_ruta,
@@ -321,7 +321,7 @@ fn flujo_por_correo_exige_y_persiste_gafete() {
     let contratista_id = crear_contratista(
         &connection,
         empresa_id,
-        "2001",
+        "200100100",
         TipoIngreso::PorCorreo,
         None,
         false,
@@ -376,7 +376,7 @@ fn intentar_ingreso_restringido(
     let contratista_id = crear_contratista(
         &connection,
         empresa_id,
-        "2001",
+        "200100100",
         tipo_ingreso,
         fecha_praind,
         es_personal_ruta,
@@ -436,7 +436,7 @@ fn sqlite_impide_ingreso_activo_y_gafete_activo_duplicados() {
     let primer_contratista = crear_contratista(
         &connection,
         empresa_id,
-        "2001",
+        "200100100",
         TipoIngreso::Praind,
         Some(praind_vigente()),
         false,
@@ -445,7 +445,7 @@ fn sqlite_impide_ingreso_activo_y_gafete_activo_duplicados() {
     let segundo_contratista = crear_contratista(
         &connection,
         empresa_id,
-        "2002",
+        "200200200",
         TipoIngreso::Praind,
         Some(praind_vigente()),
         false,

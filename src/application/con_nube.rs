@@ -214,8 +214,14 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
     nube: NubeDelDispositivo<'_>,
     actor: &UsuarioSesion,
-    datos: NuevoIngresoProveedor,
+    mut datos: NuevoIngresoProveedor,
 ) -> Result<i64, IngresoProveedorVerificadoError> {
+    // Una sola forma de la cédula para las tres verificaciones y para lo
+    // que se guarda (ver `domain::cedula`). Si no se puede normalizar, se
+    // deja como vino: el registro local la rechaza con su propio mensaje.
+    if let Ok(cedula) = crate::domain::cedula::Cedula::normalizar(&datos.cedula) {
+        datos.cedula = cedula.into_string();
+    }
     if nucleo().proveedor_con_ingreso_activo_en_sitio(&datos.cedula)? {
         return Err(IngresoProveedorServiceError::IngresoActivo.into());
     }
@@ -378,7 +384,7 @@ mod tests {
             || core.lock().unwrap(),
             sin_nube(&cache),
             &actor,
-            datos("1-1111", empresa_id),
+            datos("1-1111-1111", empresa_id),
         )
         .unwrap();
 
@@ -395,7 +401,7 @@ mod tests {
                 "INSERT INTO ingresos_proveedor_remotos (uuid, sitio_id, cedula, nombre,
                      empresa_nombre, placa, gafete_numero, hora_entrada,
                      usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en)
-                 VALUES ('u1', 's1', '2-2222', 'Ana', 'Maika', NULL, 8,
+                 VALUES ('u1', 's1', '2-2222-2222', 'Ana', 'Maika', NULL, 8,
                      '2026-09-16T11:00:00Z', 'Otro', 'd2', '2026-09-16T11:00:00Z')",
                 [],
             )
@@ -406,7 +412,7 @@ mod tests {
             || core.lock().unwrap(),
             sin_nube(&cache),
             &actor,
-            datos("2-2222", empresa_id),
+            datos("2-2222-2222", empresa_id),
         )
         .unwrap_err();
 

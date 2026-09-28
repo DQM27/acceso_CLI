@@ -101,6 +101,16 @@ pub(super) fn guardar_cita_remota(
     )?;
 
     for visitante in &fila.cita_visitantes {
+        // La web de anfitriones guarda la cédula como la escribió el
+        // anfitrión (con guiones, con el cero del TSE...). Se guarda acá en
+        // su forma única (ver `domain::cedula`) para que la portería la
+        // encuentre con cualquier formato. Si no se puede normalizar, queda
+        // como vino: mejor una cita que no se encuentra que una que se
+        // pierde.
+        let cedula = crate::domain::cedula::Cedula::normalizar(&visitante.cedula).map_or_else(
+            |_| visitante.cedula.clone(),
+            crate::domain::cedula::Cedula::into_string,
+        );
         transaction.execute(
             "
             INSERT INTO cita_visitantes (uuid, cita_id, cedula, nombre, empresa, placa_vehiculo)
@@ -115,7 +125,7 @@ pub(super) fn guardar_cita_remota(
             params![
                 visitante.id,
                 cita_id_local,
-                visitante.cedula,
+                cedula,
                 visitante.nombre,
                 visitante.empresa,
                 visitante.placa_vehiculo,
