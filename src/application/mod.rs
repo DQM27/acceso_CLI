@@ -101,7 +101,17 @@ impl AppCore {
         Self::con_reloj(connection, Arc::new(RelojSistema))
     }
 
+    /// Aplica al reloj el último desfase guardado contra la hora del
+    /// servidor (ver `database::queries::desfase_reloj`), para que el equipo
+    /// selle con la hora de internet desde el arranque y no sólo tras la
+    /// primera respuesta de la nube. Sin medición guardada, o con un reloj
+    /// que no se corrige (`RelojSistema`, `RelojFijo`), no cambia nada.
     pub fn con_reloj(connection: Connection, reloj: Arc<dyn Reloj>) -> Self {
+        match crate::database::queries::desfase_reloj::leer(&connection) {
+            Ok(Some(desfase_ms)) => reloj.actualizar_desfase_ms(desfase_ms),
+            Ok(None) => {}
+            Err(error) => log::warn!("no se pudo leer el desfase de reloj guardado: {error}"),
+        }
         Self {
             connection,
             reloj,

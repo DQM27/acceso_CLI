@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 51;
+pub const SCHEMA_VERSION: i64 = 52;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -404,6 +404,11 @@ fn aplicar_migraciones_posteriores_a_29(
     if *version == 50 {
         aplicar_migracion_51(connection)?;
         *version = 51;
+    }
+
+    if *version == 51 {
+        aplicar_migracion_52(connection)?;
+        *version = 52;
     }
 
     Ok(())
@@ -875,6 +880,20 @@ fn aplicar_migracion_51(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_51)?;
     transaction.execute_batch("PRAGMA user_version = 51")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Guarda el último desfase medido entre el reloj del equipo y la hora del
+/// servidor (ver `tiempo::RelojCorregido`). Antes vivía sólo en memoria: al
+/// abrir la app, hasta la primera respuesta de la nube (o durante todo el
+/// turno si no había internet), el equipo volvía a sellar movimientos con
+/// su propio reloj, desfasado. `NULL` = nunca se midió; se usa el reloj
+/// del equipo tal cual, como hasta ahora.
+fn aplicar_migracion_52(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_52)?;
+    transaction.execute_batch("PRAGMA user_version = 52")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1542,3 +1561,5 @@ const MIGRACION_49: &str = include_str!("migraciones/migracion_49.sql");
 const MIGRACION_50: &str = include_str!("migraciones/migracion_50.sql");
 
 const MIGRACION_51: &str = include_str!("migraciones/migracion_51.sql");
+
+const MIGRACION_52: &str = include_str!("migraciones/migracion_52.sql");
