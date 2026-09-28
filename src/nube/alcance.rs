@@ -91,7 +91,7 @@ impl AlcanceSincronizacion {
         for tabla in tablas {
             match tabla.as_ref() {
                 "contratistas" | "empresas" | "usuarios" | "gafetes" | "empresas_proveedor"
-                | "rutas" | "personas_vetadas" => alcance.catalogo = true,
+                | "rutas" => alcance.catalogo = true,
                 "vehiculos_ruta" | "encargados_ruta" => alcance.catalogo_rutas = true,
                 "ingresos" => alcance.ingresos = true,
                 "ingresos_proveedor" => alcance.ingresos_proveedor = true,

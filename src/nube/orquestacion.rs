@@ -141,9 +141,6 @@ pub fn recibir(
     }
     if alcance.catalogo {
         resumen.catalogo = sincronizacion::recibir_catalogo_del_sitio(conexion, contexto)?;
-        // Veto por persona: viaja con el catálogo (misma etapa) pero con su
-        // propia marca de agua.
-        sincronizacion::recibir_personas_vetadas(conexion, contexto)?;
     }
     if alcance.catalogo_rutas {
         resumen.catalogo_rutas =

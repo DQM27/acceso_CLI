@@ -20,9 +20,9 @@ use crate::database::error::DatabaseError;
 use crate::models::cita::{Cita, CitaVisitante, EstadoCita};
 
 pub trait CitaRepository {
-    /// ¿La cédula tiene un veto vigente? Ver
-    /// `database::queries::personas_vetadas::esta_vetada`.
-    fn cedula_vetada(&self, cedula: &str) -> Result<bool, DatabaseError>;
+    /// ¿Esta cédula tiene el acceso negado como contratista? Ver
+    /// `database::queries::contratistas::cedula_con_acceso_negado`.
+    fn cedula_con_acceso_negado(&self, cedula: &str) -> Result<bool, DatabaseError>;
 
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError>;
 
@@ -104,8 +104,8 @@ const SELECT_CITA_VISITANTE: &str = "
 ";
 
 impl CitaRepository for SqliteCitaRepository<'_> {
-    fn cedula_vetada(&self, cedula: &str) -> Result<bool, DatabaseError> {
-        crate::database::queries::personas_vetadas::esta_vetada(self.connection, cedula)
+    fn cedula_con_acceso_negado(&self, cedula: &str) -> Result<bool, DatabaseError> {
+        crate::database::queries::contratistas::cedula_con_acceso_negado(self.connection, cedula)
     }
 
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError> {

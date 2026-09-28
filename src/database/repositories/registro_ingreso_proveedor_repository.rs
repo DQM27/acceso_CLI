@@ -24,9 +24,9 @@ pub trait RegistroIngresoProveedorRepository {
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<RegistroIngresoProveedor>, DatabaseError>;
 
-    /// ¿La cédula tiene un veto vigente? Ver
-    /// `database::queries::personas_vetadas::esta_vetada`.
-    fn cedula_vetada(&self, cedula: &str) -> Result<bool, DatabaseError>;
+    /// ¿Esta cédula tiene el acceso negado como contratista? Ver
+    /// `database::queries::contratistas::cedula_con_acceso_negado`.
+    fn cedula_con_acceso_negado(&self, cedula: &str) -> Result<bool, DatabaseError>;
 
     /// Ingreso abierto (sin salida) para esta cédula -- mismo motivo que
     /// `RegistroIngresoRepository::buscar_ingreso_activo`: evitar que la
@@ -131,8 +131,8 @@ const SELECT_REGISTRO: &str = "
 ";
 
 impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorRepository<'_> {
-    fn cedula_vetada(&self, cedula: &str) -> Result<bool, DatabaseError> {
-        crate::database::queries::personas_vetadas::esta_vetada(self.connection, cedula)
+    fn cedula_con_acceso_negado(&self, cedula: &str) -> Result<bool, DatabaseError> {
+        crate::database::queries::contratistas::cedula_con_acceso_negado(self.connection, cedula)
     }
 
     fn crear(&self, registro: &NuevoRegistroIngresoProveedor) -> Result<i64, DatabaseError> {

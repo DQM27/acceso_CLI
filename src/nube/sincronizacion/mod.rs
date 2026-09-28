@@ -31,7 +31,6 @@ mod historial;
 mod ingresos;
 mod paginado;
 mod proveedores;
-mod vetos;
 
 pub use catalogo::*;
 pub use catalogo_rutas::*;
@@ -52,9 +51,6 @@ use paginado::{
     obtener_json_paginado_con,
 };
 pub use proveedores::*;
-pub use vetos::recibir_personas_vetadas;
-// Para el aviso en vivo (`nube::en_vivo`), igual que los ingresos.
-pub(in crate::nube) use vetos::{FilaPersonaVetadaRemota, guardar_persona_vetada};
 
 /// Todo lo que hace falta para hablar con el receptor en nombre de este
 /// dispositivo. `apikey` es la clave publicable del proyecto (no un

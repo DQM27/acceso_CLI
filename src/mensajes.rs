@@ -171,13 +171,13 @@ pub fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
 
 pub fn mensaje_cita(error: CitaServiceError) -> String {
     use CitaServiceError::{
-        GafeteNoDisponible, GafeteNoRegistrado, GafeteOcupado, MovimientoNoActivo,
-        OperadorNoAutorizado, PersonaVetada, RelojRetrocedido, SalidaAnteriorAEntrada,
-        SinCitaRegistrada, SinCitaVigente, VisitanteYaEnSitio,
+        AccesoNegado, GafeteNoDisponible, GafeteNoRegistrado, GafeteOcupado, MovimientoNoActivo,
+        OperadorNoAutorizado, RelojRetrocedido, SalidaAnteriorAEntrada, SinCitaRegistrada,
+        SinCitaVigente, VisitanteYaEnSitio,
     };
 
     match error {
-        PersonaVetada => MENSAJE_PERSONA_VETADA.into(),
+        AccesoNegado => MENSAJE_ACCESO_NEGADO.into(),
         SinCitaRegistrada => "No hay ninguna visita agendada para esta cédula".into(),
         SinCitaVigente(MotivoDenegacionVisita::CitaCancelada) => "Esta visita fue cancelada".into(),
         SinCitaVigente(MotivoDenegacionVisita::FueraDeVigencia) => {
@@ -204,22 +204,20 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
     }
 }
 
-/// Veto por persona (`personas_vetadas`): el mismo texto en todas las
-/// puertas. Sin el motivo, a propósito: es un dato sensible (Ley 8968) que
-/// sólo ve el administrador del panel web.
-pub const MENSAJE_PERSONA_VETADA: &str =
-    "Esta persona tiene el acceso restringido. Comuníquese con administración.";
+/// Proveedor o visita cuya cédula tiene el acceso negado como contratista
+/// (el mismo interruptor de siempre, ver
+/// `database::queries::contratistas::cedula_con_acceso_negado`).
+pub const MENSAJE_ACCESO_NEGADO: &str = "Esta persona tiene el acceso denegado.";
 
 pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     use RegistroIngresoServiceError::{
         AccesoDenegado, ContratistaNoEncontrado, GafeteNoDisponible, GafeteNoRegistrado,
         GafeteOcupado, GafeteRequerido, IngresoActivo, IngresoActivoEnOtroDispositivo,
-        PersonaVetada, PlacaNoAplica, PlacaRequerida, RelojRetrocedido,
+        PlacaNoAplica, PlacaRequerida, RelojRetrocedido,
     };
 
     match error {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),
-        PersonaVetada => MENSAJE_PERSONA_VETADA.into(),
         IngresoActivo => "El contratista ya tiene un ingreso activo".into(),
         IngresoActivoEnOtroDispositivo => {
             "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio".into()
@@ -295,7 +293,6 @@ pub fn mensaje_bloqueo_ingreso(
     use crate::services::registro_ingreso_service::BloqueoIngreso;
 
     match bloqueo {
-        BloqueoIngreso::PersonaVetada => MENSAJE_PERSONA_VETADA.into(),
         BloqueoIngreso::IngresoActivo => "El contratista ya tiene un ingreso activo.".into(),
         BloqueoIngreso::IngresoActivoEnOtroDispositivo => {
             "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio.".into()
@@ -444,14 +441,14 @@ pub fn mensaje_empresa_proveedor(error: EmpresaProveedorServiceError) -> String 
 
 pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String {
     use IngresoProveedorServiceError::{
-        CedulaInvalida, CedulaVacia, EmpresaInactiva, EmpresaNoEncontrada, GafeteNoDisponible,
-        GafeteNoRegistrado, GafeteOcupado, IngresoActivo, NombreVacio, OperadorNoAutorizado,
-        PersonaVetada, RegistroNoActivo, RelojRetrocedido, SalidaAnteriorAIngreso,
+        AccesoNegado, CedulaInvalida, CedulaVacia, EmpresaInactiva, EmpresaNoEncontrada,
+        GafeteNoDisponible, GafeteNoRegistrado, GafeteOcupado, IngresoActivo, NombreVacio,
+        OperadorNoAutorizado, RegistroNoActivo, RelojRetrocedido, SalidaAnteriorAIngreso,
     };
 
     match error {
         CedulaVacia => "La cédula es obligatoria".into(),
-        PersonaVetada => MENSAJE_PERSONA_VETADA.into(),
+        AccesoNegado => MENSAJE_ACCESO_NEGADO.into(),
         CedulaInvalida => "La cédula debe tener sólo números, entre 9 y 13 dígitos".into(),
         NombreVacio => "El nombre es obligatorio".into(),
         EmpresaNoEncontrada => "Empresa proveedora no encontrada".into(),

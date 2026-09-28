@@ -67,9 +67,10 @@ where
         let Ok(cedula) = Cedula::normalizar(cedula) else {
             return Err(CitaServiceError::SinCitaRegistrada);
         };
-        // Veto por persona: aunque tenga una visita agendada, no entra.
-        if self.citas.cedula_vetada(cedula.as_str())? {
-            return Err(CitaServiceError::PersonaVetada);
+        // A quien se le negó el acceso como contratista tampoco entra como
+        // visita, aunque tenga la cita agendada.
+        if self.citas.cedula_con_acceso_negado(cedula.as_str())? {
+            return Err(CitaServiceError::AccesoNegado);
         }
         let candidatas = self.citas.buscar_por_cedula(cedula.as_str())?;
         if candidatas.is_empty() {
