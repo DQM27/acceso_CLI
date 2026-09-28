@@ -11,6 +11,54 @@ data class RectanguloEntero(val left: Int, val top: Int, val right: Int, val bot
     val height: Int get() = bottom - top
 }
 
+/// Qué parte de lo visible (la imagen YA rotada como la ve quien opera)
+/// se le entrega a ML Kit. [RegionGuiaOcr] es el recuadro guía que se
+/// dibuja; [SubregionRecorte] es una parte de él (p. ej. sólo la banda del
+/// MRZ, ver `SeguidorBandaMrz`).
+interface RegionRecorte {
+    fun rectanguloEnPixeles(anchoVisible: Int, altoVisible: Int): RectanguloEntero
+}
+
+/// Rectángulo expresado en fracciones (0..1) del ancho y alto de otra
+/// imagen. Así las cajas de ML Kit, que llegan en píxeles del recorte
+/// analizado, se pueden llevar al recuadro guía sin depender de la
+/// resolución.
+data class FraccionesRect(val izquierda: Float, val arriba: Float, val derecha: Float, val abajo: Float) {
+    init {
+        require(izquierda < derecha && arriba < abajo) { "Rectángulo vacío: $this" }
+    }
+
+    val ancho: Float get() = derecha - izquierda
+    val alto: Float get() = abajo - arriba
+
+    companion object {
+        /// Caja en píxeles (`left`/`top`/`right`/`bottom`) de una imagen
+        /// de `anchoImagen` x `altoImagen`, llevada a fracciones y recortada
+        /// a la imagen. `null` si queda vacía.
+        fun desdePixeles(left: Int, top: Int, right: Int, bottom: Int, anchoImagen: Int, altoImagen: Int): FraccionesRect? {
+            if (anchoImagen <= 0 || altoImagen <= 0) return null
+            val izq = (left.toFloat() / anchoImagen).coerceIn(0f, 1f)
+            val der = (right.toFloat() / anchoImagen).coerceIn(0f, 1f)
+            val arr = (top.toFloat() / altoImagen).coerceIn(0f, 1f)
+            val aba = (bottom.toFloat() / altoImagen).coerceIn(0f, 1f)
+            return if (izq < der && arr < aba) FraccionesRect(izq, arr, der, aba) else null
+        }
+    }
+}
+
+/// La parte `fracciones` del rectángulo de `base`.
+data class SubregionRecorte(val base: RegionRecorte, val fracciones: FraccionesRect) : RegionRecorte {
+    override fun rectanguloEnPixeles(anchoVisible: Int, altoVisible: Int): RectanguloEntero {
+        val r = base.rectanguloEnPixeles(anchoVisible, altoVisible)
+        return RectanguloEntero(
+            left = r.left + (r.width * fracciones.izquierda).toInt(),
+            top = r.top + (r.height * fracciones.arriba).toInt(),
+            right = r.left + (r.width * fracciones.derecha).toInt(),
+            bottom = r.top + (r.height * fracciones.abajo).toInt(),
+        )
+    }
+}
+
 /// Región de interés para recortar antes del OCR -- misma forma que
 /// `MarcoGuiaCedula` debe dibujar para esa pantalla (fracción del ancho
 /// visible, proporción ancho:alto, y a qué fracción de la altura queda el
@@ -43,8 +91,8 @@ data class RegionGuiaOcr(
     val fraccionAncho: Float,
     val proporcionAnchoAlto: Float,
     val fraccionTopCentro: Float,
-) {
-    fun rectanguloEnPixeles(anchoVisible: Int, altoVisible: Int): RectanguloEntero {
+) : RegionRecorte {
+    override fun rectanguloEnPixeles(anchoVisible: Int, altoVisible: Int): RectanguloEntero {
         val ancho = (anchoVisible * fraccionAncho).toInt().coerceAtLeast(1)
         val alto = (ancho / proporcionAnchoAlto).toInt().coerceAtLeast(1)
         val left = (anchoVisible - ancho) / 2
@@ -90,7 +138,7 @@ data class RegionGuiaOcr(
 /// El resultado queda alineado a coordenadas PARES: en NV21 el croma
 /// viene submuestreado de a bloques de 2x2, un borde impar partiría un
 /// bloque.
-fun rectanguloEnSensor(crop: RectanguloEntero, rotacionGrados: Int, region: RegionGuiaOcr): RectanguloEntero {
+fun rectanguloEnSensor(crop: RectanguloEntero, rotacionGrados: Int, region: RegionRecorte): RectanguloEntero {
     val w = crop.width
     val h = crop.height
     val rotada = rotacionGrados % 180 != 0

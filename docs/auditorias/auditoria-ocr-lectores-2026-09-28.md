@@ -42,6 +42,27 @@ Lo que falta no es "rehacerlo", sino cerrar cuatro frentes:
 | S-1 | Seguridad | Tras escanear, si la búsqueda (parcial) devolvía **un solo** contratista se abría su formulario aunque su cédula no fuera la leída. Con un dígito mal leído en el frente (sin checksum) podía abrirse el de otra persona. | `CoincidenciaEscaneo.kt`: con un número se exige cédula **exacta**; por nombre (gafete In House sin cédula) se mantiene el resultado único. Tests nuevos. |
 | D-1 | Documentación | `arquitectura-ocr.md` decía que se usaba la háptica de Compose y que `VIBRATE` sobraba (el código hace lo contrario, a propósito); el doc de `analizarCedula` decía que se analizaba el frame completo sin recortar. | Corregidos. |
 
+## Segunda entrega (mismo día): rediseño guiado por la investigación
+
+Después de `investigacion-lectura-documentos-2026-09-28.md` se implementó:
+
+| Id | Qué | Dónde |
+|---|---|---|
+| — | **PDF417 de la cédula anterior**: sólo cédula y nombre, prefijo de 91 bytes, bytes crudos (con huellas) puestos en cero | `rust-core/src/pdf417_cedula.rs`, `LecturaFrame.kt` |
+| — | **Votación por carácter** entre frames (número, MRZ y placas), ponderada por nitidez; otra persona empieza de cero | `rust-core/src/votacion.rs`, `EstabilizadorLectura.kt`, `EscaneoCompartido.kt` |
+| — | **Filtro de calidad** (nitidez y reflejo) antes de ML Kit; aviso de reflejo medido | `CalidadFrame.kt` |
+| R-3 | Post-proceso **en el hilo del analizador**; sólo el resultado va al principal | `CamaraOcr.kt`, pantallas |
+| R-4 | El encuadre reutiliza la orientación del estabilizador (una clasificación por frame) | `EncuadreAdaptativo.kt` |
+| E-3 (parcial) | La geometría de ML Kit se usa para **acotar el recorte a la banda del MRZ** | `SeguidorBandaMrz` |
+| E-4 (parcial) | **Linterna** en las 4 pantallas (zoom sigue pendiente) | `BotonLinterna` |
+| — | **Precarga** de ML Kit mientras arranca la cámara | `EstadoCamaraOcr` |
+| — | **Métricas** por sesión en debug, sin datos personales (`adb logcat -s OcrMetricas`) | `MetricasOcr` |
+| — | APK sólo con las ABI del núcleo Rust: debug de 94,5 MB a 64,7 MB | `build.gradle.kts` |
+
+Sigue pendiente: S-2 (gafetes con código o confirmación), el resto de E-3
+(reconstruir renglones por geometría y usar la confianza), zoom, y A-1
+(migrar clasificación y extracción a Rust).
+
 ## Pendiente, en orden de prioridad
 
 ### Seguridad

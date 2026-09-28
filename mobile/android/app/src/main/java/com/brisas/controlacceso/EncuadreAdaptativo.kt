@@ -85,8 +85,14 @@ class ControladorEncuadre(
     /// si la orientación del recuadro cambió (la pantalla tiene que
     /// redibujarlo).
     @Synchronized
-    fun registrarTexto(texto: String, leidoCon: OrientacionEncuadre): Boolean {
-        val pedida = orientacionDelTexto(texto)
+    fun registrarTexto(texto: String, leidoCon: OrientacionEncuadre): Boolean =
+        registrarOrientacion(orientacionDelTexto(texto), leidoCon)
+
+    /// Igual que [registrarTexto], con la orientación ya deducida por quien
+    /// llama (p. ej. `ResultadoEstabilizacion.orientacionSugerida`): evita
+    /// clasificar dos veces el mismo texto en el mismo frame.
+    @Synchronized
+    fun registrarOrientacion(pedida: OrientacionEncuadre?, leidoCon: OrientacionEncuadre): Boolean {
         if (pedida == null) {
             if (leidoCon != orientacion) return false // sonda sin resultado
             framesSinDocumento++

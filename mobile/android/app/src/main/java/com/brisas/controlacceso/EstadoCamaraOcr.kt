@@ -1,6 +1,8 @@
 package com.brisas.controlacceso
 
 import android.content.Context
+import android.util.Log
+import androidx.camera.core.Camera
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -11,47 +13,120 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import com.google.mlkit.vision.barcode.BarcodeScanner
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Job
 
-/// MV-10 (auditoría 2026-09-24): las 4 pantallas de escaneo (Cédula/Gafete,
-/// Carnet KOF, Vehículo/Ruta, Comprobante de Ruta) declaraban y liberaban
-/// estos mismos 9 recursos por separado -- bloque idéntico byte a byte en
-/// las 4, con riesgo de que un cambio futuro en cómo se libera la cámara
-/// (o un bug de ciclo de vida) se arregle en una pantalla y se olvide en
-/// las otras 3. Agrupa el ejecutor de análisis, el recognizer de ML Kit,
-/// las dos banderas atómicas (`detectada`/`sesionActiva`, compartidas
-/// entre el hilo del analizador y el principal, ver
-/// `construirAnalizadorOcr`/`analizarCedula` en `PantallaEscanearCedula.kt`)
-/// y el estado que va llenando `iniciarCamara` a medida que la cámara real
-/// queda lista.
+/// Recursos de una sesión de escaneo, compartidos por las 4 pantallas
+/// (Cédula/Gafete, Carnet KOF, Vehículo/Ruta, Comprobante de Ruta) -- MV-10
+/// (auditoría 2026-09-24): antes cada pantalla los declaraba y liberaba por
+/// separado.
 ///
-/// `mutableStateOf` (no propiedades simples) para `cameraProvider`/
-/// `vistaPreviaCamara`/`analisisCamara`/`trabajoResultado` -- mismo motivo
-/// que antes de este cambio: se asignan DESPUÉS de construir el estado,
-/// dentro del `factory` de `AndroidView`, no en la creación.
-class EstadoCamaraOcr(contexto: Context) {
+/// `conLectorPdf417`: sólo la pantalla de documentos lo pide (cédula
+/// anterior); el resto no carga el modelo de códigos.
+///
+/// `mutableStateOf` (no propiedades simples) para lo que se asigna DESPUÉS
+/// de construir el estado, dentro del `factory` de `AndroidView`, y para lo
+/// que la pantalla dibuja (linterna).
+class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
     val ejecutor: ExecutorService = Executors.newSingleThreadExecutor()
     val recognizer: TextRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
+    /// Sólo PDF417: pedir un formato hace el escaneo más rápido que buscar
+    /// los 13 que soporta ML Kit.
+    val lectorCodigos: BarcodeScanner? = if (conLectorPdf417) {
+        BarcodeScanning.getClient(BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_PDF417).build())
+    } else {
+        null
+    }
     val ejecutorPrincipal: Executor = ContextCompat.getMainExecutor(contexto)
+
+    /// El hilo del analizador, para los listeners de ML Kit (ver
+    /// `analizarFrameOcr`). Si ya se liberó, corre el listener en el lugar:
+    /// éste ve `sesionActiva == false`, no procesa nada, y el `ImageProxy`
+    /// igual se cierra.
+    val ejecutorProcesamiento: Executor = Executor { tarea ->
+        try {
+            ejecutor.execute(tarea)
+        } catch (_: RejectedExecutionException) {
+            tarea.run()
+        }
+    }
     val detectada = AtomicBoolean(false)
     val sesionActiva = AtomicBoolean(true)
+
+    // Un filtro por tipo de región: la nitidez sólo es comparable entre
+    // recortes del mismo contenido (la banda del MRZ, texto denso, "parece"
+    // más nítida que la tarjeta entera). Sólo lo usa el hilo del analizador.
+    private val filtrosCalidad = HashMap<Pair<RegionRecorte, Boolean>, FiltroCalidad>()
+
+    fun filtroCalidad(region: RegionRecorte): FiltroCalidad {
+        val clave = when (region) {
+            is SubregionRecorte -> region.base to true
+            else -> region to false
+        }
+        return filtrosCalidad.getOrPut(clave) { FiltroCalidad() }
+    }
+
+    /// Números de rendimiento por sesión, sólo en debug (sin datos
+    /// personales). `adb logcat -s OcrMetricas`.
+    val metricas = MetricasOcr(habilitadas = BuildConfig.DEBUG, registrar = { Log.d(TAG_METRICAS_OCR, it) })
 
     var cameraProvider: ProcessCameraProvider? by mutableStateOf(null)
     var vistaPreviaCamara: Preview? by mutableStateOf(null)
     var analisisCamara: ImageAnalysis? by mutableStateOf(null)
     var trabajoResultado: Job? by mutableStateOf(null)
+    var camaraFisica: Camera? by mutableStateOf(null)
+    var linternaEncendida by mutableStateOf(false)
+        private set
+
+    val tieneLinterna: Boolean get() = camaraFisica?.cameraInfo?.hasFlashUnit() == true
+
+    init {
+        precalentar()
+    }
+
+    /// De noche en la portería, o con placas en sombra, la luz es lo que
+    /// más limita la lectura.
+    fun alternarLinterna() {
+        val camara = camaraFisica ?: return
+        if (!tieneLinterna) return
+        val encender = !linternaEncendida
+        camara.cameraControl.enableTorch(encender)
+        linternaEncendida = encender
+    }
+
+    /// Ejecuta `bloque` en el hilo principal si la sesión sigue viva. Los
+    /// resultados se calculan en el hilo del analizador; sólo el estado de
+    /// pantalla y los efectos (vibración, sonido) se publican acá.
+    fun enPrincipal(bloque: () -> Unit) {
+        ejecutorPrincipal.execute { if (sesionActiva.get()) bloque() }
+    }
+
+    /// El primer `process` carga el modelo (cientos de ms). Hacerlo con
+    /// una imagen mínima mientras la cámara arranca -- que igual tarda --
+    /// evita que ese costo caiga sobre el primer frame real.
+    private fun precalentar() {
+        val vacia = InputImage.fromByteArray(ByteArray(32 * 32 * 3 / 2), 32, 32, 0, InputImage.IMAGE_FORMAT_NV21)
+        recognizer.process(vacia)
+        lectorCodigos?.process(vacia)
+    }
 
     /// Mismo cierre que cada pantalla hacía a mano en su propio
     /// `onDispose` -- invalida callbacks de CameraX/ML Kit que terminen
     /// después de salir de la composición, desata la cámara del ciclo de
-    /// vida anterior, y libera hilo/recognizer.
+    /// vida anterior, y libera hilo y modelos.
     fun liberar() {
         sesionActiva.set(false)
         detectada.set(true)
@@ -61,15 +136,17 @@ class EstadoCamaraOcr(contexto: Context) {
         if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
         ejecutor.shutdown()
         recognizer.close()
+        lectorCodigos?.close()
     }
 }
 
+private const val TAG_METRICAS_OCR = "OcrMetricas"
+
 /// Crea un [EstadoCamaraOcr] atado al ciclo de vida de esta composición --
-/// `liberar()` corre una sola vez, al salir, igual que el `onDispose` que
-/// reemplaza en las 4 pantallas de escaneo.
+/// `liberar()` corre una sola vez, al salir.
 @Composable
-fun rememberEstadoCamaraOcr(contexto: Context): EstadoCamaraOcr {
-    val estado = remember { EstadoCamaraOcr(contexto) }
+fun rememberEstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false): EstadoCamaraOcr {
+    val estado = remember { EstadoCamaraOcr(contexto, conLectorPdf417) }
     DisposableEffect(Unit) {
         estado.sesionActiva.set(true)
         onDispose { estado.liberar() }

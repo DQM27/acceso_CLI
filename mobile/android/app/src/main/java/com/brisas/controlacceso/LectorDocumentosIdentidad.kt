@@ -9,7 +9,14 @@ import uniffi.control_acceso_mobile.RegistroMrz
 /// vivía en `MrzParser.kt` antes de la migración a Rust del 2026-09-25, se
 /// mueve acá porque describe el origen de un `DocumentoDetectado` (este
 /// archivo), no es parte del parseo de MRZ en sí.
-enum class FuenteDatos { OCR_FRENTE, MRZ }
+enum class FuenteDatos {
+    OCR_FRENTE,
+    MRZ,
+    // Código PDF417 del reverso de la cédula anterior: corrección de
+    // errores propia del código, sólo cédula y nombre (ver
+    // `mobile/rust-core/src/pdf417_cedula.rs`).
+    PDF417,
+}
 
 /// Tipos de documento que el lector sabe clasificar. `DESCONOCIDO` es el
 /// resultado cuando el texto no calza ninguna señal conocida -- la pantalla
@@ -574,6 +581,10 @@ private val REGEX_NUMERO_REVERSO_CEDULA = Regex(
     """N[ÚU]MERO\s*DE\s*C[ÉE]DULA\s*:?\s*(\d[- ]?\d{4}[- ]?\d{4})""",
     RegexOption.IGNORE_CASE,
 )
+
+/// Pista para el lector de códigos: el texto parece el reverso de la
+/// cédula anterior, que es la cara que trae el PDF417.
+fun pareceReversoCedulaAnterior(texto: String): Boolean = esReversoCedulaAnterior(texto)
 
 private fun esReversoCedulaAnterior(texto: String): Boolean {
     val mayus = texto.uppercase()

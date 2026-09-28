@@ -28,12 +28,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 /// Comprobante de Ruta). Antes cada pantalla salvo Cédula traía su propia
 /// copia textual de este `ImageAnalysis.Builder()` (hallazgo 2026-09-25,
 /// mismo riesgo de desincronización que ya se había resuelto para
-/// [iniciarCamara]/[analizarCedula]): separado de [iniciarCamara] para que
+/// [iniciarCamara]/[analizarFrameOcr]): separado de [iniciarCamara] para que
 /// cada función tenga una sola responsabilidad, esta arma "qué se
 /// analiza", la otra "cómo se conecta a la cámara física".
 ///
 /// `onFrameActivo` recibe el frame ya filtrado (sesión viva, documento aún
-/// no detectado) -- cada pantalla decide ahí cómo llamar a [analizarCedula]
+/// no detectado) -- cada pantalla decide ahí cómo llamar a [analizarFrameOcr]
 /// con su propio `onTexto`/`onFallo`/`region`, sin que este helper necesite
 /// saber nada de estabilizadores ni de qué tipo de documento se busca.
 fun construirAnalizadorOcr(
@@ -114,6 +114,8 @@ fun iniciarCamara(
     sesionActiva: AtomicBoolean,
     onCameraProviderListo: (ProcessCameraProvider, Preview) -> Unit,
     onFallo: (String) -> Unit,
+    // La cámara ya conectada: la usa la linterna (`EstadoCamaraOcr`).
+    onCamaraLista: (androidx.camera.core.Camera) -> Unit = {},
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
     cameraProviderFuture.addListener(
@@ -135,7 +137,7 @@ fun iniciarCamara(
             // `cropRect` queda como el frame completo del sensor, que casi
             // nunca tiene la misma proporción que lo que la vista previa en
             // verdad muestra con FILL_CENTER. `recortarParaOcr` (llamado
-            // desde `analizarCedula`) es quien de verdad lee `cropRect` y
+            // desde `analizarFrameOcr`) es quien de verdad lee `cropRect` y
             // recorta con eso antes de aplicar el recuadro guía -- ver su
             // doc-comment.
                 val grupoUseCases = UseCaseGroup.Builder()
@@ -143,11 +145,12 @@ fun iniciarCamara(
                     .addUseCase(analisis)
                     .apply { previewView.viewPort?.let { setViewPort(it) } }
                     .build()
-                proveedor.bindToLifecycle(
+                val camara = proveedor.bindToLifecycle(
                     lifecycleOwner,
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     grupoUseCases,
                 )
+                onCamaraLista(camara)
             } catch (_: Exception) {
                 if (sesionActiva.get()) onFallo("No se pudo iniciar la cámara")
             }
@@ -182,135 +185,159 @@ private const val INTERVALO_MINIMO_ENTRE_FRAMES_MS = 150L
 /// Compartido por las 4 pantallas de escaneo -- antes cada una tenía su
 /// propia copia textual idéntica (hallazgo 2026-09-19, riesgo de
 /// desincronizarse si alguien edita una sin las otras 3). Sin `private`:
-/// vive acá porque [analizarCedula]/[iniciarCamara] (el resto de lo
+/// vive acá porque [analizarFrameOcr]/[iniciarCamara] (el resto de lo
 /// compartido) también viven en este archivo.
 const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer. Acerque el documento y evite reflejos."
 
-/// Sólo entrega a ML Kit y devuelve el texto reconocido -- la clasificación
-/// de tipo de documento, extracción de campos y decisión de aceptar o no la
-/// lectura viven en [EstabilizadorLectura], no acá (separar esto evita que
-/// esta función termine "sabiendo" de cédulas/DIMEX/licencias/MRZ).
+/// Analiza un frame: recorta al recuadro, mide su calidad, corre el lector
+/// que toque (texto o códigos) y entrega una [LecturaFrame]. No sabe nada
+/// de cédulas ni de placas: clasificar y decidir vive en los
+/// estabilizadores.
 ///
-/// Con `region` no nula, ML Kit recibe SÓLO el recuadro guía (recortado
-/// sobre los planos YUV antes de reconocer, ver [recortarParaOcr]): menos
-/// píxeles que procesar y sin texto de fondo compitiendo. Esto es distinto
-/// de lo que el plan (sección 9) proponía y se descartó -- filtrar los
-/// `TextBlock` por `boundingBox` DESPUÉS de reconocer el frame entero, que
-/// no ahorraba nada. Con `region = null` se analiza el frame completo.
+/// Etapas, en orden de costo:
+/// 1. Recorte sobre los planos YUV ([recortarParaOcr]) -- ML Kit recibe
+///    sólo `region` (el recuadro guía, o la banda del MRZ); `null` = frame
+///    entero.
+/// 2. Calidad ([medirCalidad]/[FiltroCalidad], auditoría OCR 2026-09-28):
+///    un frame claramente más borroso que los recientes NO pasa a ML Kit,
+///    lo más caro del frame. Los que pasan llevan su peso para la votación.
+/// 3. ML Kit: texto, o PDF417 de la cédula anterior cuando `lector` es
+///    [LectorFrame.CODIGO] (sólo se entrega si se leyó una cédula válida).
 ///
-/// `ejecutorPrincipal` se pasa explícito a los listeners en vez de dejar que
-/// la Tasks API use su default (que también es el hilo principal, pero de
-/// forma implícita) -- `onTexto` termina llamando a `EstabilizadorLectura`,
-/// que no es thread-safe y asume ejecución serializada en un único hilo; más
-/// vale que esa garantía sea explícita acá que depender de un comportamiento
-/// por defecto de una librería externa.
-// No `private` -- [analizarCedula] no conoce nada de cédulas ni de
-// documentos de identidad (sólo entrega texto crudo de ML Kit), así que
-// otros perfiles de OCR aislados (ver LectorComprobanteRuta.kt /
-// PantallaEscanearComprobanteRuta.kt) la reusan en vez de duplicar el
-// manejo de `ImageProxy`/`InputImage`/hilos. Mismo motivo para
-// [iniciarCamara] más arriba.
+/// `onLectura`/`onFallo` corren en el HILO DEL ANALIZADOR, no en el
+/// principal: clasificar, votar y cruzar a Rust no debe trabar la
+/// pantalla. Es seguro porque CameraX no entrega otro frame hasta que éste
+/// se cierra (al completar), así que todo queda serializado en un hilo.
+/// Quien llama publica al hilo principal sólo el estado de pantalla (ver
+/// [EstadoCamaraOcr.enPrincipal]).
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
-fun analizarCedula(
+fun analizarFrameOcr(
     imagen: ImageProxy,
-    recognizer: com.google.mlkit.vision.text.TextRecognizer,
-    ejecutorPrincipal: java.util.concurrent.Executor,
-    sesionActiva: AtomicBoolean,
-    onTexto: (String) -> Unit,
+    camara: EstadoCamaraOcr,
+    region: RegionRecorte?,
+    lector: LectorFrame = LectorFrame.TEXTO,
+    onLectura: (LecturaFrame) -> Unit,
     onFallo: () -> Unit,
-    // Angosta (proporción de tarjeta) por defecto. `null` desactiva el
-    // recorte por completo (frame entero, como antes de este cambio) --
-    // el comprobante de carga de ruta lo usa así: es un papel mucho más
-    // grande que una tarjeta y, sin datos reales todavía de qué región
-    // exacta conviene recortar, adivinar mal significaba dejar de leer
-    // CUALQUIER campo (hallazgo 2026-09-20) en vez de sólo leer peor.
-    region: RegionGuiaOcr? = RegionGuiaOcr.TARJETA_ID,
 ) {
     val mediaImage = imagen.image
-    if (mediaImage == null) {
+    // Se repite el chequeo de sesión justo antes del trabajo pesado: si la
+    // pantalla se cerró entre medio, no se gasta CPU en un frame que nadie
+    // va a usar.
+    if (mediaImage == null || !camara.sesionActiva.get()) {
         imagen.close()
         return
     }
-    // Optimización #4 del relevamiento de rendimiento de cámara
-    // (2026-09-25, pospuesta a propósito junto con #2 en el commit
-    // c0dad75): `construirAnalizadorOcr` ya filtra por `sesionActiva` antes
-    // de llegar acá, pero ese chequeo pasa ANTES del trabajo pesado de esta
-    // función (copiar los planos y recortar a NV21), no
-    // después. Con `setAnalyzer` en un único hilo casi nunca hay hueco
-    // entre ambos chequeos, pero repetirlo acá, justo antes de
-    // `recortarParaOcr`, es gratis (una lectura de `AtomicBoolean`) y cierra
-    // la ventana por completo: si la pantalla se cerró en el instante entre
-    // ambos chequeos, no se gasta CPU recortando un frame cuyo resultado
-    // nadie va a usar.
-    if (!sesionActiva.get()) {
-        imagen.close()
-        return
-    }
+    val inicio = System.nanoTime()
     val rotacion = imagen.imageInfo.rotationDegrees
-    // MV-08 (auditoría 2026-09-24): `imagen.cropRect` es lo único que
-    // CameraX de verdad ajusta a partir del `ViewPort` (`setViewPort` en
-    // `iniciarCamara`) -- para `ImageAnalysis` el búfer en sí NUNCA se
-    // recorta, sólo se informa qué porción de él corresponde a lo visible.
-    // Se lee acá, sobre el `ImageProxy`, porque `mediaImage`
-    // (`android.media.Image`) no expone esta información. Antes de este
-    // fix se ignoraba por completo y `recortarParaOcr` trabajaba siempre
-    // sobre el frame entero del sensor.
-    val cropRect = imagen.cropRect
-    // Recorta al mismo recuadro que ve la persona en pantalla antes de
-    // mandarle el frame a ML Kit -- pedido explícito del usuario 2026-09-20
-    // para que el reconocimiento sea más rápido (menos píxeles) y más
-    // preciso (el texto de interés ocupa más del cuadro, sin ruido de fondo
-    // compitiendo), tal como recomienda la guía oficial de ML Kit. Con
-    // `recortarParaOcr` devolviendo `null` (formato inesperado, plano
-    // corrupto, lo que sea) se cae al frame completo de siempre -- nunca
-    // debe romper el escaneo por un recorte que salió mal.
-    val input = region?.let { recortarParaOcr(mediaImage, cropRect, rotacion, it) }
-        ?: InputImage.fromMediaImage(mediaImage, rotacion)
-    recognizer.process(input)
-        .addOnSuccessListener(ejecutorPrincipal) { resultado ->
-            if (sesionActiva.get()) {
-                onTexto(resultado.text)
+    // MV-08 (auditoría 2026-09-24): `cropRect` es lo que CameraX ajusta a
+    // partir del `ViewPort` -- la porción del búfer que de verdad se ve en
+    // pantalla (el búfer de `ImageAnalysis` nunca se recorta solo).
+    val recorte = region?.let { recortarParaOcr(mediaImage, imagen.cropRect, rotacion, it) }
+    val calidad = recorte?.let { medirCalidad(it.nv21, it.anchoSensor, it.altoSensor) }
+    val decision = if (calidad != null && region != null) {
+        camara.filtroCalidad(region).evaluar(calidad)
+    } else {
+        DecisionCalidad(procesar = true, peso = 1f)
+    }
+    if (!decision.procesar) {
+        camara.metricas.registrarDescarte()
+        imagen.close()
+        return
+    }
+    val finRecorte = System.nanoTime()
+    // Sin recorte (formato inesperado, plano raro) se lee el frame entero:
+    // un recorte fallido nunca debe romper el escaneo.
+    val input = recorte?.input ?: InputImage.fromMediaImage(mediaImage, rotacion)
+    val regionLeida = if (recorte != null) region else null
+    val ejecutor = camara.ejecutorProcesamiento
+
+    val lectorCodigos = camara.lectorCodigos
+    if (lector == LectorFrame.CODIGO && lectorCodigos != null) {
+        lectorCodigos.process(input).addOnSuccessListener(ejecutor) { codigos ->
+            if (!camara.sesionActiva.get()) return@addOnSuccessListener
+            camara.metricas.registrarFrame(LectorFrame.CODIGO, finRecorte - inicio, System.nanoTime() - finRecorte)
+            val datos = codigos.firstNotNullOfOrNull { codigo -> codigo.rawBytes?.let(::extraerPdf417Cedula) }
+            if (datos != null) {
+                onLectura(
+                    LecturaFrame(LectorFrame.CODIGO, "", datos, calidad, decision.peso, regionLeida, emptyList()),
+                )
             }
-        }
-        .addOnFailureListener(ejecutorPrincipal) { if (sesionActiva.get()) onFallo() }
-        .addOnCompleteListener(ejecutorPrincipal) {
-            imagen.close()
-        }
+        }.cerrarAlTerminar(imagen, camara, onFallo)
+    } else {
+        camara.recognizer.process(input).addOnSuccessListener(ejecutor) { resultado ->
+            if (!camara.sesionActiva.get()) return@addOnSuccessListener
+            camara.metricas.registrarFrame(LectorFrame.TEXTO, finRecorte - inicio, System.nanoTime() - finRecorte)
+            val lineasMrz = if (recorte == null) {
+                emptyList()
+            } else {
+                resultado.textBlocks.asSequence()
+                    .flatMap { it.lines }
+                    .filter { esLineaMrzProbable(it.text) }
+                    .mapNotNull { linea ->
+                        linea.boundingBox?.let {
+                            FraccionesRect.desdePixeles(it.left, it.top, it.right, it.bottom, recorte.anchoVertical, recorte.altoVertical)
+                        }
+                    }
+                    .toList()
+            }
+            onLectura(
+                LecturaFrame(LectorFrame.TEXTO, resultado.text, null, calidad, decision.peso, regionLeida, lineasMrz),
+            )
+        }.cerrarAlTerminar(imagen, camara, onFallo)
+    }
 }
 
-/// Recorta el frame de la cámara al mismo recuadro que dibuja
-/// `MarcoGuiaCedula` (`RegionGuiaOcr`, misma proporción/posición) antes de
-/// mandarlo a ML Kit. `null` si algo no sale como se espera -- el llamador
-/// cae de vuelta al frame completo, nunca debe romper el escaneo.
+/// Fallo y cierre comunes a los dos lectores, en el hilo del analizador.
+/// Cerrar el `ImageProxy` al COMPLETAR (no antes) es lo que hace que
+/// CameraX no entregue otro frame mientras éste se procesa.
+private fun <T> com.google.android.gms.tasks.Task<T>.cerrarAlTerminar(
+    imagen: ImageProxy,
+    camara: EstadoCamaraOcr,
+    onFallo: () -> Unit,
+) {
+    addOnFailureListener(camara.ejecutorProcesamiento) {
+        camara.metricas.registrarFallo()
+        if (camara.sesionActiva.get()) onFallo()
+    }.addOnCompleteListener(camara.ejecutorProcesamiento) { imagen.close() }
+}
+
+/// Recorte listo para ML Kit, más lo necesario para medir su calidad
+/// (luminancia en orientación del sensor) y para ubicar las cajas que
+/// devuelve ML Kit (que llegan ya rotadas, en `anchoVertical` x
+/// `altoVertical`).
+private class RecorteOcr(
+    val input: InputImage,
+    val nv21: ByteArray,
+    val anchoSensor: Int,
+    val altoSensor: Int,
+    val anchoVertical: Int,
+    val altoVertical: Int,
+)
+
+/// Recorta el frame de la cámara a `region` (el recuadro que dibuja
+/// `MarcoGuiaCedula`, o una parte de él) antes de mandarlo a ML Kit.
+/// `null` si algo no sale como se espera -- el llamador cae de vuelta al
+/// frame completo, nunca debe romper el escaneo.
 ///
 /// Recorta DIRECTO sobre los planos YUV del sensor: [rectanguloEnSensor]
-/// traduce el recuadro (coordenadas de pantalla, ya rotadas) al espacio sin
-/// rotar del sensor -- con tests para las 4 rotaciones, que es justo el
-/// mapeo que antes se evitaba rotando un bitmap completo primero -- y
-/// [recortarYuvANv21] copia sólo esa región a NV21. ML Kit recibe el NV21 con
-/// la rotación y la aplica él. Antes: frame entero a ARGB en un bucle de
-/// Kotlin, bitmap de ~4 MB, recorte al viewport, rotación del bitmap
-/// entero y otro recorte -- el costo de CPU más alto por frame, y además
-/// con una conversión de color que saturaba los reflejos (ver
-/// [recortarYuvANv21]).
+/// traduce la región (coordenadas de pantalla, ya rotadas) al espacio sin
+/// rotar del sensor -- con tests para las 4 rotaciones -- y
+/// [recortarYuvANv21] copia sólo esa región a NV21, leyendo fila por fila
+/// de cada `ByteBuffer` (nunca los planos enteros). ML Kit recibe el NV21
+/// con la rotación y la aplica él.
 ///
 /// `cropRect` (MV-08, auditoría 2026-09-24): el rectángulo que CameraX
 /// calculó a partir del `ViewPort`, en coordenadas del búfer SIN rotar --
 /// sin él, el recuadro guía se calculaba sobre el frame entero del sensor,
 /// que casi nunca tiene la misma proporción que lo que se ve en pantalla
-/// con `FILL_CENTER` (podía leer un documento fuera del marco).
-///
-/// Los planos NO se copian enteros: [recortarYuvANv21] lee sólo las filas
-/// del recorte directo de cada `ByteBuffer` (sobre un `duplicate()`, así
-/// que si algo falla después, el fallback `InputImage.fromMediaImage`
-/// todavía encuentra los planos intactos).
+/// con `FILL_CENTER`.
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
 private fun recortarParaOcr(
     imagen: android.media.Image,
     cropRect: android.graphics.Rect,
     rotacionGrados: Int,
-    region: RegionGuiaOcr,
-): InputImage? {
+    region: RegionRecorte,
+): RecorteOcr? {
     if (imagen.format != android.graphics.ImageFormat.YUV_420_888) return null
     val planos = imagen.planes
     if (planos.size < 3) return null
@@ -346,7 +373,15 @@ private fun recortarParaOcr(
             uvRowStride = uPlano.rowStride,
             uvPixelStride = uPlano.pixelStride,
         )
-        InputImage.fromByteArray(nv21, recorte.width, recorte.height, rotacionGrados, InputImage.IMAGE_FORMAT_NV21)
+        val rotada = rotacionGrados % 180 != 0
+        RecorteOcr(
+            input = InputImage.fromByteArray(nv21, recorte.width, recorte.height, rotacionGrados, InputImage.IMAGE_FORMAT_NV21),
+            nv21 = nv21,
+            anchoSensor = recorte.width,
+            altoSensor = recorte.height,
+            anchoVertical = if (rotada) recorte.height else recorte.width,
+            altoVertical = if (rotada) recorte.width else recorte.height,
+        )
     } catch (e: Exception) {
         null
     }

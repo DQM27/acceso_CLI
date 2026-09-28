@@ -1,6 +1,9 @@
 package com.brisas.controlacceso
 
-import uniffi.control_acceso_mobile.RegistroMrz
+import uniffi.control_acceso_mobile.ConsensoVotacion
+import uniffi.control_acceso_mobile.DatosPdf417Cedula
+import uniffi.control_acceso_mobile.VotadorPorPosicion
+import uniffi.control_acceso_mobile.leerMrz
 
 /// Estado central que alimenta tanto los esquineros del viewfinder como el
 /// mensaje in-cámara (ver plan, secciones 7 y 8) -- un solo lugar decide
@@ -18,225 +21,303 @@ data class ResultadoEstabilizacion(
     // "no se detectó como vencido" (puede ser vigente, o simplemente no
     // haber fecha de vencimiento disponible para ese tipo de documento).
     val vencido: Boolean = false,
-    // 0..1: cuántas lecturas coincidentes lleva el candidato actual sobre
-    // las que hacen falta para confirmar. La pantalla lo dibuja como barra
-    // de avance en el recuadro ("ya casi, no lo mueva").
+    // 0..1: cuánto respaldo lleva el candidato actual sobre el que hace
+    // falta para confirmar. La pantalla lo dibuja como barra de avance en
+    // el recuadro ("ya casi, no lo mueva").
     val progreso: Float = 0f,
+    // Orientación del recuadro que pide lo leído en este frame (`null` =
+    // no opina). La pantalla se la pasa a `ControladorEncuadre` en vez de
+    // que éste vuelva a clasificar el mismo texto.
+    val orientacionSugerida: OrientacionEncuadre? = null,
+    // Hay un MRZ en cuadro: el lector de códigos no tiene nada que buscar
+    // (la cédula nueva cambió el PDF417 por el MRZ).
+    val hayMrz: Boolean = false,
 )
 
 /// Decide, frame a frame, si ya hay lectura suficiente para aceptarla.
 ///
-/// Regla (plan, sección 5): si el MRZ trae checksum válido, número y fechas
-/// ya están probados por el dígito verificador -- sólo se pide que la
-/// lectura (incluidos los nombres, que el MRZ no protege con checksum)
-/// coincida en 2 frames, ver `procesarMrzValido`. Sin checksum
-/// (extracción del frente por regex), se exige que el mismo resultado
-/// aparezca `framesRequeridos` veces dentro de los últimos `ventana` frames
-/// -- no necesariamente consecutivos.
+/// **Votación por carácter** (auditoría OCR 2026-09-28). Antes se exigía
+/// que la misma cadena completa se repitiera N veces; con reflejos cada
+/// frame erraba en un carácter distinto y ninguna lectura coincidía entera
+/// con otra. Ahora cada frame vota posición por posición
+/// (`VotadorPorPosicion`, en Rust) con un peso según su nitidez, y se
+/// confirma cuando, en TODAS las posiciones, el carácter ganador:
+/// - tiene respaldo de al menos `framesRequeridos` frames (descontando
+///   [TOLERANCIA_SOPORTE] para frames apenas menos nítidos), y
+/// - le saca a la segunda opción al menos [MARGEN_MINIMO] de ventaja.
 ///
-/// Antes exigía que fueran consecutivos (un candidato distinto reiniciaba
-/// el conteo a cero). Eso resultó ser demasiado frágil con reflejos: un
-/// solo frame afectado por un reflejo (que hace que ML Kit lea mal un
-/// dígito) tiraba todo el progreso acumulado, y con reflejos intermitentes
-/// el conteo nunca llegaba a completarse. La ventana deslizante tolera
-/// algún frame malo salteado entre medio sin perder lo ya leído bien.
+/// Con frames de peso 1 esto nunca es más permisivo que la regla anterior
+/// (N lecturas del mismo valor), incluido el modo gafete, que dispara una
+/// salida sin revisión humana. Si un frame difiere del consenso en más de
+/// un par de caracteres se trata como OTRO documento y se empieza de cero:
+/// la votación corrige errores de lectura, nunca mezcla dos personas.
 ///
-/// Con instancia por sesión de escaneo: crear una nueva por cada vez que se
-/// abre la pantalla de cámara, no reusar entre escaneos distintos.
+/// El MRZ se vota igual (sus líneas completas) y el consenso se valida con
+/// sus dígitos verificadores: la línea de nombres no los tiene, por eso
+/// también ahí se exige respaldo de 2 frames.
 ///
-/// **No es thread-safe** -- `candidatosRecientes` se lee y escribe sin
-/// sincronización. Sólo es seguro porque `procesarFrame` se llama
-/// exclusivamente desde el hilo principal (el callback de ML Kit se entrega
-/// ahí explícitamente, ver `PantallaEscanearCedula.analizarCedula`). Si
-/// algún día se llama desde el hilo del analizador de CameraX en vez del
-/// principal, hay que agregar sincronización acá.
+/// El PDF417 de la cédula anterior ([procesarPdf417]) confirma en una
+/// sola lectura: el código trae su propia corrección de errores y Rust
+/// valida la forma de los datos.
+///
+/// Una instancia por sesión de escaneo. Es seguro llamarla desde el hilo
+/// del analizador y reiniciarla desde el principal: los métodos públicos
+/// están sincronizados.
 class EstabilizadorLectura(
     private val modo: ModoEscaneoDocumento = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
-    // MV-06 (auditoría 2026-09-24): en modo gafete, el número sale de una
-    // regex sin dígito verificador (a diferencia del MRZ, que si trae
-    // checksum válido se acepta en el mismo frame más arriba en
-    // `procesarFrame`) y dispara una mutación real sin confirmación humana
-    // (salida automática, ver `PantallaActivos`/`ActivosViewModel`). Con
-    // sólo 2 repeticiones alcanzaba para que una confusión de OCR
-    // (3/8, 1/7, 0/6) que se repite en el mismo reflejo cerrara el ingreso
-    // de la persona equivocada. 3 en vez de 2 no elimina el riesgo (sigue
-    // sin dígito verificador -- eso queda para una mejora aparte, QR o
-    // checksum en el gafete), pero exige una confusión más consistente
-    // para colarse. DOCUMENTO_CONTRATISTA se queda en 2: ese modo sí abre
-    // un formulario para que el operador revise antes de guardar, no
-    // dispara nada solo.
+    // MV-06 (auditoría 2026-09-24): en modo gafete el número no tiene
+    // dígito verificador y confirmar dispara una salida real sin revisión
+    // humana, así que se exige más respaldo. DOCUMENTO_CONTRATISTA abre un
+    // formulario que el operador revisa antes de guardar.
     private val framesRequeridos: Int = if (modo == ModoEscaneoDocumento.GAFETE_CONTRATISTA) 3 else 2,
-    // Un poco más grande que `framesRequeridos` -- da lugar a tolerar algún
-    // frame malo salteado sin exigir tampoco una ventana tan larga que
-    // acepte una racha vieja de candidatos ya abandonados.
+    // Frames recientes (con o sin lectura) que se consideran: tolera algún
+    // frame malo salteado sin aceptar una racha vieja ya abandonada.
     private val ventana: Int = framesRequeridos + 2,
     // Inyectable para poder fijar la fecha en tests sin depender del reloj
     // del sistema -- ver `fechaDeHoy()`.
     private val obtenerFechaHoy: () -> FechaDocumento = ::fechaDeHoy,
     // Cuántos frames se espera, con el número de una cédula ya leído del
-    // frente pero sin nombre, a que la persona muestre el reverso (MRZ,
-    // que sí trae el nombre) antes de confirmar sólo con el número. ~3 s al
-    // ritmo real de análisis (150 ms entre frames, ver
-    // `INTERVALO_MINIMO_ENTRE_FRAMES_MS`). Antes se confirmaba al instante
-    // con el mensaje "muéstreme el reverso", pero confirmar cierra la
-    // cámara: el reverso nunca llegaba a leerse.
+    // frente pero sin nombre, a que la persona muestre el reverso antes de
+    // confirmar sólo con el número. Confirmar cierra la cámara: sin esta
+    // espera el reverso nunca llegaba a leerse.
     private val framesEsperaReverso: Int = 20,
     // Frames SEGUIDOS con texto no reconocible antes de mostrarlo como
-    // inválido (marco rojo + vibración de error). Con 1, cualquier frame
-    // de transición -- la mano moviéndose, un cartel de fondo, el
-    // documento entrando al cuadro -- hacía parpadear el rojo y vibrar.
+    // inválido (marco rojo + vibración de error): con 1, cualquier frame de
+    // transición hacía parpadear el rojo.
     private val framesParaInvalido: Int = 3,
     // Frames en que el tipo se reconoce pero sus datos no terminan de
     // leerse (típico de un reflejo sobre el número) antes de sugerir
-    // inclinar el documento.
+    // inclinar el documento aunque la medición no vea reflejo.
     private val framesParaSugerirReflejo: Int = 6,
 ) {
-    // La ventana guarda una clave estable, no el objeto entero. Nombre,
-    // fecha u otros campos opcionales pueden aparecer y desaparecer entre
-    // frames aunque el número reconocido sea el mismo.
-    private val candidatosRecientes = ArrayDeque<String>()
+    private val votadorNumero = VotadorPorPosicion(ventana.toUInt())
+    private val votadorMrz = VotadorPorPosicion(VENTANA_LECTURAS_MRZ.toUInt())
 
-    // Acumula campos opcionales (nombre, apellidos...) vistos en distintos
-    // frames para el MISMO candidato (misma clave) -- hallazgo 2026-09-20
-    // contra una cédula nacional real: "Nombre:", "1° Apellido:" y "2°
-    // Apellido:" son tres bloques de texto separados en la tarjeta (a
-    // diferencia de DIMEX, donde "Apellidos:" es un solo bloque), así que
-    // rara vez ML Kit los lee los tres juntos en el mismo frame -- sin
-    // esto, el documento que se confirmaba era el de ESE frame puntual
-    // (a veces con nombre, a veces sólo con apellidos, a veces ninguno),
-    // en vez de la unión de todo lo ya visto para ese número mientras se
-    // sostiene el documento. Se reinicia sólo cuando cambia la clave (otro
-    // número), nunca por un frame suelto sin candidato -- un frame borroso
-    // de por medio no debe tirar lo ya leído bien.
-    private var claveAcumulada: String? = null
+    // Campos opcionales (nombre, apellidos...) vistos en distintos frames
+    // del MISMO documento: en la cédula, "Nombre:" y los apellidos son
+    // bloques separados que ML Kit rara vez lee juntos en un frame.
+    private var tipoAcumulado: TipoDocumento? = null
     private var documentoAcumulado: DocumentoDetectado? = null
-
-    // Lecturas de MRZ con checksum válido de los últimos frames -- la línea
-    // de nombres del MRZ NO tiene dígito verificador, así que un nombre mal
-    // leído en un único frame se confirmaba igual. Ahora número + nombres
-    // tienen que coincidir en 2 frames (ver `procesarMrzValido`).
-    private val lecturasMrzRecientes = ArrayDeque<RegistroMrzEnVentana>()
 
     // `-1` = no se está esperando el reverso. Ver `framesEsperaReverso`.
     private var framesEsperandoReverso = -1
     private var framesDesconocidosSeguidos = 0
     private var framesTipoSinDatosSeguidos = 0
+    private var framesConReflejoSeguidos = 0
 
     init {
         require(framesRequeridos > 0) { "framesRequeridos debe ser mayor que cero" }
         require(ventana >= framesRequeridos) { "ventana debe cubrir los frames requeridos" }
     }
 
-    fun procesarFrame(texto: String): ResultadoEstabilizacion {
+    /// `peso`: calidad relativa del frame en (0, 1] (ver `FiltroCalidad`).
+    /// `calidad`: medición del frame, para avisar de un reflejo real.
+    @Synchronized
+    fun procesarFrame(texto: String, peso: Float = 1f, calidad: CalidadFrame? = null): ResultadoEstabilizacion {
         val hoy = obtenerFechaHoy()
         // Cuenta TODO frame (también los vacíos mientras se voltea la
         // tarjeta) para que la espera del reverso tenga un fin real.
         if (framesEsperandoReverso >= 0) framesEsperandoReverso++
         val esperaAgotada = framesEsperandoReverso >= framesEsperaReverso
+        framesConReflejoSeguidos = if (calidad != null && calidad.fraccionReflejo >= UMBRAL_REFLEJO) {
+            framesConReflejoSeguidos + 1
+        } else {
+            0
+        }
 
         if (texto.isBlank() || texto.trim().length < 10) {
             framesDesconocidosSeguidos = 0
             registrarFrameSinCandidato()
+            votadorMrz.agregarVacio()
             if (esperaAgotada) confirmarSinReverso(hoy)?.let { return it }
             return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "Acerque el documento")
         }
 
         val hoyLocal = java.time.LocalDate.of(hoy.anio, hoy.mes, hoy.dia)
-        val mrz = if (modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA) leerMrzDeTexto(texto, hoyLocal) else null
-        if (mrz != null && mrz.checksumsValidos && !mrz.numeroDocumentoExtendidoSinSoporte) {
-            return procesarMrzValido(mrz, hoy)
-        }
+        val lecturaMrz = if (modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA) leerLecturaMrz(texto, hoyLocal) else null
+        if (lecturaMrz != null) return procesarLecturaMrz(lecturaMrz, peso, hoy, esperaAgotada)
+        votadorMrz.agregarVacio()
         if (esperaAgotada) confirmarSinReverso(hoy)?.let { return it }
-        if (mrz != null) {
-            return if (mrz.numeroDocumentoExtendidoSinSoporte) {
-                ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido")
-            } else {
-                // Hay un MRZ en cuadro pero todavía mal leído (foco, reflejo,
-                // ángulo) -- es lectura parcial, no un documento inválido.
-                // Antes era INVALIDO: marco rojo + vibración de error cada
-                // vez que se entraba en ese estado mientras la persona
-                // apenas acomodaba la tarjeta. Tampoco borra lo acumulado
-                // del frente.
-                ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_LEYENDO_REVERSO)
-            }
-        }
 
+        val orientacionMrz = if ("<<" in texto) OrientacionEncuadre.HORIZONTAL else null
         val tipo = clasificarTipoDocumento(texto)
         if (tipo == TipoDocumento.DESCONOCIDO) {
             registrarFrameSinCandidato()
             framesDesconocidosSeguidos++
             return if (framesDesconocidosSeguidos >= framesParaInvalido) {
-                ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = mensajeNoReconocido())
+                ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = mensajeNoReconocido(), orientacionSugerida = orientacionMrz)
             } else {
-                ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_BUSCANDO)
+                ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_BUSCANDO, orientacionSugerida = orientacionMrz)
             }
         }
         framesDesconocidosSeguidos = 0
+        val orientacion = orientacionMrz ?: tipo.orientacionEncuadre()
         if (!tipo.esValidoParaModo(modo)) {
             registrarFrameSinCandidato()
-            return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = mensajeTipoEquivocado(tipo))
+            return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = mensajeTipoEquivocado(tipo), orientacionSugerida = orientacion)
         }
 
         val documentoDeEsteFrame = leerDocumentoDeTexto(texto, tipo)
         if (documentoDeEsteFrame == null) {
             // Tipo reconocible por palabras clave, pero todavía no se pudo
-            // extraer el número -- lectura parcial (glare, ángulo, foco), no
-            // un documento inválido. Ya se sabe qué es: se lo decimos a
-            // quien opera en vez de un "mantenga firme" genérico.
+            // extraer el número -- lectura parcial (reflejo, ángulo, foco).
             registrarFrameSinCandidato()
             framesTipoSinDatosSeguidos++
-            val mensaje = if (framesTipoSinDatosSeguidos >= framesParaSugerirReflejo) {
-                "${tipo.nombreLegible()} — incline un poco para quitar el reflejo"
-            } else {
-                "${tipo.nombreLegible()} — no lo mueva"
-            }
-            return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = mensaje)
-        }
-        framesTipoSinDatosSeguidos = 0
-
-        val clave = documentoDeEsteFrame.claveEstabilizacion()
-        val documento = if (clave == claveAcumulada) {
-            documentoAcumulado!!.fusionarCamposOpcionales(documentoDeEsteFrame)
-        } else {
-            documentoDeEsteFrame
-        }
-        if (clave != claveAcumulada) framesEsperandoReverso = -1
-        claveAcumulada = clave
-        documentoAcumulado = documento
-
-        registrarClave(clave)
-        val repeticiones = candidatosRecientes.count { it == clave }
-
-        if (repeticiones >= framesRequeridos && faltaNombrePorFrente(documento)) {
-            if (framesEsperandoReverso < 0) framesEsperandoReverso = 0
-            if (framesEsperandoReverso < framesEsperaReverso) {
-                return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_FALTA_REVERSO)
-            }
-        }
-        return if (repeticiones >= framesRequeridos) {
-            framesEsperandoReverso = -1
-            val (mensaje, vencido) = mensajeDeConfirmacion(documento, hoy)
-            ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
-        } else {
-            ResultadoEstabilizacion(
+            val sugerirReflejo = framesTipoSinDatosSeguidos >= framesParaSugerirReflejo
+            return ResultadoEstabilizacion(
                 EstadoEscaneo.BUSCANDO,
-                mensaje = "${tipo.nombreLegible()} — no lo mueva",
-                progreso = repeticiones.toFloat() / framesRequeridos,
+                mensaje = mensajeLecturaParcial("${tipo.nombreLegible()} — no lo mueva", tipo, sugerirReflejo),
+                orientacionSugerida = orientacion,
             )
         }
+        framesTipoSinDatosSeguidos = 0
+        return votarNumero(documentoDeEsteFrame, peso, hoy, orientacion)
+    }
+
+    /// Cédula anterior leída de su PDF417 (sólo cédula y nombre, ya
+    /// validados por Rust). Confirma en el acto.
+    @Synchronized
+    fun procesarPdf417(datos: DatosPdf417Cedula): ResultadoEstabilizacion {
+        if (!TipoDocumento.CEDULA_NACIONAL.esValidoParaModo(modo)) {
+            return ResultadoEstabilizacion(
+                EstadoEscaneo.BUSCANDO,
+                mensaje = mensajeTipoEquivocado(TipoDocumento.CEDULA_NACIONAL),
+            )
+        }
+        val documento = DocumentoDetectado(
+            tipo = TipoDocumento.CEDULA_NACIONAL,
+            numeroDocumento = datos.cedula,
+            nombre = datos.nombre,
+            apellidos = datos.apellidos,
+            fuenteDatos = FuenteDatos.PDF417,
+            checksumValido = true,
+        )
+        reiniciarEstado()
+        val (mensaje, vencido) = mensajeDeConfirmacion(documento, obtenerFechaHoy())
+        return ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
+    }
+
+    @Synchronized
+    fun reiniciar() = reiniciarEstado()
+
+    private fun reiniciarEstado() {
+        votadorNumero.reiniciar()
+        votadorMrz.reiniciar()
+        tipoAcumulado = null
+        documentoAcumulado = null
+        framesEsperandoReverso = -1
+        framesDesconocidosSeguidos = 0
+        framesTipoSinDatosSeguidos = 0
+        framesConReflejoSeguidos = 0
+    }
+
+    private fun votarNumero(
+        documentoDeEsteFrame: DocumentoDetectado,
+        peso: Float,
+        hoy: FechaDocumento,
+        orientacion: OrientacionEncuadre?,
+    ): ResultadoEstabilizacion {
+        val valor = documentoDeEsteFrame.valorVotado()
+        val consensoPrevio = votadorNumero.consenso()
+        val otroDocumento = documentoDeEsteFrame.tipo != tipoAcumulado ||
+            (consensoPrevio != null && esOtraLectura(consensoPrevio.texto, valor))
+        if (otroDocumento) {
+            votadorNumero.reiniciar()
+            documentoAcumulado = null
+            framesEsperandoReverso = -1
+        }
+        tipoAcumulado = documentoDeEsteFrame.tipo
+        documentoAcumulado = documentoAcumulado?.fusionarCamposOpcionales(documentoDeEsteFrame) ?: documentoDeEsteFrame
+        votadorNumero.agregar(valor, peso)
+
+        val consenso = votadorNumero.consenso() ?: return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_BUSCANDO)
+        val documento = documentoAcumulado!!.conValorVotado(consenso.texto)
+        documentoAcumulado = documento
+        val listo = consenso.alcanza(framesRequeridos)
+
+        if (listo && faltaNombrePorFrente(documento)) {
+            if (framesEsperandoReverso < 0) framesEsperandoReverso = 0
+            if (framesEsperandoReverso < framesEsperaReverso) {
+                return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_FALTA_REVERSO, orientacionSugerida = orientacion)
+            }
+        }
+        if (listo) {
+            framesEsperandoReverso = -1
+            val (mensaje, vencido) = mensajeDeConfirmacion(documento, hoy)
+            return ResultadoEstabilizacion(
+                EstadoEscaneo.CONFIRMADO,
+                documento = documento,
+                mensaje = mensaje,
+                vencido = vencido,
+                orientacionSugerida = orientacion,
+            )
+        }
+        return ResultadoEstabilizacion(
+            EstadoEscaneo.BUSCANDO,
+            mensaje = mensajeLecturaParcial("${documento.tipo.nombreLegible()} — no lo mueva", documento.tipo, sugerirPorTiempo = false),
+            progreso = (consenso.soporteMinimo / framesRequeridos).coerceIn(0f, 1f),
+            orientacionSugerida = orientacion,
+        )
+    }
+
+    private fun procesarLecturaMrz(
+        lectura: LecturaMrz,
+        peso: Float,
+        hoy: FechaDocumento,
+        esperaAgotada: Boolean,
+    ): ResultadoEstabilizacion {
+        val registro = lectura.registro
+        if (registro.numeroDocumentoExtendidoSinSoporte) {
+            return ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no reconocido", hayMrz = true)
+        }
+        // Un MRZ válido de un tipo no soportado es definitivo: no depende
+        // de más lecturas.
+        if (registro.checksumsValidos && !registro.aDocumentoDetectado().reclasificarPorEdad(hoy).tipo.esValidoParaModo(modo)) {
+            return ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no soportado", hayMrz = true)
+        }
+        val lineas = lectura.lineas.joinToString(SEPARADOR_LINEAS_MRZ)
+        val consensoPrevio = votadorMrz.consenso()
+        if (consensoPrevio != null && esOtraLecturaMrz(consensoPrevio.texto, lineas)) votadorMrz.reiniciar()
+        votadorMrz.agregar(lineas, peso)
+        confirmarPorConsensoMrz(hoy)?.let { return it }
+        if (esperaAgotada) confirmarSinReverso(hoy)?.let { return it }
+        // MRZ en cuadro pero todavía sin consenso válido (foco, reflejo,
+        // ángulo): lectura parcial, no un documento inválido -- sin marco
+        // rojo ni vibración de error, y sin borrar lo leído del frente.
+        return ResultadoEstabilizacion(
+            EstadoEscaneo.BUSCANDO,
+            mensaje = mensajeLecturaParcial(MENSAJE_LEYENDO_REVERSO, tipo = null, sugerirPorTiempo = false),
+            orientacionSugerida = OrientacionEncuadre.HORIZONTAL,
+            hayMrz = true,
+        )
+    }
+
+    private fun confirmarPorConsensoMrz(hoy: FechaDocumento): ResultadoEstabilizacion? {
+        val consenso = votadorMrz.consenso() ?: return null
+        if (!consenso.alcanza(LECTURAS_MRZ_COINCIDENTES)) return null
+        val registro = leerMrz(consenso.texto.split(SEPARADOR_LINEAS_MRZ), hoy.anio)
+        if (!registro.formatoReconocido || !registro.checksumsValidos || registro.numeroDocumentoExtendidoSinSoporte) return null
+        val documento = registro.aDocumentoDetectado().reclasificarPorEdad(hoy)
+        if (!documento.tipo.esValidoParaModo(modo)) {
+            return ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no soportado", hayMrz = true)
+        }
+        reiniciarEstado()
+        if (registro.correcciones.isNotEmpty()) registrarCorreccionesMrzEnSentry(registro.correcciones)
+        val (mensaje, vencido) = mensajeDeConfirmacion(documento, hoy)
+        return ResultadoEstabilizacion(
+            EstadoEscaneo.CONFIRMADO,
+            documento = documento,
+            mensaje = mensaje,
+            vencido = vencido,
+            orientacionSugerida = OrientacionEncuadre.HORIZONTAL,
+            hayMrz = true,
+        )
     }
 
     /// Anuncia vencimiento en el mismo mensaje de confirmación -- un
     /// documento vencido igual se identificó correctamente (por eso sigue
     /// siendo CONFIRMADO, no INVALIDO), pero quien opera necesita saberlo de
     /// inmediato sin tener que leer la fecha en la pantalla por su cuenta.
-    ///
-    /// Caso especial: cédula nacional leída del FRENTE sin nombre. Antes se
-    /// confirmaba al instante con "muéstreme el reverso para el nombre",
-    /// pero confirmar cierra la cámara, así que el reverso nunca se llegaba
-    /// a leer. Ahora `procesarFrame` espera [framesEsperaReverso] frames al
-    /// MRZ (mensaje [MENSAJE_FALTA_REVERSO], estado BUSCANDO); sólo si no
-    /// llega se confirma con el número, avisando que el nombre falta.
     private fun mensajeDeConfirmacion(
         documento: DocumentoDetectado,
         hoy: FechaDocumento,
@@ -246,24 +327,13 @@ class EstabilizadorLectura(
         val vencido = vencimiento != null && vencimiento.estaVencida(hoy)
         // "Listo: <tipo>" en vez de "<tipo> confirmado": la mayoría de los
         // tipos son femeninos ("Cédula...", "Licencia...") y el participio
-        // no concordaba. El vencido dice CUÁNDO venció, que es lo que quien
-        // opera necesita para decidir.
+        // no concordaba.
         val mensaje = when {
             vencido -> "Listo: $nombreTipo — VENCIDO el ${vencimiento!!.aTextoDDMMYYYY()}"
             faltaNombrePorFrente(documento) -> "Listo: $nombreTipo — sin nombre, complételo a mano"
             else -> "Listo: $nombreTipo"
         }
         return mensaje to vencido
-    }
-
-    fun reiniciar() {
-        candidatosRecientes.clear()
-        claveAcumulada = null
-        documentoAcumulado = null
-        lecturasMrzRecientes.clear()
-        framesEsperandoReverso = -1
-        framesDesconocidosSeguidos = 0
-        framesTipoSinDatosSeguidos = 0
     }
 
     /// Se agotó la espera del reverso sin que llegara un MRZ válido: se
@@ -275,46 +345,19 @@ class EstabilizadorLectura(
         return ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = mensaje, vencido = vencido)
     }
 
-    /// MRZ con checksums válidos: número, fechas y el resto ya están
-    /// verificados por dígito verificador, pero la línea de nombres no --
-    /// se confirma cuando la misma lectura completa (número + nombres)
-    /// aparece en 2 de los últimos frames. Si el número se repite
-    /// [LECTURAS_MRZ_PARA_DESEMPATAR] veces con nombres que no terminan de
-    /// coincidir (reflejo sobre esa línea), se confirma con los nombres más
-    /// repetidos en vez de trabarse para siempre.
-    private fun procesarMrzValido(mrz: RegistroMrz, hoy: FechaDocumento): ResultadoEstabilizacion {
-        val documento = mrz.aDocumentoDetectado().reclasificarPorEdad(hoy)
-        if (!documento.tipo.esValidoParaModo(modo)) {
-            return ResultadoEstabilizacion(EstadoEscaneo.INVALIDO, mensaje = "Documento no soportado")
+    /// Mensaje mientras se lee: si la medición del frame ve reflejo
+    /// sostenido, lo dice (antes sólo se sospechaba por tiempo, cuando el
+    /// tipo se reconocía pero los datos no terminaban de salir).
+    private fun mensajeLecturaParcial(base: String, tipo: TipoDocumento?, sugerirPorTiempo: Boolean): String {
+        val hayReflejo = framesConReflejoSeguidos >= FRAMES_REFLEJO_PARA_AVISAR
+        return when {
+            hayReflejo -> MENSAJE_REFLEJO_MEDIDO
+            sugerirPorTiempo && tipo != null -> "${tipo.nombreLegible()} — incline un poco para quitar el reflejo"
+            else -> base
         }
-        val lectura = RegistroMrzEnVentana(mrz, documento)
-        lecturasMrzRecientes.addLast(lectura)
-        while (lecturasMrzRecientes.size > VENTANA_LECTURAS_MRZ) lecturasMrzRecientes.removeFirst()
-
-        val mismoNumero = lecturasMrzRecientes.filter { it.documento.numeroDocumento == documento.numeroDocumento }
-        val masRepetida = mismoNumero.groupBy { it.claveNombres }.maxBy { it.value.size }.value
-        val elegida = when {
-            masRepetida.size >= LECTURAS_MRZ_COINCIDENTES -> masRepetida.last()
-            mismoNumero.size >= LECTURAS_MRZ_PARA_DESEMPATAR -> masRepetida.last()
-            else -> return ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = MENSAJE_LEYENDO_REVERSO)
-        }
-        reiniciar()
-        if (elegida.mrz.correcciones.isNotEmpty()) registrarCorreccionesMrzEnSentry(elegida.mrz.correcciones)
-        val (mensaje, vencido) = mensajeDeConfirmacion(elegida.documento, hoy)
-        return ResultadoEstabilizacion(
-            EstadoEscaneo.CONFIRMADO,
-            documento = elegida.documento,
-            mensaje = mensaje,
-            vencido = vencido,
-        )
     }
 
-    private fun registrarFrameSinCandidato() = registrarClave(CLAVE_SIN_CANDIDATO)
-
-    private fun registrarClave(clave: String) {
-        candidatosRecientes.addLast(clave)
-        while (candidatosRecientes.size > ventana) candidatosRecientes.removeFirst()
-    }
+    private fun registrarFrameSinCandidato() = votadorNumero.agregarVacio()
 
     /// Dice QUÉ vio la cámara, no sólo "apunte a...": así quien opera sabe
     /// que tiene en la mano el objeto equivocado (p. ej. el gafete en vez
@@ -334,16 +377,49 @@ class EstabilizadorLectura(
         }
 }
 
-private const val CLAVE_SIN_CANDIDATO = "\u0000"
 private const val VENTANA_LECTURAS_MRZ = 6
 private const val LECTURAS_MRZ_COINCIDENTES = 2
-private const val LECTURAS_MRZ_PARA_DESEMPATAR = 4
+private const val SEPARADOR_LINEAS_MRZ = "\n"
+
+// Un frame apenas menos nítido que el mejor pesa algo menos de 1: sin esta
+// tolerancia, 2 frames buenos (p. ej. 1,0 + 0,9) no alcanzarían "2". Con
+// frames claramente peores sí hace falta uno más -- esa es la idea de
+// ponderar por nitidez.
+private const val TOLERANCIA_SOPORTE = 0.5f
+
+// Ventaja mínima del carácter ganador sobre la segunda opción, en "frames
+// completos": un empate (0) nunca confirma.
+private const val MARGEN_MINIMO = 0.5f
+
+// Proporción de píxeles saturados del recuadro a partir de la cual el
+// reflejo tapa texto (ver `CalidadFrame`), y cuántos frames seguidos antes
+// de decirlo -- un destello suelto no merece aviso.
+private const val UMBRAL_REFLEJO = 0.03f
+private const val FRAMES_REFLEJO_PARA_AVISAR = 3
+
 private const val MENSAJE_BUSCANDO = "Buscando un documento…"
 private const val MENSAJE_LEYENDO_REVERSO = "Leyendo el reverso — mantenga firme"
 private const val MENSAJE_FALTA_REVERSO = "Ya tengo el número — muéstreme la otra cara para el nombre"
+private const val MENSAJE_REFLEJO_MEDIDO = "Hay reflejo — incline un poco el documento"
 
-private class RegistroMrzEnVentana(val mrz: RegistroMrz, val documento: DocumentoDetectado) {
-    val claveNombres: String = "${documento.apellidos}|${documento.nombre}"
+internal fun ConsensoVotacion.alcanza(requeridos: Int): Boolean =
+    soporteMinimo >= requeridos - TOLERANCIA_SOPORTE && margenMinimo >= MARGEN_MINIMO
+
+/// ¿`nueva` es la lectura de OTRO documento y no el mismo con algún
+/// carácter mal leído? Distinto largo, o más diferencias de las que
+/// explica un error de lectura (un par de caracteres; en números cortos,
+/// como el de un gafete, uno solo).
+internal fun esOtraLectura(consenso: String, nueva: String): Boolean {
+    if (consenso.length != nueva.length) return true
+    val diferencias = consenso.zip(nueva).count { (a, b) -> a != b }
+    return diferencias > maxOf(1, consenso.length / 4)
+}
+
+/// Mismo criterio para las 2-3 líneas del MRZ (72-92 caracteres): otra
+/// persona difiere en número, fechas y nombres a la vez.
+private fun esOtraLecturaMrz(consenso: String, nueva: String): Boolean {
+    if (consenso.length != nueva.length) return true
+    return consenso.zip(nueva).count { (a, b) -> a != b } > consenso.length / 5
 }
 
 /// Cédula nacional leída sólo del frente, todavía sin nombre -- el nombre
@@ -354,17 +430,27 @@ private fun faltaNombrePorFrente(documento: DocumentoDetectado): Boolean =
         documento.fuenteDatos == FuenteDatos.OCR_FRENTE &&
         documento.nombre == null
 
-private fun DocumentoDetectado.claveEstabilizacion(): String =
-    "${tipo.name}:${(textoBusqueda ?: numeroDocumento).trim().uppercase()}"
+/// Lo que se vota entre frames: el número (o, para el gafete In House sin
+/// cédula, el nombre con que se busca).
+private fun DocumentoDetectado.valorVotado(): String = (textoBusqueda ?: numeroDocumento).trim()
 
-/// Combina este documento (ya acumulado de frames anteriores para la misma
-/// clave) con la lectura de un frame nuevo -- cada campo opcional se
+/// El documento acumulado con el valor que ganó la votación en vez del de
+/// un frame puntual.
+private fun DocumentoDetectado.conValorVotado(valor: String): DocumentoDetectado =
+    if (textoBusqueda != null) {
+        copy(
+            textoBusqueda = valor,
+            numeroDocumento = if (numeroDocumento.trim() == textoBusqueda.trim()) valor else numeroDocumento,
+        )
+    } else {
+        copy(numeroDocumento = valor)
+    }
+
+/// Combina este documento (ya acumulado de frames anteriores del mismo
+/// documento) con la lectura de un frame nuevo -- cada campo opcional se
 /// actualiza sólo si el frame nuevo trae un valor no nulo, si no conserva
-/// el que ya se tenía. Así un campo que un frame puntual no alcanzó a leer
-/// (nombre, un apellido...) no borra lo que sí se leyó bien en un frame
-/// anterior del mismo candidato. `numeroDocumento`/`tipo`/`fuenteDatos`
-/// vienen siempre del frame nuevo -- son la clave, no un campo opcional, y
-/// ya se validó que corresponde al mismo candidato antes de llamar a esto.
+/// el que ya se tenía. `numeroDocumento`/`tipo`/`fuenteDatos` vienen del
+/// frame nuevo; el número definitivo lo pone después la votación.
 private fun DocumentoDetectado.fusionarCamposOpcionales(nuevo: DocumentoDetectado): DocumentoDetectado = nuevo.copy(
     textoBusqueda = nuevo.textoBusqueda ?: textoBusqueda,
     nombre = nuevo.nombre ?: nombre,

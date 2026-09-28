@@ -55,6 +55,12 @@ que invertir esa jerarquía.
 
 ## 3. Decisiones de privacidad y legales
 
+- **Actualización (2026-09-28): decisión del negocio.** El sitio es zona
+  franca y quien ingresa acepta un contrato de condiciones de uso de datos;
+  se decidió leer el PDF417 tomando SÓLO cédula y nombre. Implementado con
+  minimización por diseño: ver `mobile/android/docs/arquitectura-ocr.md`
+  ("PDF417 de la cédula anterior"). El análisis original, que sigue
+  valiendo como fundamento de esa minimización:
 - **PDF417 de la cédula anterior: NO decodificarlo.** Existe una clave XOR
   publicada por ingeniería inversa y proyectos que la usan, pero ese código
   **incluye huellas dactilares**. La PRODHAB, en la resolución 029-2026-RF,

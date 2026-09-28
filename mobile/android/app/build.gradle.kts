@@ -34,6 +34,14 @@ android {
         // pisa a "production". Mismo criterio que `cfg!(debug_assertions)`
         // del lado de escritorio.
         manifestPlaceholders["sentryEnvironment"] = "development"
+
+        // Sólo las ABI para las que existe el núcleo Rust (release.yml compila
+        // arm64-v8a y x86_64): en armeabi-v7a o x86 la app no puede arrancar,
+        // así que las librerías nativas de ML Kit para esas ABI eran peso
+        // muerto (medido: APK de debug de 94,5 MB a 64,7 MB).
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     signingConfigs {
@@ -92,6 +100,10 @@ dependencies {
     implementation("androidx.camera:camera-view:1.5.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // PDF417 del reverso de la cédula anterior (sólo cédula y nombre, ver
+    // mobile/rust-core/src/pdf417_cedula.rs). Modelo empaquetado (~2,4 MB):
+    // sin descarga en el primer uso, igual que el de texto.
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation(platform("io.github.jan-tennert.supabase:bom:3.2.2"))
     implementation("io.github.jan-tennert.supabase:realtime-kt")
     implementation("io.ktor:ktor-client-okhttp:3.2.2")

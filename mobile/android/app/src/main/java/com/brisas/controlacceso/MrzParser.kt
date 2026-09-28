@@ -98,15 +98,25 @@ private fun variantesMrz(bloque: List<String>): List<List<String>> {
 /// `null` si no hay ninguna combinación de líneas reconocible todavía -- la
 /// pantalla de escaneo debe seguir esperando más frames, no tratarlo como
 /// error (ver sección 5 del plan, estabilidad de lectura).
-fun leerMrzDeTexto(texto: String, hoy: java.time.LocalDate = java.time.LocalDate.now()): RegistroMrz? {
-    var primeraReconocida: RegistroMrz? = null
+fun leerMrzDeTexto(texto: String, hoy: java.time.LocalDate = java.time.LocalDate.now()): RegistroMrz? =
+    leerLecturaMrz(texto, hoy)?.registro
+
+/// Un MRZ encontrado en el texto de un frame: las líneas ya normalizadas a
+/// su largo exacto (lo que se vota entre frames, ver `EstabilizadorLectura`)
+/// y lo que Rust leyó de ellas.
+class LecturaMrz(val lineas: List<String>, val registro: RegistroMrz)
+
+/// Igual que [leerMrzDeTexto], pero conservando también las líneas de la
+/// variante elegida.
+fun leerLecturaMrz(texto: String, hoy: java.time.LocalDate = java.time.LocalDate.now()): LecturaMrz? {
+    var primeraReconocida: LecturaMrz? = null
     val bloques = buscarBloquesMrz(texto, longitud = 30, cantidad = 3) + buscarBloquesMrz(texto, longitud = 44, cantidad = 2)
     for (bloque in bloques) {
         for (variante in variantesMrz(bloque)) {
             val registro = leerMrz(variante, hoy.year)
             if (!registro.formatoReconocido) continue
-            if (registro.checksumsValidos) return registro
-            if (primeraReconocida == null) primeraReconocida = registro
+            if (registro.checksumsValidos) return LecturaMrz(variante, registro)
+            if (primeraReconocida == null) primeraReconocida = LecturaMrz(variante, registro)
         }
     }
     return primeraReconocida

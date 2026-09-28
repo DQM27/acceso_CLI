@@ -3,6 +3,7 @@ package com.brisas.controlacceso
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import uniffi.control_acceso_mobile.DatosPdf417Cedula
 
 class EstabilizadorLecturaTest {
 
@@ -81,13 +82,17 @@ class EstabilizadorLecturaTest {
     }
 
     @Test
-    fun mrzConNombresQueNuncaCoincidenSeDesempataTrasCuatroLecturas() {
+    fun mrzConNombresQueNuncaCoincidenEnteroSeResuelvePorVotacionPorLetra() {
+        // Ninguna lectura del nombre se repite entera en los 3 primeros
+        // frames, pero cada letra sí es mayoría: la votación por carácter
+        // confirma en el 3.º (antes hacía falta esperar al 4.º y a que
+        // "MARIA" se repitiera completa).
         val estabilizador = EstabilizadorLectura()
-        val variantes = listOf("MAPIA", "MARIA", "MARLA", "MARIA")
+        val variantes = listOf("MAPIA", "MARIA", "MARLA")
         val resultados = variantes.map { estabilizador.procesarFrame(td1Valido.replace("MARIA", it)) }
-        // La segunda "MARIA" ya coincide con la primera -> confirma ahí.
-        assertEquals(EstadoEscaneo.CONFIRMADO, resultados.last().estado)
-        assertEquals("MARIA JOSE", resultados.last().documento?.nombre)
+        assertEquals(EstadoEscaneo.BUSCANDO, resultados[1].estado)
+        assertEquals(EstadoEscaneo.CONFIRMADO, resultados[2].estado)
+        assertEquals("MARIA JOSE", resultados[2].documento?.nombre)
     }
 
     @Test
@@ -424,5 +429,97 @@ class EstabilizadorLecturaTest {
         assertEquals("Licencia de conducir — no lo mueva", r.mensaje)
         repeat(5) { r = estabilizador.procesarFrame("REPUBLICA DE COSTA RICA\nLicencia de Conducir") }
         assertEquals("Licencia de conducir — incline un poco para quitar el reflejo", r.mensaje)
+    }
+
+    // --- Votación por carácter (auditoría OCR 2026-09-28) ---
+
+    private fun licencia(numero: String) = "Licencia de Conducir\nNº: $numero\nVencimiento 03-04-2030"
+
+    @Test
+    fun votacionConfirmaAunqueNingunFrameSeLeyeraEnteroBien() {
+        // Cada frame erra en un dígito distinto (reflejo que se mueve).
+        // Con igualdad de cadenas esto nunca confirmaba.
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 2)
+        assertEquals(EstadoEscaneo.BUSCANDO, estabilizador.procesarFrame(licencia("712340567")).estado)
+        assertEquals(EstadoEscaneo.BUSCANDO, estabilizador.procesarFrame(licencia("118340567")).estado)
+        val r = estabilizador.procesarFrame(licencia("112340561"))
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals("112340567", r.documento?.numeroDocumento)
+    }
+
+    @Test
+    fun modoGafeteNoConfirmaConLecturasQueSeContradicen() {
+        // Confirmar un gafete dispara una salida real: dos "16" y un "18"
+        // no alcanzan; hace falta un tercer "16".
+        fun gafete(numero: String) = "CARNÉ\nPROVISIONAL\nCRC - $numero\nCONTRATISTAS\nCosta Rica"
+        val estabilizador = EstabilizadorLectura(modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA)
+        estabilizador.procesarFrame(gafete("16"))
+        estabilizador.procesarFrame(gafete("16"))
+        assertEquals(EstadoEscaneo.BUSCANDO, estabilizador.procesarFrame(gafete("18")).estado)
+        val r = estabilizador.procesarFrame(gafete("16"))
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals("16", r.documento?.numeroDocumento)
+    }
+
+    @Test
+    fun framesMenosNitidosNecesitanMasRespaldo() {
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 2)
+        estabilizador.procesarFrame(licencia("112340567"), peso = 0.5f)
+        assertEquals(EstadoEscaneo.BUSCANDO, estabilizador.procesarFrame(licencia("112340567"), peso = 0.5f).estado)
+        assertEquals(EstadoEscaneo.CONFIRMADO, estabilizador.procesarFrame(licencia("112340567"), peso = 0.5f).estado)
+    }
+
+    @Test
+    fun otraPersonaNoHeredaLosCamposDeLaAnterior() {
+        // Se cambia de cédula sin que cambie el tipo: el nombre de la
+        // primera no puede terminar pegado al número de la segunda.
+        // Sin espera del reverso, para que confirme con lo que haya.
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 2, framesEsperaReverso = 0)
+        estabilizador.procesarFrame("TRIBUNAL SUPREMO DE ELECCIONES\n1 2345 6789\nNombre: JUAN CARLOS")
+        estabilizador.procesarFrame("TRIBUNAL SUPREMO DE ELECCIONES\n4 9876 5432\n1°Apellido: GOMEZ")
+        val r = estabilizador.procesarFrame("TRIBUNAL SUPREMO DE ELECCIONES\n4 9876 5432\n1°Apellido: GOMEZ")
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals("498765432", r.documento?.numeroDocumento)
+        assertNull(r.documento?.nombre)
+    }
+
+    @Test
+    fun reflejoMedidoSostenidoSeAvisaAunqueNoHayaPasadoElTiempo() {
+        val estabilizador = EstabilizadorLectura()
+        val conReflejo = CalidadFrame(nitidez = 30f, fraccionReflejo = 0.2f)
+        var r = estabilizador.procesarFrame("REPUBLICA DE COSTA RICA\nLicencia de Conducir", calidad = conReflejo)
+        assertEquals("Licencia de conducir — no lo mueva", r.mensaje)
+        repeat(2) { r = estabilizador.procesarFrame("REPUBLICA DE COSTA RICA\nLicencia de Conducir", calidad = conReflejo) }
+        assertEquals("Hay reflejo — incline un poco el documento", r.mensaje)
+    }
+
+    @Test
+    fun ofreceLaOrientacionDelDocumentoParaElEncuadre() {
+        val r = EstabilizadorLectura().procesarFrame(licenciaTexto)
+        assertEquals(OrientacionEncuadre.HORIZONTAL, r.orientacionSugerida)
+        val mrz = EstabilizadorLectura().procesarFrame(td1Valido)
+        assertEquals(true, mrz.hayMrz)
+    }
+
+    // --- PDF417 de la cédula anterior ---
+
+    private val datosPdf417 = DatosPdf417Cedula(cedula = "112340567", nombre = "JUAN CARLOS", apellidos = "PEREZ MORA")
+
+    @Test
+    fun pdf417ConfirmaEnUnaLecturaConCedulaYNombre() {
+        val r = EstabilizadorLectura().procesarPdf417(datosPdf417)
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals("112340567", r.documento?.numeroDocumento)
+        assertEquals("JUAN CARLOS", r.documento?.nombre)
+        assertEquals("PEREZ MORA", r.documento?.apellidos)
+        assertEquals(FuenteDatos.PDF417, r.documento?.fuenteDatos)
+        assertEquals("Listo: Cédula de identidad", r.mensaje)
+    }
+
+    @Test
+    fun pdf417EnModoGafeteNoConfirma() {
+        val r = EstabilizadorLectura(modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA).procesarPdf417(datosPdf417)
+        assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
+        assertNull(r.documento)
     }
 }

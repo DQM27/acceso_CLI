@@ -16,6 +16,16 @@ data class VehiculoRutaDetectado(
 
 enum class TipoVehiculoDetectado { PLACA, NUMERO_UNIDAD }
 
+/// Clave estable de un vehículo leído (lo que se vota entre frames, ver
+/// `EstabilizadorPorRepeticion`) y su inversa.
+fun VehiculoRutaDetectado.claveVotacion(): String = "${tipo.name}:$valor"
+
+fun vehiculoDesdeClave(clave: String): VehiculoRutaDetectado? {
+    val (tipo, valor) = clave.split(':', limit = 2).takeIf { it.size == 2 } ?: return null
+    val tipoDetectado = TipoVehiculoDetectado.entries.firstOrNull { it.name == tipo } ?: return null
+    return VehiculoRutaDetectado(valor, tipoDetectado).takeIf { valor.isNotBlank() }
+}
+
 // Formato de placa de carga/comercial (`C`/`CL` + dígitos) confirmado contra
 // una foto real (2026-09-17, camioneta con placa `CL371931`), pero el texto
 // crudo que entrega ML Kit de esa misma foto fue:
