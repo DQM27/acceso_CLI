@@ -30,6 +30,10 @@ pub trait RegistroIngresoRepository {
         cedula: &str,
     ) -> Result<bool, DatabaseError>;
 
+    /// ¿La cédula tiene un veto vigente? Ver
+    /// `database::queries::personas_vetadas::esta_vetada`.
+    fn cedula_vetada(&self, cedula: &str) -> Result<bool, DatabaseError>;
+
     /// Busca quién tiene actualmente asignado un gafete.
     ///
     /// Solo considera ingresos activos, es decir,
@@ -303,6 +307,10 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
 
             Err(error) => Err(DatabaseError::from(error)),
         }
+    }
+
+    fn cedula_vetada(&self, cedula: &str) -> Result<bool, DatabaseError> {
+        crate::database::queries::personas_vetadas::esta_vetada(self.connection, cedula)
     }
 
     fn cedula_con_ingreso_abierto_en_otro_dispositivo(

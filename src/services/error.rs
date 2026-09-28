@@ -123,6 +123,9 @@ pub enum RegistroIngresoServiceError {
     IngresoActivo,
     #[error("El contratista ya tiene un ingreso activo en el otro dispositivo del sitio")]
     IngresoActivoEnOtroDispositivo,
+    /// Veto por persona vigente (`personas_vetadas`).
+    #[error("La persona tiene el acceso restringido")]
+    PersonaVetada,
     #[error("El contratista requiere gafete")]
     GafeteRequerido,
     /// El medio de ingreso es `Vehiculo` y no se indicó placa -- mismo
@@ -175,6 +178,10 @@ pub enum CitaServiceError {
     /// simplemente no tiene ninguna visita agendada.
     #[error("No hay ninguna visita agendada para esta cédula")]
     SinCitaRegistrada,
+    /// Veto por persona vigente (`personas_vetadas`): aunque tenga una
+    /// visita agendada, no entra.
+    #[error("La persona tiene el acceso restringido")]
+    PersonaVetada,
     /// Existe al menos una cita para esta cédula, pero ninguna aplica hoy
     /// -- el motivo viaja en la variante (de la última candidata
     /// evaluada) para que la interfaz pueda mostrar algo más útil que
@@ -366,6 +373,9 @@ pub enum EmpresaProveedorServiceError {
 pub enum IngresoProveedorServiceError {
     #[error("La cédula es obligatoria")]
     CedulaVacia,
+    /// Veto por persona vigente (`personas_vetadas`).
+    #[error("La persona tiene el acceso restringido")]
+    PersonaVetada,
     /// Misma regla que contratistas: sólo cédula nacional o de extranjero
     /// (`Cedula::es_nacional_o_de_extranjero`).
     #[error("La cédula debe tener sólo números, entre 9 y 13 dígitos")]

@@ -20,6 +20,10 @@ use crate::database::error::DatabaseError;
 use crate::models::cita::{Cita, CitaVisitante, EstadoCita};
 
 pub trait CitaRepository {
+    /// ¿La cédula tiene un veto vigente? Ver
+    /// `database::queries::personas_vetadas::esta_vetada`.
+    fn cedula_vetada(&self, cedula: &str) -> Result<bool, DatabaseError>;
+
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError>;
 
     /// Agenda de un sitio -- toda cita cuya vigencia no haya terminado
@@ -100,6 +104,10 @@ const SELECT_CITA_VISITANTE: &str = "
 ";
 
 impl CitaRepository for SqliteCitaRepository<'_> {
+    fn cedula_vetada(&self, cedula: &str) -> Result<bool, DatabaseError> {
+        crate::database::queries::personas_vetadas::esta_vetada(self.connection, cedula)
+    }
+
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError> {
         let mut statement = self.connection.prepare(&format!(
             "{SELECT_CITA_VISITANTE} WHERE NORMALIZAR_CEDULA(v.cedula) = NORMALIZAR_CEDULA(?1)"

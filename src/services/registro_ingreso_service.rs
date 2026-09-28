@@ -33,6 +33,11 @@ pub struct ResultadoRegistroEntrada {
 ///
 /// No constituye una autorización cacheada: `registrar_entrada()` vuelve a consultar
 /// y validar todas las reglas inmediatamente antes de persistir.
+// Cada bool es un hecho independiente que la pantalla consulta y que
+// `bloqueo()` ordena por prioridad (veto, adentro aquí, adentro en el otro
+// equipo, gafete); no son estados de una misma máquina que convenga
+// fusionar en un enum.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct PreparacionIngreso {
@@ -49,6 +54,11 @@ pub struct PreparacionIngreso {
     pub resultado_acceso: ResultadoAcceso,
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
+    /// La cédula tiene un veto vigente (`personas_vetadas`, ver
+    /// `docs/features-futuras/plan-veto-por-persona.md`). Vale en todas las
+    /// puertas y todos los sitios, sin importar el rol, y va antes que
+    /// cualquier otra regla.
+    pub persona_vetada: bool,
     /// El otro dispositivo del sitio tiene abierto un ingreso con esta
     /// cédula (caché `ingresos_remotos`). Sin esto, la misma persona podía
     /// quedar adentro dos veces: una por la PC y otra por el teléfono.
@@ -84,6 +94,8 @@ pub struct PreparacionIngreso {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum BloqueoIngreso {
+    /// La persona tiene un veto vigente: no entra por ninguna puerta.
+    PersonaVetada,
     IngresoActivo,
     IngresoActivoEnOtroDispositivo,
     ActivoEnOtroSitio {
@@ -108,6 +120,9 @@ impl PreparacionIngreso {
     /// `docs/auditorias/auditoria-separacion-kotlin-rust-2026-09-25.md`).
     #[must_use]
     pub fn bloqueo(&self) -> Option<BloqueoIngreso> {
+        if self.persona_vetada {
+            return Some(BloqueoIngreso::PersonaVetada);
+        }
         if self.tiene_ingreso_activo {
             return Some(BloqueoIngreso::IngresoActivo);
         }
@@ -287,6 +302,7 @@ where
         let ingreso_activo_en_otro_dispositivo = self
             .registros
             .cedula_con_ingreso_abierto_en_otro_dispositivo(&contratista.cedula)?;
+        let persona_vetada = self.registros.cedula_vetada(&contratista.cedula)?;
         let gafetes_deuda = self.gafetes.deuda_de_contratista(contratista.id)?;
 
         Ok(PreparacionIngreso {
@@ -299,6 +315,7 @@ where
             resultado_acceso,
             requiere_gafete,
             tiene_ingreso_activo,
+            persona_vetada,
             ingreso_activo_en_otro_dispositivo,
             activo_en_otro_sitio: None,
             gafetes_deuda,
@@ -344,6 +361,13 @@ where
             .contratistas
             .buscar_por_id(contratista_id)?
             .ok_or(RegistroIngresoServiceError::ContratistaNoEncontrado)?;
+
+        // Veto por persona: antes que cualquier otra regla, y aunque la
+        // pantalla no lo haya mostrado (llegó por el aviso en vivo entre la
+        // preparación y la confirmación).
+        if self.registros.cedula_vetada(&contratista.cedula)? {
+            return Err(RegistroIngresoServiceError::PersonaVetada);
+        }
 
         let resultado_acceso = verificar_acceso(&contratista, fecha_costa_rica(fecha_hora_ingreso));
 
@@ -498,6 +522,7 @@ mod tests_bloqueo {
             resultado_acceso: ResultadoAcceso::Permitido,
             requiere_gafete: false,
             tiene_ingreso_activo: false,
+            persona_vetada: false,
             ingreso_activo_en_otro_dispositivo: false,
             activo_en_otro_sitio: None,
             gafetes_deuda: Vec::new(),
@@ -513,6 +538,19 @@ mod tests_bloqueo {
     /// `tiene_ingreso_activo` gana aunque los otros dos campos también
     /// estén activados -- mismo orden de prioridad que ya tenían
     /// `puedeContinuar`/`mensajeBloqueo` en Kotlin y TypeScript.
+    #[test]
+    fn el_veto_tiene_prioridad_sobre_todo_lo_demas() {
+        let preparacion = PreparacionIngreso {
+            persona_vetada: true,
+            tiene_ingreso_activo: true,
+            ingreso_activo_en_otro_dispositivo: true,
+            activo_en_otro_sitio: Some("Cartago".into()),
+            resultado_acceso: ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso),
+            ..preparacion_sin_bloqueo()
+        };
+        assert_eq!(preparacion.bloqueo(), Some(BloqueoIngreso::PersonaVetada));
+    }
+
     #[test]
     fn ingreso_activo_local_tiene_prioridad_sobre_los_demas() {
         let preparacion = PreparacionIngreso {

@@ -71,6 +71,11 @@ where
             Ok(_) | Err(_) => return Err(IngresoProveedorServiceError::CedulaInvalida),
         };
         let cedula = cedula.as_str();
+        // Veto por persona: antes que cualquier otra regla. Un contratista
+        // vetado ya no entra como proveedor con la misma cédula.
+        if self.registros.cedula_vetada(cedula)? {
+            return Err(IngresoProveedorServiceError::PersonaVetada);
+        }
         let nombre = nombre.trim();
         if nombre.is_empty() {
             return Err(IngresoProveedorServiceError::NombreVacio);

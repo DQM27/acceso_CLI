@@ -48,7 +48,7 @@ que viaja al equipo como el resto del catálogo.
 |---|---|---|
 | Quién veta y levanta | **Sólo el administrador del panel web** (`es_admin_global()`) | Dueño, 2026-09-27 |
 | Alcance | Global: todos los sitios (igual que contratistas y empresas) | Propuesta |
-| Puertas | Contratista, proveedor, visita y gafete provisional KOF | Propuesta |
+| Puertas | Contratista, proveedor y visita. El gafete provisional KOF queda fuera: se entrega a encargados de ruta, que se identifican por código de empleado y no tienen cédula (decisión del dueño, 2026-09-15) | Propuesta, ajustada en F3 |
 | Respuesta | Negar siempre. La portería no puede pasar por encima | Propuesta |
 | Qué ve el operador | Mensaje genérico ("acceso restringido, comuníquese con administración"), sin el motivo | Propuesta (privacidad, ver §8) |
 | `tiene_acceso` | Se conserva con su significado: autorización laboral del contratista | Propuesta |
@@ -124,9 +124,9 @@ personas_vetadas
 - `domain::acceso`: nueva **Regla 0** que va antes que todas:
   `persona vetada → Denegado(PersonaVetada)`. Es una función pura que
   recibe "¿está vetada?" y no consulta la base.
-- Se evalúa en **todas** las puertas: `preparar_ingreso` y
-  `registrar_entrada` (contratista), `registrar_ingreso` (proveedor),
-  `entregar` (gafete provisional KOF) y `verificar_check_in` (visita).
+- Se evalúa en **todas** las puertas con cédula: `preparar_ingreso` y
+  `registrar_entrada` (contratista), `registrar_ingreso` (proveedor) y
+  `verificar_check_in` (visita, que también cubre `registrar_entrada`).
   Todo pasa por el núcleo, así que escritorio y móvil sólo muestran el
   resultado.
 - **Con internet:** la verificación en vivo que ya existe
@@ -174,7 +174,8 @@ después de que el dueño la pruebe.
 |---|---|---|
 | F1 | Cédula canónica + diagnóstico de duplicados | Núcleo, sincronización |
 | F2 | Datos del veto: tabla, RLS, RPC y aviso en vivo (staging); migración local y descarga | Supabase staging, núcleo |
-| F3 | Regla 0 en las cuatro puertas + mensajes + auditoría de intentos | Núcleo, escritorio, móvil (sólo muestran) |
+| F3 | Regla 0 en las tres puertas con cédula + mensaje único | Núcleo (escritorio y móvil sólo muestran) |
+| F3b | Auditoría de intentos bloqueados | Núcleo, nube |
 | F4 | Pantalla del panel web | Panel web |
 | F5 | Un ingreso activo por persona entre roles | Núcleo, nube |
 

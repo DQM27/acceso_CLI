@@ -24,6 +24,10 @@ pub trait RegistroIngresoProveedorRepository {
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<RegistroIngresoProveedor>, DatabaseError>;
 
+    /// ¿La cédula tiene un veto vigente? Ver
+    /// `database::queries::personas_vetadas::esta_vetada`.
+    fn cedula_vetada(&self, cedula: &str) -> Result<bool, DatabaseError>;
+
     /// Ingreso abierto (sin salida) para esta cédula -- mismo motivo que
     /// `RegistroIngresoRepository::buscar_ingreso_activo`: evitar que la
     /// misma persona quede con dos ingresos abiertos a la vez.
@@ -127,6 +131,10 @@ const SELECT_REGISTRO: &str = "
 ";
 
 impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorRepository<'_> {
+    fn cedula_vetada(&self, cedula: &str) -> Result<bool, DatabaseError> {
+        crate::database::queries::personas_vetadas::esta_vetada(self.connection, cedula)
+    }
+
     fn crear(&self, registro: &NuevoRegistroIngresoProveedor) -> Result<i64, DatabaseError> {
         let fecha_hora_ingreso = serializar_utc(registro.fecha_hora_ingreso);
         let uuid = generar_uuid_v4();
