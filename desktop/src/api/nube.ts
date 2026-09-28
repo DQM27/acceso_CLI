@@ -174,19 +174,26 @@ export function sincronizarConNube(): Promise<ResumenSincronizacion> {
   return invoke("sincronizar_con_nube");
 }
 
-/** Sincronización de un aviso en vivo: sólo las etapas de las tablas que
- * cambiaron (`payload.table` de `cambio_nube`) -- ver
- * `nube::AlcanceSincronizacion` en el núcleo. Una tabla desconocida cae en
- * la sincronización completa del lado Rust. */
 /** Guarda la fila que trae un aviso en vivo (`registro`) directo en la base
- * local, sin consultar a la nube. `true` si la aplicó; `false` si el aviso
- * no trae datos (queda para `sincronizarCambiosNube`). */
+ * local, sin consultar a la nube (en el escritorio, también su línea del
+ * Historial). `true` si la aplicó; `false` si el aviso no trae datos
+ * (queda para `sincronizarCambiosNube`). */
 export function aplicarCambioNube(cambio: unknown): Promise<boolean> {
   return invoke("aplicar_cambio_nube", { cambio });
 }
 
+/** Sincronización de un aviso en vivo: sólo las etapas de las tablas que
+ * cambiaron (`payload.table` de `cambio_nube`) -- ver
+ * `nube::AlcanceSincronizacion` en el núcleo. Una tabla desconocida cae en
+ * la sincronización completa del lado Rust. */
 export function sincronizarCambiosNube(tablas: string[]): Promise<ResumenSincronizacion> {
   return invoke("sincronizar_cambios_nube", { tablas });
+}
+
+/** Sólo sube la bandeja de salida, sin bajar nada: lo que dispara un
+ * ingreso/salida registrado en este equipo. */
+export function enviarCambiosNube(): Promise<ResumenSincronizacion> {
+  return invoke("enviar_cambios_nube");
 }
 
 export function sesionRealtimeNube(): Promise<SesionRealtimeNube> {

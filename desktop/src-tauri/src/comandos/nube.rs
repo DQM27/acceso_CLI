@@ -385,8 +385,8 @@ pub async fn configurar_dispositivo_inicial(
 /// Aviso en vivo con los datos (`cambio_nube` con `registro`): guarda la
 /// fila directo en la base local, sin consultar a la nube -- ver
 /// `nube::en_vivo`. `true` si la aplicó; `false` si el aviso no trae datos
-/// o la tabla todavía no los manda (queda para `sincronizar_cambios_nube`,
-/// que corre igual detrás como red de seguridad). Sobre la conexión
+/// o la tabla todavía no los manda (el frontend pide entonces
+/// `sincronizar_cambios_nube` sólo para esa tabla). Sobre la conexión
 /// secundaria: nunca toma el candado del núcleo.
 #[tauri::command]
 pub async fn aplicar_cambio_nube(
@@ -397,7 +397,8 @@ pub async fn aplicar_cambio_nube(
         let state = app.state::<GuiState>();
         state.sesion_activa()?;
         let conexion = state.conexion_secundaria()?;
-        nube::aplicar_cambio_en_vivo(&conexion, &cambio).map_err(mensaje_sincronizacion)
+        nube::aplicar_cambio_en_vivo(&conexion, &cambio, nube::PerfilDispositivo::Escritorio)
+            .map_err(mensaje_sincronizacion)
     })
     .await
     .map_err(|error| format!("No se pudo aplicar el cambio en vivo: {error}"))?
@@ -421,6 +422,21 @@ pub async fn sincronizar_cambios_nube(
     })
     .await
     .map_err(|error| format!("No se pudo completar la sincronización: {error}"))?
+}
+
+/// Un ingreso/salida registrado en este equipo: sólo se vacía la bandeja de
+/// salida (`nube::AlcanceSincronizacion::solo_envio`), sin bajar catálogo
+/// ni historial -- no hay nada que traer de la nube por un cambio propio.
+#[tauri::command]
+pub async fn enviar_cambios_nube(app: tauri::AppHandle) -> Result<ResumenSincronizacion, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ejecutar_sincronizacion_con_alcance(
+            &app.state::<GuiState>(),
+            nube::AlcanceSincronizacion::solo_envio(),
+        )
+    })
+    .await
+    .map_err(|error| format!("No se pudo enviar a la nube: {error}"))?
 }
 
 #[tauri::command]

@@ -78,13 +78,23 @@ fn precargar_catalogo_durante_splash(app: tauri::AppHandle) {
 fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(ESPERA_INICIAL_SINCRONIZACION).await;
+        // La primera vuelta es la sincronización de arranque: reconcilia los
+        // historiales con el traslape largo (ver
+        // `nube::AlcanceSincronizacion::arranque`). El pulso de después sólo
+        // pide lo que cambió.
+        let mut alcance = control_acceso::nube::AlcanceSincronizacion::arranque();
         loop {
             let manejador = app.clone();
             let resultado = tauri::async_runtime::spawn_blocking(move || {
                 let estado = manejador.state::<GuiState>();
-                comandos::nube::ejecutar_sincronizacion(&estado)
+                comandos::nube::ejecutar_sincronizacion_con_alcance(&estado, alcance)
             })
             .await;
+            // Si el arranque falló (sin sesión todavía, sin red), se vuelve a
+            // intentar como arranque en la próxima vuelta.
+            if matches!(resultado, Ok(Ok(_))) {
+                alcance = control_acceso::nube::AlcanceSincronizacion::completo();
+            }
 
             // Antes los dos casos de error acá quedaban en silencio total --
             // ni el usuario los veía (es automático, sin botón que falle a
@@ -580,6 +590,7 @@ pub fn run() {
             comandos::nube::configurar_dispositivo_inicial,
             comandos::nube::sincronizar_con_nube,
             comandos::nube::sincronizar_cambios_nube,
+            comandos::nube::enviar_cambios_nube,
             comandos::nube::aplicar_cambio_nube,
             comandos::nube::sesion_realtime_nube,
             comandos::nube::listar_ingresos_remotos,

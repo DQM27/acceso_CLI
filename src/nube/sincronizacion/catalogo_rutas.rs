@@ -150,7 +150,7 @@ pub fn recibir_catalogo_rutas_del_sitio(
     if let Some(marca) = marca_mas_nueva {
         connection.execute(
             "UPDATE sincronizacion_estado SET catalogo_rutas_actualizado_hasta = ?1 WHERE id = 1",
-            params![crate::tiempo::serializar_utc(marca)],
+            params![crate::tiempo::serializar_marca_utc(marca)],
         )?;
     }
     Ok(resumen)

@@ -1,6 +1,7 @@
 use std::{
     io::{Read, Write},
     net::TcpListener,
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -1340,7 +1341,7 @@ fn recibe_historial_del_sitio_y_guarda_el_tipo_de_dispositivo_embebido() {
          \"dispositivo_entrada\":{\"tipo\":\"mobile\"}}]",
     );
 
-    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url), true).unwrap();
 
     assert_eq!(recibidos, 1);
     let tipo: Option<String> = connection
@@ -1351,6 +1352,167 @@ fn recibe_historial_del_sitio_y_guarda_el_tipo_de_dispositivo_embebido() {
         )
         .unwrap();
     assert_eq!(tipo.as_deref(), Some("mobile"));
+}
+
+/// Servidor que contesta `respuestas` en orden (una por conexión) y anota
+/// la línea de cada pedido ("GET /rest/v1/...").
+fn servidor_que_anota(respuestas: Vec<String>) -> (String, Arc<Mutex<Vec<String>>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
+    let direccion = listener.local_addr().expect("dirección local");
+    let pedidos = Arc::new(Mutex::new(Vec::new()));
+    let anotados = Arc::clone(&pedidos);
+    thread::spawn(move || {
+        for cuerpo in respuestas {
+            let Ok((mut socket, _)) = listener.accept() else {
+                return;
+            };
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .expect("set_read_timeout");
+            let mut pedido = Vec::new();
+            let mut buffer = [0; 4096];
+            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+                match socket.read(&mut buffer) {
+                    Ok(0) | Err(_) => break,
+                    Ok(leidos) => pedido.extend_from_slice(&buffer[..leidos]),
+                }
+            }
+            let pedido = String::from_utf8_lossy(&pedido);
+            anotados
+                .lock()
+                .unwrap()
+                .push(pedido.lines().next().unwrap_or_default().to_string());
+            let _ = write!(
+                socket,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
+                cuerpo.len()
+            );
+        }
+    });
+    (format!("http://{direccion}"), pedidos)
+}
+
+/// `historial_sitio` con dos movimientos ya guardados y la marca en
+/// 13:00: `mov-igual` al día con la nube, `mov-viejo` desactualizado.
+fn conexion_con_historial_guardado() -> Connection {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute_batch(
+            "INSERT INTO historial_sitio (
+                 uuid, sitio_id, contratista_nombre, hora_entrada, dispositivo_entrada_id,
+                 actualizado_en
+             ) VALUES
+                 ('mov-igual', 'sitio-1', 'Igual', '2026-09-27T11:00:00Z', 'otro',
+                  '2026-09-27T12:00:00.500000Z'),
+                 ('mov-viejo', 'sitio-1', 'Viejo', '2026-09-27T11:00:00Z', 'otro',
+                  '2026-09-27T12:00:00Z');
+             UPDATE sincronizacion_estado
+                SET historial_actualizado_hasta = '2026-09-27T13:00:00.000000Z' WHERE id = 1;",
+        )
+        .unwrap();
+    connection
+}
+
+fn fila_historial_json(id: &str, updated_at: &str) -> String {
+    format!(
+        r#"{{"id":"{id}","contratista_nombre":"Persona","hora_entrada":"2026-09-27T11:00:00Z","hora_salida":"2026-09-27T12:30:00Z","dispositivo_entrada_id":"otro","updated_at":"{updated_at}"}}"#
+    )
+}
+
+#[test]
+fn la_reconciliacion_compara_el_indice_y_trae_solo_lo_que_falta_o_cambio() {
+    let connection = conexion_con_historial_guardado();
+    let indice = r#"[
+        {"id":"mov-igual","updated_at":"2026-09-27T12:00:00.5+00:00"},
+        {"id":"mov-viejo","updated_at":"2026-09-27T12:30:00+00:00"},
+        {"id":"mov-nuevo","updated_at":"2026-09-27T14:00:00+00:00"}
+    ]"#;
+    let filas = format!(
+        "[{},{}]",
+        fila_historial_json("mov-viejo", "2026-09-27T12:30:00+00:00"),
+        fila_historial_json("mov-nuevo", "2026-09-27T14:00:00+00:00"),
+    );
+    let (base_url, pedidos) = servidor_que_anota(vec![indice.to_string(), filas]);
+
+    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url), true).unwrap();
+
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 2, "{pedidos:#?}");
+    assert!(pedidos[0].contains("select=id,updated_at"), "{pedidos:#?}");
+    assert!(pedidos[1].contains("id=in."), "{pedidos:#?}");
+    assert!(
+        pedidos[1].contains("mov-viejo") && pedidos[1].contains("mov-nuevo"),
+        "{pedidos:#?}"
+    );
+    assert!(
+        !pedidos[1].contains("mov-igual"),
+        "lo que ya está al día no se vuelve a pedir"
+    );
+    assert_eq!(recibidos, 2);
+    let guardado: String = connection
+        .query_row(
+            "SELECT actualizado_en FROM historial_sitio WHERE uuid = 'mov-nuevo'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        guardado, "2026-09-27T14:00:00.000000Z",
+        "el updated_at del servidor"
+    );
+    let marca: String = connection
+        .query_row(
+            "SELECT historial_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(marca, "2026-09-27T14:00:00.000000Z");
+}
+
+#[test]
+fn la_reconciliacion_sin_diferencias_solo_pide_el_indice() {
+    let connection = conexion_con_historial_guardado();
+    let indice = r#"[{"id":"mov-igual","updated_at":"2026-09-27T12:00:00.5+00:00"}]"#;
+    let (base_url, pedidos) = servidor_que_anota(vec![indice.to_string()]);
+
+    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url), true).unwrap();
+
+    assert_eq!(recibidos, 0);
+    assert_eq!(pedidos.lock().unwrap().len(), 1);
+    let marca: String = connection
+        .query_row(
+            "SELECT historial_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        marca, "2026-09-27T13:00:00.000000Z",
+        "la marca no retrocede"
+    );
+}
+
+#[test]
+fn fuera_del_arranque_no_se_pide_indice_sino_lo_cambiado() {
+    let connection = conexion_con_historial_guardado();
+    let (base_url, pedidos) = servidor_que_anota(vec!["[]".to_string()]);
+
+    recibir_historial_del_sitio(&connection, &contexto(&base_url), false).unwrap();
+
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 1);
+    assert!(
+        !pedidos[0].contains("select=id,updated_at&"),
+        "{pedidos:#?}"
+    );
+    // Marca (13:00) menos el traslape corto (5 minutos).
+    assert!(
+        pedidos[0].contains("updated_at=gt.2026-09-27T12:55:00.000000Z")
+            || pedidos[0].contains("updated_at=gt.2026-09-27T12%3A55%3A00.000000Z"),
+        "{pedidos:#?}"
+    );
 }
 
 #[test]
@@ -1386,7 +1548,7 @@ fn recibir_historial_del_sitio_incluye_movimientos_del_dispositivo_actual() {
         .unwrap();
     });
 
-    recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    recibir_historial_del_sitio(&connection, &contexto(&base_url), true).unwrap();
     servidor.join().unwrap();
 }
 
@@ -1446,7 +1608,7 @@ fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_e
     ) as &'static str;
     let base_url = servidor_de_respuestas(vec![respuesta_pagina_1, respuesta_pagina_2]);
 
-    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url), true).unwrap();
 
     assert_eq!(recibidos, u32::try_from(TAMANO_PAGINA_REMOTA).unwrap() + 1);
     let guardadas: i64 = connection
@@ -1465,7 +1627,7 @@ fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_e
         )
         .unwrap();
     assert_eq!(
-        marca, "2026-01-01T00:08:19Z",
+        marca, "2026-01-01T00:08:19.000000Z",
         "la marca de agua es el máximo de TODAS las páginas, no el de la última"
     );
 }
@@ -1474,7 +1636,11 @@ fn recibir_historial_paginado_persiste_todas_las_paginas_y_la_marca_de_agua_es_e
 fn marca_historial_para_consulta_retrocede_una_semana() {
     let ahora = crate::tiempo::parsear_utc("2026-09-09T12:00:00Z").unwrap();
 
-    let marca = marca_historial_para_consulta(Some("2026-09-09T10:00:00Z"), ahora);
+    let marca = marca_historial_para_consulta(
+        Some("2026-09-09T10:00:00Z"),
+        ahora,
+        traslape_historial(true),
+    );
 
     assert_eq!(
         marca,
@@ -1486,11 +1652,33 @@ fn marca_historial_para_consulta_retrocede_una_semana() {
 fn marca_historial_para_consulta_sanea_marcas_en_futuro() {
     let ahora = crate::tiempo::parsear_utc("2026-09-09T12:00:00Z").unwrap();
 
-    let marca = marca_historial_para_consulta(Some("2026-12-01T00:00:00Z"), ahora);
+    let marca = marca_historial_para_consulta(
+        Some("2026-12-01T00:00:00Z"),
+        ahora,
+        traslape_historial(true),
+    );
 
     assert_eq!(
         marca,
         Some(crate::tiempo::parsear_utc("2026-09-02T12:00:00Z").unwrap())
+    );
+}
+
+#[test]
+fn fuera_del_arranque_el_historial_retrocede_solo_minutos() {
+    // El pulso y los avisos no vuelven a bajar la semana entera (visto en
+    // producción: ~4 s reescribiendo 390 ingresos en cada aviso).
+    let ahora = crate::tiempo::parsear_utc("2026-09-09T12:00:00Z").unwrap();
+
+    let marca = marca_historial_para_consulta(
+        Some("2026-09-09T10:00:00.123456Z"),
+        ahora,
+        traslape_historial(false),
+    );
+
+    assert_eq!(
+        marca,
+        Some(crate::tiempo::parsear_utc("2026-09-09T09:55:00.123456Z").unwrap())
     );
 }
 
@@ -1506,7 +1694,7 @@ fn recibe_historial_del_sitio_sin_dispositivo_embebido_no_falla() {
          \"updated_at\":\"2026-01-01T08:00:05Z\"}]",
     );
 
-    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos = recibir_historial_del_sitio(&connection, &contexto(&base_url), true).unwrap();
 
     assert_eq!(recibidos, 1);
     let tipo: Option<String> = connection
@@ -1683,8 +1871,8 @@ fn segunda_sincronizacion_de_citas_pide_solo_lo_actualizado_desde_la_marca_previ
         }
         let pedido = String::from_utf8(pedido).unwrap();
         assert!(
-            pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00Z")
-                || pedido.contains("updated_at=gt.2026-09-09T08:00:00Z")
+            pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00")
+                || pedido.contains("updated_at=gt.2026-09-09T08:00:00")
         );
         assert!(
             !pedido.contains("sitio_id="),
@@ -1718,7 +1906,8 @@ fn recibe_el_historial_de_visitas_del_sitio_y_lo_guarda_local() {
          \"dispositivo_salida_id\":null,\"updated_at\":\"2026-01-01T08:00:05Z\"}]",
     );
 
-    let recibidos = recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos =
+        recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url), true).unwrap();
 
     assert_eq!(recibidos, 1);
     let (cedula, nombre, empresa, anfitrion): (String, String, Option<String>, Option<String>) =
@@ -1756,7 +1945,8 @@ fn una_fila_de_historial_de_visitas_con_fecha_ilegible_se_omite_sin_abortar_las_
          \"updated_at\":\"2026-01-01T08:00:05Z\"}]",
     );
 
-    let recibidos = recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    let recibidos =
+        recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url), true).unwrap();
 
     assert_eq!(recibidos, 1, "la fila con hora_entrada ilegible no cuenta");
     let total: i64 = connection
@@ -1802,7 +1992,7 @@ fn segunda_sincronizacion_de_historial_de_visitas_pide_solo_lo_actualizado_desde
         .unwrap();
     });
 
-    recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    recibir_historial_visitas_del_sitio(&connection, &contexto(&base_url), true).unwrap();
     servidor.join().unwrap();
 }
 
@@ -1821,7 +2011,8 @@ fn recibe_el_historial_de_ingresos_proveedor_del_sitio_y_lo_guarda_local() {
     );
 
     let recibidos =
-        recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url), true)
+            .unwrap();
 
     assert_eq!(recibidos, 1);
     let (cedula, nombre, empresa): (String, String, Option<String>) = connection
@@ -1858,7 +2049,8 @@ fn una_fila_de_historial_de_ingresos_proveedor_con_fecha_ilegible_se_omite_sin_a
     );
 
     let recibidos =
-        recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url)).unwrap();
+        recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url), true)
+            .unwrap();
 
     assert_eq!(recibidos, 1, "la fila con hora_entrada ilegible no cuenta");
     let total: i64 = connection
@@ -1908,7 +2100,8 @@ fn segunda_sincronizacion_de_historial_de_ingresos_proveedor_pide_solo_lo_actual
         .unwrap();
     });
 
-    recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url)).unwrap();
+    recibir_historial_ingresos_proveedor_del_sitio(&connection, &contexto(&base_url), true)
+        .unwrap();
     servidor.join().unwrap();
 }
 
@@ -2544,8 +2737,8 @@ fn segunda_sincronizacion_de_historial_gafetes_provisionales_pide_solo_lo_actual
         }
         let pedido = String::from_utf8(pedido).unwrap();
         assert!(
-            pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00Z")
-                || pedido.contains("updated_at=gt.2026-09-09T08:00:00Z")
+            pedido.contains("updated_at=gt.2026-09-09T08%3A00%3A00")
+                || pedido.contains("updated_at=gt.2026-09-09T08:00:00")
         );
         let cuerpo = "[]";
         write!(
@@ -3031,8 +3224,8 @@ fn segundo_sync_de_catalogo_pide_gafetes_con_su_propia_marca_guardada() {
             } else if paso == 9 {
                 let pedido = String::from_utf8(pedido).unwrap();
                 assert!(
-                    pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
-                        || pedido.contains("updated_at=gt.2026-01-05T00:00:00Z"),
+                    pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00")
+                        || pedido.contains("updated_at=gt.2026-01-05T00:00:00"),
                     "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {pedido}"
                 );
                 "[]"
@@ -3051,7 +3244,10 @@ fn segundo_sync_de_catalogo_pide_gafetes_con_su_propia_marca_guardada() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(marca_guardada.as_deref(), Some("2026-01-05T00:00:00Z"));
+    assert_eq!(
+        marca_guardada.as_deref(),
+        Some("2026-01-05T00:00:00.000000Z")
+    );
 
     recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
     servidor.join().unwrap();
@@ -3355,7 +3551,10 @@ fn recibe_catalogo_rutas_del_sitio_y_lo_guarda_local() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(marca_guardada.as_deref(), Some("2026-01-01T00:00:00Z"));
+    assert_eq!(
+        marca_guardada.as_deref(),
+        Some("2026-01-01T00:00:00.000000Z")
+    );
 }
 
 #[test]
@@ -3433,8 +3632,8 @@ fn segundo_sync_de_catalogo_rutas_pide_solo_lo_nuevo_con_la_marca_guardada() {
             } else if paso == 2 {
                 let pedido = String::from_utf8(pedido).unwrap();
                 assert!(
-                    pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00Z")
-                        || pedido.contains("updated_at=gt.2026-01-05T00:00:00Z"),
+                    pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00")
+                        || pedido.contains("updated_at=gt.2026-01-05T00:00:00"),
                     "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {pedido}"
                 );
                 "[]"
@@ -3453,7 +3652,10 @@ fn segundo_sync_de_catalogo_rutas_pide_solo_lo_nuevo_con_la_marca_guardada() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(marca_guardada.as_deref(), Some("2026-01-05T00:00:00Z"));
+    assert_eq!(
+        marca_guardada.as_deref(),
+        Some("2026-01-05T00:00:00.000000Z")
+    );
 
     recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
     servidor.join().unwrap();
