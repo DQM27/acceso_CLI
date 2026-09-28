@@ -194,6 +194,7 @@ class MetricasOcr(
     private var framesConCodigo = 0
     private var descartadosPorCalidad = 0
     private var fallos = 0
+    private var msHastaConfirmar: Long? = null
     private val msRecorte = ArrayDeque<Float>()
     private val msReconocimiento = ArrayDeque<Float>()
 
@@ -224,8 +225,26 @@ class MetricasOcr(
 
     @Synchronized
     fun registrarConfirmacion() {
-        if (habilitadas) registrar("confirmado en ${(reloj() - inicio) / 1_000_000} ms; ${resumen()}")
+        if (!habilitadas) return
+        val ms = (reloj() - inicio) / 1_000_000
+        msHastaConfirmar = ms
+        registrar("confirmado en $ms ms; ${resumen()}")
     }
+
+    /// Los mismos números que [resumen], estructurados para la telemetría
+    /// de diagnóstico (`Telemetria`, tipo `ocr_sesion`).
+    @Synchronized
+    fun datos(): Map<String, Any?> = mapOf(
+        "ms_sesion" to (reloj() - inicio) / 1_000_000,
+        "ms_hasta_confirmar" to msHastaConfirmar,
+        "frames" to frames,
+        "frames_con_codigo" to framesConCodigo,
+        "fps" to framesPorSegundo(),
+        "descartados_calidad" to descartadosPorCalidad,
+        "fallos" to fallos,
+        "recorte_mediana_ms" to mediana(msRecorte),
+        "reconocimiento_mediana_ms" to mediana(msReconocimiento),
+    )
 
     @Synchronized
     fun resumen(): String =

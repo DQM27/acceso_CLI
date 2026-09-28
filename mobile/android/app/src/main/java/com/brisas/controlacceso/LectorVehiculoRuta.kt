@@ -38,9 +38,9 @@ fun vehiculoDesdeClave(clave: String): VehiculoRutaDetectado? {
 //    la otra), y ML Kit lo funde en UN solo carácter que ni siquiera es
 //    consistentemente `C` -- acá salió `E`. Exigir literalmente `C`/`CL`
 //    (como antes) hace que este caso nunca matchee. Se relajó a 1-2 letras
-//    cualquiera -- el valor final puede traer el prefijo mal leído (queda
-//    en un campo de texto editable, se corrige a mano), pero al menos ya no
-//    se pierde el intento completo.
+//    cualquiera; la "E" que produce el "CL" apilado se restituye (ver
+//    `PREFIJO_CL_APILADO_LEIDO`) y cualquier otro prefijo mal leído queda
+//    en el campo de texto editable para corregirlo a mano.
 // 2. Los 6 dígitos salieron partidos "37 1931" (2+4) en vez de pegados --
 //    aparentemente un artefacto de cómo ML Kit agrupa palabras, no algo
 //    impreso en la placa. Antes esto hacía fallar el patrón por completo y
@@ -110,11 +110,25 @@ private fun corregirGrupo(grupo: String, esValido: (Char) -> Boolean, reemplazos
 private fun esDigito(c: Char) = c in '0'..'9'
 private fun esLetra(c: Char) = c in 'A'..'Z'
 
+// En la placa de carga liviana la "C" va ENCIMA de la "L" y ML Kit lee el
+// par como una sola "E" (foto real 2026-09-17: `CL371931` -> "E37 1931").
+// No existe ninguna clase de placa con prefijo "E" solo (sí "EE", equipo
+// especial), así que "E" + 6 dígitos sólo puede ser "CL": se restituye sin
+// contarlo como corrección dudosa.
+private const val PREFIJO_CL_APILADO_LEIDO = "E"
+private const val PREFIJO_CARGA_LIVIANA = "CL"
+private const val DIGITOS_PLACA_CARGA = 6
+
 private fun placaDeCarga(textoNormalizado: String): PlacaCandidata? =
     REGEX_PLACA_CARGA.findAll(textoNormalizado).mapNotNull { match ->
-        val (prefijo, primeraTanda, segundaTanda) = match.destructured
+        val (prefijoLeido, primeraTanda, segundaTanda) = match.destructured
         val (digitos, correcciones) = corregirGrupo(primeraTanda + segundaTanda, ::esDigito, DIGITO_POR_LETRA)
             ?: return@mapNotNull null
+        val prefijo = if (prefijoLeido == PREFIJO_CL_APILADO_LEIDO && digitos.length == DIGITOS_PLACA_CARGA) {
+            PREFIJO_CARGA_LIVIANA
+        } else {
+            prefijoLeido
+        }
         PlacaCandidata("$prefijo$digitos", correcciones)
             .takeIf { digitos.length in 4..6 && correcciones <= MAXIMO_CORRECCIONES_POR_PLACA }
     }.minByOrNull { it.correcciones }

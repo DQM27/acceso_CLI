@@ -80,7 +80,7 @@ class NubeRealtime(
     private suspend fun conectarHastaRenovar() {
         val sesion = withContext(dispatcherIO) {
             val secreto = secretoStore.cargar() ?: throw SecretoDispositivoNoEncontradoException()
-            nucleo.sesionRealtimeNubeConSecreto(secreto)
+            medirNucleo("sesionRealtimeNubeConSecreto") { nucleo.sesionRealtimeNubeConSecreto(secreto) }
         }
         val token = sesion.accessToken
         val supabase = createSupabaseClient(sesion.baseUrl, sesion.apikey) {

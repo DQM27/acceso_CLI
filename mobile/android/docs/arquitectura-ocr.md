@@ -145,16 +145,26 @@ CameraX entre ambos sistemas de coordenadas.
   banda MRZ, texto denso, parece más nítida que la tarjeta entera) y nunca
   se descartan más de 3 frames seguidos: un umbral relativo mal calibrado
   no puede dejar al escáner sin leer.
-- El APK sólo incluye `arm64-v8a` y `x86_64`, las ABI para las que existe el
-  núcleo Rust (APK de debug de 94,5 MB a 64,7 MB).
+- El APK sólo incluye `arm64-v8a`, el procesador del Samsung A25 (no se
+  usa en emuladores). Medido: APK de debug de 94,5 MB a 64,7 MB sin
+  x86/armeabi-v7a y 18 MB menos sin `x86_64`; el núcleo Rust, con el perfil
+  `release` de `mobile/rust-core/Cargo.toml` (LTO, un solo codegen unit,
+  símbolos quitados), pasó de 11,2 MB a 8,0 MB. El build `diagnostico`
+  (R8) queda en 33,2 MB.
 - Linterna en las 4 pantallas de escaneo (noche en la portería, placas en
   sombra).
-- Métricas por sesión sólo en debug y sin datos personales:
-  `adb logcat -s OcrMetricas`.
+- Métricas por sesión sin datos personales: en debug por
+  `adb logcat -s OcrMetricas`; en el build `diagnostico` (teléfono sin
+  depuración USB) llegan a Supabase staging como evento `ocr_sesion` al
+  cerrar la cámara, y el estado de la cámara se vigila como posible fuga
+  (ver `docs/telemetria-diagnostico.md`).
 - El número de cédula del frente exige primer dígito 1-9 (provincia). Las
   placas corrigen como máximo UNA confusión letra/dígito según la posición
   (formato fijo: letras, luego dígitos), porque no tienen dígito
   verificador que confirme una corrección.
+- Placa de carga liviana "CL" con las letras apiladas: el OCR la lee como
+  una sola "E". Se restituye "CL" sólo si vienen exactamente 6 dígitos (el
+  formato de carga); "E" con otra cantidad de dígitos se deja igual.
 - Un escaneo abre sólo el formulario del contratista cuya cédula es
   EXACTAMENTE el número leído (`CoincidenciaEscaneo.kt`); un único
   resultado de la búsqueda parcial ya no alcanza.

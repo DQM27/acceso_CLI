@@ -22,8 +22,7 @@ android {
     defaultConfig {
         applicationId = "com.dqm27.lattis"
         // Dispositivo real conocido: Samsung A25 5G (arm64) — ver
-        // docs/plan-app-movil.md. jniLibs trae arm64-v8a (dispositivo real)
-        // y x86_64 (emulador de desarrollo).
+        // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
         versionCode = 18
@@ -35,13 +34,19 @@ android {
         // del lado de escritorio.
         manifestPlaceholders["sentryEnvironment"] = "development"
 
-        // Sólo las ABI para las que existe el núcleo Rust (release.yml compila
-        // arm64-v8a y x86_64): en armeabi-v7a o x86 la app no puede arrancar,
-        // así que las librerías nativas de ML Kit para esas ABI eran peso
-        // muerto (medido: APK de debug de 94,5 MB a 64,7 MB).
+        // Sólo el procesador del dispositivo real (arm64-v8a, Samsung A25):
+        // el APK no se usa en emuladores. Las librerías nativas de ML Kit y
+        // compañía para otras ABI eran peso muerto (medido: APK de debug de
+        // 94,5 MB a 64,7 MB sin x86/armeabi-v7a, y 18 MB más sin x86_64).
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            abiFilters += listOf("arm64-v8a")
         }
+
+        // A qué Supabase apunta el núcleo (ver AplicacionControlAcceso.kt) y
+        // si se recolecta telemetría de rendimiento (ver Telemetria.kt). Los
+        // dos en `false` para release: producción nunca los activa.
+        buildConfigField("boolean", "AMBIENTE_STAGING", "false")
+        buildConfigField("boolean", "TELEMETRIA", "false")
     }
 
     signingConfigs {
@@ -64,6 +69,7 @@ android {
             // firma hasta ahí) y la reemplaza. Con el sufijo, Android los
             // trata como dos apps distintas -- coexisten sin pisarse.
             applicationIdSuffix = ".debug"
+            buildConfigField("boolean", "AMBIENTE_STAGING", "true")
         }
         release {
             isMinifyEnabled = true
@@ -72,6 +78,27 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             manifestPlaceholders["sentryEnvironment"] = "production"
+        }
+        // Build para MEDIR rendimiento en el teléfono: compilado igual que
+        // release (R8, sin `debuggable`) porque un build de debug corre sin
+        // optimizaciones y daría tiempos peores que los reales. Firmado con
+        // la llave de debug (no requiere la de producción), apunta al
+        // sandbox (staging) y manda telemetría a su tabla
+        // `telemetria_diagnostico`. Sufijo propio: convive con la app real y
+        // con el build de debug sin pisarlos. `./gradlew assembleDiagnostico`.
+        create("diagnostico") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".diag"
+            versionNameSuffix = "-diag"
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            // Permite adjuntar el profiler de Android Studio si algún día hay
+            // una PC a mano, sin volver la app `debuggable`.
+            isProfileable = true
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "AMBIENTE_STAGING", "true")
+            buildConfigField("boolean", "TELEMETRIA", "true")
+            manifestPlaceholders["sentryEnvironment"] = "diagnostico"
         }
     }
 

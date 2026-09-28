@@ -46,6 +46,7 @@ fun PantallaEscanearVehiculoRuta(
     mensajeInicial: String = MENSAJE_INICIAL_VEHICULO,
     mensajePermiso: String = "Se necesita permiso de cámara para escanear la placa o el número de unidad.",
 ) {
+    RegistrarPantalla("escanear_vehiculo_ruta")
     EscanerConPermisoCamara(mensajePermiso = mensajePermiso, onCerrar = onCerrar) {
         VistaCamaraVehiculoRuta(
             onVehiculoDetectado = onVehiculoDetectado,

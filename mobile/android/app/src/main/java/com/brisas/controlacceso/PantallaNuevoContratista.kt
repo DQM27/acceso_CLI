@@ -72,6 +72,7 @@ private fun etiquetaTipo(tipo: TipoIngreso): String =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
+    RegistrarPantalla("nuevo_contratista")
     // Mismo destino que el botón "← Volver" visible de abajo -- sin esto,
     // atrás del sistema se escapaba a la Activity en vez de volver a
     // Activos (hallazgo 2026-09-19).

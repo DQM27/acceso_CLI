@@ -62,7 +62,7 @@ class NubeViewModel(
                 val resumen = withContext(dispatcherIO) {
                     val secreto = secretoStore.cargar()
                         ?: throw SecretoDispositivoNoEncontradoException()
-                    nucleo.sincronizarConNubeConSecreto(secreto)
+                    medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
                 }
                 ultimoResumen = resumen
                 if (resumen.sesionExpulsada) onSesionExpulsada()

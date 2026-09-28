@@ -168,6 +168,25 @@ class LecturaFrameTest {
     }
 
     @Test
+    fun losDatosEstructuradosRepitenElResumen() {
+        var ahora = 0L
+        val metricas = MetricasOcr(habilitadas = true, reloj = { ahora }, cadaCuantosFrames = 100)
+        metricas.registrarFrame(conCodigo = false, nanosRecorte = 2_000_000, nanosReconocimiento = 80_000_000)
+        ahora = 500_000_000
+        metricas.registrarFrame(conCodigo = true, nanosRecorte = 4_000_000, nanosReconocimiento = 120_000_000)
+        metricas.registrarFallo()
+        assertNull(metricas.datos()["ms_hasta_confirmar"])
+        ahora = 1_500_000_000
+        metricas.registrarConfirmacion()
+        val datos = metricas.datos()
+        assertEquals(1500L, datos["ms_hasta_confirmar"])
+        assertEquals(2, datos["frames"])
+        assertEquals(1, datos["frames_con_codigo"])
+        assertEquals(1, datos["fallos"])
+        assertEquals(100f, datos["reconocimiento_mediana_ms"])
+    }
+
+    @Test
     fun metricasDeshabilitadasNoRegistranNada() {
         val registros = mutableListOf<String>()
         val metricas = MetricasOcr(habilitadas = false, registrar = { registros += it }, cadaCuantosFrames = 1)

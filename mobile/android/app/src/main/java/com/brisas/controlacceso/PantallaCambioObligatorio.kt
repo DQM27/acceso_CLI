@@ -47,6 +47,7 @@ fun PantallaCambioObligatorio(
     onCambiar: (String) -> Unit,
     onCancelar: () -> Unit,
 ) {
+    RegistrarPantalla("cambio_obligatorio")
     var password by remember { mutableStateOf("") }
     var confirmar by remember { mutableStateOf("") }
     var errorLocal by remember { mutableStateOf<String?>(null) }

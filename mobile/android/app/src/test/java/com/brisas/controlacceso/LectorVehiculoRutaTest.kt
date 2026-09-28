@@ -75,14 +75,12 @@ class LectorVehiculoRutaTest {
 
     @Test
     fun extraePlacaDeCargaConDigitosPartidosPorMLKit() {
-        // Placa real `CL371931`: el prefijo apilado se leyó como `E` (no
-        // `CL`) y los dígitos salieron partidos "37 1931" -- el valor
-        // resultante queda con el prefijo mal leído a propósito (campo
-        // editable, se corrige a mano), lo que importa es que ya no se
-        // pierden dígitos.
+        // Placa real `CL371931`: el prefijo apilado se leyó como `E` y los
+        // dígitos salieron partidos "37 1931". La "E" + 6 dígitos se
+        // restituye como "CL" (no existe prefijo "E" solo).
         val texto = "FIAT\nE37 1931\nCOSTA RICA\nCENTROAMERICA"
         val resultado = extraerVehiculo(texto)
-        assertEquals("E371931", resultado?.valor)
+        assertEquals("CL371931", resultado?.valor)
         assertEquals(TipoVehiculoDetectado.PLACA, resultado?.tipo)
     }
 
@@ -131,6 +129,13 @@ class LectorVehiculoRutaTest {
     @Test
     fun corrigeLetraLeidaComoDigitoEnUnaPlacaDeCarga() {
         assertEquals("CL371931", extraerVehiculo("CL 37I931")?.valor)
+    }
+
+    @Test
+    fun laEDelClApiladoSoloSeRestituyeConSeisDigitos() {
+        // Con otra cantidad de dígitos no hay base para suponer "CL".
+        assertEquals("E12345", extraerVehiculo("E 12345")?.valor)
+        assertEquals("CL123456", extraerVehiculo("E-123456")?.valor)
     }
 
     @Test

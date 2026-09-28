@@ -63,6 +63,26 @@ Sigue pendiente: S-2 (gafetes con código o confirmación), el resto de E-3
 (reconstruir renglones por geometría y usar la confianza), zoom, y A-1
 (migrar clasificación y extracción a Rust).
 
+## Tercera entrega: peso del APK, placa CL y telemetría
+
+- **Sólo `arm64-v8a`.** El APK únicamente se instala en el Samsung A25; se
+  quitó `x86_64` del APK y de `release.yml` (−18 MB en debug).
+- **Núcleo Rust optimizado.** Perfil `release` propio en
+  `mobile/rust-core/Cargo.toml` (`lto = "thin"`, `codegen-units = 1`,
+  `strip = true`): `.so` de 11,2 MB a 8,0 MB. `panic` se deja en `unwind`
+  a propósito: UniFFI convierte un pánico en excepción de Kotlin en vez de
+  cerrar la app.
+- **Placa "CL" apilada.** Las letras una sobre otra se leen como "E"; con
+  exactamente 6 dígitos (formato de carga liviana) se restituye "CL".
+- **Build `diagnostico` y telemetría.** El teléfono no permite depuración
+  USB: un build compilado como release (R8), firmado con la llave de debug y
+  apuntado a staging manda métricas técnicas (arranque, frames trabados,
+  memoria, posibles fugas, CPU, batería, temperatura, red, llamadas al
+  núcleo, sesiones OCR, motivos de cierre del proceso, StrictMode) a
+  `telemetria_diagnostico`. Sin datos personales. Detalle en
+  `mobile/android/docs/telemetria-diagnostico.md`. APK `diagnostico`:
+  33,2 MB.
+
 ## Pendiente, en orden de prioridad
 
 ### Seguridad
@@ -161,5 +181,10 @@ Sigue pendiente: S-2 (gafetes con código o confirmación), el resto de E-3
 - `CamaraOcr.kt`, `PantallaEscanearCedula.kt` y `ActivosViewModel.kt`
   dependen de Android y se compilan en `CI / test-android`
   (`testDebugUnitTest`).
+- Tercera entrega: 286 tests JVM, 0 fallos; `compileDiagnosticoKotlin` y
+  `assembleDiagnostico` (R8) sin errores ni advertencias; núcleo Rust con
+  `cargo fmt`, `clippy -D warnings` y 78 tests en verde. Inserción en
+  `telemetria_diagnostico` probada con la llave publicable (201), y
+  lectura/borrado con esa llave rechazados (401).
 - Falta la prueba física en el Samsung A25: cédula (frente y reverso),
   DIMEX, licencia, gafete continuo y placas, de día y de noche.

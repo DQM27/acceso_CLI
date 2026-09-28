@@ -46,7 +46,7 @@ class SincronizacionPeriodica(
                         val resumen = withContext(Dispatchers.IO) {
                             val secreto = secretoStore.cargar()
                                 ?: throw SecretoDispositivoNoEncontradoException()
-                            nucleo.sincronizarConNubeConSecreto(secreto)
+                            medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
                         }
                         Log.i("SincronizacionNube", "Recibidos: gafetes=${resumen.gafetesRecibidos}, historial=${resumen.movimientosHistorialRecibidos}, abiertos=${resumen.remotosAbiertos}")
                         onSincronizado(resumen)

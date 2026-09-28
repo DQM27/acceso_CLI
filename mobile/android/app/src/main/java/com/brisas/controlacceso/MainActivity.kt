@@ -1,6 +1,7 @@
 package com.brisas.controlacceso
 
 import android.os.Bundle
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -63,6 +64,17 @@ class MainActivity : ComponentActivity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
         GestorTema.inicializar(this)
+        if (Telemetria.activa) {
+            // Duración de cada frame y fin del arranque (primer dibujo
+            // completo). Sólo en el build de diagnóstico.
+            Telemetria.observarVentana(window)
+            window.decorView.viewTreeObserver.addOnDrawListener(object : ViewTreeObserver.OnDrawListener {
+                override fun onDraw() {
+                    Telemetria.primerFrameDibujado()
+                    window.decorView.post { window.decorView.viewTreeObserver.removeOnDrawListener(this) }
+                }
+            })
+        }
         setContent {
             val aplicacion: AplicacionViewModel = viewModel()
             val estado by aplicacion.estado.collectAsState()
@@ -127,6 +139,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Telemetria.enPrimerPlano(true)
+    }
+
+    override fun onStop() {
+        Telemetria.enPrimerPlano(false)
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Una Activity destruida que sigue alcanzable es la fuga clásica de
+        // Android (se retiene la jerarquía de vistas entera).
+        Telemetria.vigilarRetencion(this, "MainActivity")
     }
 }
 

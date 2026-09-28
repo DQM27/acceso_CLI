@@ -46,6 +46,7 @@ fun PantallaEscanearComprobanteRuta(
     onComprobanteDetectado: suspend (ComprobanteRutaDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
+    RegistrarPantalla("escanear_comprobante_ruta")
     EscanerConPermisoCamara(
         mensajePermiso = "Se necesita permiso de cámara para escanear el comprobante.",
         onCerrar = onCerrar,

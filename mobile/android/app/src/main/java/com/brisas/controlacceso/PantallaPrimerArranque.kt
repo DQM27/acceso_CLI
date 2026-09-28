@@ -51,6 +51,7 @@ fun PantallaPrimerArranque(
     metadata: MetadatosDispositivoLocal,
     onListo: () -> Unit,
 ) {
+    RegistrarPantalla("primer_arranque")
     val viewModel: PrimerArranqueViewModel =
         viewModel(factory = PrimerArranqueViewModel.factory(nucleo, secretoStore, metadata))
     var secreto by remember { mutableStateOf("") }

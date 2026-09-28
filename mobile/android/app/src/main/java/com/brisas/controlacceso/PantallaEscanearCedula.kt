@@ -46,6 +46,7 @@ fun PantallaEscanearCedula(
     // el alta de contratista sólo acepta el carnet PRAIND y lo apaga.
     lectorPdf417: Boolean = modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
 ) {
+    RegistrarPantalla("escanear_cedula")
     // Antes el mensaje de permiso era fijo ("...para escanear cédulas"),
     // sin importar el modo -- pedía cédulas incluso escaneando un gafete
     // (hallazgo 2026-09-20, al unificar las 4 pantallas de escaneo).

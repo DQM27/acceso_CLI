@@ -79,6 +79,7 @@ fun PantallaProveedores(
     secretoStore: SecretoDispositivoStore,
     refrescarNube: Int = 0,
 ) {
+    RegistrarPantalla("proveedores")
     val viewModel: ProveedoresViewModel =
         viewModel(factory = ProveedoresViewModel.factory(nucleo, secretoStore))
     // Sin esto, un cambio que llega de OTRO dispositivo (pulso periódico o

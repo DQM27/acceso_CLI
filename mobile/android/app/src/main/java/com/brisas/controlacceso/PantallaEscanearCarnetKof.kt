@@ -40,6 +40,7 @@ fun PantallaEscanearCarnetKof(
     onCarnetDetectado: suspend (CarnetKofDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
+    RegistrarPantalla("escanear_carnet_kof")
     EscanerConPermisoCamara(
         mensajePermiso = "Se necesita permiso de cámara para escanear el gafete.",
         onCerrar = onCerrar,

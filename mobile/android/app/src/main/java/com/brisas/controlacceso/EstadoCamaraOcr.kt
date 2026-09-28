@@ -102,9 +102,13 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         return filtrosCalidad.getOrPut(clave) { FiltroCalidad() }
     }
 
-    /// Números de rendimiento por sesión, sólo en debug (sin datos
-    /// personales). `adb logcat -s OcrMetricas`.
-    val metricas = MetricasOcr(habilitadas = BuildConfig.DEBUG, registrar = { Log.d(TAG_METRICAS_OCR, it) })
+    /// Números de rendimiento por sesión (sin datos personales): en debug
+    /// por `adb logcat -s OcrMetricas`; en el build `diagnostico` se mandan
+    /// a la telemetría al liberar la cámara.
+    val metricas = MetricasOcr(
+        habilitadas = BuildConfig.DEBUG || Telemetria.activa,
+        registrar = { if (BuildConfig.DEBUG) Log.d(TAG_METRICAS_OCR, it) },
+    )
 
     var cameraProvider: ProcessCameraProvider? by mutableStateOf(null)
     var vistaPreviaCamara: Preview? by mutableStateOf(null)
@@ -160,6 +164,15 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         ejecutor.shutdown()
         recognizer.close()
         lectorCodigos?.close()
+        if (Telemetria.activa) {
+            Telemetria.evento(
+                "ocr_sesion",
+                metricas.datos() + mapOf("pantalla" to Telemetria.pantallaActual(), "lector_pdf417" to (lectorCodigos != null)),
+            )
+            // La cámara y sus modelos retienen búferes grandes: si este
+            // estado sigue vivo después de cerrar la pantalla, hay una fuga.
+            Telemetria.vigilarRetencion(this, "EstadoCamaraOcr")
+        }
     }
 }
 
