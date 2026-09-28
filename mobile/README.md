@@ -49,11 +49,9 @@ echo "sdk.dir=<ruta al SDK, con / no \\>" > local.properties
 `local.properties` usa formato Java Properties — `\` es carácter de escape,
 así que la ruta del SDK debe ir con `/` (o `\\` si se insiste en backslash).
 
-Para el emulador (x86_64) además hace falta el `.so` de ese ABI — repetir el
-paso 1 con `cargo ndk -t x86_64-linux-android build --release` y copiarlo a
-`jniLibs/x86_64/`. El APK de distribución para el dispositivo real (Samsung
-A25 5G, arm64) sólo necesita `arm64-v8a`, pero no está de más incluir ambos
-si también se va a probar en el emulador antes de repartirlo.
+El APK se compila SÓLO para `arm64-v8a` (el procesador del dispositivo real,
+Samsung A25 5G): `abiFilters` en `app/build.gradle.kts` deja afuera x86_64 y
+las demás ABI, así que no hace falta compilar el núcleo para el emulador.
 
 ## Tests unitarios de los ViewModel
 

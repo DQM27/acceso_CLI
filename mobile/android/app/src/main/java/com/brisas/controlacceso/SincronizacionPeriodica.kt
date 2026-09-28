@@ -63,9 +63,9 @@ class SincronizacionPeriodica(
                             val secreto = secretoStore.cargar()
                                 ?: throw SecretoDispositivoNoEncontradoException()
                             if (tablas == null) {
-                                nucleo.sincronizarConNubeConSecreto(secreto)
+                                medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
                             } else {
-                                nucleo.sincronizarCambiosConSecreto(secreto, tablas)
+                                medirNucleo("sincronizarCambiosConSecreto") { nucleo.sincronizarCambiosConSecreto(secreto, tablas) }
                             }
                         }
                         Log.i("SincronizacionNube", "Recibidos: gafetes=${resumen.gafetesRecibidos}, historial=${resumen.movimientosHistorialRecibidos}, abiertos=${resumen.remotosAbiertos}")

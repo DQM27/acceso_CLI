@@ -64,22 +64,22 @@ class NuevoContratistaViewModel(
         private set
 
     val requierePraind: Boolean
-        get() = nucleo.requierePraindParaFormulario(tipoIngreso, personalRuta)
+        get() = medirNucleo("requierePraindParaFormulario") { nucleo.requierePraindParaFormulario(tipoIngreso, personalRuta) }
 
     /// Vencido en el instante en que se tipea, no recién al guardar. Una
     /// fecha a medio escribir ("10-09-202") el núcleo la toma como no
     /// vencida. Bloquea el botón Guardar (pedido del usuario 2026-09-20).
     val praindVencido: Boolean
         get() = requierePraind && fechaPraind.isNotBlank() &&
-            nucleo.praindVencidoParaFormulario(textoDDMMYYYYaIso(fechaPraind))
+            medirNucleo("praindVencidoParaFormulario") { nucleo.praindVencidoParaFormulario(textoDDMMYYYYaIso(fechaPraind)) }
 
     val muestraPersonalRuta: Boolean
-        get() = nucleo.admitePersonalRutaParaFormulario(tipoIngreso)
+        get() = medirNucleo("admitePersonalRutaParaFormulario") { nucleo.admitePersonalRutaParaFormulario(tipoIngreso) }
 
     init {
         viewModelScope.launch {
             try {
-                empresas = withContext(dispatcherIO) { nucleo.listarEmpresas() }
+                empresas = withContext(dispatcherIO) { medirNucleo("listarEmpresas") { nucleo.listarEmpresas() } }
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             }
@@ -176,7 +176,7 @@ class NuevoContratistaViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    nucleo.crearContratista(
+                    medirNucleo("crearContratista") { nucleo.crearContratista(
                         DatosContratista(
                             cedula = cedula,
                             nombre = nombre,
@@ -185,7 +185,7 @@ class NuevoContratistaViewModel(
                             fechaVencimientoPraind = fechaPraind.ifBlank { null }?.let(::textoDDMMYYYYaIso),
                             esPersonalRuta = personalRuta,
                         ),
-                    )
+                    ) }
                 }
                 CambiosNube.solicitar()
                 onGuardado()

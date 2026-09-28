@@ -76,7 +76,7 @@ class LoginViewModel(
             try {
                 val resultado: ResultadoLogin = withContext(dispatcherIO) {
                     val secreto = secretoStore.cargar().orEmpty()
-                    nucleo.autenticarConSecreto(cedula, passwordTipeada, secreto)
+                    medirNucleo("autenticarConSecreto") { nucleo.autenticarConSecreto(cedula, passwordTipeada, secreto) }
                 }
                 if (resultado.debeCambiarPassword) {
                     cambioObligatorio = resultado.sesion to passwordTipeada
@@ -104,7 +104,7 @@ class LoginViewModel(
             try {
                 withContext(dispatcherIO) {
                     val secreto = secretoStore.cargar() ?: return@withContext
-                    nucleo.sincronizarConNubeConSecreto(secreto)
+                    medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
                 }
             } catch (_: NucleoException) {
                 // Sin red, o sin secreto configurado todavía -- no es un
@@ -127,7 +127,7 @@ class LoginViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    nucleo.cambiarPasswordSupabase(passwordActual, passwordNueva)
+                    medirNucleo("cambiarPasswordSupabase") { nucleo.cambiarPasswordSupabase(passwordActual, passwordNueva) }
                 }
                 abrirSesion(sesionPendiente)
                 cambioObligatorio = null
@@ -151,7 +151,7 @@ class LoginViewModel(
     fun cerrarSesion() {
         propietarioSesion?.cerrar()
         propietarioSesion = null
-        nucleo.cerrarSesion()
+        medirNucleo("cerrarSesion") { nucleo.cerrarSesion() }
         sesion = null
         cedula = ""
         password = ""

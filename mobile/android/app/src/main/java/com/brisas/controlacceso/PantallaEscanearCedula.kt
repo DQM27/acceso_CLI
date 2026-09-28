@@ -41,7 +41,12 @@ fun PantallaEscanearCedula(
     resultadoUltimoEscaneo: () -> Pair<String, Boolean>? = { null },
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
+    // Buscar además el PDF417 de la cédula anterior. Sólo tiene sentido
+    // donde se acepta una cédula (ingreso de contratistas, proveedores);
+    // el alta de contratista sólo acepta el carnet PRAIND y lo apaga.
+    lectorPdf417: Boolean = modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
 ) {
+    RegistrarPantalla("escanear_cedula")
     // Antes el mensaje de permiso era fijo ("...para escanear cédulas"),
     // sin importar el modo -- pedía cédulas incluso escaneando un gafete
     // (hallazgo 2026-09-20, al unificar las 4 pantallas de escaneo).
@@ -56,6 +61,7 @@ fun PantallaEscanearCedula(
             resultadoUltimoEscaneo = resultadoUltimoEscaneo,
             onDocumentoDetectado = onDocumentoDetectado,
             onCerrar = onCerrar,
+            lectorPdf417 = lectorPdf417 && modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
         )
     }
 }
@@ -67,6 +73,7 @@ private fun VistaCamaraCedula(
     resultadoUltimoEscaneo: () -> Pair<String, Boolean>?,
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
+    lectorPdf417: Boolean,
 ) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -82,12 +89,9 @@ private fun VistaCamaraCedula(
     // MV-10 (auditoría 2026-09-24): agrupa lo que antes eran 9
     // declaraciones + un DisposableEffect idénticos a las otras 3
     // pantallas de escaneo -- ver EstadoCamaraOcr.kt.
-    val camara = rememberEstadoCamaraOcr(contexto)
-    // Último punto suelto de MV-07 (auditoría de rendimiento 2026-09-25) --
-    // una instancia por apertura de pantalla, igual que `camara`, para
-    // reusar los buffers de un frame al siguiente en vez de asignarlos
-    // desde cero cada vez. Ver el doc-comment de `BuffersOcrReutilizables`.
-    val buffersOcr = remember { BuffersOcrReutilizables() }
+    // El PDF417 sólo existe en la cédula anterior: donde no se busca, ni
+    // se carga el lector de códigos.
+    val camara = rememberEstadoCamaraOcr(contexto, conLectorPdf417 = lectorPdf417)
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
@@ -110,6 +114,11 @@ private fun VistaCamaraCedula(
     // consistentes del debounce (ver EstabilizadorLectura), no debe
     // compartirse entre sesiones de escaneo distintas.
     val estabilizador = remember(modo) { EstabilizadorLectura(modo = modo) }
+    // Acota el recorte a la banda del MRZ cuando ya se sabe dónde está, y
+    // reparte los frames entre el lector de texto y el de PDF417 (ver
+    // `LecturaFrame.kt`). Ambos los usa sólo el hilo del analizador.
+    val seguidorMrz = remember { SeguidorBandaMrz() }
+    val planificador = remember(lectorPdf417) { PlanificadorLectores(habilitado = lectorPdf417) }
     var ultimoValorContinuo by remember { mutableStateOf<String?>(null) }
     var framesSinUltimoValor by remember { mutableStateOf(0) }
     // Colores de estado compartidos por las 4 pantallas de escaneo (ver
@@ -132,6 +141,10 @@ private fun VistaCamaraCedula(
                 }
                 val onResultado: (ResultadoEstabilizacion) -> Unit = onResultado@{ resultado ->
                         if (!camara.sesionActiva.get()) return@onResultado
+                        // Un frame que ya estaba en proceso cuando se
+                        // confirmó no debe volver a pintar "buscando"
+                        // encima del resultado.
+                        if (camara.detectada.get() && resultado.estado != EstadoEscaneo.CONFIRMADO) return@onResultado
                         if (continuo && resultado.estado != EstadoEscaneo.CONFIRMADO) {
                             framesSinUltimoValor++
                             if (framesSinUltimoValor >= FRAMES_AUSENCIA_PARA_REPETIR) {
@@ -154,6 +167,7 @@ private fun VistaCamaraCedula(
                         val documento = resultado.documento
                         if (resultado.estado == EstadoEscaneo.CONFIRMADO && documento != null) {
                             if (camara.detectada.compareAndSet(false, true)) {
+                                camara.metricas.registrarConfirmacion()
                                 val valor = documento.textoBusqueda ?: documento.numeroDocumento
                                 val repetidoContinuo = continuo &&
                                     valor == ultimoValorContinuo
@@ -244,27 +258,42 @@ private fun VistaCamaraCedula(
                 }
                 // Encuadre que gira según el documento (ver
                 // `ControladorEncuadre`): horizontal para cédula/licencia/
-                // DIMEX, vertical para PRAIND, In House y gafete CRC.
+                // DIMEX, vertical para PRAIND, In House y gafete CRC. Todo lo
+                // de `onLectura` corre en el hilo del analizador; a la
+                // pantalla sólo se publica el resultado.
                 val analisis = construirAnalizadorOcr(
                     ejecutorAnalisis = camara.ejecutor,
                     detectada = camara.detectada,
                     sesionActiva = camara.sesionActiva,
+                    hayLugar = camara::hayLugar,
                 ) { imagen ->
-                    val (region, leidoCon) = encuadre.regionParaFrame()
-                    analizarCedula(
+                    val (regionBase, leidoCon) = encuadre.regionParaFrame()
+                    val region = if (leidoCon == OrientacionEncuadre.HORIZONTAL) seguidorMrz.region(regionBase) else regionBase
+                    analizarFrameOcr(
                         imagen = imagen,
-                        recognizer = camara.recognizer,
-                        ejecutorPrincipal = camara.ejecutorPrincipal,
-                        sesionActiva = camara.sesionActiva,
-                        buffersOcr = buffersOcr,
-                        onTexto = { texto ->
-                            if (encuadre.registrarTexto(texto, leidoCon)) {
-                                orientacionEncuadre = encuadre.orientacion
-                            }
-                            onResultado(estabilizador.procesarFrame(texto))
-                        },
-                        onFallo = onFallo,
+                        camara = camara,
                         region = region,
+                        // Texto y PDF417 en paralelo sobre el mismo recorte.
+                        leerCodigo = planificador.leerCodigo(),
+                        onLectura = { lectura ->
+                            val datosPdf417 = lectura.pdf417
+                            if (datosPdf417 != null) {
+                                // Corrección de errores propia del código:
+                                // gana sobre el texto del mismo frame.
+                                val resultado = estabilizador.procesarPdf417(datosPdf417)
+                                camara.enPrincipal { onResultado(resultado) }
+                            } else {
+                                val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso, lectura.calidad)
+                                planificador.registrarTexto(lectura.textos.any(::pareceReversoCedulaAnterior), resultado.hayMrz)
+                                seguidorMrz.registrar(lectura.regionLeida, lectura.lineasMrz)
+                                val giro = encuadre.registrarOrientacion(resultado.orientacionSugerida, leidoCon)
+                                camara.enPrincipal {
+                                    if (giro) orientacionEncuadre = encuadre.orientacion
+                                    onResultado(resultado)
+                                }
+                            }
+                        },
+                        onFallo = { camara.enPrincipal(onFallo) },
                     )
                 }
                 camara.analisisCamara = analisis
@@ -278,6 +307,7 @@ private fun VistaCamaraCedula(
                         camara.cameraProvider = proveedor
                         camara.vistaPreviaCamara = preview
                     },
+                    onCamaraLista = { camara.camaraFisica = it },
                     onFallo = { mensaje ->
                         if (camara.sesionActiva.get()) {
                             estado = EstadoEscaneo.INVALIDO
@@ -329,6 +359,13 @@ private fun VistaCamaraCedula(
         // Compartido (`ControlesBrisas.kt`) -- mismo botón en las 4 pantallas
         // de escaneo (Cédula, Carnet KOF, Vehículo/Ruta, Comprobante).
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+        if (camara.tieneLinterna) {
+            BotonLinterna(
+                encendida = camara.linternaEncendida,
+                onClick = camara::alternarLinterna,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 72.dp, end = 16.dp),
+            )
+        }
     }
 }
 

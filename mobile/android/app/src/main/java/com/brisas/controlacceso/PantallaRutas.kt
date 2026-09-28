@@ -47,6 +47,7 @@ import uniffi.control_acceso_mobile.VehiculoRuta
 /// del checklist por ahora en vez de dejarlo simulado.
 @Composable
 fun PantallaRutas(nucleo: Nucleo) {
+    RegistrarPantalla("rutas")
     val viewModel: RutasViewModel = viewModel(factory = RutasViewModel.factory(nucleo))
 
     var subNumeroTexto by remember { mutableStateOf("1") }

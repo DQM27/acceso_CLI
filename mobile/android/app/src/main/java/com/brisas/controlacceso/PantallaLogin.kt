@@ -39,6 +39,7 @@ import uniffi.control_acceso_mobile.Nucleo
 /// toda la app, no se reabre la base al loguear.
 @Composable
 fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispositivoStore) {
+    RegistrarPantalla("login")
     val viewModel: LoginViewModel =
         viewModel(factory = LoginViewModel.factory(nucleo, secretoStore))
 

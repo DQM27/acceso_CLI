@@ -22,6 +22,18 @@ bindgen = ["uniffi/cli"]
 # `sqlite3mc-vendor-lib` para el target que se esté armando (host o
 # `cargo ndk -t <abi> build --release --manifest-path ../../sqlite3mc-vendor-lib/Cargo.toml`).
 
+# Perfil de release PROPIO: este crate no pertenece al workspace de la raíz,
+# así que no heredaba su `[profile.release]` y el `.so` de Android salía sin
+# optimizar entre crates ni recortar (11,2 MB; sólo `strip` lo baja a 8,7 MB).
+# Mismos valores que la raíz. `panic` se queda en unwind a propósito: UniFFI
+# convierte un pánico de Rust en una excepción de Kotlin en vez de tumbar la
+# app.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
 [[bin]]
 name = "uniffi-bindgen"
 path = "uniffi-bindgen.rs"
@@ -46,6 +58,10 @@ rusqlite = "0.40.2"
 # Para leer el aviso en vivo `cambio_nube` que llega de Kotlin como texto
 # JSON (`aplicar_cambio_nube`); ya viaja transitivo vía el núcleo.
 serde_json = "1.0"
+# Lectura de documentos por OCR (`src/lectura_documentos/`): clasificación y
+# extracción por etiqueta. Ya venía dentro del `.so` de Android como
+# dependencia de `android_logger` (vía `env_filter`), así que no suma peso.
+regex = "1"
 
 [target.'cfg(target_os = "android")'.dependencies]
 # Backend real de `log` en Android -- vuelca al mismo Logcat que ve

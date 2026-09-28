@@ -61,6 +61,7 @@ fun PantallaGafetesProvisionales(
     secretoStore: SecretoDispositivoStore,
     refrescarNube: Int = 0,
 ) {
+    RegistrarPantalla("gafetes_provisionales")
     val viewModel: GafetesProvisionalesViewModel =
         viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo, secretoStore))
     var gafeteTexto by remember { mutableStateOf("") }

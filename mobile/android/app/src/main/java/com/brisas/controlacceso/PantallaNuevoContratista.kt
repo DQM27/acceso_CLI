@@ -72,6 +72,7 @@ private fun etiquetaTipo(tipo: TipoIngreso): String =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
+    RegistrarPantalla("nuevo_contratista")
     // Mismo destino que el botón "← Volver" visible de abajo -- sin esto,
     // atrás del sistema se escapaba a la Activity en vez de volver a
     // Activos (hallazgo 2026-09-19).
@@ -88,6 +89,9 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
     if (escaneando) {
         PantallaEscanearCedula(
             modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
+            // Acá sólo sirve el carnet PRAIND: sin buscar el PDF417 de la
+            // cédula, todo el procesador queda para el texto.
+            lectorPdf417 = false,
             onDocumentoDetectado = { documento ->
                 escaneando = false
                 vm.aplicarDocumentoEscaneado(documento)

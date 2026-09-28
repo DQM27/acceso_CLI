@@ -138,7 +138,7 @@ jobs:
       - name: Instalar toolchain de Rust para Android
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-18)
         with:
-          targets: aarch64-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android
 
       # lookup-only: true -- mismo motivo que en el job de escritorio de
       # arriba.
@@ -165,10 +165,10 @@ jobs:
       # ABI: `sqlite3mc-vendor-lib/dist` es una ruta fija (no por-target), así
       # que compilar el vendorizado para el segundo ABI pisa el .a del
       # primero -- por eso va intercalado con el build del núcleo de cada
-      # ABI, no una sola vez al principio. Mismos dos ABIs que el build local
-      # (ver mobile/README.md): arm64-v8a para el dispositivo real, x86_64
-      # además por si algún día hace falta correr este mismo APK en un
-      # emulador de pruebas.
+      # ABI, no una sola vez al principio. Sólo arm64-v8a: el APK es para el
+      # dispositivo real (Samsung A25); `abiFilters` en build.gradle.kts deja
+      # afuera cualquier otra ABI, así que compilar x86_64 era tiempo de CI
+      # perdido (y 18 MB de ML Kit dentro del APK).
       - name: Compilar el núcleo Rust para Android (arm64-v8a)
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
@@ -178,16 +178,6 @@ jobs:
           cd mobile/rust-core
           cargo ndk -t aarch64-linux-android build --release
           cp target/aarch64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/arm64-v8a/
-
-      - name: Compilar el núcleo Rust para Android (x86_64)
-        env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: |
-          mkdir -p mobile/android/app/src/main/jniLibs/x86_64
-          cargo ndk -t x86_64-linux-android build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
-          cd mobile/rust-core
-          cargo ndk -t x86_64-linux-android build --release
-          cp target/x86_64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/x86_64/
 
       # El keystore real nunca está en el repo (ver mobile/.gitignore) --
       # se reconstruye acá desde un secreto en base64, sólo en memoria del

@@ -99,7 +99,7 @@ class ProveedoresViewModel(
             cargando = true
             try {
                 val (locales, remotos) = withContext(dispatcherIO) {
-                    nucleo.listarProveedoresActivos() to nucleo.listarIngresosProveedorRemotos()
+                    medirNucleo("listarProveedoresActivos") { nucleo.listarProveedoresActivos() } to medirNucleo("listarIngresosProveedorRemotos") { nucleo.listarIngresosProveedorRemotos() }
                 }
                 activos = locales.map { FilaProveedorActiva.Local(it) } +
                     remotos.map { FilaProveedorActiva.Remota(it) }
@@ -117,7 +117,7 @@ class ProveedoresViewModel(
         val consultada = cedula
         viewModelScope.launch {
             val aviso = try {
-                withContext(dispatcherIO) { nucleo.avisoProveedorConIngresoActivo(consultada) }
+                withContext(dispatcherIO) { medirNucleo("avisoProveedorConIngresoActivo") { nucleo.avisoProveedorConIngresoActivo(consultada) } }
             } catch (excepcion: Exception) {
                 // Sin aviso si la consulta falla: al registrar, el núcleo
                 // vuelve a aplicar la regla. Lo inesperado se relanza.
@@ -159,7 +159,7 @@ class ProveedoresViewModel(
         }
         buscadorEmpresa.buscar {
             try {
-                resultadosEmpresa = withContext(dispatcherIO) { nucleo.buscarEmpresasProveedor(texto) }
+                resultadosEmpresa = withContext(dispatcherIO) { medirNucleo("buscarEmpresasProveedor") { nucleo.buscarEmpresasProveedor(texto) } }
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             }
@@ -183,7 +183,7 @@ class ProveedoresViewModel(
         creandoEmpresa = true
         viewModelScope.launch {
             try {
-                val id = withContext(dispatcherIO) { nucleo.crearEmpresaProveedor(nombre) }
+                val id = withContext(dispatcherIO) { medirNucleo("crearEmpresaProveedor") { nucleo.crearEmpresaProveedor(nombre) } }
                 CambiosNube.solicitar()
                 empresaSeleccionada = EmpresaProveedor(id = id, nombre = nombre, activo = true)
                 textoEmpresa = nombre
@@ -199,7 +199,7 @@ class ProveedoresViewModel(
 
     /// `nombreLeido`/`apellidosLeido` llegan separados de un documento MRZ
     /// (`DocumentoDetectado.nombre`/`.apellidos` -- ver
-    /// `LectorDocumentosIdentidad.kt`, `RegistroMrz.aDocumentoDetectado`);
+    /// `documento_desde_mrz` en `mobile/rust-core/src/lectura_documentos/identidad.rs`);
     /// usar sólo `nombre` (como hacía antes) dejaba el campo vacío o
     /// incompleto cada vez que el nombre de pila viajaba en un campo MRZ
     /// distinto al apellido -- bug reportado en pruebas reales en
@@ -224,14 +224,14 @@ class ProveedoresViewModel(
                     // núcleo en esta misma llamada.
                     val secreto = secretoStore.cargar()
                         ?: throw SecretoDispositivoNoEncontradoException()
-                    nucleo.registrarIngresoProveedorConSecreto(
+                    medirNucleo("registrarIngresoProveedorConSecreto") { nucleo.registrarIngresoProveedorConSecreto(
                         cedula,
                         nombre,
                         empresa.id,
                         placa.trim().ifBlank { null },
                         gafeteNumero,
                         secreto,
-                    )
+                    ) }
                 }
                 CambiosNube.solicitar()
                 mensaje = "Ingreso registrado"
@@ -279,11 +279,11 @@ class ProveedoresViewModel(
             try {
                 withContext(dispatcherIO) {
                     when (fila) {
-                        is FilaProveedorActiva.Local -> nucleo.registrarSalidaProveedor(fila.registro.id)
+                        is FilaProveedorActiva.Local -> medirNucleo("registrarSalidaProveedor") { nucleo.registrarSalidaProveedor(fila.registro.id) }
                         is FilaProveedorActiva.Remota -> {
                             val secreto = secretoStore.cargar()
                                 ?: throw SecretoDispositivoNoEncontradoException()
-                            nucleo.cerrarIngresoProveedorRemotoConSecreto(secreto, fila.remoto.uuid)
+                            medirNucleo("cerrarIngresoProveedorRemotoConSecreto") { nucleo.cerrarIngresoProveedorRemotoConSecreto(secreto, fila.remoto.uuid) }
                         }
                     }
                 }

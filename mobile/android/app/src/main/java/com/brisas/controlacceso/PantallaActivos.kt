@@ -52,6 +52,7 @@ fun PantallaActivos(
     secretoStore: SecretoDispositivoStore,
     refrescarNube: Int = 0,
 ) {
+    RegistrarPantalla("activos")
     val viewModel: ActivosViewModel =
         viewModel(factory = ActivosViewModel.factory(nucleo, secretoStore))
     var escanerAbierto by remember { mutableStateOf(false) }

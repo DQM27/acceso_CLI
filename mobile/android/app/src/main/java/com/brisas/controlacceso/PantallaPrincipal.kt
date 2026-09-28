@@ -71,6 +71,7 @@ fun PantallaPrincipal(
     secretoStore: SecretoDispositivoStore,
     onCerrarSesion: () -> Unit,
 ) {
+    RegistrarPantalla("principal")
     var refrescarNube by remember { mutableIntStateOf(0) }
     var mostrarNuevoContratista by remember { mutableStateOf(false) }
     // Sin esto, atrás del sistema en la raíz (pestañas) caía directo al

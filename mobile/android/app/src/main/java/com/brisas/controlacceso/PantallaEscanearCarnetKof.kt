@@ -40,6 +40,7 @@ fun PantallaEscanearCarnetKof(
     onCarnetDetectado: suspend (CarnetKofDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
+    RegistrarPantalla("escanear_carnet_kof")
     EscanerConPermisoCamara(
         mensajePermiso = "Se necesita permiso de cámara para escanear el gafete.",
         onCerrar = onCerrar,
@@ -85,27 +86,27 @@ private fun VistaCamaraCarnetKof(
                     ejecutorAnalisis = camara.ejecutor,
                     detectada = camara.detectada,
                     sesionActiva = camara.sesionActiva,
+                    hayLugar = camara::hayLugar,
                 ) { imagen ->
-                    analizarCedula(
+                    analizarFrameOcr(
                         imagen = imagen,
-                        recognizer = camara.recognizer,
-                        ejecutorPrincipal = camara.ejecutorPrincipal,
-                        sesionActiva = camara.sesionActiva,
-                        onTexto = { texto ->
-                            if (camara.sesionActiva.get()) {
-                                // Log, no overlay en pantalla -- pedido
-                                // explícito del usuario 2026-09-20 (se
-                                // veía mal encima de la cámara). Sigue
-                                // disponible por `adb logcat` en un
-                                // build debug si hace falta diagnosticar
-                                // un perfil que no lee bien.
-                                if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
-                                val resultado = estabilizador.procesarFrame(texto)
+                        camara = camara,
+                        region = RegionGuiaOcr.TARJETA_ID,
+                        onLectura = { lectura ->
+                            // Hilo del analizador: extraer y votar acá, a la
+                            // pantalla sólo se publica el resultado.
+                            if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, lectura.textos.joinToString("\n---\n"))
+                            val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso)
+                            // Sólo si no hubo resultado, como antes: un
+                            // frame que confirma no cuenta como inválido.
+                            val invalido = resultado == null && detectorInvalido.procesarTextos(lectura.textos)
+                            camara.enPrincipal {
                                 when {
                                     resultado != null -> {
                                         estado = EstadoEscaneo.CONFIRMADO
                                         ultimoMensaje = "Encargado ${resultado.nombre} confirmado"
                                         if (camara.detectada.compareAndSet(false, true)) {
+                                            camara.metricas.registrarConfirmacion()
                                             vibrarConfirmacion(contexto)
                                             reproducirSonidoConfirmacion()
                                             camara.trabajoResultado?.cancel()
@@ -114,12 +115,10 @@ private fun VistaCamaraCarnetKof(
                                             }
                                         }
                                     }
-                                    // Mismo criterio que Comprobante de
-                                    // Ruta -- ver `DetectorTextoNoReconocido`.
-                                    // `esCarnetKof` ya excluye el
-                                    // comprobante (comparte la marca "Coca
-                                    // Cola FEMSA").
-                                    detectorInvalido.procesarFrame(texto) -> {
+                                    // `DetectorTextoNoReconocido` tolera
+                                    // frames sueltos mal leídos -- ver su
+                                    // doc-comment.
+                                    invalido -> {
                                         if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
                                         estado = EstadoEscaneo.INVALIDO
                                         ultimoMensaje = "Gafete no reconocido"
@@ -131,9 +130,7 @@ private fun VistaCamaraCarnetKof(
                                 }
                             }
                         },
-                        onFallo = {
-                            if (camara.sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
-                        },
+                        onFallo = { camara.enPrincipal { ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR } },
                     )
                 }
                 camara.analisisCamara = analisis
@@ -147,6 +144,7 @@ private fun VistaCamaraCarnetKof(
                         camara.cameraProvider = proveedor
                         camara.vistaPreviaCamara = preview
                     },
+                    onCamaraLista = { camara.camaraFisica = it },
                     onFallo = { mensaje -> if (camara.sesionActiva.get()) ultimoMensaje = mensaje },
                 )
                 previewView
@@ -169,6 +167,13 @@ private fun VistaCamaraCarnetKof(
         // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
         // 2026-09-19).
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+        if (camara.tieneLinterna) {
+            BotonLinterna(
+                encendida = camara.linternaEncendida,
+                onClick = camara::alternarLinterna,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 72.dp, end = 16.dp),
+            )
+        }
     }
 }
 
