@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use crate::database::repositories::empresa_proveedor_repository::EmpresaProveedorRepository;
 use crate::database::repositories::gafete_repository::GafeteRepository;
 use crate::database::repositories::registro_ingreso_proveedor_repository::RegistroIngresoProveedorRepository;
+use crate::domain::cedula::{Cedula, CedulaInvalida};
 use crate::domain::gafete::{ValidacionAsignacion, validar_para_asignar};
 use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
 use crate::models::gafete::TipoGafete;
@@ -60,9 +61,20 @@ where
         usuario_id: i64,
         ahora: DateTime<Utc>,
     ) -> Result<i64, IngresoProveedorServiceError> {
-        let cedula = cedula.trim();
-        if cedula.is_empty() {
-            return Err(IngresoProveedorServiceError::CedulaVacia);
+        // Forma única de la cédula (ver `domain::cedula`): sin esto,
+        // `1-1234-0567` y `112340567` contaban como dos personas y la regla
+        // de "un ingreso activo por cédula" se esquivaba cambiando el
+        // formato.
+        let cedula = match Cedula::normalizar(cedula) {
+            Ok(cedula) if cedula.es_nacional_o_de_extranjero() => cedula,
+            Err(CedulaInvalida::Vacia) => return Err(IngresoProveedorServiceError::CedulaVacia),
+            Ok(_) | Err(_) => return Err(IngresoProveedorServiceError::CedulaInvalida),
+        };
+        let cedula = cedula.as_str();
+        // A quien se le negó el acceso como contratista tampoco entra como
+        // proveedor con la misma cédula.
+        if self.registros.cedula_con_acceso_negado(cedula)? {
+            return Err(IngresoProveedorServiceError::AccesoNegado);
         }
         let nombre = nombre.trim();
         if nombre.is_empty() {
@@ -184,7 +196,15 @@ mod tests {
         let servicio = IngresoProveedorService::new(&registros, &empresas, &gafetes);
 
         let id = servicio
-            .registrar_ingreso("1-1111", "Juan Perez", empresa_id, None, 7, 1, Utc::now())
+            .registrar_ingreso(
+                "1-1111-1111",
+                "Juan Perez",
+                empresa_id,
+                None,
+                7,
+                1,
+                Utc::now(),
+            )
             .unwrap();
         assert_eq!(servicio.listar_activos().unwrap().len(), 1);
 
@@ -202,7 +222,7 @@ mod tests {
         let servicio = IngresoProveedorService::new(&registros, &empresas, &gafetes);
 
         let error = servicio
-            .registrar_ingreso("1-1111", "Juan Perez", 999, None, 7, 1, Utc::now())
+            .registrar_ingreso("1-1111-1111", "Juan Perez", 999, None, 7, 1, Utc::now())
             .unwrap_err();
 
         assert!(matches!(
@@ -220,7 +240,15 @@ mod tests {
         let servicio = IngresoProveedorService::new(&registros, &empresas, &gafetes);
 
         let error = servicio
-            .registrar_ingreso("1-1111", "Juan Perez", empresa_id, None, 999, 1, Utc::now())
+            .registrar_ingreso(
+                "1-1111-1111",
+                "Juan Perez",
+                empresa_id,
+                None,
+                999,
+                1,
+                Utc::now(),
+            )
             .unwrap_err();
 
         assert!(matches!(
@@ -238,11 +266,27 @@ mod tests {
         gafetes.crear(8, TipoGafete::Proveedor).unwrap();
         let servicio = IngresoProveedorService::new(&registros, &empresas, &gafetes);
         servicio
-            .registrar_ingreso("1-1111", "Juan Perez", empresa_id, None, 7, 1, Utc::now())
+            .registrar_ingreso(
+                "1-1111-1111",
+                "Juan Perez",
+                empresa_id,
+                None,
+                7,
+                1,
+                Utc::now(),
+            )
             .unwrap();
 
         let error = servicio
-            .registrar_ingreso("1-1111", "Juan Perez", empresa_id, None, 8, 1, Utc::now())
+            .registrar_ingreso(
+                "1-1111-1111",
+                "Juan Perez",
+                empresa_id,
+                None,
+                8,
+                1,
+                Utc::now(),
+            )
             .unwrap_err();
 
         assert!(matches!(error, IngresoProveedorServiceError::IngresoActivo));
@@ -256,11 +300,27 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let servicio = IngresoProveedorService::new(&registros, &empresas, &gafetes);
         servicio
-            .registrar_ingreso("1-1111", "Juan Perez", empresa_id, None, 7, 1, Utc::now())
+            .registrar_ingreso(
+                "1-1111-1111",
+                "Juan Perez",
+                empresa_id,
+                None,
+                7,
+                1,
+                Utc::now(),
+            )
             .unwrap();
 
         let error = servicio
-            .registrar_ingreso("2-2222", "Ana Mora", empresa_id, None, 7, 1, Utc::now())
+            .registrar_ingreso(
+                "2-2222-2222",
+                "Ana Mora",
+                empresa_id,
+                None,
+                7,
+                1,
+                Utc::now(),
+            )
             .unwrap_err();
 
         assert!(matches!(error, IngresoProveedorServiceError::GafeteOcupado));
@@ -274,7 +334,15 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let servicio = IngresoProveedorService::new(&registros, &empresas, &gafetes);
         let id = servicio
-            .registrar_ingreso("1-1111", "Juan Perez", empresa_id, None, 7, 1, Utc::now())
+            .registrar_ingreso(
+                "1-1111-1111",
+                "Juan Perez",
+                empresa_id,
+                None,
+                7,
+                1,
+                Utc::now(),
+            )
             .unwrap();
         servicio.registrar_salida(id, Utc::now(), 1).unwrap();
 

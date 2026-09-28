@@ -7,7 +7,7 @@ use std::{
 use rusqlite::Connection;
 
 use super::schema::{
-    SchemaError, initialize_database, registrar_funcion_plegar, verificar_archivo_propio,
+    SchemaError, initialize_database, registrar_funciones_propias, verificar_archivo_propio,
 };
 
 pub const DATABASE_PATH_ENV: &str = "CONTROL_ACCESO_DB";
@@ -173,7 +173,7 @@ fn abrir_conexion_secundaria_base(
     // `GuiState::conexion_secundaria`) tira "unknown function: PLEGAR()".
     // No hace falta el resto de `initialize_database` (migrar/validar el
     // esquema) -- la conexión principal ya lo hizo.
-    registrar_funcion_plegar(&connection)?;
+    registrar_funciones_propias(&connection)?;
     connection.execute_batch(PRAGMAS_CONEXION_SECUNDARIA_BASE)?;
     Ok(connection)
 }

@@ -46,7 +46,17 @@ de **organización**, no del diseño en sí.
 
 ## Hallazgos
 
-### N1 (crítica): la orquestación de la sincronización está copiada 4 veces
+### N1 (crítica): la orquestación de la sincronización está copiada 4 veces — HECHO en `claude/nucleo-n1-n3`
+
+Resuelto: `nube::sincronizar` / `nube::recibir` (`src/nube/orquestacion.rs`)
+con `AlcanceSincronizacion` (`src/nube/alcance.rs`, traído de
+`claude/realtime-oficial`) y `PerfilDispositivo` (el móvil no guarda
+ningún historial del sitio: decisión del dueño, el historial vive en el
+escritorio y el panel web). Eran cinco copias, no cuatro (también
+`configurar_dispositivo_inicial_con_secreto` del puente). Se quitaron
+`AppCore::sincronizar_con_nube`, `AppCore::refrescar_catalogo_sin_sesion`
+y `Nucleo::sincronizar_con_nube`, que nadie llamaba.
+
 
 La misma secuencia de ~13 etapas (`drenar_cola`, `recibir_cierres_*`,
 `recibir_*_abiertos`, `recibir_catalogo_*`, `recibir_historial_*`,
@@ -85,7 +95,18 @@ devuelve sólo la función nueva (o nada fuera de `src/nube`); tests
 existentes pasan; test nuevo de la función con alcance completo y
 parcial.
 
-### N2 (alta): red con el candado del núcleo tomado (móvil)
+### N2 (alta): red con el candado del núcleo tomado (móvil) — HECHO en `claude/nucleo-n1-n3`
+
+Resuelto: las funciones que hacían red con el candado tomado eran las
+variantes "legado" del puente que reciben un directorio
+(`cerrar_ingreso_remoto`, `cerrar_ingreso_proveedor_remoto`,
+`cerrar_prestamo_gafete_provisional_remoto`, `sesion_realtime_nube`,
+`configurar_dispositivo_inicial`, `gafete_ocupado_en_sitio`); Kotlin sólo
+usaba las `_con_secreto`, que ya soltaban el candado. Se quitaron, junto
+con los métodos de red de `AppCore` que quedaron sin llamadores. La regla
+quedó escrita en el doc-comment de `AppCore`; única excepción documentada:
+`configurar_dispositivo_inicial` del escritorio (una sola vez, base vacía).
+
 
 `Nucleo::cerrar_ingreso_remoto` / `cerrar_ingreso_remoto_con_secreto`
 (`mobile/rust-core/src/lib.rs` ~l. 2538-2600) y los de proveedor llaman
@@ -107,7 +128,20 @@ documentarlo).
 **Regla a dejar escrita** en el doc-comment de `AppCore`: *nunca red con
 el candado tomado*.
 
-### N3 (alta): el historial local crece para siempre
+### N3 (alta): el historial local crece para siempre — HECHO en `claude/nucleo-n1-n3`
+
+Resuelto (decisiones del dueño, 2026-09-27):
+- Móvil: desde N1 no descarga ningún historial. Lo que bajaron las
+  instalaciones viejas no importa: se reinstala con la base limpia.
+- Escritorio: guarda como máximo 24 meses (`nube::retencion`); lo más
+  viejo se consulta en el panel web. Al final de cada sincronización se
+  borran de las cuatro cachés de historial del sitio los movimientos
+  cerrados más viejos que el límite (nunca los abiertos ni los registros
+  propios con su cola de salida), y corre `PRAGMA optimize`.
+- `VACUUM` / `incremental_vacuum` no se hizo: SQLite reutiliza las páginas
+  liberadas, así que el archivo deja de crecer; achicarlo en disco pediría
+  una migración (`auto_vacuum`) que no hace falta por ahora.
+
 
 No hay retención, ni `PRAGMA optimize`, ni `VACUUM` en `src/`. Escritorio
 **y móvil** (`recibir_historial_del_sitio`, `lib.rs` ~l. 3089) guardan

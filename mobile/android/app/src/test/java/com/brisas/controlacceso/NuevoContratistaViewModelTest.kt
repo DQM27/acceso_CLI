@@ -46,7 +46,7 @@ class NuevoContratistaViewModelTest {
             "INSERT INTO empresas (nombre) VALUES ('Expenic Ing S.A');",
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
     }
 
     private fun viewModel() = NuevoContratistaViewModel(nucleo, dispatcherIO = dispatcher)

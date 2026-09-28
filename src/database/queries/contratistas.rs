@@ -7,6 +7,27 @@ use crate::database::search::BusquedaTexto;
 use crate::domain::acceso::DIAS_ADVERTENCIA_PRAIND;
 use crate::models::tipo_ingreso::TipoIngreso;
 
+/// ¿Hay un contratista con esta cédula y el acceso negado (`tiene_acceso`
+/// apagado, el mismo interruptor del panel web y del escritorio)? Lo usan
+/// las puertas de proveedores y visitas: a quien se le negó el acceso como
+/// contratista tampoco entra por ahí con la misma cédula. Compara en forma
+/// única (`NORMALIZAR_CEDULA`, ver `domain::cedula`), así que no se esquiva
+/// escribiendo la cédula con guiones o con el cero del TSE.
+pub fn cedula_con_acceso_negado(
+    connection: &Connection,
+    cedula: &str,
+) -> Result<bool, DatabaseError> {
+    Ok(connection.query_row(
+        "SELECT EXISTS(
+             SELECT 1 FROM contratistas
+             WHERE tiene_acceso = 0
+               AND NORMALIZAR_CEDULA(cedula) = NORMALIZAR_CEDULA(?1)
+         )",
+        [cedula],
+        |fila| fila.get(0),
+    )?)
+}
+
 /// Tope propio de esta consulta, muy por encima de `LIMITE_LISTADO_MAXIMO`
 /// (500, pensado para listados paginados como el de la TUI/`--cli`) —
 /// la GUI (Tauri) dejó de paginar contratistas: carga el universo completo
@@ -262,6 +283,10 @@ impl ContratistasQuery for SqliteContratistasQuery<'_> {
                     FROM registro_ingresos AS r
                     WHERE r.contratista_id = c.id
                       AND r.fecha_hora_salida IS NULL
+                ) OR EXISTS (
+                    SELECT 1
+                    FROM ingresos_remotos AS rr
+                    WHERE rr.contratista_cedula = c.cedula
                 )
              {CONTRATISTAS_FROM} {where_sql}
              ORDER BY CASE WHEN c.cedula = :texto_literal COLLATE NOCASE THEN 0 ELSE 1 END,

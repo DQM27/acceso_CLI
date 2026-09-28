@@ -209,7 +209,9 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   correspondiente justo antes de confirmar cada tipo de ingreso/entrega en
   los comandos de escritorio, mismo punto donde mobile ya lo hace.
 - [ ] **No existe un veto de acceso por cédula que cruce catálogos (hallazgo
-  2026-09-19, discutido con el usuario, sin implementar).** Confirmado
+  2026-09-19, discutido con el usuario, sin implementar).** Plan de trabajo
+  actual: `docs/features-futuras/plan-veto-por-persona.md` (2026-09-27); lo
+  de abajo queda como antecedente. Confirmado
   leyendo `IngresoProveedorService::registrar_ingreso`: no consulta ningún
   catálogo por cédula -- el propio doc-comment del archivo lo dice
   ("sin catálogo de personas, cédula/nombre son snapshot puro"). Hoy sólo

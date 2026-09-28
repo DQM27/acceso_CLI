@@ -20,6 +20,10 @@ use crate::database::error::DatabaseError;
 use crate::models::cita::{Cita, CitaVisitante, EstadoCita};
 
 pub trait CitaRepository {
+    /// ¿Esta cédula tiene el acceso negado como contratista? Ver
+    /// `database::queries::contratistas::cedula_con_acceso_negado`.
+    fn cedula_con_acceso_negado(&self, cedula: &str) -> Result<bool, DatabaseError>;
+
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError>;
 
     /// Agenda de un sitio -- toda cita cuya vigencia no haya terminado
@@ -100,10 +104,14 @@ const SELECT_CITA_VISITANTE: &str = "
 ";
 
 impl CitaRepository for SqliteCitaRepository<'_> {
+    fn cedula_con_acceso_negado(&self, cedula: &str) -> Result<bool, DatabaseError> {
+        crate::database::queries::contratistas::cedula_con_acceso_negado(self.connection, cedula)
+    }
+
     fn buscar_por_cedula(&self, cedula: &str) -> Result<Vec<(Cita, CitaVisitante)>, DatabaseError> {
-        let mut statement = self
-            .connection
-            .prepare(&format!("{SELECT_CITA_VISITANTE} WHERE v.cedula = ?1"))?;
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_CITA_VISITANTE} WHERE NORMALIZAR_CEDULA(v.cedula) = NORMALIZAR_CEDULA(?1)"
+        ))?;
         let filas = statement
             .query_map(params![cedula], convertir_fila)?
             .collect::<Result<Vec<_>, _>>()?;

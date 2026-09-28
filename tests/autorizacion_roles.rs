@@ -77,7 +77,7 @@ fn base() -> AppCore {
              INSERT INTO contratistas(
                 id,cedula,nombre,empresa_id,tipo_ingreso,fecha_vencimiento_praind,
                 es_personal_ruta,tiene_acceso
-             ) VALUES (1,'1001','Persona',1,'SWAT',NULL,0,1);",
+             ) VALUES (1,'100100100','Persona',1,'SWAT',NULL,0,1);",
         )
         .unwrap();
     AppCore::new(connection)
@@ -111,7 +111,7 @@ fn operador_con_sesion_activa_puede_invocar_comandos_antes_administrativos() {
         .unwrap();
 
     let cambio_acceso = DatosActualizacionContratista {
-        cedula: "1001".into(),
+        cedula: "100100100".into(),
         nombre: "Persona".into(),
         empresa_id: 1,
         tipo_ingreso: TipoIngreso::Swat,
@@ -153,33 +153,33 @@ fn el_rol_real_se_resuelve_por_id_no_por_lo_que_declara_la_sesion() {
     core.actualizar_contratista(
         &sesion(3, RolUsuario::Root),
         1,
-        datos_contratista("9999", "Persona"),
+        datos_contratista("999999999", "Persona"),
     )
     .unwrap();
 
     core.actualizar_contratista(
         &sesion(3, RolUsuario::Operador),
         1,
-        datos_contratista("1001", "Nombre corregido"),
+        datos_contratista("100100100", "Nombre corregido"),
     )
     .unwrap();
     core.actualizar_contratista(
         &sesion(2, RolUsuario::Administrador),
         1,
-        datos_contratista("1002", "Nombre corregido"),
+        datos_contratista("100200200", "Nombre corregido"),
     )
     .unwrap();
     core.actualizar_contratista(
         &sesion(1, RolUsuario::Root),
         1,
-        datos_contratista("1003", "Nombre corregido"),
+        datos_contratista("100300300", "Nombre corregido"),
     )
     .unwrap();
 
     let pagina = core
         .buscar_contratistas(&FiltroContratistas::default())
         .unwrap();
-    assert_eq!(pagina.items[0].cedula, "1003");
+    assert_eq!(pagina.items[0].cedula, "100300300");
     assert_eq!(pagina.items[0].nombre, "NOMBRE CORREGIDO");
 }
 

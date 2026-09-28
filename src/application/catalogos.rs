@@ -204,7 +204,11 @@ impl AppCore {
             fecha_costa_rica(self.reloj.ahora_utc()),
         );
         let actual = servicio.buscar_por_id(id)?;
-        if actual.cedula != datos.cedula.trim()
+        let cedula_nueva = crate::domain::cedula::Cedula::normalizar(&datos.cedula).map_or_else(
+            |_| datos.cedula.trim().to_string(),
+            crate::domain::cedula::Cedula::into_string,
+        );
+        if actual.cedula != cedula_nueva
             && !actor_actual.rol.puede(Operacion::EditarCedulaContratista)
         {
             return Err(ContratistaServiceError::OperacionNoAutorizada);

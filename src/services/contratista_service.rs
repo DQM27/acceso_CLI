@@ -7,9 +7,8 @@ use crate::database::queries::contratistas::{
 };
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
-use crate::domain::contratista::{
-    admite_personal_ruta, cedula_valida, normalizar_nombre, praind_vencido,
-};
+use crate::domain::cedula::{Cedula, CedulaInvalida};
+use crate::domain::contratista::{admite_personal_ruta, normalizar_nombre, praind_vencido};
 use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
 use crate::tiempo::fecha_costa_rica;
@@ -112,9 +111,14 @@ where
             .ok_or(ContratistaServiceError::ContratistaNoEncontrado)
     }
 
+    /// Busca por la forma única de la cédula (ver `domain::cedula`): la
+    /// misma persona se encuentra aunque se escriba con guiones o con el
+    /// cero del TSE.
     pub fn buscar_por_cedula(&self, cedula: &str) -> Result<Contratista, ContratistaServiceError> {
+        let cedula = Cedula::normalizar(cedula)
+            .map_err(|_| ContratistaServiceError::ContratistaNoEncontrado)?;
         self.contratistas
-            .buscar_por_cedula(cedula.trim())?
+            .buscar_por_cedula(cedula.as_str())?
             .ok_or(ContratistaServiceError::ContratistaNoEncontrado)
     }
 
@@ -298,13 +302,12 @@ where
         es_personal_ruta: bool,
         tiene_acceso: bool,
     ) -> Result<Contratista, ContratistaServiceError> {
-        let cedula = cedula.trim();
-        if cedula.is_empty() {
-            return Err(ContratistaServiceError::CedulaVacia);
-        }
-        if !cedula_valida(cedula) {
-            return Err(ContratistaServiceError::CedulaInvalida);
-        }
+        let cedula = match Cedula::normalizar(cedula) {
+            Ok(cedula) if cedula.es_nacional_o_de_extranjero() => cedula,
+            Err(CedulaInvalida::Vacia) => return Err(ContratistaServiceError::CedulaVacia),
+            Ok(_) | Err(_) => return Err(ContratistaServiceError::CedulaInvalida),
+        };
+        let cedula = cedula.as_str();
 
         if nombre.trim().is_empty() {
             return Err(ContratistaServiceError::NombreVacio);

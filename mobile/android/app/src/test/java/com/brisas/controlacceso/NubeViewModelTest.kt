@@ -47,7 +47,7 @@ class NubeViewModelTest {
     @Test
     fun `sincronizar sin secreto guardado falla sin intentar red`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivoDb, NucleoDePrueba.sqlUsuarioRoot())
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = NubeViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
 
         viewModel.sincronizar()
@@ -69,7 +69,7 @@ class NubeViewModelTest {
                 );
                 """.trimIndent(),
             )
-            nucleo.autenticar("888888888", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+            nucleo.autenticarConSecreto("888888888", NucleoDePrueba.CLAVE_PRUEBA, "")
             val viewModel = NubeViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
 
             viewModel.sincronizar()

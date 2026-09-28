@@ -118,6 +118,9 @@ fun PantallaPrincipal(
             scope = scope,
             usuarioCedula = sesion.cedula,
             usuarioNombre = sesion.nombre,
+            // Aviso en vivo con la fila ya guardada: refresca Activos al
+            // instante, sin esperar la sincronización.
+            onCambioAplicado = { refrescarNube += 1 },
         )
     }
     val sincronizacion = remember(nucleo, secretoStore, scope) {

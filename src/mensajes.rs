@@ -72,7 +72,7 @@ pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),
         EmpresaNoEncontrada => "La empresa seleccionada ya no existe".into(),
         CedulaVacia => "La cédula es obligatoria".into(),
-        CedulaInvalida => "La cédula sólo puede tener números".into(),
+        CedulaInvalida => "La cédula debe tener sólo números, entre 9 y 13 dígitos".into(),
         NombreVacio => "El nombre es obligatorio".into(),
         NombreInvalido => "El nombre no puede tener números ni símbolos".into(),
         PraindRequerido => "Fecha PRAIND requerida".into(),
@@ -171,12 +171,13 @@ pub fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
 
 pub fn mensaje_cita(error: CitaServiceError) -> String {
     use CitaServiceError::{
-        GafeteNoDisponible, GafeteNoRegistrado, GafeteOcupado, MovimientoNoActivo,
+        AccesoNegado, GafeteNoDisponible, GafeteNoRegistrado, GafeteOcupado, MovimientoNoActivo,
         OperadorNoAutorizado, RelojRetrocedido, SalidaAnteriorAEntrada, SinCitaRegistrada,
         SinCitaVigente, VisitanteYaEnSitio,
     };
 
     match error {
+        AccesoNegado => MENSAJE_ACCESO_NEGADO.into(),
         SinCitaRegistrada => "No hay ninguna visita agendada para esta cédula".into(),
         SinCitaVigente(MotivoDenegacionVisita::CitaCancelada) => "Esta visita fue cancelada".into(),
         SinCitaVigente(MotivoDenegacionVisita::FueraDeVigencia) => {
@@ -203,16 +204,24 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
     }
 }
 
+/// Proveedor o visita cuya cédula tiene el acceso negado como contratista
+/// (el mismo interruptor de siempre, ver
+/// `database::queries::contratistas::cedula_con_acceso_negado`).
+pub const MENSAJE_ACCESO_NEGADO: &str = "Esta persona tiene el acceso denegado.";
+
 pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     use RegistroIngresoServiceError::{
         AccesoDenegado, ContratistaNoEncontrado, GafeteNoDisponible, GafeteNoRegistrado,
-        GafeteOcupado, GafeteRequerido, IngresoActivo, PlacaNoAplica, PlacaRequerida,
-        RelojRetrocedido,
+        GafeteOcupado, GafeteRequerido, IngresoActivo, IngresoActivoEnOtroDispositivo,
+        PlacaNoAplica, PlacaRequerida, RelojRetrocedido,
     };
 
     match error {
         ContratistaNoEncontrado => "El contratista ya no existe".into(),
         IngresoActivo => "El contratista ya tiene un ingreso activo".into(),
+        IngresoActivoEnOtroDispositivo => {
+            "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio".into()
+        }
         GafeteRequerido => "El gafete es requerido".into(),
         PlacaRequerida => "La placa es obligatoria cuando el ingreso es en vehículo".into(),
         PlacaNoAplica => "No se puede indicar placa cuando el ingreso es a pie".into(),
@@ -285,6 +294,14 @@ pub fn mensaje_bloqueo_ingreso(
 
     match bloqueo {
         BloqueoIngreso::IngresoActivo => "El contratista ya tiene un ingreso activo.".into(),
+        BloqueoIngreso::IngresoActivoEnOtroDispositivo => {
+            "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio.".into()
+        }
+        BloqueoIngreso::SinVerificarEnLaNube => {
+            "No se pudo verificar en la nube si el contratista ya tiene un ingreso activo. \
+             Revise la conexión e intente de nuevo."
+                .into()
+        }
         BloqueoIngreso::ActivoEnOtroSitio { sitio } => {
             format!("El contratista ya tiene un ingreso activo en {sitio}.")
         }
@@ -424,13 +441,15 @@ pub fn mensaje_empresa_proveedor(error: EmpresaProveedorServiceError) -> String 
 
 pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String {
     use IngresoProveedorServiceError::{
-        CedulaVacia, EmpresaInactiva, EmpresaNoEncontrada, GafeteNoDisponible, GafeteNoRegistrado,
-        GafeteOcupado, IngresoActivo, NombreVacio, OperadorNoAutorizado, RegistroNoActivo,
-        RelojRetrocedido, SalidaAnteriorAIngreso,
+        AccesoNegado, CedulaInvalida, CedulaVacia, EmpresaInactiva, EmpresaNoEncontrada,
+        GafeteNoDisponible, GafeteNoRegistrado, GafeteOcupado, IngresoActivo, NombreVacio,
+        OperadorNoAutorizado, RegistroNoActivo, RelojRetrocedido, SalidaAnteriorAIngreso,
     };
 
     match error {
         CedulaVacia => "La cédula es obligatoria".into(),
+        AccesoNegado => MENSAJE_ACCESO_NEGADO.into(),
+        CedulaInvalida => "La cédula debe tener sólo números, entre 9 y 13 dígitos".into(),
         NombreVacio => "El nombre es obligatorio".into(),
         EmpresaNoEncontrada => "Empresa proveedora no encontrada".into(),
         EmpresaInactiva => "La empresa proveedora está dada de baja".into(),
@@ -447,6 +466,19 @@ pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String 
         IngresoProveedorServiceError::Database(error) => {
             log::error!("ingreso de proveedor: {error}");
             "No se pudo registrar el movimiento".into()
+        }
+    }
+}
+
+#[cfg(feature = "nube")]
+pub fn mensaje_ingreso_verificado(error: crate::application::IngresoVerificadoError) -> String {
+    use crate::application::IngresoVerificadoError;
+
+    match error {
+        IngresoVerificadoError::Servicio(error) => mensaje_ingreso(error),
+        IngresoVerificadoError::Bloqueado(bloqueo) => mensaje_bloqueo_ingreso(&bloqueo),
+        IngresoVerificadoError::GafeteOcupadoEnSitio { numero } => {
+            format!("El gafete {numero} ya está en uso en otro dispositivo del sitio")
         }
     }
 }

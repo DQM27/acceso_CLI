@@ -216,17 +216,21 @@ impl AppCore {
         &self,
         cedula: &str,
     ) -> Result<bool, IngresoProveedorServiceError> {
-        let cedula = cedula.trim();
-        if cedula.is_empty() {
+        // Una cédula que no se puede normalizar tampoco se puede registrar
+        // (el registro la rechaza con su propio mensaje): no hay nada que
+        // avisar todavía.
+        let Ok(cedula) = crate::domain::cedula::Cedula::normalizar(cedula) else {
             return Ok(false);
-        }
+        };
+        let cedula = cedula.as_str();
         let registros = SqliteRegistroIngresoProveedorRepository::new(&self.connection);
         if registros.buscar_ingreso_activo(cedula)?.is_some() {
             return Ok(true);
         }
         self.connection
             .query_row(
-                "SELECT EXISTS(SELECT 1 FROM ingresos_proveedor_remotos WHERE cedula = ?1)",
+                "SELECT EXISTS(SELECT 1 FROM ingresos_proveedor_remotos
+                 WHERE NORMALIZAR_CEDULA(cedula) = ?1)",
                 [cedula],
                 |fila| fila.get(0),
             )
@@ -284,7 +288,7 @@ mod tests {
         let (core, actor, empresa_id) = nucleo_con_usuario_empresa_y_gafete();
 
         let id = core
-            .registrar_ingreso_proveedor(&actor, "1-1111", "Juan Perez", empresa_id, None, 7)
+            .registrar_ingreso_proveedor(&actor, "1-1111-1111", "Juan Perez", empresa_id, None, 7)
             .unwrap();
         assert_eq!(core.listar_proveedores_activos().unwrap().len(), 1);
 
@@ -298,14 +302,14 @@ mod tests {
         let (core, actor, empresa_id) = nucleo_con_usuario_empresa_y_gafete();
         assert!(
             !core
-                .proveedor_con_ingreso_activo_en_sitio("1-1111")
+                .proveedor_con_ingreso_activo_en_sitio("1-1111-1111")
                 .unwrap()
         );
 
-        core.registrar_ingreso_proveedor(&actor, "1-1111", "Juan Perez", empresa_id, None, 7)
+        core.registrar_ingreso_proveedor(&actor, "1-1111-1111", "Juan Perez", empresa_id, None, 7)
             .unwrap();
         assert!(
-            core.proveedor_con_ingreso_activo_en_sitio(" 1-1111 ")
+            core.proveedor_con_ingreso_activo_en_sitio(" 1-1111-1111 ")
                 .unwrap()
         );
 
@@ -314,18 +318,18 @@ mod tests {
                 "INSERT INTO ingresos_proveedor_remotos (uuid, sitio_id, cedula, nombre,
                      empresa_nombre, placa, gafete_numero, hora_entrada,
                      usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en)
-                 VALUES ('u1', 's1', '2-2222', 'Ana', 'Maika', NULL, 8,
+                 VALUES ('u1', 's1', '2-2222-2222', 'Ana', 'Maika', NULL, 8,
                      '2026-09-16T11:00:00Z', 'Otro', 'd2', '2026-09-16T11:00:00Z')",
                 [],
             )
             .unwrap();
         assert!(
-            core.proveedor_con_ingreso_activo_en_sitio("2-2222")
+            core.proveedor_con_ingreso_activo_en_sitio("2-2222-2222")
                 .unwrap()
         );
         assert!(
             !core
-                .proveedor_con_ingreso_activo_en_sitio("3-3333")
+                .proveedor_con_ingreso_activo_en_sitio("3-3333-3333")
                 .unwrap()
         );
         assert!(!core.proveedor_con_ingreso_activo_en_sitio("  ").unwrap());
