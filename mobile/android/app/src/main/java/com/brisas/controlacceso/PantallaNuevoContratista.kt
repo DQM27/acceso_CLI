@@ -88,6 +88,9 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
     if (escaneando) {
         PantallaEscanearCedula(
             modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
+            // Acá sólo sirve el carnet PRAIND: sin buscar el PDF417 de la
+            // cédula, todo el procesador queda para el texto.
+            lectorPdf417 = false,
             onDocumentoDetectado = { documento ->
                 escaneando = false
                 vm.aplicarDocumentoEscaneado(documento)

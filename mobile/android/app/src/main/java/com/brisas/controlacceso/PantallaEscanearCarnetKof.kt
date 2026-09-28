@@ -85,6 +85,7 @@ private fun VistaCamaraCarnetKof(
                     ejecutorAnalisis = camara.ejecutor,
                     detectada = camara.detectada,
                     sesionActiva = camara.sesionActiva,
+                    hayLugar = camara::hayLugar,
                 ) { imagen ->
                     analizarFrameOcr(
                         imagen = imagen,

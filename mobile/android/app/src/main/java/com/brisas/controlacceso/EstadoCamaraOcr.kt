@@ -26,6 +26,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Job
 
 /// Recursos de una sesión de escaneo, compartidos por las 4 pantallas
@@ -65,6 +66,28 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
     }
     val detectada = AtomicBoolean(false)
     val sesionActiva = AtomicBoolean(true)
+
+    // Frames que están ahora en ML Kit. Se reservan y liberan en el hilo
+    // del analizador (analizador y listeners comparten ese hilo), pero es
+    // atómico por si algún día no fuera así.
+    private val enProceso = AtomicInteger(0)
+
+    /// ¿Entra otro frame? Lo consulta el analizador antes de recortar.
+    fun hayLugar(): Boolean = enProceso.get() < MAXIMO_EN_PROCESO
+
+    /// Reserva un lugar para un frame; `false` si ya hay
+    /// [MAXIMO_EN_PROCESO] en vuelo.
+    fun reservarLugar(): Boolean {
+        while (true) {
+            val actual = enProceso.get()
+            if (actual >= MAXIMO_EN_PROCESO) return false
+            if (enProceso.compareAndSet(actual, actual + 1)) return true
+        }
+    }
+
+    fun liberarLugar() {
+        enProceso.updateAndGet { (it - 1).coerceAtLeast(0) }
+    }
 
     // Un filtro por tipo de región: la nitidez sólo es comparable entre
     // recortes del mismo contenido (la banda del MRZ, texto denso, "parece"
@@ -141,6 +164,12 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
 }
 
 private const val TAG_METRICAS_OCR = "OcrMetricas"
+
+/// Frames en ML Kit a la vez. Con 2, mientras uno se reconoce el siguiente
+/// ya se recorta y mide (y la cámara prepara el que sigue): el hilo del
+/// analizador y los núcleos libres dejan de esperar. Más de 2 sólo
+/// sumaría latencia por frame (ML Kit se reparte los núcleos) y calor.
+const val MAXIMO_EN_PROCESO = 2
 
 /// Crea un [EstadoCamaraOcr] atado al ciclo de vida de esta composición --
 /// `liberar()` corre una sola vez, al salir.

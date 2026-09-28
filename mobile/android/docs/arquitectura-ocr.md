@@ -11,29 +11,40 @@ accidente a permitir una operación.
 
 1. `PantallaEscanearCedula` solicita permiso y abre una sesión de cámara
    (ML Kit se precarga mientras la cámara arranca).
-2. `ImageAnalysis` conserva sólo el frame más reciente (máx. ~6-7/s).
+2. `ImageAnalysis` conserva sólo el frame más reciente; entra a la tubería
+   como máximo uno cada 80 ms y sólo si hay lugar (hasta 2 frames en
+   proceso a la vez, `MAXIMO_EN_PROCESO`).
 3. `analizarFrameOcr` recorta sobre los planos YUV sólo la región pedida:
    el recuadro guía o, si ya se vio el MRZ, su banda (`SeguidorBandaMrz`).
 4. Se mide la nitidez y el reflejo del recorte (`CalidadFrame`). Un frame
    claramente más borroso que los recientes no pasa a ML Kit.
-5. `PlanificadorLectores` decide si el frame va al lector de texto o al de
-   PDF417 (sólo modo documento; más seguido si el texto parece el reverso
-   de la cédula anterior, nunca con un MRZ en cuadro).
-6. ML Kit entrega el resultado EN EL HILO DEL ANALIZADOR; el `ImageProxy`
-   se cierra siempre al completar.
-7. `EstabilizadorLectura` clasifica, extrae y vota por carácter entre
+5. El `ImageProxy` se cierra APENAS se copia el recorte: la cámara prepara
+   el frame siguiente mientras ML Kit procesa éste.
+6. Texto y, si `PlanificadorLectores` lo pide, PDF417 corren EN PARALELO
+   sobre el mismo recorte (sólo donde se acepta una cédula; en cada frame
+   si el texto parece el reverso de la cédula anterior, uno de cada 3 si
+   no, nunca con un MRZ en cuadro). Buscar el código no le quita frames al
+   texto (p. ej. al carnet PRAIND).
+7. Cuando terminan los dos, el resultado se procesa EN EL HILO DEL
+   ANALIZADOR y se libera el lugar.
+8. `EstabilizadorLectura` clasifica, extrae y vota por carácter entre
    frames (número, MRZ); el PDF417 confirma en una lectura.
-8. Sólo el resultado se publica al hilo principal; la UI recibe el
+9. Sólo el resultado se publica al hilo principal; la UI recibe el
    `DocumentoDetectado` completo, no únicamente un texto.
-9. En modo continuo, `ActivosViewModel` termina la mutación SQLite/UniFFI
+10. En modo continuo, `ActivosViewModel` termina la mutación SQLite/UniFFI
    antes de que la cámara acepte el siguiente gafete.
 
 ## Invariantes de concurrencia
 
 - Recorte, calidad, clasificación, votación y cruces a Rust corren en el
-  único hilo del analizador (`EstadoCamaraOcr.ejecutor`): CameraX no entrega
-  otro frame hasta cerrar el anterior, así que todo queda serializado. Al
-  hilo principal sólo va el estado de pantalla (`EstadoCamaraOcr.enPrincipal`).
+  único hilo del analizador (`EstadoCamaraOcr.ejecutor`); ML Kit trabaja en
+  sus propios hilos. Con 2 frames en vuelo, mientras uno se reconoce el
+  otro se recorta, y los resultados se procesan de a uno en ese mismo hilo
+  (pueden llegar en otro orden: la votación no depende del orden). Al hilo
+  principal sólo va el estado de pantalla (`EstadoCamaraOcr.enPrincipal`).
+- El lugar de un frame se reserva antes de recortar y se libera cuando
+  terminan TODOS sus lectores (o si se descarta antes): nunca se forma una
+  cola atrasada.
 - `EstabilizadorLectura`, `EstabilizadorPorRepeticion`, `SeguidorBandaMrz`
   y `PlanificadorLectores` están sincronizados: la pantalla puede
   reiniciarlos desde el hilo principal.

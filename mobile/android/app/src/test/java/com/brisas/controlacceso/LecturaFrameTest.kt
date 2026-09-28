@@ -112,29 +112,37 @@ class LecturaFrameTest {
         assertEquals(completo.left, mitadInferior.left)
     }
 
-    // --- Planificador de lectores ---
+    // --- Planificador: cuándo buscar el PDF417 ADEMÁS del texto ---
 
     @Test
-    fun sinPdf417HabilitadoSiempreTexto() {
+    fun sinPdf417HabilitadoNuncaSeBuscaCodigo() {
         val planificador = PlanificadorLectores(habilitado = false)
-        assertTrue((1..10).all { planificador.siguiente() == LectorFrame.TEXTO })
+        assertTrue((1..10).none { planificador.leerCodigo() })
     }
 
     @Test
-    fun alternaMasSeguidoCuandoElTextoPareceElReversoAnterior() {
-        val planificador = PlanificadorLectores(habilitado = true, periodoNormal = 4, periodoConPista = 2)
-        val normal = (1..8).count { planificador.siguiente() == LectorFrame.CODIGO }
-        assertEquals(2, normal)
+    fun sinPistaBuscaCodigoCadaTantosFramesYConPistaEnTodos() {
+        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 3)
+        assertEquals(3, (1..9).count { planificador.leerCodigo() })
         planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
-        val conPista = (1..8).count { planificador.siguiente() == LectorFrame.CODIGO }
-        assertEquals(4, conPista)
+        assertTrue((1..5).all { planificador.leerCodigo() })
+    }
+
+    @Test
+    fun laPistaSeOlvidaSiElReversoDejaDeVerse() {
+        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesMemoria = 2)
+        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
+        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
+        assertTrue(planificador.leerCodigo())
+        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
+        assertFalse(planificador.leerCodigo())
     }
 
     @Test
     fun conMrzEnCuadroNoSeBuscaPdf417() {
-        val planificador = PlanificadorLectores(habilitado = true, periodoNormal = 2)
-        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = true)
-        assertTrue((1..6).all { planificador.siguiente() == LectorFrame.TEXTO })
+        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 1)
+        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = true)
+        assertTrue((1..6).none { planificador.leerCodigo() })
     }
 
     // --- Métricas (sin datos personales) ---
@@ -144,8 +152,9 @@ class LecturaFrameTest {
         var ahora = 0L
         val registros = mutableListOf<String>()
         val metricas = MetricasOcr(habilitadas = true, reloj = { ahora }, registrar = { registros += it }, cadaCuantosFrames = 100)
-        metricas.registrarFrame(LectorFrame.TEXTO, nanosRecorte = 2_000_000, nanosReconocimiento = 80_000_000)
-        metricas.registrarFrame(LectorFrame.TEXTO, nanosRecorte = 4_000_000, nanosReconocimiento = 120_000_000)
+        metricas.registrarFrame(conCodigo = false, nanosRecorte = 2_000_000, nanosReconocimiento = 80_000_000)
+        ahora = 500_000_000
+        metricas.registrarFrame(conCodigo = true, nanosRecorte = 4_000_000, nanosReconocimiento = 120_000_000)
         metricas.registrarDescarte()
         ahora = 1_500_000_000
         metricas.registrarConfirmacion()
@@ -153,13 +162,16 @@ class LecturaFrameTest {
         assertTrue(registros[0], registros[0].startsWith("confirmado en 1500 ms"))
         assertTrue(registros[0], "descartados=1" in registros[0])
         assertTrue(registros[0], "reconocimiento_mediana_ms=100.0" in registros[0])
+        // 2 frames terminados en 0,5 s: 1 intervalo -> 2 fps.
+        assertTrue(registros[0], "fps=2.0" in registros[0])
+        assertTrue(registros[0], "con_codigo=1" in registros[0])
     }
 
     @Test
     fun metricasDeshabilitadasNoRegistranNada() {
         val registros = mutableListOf<String>()
         val metricas = MetricasOcr(habilitadas = false, registrar = { registros += it }, cadaCuantosFrames = 1)
-        metricas.registrarFrame(LectorFrame.TEXTO, 1, 1)
+        metricas.registrarFrame(conCodigo = false, nanosRecorte = 1, nanosReconocimiento = 1)
         metricas.registrarConfirmacion()
         assertTrue(registros.isEmpty())
     }

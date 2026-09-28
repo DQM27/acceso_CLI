@@ -41,6 +41,10 @@ fun PantallaEscanearCedula(
     resultadoUltimoEscaneo: () -> Pair<String, Boolean>? = { null },
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
+    // Buscar además el PDF417 de la cédula anterior. Sólo tiene sentido
+    // donde se acepta una cédula (ingreso de contratistas, proveedores);
+    // el alta de contratista sólo acepta el carnet PRAIND y lo apaga.
+    lectorPdf417: Boolean = modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
 ) {
     // Antes el mensaje de permiso era fijo ("...para escanear cédulas"),
     // sin importar el modo -- pedía cédulas incluso escaneando un gafete
@@ -56,6 +60,7 @@ fun PantallaEscanearCedula(
             resultadoUltimoEscaneo = resultadoUltimoEscaneo,
             onDocumentoDetectado = onDocumentoDetectado,
             onCerrar = onCerrar,
+            lectorPdf417 = lectorPdf417 && modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
         )
     }
 }
@@ -67,6 +72,7 @@ private fun VistaCamaraCedula(
     resultadoUltimoEscaneo: () -> Pair<String, Boolean>?,
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
+    lectorPdf417: Boolean,
 ) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -82,9 +88,9 @@ private fun VistaCamaraCedula(
     // MV-10 (auditoría 2026-09-24): agrupa lo que antes eran 9
     // declaraciones + un DisposableEffect idénticos a las otras 3
     // pantallas de escaneo -- ver EstadoCamaraOcr.kt.
-    // El PDF417 sólo existe en la cédula anterior: en modo gafete ni se
-    // carga el lector de códigos.
-    val camara = rememberEstadoCamaraOcr(contexto, conLectorPdf417 = modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA)
+    // El PDF417 sólo existe en la cédula anterior: donde no se busca, ni
+    // se carga el lector de códigos.
+    val camara = rememberEstadoCamaraOcr(contexto, conLectorPdf417 = lectorPdf417)
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
@@ -111,7 +117,7 @@ private fun VistaCamaraCedula(
     // reparte los frames entre el lector de texto y el de PDF417 (ver
     // `LecturaFrame.kt`). Ambos los usa sólo el hilo del analizador.
     val seguidorMrz = remember { SeguidorBandaMrz() }
-    val planificador = remember(modo) { PlanificadorLectores(habilitado = modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA) }
+    val planificador = remember(lectorPdf417) { PlanificadorLectores(habilitado = lectorPdf417) }
     var ultimoValorContinuo by remember { mutableStateOf<String?>(null) }
     var framesSinUltimoValor by remember { mutableStateOf(0) }
     // Colores de estado compartidos por las 4 pantallas de escaneo (ver
@@ -258,22 +264,21 @@ private fun VistaCamaraCedula(
                     ejecutorAnalisis = camara.ejecutor,
                     detectada = camara.detectada,
                     sesionActiva = camara.sesionActiva,
+                    hayLugar = camara::hayLugar,
                 ) { imagen ->
                     val (regionBase, leidoCon) = encuadre.regionParaFrame()
-                    val lector = planificador.siguiente()
-                    val region = if (lector == LectorFrame.TEXTO && leidoCon == OrientacionEncuadre.HORIZONTAL) {
-                        seguidorMrz.region(regionBase)
-                    } else {
-                        regionBase
-                    }
+                    val region = if (leidoCon == OrientacionEncuadre.HORIZONTAL) seguidorMrz.region(regionBase) else regionBase
                     analizarFrameOcr(
                         imagen = imagen,
                         camara = camara,
                         region = region,
-                        lector = lector,
+                        // Texto y PDF417 en paralelo sobre el mismo recorte.
+                        leerCodigo = planificador.leerCodigo(),
                         onLectura = { lectura ->
                             val datosPdf417 = lectura.pdf417
                             if (datosPdf417 != null) {
+                                // Corrección de errores propia del código:
+                                // gana sobre el texto del mismo frame.
                                 val resultado = estabilizador.procesarPdf417(datosPdf417)
                                 camara.enPrincipal { onResultado(resultado) }
                             } else {

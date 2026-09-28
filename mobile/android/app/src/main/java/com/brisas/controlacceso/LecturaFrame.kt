@@ -4,18 +4,16 @@ import uniffi.control_acceso_mobile.DatosPdf417Cedula
 import uniffi.control_acceso_mobile.largoPrefijoPdf417Cedula
 import uniffi.control_acceso_mobile.leerPdf417Cedula
 
-/// Qué lector se corre sobre un frame. Correr los dos en cada frame
-/// duplicaría el costo; ver [PlanificadorLectores].
-enum class LectorFrame { TEXTO, CODIGO }
-
 /// Lo que produjo un frame, entregado en el hilo del analizador de cámara
 /// (ver `analizarFrameOcr`). Sin imagen: sólo texto y datos derivados.
+///
+/// El texto y el PDF417 se leen EN PARALELO sobre el mismo recorte (dos
+/// modelos de ML Kit a la vez), así que un frame puede traer los dos.
 class LecturaFrame(
-    val lector: LectorFrame,
-    /// Texto de ML Kit ("" en un frame de código).
+    /// Texto de ML Kit ("" si el lector de texto falló en este frame).
     val texto: String,
-    /// Cédula anterior leída de su PDF417, si este fue un frame de código
-    /// y lo encontró.
+    /// Cédula anterior leída de su PDF417, si en este frame también se
+    /// buscó código y se encontró uno válido.
     val pdf417: DatosPdf417Cedula?,
     /// Medición del recorte (null si no se pudo recortar y se leyó el
     /// frame entero).
@@ -135,22 +133,22 @@ private fun FraccionesRect.conMargen(horizontal: Float, vertical: Float) = Fracc
     abajo = (abajo + alto * vertical).coerceAtMost(1f),
 )
 
-/// Decide, frame a frame, si se corre el lector de texto o el de códigos
-/// (PDF417 de la cédula anterior). Correr ambos en cada frame duplicaría
-/// el costo; alternarlos a ciegas le quitaría la mitad de los frames al
-/// texto. Regla:
-/// - con un MRZ reciente en cuadro, sólo texto (la cédula nueva no trae
+/// Decide, frame a frame, si ADEMÁS del texto se busca el PDF417 de la
+/// cédula anterior. Los dos lectores corren en paralelo sobre el mismo
+/// recorte, así que buscar el código no le quita frames al texto (antes se
+/// alternaban y cada frame de código era uno menos para leer, p. ej., el
+/// carnet PRAIND). Buscar el código sí cuesta procesador, por eso:
+/// - con un MRZ reciente en cuadro, nunca (la cédula nueva no trae
 ///   PDF417);
 /// - si el texto parece el reverso de la cédula anterior (la cara del
-///   PDF417), código uno de cada [periodoConPista] frames;
-/// - si no, uno de cada [periodoNormal], por si se muestra el reverso sin
+///   PDF417), en cada frame;
+/// - si no, uno de cada [periodoSinPista], por si se muestra el reverso sin
 ///   que el texto alcance a reconocerse.
 ///
 /// Sincronizado: lo usa el hilo del analizador.
 class PlanificadorLectores(
     private val habilitado: Boolean,
-    private val periodoNormal: Int = 4,
-    private val periodoConPista: Int = 2,
+    private val periodoSinPista: Int = 3,
     private val framesMemoria: Int = 8,
 ) {
     private var contador = 0
@@ -158,18 +156,18 @@ class PlanificadorLectores(
     private var framesConMrz = 0
 
     init {
-        require(periodoNormal > 1 && periodoConPista > 1) { "Los periodos deben dejar frames para el texto" }
+        require(periodoSinPista > 0) { "periodoSinPista debe ser positivo" }
     }
 
     @Synchronized
-    fun siguiente(): LectorFrame {
-        if (!habilitado || framesConMrz > 0) return LectorFrame.TEXTO
+    fun leerCodigo(): Boolean {
+        if (!habilitado || framesConMrz > 0) return false
+        if (framesConPista > 0) return true
         contador++
-        val periodo = if (framesConPista > 0) periodoConPista else periodoNormal
-        return if (contador % periodo == 0) LectorFrame.CODIGO else LectorFrame.TEXTO
+        return contador % periodoSinPista == 0
     }
 
-    /// Resultado de un frame de texto.
+    /// Resultado del texto de un frame.
     @Synchronized
     fun registrarTexto(pareceReversoConCodigo: Boolean, hayMrz: Boolean) {
         framesConPista = if (pareceReversoConCodigo) framesMemoria else (framesConPista - 1).coerceAtLeast(0)
@@ -190,20 +188,28 @@ class MetricasOcr(
     private val cadaCuantosFrames: Int = 30,
 ) {
     private val inicio = reloj()
-    private var framesTexto = 0
-    private var framesCodigo = 0
+    private var primerFrame = 0L
+    private var ultimoFrame = 0L
+    private var frames = 0
+    private var framesConCodigo = 0
     private var descartadosPorCalidad = 0
     private var fallos = 0
     private val msRecorte = ArrayDeque<Float>()
     private val msReconocimiento = ArrayDeque<Float>()
 
+    /// Un frame que terminó de pasar por ML Kit. `nanosReconocimiento`
+    /// cubre los dos lectores si corrieron en paralelo.
     @Synchronized
-    fun registrarFrame(lector: LectorFrame, nanosRecorte: Long, nanosReconocimiento: Long) {
+    fun registrarFrame(conCodigo: Boolean, nanosRecorte: Long, nanosReconocimiento: Long) {
         if (!habilitadas) return
-        if (lector == LectorFrame.TEXTO) framesTexto++ else framesCodigo++
+        val ahora = reloj()
+        if (frames == 0) primerFrame = ahora
+        ultimoFrame = ahora
+        frames++
+        if (conCodigo) framesConCodigo++
         agregar(msRecorte, nanosRecorte / 1e6f)
         agregar(msReconocimiento, nanosReconocimiento / 1e6f)
-        if ((framesTexto + framesCodigo) % cadaCuantosFrames == 0) registrar(resumen())
+        if (frames % cadaCuantosFrames == 0) registrar(resumen())
     }
 
     @Synchronized
@@ -223,8 +229,16 @@ class MetricasOcr(
 
     @Synchronized
     fun resumen(): String =
-        "frames texto=$framesTexto codigo=$framesCodigo descartados=$descartadosPorCalidad fallos=$fallos " +
+        "frames=$frames con_codigo=$framesConCodigo fps=${formato(framesPorSegundo())} " +
+            "descartados=$descartadosPorCalidad fallos=$fallos " +
             "recorte_mediana_ms=${formato(mediana(msRecorte))} reconocimiento_mediana_ms=${formato(mediana(msReconocimiento))}"
+
+    /// Frames que terminaron por segundo: lo que de verdad procesa la
+    /// tubería (con 2 frames en paralelo puede superar 1/latencia).
+    private fun framesPorSegundo(): Float? {
+        if (frames < 2 || ultimoFrame <= primerFrame) return null
+        return (frames - 1) / ((ultimoFrame - primerFrame) / 1e9f)
+    }
 
     private fun agregar(cola: ArrayDeque<Float>, valor: Float) {
         cola.addLast(valor)
