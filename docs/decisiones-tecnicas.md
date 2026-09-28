@@ -727,7 +727,15 @@ Regla desde ahora:
 
 - **Al abrir la app** (primera vuelta del pulso,
   `AlcanceSincronizacion::arranque`): sincronización completa, con los
-  historiales reconciliados 7 días hacia atrás.
+  historiales reconciliados 7 días hacia atrás **por diferencias**: se baja
+  sólo el índice (`id`, `updated_at`) de esos 7 días, se compara con la
+  copia local y se piden completas (`id=in.(...)`) sólo las filas que
+  faltan o cambiaron. Para comparar, `actualizado_en` de los tres
+  historiales locales guarda ahora el `updated_at` del servidor (antes, la
+  hora local de escritura, que nadie leía) -- sin migración de esquema. La
+  primera reconciliación tras actualizar la app vuelve a traer la semana
+  una vez (las filas viejas tienen la hora local); de ahí en más, sólo lo
+  distinto.
 - **Pulso periódico, botón y reconexión**: completa pero incremental; los
   historiales retroceden sólo 5 minutos (`MINUTOS_TRASLAPE_CORTO`, ver
   NS-09 en `docs/auditorias/auditoria-integral-2026-09-24`).

@@ -118,7 +118,7 @@ pub fn recibir(
     perfil: PerfilDispositivo,
 ) -> Result<ResumenSincronizacionNube, SincronizacionError> {
     let historiales = perfil.guarda_historiales();
-    let traslape = sincronizacion::traslape_historial(alcance.reconciliar_historial);
+    let reconciliar = alcance.reconciliar_historial;
     let mut resumen = ResumenSincronizacionNube::default();
 
     if alcance.ingresos {
@@ -149,19 +149,21 @@ pub fn recibir(
     }
     if alcance.ingresos && historiales {
         resumen.movimientos_historial_recibidos =
-            sincronizacion::recibir_historial_del_sitio(conexion, contexto, traslape)?;
+            sincronizacion::recibir_historial_del_sitio(conexion, contexto, reconciliar)?;
     }
     if alcance.citas {
         resumen.citas_recibidas = sincronizacion::recibir_citas_del_sitio(conexion, contexto)?;
     }
     if alcance.visitas && historiales {
         resumen.historial_visitas_recibidos =
-            sincronizacion::recibir_historial_visitas_del_sitio(conexion, contexto, traslape)?;
+            sincronizacion::recibir_historial_visitas_del_sitio(conexion, contexto, reconciliar)?;
     }
     if alcance.ingresos_proveedor && historiales {
         resumen.historial_ingresos_proveedor_recibidos =
             sincronizacion::recibir_historial_ingresos_proveedor_del_sitio(
-                conexion, contexto, traslape,
+                conexion,
+                contexto,
+                reconciliar,
             )?;
     }
     if alcance.gafetes_provisionales && historiales {

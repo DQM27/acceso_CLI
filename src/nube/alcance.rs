@@ -41,13 +41,12 @@ pub struct AlcanceSincronizacion {
     pub citas: bool,
     /// Movimientos de visita: historial y conflictos de visitantes.
     pub visitas: bool,
-    /// Los historiales se piden con el traslape largo
-    /// (`DIAS_TRASLAPE_HISTORIAL`, 7 días) en vez del corto (minutos):
-    /// reconciliación para recuperar filas que un traslape corto pudiera
-    /// haber dejado afuera. Cuesta segundos (vuelve a bajar y reescribir la
-    /// última semana del sitio), así que sólo lo pide la primera
-    /// sincronización al abrir la app ([`Self::arranque`]) -- nunca el
-    /// pulso ni un aviso en vivo.
+    /// Los historiales se reconcilian: se compara el índice (`id`,
+    /// `updated_at`) de los últimos 7 días con la copia local y se traen
+    /// sólo las filas que faltan o cambiaron -- recupera lo que un traslape
+    /// corto pudiera haber dejado afuera. Sólo lo pide la primera
+    /// sincronización al abrir la app ([`Self::arranque`]); el pulso y los
+    /// avisos piden lo cambiado desde la marca.
     pub reconciliar_historial: bool,
 }
 
