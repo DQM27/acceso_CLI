@@ -49,4 +49,13 @@ class EstabilizadorPorRepeticionTest {
         assertNull(vehiculoDesdeClave("DESCONOCIDO:123"))
         assertNull(vehiculoDesdeClave("sin separador"))
     }
+
+    @Test
+    fun conVariosTextosCuentaElPrimeroDelQueSeExtraeAlgo() {
+        val estabilizador = porRepeticion()
+        // La versión en renglones visuales no trae placa (p. ej. se unió a
+        // otro texto); la original sí: el frame cuenta igual.
+        assertNull(estabilizador.procesarTextos(listOf("COSTA RICA CENTROAMERICA", "BPH485")))
+        assertEquals("BPH485", estabilizador.procesarTextos(listOf("BPH485", "ruido"))?.valor)
+    }
 }

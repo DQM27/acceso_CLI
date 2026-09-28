@@ -93,8 +93,15 @@ class EstabilizadorPorRepeticion<T>(
     private val votador = desdeClave?.let { VotadorPorPosicion(ventana.toUInt()) }
 
     @Synchronized
-    fun procesarFrame(texto: String, peso: Float = 1f): T? {
-        val detectado = extraer(texto)
+    fun procesarFrame(texto: String, peso: Float = 1f): T? = procesarDetectado(extraer(texto), peso)
+
+    /// Un frame con varias versiones de su texto (ver `LecturaFrame.textos`):
+    /// cuenta la primera de la que se extrae algo.
+    @Synchronized
+    fun procesarTextos(textos: List<String>, peso: Float = 1f): T? =
+        procesarDetectado(textos.firstNotNullOfOrNull(extraer), peso)
+
+    private fun procesarDetectado(detectado: T?, peso: Float): T? {
         if (votador != null && desdeClave != null) return votar(votador, desdeClave, detectado, peso)
         val claveActual = detectado?.let(clave) ?: CLAVE_SIN_CANDIDATO
         candidatosRecientes.addLast(claveActual)
@@ -131,9 +138,9 @@ class EstabilizadorPorRepeticion<T>(
 ///
 /// Necesario porque el clasificador de estos 3 perfiles (`esComprobanteCargaRuta`,
 /// `esCarnetKof`) es un regex angosto sobre un documento completo (hoja
-/// grande, mucho texto, ángulo/reflejo variable) -- a diferencia de
-/// `clasificarTipoDocumento` en identidad, que evalúa contra varios tipos de
-/// documento conocidos y casi siempre matchea alguno. Sin este debounce, un
+/// grande, mucho texto, ángulo/reflejo variable) -- a diferencia de la
+/// clasificación de identidad (`clasificarTipoDocumento`), que evalúa
+/// contra varios tipos de documento conocidos y casi siempre matchea alguno. Sin este debounce, un
 /// solo frame con la palabra clave levemente mal leída (glare, se cortó
 /// "Ruta" a la mitad) alcanzaba para poner rojo + vibrar con el documento
 /// correcto todavía en cuadro -- hallazgo 2026-09-20, reportado como "se
@@ -149,9 +156,14 @@ class DetectorTextoNoReconocido(
     /// texto sustancial (blanco/borroso, ver `LARGO_MINIMO_TEXTO_INVALIDO`)
     /// no cuentan ni a favor ni en contra, igual que un frame sin candidato
     /// no rompe una racha ya acumulada en `EstabilizadorPorRepeticion`.
-    fun procesarFrame(texto: String): Boolean {
-        if (texto.trim().length < LARGO_MINIMO_TEXTO_INVALIDO) return recientes.count { it } >= framesRequeridos
-        recientes.addLast(!esTipoEsperado(texto))
+    fun procesarFrame(texto: String): Boolean = procesarTextos(listOf(texto))
+
+    /// Un frame con varias versiones de su texto: es el tipo esperado si
+    /// alguna lo es.
+    fun procesarTextos(textos: List<String>): Boolean {
+        val sustanciales = textos.filter { it.trim().length >= LARGO_MINIMO_TEXTO_INVALIDO }
+        if (sustanciales.isEmpty()) return recientes.count { it } >= framesRequeridos
+        recientes.addLast(sustanciales.none(esTipoEsperado))
         while (recientes.size > ventana) recientes.removeFirst()
         return recientes.count { it } >= framesRequeridos
     }

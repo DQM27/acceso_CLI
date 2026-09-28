@@ -26,13 +26,56 @@ accidente a permitir una operación.
    no, nunca con un MRZ en cuadro). Buscar el código no le quita frames al
    texto (p. ej. al carnet PRAIND).
 7. Cuando terminan los dos, el resultado se procesa EN EL HILO DEL
-   ANALIZADOR y se libera el lugar.
-8. `EstabilizadorLectura` clasifica, extrae y vota por carácter entre
-   frames (número, MRZ); el PDF417 confirma en una lectura.
+   ANALIZADOR y se libera el lugar. Del texto de ML Kit se pasan al núcleo
+   las líneas con sus cajas y las palabras con su confianza
+   (`textosParaLectores`); el núcleo arma los **renglones visuales** y
+   devuelve las versiones del texto que prueban los lectores (ver
+   "Renglones visuales").
+8. `EstabilizadorLectura` (envoltorio de `EstabilizadorDocumento`, en
+   Rust) clasifica, extrae y vota por carácter entre frames (número, MRZ);
+   el PDF417 confirma en una lectura.
 9. Sólo el resultado se publica al hilo principal; la UI recibe el
    `DocumentoDetectado` completo, no únicamente un texto.
 10. En modo continuo, `ActivosViewModel` termina la mutación SQLite/UniFFI
    antes de que la cámara acepte el siguiente gafete.
+
+## Dónde vive cada cosa
+
+Todo lo que decide QUÉ dice el texto está en el núcleo Rust
+(`mobile/rust-core/src/lectura_documentos/`, auditoría OCR 2026-09-28,
+punto A-1): clasificación, extractores de cada documento, búsqueda del MRZ
+dentro del texto, placas, comprobante de ruta, carnet KOF, renglones
+visuales y el estabilizador de documentos. iOS lo recibe hecho y hay una
+sola suite de tests (Rust, más la de Kotlin que lo ejercita a través de los
+envoltorios).
+
+En Kotlin quedan la cámara, ML Kit, el recorte YUV, la medición de calidad,
+el encuadre adaptativo (`ControladorEncuadre`, `SeguidorBandaMrz`,
+`PlanificadorLectores`), el `EstabilizadorPorRepeticion` genérico de las
+pantallas simples (vota con el `VotadorPorPosicion` de Rust), el aviso a
+Sentry de las correcciones del MRZ y la UI. Las funciones de Kotlin de
+antes (`clasificarTipoDocumento`, `extraerVehiculo`, `leerMrzDeTexto`...)
+se conservan como envoltorios de una línea, así que pantallas y tests no
+cambiaron.
+
+## Renglones visuales
+
+`Text.text` de ML Kit concatena los bloques en un orden que cambia entre
+frames: la etiqueta "Nombre:" y su valor llegan en bloques distintos, la
+columna de valores de la cédula anterior puede venir en otro orden, una
+línea del MRZ partida en dos. `reconstruir_texto_visual` agrupa las líneas
+que están a la misma altura (tolerancia: media altura de letra), las ordena
+de izquierda a derecha y ordena los renglones de arriba abajo. La
+inclinación del documento se estima con las palabras de cada línea y la
+altura se mide sobre esa recta. Las palabras con confianza menor a 0,25 se
+descartan en esta versión (umbral conservador, pendiente de calibrar con
+muestras del A25).
+
+Los lectores prueban primero los renglones visuales y después el texto
+original de ML Kit (`textos_de_frame`): se queda la primera versión que
+lee. Así la mejora no puede leer peor que antes: si la reconstrucción
+pierde algo, el texto original sigue ahí. El MRZ gana la versión que valida
+los dígitos verificadores en cualquiera de las dos.
 
 ## Invariantes de concurrencia
 
@@ -120,7 +163,11 @@ CameraX entre ambos sistemas de coordenadas.
 
 ## Pruebas obligatorias
 
-- Tests JVM de clasificación, extracción, checksum, siglo y fechas inválidas.
+- Tests Rust de `lectura_documentos` (`cargo test` en `mobile/rust-core`),
+  incluido uno de extremo a extremo en el que el texto original de ML Kit
+  asigna mal el nombre de la cédula y los renglones visuales lo corrigen.
+- Tests JVM de clasificación, extracción, checksum, siglo y fechas inválidas
+  (ejercitan el código Rust a través de los envoltorios de Kotlin).
 - Tests de estabilización ante campos intermitentes y texto ajeno.
 - Tests del ViewModel con base temporal para comprobar la salida por gafete.
 - `CI / test-android` compila Kotlin y ejecuta `testDebugUnitTest` en cada

@@ -105,12 +105,11 @@ private fun VistaCamaraComprobanteRuta(
                         onLectura = { lectura ->
                             // Hilo del analizador: extraer y votar acá, a la
                             // pantalla sólo se publica el resultado.
-                            val texto = lectura.texto
-                            if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
-                            val resultado = estabilizador.procesarFrame(texto, lectura.peso)
+                            if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, lectura.textos.joinToString("\n---\n"))
+                            val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso)
                             // Sólo si no hubo resultado, como antes: un
                             // frame que confirma no cuenta como inválido.
-                            val invalido = resultado == null && detectorInvalido.procesarFrame(texto)
+                            val invalido = resultado == null && detectorInvalido.procesarTextos(lectura.textos)
                             camara.enPrincipal {
                                 when {
                                     resultado != null -> {

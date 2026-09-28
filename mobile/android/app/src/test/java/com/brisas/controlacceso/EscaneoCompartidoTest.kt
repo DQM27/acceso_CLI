@@ -51,4 +51,12 @@ class DetectorTextoNoReconocidoTest {
         val resultado = det.procesarFrame("OK")
         assertEquals(false, resultado)
     }
+
+    @Test
+    fun conVariosTextosEsElTipoEsperadoSiAlgunoLoEs() {
+        val det = detector { it == "RUTA CORRECTA LARGA" }
+        repeat(3) { assertEquals(false, det.procesarTextos(listOf("otra cosa con texto largo", "RUTA CORRECTA LARGA"))) }
+        repeat(2) { det.procesarTextos(listOf("otra cosa con texto largo", "tampoco es la ruta")) }
+        assertEquals(true, det.procesarTextos(listOf("otra cosa con texto largo")))
+    }
 }

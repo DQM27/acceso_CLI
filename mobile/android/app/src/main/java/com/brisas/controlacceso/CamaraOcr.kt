@@ -14,14 +14,18 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
+import uniffi.control_acceso_mobile.LineaOcr
+import uniffi.control_acceso_mobile.PalabraOcr
+import uniffi.control_acceso_mobile.textosDeFrame
 import java.util.concurrent.atomic.AtomicBoolean
 
 /// Plomería de cámara + ML Kit compartida por las pantallas de escaneo
 /// (sacada de `PantallaEscanearCedula.kt`, punto M4 de la auditoría
 /// móvil): analizador de CameraX con límite de frames, arranque de la
 /// cámara, recorte al recuadro guía sobre los planos YUV y entrega a ML
-/// Kit. Sin nada de clasificación de documentos -- eso vive en
-/// `LectorDocumentosIdentidad.kt` / `EstabilizadorLectura.kt`.
+/// Kit. Sin nada de clasificación de documentos -- eso vive en el núcleo
+/// Rust (`mobile/rust-core/src/lectura_documentos/`).
 
 /// Arma el caso de uso de análisis de ML Kit -- resolución fija y descarte
 /// temprano de frames una vez ya se detectó un documento -- compartido por
@@ -286,7 +290,8 @@ fun analizarFrameOcr(
                         }
                         .toList()
                 }
-                onLectura(LecturaFrame(texto?.text.orEmpty(), datosPdf417, calidad, decision.peso, regionLeida, lineasMrz))
+                val textos = texto?.let(::textosParaLectores).orEmpty()
+                onLectura(LecturaFrame(texto?.text.orEmpty(), textos, datosPdf417, calidad, decision.peso, regionLeida, lineasMrz))
             } finally {
                 if (retenerImagen) imagen.close()
                 camara.liberarLugar()
@@ -301,6 +306,39 @@ fun analizarFrameOcr(
             camara.liberarLugar()
         }
     }
+}
+
+/// Las versiones del texto del frame para los lectores (auditoría OCR
+/// 2026-09-28, E-3): el núcleo arma los renglones visuales con las cajas de
+/// cada línea y palabra (y su confianza) y agrega el texto original de ML
+/// Kit como segunda opción. Las cajas van en píxeles de la imagen que
+/// analizó ML Kit; sólo importan sus posiciones relativas. Una línea o
+/// palabra sin caja se omite de la versión visual (la original la conserva).
+private fun textosParaLectores(texto: Text): List<String> {
+    val lineas = texto.textBlocks.flatMap { bloque ->
+        bloque.lines.mapNotNull { linea ->
+            val caja = linea.boundingBox ?: return@mapNotNull null
+            LineaOcr(
+                texto = linea.text,
+                izquierda = caja.left.toFloat(),
+                arriba = caja.top.toFloat(),
+                derecha = caja.right.toFloat(),
+                abajo = caja.bottom.toFloat(),
+                palabras = linea.elements.mapNotNull { palabra ->
+                    val c = palabra.boundingBox ?: return@mapNotNull null
+                    PalabraOcr(
+                        texto = palabra.text,
+                        izquierda = c.left.toFloat(),
+                        arriba = c.top.toFloat(),
+                        derecha = c.right.toFloat(),
+                        abajo = c.bottom.toFloat(),
+                        confianza = palabra.confidence,
+                    )
+                },
+            )
+        }
+    }
+    return textosDeFrame(texto.text, lineas)
 }
 
 /// Frame sin recorte (y por lo tanto sin medición): se procesa con peso 1.
