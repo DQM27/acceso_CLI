@@ -117,7 +117,7 @@ class NubeRealtime(
                         // tabla corre igual detrás, como red de seguridad.
                         if (aviso["registro"] is JsonObject || aviso.texto("operation") == "DELETE") {
                             val aplicado = try {
-                                withContext(dispatcherIO) { nucleo.aplicarCambioNube(aviso.toString()) }
+                                withContext(dispatcherIO) { medirNucleo("aplicarCambioNube") { nucleo.aplicarCambioNube(aviso.toString()) } }
                             } catch (excepcion: NucleoException) {
                                 Log.w("SincronizacionNube", "No se pudo aplicar el cambio en vivo", excepcion)
                                 false
