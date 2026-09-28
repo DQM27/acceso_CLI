@@ -9,14 +9,17 @@
 //! el resultado es idéntico. La sincronización por tabla sigue corriendo
 //! detrás como red de seguridad: corrige un aviso fuera de orden o perdido.
 //!
-//! Hoy sólo `ingresos` (la pantalla Activos). Un aviso de otra tabla, o uno
-//! viejo sin `registro`, devuelve `false` y queda para la sincronización.
+//! Hoy `ingresos` (la pantalla Activos) y `personas_vetadas` (el veto por
+//! persona: llega a las porterías en segundos). Un aviso de otra tabla, o
+//! uno viejo sin `registro`, devuelve `false` y queda para la
+//! sincronización.
 
 use rusqlite::{Connection, params};
 
 use super::SincronizacionError;
 use super::sincronizacion::{
-    FilaIngresoRemoto, aplicar_cierre_de_ingreso_propio, guardar_ingreso_remoto,
+    FilaIngresoRemoto, FilaPersonaVetadaRemota, aplicar_cierre_de_ingreso_propio,
+    guardar_ingreso_remoto, guardar_persona_vetada,
 };
 
 #[derive(serde::Deserialize)]
@@ -48,6 +51,9 @@ pub fn aplicar_cambio_en_vivo(
         log::warn!("aviso en vivo: formato inesperado");
         return Ok(false);
     };
+    if aviso.table == "personas_vetadas" {
+        return aplicar_veto(conexion, aviso.registro);
+    }
     if aviso.table != "ingresos" {
         return Ok(false);
     }
@@ -87,6 +93,20 @@ pub fn aplicar_cambio_en_vivo(
         guardar_ingreso_remoto(&transaccion, &estado.sitio_id, fila)?;
     }
     transaccion.commit()?;
+    Ok(true)
+}
+
+/// Un veto nuevo o levantado. Nunca se borra (levantar es una
+/// actualización), así que no hay caso DELETE.
+fn aplicar_veto(
+    conexion: &Connection,
+    registro: Option<serde_json::Value>,
+) -> Result<bool, SincronizacionError> {
+    let Some(Ok(fila)) = registro.map(serde_json::from_value::<FilaPersonaVetadaRemota>) else {
+        log::warn!("aviso en vivo: veto con formato inesperado");
+        return Ok(false);
+    };
+    guardar_persona_vetada(conexion, &fila)?;
     Ok(true)
 }
 
@@ -137,6 +157,43 @@ mod tests {
             .unwrap()
             .collect::<Result<_, _>>()
             .unwrap()
+    }
+
+    fn vigente(conexion: &Connection, cedula: &str) -> Option<bool> {
+        conexion
+            .query_row(
+                "SELECT vigente FROM personas_vetadas WHERE cedula = ?1",
+                [cedula],
+                |fila| fila.get(0),
+            )
+            .ok()
+    }
+
+    #[test]
+    fn un_veto_llega_al_instante_y_su_levantamiento_tambien() {
+        let conexion = base();
+        let veto = |levantado_en: Option<&str>| {
+            json!({
+                "table": "personas_vetadas",
+                "operation": if levantado_en.is_some() { "UPDATE" } else { "INSERT" },
+                "id": "veto-1",
+                "sitio_id": "s1",
+                "registro": {
+                    "id": "veto-1",
+                    "cedula": "112340567",
+                    "levantado_en": levantado_en,
+                    "updated_at": "2026-09-28T12:00:00.123+00:00"
+                }
+            })
+        };
+
+        assert!(aplicar_cambio_en_vivo(&conexion, &veto(None)).unwrap());
+        assert_eq!(vigente(&conexion, "112340567"), Some(true));
+
+        assert!(
+            aplicar_cambio_en_vivo(&conexion, &veto(Some("2026-09-28T13:00:00+00:00"))).unwrap()
+        );
+        assert_eq!(vigente(&conexion, "112340567"), Some(false));
     }
 
     #[test]
