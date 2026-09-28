@@ -169,7 +169,8 @@ class LectorComprobanteRutaTest {
         // esta trae una fila "Sub-Total Familia ... 1/0" en medio de la
         // tabla, con su propia barra "/" -- confirma que no se confunde
         // con el patrón de "Ruta / No.de Carga" (que exige esa etiqueta
-        // literal antes de la barra, ver REGEX_RUTA_NUMERO_CARGA).
+        // literal antes de la barra, ver RUTA_NUMERO_CARGA en
+        // mobile/rust-core/src/lectura_documentos/comprobante.rs).
         val texto = """
             Coca Cola FEMSA
             COMPROBANTE DE CARGA DE RUTA

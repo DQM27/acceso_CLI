@@ -10,8 +10,14 @@ import uniffi.control_acceso_mobile.leerPdf417Cedula
 /// El texto y el PDF417 se leen EN PARALELO sobre el mismo recorte (dos
 /// modelos de ML Kit a la vez), así que un frame puede traer los dos.
 class LecturaFrame(
-    /// Texto de ML Kit ("" si el lector de texto falló en este frame).
+    /// Texto de ML Kit tal cual ("" si el lector de texto falló en este
+    /// frame). Sólo para diagnóstico: los lectores usan [textos].
     val texto: String,
+    /// Las versiones del texto que prueban los lectores, en orden: los
+    /// renglones visuales armados con la geometría de ML Kit y, si difiere,
+    /// el texto original (ver `textosDeFrame` en el núcleo). Vacía si no
+    /// hubo texto.
+    val textos: List<String>,
     /// Cédula anterior leída de su PDF417, si en este frame también se
     /// buscó código y se encontró uno válido.
     val pdf417: DatosPdf417Cedula?,

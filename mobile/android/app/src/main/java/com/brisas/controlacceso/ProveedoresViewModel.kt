@@ -199,7 +199,7 @@ class ProveedoresViewModel(
 
     /// `nombreLeido`/`apellidosLeido` llegan separados de un documento MRZ
     /// (`DocumentoDetectado.nombre`/`.apellidos` -- ver
-    /// `LectorDocumentosIdentidad.kt`, `RegistroMrz.aDocumentoDetectado`);
+    /// `documento_desde_mrz` en `mobile/rust-core/src/lectura_documentos/identidad.rs`);
     /// usar sólo `nombre` (como hacía antes) dejaba el campo vacío o
     /// incompleto cada vez que el nombre de pila viajaba en un campo MRZ
     /// distinto al apellido -- bug reportado en pruebas reales en

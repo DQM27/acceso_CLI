@@ -43,6 +43,10 @@ log = "0.4"
 # `rusqlite::Connection` que usa `control_acceso::application::AppCore`
 # internamente, no una version incompatible.
 rusqlite = "0.40.2"
+# Lectura de documentos por OCR (`src/lectura_documentos/`): clasificación y
+# extracción por etiqueta. Ya venía dentro del `.so` de Android como
+# dependencia de `android_logger` (vía `env_filter`), así que no suma peso.
+regex = "1"
 
 [target.'cfg(target_os = "android")'.dependencies]
 # Backend real de `log` en Android -- vuelca al mismo Logcat que ve

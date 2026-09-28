@@ -70,8 +70,9 @@ class LectorVehiculoRutaTest {
     }
 
     // Muestras reales del 2026-09-17 (overlay de debug de
-    // PantallaEscanearVehiculoRuta, ver comentario de `REGEX_PLACA_CARGA`
-    // en LectorVehiculoRuta.kt para el detalle de cada caso).
+    // PantallaEscanearVehiculoRuta, ver comentario de `PLACA_CARGA` en
+    // mobile/rust-core/src/lectura_documentos/vehiculo.rs para el detalle
+    // de cada caso).
 
     @Test
     fun extraePlacaDeCargaConDigitosPartidosPorMLKit() {

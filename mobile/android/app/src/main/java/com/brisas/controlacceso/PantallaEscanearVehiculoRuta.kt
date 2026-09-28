@@ -104,11 +104,10 @@ private fun VistaCamaraVehiculoRuta(
                         onLectura = { lectura ->
                             // Hilo del analizador: extraer y votar acá, a la
                             // pantalla sólo se publica el resultado.
-                            val texto = lectura.texto
-                            val resultado = estabilizador.procesarFrame(texto, lectura.peso)
+                            val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso)
                             // Sólo si no hubo resultado, como antes: un
                             // frame que confirma no cuenta como inválido.
-                            val invalido = resultado == null && detectorInvalido.procesarFrame(texto)
+                            val invalido = resultado == null && detectorInvalido.procesarTextos(lectura.textos)
                             camara.enPrincipal {
                                 when {
                                     resultado != null -> {

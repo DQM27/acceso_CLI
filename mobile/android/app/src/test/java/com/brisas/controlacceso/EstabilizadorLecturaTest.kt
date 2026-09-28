@@ -522,4 +522,12 @@ class EstabilizadorLecturaTest {
         assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
         assertNull(r.documento)
     }
+
+    @Test
+    fun conVariosTextosUnoQueNoLeeCedeAlSiguienteDelMismoFrame() {
+        val estabilizador = EstabilizadorLectura(framesRequeridos = 1)
+        val r = estabilizador.procesarTextos(listOf("texto de fondo sin documento", licenciaTexto))
+        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
+        assertEquals("112340567", r.documento?.numeroDocumento)
+    }
 }

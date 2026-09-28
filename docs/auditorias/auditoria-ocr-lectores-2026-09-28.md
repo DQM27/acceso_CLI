@@ -63,6 +63,34 @@ Sigue pendiente: S-2 (gafetes con código o confirmación), el resto de E-3
 (reconstruir renglones por geometría y usar la confianza), zoom, y A-1
 (migrar clasificación y extracción a Rust).
 
+## Entrega A-1 y E-3: lectura de documentos en Rust y renglones visuales
+
+- **A-1 resuelto.** Clasificación, extractores de cada documento, búsqueda
+  del MRZ dentro del texto, placas, comprobante de ruta, carnet KOF y el
+  estabilizador de documentos pasaron a `mobile/rust-core/src/lectura_documentos/`
+  (el estabilizador como objeto UniFFI, `EstabilizadorDocumento`). Kotlin
+  conserva sus funciones de siempre como envoltorios de una línea. Se
+  portó con el comportamiento exacto: los 268 tests JVM existentes pasaron
+  SIN cambios contra el código de Rust, y se agregaron 42 tests Rust. Las
+  diferencias de semántica entre `java.util.regex` y `regex` (sin
+  lookaround, `\d` Unicode, `lines()`, desempates de `maxByOrNull`) están
+  resueltas y comentadas en el código.
+- **E-3 resuelto (con umbrales por calibrar).** `analizarFrameOcr` pasa al
+  núcleo las líneas con sus cajas y las palabras con su confianza. El
+  núcleo arma renglones visuales (misma altura, izquierda a derecha,
+  corrigiendo la inclinación con las palabras de cada línea) y descarta
+  palabras con confianza < 0,25. Los lectores prueban primero esa versión y
+  después el texto original, así que no puede leer peor que antes. El MRZ
+  por geometría (punto 3) queda cubierto por los renglones: sus líneas
+  quedan consecutivas y una línea partida se une. Test de extremo a
+  extremo: una cédula anterior cuyo texto original asignaba "GOMEZ" como
+  nombre ahora sale "JUAN CARLOS" / "GOMEZ VARGAS".
+- **Pendiente de estos puntos:** calibrar con muestras reales del A25 la
+  tolerancia de altura (media altura de letra) y el umbral de confianza.
+  El `EstabilizadorPorRepeticion` genérico de las pantallas simples queda
+  en Kotlin a propósito (recibe funciones de Kotlin; ya vota con el
+  `VotadorPorPosicion` de Rust).
+
 ## Pendiente, en orden de prioridad
 
 ### Seguridad
@@ -92,7 +120,7 @@ Sigue pendiente: S-2 (gafetes con código o confirmación), el resto de E-3
 
 ### Exactitud
 
-- **E-3 (alta) · Usar la estructura de ML Kit, no sólo `Text.text`.**
+- **E-3 (alta, RESUELTO salvo calibración; ver "Entrega A-1 y E-3") · Usar la estructura de ML Kit, no sólo `Text.text`.**
   ML Kit v2 entrega `TextBlock → Line → Element` con `boundingBox`,
   `angle` y `confidence`. Hoy se usa sólo el texto plano, cuyo orden de
   bloques cambia entre frames; varios parches existen por eso (columnas
@@ -135,7 +163,7 @@ Sigue pendiente: S-2 (gafetes con código o confirmación), el resto de E-3
 
 ### Arquitectura Rust / Kotlin
 
-- **A-1 · Completar la migración de lectura de documentos a Rust.**
+- **A-1 · (RESUELTO; ver "Entrega A-1 y E-3") Completar la migración de lectura de documentos a Rust.**
   Estado actual: el MRZ (checksum, confusables, siglos) ya está en Rust;
   clasificación, extractores por regex, estabilizador y lectores de placa,
   comprobante y carnet KOF siguen en Kotlin (~1 700 líneas con comentarios). Es lo que la
@@ -161,5 +189,9 @@ Sigue pendiente: S-2 (gafetes con código o confirmación), el resto de E-3
 - `CamaraOcr.kt`, `PantallaEscanearCedula.kt` y `ActivosViewModel.kt`
   dependen de Android y se compilan en `CI / test-android`
   (`testDebugUnitTest`).
+- Entrega A-1 y E-3: 271 tests JVM y 120 tests Rust, 0 fallos;
+  `cargo clippy -D warnings` limpio; bindings Kotlin regenerados y
+  verificados con el mismo comando que CI; `compileDebugKotlin` sin
+  advertencias.
 - Falta la prueba física en el Samsung A25: cédula (frente y reverso),
   DIMEX, licencia, gafete continuo y placas, de día y de noche.

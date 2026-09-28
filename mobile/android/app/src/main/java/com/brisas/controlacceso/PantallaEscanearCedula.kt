@@ -282,8 +282,8 @@ private fun VistaCamaraCedula(
                                 val resultado = estabilizador.procesarPdf417(datosPdf417)
                                 camara.enPrincipal { onResultado(resultado) }
                             } else {
-                                val resultado = estabilizador.procesarFrame(lectura.texto, lectura.peso, lectura.calidad)
-                                planificador.registrarTexto(pareceReversoCedulaAnterior(lectura.texto), resultado.hayMrz)
+                                val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso, lectura.calidad)
+                                planificador.registrarTexto(lectura.textos.any(::pareceReversoCedulaAnterior), resultado.hayMrz)
                                 seguidorMrz.registrar(lectura.regionLeida, lectura.lineasMrz)
                                 val giro = encuadre.registrarOrientacion(resultado.orientacionSugerida, leidoCon)
                                 camara.enPrincipal {

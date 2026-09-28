@@ -6,20 +6,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 
 /// Orientación del recuadro guía de una pantalla de cámara.
-enum class OrientacionEncuadre { HORIZONTAL, VERTICAL }
+typealias OrientacionEncuadre = uniffi.control_acceso_mobile.OrientacionEncuadre
 
-/// Qué orientación pide cada tipo de documento. Cédula, licencia, DIMEX y
-/// carnet BAC son tarjetas horizontales; el carnet PRAIND, el gafete In
-/// House y el gafete CRC de contratista se sostienen VERTICALES. `null`
-/// para lo que no se reconoce (no opina sobre la orientación).
-fun TipoDocumento.orientacionEncuadre(): OrientacionEncuadre? = when (this) {
-    TipoDocumento.CARNET_INDUCCION_PRAIND,
-    TipoDocumento.CARNET_IN_HOUSE,
-    TipoDocumento.GAFETE_CONTRATISTA,
-    -> OrientacionEncuadre.VERTICAL
-    TipoDocumento.DESCONOCIDO -> null
-    else -> OrientacionEncuadre.HORIZONTAL
-}
+/// Qué orientación pide cada tipo de documento: el carnet PRAIND, el gafete
+/// In House y el gafete CRC se sostienen VERTICALES; el resto son tarjetas
+/// horizontales. `null` para lo que no se reconoce.
+fun TipoDocumento.orientacionEncuadre(): OrientacionEncuadre? =
+    uniffi.control_acceso_mobile.orientacionEncuadreDeTipo(this)
 
 /// Mecanismo GENÉRICO de encuadre que se adapta al documento, para que cada
 /// pantalla de cámara lo reuse con su propio comportamiento: cada una elige
@@ -139,7 +132,7 @@ class ControladorEncuadre(
 /// contratista y gafetes): el MRZ del reverso de una cédula/DIMEX no se
 /// clasifica por palabras clave, pero es claramente horizontal.
 fun orientacionDeTextoDocumento(texto: String): OrientacionEncuadre? =
-    if ("<<" in texto) OrientacionEncuadre.HORIZONTAL else clasificarTipoDocumento(texto).orientacionEncuadre()
+    uniffi.control_acceso_mobile.orientacionDeTextoDocumento(texto)
 
 /// Región que se dibuja con transición suave al girar el encuadre (el
 /// recorte real cambia en el acto; esto es sólo lo que ve quien opera).
