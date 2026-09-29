@@ -22,11 +22,21 @@ select set_config('diagnostico.contratista_a', (select id::text from public.cont
 
 insert into public.administradores_panel (correo) values (current_setting('diagnostico.correo_admin'));
 
+-- Un dispositivo vigente por sitio como `sub` de los JWT simulados: la
+-- política restrictiva "solo dispositivos vigentes" exige que el token sea
+-- de un dispositivo real y activo (ver dispositivos_vigentes_y_vinculacion.sql).
+-- Sin esto, los casos negativos pasarían por esa política y no por la de sitio.
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, secret_hash) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico JWT A', 'diag-hash-jwt-a'),
+  (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, 'pc', 'Diagnóstico JWT B', 'diag-hash-jwt-b');
+select set_config('diagnostico.jwt_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT A'), true),
+       set_config('diagnostico.jwt_b', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT B'), true);
+
 set local role authenticated;
 
 -- Un dispositivo 'pc' de su propio sitio puede registrar un ingreso.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_a'), 'tipo', 'pc')::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_a'), 'sitio_id', current_setting('diagnostico.sitio_a'), 'tipo', 'pc')::text,
   true);
 do $$
 begin
@@ -51,7 +61,7 @@ end $$;
 
 -- Un dispositivo 'visor' (de solo lectura) NO puede registrar ingresos.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_a'), 'tipo', 'visor')::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.dispositivo_visor'), 'sitio_id', current_setting('diagnostico.sitio_a'), 'tipo', 'visor')::text,
   true);
 do $$
 begin
@@ -68,7 +78,7 @@ end $$;
 -- contratistas/usuarios, ingresos SÍ está acotado por sitio para
 -- dispositivos normales).
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_b'), 'tipo', 'pc')::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_b'), 'sitio_id', current_setting('diagnostico.sitio_b'), 'tipo', 'pc')::text,
   true);
 do $$
 begin

@@ -35,12 +35,20 @@ insert into public.administradores_panel (correo) values (current_setting('diagn
 insert into public.usuarios (id, sitio_id, cedula, nombre, rol) values
   (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'diag-cedula-1', 'Diagnóstico operador', 'OPERADOR');
 
+-- Un dispositivo vigente por sitio como `sub` de los JWT simulados: la
+-- política restrictiva "solo dispositivos vigentes" exige que el token sea
+-- de un dispositivo real y activo (ver dispositivos_vigentes_y_vinculacion.sql).
+-- Sin esto, los casos negativos pasarían por esa política y no por la de sitio.
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, secret_hash) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico JWT A', 'diag-hash-jwt-a');
+select set_config('diagnostico.jwt_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT A'), true);
+
 set local role authenticated;
 
 -- Crear: un dispositivo de su propio sitio YA NO puede -- antes de este
 -- cierre esto sí funcionaba.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_a'), 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
   true);
 do $$
 begin

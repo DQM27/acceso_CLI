@@ -28,11 +28,21 @@ values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', '
 
 insert into public.administradores_panel (correo) values (current_setting('diagnostico.correo_admin'));
 
+-- Un dispositivo vigente por sitio como `sub` de los JWT simulados: la
+-- política restrictiva "solo dispositivos vigentes" exige que el token sea
+-- de un dispositivo real y activo (ver dispositivos_vigentes_y_vinculacion.sql).
+-- Sin esto, los casos negativos pasarían por esa política y no por la de sitio.
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, secret_hash) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico JWT A', 'diag-hash-jwt-a'),
+  (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, 'pc', 'Diagnóstico JWT B', 'diag-hash-jwt-b');
+select set_config('diagnostico.jwt_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT A'), true),
+       set_config('diagnostico.jwt_b', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT B'), true);
+
 set local role authenticated;
 
 -- Un dispositivo lee los dispositivos de SU propio sitio.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_a'), 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
   true);
 do $$
 begin
@@ -43,7 +53,7 @@ end $$;
 
 -- Pero NO los de otro sitio.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_b'))::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_b'), 'sitio_id', current_setting('diagnostico.sitio_b'))::text,
   true);
 do $$
 begin

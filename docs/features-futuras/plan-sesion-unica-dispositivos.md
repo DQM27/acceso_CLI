@@ -1,5 +1,12 @@
 # Sesión única y presencia de dispositivos — plan (borrador, sin código todavía)
 
+> **Actualización 2026-09-29:** los puntos 1–5 (secreto de un solo uso,
+> rotación, registro forense y desempate offline) quedan propuestos para
+> reemplazo por un modelo más simple — código de vinculación de un solo uso
+> + par de claves generado en el equipo. Ver
+> `propuesta-registro-dispositivos.md`. La sección 7 (sesión única por
+> persona) no cambia.
+
 > Documento de continuidad para retomar esta conversación en otra sesión.
 > Nace de una prueba manual del usuario: el mismo secreto de dispositivo
 > funciona en más de un dispositivo a la vez. Nada de esto está
