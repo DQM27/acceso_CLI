@@ -283,12 +283,17 @@ impl Nucleo {
     /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
     /// autenticar de cero -- delega en `Nucleo::cache_token`, que
     /// reemplaza para móvil lo que antes hacía `AppCore::autenticar_con_cache`
-    /// (ver el comentario de ese campo). Nunca toca `core_lock()`.
+    /// (ver el comentario de ese campo). La red corre sin `core_lock()`;
+    /// sólo se toma DESPUÉS, para aplicar el desfase de reloj medido (ver
+    /// [`Nucleo::aplicar_desfase_de`]). Quien llama no debe tener tomado
+    /// `core_lock()`.
     fn autenticar_con_cache(
         &self,
         secreto: &str,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        self.cache_token.autenticar_con_cache(secreto)
+        let token = self.cache_token.autenticar_con_cache(secreto)?;
+        self.aplicar_desfase_de(&token);
+        Ok(token)
     }
 
     /// Igual que [`Nucleo::autenticar_con_cache`], pero permite adjuntar
@@ -300,7 +305,21 @@ impl Nucleo {
         secreto: &str,
         metadata: Option<&control_acceso::nube::MetadatosDispositivo>,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        self.cache_token.autenticar_y_cachear(secreto, metadata)
+        let token = self.cache_token.autenticar_y_cachear(secreto, metadata)?;
+        self.aplicar_desfase_de(&token);
+        Ok(token)
+    }
+
+    /// Aplica (y guarda) el desfase de reloj que trae un token recién
+    /// medido; en un acierto de caché no trae nada y no hace nada. En un
+    /// solo lugar a propósito: antes cada llamador lo aplicaba por su cuenta
+    /// y el login (`Nucleo::autenticar`) se lo saltaba -- medía el desfase
+    /// y lo descartaba, y las autenticaciones siguientes, desde el caché, ya
+    /// no lo traían, así que quedaba el de una medición vieja.
+    fn aplicar_desfase_de(&self, token: &control_acceso::nube::TokenDispositivo) {
+        if let Some(desfase_ms) = token.desfase_reloj_ms {
+            self.core_lock().actualizar_desfase_reloj(desfase_ms);
+        }
     }
 
     /// Conexión propia al mismo archivo, independiente de `core` -- mismo

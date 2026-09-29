@@ -65,9 +65,6 @@ impl Nucleo {
             .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
             })?;
-        if let Some(desfase_ms) = token.desfase_reloj_ms {
-            self.core_lock().actualizar_desfase_reloj(desfase_ms);
-        }
 
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::base_url(),
@@ -205,9 +202,6 @@ impl Nucleo {
             .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
             })?;
-        if let Some(desfase_ms) = token.desfase_reloj_ms {
-            self.core_lock().actualizar_desfase_reloj(desfase_ms);
-        }
         let topic = format!("sitio:{}", token.sitio_id);
 
         Ok(SesionRealtimeNube {
@@ -448,9 +442,6 @@ impl Nucleo {
                 mensaje: interno(error),
             })
         })?;
-        if let Some(desfase_ms) = token.desfase_reloj_ms {
-            self.core_lock().actualizar_desfase_reloj(desfase_ms);
-        }
 
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::base_url(),
