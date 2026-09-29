@@ -1,5 +1,6 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
+import { registrarErrorRender } from "../telemetria";
 
 /**
  * Sin esto, un error de render sin capturar en cualquier pantalla (un dato
@@ -27,6 +28,7 @@ export default class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    registrarErrorRender(error);
     console.error("Error sin capturar en la GUI:", error, info.componentStack);
   }
 

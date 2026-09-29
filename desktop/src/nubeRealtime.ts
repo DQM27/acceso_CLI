@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import {
   aplicarCambioNube,
+  desfaseRelojMs,
   enviarCambiosNube,
   sesionRealtimeNube,
   sincronizarCambiosNube,
@@ -9,6 +10,8 @@ import {
 } from "./api/nube";
 import type { ResumenSincronizacion } from "./api/nube";
 import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
+import { realtimeTelemetria, telemetriaActiva } from "./telemetria";
+import { latenciaDesde, tipoDeError } from "./telemetriaCalculos";
 
 export { EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 
@@ -79,6 +82,20 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   // `subscribe` avisa "SUBSCRIBED", así una falla puntual después de mucho
   // andar bien no arranca desde el tope.
   let intentosSeguidos = 0;
+  // Telemetría de diagnóstico (sin efecto si no está activa): desde cuándo
+  // está suscrito el canal actual y el desfase del reloj con que se corrige
+  // la latencia de los avisos.
+  let suscritoDesde: number | null = null;
+  let desfaseReloj: number | null = null;
+
+  /** El canal actual dejó de estar suscrito (o nunca llegó a estarlo). */
+  function anotarFinDeConexion(motivo: string) {
+    const telemetria = realtimeTelemetria();
+    if (!telemetria) return;
+    if (suscritoDesde === null) telemetria.error(motivo);
+    else telemetria.terminado(motivo, performance.now() - suscritoDesde);
+    suscritoDesde = null;
+  }
 
   function limpiarCanal() {
     if (temporizadorRenovar) window.clearTimeout(temporizadorRenovar);
@@ -157,9 +174,15 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
 
   async function conectar() {
     if (cancelado) return;
+    realtimeTelemetria()?.conectando();
+    const inicioIntento = performance.now();
     try {
       const sesion = await sesionRealtimeNube();
       if (cancelado) return;
+      if (telemetriaActiva()) {
+        desfaseReloj = await desfaseRelojMs().catch(() => null);
+        realtimeTelemetria()?.desfaseReloj(desfaseReloj);
+      }
 
       const clienteActual = createClient(sesion.base_url, sesion.apikey, {
         // Supabase vuelve a consultar este callback al conectar y renovar.
@@ -182,20 +205,32 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
         .channel(sesion.topic, { config: { private: true } })
         .on("broadcast", { event: "cambio_nube" }, ({ payload }) => {
           if (cancelado || cliente !== clienteActual) return;
-          if (payload?.dispositivo_id === sesion.dispositivo_id) return;
+          const ecoPropio = payload?.dispositivo_id === sesion.dispositivo_id;
+          realtimeTelemetria()?.aviso(
+            typeof payload?.table === "string" ? payload.table : undefined,
+            JSON.stringify(payload ?? null).length,
+            ecoPropio,
+            typeof payload?.changed_at === "string"
+              ? latenciaDesde(payload.changed_at, Date.now(), desfaseReloj)
+              : null,
+          );
+          if (ecoPropio) return;
           const tabla = typeof payload?.table === "string" ? payload.table : undefined;
           // El aviso trae la fila: se guarda SÓLO esa fila (Activos e
           // Historial) y se refresca la pantalla, sin consultar la nube. Si
           // no se pudo aplicar, se sincroniza sólo su tabla. El pulso
           // periódico sigue siendo la red de seguridad.
           if (payload?.registro || payload?.operation === "DELETE") {
+            const inicioAplicar = performance.now();
             void aplicarCambioNube(payload)
               .then((aplicado) => {
+                realtimeTelemetria()?.aplicado(aplicado, performance.now() - inicioAplicar);
                 if (cancelado) return;
                 if (aplicado) window.dispatchEvent(new Event(EVENTO_CAMBIO_EN_VIVO));
                 else programarSincronizacion(tabla);
               })
               .catch((error) => {
+                realtimeTelemetria()?.aplicado(false, performance.now() - inicioAplicar);
                 console.info("No se pudo aplicar el cambio en vivo:", error);
                 programarSincronizacion(tabla);
               });
@@ -208,6 +243,8 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
           opciones.onEstado?.(estado);
           if (estado === "SUBSCRIBED") {
             intentosSeguidos = 0;
+            suscritoDesde = performance.now();
+            realtimeTelemetria()?.suscrito(suscritoDesde - inicioIntento);
             // Recupera cambios ocurridos mientras el cliente estuvo desconectado.
             programarSincronizacion();
             // Presencia (docs/features-futuras/plan-sesion-unica-dispositivos.md, "Panel de
@@ -222,14 +259,19 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
             });
           } else if (estado === "CHANNEL_ERROR" || estado === "TIMED_OUT" || estado === "CLOSED") {
             if (error) console.info("No se pudo suscribir al canal de nube:", error.message);
+            anotarFinDeConexion(estado);
             reconectar();
           }
         });
 
       const renovarEnSegundos = Math.max(60, sesion.expires_in - 60);
-      temporizadorRenovar = window.setTimeout(reconectar, renovarEnSegundos * 1000);
+      temporizadorRenovar = window.setTimeout(() => {
+        anotarFinDeConexion("renovacion");
+        reconectar();
+      }, renovarEnSegundos * 1000);
     } catch (error) {
       if (cancelado) return;
+      realtimeTelemetria()?.error(tipoDeError(error));
       opciones.onEstado?.("CHANNEL_ERROR");
       console.info("Realtime de nube no quedó activo todavía:", error);
       reconectar();

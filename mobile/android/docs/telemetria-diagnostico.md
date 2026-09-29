@@ -6,6 +6,10 @@ Para medir cómo trabaja la app en el equipo real, el build `diagnostico`
 manda métricas técnicas a la tabla `telemetria_diagnostico` del proyecto de
 Supabase **staging**.
 
+El escritorio manda a la misma tabla, con los mismos nombres de evento y de
+campo (`version_app` empieza con `desktop-`): ver
+`desktop/docs/telemetria-diagnostico.md`.
+
 ## Qué build la tiene
 
 | Build        | Paquete                    | Base      | Telemetría | Compilación                          |

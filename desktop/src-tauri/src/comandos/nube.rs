@@ -652,3 +652,12 @@ pub fn cerrar_prestamo_gafete_provisional_remoto(
     )
     .map_err(mensaje_sincronizacion)
 }
+
+/// Último desfase medido entre el reloj de esta PC y el del servidor (ms,
+/// positivo si la PC va adelantada), o `None` si nunca se midió. Lo usa la
+/// telemetría de diagnóstico para corregir la latencia de los avisos en
+/// vivo (ver `desktop/src/telemetria.ts`).
+#[tauri::command]
+pub fn desfase_reloj_ms(state: tauri::State<GuiState>) -> Option<i64> {
+    state.core().desfase_reloj_ms()
+}

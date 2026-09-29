@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./invocar";
 import { solicitarSincronizacionNube } from "../eventosNube";
 import type { MedioIngreso } from "./ingresos";
 import type { TipoIngreso } from "./contratistas";
@@ -230,4 +230,11 @@ export async function cerrarIngresoProveedorRemoto(uuid: string): Promise<void> 
  * `fallido` de forma permanente -- necesitan que alguien las mire. */
 export function fallosPermanentesNube(): Promise<number> {
   return invoke("fallos_permanentes_nube");
+}
+
+/** Último desfase medido entre el reloj de esta PC y el del servidor (ms,
+ * positivo si la PC va adelantada), `null` si nunca se midió. Para la
+ * telemetría de diagnóstico (latencia de los avisos en vivo). */
+export function desfaseRelojMs(): Promise<number | null> {
+  return invoke<number | null>("desfase_reloj_ms");
 }

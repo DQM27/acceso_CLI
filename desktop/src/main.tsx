@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import "./index.css";
+import { iniciarTelemetria } from "./telemetria";
 
 // El menú contextual nativo del WebView (Atrás/Actualizar/Guardar como/
 // Imprimir/Más herramientas) es el de un navegador -- no aplica a esta app
@@ -13,6 +14,9 @@ import "./index.css";
 // `preventDefault()` igual y abre su menú antes de que este listener
 // corra en la fase de burbujeo, así que no compiten.
 document.addEventListener("contextmenu", (evento) => evento.preventDefault());
+
+// Sólo mide en el build de diagnóstico (ver `telemetria.ts`).
+void iniciarTelemetria();
 
 const raiz = document.getElementById("root");
 if (!raiz) {

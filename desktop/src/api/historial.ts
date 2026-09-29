@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./invocar";
 import type { MedioIngreso, ResultadoIngresoRegistrado } from "./ingresos";
 import type { TipoIngreso } from "./contratistas";
 import type { CargaCompleta } from "./comun";
