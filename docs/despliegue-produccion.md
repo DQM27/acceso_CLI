@@ -35,12 +35,12 @@ sección "Aplicado en producción" con fecha y quién lo autorizó.
 
 | # | Migración (nombre en staging) | Archivo en el repo | Rama dueña | ¿Rompe apps viejas? |
 |---|---|---|---|---|
-| ~~1~~ | ~~`cambio_nube_lleva_la_fila_de_ingresos`~~ **Aplicada en producción el 2026-09-29 (ver sección 5)** | `supabase/migrations/20260927200000_cambio_nube_lleva_la_fila_de_ingresos.sql` | `claude/nucleo-n1-n3` (N1, estable) | No |
+| ~~1~~ | ~~`cambio_nube_lleva_la_fila_de_ingresos`~~ **Aplicada en producción el 2026-09-29 (ver sección 5)** | `supabase/migrations/20260929075806_cambio_nube_lleva_la_fila_de_ingresos.sql` | `claude/nucleo-n1-n3` (N1, estable) | No |
 | 2 | `rediseno_visitas_tablas_nuevas` | `supabase/migrations/20260927120000_rediseno_visitas_tablas_nuevas.sql` | `claude/rediseno-web-visitas` | Revisar con esa rama |
 | 3 | `optimiza_rls_e_indices_de_visitas` | `supabase/migrations/20260927121500_optimiza_rls_e_indices_de_visitas.sql` | `claude/rediseno-web-visitas` | Revisar con esa rama |
 | 4 | `rediseno_visitas_rpcs_vista_busqueda` | `supabase/migrations/20260927150000_rediseno_visitas_rpcs_vista_busqueda.sql` | `claude/rediseno-web-visitas` | Revisar con esa rama |
 | 5 | `rutas_documento_tramo_viaje` (+ `_fix_search_path`, `_indices_fk`) | **No existe en el repo** | `feat/rutas-documento-tramo-viaje` (19 sep, sin unir) | Desconocido |
-| ~~6~~ | ~~`hora_servidor_ms`~~ **Aplicada en producción el 2026-09-29 (ver sección 5)** | `supabase/migrations/20260929020000_hora_servidor_ms.sql` | `claude/fusion-integral` (reloj en ms) | No |
+| ~~6~~ | ~~`hora_servidor_ms`~~ **Aplicada en producción el 2026-09-29 (ver sección 5)** | `supabase/migrations/20260929075809_hora_servidor_ms.sql` | `claude/fusion-integral` (reloj en ms) | No |
 
 ### 2.1 Aviso en vivo con los datos (`cambio_nube_lleva_la_fila_de_ingresos`)
 

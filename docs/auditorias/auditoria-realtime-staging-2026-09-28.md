@@ -15,7 +15,7 @@ todavía no está en producción.
 
 | Punto | Resultado |
 |---|---|
-| `private.emitir_cambio_nube_sitio()` en staging igual a la migración `20260927200000_cambio_nube_lleva_la_fila_de_ingresos.sql` | Idéntica (registrada como `20260927211032` en staging) |
+| `private.emitir_cambio_nube_sitio()` en staging igual a la migración `20260929075806_cambio_nube_lleva_la_fila_de_ingresos.sql` | Idéntica (registrada como `20260927211032` en staging) |
 | La misma función en `control-acceso-nube` | **Versión vieja**, sin `id` ni `registro` |
 | Triggers `*_emitir_cambio_nube` en staging | 17, todos habilitados (los 14 de producción más `viajes_ruta`, `documentos_ruta` y `salida_ruta_documentos`) |
 | Políticas de `realtime.messages` | Las 3 esperadas (broadcast leer, presencia leer, presencia publicar), todas por `sitio:` + `sitio_id` del JWT |
@@ -72,7 +72,7 @@ así que no puede reutilizar `emitir_cambio_nube_sitio` tal cual).
 
 Sin riesgo de rotura: la app nueva con la función vieja cae en la
 sincronización por tabla. Pero la mejora principal no rinde en la portería
-hasta aplicar `20260927200000_cambio_nube_lleva_la_fila_de_ingresos.sql` en
+hasta aplicar `20260929075806_cambio_nube_lleva_la_fila_de_ingresos.sql` en
 `control-acceso-nube`.
 
 ### R-3 (media) — Solo `ingresos` trae la fila

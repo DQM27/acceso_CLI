@@ -4,7 +4,7 @@
 //! El header HTTP `Date` (ver `cliente::autenticar_dispositivo`) trae
 //! segundos enteros: el desfase medido con él puede errar hasta 1 s. Acá se
 //! le pide la hora al servidor en milisegundos (`public.hora_servidor_ms`,
-//! migración `20260929020000_hora_servidor_ms.sql`) varias veces y se usa
+//! migración `20260929075809_hora_servidor_ms.sql`) varias veces y se usa
 //! la respuesta que tardó MENOS en ir y volver: su error es, como mucho, la
 //! mitad de ese viaje (unas decenas de ms en 4G). La primera respuesta suele
 //! ser la peor (arma la conexión TLS), por eso no basta con una.
