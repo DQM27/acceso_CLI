@@ -49,6 +49,10 @@ pub struct PreparacionIngreso {
     pub resultado_acceso: ResultadoAcceso,
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
+    /// El otro dispositivo del sitio tiene abierto un ingreso con esta
+    /// cédula (caché `ingresos_remotos`). Sin esto, la misma persona podía
+    /// quedar adentro dos veces: una por la PC y otra por el teléfono.
+    pub ingreso_activo_en_otro_dispositivo: bool,
     /// Nombre del sitio donde este contratista tiene un ingreso abierto
     /// AHORA MISMO, si es otro distinto de este (`docs/pendientes.md`,
     /// "Chequeo cruzado de ingresos abiertos entre sitios"). Siempre `None`
@@ -81,12 +85,17 @@ pub struct PreparacionIngreso {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum BloqueoIngreso {
     IngresoActivo,
+    IngresoActivoEnOtroDispositivo,
     ActivoEnOtroSitio {
         sitio: String,
     },
     AccesoDenegado {
         motivo: crate::domain::resultado_acceso::MotivoDenegacion,
     },
+    /// Con la nube configurada no se pudo confirmar que la persona no tenga
+    /// un ingreso activo en otro lugar: no se registra (decisión del
+    /// dueño, igual que el gafete). Lo arma `con_nube`, nunca `bloqueo()`.
+    SinVerificarEnLaNube,
 }
 
 impl PreparacionIngreso {
@@ -101,6 +110,9 @@ impl PreparacionIngreso {
     pub fn bloqueo(&self) -> Option<BloqueoIngreso> {
         if self.tiene_ingreso_activo {
             return Some(BloqueoIngreso::IngresoActivo);
+        }
+        if self.ingreso_activo_en_otro_dispositivo {
+            return Some(BloqueoIngreso::IngresoActivoEnOtroDispositivo);
         }
         if let Some(sitio) = &self.activo_en_otro_sitio {
             return Some(BloqueoIngreso::ActivoEnOtroSitio {
@@ -272,6 +284,9 @@ where
             .registros
             .buscar_ingreso_activo(contratista.id)?
             .is_some();
+        let ingreso_activo_en_otro_dispositivo = self
+            .registros
+            .cedula_con_ingreso_abierto_en_otro_dispositivo(&contratista.cedula)?;
         let gafetes_deuda = self.gafetes.deuda_de_contratista(contratista.id)?;
 
         Ok(PreparacionIngreso {
@@ -284,6 +299,7 @@ where
             resultado_acceso,
             requiere_gafete,
             tiene_ingreso_activo,
+            ingreso_activo_en_otro_dispositivo,
             activo_en_otro_sitio: None,
             gafetes_deuda,
             aviso_praind: None,
@@ -341,6 +357,12 @@ where
             .is_some()
         {
             return Err(RegistroIngresoServiceError::IngresoActivo);
+        }
+        if self
+            .registros
+            .cedula_con_ingreso_abierto_en_otro_dispositivo(&contratista.cedula)?
+        {
+            return Err(RegistroIngresoServiceError::IngresoActivoEnOtroDispositivo);
         }
 
         let gafete_numero = if contratista.requiere_gafete() {
@@ -476,6 +498,7 @@ mod tests_bloqueo {
             resultado_acceso: ResultadoAcceso::Permitido,
             requiere_gafete: false,
             tiene_ingreso_activo: false,
+            ingreso_activo_en_otro_dispositivo: false,
             activo_en_otro_sitio: None,
             gafetes_deuda: Vec::new(),
             aviso_praind: None,
@@ -500,6 +523,23 @@ mod tests_bloqueo {
         };
 
         assert_eq!(preparacion.bloqueo(), Some(BloqueoIngreso::IngresoActivo));
+    }
+
+    /// Abierto en el otro dispositivo del sitio: gana sobre otro sitio y
+    /// sobre un acceso denegado (es el mismo sitio, la misma persona).
+    #[test]
+    fn ingreso_activo_en_otro_dispositivo_bloquea() {
+        let preparacion = PreparacionIngreso {
+            ingreso_activo_en_otro_dispositivo: true,
+            activo_en_otro_sitio: Some("Cartago".into()),
+            resultado_acceso: ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso),
+            ..preparacion_sin_bloqueo()
+        };
+
+        assert_eq!(
+            preparacion.bloqueo(),
+            Some(BloqueoIngreso::IngresoActivoEnOtroDispositivo)
+        );
     }
 
     /// Sin ingreso activo local, pero sí en otro sitio: gana sobre un

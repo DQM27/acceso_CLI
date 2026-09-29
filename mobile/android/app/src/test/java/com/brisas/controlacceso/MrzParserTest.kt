@@ -11,10 +11,10 @@ import uniffi.control_acceso_mobile.FormatoMrz
 /// `docs/auditorias/auditoria-separacion-kotlin-rust-2026-09-25.md`) --
 /// incluidos los dos casos reales documentados (DIMEX costarricense, cédula
 /// belga issue Arg0s1080/mrz#4) y los nuevos de corrección acotada de
-/// confusables. Lo único que sigue del lado Kotlin es `buscarBloquesMrz`
-/// (extracción mecánica de líneas, privada a este archivo) -- se ejercita
-/// acá sólo indirectamente, a través del punto de entrada público
-/// `leerMrzDeTexto`, que es lo único invocable desde otro archivo.
+/// confusables. Desde la auditoría OCR 2026-09-28 (A-1) también la
+/// búsqueda de las líneas dentro del texto vive en Rust
+/// (`lectura_documentos/mrz_texto.rs`): estos casos la ejercitan a través
+/// del punto de entrada de siempre, `leerMrzDeTexto`.
 class MrzParserTest {
 
     // Checksum verificado con script Python (algoritmo ICAO 9303 real) --

@@ -183,7 +183,7 @@ class ActivosViewModel(
         trabajoBusqueda?.cancel()
         trabajoBusqueda = viewModelScope.launch {
             try {
-                val resultados = withContext(dispatcherIO) { nucleo.buscarContratistas(valor) }
+                val resultados = withContext(dispatcherIO) { medirNucleo("buscarContratistas") { nucleo.buscarContratistas(valor) } }
                 resultadosBusqueda = resultados
                 val contratista = contratistaEscaneadoClaro(valor, resultados)
                 if (contratista != null) {
@@ -220,7 +220,7 @@ class ActivosViewModel(
     /// que mostrar.
     private suspend fun remotosSeguro(): List<IngresoRemoto> =
         try {
-            withContext(dispatcherIO) { nucleo.listarIngresosRemotos() }
+            withContext(dispatcherIO) { medirNucleo("listarIngresosRemotos") { nucleo.listarIngresosRemotos() } }
         } catch (_: NucleoException) {
             emptyList()
         }
@@ -236,13 +236,13 @@ class ActivosViewModel(
                     ModoBusqueda.ENTRADA -> {
                         if (texto.isBlank()) {
                             val locales = withContext(dispatcherIO) {
-                                nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA)
+                                medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA) }
                             }
                             val remotos = remotosSeguro()
                             activos = locales.map { FilaActiva.Local(it) } + remotos.map { FilaActiva.Remota(it) }
                         } else {
                             resultadosBusqueda =
-                                withContext(dispatcherIO) { nucleo.buscarContratistas(texto) }
+                                withContext(dispatcherIO) { medirNucleo("buscarContratistas") { nucleo.buscarContratistas(texto) } }
                         }
                     }
                     ModoBusqueda.SALIDA_NOMBRE -> {
@@ -254,7 +254,7 @@ class ActivosViewModel(
                             emptyList()
                         } else {
                             val locales = withContext(dispatcherIO) {
-                                nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.NOMBRE_CEDULA)
+                                medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.NOMBRE_CEDULA) }
                             }
                             val remotos = remotosSeguro()
                                 .filter { it.contratistaNombre.contains(texto, ignoreCase = true) }
@@ -269,7 +269,7 @@ class ActivosViewModel(
                             withContext(dispatcherIO) {
                                 numeros.map { numero ->
                                     val resultado =
-                                        nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE)
+                                        medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE) }
                                     CoincidenciaGafete(numero, resultado.firstOrNull())
                                 }
                             }
@@ -316,7 +316,7 @@ class ActivosViewModel(
                     ""
                 }
                 val preparacion = withContext(dispatcherIO) {
-                    nucleo.prepararIngresoConSecreto(contratista.id, secreto)
+                    medirNucleo("prepararIngresoConSecreto") { nucleo.prepararIngresoConSecreto(contratista.id, secreto) }
                 }
                 seleccionIngreso = preparacion.mensajeBloqueo?.let { mensaje ->
                     SeleccionIngreso.Bloqueada(preparacion, mensaje)
@@ -387,7 +387,7 @@ class ActivosViewModel(
                     } else {
                         secretoStore.cargar().orEmpty()
                     }
-                    nucleo.registrarIngresoConSecreto(preparacion.contratistaId, medio, gafete, placaTexto, secreto)
+                    medirNucleo("registrarIngresoConSecreto") { nucleo.registrarIngresoConSecreto(preparacion.contratistaId, medio, gafete, placaTexto, secreto) }
                 }
                 onIngresoRegistrado()
             } catch (excepcion: Exception) {
@@ -399,7 +399,7 @@ class ActivosViewModel(
     }
 
     fun onIngresoRegistrado() {
-        CambiosNube.solicitar()
+        CambiosNube.cambioLocal()
         seleccionIngreso = SeleccionIngreso.Ninguna
         errorIngreso = null
         texto = ""
@@ -421,16 +421,16 @@ class ActivosViewModel(
                 mutexMutaciones.withLock {
                     withContext(dispatcherIO) {
                         when (fila) {
-                            is FilaActiva.Local -> nucleo.registrarSalida(fila.activo.registroId)
+                            is FilaActiva.Local -> medirNucleo("registrarSalida") { nucleo.registrarSalida(fila.activo.registroId) }
                             is FilaActiva.Remota -> {
                                 val secreto = secretoStore.cargar()
                                     ?: throw SecretoDispositivoNoEncontradoException()
-                                nucleo.cerrarIngresoRemotoConSecreto(secreto, fila.remoto.uuid)
+                                medirNucleo("cerrarIngresoRemotoConSecreto") { nucleo.cerrarIngresoRemotoConSecreto(secreto, fila.remoto.uuid) }
                             }
                         }
                     }
                 }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 buscar()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
@@ -454,8 +454,8 @@ class ActivosViewModel(
                             continue
                         }
                         try {
-                            withContext(dispatcherIO) { nucleo.registrarSalida(activoCoincidente.registroId) }
-                            CambiosNube.solicitar()
+                            withContext(dispatcherIO) { medirNucleo("registrarSalida") { nucleo.registrarSalida(activoCoincidente.registroId) } }
+                            CambiosNube.cambioLocal()
                             registrados.add(activoCoincidente.contratistaNombre)
                         } catch (excepcion: NucleoException) {
                             fallidos.add("gafete ${coincidencia.numero}: ${excepcion.message}")
@@ -495,15 +495,15 @@ class ActivosViewModel(
                 enviandoGafetes = true
                 try {
                     val activo = withContext(dispatcherIO) {
-                        nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE).firstOrNull()
+                        medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE) }.firstOrNull()
                     }
                     coincidenciasGafete = listOf(CoincidenciaGafete(numero, activo))
                     if (activo == null) {
                         mensaje = "Gafete $numero: sin ingreso activo"
                         mensajeEsError = true
                     } else {
-                        withContext(dispatcherIO) { nucleo.registrarSalida(activo.registroId) }
-                        CambiosNube.solicitar()
+                        withContext(dispatcherIO) { medirNucleo("registrarSalida") { nucleo.registrarSalida(activo.registroId) } }
+                        CambiosNube.cambioLocal()
                         mensaje = "Salida registrada: ${activo.contratistaNombre}"
                         mensajeEsError = false
                         texto = ""
@@ -539,11 +539,4 @@ class ActivosViewModel(
             initializer { ActivosViewModel(nucleo, secretoStore) }
         }
     }
-}
-
-private fun contratistaEscaneadoClaro(valor: String, resultados: List<ContratistaResumen>): ContratistaResumen? {
-    if (resultados.size == 1) return resultados.single()
-    val digitos = valor.filter(Char::isDigit)
-    if (digitos.isEmpty()) return null
-    return resultados.singleOrNull { it.cedula.filter(Char::isDigit) == digitos }
 }

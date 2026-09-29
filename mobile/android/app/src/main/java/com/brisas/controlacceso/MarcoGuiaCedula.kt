@@ -47,10 +47,10 @@ fun MarcoGuiaCedula(
     estado: EstadoEscaneo,
     modifier: Modifier = Modifier,
     // Misma región que de verdad se recorta antes del OCR (ver
-    // `RegionGuiaOcr`/`analizarCedula`) -- por defecto la angosta de
+    // `RegionGuiaOcr`/`analizarFrameOcr`) -- por defecto la angosta de
     // tarjeta, para que las 3 pantallas que no pasan nada distinto no
     // cambien en nada. `null` (comprobante de carga de ruta, sin recorte
-    // -- ver el comentario en `analizarCedula`) dibuja el recuadro sobre
+    // -- ver el comentario en `analizarFrameOcr`) dibuja el recuadro sobre
     // toda la pantalla, sin oscurecer nada: mentirle a quien opera con un
     // recuadro angosto cuando en realidad se está analizando el frame
     // completo sería peor que no mostrar ningún límite.

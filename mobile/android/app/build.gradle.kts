@@ -15,6 +15,17 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// Hash corto del commit para identificar el build `diagnostico`; "sinhash"
+// si git no está disponible o el árbol no es un repositorio.
+val hashCortoDelCommit: String = try {
+    providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().ifEmpty { "sinhash" }
+} catch (e: Exception) {
+    "sinhash"
+}
+
 android {
     namespace = "com.brisas.controlacceso"
     compileSdk = 36
@@ -22,18 +33,31 @@ android {
     defaultConfig {
         applicationId = "com.dqm27.lattis"
         // Dispositivo real conocido: Samsung A25 5G (arm64) — ver
-        // docs/plan-app-movil.md. jniLibs trae arm64-v8a (dispositivo real)
-        // y x86_64 (emulador de desarrollo).
+        // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.2.6"
+        versionCode = 19
+        versionName = "1.2.7"
 
         // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
         // el default acá es "development" (debug); `release {}` abajo lo
         // pisa a "production". Mismo criterio que `cfg!(debug_assertions)`
         // del lado de escritorio.
         manifestPlaceholders["sentryEnvironment"] = "development"
+
+        // Sólo el procesador del dispositivo real (arm64-v8a, Samsung A25):
+        // el APK no se usa en emuladores. Las librerías nativas de ML Kit y
+        // compañía para otras ABI eran peso muerto (medido: APK de debug de
+        // 94,5 MB a 64,7 MB sin x86/armeabi-v7a, y 18 MB más sin x86_64).
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+
+        // A qué Supabase apunta el núcleo (ver AplicacionControlAcceso.kt) y
+        // si se recolecta telemetría de rendimiento (ver Telemetria.kt). Los
+        // dos en `false` para release: producción nunca los activa.
+        buildConfigField("boolean", "AMBIENTE_STAGING", "false")
+        buildConfigField("boolean", "TELEMETRIA", "false")
     }
 
     signingConfigs {
@@ -56,6 +80,7 @@ android {
             // firma hasta ahí) y la reemplaza. Con el sufijo, Android los
             // trata como dos apps distintas -- coexisten sin pisarse.
             applicationIdSuffix = ".debug"
+            buildConfigField("boolean", "AMBIENTE_STAGING", "true")
         }
         release {
             isMinifyEnabled = true
@@ -64,6 +89,29 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             manifestPlaceholders["sentryEnvironment"] = "production"
+        }
+        // Build para MEDIR rendimiento en el teléfono: compilado igual que
+        // release (R8, sin `debuggable`) porque un build de debug corre sin
+        // optimizaciones y daría tiempos peores que los reales. Firmado con
+        // la llave de debug (no requiere la de producción), apunta al
+        // sandbox (staging) y manda telemetría a su tabla
+        // `telemetria_diagnostico`. Sufijo propio: convive con la app real y
+        // con el build de debug sin pisarlos. `./gradlew assembleDiagnostico`.
+        create("diagnostico") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".diag"
+            // Con el hash corto del commit al final, `version_app` de cada
+            // fila de telemetría dice de qué código salió ("1.2.7-diag+abc1234").
+            versionNameSuffix = "-diag+$hashCortoDelCommit"
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            // Permite adjuntar el profiler de Android Studio si algún día hay
+            // una PC a mano, sin volver la app `debuggable`.
+            isProfileable = true
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "AMBIENTE_STAGING", "true")
+            buildConfigField("boolean", "TELEMETRIA", "true")
+            manifestPlaceholders["sentryEnvironment"] = "diagnostico"
         }
     }
 
@@ -92,6 +140,10 @@ dependencies {
     implementation("androidx.camera:camera-view:1.5.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // PDF417 del reverso de la cédula anterior (sólo cédula y nombre, ver
+    // mobile/rust-core/src/pdf417_cedula.rs). Modelo empaquetado (~2,4 MB):
+    // sin descarga en el primer uso, igual que el de texto.
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation(platform("io.github.jan-tennert.supabase:bom:3.2.2"))
     implementation("io.github.jan-tennert.supabase:realtime-kt")
     implementation("io.ktor:ktor-client-okhttp:3.2.2")

@@ -71,6 +71,7 @@ fun PantallaPrincipal(
     secretoStore: SecretoDispositivoStore,
     onCerrarSesion: () -> Unit,
 ) {
+    RegistrarPantalla("principal")
     var refrescarNube by remember { mutableIntStateOf(0) }
     var mostrarNuevoContratista by remember { mutableStateOf(false) }
     // Sin esto, atrás del sistema en la raíz (pestañas) caía directo al
@@ -118,6 +119,9 @@ fun PantallaPrincipal(
             scope = scope,
             usuarioCedula = sesion.cedula,
             usuarioNombre = sesion.nombre,
+            // Aviso en vivo con la fila ya guardada: refresca Activos al
+            // instante, sin esperar la sincronización.
+            onCambioAplicado = { refrescarNube += 1 },
         )
     }
     val sincronizacion = remember(nucleo, secretoStore, scope) {
@@ -152,13 +156,19 @@ fun PantallaPrincipal(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(sincronizacion, realtime, lifecycleOwner) {
         var trabajoBloqueo: Job? = null
+        // Al volver de segundo plano la sincronización sale sin esperar a
+        // Realtime (ver `SincronizacionPeriodica.iniciar`); en el primer
+        // arranque no, porque el login ya lanzó una.
+        var volviendoDeSegundoPlano = false
         fun iniciarServicios() {
             trabajoBloqueo?.cancel()
             trabajoBloqueo = null
-            sincronizacion.iniciar()
+            sincronizacion.iniciar(inmediata = volviendoDeSegundoPlano)
+            volviendoDeSegundoPlano = false
             realtime.iniciar()
         }
         fun detenerServiciosYProgramarBloqueo() {
+            volviendoDeSegundoPlano = true
             realtime.detener()
             sincronizacion.detener()
             trabajoBloqueo?.cancel()
@@ -348,7 +358,12 @@ fun PantallaPrincipal(
     }
 }
 
-private const val DEMORA_BLOQUEO_SESION_MS = 2 * 60_000L
+/// Tiempo fuera de primer plano (app minimizada o teléfono bloqueado) tras
+/// el cual se cierra la sesión. Eran 2 minutos: en la portería el guardia
+/// bloquea el teléfono entre ingreso e ingreso y tenía que volver a entrar
+/// casi siempre. 25 minutos cubre esas pausas y sigue cerrando la sesión de
+/// un teléfono olvidado.
+private const val DEMORA_BLOQUEO_SESION_MS = 25 * 60_000L
 
 /// Secciones de la pantalla principal, en el orden de la fila de pestañas
 /// (punto M5 de la auditoría móvil: antes eran textos sueltos).

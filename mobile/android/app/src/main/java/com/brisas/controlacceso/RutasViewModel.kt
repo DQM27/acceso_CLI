@@ -95,7 +95,7 @@ class RutasViewModel(
         viewModelScope.launch {
             cargando = true
             try {
-                activas = withContext(dispatcherIO) { nucleo.listarRutasActivas() }
+                activas = withContext(dispatcherIO) { medirNucleo("listarRutasActivas") { nucleo.listarRutasActivas() } }
                 error = null
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
@@ -118,7 +118,7 @@ class RutasViewModel(
         }
         buscadorEncargado.buscar {
             try {
-                resultadosEncargado = withContext(dispatcherIO) { nucleo.buscarEncargadosRuta(nuevo) }
+                resultadosEncargado = withContext(dispatcherIO) { medirNucleo("buscarEncargadosRuta") { nucleo.buscarEncargadosRuta(nuevo) } }
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             }
@@ -142,7 +142,7 @@ class RutasViewModel(
         cambiarTextoEncargado(texto)
         buscadorEncargado.buscar(inmediato = true) {
             try {
-                val resultados = withContext(dispatcherIO) { nucleo.buscarEncargadosRuta(texto) }
+                val resultados = withContext(dispatcherIO) { medirNucleo("buscarEncargadosRuta") { nucleo.buscarEncargadosRuta(texto) } }
                 resultadosEncargado = resultados
                 resultados
                     .singleOrNull { it.codigoEmpleado == texto || it.nombre == texto }
@@ -163,7 +163,7 @@ class RutasViewModel(
         }
         buscadorRuta.buscar {
             try {
-                resultadosRuta = withContext(dispatcherIO) { nucleo.buscarRutas(nuevo) }
+                resultadosRuta = withContext(dispatcherIO) { medirNucleo("buscarRutas") { nucleo.buscarRutas(nuevo) } }
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             }
@@ -186,7 +186,7 @@ class RutasViewModel(
         cambiarTextoRuta(numero.toString())
         buscadorRuta.buscar(inmediato = true) {
             try {
-                val resultados = withContext(dispatcherIO) { nucleo.buscarRutas(numero.toString()) }
+                val resultados = withContext(dispatcherIO) { medirNucleo("buscarRutas") { nucleo.buscarRutas(numero.toString()) } }
                 resultadosRuta = resultados
                 resultados.singleOrNull { it.numero == numero.toLong() }?.let { elegirRuta(it) }
             } catch (excepcion: NucleoException) {
@@ -207,7 +207,7 @@ class RutasViewModel(
         }
         buscadorVehiculo.buscar {
             try {
-                resultadosVehiculo = withContext(dispatcherIO) { nucleo.buscarVehiculosRuta(nuevo) }
+                resultadosVehiculo = withContext(dispatcherIO) { medirNucleo("buscarVehiculosRuta") { nucleo.buscarVehiculosRuta(nuevo) } }
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             }
@@ -230,7 +230,7 @@ class RutasViewModel(
         cambiarTextoVehiculo(texto)
         buscadorVehiculo.buscar(inmediato = true) {
             try {
-                val resultados = withContext(dispatcherIO) { nucleo.buscarVehiculosRuta(texto) }
+                val resultados = withContext(dispatcherIO) { medirNucleo("buscarVehiculosRuta") { nucleo.buscarVehiculosRuta(texto) } }
                 resultadosVehiculo = resultados
                 resultados
                     .singleOrNull { it.placa == texto || it.numeroUnidad == texto }
@@ -246,8 +246,8 @@ class RutasViewModel(
         registrando = true
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) { nucleo.registrarSalidaRuta(solicitud) }
-                CambiosNube.solicitar()
+                withContext(dispatcherIO) { medirNucleo("registrarSalidaRuta") { nucleo.registrarSalidaRuta(solicitud) } }
+                CambiosNube.cambioLocal()
                 mensaje = "Salida registrada"
                 error = null
                 textoEncargado = ""
@@ -269,8 +269,8 @@ class RutasViewModel(
     fun registrarRetorno(salida: SalidaRutaActivaResumen) {
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) { nucleo.registrarRetornoRuta(salida.id) }
-                CambiosNube.solicitar()
+                withContext(dispatcherIO) { medirNucleo("registrarRetornoRuta") { nucleo.registrarRetornoRuta(salida.id) } }
+                CambiosNube.cambioLocal()
                 refrescarActivas()
             } catch (excepcion: NucleoException) {
                 error = excepcion.message

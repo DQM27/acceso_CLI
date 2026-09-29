@@ -1,5 +1,6 @@
 pub mod acceso;
 pub mod autorizacion;
+pub mod cedula;
 pub mod cita;
 pub mod contratista;
 pub mod gafete;

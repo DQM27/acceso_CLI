@@ -111,7 +111,13 @@ pub fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
         sitio_id: &token.sitio_id,
     };
     let conexion = state.conexion_secundaria()?;
-    nube::recibir_catalogo_del_sitio(&conexion, &contexto).map_err(mensaje_sincronizacion)?;
+    nube::recibir(
+        &conexion,
+        &contexto,
+        nube::AlcanceSincronizacion::solo_catalogo(),
+        nube::PerfilDispositivo::Escritorio,
+    )
+    .map_err(mensaje_sincronizacion)?;
     Ok(())
 }
 

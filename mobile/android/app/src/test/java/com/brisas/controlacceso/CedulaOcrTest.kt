@@ -26,6 +26,19 @@ class CedulaOcrTest {
     }
 
     @Test
+    fun rechazaNumeroQueEmpiezaEnCeroPorqueNingunaProvinciaEsCero() {
+        assertNull(extraerCedulaDeTexto("001234567"))
+        assertNull(extraerCedulaDeTexto("0 1234 5678"))
+    }
+
+    @Test
+    fun saltaElNumeroDeControlYSigueHastaLaCedulaReal() {
+        // Antes se devolvía el primero ("001234567") y quien llamaba lo
+        // descartaba, perdiendo la cédula que venía después.
+        assertEquals("123456789", extraerCedulaDeTexto("001234567\n123456789"))
+    }
+
+    @Test
     fun ignoraNumeroDeExpedienteConFormatoDeCedula() {
         assertNull(extraerCedulaDeTexto("Expediente No.: 1-2345-6789"))
     }

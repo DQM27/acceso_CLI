@@ -48,12 +48,6 @@ pub fn praind_vencido(fecha_vencimiento: Option<NaiveDate>, hoy: NaiveDate) -> b
     fecha_vencimiento.is_some_and(|fecha| fecha < hoy)
 }
 
-/// Regla de negocio: la cédula sólo tiene dígitos (sin guiones ni
-/// espacios). Vacía no es válida.
-pub fn cedula_valida(cedula: &str) -> bool {
-    !cedula.is_empty() && cedula.chars().all(|c| c.is_ascii_digit())
-}
-
 /// Regla de negocio: el nombre sólo tiene letras (con tildes), espacios,
 /// apóstrofo y guion -- sin números ni símbolos -- y se guarda en
 /// MAYÚSCULAS con los espacios de más colapsados. `None` si no cumple o
@@ -117,13 +111,6 @@ mod tests {
         assert!(!praind_vencido(Some(hoy), hoy));
         assert!(!praind_vencido(NaiveDate::from_ymd_opt(2027, 1, 1), hoy));
         assert!(!praind_vencido(None, hoy));
-    }
-
-    #[test]
-    fn cedula_valida_solo_digitos() {
-        assert!(cedula_valida("701000000"));
-        assert!(!cedula_valida("7-0100-0000"));
-        assert!(!cedula_valida(""));
     }
 
     #[test]

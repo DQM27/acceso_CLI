@@ -49,7 +49,7 @@ class GafetesProvisionalesViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
     }
 
     private fun viewModel(secreto: String? = null) =

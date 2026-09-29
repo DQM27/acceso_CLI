@@ -125,7 +125,7 @@ class RutasViewModelTest {
             sqlEncargadoAraya(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = viewModel()
         advanceUntilIdle()
 
@@ -169,7 +169,7 @@ class RutasViewModelTest {
     @Test
     fun `registrarSalida con numero de ruta inexistente falla y deja un error legible`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = viewModel()
         advanceUntilIdle()
 

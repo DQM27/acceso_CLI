@@ -1,0 +1,2 @@
+
+ALTER TABLE empresas ADD COLUMN activo INTEGER NOT NULL DEFAULT 1 CHECK (activo IN (0, 1));

@@ -17,6 +17,7 @@ mod estado;
 mod pdf;
 #[cfg(windows)]
 mod recuperacion_local;
+mod telemetria;
 
 use estado::GuiState;
 
@@ -78,13 +79,39 @@ fn precargar_catalogo_durante_splash(app: tauri::AppHandle) {
 fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(ESPERA_INICIAL_SINCRONIZACION).await;
+        // La primera vuelta es la sincronización de arranque: reconcilia los
+        // historiales con el traslape largo (ver
+        // `nube::AlcanceSincronizacion::arranque`). El pulso de después sólo
+        // pide lo que cambió.
+        let mut alcance = control_acceso::nube::AlcanceSincronizacion::arranque();
         loop {
             let manejador = app.clone();
+            let inicio = std::time::Instant::now();
+            let es_arranque = alcance == control_acceso::nube::AlcanceSincronizacion::arranque();
             let resultado = tauri::async_runtime::spawn_blocking(move || {
                 let estado = manejador.state::<GuiState>();
-                comandos::nube::ejecutar_sincronizacion(&estado)
+                comandos::nube::ejecutar_sincronizacion_con_alcance(&estado, alcance)
             })
             .await;
+            if telemetria::activa() {
+                telemetria::evento(
+                    "sincronizacion_auto",
+                    serde_json::json!({
+                        "ms": inicio.elapsed().as_millis(),
+                        "arranque": es_arranque,
+                        "resultado": match &resultado {
+                            Ok(Ok(_)) => "ok",
+                            Ok(Err(_)) => "error",
+                            Err(_) => "tarea_fallida",
+                        },
+                    }),
+                );
+            }
+            // Si el arranque falló (sin sesión todavía, sin red), se vuelve a
+            // intentar como arranque en la próxima vuelta.
+            if matches!(resultado, Ok(Ok(_))) {
+                alcance = control_acceso::nube::AlcanceSincronizacion::completo();
+            }
 
             // Antes los dos casos de error acá quedaban en silencio total --
             // ni el usuario los veía (es automático, sin botón que falle a
@@ -311,7 +338,13 @@ struct EstadoSplash {
 /// llamaron antes), la llama tanto el comando de abajo (camino normal) como
 /// la red de seguridad, cualquiera que llegue primero gana y el otro no hace
 /// nada dañino.
-fn cerrar_splash_y_mostrar_principal(app: &tauri::AppHandle) {
+fn cerrar_splash_y_mostrar_principal(app: &tauri::AppHandle, por: &str) {
+    if let Some(ms) = telemetria::ms_desde_inicio() {
+        telemetria::evento(
+            "arranque",
+            serde_json::json!({ "ms_hasta_ventana": ms, "por": por }),
+        );
+    }
     if let Some(splash) = app.get_webview_window("splashscreen") {
         let _ = splash.close();
     }
@@ -331,7 +364,7 @@ fn mostrar_ventana_principal(app: tauri::AppHandle) {
     app.state::<EstadoSplash>()
         .cerrado_por_frontend
         .store(true, std::sync::atomic::Ordering::SeqCst);
-    cerrar_splash_y_mostrar_principal(&app);
+    cerrar_splash_y_mostrar_principal(&app, "frontend");
 }
 
 /// Arma el cierre del splash: el camino normal es el invoke de arriba desde
@@ -361,7 +394,7 @@ fn configurar_cierre_de_splash(app: &tauri::App) {
             );
             log::warn!("{mensaje}");
             sentry::capture_message(&mensaje, sentry::Level::Warning);
-            cerrar_splash_y_mostrar_principal(&handle);
+            cerrar_splash_y_mostrar_principal(&handle, "red_de_seguridad");
         }
     });
     if let Some(principal) = app.get_webview_window("main") {
@@ -485,6 +518,105 @@ fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+/// Todos los comandos Tauri que puede invocar el frontend -- separado de
+/// `run()` sólo para mantenerla bajo el tope de líneas de Clippy.
+fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        comandos::autenticacion::requiere_configuracion_inicial,
+        comandos::autenticacion::login,
+        comandos::autenticacion::cambiar_password_supabase,
+        comandos::autenticacion::cerrar_sesion,
+        comandos::contratistas::buscar_contratistas,
+        comandos::contratistas::crear_contratista,
+        comandos::contratistas::actualizar_contratista,
+        comandos::contratistas::reglas_formulario_contratista,
+        comandos::empresas::listar_empresas,
+        comandos::empresas::listar_empresas_seleccionables,
+        comandos::empresas::buscar_empresas,
+        comandos::empresas::crear_empresa,
+        comandos::empresas::actualizar_empresa,
+        comandos::empresas::establecer_empresa_activa,
+        comandos::usuarios::cambiar_mi_password,
+        comandos::ingresos::listar_ingresos_activos,
+        comandos::ingresos::preparar_ingreso,
+        comandos::ingresos::registrar_ingreso,
+        comandos::ingresos::registrar_salida,
+        comandos::citas::verificar_check_in_visita,
+        comandos::citas::registrar_entrada_visita,
+        comandos::citas::registrar_salida_visita,
+        comandos::citas::listar_visitas_activas,
+        comandos::citas::listar_historial_visitas_sitio,
+        comandos::citas::listar_agenda_visitas,
+        comandos::rutas::listar_vehiculos_ruta,
+        comandos::rutas::listar_vehiculos_ruta_seleccionables,
+        comandos::rutas::crear_vehiculo_ruta,
+        comandos::rutas::actualizar_vehiculo_ruta,
+        comandos::rutas::listar_encargados_ruta,
+        comandos::rutas::listar_encargados_ruta_seleccionables,
+        comandos::rutas::crear_encargado_ruta,
+        comandos::rutas::actualizar_encargado_ruta,
+        comandos::rutas::listar_rutas,
+        comandos::rutas::listar_rutas_seleccionables,
+        comandos::rutas::crear_ruta,
+        comandos::rutas::crear_rutas_rango,
+        comandos::rutas::dar_de_baja_ruta,
+        comandos::rutas::reactivar_ruta,
+        comandos::rutas::registrar_salida_ruta,
+        comandos::rutas::registrar_retorno_ruta,
+        comandos::rutas::listar_rutas_activas,
+        comandos::rutas::buscar_salida_ruta,
+        comandos::proveedores::listar_empresas_proveedor,
+        comandos::proveedores::listar_empresas_proveedor_seleccionables,
+        comandos::proveedores::buscar_empresas_proveedor,
+        comandos::proveedores::crear_empresa_proveedor,
+        comandos::proveedores::establecer_empresa_proveedor_activa,
+        comandos::proveedores::registrar_ingreso_proveedor,
+        comandos::proveedores::registrar_salida_proveedor,
+        comandos::proveedores::listar_proveedores_activos,
+        comandos::proveedores::listar_historial_ingresos_proveedor_sitio,
+        comandos::gafetes_provisionales::buscar_encargados_ruta_provisional,
+        comandos::gafetes_provisionales::entregar_gafete_provisional,
+        comandos::gafetes_provisionales::registrar_devolucion_gafete_provisional,
+        comandos::gafetes_provisionales::listar_gafetes_provisionales_activos,
+        comandos::gafetes_provisionales::listar_gafetes_provisionales_historial_sitio,
+        comandos::historial::listar_historial,
+        comandos::historial::listar_historial_sitio,
+        comandos::historial::exportar_historial,
+        comandos::historial::exportar_historial_pdf,
+        comandos::exportacion::guardar_csv,
+        comandos::exportacion::exportar_tabla_xlsx,
+        comandos::exportacion::exportar_tabla_pdf,
+        comandos::auditoria::listar_auditoria,
+        comandos::auditoria::listar_auditoria_gafetes,
+        comandos::gafetes::buscar_gafetes,
+        comandos::gafetes::historial_gafete,
+        comandos::gafetes::crear_gafete,
+        comandos::gafetes::crear_gafetes_rango,
+        comandos::gafetes::dar_de_baja_gafete,
+        comandos::gafetes::marcar_gafete_perdido_contratista,
+        comandos::gafetes::marcar_gafete_perdido_visita,
+        comandos::gafetes::marcar_gafete_perdido_provisional_kof,
+        comandos::gafetes::resolver_gafete,
+        comandos::nube::configurar_dispositivo_inicial,
+        comandos::nube::sincronizar_con_nube,
+        comandos::nube::sincronizar_cambios_nube,
+        comandos::nube::enviar_cambios_nube,
+        comandos::nube::aplicar_cambio_nube,
+        comandos::nube::sesion_realtime_nube,
+        comandos::nube::listar_ingresos_remotos,
+        comandos::nube::cerrar_ingreso_remoto,
+        comandos::nube::listar_ingresos_proveedor_remotos,
+        comandos::nube::cerrar_ingreso_proveedor_remoto,
+        comandos::nube::listar_prestamos_gafete_provisional_remotos,
+        comandos::nube::cerrar_prestamo_gafete_provisional_remoto,
+        comandos::nube::fallos_permanentes_nube,
+        comandos::nube::desfase_reloj_ms,
+        telemetria::telemetria_activa,
+        telemetria::telemetria_eventos,
+        mostrar_ventana_principal,
+    ]
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Inicia la aplicación de escritorio y registra todos los comandos Tauri.
 ///
@@ -494,6 +626,9 @@ fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
 pub fn run() {
     let _guardia_sentry = inicializar_sentry();
     let (ruta_base_datos, instancia, clave_base_datos, core) = preparar_nucleo();
+    if let Some(directorio) = ruta_base_datos.parent() {
+        telemetria::iniciar(directorio);
+    }
     let estado = GuiState::new(core, instancia, ruta_base_datos, clave_base_datos);
 
     tauri::Builder::default()
@@ -501,94 +636,12 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(estado)
         .setup(configurar_arranque)
-        .invoke_handler(tauri::generate_handler![
-            comandos::autenticacion::requiere_configuracion_inicial,
-            comandos::autenticacion::login,
-            comandos::autenticacion::cambiar_password_supabase,
-            comandos::autenticacion::cerrar_sesion,
-            comandos::contratistas::buscar_contratistas,
-            comandos::contratistas::crear_contratista,
-            comandos::contratistas::actualizar_contratista,
-            comandos::contratistas::reglas_formulario_contratista,
-            comandos::empresas::listar_empresas,
-            comandos::empresas::listar_empresas_seleccionables,
-            comandos::empresas::buscar_empresas,
-            comandos::empresas::crear_empresa,
-            comandos::empresas::actualizar_empresa,
-            comandos::empresas::establecer_empresa_activa,
-            comandos::usuarios::cambiar_mi_password,
-            comandos::ingresos::listar_ingresos_activos,
-            comandos::ingresos::preparar_ingreso,
-            comandos::ingresos::registrar_ingreso,
-            comandos::ingresos::registrar_salida,
-            comandos::citas::verificar_check_in_visita,
-            comandos::citas::registrar_entrada_visita,
-            comandos::citas::registrar_salida_visita,
-            comandos::citas::listar_visitas_activas,
-            comandos::citas::listar_historial_visitas_sitio,
-            comandos::citas::listar_agenda_visitas,
-            comandos::rutas::listar_vehiculos_ruta,
-            comandos::rutas::listar_vehiculos_ruta_seleccionables,
-            comandos::rutas::crear_vehiculo_ruta,
-            comandos::rutas::actualizar_vehiculo_ruta,
-            comandos::rutas::listar_encargados_ruta,
-            comandos::rutas::listar_encargados_ruta_seleccionables,
-            comandos::rutas::crear_encargado_ruta,
-            comandos::rutas::actualizar_encargado_ruta,
-            comandos::rutas::listar_rutas,
-            comandos::rutas::listar_rutas_seleccionables,
-            comandos::rutas::crear_ruta,
-            comandos::rutas::crear_rutas_rango,
-            comandos::rutas::dar_de_baja_ruta,
-            comandos::rutas::reactivar_ruta,
-            comandos::rutas::registrar_salida_ruta,
-            comandos::rutas::registrar_retorno_ruta,
-            comandos::rutas::listar_rutas_activas,
-            comandos::rutas::buscar_salida_ruta,
-            comandos::proveedores::listar_empresas_proveedor,
-            comandos::proveedores::listar_empresas_proveedor_seleccionables,
-            comandos::proveedores::buscar_empresas_proveedor,
-            comandos::proveedores::crear_empresa_proveedor,
-            comandos::proveedores::establecer_empresa_proveedor_activa,
-            comandos::proveedores::registrar_ingreso_proveedor,
-            comandos::proveedores::registrar_salida_proveedor,
-            comandos::proveedores::listar_proveedores_activos,
-            comandos::proveedores::listar_historial_ingresos_proveedor_sitio,
-            comandos::gafetes_provisionales::buscar_encargados_ruta_provisional,
-            comandos::gafetes_provisionales::entregar_gafete_provisional,
-            comandos::gafetes_provisionales::registrar_devolucion_gafete_provisional,
-            comandos::gafetes_provisionales::listar_gafetes_provisionales_activos,
-            comandos::gafetes_provisionales::listar_gafetes_provisionales_historial_sitio,
-            comandos::historial::listar_historial,
-            comandos::historial::listar_historial_sitio,
-            comandos::historial::exportar_historial,
-            comandos::historial::exportar_historial_pdf,
-            comandos::exportacion::guardar_csv,
-            comandos::exportacion::exportar_tabla_xlsx,
-            comandos::exportacion::exportar_tabla_pdf,
-            comandos::auditoria::listar_auditoria,
-            comandos::auditoria::listar_auditoria_gafetes,
-            comandos::gafetes::buscar_gafetes,
-            comandos::gafetes::historial_gafete,
-            comandos::gafetes::crear_gafete,
-            comandos::gafetes::crear_gafetes_rango,
-            comandos::gafetes::dar_de_baja_gafete,
-            comandos::gafetes::marcar_gafete_perdido_contratista,
-            comandos::gafetes::marcar_gafete_perdido_visita,
-            comandos::gafetes::marcar_gafete_perdido_provisional_kof,
-            comandos::gafetes::resolver_gafete,
-            comandos::nube::configurar_dispositivo_inicial,
-            comandos::nube::sincronizar_con_nube,
-            comandos::nube::sesion_realtime_nube,
-            comandos::nube::listar_ingresos_remotos,
-            comandos::nube::cerrar_ingreso_remoto,
-            comandos::nube::listar_ingresos_proveedor_remotos,
-            comandos::nube::cerrar_ingreso_proveedor_remoto,
-            comandos::nube::listar_prestamos_gafete_provisional_remotos,
-            comandos::nube::cerrar_prestamo_gafete_provisional_remoto,
-            comandos::nube::fallos_permanentes_nube,
-            mostrar_ventana_principal,
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .invoke_handler(manejador_de_comandos())
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_, evento| {
+            if matches!(evento, tauri::RunEvent::Exit) {
+                telemetria::cerrar();
+            }
+        });
 }

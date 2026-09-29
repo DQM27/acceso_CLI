@@ -54,7 +54,7 @@ class ProveedoresViewModelTest {
             "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'PROVEEDOR', 'DISPONIBLE');",
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val viewModel = viewModel(SecretoDispositivoStoreDePrueba(secreto = ""))
         val empresaId = nucleo.crearEmpresaProveedor("Empresa Proveedora Test")
         advanceUntilIdle()
@@ -80,7 +80,7 @@ class ProveedoresViewModelTest {
             "INSERT INTO gafetes (numero, tipo, estado) VALUES (8, 'PROVEEDOR', 'DISPONIBLE');",
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA, "", "")
+        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
         val empresaId = nucleo.crearEmpresaProveedor("Empresa Proveedora Test")
         nucleo.registrarIngresoProveedor("111222333", "Proveedor Test", empresaId, null, 7L)
         val viewModel = viewModel(SecretoDispositivoStoreDePrueba(secreto = ""))

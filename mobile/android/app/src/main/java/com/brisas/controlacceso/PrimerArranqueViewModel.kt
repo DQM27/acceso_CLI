@@ -38,14 +38,14 @@ class PrimerArranqueViewModel(
                     // Persistir primero permite reintentar/recuperar si la
                     // operación remota termina y el proceso se interrumpe.
                     secretoStore.guardar(secreto)
-                    nucleo.configurarDispositivoInicialConSecreto(
+                    medirNucleo("configurarDispositivoInicialConSecreto") { nucleo.configurarDispositivoInicialConSecreto(
                         secreto = secreto,
                         identificadorHardware = metadata.identificadorHardware,
                         nombreDispositivo = metadata.nombreDispositivo,
                         plataforma = metadata.plataforma,
                         versionBuild = metadata.versionBuild,
                         appVersion = metadata.appVersion,
-                    )
+                    ) }
                 }
                 onListo()
             } catch (excepcion: Exception) {

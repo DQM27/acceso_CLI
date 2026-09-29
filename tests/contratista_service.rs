@@ -32,7 +32,7 @@ fn fecha_praind() -> NaiveDate {
 
 fn datos(empresa_id: i64, tipo_ingreso: TipoIngreso) -> DatosContratista {
     DatosContratista {
-        cedula: "2001".to_string(),
+        cedula: "200100100".to_string(),
         nombre: "Persona Uno".to_string(),
         empresa_id,
         tipo_ingreso,
@@ -44,7 +44,7 @@ fn datos(empresa_id: i64, tipo_ingreso: TipoIngreso) -> DatosContratista {
 
 fn actualizacion(empresa_id: i64, tipo_ingreso: TipoIngreso) -> DatosActualizacionContratista {
     DatosActualizacionContratista {
-        cedula: "2001".to_string(),
+        cedula: "200100100".to_string(),
         nombre: "Persona Uno".to_string(),
         empresa_id,
         tipo_ingreso,
@@ -187,7 +187,7 @@ fn debe_rechazar_cedula_solo_espacios() {
 #[test]
 fn debe_rechazar_nombre_vacio() {
     assert!(matches!(
-        probar_datos_invalidos("2001", ""),
+        probar_datos_invalidos("200100100", ""),
         Err(ContratistaServiceError::NombreVacio)
     ));
 }
@@ -195,7 +195,7 @@ fn debe_rechazar_nombre_vacio() {
 #[test]
 fn debe_rechazar_nombre_solo_espacios() {
     assert!(matches!(
-        probar_datos_invalidos("2001", "   "),
+        probar_datos_invalidos("200100100", "   "),
         Err(ContratistaServiceError::NombreVacio)
     ));
 }
@@ -207,11 +207,11 @@ fn debe_aplicar_trim_a_cedula_al_crear() {
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
     let mut entrada = datos(empresa_id, TipoIngreso::Swat);
-    entrada.cedula = "  2001  ".to_string();
+    entrada.cedula = "  200100100  ".to_string();
 
     let id = servicio.crear(entrada).unwrap();
 
-    assert_eq!(servicio.buscar_por_id(id).unwrap().cedula, "2001");
+    assert_eq!(servicio.buscar_por_id(id).unwrap().cedula, "200100100");
 }
 
 #[test]
@@ -238,7 +238,7 @@ fn debe_buscar_por_cedula() {
         .crear(datos(empresa_id, TipoIngreso::Swat))
         .unwrap();
 
-    assert_eq!(servicio.buscar_por_cedula("2001").unwrap().id, id);
+    assert_eq!(servicio.buscar_por_cedula("200100100").unwrap().id, id);
 }
 
 #[test]
@@ -251,7 +251,7 @@ fn debe_aplicar_trim_al_buscar_por_cedula() {
         .crear(datos(empresa_id, TipoIngreso::Swat))
         .unwrap();
 
-    assert_eq!(servicio.buscar_por_cedula("  2001  ").unwrap().id, id);
+    assert_eq!(servicio.buscar_por_cedula("  200100100  ").unwrap().id, id);
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn contratista_inexistente_debe_producir_error() {
         Err(ContratistaServiceError::ContratistaNoEncontrado)
     ));
     assert!(matches!(
-        servicio.buscar_por_cedula("999"),
+        servicio.buscar_por_cedula("999999999"),
         Err(ContratistaServiceError::ContratistaNoEncontrado)
     ));
 }
@@ -303,16 +303,16 @@ fn debe_actualizar_contratista() {
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
     let mut entrada = actualizacion(empresa_id, TipoIngreso::PorCorreo);
-    entrada.cedula = "3001".to_string();
+    entrada.cedula = "300100100".to_string();
     entrada.nombre = "Nombre actualizado".to_string();
 
     servicio.actualizar(id, entrada).unwrap();
     let actualizado = servicio.buscar_por_id(id).unwrap();
 
-    assert_eq!(actualizado.cedula, "3001");
+    assert_eq!(actualizado.cedula, "300100100");
     assert_eq!(actualizado.nombre, "NOMBRE ACTUALIZADO");
     assert!(matches!(
-        servicio.buscar_por_cedula("2001"),
+        servicio.buscar_por_cedula("200100100"),
         Err(ContratistaServiceError::ContratistaNoEncontrado)
     ));
 }
@@ -324,11 +324,11 @@ fn debe_aplicar_trim_a_cedula_al_actualizar() {
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
     let mut entrada = actualizacion(empresa_id, TipoIngreso::Swat);
-    entrada.cedula = "  3001  ".to_string();
+    entrada.cedula = "  300100100  ".to_string();
 
     servicio.actualizar(id, entrada).unwrap();
 
-    assert_eq!(servicio.buscar_por_id(id).unwrap().cedula, "3001");
+    assert_eq!(servicio.buscar_por_id(id).unwrap().cedula, "300100100");
 }
 
 #[test]
@@ -346,7 +346,7 @@ fn debe_rechazar_cedula_vacia_al_actualizar() {
             Err(ContratistaServiceError::CedulaVacia)
         ));
     }
-    assert_eq!(servicio.buscar_por_id(id).unwrap().cedula, "2001");
+    assert_eq!(servicio.buscar_por_id(id).unwrap().cedula, "200100100");
 }
 
 #[test]
@@ -444,7 +444,7 @@ fn debe_listar_contratistas() {
         .crear(datos(empresa_id, TipoIngreso::Swat))
         .unwrap();
     let mut segundo = datos(empresa_id, TipoIngreso::PorCorreo);
-    segundo.cedula = "2002".to_string();
+    segundo.cedula = "200200200".to_string();
     segundo.nombre = "Persona Dos".to_string();
     servicio.crear(segundo).unwrap();
 
@@ -480,7 +480,7 @@ fn actualizar_con_cedula_duplicada_devuelve_error_semantico_y_conserva_registro(
         .crear(datos(empresa_id, TipoIngreso::Swat))
         .unwrap();
     let mut segundo = datos(empresa_id, TipoIngreso::Swat);
-    segundo.cedula = "2002".to_owned();
+    segundo.cedula = "200200200".to_owned();
     segundo.nombre = "Persona Dos".to_owned();
     let segundo_id = servicio.crear(segundo).unwrap();
     let mut actualizacion = actualizacion(empresa_id, TipoIngreso::Swat);
@@ -490,7 +490,7 @@ fn actualizar_con_cedula_duplicada_devuelve_error_semantico_y_conserva_registro(
         Err(ContratistaServiceError::CedulaDuplicada)
     ));
     let conservado = servicio.buscar_por_id(segundo_id).unwrap();
-    assert_eq!(conservado.cedula, "2002");
+    assert_eq!(conservado.cedula, "200200200");
     assert_eq!(conservado.nombre, "PERSONA DOS");
 }
 
@@ -619,12 +619,26 @@ fn cedula_solo_digitos_y_nombre_solo_letras_en_mayusculas() {
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
 
+    // Letras (pasaporte) y menos de 9 dígitos: no es cédula nacional ni de
+    // extranjero.
+    for invalida in ["A12345678", "12345678", "12345678901234"] {
+        let mut entrada = datos(empresa_id, TipoIngreso::Swat);
+        entrada.cedula = invalida.to_string();
+        assert!(
+            matches!(
+                servicio.crear(entrada),
+                Err(ContratistaServiceError::CedulaInvalida)
+            ),
+            "{invalida}"
+        );
+    }
+
+    // Con guiones se acepta y se guarda en su forma única.
     let mut entrada = datos(empresa_id, TipoIngreso::Swat);
     entrada.cedula = "7-0100-0000".to_string();
-    assert!(matches!(
-        servicio.crear(entrada),
-        Err(ContratistaServiceError::CedulaInvalida)
-    ));
+    let id = servicio.crear(entrada).unwrap();
+    assert_eq!(servicio.buscar_por_id(id).unwrap().cedula, "701000000");
+    assert_eq!(servicio.buscar_por_cedula("07-0100-0000").unwrap().id, id);
 
     let mut entrada = datos(empresa_id, TipoIngreso::Swat);
     entrada.nombre = "Ana 2".to_string();

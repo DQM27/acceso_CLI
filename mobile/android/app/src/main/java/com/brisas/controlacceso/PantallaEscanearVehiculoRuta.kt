@@ -46,6 +46,7 @@ fun PantallaEscanearVehiculoRuta(
     mensajeInicial: String = MENSAJE_INICIAL_VEHICULO,
     mensajePermiso: String = "Se necesita permiso de cámara para escanear la placa o el número de unidad.",
 ) {
+    RegistrarPantalla("escanear_vehiculo_ruta")
     EscanerConPermisoCamara(mensajePermiso = mensajePermiso, onCerrar = onCerrar) {
         VistaCamaraVehiculoRuta(
             onVehiculoDetectado = onVehiculoDetectado,
@@ -67,12 +68,20 @@ private fun VistaCamaraVehiculoRuta(
     val onDetectadoActual by rememberUpdatedState(onVehiculoDetectado)
     var ultimoMensaje by remember { mutableStateOf(mensajeInicial) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
-    val estabilizador = remember {
-        EstabilizadorPorRepeticion(extraer = ::extraerVehiculo, clave = { "${it.tipo}:${it.valor}" })
-    }
-    val detectorInvalido = remember { DetectorTextoNoReconocido(esTipoEsperado = { extraerVehiculo(it) != null }) }
     // MV-10 (auditoría 2026-09-24): ver EstadoCamaraOcr.kt.
     val camara = rememberEstadoCamaraOcr(contexto)
+    val estabilizador = remember {
+        // Con votación por carácter: una placa no tiene dígito verificador
+        // y cada frame puede errar en un carácter distinto (ver
+        // `EstabilizadorPorRepeticion`).
+        EstabilizadorPorRepeticion(
+            extraer = ::extraerVehiculo,
+            clave = { it.claveVotacion() },
+            desdeClave = ::vehiculoDesdeClave,
+            alReiniciarVotacion = camara.metricas::registrarReinicioVotacion,
+        )
+    }
+    val detectorInvalido = remember { DetectorTextoNoReconocido(esTipoEsperado = { extraerVehiculo(it) != null }) }
 
     val colorMarco = when (estado) {
         EstadoEscaneo.CONFIRMADO -> ColorEscaneoConfirmado
@@ -88,20 +97,34 @@ private fun VistaCamaraVehiculoRuta(
                     ejecutorAnalisis = camara.ejecutor,
                     detectada = camara.detectada,
                     sesionActiva = camara.sesionActiva,
+                    hayLugar = camara::hayLugar,
                 ) { imagen ->
-                    analizarCedula(
+                    analizarFrameOcr(
                         imagen = imagen,
-                        recognizer = camara.recognizer,
-                        ejecutorPrincipal = camara.ejecutorPrincipal,
-                        sesionActiva = camara.sesionActiva,
-                        onTexto = { texto ->
-                            if (camara.sesionActiva.get()) {
-                                val resultado = estabilizador.procesarFrame(texto)
+                        camara = camara,
+                        region = RegionGuiaOcr.TARJETA_ID,
+                        onLectura = { lectura ->
+                            // Hilo del analizador: extraer y votar acá, a la
+                            // pantalla sólo se publica el resultado.
+                            // Una sola extracción por frame: la primera versión
+                            // del texto que lee algo, con cómo se leyó (para la
+                            // telemetría; nunca el valor).
+                            val leida = lectura.textos.withIndex().firstNotNullOfOrNull { (indice, texto) ->
+                                extraerVehiculoConDetalle(texto)?.let { IndexedValue(indice, it) }
+                            }
+                            camara.metricas.registrarLecturaVehiculo(leida?.value, leida?.index)
+                            if (leida != null) camara.metricas.registrarPrimeraLectura()
+                            val resultado = estabilizador.procesarLectura(leida?.value?.vehiculo, lectura.peso)
+                            // Sólo si no hubo resultado, como antes: un
+                            // frame que confirma no cuenta como inválido.
+                            val invalido = resultado == null && detectorInvalido.procesarTextos(lectura.textos)
+                            camara.enPrincipal {
                                 when {
                                     resultado != null -> {
                                         estado = EstadoEscaneo.CONFIRMADO
-                                        ultimoMensaje = "${resultado.valor} confirmado"
+                                        ultimoMensaje = "${placaComoSeImprime(resultado.valor)} confirmado"
                                         if (camara.detectada.compareAndSet(false, true)) {
+                                            camara.metricas.registrarConfirmacion()
                                             vibrarConfirmacion(contexto)
                                             reproducirSonidoConfirmacion()
                                             camara.trabajoResultado?.cancel()
@@ -110,16 +133,10 @@ private fun VistaCamaraVehiculoRuta(
                                             }
                                         }
                                     }
-                                    // Sin clasificador aparte acá (a
-                                    // diferencia de Comprobante/Carnet KOF):
-                                    // placa/número de unidad es un dato
-                                    // atómico, `extraerVehiculo` ya decide
-                                    // todo en un solo paso -- que falle es
-                                    // en sí mismo la señal de "esto no es
-                                    // una placa ni un número de unidad".
-                                    // Ver `DetectorTextoNoReconocido` sobre
-                                    // por qué esto tolera frames sueltos.
-                                    detectorInvalido.procesarFrame(texto) -> {
+                                    // `DetectorTextoNoReconocido` tolera
+                                    // frames sueltos mal leídos -- ver su
+                                    // doc-comment.
+                                    invalido -> {
                                         if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
                                         estado = EstadoEscaneo.INVALIDO
                                         ultimoMensaje = "No se reconoce como placa ni número de unidad"
@@ -131,9 +148,7 @@ private fun VistaCamaraVehiculoRuta(
                                 }
                             }
                         },
-                        onFallo = {
-                            if (camara.sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
-                        },
+                        onFallo = { camara.enPrincipal { ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR } },
                     )
                 }
                 camara.analisisCamara = analisis
@@ -147,6 +162,7 @@ private fun VistaCamaraVehiculoRuta(
                         camara.cameraProvider = proveedor
                         camara.vistaPreviaCamara = preview
                     },
+                    onCamaraLista = { camara.camaraFisica = it },
                     onFallo = { mensaje -> if (camara.sesionActiva.get()) ultimoMensaje = mensaje },
                 )
                 previewView
@@ -169,6 +185,13 @@ private fun VistaCamaraVehiculoRuta(
         // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
         // 2026-09-19).
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+        if (camara.tieneLinterna) {
+            BotonLinterna(
+                encendida = camara.linternaEncendida,
+                onClick = camara::alternarLinterna,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 72.dp, end = 16.dp),
+            )
+        }
     }
 }
 

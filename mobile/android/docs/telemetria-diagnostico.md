@@ -1,0 +1,236 @@
+# Telemetría de diagnóstico
+
+El teléfono de la portería (Samsung A25) tiene bloqueada la depuración USB,
+así que `adb logcat` y el profiler de Android Studio no están disponibles.
+Para medir cómo trabaja la app en el equipo real, el build `diagnostico`
+manda métricas técnicas a la tabla `telemetria_diagnostico` del proyecto de
+Supabase **staging**.
+
+El escritorio manda a la misma tabla, con los mismos nombres de evento y de
+campo (`version_app` empieza con `desktop-`): ver
+`desktop/docs/telemetria-diagnostico.md`.
+
+## Qué build la tiene
+
+| Build        | Paquete                    | Base      | Telemetría | Compilación                          |
+|--------------|----------------------------|-----------|------------|--------------------------------------|
+| `release`    | `com.dqm27.lattis`         | producción| no         | R8, llave real                       |
+| `debug`      | `com.dqm27.lattis.debug`   | staging   | no         | sin optimizar, depurable             |
+| `diagnostico`| `com.dqm27.lattis.diag`    | staging   | **sí**     | R8 como release, llave de debug, `profileable` |
+
+`diagnostico` se compila igual que release porque un build de debug corre
+sin optimizaciones y daría tiempos peores que los reales. Los tres paquetes
+conviven en el mismo teléfono sin pisarse.
+
+Compilar: `./gradlew assembleDiagnostico`, o desde GitHub con el workflow
+manual **Build de prueba (mobile)** eligiendo la variante `diagnostico`.
+
+Con `BuildConfig.TELEMETRIA = false` (release y debug) no se inicializa
+nada: cada punto de medición es un chequeo de un booleano.
+
+## Privacidad
+
+Sólo números y nombres técnicos (nombres de pantalla, de operación del
+núcleo, de clase). **Nunca** texto leído por el OCR, cédulas, nombres,
+placas ni imágenes. El dispositivo se identifica con un UUID aleatorio por
+instalación (no ANDROID_ID ni IMEI), y la sesión con otro por arranque. De
+los motivos de salida del proceso se guarda sólo el resumen antes de `:`
+(el resto puede ser el mensaje de una excepción).
+
+## Eventos (`tipo`)
+
+| Tipo              | Cuándo                                | Datos principales |
+|-------------------|---------------------------------------|-------------------|
+| `sesion_inicio`   | al arrancar el proceso                | fabricante, modelo, Android, ABI, núcleos, RAM total, clase de memoria |
+| `arranque`        | primer frame dibujado                 | ms desde el inicio del proceso; en Android 15+ tipo y motivo del arranque (frío, tibio, caliente) |
+| `salida_anterior` | al arrancar, una vez por salida       | por qué murió el proceso antes (ANR, memoria, crash nativo/Java, usuario), PSS/RSS |
+| `pantalla`        | al entrar a cada pantalla             | ms hasta su primer frame |
+| `muestra_sistema` | cada 30 s en primer plano             | heap Java y nativo, PSS por tipo (Java, nativo, gráficos, código), memoria libre del sistema, hilos, descriptores abiertos, CPU (% de un núcleo y del total), red rx/tx, batería (%, corriente, temperatura, carga, ahorro), estado y margen térmico, pantalla visible |
+| `frames`          | cada 30 s, por pantalla               | frames, trabados (> 2× el presupuesto), congelados (> 700 ms), p50/p90/p99/máx |
+| `llamada_nucleo`  | cada 30 s, por operación              | llamadas, errores, p50/p90/máx/total ms de cada llamada al núcleo Rust |
+| `ocr_sesion`      | al cerrar una cámara de escaneo       | fps, frames, frames con PDF417, descartes por calidad, fallos, medianas de recorte y reconocimiento, ms hasta confirmar, y el diagnóstico del PDF417 (ver abajo) |
+| `camara_info`     | una vez por apertura de cámara, con la cámara ya abierta | qué puede dar la cámara: nivel de hardware, resolución real del análisis y del preview, tamaño YUV y JPEG máximos, tamaño del sensor, zoom máximo y distancia mínima de enfoque (ver abajo) |
+| `realtime`        | cada 30 s, si hubo actividad          | conexión (intentos, ms hasta suscribir, fin de cada conexión y minutos conectado, errores), avisos por tabla, ecos propios, KB recibidos, aplicados en la base local y su tiempo, y latencia (ver abajo) |
+| `strictmode`      | cada 30 s, agregado                   | disco/red en el hilo principal, recursos sin cerrar, Activities filtradas, con el punto del código de la app |
+| `memoria_baja`    | cuando el sistema pide liberar memoria| nivel de `onTrimMemory`, pantalla |
+| `retencion`       | objeto vivo 10 s después de liberarlo | posible fuga: `MainActivity` destruida o `EstadoCamaraOcr` cerrado que siguen en memoria tras forzar el GC |
+| `error_telemetria`| si falla la propia telemetría         | dónde y tipo de excepción |
+
+## Diagnóstico del PDF417 (en `ocr_sesion`)
+
+Dónde se pierde la lectura del código de la cédula anterior, sólo con
+números y motivos (nunca bytes del código):
+
+| Campo | Qué dice |
+|---|---|
+| `frames_con_codigo` | Frames en que se buscó el código |
+| `pdf417_frames_con_codigo_detectado` / `pdf417_codigos_detectados` | Frames en que ML Kit decodificó algún PDF417, y cuántos |
+| `imagen_ancho_px_mediana_con_codigo` | Ancho (px) de la imagen que analizó ML Kit al buscar el código: la resolución disponible |
+| `pdf417_ancho_codigo_px_mediana` | Ancho (px) de los códigos detectados |
+| `pdf417_sin_bytes` | Códigos que llegaron sin bytes crudos |
+| `pdf417_bytes_min` / `pdf417_bytes_max` | Largo de los bytes recibidos |
+| `pdf417_motivos` | Resultado del núcleo por código: `ACEPTADO`, `PREFIJO_CORTO`, `CEDULA_INVALIDA` (clave o formato distintos), `PRIMER_APELLIDO_INVALIDO` / `SEGUNDO_APELLIDO_INVALIDO` / `NOMBRE_INVALIDO` (posiciones corridas), `NOMBRE_O_APELLIDO_VACIO` |
+| `pdf417_errores_lector` | Veces que el lector de códigos terminó con error |
+| `modo_codigo_activaciones` | Veces que se activó el "modo código" (ver abajo) |
+| `modo_codigo_frames` | Frames que corrieron en modo código |
+| `modo_codigo_imagen_ancho_px_mediana` | Ancho (px) de la imagen que analizó el lector de códigos EN modo código (todo lo visible). Aparte de `imagen_ancho_px_mediana_con_codigo`, que mide sólo el recorte normal del recuadro guía |
+| `modo_codigo_alta_resolucion_cambios` / `_fallos` / `_ms_max` | Veces que el análisis pasó a la mayor resolución al entrar al modo código, veces que el equipo no lo admitió (sigue con la normal) y lo que tardó el cambio más lento (ms) |
+
+Cómo leerlo: muchos frames con código y **0 detectados** = falta
+resolución (ML Kit ni lo encuentra); detectados pero **sin bytes** = ML
+Kit no entrega el binario; con **motivos de rechazo** = el formato del
+decodificador no calza con las tarjetas reales.
+
+### Modo código
+
+El PDF417 de la cédula anterior trae datos y huellas: cientos de barras de
+1-2 px en el recuadro guía, bajo los ~2-3 px por barra que ML Kit necesita
+(con el recorte de ~944 px de ancho nunca se detectó). Al verse el reverso
+se activa el modo código por 60 frames, más que la pista de texto (si la
+persona acerca el código el texto deja de leerse): el código se busca en
+todos los frames y en **todo lo visible**, no en el recuadro, y la pantalla
+pide "Acerque el código de barras hasta que llene la pantalla (de lado
+funciona mejor)". De lado el código queda a lo largo de los 1920 px del
+frame. Termina al confirmar, al aparecer un MRZ o al vencerse.
+
+Mientras dura, el análisis pasa a la mayor resolución del sensor
+(`RESOLUCION_ANALISIS_CODIGO`, 4080x3060 en el A25) y vuelve a 1080p al
+terminar; al cambiar sale otro `camara_info` con `modo_codigo = true` y la
+resolución que eligió CameraX. La primera versión del modo, a 1920x1440,
+sólo llevó la imagen del lector de 944 a 1126 px (el preview recorta los
+costados): 0 detecciones en 192 frames (staging, 2026-09-29).
+
+Cómo leerlo: con `modo_codigo_activaciones` > 0, compare
+`modo_codigo_imagen_ancho_px_mediana` con `imagen_ancho_px_mediana_con_codigo`
+(si no es mayor, el modo no gana píxeles) y mire si
+`pdf417_codigos_detectados` sube y `pdf417_ancho_codigo_px_mediana` crece.
+Sin activaciones, el texto nunca reconoció el reverso: no hay modo.
+
+## Qué puede dar la cámara (`camara_info`)
+
+Para decidir si se puede pedir más resolución al análisis, con sólo números:
+
+| Campo | Qué dice |
+|---|---|
+| `pantalla` | Pantalla de escaneo que abrió la cámara |
+| `hardware_nivel` | `INFO_SUPPORTED_HARDWARE_LEVEL` de Camera2: `LEGACY`, `LIMITED`, `FULL`, `LEVEL_3`, `EXTERNAL` |
+| `analisis_ancho` / `analisis_alto` | Resolución REAL elegida para el análisis (`resolutionInfo`; se pide 1920x1080) |
+| `preview_ancho` / `preview_alto` | Resolución real del preview |
+| `yuv_max_ancho` / `yuv_max_alto` | Mayor tamaño de salida YUV_420_888 |
+| `yuv_alta_resolucion_max_ancho` / `_alto` | Mayor tamaño YUV que sólo se da a menor velocidad (sensores de 50 MP); nulo si no hay |
+| `jpeg_max_ancho` / `jpeg_max_alto` | Mayor tamaño JPEG |
+| `sensor_ancho` / `sensor_alto` | Matriz de píxeles del sensor |
+| `zoom_max` | Zoom máximo (razón) |
+| `enfoque_min_dioptrias` / `enfoque_min_cm` | Distancia mínima de enfoque; nulos con enfoque fijo |
+
+Cómo leerlo: si `analisis_*` es menor que `yuv_max_*`, se puede pedir más
+resolución al análisis (a costa de fps); si ya son iguales, ese es el techo.
+`enfoque_min_cm` dice a qué distancia deja de enfocar el código acercado.
+
+```sql
+select ocurrido_en, version_app, datos
+from public.telemetria_diagnostico
+where tipo = 'camara_info'
+order by ocurrido_en desc;
+```
+
+```sql
+select ocurrido_en, datos->>'pantalla', datos->>'frames_con_codigo',
+       datos->>'pdf417_codigos_detectados', datos->>'pdf417_sin_bytes',
+       datos->'pdf417_motivos', datos->>'imagen_ancho_px_mediana_con_codigo',
+       datos->>'pdf417_ancho_codigo_px_mediana'
+from public.telemetria_diagnostico
+where tipo = 'ocr_sesion' and (datos->>'lector_pdf417')::boolean
+order by ocurrido_en desc;
+```
+
+## Condiciones de captura, texto y placas (en `ocr_sesion`)
+
+Para calibrar los umbrales con datos reales, de día y de noche. Todo son
+números o nombres de formato; nunca el texto, la placa ni la imagen.
+
+| Campo | Qué dice | Sirve para ajustar |
+|---|---|---|
+| `abierta_desde` | Pantalla desde la que se abrió la cámara (`proveedores`, `activos`...) | Separar los casos de uso |
+| `frames_medidos` / `frames_con_linterna` | Frames medidos (también los descartados) y cuántos con linterna | Uso real de la linterna |
+| `nitidez_p10/p50/p90` | Nitidez del recorte (relativa: comparar sesiones del mismo teléfono) | Filtro de calidad (`FiltroCalidad`) |
+| `luminancia_p10/p50` | Brillo medio del recorte, 0-255 | Distinguir noche/día; sugerir la linterna |
+| `reflejo_p50/p90` | Fracción de píxeles saturados | Aviso de reflejo (`UMBRAL_REFLEJO`, 0,03) |
+| `palabras` / `palabras_confianza_baja` / `confianza_p10/p50` / `frames_sin_confianza` | Confianza de las palabras de ML Kit | Umbral de los renglones visuales (0,25) |
+| `frames_textos_distintos` | Frames en que los renglones visuales difieren del texto original | Cuánto cambia E-3 |
+| `vehiculo_formatos` | Lecturas por formato: `CARGA`, `PARTICULAR`, `MOTO`, `NUMERO_UNIDAD` | Qué placas llegan |
+| `vehiculo_con_correccion` / `vehiculo_cl_restituida` | Lecturas que corrigieron letra/dígito o restituyeron la "CL" apilada | Máximo de correcciones por placa |
+| `vehiculo_por_version_texto` | Lecturas desde los renglones visuales o el texto original | Si E-3 ayuda en placas |
+| `vehiculo_frames_sin_lectura` | Frames con texto y sin placa | Cuánto cuesta leer (noche, distancia) |
+| `reinicios_votacion` | Veces que la votación empezó de cero por otra lectura | Tolerancia de la votación |
+| `ms_hasta_primera_lectura` | Primer frame con algo reconocido (placa, documento con datos o MRZ) | Separar "tardó en encontrarlo" de "tardó en confirmarlo" |
+| `documento_estados` | Frames por estado: `BUSCANDO`, `INVALIDO`, `CONFIRMADO` | Cuánto rojo ve quien opera |
+| `documento_frames_con_mrz` / `documento_progreso_maximo` | Frames con MRZ en cuadro y avance máximo de la votación | Qué tan cerca estuvo una sesión que no confirmó |
+| `documento_confirmado_tipo` / `_fuente` / `_con_nombre` / `_vencido` | Tipo, origen (`OCR_FRENTE`, `MRZ`, `PDF417`), si trajo nombre y si está vencido (nunca número ni nombre) | Qué lector resuelve cada caso |
+
+```sql
+select ocurrido_en, datos->>'pantalla', datos->>'abierta_desde',
+       datos->>'ms_hasta_confirmar', datos->>'frames', datos->>'descartados_calidad',
+       datos->>'luminancia_p50', datos->>'frames_con_linterna', datos->>'nitidez_p50',
+       datos->>'reflejo_p90', datos->'vehiculo_formatos', datos->>'vehiculo_frames_sin_lectura',
+       datos->>'reinicios_votacion', datos->>'confianza_p10'
+from public.telemetria_diagnostico
+where tipo = 'ocr_sesion'
+order by ocurrido_en desc;
+```
+
+## Latencia de Realtime
+
+`latencia_ms_*` es la hora del teléfono al recibir el aviso menos
+`changed_at`, la hora del servidor al escribir la fila. La hora del
+teléfono se corrige con el desfase de su reloj (`desfase_reloj_ms`), que
+el núcleo mide en cada autenticación con precisión de milisegundos
+(`public.hora_servidor_ms`, ver `src/nube/reloj_preciso.rs`): varias
+consultas y se usa la de viaje más corto, error de ±(la mitad de ese
+viaje). Si el proyecto no tiene la función, el desfase sale del header
+HTTP `Date` (±1 s) y la latencia sólo sirve para comparar;
+`latencia_corregida` dice si hubo desfase para corregir.
+
+La medición precisa corre en segundo plano después de autenticar y se
+aplica con el token siguiente, así que al conectar el canal todavía puede
+estar el desfase del header `Date`. Por eso el desfase se vuelve a leer,
+como mucho cada 10 s, mientras llegan avisos (teléfono y escritorio). Antes
+se leía una sola vez por conexión y en staging (2026-09-29) el teléfono dio
+latencias de −950 ms durante toda la sesión.
+
+Qué mirar para el lag entre equipos: la latencia del aviso (servidor →
+equipo) es sólo el último tramo. Antes está lo que tarda el que guarda en
+subir el cambio: `llamada_nucleo` con `enviarCambiosConSecreto` (teléfono)
+o `enviar_cambios_nube` (escritorio), más la pausa de agrupación de 600 ms.
+
+## Envío
+
+- Cola en memoria con tope de 5000 filas (si se llena se descartan las más
+  viejas: la telemetría no puede ser ella misma una fuga).
+- Envío por lotes de 200 cada 60 s y al pasar la app a segundo plano, en un
+  hilo de prioridad mínima. POST a PostgREST con la llave publicable y
+  `Prefer: return=minimal`.
+- Lo que no se pudo enviar (sin red) se guarda en
+  `files/telemetria_pendiente.jsonl` y se reintenta en el próximo arranque.
+
+## Tabla y permisos
+
+Script: `supabase/scripts/telemetria_diagnostico_staging.sql` (idempotente,
+sólo staging, **no** está en `supabase/migrations/` para que producción
+nunca la tenga). RLS activado: la llave publicable sólo puede **insertar**;
+leer, modificar o borrar requiere el SQL Editor. No hay límites ni limpieza
+automática: son datos de desarrollo y se borran a mano con
+`truncate public.telemetria_diagnostico;`.
+
+El mismo script trae consultas de ejemplo (arranques, evolución de la
+memoria por sesión, objetos retenidos, llamadas más lentas, sesiones OCR).
+
+## Cómo leer una posible fuga de memoria
+
+1. `retencion` con `EstadoCamaraOcr` o `MainActivity`: algo sigue
+   referenciando la cámara o la Activity después de cerrarlas.
+2. `muestra_sistema.pss_total_mb` que sube de sesión de escaneo en sesión de
+   escaneo y no baja en reposo (misma `sesion`).
+3. `descriptores_abiertos` o `hilos` que crecen sin volver: recursos sin
+   cerrar (confirmar con `strictmode`).
+4. `salida_anterior` con `motivo_nombre` `MEMORIA_BAJA` o `USO_EXCESIVO`.

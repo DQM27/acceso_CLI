@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./invocar";
 import { solicitarSincronizacionNube } from "../eventosNube";
 
 // Espejo de comandos/rutas.rs y dto/rutas.rs — ver también

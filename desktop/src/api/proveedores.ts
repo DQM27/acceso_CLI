@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./invocar";
 import { solicitarSincronizacionNube } from "../eventosNube";
 import { cerrarIngresoProveedorRemoto, listarIngresosProveedorRemotos } from "./nube";
 import type { IngresoProveedorRemoto } from "./nube";

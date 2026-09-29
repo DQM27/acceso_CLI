@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 
 /// Escaneo del Comprobante de Carga de Ruta -- perfil aislado del OCR de
 /// identidad (ver LectorComprobanteRuta.kt): reusa la infraestructura de
-/// cámara genérica ([iniciarCamara], [analizarCedula], ambas en
+/// cámara genérica ([iniciarCamara], [analizarFrameOcr], ambas en
 /// `PantallaEscanearCedula.kt` -- no conocen nada de cédulas, sólo entregan
 /// texto crudo de ML Kit), pero con su propia estabilización y su propio
 /// resultado ([ComprobanteRutaDetectado]). Un solo escaneo carga ruta,
@@ -46,6 +46,7 @@ fun PantallaEscanearComprobanteRuta(
     onComprobanteDetectado: suspend (ComprobanteRutaDetectado) -> Unit,
     onCerrar: () -> Unit,
 ) {
+    RegistrarPantalla("escanear_comprobante_ruta")
     EscanerConPermisoCamara(
         mensajePermiso = "Se necesita permiso de cámara para escanear el comprobante.",
         onCerrar = onCerrar,
@@ -89,83 +90,56 @@ private fun VistaCamaraComprobanteRuta(
         AndroidView(
             factory = { ctx ->
                 val previewView = PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
-                // Resolución 1280x720 -- misma que usan las otras 3
-                // pantallas de escaneo, ahora fijada una sola vez en
-                // `construirAnalizadorOcr` (`PantallaEscanearCedula.kt`).
-                // Vuelta a 1280x720 (2026-09-20) -- la subida a 1920x1080
-                // fue una apuesta sin confirmar en el dispositivo real y el
-                // usuario reportó que empeoró (parece forzar un modo de
-                // captura distinto).
+                // Resolución: la misma de las otras 3 pantallas, fijada una
+                // sola vez en `construirAnalizadorOcr` (1920x1080, ver ahí).
                 val analisis = construirAnalizadorOcr(
                     ejecutorAnalisis = camara.ejecutor,
                     detectada = camara.detectada,
                     sesionActiva = camara.sesionActiva,
+                    hayLugar = camara::hayLugar,
                 ) { imagen ->
-                    val onTexto: (String) -> Unit = { texto ->
-                        if (camara.sesionActiva.get()) {
-                            if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, texto)
-                            val resultado = estabilizador.procesarFrame(texto)
-                            when {
-                                resultado != null -> {
-                                    estado = EstadoEscaneo.CONFIRMADO
-                                    ultimoMensaje = "Comprobante ${resultado.numeroRuta} confirmado"
-                                    if (camara.detectada.compareAndSet(false, true)) {
-                                        vibrarConfirmacion(contexto)
-                                        camara.trabajoResultado?.cancel()
-                                        camara.trabajoResultado = alcance.launch {
-                                            if (camara.sesionActiva.get()) onDetectadoActual(resultado)
+                    analizarFrameOcr(
+                        imagen = imagen,
+                        camara = camara,
+                        region = RegionGuiaOcr.COMPROBANTE_RUTA,
+                        onLectura = { lectura ->
+                            // Hilo del analizador: extraer y votar acá, a la
+                            // pantalla sólo se publica el resultado.
+                            if (BuildConfig.DEBUG) Log.d(TAG_DEBUG_OCR_LECTURA, lectura.textos.joinToString("\n---\n"))
+                            val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso)
+                            // Sólo si no hubo resultado, como antes: un
+                            // frame que confirma no cuenta como inválido.
+                            val invalido = resultado == null && detectorInvalido.procesarTextos(lectura.textos)
+                            camara.enPrincipal {
+                                when {
+                                    resultado != null -> {
+                                        estado = EstadoEscaneo.CONFIRMADO
+                                        ultimoMensaje = "Comprobante ${resultado.numeroRuta} confirmado"
+                                        if (camara.detectada.compareAndSet(false, true)) {
+                                            camara.metricas.registrarConfirmacion()
+                                            vibrarConfirmacion(contexto)
+                                            camara.trabajoResultado?.cancel()
+                                            camara.trabajoResultado = alcance.launch {
+                                                if (camara.sesionActiva.get()) onDetectadoActual(resultado)
+                                            }
                                         }
                                     }
-                                }
-                                // `DetectorTextoNoReconocido` ya tolera
-                                // frames sueltos mal leídos -- ver su
-                                // doc-comment. Si SÍ es un comprobante pero
-                                // todavía no se leyó el "Transporte:"
-                                // (esComprobanteCargaRuta ya dio true), se
-                                // queda en BUSCANDO -- eso no es un
-                                // encuadre inválido, es "sostenga firme".
-                                detectorInvalido.procesarFrame(texto) -> {
-                                    if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
-                                    estado = EstadoEscaneo.INVALIDO
-                                    ultimoMensaje = "Documento no reconocido"
-                                }
-                                else -> {
-                                    estado = EstadoEscaneo.BUSCANDO
-                                    ultimoMensaje = MENSAJE_INICIAL
+                                    // `DetectorTextoNoReconocido` tolera
+                                    // frames sueltos mal leídos -- ver su
+                                    // doc-comment.
+                                    invalido -> {
+                                        if (estado != EstadoEscaneo.INVALIDO) vibrarError(contexto)
+                                        estado = EstadoEscaneo.INVALIDO
+                                        ultimoMensaje = "Documento no reconocido"
+                                    }
+                                    else -> {
+                                        estado = EstadoEscaneo.BUSCANDO
+                                        ultimoMensaje = MENSAJE_INICIAL
+                                    }
                                 }
                             }
-                        }
-                    }
-                    val onFallo: () -> Unit = {
-                        if (camara.sesionActiva.get()) ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
-                    }
-                    // Mismo camino simple que usan Vehículo/Ruta y
-                    // Carnet KOF -- antes esta pantalla era la única
-                    // de las 4 con un camino aparte en debug que
-                    // además corría el detector de códigos de barras
-                    // en cada frame (sondeo exploratorio del
-                    // 2026-09-15 que nunca llegó a una conclusión
-                    // útil). Se sacó por completo (2026-09-20): tras
-                    // reportarse que el comprobante dejó de
-                    // reconocer cualquier cosa, esta pantalla era la
-                    // única con ese camino extra sin probar, así que
-                    // en vez de seguir adivinando la región de
-                    // recorte se unifica con el camino ya
-                    // comprobado que sí funciona en las otras 3.
-                    analizarCedula(
-                        imagen = imagen,
-                        recognizer = camara.recognizer,
-                        ejecutorPrincipal = camara.ejecutorPrincipal,
-                        sesionActiva = camara.sesionActiva,
-                        onTexto = onTexto,
-                        onFallo = onFallo,
-                        // Región propia para el comprobante (2026-09-20,
-                        // pedido explícito del usuario) -- ver el
-                        // doc-comment de RegionGuiaOcr.COMPROBANTE_RUTA
-                        // sobre la escala (comparable a TARJETA_ID,
-                        // no el frame casi completo del intento
-                        // anterior).
-                        region = RegionGuiaOcr.COMPROBANTE_RUTA,
+                        },
+                        onFallo = { camara.enPrincipal { ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR } },
                     )
                 }
                 camara.analisisCamara = analisis
@@ -179,6 +153,7 @@ private fun VistaCamaraComprobanteRuta(
                         camara.cameraProvider = proveedor
                         camara.vistaPreviaCamara = preview
                     },
+                    onCamaraLista = { camara.camaraFisica = it },
                     onFallo = { mensaje -> if (camara.sesionActiva.get()) ultimoMensaje = mensaje },
                 )
                 previewView
@@ -206,6 +181,13 @@ private fun VistaCamaraComprobanteRuta(
         // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
         // 2026-09-19).
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+        if (camara.tieneLinterna) {
+            BotonLinterna(
+                encendida = camara.linternaEncendida,
+                onClick = camara::alternarLinterna,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 72.dp, end = 16.dp),
+            )
+        }
     }
 }
 

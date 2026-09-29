@@ -673,75 +673,111 @@ internal object IntegrityCheckingUniffiLib {
         uniffiCheckContractApiVersion(this)
         uniffiCheckApiChecksums(this)
     }
+    external fun uniffi_control_acceso_mobile_checksum_func_es_carnet_kof(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_extraer_carnet_kof(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_extraer_cedula_de_texto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_es_comprobante_carga_ruta(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_extraer_comprobante_ruta(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_consenso_alcanza(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_es_otra_lectura(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_orientacion_de_texto_documento(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_orientacion_encuadre_de_tipo(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_clasificar_tipo_documento(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_documento_desde_mrz(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_leer_documento_de_texto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_nombre_legible_tipo_documento(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_parece_reverso_cedula_anterior(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_reclasificar_por_edad(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_leer_lectura_mrz(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_confianza_minima_palabra(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_reconstruir_texto_visual(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_textos_de_frame(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo_con_detalle(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_placa_como_se_imprime(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_leer_mrz(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_largo_prefijo_pdf417_cedula(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula_con_motivo(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_borrar_secreto_dispositivo_legado(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_empresas_proveedor(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_vehiculos_ruta(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_secreto_dispositivo_legado(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_proveedor_remoto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_proveedor_remoto_con_secreto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto_con_secreto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_contratista_activo_en_otro_sitio_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa_proveedor(
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario(
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_praind_vencido_para_formulario(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_gafete_para_formulario(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_praind_para_formulario(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio_con_secreto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_gafetes_provisionales_activos(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_con_secreto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_con_secreto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_cambio_nube(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_borrar_secreto_dispositivo_legado(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_secreto_dispositivo_legado(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_proveedor_remoto_con_secreto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto_con_secreto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_enviar_cambios_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos(
     ): Int
@@ -749,55 +785,71 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_prestamos_gafete_provisional_remotos(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_cambios_con_secreto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube_con_secreto(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_empresas_proveedor(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa_proveedor(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_proveedores_activos(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_rutas_activas(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_praind_vencido_para_formulario(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_con_secreto(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_con_secreto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor_con_secreto(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_proveedor(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_vehiculos_ruta(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_rutas_activas(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_ruta(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial(
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_gafete_para_formulario(
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_praind_para_formulario(
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado(
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube(
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto(
+    external fun uniffi_control_acceso_mobile_checksum_method_estabilizadordocumento_procesar_frame(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube(
+    external fun uniffi_control_acceso_mobile_checksum_method_estabilizadordocumento_procesar_pdf417(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube_con_secreto(
+    external fun uniffi_control_acceso_mobile_checksum_method_estabilizadordocumento_reiniciar(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_votadorporposicion_agregar(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_votadorporposicion_agregar_vacio(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_votadorporposicion_consenso(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_votadorporposicion_reiniciar(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir_cifrado(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_constructor_estabilizadordocumento_new(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_constructor_votadorporposicion_new(
     ): Int
     external fun ffi_control_acceso_mobile_uniffi_contract_version(
     ): Int
@@ -827,71 +879,57 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_admite_personal_ruta_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar_con_secreto(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_aviso_proveedor_con_ingreso_activo(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_borrar_secreto_dispositivo_legado(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_empresas_proveedor(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_rutas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_vehiculos_ruta(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_supabase(`ptr`: Long,`passwordActual`: RustBuffer.ByValue,`passwordNueva`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cargar_secreto_dispositivo_legado(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_proveedor_remoto(`ptr`: Long,`directorio`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_proveedor_remoto_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto(`ptr`: Long,`directorio`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto(`ptr`: Long,`directorio`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_contratista_activo_en_otro_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa(`ptr`: Long,`nombre`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa_proveedor(`ptr`: Long,`nombre`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_praind_vencido_para_formulario(`ptr`: Long,`fechaIso`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_gafete_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,`personalRuta`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_praind_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,`personalRuta`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional(`ptr`: Long,`encargadoId`: Long,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional_con_secreto(`ptr`: Long,`encargadoId`: Long,`gafeteNumero`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(`ptr`: Long,`directorio`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_gafetes_provisionales_activos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_devolucion_gafete_provisional(`ptr`: Long,`prestamoId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_contratistas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(`ptr`: Long,`texto`: RustBuffer.ByValue,`modo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso_con_secreto(`ptr`: Long,`contratistaId`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_con_secreto(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_cambio_nube(`ptr`: Long,`avisoJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_borrar_secreto_dispositivo_legado(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cargar_secreto_dispositivo_legado(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_proveedor_remoto_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_desfase_reloj_ms(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_enviar_cambios_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_proveedor_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -899,53 +937,127 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_prestamos_gafete_provisional_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_proveedores_activos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_rutas_activas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_praind_vencido_para_formulario(`ptr`: Long,`fechaIso`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso_con_secreto(`ptr`: Long,`contratistaId`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_cambios_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`tablas`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_devolucion_gafete_provisional(`ptr`: Long,`prestamoId`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_con_secreto(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_aviso_proveedor_con_ingreso_activo(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_empresas_proveedor(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa_proveedor(`ptr`: Long,`nombre`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_proveedores_activos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor(`ptr`: Long,`cedula`: RustBuffer.ByValue,`nombre`: RustBuffer.ByValue,`empresaId`: Long,`placa`: RustBuffer.ByValue,`gafeteNumero`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor_con_secreto(`ptr`: Long,`cedula`: RustBuffer.ByValue,`nombre`: RustBuffer.ByValue,`empresaId`: Long,`placa`: RustBuffer.ByValue,`gafeteNumero`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_retorno_ruta(`ptr`: Long,`salidaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_proveedor(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_rutas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_vehiculos_ruta(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_rutas_activas(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_retorno_ruta(`ptr`: Long,`salidaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_ruta(`ptr`: Long,`solicitud`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_gafete_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,`personalRuta`: Byte,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_praind_para_formulario(`ptr`: Long,`tipoIngreso`: RustBuffer.ByValue,`personalRuta`: Byte,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar_con_secreto(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_supabase(`ptr`: Long,`passwordActual`: RustBuffer.ByValue,`passwordNueva`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(`ptr`: Long,`directorio`: RustBuffer.ByValue,`identificadorDispositivo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_clone_estabilizadordocumento(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_free_estabilizadordocumento(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_constructor_estabilizadordocumento_new(`configuracion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_estabilizadordocumento_procesar_frame(`ptr`: Long,`textos`: RustBuffer.ByValue,`peso`: Float,`fraccionReflejo`: RustBuffer.ByValue,`hoy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_estabilizadordocumento_procesar_pdf417(`ptr`: Long,`datos`: RustBuffer.ByValue,`hoy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_estabilizadordocumento_reiniciar(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_clone_votadorporposicion(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_free_votadorporposicion(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_constructor_votadorporposicion_new(`capacidad`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_votadorporposicion_agregar(`ptr`: Long,`texto`: RustBuffer.ByValue,`peso`: Float,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_votadorporposicion_agregar_vacio(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_votadorporposicion_consenso(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_votadorporposicion_reiniciar(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_func_es_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_func_extraer_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_extraer_cedula_de_texto(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_es_comprobante_carga_ruta(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_func_extraer_comprobante_ruta(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_consenso_alcanza(`consenso`: RustBuffer.ByValue,`requeridos`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_func_es_otra_lectura(`consenso`: RustBuffer.ByValue,`nueva`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_func_orientacion_de_texto_documento(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_orientacion_encuadre_de_tipo(`tipo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_clasificar_tipo_documento(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_documento_desde_mrz(`registro`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_leer_documento_de_texto(`texto`: RustBuffer.ByValue,`tipo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_nombre_legible_tipo_documento(`tipo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_parece_reverso_cedula_anterior(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_func_reclasificar_por_edad(`documento`: RustBuffer.ByValue,`hoy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_leer_lectura_mrz(`texto`: RustBuffer.ByValue,`anioActual`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_confianza_minima_palabra(uniffi_out_err: UniffiRustCallStatus, 
+    ): Float
+    external fun uniffi_control_acceso_mobile_fn_func_reconstruir_texto_visual(`lineas`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_textos_de_frame(`textoMlKit`: RustBuffer.ByValue,`lineas`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_extraer_vehiculo(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_extraer_vehiculo_con_detalle(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_placa_como_se_imprime(`valor`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_leer_mrz(`lineas`: RustBuffer.ByValue,`anioActual`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_largo_prefijo_pdf417_cedula(uniffi_out_err: UniffiRustCallStatus, 
+    ): Int
+    external fun uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula(`prefijo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula_con_motivo(`prefijo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1066,193 +1178,271 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_es_carnet_kof() and 0xFFFF) != 540) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_extraer_carnet_kof() and 0xFFFF) != 37314) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_extraer_cedula_de_texto() and 0xFFFF) != 37099) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_es_comprobante_carga_ruta() and 0xFFFF) != 31278) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_extraer_comprobante_ruta() and 0xFFFF) != 19435) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_consenso_alcanza() and 0xFFFF) != 41183) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_es_otra_lectura() and 0xFFFF) != 37040) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_orientacion_de_texto_documento() and 0xFFFF) != 49717) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_orientacion_encuadre_de_tipo() and 0xFFFF) != 45181) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_clasificar_tipo_documento() and 0xFFFF) != 54102) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_documento_desde_mrz() and 0xFFFF) != 4599) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_documento_de_texto() and 0xFFFF) != 15263) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_nombre_legible_tipo_documento() and 0xFFFF) != 9817) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_parece_reverso_cedula_anterior() and 0xFFFF) != 3688) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_reclasificar_por_edad() and 0xFFFF) != 58764) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_lectura_mrz() and 0xFFFF) != 5753) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_confianza_minima_palabra() and 0xFFFF) != 29692) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_reconstruir_texto_visual() and 0xFFFF) != 17711) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_textos_de_frame() and 0xFFFF) != 20869) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo() and 0xFFFF) != 63495) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo_con_detalle() and 0xFFFF) != 9950) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_placa_como_se_imprime() and 0xFFFF) != 15330) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 18012) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario() and 0xFFFF) != 15830) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_largo_prefijo_pdf417_cedula() and 0xFFFF) != 60675) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() and 0xFFFF) != 25039) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula() and 0xFFFF) != 8531) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto() and 0xFFFF) != 39907) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula_con_motivo() and 0xFFFF) != 65501) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 38298) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario() and 0xFFFF) != 65365) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_borrar_secreto_dispositivo_legado() and 0xFFFF) != 50777) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() and 0xFFFF) != 51813) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() and 0xFFFF) != 3985) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa() and 0xFFFF) != 43927) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_empresas_proveedor() and 0xFFFF) != 9949) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() and 0xFFFF) != 18297) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta() and 0xFFFF) != 61462) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_praind_vencido_para_formulario() and 0xFFFF) != 64215) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas() and 0xFFFF) != 19377) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_gafete_para_formulario() and 0xFFFF) != 27002) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_vehiculos_ruta() and 0xFFFF) != 54159) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_praind_para_formulario() and 0xFFFF) != 15325) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase() and 0xFFFF) != 21021) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional() and 0xFFFF) != 18805) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_secreto_dispositivo_legado() and 0xFFFF) != 52509) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto() and 0xFFFF) != 28047) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_proveedor_remoto() and 0xFFFF) != 61584) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_gafetes_provisionales_activos() and 0xFFFF) != 37193) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_proveedor_remoto_con_secreto() and 0xFFFF) != 50530) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional() and 0xFFFF) != 52894) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto() and 0xFFFF) != 61493) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_contratistas() and 0xFFFF) != 14429) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto_con_secreto() and 0xFFFF) != 121) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() and 0xFFFF) != 64102) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto() and 0xFFFF) != 32891) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() and 0xFFFF) != 22177) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto() and 0xFFFF) != 51951) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_con_secreto() and 0xFFFF) != 32601) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() and 0xFFFF) != 60001) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() and 0xFFFF) != 48263) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial() and 0xFFFF) != 9648) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_con_secreto() and 0xFFFF) != 48142) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() and 0xFFFF) != 12389) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida() and 0xFFFF) != 31419) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_contratista_activo_en_otro_sitio_con_secreto() and 0xFFFF) != 8502) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_cambio_nube() and 0xFFFF) != 34319) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista() and 0xFFFF) != 20948) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_borrar_secreto_dispositivo_legado() and 0xFFFF) != 48024) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa() and 0xFFFF) != 5879) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cargar_secreto_dispositivo_legado() and 0xFFFF) != 9898) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa_proveedor() and 0xFFFF) != 57468) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_proveedor_remoto_con_secreto() and 0xFFFF) != 53464) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() and 0xFFFF) != 28771) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_remoto_con_secreto() and 0xFFFF) != 46053) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional() and 0xFFFF) != 43280) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto() and 0xFFFF) != 65175) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_entregar_gafete_provisional_con_secreto() and 0xFFFF) != 33806) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() and 0xFFFF) != 19589) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio() and 0xFFFF) != 35345) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms() and 0xFFFF) != 4032) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_gafete_ocupado_en_sitio_con_secreto() and 0xFFFF) != 40319) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_enviar_cambios_con_secreto() and 0xFFFF) != 5353) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_guardar_secreto_dispositivo() and 0xFFFF) != 28439) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos() and 0xFFFF) != 45361) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_empresas() and 0xFFFF) != 27279) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos() and 0xFFFF) != 42812) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_gafetes_provisionales_activos() and 0xFFFF) != 59488) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_prestamos_gafete_provisional_remotos() and 0xFFFF) != 557) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() and 0xFFFF) != 52849) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial() and 0xFFFF) != 46802) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos() and 0xFFFF) != 45562) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto() and 0xFFFF) != 4530) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos() and 0xFFFF) != 40530) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_cambios_con_secreto() and 0xFFFF) != 63020) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_prestamos_gafete_provisional_remotos() and 0xFFFF) != 22618) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube_con_secreto() and 0xFFFF) != 53396) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_proveedores_activos() and 0xFFFF) != 58098) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 39964) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_rutas_activas() and 0xFFFF) != 2190) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_empresas_proveedor() and 0xFFFF) != 7299) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios() and 0xFFFF) != 1455) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_empresa_proveedor() and 0xFFFF) != 44166) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_praind_vencido_para_formulario() and 0xFFFF) != 30709) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_proveedores_activos() and 0xFFFF) != 61075) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() and 0xFFFF) != 60754) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor() and 0xFFFF) != 36810) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_con_secreto() and 0xFFFF) != 56092) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor_con_secreto() and 0xFFFF) != 41164) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_devolucion_gafete_provisional() and 0xFFFF) != 33923) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_proveedor() and 0xFFFF) != 28898) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() and 0xFFFF) != 38089) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta() and 0xFFFF) != 54734) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_con_secreto() and 0xFFFF) != 22370) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas() and 0xFFFF) != 48840) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor() and 0xFFFF) != 65024) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_vehiculos_ruta() and 0xFFFF) != 3493) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_proveedor_con_secreto() and 0xFFFF) != 25163) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_rutas_activas() and 0xFFFF) != 65310) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta() and 0xFFFF) != 56331) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_retorno_ruta() and 0xFFFF) != 57424) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida() and 0xFFFF) != 34276) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_ruta() and 0xFFFF) != 6026) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_proveedor() and 0xFFFF) != 48053) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar_con_secreto() and 0xFFFF) != 20689) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_ruta() and 0xFFFF) != 1461) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase() and 0xFFFF) != 27915) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial() and 0xFFFF) != 516) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() and 0xFFFF) != 14163) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_gafete_para_formulario() and 0xFFFF) != 50281) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() and 0xFFFF) != 9310) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_praind_para_formulario() and 0xFFFF) != 29740) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios() and 0xFFFF) != 41320) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_secreto_dispositivo_guardado() and 0xFFFF) != 12281) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_estabilizadordocumento_procesar_frame() and 0xFFFF) != 40198) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube() and 0xFFFF) != 41771) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_estabilizadordocumento_procesar_pdf417() and 0xFFFF) != 4749) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube_con_secreto() and 0xFFFF) != 45842) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_estabilizadordocumento_reiniciar() and 0xFFFF) != 42567) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube() and 0xFFFF) != 44131) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_votadorporposicion_agregar() and 0xFFFF) != 4035) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_con_nube_con_secreto() and 0xFFFF) != 16587) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_votadorporposicion_agregar_vacio() and 0xFFFF) != 25048) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir() and 0xFFFF) != 57593) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_votadorporposicion_consenso() and 0xFFFF) != 26097) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir_cifrado() and 0xFFFF) != 4932) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_votadorporposicion_reiniciar() and 0xFFFF) != 63088) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir() and 0xFFFF) != 22988) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir_cifrado() and 0xFFFF) != 1677) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_constructor_estabilizadordocumento_new() and 0xFFFF) != 9435) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_constructor_votadorporposicion_new() and 0xFFFF) != 39547) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -1534,6 +1724,29 @@ public object FfiConverterLong: FfiConverter<Long, Long> {
 /**
  * @suppress
  */
+public object FfiConverterFloat: FfiConverter<Float, Float> {
+    override fun lift(value: Float): Float {
+        return value
+    }
+
+    override fun read(buf: ByteBuffer): Float {
+        return buf.getFloat()
+    }
+
+    override fun lower(value: Float): Float {
+        return value
+    }
+
+    override fun allocationSize(value: Float) = 4UL
+
+    override fun write(value: Float, buf: ByteBuffer) {
+        buf.putFloat(value)
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterBoolean: FfiConverter<Boolean, Byte> {
     override fun lift(value: Byte): Boolean {
         return value.toInt() != 0
@@ -1727,6 +1940,331 @@ public object FfiConverterByteArray: FfiConverterRustBuffer<ByteArray> {
 
 
 /**
+ * Una instancia por sesión de escaneo; segura entre hilos (el analizador
+ * de la cámara la alimenta y la pantalla la reinicia).
+ */
+public interface EstabilizadorDocumentoInterface {
+    
+    /**
+     * `textos`: las versiones del texto del frame (ver `textos_de_frame`).
+     * `peso`: calidad relativa del frame en (0, 1]. `fraccion_reflejo`:
+     * medición del recorte, para avisar de un reflejo real.
+     */
+    fun `procesarFrame`(`textos`: List<kotlin.String>, `peso`: kotlin.Float, `fraccionReflejo`: kotlin.Float?, `hoy`: FechaOcr): ResultadoEstabilizacion
+    
+    /**
+     * Cédula anterior leída de su PDF417 (sólo cédula y nombre, ya
+     * validados). Confirma en el acto.
+     */
+    fun `procesarPdf417`(`datos`: DatosPdf417Cedula, `hoy`: FechaOcr): ResultadoEstabilizacion
+    
+    fun `reiniciar`()
+    
+    companion object
+}
+
+/**
+ * Una instancia por sesión de escaneo; segura entre hilos (el analizador
+ * de la cámara la alimenta y la pantalla la reinicia).
+ */
+open class EstabilizadorDocumento: Disposable, AutoCloseable, EstabilizadorDocumentoInterface
+{
+
+    @Suppress("UNUSED_PARAMETER")
+    /**
+     * @suppress
+     */
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+    constructor(`configuracion`: ConfiguracionEstabilizador) :
+        this(UniffiWithHandle, 
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_constructor_estabilizadordocumento_new(
+    
+        
+        FfiConverterTypeConfiguracionEstabilizador.lower(`configuracion`),_status)
+}
+    )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(private val handle: Long) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return;
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_control_acceso_mobile_fn_free_estabilizadordocumento(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+        }
+        return uniffiRustCall() { status ->
+            UniffiLib.uniffi_control_acceso_mobile_fn_clone_estabilizadordocumento(handle, status)
+        }
+    }
+
+    
+    /**
+     * `textos`: las versiones del texto del frame (ver `textos_de_frame`).
+     * `peso`: calidad relativa del frame en (0, 1]. `fraccion_reflejo`:
+     * medición del recorte, para avisar de un reflejo real.
+     */override fun `procesarFrame`(`textos`: List<kotlin.String>, `peso`: kotlin.Float, `fraccionReflejo`: kotlin.Float?, `hoy`: FechaOcr): ResultadoEstabilizacion {
+            return FfiConverterTypeResultadoEstabilizacion.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_estabilizadordocumento_procesar_frame(
+        it,
+        
+        FfiConverterSequenceString.lower(`textos`),
+        FfiConverterFloat.lower(`peso`),
+        FfiConverterOptionalFloat.lower(`fraccionReflejo`),
+        FfiConverterTypeFechaOcr.lower(`hoy`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Cédula anterior leída de su PDF417 (sólo cédula y nombre, ya
+     * validados). Confirma en el acto.
+     */override fun `procesarPdf417`(`datos`: DatosPdf417Cedula, `hoy`: FechaOcr): ResultadoEstabilizacion {
+            return FfiConverterTypeResultadoEstabilizacion.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_estabilizadordocumento_procesar_pdf417(
+        it,
+        
+        FfiConverterTypeDatosPdf417Cedula.lower(`datos`),
+        FfiConverterTypeFechaOcr.lower(`hoy`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `reiniciar`()
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_estabilizadordocumento_reiniciar(
+        it,
+        _status)
+}
+    }
+    
+    
+
+    
+
+    
+
+
+    
+    
+    /**
+     * @suppress
+     */
+    companion object
+    
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeEstabilizadorDocumento: FfiConverter<EstabilizadorDocumento, Long> {
+    override fun lower(value: EstabilizadorDocumento): Long {
+        return value.uniffiCloneHandle()
+    }
+
+    override fun lift(value: Long): EstabilizadorDocumento {
+        return EstabilizadorDocumento(UniffiWithHandle, value)
+    }
+
+    override fun read(buf: ByteBuffer): EstabilizadorDocumento {
+        return lift(buf.getLong())
+    }
+
+    override fun allocationSize(value: EstabilizadorDocumento) = 8UL
+
+    override fun write(value: EstabilizadorDocumento, buf: ByteBuffer) {
+        buf.putLong(lower(value))
+    }
+}
+
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+
+/**
  * Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
  * abre una vez al arrancar la app y se reusa en todas las pantallas (login,
  * buscar contratista, registrar entrada/salida) — nunca se reabre por
@@ -1742,71 +2280,77 @@ public interface NucleoInterface {
     fun `admitePersonalRutaParaFormulario`(`tipoIngreso`: TipoIngreso): kotlin.Boolean
     
     /**
-     * `directorio` sólo para los intentos de sincronización (ver abajo) --
-     * el resto del login sigue sin necesitarlo, la base ya está abierta
-     * desde `abrir`.
-     *
-     * Dos chequeos contra la nube, uno para cada dirección de un cambio de
-     * estado remoto -- decisión explícita: "por seguridad, pero nunca
-     * bloqueante" (el teléfono tiene que poder operar sin internet), así
-     * que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
-     *
-     * 1. **Alta o reactivación**: si el chequeo local dice "inactivo"
-     * (`AutenticacionErrorNucleo::UsuarioInactivo`) o "no existe"
-     * (`CredencialesInvalidas` -- que es la misma variante que una
-     * contraseña incorrecta, ver `autenticacion_service.rs`), puede ser
-     * que a este usuario lo hayan reactivado en otro dispositivo, o
-     * creado en el panel/otro sitio DESPUÉS del primer arranque de este
-     * teléfono, y esta base todavía no se enteró -- antes de rendirse,
-     * refresca sólo el catálogo (`refrescar_catalogo_sin_sesion`, sin
-     * sesión) y reintenta el login local una vez más. Sin esto, un
-     * usuario nuevo o una reactivación remota nunca se podían reflejar
-     * acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
-     * recién arranca DESPUÉS de un primer login exitoso, así que una
-     * cédula que todavía no existe en este teléfono se quedaba
-     * "credenciales inválidas" para siempre, sin importar cuánto se
-     * esperara -- reportado en vivo: un ROOT creado en Supabase después
-     * del primer arranque del emulador nunca podía entrar. Costo
-     * aceptado: una contraseña tipeada mal también dispara este
-     * refresco de más (no hay forma barata de distinguir los dos casos
-     * antes de sincronizar) -- mismo costo que ya paga escritorio, que
-     * sincroniza el catálogo en CADA intento de login, acierte o no
-     * (`desktop/src-tauri/src/comandos/autenticacion.rs`).
-     * 2. **Baja**: tras un login local exitoso, confirma en vivo que la
-     * cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
-     * una columna, no la sincronización completa que hacía esto antes:
-     * medida como la causa real del retraso de "un par de segundos"
-     * que se sentía al entrar). La sincronización completa (cola,
-     * catálogo, historial...) sigue disparándose, pero Kotlin la lanza
-     * aparte (ver `LoginViewModel.autenticar`) sin que este método la
-     * espere -- acá retener el candado durante una sincronización
-     * entera hubiera vuelto a sentirse lento.
+     * Alta de contratista en persona, sólo creación (ver
+     * docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
+     * PRAIND requerido y vigente, personal de ruta según el tipo, acceso
+     * habilitado) viven en `ContratistaService::crear`; esto
+     * sólo convierte tipos en la frontera uniffi.
      */
-    fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResultadoLogin
+    fun `crearContratista`(`datos`: DatosContratista): kotlin.Long
+    
+    fun `crearEmpresa`(`nombre`: kotlin.String): kotlin.Long
     
     /**
-     * Igual que [`Nucleo::autenticar`], pero con el secreto ya descifrado
-     * por Android Keystore. Si el login local necesita refrescar catálogo
-     * por un usuario recién creado/reactivado, usa este secreto en memoria
-     * sin leer credenciales desde disco.
+     * Es el selector del wizard de "Nuevo contratista" -- una empresa
+     * desactivada no es una opción válida ahí, ver
+     * `EmpresaService::listar_seleccionables`. No hay pantalla de
+     * administración de empresas en mobile, así que no hace falta exponer
+     * también la variante sin filtro.
      */
-    fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): ResultadoLogin
+    fun `listarEmpresas`(): List<Empresa>
     
     /**
-     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
-     * ya tiene un ingreso de proveedor abierto en este sitio (este equipo
-     * o el otro dispositivo), `None` si puede entrar. La regla y el texto
-     * son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+     * Aviso inmediato de PRAIND vencido mientras se tipea la fecha (ISO
+     * `AAAA-MM-DD`). Una fecha incompleta o inválida todavía no es
+     * "vencida" (`false`): eso lo rechaza `crear_contratista` al guardar.
+     * Misma regla y mismo reloj que el alta (`AppCore::praind_vencido`).
      */
-    fun `avisoProveedorConIngresoActivo`(`cedula`: kotlin.String): kotlin.String?
+    fun `praindVencidoParaFormulario`(`fechaIso`: kotlin.String): kotlin.Boolean
     
     /**
-     * Borra el archivo legado de `cargar_secreto_dispositivo_legado` --
-     * Kotlin lo llama justo después de migrar ese secreto al Keystore, para
-     * no dejar la copia vieja (en texto plano, ver el módulo
-     * `nube::credenciales`) huérfana en el almacenamiento de la app.
+     * Espejo de [`Self::requiere_praind_para_formulario`] para la otra
+     * regla del mismo formulario.
      */
-    fun `borrarSecretoDispositivoLegado`(`directorio`: kotlin.String)
+    fun `requiereGafeteParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean
+    
+    /**
+     * MV-10 (auditoría 2026-09-24): antes de este método,
+     * `PantallaNuevoContratista.kt` reimplementaba esta regla a mano en
+     * Kotlin (necesita evaluarla ANTES de tener un `Contratista` real que
+     * consultar -- el formulario todavía no se guardó) -- riesgo real de
+     * quedar desincronizada si la regla cambia acá y nadie se acuerda de
+     * tocar también el formulario móvil. No usa ningún estado de `self` --
+     * vive como método de `Nucleo` (no función libre) porque es el único
+     * patrón de export que usa este puente hoy (ver el resto de este
+     * `impl`). Fuente de verdad real: `control_acceso::domain::contratista`.
+     */
+    fun `requierePraindParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean
+    
+    /**
+     * Entrega un gafete provisional KOF -- espejo de
+     * `AppCore::entregar_gafete_provisional`. El buscador de encargado
+     * reusa `buscar_encargados_ruta` tal cual, sin nada nuevo del lado de
+     * `UniFFI` para eso.
+     */
+    fun `entregarGafeteProvisional`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long): kotlin.Long
+    
+    /**
+     * Entrega con su regla en la misma llamada; la decide
+     * `application::entregar_gafete_provisional_verificado`, la misma que
+     * usa escritorio. `secreto` vacío se salta el chequeo de nube.
+     */
+    fun `entregarGafeteProvisionalConSecreto`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long
+    
+    /**
+     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
+     */
+    fun `listarGafetesProvisionalesActivos`(): List<PrestamoGafeteProvisionalActivoResumen>
+    
+    /**
+     * Registra la devolución de un préstamo de gafete provisional KOF --
+     * espejo de `AppCore::registrar_devolucion_gafete_provisional`.
+     */
+    fun `registrarDevolucionGafeteProvisional`(`prestamoId`: kotlin.Long)
     
     /**
      * Búsqueda en vivo (la vía primaria del guardia — ver
@@ -1822,6 +2366,188 @@ public interface NucleoInterface {
     fun `buscarContratistas`(`texto`: kotlin.String): List<ContratistaResumen>
     
     /**
+     * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
+     * el listado completo que carga AG Grid en desktop.
+     *
+     * `modo` decide cómo se interpreta `texto` — separado a propósito de
+     * `NombreCedula`: la búsqueda de texto libre de Rust ya hace `OR` entre
+     * cédula/nombre (`LIKE`) y gafete exacto en la misma consulta, así que
+     * buscar "7" como gafete también trae cualquier cédula que *contenga*
+     * un 7 — ruidoso con muchos activos a la vez. En modo `Gafete` se
+     * filtra sólo por `gafete_numero` exacto, sin ese ruido.
+     */
+    fun `listarIngresosActivos`(`texto`: kotlin.String, `modo`: ModoBusquedaActivos): List<IngresoActivoResumen>
+    
+    /**
+     * Vista previa antes de confirmar — misma decisión que ya toma la GUI
+     * de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
+     * rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
+     * (Kotlin) decide si deja continuar mirando los campos ya calculados.
+     */
+    fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso
+    
+    /**
+     * Vista previa con TODAS las reglas: las locales (este equipo y el
+     * otro equipo del sitio) y, con nube, la verificación en vivo de que la
+     * persona no tenga un ingreso activo en ningún sitio. Las decide
+     * `application::preparar_ingreso_verificado`, la misma que usa
+     * escritorio; Kotlin sólo muestra `mensaje_bloqueo`. `secreto` vacío =
+     * nube sin configurar (sólo reglas locales). Nunca toca `core_lock()`
+     * durante la red.
+     */
+    fun `prepararIngresoConSecreto`(`contratistaId`: kotlin.Long, `secreto`: kotlin.String): PreparacionIngreso
+    
+    fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?): ResultadoRegistroEntrada
+    
+    /**
+     * Ingreso con TODAS sus reglas en una sola llamada: locales, y con nube
+     * la persona sin ingreso activo en ningún sitio y el gafete libre en el
+     * otro dispositivo; si no se puede verificar, no se registra. Las
+     * decide `application::registrar_ingreso_verificado`, la misma que usa
+     * escritorio. `secreto` vacío = nube sin configurar.
+     */
+    fun `registrarIngresoConSecreto`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?, `secreto`: kotlin.String): ResultadoRegistroEntrada
+    
+    fun `registrarSalida`(`registroId`: kotlin.Long)
+    
+    /**
+     * Aviso en vivo con los datos (`cambio_nube` con `registro`, tal cual
+     * llega por el canal, en JSON): guarda la fila directo en la base local
+     * sin consultar a la nube -- ver `control_acceso::nube::en_vivo`.
+     * `true` si la aplicó; `false` si el aviso no trae datos o su tabla
+     * todavía no los manda (queda para `sincronizar_cambios_con_secreto`,
+     * que corre igual detrás). Sobre la conexión secundaria: nunca toma el
+     * candado del núcleo.
+     */
+    fun `aplicarCambioNube`(`avisoJson`: kotlin.String): kotlin.Boolean
+    
+    /**
+     * Borra el archivo legado de `cargar_secreto_dispositivo_legado` --
+     * Kotlin lo llama justo después de migrar ese secreto al Keystore, para
+     * no dejar la copia vieja (en texto plano, ver el módulo
+     * `nube::credenciales`) huérfana en el almacenamiento de la app.
+     */
+    fun `borrarSecretoDispositivoLegado`(`directorio`: kotlin.String)
+    
+    /**
+     * Lee el secreto guardado por versiones móviles anteriores a Android
+     * Keystore. Kotlin lo usa sólo para migrarlo al almacén seguro nuevo.
+     */
+    fun `cargarSecretoDispositivoLegado`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): kotlin.String?
+    
+    /**
+     * Espejo de [`Self::cerrar_ingreso_remoto_con_secreto`], pero contra
+     * `ingresos_proveedor`.
+     */
+    fun `cerrarIngresoProveedorRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
+    
+    /**
+     * Cierra, contra la nube, un ingreso abierto por el otro dispositivo
+     * del mismo sitio -- nunca toca el historial local de este teléfono.
+     * Usa el secreto que Kotlin descifra de Android Keystore; el candado
+     * del núcleo sólo se toma para autorizar, nunca durante la red.
+     */
+    fun `cerrarIngresoRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
+    
+    /**
+     * Espejo de [`Self::cerrar_ingreso_proveedor_remoto_con_secreto`],
+     * pero contra `prestamos_gafete_provisional`.
+     */
+    fun `cerrarPrestamoGafeteProvisionalRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
+    
+    /**
+     * Activación inicial de una base vacía. No persiste el secreto desde
+     * Rust: Android lo guarda con Android Keystore y sólo entrega el
+     * secreto descifrado en memoria para esta autenticación inicial. El
+     * candado del núcleo sólo se toma para lo local, nunca durante la red.
+     *
+     * Los parámetros de metadata (todos opcionales, `""` = no disponible)
+     * viajan una única vez, en esta primera autenticación -- ver
+     * `control_acceso::nube::MetadatosDispositivo`. No se vuelven a
+     * reenviar en cada renovación de token porque casi nunca cambian, y
+     * esto ya alcanza para que el panel de administración distinga el
+     * teléfono físico detrás de cada secreto (ver
+     * `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
+     */
+    fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
+    
+    /**
+     * Último desfase medido del reloj del teléfono contra el servidor (ms;
+     * positivo = el teléfono va adelantado), `None` si nunca se midió. Se
+     * mide en cada autenticación con precisión de milisegundos (ver
+     * `control_acceso::nube::reloj_preciso`). Lo usa la telemetría de
+     * diagnóstico para corregir la latencia de los avisos en vivo.
+     */
+    fun `desfaseRelojMs`(): kotlin.Long?
+    
+    /**
+     * Sólo vacía la bandeja de salida, sin bajar nada: lo que corre tras
+     * un cambio hecho en este teléfono (mismo criterio que
+     * `enviar_cambios_nube` en escritorio). Antes un registro local corría
+     * la sincronización completa antes de subirse (telemetría de staging:
+     * ~1,6 s de promedio y hasta 5 s), y el otro equipo recién veía el
+     * cambio al terminar. El pulso periódico sigue siendo completo.
+     */
+    fun `enviarCambiosConSecreto`(`secreto`: kotlin.String): ResumenSincronizacion
+    
+    /**
+     * Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
+     * `ingresos_proveedor_remotos`.
+     */
+    fun `listarIngresosProveedorRemotos`(): List<IngresoProveedorRemoto>
+    
+    /**
+     * Lectura pura de la caché local `ingresos_remotos` -- no hace falta
+     * red para mostrarla, ya la llenó la última sincronización.
+     */
+    fun `listarIngresosRemotos`(): List<IngresoRemoto>
+    
+    /**
+     * Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
+     * la caché `prestamos_gafete_provisional_remotos`.
+     */
+    fun `listarPrestamosGafeteProvisionalRemotos`(): List<PrestamoGafeteProvisionalRemoto>
+    
+    /**
+     * `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
+     * usa para decidir si mostrar la pantalla de arranque (pegar el
+     * secreto) en vez del login (ver `MainActivity.kt`).
+     */
+    fun `requiereConfiguracionInicial`(): kotlin.Boolean
+    
+    /**
+     * Lo mínimo para que Kotlin escuche Broadcast privado por sitio, con el
+     * secreto que Kotlin descifra de Android Keystore. El socket y sus
+     * reconexiones viven fuera del núcleo.
+     */
+    fun `sesionRealtimeNubeConSecreto`(`secreto`: kotlin.String): SesionRealtimeNube
+    
+    /**
+     * Sincronización disparada por avisos en vivo (`cambio_nube`, ver
+     * `NubeRealtime.kt`): corre sólo las etapas de las tablas que
+     * cambiaron (`payload.table`), ver
+     * `control_acceso::nube::AlcanceSincronizacion`. Antes cada aviso
+     * corría la sincronización completa (~12 consultas a la nube por un
+     * solo cambio). Una tabla desconocida o una lista vacía caen en la
+     * completa. La bandeja de salida se drena siempre.
+     */
+    fun `sincronizarCambiosConSecreto`(`secreto`: kotlin.String, `tablas`: List<kotlin.String>): ResumenSincronizacion
+    
+    /**
+     * Sincroniza usando el secreto ya descifrado por Android Keystore.
+     * Evita que el núcleo móvil lea un secreto persistido en texto plano.
+     */
+    fun `sincronizarConNubeConSecreto`(`secreto`: kotlin.String): ResumenSincronizacion
+    
+    /**
+     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
+     * ya tiene un ingreso de proveedor abierto en este sitio (este equipo
+     * o el otro dispositivo), `None` si puede entrar. La regla y el texto
+     * son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+     */
+    fun `avisoProveedorConIngresoActivo`(`cedula`: kotlin.String): kotlin.String?
+    
+    /**
      * Selector con autocompletado del wizard de proveedores (Paso 2:
      * empresa) -- espejo de `AppCore::buscar_empresas_proveedor_seleccionables`.
      * Es el selector del wizard de proveedores -- una empresa desactivada
@@ -1830,6 +2556,37 @@ public interface NucleoInterface {
      * seguía mostrando empresas desactivadas.
      */
     fun `buscarEmpresasProveedor`(`texto`: kotlin.String): List<EmpresaProveedor>
+    
+    /**
+     * Alta inline de empresa proveedora desde el mismo selector -- espejo
+     * de `AppCore::crear_empresa_proveedor`.
+     */
+    fun `crearEmpresaProveedor`(`nombre`: kotlin.String): kotlin.Long
+    
+    /**
+     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
+     */
+    fun `listarProveedoresActivos`(): List<RegistroIngresoProveedorActivoResumen>
+    
+    /**
+     * Registra el ingreso (apertura) del ciclo de un proveedor -- espejo
+     * de `AppCore::registrar_ingreso_proveedor`.
+     */
+    fun `registrarIngresoProveedor`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long): kotlin.Long
+    
+    /**
+     * Ingreso de proveedor con todas sus reglas en una sola llamada; el
+     * orden y qué falla frena los decide
+     * `application::registrar_ingreso_proveedor_verificado`, la misma que
+     * usa escritorio. `secreto` vacío se salta los chequeos de nube.
+     */
+    fun `registrarIngresoProveedorConSecreto`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long
+    
+    /**
+     * Registra la salida (cierre) de un ingreso de proveedor activo --
+     * espejo de `AppCore::registrar_salida_proveedor`.
+     */
+    fun `registrarSalidaProveedor`(`registroId`: kotlin.Long)
     
     /**
      * Buscador del checklist de rutas (paso "Encargado KOF") -- por nombre
@@ -1859,55 +2616,75 @@ public interface NucleoInterface {
     fun `buscarVehiculosRuta`(`texto`: kotlin.String): List<VehiculoRuta>
     
     /**
+     * Sin actor -- es una lectura, mismo criterio que
+     * `listar_ingresos_activos`.
+     */
+    fun `listarRutasActivas`(): List<SalidaRutaActivaResumen>
+    
+    /**
+     * Registra el retorno (cierre) de una salida de ruta activa --
+     * espejo de `AppCore::registrar_retorno_ruta`.
+     */
+    fun `registrarRetornoRuta`(`salidaId`: kotlin.Long)
+    
+    /**
+     * Registra la salida (apertura) del ciclo de una ruta -- espejo de
+     * `AppCore::registrar_salida_ruta`. `solicitud.fecha_documento` viaja
+     * como texto ISO (`AAAA-MM-DD`), mismo criterio que
+     * `fecha_vencimiento_praind` en `crear_contratista`.
+     */
+    fun `registrarSalidaRuta`(`solicitud`: SolicitudSalidaRuta): ResultadoRegistroSalidaRuta
+    
+    /**
+     * Login con el secreto que Kotlin descifra de Android Keystore (vacío =
+     * nube sin configurar: no se toca la red).
+     *
+     * Dos chequeos contra la nube, uno para cada dirección de un cambio de
+     * estado remoto -- decisión explícita: "por seguridad, pero nunca
+     * bloqueante" (el teléfono tiene que poder operar sin internet), así
+     * que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
+     *
+     * 1. **Alta o reactivación**: si el chequeo local dice "inactivo"
+     * (`AutenticacionErrorNucleo::UsuarioInactivo`) o "no existe"
+     * (`CredencialesInvalidas` -- que es la misma variante que una
+     * contraseña incorrecta, ver `autenticacion_service.rs`), puede ser
+     * que a este usuario lo hayan reactivado en otro dispositivo, o
+     * creado en el panel/otro sitio DESPUÉS del primer arranque de este
+     * teléfono, y esta base todavía no se enteró -- antes de rendirse,
+     * refresca sólo el catálogo (`refrescar_catalogo_sin_sesion_con_secreto`, sin
+     * sesión) y reintenta el login local una vez más. Sin esto, un
+     * usuario nuevo o una reactivación remota nunca se podían reflejar
+     * acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
+     * recién arranca DESPUÉS de un primer login exitoso, así que una
+     * cédula que todavía no existe en este teléfono se quedaba
+     * "credenciales inválidas" para siempre, sin importar cuánto se
+     * esperara -- reportado en vivo: un ROOT creado en Supabase después
+     * del primer arranque del emulador nunca podía entrar. Costo
+     * aceptado: una contraseña tipeada mal también dispara este
+     * refresco de más (no hay forma barata de distinguir los dos casos
+     * antes de sincronizar) -- mismo costo que ya paga escritorio, que
+     * sincroniza el catálogo en CADA intento de login, acierte o no
+     * (`desktop/src-tauri/src/comandos/autenticacion.rs`).
+     * 2. **Baja**: tras un login local exitoso, confirma en vivo que la
+     * cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
+     * una columna, no la sincronización completa que hacía esto antes:
+     * medida como la causa real del retraso de "un par de segundos"
+     * que se sentía al entrar). La sincronización completa (cola,
+     * catálogo, historial...) sigue disparándose, pero Kotlin la lanza
+     * aparte (ver `LoginViewModel.autenticar`) sin que este método la
+     * espere -- acá retener el candado durante una sincronización
+     * entera hubiera vuelto a sentirse lento.
+     */
+    fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): ResultadoLogin
+    
+    /**
      * Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-     * tras `autenticar`/`autenticar_con_secreto`) o rutinario --
+     * tras `autenticar_con_secreto`) o rutinario --
      * `nube::cambiar_password` ya revalida `password_actual` con un login
      * real antes de aceptar la nueva, no confía en que la sesión siga
      * abierta.
      */
     fun `cambiarPasswordSupabase`(`passwordActual`: kotlin.String, `passwordNueva`: kotlin.String)
-    
-    /**
-     * Lee el secreto guardado por versiones móviles anteriores a Android
-     * Keystore. Kotlin lo usa sólo para migrarlo al almacén seguro nuevo.
-     */
-    fun `cargarSecretoDispositivoLegado`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): kotlin.String?
-    
-    /**
-     * Espejo de [`Self::cerrar_ingreso_remoto`], pero contra
-     * `ingresos_proveedor`.
-     */
-    fun `cerrarIngresoProveedorRemoto`(`directorio`: kotlin.String, `uuid`: kotlin.String)
-    
-    /**
-     * Espejo de [`Self::cerrar_ingreso_remoto_con_secreto`], pero contra
-     * `ingresos_proveedor`.
-     */
-    fun `cerrarIngresoProveedorRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
-    
-    /**
-     * Cierra, contra la nube, un ingreso abierto por el otro dispositivo
-     * del mismo sitio -- nunca toca el historial local de este teléfono.
-     */
-    fun `cerrarIngresoRemoto`(`directorio`: kotlin.String, `uuid`: kotlin.String)
-    
-    /**
-     * Cierra un ingreso remoto usando el secreto ya descifrado por Android
-     * Keystore.
-     */
-    fun `cerrarIngresoRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
-    
-    /**
-     * Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], pero contra
-     * `prestamos_gafete_provisional`.
-     */
-    fun `cerrarPrestamoGafeteProvisionalRemoto`(`directorio`: kotlin.String, `uuid`: kotlin.String)
-    
-    /**
-     * Espejo de [`Self::cerrar_ingreso_proveedor_remoto_con_secreto`],
-     * pero contra `prestamos_gafete_provisional`.
-     */
-    fun `cerrarPrestamoGafeteProvisionalRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
     
     /**
      * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
@@ -1916,64 +2693,6 @@ public interface NucleoInterface {
      * reabrir la base.
      */
     fun `cerrarSesion`()
-    
-    /**
-     * Arranque de una base vacía -- sin sesión, porque todavía no existe
-     * ningún usuario con quien autenticar. Guarda el secreto pegado en la
-     * pantalla de arranque y trae el catálogo remoto (usuarios incluidos),
-     * para que el próximo intento de login ya tenga con quién autenticar
-     * (con el centinela `SIN_PASSWORD_LOCAL`, cae solo en "fijar
-     * contraseña"). Método legado: la app Android nueva usa
-     * [`Nucleo::configurar_dispositivo_inicial_con_secreto`] y persiste el
-     * secreto con Android Keystore.
-     */
-    fun `configurarDispositivoInicial`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String): ResumenSincronizacion
-    
-    /**
-     * Igual que [`Nucleo::configurar_dispositivo_inicial`], pero sin
-     * persistir el secreto desde Rust. Android lo guarda con Android
-     * Keystore y sólo entrega el secreto descifrado en memoria para esta
-     * autenticación inicial.
-     *
-     * Los parámetros de metadata (todos opcionales, `""` = no disponible)
-     * viajan una única vez, en esta primera autenticación -- ver
-     * `control_acceso::nube::MetadatosDispositivo`. No se vuelven a
-     * reenviar en cada renovación de token porque casi nunca cambian, y
-     * esto ya alcanza para que el panel de administración distinga el
-     * teléfono físico detrás de cada secreto (ver
-     * `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
-     */
-    fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
-    
-    /**
-     * Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
-     * de ingresos abiertos entre sitios") -- mismo patrón que
-     * `gafete_ocupado_en_sitio_con_secreto`, pero de mejor esfuerzo: sin
-     * secreto, o si la red falla, `Ok(None)` en vez de propagar el error
-     * (acá SÍ hay con qué chocar sin red -- un ingreso registrado offline
-     * queda local igual, y el conflicto se detecta después al sincronizar,
-     * ver `sincronizar_con_secreto`/`ResumenSincronizacion::conflictos_ingreso`).
-     * Kotlin la llama después de `preparar_ingreso`, sólo si los chequeos
-     * locales ya dejaron pasar.
-     */
-    fun `contratistaActivoEnOtroSitioConSecreto`(`secreto`: kotlin.String, `cedula`: kotlin.String): kotlin.String?
-    
-    /**
-     * Alta de contratista en persona, sólo creación (ver
-     * docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
-     * PRAIND requerido y vigente, personal de ruta según el tipo, acceso
-     * habilitado) viven en `ContratistaService::crear`; esto
-     * sólo convierte tipos en la frontera uniffi.
-     */
-    fun `crearContratista`(`datos`: DatosContratista): kotlin.Long
-    
-    fun `crearEmpresa`(`nombre`: kotlin.String): kotlin.Long
-    
-    /**
-     * Alta inline de empresa proveedora desde el mismo selector -- espejo
-     * de `AppCore::crear_empresa_proveedor`.
-     */
-    fun `crearEmpresaProveedor`(`nombre`: kotlin.String): kotlin.Long
     
     /**
      * Sólo Root/Administrador — Rust ya rechaza a un actor sin
@@ -1985,259 +2704,9 @@ public interface NucleoInterface {
     fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long
     
     /**
-     * Entrega un gafete provisional KOF -- espejo de
-     * `AppCore::entregar_gafete_provisional`. El buscador de encargado
-     * reusa `buscar_encargados_ruta` tal cual, sin nada nuevo del lado de
-     * `UniFFI` para eso.
-     */
-    fun `entregarGafeteProvisional`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long): kotlin.Long
-    
-    /**
-     * Entrega con su regla en la misma llamada; la decide
-     * `application::entregar_gafete_provisional_verificado`, la misma que
-     * usa escritorio. `secreto` vacío se salta el chequeo de nube.
-     */
-    fun `entregarGafeteProvisionalConSecreto`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long
-    
-    /**
-     * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
-     * activo en este sitio del lado de OTRO dispositivo -- llamar justo
-     * antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
-     * dispositivo sólo valida el gafete contra su propia base `SQLite`,
-     * que nunca ve lo que hizo el otro hasta sincronizar, así que dos
-     * dispositivos del mismo sitio podían aceptar el mismo número como
-     * activo a la vez.
-     */
-    fun `gafeteOcupadoEnSitio`(`directorio`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean
-    
-    /**
-     * Chequeo remoto usando el secreto ya descifrado por Android Keystore.
-     */
-    fun `gafeteOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean
-    
-    /**
-     * Guarda el secreto de este dispositivo en el archivo administrado por
-     * Rust. Método legado: Android nuevo usa Android Keystore desde Kotlin
-     * y sólo mantiene este camino para compatibilidad/migración.
-     */
-    fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String)
-    
-    /**
-     * Es el selector del wizard de "Nuevo contratista" -- una empresa
-     * desactivada no es una opción válida ahí, ver
-     * `EmpresaService::listar_seleccionables`. No hay pantalla de
-     * administración de empresas en mobile, así que no hace falta exponer
-     * también la variante sin filtro.
-     */
-    fun `listarEmpresas`(): List<Empresa>
-    
-    /**
-     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
-     */
-    fun `listarGafetesProvisionalesActivos`(): List<PrestamoGafeteProvisionalActivoResumen>
-    
-    /**
-     * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
-     * el listado completo que carga AG Grid en desktop.
-     *
-     * `modo` decide cómo se interpreta `texto` — separado a propósito de
-     * `NombreCedula`: la búsqueda de texto libre de Rust ya hace `OR` entre
-     * cédula/nombre (`LIKE`) y gafete exacto en la misma consulta, así que
-     * buscar "7" como gafete también trae cualquier cédula que *contenga*
-     * un 7 — ruidoso con muchos activos a la vez. En modo `Gafete` se
-     * filtra sólo por `gafete_numero` exacto, sin ese ruido.
-     */
-    fun `listarIngresosActivos`(`texto`: kotlin.String, `modo`: ModoBusquedaActivos): List<IngresoActivoResumen>
-    
-    /**
-     * Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
-     * `ingresos_proveedor_remotos`.
-     */
-    fun `listarIngresosProveedorRemotos`(): List<IngresoProveedorRemoto>
-    
-    /**
-     * Lectura pura de la caché local `ingresos_remotos` -- no hace falta
-     * red para mostrarla, ya la llenó la última `sincronizar_con_nube`.
-     */
-    fun `listarIngresosRemotos`(): List<IngresoRemoto>
-    
-    /**
-     * Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
-     * la caché `prestamos_gafete_provisional_remotos`.
-     */
-    fun `listarPrestamosGafeteProvisionalRemotos`(): List<PrestamoGafeteProvisionalRemoto>
-    
-    /**
-     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
-     */
-    fun `listarProveedoresActivos`(): List<RegistroIngresoProveedorActivoResumen>
-    
-    /**
-     * Sin actor -- es una lectura, mismo criterio que
-     * `listar_ingresos_activos`.
-     */
-    fun `listarRutasActivas`(): List<SalidaRutaActivaResumen>
-    
-    /**
      * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
      */
     fun `listarUsuarios`(`texto`: kotlin.String): List<UsuarioResumen>
-    
-    /**
-     * Aviso inmediato de PRAIND vencido mientras se tipea la fecha (ISO
-     * `AAAA-MM-DD`). Una fecha incompleta o inválida todavía no es
-     * "vencida" (`false`): eso lo rechaza `crear_contratista` al guardar.
-     * Misma regla y mismo reloj que el alta (`AppCore::praind_vencido`).
-     */
-    fun `praindVencidoParaFormulario`(`fechaIso`: kotlin.String): kotlin.Boolean
-    
-    /**
-     * Vista previa antes de confirmar — misma decisión que ya toma la GUI
-     * de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
-     * rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
-     * (Kotlin) decide si deja continuar mirando los campos ya calculados.
-     */
-    fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso
-    
-    /**
-     * Igual que [`Nucleo::preparar_ingreso`], pero además intenta el
-     * chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo
-     * cruzado de ingresos abiertos entre sitios") cuando los chequeos
-     * locales ya dejaron pasar -- reemplaza el `if` que antes armaba
-     * Kotlin en `ActivosViewModel.elegir` con dos llamadas FFI separadas
-     * (`prepararIngreso` + `contratistaActivoEnOtroSitioConSecreto`) y su
-     * propio `puedeContinuar`/`mensajeBloqueo`. Nunca toca `core_lock()`
-     * durante la parte de red -- ver `CacheTokenDispositivo`.
-     *
-     * `secreto` vacío (dispositivo sin nube configurada) se salta el
-     * chequeo remoto sin tocar la red, igual que el resto de los
-     * `*_con_secreto` de este archivo.
-     */
-    fun `prepararIngresoConSecreto`(`contratistaId`: kotlin.Long, `secreto`: kotlin.String): PreparacionIngreso
-    
-    /**
-     * Registra la devolución de un préstamo de gafete provisional KOF --
-     * espejo de `AppCore::registrar_devolucion_gafete_provisional`.
-     */
-    fun `registrarDevolucionGafeteProvisional`(`prestamoId`: kotlin.Long)
-    
-    fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?): ResultadoRegistroEntrada
-    
-    /**
-     * Igual que [`Nucleo::registrar_ingreso`], pero además chequea en vivo
-     * que el gafete (si lo hay) no esté ya activo en este sitio del lado
-     * de OTRO dispositivo antes de escribir -- reemplaza el par de
-     * llamadas separadas `gafeteOcupadoEnSitioConSecreto` +
-     * `registrarIngreso` que antes hacía `PantallaConfirmarIngreso.kt`
-     * (con su propia `GafeteOcupadoEnSitioException`), acortando la
-     * ventana entre chequear y escribir a un solo cruce FFI.
-     *
-     * `secreto` vacío se salta el chequeo sin tocar la red (mismo
-     * criterio que el resto de los `*_con_secreto`).
-     */
-    fun `registrarIngresoConSecreto`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?, `secreto`: kotlin.String): ResultadoRegistroEntrada
-    
-    /**
-     * Registra el ingreso (apertura) del ciclo de un proveedor -- espejo
-     * de `AppCore::registrar_ingreso_proveedor`.
-     */
-    fun `registrarIngresoProveedor`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long): kotlin.Long
-    
-    /**
-     * Ingreso de proveedor con todas sus reglas en una sola llamada; el
-     * orden y qué falla frena los decide
-     * `application::registrar_ingreso_proveedor_verificado`, la misma que
-     * usa escritorio. `secreto` vacío se salta los chequeos de nube.
-     */
-    fun `registrarIngresoProveedorConSecreto`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long
-    
-    /**
-     * Registra el retorno (cierre) de una salida de ruta activa --
-     * espejo de `AppCore::registrar_retorno_ruta`.
-     */
-    fun `registrarRetornoRuta`(`salidaId`: kotlin.Long)
-    
-    fun `registrarSalida`(`registroId`: kotlin.Long)
-    
-    /**
-     * Registra la salida (cierre) de un ingreso de proveedor activo --
-     * espejo de `AppCore::registrar_salida_proveedor`.
-     */
-    fun `registrarSalidaProveedor`(`registroId`: kotlin.Long)
-    
-    /**
-     * Registra la salida (apertura) del ciclo de una ruta -- espejo de
-     * `AppCore::registrar_salida_ruta`. `solicitud.fecha_documento` viaja
-     * como texto ISO (`AAAA-MM-DD`), mismo criterio que
-     * `fecha_vencimiento_praind` en `crear_contratista`.
-     */
-    fun `registrarSalidaRuta`(`solicitud`: SolicitudSalidaRuta): ResultadoRegistroSalidaRuta
-    
-    /**
-     * `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
-     * usa para decidir si mostrar la pantalla de arranque (pegar el
-     * secreto) en vez del login (ver `MainActivity.kt`).
-     */
-    fun `requiereConfiguracionInicial`(): kotlin.Boolean
-    
-    /**
-     * Espejo de [`Self::requiere_praind_para_formulario`] para la otra
-     * regla del mismo formulario.
-     */
-    fun `requiereGafeteParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean
-    
-    /**
-     * MV-10 (auditoría 2026-09-24): antes de este método,
-     * `PantallaNuevoContratista.kt` reimplementaba esta regla a mano en
-     * Kotlin (necesita evaluarla ANTES de tener un `Contratista` real que
-     * consultar -- el formulario todavía no se guardó) -- riesgo real de
-     * quedar desincronizada si la regla cambia acá y nadie se acuerda de
-     * tocar también el formulario móvil. No usa ningún estado de `self` --
-     * vive como método de `Nucleo` (no función libre) porque es el único
-     * patrón de export que usa este puente hoy (ver el resto de este
-     * `impl`). Fuente de verdad real: `control_acceso::domain::contratista`.
-     */
-    fun `requierePraindParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean
-    
-    /**
-     * No revela el secreto -- sólo si ya hay uno guardado. Ver
-     * [`Nucleo::guardar_secreto_dispositivo`] sobre `identificador_dispositivo`.
-     */
-    fun `secretoDispositivoGuardado`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): kotlin.Boolean
-    
-    /**
-     * Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
-     * sitio; el socket y sus reconexiones viven fuera del núcleo.
-     */
-    fun `sesionRealtimeNube`(`directorio`: kotlin.String): SesionRealtimeNube
-    
-    /**
-     * Igual que [`Nucleo::sesion_realtime_nube`], pero tomando el secreto
-     * desde Android Keystore en Kotlin en vez del archivo administrado por
-     * Rust.
-     */
-    fun `sesionRealtimeNubeConSecreto`(`secreto`: kotlin.String): SesionRealtimeNube
-    
-    /**
-     * Autentica este dispositivo, drena la bandeja de salida pendiente y
-     * refresca la caché de lo que el otro dispositivo del mismo sitio
-     * tiene abierto ahora mismo.
-     * Reintenta UNA vez si el intento falla porque el token de dispositivo
-     * cacheado, que `autenticar_con_cache` creía vigente, resultó
-     * rechazado por el receptor a mitad de camino -- ver
-     * `SincronizacionError::token_dispositivo_vencido` y el mismo patrón en
-     * `desktop/src-tauri/src/comandos/nube.rs::ejecutar_sincronizacion`.
-     * El candado de `sincronizacion_en_curso` se toma acá, envolviendo los
-     * DOS intentos -- así ninguna otra sincronización se cuela entre el
-     * primer fallo y el reintento.
-     */
-    fun `sincronizarConNube`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResumenSincronizacion
-    
-    /**
-     * Sincroniza usando el secreto ya descifrado por Android Keystore.
-     * Evita que el núcleo móvil lea un secreto persistido en texto plano.
-     */
-    fun `sincronizarConNubeConSecreto`(`secreto`: kotlin.String): ResumenSincronizacion
     
     companion object
 }
@@ -2370,57 +2839,35 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * `directorio` sólo para los intentos de sincronización (ver abajo) --
-     * el resto del login sigue sin necesitarlo, la base ya está abierta
-     * desde `abrir`.
-     *
-     * Dos chequeos contra la nube, uno para cada dirección de un cambio de
-     * estado remoto -- decisión explícita: "por seguridad, pero nunca
-     * bloqueante" (el teléfono tiene que poder operar sin internet), así
-     * que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
-     *
-     * 1. **Alta o reactivación**: si el chequeo local dice "inactivo"
-     * (`AutenticacionErrorNucleo::UsuarioInactivo`) o "no existe"
-     * (`CredencialesInvalidas` -- que es la misma variante que una
-     * contraseña incorrecta, ver `autenticacion_service.rs`), puede ser
-     * que a este usuario lo hayan reactivado en otro dispositivo, o
-     * creado en el panel/otro sitio DESPUÉS del primer arranque de este
-     * teléfono, y esta base todavía no se enteró -- antes de rendirse,
-     * refresca sólo el catálogo (`refrescar_catalogo_sin_sesion`, sin
-     * sesión) y reintenta el login local una vez más. Sin esto, un
-     * usuario nuevo o una reactivación remota nunca se podían reflejar
-     * acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
-     * recién arranca DESPUÉS de un primer login exitoso, así que una
-     * cédula que todavía no existe en este teléfono se quedaba
-     * "credenciales inválidas" para siempre, sin importar cuánto se
-     * esperara -- reportado en vivo: un ROOT creado en Supabase después
-     * del primer arranque del emulador nunca podía entrar. Costo
-     * aceptado: una contraseña tipeada mal también dispara este
-     * refresco de más (no hay forma barata de distinguir los dos casos
-     * antes de sincronizar) -- mismo costo que ya paga escritorio, que
-     * sincroniza el catálogo en CADA intento de login, acierte o no
-     * (`desktop/src-tauri/src/comandos/autenticacion.rs`).
-     * 2. **Baja**: tras un login local exitoso, confirma en vivo que la
-     * cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
-     * una columna, no la sincronización completa que hacía esto antes:
-     * medida como la causa real del retraso de "un par de segundos"
-     * que se sentía al entrar). La sincronización completa (cola,
-     * catálogo, historial...) sigue disparándose, pero Kotlin la lanza
-     * aparte (ver `LoginViewModel.autenticar`) sin que este método la
-     * espere -- acá retener el candado durante una sincronización
-     * entera hubiera vuelto a sentirse lento.
+     * Alta de contratista en persona, sólo creación (ver
+     * docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
+     * PRAIND requerido y vigente, personal de ruta según el tipo, acceso
+     * habilitado) viven en `ContratistaService::crear`; esto
+     * sólo convierte tipos en la frontera uniffi.
      */
-    @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String, `directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResultadoLogin {
-            return FfiConverterTypeResultadoLogin.lift(
+    @Throws(NucleoException::class)override fun `crearContratista`(`datos`: DatosContratista): kotlin.Long {
+            return FfiConverterLong.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(
         it,
         
-        FfiConverterString.lower(`cedula`),
-        FfiConverterString.lower(`password`),
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`identificadorDispositivo`),_status)
+        FfiConverterTypeDatosContratista.lower(`datos`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    @Throws(NucleoException::class)override fun `crearEmpresa`(`nombre`: kotlin.String): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa(
+        it,
+        
+        FfiConverterString.lower(`nombre`),_status)
 }
     }
     )
@@ -2429,20 +2876,127 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Igual que [`Nucleo::autenticar`], pero con el secreto ya descifrado
-     * por Android Keystore. Si el login local necesita refrescar catálogo
-     * por un usuario recién creado/reactivado, usa este secreto en memoria
-     * sin leer credenciales desde disco.
+     * Es el selector del wizard de "Nuevo contratista" -- una empresa
+     * desactivada no es una opción válida ahí, ver
+     * `EmpresaService::listar_seleccionables`. No hay pantalla de
+     * administración de empresas en mobile, así que no hace falta exponer
+     * también la variante sin filtro.
      */
-    @Throws(NucleoException::class)override fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): ResultadoLogin {
-            return FfiConverterTypeResultadoLogin.lift(
+    @Throws(NucleoException::class)override fun `listarEmpresas`(): List<Empresa> {
+            return FfiConverterSequenceTypeEmpresa.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_autenticar_con_secreto(
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Aviso inmediato de PRAIND vencido mientras se tipea la fecha (ISO
+     * `AAAA-MM-DD`). Una fecha incompleta o inválida todavía no es
+     * "vencida" (`false`): eso lo rechaza `crear_contratista` al guardar.
+     * Misma regla y mismo reloj que el alta (`AppCore::praind_vencido`).
+     */override fun `praindVencidoParaFormulario`(`fechaIso`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_praind_vencido_para_formulario(
         it,
         
-        FfiConverterString.lower(`cedula`),
-        FfiConverterString.lower(`password`),
+        FfiConverterString.lower(`fechaIso`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Espejo de [`Self::requiere_praind_para_formulario`] para la otra
+     * regla del mismo formulario.
+     */override fun `requiereGafeteParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_requiere_gafete_para_formulario(
+        it,
+        
+        FfiConverterTypeTipoIngreso.lower(`tipoIngreso`),
+        FfiConverterBoolean.lower(`personalRuta`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * MV-10 (auditoría 2026-09-24): antes de este método,
+     * `PantallaNuevoContratista.kt` reimplementaba esta regla a mano en
+     * Kotlin (necesita evaluarla ANTES de tener un `Contratista` real que
+     * consultar -- el formulario todavía no se guardó) -- riesgo real de
+     * quedar desincronizada si la regla cambia acá y nadie se acuerda de
+     * tocar también el formulario móvil. No usa ningún estado de `self` --
+     * vive como método de `Nucleo` (no función libre) porque es el único
+     * patrón de export que usa este puente hoy (ver el resto de este
+     * `impl`). Fuente de verdad real: `control_acceso::domain::contratista`.
+     */override fun `requierePraindParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_requiere_praind_para_formulario(
+        it,
+        
+        FfiConverterTypeTipoIngreso.lower(`tipoIngreso`),
+        FfiConverterBoolean.lower(`personalRuta`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Entrega un gafete provisional KOF -- espejo de
+     * `AppCore::entregar_gafete_provisional`. El buscador de encargado
+     * reusa `buscar_encargados_ruta` tal cual, sin nada nuevo del lado de
+     * `UniFFI` para eso.
+     */
+    @Throws(NucleoException::class)override fun `entregarGafeteProvisional`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional(
+        it,
+        
+        FfiConverterLong.lower(`encargadoId`),
+        FfiConverterLong.lower(`gafeteNumero`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Entrega con su regla en la misma llamada; la decide
+     * `application::entregar_gafete_provisional_verificado`, la misma que
+     * usa escritorio. `secreto` vacío se salta el chequeo de nube.
+     */
+    @Throws(NucleoException::class)override fun `entregarGafeteProvisionalConSecreto`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional_con_secreto(
+        it,
+        
+        FfiConverterLong.lower(`encargadoId`),
+        FfiConverterLong.lower(`gafeteNumero`),
         FfiConverterString.lower(`secreto`),_status)
 }
     }
@@ -2452,19 +3006,15 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
-     * ya tiene un ingreso de proveedor abierto en este sitio (este equipo
-     * o el otro dispositivo), `None` si puede entrar. La regla y el texto
-     * son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
      */
-    @Throws(NucleoException::class)override fun `avisoProveedorConIngresoActivo`(`cedula`: kotlin.String): kotlin.String? {
-            return FfiConverterOptionalString.lift(
+    @Throws(NucleoException::class)override fun `listarGafetesProvisionalesActivos`(): List<PrestamoGafeteProvisionalActivoResumen> {
+            return FfiConverterSequenceTypePrestamoGafeteProvisionalActivoResumen.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_aviso_proveedor_con_ingreso_activo(
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_gafetes_provisionales_activos(
         it,
-        
-        FfiConverterString.lower(`cedula`),_status)
+        _status)
 }
     }
     )
@@ -2473,19 +3023,17 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Borra el archivo legado de `cargar_secreto_dispositivo_legado` --
-     * Kotlin lo llama justo después de migrar ese secreto al Keystore, para
-     * no dejar la copia vieja (en texto plano, ver el módulo
-     * `nube::credenciales`) huérfana en el almacenamiento de la app.
+     * Registra la devolución de un préstamo de gafete provisional KOF --
+     * espejo de `AppCore::registrar_devolucion_gafete_provisional`.
      */
-    @Throws(NucleoException::class)override fun `borrarSecretoDispositivoLegado`(`directorio`: kotlin.String)
+    @Throws(NucleoException::class)override fun `registrarDevolucionGafeteProvisional`(`prestamoId`: kotlin.Long)
         = 
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_borrar_secreto_dispositivo_legado(
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_devolucion_gafete_provisional(
         it,
         
-        FfiConverterString.lower(`directorio`),_status)
+        FfiConverterLong.lower(`prestamoId`),_status)
 }
     }
     
@@ -2519,6 +3067,494 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
+     * el listado completo que carga AG Grid en desktop.
+     *
+     * `modo` decide cómo se interpreta `texto` — separado a propósito de
+     * `NombreCedula`: la búsqueda de texto libre de Rust ya hace `OR` entre
+     * cédula/nombre (`LIKE`) y gafete exacto en la misma consulta, así que
+     * buscar "7" como gafete también trae cualquier cédula que *contenga*
+     * un 7 — ruidoso con muchos activos a la vez. En modo `Gafete` se
+     * filtra sólo por `gafete_numero` exacto, sin ese ruido.
+     */
+    @Throws(NucleoException::class)override fun `listarIngresosActivos`(`texto`: kotlin.String, `modo`: ModoBusquedaActivos): List<IngresoActivoResumen> {
+            return FfiConverterSequenceTypeIngresoActivoResumen.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(
+        it,
+        
+        FfiConverterString.lower(`texto`),
+        FfiConverterTypeModoBusquedaActivos.lower(`modo`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Vista previa antes de confirmar — misma decisión que ya toma la GUI
+     * de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
+     * rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
+     * (Kotlin) decide si deja continuar mirando los campos ya calculados.
+     */
+    @Throws(NucleoException::class)override fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso {
+            return FfiConverterTypePreparacionIngreso.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Vista previa con TODAS las reglas: las locales (este equipo y el
+     * otro equipo del sitio) y, con nube, la verificación en vivo de que la
+     * persona no tenga un ingreso activo en ningún sitio. Las decide
+     * `application::preparar_ingreso_verificado`, la misma que usa
+     * escritorio; Kotlin sólo muestra `mensaje_bloqueo`. `secreto` vacío =
+     * nube sin configurar (sólo reglas locales). Nunca toca `core_lock()`
+     * durante la red.
+     */
+    @Throws(NucleoException::class)override fun `prepararIngresoConSecreto`(`contratistaId`: kotlin.Long, `secreto`: kotlin.String): PreparacionIngreso {
+            return FfiConverterTypePreparacionIngreso.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso_con_secreto(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),
+        FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    @Throws(NucleoException::class)override fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?): ResultadoRegistroEntrada {
+            return FfiConverterTypeResultadoRegistroEntrada.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),
+        FfiConverterTypeMedioIngreso.lower(`medio`),
+        FfiConverterOptionalLong.lower(`gafete`),
+        FfiConverterOptionalString.lower(`placa`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Ingreso con TODAS sus reglas en una sola llamada: locales, y con nube
+     * la persona sin ingreso activo en ningún sitio y el gafete libre en el
+     * otro dispositivo; si no se puede verificar, no se registra. Las
+     * decide `application::registrar_ingreso_verificado`, la misma que usa
+     * escritorio. `secreto` vacío = nube sin configurar.
+     */
+    @Throws(NucleoException::class)override fun `registrarIngresoConSecreto`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?, `secreto`: kotlin.String): ResultadoRegistroEntrada {
+            return FfiConverterTypeResultadoRegistroEntrada.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_con_secreto(
+        it,
+        
+        FfiConverterLong.lower(`contratistaId`),
+        FfiConverterTypeMedioIngreso.lower(`medio`),
+        FfiConverterOptionalLong.lower(`gafete`),
+        FfiConverterOptionalString.lower(`placa`),
+        FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    @Throws(NucleoException::class)override fun `registrarSalida`(`registroId`: kotlin.Long)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(
+        it,
+        
+        FfiConverterLong.lower(`registroId`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Aviso en vivo con los datos (`cambio_nube` con `registro`, tal cual
+     * llega por el canal, en JSON): guarda la fila directo en la base local
+     * sin consultar a la nube -- ver `control_acceso::nube::en_vivo`.
+     * `true` si la aplicó; `false` si el aviso no trae datos o su tabla
+     * todavía no los manda (queda para `sincronizar_cambios_con_secreto`,
+     * que corre igual detrás). Sobre la conexión secundaria: nunca toma el
+     * candado del núcleo.
+     */
+    @Throws(NucleoException::class)override fun `aplicarCambioNube`(`avisoJson`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_cambio_nube(
+        it,
+        
+        FfiConverterString.lower(`avisoJson`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Borra el archivo legado de `cargar_secreto_dispositivo_legado` --
+     * Kotlin lo llama justo después de migrar ese secreto al Keystore, para
+     * no dejar la copia vieja (en texto plano, ver el módulo
+     * `nube::credenciales`) huérfana en el almacenamiento de la app.
+     */
+    @Throws(NucleoException::class)override fun `borrarSecretoDispositivoLegado`(`directorio`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_borrar_secreto_dispositivo_legado(
+        it,
+        
+        FfiConverterString.lower(`directorio`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Lee el secreto guardado por versiones móviles anteriores a Android
+     * Keystore. Kotlin lo usa sólo para migrarlo al almacén seguro nuevo.
+     */override fun `cargarSecretoDispositivoLegado`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cargar_secreto_dispositivo_legado(
+        it,
+        
+        FfiConverterString.lower(`directorio`),
+        FfiConverterString.lower(`identificadorDispositivo`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Espejo de [`Self::cerrar_ingreso_remoto_con_secreto`], pero contra
+     * `ingresos_proveedor`.
+     */
+    @Throws(NucleoException::class)override fun `cerrarIngresoProveedorRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_proveedor_remoto_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),
+        FfiConverterString.lower(`uuid`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Cierra, contra la nube, un ingreso abierto por el otro dispositivo
+     * del mismo sitio -- nunca toca el historial local de este teléfono.
+     * Usa el secreto que Kotlin descifra de Android Keystore; el candado
+     * del núcleo sólo se toma para autorizar, nunca durante la red.
+     */
+    @Throws(NucleoException::class)override fun `cerrarIngresoRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),
+        FfiConverterString.lower(`uuid`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Espejo de [`Self::cerrar_ingreso_proveedor_remoto_con_secreto`],
+     * pero contra `prestamos_gafete_provisional`.
+     */
+    @Throws(NucleoException::class)override fun `cerrarPrestamoGafeteProvisionalRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),
+        FfiConverterString.lower(`uuid`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Activación inicial de una base vacía. No persiste el secreto desde
+     * Rust: Android lo guarda con Android Keystore y sólo entrega el
+     * secreto descifrado en memoria para esta autenticación inicial. El
+     * candado del núcleo sólo se toma para lo local, nunca durante la red.
+     *
+     * Los parámetros de metadata (todos opcionales, `""` = no disponible)
+     * viajan una única vez, en esta primera autenticación -- ver
+     * `control_acceso::nube::MetadatosDispositivo`. No se vuelven a
+     * reenviar en cada renovación de token porque casi nunca cambian, y
+     * esto ya alcanza para que el panel de administración distinga el
+     * teléfono físico detrás de cada secreto (ver
+     * `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
+     */
+    @Throws(NucleoException::class)override fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion {
+            return FfiConverterTypeResumenSincronizacion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),
+        FfiConverterString.lower(`identificadorHardware`),
+        FfiConverterString.lower(`nombreDispositivo`),
+        FfiConverterString.lower(`plataforma`),
+        FfiConverterString.lower(`versionBuild`),
+        FfiConverterString.lower(`appVersion`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Último desfase medido del reloj del teléfono contra el servidor (ms;
+     * positivo = el teléfono va adelantado), `None` si nunca se midió. Se
+     * mide en cada autenticación con precisión de milisegundos (ver
+     * `control_acceso::nube::reloj_preciso`). Lo usa la telemetría de
+     * diagnóstico para corregir la latencia de los avisos en vivo.
+     */override fun `desfaseRelojMs`(): kotlin.Long? {
+            return FfiConverterOptionalLong.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_desfase_reloj_ms(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Sólo vacía la bandeja de salida, sin bajar nada: lo que corre tras
+     * un cambio hecho en este teléfono (mismo criterio que
+     * `enviar_cambios_nube` en escritorio). Antes un registro local corría
+     * la sincronización completa antes de subirse (telemetría de staging:
+     * ~1,6 s de promedio y hasta 5 s), y el otro equipo recién veía el
+     * cambio al terminar. El pulso periódico sigue siendo completo.
+     */
+    @Throws(NucleoException::class)override fun `enviarCambiosConSecreto`(`secreto`: kotlin.String): ResumenSincronizacion {
+            return FfiConverterTypeResumenSincronizacion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_enviar_cambios_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
+     * `ingresos_proveedor_remotos`.
+     */
+    @Throws(NucleoException::class)override fun `listarIngresosProveedorRemotos`(): List<IngresoProveedorRemoto> {
+            return FfiConverterSequenceTypeIngresoProveedorRemoto.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_proveedor_remotos(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Lectura pura de la caché local `ingresos_remotos` -- no hace falta
+     * red para mostrarla, ya la llenó la última sincronización.
+     */
+    @Throws(NucleoException::class)override fun `listarIngresosRemotos`(): List<IngresoRemoto> {
+            return FfiConverterSequenceTypeIngresoRemoto.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_remotos(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
+     * la caché `prestamos_gafete_provisional_remotos`.
+     */
+    @Throws(NucleoException::class)override fun `listarPrestamosGafeteProvisionalRemotos`(): List<PrestamoGafeteProvisionalRemoto> {
+            return FfiConverterSequenceTypePrestamoGafeteProvisionalRemoto.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_prestamos_gafete_provisional_remotos(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
+     * usa para decidir si mostrar la pantalla de arranque (pegar el
+     * secreto) en vez del login (ver `MainActivity.kt`).
+     */
+    @Throws(NucleoException::class)override fun `requiereConfiguracionInicial`(): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Lo mínimo para que Kotlin escuche Broadcast privado por sitio, con el
+     * secreto que Kotlin descifra de Android Keystore. El socket y sus
+     * reconexiones viven fuera del núcleo.
+     */
+    @Throws(NucleoException::class)override fun `sesionRealtimeNubeConSecreto`(`secreto`: kotlin.String): SesionRealtimeNube {
+            return FfiConverterTypeSesionRealtimeNube.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Sincronización disparada por avisos en vivo (`cambio_nube`, ver
+     * `NubeRealtime.kt`): corre sólo las etapas de las tablas que
+     * cambiaron (`payload.table`), ver
+     * `control_acceso::nube::AlcanceSincronizacion`. Antes cada aviso
+     * corría la sincronización completa (~12 consultas a la nube por un
+     * solo cambio). Una tabla desconocida o una lista vacía caen en la
+     * completa. La bandeja de salida se drena siempre.
+     */
+    @Throws(NucleoException::class)override fun `sincronizarCambiosConSecreto`(`secreto`: kotlin.String, `tablas`: List<kotlin.String>): ResumenSincronizacion {
+            return FfiConverterTypeResumenSincronizacion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_cambios_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),
+        FfiConverterSequenceString.lower(`tablas`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Sincroniza usando el secreto ya descifrado por Android Keystore.
+     * Evita que el núcleo móvil lea un secreto persistido en texto plano.
+     */
+    @Throws(NucleoException::class)override fun `sincronizarConNubeConSecreto`(`secreto`: kotlin.String): ResumenSincronizacion {
+            return FfiConverterTypeResumenSincronizacion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
+     * ya tiene un ingreso de proveedor abierto en este sitio (este equipo
+     * o el otro dispositivo), `None` si puede entrar. La regla y el texto
+     * son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+     */
+    @Throws(NucleoException::class)override fun `avisoProveedorConIngresoActivo`(`cedula`: kotlin.String): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_aviso_proveedor_con_ingreso_activo(
+        it,
+        
+        FfiConverterString.lower(`cedula`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Selector con autocompletado del wizard de proveedores (Paso 2:
      * empresa) -- espejo de `AppCore::buscar_empresas_proveedor_seleccionables`.
      * Es el selector del wizard de proveedores -- una empresa desactivada
@@ -2538,6 +3574,109 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     }
     )
     }
+    
+
+    
+    /**
+     * Alta inline de empresa proveedora desde el mismo selector -- espejo
+     * de `AppCore::crear_empresa_proveedor`.
+     */
+    @Throws(NucleoException::class)override fun `crearEmpresaProveedor`(`nombre`: kotlin.String): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa_proveedor(
+        it,
+        
+        FfiConverterString.lower(`nombre`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
+     */
+    @Throws(NucleoException::class)override fun `listarProveedoresActivos`(): List<RegistroIngresoProveedorActivoResumen> {
+            return FfiConverterSequenceTypeRegistroIngresoProveedorActivoResumen.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_proveedores_activos(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Registra el ingreso (apertura) del ciclo de un proveedor -- espejo
+     * de `AppCore::registrar_ingreso_proveedor`.
+     */
+    @Throws(NucleoException::class)override fun `registrarIngresoProveedor`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor(
+        it,
+        
+        FfiConverterString.lower(`cedula`),
+        FfiConverterString.lower(`nombre`),
+        FfiConverterLong.lower(`empresaId`),
+        FfiConverterOptionalString.lower(`placa`),
+        FfiConverterLong.lower(`gafeteNumero`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Ingreso de proveedor con todas sus reglas en una sola llamada; el
+     * orden y qué falla frena los decide
+     * `application::registrar_ingreso_proveedor_verificado`, la misma que
+     * usa escritorio. `secreto` vacío se salta los chequeos de nube.
+     */
+    @Throws(NucleoException::class)override fun `registrarIngresoProveedorConSecreto`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`cedula`),
+        FfiConverterString.lower(`nombre`),
+        FfiConverterLong.lower(`empresaId`),
+        FfiConverterOptionalString.lower(`placa`),
+        FfiConverterLong.lower(`gafeteNumero`),
+        FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Registra la salida (cierre) de un ingreso de proveedor activo --
+     * espejo de `AppCore::registrar_salida_proveedor`.
+     */
+    @Throws(NucleoException::class)override fun `registrarSalidaProveedor`(`registroId`: kotlin.Long)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_proveedor(
+        it,
+        
+        FfiConverterLong.lower(`registroId`),_status)
+}
+    }
+    
     
 
     
@@ -2608,589 +3747,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-     * tras `autenticar`/`autenticar_con_secreto`) o rutinario --
-     * `nube::cambiar_password` ya revalida `password_actual` con un login
-     * real antes de aceptar la nueva, no confía en que la sesión siga
-     * abierta.
-     */
-    @Throws(NucleoException::class)override fun `cambiarPasswordSupabase`(`passwordActual`: kotlin.String, `passwordNueva`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_supabase(
-        it,
-        
-        FfiConverterString.lower(`passwordActual`),
-        FfiConverterString.lower(`passwordNueva`),_status)
-}
-    }
-    
-    
-
-    
-    /**
-     * Lee el secreto guardado por versiones móviles anteriores a Android
-     * Keystore. Kotlin lo usa sólo para migrarlo al almacén seguro nuevo.
-     */override fun `cargarSecretoDispositivoLegado`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): kotlin.String? {
-            return FfiConverterOptionalString.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cargar_secreto_dispositivo_legado(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`identificadorDispositivo`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Espejo de [`Self::cerrar_ingreso_remoto`], pero contra
-     * `ingresos_proveedor`.
-     */
-    @Throws(NucleoException::class)override fun `cerrarIngresoProveedorRemoto`(`directorio`: kotlin.String, `uuid`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_proveedor_remoto(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`uuid`),_status)
-}
-    }
-    
-    
-
-    
-    /**
-     * Espejo de [`Self::cerrar_ingreso_remoto_con_secreto`], pero contra
-     * `ingresos_proveedor`.
-     */
-    @Throws(NucleoException::class)override fun `cerrarIngresoProveedorRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_proveedor_remoto_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),
-        FfiConverterString.lower(`uuid`),_status)
-}
-    }
-    
-    
-
-    
-    /**
-     * Cierra, contra la nube, un ingreso abierto por el otro dispositivo
-     * del mismo sitio -- nunca toca el historial local de este teléfono.
-     */
-    @Throws(NucleoException::class)override fun `cerrarIngresoRemoto`(`directorio`: kotlin.String, `uuid`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`uuid`),_status)
-}
-    }
-    
-    
-
-    
-    /**
-     * Cierra un ingreso remoto usando el secreto ya descifrado por Android
-     * Keystore.
-     */
-    @Throws(NucleoException::class)override fun `cerrarIngresoRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),
-        FfiConverterString.lower(`uuid`),_status)
-}
-    }
-    
-    
-
-    
-    /**
-     * Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], pero contra
-     * `prestamos_gafete_provisional`.
-     */
-    @Throws(NucleoException::class)override fun `cerrarPrestamoGafeteProvisionalRemoto`(`directorio`: kotlin.String, `uuid`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`uuid`),_status)
-}
-    }
-    
-    
-
-    
-    /**
-     * Espejo de [`Self::cerrar_ingreso_proveedor_remoto_con_secreto`],
-     * pero contra `prestamos_gafete_provisional`.
-     */
-    @Throws(NucleoException::class)override fun `cerrarPrestamoGafeteProvisionalRemotoConSecreto`(`secreto`: kotlin.String, `uuid`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),
-        FfiConverterString.lower(`uuid`),_status)
-}
-    }
-    
-    
-
-    
-    /**
-     * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
-     * se quedan abiertos (son del teléfono, no de la sesión) para que
-     * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
-     * reabrir la base.
-     */override fun `cerrarSesion`()
-        = 
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(
-        it,
-        _status)
-}
-    }
-    
-    
-
-    
-    /**
-     * Arranque de una base vacía -- sin sesión, porque todavía no existe
-     * ningún usuario con quien autenticar. Guarda el secreto pegado en la
-     * pantalla de arranque y trae el catálogo remoto (usuarios incluidos),
-     * para que el próximo intento de login ya tenga con quién autenticar
-     * (con el centinela `SIN_PASSWORD_LOCAL`, cae solo en "fijar
-     * contraseña"). Método legado: la app Android nueva usa
-     * [`Nucleo::configurar_dispositivo_inicial_con_secreto`] y persiste el
-     * secreto con Android Keystore.
-     */
-    @Throws(NucleoException::class)override fun `configurarDispositivoInicial`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String): ResumenSincronizacion {
-            return FfiConverterTypeResumenSincronizacion.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`identificadorDispositivo`),
-        FfiConverterString.lower(`secreto`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Igual que [`Nucleo::configurar_dispositivo_inicial`], pero sin
-     * persistir el secreto desde Rust. Android lo guarda con Android
-     * Keystore y sólo entrega el secreto descifrado en memoria para esta
-     * autenticación inicial.
-     *
-     * Los parámetros de metadata (todos opcionales, `""` = no disponible)
-     * viajan una única vez, en esta primera autenticación -- ver
-     * `control_acceso::nube::MetadatosDispositivo`. No se vuelven a
-     * reenviar en cada renovación de token porque casi nunca cambian, y
-     * esto ya alcanza para que el panel de administración distinga el
-     * teléfono físico detrás de cada secreto (ver
-     * `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
-     */
-    @Throws(NucleoException::class)override fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion {
-            return FfiConverterTypeResumenSincronizacion.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),
-        FfiConverterString.lower(`identificadorHardware`),
-        FfiConverterString.lower(`nombreDispositivo`),
-        FfiConverterString.lower(`plataforma`),
-        FfiConverterString.lower(`versionBuild`),
-        FfiConverterString.lower(`appVersion`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo cruzado
-     * de ingresos abiertos entre sitios") -- mismo patrón que
-     * `gafete_ocupado_en_sitio_con_secreto`, pero de mejor esfuerzo: sin
-     * secreto, o si la red falla, `Ok(None)` en vez de propagar el error
-     * (acá SÍ hay con qué chocar sin red -- un ingreso registrado offline
-     * queda local igual, y el conflicto se detecta después al sincronizar,
-     * ver `sincronizar_con_secreto`/`ResumenSincronizacion::conflictos_ingreso`).
-     * Kotlin la llama después de `preparar_ingreso`, sólo si los chequeos
-     * locales ya dejaron pasar.
-     */override fun `contratistaActivoEnOtroSitioConSecreto`(`secreto`: kotlin.String, `cedula`: kotlin.String): kotlin.String? {
-            return FfiConverterOptionalString.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_contratista_activo_en_otro_sitio_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),
-        FfiConverterString.lower(`cedula`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Alta de contratista en persona, sólo creación (ver
-     * docs/plan-app-movil.md). Todas las reglas (campos obligatorios,
-     * PRAIND requerido y vigente, personal de ruta según el tipo, acceso
-     * habilitado) viven en `ContratistaService::crear`; esto
-     * sólo convierte tipos en la frontera uniffi.
-     */
-    @Throws(NucleoException::class)override fun `crearContratista`(`datos`: DatosContratista): kotlin.Long {
-            return FfiConverterLong.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_contratista(
-        it,
-        
-        FfiConverterTypeDatosContratista.lower(`datos`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    @Throws(NucleoException::class)override fun `crearEmpresa`(`nombre`: kotlin.String): kotlin.Long {
-            return FfiConverterLong.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa(
-        it,
-        
-        FfiConverterString.lower(`nombre`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Alta inline de empresa proveedora desde el mismo selector -- espejo
-     * de `AppCore::crear_empresa_proveedor`.
-     */
-    @Throws(NucleoException::class)override fun `crearEmpresaProveedor`(`nombre`: kotlin.String): kotlin.Long {
-            return FfiConverterLong.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_empresa_proveedor(
-        it,
-        
-        FfiConverterString.lower(`nombre`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Sólo Root/Administrador — Rust ya rechaza a un actor sin
-     * `Operacion::GestionarUsuarios` con `OperacionNoAutorizada`
-     * (`verificar_creacion_usuario`), y sólo Root puede crear otro Root
-     * (`puede_gestionar_usuario`). Kotlin oculta el menú para Operador
-     * como atajo de UX, no como el control real.
-     */
-    @Throws(NucleoException::class)override fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long {
-            return FfiConverterLong.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(
-        it,
-        
-        FfiConverterTypeDatosUsuario.lower(`datos`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Entrega un gafete provisional KOF -- espejo de
-     * `AppCore::entregar_gafete_provisional`. El buscador de encargado
-     * reusa `buscar_encargados_ruta` tal cual, sin nada nuevo del lado de
-     * `UniFFI` para eso.
-     */
-    @Throws(NucleoException::class)override fun `entregarGafeteProvisional`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long): kotlin.Long {
-            return FfiConverterLong.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional(
-        it,
-        
-        FfiConverterLong.lower(`encargadoId`),
-        FfiConverterLong.lower(`gafeteNumero`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Entrega con su regla en la misma llamada; la decide
-     * `application::entregar_gafete_provisional_verificado`, la misma que
-     * usa escritorio. `secreto` vacío se salta el chequeo de nube.
-     */
-    @Throws(NucleoException::class)override fun `entregarGafeteProvisionalConSecreto`(`encargadoId`: kotlin.Long, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long {
-            return FfiConverterLong.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_entregar_gafete_provisional_con_secreto(
-        it,
-        
-        FfiConverterLong.lower(`encargadoId`),
-        FfiConverterLong.lower(`gafeteNumero`),
-        FfiConverterString.lower(`secreto`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Chequeo en vivo (no la caché local) de si `gafete_numero` ya está
-     * activo en este sitio del lado de OTRO dispositivo -- llamar justo
-     * antes de `registrar_ingreso` cuando el ingreso lleva gafete. Cada
-     * dispositivo sólo valida el gafete contra su propia base `SQLite`,
-     * que nunca ve lo que hizo el otro hasta sincronizar, así que dos
-     * dispositivos del mismo sitio podían aceptar el mismo número como
-     * activo a la vez.
-     */
-    @Throws(NucleoException::class)override fun `gafeteOcupadoEnSitio`(`directorio`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterLong.lower(`gafeteNumero`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Chequeo remoto usando el secreto ya descifrado por Android Keystore.
-     */
-    @Throws(NucleoException::class)override fun `gafeteOcupadoEnSitioConSecreto`(`secreto`: kotlin.String, `gafeteNumero`: kotlin.Long): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_gafete_ocupado_en_sitio_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),
-        FfiConverterLong.lower(`gafeteNumero`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Guarda el secreto de este dispositivo en el archivo administrado por
-     * Rust. Método legado: Android nuevo usa Android Keystore desde Kotlin
-     * y sólo mantiene este camino para compatibilidad/migración.
-     */
-    @Throws(NucleoException::class)override fun `guardarSecretoDispositivo`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String, `secreto`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_guardar_secreto_dispositivo(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`identificadorDispositivo`),
-        FfiConverterString.lower(`secreto`),_status)
-}
-    }
-    
-    
-
-    
-    /**
-     * Es el selector del wizard de "Nuevo contratista" -- una empresa
-     * desactivada no es una opción válida ahí, ver
-     * `EmpresaService::listar_seleccionables`. No hay pantalla de
-     * administración de empresas en mobile, así que no hace falta exponer
-     * también la variante sin filtro.
-     */
-    @Throws(NucleoException::class)override fun `listarEmpresas`(): List<Empresa> {
-            return FfiConverterSequenceTypeEmpresa.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_empresas(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
-     */
-    @Throws(NucleoException::class)override fun `listarGafetesProvisionalesActivos`(): List<PrestamoGafeteProvisionalActivoResumen> {
-            return FfiConverterSequenceTypePrestamoGafeteProvisionalActivoResumen.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_gafetes_provisionales_activos(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Mismo criterio tacaño que `buscar_contratistas`: página acotada, no
-     * el listado completo que carga AG Grid en desktop.
-     *
-     * `modo` decide cómo se interpreta `texto` — separado a propósito de
-     * `NombreCedula`: la búsqueda de texto libre de Rust ya hace `OR` entre
-     * cédula/nombre (`LIKE`) y gafete exacto en la misma consulta, así que
-     * buscar "7" como gafete también trae cualquier cédula que *contenga*
-     * un 7 — ruidoso con muchos activos a la vez. En modo `Gafete` se
-     * filtra sólo por `gafete_numero` exacto, sin ese ruido.
-     */
-    @Throws(NucleoException::class)override fun `listarIngresosActivos`(`texto`: kotlin.String, `modo`: ModoBusquedaActivos): List<IngresoActivoResumen> {
-            return FfiConverterSequenceTypeIngresoActivoResumen.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_activos(
-        it,
-        
-        FfiConverterString.lower(`texto`),
-        FfiConverterTypeModoBusquedaActivos.lower(`modo`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
-     * `ingresos_proveedor_remotos`.
-     */
-    @Throws(NucleoException::class)override fun `listarIngresosProveedorRemotos`(): List<IngresoProveedorRemoto> {
-            return FfiConverterSequenceTypeIngresoProveedorRemoto.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_proveedor_remotos(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Lectura pura de la caché local `ingresos_remotos` -- no hace falta
-     * red para mostrarla, ya la llenó la última `sincronizar_con_nube`.
-     */
-    @Throws(NucleoException::class)override fun `listarIngresosRemotos`(): List<IngresoRemoto> {
-            return FfiConverterSequenceTypeIngresoRemoto.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_remotos(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
-     * la caché `prestamos_gafete_provisional_remotos`.
-     */
-    @Throws(NucleoException::class)override fun `listarPrestamosGafeteProvisionalRemotos`(): List<PrestamoGafeteProvisionalRemoto> {
-            return FfiConverterSequenceTypePrestamoGafeteProvisionalRemoto.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_prestamos_gafete_provisional_remotos(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Sin actor -- es una lectura, mismo criterio que `listar_rutas_activas`.
-     */
-    @Throws(NucleoException::class)override fun `listarProveedoresActivos`(): List<RegistroIngresoProveedorActivoResumen> {
-            return FfiConverterSequenceTypeRegistroIngresoProveedorActivoResumen.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_proveedores_activos(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
      * Sin actor -- es una lectura, mismo criterio que
      * `listar_ingresos_activos`.
      */
@@ -3201,211 +3757,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_rutas_activas(
         it,
         _status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
-     */
-    @Throws(NucleoException::class)override fun `listarUsuarios`(`texto`: kotlin.String): List<UsuarioResumen> {
-            return FfiConverterSequenceTypeUsuarioResumen.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(
-        it,
-        
-        FfiConverterString.lower(`texto`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Aviso inmediato de PRAIND vencido mientras se tipea la fecha (ISO
-     * `AAAA-MM-DD`). Una fecha incompleta o inválida todavía no es
-     * "vencida" (`false`): eso lo rechaza `crear_contratista` al guardar.
-     * Misma regla y mismo reloj que el alta (`AppCore::praind_vencido`).
-     */override fun `praindVencidoParaFormulario`(`fechaIso`: kotlin.String): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_praind_vencido_para_formulario(
-        it,
-        
-        FfiConverterString.lower(`fechaIso`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Vista previa antes de confirmar — misma decisión que ya toma la GUI
-     * de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
-     * rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
-     * (Kotlin) decide si deja continuar mirando los campos ya calculados.
-     */
-    @Throws(NucleoException::class)override fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso {
-            return FfiConverterTypePreparacionIngreso.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(
-        it,
-        
-        FfiConverterLong.lower(`contratistaId`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Igual que [`Nucleo::preparar_ingreso`], pero además intenta el
-     * chequeo cruzado entre sitios (`docs/pendientes.md`, "Chequeo
-     * cruzado de ingresos abiertos entre sitios") cuando los chequeos
-     * locales ya dejaron pasar -- reemplaza el `if` que antes armaba
-     * Kotlin en `ActivosViewModel.elegir` con dos llamadas FFI separadas
-     * (`prepararIngreso` + `contratistaActivoEnOtroSitioConSecreto`) y su
-     * propio `puedeContinuar`/`mensajeBloqueo`. Nunca toca `core_lock()`
-     * durante la parte de red -- ver `CacheTokenDispositivo`.
-     *
-     * `secreto` vacío (dispositivo sin nube configurada) se salta el
-     * chequeo remoto sin tocar la red, igual que el resto de los
-     * `*_con_secreto` de este archivo.
-     */
-    @Throws(NucleoException::class)override fun `prepararIngresoConSecreto`(`contratistaId`: kotlin.Long, `secreto`: kotlin.String): PreparacionIngreso {
-            return FfiConverterTypePreparacionIngreso.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso_con_secreto(
-        it,
-        
-        FfiConverterLong.lower(`contratistaId`),
-        FfiConverterString.lower(`secreto`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Registra la devolución de un préstamo de gafete provisional KOF --
-     * espejo de `AppCore::registrar_devolucion_gafete_provisional`.
-     */
-    @Throws(NucleoException::class)override fun `registrarDevolucionGafeteProvisional`(`prestamoId`: kotlin.Long)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_devolucion_gafete_provisional(
-        it,
-        
-        FfiConverterLong.lower(`prestamoId`),_status)
-}
-    }
-    
-    
-
-    
-    @Throws(NucleoException::class)override fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?): ResultadoRegistroEntrada {
-            return FfiConverterTypeResultadoRegistroEntrada.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(
-        it,
-        
-        FfiConverterLong.lower(`contratistaId`),
-        FfiConverterTypeMedioIngreso.lower(`medio`),
-        FfiConverterOptionalLong.lower(`gafete`),
-        FfiConverterOptionalString.lower(`placa`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Igual que [`Nucleo::registrar_ingreso`], pero además chequea en vivo
-     * que el gafete (si lo hay) no esté ya activo en este sitio del lado
-     * de OTRO dispositivo antes de escribir -- reemplaza el par de
-     * llamadas separadas `gafeteOcupadoEnSitioConSecreto` +
-     * `registrarIngreso` que antes hacía `PantallaConfirmarIngreso.kt`
-     * (con su propia `GafeteOcupadoEnSitioException`), acortando la
-     * ventana entre chequear y escribir a un solo cruce FFI.
-     *
-     * `secreto` vacío se salta el chequeo sin tocar la red (mismo
-     * criterio que el resto de los `*_con_secreto`).
-     */
-    @Throws(NucleoException::class)override fun `registrarIngresoConSecreto`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?, `secreto`: kotlin.String): ResultadoRegistroEntrada {
-            return FfiConverterTypeResultadoRegistroEntrada.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_con_secreto(
-        it,
-        
-        FfiConverterLong.lower(`contratistaId`),
-        FfiConverterTypeMedioIngreso.lower(`medio`),
-        FfiConverterOptionalLong.lower(`gafete`),
-        FfiConverterOptionalString.lower(`placa`),
-        FfiConverterString.lower(`secreto`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Registra el ingreso (apertura) del ciclo de un proveedor -- espejo
-     * de `AppCore::registrar_ingreso_proveedor`.
-     */
-    @Throws(NucleoException::class)override fun `registrarIngresoProveedor`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long): kotlin.Long {
-            return FfiConverterLong.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor(
-        it,
-        
-        FfiConverterString.lower(`cedula`),
-        FfiConverterString.lower(`nombre`),
-        FfiConverterLong.lower(`empresaId`),
-        FfiConverterOptionalString.lower(`placa`),
-        FfiConverterLong.lower(`gafeteNumero`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Ingreso de proveedor con todas sus reglas en una sola llamada; el
-     * orden y qué falla frena los decide
-     * `application::registrar_ingreso_proveedor_verificado`, la misma que
-     * usa escritorio. `secreto` vacío se salta los chequeos de nube.
-     */
-    @Throws(NucleoException::class)override fun `registrarIngresoProveedorConSecreto`(`cedula`: kotlin.String, `nombre`: kotlin.String, `empresaId`: kotlin.Long, `placa`: kotlin.String?, `gafeteNumero`: kotlin.Long, `secreto`: kotlin.String): kotlin.Long {
-            return FfiConverterLong.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_proveedor_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`cedula`),
-        FfiConverterString.lower(`nombre`),
-        FfiConverterLong.lower(`empresaId`),
-        FfiConverterOptionalString.lower(`placa`),
-        FfiConverterLong.lower(`gafeteNumero`),
-        FfiConverterString.lower(`secreto`),_status)
 }
     }
     )
@@ -3425,38 +3776,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterLong.lower(`salidaId`),_status)
-}
-    }
-    
-    
-
-    
-    @Throws(NucleoException::class)override fun `registrarSalida`(`registroId`: kotlin.Long)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(
-        it,
-        
-        FfiConverterLong.lower(`registroId`),_status)
-}
-    }
-    
-    
-
-    
-    /**
-     * Registra la salida (cierre) de un ingreso de proveedor activo --
-     * espejo de `AppCore::registrar_salida_proveedor`.
-     */
-    @Throws(NucleoException::class)override fun `registrarSalidaProveedor`(`registroId`: kotlin.Long)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_proveedor(
-        it,
-        
-        FfiConverterLong.lower(`registroId`),_status)
 }
     }
     
@@ -3485,82 +3804,117 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
-     * usa para decidir si mostrar la pantalla de arranque (pegar el
-     * secreto) en vez del login (ver `MainActivity.kt`).
+     * Login con el secreto que Kotlin descifra de Android Keystore (vacío =
+     * nube sin configurar: no se toca la red).
+     *
+     * Dos chequeos contra la nube, uno para cada dirección de un cambio de
+     * estado remoto -- decisión explícita: "por seguridad, pero nunca
+     * bloqueante" (el teléfono tiene que poder operar sin internet), así
+     * que los dos son best-effort (con el tope de `nube::cliente::TIMEOUT_HTTP`):
+     *
+     * 1. **Alta o reactivación**: si el chequeo local dice "inactivo"
+     * (`AutenticacionErrorNucleo::UsuarioInactivo`) o "no existe"
+     * (`CredencialesInvalidas` -- que es la misma variante que una
+     * contraseña incorrecta, ver `autenticacion_service.rs`), puede ser
+     * que a este usuario lo hayan reactivado en otro dispositivo, o
+     * creado en el panel/otro sitio DESPUÉS del primer arranque de este
+     * teléfono, y esta base todavía no se enteró -- antes de rendirse,
+     * refresca sólo el catálogo (`refrescar_catalogo_sin_sesion_con_secreto`, sin
+     * sesión) y reintenta el login local una vez más. Sin esto, un
+     * usuario nuevo o una reactivación remota nunca se podían reflejar
+     * acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
+     * recién arranca DESPUÉS de un primer login exitoso, así que una
+     * cédula que todavía no existe en este teléfono se quedaba
+     * "credenciales inválidas" para siempre, sin importar cuánto se
+     * esperara -- reportado en vivo: un ROOT creado en Supabase después
+     * del primer arranque del emulador nunca podía entrar. Costo
+     * aceptado: una contraseña tipeada mal también dispara este
+     * refresco de más (no hay forma barata de distinguir los dos casos
+     * antes de sincronizar) -- mismo costo que ya paga escritorio, que
+     * sincroniza el catálogo en CADA intento de login, acierte o no
+     * (`desktop/src-tauri/src/comandos/autenticacion.rs`).
+     * 2. **Baja**: tras un login local exitoso, confirma en vivo que la
+     * cédula sigue activa (`usuario_sigue_activo_remoto` -- una fila,
+     * una columna, no la sincronización completa que hacía esto antes:
+     * medida como la causa real del retraso de "un par de segundos"
+     * que se sentía al entrar). La sincronización completa (cola,
+     * catálogo, historial...) sigue disparándose, pero Kotlin la lanza
+     * aparte (ver `LoginViewModel.autenticar`) sin que este método la
+     * espere -- acá retener el candado durante una sincronización
+     * entera hubiera vuelto a sentirse lento.
      */
-    @Throws(NucleoException::class)override fun `requiereConfiguracionInicial`(): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
+    @Throws(NucleoException::class)override fun `autenticarConSecreto`(`cedula`: kotlin.String, `password`: kotlin.String, `secreto`: kotlin.String): ResultadoLogin {
+            return FfiConverterTypeResultadoLogin.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_autenticar_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`cedula`),
+        FfiConverterString.lower(`password`),
+        FfiConverterString.lower(`secreto`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
+     * tras `autenticar_con_secreto`) o rutinario --
+     * `nube::cambiar_password` ya revalida `password_actual` con un login
+     * real antes de aceptar la nueva, no confía en que la sesión siga
+     * abierta.
+     */
+    @Throws(NucleoException::class)override fun `cambiarPasswordSupabase`(`passwordActual`: kotlin.String, `passwordNueva`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_supabase(
+        it,
+        
+        FfiConverterString.lower(`passwordActual`),
+        FfiConverterString.lower(`passwordNueva`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
+     * se quedan abiertos (son del teléfono, no de la sesión) para que
+     * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
+     * reabrir la base.
+     */override fun `cerrarSesion`()
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(
         it,
         _status)
 }
     }
-    )
-    }
+    
     
 
     
     /**
-     * Espejo de [`Self::requiere_praind_para_formulario`] para la otra
-     * regla del mismo formulario.
-     */override fun `requiereGafeteParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_requiere_gafete_para_formulario(
-        it,
-        
-        FfiConverterTypeTipoIngreso.lower(`tipoIngreso`),
-        FfiConverterBoolean.lower(`personalRuta`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * MV-10 (auditoría 2026-09-24): antes de este método,
-     * `PantallaNuevoContratista.kt` reimplementaba esta regla a mano en
-     * Kotlin (necesita evaluarla ANTES de tener un `Contratista` real que
-     * consultar -- el formulario todavía no se guardó) -- riesgo real de
-     * quedar desincronizada si la regla cambia acá y nadie se acuerda de
-     * tocar también el formulario móvil. No usa ningún estado de `self` --
-     * vive como método de `Nucleo` (no función libre) porque es el único
-     * patrón de export que usa este puente hoy (ver el resto de este
-     * `impl`). Fuente de verdad real: `control_acceso::domain::contratista`.
-     */override fun `requierePraindParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_requiere_praind_para_formulario(
-        it,
-        
-        FfiConverterTypeTipoIngreso.lower(`tipoIngreso`),
-        FfiConverterBoolean.lower(`personalRuta`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * No revela el secreto -- sólo si ya hay uno guardado. Ver
-     * [`Nucleo::guardar_secreto_dispositivo`] sobre `identificador_dispositivo`.
+     * Sólo Root/Administrador — Rust ya rechaza a un actor sin
+     * `Operacion::GestionarUsuarios` con `OperacionNoAutorizada`
+     * (`verificar_creacion_usuario`), y sólo Root puede crear otro Root
+     * (`puede_gestionar_usuario`). Kotlin oculta el menú para Operador
+     * como atajo de UX, no como el control real.
      */
-    @Throws(NucleoException::class)override fun `secretoDispositivoGuardado`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
+    @Throws(NucleoException::class)override fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long {
+            return FfiConverterLong.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_secreto_dispositivo_guardado(
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(
         it,
         
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`identificadorDispositivo`),_status)
+        FfiConverterTypeDatosUsuario.lower(`datos`),_status)
 }
     }
     )
@@ -3569,85 +3923,16 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Devuelve lo mínimo para que Kotlin escuche Broadcast privado por
-     * sitio; el socket y sus reconexiones viven fuera del núcleo.
+     * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
      */
-    @Throws(NucleoException::class)override fun `sesionRealtimeNube`(`directorio`: kotlin.String): SesionRealtimeNube {
-            return FfiConverterTypeSesionRealtimeNube.lift(
+    @Throws(NucleoException::class)override fun `listarUsuarios`(`texto`: kotlin.String): List<UsuarioResumen> {
+            return FfiConverterSequenceTypeUsuarioResumen.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(
         it,
         
-        FfiConverterString.lower(`directorio`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Igual que [`Nucleo::sesion_realtime_nube`], pero tomando el secreto
-     * desde Android Keystore en Kotlin en vez del archivo administrado por
-     * Rust.
-     */
-    @Throws(NucleoException::class)override fun `sesionRealtimeNubeConSecreto`(`secreto`: kotlin.String): SesionRealtimeNube {
-            return FfiConverterTypeSesionRealtimeNube.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Autentica este dispositivo, drena la bandeja de salida pendiente y
-     * refresca la caché de lo que el otro dispositivo del mismo sitio
-     * tiene abierto ahora mismo.
-     * Reintenta UNA vez si el intento falla porque el token de dispositivo
-     * cacheado, que `autenticar_con_cache` creía vigente, resultó
-     * rechazado por el receptor a mitad de camino -- ver
-     * `SincronizacionError::token_dispositivo_vencido` y el mismo patrón en
-     * `desktop/src-tauri/src/comandos/nube.rs::ejecutar_sincronizacion`.
-     * El candado de `sincronizacion_en_curso` se toma acá, envolviendo los
-     * DOS intentos -- así ninguna otra sincronización se cuela entre el
-     * primer fallo y el reintento.
-     */
-    @Throws(NucleoException::class)override fun `sincronizarConNube`(`directorio`: kotlin.String, `identificadorDispositivo`: kotlin.String): ResumenSincronizacion {
-            return FfiConverterTypeResumenSincronizacion.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube(
-        it,
-        
-        FfiConverterString.lower(`directorio`),
-        FfiConverterString.lower(`identificadorDispositivo`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Sincroniza usando el secreto ya descifrado por Android Keystore.
-     * Evita que el núcleo móvil lea un secreto persistido en texto plano.
-     */
-    @Throws(NucleoException::class)override fun `sincronizarConNubeConSecreto`(`secreto`: kotlin.String): ResumenSincronizacion {
-            return FfiConverterTypeResumenSincronizacion.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_con_nube_con_secreto(
-        it,
-        
-        FfiConverterString.lower(`secreto`),_status)
+        FfiConverterString.lower(`texto`),_status)
 }
     }
     )
@@ -3734,6 +4019,518 @@ public object FfiConverterTypeNucleo: FfiConverter<Nucleo, Long> {
 
     override fun write(value: Nucleo, buf: ByteBuffer) {
         buf.putLong(lower(value))
+    }
+}
+
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+
+/**
+ * Ventana deslizante de lecturas ponderadas. Los frames sin lectura
+ * también ocupan lugar (ver [`VotadorPorPosicion::agregar_vacio`]) para
+ * que una lectura vieja se descarte aunque no llegue otra que la
+ * reemplace.
+ */
+public interface VotadorPorPosicionInterface {
+    
+    /**
+     * Agrega la lectura de un frame. `peso` en (0, 1]: 1 para un frame
+     * nítido; menos para uno de menor calidad. Un peso no finito o no
+     * positivo cuenta como frame sin lectura.
+     */
+    fun `agregar`(`texto`: kotlin.String, `peso`: kotlin.Float)
+    
+    /**
+     * Un frame que no trajo lectura: envejece la ventana.
+     */
+    fun `agregarVacio`()
+    
+    fun `consenso`(): ConsensoVotacion?
+    
+    fun `reiniciar`()
+    
+    companion object
+}
+
+/**
+ * Ventana deslizante de lecturas ponderadas. Los frames sin lectura
+ * también ocupan lugar (ver [`VotadorPorPosicion::agregar_vacio`]) para
+ * que una lectura vieja se descarte aunque no llegue otra que la
+ * reemplace.
+ */
+open class VotadorPorPosicion: Disposable, AutoCloseable, VotadorPorPosicionInterface
+{
+
+    @Suppress("UNUSED_PARAMETER")
+    /**
+     * @suppress
+     */
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+    /**
+     * `capacidad`: cuántos frames recientes (con o sin lectura) se
+     * consideran. Mínimo 1.
+     */
+    constructor(`capacidad`: kotlin.UInt) :
+        this(UniffiWithHandle, 
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_constructor_votadorporposicion_new(
+    
+        
+        FfiConverterUInt.lower(`capacidad`),_status)
+}
+    )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(private val handle: Long) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return;
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_control_acceso_mobile_fn_free_votadorporposicion(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+        }
+        return uniffiRustCall() { status ->
+            UniffiLib.uniffi_control_acceso_mobile_fn_clone_votadorporposicion(handle, status)
+        }
+    }
+
+    
+    /**
+     * Agrega la lectura de un frame. `peso` en (0, 1]: 1 para un frame
+     * nítido; menos para uno de menor calidad. Un peso no finito o no
+     * positivo cuenta como frame sin lectura.
+     */override fun `agregar`(`texto`: kotlin.String, `peso`: kotlin.Float)
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_votadorporposicion_agregar(
+        it,
+        
+        FfiConverterString.lower(`texto`),
+        FfiConverterFloat.lower(`peso`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Un frame que no trajo lectura: envejece la ventana.
+     */override fun `agregarVacio`()
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_votadorporposicion_agregar_vacio(
+        it,
+        _status)
+}
+    }
+    
+    
+
+    override fun `consenso`(): ConsensoVotacion? {
+            return FfiConverterOptionalTypeConsensoVotacion.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_votadorporposicion_consenso(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    override fun `reiniciar`()
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_votadorporposicion_reiniciar(
+        it,
+        _status)
+}
+    }
+    
+    
+
+    
+
+    
+
+
+    
+    
+    /**
+     * @suppress
+     */
+    companion object
+    
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVotadorPorPosicion: FfiConverter<VotadorPorPosicion, Long> {
+    override fun lower(value: VotadorPorPosicion): Long {
+        return value.uniffiCloneHandle()
+    }
+
+    override fun lift(value: Long): VotadorPorPosicion {
+        return VotadorPorPosicion(UniffiWithHandle, value)
+    }
+
+    override fun read(buf: ByteBuffer): VotadorPorPosicion {
+        return lift(buf.getLong())
+    }
+
+    override fun allocationSize(value: VotadorPorPosicion) = 8UL
+
+    override fun write(value: VotadorPorPosicion, buf: ByteBuffer) {
+        buf.putLong(lower(value))
+    }
+}
+
+
+
+data class CarnetKofDetectado (
+    var `nombre`: kotlin.String?
+    , 
+    var `codigoEmpleado`: kotlin.String?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCarnetKofDetectado: FfiConverterRustBuffer<CarnetKofDetectado> {
+    override fun read(buf: ByteBuffer): CarnetKofDetectado {
+        return CarnetKofDetectado(
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: CarnetKofDetectado) = (
+            FfiConverterOptionalString.allocationSize(value.`nombre`) +
+            FfiConverterOptionalString.allocationSize(value.`codigoEmpleado`)
+    )
+
+    override fun write(value: CarnetKofDetectado, buf: ByteBuffer) {
+            FfiConverterOptionalString.write(value.`nombre`, buf)
+            FfiConverterOptionalString.write(value.`codigoEmpleado`, buf)
+    }
+}
+
+
+
+data class ComprobanteRutaDetectado (
+    /**
+     * Código antes de la barra en "Ruta / No.de Carga:" (ej. `CRR079`).
+     */
+    var `numeroRuta`: kotlin.String
+    , 
+    /**
+     * Sub-número tras la barra, sin ceros a la izquierda: `1` es la ruta
+     * principal; `2`, `3`... las recargas (H2, H3...).
+     */
+    var `subNumero`: kotlin.Int
+    , 
+    /**
+     * Campo "Transporte:": el número de documento de esa carga.
+     */
+    var `numeroDocumento`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeComprobanteRutaDetectado: FfiConverterRustBuffer<ComprobanteRutaDetectado> {
+    override fun read(buf: ByteBuffer): ComprobanteRutaDetectado {
+        return ComprobanteRutaDetectado(
+            FfiConverterString.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ComprobanteRutaDetectado) = (
+            FfiConverterString.allocationSize(value.`numeroRuta`) +
+            FfiConverterInt.allocationSize(value.`subNumero`) +
+            FfiConverterString.allocationSize(value.`numeroDocumento`)
+    )
+
+    override fun write(value: ComprobanteRutaDetectado, buf: ByteBuffer) {
+            FfiConverterString.write(value.`numeroRuta`, buf)
+            FfiConverterInt.write(value.`subNumero`, buf)
+            FfiConverterString.write(value.`numeroDocumento`, buf)
+    }
+}
+
+
+
+/**
+ * Parámetros de una sesión de escaneo (los valores por defecto los pone
+ * quien crea el estabilizador; ver `EstabilizadorLectura.kt`).
+ */
+data class ConfiguracionEstabilizador (
+    var `modo`: ModoEscaneoDocumento
+    , 
+    /**
+     * Frames (completos) que deben respaldar la lectura.
+     */
+    var `framesRequeridos`: kotlin.UInt
+    , 
+    /**
+     * Frames recientes que se consideran (tolera alguno malo salteado).
+     */
+    var `ventana`: kotlin.UInt
+    , 
+    /**
+     * Con el número de la cédula leído del frente pero sin nombre, cuántos
+     * frames se espera a que se muestre el reverso antes de confirmar sólo
+     * con el número (confirmar cierra la cámara).
+     */
+    var `framesEsperaReverso`: kotlin.UInt
+    , 
+    /**
+     * Frames SEGUIDOS no reconocibles antes de marcar inválido (con 1,
+     * cualquier frame de transición hacía parpadear el rojo).
+     */
+    var `framesParaInvalido`: kotlin.UInt
+    , 
+    /**
+     * Frames con el tipo reconocido pero sin datos antes de sugerir
+     * inclinar el documento.
+     */
+    var `framesParaSugerirReflejo`: kotlin.UInt
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeConfiguracionEstabilizador: FfiConverterRustBuffer<ConfiguracionEstabilizador> {
+    override fun read(buf: ByteBuffer): ConfiguracionEstabilizador {
+        return ConfiguracionEstabilizador(
+            FfiConverterTypeModoEscaneoDocumento.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ConfiguracionEstabilizador) = (
+            FfiConverterTypeModoEscaneoDocumento.allocationSize(value.`modo`) +
+            FfiConverterUInt.allocationSize(value.`framesRequeridos`) +
+            FfiConverterUInt.allocationSize(value.`ventana`) +
+            FfiConverterUInt.allocationSize(value.`framesEsperaReverso`) +
+            FfiConverterUInt.allocationSize(value.`framesParaInvalido`) +
+            FfiConverterUInt.allocationSize(value.`framesParaSugerirReflejo`)
+    )
+
+    override fun write(value: ConfiguracionEstabilizador, buf: ByteBuffer) {
+            FfiConverterTypeModoEscaneoDocumento.write(value.`modo`, buf)
+            FfiConverterUInt.write(value.`framesRequeridos`, buf)
+            FfiConverterUInt.write(value.`ventana`, buf)
+            FfiConverterUInt.write(value.`framesEsperaReverso`, buf)
+            FfiConverterUInt.write(value.`framesParaInvalido`, buf)
+            FfiConverterUInt.write(value.`framesParaSugerirReflejo`, buf)
     }
 }
 
@@ -3872,6 +4669,74 @@ public object FfiConverterTypeConflictoIngresoProveedorActivo: FfiConverterRustB
             FfiConverterString.write(value.`cedula`, buf)
             FfiConverterString.write(value.`nombre`, buf)
             FfiConverterString.write(value.`sitioConflicto`, buf)
+    }
+}
+
+
+
+/**
+ * Resultado de la votación sobre las lecturas actuales.
+ */
+data class ConsensoVotacion (
+    /**
+     * El carácter más votado de cada posición.
+     */
+    var `texto`: kotlin.String
+    , 
+    /**
+     * Peso que respalda al ganador en su posición MÁS débil: cuántos
+     * "frames completos" lo sostienen, como mínimo, en todas las
+     * posiciones.
+     */
+    var `soporteMinimo`: kotlin.Float
+    , 
+    /**
+     * Ventaja del ganador sobre la segunda opción en la posición más
+     * disputada (incluye a las lecturas de otro largo como rival). Si es
+     * mayor que el peso de un frame, un frame más ya no puede cambiar el
+     * resultado.
+     */
+    var `margenMinimo`: kotlin.Float
+    , 
+    /**
+     * Lecturas que forman el grupo ganador.
+     */
+    var `lecturas`: kotlin.UInt
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeConsensoVotacion: FfiConverterRustBuffer<ConsensoVotacion> {
+    override fun read(buf: ByteBuffer): ConsensoVotacion {
+        return ConsensoVotacion(
+            FfiConverterString.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ConsensoVotacion) = (
+            FfiConverterString.allocationSize(value.`texto`) +
+            FfiConverterFloat.allocationSize(value.`soporteMinimo`) +
+            FfiConverterFloat.allocationSize(value.`margenMinimo`) +
+            FfiConverterUInt.allocationSize(value.`lecturas`)
+    )
+
+    override fun write(value: ConsensoVotacion, buf: ByteBuffer) {
+            FfiConverterString.write(value.`texto`, buf)
+            FfiConverterFloat.write(value.`soporteMinimo`, buf)
+            FfiConverterFloat.write(value.`margenMinimo`, buf)
+            FfiConverterUInt.write(value.`lecturas`, buf)
     }
 }
 
@@ -4083,6 +4948,52 @@ public object FfiConverterTypeDatosContratista: FfiConverterRustBuffer<DatosCont
 
 
 
+data class DatosPdf417Cedula (
+    var `cedula`: kotlin.String
+    , 
+    var `nombre`: kotlin.String
+    , 
+    /**
+     * "1er apellido 2do apellido", separados por un espacio.
+     */
+    var `apellidos`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDatosPdf417Cedula: FfiConverterRustBuffer<DatosPdf417Cedula> {
+    override fun read(buf: ByteBuffer): DatosPdf417Cedula {
+        return DatosPdf417Cedula(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DatosPdf417Cedula) = (
+            FfiConverterString.allocationSize(value.`cedula`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterString.allocationSize(value.`apellidos`)
+    )
+
+    override fun write(value: DatosPdf417Cedula, buf: ByteBuffer) {
+            FfiConverterString.write(value.`cedula`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterString.write(value.`apellidos`, buf)
+    }
+}
+
+
+
 data class DatosUsuario (
     var `cedula`: kotlin.String
     , 
@@ -4131,6 +5042,112 @@ public object FfiConverterTypeDatosUsuario: FfiConverterRustBuffer<DatosUsuario>
             FfiConverterString.write(value.`password`, buf)
             FfiConverterTypeRolUsuario.write(value.`rol`, buf)
             FfiConverterBoolean.write(value.`activo`, buf)
+    }
+}
+
+
+
+/**
+ * Resultado normalizado de leer un documento, sin importar qué extractor
+ * lo produjo. Lo que un tipo de documento no trae queda en `None` en vez
+ * de forzar un valor.
+ */
+data class DocumentoLeido (
+    var `tipo`: TipoDocumento
+    , 
+    var `numeroDocumento`: kotlin.String
+    , 
+    /**
+     * Lo que se busca en el catálogo cuando no hay número (gafete In House
+     * sin cédula: el nombre) o cuando el número no es una cédula (gafete).
+     */
+    var `textoBusqueda`: kotlin.String?
+    , 
+    var `nombre`: kotlin.String?
+    , 
+    var `apellidos`: kotlin.String?
+    , 
+    var `nacionalidad`: kotlin.String?
+    , 
+    /**
+     * Sólo el carnet PRAIND: el texto tal cual lo imprime; emparejarlo con
+     * una empresa del catálogo lo decide la pantalla.
+     */
+    var `empresa`: kotlin.String?
+    , 
+    var `esExtranjero`: kotlin.Boolean
+    , 
+    var `vencimiento`: FechaOcr?
+    , 
+    var `fechaNacimiento`: FechaOcr?
+    , 
+    var `sexo`: kotlin.String?
+    , 
+    var `fuenteDatos`: FuenteDatos
+    , 
+    var `checksumValido`: kotlin.Boolean?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDocumentoLeido: FfiConverterRustBuffer<DocumentoLeido> {
+    override fun read(buf: ByteBuffer): DocumentoLeido {
+        return DocumentoLeido(
+            FfiConverterTypeTipoDocumento.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalTypeFechaOcr.read(buf),
+            FfiConverterOptionalTypeFechaOcr.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterTypeFuenteDatos.read(buf),
+            FfiConverterOptionalBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DocumentoLeido) = (
+            FfiConverterTypeTipoDocumento.allocationSize(value.`tipo`) +
+            FfiConverterString.allocationSize(value.`numeroDocumento`) +
+            FfiConverterOptionalString.allocationSize(value.`textoBusqueda`) +
+            FfiConverterOptionalString.allocationSize(value.`nombre`) +
+            FfiConverterOptionalString.allocationSize(value.`apellidos`) +
+            FfiConverterOptionalString.allocationSize(value.`nacionalidad`) +
+            FfiConverterOptionalString.allocationSize(value.`empresa`) +
+            FfiConverterBoolean.allocationSize(value.`esExtranjero`) +
+            FfiConverterOptionalTypeFechaOcr.allocationSize(value.`vencimiento`) +
+            FfiConverterOptionalTypeFechaOcr.allocationSize(value.`fechaNacimiento`) +
+            FfiConverterOptionalString.allocationSize(value.`sexo`) +
+            FfiConverterTypeFuenteDatos.allocationSize(value.`fuenteDatos`) +
+            FfiConverterOptionalBoolean.allocationSize(value.`checksumValido`)
+    )
+
+    override fun write(value: DocumentoLeido, buf: ByteBuffer) {
+            FfiConverterTypeTipoDocumento.write(value.`tipo`, buf)
+            FfiConverterString.write(value.`numeroDocumento`, buf)
+            FfiConverterOptionalString.write(value.`textoBusqueda`, buf)
+            FfiConverterOptionalString.write(value.`nombre`, buf)
+            FfiConverterOptionalString.write(value.`apellidos`, buf)
+            FfiConverterOptionalString.write(value.`nacionalidad`, buf)
+            FfiConverterOptionalString.write(value.`empresa`, buf)
+            FfiConverterBoolean.write(value.`esExtranjero`, buf)
+            FfiConverterOptionalTypeFechaOcr.write(value.`vencimiento`, buf)
+            FfiConverterOptionalTypeFechaOcr.write(value.`fechaNacimiento`, buf)
+            FfiConverterOptionalString.write(value.`sexo`, buf)
+            FfiConverterTypeFuenteDatos.write(value.`fuenteDatos`, buf)
+            FfiConverterOptionalBoolean.write(value.`checksumValido`, buf)
     }
 }
 
@@ -4315,6 +5332,53 @@ public object FfiConverterTypeFechaMrz: FfiConverterRustBuffer<FechaMrz> {
     )
 
     override fun write(value: FechaMrz, buf: ByteBuffer) {
+            FfiConverterUByte.write(value.`dia`, buf)
+            FfiConverterUByte.write(value.`mes`, buf)
+            FfiConverterInt.write(value.`anio`, buf)
+    }
+}
+
+
+
+/**
+ * Fecha de un documento (vencimiento, nacimiento), ya validada contra el
+ * calendario.
+ */
+data class FechaOcr (
+    var `dia`: kotlin.UByte
+    , 
+    var `mes`: kotlin.UByte
+    , 
+    var `anio`: kotlin.Int
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFechaOcr: FfiConverterRustBuffer<FechaOcr> {
+    override fun read(buf: ByteBuffer): FechaOcr {
+        return FechaOcr(
+            FfiConverterUByte.read(buf),
+            FfiConverterUByte.read(buf),
+            FfiConverterInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FechaOcr) = (
+            FfiConverterUByte.allocationSize(value.`dia`) +
+            FfiConverterUByte.allocationSize(value.`mes`) +
+            FfiConverterInt.allocationSize(value.`anio`)
+    )
+
+    override fun write(value: FechaOcr, buf: ByteBuffer) {
             FfiConverterUByte.write(value.`dia`, buf)
             FfiConverterUByte.write(value.`mes`, buf)
             FfiConverterInt.write(value.`anio`, buf)
@@ -4547,6 +5611,264 @@ public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemot
 
 
 /**
+ * Un MRZ encontrado en el texto: las líneas normalizadas a su largo exacto
+ * (lo que se vota entre frames) y lo que se leyó de ellas.
+ */
+data class LecturaMrz (
+    var `lineas`: List<kotlin.String>
+    , 
+    var `registro`: RegistroMrz
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLecturaMrz: FfiConverterRustBuffer<LecturaMrz> {
+    override fun read(buf: ByteBuffer): LecturaMrz {
+        return LecturaMrz(
+            FfiConverterSequenceString.read(buf),
+            FfiConverterTypeRegistroMrz.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LecturaMrz) = (
+            FfiConverterSequenceString.allocationSize(value.`lineas`) +
+            FfiConverterTypeRegistroMrz.allocationSize(value.`registro`)
+    )
+
+    override fun write(value: LecturaMrz, buf: ByteBuffer) {
+            FfiConverterSequenceString.write(value.`lineas`, buf)
+            FfiConverterTypeRegistroMrz.write(value.`registro`, buf)
+    }
+}
+
+
+
+data class LecturaPdf417 (
+    var `datos`: DatosPdf417Cedula?
+    , 
+    var `motivo`: MotivoPdf417
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLecturaPdf417: FfiConverterRustBuffer<LecturaPdf417> {
+    override fun read(buf: ByteBuffer): LecturaPdf417 {
+        return LecturaPdf417(
+            FfiConverterOptionalTypeDatosPdf417Cedula.read(buf),
+            FfiConverterTypeMotivoPdf417.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LecturaPdf417) = (
+            FfiConverterOptionalTypeDatosPdf417Cedula.allocationSize(value.`datos`) +
+            FfiConverterTypeMotivoPdf417.allocationSize(value.`motivo`)
+    )
+
+    override fun write(value: LecturaPdf417, buf: ByteBuffer) {
+            FfiConverterOptionalTypeDatosPdf417Cedula.write(value.`datos`, buf)
+            FfiConverterTypeMotivoPdf417.write(value.`motivo`, buf)
+    }
+}
+
+
+
+/**
+ * Una lectura de vehículo con CÓMO se obtuvo, para la telemetría de
+ * diagnóstico: el formato, cuántos caracteres hubo que corregir (letra
+ * por dígito o al revés) y si se restituyó la "CL" apilada. La
+ * telemetría usa sólo estos datos, nunca `vehiculo.valor`.
+ */
+data class LecturaVehiculo (
+    var `vehiculo`: VehiculoRutaDetectado
+    , 
+    var `formato`: FormatoVehiculo
+    , 
+    var `correcciones`: kotlin.UInt
+    , 
+    var `clRestituida`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLecturaVehiculo: FfiConverterRustBuffer<LecturaVehiculo> {
+    override fun read(buf: ByteBuffer): LecturaVehiculo {
+        return LecturaVehiculo(
+            FfiConverterTypeVehiculoRutaDetectado.read(buf),
+            FfiConverterTypeFormatoVehiculo.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LecturaVehiculo) = (
+            FfiConverterTypeVehiculoRutaDetectado.allocationSize(value.`vehiculo`) +
+            FfiConverterTypeFormatoVehiculo.allocationSize(value.`formato`) +
+            FfiConverterUInt.allocationSize(value.`correcciones`) +
+            FfiConverterBoolean.allocationSize(value.`clRestituida`)
+    )
+
+    override fun write(value: LecturaVehiculo, buf: ByteBuffer) {
+            FfiConverterTypeVehiculoRutaDetectado.write(value.`vehiculo`, buf)
+            FfiConverterTypeFormatoVehiculo.write(value.`formato`, buf)
+            FfiConverterUInt.write(value.`correcciones`, buf)
+            FfiConverterBoolean.write(value.`clRestituida`, buf)
+    }
+}
+
+
+
+/**
+ * Una línea (`Line` de ML Kit) con su caja y sus palabras, en el orden en
+ * que ML Kit las entregó.
+ */
+data class LineaOcr (
+    var `texto`: kotlin.String
+    , 
+    var `izquierda`: kotlin.Float
+    , 
+    var `arriba`: kotlin.Float
+    , 
+    var `derecha`: kotlin.Float
+    , 
+    var `abajo`: kotlin.Float
+    , 
+    var `palabras`: List<PalabraOcr>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLineaOcr: FfiConverterRustBuffer<LineaOcr> {
+    override fun read(buf: ByteBuffer): LineaOcr {
+        return LineaOcr(
+            FfiConverterString.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterSequenceTypePalabraOcr.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LineaOcr) = (
+            FfiConverterString.allocationSize(value.`texto`) +
+            FfiConverterFloat.allocationSize(value.`izquierda`) +
+            FfiConverterFloat.allocationSize(value.`arriba`) +
+            FfiConverterFloat.allocationSize(value.`derecha`) +
+            FfiConverterFloat.allocationSize(value.`abajo`) +
+            FfiConverterSequenceTypePalabraOcr.allocationSize(value.`palabras`)
+    )
+
+    override fun write(value: LineaOcr, buf: ByteBuffer) {
+            FfiConverterString.write(value.`texto`, buf)
+            FfiConverterFloat.write(value.`izquierda`, buf)
+            FfiConverterFloat.write(value.`arriba`, buf)
+            FfiConverterFloat.write(value.`derecha`, buf)
+            FfiConverterFloat.write(value.`abajo`, buf)
+            FfiConverterSequenceTypePalabraOcr.write(value.`palabras`, buf)
+    }
+}
+
+
+
+/**
+ * Una palabra (`Element` de ML Kit) con su caja en píxeles de la imagen
+ * analizada y su confianza (0 si el modelo no la informa).
+ */
+data class PalabraOcr (
+    var `texto`: kotlin.String
+    , 
+    var `izquierda`: kotlin.Float
+    , 
+    var `arriba`: kotlin.Float
+    , 
+    var `derecha`: kotlin.Float
+    , 
+    var `abajo`: kotlin.Float
+    , 
+    var `confianza`: kotlin.Float
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePalabraOcr: FfiConverterRustBuffer<PalabraOcr> {
+    override fun read(buf: ByteBuffer): PalabraOcr {
+        return PalabraOcr(
+            FfiConverterString.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PalabraOcr) = (
+            FfiConverterString.allocationSize(value.`texto`) +
+            FfiConverterFloat.allocationSize(value.`izquierda`) +
+            FfiConverterFloat.allocationSize(value.`arriba`) +
+            FfiConverterFloat.allocationSize(value.`derecha`) +
+            FfiConverterFloat.allocationSize(value.`abajo`) +
+            FfiConverterFloat.allocationSize(value.`confianza`)
+    )
+
+    override fun write(value: PalabraOcr, buf: ByteBuffer) {
+            FfiConverterString.write(value.`texto`, buf)
+            FfiConverterFloat.write(value.`izquierda`, buf)
+            FfiConverterFloat.write(value.`arriba`, buf)
+            FfiConverterFloat.write(value.`derecha`, buf)
+            FfiConverterFloat.write(value.`abajo`, buf)
+            FfiConverterFloat.write(value.`confianza`, buf)
+    }
+}
+
+
+
+/**
  * Espejo de `PreparacionIngreso` — vista previa antes de confirmar; no es
  * una autorización cacheada, `registrar_ingreso` vuelve a validar todo.
  */
@@ -4575,11 +5897,8 @@ data class PreparacionIngreso (
     var `tieneIngresoActivo`: kotlin.Boolean
     , 
     /**
-     * Siempre `None` al volver de `preparar_ingreso` -- ese método no toca
-     * la red (mismo motivo que en el núcleo). Kotlin lo completa llamando
-     * a `contratista_activo_en_otro_sitio_con_secreto` (mejor esfuerzo,
-     * igual que `gafete_ocupado_en_sitio_con_secreto`) antes de dejar
-     * continuar, ver `docs/pendientes.md`.
+     * Siempre `None`: el ingreso activo en otro sitio llega resuelto en
+     * `mensaje_bloqueo` (ver `preparar_ingreso_con_secreto`).
      */
     var `activoEnOtroSitio`: kotlin.String?
     , 
@@ -4978,6 +6297,92 @@ public object FfiConverterTypeRegistroMrz: FfiConverterRustBuffer<RegistroMrz> {
             FfiConverterBoolean.write(value.`checksumsValidos`, buf)
             FfiConverterBoolean.write(value.`numeroDocumentoExtendidoSinSoporte`, buf)
             FfiConverterSequenceTypeCorreccionAplicada.write(value.`correcciones`, buf)
+    }
+}
+
+
+
+data class ResultadoEstabilizacion (
+    var `estado`: EstadoEscaneo
+    , 
+    var `documento`: DocumentoLeido?
+    , 
+    var `mensaje`: kotlin.String
+    , 
+    /**
+     * Sólo con estado confirmado y fecha de vencimiento disponible;
+     * `false` no significa "vigente confirmado".
+     */
+    var `vencido`: kotlin.Boolean
+    , 
+    /**
+     * 0..1: respaldo del candidato actual sobre el necesario (barra de
+     * avance del recuadro: "ya casi, no lo mueva").
+     */
+    var `progreso`: kotlin.Float
+    , 
+    /**
+     * Orientación del recuadro que pide lo leído (`None` = no opina).
+     */
+    var `orientacionSugerida`: OrientacionEncuadre?
+    , 
+    /**
+     * Hay un MRZ en cuadro: el lector de códigos no tiene nada que buscar.
+     */
+    var `hayMrz`: kotlin.Boolean
+    , 
+    /**
+     * Correcciones de confusables del MRZ confirmado (para Sentry); vacía
+     * en cualquier otro caso.
+     */
+    var `correccionesMrz`: List<CorreccionAplicada>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResultadoEstabilizacion: FfiConverterRustBuffer<ResultadoEstabilizacion> {
+    override fun read(buf: ByteBuffer): ResultadoEstabilizacion {
+        return ResultadoEstabilizacion(
+            FfiConverterTypeEstadoEscaneo.read(buf),
+            FfiConverterOptionalTypeDocumentoLeido.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterOptionalTypeOrientacionEncuadre.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterSequenceTypeCorreccionAplicada.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ResultadoEstabilizacion) = (
+            FfiConverterTypeEstadoEscaneo.allocationSize(value.`estado`) +
+            FfiConverterOptionalTypeDocumentoLeido.allocationSize(value.`documento`) +
+            FfiConverterString.allocationSize(value.`mensaje`) +
+            FfiConverterBoolean.allocationSize(value.`vencido`) +
+            FfiConverterFloat.allocationSize(value.`progreso`) +
+            FfiConverterOptionalTypeOrientacionEncuadre.allocationSize(value.`orientacionSugerida`) +
+            FfiConverterBoolean.allocationSize(value.`hayMrz`) +
+            FfiConverterSequenceTypeCorreccionAplicada.allocationSize(value.`correccionesMrz`)
+    )
+
+    override fun write(value: ResultadoEstabilizacion, buf: ByteBuffer) {
+            FfiConverterTypeEstadoEscaneo.write(value.`estado`, buf)
+            FfiConverterOptionalTypeDocumentoLeido.write(value.`documento`, buf)
+            FfiConverterString.write(value.`mensaje`, buf)
+            FfiConverterBoolean.write(value.`vencido`, buf)
+            FfiConverterFloat.write(value.`progreso`, buf)
+            FfiConverterOptionalTypeOrientacionEncuadre.write(value.`orientacionSugerida`, buf)
+            FfiConverterBoolean.write(value.`hayMrz`, buf)
+            FfiConverterSequenceTypeCorreccionAplicada.write(value.`correccionesMrz`, buf)
     }
 }
 
@@ -5700,6 +7105,44 @@ public object FfiConverterTypeVehiculoRuta: FfiConverterRustBuffer<VehiculoRuta>
 
 
 
+data class VehiculoRutaDetectado (
+    var `valor`: kotlin.String
+    , 
+    var `tipo`: TipoVehiculoDetectado
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVehiculoRutaDetectado: FfiConverterRustBuffer<VehiculoRutaDetectado> {
+    override fun read(buf: ByteBuffer): VehiculoRutaDetectado {
+        return VehiculoRutaDetectado(
+            FfiConverterString.read(buf),
+            FfiConverterTypeTipoVehiculoDetectado.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: VehiculoRutaDetectado) = (
+            FfiConverterString.allocationSize(value.`valor`) +
+            FfiConverterTypeTipoVehiculoDetectado.allocationSize(value.`tipo`)
+    )
+
+    override fun write(value: VehiculoRutaDetectado, buf: ByteBuffer) {
+            FfiConverterString.write(value.`valor`, buf)
+            FfiConverterTypeTipoVehiculoDetectado.write(value.`tipo`, buf)
+    }
+}
+
+
+
 /**
  * Campo de un MRZ sobre el que se puede intentar una corrección acotada de
  * caracteres ambiguos -- sólo los campos con su propio dígito verificador
@@ -5743,6 +7186,44 @@ public object FfiConverterTypeCampoMrz: FfiConverterRustBuffer<CampoMrz> {
 
 
 
+/**
+ * Estado que alimenta los esquineros del visor y el mensaje de la cámara.
+ */
+
+enum class EstadoEscaneo {
+    
+    BUSCANDO,
+    INVALIDO,
+    CONFIRMADO;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeEstadoEscaneo: FfiConverterRustBuffer<EstadoEscaneo> {
+    override fun read(buf: ByteBuffer) = try {
+        EstadoEscaneo.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: EstadoEscaneo) = 4UL
+
+    override fun write(value: EstadoEscaneo, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
 
 enum class FormatoMrz {
     
@@ -5769,6 +7250,105 @@ public object FfiConverterTypeFormatoMrz: FfiConverterRustBuffer<FormatoMrz> {
     override fun allocationSize(value: FormatoMrz) = 4UL
 
     override fun write(value: FormatoMrz, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * Qué patrón produjo la lectura (sólo para diagnóstico).
+ */
+
+enum class FormatoVehiculo {
+    
+    /**
+     * `C`/`CL` + dígitos.
+     */
+    CARGA,
+    /**
+     * 3 letras + 3 dígitos.
+     */
+    PARTICULAR,
+    /**
+     * Dos grupos de 3 (y `M`).
+     */
+    MOTO,
+    /**
+     * Calcomanía de la flota.
+     */
+    NUMERO_UNIDAD;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFormatoVehiculo: FfiConverterRustBuffer<FormatoVehiculo> {
+    override fun read(buf: ByteBuffer) = try {
+        FormatoVehiculo.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FormatoVehiculo) = 4UL
+
+    override fun write(value: FormatoVehiculo, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * De dónde salieron los datos de un documento leído.
+ */
+
+enum class FuenteDatos {
+    
+    /**
+     * Texto libre del frente, por etiquetas.
+     */
+    OCR_FRENTE,
+    /**
+     * Zona MRZ del reverso, con dígitos verificadores.
+     */
+    MRZ,
+    /**
+     * PDF417 del reverso de la cédula anterior (sólo cédula y nombre, ver
+     * `pdf417_cedula.rs`).
+     */
+    PDF417;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFuenteDatos: FfiConverterRustBuffer<FuenteDatos> {
+    override fun read(buf: ByteBuffer) = try {
+        FuenteDatos.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FuenteDatos) = 4UL
+
+    override fun write(value: FuenteDatos, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
@@ -5851,6 +7431,46 @@ public object FfiConverterTypeModoBusquedaActivos: FfiConverterRustBuffer<ModoBu
 
 
 
+enum class ModoEscaneoDocumento {
+    
+    /**
+     * Documento del contratista: abre un formulario que el operador revisa.
+     */
+    DOCUMENTO_CONTRATISTA,
+    /**
+     * Gafete de contratista: confirmar registra una salida sin revisión.
+     */
+    GAFETE_CONTRATISTA;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeModoEscaneoDocumento: FfiConverterRustBuffer<ModoEscaneoDocumento> {
+    override fun read(buf: ByteBuffer) = try {
+        ModoEscaneoDocumento.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: ModoEscaneoDocumento) = 4UL
+
+    override fun write(value: ModoEscaneoDocumento, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
 enum class MotivoDenegacion {
     
     SIN_ACCESO,
@@ -5878,6 +7498,51 @@ public object FfiConverterTypeMotivoDenegacion: FfiConverterRustBuffer<MotivoDen
     override fun allocationSize(value: MotivoDenegacion) = 4UL
 
     override fun write(value: MotivoDenegacion, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * Por qué se aceptó o rechazó un PDF417. Sólo para diagnóstico (telemetría
+ * del build `diagnostico`): dice QUÉ validación falló, nunca qué bytes
+ * había. Distingue una clave o un formato equivocados (falla ya la cédula)
+ * de posiciones corridas (la cédula pasa y fallan los nombres).
+ */
+
+enum class MotivoPdf417 {
+    
+    ACEPTADO,
+    PREFIJO_CORTO,
+    CEDULA_INVALIDA,
+    PRIMER_APELLIDO_INVALIDO,
+    SEGUNDO_APELLIDO_INVALIDO,
+    NOMBRE_INVALIDO,
+    NOMBRE_O_APELLIDO_VACIO;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMotivoPdf417: FfiConverterRustBuffer<MotivoPdf417> {
+    override fun read(buf: ByteBuffer) = try {
+        MotivoPdf417.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: MotivoPdf417) = 4UL
+
+    override fun write(value: MotivoPdf417, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
@@ -5958,7 +7623,7 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
         
     /**
      * El gafete ya está activo en este sitio del lado de OTRO
-     * dispositivo -- chequeo en vivo (`CacheTokenDispositivo::gafete_ocupado_en_otro_dispositivo`),
+     * dispositivo -- chequeo en vivo (`application::registrar_ingreso_verificado`),
      * nunca llega a tocar `registrar_ingreso` en el núcleo, se corta acá
      * mismo. Reemplaza `GafeteOcupadoEnSitioException`, que antes vivía
      * sólo del lado de Kotlin (`PantallaConfirmarIngreso.kt`).
@@ -6064,6 +7729,43 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
     }
 
 }
+
+
+
+/**
+ * Orientación del recuadro guía.
+ */
+
+enum class OrientacionEncuadre {
+    
+    HORIZONTAL,
+    VERTICAL;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOrientacionEncuadre: FfiConverterRustBuffer<OrientacionEncuadre> {
+    override fun read(buf: ByteBuffer) = try {
+        OrientacionEncuadre.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: OrientacionEncuadre) = 4UL
+
+    override fun write(value: OrientacionEncuadre, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
 
 
 
@@ -6320,6 +8022,62 @@ public object FfiConverterTypeRolUsuario: FfiConverterRustBuffer<RolUsuario> {
 
 
 
+/**
+ * Tipos de documento que el lector sabe clasificar. `Desconocido` es el
+ * resultado cuando el texto no calza ninguna señal conocida: la pantalla
+ * de escaneo sigue buscando, no es un error.
+ */
+
+enum class TipoDocumento {
+    
+    CEDULA_NACIONAL,
+    /**
+     * Tarjeta de Identidad de Menores: mismo código MRZ que la cédula
+     * (`IDCRI`); se distingue por la edad (ver [`reclasificar_por_edad`]).
+     */
+    TARJETA_IDENTIDAD_MENOR,
+    CEDULA_RESIDENCIA,
+    LICENCIA_NACIONAL,
+    LICENCIA_EXTRANJERO,
+    PASAPORTE,
+    /**
+     * Carnet de inducción al sitio (PRAIND): su vencimiento es el
+     * `fecha_vencimiento_praind` del contratista.
+     */
+    CARNET_INDUCCION_PRAIND,
+    CARNET_IN_HOUSE,
+    CARNET_BAC,
+    GAFETE_CONTRATISTA,
+    DESCONOCIDO;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTipoDocumento: FfiConverterRustBuffer<TipoDocumento> {
+    override fun read(buf: ByteBuffer) = try {
+        TipoDocumento.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: TipoDocumento) = 4UL
+
+    override fun write(value: TipoDocumento, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
 
 enum class TipoIngreso {
     
@@ -6348,6 +8106,40 @@ public object FfiConverterTypeTipoIngreso: FfiConverterRustBuffer<TipoIngreso> {
     override fun allocationSize(value: TipoIngreso) = 4UL
 
     override fun write(value: TipoIngreso, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+enum class TipoVehiculoDetectado {
+    
+    PLACA,
+    NUMERO_UNIDAD;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTipoVehiculoDetectado: FfiConverterRustBuffer<TipoVehiculoDetectado> {
+    override fun read(buf: ByteBuffer) = try {
+        TipoVehiculoDetectado.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: TipoVehiculoDetectado) = 4UL
+
+    override fun write(value: TipoVehiculoDetectado, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
@@ -6392,6 +8184,70 @@ public object FfiConverterOptionalLong: FfiConverterRustBuffer<kotlin.Long?> {
 /**
  * @suppress
  */
+public object FfiConverterOptionalFloat: FfiConverterRustBuffer<kotlin.Float?> {
+    override fun read(buf: ByteBuffer): kotlin.Float? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterFloat.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.Float?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterFloat.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.Float?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterFloat.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalBoolean: FfiConverterRustBuffer<kotlin.Boolean?> {
+    override fun read(buf: ByteBuffer): kotlin.Boolean? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterBoolean.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.Boolean?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterBoolean.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.Boolean?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterBoolean.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?> {
     override fun read(buf: ByteBuffer): kotlin.String? {
         if (buf.get().toInt() == 0) {
@@ -6414,6 +8270,166 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
         } else {
             buf.put(1)
             FfiConverterString.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeCarnetKofDetectado: FfiConverterRustBuffer<CarnetKofDetectado?> {
+    override fun read(buf: ByteBuffer): CarnetKofDetectado? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeCarnetKofDetectado.read(buf)
+    }
+
+    override fun allocationSize(value: CarnetKofDetectado?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeCarnetKofDetectado.allocationSize(value)
+        }
+    }
+
+    override fun write(value: CarnetKofDetectado?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeCarnetKofDetectado.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeComprobanteRutaDetectado: FfiConverterRustBuffer<ComprobanteRutaDetectado?> {
+    override fun read(buf: ByteBuffer): ComprobanteRutaDetectado? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeComprobanteRutaDetectado.read(buf)
+    }
+
+    override fun allocationSize(value: ComprobanteRutaDetectado?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeComprobanteRutaDetectado.allocationSize(value)
+        }
+    }
+
+    override fun write(value: ComprobanteRutaDetectado?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeComprobanteRutaDetectado.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeConsensoVotacion: FfiConverterRustBuffer<ConsensoVotacion?> {
+    override fun read(buf: ByteBuffer): ConsensoVotacion? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeConsensoVotacion.read(buf)
+    }
+
+    override fun allocationSize(value: ConsensoVotacion?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeConsensoVotacion.allocationSize(value)
+        }
+    }
+
+    override fun write(value: ConsensoVotacion?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeConsensoVotacion.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeDatosPdf417Cedula: FfiConverterRustBuffer<DatosPdf417Cedula?> {
+    override fun read(buf: ByteBuffer): DatosPdf417Cedula? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeDatosPdf417Cedula.read(buf)
+    }
+
+    override fun allocationSize(value: DatosPdf417Cedula?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeDatosPdf417Cedula.allocationSize(value)
+        }
+    }
+
+    override fun write(value: DatosPdf417Cedula?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeDatosPdf417Cedula.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeDocumentoLeido: FfiConverterRustBuffer<DocumentoLeido?> {
+    override fun read(buf: ByteBuffer): DocumentoLeido? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeDocumentoLeido.read(buf)
+    }
+
+    override fun allocationSize(value: DocumentoLeido?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeDocumentoLeido.allocationSize(value)
+        }
+    }
+
+    override fun write(value: DocumentoLeido?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeDocumentoLeido.write(value, buf)
         }
     }
 }
@@ -6456,6 +8472,134 @@ public object FfiConverterOptionalTypeFechaMrz: FfiConverterRustBuffer<FechaMrz?
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeFechaOcr: FfiConverterRustBuffer<FechaOcr?> {
+    override fun read(buf: ByteBuffer): FechaOcr? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeFechaOcr.read(buf)
+    }
+
+    override fun allocationSize(value: FechaOcr?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeFechaOcr.allocationSize(value)
+        }
+    }
+
+    override fun write(value: FechaOcr?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeFechaOcr.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeLecturaMrz: FfiConverterRustBuffer<LecturaMrz?> {
+    override fun read(buf: ByteBuffer): LecturaMrz? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeLecturaMrz.read(buf)
+    }
+
+    override fun allocationSize(value: LecturaMrz?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeLecturaMrz.allocationSize(value)
+        }
+    }
+
+    override fun write(value: LecturaMrz?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeLecturaMrz.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeLecturaVehiculo: FfiConverterRustBuffer<LecturaVehiculo?> {
+    override fun read(buf: ByteBuffer): LecturaVehiculo? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeLecturaVehiculo.read(buf)
+    }
+
+    override fun allocationSize(value: LecturaVehiculo?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeLecturaVehiculo.allocationSize(value)
+        }
+    }
+
+    override fun write(value: LecturaVehiculo?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeLecturaVehiculo.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeVehiculoRutaDetectado: FfiConverterRustBuffer<VehiculoRutaDetectado?> {
+    override fun read(buf: ByteBuffer): VehiculoRutaDetectado? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeVehiculoRutaDetectado.read(buf)
+    }
+
+    override fun allocationSize(value: VehiculoRutaDetectado?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeVehiculoRutaDetectado.allocationSize(value)
+        }
+    }
+
+    override fun write(value: VehiculoRutaDetectado?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeVehiculoRutaDetectado.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeFormatoMrz: FfiConverterRustBuffer<FormatoMrz?> {
     override fun read(buf: ByteBuffer): FormatoMrz? {
         if (buf.get().toInt() == 0) {
@@ -6478,6 +8622,70 @@ public object FfiConverterOptionalTypeFormatoMrz: FfiConverterRustBuffer<Formato
         } else {
             buf.put(1)
             FfiConverterTypeFormatoMrz.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeOrientacionEncuadre: FfiConverterRustBuffer<OrientacionEncuadre?> {
+    override fun read(buf: ByteBuffer): OrientacionEncuadre? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeOrientacionEncuadre.read(buf)
+    }
+
+    override fun allocationSize(value: OrientacionEncuadre?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeOrientacionEncuadre.allocationSize(value)
+        }
+    }
+
+    override fun write(value: OrientacionEncuadre?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeOrientacionEncuadre.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeTipoDocumento: FfiConverterRustBuffer<TipoDocumento?> {
+    override fun read(buf: ByteBuffer): TipoDocumento? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeTipoDocumento.read(buf)
+    }
+
+    override fun allocationSize(value: TipoDocumento?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeTipoDocumento.allocationSize(value)
+        }
+    }
+
+    override fun write(value: TipoDocumento?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeTipoDocumento.write(value, buf)
         }
     }
 }
@@ -6852,6 +9060,62 @@ public object FfiConverterSequenceTypeIngresoRemoto: FfiConverterRustBuffer<List
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeLineaOcr: FfiConverterRustBuffer<List<LineaOcr>> {
+    override fun read(buf: ByteBuffer): List<LineaOcr> {
+        val len = buf.getInt()
+        return List<LineaOcr>(len) {
+            FfiConverterTypeLineaOcr.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<LineaOcr>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeLineaOcr.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<LineaOcr>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeLineaOcr.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypePalabraOcr: FfiConverterRustBuffer<List<PalabraOcr>> {
+    override fun read(buf: ByteBuffer): List<PalabraOcr> {
+        val len = buf.getInt()
+        return List<PalabraOcr>(len) {
+            FfiConverterTypePalabraOcr.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<PalabraOcr>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypePalabraOcr.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<PalabraOcr>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypePalabraOcr.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypePrestamoGafeteProvisionalActivoResumen: FfiConverterRustBuffer<List<PrestamoGafeteProvisionalActivoResumen>> {
     override fun read(buf: ByteBuffer): List<PrestamoGafeteProvisionalActivoResumen> {
         val len = buf.getInt()
@@ -7042,6 +9306,355 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
     }
 }
         /**
+         * ¿El texto viene de un carnet KOF (frente o reverso)? Excluye el
+         * comprobante de carga, que imprime la misma marca.
+         */ fun `esCarnetKof`(`texto`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_es_carnet_kof(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+ fun `extraerCarnetKof`(`texto`: kotlin.String): CarnetKofDetectado? {
+            return FfiConverterOptionalTypeCarnetKofDetectado.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_extraer_carnet_kof(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Número de cédula nacional (9 dígitos, sin separadores) en el texto. Se
+         * prefiere el impreso con separadores ("1 2345 6789", como va en la
+         * tarjeta) y, si no hay, 9 dígitos seguidos.
+         */ fun `extraerCedulaDeTexto`(`texto`: kotlin.String): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_extraer_cedula_de_texto(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * ¿Es un Comprobante de Carga de Ruta? Separado de la extracción para que
+         * la pantalla siga buscando sin tratar cada frame parcial como fallo.
+         */ fun `esComprobanteCargaRuta`(`texto`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_es_comprobante_carga_ruta(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Ruta y documento son obligatorios: sin alguno no hay nada que registrar.
+         */ fun `extraerComprobanteRuta`(`texto`: kotlin.String): ComprobanteRutaDetectado? {
+            return FfiConverterOptionalTypeComprobanteRutaDetectado.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_extraer_comprobante_ruta(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * ¿El consenso alcanza para confirmar con `requeridos` frames?
+         */ fun `consensoAlcanza`(`consenso`: ConsensoVotacion, `requeridos`: kotlin.UInt): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_consenso_alcanza(
+    
+        
+        FfiConverterTypeConsensoVotacion.lower(`consenso`),
+        FfiConverterUInt.lower(`requeridos`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * ¿`nueva` es la lectura de OTRO documento y no el mismo con algún
+         * carácter mal leído? Distinto largo, o más diferencias de las que explica
+         * un error de lectura (un par; en números cortos, como un gafete, una).
+         */ fun `esOtraLectura`(`consenso`: kotlin.String, `nueva`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_es_otra_lectura(
+    
+        
+        FfiConverterString.lower(`consenso`),
+        FfiConverterString.lower(`nueva`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Orientación que pide un texto de la pantalla de documentos: el MRZ no se
+         * clasifica por palabras clave, pero es claramente horizontal.
+         */ fun `orientacionDeTextoDocumento`(`texto`: kotlin.String): OrientacionEncuadre? {
+            return FfiConverterOptionalTypeOrientacionEncuadre.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_orientacion_de_texto_documento(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Orientación que pide cada tipo: el carnet PRAIND, el gafete In House y
+         * el gafete CRC se sostienen VERTICALES; el resto son tarjetas
+         * horizontales. `None` para lo que no se reconoce.
+         */ fun `orientacionEncuadreDeTipo`(`tipo`: TipoDocumento): OrientacionEncuadre? {
+            return FfiConverterOptionalTypeOrientacionEncuadre.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_orientacion_encuadre_de_tipo(
+    
+        
+        FfiConverterTypeTipoDocumento.lower(`tipo`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Clasifica el tipo de documento a partir del texto, antes de extraer
+         * ningún campo. El ORDEN importa: DIMEX y licencia de extranjero comparten
+         * el rango del número y sólo el contexto los distingue; el gafete va antes
+         * que la DIMEX y el PRAIND antes que la cédula (cada caso explicado abajo).
+         */ fun `clasificarTipoDocumento`(`texto`: kotlin.String): TipoDocumento {
+            return FfiConverterTypeTipoDocumento.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_clasificar_tipo_documento(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Un MRZ ya leído (`leer_mrz`) al modelo normalizado. Distinguir cédula
+         * nacional de DIMEX (ambas TD1) es una regla de Costa Rica, no de ICAO:
+         * código `ID` para la cédula (Decreto TSE n.° 22-2025) y `C<` para el
+         * DIMEX de la DGME (confirmado con un documento real). Un TD1 de otro país
+         * o con otro código queda `Desconocido`: sin regla verificada, mejor eso
+         * que adivinar.
+         */ fun `documentoDesdeMrz`(`registro`: RegistroMrz): DocumentoLeido {
+            return FfiConverterTypeDocumentoLeido.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_documento_desde_mrz(
+    
+        
+        FfiConverterTypeRegistroMrz.lower(`registro`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Clasifica (si `tipo` no viene ya calculado) y extrae. `None` cuando
+         * todavía no hay información suficiente: la pantalla sigue esperando
+         * frames, no es un fallo.
+         */ fun `leerDocumentoDeTexto`(`texto`: kotlin.String, `tipo`: TipoDocumento?): DocumentoLeido? {
+            return FfiConverterOptionalTypeDocumentoLeido.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_leer_documento_de_texto(
+    
+        
+        FfiConverterString.lower(`texto`),
+        FfiConverterOptionalTypeTipoDocumento.lower(`tipo`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Nombre para mostrar en el mensaje de la cámara: quien opera nunca elige
+         * el tipo a mano, así que esto le confirma qué se detectó.
+         */ fun `nombreLegibleTipoDocumento`(`tipo`: TipoDocumento): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_nombre_legible_tipo_documento(
+    
+        
+        FfiConverterTypeTipoDocumento.lower(`tipo`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Pista para el lector de códigos: el texto parece el reverso de la
+         * cédula anterior, la cara que trae el PDF417.
+         */ fun `pareceReversoCedulaAnterior`(`texto`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_parece_reverso_cedula_anterior(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * La TIM usa el mismo código MRZ que la cédula de adulto: sólo la fecha
+         * de nacimiento las distingue. Sin efecto sobre otros tipos ni sin fecha.
+         */ fun `reclasificarPorEdad`(`documento`: DocumentoLeido, `hoy`: FechaOcr): DocumentoLeido {
+            return FfiConverterTypeDocumentoLeido.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_reclasificar_por_edad(
+    
+        
+        FfiConverterTypeDocumentoLeido.lower(`documento`),
+        FfiConverterTypeFechaOcr.lower(`hoy`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Busca un MRZ (TD1 --cédula, DIMEX-- antes que TD3 --pasaporte--) y se
+         * queda con la primera lectura que valida los dígitos verificadores; si
+         * ninguna valida, con la primera reconocida (la pantalla sabe así que HAY
+         * un MRZ en cuadro, todavía mal leído). `None` si no hay nada con forma de
+         * MRZ: la pantalla sigue esperando.
+         */ fun `leerLecturaMrz`(`texto`: kotlin.String, `anioActual`: kotlin.Int): LecturaMrz? {
+            return FfiConverterOptionalTypeLecturaMrz.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_leer_lectura_mrz(
+    
+        
+        FfiConverterString.lower(`texto`),
+        FfiConverterInt.lower(`anioActual`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * El umbral de [`CONFIANZA_MINIMA`], para que la telemetría de diagnóstico
+         * cuente las palabras descartadas con el mismo número.
+         */ fun `confianzaMinimaPalabra`(): kotlin.Float {
+            return FfiConverterFloat.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_confianza_minima_palabra(
+    
+        _status)
+}
+    )
+    }
+    
+
+        /**
+         * Texto del frame en renglones visuales. Si alguna caja es inválida
+         * (NaN, invertida) no se puede ubicar nada con seguridad y se devuelven
+         * las líneas en el orden de ML Kit.
+         */ fun `reconstruirTextoVisual`(`lineas`: List<LineaOcr>): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_reconstruir_texto_visual(
+    
+        
+        FfiConverterSequenceTypeLineaOcr.lower(`lineas`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Las versiones del texto de un frame que prueban los lectores, en orden:
+         * renglones visuales y, si difiere, el texto original de ML Kit. Nunca
+         * incluye textos vacíos.
+         */ fun `textosDeFrame`(`textoMlKit`: kotlin.String, `lineas`: List<LineaOcr>): List<kotlin.String> {
+            return FfiConverterSequenceString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_textos_de_frame(
+    
+        
+        FfiConverterString.lower(`textoMlKit`),
+        FfiConverterSequenceTypeLineaOcr.lower(`lineas`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Placa primero (el patrón más específico) y número de unidad sólo si no
+         * hay placa, para no leer la parte numérica de una placa como unidad.
+         * Entre carga y particular gana la que necesitó MENOS correcciones (a
+         * igualdad, la de carga): `SGB123` no se convierte en `SG8123`.
+         */ fun `extraerVehiculo`(`texto`: kotlin.String): VehiculoRutaDetectado? {
+            return FfiConverterOptionalTypeVehiculoRutaDetectado.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_extraer_vehiculo(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Igual que [`extraer_vehiculo`], con cómo se obtuvo la lectura.
+         */ fun `extraerVehiculoConDetalle`(`texto`: kotlin.String): LecturaVehiculo? {
+            return FfiConverterOptionalTypeLecturaVehiculo.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_extraer_vehiculo_con_detalle(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * La placa como va impresa, para mostrarla y guardarla en el formulario:
+         * prefijo y dígitos separados por un espacio (carga `CL371931` ->
+         * `CL 371931`, moto `M947369` -> `M 947369`) y particular con guion
+         * (`BPH485` -> `BPH-485`). El número de unidad y cualquier otra cosa
+         * quedan igual. El valor sin formato (`VehiculoRutaDetectado.valor`)
+         * sigue siendo el que se vota y se compara con el catálogo.
+         */ fun `placaComoSeImprime`(`valor`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_placa_como_se_imprime(
+    
+        
+        FfiConverterString.lower(`valor`),_status)
+}
+    )
+    }
+    
+
+        /**
          * Punto de entrada FFI: recibe las 2-3 líneas de MRZ que Kotlin ya aisló
          * con `buscarBloquesMrz` (extracción mecánica, se queda en Kotlin) y
          * devuelve el resultado resuelto -- válido/inválido y, si corrigió algo,
@@ -7065,6 +9678,53 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
         
         FfiConverterSequenceString.lower(`lineas`),
         FfiConverterInt.lower(`anioActual`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Largo del prefijo que se debe entregar a [`leer_pdf417_cedula`]. Función
+         * (no constante exportada) para que Kotlin lo tome de acá y no duplique
+         * el número.
+         */ fun `largoPrefijoPdf417Cedula`(): kotlin.UInt {
+            return FfiConverterUInt.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_largo_prefijo_pdf417_cedula(
+    
+        _status)
+}
+    )
+    }
+    
+
+        /**
+         * Descifra cédula, nombre y apellidos de los primeros bytes crudos del
+         * PDF417. `None` si el prefijo es corto o lo descifrado no tiene forma de
+         * cédula costarricense (9 dígitos con provincia 1-9 y nombres sólo con
+         * letras): así un PDF417 de otro documento, o una lectura corrupta, nunca
+         * produce datos.
+         */ fun `leerPdf417Cedula`(`prefijo`: kotlin.ByteArray): DatosPdf417Cedula? {
+            return FfiConverterOptionalTypeDatosPdf417Cedula.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula(
+    
+        
+        FfiConverterByteArray.lower(`prefijo`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Igual que [`leer_pdf417_cedula`], con el motivo del resultado.
+         */ fun `leerPdf417CedulaConMotivo`(`prefijo`: kotlin.ByteArray): LecturaPdf417 {
+            return FfiConverterTypeLecturaPdf417.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula_con_motivo(
+    
+        
+        FfiConverterByteArray.lower(`prefijo`),_status)
 }
     )
     }

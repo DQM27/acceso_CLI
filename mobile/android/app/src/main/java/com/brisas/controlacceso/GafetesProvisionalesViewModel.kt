@@ -75,8 +75,8 @@ class GafetesProvisionalesViewModel(
             cargando = true
             try {
                 val (locales, remotos) = withContext(dispatcherIO) {
-                    nucleo.listarGafetesProvisionalesActivos() to
-                        nucleo.listarPrestamosGafeteProvisionalRemotos()
+                    medirNucleo("listarGafetesProvisionalesActivos") { nucleo.listarGafetesProvisionalesActivos() } to
+                        medirNucleo("listarPrestamosGafeteProvisionalRemotos") { nucleo.listarPrestamosGafeteProvisionalRemotos() }
                 }
                 activos = locales.map { FilaGafeteProvisionalActiva.Local(it) } +
                     remotos.map { FilaGafeteProvisionalActiva.Remota(it) }
@@ -99,7 +99,7 @@ class GafetesProvisionalesViewModel(
         }
         buscadorEncargado.buscar {
             try {
-                resultadosEncargado = withContext(dispatcherIO) { nucleo.buscarEncargadosRuta(nuevo) }
+                resultadosEncargado = withContext(dispatcherIO) { medirNucleo("buscarEncargadosRuta") { nucleo.buscarEncargadosRuta(nuevo) } }
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             }
@@ -124,9 +124,9 @@ class GafetesProvisionalesViewModel(
                     // no esté prestado en el otro dispositivo del sitio.
                     val secreto = secretoStore.cargar()
                         ?: throw SecretoDispositivoNoEncontradoException()
-                    nucleo.entregarGafeteProvisionalConSecreto(encargado.id, gafeteNumero, secreto)
+                    medirNucleo("entregarGafeteProvisionalConSecreto") { nucleo.entregarGafeteProvisionalConSecreto(encargado.id, gafeteNumero, secreto) }
                 }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 mensaje = "Gafete entregado"
                 error = null
                 textoEncargado = ""
@@ -151,15 +151,15 @@ class GafetesProvisionalesViewModel(
                 withContext(dispatcherIO) {
                     when (fila) {
                         is FilaGafeteProvisionalActiva.Local ->
-                            nucleo.registrarDevolucionGafeteProvisional(fila.prestamo.id)
+                            medirNucleo("registrarDevolucionGafeteProvisional") { nucleo.registrarDevolucionGafeteProvisional(fila.prestamo.id) }
                         is FilaGafeteProvisionalActiva.Remota -> {
                             val secreto = secretoStore.cargar()
                                 ?: throw SecretoDispositivoNoEncontradoException()
-                            nucleo.cerrarPrestamoGafeteProvisionalRemotoConSecreto(secreto, fila.remoto.uuid)
+                            medirNucleo("cerrarPrestamoGafeteProvisionalRemotoConSecreto") { nucleo.cerrarPrestamoGafeteProvisionalRemotoConSecreto(secreto, fila.remoto.uuid) }
                         }
                     }
                 }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 refrescarActivos()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()

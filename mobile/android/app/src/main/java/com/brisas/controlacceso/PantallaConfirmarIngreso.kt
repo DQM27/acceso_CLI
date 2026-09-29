@@ -58,6 +58,7 @@ fun PantallaConfirmarIngreso(
     onLimpiarError: () -> Unit,
     onCambiar: () -> Unit,
 ) {
+    RegistrarPantalla("confirmar_ingreso")
     var medio by rememberSaveable { mutableStateOf(MedioIngreso.CAMINANDO) }
     var gafeteTexto by rememberSaveable { mutableStateOf("") }
     var placaTexto by rememberSaveable { mutableStateOf("") }

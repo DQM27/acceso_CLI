@@ -17,6 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FlashlightOff
+import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
@@ -217,6 +219,27 @@ fun BotonCerrarCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = Color.White)
+    }
+}
+
+/** Linterna de la cámara, mismo estilo que [BotonCerrarCamara] -- va debajo
+ * de él en las 4 pantallas de escaneo. De noche en la portería, o con una
+ * placa en sombra, la luz es lo que más limita la lectura. */
+@Composable
+fun BotonLinterna(encendida: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (encendida) Icons.Default.FlashlightOff else Icons.Default.FlashlightOn,
+            contentDescription = if (encendida) "Apagar linterna" else "Encender linterna",
+            tint = Color.White,
+        )
     }
 }
 

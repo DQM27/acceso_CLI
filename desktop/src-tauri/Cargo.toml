@@ -1,6 +1,6 @@
 [package]
 name = "control-acceso-desktop"
-version = "1.6.7"
+version = "1.6.8"
 description = "Interfaz gráfica de escritorio para Lattis"
 authors = ["Daniel Quintana — DQM27"]
 license = "MIT"
@@ -60,6 +60,15 @@ tauri-plugin-process = "2"
 sentry = "0.49"
 url = "=2.5.8"
 tokio = { version = "=1.53.1", features = ["sync", "time"] }
+# Sólo con la feature `telemetria` (build de diagnóstico, ver
+# src/telemetria.rs): manda los lotes a staging. Misma versión y features que
+# el crate raíz, así Cargo unifica una sola copia.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"], optional = true }
+
+[features]
+# Telemetría técnica hacia el proyecto de STAGING (docs/telemetria-diagnostico.md).
+# Nunca en los builds que se publican: `cargo tauri build --features telemetria`.
+telemetria = ["dep:reqwest"]
 
 [dev-dependencies]
 # Sólo para los tests de recuperacion_local.rs -- misma versión que ya fija
@@ -148,9 +157,14 @@ webview2-com = "=0.38.2"
 # diálogos nativos (mostrar_error_fatal_y_salir/confirmar_reconstruccion_desde_nube
 # en lib.rs) dejaron el MessageBoxW crudo (feo, look de Windows 95) por
 # rfd, que en Windows usa TaskDialogIndirect (el diálogo moderno).
+# "Win32_System_ProcessStatus"/"Threading"/"SystemInformation": memoria y CPU
+# del proceso para la telemetría de diagnóstico (src/telemetria.rs).
 windows = { version = "=0.61.3", features = [
     "Win32_Security_Cryptography",
     "Win32_Foundation",
+    "Win32_System_ProcessStatus",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
 ] }
 # Generar la clave de 256 bits de SQLCipher (rand_core, misma versión que fija
 # el crate raíz para que Cargo unifique una sola copia) y borrarla de memoria

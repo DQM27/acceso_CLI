@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./invocar";
 
 // Espejo de comandos/usuarios.rs. Crear/editar/buscar usuarios globales u
 // otorgarles/resetearles la contraseña desde el escritorio ya no existe --

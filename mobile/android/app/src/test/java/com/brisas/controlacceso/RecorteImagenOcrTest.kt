@@ -3,6 +3,7 @@ package com.brisas.controlacceso
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.ByteBuffer
 
 class RecorteImagenOcrTest {
 
@@ -114,7 +115,7 @@ class RecorteImagenOcrTest {
         val v = ByteArray(8) { 60 }
         val rect = RectanguloEntero(left = 2, top = 2, right = 6, bottom = 4)
 
-        val nv21 = recortarYuvANv21(rect, y, stride, u, v, uvRowStride = 4, uvPixelStride = 1)
+        val nv21 = recortarYuvANv21(rect, ByteBuffer.wrap(y), stride, ByteBuffer.wrap(u), ByteBuffer.wrap(v), uvRowStride = 4, uvPixelStride = 1)
 
         assertEquals(4 * 2 + 4, nv21.size)
         assertEquals(listOf(22, 23, 24, 25, 32, 33, 34, 35), nv21.take(8).map { it.toInt() })
@@ -129,11 +130,47 @@ class RecorteImagenOcrTest {
         val v = ByteArray(16) { i -> if (i % 2 == 0) (200 + i / 2).toByte() else 0 }
         val rect = RectanguloEntero(left = 4, top = 2, right = 8, bottom = 4) // 4x2 -> croma 2x1
 
-        val nv21 = recortarYuvANv21(rect, y, 8, u, v, uvRowStride = 8, uvPixelStride = 2)
+        val nv21 = recortarYuvANv21(rect, ByteBuffer.wrap(y), 8, ByteBuffer.wrap(u), ByteBuffer.wrap(v), uvRowStride = 8, uvPixelStride = 2)
 
         // Croma: fila 1 (top/2), columnas 2 y 3 (left/2) -> índices 8+4, 8+6.
         val croma = nv21.drop(4 * 2).map { it.toInt() and 0xff }
         assertEquals(listOf(200 + 6, 100 + 6, 200 + 7, 100 + 7), croma)
+    }
+
+    @Test
+    fun recortarYuvANv21LeeLaUltimaFilaDeCromaSinElRellenoFinal() {
+        // Imagen 8x4, croma 4x2 con pixelStride 2 y rowStride 8: como en un
+        // plano real, la última fila de croma NO trae el byte de relleno
+        // final (15 bytes, no 16). Recortar hasta el borde derecho e
+        // inferior no debe salirse del búfer.
+        val y = ByteBuffer.wrap(ByteArray(8 * 4))
+        val u = ByteBuffer.wrap(ByteArray(15) { i -> (100 + i).toByte() })
+        val v = ByteBuffer.wrap(ByteArray(15) { i -> (200 + i).toByte() })
+        val rect = RectanguloEntero(left = 4, top = 2, right = 8, bottom = 4)
+
+        val nv21 = recortarYuvANv21(rect, y, 8, u, v, uvRowStride = 8, uvPixelStride = 2)
+
+        val croma = nv21.drop(4 * 2).map { it.toInt() and 0xff }
+        assertEquals(listOf(200 + 12, 100 + 12, 200 + 14, 100 + 14), croma)
+    }
+
+    @Test
+    fun recortarYuvANv21RespetaLaPosicionInicialDelBuferYNoLaMueve() {
+        // Un plano cuyo búfer no empieza en 0 (slice de un búfer mayor) se
+        // lee desde su posición, igual que la copia completa anterior; y la
+        // lectura no consume el búfer: el fallback a `fromMediaImage` lo
+        // necesita intacto.
+        val crudo = ByteArray(3 + 4 * 2) { i -> if (i < 3) 99 else (i - 3).toByte() }
+        val y = ByteBuffer.wrap(crudo).apply { position(3) }
+        val u = ByteBuffer.wrap(ByteArray(2) { 50 })
+        val v = ByteBuffer.wrap(ByteArray(2) { 60 })
+        val rect = RectanguloEntero(left = 0, top = 0, right = 2, bottom = 2)
+
+        val nv21 = recortarYuvANv21(rect, y, 4, u, v, uvRowStride = 2, uvPixelStride = 1)
+
+        assertEquals(listOf(0, 1, 4, 5, 60, 50), nv21.map { it.toInt() })
+        assertEquals(3, y.position())
+        assertEquals(0, u.position())
     }
 
     @Test

@@ -206,6 +206,18 @@ impl From<nube::SincronizacionError> for FalloSincronizacion {
 /// quien usa la app tenía que notarlo y volver a apretar "Sincronizar" a
 /// mano -- ahora se recupera sola.
 pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, String> {
+    ejecutar_sincronizacion_con_alcance(state, nube::AlcanceSincronizacion::completo())
+}
+
+/// Igual que [`ejecutar_sincronizacion`], pero corriendo sólo las etapas de
+/// recepción de `alcance` -- ver `nube::AlcanceSincronizacion`. Lo usa el
+/// aviso en vivo (`sincronizar_cambios_nube`): antes cada aviso corría la
+/// sincronización COMPLETA (~13 consultas a la nube) aunque sólo hubiera
+/// cambiado una tabla. La bandeja de salida se drena siempre.
+pub fn ejecutar_sincronizacion_con_alcance(
+    state: &GuiState,
+    alcance: nube::AlcanceSincronizacion,
+) -> Result<ResumenSincronizacion, String> {
     // El timer, los avisos remotos y el botón manual comparten la misma cola.
     // Sólo una ejecución puede drenarla a la vez; el núcleo queda libre.
     static SINCRONIZACION: Mutex<()> = Mutex::new(());
@@ -213,10 +225,10 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    match intentar_sincronizacion(state) {
+    match intentar_sincronizacion(state, alcance) {
         Err(FalloSincronizacion::TokenVencido) => {
             state.invalidar_token_cacheado();
-            intentar_sincronizacion(state).map_err(|fallo| match fallo {
+            intentar_sincronizacion(state, alcance).map_err(|fallo| match fallo {
                 FalloSincronizacion::TokenVencido => {
                     "El token de este dispositivo venció y no se pudo renovar -- revisá la conexión"
                         .to_string()
@@ -229,7 +241,10 @@ pub fn ejecutar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion
     }
 }
 
-fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, FalloSincronizacion> {
+fn intentar_sincronizacion(
+    state: &GuiState,
+    alcance: nube::AlcanceSincronizacion,
+) -> Result<ResumenSincronizacion, FalloSincronizacion> {
     let token = autenticar(state).map_err(FalloSincronizacion::Mensaje)?;
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
@@ -246,7 +261,10 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     // del arranque inicial) o sin red, simplemente no hace nada -- el
     // tope de 12h en `GuiState::access_token_supabase_vigente` sigue
     // aplicando igual si esto no logra renovar a tiempo.
-    if let Some(refresh_token) = state.refresh_token_supabase()
+    // Sólo en la sincronización completa: es una llamada de red más, y el
+    // pulso periódico (completo) ya la corre cada 2 minutos.
+    if alcance.es_completo()
+        && let Some(refresh_token) = state.refresh_token_supabase()
         && let Ok(sesion) = nube::refrescar(nube::base_url(), nube::apikey(), &refresh_token)
     {
         state.iniciar_sesion_supabase(sesion);
@@ -255,41 +273,12 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     let conexion = state
         .conexion_secundaria()
         .map_err(FalloSincronizacion::Mensaje)?;
-    let resumen = nube::drenar_cola(&conexion, &contexto, 200)?;
-    let cierres_recibidos = nube::recibir_cierres_de_ingresos_propios(&conexion, &contexto)?;
-    let cierres_recibidos_proveedor =
-        nube::recibir_cierres_de_ingresos_propios_proveedor(&conexion, &contexto)?;
-    let remotos = nube::recibir_ingresos_abiertos(&conexion, &contexto)?;
-    let _remotos_proveedor = nube::recibir_ingresos_proveedor_abiertos(&conexion, &contexto)?;
-    let _remotos_gafete_provisional =
-        nube::recibir_prestamos_gafete_provisional_abiertos(&conexion, &contexto)?;
-    let _devoluciones_propias_gafete_provisional =
-        nube::recibir_devoluciones_propias_gafete_provisional(&conexion, &contexto)?;
-    let catalogo = nube::recibir_catalogo_del_sitio(&conexion, &contexto)?;
-    let catalogo_rutas = nube::recibir_catalogo_rutas_del_sitio(&conexion, &contexto)?;
-    let movimientos_historial_recibidos = nube::recibir_historial_del_sitio(&conexion, &contexto)?;
-    let citas_recibidas = nube::recibir_citas_del_sitio(&conexion, &contexto)?;
-    let historial_visitas_recibidos =
-        nube::recibir_historial_visitas_del_sitio(&conexion, &contexto)?;
-    let historial_ingresos_proveedor_recibidos =
-        nube::recibir_historial_ingresos_proveedor_del_sitio(&conexion, &contexto)?;
-    // Faltaba acá (bug 2026-09-22): la feature de historial de gafetes
-    // provisionales sólo cableó `AppCore::sincronizar_con_nube`, que el
-    // escritorio NO usa -- sin esta llamada la caché
-    // `prestamos_gafete_provisional_historial_sitio` nunca se llenaba y la
-    // vista "Historial" quedaba siempre vacía.
-    let historial_gafetes_provisionales_recibidos =
-        nube::recibir_historial_gafetes_provisionales_del_sitio(&conexion, &contexto)?;
-    // Mejor esfuerzo a propósito -- ya se llegó hasta acá con la nube
-    // respondiendo bien, pero si este chequeo puntual falla no tiene
-    // sentido tumbar un sync que por lo demás anduvo. Vacío en ese caso, no
-    // error.
-    let conflictos_ingreso =
-        nube::contratistas_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
-    let conflictos_movimiento_visita =
-        nube::visitantes_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
-    let conflictos_ingreso_proveedor =
-        nube::proveedores_con_conflicto_activo(&conexion, &contexto).unwrap_or_default();
+    let resumen = nube::sincronizar(
+        &conexion,
+        &contexto,
+        alcance,
+        nube::PerfilDispositivo::Escritorio,
+    )?;
 
     // Si a quien disparó esto lo desactivaron en otro dispositivo, el
     // catálogo recién recibido ya lo refleja -- lo saca de la sesión acá
@@ -307,26 +296,27 @@ fn intentar_sincronizacion(state: &GuiState) -> Result<ResumenSincronizacion, Fa
     Ok(ResumenSincronizacion {
         enviados: resumen.enviados,
         fallidos: resumen.fallidos,
-        remotos_abiertos: u32::try_from(remotos.len()).unwrap_or(u32::MAX),
-        cierres_recibidos,
-        cierres_recibidos_proveedor,
-        movimientos_historial_recibidos,
-        citas_recibidas,
-        historial_visitas_recibidos,
-        historial_ingresos_proveedor_recibidos,
-        historial_gafetes_provisionales_recibidos,
-        empresas_recibidas: catalogo.empresas_recibidas,
-        contratistas_recibidos: catalogo.contratistas_recibidos,
-        gafetes_recibidos: catalogo.gafetes_recibidos,
-        vehiculos_ruta_recibidos: catalogo_rutas.vehiculos_recibidos,
-        encargados_ruta_recibidos: catalogo_rutas.encargados_recibidos,
+        remotos_abiertos: resumen.remotos_abiertos,
+        cierres_recibidos: resumen.cierres_recibidos,
+        cierres_recibidos_proveedor: resumen.cierres_recibidos_proveedor,
+        movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
+        citas_recibidas: resumen.citas_recibidas,
+        historial_visitas_recibidos: resumen.historial_visitas_recibidos,
+        historial_ingresos_proveedor_recibidos: resumen.historial_ingresos_proveedor_recibidos,
+        historial_gafetes_provisionales_recibidos: resumen
+            .historial_gafetes_provisionales_recibidos,
+        empresas_recibidas: resumen.catalogo.empresas_recibidas,
+        contratistas_recibidos: resumen.catalogo.contratistas_recibidos,
+        gafetes_recibidos: resumen.catalogo.gafetes_recibidos,
+        vehiculos_ruta_recibidos: resumen.catalogo_rutas.vehiculos_recibidos,
+        encargados_ruta_recibidos: resumen.catalogo_rutas.encargados_recibidos,
         sitio_id: token.sitio_id,
         dispositivo_id: token.dispositivo_id,
         tipo: token.tipo,
         sesion_expulsada,
-        conflictos_ingreso,
-        conflictos_movimiento_visita,
-        conflictos_ingreso_proveedor,
+        conflictos_ingreso: resumen.conflictos_ingreso,
+        conflictos_movimiento_visita: resumen.conflictos_movimiento_visita,
+        conflictos_ingreso_proveedor: resumen.conflictos_ingreso_proveedor,
         conflictos_gafete: resumen.conflictos_gafete,
     })
 }
@@ -348,7 +338,13 @@ pub async fn configurar_dispositivo_inicial(
         let metadata = metadata_de_esta_maquina();
         let resumen = state
             .core()
-            .configurar_dispositivo_inicial(None, None, &secreto, Some(&metadata))
+            .configurar_dispositivo_inicial(
+                None,
+                None,
+                &secreto,
+                Some(&metadata),
+                nube::PerfilDispositivo::Escritorio,
+            )
             .map_err(mensaje_gestion_nube)?;
         Ok(ResumenSincronizacion {
             enviados: resumen.enviados,
@@ -384,6 +380,63 @@ pub async fn configurar_dispositivo_inicial(
     })
     .await
     .map_err(|error| format!("No se pudo completar el arranque inicial: {error}"))?
+}
+
+/// Aviso en vivo con los datos (`cambio_nube` con `registro`): guarda la
+/// fila directo en la base local, sin consultar a la nube -- ver
+/// `nube::en_vivo`. `true` si la aplicó; `false` si el aviso no trae datos
+/// o la tabla todavía no los manda (el frontend pide entonces
+/// `sincronizar_cambios_nube` sólo para esa tabla). Sobre la conexión
+/// secundaria: nunca toma el candado del núcleo.
+#[tauri::command]
+pub async fn aplicar_cambio_nube(
+    app: tauri::AppHandle,
+    cambio: serde_json::Value,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<GuiState>();
+        state.sesion_activa()?;
+        let conexion = state.conexion_secundaria()?;
+        nube::aplicar_cambio_en_vivo(&conexion, &cambio, nube::PerfilDispositivo::Escritorio)
+            .map_err(mensaje_sincronizacion)
+    })
+    .await
+    .map_err(|error| format!("No se pudo aplicar el cambio en vivo: {error}"))?
+}
+
+/// Sincronización disparada por avisos en vivo (`cambio_nube`) -- corre
+/// sólo las etapas de las tablas que cambiaron (`tablas`, tal cual las
+/// manda el aviso en `payload.table`), ver `nube::AlcanceSincronizacion`.
+/// Una tabla desconocida o una lista vacía caen en la sincronización
+/// completa.
+#[tauri::command]
+pub async fn sincronizar_cambios_nube(
+    app: tauri::AppHandle,
+    tablas: Vec<String>,
+) -> Result<ResumenSincronizacion, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ejecutar_sincronizacion_con_alcance(
+            &app.state::<GuiState>(),
+            nube::AlcanceSincronizacion::desde_tablas(&tablas),
+        )
+    })
+    .await
+    .map_err(|error| format!("No se pudo completar la sincronización: {error}"))?
+}
+
+/// Un ingreso/salida registrado en este equipo: sólo se vacía la bandeja de
+/// salida (`nube::AlcanceSincronizacion::solo_envio`), sin bajar catálogo
+/// ni historial -- no hay nada que traer de la nube por un cambio propio.
+#[tauri::command]
+pub async fn enviar_cambios_nube(app: tauri::AppHandle) -> Result<ResumenSincronizacion, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ejecutar_sincronizacion_con_alcance(
+            &app.state::<GuiState>(),
+            nube::AlcanceSincronizacion::solo_envio(),
+        )
+    })
+    .await
+    .map_err(|error| format!("No se pudo enviar a la nube: {error}"))?
 }
 
 #[tauri::command]
@@ -480,7 +533,8 @@ pub fn cerrar_ingreso_remoto(uuid: String, state: tauri::State<GuiState>) -> Res
         sitio_id: &token.sitio_id,
     };
     let conexion = state.conexion_secundaria()?;
-    nube::cerrar_ingreso_remoto(&conexion, &contexto, &uuid, &actor.nombre)
+    let hora = state.core().ahora_utc();
+    nube::cerrar_ingreso_remoto(&conexion, &contexto, &uuid, &actor.nombre, hora)
         .map_err(mensaje_sincronizacion)
 }
 
@@ -534,7 +588,8 @@ pub fn cerrar_ingreso_proveedor_remoto(
         sitio_id: &token.sitio_id,
     };
     let conexion = state.conexion_secundaria()?;
-    nube::cerrar_ingreso_proveedor_remoto(&conexion, &contexto, &uuid, &actor.nombre)
+    let hora = state.core().ahora_utc();
+    nube::cerrar_ingreso_proveedor_remoto(&conexion, &contexto, &uuid, &actor.nombre, hora)
         .map_err(mensaje_sincronizacion)
 }
 
@@ -587,6 +642,22 @@ pub fn cerrar_prestamo_gafete_provisional_remoto(
         sitio_id: &token.sitio_id,
     };
     let conexion = state.conexion_secundaria()?;
-    nube::cerrar_prestamo_gafete_provisional_remoto(&conexion, &contexto, &uuid, &actor.nombre)
-        .map_err(mensaje_sincronizacion)
+    let hora = state.core().ahora_utc();
+    nube::cerrar_prestamo_gafete_provisional_remoto(
+        &conexion,
+        &contexto,
+        &uuid,
+        &actor.nombre,
+        hora,
+    )
+    .map_err(mensaje_sincronizacion)
+}
+
+/// Último desfase medido entre el reloj de esta PC y el del servidor (ms,
+/// positivo si la PC va adelantada), o `None` si nunca se midió. Lo usa la
+/// telemetría de diagnóstico para corregir la latencia de los avisos en
+/// vivo (ver `desktop/src/telemetria.ts`).
+#[tauri::command]
+pub fn desfase_reloj_ms(state: tauri::State<GuiState>) -> Option<i64> {
+    state.core().desfase_reloj_ms()
 }

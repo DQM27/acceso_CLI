@@ -79,6 +79,7 @@ fun PantallaProveedores(
     secretoStore: SecretoDispositivoStore,
     refrescarNube: Int = 0,
 ) {
+    RegistrarPantalla("proveedores")
     val viewModel: ProveedoresViewModel =
         viewModel(factory = ProveedoresViewModel.factory(nucleo, secretoStore))
     // Sin esto, un cambio que llega de OTRO dispositivo (pulso periódico o
@@ -125,7 +126,8 @@ fun PantallaProveedores(
         PantallaEscanearVehiculoRuta(
             onVehiculoDetectado = { detectado ->
                 escaneandoPlaca = false
-                viewModel.cambiarPlaca(detectado.valor)
+                // Como va impresa en la placa (`CL 371931`, `BPH-485`).
+                viewModel.cambiarPlaca(placaComoSeImprime(detectado.valor))
             },
             onCerrar = { escaneandoPlaca = false },
             mensajeInicial = "Apunte a la placa del vehículo",

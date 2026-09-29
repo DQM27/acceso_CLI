@@ -21,7 +21,7 @@
 //! campo HERMANO del candado, nunca adentro -- este tipo es esa misma
 //! solución escrita una sola vez: quien lo use debe seguir sosteniéndolo
 //! como campo hermano de su `AppCore`, no envuelto por el mismo candado.
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::cliente::autenticar_dispositivo;
@@ -73,6 +73,10 @@ struct EntradaCache {
 /// candado.
 pub struct CacheTokenDispositivo {
     entrada: Mutex<Option<EntradaCache>>,
+    /// Desfase en milisegundos medido en segundo plano (ver
+    /// [`Self::autenticar_y_cachear`]) que todavía nadie aplicó: viaja una
+    /// sola vez, en el próximo token que se entregue.
+    desfase_pendiente: Arc<Mutex<Option<i64>>>,
 }
 
 impl Default for CacheTokenDispositivo {
@@ -85,14 +89,16 @@ impl CacheTokenDispositivo {
     pub fn new() -> Self {
         Self {
             entrada: Mutex::new(None),
+            desfase_pendiente: Arc::new(Mutex::new(None)),
         }
     }
 
     /// Reusa el último token mientras siga vigente para el MISMO secreto;
     /// si no, autentica de nuevo contra `device-auth` y lo cachea. Un
     /// acierto de caché no vuelve a medir el desfase de reloj
-    /// (`TokenDispositivo::desfase_reloj_ms` queda en `None`) -- sólo se
-    /// mide cuando de verdad se habla con el receptor.
+    /// (`TokenDispositivo::desfase_reloj_ms` queda en `None`, salvo que
+    /// traiga la medición en milisegundos que terminó en segundo plano) --
+    /// sólo se mide cuando de verdad se habla con el receptor.
     ///
     /// Quien llama es responsable de aplicar `desfase_reloj_ms` a su
     /// propio reloj cuando venga `Some` (ver
@@ -120,13 +126,26 @@ impl CacheTokenDispositivo {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(entrada) = cache.as_ref()
                 && entrada.secreto == secreto
-                && let Some(token) = reutilizable(&entrada.token, entrada.obtenido_en.elapsed())
+                && let Some(mut token) = reutilizable(&entrada.token, entrada.obtenido_en.elapsed())
             {
+                token.desfase_reloj_ms = tomar(&self.desfase_pendiente);
                 return Ok(token);
             }
         }
 
         let token = autenticar_dispositivo(super::base_url(), secreto, metadata)?;
+        // El token sale ya con el desfase del header `Date` (segundos). La
+        // medición en milisegundos (4 consultas, ~0,3-0,6 s en 4G) corre
+        // aparte: antes se hacía acá y la pagaba el login del teléfono
+        // (1,3-1,7 s con token nuevo, medido con telemetría). Queda en
+        // `desfase_pendiente` y viaja en el próximo token que se entregue
+        // (la sincronización que sigue al login, el canal de Realtime).
+        // Una medición vieja sin aplicar se descarta: la nueva la reemplaza.
+        *self
+            .desfase_pendiente
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        medir_en_segundo_plano(&token.access_token, Arc::clone(&self.desfase_pendiente));
         *self
             .entrada
             .lock()
@@ -151,77 +170,36 @@ impl CacheTokenDispositivo {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
+}
 
-    /// Chequeo remoto de "¿esta cédula ya tiene un ingreso activo en OTRO
-    /// sitio ahora mismo?" -- `None` sin secreto (nada con qué consultar),
-    /// y también `None` ante cualquier falla (sin red, token rechazado,
-    /// lo que sea): este chequeo es puramente informativo, mejor esfuerzo
-    /// a propósito (`docs/pendientes.md`, "chequeo cruzado de ingresos
-    /// abiertos entre sitios") -- sin conexión, el registro sigue local y
-    /// el conflicto, si lo hay, se detecta después al sincronizar
-    /// (`ConflictoIngresoActivo`). NUNCA debe frenar un registro por sí
-    /// solo -- por eso `Option`, no `Result`: quien llama no tiene forma
-    /// de distinguir "no hay conflicto" de "no se pudo verificar", y no
-    /// debería poder hacerlo, para no tentarse a tratarlos distinto.
-    pub fn contratista_activo_en_otro_sitio(&self, secreto: &str, cedula: &str) -> Option<String> {
-        if secreto.trim().is_empty() {
-            return None;
-        }
-        let token = self.autenticar_con_cache(secreto).ok()?;
-        let contexto = super::ContextoSincronizacion {
-            base_url: super::base_url(),
-            apikey: super::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        super::contratista_activo_en_otro_sitio(&contexto, cedula)
-            .ok()
-            .flatten()
-    }
+/// Saca (y deja vacío) el desfase pendiente.
+fn tomar(pendiente: &Mutex<Option<i64>>) -> Option<i64> {
+    pendiente
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
+}
 
-    /// Chequeo remoto de "¿este número de gafete ya está activo en este
-    /// MISMO sitio, del lado de OTRO dispositivo, ahora mismo?" --
-    /// deliberadamente asimétrico respecto de
-    /// [`Self::contratista_activo_en_otro_sitio`]: acá SÍ se propaga el
-    /// error (`Result`, no `Option`) en vez de asumir "libre" cuando la
-    /// consulta falla. No es un descuido ni una inconsistencia a limpiar
-    /// -- son dos políticas distintas a propósito:
-    ///
-    /// - `contratista_activo_en_otro_sitio` es una ADVERTENCIA informativa
-    ///   (el registro local ya es válido igual, esto sólo avisa de un
-    ///   posible duplicado entre sitios que se puede corregir después).
-    /// - Este chequeo es lo único que evita que DOS dispositivos del mismo
-    ///   sitio le entreguen el mismo número físico de gafete a dos
-    ///   personas distintas a la vez -- si no se puede verificar que está
-    ///   libre, no hay forma segura de decir que sí lo está. Sin secreto
-    ///   guardado (dispositivo sin nube configurada) no hay con quién
-    ///   chocar, por eso el único camino que no toca la red es `Ok(true)`
-    ///   explícito -- nunca "silenciar el error y asumir libre".
-    ///
-    /// Si algún día alguien consolida este método con el de arriba (misma
-    /// forma superficial: autenticar, armar contexto, llamar), que la
-    /// firma de retorno siga siendo la señal de que hay dos políticas
-    /// distintas debajo, no una.
-    pub fn gafete_ocupado_en_otro_dispositivo(
-        &self,
-        secreto: &str,
-        numero: i64,
-    ) -> Result<bool, super::SincronizacionError> {
-        // `?` convierte `NubeError` -> `SincronizacionError` sola
-        // (`#[from]` en `SincronizacionError::Red`) -- autenticar es la
-        // única parte de este chequeo que puede fallar con el tipo más
-        // angosto, `gafete_ocupado_en_otro_dispositivo` ya devuelve el
-        // más ancho.
-        let token = self.autenticar_con_cache(secreto)?;
-        let contexto = super::ContextoSincronizacion {
-            base_url: super::base_url(),
-            apikey: super::apikey(),
-            token: &token.access_token,
-            dispositivo_id: &token.dispositivo_id,
-            sitio_id: &token.sitio_id,
-        };
-        super::gafete_ocupado_en_otro_dispositivo(&contexto, numero)
+/// Mide el desfase en milisegundos en un hilo propio y lo deja en
+/// `destino`. Si no se puede medir (sin la función en el servidor, red
+/// lenta) no deja nada y queda el del header `Date`.
+fn medir_en_segundo_plano(access_token: &str, destino: Arc<Mutex<Option<i64>>>) {
+    let access_token = access_token.to_string();
+    let lanzado = std::thread::Builder::new()
+        .name("reloj-preciso".to_string())
+        .spawn(move || {
+            if let Some(preciso) = super::reloj_preciso::medir_desfase_ms(
+                super::base_url(),
+                super::apikey(),
+                &access_token,
+            ) {
+                *destino
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(preciso);
+            }
+        });
+    if let Err(error) = lanzado {
+        log::warn!("no se pudo lanzar la medición del reloj: {error}");
     }
 }
 
@@ -229,7 +207,9 @@ impl CacheTokenDispositivo {
 mod tests {
     use std::time::Duration;
 
-    use super::{MARGEN_EXPIRACION, TokenDispositivo, reutilizable};
+    use std::sync::Mutex;
+
+    use super::{MARGEN_EXPIRACION, TokenDispositivo, reutilizable, tomar};
 
     fn token_de_12_horas() -> TokenDispositivo {
         TokenDispositivo {
@@ -283,5 +263,16 @@ mod tests {
         let mut corto = token_de_12_horas();
         corto.expires_in = 60;
         assert!(reutilizable(&corto, Duration::ZERO).is_none());
+    }
+
+    #[test]
+    fn el_desfase_medido_en_segundo_plano_viaja_una_sola_vez() {
+        let pendiente = Mutex::new(Some(-240));
+        assert_eq!(tomar(&pendiente), Some(-240));
+        assert_eq!(
+            tomar(&pendiente),
+            None,
+            "ya aplicado: los siguientes aciertos no lo repiten"
+        );
     }
 }

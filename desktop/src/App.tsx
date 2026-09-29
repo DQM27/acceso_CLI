@@ -73,7 +73,9 @@ import {
   sincronizarConNube,
 } from "./api";
 import type { ResumenSincronizacion, Update, UsuarioSesion } from "./api";
+import { EVENTO_CAMBIO_EN_VIVO } from "./eventosNube";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
+import { registrarPantalla } from "./telemetria";
 import { textoHora } from "./tiempo";
 import { SesionProvider } from "./contexto/SesionContexto";
 import {
@@ -188,6 +190,12 @@ export default function App() {
   // verdad), el primer montaje "de prueba" lo dejaría marcado y el segundo
   // montaje real nunca llegaría a invocar nada.
   const yaMostroVentanaPrincipal = useRef(false);
+
+  // Telemetría de diagnóstico: la sesión abierta registra sus propias
+  // secciones (ver `Shell`).
+  useEffect(() => {
+    if (pantalla.tipo !== "shell") registrarPantalla(pantalla.tipo);
+  }, [pantalla.tipo]);
 
   useEffect(() => {
     requiereConfiguracionInicial()
@@ -378,6 +386,9 @@ function Shell({
   // PRIMERA visita a cada sección monta su componente; volver después es
   // instantáneo.
   const [visitadas, setVisitadas] = useState<Seccion[]>(["activos"]);
+  useEffect(() => {
+    registrarPantalla(seccion);
+  }, [seccion]);
   useEffect(() => {
     // `Promise.resolve().then(...)` en vez de llamar `setVisitadas` directo
     // -- ver el mismo comentario en Activos.tsx.
@@ -585,10 +596,15 @@ function Shell({
       "nube://sincronizado",
       ({ payload }) => alSincronizarNube(payload, true),
     );
+    // Un aviso en vivo ya guardó su fila (ver `aplicarCambioNube`): Activos
+    // se recarga en ese momento, sin esperar ninguna sincronización.
+    const alCambiarEnVivo = () => startTransition(() => setRefrescarActivos((n) => n + 1));
+    window.addEventListener(EVENTO_CAMBIO_EN_VIVO, alCambiarEnVivo);
 
     return () => {
       cancelarRealtime();
       cancelarSincronizacionAutomatica.then((cancelar) => cancelar());
+      window.removeEventListener(EVENTO_CAMBIO_EN_VIVO, alCambiarEnVivo);
     };
   }, [sesion.id, sesion.cedula, sesion.nombre]);
 

@@ -6,25 +6,33 @@
 //! recepción (`recibir_ingresos_abiertos`/`cerrar_ingreso_remoto`) de lo
 //! que el otro dispositivo del mismo sitio tiene abierto ahora mismo.
 
+pub mod alcance;
 pub mod auth_supabase;
 pub mod cache_token;
 pub mod cliente;
 pub mod credenciales;
+pub mod en_vivo;
+pub mod orquestacion;
+pub mod reloj_preciso;
+pub mod retencion;
 pub mod sincronizacion;
 
+pub use alcance::AlcanceSincronizacion;
 pub use auth_supabase::{
     AuthSupabaseError, Jwk, SesionSupabase, cambiar_password, login, obtener_jwks, refrescar,
     verificar_token_offline,
 };
 pub use cache_token::CacheTokenDispositivo;
 pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo, autenticar_dispositivo};
+pub use en_vivo::aplicar_cambio_en_vivo;
+pub use orquestacion::{PerfilDispositivo, ResumenSincronizacionNube, recibir, sincronizar};
 pub use sincronizacion::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
-    ConflictoMovimientoVisitaActivo, ContextoSincronizacion, IngresoProveedorRemoto, IngresoRemoto,
-    PrestamoGafeteProvisionalRemoto, ResumenCatalogo, ResumenCatalogoRutas, ResumenDrenado,
-    SincronizacionError, cerrar_ingreso_proveedor_remoto, cerrar_ingreso_remoto,
-    cerrar_prestamo_gafete_provisional_remoto, contar_fallos_permanentes,
-    contratista_activo_en_otro_sitio, contratistas_con_conflicto_activo, drenar_cola,
+    ConflictoMovimientoVisitaActivo, ContextoSincronizacion, IngresoActivoEnLaNube,
+    IngresoProveedorRemoto, IngresoRemoto, PrestamoGafeteProvisionalRemoto, ResumenCatalogo,
+    ResumenCatalogoRutas, ResumenDrenado, SincronizacionError, cerrar_ingreso_proveedor_remoto,
+    cerrar_ingreso_remoto, cerrar_prestamo_gafete_provisional_remoto, contar_fallos_permanentes,
+    contratista_con_ingreso_activo, contratistas_con_conflicto_activo, drenar_cola,
     gafete_de_proveedor_ocupado_en_otro_dispositivo, gafete_de_visita_ocupado_en_otro_dispositivo,
     gafete_ocupado_en_otro_dispositivo, gafete_provisional_ocupado_en_otro_dispositivo,
     proveedor_activo_en_otro_sitio, proveedores_con_conflicto_activo, recibir_catalogo_del_sitio,

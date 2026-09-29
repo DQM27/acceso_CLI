@@ -24,6 +24,10 @@ pub trait RegistroIngresoProveedorRepository {
 
     fn buscar_por_id(&self, id: i64) -> Result<Option<RegistroIngresoProveedor>, DatabaseError>;
 
+    /// ¿Esta cédula tiene el acceso negado como contratista? Ver
+    /// `database::queries::contratistas::cedula_con_acceso_negado`.
+    fn cedula_con_acceso_negado(&self, cedula: &str) -> Result<bool, DatabaseError>;
+
     /// Ingreso abierto (sin salida) para esta cédula -- mismo motivo que
     /// `RegistroIngresoRepository::buscar_ingreso_activo`: evitar que la
     /// misma persona quede con dos ingresos abiertos a la vez.
@@ -109,6 +113,17 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<RegistroIngresoProveedor> {
     })
 }
 
+/// Ingreso abierto de una cédula, comparando en forma única
+/// (`NORMALIZAR_CEDULA`, ver `domain::cedula`): un registro viejo guardado
+/// con guiones también cuenta. La función sobre la columna impide buscar
+/// por índice de cédula, pero `fecha_hora_salida IS NULL` deja recorrer
+/// sólo un índice parcial de los abiertos (por cédula o por gafete), nunca
+/// el historial.
+const FILTRO_ACTIVO_POR_CEDULA: &str = "
+    WHERE NORMALIZAR_CEDULA(cedula) = NORMALIZAR_CEDULA(?1)
+      AND fecha_hora_salida IS NULL
+    ORDER BY fecha_hora_ingreso DESC LIMIT 1";
+
 const SELECT_REGISTRO: &str = "
     SELECT id, cedula, nombre, empresa_id, empresa_nombre, placa, gafete_numero,
            fecha_hora_ingreso, usuario_ingreso_id, fecha_hora_salida, usuario_salida_id
@@ -116,6 +131,10 @@ const SELECT_REGISTRO: &str = "
 ";
 
 impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorRepository<'_> {
+    fn cedula_con_acceso_negado(&self, cedula: &str) -> Result<bool, DatabaseError> {
+        crate::database::queries::contratistas::cedula_con_acceso_negado(self.connection, cedula)
+    }
+
     fn crear(&self, registro: &NuevoRegistroIngresoProveedor) -> Result<i64, DatabaseError> {
         let fecha_hora_ingreso = serializar_utc(registro.fecha_hora_ingreso);
         let uuid = generar_uuid_v4();
@@ -171,10 +190,9 @@ impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorReposi
         &self,
         cedula: &str,
     ) -> Result<Option<RegistroIngresoProveedor>, DatabaseError> {
-        let mut statement = self.connection.prepare(&format!(
-            "{SELECT_REGISTRO} WHERE cedula = ?1 AND fecha_hora_salida IS NULL
-             ORDER BY fecha_hora_ingreso DESC LIMIT 1"
-        ))?;
+        let mut statement = self
+            .connection
+            .prepare(&format!("{SELECT_REGISTRO} {FILTRO_ACTIVO_POR_CEDULA}"))?;
         match statement.query_row(params![cedula], convertir_fila) {
             Ok(registro) => Ok(Some(registro)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -302,6 +320,49 @@ impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorReposi
 mod tests {
     use super::*;
     use crate::database::schema::initialize_database;
+
+    #[test]
+    fn buscar_ingreso_activo_recorre_solo_los_abiertos() {
+        let (connection, _) = conexion_con_empresa();
+        let mut statement = connection
+            .prepare(&format!(
+                "EXPLAIN QUERY PLAN {SELECT_REGISTRO} {FILTRO_ACTIVO_POR_CEDULA}"
+            ))
+            .unwrap();
+        let detalles = statement
+            .query_map(["112340567"], |row| row.get::<_, String>(3))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        // Cualquiera de los dos índices parciales de abiertos (por cédula o
+        // por gafete, ambos `WHERE fecha_hora_salida IS NULL`) deja fuera el
+        // historial; lo que no puede pasar es recorrer la tabla entera.
+        let indices_de_abiertos = [
+            "USING INDEX idx_registro_ingresos_proveedor_cedula_activa",
+            "USING INDEX idx_registro_ingresos_proveedor_gafete_activo",
+        ];
+        assert!(
+            detalles
+                .iter()
+                .any(|d| indices_de_abiertos.iter().any(|indice| d.contains(indice))),
+            "debe recorrer sólo un índice parcial de abiertos: {detalles:?}"
+        );
+    }
+
+    #[test]
+    fn buscar_ingreso_activo_encuentra_la_cedula_en_cualquier_formato() {
+        let (connection, empresa_id) = conexion_con_empresa();
+        let repo = SqliteRegistroIngresoProveedorRepository::new(&connection);
+        // Un registro viejo, guardado con guiones antes de la forma única.
+        repo.crear(&nuevo(empresa_id, "1-1234-0567", 7)).unwrap();
+
+        assert!(
+            repo.buscar_ingreso_activo("01-1234-0567")
+                .unwrap()
+                .is_some()
+        );
+        assert!(repo.buscar_ingreso_activo("999999999").unwrap().is_none());
+    }
 
     fn conexion_con_empresa() -> (Connection, i64) {
         let connection = Connection::open_in_memory().unwrap();
