@@ -9,7 +9,7 @@ Mantener este archivo al día: cada cambio que se aplique en staging se anota
 aquí en el mismo commit. Cuando se aplique en producción, se mueve a la
 sección "Aplicado en producción" con fecha y quién lo autorizó.
 
-Última revisión: 2026-09-28.
+Última revisión: 2026-09-29.
 
 ## 1. Antes de empezar
 
@@ -112,6 +112,31 @@ Antes de llevarlas a producción:
    guarda el texto de cada una).
 2. Versionarlas como archivos en esa rama.
 3. Decidir si esa rama sigue viva.
+
+### 2.5 Verificación antes del PR de `claude/fusion-integral` (2026-09-29)
+
+Comparadas las migraciones de staging, producción y la rama, y las tablas y
+columnas que usan las apps de la rama:
+
+- **Producción está al día con `main`** (última:
+  `agrega_indice_unico_gafete_activo_por_sitio`).
+- **La rama sólo necesita dos migraciones nuevas en producción:** filas 1
+  (`cambio_nube_lleva_la_fila_de_ingresos`) y 6 (`hora_servidor_ms`).
+  Ninguna rompe apps viejas y las apps nuevas funcionan sin ellas (más
+  lento: sin la fila en el aviso y con el reloj a ±1 s).
+- **Veto:** `crea_personas_vetadas` + `revierte_personas_vetadas` en
+  staging; verificado que no queda ninguna tabla ni función de ese diseño.
+  Nada que aplicar en producción (ver 2.2).
+- **Visitas (filas 2-4) y rutas (fila 5)** son de otras ramas; las apps de
+  esta rama no usan sus tablas ni RPC.
+- **Staging está desfasado en `salidas_ruta`:** la fila 5 (sin archivo en el
+  repo) le quitó `numero_ruta`, `sub_numero`, `numero_documento`,
+  `fecha_documento`, `resultado` y `motivo_resultado` y le agregó
+  `viaje_id`. Las apps (de `main` y de esta rama) mandan esas columnas, así
+  que **en staging las salidas de ruta no pueden subir** (la tabla tiene 0
+  filas). En producción sí están. No bloquea el PR, pero las pruebas de
+  rutas contra staging van a fallar hasta resolver la rama de rutas.
+- `telemetria_diagnostico` sólo existe en staging, como corresponde.
 
 ## 3. Cambios de la base local de los equipos (SQLite)
 
