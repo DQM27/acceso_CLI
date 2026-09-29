@@ -4,7 +4,7 @@ Es la contraparte de la del teléfono (`mobile/android/docs/telemetria-diagnosti
 Usa la misma tabla `telemetria_diagnostico` del proyecto de **staging** y los
 mismos nombres de evento y de campo, así una consulta sirve para las dos
 plataformas. Las filas del escritorio se reconocen por `version_app`, que
-empieza con `desktop-` (por ejemplo `desktop-1.6.7-diag`).
+empieza con `desktop-` (por ejemplo `desktop-1.6.8-diag+abc1234`, con el hash corto del commit).
 
 ## Qué build la tiene
 

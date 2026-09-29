@@ -15,6 +15,17 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// Hash corto del commit para identificar el build `diagnostico`; "sinhash"
+// si git no está disponible o el árbol no es un repositorio.
+val hashCortoDelCommit: String = try {
+    providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().ifEmpty { "sinhash" }
+} catch (e: Exception) {
+    "sinhash"
+}
+
 android {
     namespace = "com.brisas.controlacceso"
     compileSdk = 36
@@ -25,8 +36,8 @@ android {
         // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.2.6"
+        versionCode = 19
+        versionName = "1.2.7"
 
         // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
         // el default acá es "development" (debug); `release {}` abajo lo
@@ -89,7 +100,9 @@ android {
         create("diagnostico") {
             initWith(getByName("release"))
             applicationIdSuffix = ".diag"
-            versionNameSuffix = "-diag"
+            // Con el hash corto del commit al final, `version_app` de cada
+            // fila de telemetría dice de qué código salió ("1.2.7-diag+abc1234").
+            versionNameSuffix = "-diag+$hashCortoDelCommit"
             signingConfig = signingConfigs.getByName("debug")
             isDebuggable = false
             // Permite adjuntar el profiler de Android Studio si algún día hay

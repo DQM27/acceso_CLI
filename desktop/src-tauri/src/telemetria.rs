@@ -222,7 +222,11 @@ pub fn iniciar(directorio: &Path) {
     let t = Telemetria {
         dispositivo: identificador_de_instalacion(directorio),
         sesion: control_acceso::database::identificador::generar_uuid_v4(),
-        version: format!("desktop-{}-diag", env!("CARGO_PKG_VERSION")),
+        version: format!(
+            "desktop-{}-diag+{}",
+            env!("CARGO_PKG_VERSION"),
+            env!("BUILD_COMMIT_HASH")
+        ),
         directorio: directorio.to_path_buf(),
         inicio: Instant::now(),
         cola: Mutex::new(Cola::default()),
