@@ -74,7 +74,11 @@ class SincronizacionPeriodica(
                 porSincronizar.anotar(null)
                 var agrupar = !inmediata
                 while (true) {
-                    if (agrupar) delay(PAUSA_AGRUPACION_MS)
+                    // La pausa junta avisos remotos que llegan casi a la vez.
+                    // Un cambio hecho acá sale enseguida: esperar sólo
+                    // demoraba ~0,6 s que el otro equipo lo viera (lo que
+                    // llegue mientras tanto va en la corrida siguiente).
+                    if (agrupar && !porSincronizar.soloEnvio()) delay(PAUSA_AGRUPACION_MS)
                     agrupar = true
                     val alcance = porSincronizar.tomar()
                     try {

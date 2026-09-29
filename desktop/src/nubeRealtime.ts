@@ -56,6 +56,8 @@ export function emitirActualizacion(
 // Espacia los reintentos cuando falta conexión o la sesión no está lista.
 const REINTENTO_BASE_MS = 2_000;
 const REINTENTO_TOPE_MS = 60_000;
+// Junta avisos remotos que llegan casi a la vez en una sola corrida.
+const PAUSA_AGRUPACION_MS = 600;
 // Cada cuánto, como mucho, se relee el desfase del reloj (telemetría).
 const INTERVALO_DESFASE_MS = 10_000;
 
@@ -187,10 +189,17 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   function programarCorrida() {
     if (cancelado) return;
     if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
-    temporizadorSincronizar = window.setTimeout(() => {
-      temporizadorSincronizar = null;
-      void sincronizarPorAviso();
-    }, 600);
+    // La pausa junta avisos remotos que llegan casi a la vez. Si lo único
+    // pendiente es subir un cambio hecho en esta PC, sale enseguida:
+    // esperar sólo demoraba ~0,6 s que el otro equipo lo viera.
+    const soloEnvio = !pendienteCompleta && tablasPendientes.size === 0;
+    temporizadorSincronizar = window.setTimeout(
+      () => {
+        temporizadorSincronizar = null;
+        void sincronizarPorAviso();
+      },
+      soloEnvio ? 0 : PAUSA_AGRUPACION_MS,
+    );
   }
 
   async function conectar() {

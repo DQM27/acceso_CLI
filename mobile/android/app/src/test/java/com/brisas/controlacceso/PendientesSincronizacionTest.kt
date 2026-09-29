@@ -68,4 +68,16 @@ class PendientesSincronizacionTest {
         // Sin nada nuevo: el pulso periódico, que es completo.
         assertEquals(AlcancePendiente.Completa, pendientes.tomar())
     }
+
+    @Test
+    fun soloEnvioSiLoUnicoPendienteEsLocal() {
+        val pendientes = PendientesSincronizacion()
+        assertEquals(false, pendientes.soloEnvio())
+        pendientes.anotarCambioLocal()
+        assertEquals(true, pendientes.soloEnvio())
+        pendientes.anotar("ingresos")
+        assertEquals(false, pendientes.soloEnvio())
+        pendientes.tomar()
+        assertEquals(false, pendientes.soloEnvio())
+    }
 }

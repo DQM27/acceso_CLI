@@ -82,6 +82,10 @@ class PendientesSincronizacion {
         envio = true
     }
 
+    /** ¿Lo único pendiente es subir cambios hechos en este teléfono? */
+    @Synchronized
+    fun soloEnvio(): Boolean = envio && !completa && tablas.isEmpty()
+
     /**
      * Lo pendiente, y lo deja vacío. Gana lo más amplio: la completa si se
      * pidió; si no, las tablas en el orden en que llegaron (también suben lo
