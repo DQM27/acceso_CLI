@@ -230,6 +230,10 @@ fun analizarFrameOcr(
     camara: EstadoCamaraOcr,
     region: RegionRecorte?,
     leerCodigo: Boolean = false,
+    // "Modo código" (ver `PlanificadorLectores`): el lector de códigos recibe
+    // un segundo recorte con TODO lo visible en vez del recuadro guía. El
+    // texto sigue con su recorte de siempre. Sólo cuenta si `leerCodigo`.
+    modoCodigo: Boolean = false,
     onLectura: (LecturaFrame) -> Unit,
     onFallo: () -> Unit,
 ) {
@@ -259,6 +263,15 @@ fun analizarFrameOcr(
             camara.metricas.registrarDescarte()
             return
         }
+        val lectorCodigos = camara.lectorCodigos
+        // Segundo recorte, sólo para el lector de códigos: es una copia
+        // propia (NV21), así que no retiene el `ImageProxy`. Si no se puede
+        // armar, el código se lee del recorte normal.
+        val recorteCodigo = if (leerCodigo && modoCodigo && lectorCodigos != null) {
+            recortarParaOcr(mediaImage, imagen.cropRect, rotacion, TodoLoVisibleRecorte)
+        } else {
+            null
+        }
         val finRecorte = System.nanoTime()
         // Antes de cerrar la imagen: el ancho que ve ML Kit (ya rotado).
         val anchoImagenPx = recorte?.anchoVertical ?: if (rotacion % 180 != 0) mediaImage.height else mediaImage.width
@@ -269,17 +282,18 @@ fun analizarFrameOcr(
         if (!retenerImagen) imagen.close()
         val regionLeida = if (recorte != null) region else null
         val tareaTexto = camara.recognizer.process(input)
-        val lectorCodigos = camara.lectorCodigos
-        val tareaCodigo = if (leerCodigo && lectorCodigos != null) lectorCodigos.process(input) else null
+        val tareaCodigo = if (leerCodigo && lectorCodigos != null) lectorCodigos.process(recorteCodigo?.input ?: input) else null
+        val anchoCodigoPx = recorteCodigo?.anchoVertical ?: anchoImagenPx
+        val leyoEnModoCodigo = recorteCodigo != null
         pendienteDeCierre = false
         Tasks.whenAllComplete(listOfNotNull(tareaTexto, tareaCodigo)).addOnCompleteListener(camara.ejecutorProcesamiento) {
             try {
                 if (!camara.sesionActiva.get()) return@addOnCompleteListener
-                camara.metricas.registrarFrame(tareaCodigo != null, finRecorte - inicio, System.nanoTime() - finRecorte)
+                camara.metricas.registrarFrame(tareaCodigo != null, finRecorte - inicio, System.nanoTime() - finRecorte, leyoEnModoCodigo)
                 val texto = tareaTexto.takeIf { it.isSuccessful }?.result
                 if (tareaCodigo != null && !tareaCodigo.isSuccessful) camara.metricas.registrarErrorLectorCodigo()
                 val datosPdf417 = tareaCodigo?.takeIf { it.isSuccessful }?.result
-                    ?.let { codigos -> leerCodigos(codigos, anchoImagenPx, camara.metricas) }
+                    ?.let { codigos -> leerCodigos(codigos, anchoCodigoPx, leyoEnModoCodigo, camara.metricas) }
                 if (texto == null && datosPdf417 == null) {
                     camara.metricas.registrarFallo()
                     onFallo()
@@ -359,7 +373,12 @@ private val UMBRAL_CONFIANZA_PALABRA = confianzaMinimaPalabra()
 /// diagnóstico de todos los códigos del frame para la telemetría. Los
 /// bytes crudos se ponen en cero en todos los casos (ver
 /// [leerPdf417ConMotivo]).
-private fun leerCodigos(codigos: List<Barcode>, anchoImagenPx: Int, metricas: MetricasOcr): DatosPdf417Cedula? {
+private fun leerCodigos(
+    codigos: List<Barcode>,
+    anchoImagenPx: Int,
+    enModoCodigo: Boolean,
+    metricas: MetricasOcr,
+): DatosPdf417Cedula? {
     var datos: DatosPdf417Cedula? = null
     var sinBytes = 0
     val motivos = mutableListOf<MotivoPdf417>()
@@ -381,7 +400,7 @@ private fun leerCodigos(codigos: List<Barcode>, anchoImagenPx: Int, metricas: Me
         motivos += lectura.motivo
         datos = lectura.datos
     }
-    metricas.registrarBusquedaCodigo(DiagnosticoCodigos(codigos.size, sinBytes, motivos, largos, anchos, anchoImagenPx))
+    metricas.registrarBusquedaCodigo(DiagnosticoCodigos(codigos.size, sinBytes, motivos, largos, anchos, anchoImagenPx, enModoCodigo))
     return datos
 }
 

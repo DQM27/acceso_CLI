@@ -76,7 +76,27 @@ class DiagnosticoCodigos(
     /// Ancho en píxeles de la imagen que analizó ML Kit (el recorte, ya
     /// rotado): cuánta resolución tuvo el código para leerse.
     val anchoImagenPx: Int,
+    /// El frame se leyó en "modo código" (todo lo visible, no el recuadro
+    /// guía): su ancho se mide aparte del recorte normal.
+    val enModoCodigo: Boolean = false,
 )
+
+/// Qué hacer con el lector de códigos en un frame (ver
+/// [PlanificadorLectores.planCodigo]).
+class PlanCodigo(
+    /// Buscar el PDF417 en este frame.
+    val leer: Boolean,
+    /// El código se busca en TODO lo visible (modo código), no en el recuadro.
+    val modoCodigo: Boolean,
+)
+
+/// Región que abarca todo lo visible en pantalla (el `cropRect` completo del
+/// `ViewPort`): la que lee el lector de códigos en modo código, para que el
+/// PDF417 acercado o girado de lado no se corte contra el recuadro guía.
+object TodoLoVisibleRecorte : RegionRecorte {
+    override fun rectanguloEnPixeles(anchoVisible: Int, altoVisible: Int) =
+        RectanguloEntero(0, 0, anchoVisible, altoVisible)
+}
 
 /// ¿Esta línea de texto de ML Kit tiene forma de línea de MRZ? Largo de
 /// TD1 (30) o TD3 (44) con algo de tolerancia, alfabeto MRZ y al menos un
@@ -177,33 +197,75 @@ private fun FraccionesRect.conMargen(horizontal: Float, vertical: Float) = Fracc
 /// - si no, uno de cada [periodoSinPista], por si se muestra el reverso sin
 ///   que el texto alcance a reconocerse.
 ///
-/// Sincronizado: lo usa el hilo del analizador.
+/// "Modo código": el PDF417 de la cédula anterior trae datos y huellas, con
+/// cientos de barras de 1-2 px en el recuadro guía (bajo lo que ML Kit
+/// necesita). Al verse el reverso se activa por [framesModoCodigo] frames,
+/// MÁS que la pista: si la persona acerca el código el texto deja de
+/// leerse y la pista se pierde en ~1 s, pero el código sigue buscándose y,
+/// mientras dura el modo, en todo lo visible (ver [TodoLoVisibleRecorte])
+/// para que el código acercado o de lado -- a lo largo de los 1920 px del
+/// frame -- ocupe muchos más píxeles. Termina al confirmar
+/// ([terminarModoCodigo]), al aparecer un MRZ o al vencerse los frames.
+/// `framesModoCodigo = 0` lo desactiva.
+///
+/// Sincronizado: lo usa el hilo del analizador (y la pantalla, al confirmar).
 class PlanificadorLectores(
     private val habilitado: Boolean,
     private val periodoSinPista: Int = 3,
     private val framesMemoria: Int = 8,
+    private val framesModoCodigo: Int = 60,
 ) {
     private var contador = 0
     private var framesConPista = 0
     private var framesConMrz = 0
+    private var restanteModoCodigo = 0
 
     init {
         require(periodoSinPista > 0) { "periodoSinPista debe ser positivo" }
+        require(framesModoCodigo >= 0) { "framesModoCodigo no puede ser negativo" }
     }
 
+    /// ¿Está activo el modo código? (Para mostrar el aviso en pantalla.)
+    val modoCodigo: Boolean
+        @Synchronized get() = restanteModoCodigo > 0
+
+    /// Qué hacer en el próximo frame. En modo código siempre se lee el
+    /// código y cada llamada gasta un frame del modo.
     @Synchronized
-    fun leerCodigo(): Boolean {
-        if (!habilitado || framesConMrz > 0) return false
-        if (framesConPista > 0) return true
+    fun planCodigo(): PlanCodigo {
+        if (!habilitado || framesConMrz > 0) return PlanCodigo(leer = false, modoCodigo = false)
+        if (restanteModoCodigo > 0) {
+            restanteModoCodigo--
+            return PlanCodigo(leer = true, modoCodigo = true)
+        }
+        if (framesConPista > 0) return PlanCodigo(leer = true, modoCodigo = false)
         contador++
-        return contador % periodoSinPista == 0
+        return PlanCodigo(leer = contador % periodoSinPista == 0, modoCodigo = false)
     }
 
-    /// Resultado del texto de un frame.
+    fun leerCodigo(): Boolean = planCodigo().leer
+
+    /// Resultado del texto de un frame. Devuelve `true` si con este frame
+    /// se ACABA de activar el modo código.
     @Synchronized
-    fun registrarTexto(pareceReversoConCodigo: Boolean, hayMrz: Boolean) {
+    fun registrarTexto(pareceReversoConCodigo: Boolean, hayMrz: Boolean): Boolean {
         framesConPista = if (pareceReversoConCodigo) framesMemoria else (framesConPista - 1).coerceAtLeast(0)
         framesConMrz = if (hayMrz) framesMemoria else (framesConMrz - 1).coerceAtLeast(0)
+        if (hayMrz) {
+            restanteModoCodigo = 0
+            return false
+        }
+        if (habilitado && pareceReversoConCodigo && restanteModoCodigo == 0 && framesModoCodigo > 0) {
+            restanteModoCodigo = framesModoCodigo
+            return true
+        }
+        return false
+    }
+
+    /// Se confirmó un documento: el modo ya cumplió.
+    @Synchronized
+    fun terminarModoCodigo() {
+        restanteModoCodigo = 0
     }
 }
 
@@ -235,6 +297,13 @@ class MetricasOcr(
     private val largosBytesPdf417 = ArrayDeque<Float>()
     private val anchosCodigoPx = ArrayDeque<Float>()
     private val anchosImagenConCodigoPx = ArrayDeque<Float>()
+
+    // Modo código (ver `PlanificadorLectores`): frames que corrieron con el
+    // lector de códigos sobre todo lo visible, veces que se activó y ancho de
+    // esa imagen (aparte del recorte normal de `anchosImagenConCodigoPx`).
+    private var framesModoCodigo = 0
+    private var activacionesModoCodigo = 0
+    private val anchosImagenModoCodigoPx = ArrayDeque<Float>()
 
     // Condiciones de captura (todos los frames medidos, también los
     // descartados): para calibrar el filtro de calidad y el aviso de
@@ -277,13 +346,14 @@ class MetricasOcr(
     /// Un frame que terminó de pasar por ML Kit. `nanosReconocimiento`
     /// cubre los dos lectores si corrieron en paralelo.
     @Synchronized
-    fun registrarFrame(conCodigo: Boolean, nanosRecorte: Long, nanosReconocimiento: Long) {
+    fun registrarFrame(conCodigo: Boolean, nanosRecorte: Long, nanosReconocimiento: Long, enModoCodigo: Boolean = false) {
         if (!habilitadas) return
         val ahora = reloj()
         if (frames == 0) primerFrame = ahora
         ultimoFrame = ahora
         frames++
         if (conCodigo) framesConCodigo++
+        if (enModoCodigo) framesModoCodigo++
         agregar(msRecorte, nanosRecorte / 1e6f)
         agregar(msReconocimiento, nanosReconocimiento / 1e6f)
         if (frames % cadaCuantosFrames == 0) registrar(resumen())
@@ -299,7 +369,16 @@ class MetricasOcr(
         diagnostico.motivos.forEach { motivosPdf417.merge(it.name, 1, Int::plus) }
         diagnostico.largosBytes.forEach { agregar(largosBytesPdf417, it.toFloat()) }
         diagnostico.anchosCodigoPx.forEach { agregar(anchosCodigoPx, it.toFloat()) }
-        agregar(anchosImagenConCodigoPx, diagnostico.anchoImagenPx.toFloat())
+        agregar(
+            if (diagnostico.enModoCodigo) anchosImagenModoCodigoPx else anchosImagenConCodigoPx,
+            diagnostico.anchoImagenPx.toFloat(),
+        )
+    }
+
+    /// El modo código se acaba de activar (una vez por activación).
+    @Synchronized
+    fun registrarActivacionModoCodigo() {
+        if (habilitadas) activacionesModoCodigo++
     }
 
     /// Calidad medida de un frame (procesado o descartado) y si la linterna
@@ -432,6 +511,11 @@ class MetricasOcr(
         "pdf417_bytes_max" to largosBytesPdf417.maxOrNull(),
         "pdf417_ancho_codigo_px_mediana" to mediana(anchosCodigoPx),
         "imagen_ancho_px_mediana_con_codigo" to mediana(anchosImagenConCodigoPx),
+        // Modo código: el lector de códigos sobre todo lo visible. Si su
+        // ancho no supera al del recorte normal, el modo no gana píxeles.
+        "modo_codigo_frames" to framesModoCodigo,
+        "modo_codigo_activaciones" to activacionesModoCodigo,
+        "modo_codigo_imagen_ancho_px_mediana" to mediana(anchosImagenModoCodigoPx),
         // Condiciones de captura: con qué nitidez, luz y reflejo se trabajó.
         "frames_medidos" to framesMedidos,
         "frames_con_linterna" to framesConLinterna,

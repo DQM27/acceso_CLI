@@ -131,12 +131,116 @@ class LecturaFrameTest {
 
     @Test
     fun laPistaSeOlvidaSiElReversoDejaDeVerse() {
-        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesMemoria = 2)
+        // Sin modo código (0 frames): sólo la pista de memoria corta.
+        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesMemoria = 2, framesModoCodigo = 0)
         planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
         planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
         assertTrue(planificador.leerCodigo())
         planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
         assertFalse(planificador.leerCodigo())
+    }
+
+    // --- Modo código: el PDF417 se sigue buscando (en todo lo visible) aunque el texto se pierda ---
+
+    @Test
+    fun alVerElReversoSeActivaElModoCodigoYDuraMasQueLaPista() {
+        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesMemoria = 2, framesModoCodigo = 5)
+        assertFalse(planificador.modoCodigo)
+        assertTrue(planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false))
+        assertTrue(planificador.modoCodigo)
+        // La persona acerca el código: el texto ya no se lee y la pista se
+        // agota en 2 frames, pero el modo sigue.
+        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
+        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
+        val planes = (1..5).map { planificador.planCodigo() }
+        assertTrue(planes.all { it.leer && it.modoCodigo })
+    }
+
+    @Test
+    fun elModoCodigoSeVenceAlAgotarseSusFrames() {
+        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesMemoria = 1, framesModoCodigo = 3)
+        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
+        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
+        repeat(3) { assertTrue(planificador.planCodigo().modoCodigo) }
+        assertFalse(planificador.modoCodigo)
+        val despues = planificador.planCodigo()
+        assertFalse(despues.leer)
+        assertFalse(despues.modoCodigo)
+    }
+
+    @Test
+    fun activarElModoCodigoNoLoRenuevaMientrasDura() {
+        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesModoCodigo = 4)
+        assertTrue(planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false))
+        planificador.planCodigo()
+        planificador.planCodigo()
+        // Ver otra vez el reverso no reinicia el modo ni cuenta otra activación.
+        assertFalse(planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false))
+        planificador.planCodigo()
+        planificador.planCodigo()
+        assertFalse(planificador.modoCodigo)
+    }
+
+    @Test
+    fun unMrzTerminaElModoCodigo() {
+        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 1, framesModoCodigo = 50)
+        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
+        assertTrue(planificador.modoCodigo)
+        // Aparece un MRZ (la cédula nueva no trae PDF417): fin del modo y
+        // no se busca código.
+        assertFalse(planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = true))
+        assertFalse(planificador.modoCodigo)
+        assertTrue((1..5).none { planificador.planCodigo().leer })
+    }
+
+    @Test
+    fun confirmarUnDocumentoTerminaElModoCodigo() {
+        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesMemoria = 1, framesModoCodigo = 50)
+        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
+        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
+        assertTrue(planificador.modoCodigo)
+        planificador.terminarModoCodigo()
+        assertFalse(planificador.modoCodigo)
+        assertFalse(planificador.planCodigo().modoCodigo)
+    }
+
+    @Test
+    fun sinPdf417HabilitadoNuncaSeActivaElModoCodigo() {
+        val planificador = PlanificadorLectores(habilitado = false, framesModoCodigo = 50)
+        assertFalse(planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false))
+        assertFalse(planificador.modoCodigo)
+        assertFalse(planificador.planCodigo().leer)
+    }
+
+    @Test
+    fun todoLoVisibleAbarcaLaImagenEntera() {
+        val r = TodoLoVisibleRecorte.rectanguloEnPixeles(1080, 1920)
+        assertEquals(RectanguloEntero(0, 0, 1080, 1920), r)
+        // Con rotación, el recorte en el sensor cubre todo el `cropRect` (a pares).
+        val sensor = rectanguloEnSensor(RectanguloEntero(0, 0, 1920, 1080), 90, TodoLoVisibleRecorte)
+        assertEquals(RectanguloEntero(0, 0, 1920, 1080), sensor)
+    }
+
+    @Test
+    fun lasMetricasDelModoCodigoSeSeparanDelRecorteNormal() {
+        val metricas = MetricasOcr(habilitadas = true, cadaCuantosFrames = 100)
+        metricas.registrarActivacionModoCodigo()
+        metricas.registrarFrame(conCodigo = true, nanosRecorte = 1, nanosReconocimiento = 1)
+        metricas.registrarFrame(conCodigo = true, nanosRecorte = 1, nanosReconocimiento = 1, enModoCodigo = true)
+        metricas.registrarFrame(conCodigo = true, nanosRecorte = 1, nanosReconocimiento = 1, enModoCodigo = true)
+        metricas.registrarBusquedaCodigo(DiagnosticoCodigos(0, 0, emptyList(), emptyList(), emptyList(), anchoImagenPx = 944))
+        metricas.registrarBusquedaCodigo(
+            DiagnosticoCodigos(0, 0, emptyList(), emptyList(), emptyList(), anchoImagenPx = 1080, enModoCodigo = true),
+        )
+        metricas.registrarBusquedaCodigo(
+            DiagnosticoCodigos(0, 0, emptyList(), emptyList(), emptyList(), anchoImagenPx = 1920, enModoCodigo = true),
+        )
+        val datos = metricas.datos()
+        assertEquals(2, datos["modo_codigo_frames"])
+        assertEquals(1, datos["modo_codigo_activaciones"])
+        assertEquals(1500f, datos["modo_codigo_imagen_ancho_px_mediana"])
+        // El ancho del recorte normal no se mezcla con el del modo.
+        assertEquals(944f, datos["imagen_ancho_px_mediana_con_codigo"])
     }
 
     @Test
