@@ -717,6 +717,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula_con_motivo(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
@@ -1035,6 +1037,8 @@ internal object UniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula(`prefijo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula_con_motivo(`prefijo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1218,6 +1222,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula() and 0xFFFF) != 8531) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula_con_motivo() and 0xFFFF) != 65501) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario() and 0xFFFF) != 65365) {
@@ -5548,6 +5555,44 @@ public object FfiConverterTypeLecturaMrz: FfiConverterRustBuffer<LecturaMrz> {
 
 
 
+data class LecturaPdf417 (
+    var `datos`: DatosPdf417Cedula?
+    , 
+    var `motivo`: MotivoPdf417
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLecturaPdf417: FfiConverterRustBuffer<LecturaPdf417> {
+    override fun read(buf: ByteBuffer): LecturaPdf417 {
+        return LecturaPdf417(
+            FfiConverterOptionalTypeDatosPdf417Cedula.read(buf),
+            FfiConverterTypeMotivoPdf417.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LecturaPdf417) = (
+            FfiConverterOptionalTypeDatosPdf417Cedula.allocationSize(value.`datos`) +
+            FfiConverterTypeMotivoPdf417.allocationSize(value.`motivo`)
+    )
+
+    override fun write(value: LecturaPdf417, buf: ByteBuffer) {
+            FfiConverterOptionalTypeDatosPdf417Cedula.write(value.`datos`, buf)
+            FfiConverterTypeMotivoPdf417.write(value.`motivo`, buf)
+    }
+}
+
+
+
 /**
  * Una línea (`Line` de ML Kit) con su caja y sus palabras, en el orden en
  * que ML Kit las entregó.
@@ -7251,6 +7296,51 @@ public object FfiConverterTypeMotivoDenegacion: FfiConverterRustBuffer<MotivoDen
     override fun allocationSize(value: MotivoDenegacion) = 4UL
 
     override fun write(value: MotivoDenegacion, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * Por qué se aceptó o rechazó un PDF417. Sólo para diagnóstico (telemetría
+ * del build `diagnostico`): dice QUÉ validación falló, nunca qué bytes
+ * había. Distingue una clave o un formato equivocados (falla ya la cédula)
+ * de posiciones corridas (la cédula pasa y fallan los nombres).
+ */
+
+enum class MotivoPdf417 {
+    
+    ACEPTADO,
+    PREFIJO_CORTO,
+    CEDULA_INVALIDA,
+    PRIMER_APELLIDO_INVALIDO,
+    SEGUNDO_APELLIDO_INVALIDO,
+    NOMBRE_INVALIDO,
+    NOMBRE_O_APELLIDO_VACIO;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMotivoPdf417: FfiConverterRustBuffer<MotivoPdf417> {
+    override fun read(buf: ByteBuffer) = try {
+        MotivoPdf417.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: MotivoPdf417) = 4UL
+
+    override fun write(value: MotivoPdf417, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
@@ -9337,6 +9427,20 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
             return FfiConverterOptionalTypeDatosPdf417Cedula.lift(
     uniffiRustCall() { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula(
+    
+        
+        FfiConverterByteArray.lower(`prefijo`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Igual que [`leer_pdf417_cedula`], con el motivo del resultado.
+         */ fun `leerPdf417CedulaConMotivo`(`prefijo`: kotlin.ByteArray): LecturaPdf417 {
+            return FfiConverterTypeLecturaPdf417.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula_con_motivo(
     
         
         FfiConverterByteArray.lower(`prefijo`),_status)

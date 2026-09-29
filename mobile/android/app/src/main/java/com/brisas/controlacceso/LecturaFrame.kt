@@ -1,8 +1,10 @@
 package com.brisas.controlacceso
 
 import uniffi.control_acceso_mobile.DatosPdf417Cedula
+import uniffi.control_acceso_mobile.LecturaPdf417
+import uniffi.control_acceso_mobile.MotivoPdf417
 import uniffi.control_acceso_mobile.largoPrefijoPdf417Cedula
-import uniffi.control_acceso_mobile.leerPdf417Cedula
+import uniffi.control_acceso_mobile.leerPdf417CedulaConMotivo
 
 /// Lo que produjo un frame, entregado en el hilo del analizador de cámara
 /// (ver `analizarFrameOcr`). Sin imagen: sólo texto y datos derivados.
@@ -37,20 +39,43 @@ class LecturaFrame(
 /// Rust SÓLO los primeros bytes (hasta el final del nombre) y poniendo en
 /// cero, al terminar, tanto el prefijo como los bytes crudos recibidos --
 /// que incluyen las huellas dactilares. Nada de esto se guarda ni se loguea.
-fun extraerPdf417Cedula(crudo: ByteArray): DatosPdf417Cedula? {
+fun extraerPdf417Cedula(crudo: ByteArray): DatosPdf417Cedula? = leerPdf417ConMotivo(crudo).datos
+
+/// Igual que [extraerPdf417Cedula], con el motivo del resultado para la
+/// telemetría de diagnóstico (qué validación falló, nunca qué bytes había).
+fun leerPdf417ConMotivo(crudo: ByteArray): LecturaPdf417 {
     val largo = largoPrefijoPdf417Cedula().toInt()
     if (crudo.size < largo) {
         crudo.fill(0)
-        return null
+        return LecturaPdf417(datos = null, motivo = MotivoPdf417.PREFIJO_CORTO)
     }
     val prefijo = crudo.copyOfRange(0, largo)
     crudo.fill(0)
     return try {
-        leerPdf417Cedula(prefijo)
+        leerPdf417CedulaConMotivo(prefijo)
     } finally {
         prefijo.fill(0)
     }
 }
+
+/// Lo que pasó con el lector de códigos en un frame que lo usó, sólo con
+/// números y motivos (ver [MetricasOcr.registrarBusquedaCodigo]).
+class DiagnosticoCodigos(
+    /// Códigos PDF417 que ML Kit decodificó en el frame (0 si no vio
+    /// ninguno: con poca resolución ni siquiera lo detecta).
+    val detectados: Int,
+    /// Códigos que llegaron sin bytes crudos (`rawBytes == null`).
+    val sinBytes: Int,
+    /// Resultado del núcleo para cada código con bytes.
+    val motivos: List<MotivoPdf417>,
+    /// Largo en bytes de cada código recibido (no su contenido).
+    val largosBytes: List<Int>,
+    /// Ancho en píxeles de cada código dentro de la imagen analizada.
+    val anchosCodigoPx: List<Int>,
+    /// Ancho en píxeles de la imagen que analizó ML Kit (el recorte, ya
+    /// rotado): cuánta resolución tuvo el código para leerse.
+    val anchoImagenPx: Int,
+)
 
 /// ¿Esta línea de texto de ML Kit tiene forma de línea de MRZ? Largo de
 /// TD1 (30) o TD3 (44) con algo de tolerancia, alfabeto MRZ y al menos un
@@ -201,6 +226,14 @@ class MetricasOcr(
     private var descartadosPorCalidad = 0
     private var fallos = 0
     private var msHastaConfirmar: Long? = null
+    private var framesConCodigoDetectado = 0
+    private var codigosDetectados = 0
+    private var codigosSinBytes = 0
+    private var erroresLectorCodigo = 0
+    private val motivosPdf417 = sortedMapOf<String, Int>()
+    private val largosBytesPdf417 = ArrayDeque<Float>()
+    private val anchosCodigoPx = ArrayDeque<Float>()
+    private val anchosImagenConCodigoPx = ArrayDeque<Float>()
     private val msRecorte = ArrayDeque<Float>()
     private val msReconocimiento = ArrayDeque<Float>()
 
@@ -217,6 +250,25 @@ class MetricasOcr(
         agregar(msRecorte, nanosRecorte / 1e6f)
         agregar(msReconocimiento, nanosReconocimiento / 1e6f)
         if (frames % cadaCuantosFrames == 0) registrar(resumen())
+    }
+
+    /// Resultado del lector de códigos en un frame que lo usó.
+    @Synchronized
+    fun registrarBusquedaCodigo(diagnostico: DiagnosticoCodigos) {
+        if (!habilitadas) return
+        if (diagnostico.detectados > 0) framesConCodigoDetectado++
+        codigosDetectados += diagnostico.detectados
+        codigosSinBytes += diagnostico.sinBytes
+        diagnostico.motivos.forEach { motivosPdf417.merge(it.name, 1, Int::plus) }
+        diagnostico.largosBytes.forEach { agregar(largosBytesPdf417, it.toFloat()) }
+        diagnostico.anchosCodigoPx.forEach { agregar(anchosCodigoPx, it.toFloat()) }
+        agregar(anchosImagenConCodigoPx, diagnostico.anchoImagenPx.toFloat())
+    }
+
+    /// El lector de códigos terminó con error (no "sin códigos").
+    @Synchronized
+    fun registrarErrorLectorCodigo() {
+        if (habilitadas) erroresLectorCodigo++
     }
 
     @Synchronized
@@ -250,6 +302,18 @@ class MetricasOcr(
         "fallos" to fallos,
         "recorte_mediana_ms" to mediana(msRecorte),
         "reconocimiento_mediana_ms" to mediana(msReconocimiento),
+        // PDF417: dónde se pierde la lectura. Sin códigos detectados con
+        // poco ancho de imagen = falta resolución; detectados sin bytes =
+        // ML Kit no entrega el binario; con motivos de rechazo = formato.
+        "pdf417_frames_con_codigo_detectado" to framesConCodigoDetectado,
+        "pdf417_codigos_detectados" to codigosDetectados,
+        "pdf417_sin_bytes" to codigosSinBytes,
+        "pdf417_errores_lector" to erroresLectorCodigo,
+        "pdf417_motivos" to motivosPdf417.toMap(),
+        "pdf417_bytes_min" to largosBytesPdf417.minOrNull(),
+        "pdf417_bytes_max" to largosBytesPdf417.maxOrNull(),
+        "pdf417_ancho_codigo_px_mediana" to mediana(anchosCodigoPx),
+        "imagen_ancho_px_mediana_con_codigo" to mediana(anchosImagenConCodigoPx),
     )
 
     @Synchronized

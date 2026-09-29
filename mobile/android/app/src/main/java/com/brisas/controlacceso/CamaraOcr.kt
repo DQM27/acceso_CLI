@@ -13,9 +13,12 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
+import uniffi.control_acceso_mobile.DatosPdf417Cedula
 import uniffi.control_acceso_mobile.LineaOcr
+import uniffi.control_acceso_mobile.MotivoPdf417
 import uniffi.control_acceso_mobile.PalabraOcr
 import uniffi.control_acceso_mobile.textosDeFrame
 import java.util.concurrent.atomic.AtomicBoolean
@@ -255,6 +258,8 @@ fun analizarFrameOcr(
             return
         }
         val finRecorte = System.nanoTime()
+        // Antes de cerrar la imagen: el ancho que ve ML Kit (ya rotado).
+        val anchoImagenPx = recorte?.anchoVertical ?: if (rotacion % 180 != 0) mediaImage.height else mediaImage.width
         // Sin recorte (formato inesperado, plano raro) se lee el frame
         // entero: un recorte fallido nunca debe romper el escaneo.
         val input = recorte?.input ?: InputImage.fromMediaImage(mediaImage, rotacion)
@@ -270,8 +275,9 @@ fun analizarFrameOcr(
                 if (!camara.sesionActiva.get()) return@addOnCompleteListener
                 camara.metricas.registrarFrame(tareaCodigo != null, finRecorte - inicio, System.nanoTime() - finRecorte)
                 val texto = tareaTexto.takeIf { it.isSuccessful }?.result
+                if (tareaCodigo != null && !tareaCodigo.isSuccessful) camara.metricas.registrarErrorLectorCodigo()
                 val datosPdf417 = tareaCodigo?.takeIf { it.isSuccessful }?.result
-                    ?.firstNotNullOfOrNull { codigo -> codigo.rawBytes?.let(::extraerPdf417Cedula) }
+                    ?.let { codigos -> leerCodigos(codigos, anchoImagenPx, camara.metricas) }
                 if (texto == null && datosPdf417 == null) {
                     camara.metricas.registrarFallo()
                     onFallo()
@@ -339,6 +345,36 @@ private fun textosParaLectores(texto: Text): List<String> {
         }
     }
     return textosDeFrame(texto.text, lineas)
+}
+
+/// El primer PDF417 de la cédula anterior que el núcleo acepta, y el
+/// diagnóstico de todos los códigos del frame para la telemetría. Los
+/// bytes crudos se ponen en cero en todos los casos (ver
+/// [leerPdf417ConMotivo]).
+private fun leerCodigos(codigos: List<Barcode>, anchoImagenPx: Int, metricas: MetricasOcr): DatosPdf417Cedula? {
+    var datos: DatosPdf417Cedula? = null
+    var sinBytes = 0
+    val motivos = mutableListOf<MotivoPdf417>()
+    val largos = mutableListOf<Int>()
+    val anchos = mutableListOf<Int>()
+    for (codigo in codigos) {
+        codigo.boundingBox?.let { anchos += it.width() }
+        val crudo = codigo.rawBytes
+        if (crudo == null) {
+            sinBytes++
+            continue
+        }
+        largos += crudo.size
+        if (datos != null) {
+            crudo.fill(0)
+            continue
+        }
+        val lectura = leerPdf417ConMotivo(crudo)
+        motivos += lectura.motivo
+        datos = lectura.datos
+    }
+    metricas.registrarBusquedaCodigo(DiagnosticoCodigos(codigos.size, sinBytes, motivos, largos, anchos, anchoImagenPx))
+    return datos
 }
 
 /// Frame sin recorte (y por lo tanto sin medición): se procesa con peso 1.

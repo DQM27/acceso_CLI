@@ -44,11 +44,42 @@ los motivos de salida del proceso se guarda sólo el resumen antes de `:`
 | `muestra_sistema` | cada 30 s en primer plano             | heap Java y nativo, PSS por tipo (Java, nativo, gráficos, código), memoria libre del sistema, hilos, descriptores abiertos, CPU (% de un núcleo y del total), red rx/tx, batería (%, corriente, temperatura, carga, ahorro), estado y margen térmico, pantalla visible |
 | `frames`          | cada 30 s, por pantalla               | frames, trabados (> 2× el presupuesto), congelados (> 700 ms), p50/p90/p99/máx |
 | `llamada_nucleo`  | cada 30 s, por operación              | llamadas, errores, p50/p90/máx/total ms de cada llamada al núcleo Rust |
-| `ocr_sesion`      | al cerrar una cámara de escaneo       | fps, frames, frames con PDF417, descartes por calidad, fallos, medianas de recorte y reconocimiento, ms hasta confirmar |
+| `ocr_sesion`      | al cerrar una cámara de escaneo       | fps, frames, frames con PDF417, descartes por calidad, fallos, medianas de recorte y reconocimiento, ms hasta confirmar, y el diagnóstico del PDF417 (ver abajo) |
 | `strictmode`      | cada 30 s, agregado                   | disco/red en el hilo principal, recursos sin cerrar, Activities filtradas, con el punto del código de la app |
 | `memoria_baja`    | cuando el sistema pide liberar memoria| nivel de `onTrimMemory`, pantalla |
 | `retencion`       | objeto vivo 10 s después de liberarlo | posible fuga: `MainActivity` destruida o `EstadoCamaraOcr` cerrado que siguen en memoria tras forzar el GC |
 | `error_telemetria`| si falla la propia telemetría         | dónde y tipo de excepción |
+
+## Diagnóstico del PDF417 (en `ocr_sesion`)
+
+Dónde se pierde la lectura del código de la cédula anterior, sólo con
+números y motivos (nunca bytes del código):
+
+| Campo | Qué dice |
+|---|---|
+| `frames_con_codigo` | Frames en que se buscó el código |
+| `pdf417_frames_con_codigo_detectado` / `pdf417_codigos_detectados` | Frames en que ML Kit decodificó algún PDF417, y cuántos |
+| `imagen_ancho_px_mediana_con_codigo` | Ancho (px) de la imagen que analizó ML Kit al buscar el código: la resolución disponible |
+| `pdf417_ancho_codigo_px_mediana` | Ancho (px) de los códigos detectados |
+| `pdf417_sin_bytes` | Códigos que llegaron sin bytes crudos |
+| `pdf417_bytes_min` / `pdf417_bytes_max` | Largo de los bytes recibidos |
+| `pdf417_motivos` | Resultado del núcleo por código: `ACEPTADO`, `PREFIJO_CORTO`, `CEDULA_INVALIDA` (clave o formato distintos), `PRIMER_APELLIDO_INVALIDO` / `SEGUNDO_APELLIDO_INVALIDO` / `NOMBRE_INVALIDO` (posiciones corridas), `NOMBRE_O_APELLIDO_VACIO` |
+| `pdf417_errores_lector` | Veces que el lector de códigos terminó con error |
+
+Cómo leerlo: muchos frames con código y **0 detectados** = falta
+resolución (ML Kit ni lo encuentra); detectados pero **sin bytes** = ML
+Kit no entrega el binario; con **motivos de rechazo** = el formato del
+decodificador no calza con las tarjetas reales.
+
+```sql
+select ocurrido_en, datos->>'pantalla', datos->>'frames_con_codigo',
+       datos->>'pdf417_codigos_detectados', datos->>'pdf417_sin_bytes',
+       datos->'pdf417_motivos', datos->>'imagen_ancho_px_mediana_con_codigo',
+       datos->>'pdf417_ancho_codigo_px_mediana'
+from public.telemetria_diagnostico
+where tipo = 'ocr_sesion' and (datos->>'lector_pdf417')::boolean
+order by ocurrido_en desc;
+```
 
 ## Envío
 

@@ -58,15 +58,51 @@ pub fn largo_prefijo_pdf417_cedula() -> u32 {
 /// letras): así un PDF417 de otro documento, o una lectura corrupta, nunca
 /// produce datos.
 #[uniffi::export]
-pub fn leer_pdf417_cedula(mut prefijo: Vec<u8>) -> Option<DatosPdf417Cedula> {
-    let resultado = descifrar_y_validar(&prefijo);
-    prefijo.fill(0);
-    resultado
+pub fn leer_pdf417_cedula(prefijo: Vec<u8>) -> Option<DatosPdf417Cedula> {
+    leer_pdf417_cedula_con_motivo(prefijo).datos
 }
 
-fn descifrar_y_validar(prefijo: &[u8]) -> Option<DatosPdf417Cedula> {
+/// Por qué se aceptó o rechazó un PDF417. Sólo para diagnóstico (telemetría
+/// del build `diagnostico`): dice QUÉ validación falló, nunca qué bytes
+/// había. Distingue una clave o un formato equivocados (falla ya la cédula)
+/// de posiciones corridas (la cédula pasa y fallan los nombres).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum MotivoPdf417 {
+    Aceptado,
+    PrefijoCorto,
+    CedulaInvalida,
+    PrimerApellidoInvalido,
+    SegundoApellidoInvalido,
+    NombreInvalido,
+    NombreOApellidoVacio,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct LecturaPdf417 {
+    pub datos: Option<DatosPdf417Cedula>,
+    pub motivo: MotivoPdf417,
+}
+
+/// Igual que [`leer_pdf417_cedula`], con el motivo del resultado.
+#[uniffi::export]
+pub fn leer_pdf417_cedula_con_motivo(mut prefijo: Vec<u8>) -> LecturaPdf417 {
+    let resultado = descifrar_y_validar(&prefijo);
+    prefijo.fill(0);
+    match resultado {
+        Ok(datos) => LecturaPdf417 {
+            datos: Some(datos),
+            motivo: MotivoPdf417::Aceptado,
+        },
+        Err(motivo) => LecturaPdf417 {
+            datos: None,
+            motivo,
+        },
+    }
+}
+
+fn descifrar_y_validar(prefijo: &[u8]) -> Result<DatosPdf417Cedula, MotivoPdf417> {
     if prefijo.len() < LARGO_PREFIJO_PDF417_CEDULA {
-        return None;
+        return Err(MotivoPdf417::PrefijoCorto);
     }
     let mut claro: Vec<u8> = prefijo[..LARGO_PREFIJO_PDF417_CEDULA]
         .iter()
@@ -78,20 +114,22 @@ fn descifrar_y_validar(prefijo: &[u8]) -> Option<DatosPdf417Cedula> {
     resultado
 }
 
-fn extraer_campos(claro: &[u8]) -> Option<DatosPdf417Cedula> {
-    let cedula = cedula_valida(&claro[RANGO_CEDULA])?;
-    let apellido1 = campo_de_nombre(&claro[RANGO_APELLIDO1])?;
-    let apellido2 = campo_de_nombre(&claro[RANGO_APELLIDO2])?;
-    let nombre = campo_de_nombre(&claro[RANGO_NOMBRE])?;
+fn extraer_campos(claro: &[u8]) -> Result<DatosPdf417Cedula, MotivoPdf417> {
+    let cedula = cedula_valida(&claro[RANGO_CEDULA]).ok_or(MotivoPdf417::CedulaInvalida)?;
+    let apellido1 =
+        campo_de_nombre(&claro[RANGO_APELLIDO1]).ok_or(MotivoPdf417::PrimerApellidoInvalido)?;
+    let apellido2 =
+        campo_de_nombre(&claro[RANGO_APELLIDO2]).ok_or(MotivoPdf417::SegundoApellidoInvalido)?;
+    let nombre = campo_de_nombre(&claro[RANGO_NOMBRE]).ok_or(MotivoPdf417::NombreInvalido)?;
     if nombre.is_empty() || apellido1.is_empty() {
-        return None;
+        return Err(MotivoPdf417::NombreOApellidoVacio);
     }
     let ambos_apellidos = [apellido1, apellido2]
         .into_iter()
         .filter(|parte| !parte.is_empty())
         .collect::<Vec<_>>()
         .join(" ");
-    Some(DatosPdf417Cedula {
+    Ok(DatosPdf417Cedula {
         cedula,
         nombre,
         apellidos: ambos_apellidos,
@@ -221,5 +259,26 @@ mod tests {
     fn sin_nombre_no_hay_resultado() {
         let codigo = codificar("112340567", "PEREZ", "MORA", "");
         assert_eq!(leer_pdf417_cedula(prefijo(&codigo)), None);
+    }
+
+    #[test]
+    fn el_motivo_dice_que_validacion_fallo_sin_devolver_datos() {
+        let motivo = |codigo: Vec<u8>| leer_pdf417_cedula_con_motivo(codigo).motivo;
+        let bueno = codificar("112340567", "PEREZ", "MORA", "JUAN");
+        let lectura = leer_pdf417_cedula_con_motivo(prefijo(&bueno));
+        assert_eq!(lectura.motivo, MotivoPdf417::Aceptado);
+        assert!(lectura.datos.is_some());
+        assert_eq!(motivo(bueno[..90].to_vec()), MotivoPdf417::PrefijoCorto);
+        let cero = codificar("012340567", "PEREZ", "MORA", "JUAN");
+        assert_eq!(motivo(prefijo(&cero)), MotivoPdf417::CedulaInvalida);
+        let apellido = codificar("112340567", "PER3Z", "MORA", "JUAN");
+        assert_eq!(
+            motivo(prefijo(&apellido)),
+            MotivoPdf417::PrimerApellidoInvalido
+        );
+        let nombre = codificar("112340567", "PEREZ", "MORA", "JU4N");
+        assert_eq!(motivo(prefijo(&nombre)), MotivoPdf417::NombreInvalido);
+        let vacio = codificar("112340567", "PEREZ", "MORA", "");
+        assert_eq!(motivo(prefijo(&vacio)), MotivoPdf417::NombreOApellidoVacio);
     }
 }

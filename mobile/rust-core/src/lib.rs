@@ -18,7 +18,10 @@ use control_acceso::tiempo::RelojCorregido;
 mod mrz;
 pub use mrz::{CampoMrz, CorreccionAplicada, FechaMrz, FormatoMrz, RegistroMrz, leer_mrz};
 mod pdf417_cedula;
-pub use pdf417_cedula::{DatosPdf417Cedula, largo_prefijo_pdf417_cedula, leer_pdf417_cedula};
+pub use pdf417_cedula::{
+    DatosPdf417Cedula, LecturaPdf417, MotivoPdf417, largo_prefijo_pdf417_cedula,
+    leer_pdf417_cedula, leer_pdf417_cedula_con_motivo,
+};
 mod votacion;
 pub use votacion::{ConsensoVotacion, VotadorPorPosicion};
 mod lectura_documentos;

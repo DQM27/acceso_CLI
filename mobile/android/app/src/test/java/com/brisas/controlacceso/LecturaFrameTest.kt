@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import uniffi.control_acceso_mobile.MotivoPdf417
 
 class LecturaFrameTest {
 
@@ -193,5 +194,33 @@ class LecturaFrameTest {
         metricas.registrarFrame(conCodigo = false, nanosRecorte = 1, nanosReconocimiento = 1)
         metricas.registrarConfirmacion()
         assertTrue(registros.isEmpty())
+    }
+
+    @Test
+    fun elDiagnosticoDelPdf417CuentaDondeSePierdeLaLectura() {
+        val metricas = MetricasOcr(habilitadas = true, cadaCuantosFrames = 100)
+        // Frame sin códigos (lo esperable con poca resolución).
+        metricas.registrarBusquedaCodigo(DiagnosticoCodigos(0, 0, emptyList(), emptyList(), emptyList(), anchoImagenPx = 900))
+        // Frame con un código sin bytes y otro rechazado por el núcleo.
+        metricas.registrarBusquedaCodigo(
+            DiagnosticoCodigos(2, 1, listOf(MotivoPdf417.CEDULA_INVALIDA), listOf(512), listOf(410, 420), anchoImagenPx = 1100),
+        )
+        metricas.registrarErrorLectorCodigo()
+        val datos = metricas.datos()
+        assertEquals(1, datos["pdf417_frames_con_codigo_detectado"])
+        assertEquals(2, datos["pdf417_codigos_detectados"])
+        assertEquals(1, datos["pdf417_sin_bytes"])
+        assertEquals(1, datos["pdf417_errores_lector"])
+        assertEquals(mapOf("CEDULA_INVALIDA" to 1), datos["pdf417_motivos"])
+        assertEquals(512f, datos["pdf417_bytes_max"])
+        assertEquals(415f, datos["pdf417_ancho_codigo_px_mediana"])
+        assertEquals(1000f, datos["imagen_ancho_px_mediana_con_codigo"])
+    }
+
+    @Test
+    fun unPdf417CortoSeRechazaConMotivoYSeBorra() {
+        val crudo = ByteArray(10) { 7 }
+        assertEquals(MotivoPdf417.PREFIJO_CORTO, leerPdf417ConMotivo(crudo).motivo)
+        assertTrue(crudo.all { it == 0.toByte() })
     }
 }
