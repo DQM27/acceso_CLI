@@ -14,9 +14,18 @@ on:
       version:
         description: "Nombre a usar para el Release/tag (ej. v1.5.4-manual)"
         required: true
+      # Para un Release que ya existe y sólo le falta el APK (p. ej. v1.7.0,
+      # cuyo job de Android falló): salta el escritorio, no lo vuelve a
+      # compilar ni reescribe sus archivos publicados, y adjunta el APK
+      # firmado al Release `version`, que ya tiene que existir.
+      solo_movil:
+        description: "Sólo el APK: no recompilar el escritorio (el Release ya existe)"
+        type: boolean
+        default: false
 
 jobs:
   build-gui:
+    if: ${{ !inputs.solo_movil }}
     permissions:
       contents: write
     runs-on: windows-latest
@@ -106,6 +115,9 @@ jobs:
     # que `gh`, ya instalado en el runner, hace solo (hallazgo de zizmor,
     # severidad "note", 2026-09-19).
     needs: build-gui
+    # Con `solo_movil` build-gui queda saltado y sin este `if` este job se
+    # saltaría con él. Si build-gui FALLA sigue sin correr (como antes).
+    if: ${{ !cancelled() && (needs.build-gui.result == 'success' || needs.build-gui.result == 'skipped') }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
