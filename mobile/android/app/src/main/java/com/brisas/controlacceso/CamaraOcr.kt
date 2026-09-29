@@ -164,6 +164,7 @@ fun iniciarCamara(
                     grupoUseCases,
                 )
                 onCamaraLista(camara)
+                reportarCamaraInfo(camara, analisis, preview, lifecycleOwner)
             } catch (_: Exception) {
                 if (sesionActiva.get()) onFallo("No se pudo iniciar la cámara")
             }

@@ -24,7 +24,8 @@ accidente a permitir una operación.
    sobre el mismo recorte (sólo donde se acepta una cédula; en cada frame
    si el texto parece el reverso de la cédula anterior, uno de cada 3 si
    no, nunca con un MRZ en cuadro). Buscar el código no le quita frames al
-   texto (p. ej. al carnet PRAIND).
+   texto (p. ej. al carnet PRAIND). En "modo código" (ver más abajo) el
+   lector de códigos recibe un recorte propio con todo lo visible.
 7. Cuando terminan los dos, el resultado se procesa EN EL HILO DEL
    ANALIZADOR y se libera el lugar. Del texto de ML Kit se pasan al núcleo
    las líneas con sus cajas y las palabras con su confianza
@@ -152,6 +153,32 @@ nombre) y pone en cero los bytes crudos, que incluyen las huellas; Rust
 descifra sólo ese prefijo, valida y pone en cero lo que recibió. Nunca se
 descifran fechas ni huellas, nada se guarda ni se registra. Ver
 `mobile/rust-core/src/pdf417_cedula.rs`.
+
+### Modo código
+
+Con el recorte del recuadro guía (~944 px de ancho) el PDF417 de la cédula
+anterior nunca se detectó: trae datos y huellas, cientos de barras de 1-2 px,
+bajo los ~2-3 px por barra que ML Kit necesita (el problema son los píxeles
+por barra, no el lector ni el decodificador). Una foto de alta resolución
+no funcionó (nunca pasó de 1080 px y bajaba el escáner a menos de 1 fps).
+
+`PlanificadorLectores` activa el "modo código" al verse el reverso de la
+cédula anterior: dura 60 frames, más que la pista (8), porque al acercar el
+código el texto deja de leerse. Termina al confirmar, al aparecer un MRZ o al
+vencerse. Durante el modo:
+
+- el código se busca en todos los frames;
+- `analizarFrameOcr` arma un SEGUNDO recorte, `TodoLoVisibleRecorte` (el
+  `cropRect` completo del `ViewPort`), sólo para el lector de códigos; el
+  texto sigue con su recorte de siempre. Es una copia NV21 propia: el ciclo
+  de vida del `ImageProxy` y de `liberarLugar()` no cambia;
+- la pantalla pide acercar el código hasta llenar la pantalla, y de lado: a
+  lo largo de los 1920 px del frame el código gana la mayor cantidad de
+  píxeles.
+
+La telemetría (`modo_codigo_*` en `ocr_sesion` y el evento `camara_info`,
+ver `telemetria-diagnostico.md`) dice si el modo gana píxeles y si la cámara
+permitiría pedir más resolución al análisis.
 
 ## Guía visual
 

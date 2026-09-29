@@ -49,6 +49,7 @@ los motivos de salida del proceso se guarda sólo el resumen antes de `:`
 | `frames`          | cada 30 s, por pantalla               | frames, trabados (> 2× el presupuesto), congelados (> 700 ms), p50/p90/p99/máx |
 | `llamada_nucleo`  | cada 30 s, por operación              | llamadas, errores, p50/p90/máx/total ms de cada llamada al núcleo Rust |
 | `ocr_sesion`      | al cerrar una cámara de escaneo       | fps, frames, frames con PDF417, descartes por calidad, fallos, medianas de recorte y reconocimiento, ms hasta confirmar, y el diagnóstico del PDF417 (ver abajo) |
+| `camara_info`     | una vez por apertura de cámara, con la cámara ya abierta | qué puede dar la cámara: nivel de hardware, resolución real del análisis y del preview, tamaño YUV y JPEG máximos, tamaño del sensor, zoom máximo y distancia mínima de enfoque (ver abajo) |
 | `realtime`        | cada 30 s, si hubo actividad          | conexión (intentos, ms hasta suscribir, fin de cada conexión y minutos conectado, errores), avisos por tabla, ecos propios, KB recibidos, aplicados en la base local y su tiempo, y latencia (ver abajo) |
 | `strictmode`      | cada 30 s, agregado                   | disco/red en el hilo principal, recursos sin cerrar, Activities filtradas, con el punto del código de la app |
 | `memoria_baja`    | cuando el sistema pide liberar memoria| nivel de `onTrimMemory`, pantalla |
@@ -70,11 +71,60 @@ números y motivos (nunca bytes del código):
 | `pdf417_bytes_min` / `pdf417_bytes_max` | Largo de los bytes recibidos |
 | `pdf417_motivos` | Resultado del núcleo por código: `ACEPTADO`, `PREFIJO_CORTO`, `CEDULA_INVALIDA` (clave o formato distintos), `PRIMER_APELLIDO_INVALIDO` / `SEGUNDO_APELLIDO_INVALIDO` / `NOMBRE_INVALIDO` (posiciones corridas), `NOMBRE_O_APELLIDO_VACIO` |
 | `pdf417_errores_lector` | Veces que el lector de códigos terminó con error |
+| `modo_codigo_activaciones` | Veces que se activó el "modo código" (ver abajo) |
+| `modo_codigo_frames` | Frames que corrieron en modo código |
+| `modo_codigo_imagen_ancho_px_mediana` | Ancho (px) de la imagen que analizó el lector de códigos EN modo código (todo lo visible). Aparte de `imagen_ancho_px_mediana_con_codigo`, que mide sólo el recorte normal del recuadro guía |
 
 Cómo leerlo: muchos frames con código y **0 detectados** = falta
 resolución (ML Kit ni lo encuentra); detectados pero **sin bytes** = ML
 Kit no entrega el binario; con **motivos de rechazo** = el formato del
 decodificador no calza con las tarjetas reales.
+
+### Modo código
+
+El PDF417 de la cédula anterior trae datos y huellas: cientos de barras de
+1-2 px en el recuadro guía, bajo los ~2-3 px por barra que ML Kit necesita
+(con el recorte de ~944 px de ancho nunca se detectó). Al verse el reverso
+se activa el modo código por 60 frames, más que la pista de texto (si la
+persona acerca el código el texto deja de leerse): el código se busca en
+todos los frames y en **todo lo visible**, no en el recuadro, y la pantalla
+pide "Acerque el código de barras hasta que llene la pantalla (de lado
+funciona mejor)". De lado el código queda a lo largo de los 1920 px del
+frame. Termina al confirmar, al aparecer un MRZ o al vencerse.
+
+Cómo leerlo: con `modo_codigo_activaciones` > 0, compare
+`modo_codigo_imagen_ancho_px_mediana` con `imagen_ancho_px_mediana_con_codigo`
+(si no es mayor, el modo no gana píxeles) y mire si
+`pdf417_codigos_detectados` sube y `pdf417_ancho_codigo_px_mediana` crece.
+Sin activaciones, el texto nunca reconoció el reverso: no hay modo.
+
+## Qué puede dar la cámara (`camara_info`)
+
+Para decidir si se puede pedir más resolución al análisis, con sólo números:
+
+| Campo | Qué dice |
+|---|---|
+| `pantalla` | Pantalla de escaneo que abrió la cámara |
+| `hardware_nivel` | `INFO_SUPPORTED_HARDWARE_LEVEL` de Camera2: `LEGACY`, `LIMITED`, `FULL`, `LEVEL_3`, `EXTERNAL` |
+| `analisis_ancho` / `analisis_alto` | Resolución REAL elegida para el análisis (`resolutionInfo`; se pide 1920x1080) |
+| `preview_ancho` / `preview_alto` | Resolución real del preview |
+| `yuv_max_ancho` / `yuv_max_alto` | Mayor tamaño de salida YUV_420_888 |
+| `yuv_alta_resolucion_max_ancho` / `_alto` | Mayor tamaño YUV que sólo se da a menor velocidad (sensores de 50 MP); nulo si no hay |
+| `jpeg_max_ancho` / `jpeg_max_alto` | Mayor tamaño JPEG |
+| `sensor_ancho` / `sensor_alto` | Matriz de píxeles del sensor |
+| `zoom_max` | Zoom máximo (razón) |
+| `enfoque_min_dioptrias` / `enfoque_min_cm` | Distancia mínima de enfoque; nulos con enfoque fijo |
+
+Cómo leerlo: si `analisis_*` es menor que `yuv_max_*`, se puede pedir más
+resolución al análisis (a costa de fps); si ya son iguales, ese es el techo.
+`enfoque_min_cm` dice a qué distancia deja de enfocar el código acercado.
+
+```sql
+select ocurrido_en, version_app, datos
+from public.telemetria_diagnostico
+where tipo = 'camara_info'
+order by ocurrido_en desc;
+```
 
 ```sql
 select ocurrido_en, datos->>'pantalla', datos->>'frames_con_codigo',
