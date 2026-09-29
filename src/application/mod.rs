@@ -78,7 +78,7 @@ pub enum BootstrapError {
 /// `nube::sincronizar`/`nube::recibir` sobre una conexión secundaria y las
 /// funciones de `application::con_nube`, que toman el candado sólo para lo
 /// local. La única excepción, documentada, es
-/// [`AppCore::configurar_dispositivo_inicial`].
+/// [`AppCore::vincular_dispositivo_inicial`].
 pub struct AppCore {
     connection: Connection,
     reloj: Arc<dyn Reloj>,

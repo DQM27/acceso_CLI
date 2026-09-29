@@ -24,6 +24,7 @@ interface CanalPrueba {
   aviso: (mensaje: {
     payload: { dispositivo_id: string; table?: string; operation?: string; registro?: unknown };
   }) => void;
+  expulsion: (mensaje: { payload: unknown }) => void;
   accessToken: () => Promise<string>;
 }
 const canales: CanalPrueba[] = [];
@@ -32,6 +33,7 @@ const sesion = {
   base_url: "https://ejemplo.supabase.co", apikey: "publicable-prueba",
   access_token: "jwt-dispositivo", expires_in: 3600,
   sitio_id: "sitio-a", dispositivo_id: "equipo-a", topic: "sitio:sitio-a",
+  huella: "huella-a",
 };
 const resumen = { enviados: 0 };
 
@@ -45,9 +47,15 @@ beforeEach(() => {
   mocks.enviar.mockResolvedValue(resumen);
   mocks.aplicarCambio.mockResolvedValue(true);
   mocks.crear.mockImplementation((_url, _key, opciones) => {
-    const control: CanalPrueba = { estado: () => {}, aviso: () => {}, accessToken: opciones.accessToken };
+    const control: CanalPrueba = {
+      estado: () => {}, aviso: () => {}, expulsion: () => {}, accessToken: opciones.accessToken,
+    };
     const canal = {
-      on: vi.fn((_tipo, _filtro, callback) => { control.aviso = callback; return canal; }),
+      on: vi.fn((_tipo, filtro: { event: string }, callback) => {
+        if (filtro.event === "dispositivo_expulsado") control.expulsion = callback;
+        else control.aviso = callback;
+        return canal;
+      }),
       subscribe: vi.fn((callback) => { control.estado = callback; return canal; }),
       track: vi.fn().mockResolvedValue(undefined),
     };
@@ -61,13 +69,25 @@ beforeEach(() => {
 });
 afterEach(() => { detener?.(); detener = undefined; vi.useRealTimers(); });
 
-async function iniciar() {
-  detener = iniciarRealtimeNube();
+async function iniciar(opciones: Parameters<typeof iniciarRealtimeNube>[0] = {}) {
+  detener = iniciarRealtimeNube(opciones);
   await vi.advanceTimersByTimeAsync(0);
   return canales[0];
 }
 
 describe("sincronización por Realtime", () => {
+  it("avisa la expulsión sólo cuando el aviso es para este equipo", async () => {
+    const onExpulsado = vi.fn();
+    const canal = await iniciar({ onExpulsado });
+
+    canal.expulsion({ payload: { dispositivo_id: "equipo-b", motivo: "revocado" } });
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revinculado", huella: "otra" } });
+    expect(onExpulsado).not.toHaveBeenCalled();
+
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "suspendido", huella: "huella-a" } });
+    expect(onExpulsado).toHaveBeenCalledWith("suspendido");
+  });
+
   it("un aviso con la fila se aplica al instante y no consulta la nube", async () => {
     const recargas = vi.fn();
     window.addEventListener("nube:cambio-en-vivo", recargas);

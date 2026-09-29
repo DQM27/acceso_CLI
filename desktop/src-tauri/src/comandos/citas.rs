@@ -19,7 +19,7 @@ const ESPERA_MAXIMA_CHEQUEO_OTRO_SITIO: std::time::Duration = std::time::Duratio
 /// visitas -- misma idea: un visitante no puede estar activo en dos sitios
 /// a la vez, mismo criterio que un contratista.
 fn chequear_visitante_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Option<String> {
-    let secreto = nube::credenciales::cargar_secreto()?;
+    let secreto = state.credencial_nube()?;
     let token = state.autenticar_con_cache(&secreto).ok()?;
     if let Some(desfase_ms) = token.desfase_reloj_ms {
         state.core().actualizar_desfase_reloj(desfase_ms);
@@ -46,7 +46,7 @@ fn gafete_de_visita_libre_en_otro_dispositivo(
     state: &GuiState,
     numero: i64,
 ) -> Result<bool, String> {
-    let Some(secreto) = nube::credenciales::cargar_secreto() else {
+    let Some(secreto) = state.credencial_nube() else {
         return Ok(true);
     };
     let actor = state.sesion_activa()?;

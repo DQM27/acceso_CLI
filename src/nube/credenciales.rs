@@ -259,7 +259,7 @@ fn directorio_default() -> Option<PathBuf> {
 /// Machine GUID de Windows -- ya NO se usa para derivar ninguna clave de
 /// cifrado (ver el doc-comment del módulo, DPAPI no lo necesita). Queda
 /// exclusivamente para la metadata forense de la activación inicial --
-/// `desktop-tauri` la usa ahí, ver `comandos::nube::configurar_dispositivo_inicial`.
+/// `desktop-tauri` la usa ahí, ver `comandos::nube::metadata_de_esta_maquina`.
 /// `None` si no se pudo leer (registro inaccesible, permisos).
 #[cfg(feature = "cifrado-secreto-dispositivo")]
 pub fn identificador_de_esta_maquina() -> Option<String> {

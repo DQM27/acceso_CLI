@@ -5,6 +5,7 @@ use std::time::Duration;
 use control_acceso::application::AppCore;
 use control_acceso::database::connection::ruta_base_datos;
 use control_acceso::instancia::InstanciaGuard;
+use control_acceso::nube::{FirmanteArchivo, FirmanteDispositivo};
 use control_acceso::tiempo::RelojCorregido;
 use tauri::{Emitter, Manager};
 use zeroize::Zeroizing;
@@ -416,7 +417,13 @@ fn configurar_cierre_de_splash(app: &tauri::App) {
 /// separado de `run()` únicamente para mantenerla bajo el tope de líneas de
 /// Clippy (`too_many_lines`); sin lógica propia, es el mismo arranque que
 /// antes vivía inline.
-fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) {
+fn preparar_nucleo() -> (
+    PathBuf,
+    InstanciaGuard,
+    Zeroizing<[u8; 32]>,
+    AppCore,
+    Arc<dyn FirmanteDispositivo>,
+) {
     let ruta_base_datos = ruta_base_datos().unwrap_or_else(|error| {
         mostrar_error_fatal_y_salir(&format!(
             "No se pudo resolver la ruta de la base de datos: {error}"
@@ -451,8 +458,15 @@ fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) 
     // ver `AppCore::establecer_version_app` y
     // docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md, punto 9.
     core.establecer_version_app(env!("CARGO_PKG_VERSION"));
+    // Identidad del equipo ante la nube: su propia clave, en la misma
+    // carpeta que el secreto legado (ver `control_acceso::nube::firmante`).
+    // Una sola instancia compartida por el núcleo y por `GuiState`: las dos
+    // cachés de token firman con la misma clave.
+    let firmante: Arc<dyn FirmanteDispositivo> =
+        Arc::new(FirmanteArchivo::en(&directorio_credenciales));
+    core.establecer_firmante_dispositivo(Arc::clone(&firmante));
 
-    (ruta_base_datos, instancia, clave_base_datos, core)
+    (ruta_base_datos, instancia, clave_base_datos, core, firmante)
 }
 
 /// Registra los plugins que no se cargan siempre (updater fuera de móvil,
@@ -597,7 +611,10 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::gafetes::marcar_gafete_perdido_visita,
         comandos::gafetes::marcar_gafete_perdido_provisional_kof,
         comandos::gafetes::resolver_gafete,
-        comandos::nube::configurar_dispositivo_inicial,
+        comandos::nube::vincular_dispositivo_inicial,
+        comandos::nube::revincular_dispositivo,
+        comandos::nube::estado_vinculacion,
+        comandos::nube::descartar_token_nube,
         comandos::nube::sincronizar_con_nube,
         comandos::nube::sincronizar_cambios_nube,
         comandos::nube::enviar_cambios_nube,
@@ -625,11 +642,11 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
 /// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
 pub fn run() {
     let _guardia_sentry = inicializar_sentry();
-    let (ruta_base_datos, instancia, clave_base_datos, core) = preparar_nucleo();
+    let (ruta_base_datos, instancia, clave_base_datos, core, firmante) = preparar_nucleo();
     if let Some(directorio) = ruta_base_datos.parent() {
         telemetria::iniciar(directorio);
     }
-    let estado = GuiState::new(core, instancia, ruta_base_datos, clave_base_datos);
+    let estado = GuiState::new(core, instancia, ruta_base_datos, clave_base_datos, firmante);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

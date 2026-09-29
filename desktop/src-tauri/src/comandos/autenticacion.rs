@@ -97,8 +97,9 @@ fn intentar_login_local(
 /// reintento de acá de más abajo casi nunca tiene que esperar los
 /// `ESPERA_MAXIMA_SYNC_LOGIN` completos.
 pub fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
-    let secreto = nube::credenciales::cargar_secreto()
-        .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
+    let secreto = state
+        .credencial_nube()
+        .ok_or_else(|| "Este dispositivo todavía no está vinculado a la nube".to_string())?;
     let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
     if let Some(desfase_ms) = token.desfase_reloj_ms {
         state.core().actualizar_desfase_reloj(desfase_ms);
@@ -129,8 +130,9 @@ pub fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
 /// sincronización completa (cola, catálogo, historial...) sigue
 /// corriendo, pero en segundo plano -- ver `login`.
 fn usuario_sigue_activo_remoto(state: &GuiState, cedula: &str) -> Result<bool, String> {
-    let secreto = nube::credenciales::cargar_secreto()
-        .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
+    let secreto = state
+        .credencial_nube()
+        .ok_or_else(|| "Este dispositivo todavía no está vinculado a la nube".to_string())?;
     let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
     if let Some(desfase_ms) = token.desfase_reloj_ms {
         state.core().actualizar_desfase_reloj(desfase_ms);

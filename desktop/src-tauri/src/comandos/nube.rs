@@ -99,6 +99,8 @@ pub struct SesionRealtimeNube {
     pub dispositivo_id: String,
     pub tipo: String,
     pub topic: String,
+    /// Ver `CacheTokenDispositivo::huella_vinculada`.
+    pub huella: Option<String>,
 }
 
 /// Espejo de `nube::IngresoRemoto` -- un ingreso abierto por el otro
@@ -157,8 +159,9 @@ fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
         .autorizar_uso_nube(&actor)
         .map_err(mensaje_gestion_nube)?;
 
-    let secreto = nube::credenciales::cargar_secreto()
-        .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
+    let secreto = state
+        .credencial_nube()
+        .ok_or_else(|| "Este dispositivo todavía no está vinculado a la nube".to_string())?;
     let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
     // El candado ya se soltó (`autorizar_uso_nube` arriba fue la única
     // sección crítica) -- volver a pedirlo acá es una lectura/escritura
@@ -323,25 +326,24 @@ fn intentar_sincronizacion(
 
 /// Arranque de una base vacía (`requiere_configuracion_inicial` en
 /// `comandos::autenticacion`) -- sin `sesion_activa()` a propósito, porque
-/// todavía no existe ningún usuario con quien loguearse. Guarda el secreto
-/// pegado en la pantalla de arranque (ver `App.tsx`) y trae el catálogo
-/// remoto completo, usuarios incluidos, para que el próximo intento de
-/// login ya tenga con quién autenticar (con el centinela
-/// `SIN_PASSWORD_LOCAL`, así que cae solo en "fijar contraseña").
+/// todavía no existe ningún usuario con quien loguearse. Canjea el código de
+/// vinculación que el panel generó para este equipo (ver
+/// `PrimerArranque.tsx`) y trae el catálogo remoto completo, usuarios
+/// incluidos, para que el próximo intento de login ya tenga con quién
+/// autenticar (con el centinela `SIN_PASSWORD_LOCAL`, así que cae solo en
+/// "fijar contraseña").
 #[tauri::command]
-pub async fn configurar_dispositivo_inicial(
+pub async fn vincular_dispositivo_inicial(
     app: tauri::AppHandle,
-    secreto: String,
+    codigo: String,
 ) -> Result<ResumenSincronizacion, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<GuiState>();
         let metadata = metadata_de_esta_maquina();
         let resumen = state
             .core()
-            .configurar_dispositivo_inicial(
-                None,
-                None,
-                &secreto,
+            .vincular_dispositivo_inicial(
+                &codigo,
                 Some(&metadata),
                 nube::PerfilDispositivo::Escritorio,
             )
@@ -351,7 +353,7 @@ pub async fn configurar_dispositivo_inicial(
             fallidos: resumen.fallidos,
             remotos_abiertos: resumen.remotos_abiertos,
             cierres_recibidos: resumen.cierres_recibidos,
-            // Núcleo (`AppCore::configurar_dispositivo_inicial`) no trae este
+            // Núcleo (`AppCore::vincular_dispositivo_inicial`) no trae este
             // campo -- mismo criterio que `conflictos_ingreso_proveedor` de
             // abajo: base recién configurada, nada que traer todavía.
             cierres_recibidos_proveedor: 0,
@@ -380,6 +382,63 @@ pub async fn configurar_dispositivo_inicial(
     })
     .await
     .map_err(|error| format!("No se pudo completar el arranque inicial: {error}"))?
+}
+
+/// Cómo está vinculado este equipo, para la pantalla de la nube.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct EstadoVinculacion {
+    /// `"clave"`, `"secreto_legado"` o `"sin_vincular"`.
+    pub credencial: &'static str,
+    pub dispositivo_id: Option<String>,
+}
+
+#[tauri::command]
+pub fn estado_vinculacion(state: tauri::State<'_, GuiState>) -> EstadoVinculacion {
+    let dispositivo_id = state.dispositivo_vinculado();
+    let credencial = match (&dispositivo_id, state.credencial_nube()) {
+        (Some(_), _) => "clave",
+        (None, Some(_)) => "secreto_legado",
+        (None, None) => "sin_vincular",
+    };
+    EstadoVinculacion {
+        credencial,
+        dispositivo_id,
+    }
+}
+
+/// Re-vincula un equipo ya en uso con un código nuevo del panel (equipo
+/// reinstalado, clave perdida, o expulsado tras un "Re-vincular" en el
+/// panel), SIN vaciar su base: la bandeja de salida pendiente se conserva y
+/// se envía en la próxima sincronización. Exclusivo de ROOT, igual que el
+/// resto de la gestión de la nube.
+///
+/// Si el equipo ya estaba vinculado, el código tiene que ser del MISMO
+/// dispositivo (lo verifica el servidor sin gastar el código): sus datos
+/// locales pertenecen a ese dispositivo y a su sitio.
+#[tauri::command]
+pub async fn revincular_dispositivo(app: tauri::AppHandle, codigo: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<GuiState>();
+        let actor = state.sesion_activa()?;
+        state
+            .core()
+            .autorizar_gestion_nube(&actor)
+            .map_err(mensaje_gestion_nube)?;
+        let esperado = state.dispositivo_vinculado();
+        let token = state
+            .vincular(
+                &codigo,
+                esperado.as_deref(),
+                Some(&metadata_de_esta_maquina()),
+            )
+            .map_err(mensaje_nube)?;
+        if let Some(desfase_ms) = token.desfase_reloj_ms {
+            state.core().actualizar_desfase_reloj(desfase_ms);
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("No se pudo re-vincular el dispositivo: {error}"))?
 }
 
 /// Aviso en vivo con los datos (`cambio_nube` con `registro`): guarda la
@@ -466,7 +525,16 @@ fn preparar_sesion_realtime(state: &GuiState) -> Result<SesionRealtimeNube, Stri
         sitio_id: sesion.sitio_id,
         dispositivo_id: sesion.dispositivo_id,
         tipo: sesion.tipo,
+        huella: state.huella_vinculada(),
     })
+}
+
+/// El aviso en vivo `dispositivo_expulsado` llegó para este equipo: el
+/// token cacheado ya no sirve (el servidor lo rechaza), así que se descarta
+/// para que la próxima operación de nube pida uno y muestre el motivo real.
+#[tauri::command]
+pub fn descartar_token_nube(state: tauri::State<'_, GuiState>) {
+    state.invalidar_token_cacheado();
 }
 
 /// Cuántas filas de `cola_salida` ya agotaron los reintentos automáticos

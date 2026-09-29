@@ -105,18 +105,17 @@ impl std::fmt::Debug for TokenDispositivo {
     }
 }
 
-/// Datos del dispositivo físico capturados en la activación inicial (ver
-/// `Nucleo::configurar_dispositivo_inicial_con_secreto` en móvil,
-/// `comandos::nube::configurar_dispositivo_inicial` en escritorio) -- sólo
-/// viajan una vez, no en cada renovación de token. Sirven para que el panel
-/// de administración distinga "el mismo dispositivo de siempre" de uno
-/// distinto usando el mismo secreto, y como evidencia si hace falta
-/// denunciar un intento de fraude (ver `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
+/// Datos del dispositivo físico capturados al vincularlo (ver
+/// `Nucleo::vincular_dispositivo_inicial` en móvil,
+/// `comandos::nube::vincular_dispositivo_inicial` en escritorio). Sirven
+/// para que el panel de administración identifique el equipo físico, y el
+/// servidor nunca pisa el identificador de hardware ya registrado: si llega
+/// otro, lo deja como evento de seguridad (ver `device-auth`).
 /// Nombres de campo neutrales a propósito -- esto lo usan tanto móvil como
 /// escritorio, cada uno con su propio significado (ver los doc-comments de
 /// cada campo). Ninguno es secreto en sí mismo -- todos observables por
 /// cualquier app en el propio dispositivo -- así que viajan en texto plano
-/// en el body, igual que el secreto.
+/// en el body.
 #[derive(Default, serde::Serialize)]
 pub struct MetadatosDispositivo {
     /// Identificador estable de hardware: `Settings.Secure.ANDROID_ID` en

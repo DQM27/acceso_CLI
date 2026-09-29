@@ -8,7 +8,8 @@ import {
   sincronizarCambiosNube,
   sincronizarConNube,
 } from "./api/nube";
-import type { ResumenSincronizacion } from "./api/nube";
+import type { MotivoExpulsion, ResumenSincronizacion } from "./api/nube";
+import { motivoSiEsParaEsteEquipo } from "./expulsionNube";
 import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 import { realtimeTelemetria, telemetriaActiva } from "./telemetria";
 import { latenciaDesde, tipoDeError } from "./telemetriaCalculos";
@@ -28,6 +29,9 @@ export type EstadoCanalRealtime = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" |
 interface OpcionesRealtimeNube {
   onSincronizado?: (resumen: ResumenSincronizacion) => void;
   onEstado?: (estado: EstadoCanalRealtime) => void;
+  /** Este equipo fue revocado, suspendido o re-vinculado en otro equipo
+   * (ver `expulsionNube.ts`). */
+  onExpulsado?: (motivo: MotivoExpulsion) => void;
   // Quién tiene la sesión abierta en esta PC ahora -- viaja en el mismo
   // `track()` que ya marca el dispositivo como presente, para que el panel
   // pueda mostrar "usuarios en línea y desde dónde" (ver
@@ -269,6 +273,11 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
             return;
           }
           programarSincronizacion(tabla);
+        })
+        .on("broadcast", { event: "dispositivo_expulsado" }, ({ payload }) => {
+          if (cancelado || cliente !== clienteActual) return;
+          const motivo = motivoSiEsParaEsteEquipo(payload, sesion);
+          if (motivo) opciones.onExpulsado?.(motivo);
         })
         .subscribe((estado, error) => {
           if (cancelado || cliente !== clienteActual) return;

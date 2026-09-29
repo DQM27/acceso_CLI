@@ -147,6 +147,19 @@ impl CacheTokenDispositivo {
         self.firmante()?.dispositivo_vinculado()
     }
 
+    /// Huella RFC 7638 de la clave vinculada, si la hay. El aviso en vivo
+    /// `dispositivo_expulsado` trae la huella del equipo que queda fuera: al
+    /// re-vincular, el equipo nuevo comparte `dispositivo_id` con el viejo y
+    /// sólo comparando la huella sabe que el aviso no es para él.
+    pub fn huella_vinculada(&self) -> Option<String> {
+        let firmante = self.firmante()?;
+        firmante.dispositivo_vinculado()?;
+        let jwk = firmante.clave_publica_jwk().ok()?;
+        super::firmante::ClavePublicaJwk::desde_json(&jwk)
+            .ok()
+            .map(|clave| clave.huella())
+    }
+
     /// `true` si este equipo tiene con qué autenticarse: clave vinculada o,
     /// en su defecto, un secreto legado no vacío. Reemplaza al "¿hay
     /// secreto?" de antes, que ya no alcanza: un equipo vinculado por código

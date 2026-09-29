@@ -4,7 +4,6 @@ use control_acceso::mensajes::{
     mensaje_bloqueo_ingreso, mensaje_ingreso, mensaje_ingreso_verificado, mensaje_salida,
 };
 use control_acceso::models::medio_ingreso::MedioIngreso;
-use control_acceso::nube;
 use control_acceso::services::registro_ingreso_service::{
     ListaIngresosActivosResumen, PreparacionIngreso, ResultadoRegistroEntrada,
 };
@@ -48,7 +47,7 @@ pub async fn preparar_ingreso(
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<GuiState>();
         let sesion = state.sesion_activa()?;
-        let secreto = nube::credenciales::cargar_secreto();
+        let secreto = state.credencial_nube();
         let (preparacion, bloqueo) = preparar_ingreso_verificado(
             || state.core(),
             state.nube_del_dispositivo(secreto.as_deref()),
@@ -74,7 +73,7 @@ pub fn registrar_ingreso(
     state: tauri::State<GuiState>,
 ) -> Result<ResultadoRegistroEntrada, String> {
     let sesion = state.sesion_activa()?;
-    let secreto = nube::credenciales::cargar_secreto();
+    let secreto = state.credencial_nube();
     registrar_ingreso_verificado(
         || state.core(),
         state.nube_del_dispositivo(secreto.as_deref()),

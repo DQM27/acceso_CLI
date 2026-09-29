@@ -21,9 +21,11 @@ use crate::services::registro_ingreso_service::{
     BloqueoIngreso, PreparacionIngreso, ResultadoRegistroEntrada,
 };
 
-/// Con qué hablar con la nube desde este dispositivo. `secreto: None`
-/// significa nube sin configurar: no hay con quién chocar y ningún
-/// chequeo remoto toca la red.
+/// Con qué hablar con la nube desde este dispositivo. `secreto` es el
+/// secreto legado, si el equipo todavía lo tiene; un equipo vinculado por
+/// código no tiene y se autentica con su clave (ver `nube::firmante`). Sin
+/// ninguna de las dos cosas, la nube está sin configurar: no hay con quién
+/// chocar y ningún chequeo remoto toca la red.
 #[derive(Clone, Copy)]
 pub struct NubeDelDispositivo<'a> {
     pub cache_token: &'a CacheTokenDispositivo,
@@ -31,8 +33,16 @@ pub struct NubeDelDispositivo<'a> {
 }
 
 impl NubeDelDispositivo<'_> {
-    fn secreto(&self) -> Option<&str> {
-        self.secreto.filter(|secreto| !secreto.trim().is_empty())
+    /// `None` si la nube no está configurada; si lo está, lo que hay que
+    /// pasarle a la caché como secreto (vacío si el equipo usa su clave).
+    fn credencial(&self) -> Option<&str> {
+        let secreto = self
+            .secreto
+            .map(str::trim)
+            .filter(|secreto| !secreto.is_empty());
+        self.cache_token
+            .credencial_configurada(secreto)
+            .then(|| secreto.unwrap_or_default())
     }
 }
 
@@ -104,7 +114,7 @@ pub fn preparar_ingreso_verificado<G: Deref<Target = AppCore>>(
     if local.is_some() {
         return Ok((preparacion, local));
     }
-    let Some(secreto) = nube.secreto() else {
+    let Some(secreto) = nube.credencial() else {
         return Ok((preparacion, None));
     };
     // Sin sesión no hay con qué autorizar la consulta: con nube
@@ -155,7 +165,7 @@ pub fn registrar_ingreso_verificado<G: Deref<Target = AppCore>>(
         return Err(IngresoVerificadoError::Bloqueado(bloqueo));
     }
 
-    if let Some(secreto) = nube.secreto() {
+    if let Some(secreto) = nube.credencial() {
         let token = autenticar(&nucleo, nube, secreto, actor).map_err(|error| {
             log::warn!("ingreso: no se pudo autenticar para verificar: {error}");
             IngresoVerificadoError::Bloqueado(BloqueoIngreso::SinVerificarEnLaNube)
@@ -243,7 +253,7 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
         return Err(IngresoProveedorServiceError::IngresoActivo.into());
     }
 
-    if let Some(secreto) = nube.secreto() {
+    if let Some(secreto) = nube.credencial() {
         let token = autenticar(&nucleo, nube, secreto, actor)?;
         let contexto = contexto(&token);
         // A la vez, como en `registrar_ingreso_verificado`; mismo orden al
@@ -304,7 +314,7 @@ pub fn entregar_gafete_provisional_verificado<G: Deref<Target = AppCore>>(
     encargado_id: i64,
     gafete_numero: i64,
 ) -> Result<i64, EntregaGafeteProvisionalVerificadaError> {
-    if let Some(secreto) = nube.secreto() {
+    if let Some(secreto) = nube.credencial() {
         let token = autenticar(&nucleo, nube, secreto, actor)?;
         if crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(
             &contexto(&token),
@@ -453,7 +463,22 @@ mod tests {
             cache_token: &cache,
             secreto: Some("   "),
         };
-        assert!(nube.secreto().is_none());
+        assert!(nube.credencial().is_none());
+    }
+
+    #[test]
+    fn una_clave_vinculada_cuenta_como_nube_configurada_aunque_no_haya_secreto() {
+        let directorio = tempfile::tempdir().unwrap();
+        let firmante = crate::nube::FirmanteArchivo::en(directorio.path());
+        crate::nube::FirmanteDispositivo::marcar_vinculada(&firmante, "disp-1").unwrap();
+        let cache = CacheTokenDispositivo::new();
+        cache.establecer_firmante(std::sync::Arc::new(firmante));
+
+        let nube = NubeDelDispositivo {
+            cache_token: &cache,
+            secreto: None,
+        };
+        assert_eq!(nube.credencial(), Some(""));
     }
 
     #[test]

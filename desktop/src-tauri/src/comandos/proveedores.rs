@@ -5,7 +5,6 @@ use control_acceso::mensajes::{
 };
 use control_acceso::models::empresa_proveedor::EmpresaProveedor;
 use control_acceso::models::registro_ingreso_proveedor::RegistroIngresoProveedorActivoResumen;
-use control_acceso::nube;
 use rusqlite::params;
 
 use crate::comandos::historial::rango_utc;
@@ -87,7 +86,7 @@ pub fn registrar_ingreso_proveedor(
     state: tauri::State<GuiState>,
 ) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
-    let secreto = nube::credenciales::cargar_secreto();
+    let secreto = state.credencial_nube();
     registrar_ingreso_proveedor_verificado(
         || state.core(),
         state.nube_del_dispositivo(secreto.as_deref()),

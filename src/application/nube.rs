@@ -1,19 +1,12 @@
 //! Gestión de la persistencia en la nube (`docs/planes-implementados/plan-persistencia-nube.md`)
-//! desde la fachada de aplicación. El secreto del dispositivo se configura
-//! una sola vez, en el arranque inicial (`configurar_dispositivo_inicial`)
-//! -- ya no hay una pantalla aparte para tocarlo desde una sesión abierta
-//! (ver docs/decisiones-tecnicas.md, "eliminación de `GestionarNube`").
-//! El móvil guarda el secreto con Android Keystore desde Kotlin. Sincronizar,
-//! leer y cerrar ingresos remotos
+//! desde la fachada de aplicación. El dispositivo se vincula en el arranque
+//! inicial canjeando un código del panel (`vincular_dispositivo_inicial`);
+//! desde ahí se autentica con su propia clave (ver `nube::firmante` y
+//! `docs/features-futuras/propuesta-registro-dispositivos.md`). Los equipos
+//! que todavía tienen el secreto de antes migran solos en su próxima
+//! autenticación. Sincronizar, leer y cerrar ingresos remotos
 //! (`Operacion::UsarNube`) es de cualquier rol -- uso diario normal (la
 //! pantalla Activos los usa), no administración.
-//!
-//! `directorio` es `None` en escritorio (resuelve `%LOCALAPPDATA%` solo,
-//! ver `nube::credenciales::guardar_secreto`) y `Some(...)` en el celular
-//! (recibe el mismo directorio que ya usa para abrir la base `SQLite`,
-//! ver `mobile/rust-core/src/lib.rs` -- Android no tiene `%LOCALAPPDATA%`).
-
-use std::path::Path;
 
 use crate::database::error::DatabaseError;
 use crate::domain::autorizacion::Operacion;
@@ -150,9 +143,11 @@ pub struct ResumenSincronizacion {
 impl AppCore {
     /// Bootstrap de una base sin ningún usuario todavía
     /// (`requiere_configuracion_inicial() == true`) -- sin sesión posible,
-    /// porque no hay con quién autenticar todavía. Guarda el secreto pegado
-    /// en la pantalla de arranque y trae el catálogo remoto (usuarios
-    /// incluidos), para que el próximo Login tenga con quién autenticar.
+    /// porque no hay con quién autenticar todavía. Canjea el código de
+    /// vinculación que emitió el panel (el equipo genera su clave y sólo
+    /// manda la pública, ver `nube::firmante`) y trae el catálogo remoto
+    /// (usuarios incluidos), para que el próximo Login tenga con quién
+    /// autenticar. Requiere [`Self::establecer_firmante_dispositivo`].
     /// Cada usuario que llega así arranca con el centinela
     /// `SIN_PASSWORD_LOCAL` (ver `recibir_catalogo_del_sitio`), así que el
     /// primer login de cualquiera de ellos cae en `AutenticacionError::SinPasswordLocal`
@@ -162,27 +157,24 @@ impl AppCore {
     /// auditoría 2026-09-24 (NR-07/NS-25) por no tener ningún llamador real.
     ///
     /// Se rechaza a propósito si ya existe algún usuario local -- este
-    /// camino es sólo el bootstrap de una base vacía, no una forma
-    /// alternativa de reconfigurar un dispositivo ya en uso (para eso sigue
-    /// existiendo `guardar_secreto_dispositivo`, detrás de una sesión Root
-    /// real).
-    /// `metadata`, si viene, viaja en el mismo request que la autenticación
-    /// inicial -- ver `nube::MetadatosDispositivo`. Cada plataforma decide
-    /// qué mandar (o `None`): escritorio arma la suya en
-    /// `comandos::nube::configurar_dispositivo_inicial`.
+    /// camino es sólo el bootstrap de una base vacía. Un equipo ya en uso se
+    /// re-vincula sin tocar su base (ver `comandos::nube::revincular_dispositivo`
+    /// en escritorio y `Nucleo::revincular_dispositivo` en móvil).
+    /// `metadata`, si viene, viaja en el mismo request que el canje -- ver
+    /// `nube::MetadatosDispositivo`. Cada plataforma decide qué mandar (o
+    /// `None`): escritorio arma la suya en
+    /// `comandos::nube::vincular_dispositivo_inicial`.
     ///
     /// Única excepción a la regla "nunca red con el candado del núcleo
     /// tomado" (ver `AppCore`): quien la llama la usa con el candado tomado
     /// y habla con la nube. Se acepta porque corre una sola vez, con la base
     /// vacía y la pantalla de activación esperando: no hay otra operación
     /// que pueda quedar trabada. El móvil ni siquiera la usa
-    /// (`Nucleo::configurar_dispositivo_inicial_con_secreto` suelta el
-    /// candado antes de la red).
-    pub fn configurar_dispositivo_inicial(
+    /// (`Nucleo::vincular_dispositivo_inicial` suelta el candado antes de la
+    /// red).
+    pub fn vincular_dispositivo_inicial(
         &self,
-        directorio: Option<&Path>,
-        identificador_dispositivo: Option<&str>,
-        secreto: &str,
+        codigo: &str,
         metadata: Option<&crate::nube::MetadatosDispositivo>,
         perfil: crate::nube::PerfilDispositivo,
     ) -> Result<ResumenSincronizacion, GestionNubeError> {
@@ -190,21 +182,29 @@ impl AppCore {
             return Err(GestionNubeError::YaConfigurado);
         }
 
-        match (directorio, identificador_dispositivo) {
-            (Some(directorio), Some(identificador)) => {
-                crate::nube::credenciales::guardar_secreto_en_con_identificador(
-                    directorio,
-                    secreto,
-                    identificador,
-                )?;
-            }
-            (Some(directorio), None) => {
-                crate::nube::credenciales::guardar_secreto_en(directorio, secreto)?;
-            }
-            (None, _) => crate::nube::credenciales::guardar_secreto(secreto)?,
-        }
+        let token = self.vincular_y_cachear(codigo, metadata)?;
+        self.recibir_catalogo_inicial(token, perfil)
+    }
 
-        let token = self.autenticar_y_cachear(secreto, metadata)?;
+    /// Configura quién firma por este equipo (ver `nube::firmante`). Cada
+    /// plataforma lo llama una vez al arrancar, antes de cualquier operación
+    /// de nube.
+    pub fn establecer_firmante_dispositivo(
+        &self,
+        firmante: std::sync::Arc<dyn crate::nube::FirmanteDispositivo>,
+    ) {
+        self.cache_token.establecer_firmante(firmante);
+    }
+
+    /// Base vacía recién vinculada: nada propio que mandar, sólo el catálogo
+    /// para que el primer login tenga con quién autenticar. Pública para
+    /// que el móvil, que vincula sin el candado del núcleo tomado (ver
+    /// `mobile/rust-core/src/nube.rs`), reuse exactamente el mismo paso.
+    pub fn recibir_catalogo_inicial(
+        &self,
+        token: crate::nube::TokenDispositivo,
+        perfil: crate::nube::PerfilDispositivo,
+    ) -> Result<ResumenSincronizacion, GestionNubeError> {
         let contexto = crate::nube::ContextoSincronizacion {
             base_url: crate::nube::base_url(),
             apikey: crate::nube::apikey(),
@@ -212,8 +212,6 @@ impl AppCore {
             dispositivo_id: &token.dispositivo_id,
             sitio_id: &token.sitio_id,
         };
-        // Base vacía: nada propio que mandar, sólo el catálogo para que el
-        // primer login tenga con quién autenticar.
         let recibido = crate::nube::recibir(
             &self.connection,
             &contexto,
@@ -369,19 +367,14 @@ impl AppCore {
         }
     }
 
-    /// Autentica (reusando el token cacheado si sigue vigente) y permite
-    /// adjuntar `metadata` completa -- sólo la activación inicial (ver
-    /// [`Self::configurar_dispositivo_inicial`]). Sin `metadata`, pero
-    /// si ya se llamó [`AppCore::establecer_version_app`], acá igual se arma
-    /// una `MetadatosDispositivo` mínima (sólo `app_version`) para que el
-    /// receptor pueda aplicar `VERSION_MINIMA_ACEPTADA` en cualquier
-    /// renovación, no sólo al activar el dispositivo -- ver
-    /// `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9. Sin
-    /// `establecer_version_app`, el comportamiento es exactamente el de
-    /// antes.
-    fn autenticar_y_cachear(
+    /// Canjea el código (ver [`Self::vincular_dispositivo_inicial`]). Sin
+    /// `metadata`, pero si ya se llamó [`AppCore::establecer_version_app`],
+    /// arma una `MetadatosDispositivo` mínima (sólo `app_version`) para que
+    /// el receptor pueda aplicar `VERSION_MINIMA_ACEPTADA` -- ver
+    /// `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
+    fn vincular_y_cachear(
         &self,
-        secreto: &str,
+        codigo: &str,
         metadata: Option<&crate::nube::MetadatosDispositivo>,
     ) -> Result<crate::nube::TokenDispositivo, GestionNubeError> {
         let metadata_con_version;
@@ -396,11 +389,7 @@ impl AppCore {
             }
             (None, None) => None,
         };
-        // `cache_token` ya deja `desfase_reloj_ms` en `None` en un acierto
-        // de caché (ver su doc-comment) -- `aplicar_desfase_reloj` es
-        // entonces no-op ahí solo, sin necesidad de distinguir acá si esta
-        // llamada habló con el receptor o no.
-        let token = self.cache_token.autenticar_y_cachear(secreto, metadata)?;
+        let token = self.cache_token.vincular(codigo, None, metadata)?;
         self.aplicar_desfase_reloj(&token);
         Ok(token)
     }

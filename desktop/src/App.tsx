@@ -67,6 +67,7 @@ import PrimerArranque from "./pantallas/PrimerArranque";
 import {
   buscarActualizacion,
   cerrarSesion,
+  descartarTokenNube,
   instalarActualizacion,
   mostrarVentanaPrincipal,
   requiereConfiguracionInicial,
@@ -74,6 +75,7 @@ import {
 } from "./api";
 import type { ResumenSincronizacion, Update, UsuarioSesion } from "./api";
 import { EVENTO_CAMBIO_EN_VIVO } from "./eventosNube";
+import { mensajeExpulsion } from "./expulsionNube";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { registrarPantalla } from "./telemetria";
 import { textoHora } from "./tiempo";
@@ -590,6 +592,13 @@ function Shell({
     const cancelarRealtime = iniciarRealtimeNube({
       onSincronizado: (resumen) => alSincronizarNube(resumen, false),
       onEstado: setEstadoConexionNube,
+      // La nube ya le cortó el acceso a este equipo (ver `expulsionNube.ts`):
+      // el token cacheado no sirve más. El trabajo local sigue disponible;
+      // el aviso queda fijo hasta que alguien lo cierre.
+      onExpulsado: (motivo) => {
+        void descartarTokenNube();
+        toast.error(mensajeExpulsion(motivo), { duration: Infinity, closeButton: true });
+      },
       usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
     });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
@@ -610,10 +619,9 @@ function Shell({
 
   // Botón "Sincronizar" de la barra de estado (`BarraNube.tsx`) — visible
   // para cualquier rol activo, ver su doc-comment. `sincronizar_con_nube`
-  // ya falla con un mensaje claro (`GestionNubeError::SinSecreto`) si este
-  // dispositivo todavía no tiene el secreto configurado, así que no hace
-  // falta ocultar el botón para quien no puede configurarlo (eso sigue
-  // siendo exclusivo de ROOT en la pantalla Nube).
+  // ya falla con un mensaje claro si este equipo todavía no está vinculado,
+  // así que no hace falta ocultar el botón para quien no puede vincularlo
+  // (eso es exclusivo de ROOT, en el menú de usuario).
   async function sincronizarManualmente() {
     setSincronizandoManual(true);
     try {
