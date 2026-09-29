@@ -225,11 +225,13 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "argon2",
+ "base64",
  "chrono",
  "chrono-tz",
  "jsonwebtoken",
  "log",
  "machine-uid",
+ "p256",
  "rand_core 0.6.4",
  "reqwest",
  "rusqlite",

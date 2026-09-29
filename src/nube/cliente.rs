@@ -21,6 +21,19 @@ pub enum NubeError {
     /// `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
     #[error("Esta versión de la app ya no es compatible -- hace falta actualizar")]
     VersionDesactualizada,
+    /// `device-vincular` rechazó el código: no existe, ya se usó, venció o
+    /// se anuló. El motivo exacto queda registrado en el panel, no acá.
+    #[error("El código de vinculación no es válido o ya venció")]
+    CodigoVinculacionInvalido,
+    /// La clave pública que mandó este equipo ya está atada a otro
+    /// dispositivo (índice único de `clave_huella`).
+    #[error("La clave de este equipo ya está vinculada a otro dispositivo")]
+    ClaveEnUso,
+    /// Ni clave vinculada ni secreto legado: el equipo nunca se vinculó.
+    #[error("Este dispositivo todavía no está vinculado a la nube")]
+    SinCredencial,
+    #[error(transparent)]
+    Firmante(#[from] super::firmante::ErrorFirmante),
 }
 
 /// Tope por operación de red contra el receptor (conexión + respuesta
@@ -124,26 +137,135 @@ pub struct MetadatosDispositivo {
 /// Intercambia el secreto de este dispositivo (ver `super::credenciales`)
 /// por un `TokenDispositivo` firmado por el receptor. `metadata`, si viene,
 /// se adjunta al mismo request -- ver `MetadatosDispositivo`.
+///
+/// Camino legado: los equipos nuevos se autentican con su clave (ver
+/// [`autenticar_con_firmante`]).
 pub fn autenticar_dispositivo(
     base_url: &str,
     secreto: &str,
     metadata: Option<&MetadatosDispositivo>,
 ) -> Result<TokenDispositivo, NubeError> {
-    let url = format!("{base_url}/functions/v1/device-auth");
-    let mut cuerpo = serde_json::json!({ "secret": secreto });
-    if let Some(metadata) = metadata
-        && let serde_json::Value::Object(mapa) = &mut cuerpo
-    {
-        mapa.insert(
-            "metadata".to_string(),
-            serde_json::to_value(metadata).unwrap_or_default(),
-        );
-    }
-    let respuesta = cliente_http().post(url).json(&cuerpo).send()?;
+    autenticar_con_secreto(base_url, secreto, None, metadata).map(|autenticado| autenticado.token)
+}
 
+/// Token recién emitido, más si el servidor aprovechó la llamada para
+/// registrar la clave pública del equipo (migración desde el secreto).
+pub(crate) struct Autenticado {
+    pub token: TokenDispositivo,
+    pub clave_registrada: bool,
+}
+
+#[derive(Deserialize)]
+struct RespuestaToken {
+    #[serde(flatten)]
+    token: TokenDispositivo,
+    #[serde(default)]
+    clave_registrada: bool,
+}
+
+/// Camino legado por secreto. Si viene `clave_publica_jwk`, el servidor
+/// migra al equipo en la misma llamada: guarda la clave y deja de aceptar
+/// el secreto (ver `Autenticado::clave_registrada`).
+pub(crate) fn autenticar_con_secreto(
+    base_url: &str,
+    secreto: &str,
+    clave_publica_jwk: Option<&str>,
+    metadata: Option<&MetadatosDispositivo>,
+) -> Result<Autenticado, NubeError> {
+    let mut cuerpo = serde_json::json!({ "secret": secreto });
+    if let Some(jwk) = clave_publica_jwk {
+        cuerpo["clave_publica_jwk"] = jwk_como_valor(jwk)?;
+    }
+    agregar_metadata(&mut cuerpo, metadata);
+    let respuesta = cliente_http()
+        .post(format!("{base_url}/functions/v1/device-auth"))
+        .json(&cuerpo)
+        .send()?;
+    token_de_respuesta(respuesta, NubeError::CredencialesInvalidas)
+}
+
+/// Camino normal: pide un desafío al servidor, lo firma con la clave del
+/// equipo y lo canjea por un token. Dos idas y vueltas, a cambio de que
+/// ningún secreto viaje y de no depender del reloj del equipo.
+pub(crate) fn autenticar_con_firmante(
+    base_url: &str,
+    firmante: &dyn super::firmante::FirmanteDispositivo,
+    metadata: Option<&MetadatosDispositivo>,
+) -> Result<TokenDispositivo, NubeError> {
+    #[derive(Deserialize)]
+    struct RespuestaDesafio {
+        desafio: String,
+    }
+
+    let url = format!("{base_url}/functions/v1/device-auth");
+    let desafio = cliente_http()
+        .post(&url)
+        .json(&serde_json::json!({ "desafio": true }))
+        .send()?
+        .error_for_status()?
+        .json::<RespuestaDesafio>()?
+        .desafio;
+
+    let asercion = super::firmante::construir_asercion(firmante, &desafio)?;
+    let mut cuerpo = serde_json::json!({ "asercion": asercion });
+    agregar_metadata(&mut cuerpo, metadata);
+    let respuesta = cliente_http().post(url).json(&cuerpo).send()?;
+    token_de_respuesta(respuesta, NubeError::CredencialesInvalidas)
+        .map(|autenticado| autenticado.token)
+}
+
+/// Canjea el código de vinculación que emitió el panel, atando la clave
+/// pública de este equipo al dispositivo. Devuelve el primer token. Con
+/// `dispositivo_esperado`, un código de otro dispositivo se rechaza sin
+/// consumirse.
+pub(crate) fn vincular_con_codigo(
+    base_url: &str,
+    codigo: &str,
+    clave_publica_jwk: &str,
+    dispositivo_esperado: Option<&str>,
+    metadata: Option<&MetadatosDispositivo>,
+) -> Result<TokenDispositivo, NubeError> {
+    let mut cuerpo = serde_json::json!({
+        "codigo": codigo,
+        "clave_publica_jwk": jwk_como_valor(clave_publica_jwk)?,
+    });
+    if let Some(dispositivo_id) = dispositivo_esperado {
+        cuerpo["dispositivo_esperado"] = serde_json::Value::from(dispositivo_id);
+    }
+    agregar_metadata(&mut cuerpo, metadata);
+    let respuesta = cliente_http()
+        .post(format!("{base_url}/functions/v1/device-vincular"))
+        .json(&cuerpo)
+        .send()?;
+    token_de_respuesta(respuesta, NubeError::CodigoVinculacionInvalido)
+        .map(|autenticado| autenticado.token)
+}
+
+fn jwk_como_valor(jwk: &str) -> Result<serde_json::Value, NubeError> {
+    serde_json::from_str(jwk).map_err(|error| {
+        NubeError::Firmante(super::firmante::ErrorFirmante::ClaveInvalida(
+            error.to_string(),
+        ))
+    })
+}
+
+fn agregar_metadata(cuerpo: &mut serde_json::Value, metadata: Option<&MetadatosDispositivo>) {
+    if let Some(metadata) = metadata {
+        cuerpo["metadata"] = serde_json::to_value(metadata).unwrap_or_default();
+    }
+}
+
+/// Traduce el estado HTTP de `device-auth`/`device-vincular` y lee el token.
+/// `no_autorizado` es lo que significa un 401 para quien llama: credencial
+/// rechazada al autenticar, código inválido al vincular.
+fn token_de_respuesta(
+    respuesta: reqwest::blocking::Response,
+    no_autorizado: NubeError,
+) -> Result<Autenticado, NubeError> {
     match respuesta.status() {
-        reqwest::StatusCode::UNAUTHORIZED => return Err(NubeError::CredencialesInvalidas),
+        reqwest::StatusCode::UNAUTHORIZED => return Err(no_autorizado),
         reqwest::StatusCode::FORBIDDEN => return Err(NubeError::DispositivoSuspendido),
+        reqwest::StatusCode::CONFLICT => return Err(NubeError::ClaveEnUso),
         // 426 Upgrade Required -- lo que `device-auth` manda cuando
         // `VERSION_MINIMA_ACEPTADA` rechaza esta versión. Ver
         // `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
@@ -152,9 +274,15 @@ pub fn autenticar_dispositivo(
     }
     let respuesta = respuesta.error_for_status()?;
     let desfase_reloj_ms = desfase_reloj_ms_desde_header(&respuesta);
-    let mut token = respuesta.json::<TokenDispositivo>()?;
+    let RespuestaToken {
+        mut token,
+        clave_registrada,
+    } = respuesta.json::<RespuestaToken>()?;
     token.desfase_reloj_ms = desfase_reloj_ms;
-    Ok(token)
+    Ok(Autenticado {
+        token,
+        clave_registrada,
+    })
 }
 
 /// Lee el header `Date` de la respuesta (hora del receptor al responder) y

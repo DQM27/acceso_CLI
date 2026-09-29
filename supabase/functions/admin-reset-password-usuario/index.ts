@@ -1,42 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
-
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-  });
-}
-
-// Ver admin-list-devices/index.ts para el mismo patrón comentado en detalle.
-async function correoAdminAutorizado(
-  req: Request,
-  admin: ReturnType<typeof createClient>,
-): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!token) return null;
-
-  const { data: userData, error: userError } = await admin.auth.getUser(token);
-  const correo = userData?.user?.email;
-  if (userError || !correo) return null;
-
-  const { data: fila } = await admin
-    .from("administradores_panel")
-    .select("correo")
-    .eq("correo", correo)
-    .maybeSingle();
-
-  return fila ? correo : null;
-}
+import { clienteServicio, correoAdminAutorizado } from "../_shared/admin.ts";
+import { json, preflight } from "../_shared/http.ts";
 
 // Mismo alfabeto/longitud que admin-create-usuario -- ver ese archivo para
 // el razonamiento de entropía/legibilidad.
@@ -55,10 +19,11 @@ function generarPasswordTemporal(longitud = 10): string {
  * admin-create-usuario, ver docs/planes-implementados/plan-autenticacion-supabase-auth.md.
  */
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
+  const respuestaPreflight = preflight(req);
+  if (respuestaPreflight) return respuestaPreflight;
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const supabase = clienteServicio();
 
   if (!(await correoAdminAutorizado(req, supabase))) {
     return json({ error: "unauthorized" }, 401);

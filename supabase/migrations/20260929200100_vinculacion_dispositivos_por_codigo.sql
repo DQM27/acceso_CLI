@@ -58,6 +58,7 @@ create table if not exists public.eventos_seguridad_dispositivos (
     'codigo_usado',
     'codigo_vencido',
     'codigo_anulado',
+    'codigo_de_otro_dispositivo',
     'firma_invalida',
     'hardware_distinto'
   )),
@@ -91,16 +92,21 @@ create policy "solo dispositivos vigentes" on public.eventos_seguridad_dispositi
   with check ((select private.dispositivo_vigente()));
 
 -- Canje atómico. Devuelve cero filas si el código no sirve (inexistente,
--- usado, vencido, anulado, o el dispositivo ya fue revocado); quien llama
--- consulta el motivo aparte para registrarlo. Una huella repetida (la misma
--- clave pública para dos dispositivos) viola el índice único y revierte
--- todo, incluido el uso del código.
+-- usado, vencido, anulado, de otro dispositivo, o el dispositivo ya fue
+-- revocado); quien llama consulta el motivo aparte para registrarlo. Una
+-- huella repetida (la misma clave pública para dos dispositivos) viola el
+-- índice único y revierte todo, incluido el uso del código.
+--
+-- `p_dispositivo_esperado`: el equipo lo manda al re-vincularse con datos
+-- locales ya cargados. Un código de OTRO dispositivo se rechaza sin
+-- consumirse, para no atar esos datos a otro dispositivo u otro sitio.
 create or replace function public.canjear_codigo_vinculacion(
   p_codigo_hash text,
   p_clave_publica_jwk jsonb,
   p_clave_huella text,
   p_metadata jsonb,
-  p_ip text
+  p_ip text,
+  p_dispositivo_esperado uuid default null
 )
 returns table (dispositivo_id uuid, sitio_id uuid, tipo text)
 language plpgsql
@@ -117,6 +123,7 @@ begin
      and c.usado_en is null
      and c.anulado_en is null
      and c.expira_en > pg_catalog.now()
+     and (p_dispositivo_esperado is null or c.dispositivo_id = p_dispositivo_esperado)
   returning c.dispositivo_id into v_dispositivo_id;
 
   if v_dispositivo_id is null then
@@ -144,7 +151,7 @@ begin
 end;
 $$;
 
-revoke all on function public.canjear_codigo_vinculacion(text, jsonb, text, jsonb, text)
+revoke all on function public.canjear_codigo_vinculacion(text, jsonb, text, jsonb, text, uuid)
   from public, anon, authenticated;
-grant execute on function public.canjear_codigo_vinculacion(text, jsonb, text, jsonb, text)
+grant execute on function public.canjear_codigo_vinculacion(text, jsonb, text, jsonb, text, uuid)
   to service_role;

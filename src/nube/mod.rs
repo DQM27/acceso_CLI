@@ -12,6 +12,7 @@ pub mod cache_token;
 pub mod cliente;
 pub mod credenciales;
 pub mod en_vivo;
+pub mod firmante;
 pub mod orquestacion;
 pub mod reloj_preciso;
 pub mod retencion;
@@ -25,6 +26,7 @@ pub use auth_supabase::{
 pub use cache_token::CacheTokenDispositivo;
 pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo, autenticar_dispositivo};
 pub use en_vivo::aplicar_cambio_en_vivo;
+pub use firmante::{ErrorFirmante, FirmanteArchivo, FirmanteDispositivo};
 pub use orquestacion::{PerfilDispositivo, ResumenSincronizacionNube, recibir, sincronizar};
 pub use sincronizacion::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,

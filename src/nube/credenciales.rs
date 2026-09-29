@@ -288,20 +288,44 @@ pub fn cargar_secreto() -> Option<String> {
 /// con DPAPI (feature `cifrado-secreto-dispositivo`, sólo escritorio -- ver
 /// [`guardar_secreto_en_con_identificador`] para el equivalente móvil).
 pub fn guardar_secreto_en(directorio: &Path, secreto: &str) -> io::Result<()> {
-    fs::create_dir_all(directorio)?;
-    let secreto = secreto.trim();
-    #[cfg(all(windows, feature = "cifrado-secreto-dispositivo"))]
-    if let Some(protegido) = dpapi::proteger(secreto) {
-        return fs::write(directorio.join(FILE_NAME), protegido);
-    }
-    fs::write(directorio.join(FILE_NAME), secreto)
+    guardar_protegido_en(directorio, FILE_NAME, secreto.trim())
 }
 
 /// Ver [`guardar_secreto_en`]. Lee tanto un archivo protegido con DPAPI por
 /// esta misma cuenta de Windows como uno en texto plano legado.
 #[must_use]
 pub fn cargar_secreto_en(directorio: &Path) -> Option<String> {
-    let contenido = fs::read(directorio.join(FILE_NAME)).ok()?;
+    cargar_protegido_en(directorio, FILE_NAME)
+}
+
+/// Escribe `texto` en `<directorio>/<archivo>` con la misma protección que el
+/// secreto: DPAPI en escritorio con `cifrado-secreto-dispositivo`, texto
+/// plano en cualquier otro caso. Lo comparten el secreto legado y la clave
+/// privada del firmante de escritorio (ver `nube::firmante`). La escritura
+/// pasa por un archivo temporal y un `rename`, para que un corte a mitad de
+/// camino nunca deje el archivo a medio escribir.
+pub(crate) fn guardar_protegido_en(
+    directorio: &Path,
+    archivo: &str,
+    texto: &str,
+) -> io::Result<()> {
+    fs::create_dir_all(directorio)?;
+    #[cfg(all(windows, feature = "cifrado-secreto-dispositivo"))]
+    let contenido = dpapi::proteger(texto).unwrap_or_else(|| texto.as_bytes().to_vec());
+    #[cfg(not(all(windows, feature = "cifrado-secreto-dispositivo")))]
+    let contenido = texto.as_bytes().to_vec();
+
+    let destino = directorio.join(archivo);
+    let temporal = directorio.join(format!("{archivo}.tmp"));
+    fs::write(&temporal, contenido)?;
+    fs::rename(&temporal, &destino)
+}
+
+/// Ver [`guardar_protegido_en`]. `None` si no existe, está vacío o no se
+/// pudo desproteger (otro usuario de Windows, archivo corrupto).
+#[must_use]
+pub(crate) fn cargar_protegido_en(directorio: &Path, archivo: &str) -> Option<String> {
+    let contenido = fs::read(directorio.join(archivo)).ok()?;
     #[cfg(all(windows, feature = "cifrado-secreto-dispositivo"))]
     if dpapi::es_protegido(&contenido) {
         return dpapi::desproteger(&contenido);
@@ -351,6 +375,15 @@ pub fn cargar_secreto_en_con_identificador(
         return cifrado::descifrar(&contenido, identificador);
     }
     secreto_de_texto_plano(contenido)
+}
+
+/// Ver [`guardar_secreto`] sobre por qué esta versión es sólo de escritorio.
+/// La usa escritorio cuando el equipo ya migró a clave (ver
+/// `nube::firmante`) y el secreto dejó de servir en el servidor.
+pub fn borrar_secreto() -> io::Result<()> {
+    let directorio =
+        directorio_default().ok_or_else(|| io::Error::other("no se pudo resolver %APPDATA%"))?;
+    borrar_secreto_en(&directorio)
 }
 
 /// Borra `<directorio>/dispositivo-nube.secret` si existe -- para cuando ya

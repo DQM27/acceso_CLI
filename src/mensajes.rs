@@ -528,7 +528,9 @@ pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
 
     match error {
         NubeError::CredencialesInvalidas => {
-            "El secreto de este dispositivo fue rechazado o revocado".into()
+            "La nube ya no reconoce a este dispositivo (revocado o vinculado en otro equipo) \
+             -- pedí un código nuevo en el panel para volver a vincularlo"
+                .into()
         }
         NubeError::DispositivoSuspendido => {
             "Este dispositivo fue suspendido -- contactá a un administrador".into()
@@ -536,6 +538,19 @@ pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
         NubeError::VersionDesactualizada => {
             "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando"
                 .into()
+        }
+        NubeError::CodigoVinculacionInvalido => {
+            "El código no es válido o ya venció -- pedí uno nuevo en el panel".into()
+        }
+        NubeError::ClaveEnUso => {
+            "La clave de este equipo ya está vinculada a otro dispositivo -- pedí ayuda a un \
+             administrador"
+                .into()
+        }
+        NubeError::SinCredencial => "Este dispositivo todavía no está vinculado a la nube".into(),
+        NubeError::Firmante(error) => {
+            log::error!("nube: {error}");
+            "No se pudo usar la clave de este dispositivo".into()
         }
         NubeError::Red(error) => {
             log::warn!("nube: {error}");
