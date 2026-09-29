@@ -18,12 +18,12 @@ fn main() {
     // existen: cargo trata una ruta ausente como "siempre cambió".
     let git = "../../.git";
     println!("cargo:rerun-if-changed={git}/HEAD");
-    if let Ok(head) = std::fs::read_to_string(format!("{git}/HEAD")) {
-        if let Some(referencia) = head.strip_prefix("ref: ") {
-            let archivo = format!("{git}/{}", referencia.trim());
-            if std::path::Path::new(&archivo).exists() {
-                println!("cargo:rerun-if-changed={archivo}");
-            }
+    if let Ok(head) = std::fs::read_to_string(format!("{git}/HEAD"))
+        && let Some(referencia) = head.strip_prefix("ref: ")
+    {
+        let archivo = format!("{git}/{}", referencia.trim());
+        if std::path::Path::new(&archivo).exists() {
+            println!("cargo:rerun-if-changed={archivo}");
         }
     }
     if std::path::Path::new(&format!("{git}/packed-refs")).exists() {

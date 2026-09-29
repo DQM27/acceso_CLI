@@ -455,9 +455,9 @@ mod sistema {
                 }
                 _ => None,
             };
-            let nucleos = std::thread::available_parallelism()
-                .map(|n| u128::from(u32::try_from(n.get()).unwrap_or(u32::MAX)))
-                .unwrap_or(1);
+            let nucleos = std::thread::available_parallelism().map_or(1, |n| {
+                u128::from(u32::try_from(n.get()).unwrap_or(u32::MAX))
+            });
             if let Some(cpu) = cpu_ms {
                 self.anterior = Some((ahora, cpu));
             }
