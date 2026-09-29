@@ -58,4 +58,19 @@ class EstabilizadorPorRepeticionTest {
         assertNull(estabilizador.procesarTextos(listOf("COSTA RICA CENTROAMERICA", "BPH485")))
         assertEquals("BPH485", estabilizador.procesarTextos(listOf("BPH485", "ruido"))?.valor)
     }
+
+    @Test
+    fun avisaCuandoLaVotacionEmpiezaDeCero() {
+        var reinicios = 0
+        val estabilizador = EstabilizadorPorRepeticion(
+            extraer = ::extraerVehiculo,
+            clave = { it.claveVotacion() },
+            desdeClave = ::vehiculoDesdeClave,
+            alReiniciarVotacion = { reinicios++ },
+        )
+        estabilizador.procesarLectura(extraerVehiculo("BPH485"))
+        assertEquals(0, reinicios)
+        estabilizador.procesarLectura(extraerVehiculo("KLM902"))
+        assertEquals(1, reinicios)
+    }
 }

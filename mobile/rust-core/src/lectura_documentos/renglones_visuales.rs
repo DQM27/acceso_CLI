@@ -47,6 +47,13 @@ pub struct LineaOcr {
 /// Debajo de esto una palabra se considera ruido. Punto de partida
 /// conservador, pendiente de calibrar con muestras reales.
 const CONFIANZA_MINIMA: f32 = 0.25;
+
+/// El umbral de [`CONFIANZA_MINIMA`], para que la telemetría de diagnóstico
+/// cuente las palabras descartadas con el mismo número.
+#[uniffi::export]
+pub fn confianza_minima_palabra() -> f32 {
+    CONFIANZA_MINIMA
+}
 /// Dos líneas están en el mismo renglón si sus centros (corregidos por la
 /// inclinación) distan menos que esta fracción de su altura.
 const FRACCION_ALTURA_MISMO_RENGLON: f32 = 0.5;

@@ -2,6 +2,7 @@ package com.brisas.controlacceso
 
 import uniffi.control_acceso_mobile.DatosPdf417Cedula
 import uniffi.control_acceso_mobile.LecturaPdf417
+import uniffi.control_acceso_mobile.LecturaVehiculo
 import uniffi.control_acceso_mobile.MotivoPdf417
 import uniffi.control_acceso_mobile.largoPrefijoPdf417Cedula
 import uniffi.control_acceso_mobile.leerPdf417CedulaConMotivo
@@ -234,6 +235,32 @@ class MetricasOcr(
     private val largosBytesPdf417 = ArrayDeque<Float>()
     private val anchosCodigoPx = ArrayDeque<Float>()
     private val anchosImagenConCodigoPx = ArrayDeque<Float>()
+
+    // Condiciones de captura (todos los frames medidos, también los
+    // descartados): para calibrar el filtro de calidad y el aviso de
+    // reflejo con datos reales, de día y de noche.
+    private val nitideces = ArrayDeque<Float>()
+    private val luminancias = ArrayDeque<Float>()
+    private val reflejos = ArrayDeque<Float>()
+    private var framesMedidos = 0
+    private var framesConLinterna = 0
+
+    // Confianza de las palabras de ML Kit: para calibrar el umbral con que
+    // los renglones visuales descartan palabras (`CONFIANZA_MINIMA`, 0,25).
+    private var palabras = 0
+    private var palabrasConfianzaBaja = 0
+    private var framesSinConfianza = 0
+    private val confianzas = ArrayDeque<Float>()
+    private var framesConTextosDistintos = 0
+    private var framesConTexto = 0
+
+    // Placas y números de unidad (nunca el valor leído).
+    private var framesSinVehiculo = 0
+    private val formatosVehiculo = sortedMapOf<String, Int>()
+    private var vehiculosConCorreccion = 0
+    private var vehiculosClRestituida = 0
+    private val vehiculoPorVersionTexto = sortedMapOf<String, Int>()
+    private var reiniciosVotacion = 0
     private val msRecorte = ArrayDeque<Float>()
     private val msReconocimiento = ArrayDeque<Float>()
 
@@ -263,6 +290,59 @@ class MetricasOcr(
         diagnostico.largosBytes.forEach { agregar(largosBytesPdf417, it.toFloat()) }
         diagnostico.anchosCodigoPx.forEach { agregar(anchosCodigoPx, it.toFloat()) }
         agregar(anchosImagenConCodigoPx, diagnostico.anchoImagenPx.toFloat())
+    }
+
+    /// Calidad medida de un frame (procesado o descartado) y si la linterna
+    /// estaba encendida.
+    @Synchronized
+    fun registrarCalidad(calidad: CalidadFrame, linternaEncendida: Boolean) {
+        if (!habilitadas) return
+        framesMedidos++
+        if (linternaEncendida) framesConLinterna++
+        agregar(nitideces, calidad.nitidez, MUESTRAS_CONDICIONES)
+        agregar(luminancias, calidad.luminancia, MUESTRAS_CONDICIONES)
+        agregar(reflejos, calidad.fraccionReflejo, MUESTRAS_CONDICIONES)
+    }
+
+    /// Las palabras que entregó ML Kit en un frame y cuántas versiones de
+    /// texto se armaron (2 = los renglones visuales difieren del original).
+    @Synchronized
+    fun registrarTexto(confianzasPalabras: List<Float>, umbralBajo: Float, versionesTexto: Int) {
+        if (!habilitadas) return
+        framesConTexto++
+        if (versionesTexto > 1) framesConTextosDistintos++
+        palabras += confianzasPalabras.size
+        // Todas en 0 = el modelo no informa confianza en este frame.
+        if (confianzasPalabras.isNotEmpty() && confianzasPalabras.all { it <= 0f }) {
+            framesSinConfianza++
+            return
+        }
+        palabrasConfianzaBaja += confianzasPalabras.count { it < umbralBajo }
+        confianzasPalabras.forEach { agregar(confianzas, it, MUESTRAS_CONDICIONES) }
+    }
+
+    /// Resultado del lector de placas en un frame: `null` si no encontró
+    /// nada; `indiceTexto` = versión del texto que lo produjo (0 = renglones
+    /// visuales, 1 = texto original de ML Kit).
+    @Synchronized
+    fun registrarLecturaVehiculo(lectura: LecturaVehiculo?, indiceTexto: Int?) {
+        if (!habilitadas) return
+        if (lectura == null) {
+            framesSinVehiculo++
+            return
+        }
+        formatosVehiculo.merge(lectura.formato.name, 1, Int::plus)
+        if (lectura.correcciones > 0u) vehiculosConCorreccion++
+        if (lectura.clRestituida) vehiculosClRestituida++
+        val version = if (indiceTexto == 0) "visual" else "original"
+        vehiculoPorVersionTexto.merge(version, 1, Int::plus)
+    }
+
+    /// La votación se reinició porque un frame leyó OTRO vehículo (o un
+    /// valor demasiado distinto).
+    @Synchronized
+    fun registrarReinicioVotacion() {
+        if (habilitadas) reiniciosVotacion++
     }
 
     /// El lector de códigos terminó con error (no "sin códigos").
@@ -314,6 +394,31 @@ class MetricasOcr(
         "pdf417_bytes_max" to largosBytesPdf417.maxOrNull(),
         "pdf417_ancho_codigo_px_mediana" to mediana(anchosCodigoPx),
         "imagen_ancho_px_mediana_con_codigo" to mediana(anchosImagenConCodigoPx),
+        // Condiciones de captura: con qué nitidez, luz y reflejo se trabajó.
+        "frames_medidos" to framesMedidos,
+        "frames_con_linterna" to framesConLinterna,
+        "nitidez_p10" to cuantil(nitideces, 0.1),
+        "nitidez_p50" to cuantil(nitideces, 0.5),
+        "nitidez_p90" to cuantil(nitideces, 0.9),
+        "luminancia_p10" to cuantil(luminancias, 0.1),
+        "luminancia_p50" to cuantil(luminancias, 0.5),
+        "reflejo_p50" to cuantil(reflejos, 0.5),
+        "reflejo_p90" to cuantil(reflejos, 0.9),
+        // Texto: confianza de ML Kit y cuánto aportan los renglones visuales.
+        "frames_con_texto" to framesConTexto,
+        "frames_textos_distintos" to framesConTextosDistintos,
+        "palabras" to palabras,
+        "palabras_confianza_baja" to palabrasConfianzaBaja,
+        "frames_sin_confianza" to framesSinConfianza,
+        "confianza_p10" to cuantil(confianzas, 0.1),
+        "confianza_p50" to cuantil(confianzas, 0.5),
+        // Placas (vacío en las demás pantallas).
+        "vehiculo_frames_sin_lectura" to framesSinVehiculo,
+        "vehiculo_formatos" to formatosVehiculo.toMap(),
+        "vehiculo_con_correccion" to vehiculosConCorreccion,
+        "vehiculo_cl_restituida" to vehiculosClRestituida,
+        "vehiculo_por_version_texto" to vehiculoPorVersionTexto.toMap(),
+        "reinicios_votacion" to reiniciosVotacion,
     )
 
     @Synchronized
@@ -329,10 +434,13 @@ class MetricasOcr(
         return (frames - 1) / ((ultimoFrame - primerFrame) / 1e9f)
     }
 
-    private fun agregar(cola: ArrayDeque<Float>, valor: Float) {
+    private fun agregar(cola: ArrayDeque<Float>, valor: Float, maximo: Int = MUESTRAS) {
         cola.addLast(valor)
-        while (cola.size > MUESTRAS) cola.removeFirst()
+        while (cola.size > maximo) cola.removeFirst()
     }
+
+    private fun cuantil(valores: Collection<Float>, p: Double): Float? =
+        percentil(valores.map(Float::toDouble).sorted(), p)?.toFloat()
 
     private fun mediana(valores: Collection<Float>): Float? {
         if (valores.isEmpty()) return null
@@ -345,5 +453,8 @@ class MetricasOcr(
 
     private companion object {
         const val MUESTRAS = 60
+        // Condiciones y confianzas: más muestras (son baratas y se resumen
+        // en cuantiles al cerrar la cámara).
+        const val MUESTRAS_CONDICIONES = 2_000
     }
 }

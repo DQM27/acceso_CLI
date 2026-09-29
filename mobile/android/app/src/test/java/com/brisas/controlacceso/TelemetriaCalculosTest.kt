@@ -197,4 +197,13 @@ class TelemetriaCalculosTest {
         assertEquals("StrictMode.onReadFromDisk:1", origenEnLaApp(arrayOf(pila[0])))
         assertEquals("(desconocido)", origenEnLaApp(emptyArray()))
     }
+
+    @Test
+    fun laPantallaAnteriorEsDesdeDondeSeAbrio() {
+        val pila = PilaPantallas()
+        assertEquals(PilaPantallas.SIN_PANTALLA, pila.anterior())
+        pila.entrar("proveedores")
+        pila.entrar("escanear_vehiculo_ruta")
+        assertEquals("proveedores", pila.anterior())
+    }
 }

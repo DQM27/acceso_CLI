@@ -101,6 +101,33 @@ fn corregir_grupo(
 struct Candidata {
     valor: String,
     correcciones: usize,
+    formato: FormatoVehiculo,
+    cl_restituida: bool,
+}
+
+/// Qué patrón produjo la lectura (sólo para diagnóstico).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum FormatoVehiculo {
+    /// `C`/`CL` + dígitos.
+    Carga,
+    /// 3 letras + 3 dígitos.
+    Particular,
+    /// Dos grupos de 3 (y `M`).
+    Moto,
+    /// Calcomanía de la flota.
+    NumeroUnidad,
+}
+
+/// Una lectura de vehículo con CÓMO se obtuvo, para la telemetría de
+/// diagnóstico: el formato, cuántos caracteres hubo que corregir (letra
+/// por dígito o al revés) y si se restituyó la "CL" apilada. La
+/// telemetría usa sólo estos datos, nunca `vehiculo.valor`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct LecturaVehiculo {
+    pub vehiculo: VehiculoRutaDetectado,
+    pub formato: FormatoVehiculo,
+    pub correcciones: u32,
+    pub cl_restituida: bool,
 }
 
 // En la placa de carga liviana la "C" va ENCIMA de la "L" y ML Kit lee el
@@ -121,16 +148,19 @@ fn placa_de_carga(texto: &str) -> Option<Candidata> {
                 char::is_ascii_digit,
                 digito_por_letra,
             )?;
-            let prefijo =
-                if &c[1] == PREFIJO_CL_APILADO_LEIDO && digitos.len() == DIGITOS_PLACA_CARGA {
-                    PREFIJO_CARGA_LIVIANA
-                } else {
-                    &c[1]
-                };
+            let cl_restituida =
+                &c[1] == PREFIJO_CL_APILADO_LEIDO && digitos.len() == DIGITOS_PLACA_CARGA;
+            let prefijo = if cl_restituida {
+                PREFIJO_CARGA_LIVIANA
+            } else {
+                &c[1]
+            };
             ((4..=6).contains(&digitos.len()) && correcciones <= MAXIMO_CORRECCIONES_POR_PLACA)
                 .then(|| Candidata {
                     valor: format!("{prefijo}{digitos}"),
                     correcciones,
+                    formato: FormatoVehiculo::Carga,
+                    cl_restituida,
                 })
         })
         .min_by_key(|c| c.correcciones)
@@ -148,6 +178,8 @@ fn placa_particular(texto: &str) -> Option<Candidata> {
             (correcciones <= MAXIMO_CORRECCIONES_POR_PLACA).then(|| Candidata {
                 valor: format!("{letras}{digitos}"),
                 correcciones,
+                formato: FormatoVehiculo::Particular,
+                cl_restituida: false,
             })
         })
         .min_by_key(|c| c.correcciones)
@@ -182,25 +214,47 @@ fn moto(texto: &str) -> Option<VehiculoRutaDetectado> {
 /// igualdad, la de carga): `SGB123` no se convierte en `SG8123`.
 #[uniffi::export]
 pub fn extraer_vehiculo(texto: String) -> Option<VehiculoRutaDetectado> {
+    extraer_vehiculo_con_detalle(texto).map(|l| l.vehiculo)
+}
+
+/// Igual que [`extraer_vehiculo`], con cómo se obtuvo la lectura.
+#[uniffi::export]
+pub fn extraer_vehiculo_con_detalle(texto: String) -> Option<LecturaVehiculo> {
     let normalizado = texto.to_uppercase();
     let placa = [placa_de_carga(&normalizado), placa_particular(&normalizado)]
         .into_iter()
         .flatten()
         .min_by_key(|c| c.correcciones);
     if let Some(p) = placa {
-        return Some(VehiculoRutaDetectado {
-            valor: p.valor,
-            tipo: TipoVehiculoDetectado::Placa,
+        return Some(LecturaVehiculo {
+            vehiculo: VehiculoRutaDetectado {
+                valor: p.valor,
+                tipo: TipoVehiculoDetectado::Placa,
+            },
+            formato: p.formato,
+            correcciones: u32::try_from(p.correcciones).unwrap_or(u32::MAX),
+            cl_restituida: p.cl_restituida,
         });
     }
-    moto(&normalizado).or_else(|| {
-        NUMERO_UNIDAD
-            .captures(&normalizado)
-            .map(|c| VehiculoRutaDetectado {
-                valor: c[1].to_owned(),
-                tipo: TipoVehiculoDetectado::NumeroUnidad,
+    let sin_correcciones = |vehiculo, formato| LecturaVehiculo {
+        vehiculo,
+        formato,
+        correcciones: 0,
+        cl_restituida: false,
+    };
+    moto(&normalizado)
+        .map(|v| sin_correcciones(v, FormatoVehiculo::Moto))
+        .or_else(|| {
+            NUMERO_UNIDAD.captures(&normalizado).map(|c| {
+                sin_correcciones(
+                    VehiculoRutaDetectado {
+                        valor: c[1].to_owned(),
+                        tipo: TipoVehiculoDetectado::NumeroUnidad,
+                    },
+                    FormatoVehiculo::NumeroUnidad,
+                )
             })
-    })
+        })
 }
 
 #[cfg(test)]
@@ -243,5 +297,25 @@ mod tests {
             leer("228051"),
             Some(("228051".into(), TipoVehiculoDetectado::NumeroUnidad))
         );
+    }
+
+    #[test]
+    fn el_detalle_dice_formato_correcciones_y_cl() {
+        let detalle = |t: &str| extraer_vehiculo_con_detalle(t.to_owned()).unwrap();
+        let cl = detalle("E37 1931");
+        assert_eq!(
+            (cl.formato, cl.correcciones, cl.cl_restituida),
+            (FormatoVehiculo::Carga, 0, true)
+        );
+        let corregida = detalle("8PH485");
+        assert_eq!(
+            (corregida.formato, corregida.correcciones),
+            (FormatoVehiculo::Particular, 1)
+        );
+        assert_eq!(
+            detalle("CoSmCA\n947\n369\nM").formato,
+            FormatoVehiculo::Moto
+        );
+        assert_eq!(detalle("22906").formato, FormatoVehiculo::NumeroUnidad);
     }
 }

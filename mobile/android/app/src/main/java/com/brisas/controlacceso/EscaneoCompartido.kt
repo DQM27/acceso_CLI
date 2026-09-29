@@ -88,6 +88,9 @@ class EstabilizadorPorRepeticion<T>(
     // sin exigir una ventana tan larga que acepte una racha ya abandonada.
     private val ventana: Int = framesRequeridos + 2,
     private val desdeClave: ((String) -> T?)? = null,
+    // Aviso de que la votación empezó de cero porque llegó OTRA lectura
+    // (telemetría de diagnóstico).
+    private val alReiniciarVotacion: () -> Unit = {},
 ) {
     private val candidatosRecientes = ArrayDeque<String>()
     private val votador = desdeClave?.let { VotadorPorPosicion(ventana.toUInt()) }
@@ -100,6 +103,11 @@ class EstabilizadorPorRepeticion<T>(
     @Synchronized
     fun procesarTextos(textos: List<String>, peso: Float = 1f): T? =
         procesarDetectado(textos.firstNotNullOfOrNull(extraer), peso)
+
+    /// Un frame cuya lectura ya extrajo quien llama (p. ej. para medir cómo
+    /// se leyó): `null` si no hubo lectura.
+    @Synchronized
+    fun procesarLectura(detectado: T?, peso: Float = 1f): T? = procesarDetectado(detectado, peso)
 
     private fun procesarDetectado(detectado: T?, peso: Float): T? {
         if (votador != null && desdeClave != null) return votar(votador, desdeClave, detectado, peso)
@@ -118,7 +126,10 @@ class EstabilizadorPorRepeticion<T>(
         }
         val claveActual = clave(detectado)
         val previo = votador.consenso()
-        if (previo != null && esOtraLectura(previo.texto, claveActual)) votador.reiniciar()
+        if (previo != null && esOtraLectura(previo.texto, claveActual)) {
+            votador.reiniciar()
+            alReiniciarVotacion()
+        }
         votador.agregar(claveActual, peso)
         val consenso = votador.consenso() ?: return null
         return if (consenso.alcanza(framesRequeridos)) desdeClave(consenso.texto) else null

@@ -20,6 +20,7 @@ import uniffi.control_acceso_mobile.DatosPdf417Cedula
 import uniffi.control_acceso_mobile.LineaOcr
 import uniffi.control_acceso_mobile.MotivoPdf417
 import uniffi.control_acceso_mobile.PalabraOcr
+import uniffi.control_acceso_mobile.confianzaMinimaPalabra
 import uniffi.control_acceso_mobile.textosDeFrame
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -252,6 +253,7 @@ fun analizarFrameOcr(
         val recorte = region?.let { recortarParaOcr(mediaImage, imagen.cropRect, rotacion, it) }
         val calidad = recorte?.let { medirCalidad(it.nv21, it.anchoSensor, it.altoSensor) }
         // Sin región no hay recorte ni medición: se procesa con peso 1.
+        calidad?.let { camara.metricas.registrarCalidad(it, camara.linternaEncendida) }
         val decision = if (region != null && calidad != null) camara.filtroCalidad(region).evaluar(calidad) else SIN_MEDICION
         if (!decision.procesar) {
             camara.metricas.registrarDescarte()
@@ -296,7 +298,7 @@ fun analizarFrameOcr(
                         }
                         .toList()
                 }
-                val textos = texto?.let(::textosParaLectores).orEmpty()
+                val textos = texto?.let { textosParaLectores(it, camara.metricas) }.orEmpty()
                 onLectura(LecturaFrame(texto?.text.orEmpty(), textos, datosPdf417, calidad, decision.peso, regionLeida, lineasMrz))
             } finally {
                 if (retenerImagen) imagen.close()
@@ -320,7 +322,7 @@ fun analizarFrameOcr(
 /// Kit como segunda opción. Las cajas van en píxeles de la imagen que
 /// analizó ML Kit; sólo importan sus posiciones relativas. Una línea o
 /// palabra sin caja se omite de la versión visual (la original la conserva).
-private fun textosParaLectores(texto: Text): List<String> {
+private fun textosParaLectores(texto: Text, metricas: MetricasOcr): List<String> {
     val lineas = texto.textBlocks.flatMap { bloque ->
         bloque.lines.mapNotNull { linea ->
             val caja = linea.boundingBox ?: return@mapNotNull null
@@ -344,8 +346,14 @@ private fun textosParaLectores(texto: Text): List<String> {
             )
         }
     }
-    return textosDeFrame(texto.text, lineas)
+    val textos = textosDeFrame(texto.text, lineas)
+    metricas.registrarTexto(lineas.flatMap { l -> l.palabras.map { it.confianza } }, UMBRAL_CONFIANZA_PALABRA, textos.size)
+    return textos
 }
+
+/// El mismo umbral con que el núcleo descarta palabras (ver
+/// `renglones_visuales.rs`), para contarlas en la telemetría.
+private val UMBRAL_CONFIANZA_PALABRA = confianzaMinimaPalabra()
 
 /// El primer PDF417 de la cédula anterior que el núcleo acepta, y el
 /// diagnóstico de todos los códigos del frame para la telemetría. Los

@@ -42,6 +42,11 @@ pub use identidad::{
     reclasificar_por_edad,
 };
 pub use mrz_texto::{LecturaMrz, leer_lectura_mrz};
-pub use renglones_visuales::{LineaOcr, PalabraOcr, reconstruir_texto_visual, textos_de_frame};
+pub use renglones_visuales::{
+    LineaOcr, PalabraOcr, confianza_minima_palabra, reconstruir_texto_visual, textos_de_frame,
+};
 pub use texto::FechaOcr;
-pub use vehiculo::{TipoVehiculoDetectado, VehiculoRutaDetectado, extraer_vehiculo};
+pub use vehiculo::{
+    FormatoVehiculo, LecturaVehiculo, TipoVehiculoDetectado, VehiculoRutaDetectado,
+    extraer_vehiculo, extraer_vehiculo_con_detalle,
+};

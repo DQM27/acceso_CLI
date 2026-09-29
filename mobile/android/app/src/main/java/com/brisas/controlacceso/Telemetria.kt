@@ -80,6 +80,8 @@ object Telemetria {
 
     fun pantallaActual(): String = motor?.pantallas?.actual() ?: PilaPantallas.SIN_PANTALLA
 
+    fun pantallaAnterior(): String = motor?.pantallas?.anterior() ?: PilaPantallas.SIN_PANTALLA
+
     fun entrarPantalla(nombre: String) {
         motor?.pantallas?.entrar(nombre)
     }

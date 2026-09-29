@@ -81,6 +81,37 @@ where tipo = 'ocr_sesion' and (datos->>'lector_pdf417')::boolean
 order by ocurrido_en desc;
 ```
 
+## Condiciones de captura, texto y placas (en `ocr_sesion`)
+
+Para calibrar los umbrales con datos reales, de día y de noche. Todo son
+números o nombres de formato; nunca el texto, la placa ni la imagen.
+
+| Campo | Qué dice | Sirve para ajustar |
+|---|---|---|
+| `abierta_desde` | Pantalla desde la que se abrió la cámara (`proveedores`, `activos`...) | Separar los casos de uso |
+| `frames_medidos` / `frames_con_linterna` | Frames medidos (también los descartados) y cuántos con linterna | Uso real de la linterna |
+| `nitidez_p10/p50/p90` | Nitidez del recorte (relativa: comparar sesiones del mismo teléfono) | Filtro de calidad (`FiltroCalidad`) |
+| `luminancia_p10/p50` | Brillo medio del recorte, 0-255 | Distinguir noche/día; sugerir la linterna |
+| `reflejo_p50/p90` | Fracción de píxeles saturados | Aviso de reflejo (`UMBRAL_REFLEJO`, 0,03) |
+| `palabras` / `palabras_confianza_baja` / `confianza_p10/p50` / `frames_sin_confianza` | Confianza de las palabras de ML Kit | Umbral de los renglones visuales (0,25) |
+| `frames_textos_distintos` | Frames en que los renglones visuales difieren del texto original | Cuánto cambia E-3 |
+| `vehiculo_formatos` | Lecturas por formato: `CARGA`, `PARTICULAR`, `MOTO`, `NUMERO_UNIDAD` | Qué placas llegan |
+| `vehiculo_con_correccion` / `vehiculo_cl_restituida` | Lecturas que corrigieron letra/dígito o restituyeron la "CL" apilada | Máximo de correcciones por placa |
+| `vehiculo_por_version_texto` | Lecturas desde los renglones visuales o el texto original | Si E-3 ayuda en placas |
+| `vehiculo_frames_sin_lectura` | Frames con texto y sin placa | Cuánto cuesta leer (noche, distancia) |
+| `reinicios_votacion` | Veces que la votación empezó de cero por otra lectura | Tolerancia de la votación |
+
+```sql
+select ocurrido_en, datos->>'pantalla', datos->>'abierta_desde',
+       datos->>'ms_hasta_confirmar', datos->>'frames', datos->>'descartados_calidad',
+       datos->>'luminancia_p50', datos->>'frames_con_linterna', datos->>'nitidez_p50',
+       datos->>'reflejo_p90', datos->'vehiculo_formatos', datos->>'vehiculo_frames_sin_lectura',
+       datos->>'reinicios_votacion', datos->>'confianza_p10'
+from public.telemetria_diagnostico
+where tipo = 'ocr_sesion'
+order by ocurrido_en desc;
+```
+
 ## Envío
 
 - Cola en memoria con tope de 5000 filas (si se llena se descartan las más

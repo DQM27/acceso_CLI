@@ -215,6 +215,11 @@ class PilaPantallas {
     @Synchronized
     fun actual(): String = pila.lastOrNull() ?: SIN_PANTALLA
 
+    /// La pantalla debajo de la visible: desde dónde se abrió (p. ej. la
+    /// cámara abierta desde Proveedores).
+    @Synchronized
+    fun anterior(): String = pila.getOrNull(pila.size - 2) ?: SIN_PANTALLA
+
     companion object {
         const val SIN_PANTALLA = "(ninguna)"
     }

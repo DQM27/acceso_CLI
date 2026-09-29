@@ -93,4 +93,9 @@ class CalidadFrameTest {
         // El 100 ya salió de la ventana: 20 es la referencia.
         assertTrue(filtro.evaluar(CalidadFrame(19f, 0f)).procesar)
     }
+
+    @Test
+    fun mideLaLuminanciaMedia() {
+        assertEquals(100f, medirCalidad(ByteArray(32 * 32) { 100 }, 32, 32).luminancia)
+    }
 }

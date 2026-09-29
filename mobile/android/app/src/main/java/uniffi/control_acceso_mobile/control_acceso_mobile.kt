@@ -705,11 +705,15 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_leer_lectura_mrz(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_confianza_minima_palabra(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_reconstruir_texto_visual(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_textos_de_frame(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo_con_detalle(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_leer_mrz(
     ): Int
@@ -1025,11 +1029,15 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_leer_lectura_mrz(`texto`: RustBuffer.ByValue,`anioActual`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_confianza_minima_palabra(uniffi_out_err: UniffiRustCallStatus, 
+    ): Float
     external fun uniffi_control_acceso_mobile_fn_func_reconstruir_texto_visual(`lineas`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_textos_de_frame(`textoMlKit`: RustBuffer.ByValue,`lineas`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_extraer_vehiculo(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_extraer_vehiculo_con_detalle(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_leer_mrz(`lineas`: RustBuffer.ByValue,`anioActual`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1206,6 +1214,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_lectura_mrz() and 0xFFFF) != 5753) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_confianza_minima_palabra() and 0xFFFF) != 29692) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_reconstruir_texto_visual() and 0xFFFF) != 17711) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1213,6 +1224,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo() and 0xFFFF) != 63495) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo_con_detalle() and 0xFFFF) != 9950) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 18012) {
@@ -5594,6 +5608,60 @@ public object FfiConverterTypeLecturaPdf417: FfiConverterRustBuffer<LecturaPdf41
 
 
 /**
+ * Una lectura de vehículo con CÓMO se obtuvo, para la telemetría de
+ * diagnóstico: el formato, cuántos caracteres hubo que corregir (letra
+ * por dígito o al revés) y si se restituyó la "CL" apilada. La
+ * telemetría usa sólo estos datos, nunca `vehiculo.valor`.
+ */
+data class LecturaVehiculo (
+    var `vehiculo`: VehiculoRutaDetectado
+    , 
+    var `formato`: FormatoVehiculo
+    , 
+    var `correcciones`: kotlin.UInt
+    , 
+    var `clRestituida`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLecturaVehiculo: FfiConverterRustBuffer<LecturaVehiculo> {
+    override fun read(buf: ByteBuffer): LecturaVehiculo {
+        return LecturaVehiculo(
+            FfiConverterTypeVehiculoRutaDetectado.read(buf),
+            FfiConverterTypeFormatoVehiculo.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LecturaVehiculo) = (
+            FfiConverterTypeVehiculoRutaDetectado.allocationSize(value.`vehiculo`) +
+            FfiConverterTypeFormatoVehiculo.allocationSize(value.`formato`) +
+            FfiConverterUInt.allocationSize(value.`correcciones`) +
+            FfiConverterBoolean.allocationSize(value.`clRestituida`)
+    )
+
+    override fun write(value: LecturaVehiculo, buf: ByteBuffer) {
+            FfiConverterTypeVehiculoRutaDetectado.write(value.`vehiculo`, buf)
+            FfiConverterTypeFormatoVehiculo.write(value.`formato`, buf)
+            FfiConverterUInt.write(value.`correcciones`, buf)
+            FfiConverterBoolean.write(value.`clRestituida`, buf)
+    }
+}
+
+
+
+/**
  * Una línea (`Line` de ML Kit) con su caja y sus palabras, en el orden en
  * que ML Kit las entregó.
  */
@@ -7108,6 +7176,57 @@ public object FfiConverterTypeFormatoMrz: FfiConverterRustBuffer<FormatoMrz> {
 
 
 /**
+ * Qué patrón produjo la lectura (sólo para diagnóstico).
+ */
+
+enum class FormatoVehiculo {
+    
+    /**
+     * `C`/`CL` + dígitos.
+     */
+    CARGA,
+    /**
+     * 3 letras + 3 dígitos.
+     */
+    PARTICULAR,
+    /**
+     * Dos grupos de 3 (y `M`).
+     */
+    MOTO,
+    /**
+     * Calcomanía de la flota.
+     */
+    NUMERO_UNIDAD;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFormatoVehiculo: FfiConverterRustBuffer<FormatoVehiculo> {
+    override fun read(buf: ByteBuffer) = try {
+        FormatoVehiculo.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FormatoVehiculo) = 4UL
+
+    override fun write(value: FormatoVehiculo, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
  * De dónde salieron los datos de un documento leído.
  */
 
@@ -8334,6 +8453,38 @@ public object FfiConverterOptionalTypeLecturaMrz: FfiConverterRustBuffer<Lectura
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeLecturaVehiculo: FfiConverterRustBuffer<LecturaVehiculo?> {
+    override fun read(buf: ByteBuffer): LecturaVehiculo? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeLecturaVehiculo.read(buf)
+    }
+
+    override fun allocationSize(value: LecturaVehiculo?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeLecturaVehiculo.allocationSize(value)
+        }
+    }
+
+    override fun write(value: LecturaVehiculo?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeLecturaVehiculo.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeVehiculoRutaDetectado: FfiConverterRustBuffer<VehiculoRutaDetectado?> {
     override fun read(buf: ByteBuffer): VehiculoRutaDetectado? {
         if (buf.get().toInt() == 0) {
@@ -9324,6 +9475,20 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
     
 
         /**
+         * El umbral de [`CONFIANZA_MINIMA`], para que la telemetría de diagnóstico
+         * cuente las palabras descartadas con el mismo número.
+         */ fun `confianzaMinimaPalabra`(): kotlin.Float {
+            return FfiConverterFloat.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_confianza_minima_palabra(
+    
+        _status)
+}
+    )
+    }
+    
+
+        /**
          * Texto del frame en renglones visuales. Si alguna caja es inválida
          * (NaN, invertida) no se puede ubicar nada con seguridad y se devuelven
          * las líneas en el orden de ML Kit.
@@ -9365,6 +9530,20 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
             return FfiConverterOptionalTypeVehiculoRutaDetectado.lift(
     uniffiRustCall() { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_func_extraer_vehiculo(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Igual que [`extraer_vehiculo`], con cómo se obtuvo la lectura.
+         */ fun `extraerVehiculoConDetalle`(`texto`: kotlin.String): LecturaVehiculo? {
+            return FfiConverterOptionalTypeLecturaVehiculo.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_extraer_vehiculo_con_detalle(
     
         
         FfiConverterString.lower(`texto`),_status)

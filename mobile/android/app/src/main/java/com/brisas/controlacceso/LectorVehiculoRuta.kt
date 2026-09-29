@@ -23,3 +23,10 @@ fun vehiculoDesdeClave(clave: String): VehiculoRutaDetectado? {
 
 /// Placa (lo más específico) o, si no hay, número de unidad.
 fun extraerVehiculo(texto: String): VehiculoRutaDetectado? = uniffi.control_acceso_mobile.extraerVehiculo(texto)
+
+/// Igual que [extraerVehiculo], con cómo se obtuvo (formato, correcciones,
+/// "CL" restituida) para la telemetría de diagnóstico.
+fun extraerVehiculoConDetalle(texto: String): LecturaVehiculo? =
+    uniffi.control_acceso_mobile.extraerVehiculoConDetalle(texto)
+
+typealias LecturaVehiculo = uniffi.control_acceso_mobile.LecturaVehiculo

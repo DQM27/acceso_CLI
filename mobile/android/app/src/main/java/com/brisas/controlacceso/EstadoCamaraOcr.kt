@@ -167,7 +167,11 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         if (Telemetria.activa) {
             Telemetria.evento(
                 "ocr_sesion",
-                metricas.datos() + mapOf("pantalla" to Telemetria.pantallaActual(), "lector_pdf417" to (lectorCodigos != null)),
+                metricas.datos() + mapOf(
+                    "pantalla" to Telemetria.pantallaActual(),
+                    "abierta_desde" to Telemetria.pantallaAnterior(),
+                    "lector_pdf417" to (lectorCodigos != null),
+                ),
             )
             // La cámara y sus modelos retienen búferes grandes: si este
             // estado sigue vivo después de cerrar la pantalla, hay una fuga.

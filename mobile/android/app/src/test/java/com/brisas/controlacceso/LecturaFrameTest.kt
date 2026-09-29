@@ -223,4 +223,32 @@ class LecturaFrameTest {
         assertEquals(MotivoPdf417.PREFIJO_CORTO, leerPdf417ConMotivo(crudo).motivo)
         assertTrue(crudo.all { it == 0.toByte() })
     }
+
+    @Test
+    fun registraCondicionesConfianzaYPlacasSinValores() {
+        val metricas = MetricasOcr(habilitadas = true, cadaCuantosFrames = 100)
+        metricas.registrarCalidad(CalidadFrame(nitidez = 10f, fraccionReflejo = 0.01f, luminancia = 40f), linternaEncendida = true)
+        metricas.registrarCalidad(CalidadFrame(nitidez = 30f, fraccionReflejo = 0.05f, luminancia = 60f), linternaEncendida = false)
+        metricas.registrarTexto(listOf(0.9f, 0.1f, 0.8f), umbralBajo = 0.25f, versionesTexto = 2)
+        metricas.registrarTexto(listOf(0f, 0f), umbralBajo = 0.25f, versionesTexto = 1)
+        val placa = extraerVehiculoConDetalle("E37 1931")
+        metricas.registrarLecturaVehiculo(placa, indiceTexto = 0)
+        metricas.registrarLecturaVehiculo(null, indiceTexto = null)
+        metricas.registrarReinicioVotacion()
+        val datos = metricas.datos()
+        assertEquals(2, datos["frames_medidos"])
+        assertEquals(1, datos["frames_con_linterna"])
+        assertEquals(40f, datos["luminancia_p10"])
+        assertEquals(1, datos["frames_textos_distintos"])
+        assertEquals(5, datos["palabras"])
+        assertEquals(1, datos["palabras_confianza_baja"])
+        assertEquals(1, datos["frames_sin_confianza"])
+        assertEquals(mapOf("CARGA" to 1), datos["vehiculo_formatos"])
+        assertEquals(1, datos["vehiculo_cl_restituida"])
+        assertEquals(mapOf("visual" to 1), datos["vehiculo_por_version_texto"])
+        assertEquals(1, datos["vehiculo_frames_sin_lectura"])
+        assertEquals(1, datos["reinicios_votacion"])
+        // Nunca el valor de la placa.
+        assertFalse(datos.values.any { it.toString().contains("371931") })
+    }
 }

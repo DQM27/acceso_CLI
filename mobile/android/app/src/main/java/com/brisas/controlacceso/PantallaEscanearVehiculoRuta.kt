@@ -68,6 +68,8 @@ private fun VistaCamaraVehiculoRuta(
     val onDetectadoActual by rememberUpdatedState(onVehiculoDetectado)
     var ultimoMensaje by remember { mutableStateOf(mensajeInicial) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
+    // MV-10 (auditoría 2026-09-24): ver EstadoCamaraOcr.kt.
+    val camara = rememberEstadoCamaraOcr(contexto)
     val estabilizador = remember {
         // Con votación por carácter: una placa no tiene dígito verificador
         // y cada frame puede errar en un carácter distinto (ver
@@ -76,11 +78,10 @@ private fun VistaCamaraVehiculoRuta(
             extraer = ::extraerVehiculo,
             clave = { it.claveVotacion() },
             desdeClave = ::vehiculoDesdeClave,
+            alReiniciarVotacion = camara.metricas::registrarReinicioVotacion,
         )
     }
     val detectorInvalido = remember { DetectorTextoNoReconocido(esTipoEsperado = { extraerVehiculo(it) != null }) }
-    // MV-10 (auditoría 2026-09-24): ver EstadoCamaraOcr.kt.
-    val camara = rememberEstadoCamaraOcr(contexto)
 
     val colorMarco = when (estado) {
         EstadoEscaneo.CONFIRMADO -> ColorEscaneoConfirmado
@@ -105,7 +106,14 @@ private fun VistaCamaraVehiculoRuta(
                         onLectura = { lectura ->
                             // Hilo del analizador: extraer y votar acá, a la
                             // pantalla sólo se publica el resultado.
-                            val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso)
+                            // Una sola extracción por frame: la primera versión
+                            // del texto que lee algo, con cómo se leyó (para la
+                            // telemetría; nunca el valor).
+                            val leida = lectura.textos.withIndex().firstNotNullOfOrNull { (indice, texto) ->
+                                extraerVehiculoConDetalle(texto)?.let { IndexedValue(indice, it) }
+                            }
+                            camara.metricas.registrarLecturaVehiculo(leida?.value, leida?.index)
+                            val resultado = estabilizador.procesarLectura(leida?.value?.vehiculo, lectura.peso)
                             // Sólo si no hubo resultado, como antes: un
                             // frame que confirma no cuenta como inválido.
                             val invalido = resultado == null && detectorInvalido.procesarTextos(lectura.textos)

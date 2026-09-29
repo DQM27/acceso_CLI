@@ -16,7 +16,9 @@ package com.brisas.controlacceso
 ///   como umbral absoluto entre teléfonos o iluminaciones.
 /// - `fraccionReflejo`: proporción de píxeles saturados (Y >= 250), lo que
 ///   deja un reflejo sobre el plástico de la tarjeta.
-data class CalidadFrame(val nitidez: Float, val fraccionReflejo: Float)
+/// - `luminancia`: brillo medio del recorte (0-255). Sólo diagnóstico: dice
+///   cuánta luz había (de noche en la portería, con o sin linterna).
+data class CalidadFrame(val nitidez: Float, val fraccionReflejo: Float, val luminancia: Float = 0f)
 
 private const val UMBRAL_SATURACION = 250
 private const val CUANTIL_NITIDEZ = 0.99
@@ -32,6 +34,7 @@ fun medirCalidad(y: ByteArray, ancho: Int, alto: Int, paso: Int = 2): CalidadFra
     val histogramaH = IntArray(256)
     val histogramaV = IntArray(256)
     var saturados = 0
+    var sumaLuminancia = 0L
     var muestras = 0
     var fila = 0
     while (fila < alto - paso) {
@@ -44,6 +47,7 @@ fun medirCalidad(y: ByteArray, ancho: Int, alto: Int, paso: Int = 2): CalidadFra
             histogramaH[kotlin.math.abs(derecha - actual)]++
             histogramaV[kotlin.math.abs(abajo - actual)]++
             if (actual >= UMBRAL_SATURACION) saturados++
+            sumaLuminancia += actual
             muestras++
             columna += paso
         }
@@ -51,7 +55,11 @@ fun medirCalidad(y: ByteArray, ancho: Int, alto: Int, paso: Int = 2): CalidadFra
     }
     if (muestras == 0) return CalidadFrame(nitidez = 0f, fraccionReflejo = 0f)
     val nitidez = minOf(cuantilAlto(histogramaH, muestras), cuantilAlto(histogramaV, muestras))
-    return CalidadFrame(nitidez = nitidez.toFloat(), fraccionReflejo = saturados.toFloat() / muestras)
+    return CalidadFrame(
+        nitidez = nitidez.toFloat(),
+        fraccionReflejo = saturados.toFloat() / muestras,
+        luminancia = sumaLuminancia.toFloat() / muestras,
+    )
 }
 
 private fun cuantilAlto(histograma: IntArray, total: Int): Int {
