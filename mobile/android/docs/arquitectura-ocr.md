@@ -175,6 +175,13 @@ vencerse. Durante el modo:
 - la pantalla pide acercar el código hasta llenar la pantalla, y de lado: a
   lo largo de los 1920 px del frame el código gana la mayor cantidad de
   píxeles.
+- el análisis pasa a la mayor resolución del sensor
+  (`EstadoCamaraOcr.usarAnalisisDeCodigo`: otro `ImageAnalysis` con el mismo
+  analizador, reenlazado sin soltar el preview) y vuelve a 1080p al terminar.
+  Con 1920x1440 el lector veía ~1126 px (el preview recorta los costados) y
+  siguió sin detectar nada; a 4080x3060 son ~2,1 veces más. El preview se
+  congela un momento al entrar y al salir; si el equipo no admite la
+  combinación, sigue con la normal.
 
 La telemetría (`modo_codigo_*` en `ocr_sesion` y el evento `camara_info`,
 ver `telemetria-diagnostico.md`) dice si el modo gana píxeles y si la cámara

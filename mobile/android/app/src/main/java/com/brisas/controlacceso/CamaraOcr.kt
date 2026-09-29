@@ -53,6 +53,9 @@ fun construirAnalizadorOcr(
     // `EstadoCamaraOcr.hayLugar`). Si no, el frame se descarta ANTES de
     // recortar: nunca se forma una cola atrasada.
     hayLugar: () -> Boolean = { true },
+    // La normal es 1080p (ver abajo). El "modo código" del PDF417 pide
+    // [RESOLUCION_ANALISIS_CODIGO] (ver `EstadoCamaraOcr.usarAnalisisDeCodigo`).
+    resolucion: Size = RESOLUCION_ANALISIS_NORMAL,
     onFrameActivo: (ImageProxy) -> Unit,
 ): ImageAnalysis {
     // Optimización #2 del relevamiento de rendimiento de cámara
@@ -86,8 +89,13 @@ fun construirAnalizadorOcr(
                         // pesa: se recorta sólo el recuadro sobre los planos
                         // crudos (ver `recortarParaOcr`), sin convertir el
                         // frame completo a ARGB.
-                        Size(1920, 1080),
-                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                        resolucion,
+                        if (resolucion == RESOLUCION_ANALISIS_NORMAL) {
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                        } else {
+                            // Lo más grande que dé el equipo sin pasarse.
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER
+                        },
                     ),
                 )
                 .build(),
@@ -129,6 +137,9 @@ fun iniciarCamara(
     onFallo: (String) -> Unit,
     // La cámara ya conectada: la usa la linterna (`EstadoCamaraOcr`).
     onCamaraLista: (androidx.camera.core.Camera) -> Unit = {},
+    // Lo necesario para volver a enlazar otro análisis sin soltar el
+    // preview (ver `EstadoCamaraOcr.usarAnalisisDeCodigo`).
+    onEnlazado: (androidx.lifecycle.LifecycleOwner, androidx.camera.core.ViewPort?) -> Unit = { _, _ -> },
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
     cameraProviderFuture.addListener(
@@ -164,6 +175,7 @@ fun iniciarCamara(
                     grupoUseCases,
                 )
                 onCamaraLista(camara)
+                onEnlazado(lifecycleOwner, previewView.viewPort)
                 reportarCamaraInfo(camara, analisis, preview, lifecycleOwner)
             } catch (_: Exception) {
                 if (sesionActiva.get()) onFallo("No se pudo iniciar la cámara")
@@ -195,6 +207,17 @@ fun iniciarCamara(
 // El sensor sigue entregando a su fps normal. Ajustable con las métricas
 // (`adb logcat -s OcrMetricas`: fps y mediana de reconocimiento).
 private const val INTERVALO_MINIMO_ENTRE_FRAMES_MS = 80L
+
+/// Análisis de siempre: 1080p (CameraX da 1920x1440 en 4:3 en el A25).
+val RESOLUCION_ANALISIS_NORMAL = Size(1920, 1080)
+
+/// Análisis del "modo código" del PDF417: la mayor del sensor del A25
+/// (4080x3060, `camara_info` de staging 2026-09-29). Con 1920x1440 el
+/// lector veía la tarjeta en ~1126 px y las barras del PDF417 de la cédula
+/// anterior (datos + huellas) quedaban en 1-2 px: 0 detecciones. Con esto,
+/// ~2,1 veces más píxeles. En otro equipo CameraX elige lo más grande que
+/// no se pase.
+val RESOLUCION_ANALISIS_CODIGO = Size(4080, 3060)
 
 /// Compartido por las 4 pantallas de escaneo -- antes cada una tenía su
 /// propia copia textual idéntica (hallazgo 2026-09-19, riesgo de

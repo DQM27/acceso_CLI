@@ -3,8 +3,11 @@ package com.brisas.controlacceso
 import android.content.Context
 import android.util.Log
 import androidx.camera.core.Camera
+import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCaseGroup
+import androidx.camera.core.ViewPort
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -13,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 import com.google.mlkit.vision.barcode.BarcodeScanner
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -113,6 +117,18 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
     var cameraProvider: ProcessCameraProvider? by mutableStateOf(null)
     var vistaPreviaCamara: Preview? by mutableStateOf(null)
     var analisisCamara: ImageAnalysis? by mutableStateOf(null)
+
+    /// Mismo analizador a la mayor resolución: sólo mientras dura el "modo
+    /// código" del PDF417 (ver [usarAnalisisDeCodigo]). `null` = la pantalla
+    /// no lo usa.
+    var analisisCodigo: ImageAnalysis? = null
+
+    /// Lo que hace falta para volver a enlazar (ver `iniciarCamara`).
+    private var propietarioCamara: LifecycleOwner? = null
+    private var viewPortCamara: ViewPort? = null
+
+    /// ¿Está enlazado [analisisCodigo] en vez de [analisisCamara]?
+    private var analisisCodigoActivo = false
     var trabajoResultado: Job? by mutableStateOf(null)
     var camaraFisica: Camera? by mutableStateOf(null)
     var linternaEncendida by mutableStateOf(false)
@@ -132,6 +148,68 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         val encender = !linternaEncendida
         camara.cameraControl.enableTorch(encender)
         linternaEncendida = encender
+    }
+
+    /// Lo llama `iniciarCamara` cuando la cámara quedó enlazada.
+    fun alEnlazar(propietario: LifecycleOwner, viewPort: ViewPort?) {
+        propietarioCamara = propietario
+        viewPortCamara = viewPort
+    }
+
+    /// Cambia el análisis por el de alta resolución (`activar`) o vuelve al
+    /// normal, sin soltar el preview. En el hilo principal (lo exige
+    /// CameraX). La cámara se reconfigura: el preview se congela un momento
+    /// al entrar y al salir del modo código. Si el equipo no admite la
+    /// combinación, se queda (o vuelve) con el normal: el escaneo sigue
+    /// como siempre.
+    fun usarAnalisisDeCodigo(activar: Boolean) {
+        if (!sesionActiva.get() || activar == analisisCodigoActivo) return
+        val proveedor = cameraProvider ?: return
+        val preview = vistaPreviaCamara ?: return
+        val propietario = propietarioCamara ?: return
+        val normal = analisisCamara ?: return
+        val alto = analisisCodigo ?: return
+        val (sale, entra) = if (activar) normal to alto else alto to normal
+        val inicio = android.os.SystemClock.elapsedRealtime()
+        try {
+            enlazarConPreview(proveedor, propietario, preview, sale, entra)
+            analisisCodigoActivo = activar
+            metricas.registrarCambioAnalisisCodigo(activar, exito = true, ms = android.os.SystemClock.elapsedRealtime() - inicio)
+            if (activar) {
+                camaraFisica?.let { reportarCamaraInfo(it, alto, preview, propietario, mapOf("modo_codigo" to true)) }
+            }
+        } catch (_: RuntimeException) {
+            metricas.registrarCambioAnalisisCodigo(activar, exito = false, ms = android.os.SystemClock.elapsedRealtime() - inicio)
+            analisisCodigoActivo = false
+            if (activar) {
+                // Volver al de siempre; si tampoco se puede, la pantalla ya
+                // mostraba el error de cámara al arrancar.
+                try {
+                    enlazarConPreview(proveedor, propietario, preview, alto, normal)
+                } catch (_: RuntimeException) {
+                }
+            }
+        }
+    }
+
+    private fun enlazarConPreview(
+        proveedor: ProcessCameraProvider,
+        propietario: LifecycleOwner,
+        preview: Preview,
+        sale: ImageAnalysis,
+        entra: ImageAnalysis,
+    ) {
+        proveedor.unbind(sale)
+        val grupo = UseCaseGroup.Builder()
+            .addUseCase(preview)
+            .addUseCase(entra)
+            .apply { viewPortCamara?.let { setViewPort(it) } }
+            .build()
+        val camara = proveedor.bindToLifecycle(propietario, CameraSelector.DEFAULT_BACK_CAMERA, grupo)
+        camaraFisica = camara
+        // Reenlazar puede apagar la linterna: se respeta lo que eligió
+        // quien opera.
+        if (linternaEncendida) camara.cameraControl.enableTorch(true)
     }
 
     /// Ejecuta `bloque` en el hilo principal si la sesión sigue viva. Los
@@ -159,7 +237,8 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         detectada.set(true)
         trabajoResultado?.cancel()
         analisisCamara?.clearAnalyzer()
-        val casos = listOfNotNull(vistaPreviaCamara, analisisCamara).toTypedArray()
+        analisisCodigo?.clearAnalyzer()
+        val casos = listOfNotNull(vistaPreviaCamara, analisisCamara, analisisCodigo).toTypedArray()
         if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
         ejecutor.shutdown()
         recognizer.close()

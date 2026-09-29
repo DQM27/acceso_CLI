@@ -53,6 +53,9 @@ fun reportarCamaraInfo(
     analisis: ImageAnalysis,
     preview: Preview,
     lifecycleOwner: LifecycleOwner,
+    // Datos que se suman al evento (ej. `modo_codigo` al cambiar al análisis
+    // de alta resolución del PDF417).
+    extra: Map<String, Any?> = emptyMap(),
 ) {
     if (!Telemetria.activa) return
     val estado = camara.cameraInfo.cameraState
@@ -63,7 +66,7 @@ fun reportarCamaraInfo(
         reportado = true
         estado.removeObserver(observador)
         try {
-            Telemetria.evento("camara_info", datosCamaraInfo(camara, analisis, preview))
+            Telemetria.evento("camara_info", datosCamaraInfo(camara, analisis, preview) + extra)
         } catch (_: RuntimeException) {
             // Un dato que la cámara no da nunca debe romper el escaneo.
         }

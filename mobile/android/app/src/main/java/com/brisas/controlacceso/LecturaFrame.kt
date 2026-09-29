@@ -305,6 +305,13 @@ class MetricasOcr(
     private var activacionesModoCodigo = 0
     private val anchosImagenModoCodigoPx = ArrayDeque<Float>()
 
+    // Análisis de alta resolución del modo código (ver
+    // `EstadoCamaraOcr.usarAnalisisDeCodigo`): cambios hechos, fallidos (el
+    // equipo no admitió la combinación) y cuánto tardó el más lento.
+    private var cambiosAnalisisCodigo = 0
+    private var fallosAnalisisCodigo = 0
+    private var msCambioAnalisisCodigoMax: Long? = null
+
     // Condiciones de captura (todos los frames medidos, también los
     // descartados): para calibrar el filtro de calidad y el aviso de
     // reflejo con datos reales, de día y de noche.
@@ -379,6 +386,19 @@ class MetricasOcr(
     @Synchronized
     fun registrarActivacionModoCodigo() {
         if (habilitadas) activacionesModoCodigo++
+    }
+
+    /// Se cambió al análisis de alta resolución (`activar`) o se volvió al
+    /// normal. `ms`: lo que tardó en reenlazar la cámara.
+    @Synchronized
+    fun registrarCambioAnalisisCodigo(activar: Boolean, exito: Boolean, ms: Long) {
+        if (!habilitadas) return
+        if (!exito) {
+            fallosAnalisisCodigo++
+            return
+        }
+        if (activar) cambiosAnalisisCodigo++
+        msCambioAnalisisCodigoMax = maxOf(msCambioAnalisisCodigoMax ?: 0L, ms)
     }
 
     /// Calidad medida de un frame (procesado o descartado) y si la linterna
@@ -516,6 +536,9 @@ class MetricasOcr(
         "modo_codigo_frames" to framesModoCodigo,
         "modo_codigo_activaciones" to activacionesModoCodigo,
         "modo_codigo_imagen_ancho_px_mediana" to mediana(anchosImagenModoCodigoPx),
+        "modo_codigo_alta_resolucion_cambios" to cambiosAnalisisCodigo,
+        "modo_codigo_alta_resolucion_fallos" to fallosAnalisisCodigo,
+        "modo_codigo_alta_resolucion_ms_max" to msCambioAnalisisCodigoMax,
         // Condiciones de captura: con qué nitidez, luz y reflejo se trabajó.
         "frames_medidos" to framesMedidos,
         "frames_con_linterna" to framesConLinterna,

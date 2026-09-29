@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import androidx.camera.core.ImageProxy
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -121,6 +123,12 @@ private fun VistaCamaraCedula(
     val planificador = remember(lectorPdf417) { PlanificadorLectores(habilitado = lectorPdf417) }
     // Aviso mientras dura el "modo código" (ver `PlanificadorLectores`).
     var modoCodigoVisible by remember { mutableStateOf(false) }
+    // Modo código: el análisis pasa a la mayor resolución mientras dura
+    // (las barras del PDF417 de la cédula anterior no alcanzan a verse a
+    // 1080p) y vuelve al normal al terminar. Corre en el hilo principal.
+    LaunchedEffect(modoCodigoVisible) {
+        camara.usarAnalisisDeCodigo(modoCodigoVisible)
+    }
     var ultimoValorContinuo by remember { mutableStateOf<String?>(null) }
     var framesSinUltimoValor by remember { mutableStateOf(0) }
     // Colores de estado compartidos por las 4 pantallas de escaneo (ver
@@ -268,12 +276,7 @@ private fun VistaCamaraCedula(
                 // DIMEX, vertical para PRAIND, In House y gafete CRC. Todo lo
                 // de `onLectura` corre en el hilo del analizador; a la
                 // pantalla sólo se publica el resultado.
-                val analisis = construirAnalizadorOcr(
-                    ejecutorAnalisis = camara.ejecutor,
-                    detectada = camara.detectada,
-                    sesionActiva = camara.sesionActiva,
-                    hayLugar = camara::hayLugar,
-                ) { imagen ->
+                val analizarFrame: (ImageProxy) -> Unit = { imagen ->
                     val (regionBase, leidoCon) = encuadre.regionParaFrame()
                     val region = if (leidoCon == OrientacionEncuadre.HORIZONTAL) seguidorMrz.region(regionBase) else regionBase
                     val planCodigo = planificador.planCodigo()
@@ -312,7 +315,26 @@ private fun VistaCamaraCedula(
                         onFallo = { camara.enPrincipal(onFallo) },
                     )
                 }
+                val analisis = construirAnalizadorOcr(
+                    ejecutorAnalisis = camara.ejecutor,
+                    detectada = camara.detectada,
+                    sesionActiva = camara.sesionActiva,
+                    hayLugar = camara::hayLugar,
+                    onFrameActivo = analizarFrame,
+                )
                 camara.analisisCamara = analisis
+                // El mismo análisis a la mayor resolución, para el modo código
+                // (ver el `LaunchedEffect` de `modoCodigoVisible`).
+                if (camara.lectorCodigos != null) {
+                    camara.analisisCodigo = construirAnalizadorOcr(
+                        ejecutorAnalisis = camara.ejecutor,
+                        detectada = camara.detectada,
+                        sesionActiva = camara.sesionActiva,
+                        hayLugar = camara::hayLugar,
+                        resolucion = RESOLUCION_ANALISIS_CODIGO,
+                        onFrameActivo = analizarFrame,
+                    )
+                }
                 iniciarCamara(
                     ctx = ctx,
                     previewView = previewView,
@@ -324,6 +346,7 @@ private fun VistaCamaraCedula(
                         camara.vistaPreviaCamara = preview
                     },
                     onCamaraLista = { camara.camaraFisica = it },
+                    onEnlazado = camara::alEnlazar,
                     onFallo = { mensaje ->
                         if (camara.sesionActiva.get()) {
                             estado = EstadoEscaneo.INVALIDO

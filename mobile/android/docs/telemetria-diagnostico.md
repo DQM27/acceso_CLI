@@ -74,6 +74,7 @@ números y motivos (nunca bytes del código):
 | `modo_codigo_activaciones` | Veces que se activó el "modo código" (ver abajo) |
 | `modo_codigo_frames` | Frames que corrieron en modo código |
 | `modo_codigo_imagen_ancho_px_mediana` | Ancho (px) de la imagen que analizó el lector de códigos EN modo código (todo lo visible). Aparte de `imagen_ancho_px_mediana_con_codigo`, que mide sólo el recorte normal del recuadro guía |
+| `modo_codigo_alta_resolucion_cambios` / `_fallos` / `_ms_max` | Veces que el análisis pasó a la mayor resolución al entrar al modo código, veces que el equipo no lo admitió (sigue con la normal) y lo que tardó el cambio más lento (ms) |
 
 Cómo leerlo: muchos frames con código y **0 detectados** = falta
 resolución (ML Kit ni lo encuentra); detectados pero **sin bytes** = ML
@@ -91,6 +92,13 @@ todos los frames y en **todo lo visible**, no en el recuadro, y la pantalla
 pide "Acerque el código de barras hasta que llene la pantalla (de lado
 funciona mejor)". De lado el código queda a lo largo de los 1920 px del
 frame. Termina al confirmar, al aparecer un MRZ o al vencerse.
+
+Mientras dura, el análisis pasa a la mayor resolución del sensor
+(`RESOLUCION_ANALISIS_CODIGO`, 4080x3060 en el A25) y vuelve a 1080p al
+terminar; al cambiar sale otro `camara_info` con `modo_codigo = true` y la
+resolución que eligió CameraX. La primera versión del modo, a 1920x1440,
+sólo llevó la imagen del lector de 944 a 1126 px (el preview recorta los
+costados): 0 detecciones en 192 frames (staging, 2026-09-29).
 
 Cómo leerlo: con `modo_codigo_activaciones` > 0, compare
 `modo_codigo_imagen_ancho_px_mediana` con `imagen_ancho_px_mediana_con_codigo`
