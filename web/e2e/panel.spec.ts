@@ -119,8 +119,30 @@ async function preparar(page: Page) {
             version_build: null,
             app_version: null,
             last_ip: null,
+            clave_huella: "huella-prueba",
+            vinculado_en: "2026-09-09T12:05:00Z",
+            credencial: "clave",
           },
         ],
+        codigos_pendientes: [],
+        eventos: [
+          {
+            id: 1,
+            ocurrido_en: "2026-09-09T12:10:00Z",
+            dispositivo_id: "3",
+            tipo: "codigo_usado",
+            ip: "203.0.113.7",
+            detalle: null,
+          },
+        ],
+      });
+    if (url.pathname === "/functions/v1/admin-provision-device")
+      return responder({
+        sitio_id: sitio.id,
+        sitio_nombre: sitio.nombre,
+        dispositivo_id: "4",
+        codigo: "K7QM-R4XT-2P",
+        expira_en: new Date(Date.now() + 15 * 60_000).toISOString(),
       });
     throw new Error(`Petición inesperada: ${url.pathname}`);
   });
@@ -142,6 +164,22 @@ test("Dispositivos carga sin violaciones de CSP", async ({ page }) => {
   await preparar(page);
   await page.goto("/dispositivos");
   await expect(page.getByText("Brisas")).toBeVisible();
+  // El registro de intentos vive fuera de la grilla: se ve en cualquier
+  // ancho (las columnas de la grilla se virtualizan en pantallas angostas).
+  await page.getByText(/Intentos y alertas/).click();
+  await expect(page.getByText("203.0.113.7")).toBeVisible();
+});
+
+test("Alta de dispositivo muestra el código y su QR sin violaciones de CSP", async ({ page }) => {
+  await preparar(page);
+  await page.goto("/dispositivos");
+  await page.getByRole("button", { name: "+ Nuevo" }).click();
+  await page.getByPlaceholder("ej. Brisas - PC recepción").fill("PC nueva");
+  await page.getByRole("button", { name: "Crear y generar código" }).click();
+
+  await expect(page.getByText("K7QM-R4XT-2P")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Código QR de vinculación" })).toBeVisible();
+  await expect(page.getByText(/Vence en \d+:\d{2}/)).toBeVisible();
 });
 
 test("Historial (AG Grid) y exportación a PDF sin violaciones de CSP", async ({ page }) => {

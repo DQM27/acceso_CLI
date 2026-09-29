@@ -541,3 +541,24 @@ input {
   --border-radius: var(--radio-chico) !important;
   font-family: inherit !important;
 }
+
+/* Registro de "Intentos y alertas" en Dispositivos: una lista corta de
+   solo lectura, sin filtros ni orden -- no justifica una grilla completa. */
+.tabla-eventos {
+  width: 100%;
+  margin-top: 0.5rem;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.tabla-eventos th,
+.tabla-eventos td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--borde);
+  text-align: left;
+}
+
+.tabla-eventos th {
+  color: var(--muted);
+  font-weight: 600;
+}

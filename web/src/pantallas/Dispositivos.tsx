@@ -4,11 +4,14 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
+import CodigoVinculacionEmitido from "../componentes/CodigoVinculacionEmitido";
+import { TEXTO_CREDENCIAL, TEXTO_EVENTO, tiempoRestante } from "../componentes/CodigoVinculacion.logica";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { usePresenciaPorSitio } from "../presenciaSitios";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
 import {
+  crearCodigoVinculacion,
   crearSitio,
   eliminarDispositivo,
   listarDispositivosYSitios,
@@ -16,7 +19,12 @@ import {
   revocarDispositivo,
   suspenderDispositivo,
 } from "../api/dispositivos";
-import type { Dispositivo, DispositivoProvisionado, TipoDispositivo } from "../api/dispositivos";
+import type {
+  CodigoPendiente,
+  Dispositivo,
+  EventoSeguridad,
+  TipoDispositivo,
+} from "../api/dispositivos";
 import type { UsuarioSesion } from "../api";
 
 const ETIQUETAS_TIPO: Record<TipoDispositivo, string> = {
@@ -28,6 +36,15 @@ const ETIQUETAS_TIPO: Record<TipoDispositivo, string> = {
 interface FilaDispositivo extends Dispositivo {
   sitio_nombre: string;
   conectado: boolean;
+  /** Vencimiento del código de vinculación pendiente, si hay uno. */
+  codigo_pendiente_hasta: string | null;
+}
+
+/** Código recién emitido, para mostrarlo una sola vez. */
+interface CodigoMostrado {
+  titulo: string;
+  codigo: string;
+  expira_en: string;
 }
 
 function textoFechaHora(iso: string): string {
@@ -35,29 +52,33 @@ function textoFechaHora(iso: string): string {
 }
 
 /**
- * Alta/baja/suspensión de dispositivos -- reemplaza
- * `admin-panel/panel-dispositivos.html` (clave compartida, sin saber quién
- * hizo qué) por esta pantalla dentro del panel nuevo, autenticada con la
- * misma sesión de Google que el resto (ver `api/dispositivos.ts`). El
- * secreto de un dispositivo nuevo se muestra UNA sola vez al crearlo -- no
- * queda guardado en texto plano en ningún lado que se pueda volver a leer,
- * ni siquiera acá.
+ * Alta, vinculación, baja y suspensión de dispositivos, autenticada con la
+ * misma sesión de Google que el resto del panel (ver `api/dispositivos.ts`).
  *
- * Revocar y Eliminar (las dos acciones que de verdad le cortan el paso a un
- * dispositivo, la segunda sin vuelta atrás) piden código de confirmación
- * por correo -- misma "sos vos ahora mismo" que alta/baja de administradores
- * (ver `ConfirmacionSensible`). Suspender no lo pide: es reversible con un
- * click (Reactivar), no hace falta ese costo extra para algo que se
- * deshace solo.
+ * El panel es la única autoridad: un equipo nunca se da de alta solo. Al
+ * crear un dispositivo (o con "Re-vincular") se emite un código de un solo
+ * uso, con QR, que vence en minutos y se muestra UNA sola vez; el equipo lo
+ * canjea y genera su propia clave (ver
+ * docs/features-futuras/propuesta-registro-dispositivos.md). Los rechazos
+ * (código usado, vencido, de otro dispositivo, firma inválida...) quedan en
+ * "Intentos y alertas", con la IP.
+ *
+ * Revocar, Eliminar y Re-vincular un equipo que está en uso piden código de
+ * confirmación por correo -- misma "sos vos ahora mismo" que alta/baja de
+ * administradores (ver `ConfirmacionSensible`): las tres le cortan el paso
+ * al equipo actual. Suspender no lo pide: es reversible con un click
+ * (Reactivar).
  */
 export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const [sitios, setSitios] = useState<{ id: string; nombre: string }[]>([]);
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
+  const [codigosPendientes, setCodigosPendientes] = useState<CodigoPendiente[]>([]);
+  const [eventos, setEventos] = useState<EventoSeguridad[]>([]);
+  const [codigoMostrado, setCodigoMostrado] = useState<CodigoMostrado | null>(null);
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [creando, setCreando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
-  const [provisionado, setProvisionado] = useState<DispositivoProvisionado | null>(null);
 
   const [sitioId, setSitioId] = useState("");
   const [tipo, setTipo] = useState<TipoDispositivo>("pc");
@@ -115,9 +136,11 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         if (!silencioso) setCargando(true);
       })
       .then(() => listarDispositivosYSitios())
-      .then(({ sitios, dispositivos }) => {
+      .then(({ sitios, dispositivos, codigos_pendientes, eventos }) => {
         setSitios(sitios);
         setDispositivos(dispositivos);
+        setCodigosPendientes(codigos_pendientes);
+        setEventos(eventos);
       })
       .catch((error) => {
         if (!silencioso) toast.error(mensajeError(error));
@@ -164,17 +187,22 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   // Los ocultos (ver alEliminar) no se muestran nunca desde acá a
   // propósito -- recuperar uno es por SQL directo en Supabase, no hay
   // botón para eso en el panel.
-  const filas: FilaDispositivo[] = useMemo(
-    () =>
-      dispositivos
-        .filter((d) => !d.oculto_en_panel)
-        .map((d) => ({
-          ...d,
-          sitio_nombre: nombrePorSitio(d.sitio_id),
-          conectado: conectados.has(d.id),
-        })),
-    [dispositivos, nombrePorSitio, conectados],
-  );
+  const filas: FilaDispositivo[] = useMemo(() => {
+    const pendientePorDispositivo = new Map(codigosPendientes.map((c) => [c.dispositivo_id, c.expira_en]));
+    return dispositivos
+      .filter((d) => !d.oculto_en_panel)
+      .map((d) => ({
+        ...d,
+        sitio_nombre: nombrePorSitio(d.sitio_id),
+        conectado: conectados.has(d.id),
+        codigo_pendiente_hasta: pendientePorDispositivo.get(d.id) ?? null,
+      }));
+  }, [dispositivos, codigosPendientes, nombrePorSitio, conectados]);
+
+  const etiquetaPorDispositivo = useMemo(() => {
+    const mapa = new Map(dispositivos.map((d) => [d.id, d.etiqueta]));
+    return (id: string | null) => (id ? (mapa.get(id) ?? "Dispositivo borrado") : "—");
+  }, [dispositivos]);
 
   function abrirModal() {
     setModalAbierto(true);
@@ -186,7 +214,6 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     setTipo("pc");
     setEtiqueta("");
     setErrorForm(null);
-    setProvisionado(null);
   }
 
   async function alEnviarFormulario(evento: React.FormEvent) {
@@ -199,15 +226,17 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     setCreando(true);
     setErrorForm(null);
     try {
-      // Manda el nombre, no el id -- admin-provision-device resuelve el
-      // sitio por nombre (upsert), así que reutiliza el que ya existe en
-      // vez de duplicarlo.
       const resultado = await provisionarDispositivo({
-        sitio_nombre: sitio.nombre,
+        sitio_id: sitio.id,
         tipo,
         etiqueta: etiqueta.trim(),
       });
-      setProvisionado(resultado);
+      cerrarModal();
+      setCodigoMostrado({
+        titulo: `${etiqueta.trim()} (${resultado.sitio_nombre})`,
+        codigo: resultado.codigo,
+        expira_en: resultado.expira_en,
+      });
       recargar();
     } catch (error) {
       setErrorForm(mensajeError(error));
@@ -308,14 +337,37 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     [recargar],
   );
 
-  async function copiarSecreto(secret: string) {
-    try {
-      await navigator.clipboard.writeText(secret);
-      toast.success("Secreto copiado.");
-    } catch {
-      toast.error("No se pudo copiar -- seleccioná el texto a mano.");
-    }
-  }
+  // Re-vincular: código nuevo para el MISMO dispositivo (conserva su
+  // historial). Si hay un equipo usándolo, al canjearse queda fuera: por eso
+  // pide confirmación por correo, igual que Revocar. Sin equipo vinculado
+  // (nunca se usó, o el código anterior venció) es sólo reemplazar el código.
+  const alRevincular = useCallback(
+    (fila: FilaDispositivo) => {
+      async function emitir() {
+        const emitido = await crearCodigoVinculacion(fila.id);
+        setCodigoMostrado({ titulo: fila.etiqueta, codigo: emitido.codigo, expira_en: emitido.expira_en });
+        await recargar();
+      }
+      if (fila.credencial === "sin_vincular") {
+        emitir().catch((error) => toast.error(mensajeError(error)));
+        return;
+      }
+      setConfirmacionSensible({
+        titulo: "Re-vincular dispositivo",
+        pregunta: `¿Generar un código nuevo para "${fila.etiqueta}"? Cuando se use, el equipo actual deja de sincronizar.`,
+        descripcion: `re-vincular "${fila.etiqueta}" -- cuando se use el código nuevo, el equipo actual deja de sincronizar`,
+        accion: async () => {
+          try {
+            await emitir();
+            setConfirmacionSensible(null);
+          } catch (error) {
+            toast.error(mensajeError(error));
+          }
+        },
+      });
+    },
+    [recargar],
+  );
 
   const columnas: ColDef<FilaDispositivo>[] = useMemo(
     () => [
@@ -358,6 +410,31 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         valueFormatter: ({ value }) => value ?? "—",
       },
       {
+        field: "credencial",
+        headerName: "Vinculación",
+        flex: 1.1,
+        minWidth: 150,
+        filter: false,
+        // Un código pendiente manda sobre lo demás: es lo próximo que va a
+        // pasar con este dispositivo.
+        cellRenderer: ({ data }: { data: FilaDispositivo }) => {
+          const restante = data.codigo_pendiente_hasta
+            ? tiempoRestante(data.codigo_pendiente_hasta, Date.now())
+            : null;
+          const [texto, color] = restante
+            ? [`Código pendiente (${restante})`, "var(--advertencia)"]
+            : [
+                TEXTO_CREDENCIAL[data.credencial],
+                data.credencial === "clave" ? "var(--exito)" : "var(--muted)",
+              ];
+          return (
+            <span className="chip" style={{ ["--chip-color" as string]: color }} title={data.clave_huella ?? undefined}>
+              {texto}
+            </span>
+          );
+        },
+      },
+      {
         field: "revoked_at",
         headerName: "Estado",
         flex: 0.9,
@@ -383,7 +460,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         minWidth: 130,
         filter: false,
         // Distinto de "Estado": esto es presencia en vivo (¿tiene la app
-        // abierta ahora mismo?), no si el secreto está habilitado. Un
+        // abierta ahora mismo?), no si su credencial está habilitada. Un
         // dispositivo puede estar "Activo" y "Desconectado" a la vez.
         cellRenderer: ({ data }: { data: FilaDispositivo }) => {
           const [texto, color] = data.conectado
@@ -399,8 +476,8 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       {
         colId: "acciones",
         headerName: "Acción",
-        flex: 1.8,
-        minWidth: 260,
+        flex: 2.2,
+        minWidth: 340,
         sortable: false,
         filter: false,
         cellRenderer: ({ data }: { data: FilaDispositivo }) => (
@@ -432,6 +509,16 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
                 type="button"
                 className="boton"
                 style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                onClick={() => alRevincular(data)}
+              >
+                Re-vincular
+              </button>
+            )}
+            {!data.revoked_at && (
+              <button
+                type="button"
+                className="boton"
+                style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
                 onClick={() => alRevocar(data)}
               >
                 Revocar
@@ -449,7 +536,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         ),
       },
     ],
-    [alReactivar, alSuspender, alRevocar, alEliminar],
+    [alReactivar, alSuspender, alRevincular, alRevocar, alEliminar],
   );
 
   return (
@@ -469,38 +556,39 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
           />
         </div>
         {cargando && filas.length === 0 && <p style={{ color: "var(--muted)" }}>Cargando…</p>}
+        <details style={{ marginTop: "0.75rem" }}>
+          <summary style={{ cursor: "pointer" }}>
+            Intentos y alertas ({eventos.length})
+          </summary>
+          {eventos.length === 0 ? (
+            <p style={{ color: "var(--muted)" }}>Sin intentos rechazados ni alertas recientes.</p>
+          ) : (
+            <table className="tabla-eventos">
+              <thead>
+                <tr>
+                  <th>Cuándo</th>
+                  <th>Qué pasó</th>
+                  <th>Dispositivo</th>
+                  <th>IP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {eventos.map((evento) => (
+                  <tr key={evento.id}>
+                    <td>{textoFechaHora(evento.ocurrido_en)}</td>
+                    <td>{TEXTO_EVENTO[evento.tipo] ?? evento.tipo}</td>
+                    <td>{etiquetaPorDispositivo(evento.dispositivo_id)}</td>
+                    <td>{evento.ip ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </details>
       </div>
 
       {modalAbierto && (
         <Modal titulo="Nuevo dispositivo" onCerrar={cerrarModal}>
-          {provisionado ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <p style={{ margin: 0 }}>
-                Dispositivo creado en <strong>{provisionado.sitio_nombre}</strong>. Pegá este
-                secreto en la app del dispositivo — no se va a volver a mostrar acá.
-              </p>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
-                <input
-                  readOnly
-                  value={provisionado.secret}
-                  onFocus={(evento) => evento.currentTarget.select()}
-                  style={{ flex: 1, fontFamily: "monospace", fontSize: "0.8rem" }}
-                />
-                <button
-                  type="button"
-                  className="boton"
-                  onClick={() => copiarSecreto(provisionado.secret)}
-                >
-                  Copiar
-                </button>
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button type="button" className="boton boton-primario" onClick={cerrarModal}>
-                  Listo
-                </button>
-              </div>
-            </div>
-          ) : (
             <form
               onSubmit={alEnviarFormulario}
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
@@ -566,11 +654,20 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
                   Cancelar
                 </button>
                 <button type="submit" className="boton boton-primario" disabled={creando}>
-                  {creando ? "Creando…" : "Crear dispositivo"}
+                  {creando ? "Creando…" : "Crear y generar código"}
                 </button>
               </div>
             </form>
-          )}
+        </Modal>
+      )}
+
+      {codigoMostrado && (
+        <Modal titulo={`Código de vinculación — ${codigoMostrado.titulo}`} onCerrar={() => setCodigoMostrado(null)}>
+          <CodigoVinculacionEmitido
+            codigo={codigoMostrado.codigo}
+            expiraEn={codigoMostrado.expira_en}
+            onListo={() => setCodigoMostrado(null)}
+          />
         </Modal>
       )}
 
