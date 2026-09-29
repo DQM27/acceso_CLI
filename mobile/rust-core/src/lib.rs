@@ -310,8 +310,11 @@ impl Nucleo {
         Ok(token)
     }
 
-    /// Aplica (y guarda) el desfase de reloj que trae un token recién
-    /// medido; en un acierto de caché no trae nada y no hace nada. En un
+    /// Aplica (y guarda) el desfase de reloj que trae un token: el del
+    /// header `Date` en uno recién pedido, y la medición en milisegundos
+    /// (que corre en segundo plano, ver `CacheTokenDispositivo`) en el
+    /// primer acierto de caché después de que termine; si no trae nada, no
+    /// hace nada. En un
     /// solo lugar a propósito: antes cada llamador lo aplicaba por su cuenta
     /// y el login (`Nucleo::autenticar`) se lo saltaba -- medía el desfase
     /// y lo descartaba, y las autenticaciones siguientes, desde el caché, ya
