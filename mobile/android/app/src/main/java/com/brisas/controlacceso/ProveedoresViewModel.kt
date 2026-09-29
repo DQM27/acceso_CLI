@@ -184,7 +184,7 @@ class ProveedoresViewModel(
         viewModelScope.launch {
             try {
                 val id = withContext(dispatcherIO) { medirNucleo("crearEmpresaProveedor") { nucleo.crearEmpresaProveedor(nombre) } }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 empresaSeleccionada = EmpresaProveedor(id = id, nombre = nombre, activo = true)
                 textoEmpresa = nombre
                 resultadosEmpresa = emptyList()
@@ -233,7 +233,7 @@ class ProveedoresViewModel(
                         secreto,
                     ) }
                 }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 mensaje = "Ingreso registrado"
                 error = null
                 cedula = ""
@@ -287,7 +287,7 @@ class ProveedoresViewModel(
                         }
                     }
                 }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 refrescarActivos()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()

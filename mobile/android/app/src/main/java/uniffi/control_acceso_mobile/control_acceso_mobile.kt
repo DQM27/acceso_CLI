@@ -777,6 +777,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_enviar_cambios_con_secreto(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos(
@@ -926,6 +928,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_desfase_reloj_ms(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_enviar_cambios_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_proveedor_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1237,7 +1241,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo_con_detalle() and 0xFFFF) != 9950) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_func_placa_como_se_imprime() and 0xFFFF) != 4830) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_placa_como_se_imprime() and 0xFFFF) != 15330) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 18012) {
@@ -1328,6 +1332,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms() and 0xFFFF) != 4032) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_enviar_cambios_con_secreto() and 0xFFFF) != 5353) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos() and 0xFFFF) != 45361) {
@@ -2474,6 +2481,16 @@ public interface NucleoInterface {
     fun `desfaseRelojMs`(): kotlin.Long?
     
     /**
+     * Sólo vacía la bandeja de salida, sin bajar nada: lo que corre tras
+     * un cambio hecho en este teléfono (mismo criterio que
+     * `enviar_cambios_nube` en escritorio). Antes un registro local corría
+     * la sincronización completa antes de subirse (telemetría de staging:
+     * ~1,6 s de promedio y hasta 5 s), y el otro equipo recién veía el
+     * cambio al terminar. El pulso periódico sigue siendo completo.
+     */
+    fun `enviarCambiosConSecreto`(`secreto`: kotlin.String): ResumenSincronizacion
+    
+    /**
      * Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
      * `ingresos_proveedor_remotos`.
      */
@@ -3349,6 +3366,29 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_desfase_reloj_ms(
         it,
         _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Sólo vacía la bandeja de salida, sin bajar nada: lo que corre tras
+     * un cambio hecho en este teléfono (mismo criterio que
+     * `enviar_cambios_nube` en escritorio). Antes un registro local corría
+     * la sincronización completa antes de subirse (telemetría de staging:
+     * ~1,6 s de promedio y hasta 5 s), y el otro equipo recién veía el
+     * cambio al terminar. El pulso periódico sigue siendo completo.
+     */
+    @Throws(NucleoException::class)override fun `enviarCambiosConSecreto`(`secreto`: kotlin.String): ResumenSincronizacion {
+            return FfiConverterTypeResumenSincronizacion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_enviar_cambios_con_secreto(
+        it,
+        
+        FfiConverterString.lower(`secreto`),_status)
 }
     }
     )
@@ -9597,10 +9637,10 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
 
         /**
          * La placa como va impresa, para mostrarla y guardarla en el formulario:
-         * carga con un espacio tras el prefijo (`CL371931` -> `CL 371931`) y
-         * particular con guion (`BPH485` -> `BPH-485`). La moto (la `M` va en
-         * otro renglón de la placa física), el número de unidad y cualquier otra
-         * cosa quedan igual. El valor sin formato (`VehiculoRutaDetectado.valor`)
+         * prefijo y dígitos separados por un espacio (carga `CL371931` ->
+         * `CL 371931`, moto `M947369` -> `M 947369`) y particular con guion
+         * (`BPH485` -> `BPH-485`). El número de unidad y cualquier otra cosa
+         * quedan igual. El valor sin formato (`VehiculoRutaDetectado.valor`)
          * sigue siendo el que se vota y se compara con el catálogo.
          */ fun `placaComoSeImprime`(`valor`: kotlin.String): kotlin.String {
             return FfiConverterString.lift(

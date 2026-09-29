@@ -126,7 +126,7 @@ class GafetesProvisionalesViewModel(
                         ?: throw SecretoDispositivoNoEncontradoException()
                     medirNucleo("entregarGafeteProvisionalConSecreto") { nucleo.entregarGafeteProvisionalConSecreto(encargado.id, gafeteNumero, secreto) }
                 }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 mensaje = "Gafete entregado"
                 error = null
                 textoEncargado = ""
@@ -159,7 +159,7 @@ class GafetesProvisionalesViewModel(
                         }
                     }
                 }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 refrescarActivos()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()

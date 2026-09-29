@@ -183,6 +183,18 @@ viaje). Si el proyecto no tiene la función, el desfase sale del header
 HTTP `Date` (±1 s) y la latencia sólo sirve para comparar;
 `latencia_corregida` dice si hubo desfase para corregir.
 
+La medición precisa corre en segundo plano después de autenticar y se
+aplica con el token siguiente, así que al conectar el canal todavía puede
+estar el desfase del header `Date`. Por eso el desfase se vuelve a leer,
+como mucho cada 10 s, mientras llegan avisos (teléfono y escritorio). Antes
+se leía una sola vez por conexión y en staging (2026-09-29) el teléfono dio
+latencias de −950 ms durante toda la sesión.
+
+Qué mirar para el lag entre equipos: la latencia del aviso (servidor →
+equipo) es sólo el último tramo. Antes está lo que tarda el que guarda en
+subir el cambio: `llamada_nucleo` con `enviarCambiosConSecreto` (teléfono)
+o `enviar_cambios_nube` (escritorio), más la pausa de agrupación de 600 ms.
+
 ## Envío
 
 - Cola en memoria con tope de 5000 filas (si se llena se descartan las más

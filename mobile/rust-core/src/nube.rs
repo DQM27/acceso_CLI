@@ -188,6 +188,22 @@ impl Nucleo {
         )
     }
 
+    /// Sólo vacía la bandeja de salida, sin bajar nada: lo que corre tras
+    /// un cambio hecho en este teléfono (mismo criterio que
+    /// `enviar_cambios_nube` en escritorio). Antes un registro local corría
+    /// la sincronización completa antes de subirse (telemetría de staging:
+    /// ~1,6 s de promedio y hasta 5 s), y el otro equipo recién veía el
+    /// cambio al terminar. El pulso periódico sigue siendo completo.
+    pub fn enviar_cambios_con_secreto(
+        &self,
+        secreto: String,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
+        self.sincronizar_con_secreto(
+            &secreto,
+            control_acceso::nube::AlcanceSincronizacion::solo_envio(),
+        )
+    }
+
     /// Lo mínimo para que Kotlin escuche Broadcast privado por sitio, con el
     /// secreto que Kotlin descifra de Android Keystore. El socket y sus
     /// reconexiones viven fuera del núcleo.

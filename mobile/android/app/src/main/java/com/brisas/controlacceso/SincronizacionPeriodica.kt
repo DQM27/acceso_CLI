@@ -27,10 +27,12 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
  *
  * Un aviso en vivo que trae su tabla corre sólo esa parte
  * (`sincronizarCambiosConSecreto`, ver `AlcanceSincronizacion` en el
- * núcleo); el pulso, un registro local y la reconexión del canal corren la
- * completa. Antes cada aviso corría la completa (~12 consultas a la nube
- * por un solo cambio) -- el aviso llegaba al instante, lo que tardaba era
- * lo que se hacía al recibirlo.
+ * núcleo); un registro local sólo sube lo pendiente
+ * (`enviarCambiosConSecreto`, igual que escritorio); el pulso y la
+ * reconexión del canal corren la completa. Antes cada aviso corría la
+ * completa (~12 consultas a la nube por un solo cambio) -- el aviso llegaba
+ * al instante, lo que tardaba era lo que se hacía al recibirlo. Lo mismo
+ * pasaba al guardar: el cambio se subía al final de una completa.
  */
 class SincronizacionPeriodica(
     private val nucleo: Nucleo,
@@ -57,8 +59,11 @@ class SincronizacionPeriodica(
                 val pendientes = Channel<Unit>(Channel.CONFLATED)
                 val porSincronizar = PendientesSincronizacion()
                 launch {
-                    CambiosNube.cambios.collect { tabla ->
-                        porSincronizar.anotar(tabla)
+                    CambiosNube.cambios.collect { solicitud ->
+                        when (solicitud) {
+                            is SolicitudNube.Remota -> porSincronizar.anotar(solicitud.tabla)
+                            SolicitudNube.CambioLocal -> porSincronizar.anotarCambioLocal()
+                        }
                         pendientes.trySend(Unit)
                     }
                 }
@@ -71,15 +76,18 @@ class SincronizacionPeriodica(
                 while (true) {
                     if (agrupar) delay(PAUSA_AGRUPACION_MS)
                     agrupar = true
-                    val tablas = porSincronizar.tomar()
+                    val alcance = porSincronizar.tomar()
                     try {
                         val resumen = withContext(Dispatchers.IO) {
                             val secreto = secretoStore.cargar()
                                 ?: throw SecretoDispositivoNoEncontradoException()
-                            if (tablas == null) {
-                                medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
-                            } else {
-                                medirNucleo("sincronizarCambiosConSecreto") { nucleo.sincronizarCambiosConSecreto(secreto, tablas) }
+                            when (alcance) {
+                                AlcancePendiente.Completa ->
+                                    medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
+                                is AlcancePendiente.Tablas ->
+                                    medirNucleo("sincronizarCambiosConSecreto") { nucleo.sincronizarCambiosConSecreto(secreto, alcance.tablas) }
+                                AlcancePendiente.SoloEnvio ->
+                                    medirNucleo("enviarCambiosConSecreto") { nucleo.enviarCambiosConSecreto(secreto) }
                             }
                         }
                         Log.i("SincronizacionNube", "Recibidos: gafetes=${resumen.gafetesRecibidos}, historial=${resumen.movimientosHistorialRecibidos}, abiertos=${resumen.remotosAbiertos}")

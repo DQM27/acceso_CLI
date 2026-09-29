@@ -399,7 +399,7 @@ class ActivosViewModel(
     }
 
     fun onIngresoRegistrado() {
-        CambiosNube.solicitar()
+        CambiosNube.cambioLocal()
         seleccionIngreso = SeleccionIngreso.Ninguna
         errorIngreso = null
         texto = ""
@@ -430,7 +430,7 @@ class ActivosViewModel(
                         }
                     }
                 }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 buscar()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
@@ -455,7 +455,7 @@ class ActivosViewModel(
                         }
                         try {
                             withContext(dispatcherIO) { medirNucleo("registrarSalida") { nucleo.registrarSalida(activoCoincidente.registroId) } }
-                            CambiosNube.solicitar()
+                            CambiosNube.cambioLocal()
                             registrados.add(activoCoincidente.contratistaNombre)
                         } catch (excepcion: NucleoException) {
                             fallidos.add("gafete ${coincidencia.numero}: ${excepcion.message}")
@@ -503,7 +503,7 @@ class ActivosViewModel(
                         mensajeEsError = true
                     } else {
                         withContext(dispatcherIO) { medirNucleo("registrarSalida") { nucleo.registrarSalida(activo.registroId) } }
-                        CambiosNube.solicitar()
+                        CambiosNube.cambioLocal()
                         mensaje = "Salida registrada: ${activo.contratistaNombre}"
                         mensajeEsError = false
                         texto = ""

@@ -1,7 +1,6 @@
 package com.brisas.controlacceso
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PendientesSincronizacionTest {
@@ -12,20 +11,20 @@ class PendientesSincronizacionTest {
         pendientes.anotar("ingresos")
         pendientes.anotar("gafetes")
         pendientes.anotar("ingresos")
-        assertEquals(listOf("ingresos", "gafetes"), pendientes.tomar())
+        assertEquals(AlcancePendiente.Tablas(listOf("ingresos", "gafetes")), pendientes.tomar())
     }
 
     @Test
     fun unPedidoCompletoGanaSobreLasTablas() {
         val pendientes = PendientesSincronizacion()
         pendientes.anotar("empresas")
-        pendientes.anotar(null) // registro local o reconexión del canal
-        assertNull(pendientes.tomar())
+        pendientes.anotar(null) // reconexión del canal
+        assertEquals(AlcancePendiente.Completa, pendientes.tomar())
     }
 
     @Test
     fun sinNadaAnotadoPideLaCompleta() {
-        assertNull(PendientesSincronizacion().tomar())
+        assertEquals(AlcancePendiente.Completa, PendientesSincronizacion().tomar())
     }
 
     @Test
@@ -34,6 +33,39 @@ class PendientesSincronizacionTest {
         pendientes.anotar("citas")
         pendientes.tomar()
         pendientes.anotar("usuarios")
-        assertEquals(listOf("usuarios"), pendientes.tomar())
+        assertEquals(AlcancePendiente.Tablas(listOf("usuarios")), pendientes.tomar())
+    }
+
+    @Test
+    fun unCambioLocalSoloPideElEnvio() {
+        val pendientes = PendientesSincronizacion()
+        pendientes.anotarCambioLocal()
+        pendientes.anotarCambioLocal()
+        assertEquals(AlcancePendiente.SoloEnvio, pendientes.tomar())
+    }
+
+    @Test
+    fun lasTablasYaSubenLoLocal() {
+        val pendientes = PendientesSincronizacion()
+        pendientes.anotarCambioLocal()
+        pendientes.anotar("ingresos")
+        assertEquals(AlcancePendiente.Tablas(listOf("ingresos")), pendientes.tomar())
+    }
+
+    @Test
+    fun laCompletaGanaSobreUnCambioLocal() {
+        val pendientes = PendientesSincronizacion()
+        pendientes.anotarCambioLocal()
+        pendientes.anotar(null)
+        assertEquals(AlcancePendiente.Completa, pendientes.tomar())
+    }
+
+    @Test
+    fun elEnvioNoQuedaPendienteParaLaSiguienteCorrida() {
+        val pendientes = PendientesSincronizacion()
+        pendientes.anotarCambioLocal()
+        pendientes.tomar()
+        // Sin nada nuevo: el pulso periódico, que es completo.
+        assertEquals(AlcancePendiente.Completa, pendientes.tomar())
     }
 }

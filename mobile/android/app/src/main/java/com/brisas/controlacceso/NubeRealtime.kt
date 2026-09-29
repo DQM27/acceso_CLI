@@ -95,10 +95,17 @@ class NubeRealtime(
             val secreto = secretoStore.cargar() ?: throw SecretoDispositivoNoEncontradoException()
             medirNucleo("sesionRealtimeNubeConSecreto") { nucleo.sesionRealtimeNubeConSecreto(secreto) }
         }
-        // Desfase del reloj medido en esta autenticación (precisión de ms):
-        // corrige la latencia de los avisos en la telemetría.
-        val desfaseRelojMs = if (Telemetria.activa) withContext(dispatcherIO) { nucleo.desfaseRelojMs() } else null
-        Telemetria.realtime?.desfaseReloj(desfaseRelojMs)
+        // Desfase del reloj (precisión de ms): corrige la latencia de los
+        // avisos en la telemetría. Se vuelve a leer mientras el canal está
+        // abierto (ver `refrescarDesfase`): la medición precisa corre en
+        // segundo plano tras autenticar y recién se aplica con el token
+        // siguiente, así que la lectura de acá suele ser todavía la del
+        // header `Date` (±1 s; en staging dio latencias de -950 ms).
+        val desfaseRelojMs = java.util.concurrent.atomic.AtomicReference(
+            if (Telemetria.activa) withContext(dispatcherIO) { nucleo.desfaseRelojMs() } else null,
+        )
+        Telemetria.realtime?.desfaseReloj(desfaseRelojMs.get())
+        var desfaseLeidoEn = SystemClock.elapsedRealtime()
         val token = sesion.accessToken
         val supabase = createSupabaseClient(sesion.baseUrl, sesion.apikey) {
             install(Realtime) {
@@ -111,14 +118,29 @@ class NubeRealtime(
 
         try {
             coroutineScope {
+                fun refrescarDesfase() {
+                    if (!Telemetria.activa) return
+                    val ahora = SystemClock.elapsedRealtime()
+                    if (ahora - desfaseLeidoEn < INTERVALO_DESFASE_MS) return
+                    desfaseLeidoEn = ahora
+                    // Aparte: leerlo toma el candado del núcleo y no debe
+                    // demorar el aviso siguiente.
+                    // Nunca lanza: una falla acá cancelaría el canal entero.
+                    launch(dispatcherIO) {
+                        val leido = runCatching { nucleo.desfaseRelojMs() }.getOrNull() ?: return@launch
+                        desfaseRelojMs.set(leido)
+                        Telemetria.realtime?.desfaseReloj(leido)
+                    }
+                }
                 val avisos = canal.broadcastFlow<JsonObject>("cambio_nube")
                     .onEach { aviso ->
+                        refrescarDesfase()
                         val ecoPropio = aviso.texto("dispositivo_id") == sesion.dispositivoId
                         Telemetria.realtime?.aviso(
                             tabla = aviso.texto("table"),
                             bytesAviso = aviso.toString().length,
                             ecoPropio = ecoPropio,
-                            latenciaMs = aviso.texto("changed_at")?.let { msDesde(it, desfaseRelojMs ?: 0L) },
+                            latenciaMs = aviso.texto("changed_at")?.let { msDesde(it, desfaseRelojMs.get() ?: 0L) },
                         )
                         // `dispositivo_id` es quien hizo ESTE cambio (el
                         // `sub` de su JWT, ver la migración
@@ -129,8 +151,14 @@ class NubeRealtime(
                         if (ecoPropio) return@onEach
                         val tabla = aviso.texto("table")
                         // El aviso trae la fila: se guarda al instante (el
-                        // núcleo decide qué hacer con ella). La descarga por
-                        // tabla corre igual detrás, como red de seguridad.
+                        // núcleo decide qué hacer con ella) y no se descarga
+                        // nada más -- mismo criterio que `nubeRealtime.ts` en
+                        // escritorio. Antes la descarga por tabla corría
+                        // igual detrás (~0,4-0,5 s de red por aviso, medido
+                        // con telemetría) y ocupaba la sincronización: un
+                        // registro hecho justo después esperaba a que
+                        // terminara para subirse. La red de seguridad es el
+                        // pulso periódico (completo, cada 2 minutos).
                         if (aviso["registro"] is JsonObject || aviso.texto("operation") == "DELETE") {
                             val inicioAplicar = System.nanoTime()
                             val aplicado = try {
@@ -140,7 +168,10 @@ class NubeRealtime(
                                 false
                             }
                             Telemetria.realtime?.aplicado(aplicado, System.nanoTime() - inicioAplicar)
-                            if (aplicado) onCambioAplicado()
+                            if (aplicado) {
+                                onCambioAplicado()
+                                return@onEach
+                            }
                         }
                         Log.i("SincronizacionNube", "Aviso remoto recibido (${tabla ?: "sin tabla"}); solicitando descarga")
                         onCambio(tabla)
@@ -225,6 +256,8 @@ class NubeRealtime(
 
     private companion object {
         const val ESPERA_SUSCRIPCION_MS = 15_000L
+        /** Cada cuánto, como mucho, se relee el desfase del reloj. */
+        const val INTERVALO_DESFASE_MS = 10_000L
     }
 
     private fun milisegundosHastaRenovar(expiresIn: ULong): Long {

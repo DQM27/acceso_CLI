@@ -56,6 +56,8 @@ export function emitirActualizacion(
 // Espacia los reintentos cuando falta conexión o la sesión no está lista.
 const REINTENTO_BASE_MS = 2_000;
 const REINTENTO_TOPE_MS = 60_000;
+// Cada cuánto, como mucho, se relee el desfase del reloj (telemetría).
+const INTERVALO_DESFASE_MS = 10_000;
 
 export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => void {
   let cancelado = false;
@@ -87,6 +89,25 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   // la latencia de los avisos.
   let suscritoDesde: number | null = null;
   let desfaseReloj: number | null = null;
+  let desfaseLeidoEn = 0;
+
+  /** Vuelve a leer el desfase, como mucho cada `INTERVALO_DESFASE_MS`: la
+   * medición en milisegundos corre en segundo plano tras autenticar y se
+   * aplica recién con el token siguiente, así que la lectura al conectar
+   * puede ser todavía la del header `Date` (±1 s). No espera: el aviso en
+   * curso usa el valor anterior. */
+  function refrescarDesfase() {
+    if (!telemetriaActiva()) return;
+    const ahora = performance.now();
+    if (ahora - desfaseLeidoEn < INTERVALO_DESFASE_MS) return;
+    desfaseLeidoEn = ahora;
+    void desfaseRelojMs()
+      .then((leido) => {
+        desfaseReloj = leido;
+        realtimeTelemetria()?.desfaseReloj(leido);
+      })
+      .catch(() => undefined);
+  }
 
   /** El canal actual dejó de estar suscrito (o nunca llegó a estarlo). */
   function anotarFinDeConexion(motivo: string) {
@@ -181,6 +202,7 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
       if (cancelado) return;
       if (telemetriaActiva()) {
         desfaseReloj = await desfaseRelojMs().catch(() => null);
+        desfaseLeidoEn = performance.now();
         realtimeTelemetria()?.desfaseReloj(desfaseReloj);
       }
 
@@ -205,6 +227,7 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
         .channel(sesion.topic, { config: { private: true } })
         .on("broadcast", { event: "cambio_nube" }, ({ payload }) => {
           if (cancelado || cliente !== clienteActual) return;
+          refrescarDesfase();
           const ecoPropio = payload?.dispositivo_id === sesion.dispositivo_id;
           realtimeTelemetria()?.aviso(
             typeof payload?.table === "string" ? payload.table : undefined,

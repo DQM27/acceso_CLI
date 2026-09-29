@@ -187,7 +187,7 @@ class NuevoContratistaViewModel(
                         ),
                     ) }
                 }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 onGuardado()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()

@@ -247,7 +247,7 @@ class RutasViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) { medirNucleo("registrarSalidaRuta") { nucleo.registrarSalidaRuta(solicitud) } }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 mensaje = "Salida registrada"
                 error = null
                 textoEncargado = ""
@@ -270,7 +270,7 @@ class RutasViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) { medirNucleo("registrarRetornoRuta") { nucleo.registrarRetornoRuta(salida.id) } }
-                CambiosNube.solicitar()
+                CambiosNube.cambioLocal()
                 refrescarActivas()
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
