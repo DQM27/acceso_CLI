@@ -206,4 +206,29 @@ class TelemetriaCalculosTest {
         pila.entrar("escanear_vehiculo_ruta")
         assertEquals("proveedores", pila.anterior())
     }
+
+    @Test
+    fun agregaRealtimeSinContenidoYSeVacia() {
+        val realtime = AgregadorRealtime()
+        assertNull(realtime.vaciar())
+        realtime.conectando()
+        realtime.suscrito(msDesdeIntento = 850)
+        realtime.aviso(tabla = "ingresos", bytesAviso = 2048, ecoPropio = false, latenciaMs = 120)
+        realtime.aviso(tabla = "ingresos", bytesAviso = 1024, ecoPropio = true, latenciaMs = 90)
+        realtime.aplicado(ok = true, nanos = 4_000_000)
+        realtime.terminado(motivo = "UNSUBSCRIBED", msConectadoAhora = 120_000)
+        realtime.error("IllegalStateException")
+        val r = realtime.vaciar()!!
+        assertEquals(1, r["intentos_conexion"])
+        assertEquals(850.0, r["ms_hasta_suscribir_p50"])
+        assertEquals(mapOf("ingresos" to 1), r["avisos_por_tabla"])
+        assertEquals(1, r["ecos_propios"])
+        assertEquals(3.0, r["kb_recibidos"])
+        assertEquals(1, r["aplicados"])
+        assertEquals(90.0, r["latencia_ms_min"])
+        assertEquals(mapOf("UNSUBSCRIBED" to 1), r["fin_de_conexion"])
+        assertEquals(2.0, r["minutos_conectado_max"])
+        assertEquals(mapOf("IllegalStateException" to 1), r["errores"])
+        assertNull(realtime.vaciar())
+    }
 }

@@ -275,6 +275,116 @@ class VigilanteRetencion(
     fun pendientes(): Int = vigilados.size
 }
 
+/// Realtime (avisos en vivo de la nube), agregado entre dos envíos: cómo
+/// se conecta y se cae el canal y qué llega por él. Sin contenido de los
+/// avisos: sólo tabla, operación, tamaño y tiempos.
+class AgregadorRealtime {
+    private var intentosConexion = 0
+    private val msHastaSuscribir = mutableListOf<Double>()
+    private val caidas = sortedMapOf<String, Int>()
+    private val errores = sortedMapOf<String, Int>()
+    private val msConectado = mutableListOf<Double>()
+    private val avisosPorTabla = sortedMapOf<String, Int>()
+    private var ecosPropios = 0
+    private var bytes = 0L
+    private var aplicados = 0
+    private var noAplicados = 0
+    private val msAplicar = mutableListOf<Double>()
+    private val latenciasMs = mutableListOf<Double>()
+    private var vacio = true
+
+    @Synchronized
+    fun conectando() {
+        intentosConexion++
+        vacio = false
+    }
+
+    @Synchronized
+    fun suscrito(msDesdeIntento: Long) {
+        msHastaSuscribir += msDesdeIntento.toDouble()
+        vacio = false
+    }
+
+    /// El canal dejó de estar suscrito (`motivo`: estado del canal o
+    /// "renovacion" del token) tras `msConectado` de conexión.
+    @Synchronized
+    fun terminado(motivo: String, msConectadoAhora: Long?) {
+        caidas.merge(motivo, 1, Int::plus)
+        msConectadoAhora?.let { msConectado += it.toDouble() }
+        vacio = false
+    }
+
+    @Synchronized
+    fun error(tipo: String) {
+        errores.merge(tipo, 1, Int::plus)
+        vacio = false
+    }
+
+    /// Un aviso recibido. `latenciaMs`: hora del teléfono menos la del
+    /// servidor al escribir (`changed_at`); incluye el desfase entre los dos
+    /// relojes, sirve para comparar, no como valor absoluto.
+    @Synchronized
+    fun aviso(tabla: String?, bytesAviso: Int, ecoPropio: Boolean, latenciaMs: Long?) {
+        vacio = false
+        bytes += bytesAviso
+        latenciaMs?.let { latenciasMs += it.toDouble() }
+        if (ecoPropio) {
+            ecosPropios++
+            return
+        }
+        avisosPorTabla.merge(tabla ?: "(sin tabla)", 1, Int::plus)
+    }
+
+    /// Resultado de guardar en la base local la fila que trajo un aviso.
+    @Synchronized
+    fun aplicado(ok: Boolean, nanos: Long) {
+        if (ok) aplicados++ else noAplicados++
+        msAplicar += nanos / 1e6
+        vacio = false
+    }
+
+    /// Resumen y vacía lo acumulado; `null` si no pasó nada.
+    @Synchronized
+    fun vaciar(): Map<String, Any?>? {
+        if (vacio) return null
+        val p = { valores: List<Double>, q: Double -> percentil(valores.sorted(), q)?.redondeado() }
+        val resumen = mapOf(
+            "intentos_conexion" to intentosConexion,
+            "ms_hasta_suscribir_p50" to p(msHastaSuscribir, 0.5),
+            "ms_hasta_suscribir_max" to msHastaSuscribir.maxOrNull()?.redondeado(),
+            "fin_de_conexion" to caidas.toMap(),
+            "errores" to errores.toMap(),
+            "minutos_conectado_max" to msConectado.maxOrNull()?.let { (it / 60_000).redondeado() },
+            "avisos_por_tabla" to avisosPorTabla.toMap(),
+            "avisos" to avisosPorTabla.values.sum(),
+            "ecos_propios" to ecosPropios,
+            "kb_recibidos" to (bytes / 1024.0).redondeado(),
+            "aplicados" to aplicados,
+            "no_aplicados" to noAplicados,
+            "ms_aplicar_p50" to p(msAplicar, 0.5),
+            "ms_aplicar_max" to msAplicar.maxOrNull()?.redondeado(),
+            "latencia_ms_p50" to p(latenciasMs, 0.5),
+            "latencia_ms_p90" to p(latenciasMs, 0.9),
+            "latencia_ms_min" to latenciasMs.minOrNull()?.redondeado(),
+            "latencia_ms_max" to latenciasMs.maxOrNull()?.redondeado(),
+        )
+        intentosConexion = 0
+        msHastaSuscribir.clear()
+        caidas.clear()
+        errores.clear()
+        msConectado.clear()
+        avisosPorTabla.clear()
+        ecosPropios = 0
+        bytes = 0
+        aplicados = 0
+        noAplicados = 0
+        msAplicar.clear()
+        latenciasMs.clear()
+        vacio = true
+        return resumen
+    }
+}
+
 /// Resumen de violaciones de StrictMode (acceso a disco o red en el hilo
 /// de la pantalla, recursos que no se cerraron, Activities filtradas),
 /// agregadas por tipo y por el primer punto del código de la app donde

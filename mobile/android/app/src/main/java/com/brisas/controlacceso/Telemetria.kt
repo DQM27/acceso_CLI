@@ -78,6 +78,9 @@ object Telemetria {
         motor?.enPrimerPlano(visible)
     }
 
+    /// Métricas de Realtime (`null` con la telemetría apagada).
+    val realtime: AgregadorRealtime? get() = motor?.realtime
+
     fun pantallaActual(): String = motor?.pantallas?.actual() ?: PilaPantallas.SIN_PANTALLA
 
     fun pantallaAnterior(): String = motor?.pantallas?.anterior() ?: PilaPantallas.SIN_PANTALLA
@@ -129,6 +132,7 @@ private class MotorTelemetria(private val app: Application) {
     private val archivoPendiente = File(app.filesDir, "telemetria_pendiente.jsonl")
     private val llamadas = AgregadorLlamadas()
     private val violaciones = AgregadorViolaciones()
+    val realtime = AgregadorRealtime()
     val pantallas = PilaPantallas()
     val vigilante = VigilanteRetencion(reloj = SystemClock::elapsedRealtime, forzarRecoleccion = { Runtime.getRuntime().gc() })
     private val activityManager = app.getSystemService(ActivityManager::class.java)
@@ -230,6 +234,7 @@ private class MotorTelemetria(private val app: Application) {
         llamadas.vaciar().forEach { encolar("llamada_nucleo", it) }
         frames?.vaciar()?.forEach { encolar("frames", it) }
         violaciones.vaciar().forEach { encolar("strictmode", it) }
+        realtime.vaciar()?.let { encolar("realtime", it) }
     }
 
     private fun muestraSistema(): Map<String, Any?> {

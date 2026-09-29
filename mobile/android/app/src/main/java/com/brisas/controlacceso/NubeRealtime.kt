@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import android.os.SystemClock
 import android.util.Log
 
 import io.github.jan.supabase.createSupabaseClient
@@ -65,6 +66,7 @@ class NubeRealtime(
                     throw cancelacion
                 } catch (excepcion: NucleoException) {
                     Log.w("SincronizacionNube", "No se pudo autenticar para Realtime", excepcion)
+                    Telemetria.realtime?.error(excepcion.javaClass.simpleName)
                     30_000L
                 } catch (excepcion: Throwable) {
                     // Antes esto se descartaba en silencio -- si Realtime nunca
@@ -73,6 +75,7 @@ class NubeRealtime(
                     // el problema, todo seguía funcionando pero sin la parte en
                     // vivo).
                     Log.w("SincronizacionNube", "Fallo conectando el canal de Realtime", excepcion)
+                    Telemetria.realtime?.error(excepcion.javaClass.simpleName)
                     30_000L
                 }
                 delay(esperaTrasError)
@@ -86,6 +89,8 @@ class NubeRealtime(
     }
 
     private suspend fun conectarHastaRenovar() {
+        val inicioIntento = SystemClock.elapsedRealtime()
+        Telemetria.realtime?.conectando()
         val sesion = withContext(dispatcherIO) {
             val secreto = secretoStore.cargar() ?: throw SecretoDispositivoNoEncontradoException()
             medirNucleo("sesionRealtimeNubeConSecreto") { nucleo.sesionRealtimeNubeConSecreto(secreto) }
@@ -104,24 +109,33 @@ class NubeRealtime(
             coroutineScope {
                 val avisos = canal.broadcastFlow<JsonObject>("cambio_nube")
                     .onEach { aviso ->
+                        val ecoPropio = aviso.texto("dispositivo_id") == sesion.dispositivoId
+                        Telemetria.realtime?.aviso(
+                            tabla = aviso.texto("table"),
+                            bytesAviso = aviso.toString().length,
+                            ecoPropio = ecoPropio,
+                            latenciaMs = aviso.texto("changed_at")?.let(::msDesde),
+                        )
                         // `dispositivo_id` es quien hizo ESTE cambio (el
                         // `sub` de su JWT, ver la migración
                         // `avisa_cambio_nube_segun_quien_escribe_no_quien_creo_la_fila`):
                         // el eco de un cambio propio ya está en la base
                         // local, no hay nada que bajar -- mismo filtro que
                         // `nubeRealtime.ts` en escritorio.
-                        if (aviso.texto("dispositivo_id") == sesion.dispositivoId) return@onEach
+                        if (ecoPropio) return@onEach
                         val tabla = aviso.texto("table")
                         // El aviso trae la fila: se guarda al instante (el
                         // núcleo decide qué hacer con ella). La descarga por
                         // tabla corre igual detrás, como red de seguridad.
                         if (aviso["registro"] is JsonObject || aviso.texto("operation") == "DELETE") {
+                            val inicioAplicar = System.nanoTime()
                             val aplicado = try {
                                 withContext(dispatcherIO) { medirNucleo("aplicarCambioNube") { nucleo.aplicarCambioNube(aviso.toString()) } }
                             } catch (excepcion: NucleoException) {
                                 Log.w("SincronizacionNube", "No se pudo aplicar el cambio en vivo", excepcion)
                                 false
                             }
+                            Telemetria.realtime?.aplicado(aplicado, System.nanoTime() - inicioAplicar)
                             if (aplicado) onCambioAplicado()
                         }
                         Log.i("SincronizacionNube", "Aviso remoto recibido (${tabla ?: "sin tabla"}); solicitando descarga")
@@ -140,6 +154,8 @@ class NubeRealtime(
                     withTimeoutOrNull(ESPERA_SUSCRIPCION_MS) { canal.subscribe(blockUntilSubscribed = true) }
                         ?: throw IllegalStateException("El canal de avisos no confirmó la suscripción")
                     Log.i("SincronizacionNube", "Canal de avisos suscrito")
+                    val suscritoDesde = SystemClock.elapsedRealtime()
+                    Telemetria.realtime?.suscrito(suscritoDesde - inicioIntento)
                     // Presencia (docs/features-futuras/plan-sesion-unica-dispositivos.md,
                     // "Panel de presencia en tiempo real"): marca este
                     // dispositivo como conectado mientras dure la
@@ -174,6 +190,10 @@ class NubeRealtime(
                     if (seCayo != null) {
                         Log.w("SincronizacionNube", "El canal de avisos se cayó ($seCayo); reconectando")
                     }
+                    Telemetria.realtime?.terminado(
+                        motivo = seCayo?.name ?: "renovacion",
+                        msConectadoAhora = SystemClock.elapsedRealtime() - suscritoDesde,
+                    )
                 } finally {
                     // El colector infinito debe terminar para poder renovar el JWT.
                     avisos.cancel()
@@ -185,6 +205,14 @@ class NubeRealtime(
                 supabase.close()
             }
         }
+    }
+
+    /// Milisegundos desde `instanteIso` (hora del servidor) hasta ahora (hora
+    /// del teléfono). `null` si no se puede leer la fecha.
+    private fun msDesde(instanteIso: String): Long? = try {
+        System.currentTimeMillis() - java.time.OffsetDateTime.parse(instanteIso).toInstant().toEpochMilli()
+    } catch (e: java.time.format.DateTimeParseException) {
+        null
     }
 
     private fun JsonObject.texto(clave: String): String? =

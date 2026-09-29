@@ -45,6 +45,7 @@ los motivos de salida del proceso se guarda sólo el resumen antes de `:`
 | `frames`          | cada 30 s, por pantalla               | frames, trabados (> 2× el presupuesto), congelados (> 700 ms), p50/p90/p99/máx |
 | `llamada_nucleo`  | cada 30 s, por operación              | llamadas, errores, p50/p90/máx/total ms de cada llamada al núcleo Rust |
 | `ocr_sesion`      | al cerrar una cámara de escaneo       | fps, frames, frames con PDF417, descartes por calidad, fallos, medianas de recorte y reconocimiento, ms hasta confirmar, y el diagnóstico del PDF417 (ver abajo) |
+| `realtime`        | cada 30 s, si hubo actividad          | conexión (intentos, ms hasta suscribir, fin de cada conexión y minutos conectado, errores), avisos por tabla, ecos propios, KB recibidos, aplicados en la base local y su tiempo, y latencia (ver abajo) |
 | `strictmode`      | cada 30 s, agregado                   | disco/red en el hilo principal, recursos sin cerrar, Activities filtradas, con el punto del código de la app |
 | `memoria_baja`    | cuando el sistema pide liberar memoria| nivel de `onTrimMemory`, pantalla |
 | `retencion`       | objeto vivo 10 s después de liberarlo | posible fuga: `MainActivity` destruida o `EstadoCamaraOcr` cerrado que siguen en memoria tras forzar el GC |
@@ -115,6 +116,16 @@ from public.telemetria_diagnostico
 where tipo = 'ocr_sesion'
 order by ocurrido_en desc;
 ```
+
+## Latencia de Realtime
+
+`latencia_ms_*` es la hora del teléfono al recibir el aviso menos
+`changed_at`, la hora del servidor al escribir la fila. Incluye el desfase
+entre los dos relojes. La corrección de reloj del núcleo (header HTTP
+`Date`, precisión de 1 s) no alcanza para milisegundos, así que se reporta
+crudo: sirve para comparar tablas, momentos y redes. El mínimo de muchos
+avisos se acerca al desfase; `p50 - min` es la latencia real más su
+variación.
 
 ## Envío
 
