@@ -12,6 +12,22 @@ fn main() {
         .filter(|texto| !texto.is_empty())
         .unwrap_or_else(|| "sinhash".to_string());
     println!("cargo:rustc-env=BUILD_COMMIT_HASH={hash}");
-    println!("cargo:rerun-if-changed=../../.git/HEAD");
+    // `.git/HEAD` sólo cambia al cambiar de rama: un commit o un pull en la
+    // misma rama mueve el archivo de la rama (o `packed-refs`), así que se
+    // vigilan los tres o el hash quedaría viejo en el binario. Sólo los que
+    // existen: cargo trata una ruta ausente como "siempre cambió".
+    let git = "../../.git";
+    println!("cargo:rerun-if-changed={git}/HEAD");
+    if let Ok(head) = std::fs::read_to_string(format!("{git}/HEAD")) {
+        if let Some(referencia) = head.strip_prefix("ref: ") {
+            let archivo = format!("{git}/{}", referencia.trim());
+            if std::path::Path::new(&archivo).exists() {
+                println!("cargo:rerun-if-changed={archivo}");
+            }
+        }
+    }
+    if std::path::Path::new(&format!("{git}/packed-refs")).exists() {
+        println!("cargo:rerun-if-changed={git}/packed-refs");
+    }
     tauri_build::build();
 }
