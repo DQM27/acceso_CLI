@@ -20,6 +20,7 @@
 
 use super::cliente::NubeError;
 
+mod anticipados;
 mod catalogo;
 mod catalogo_rutas;
 mod citas;
@@ -43,6 +44,7 @@ pub use historial::*;
 pub use ingresos::*;
 // Para el aviso en vivo (`nube::en_vivo`), que aplica la misma fila sin
 // pasar por la sincronización.
+pub(in crate::nube) use anticipados::con_descargas_anticipadas;
 pub(in crate::nube) use historial::guardar_historial_en_vivo;
 pub(in crate::nube) use ingresos::{
     FilaIngresoRemoto, aplicar_cierre_de_ingreso_propio, guardar_ingreso_remoto,

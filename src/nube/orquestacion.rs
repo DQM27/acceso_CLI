@@ -117,6 +117,23 @@ pub fn recibir(
     alcance: AlcanceSincronizacion,
     perfil: PerfilDispositivo,
 ) -> Result<ResumenSincronizacionNube, SincronizacionError> {
+    // Las descargas salen en paralelo; las etapas siguen guardando en el
+    // orden de abajo (ver `sincronizacion::anticipados`).
+    let huella = format!(
+        "{}|{}|{}|{alcance:?}|{perfil:?}",
+        contexto.base_url, contexto.sitio_id, contexto.dispositivo_id
+    );
+    sincronizacion::con_descargas_anticipadas(contexto, &huella, || {
+        recibir_en_orden(conexion, contexto, alcance, perfil)
+    })
+}
+
+fn recibir_en_orden(
+    conexion: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    alcance: AlcanceSincronizacion,
+    perfil: PerfilDispositivo,
+) -> Result<ResumenSincronizacionNube, SincronizacionError> {
     let historiales = perfil.guarda_historiales();
     let reconciliar = alcance.reconciliar_historial;
     let mut resumen = ResumenSincronizacionNube::default();
@@ -256,6 +273,42 @@ mod tests {
         let resumen = sincronizar(&conexion, &contexto, alcance, perfil).unwrap();
         let pedidos = pedidos.lock().unwrap().clone();
         (resumen, pedidos)
+    }
+
+    #[test]
+    fn la_segunda_recepcion_aprovecha_lo_descargado_por_adelantado_sin_repetir_pedidos() {
+        let conexion = Connection::open_in_memory().unwrap();
+        initialize_database(&conexion).unwrap();
+        let (base_url, pedidos) = servidor_que_anota();
+        let contexto = ContextoSincronizacion {
+            base_url: &base_url,
+            apikey: "apikey",
+            token: "token",
+            dispositivo_id: "11111111-1111-1111-1111-111111111111",
+            sitio_id: "22222222-2222-2222-2222-222222222222",
+        };
+        let correr_una = || {
+            let antes = pedidos.lock().unwrap().len();
+            let resumen = sincronizar(
+                &conexion,
+                &contexto,
+                AlcanceSincronizacion::completo(),
+                PerfilDispositivo::Escritorio,
+            )
+            .unwrap();
+            let mut hechos = pedidos.lock().unwrap()[antes..].to_vec();
+            hechos.sort();
+            (resumen, hechos)
+        };
+
+        let (primera, pedidos_primera) = correr_una();
+        let (segunda, pedidos_segunda) = correr_una();
+
+        assert_eq!(primera, segunda);
+        assert!(pedidos_primera.len() > 5);
+        // Si las etapas no usaran lo anticipado, cada URL se pediría dos
+        // veces (la anticipada y la de la etapa).
+        assert_eq!(pedidos_segunda, pedidos_primera);
     }
 
     fn pidio(pedidos: &[String], recurso: &str) -> bool {

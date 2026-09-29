@@ -1,3 +1,4 @@
+use super::anticipados::{self, Pedido};
 use super::{ContextoSincronizacion, SincronizacionError};
 use crate::nube::cliente::NubeError;
 
@@ -9,6 +10,12 @@ pub(super) fn obtener_json<T: serde::de::DeserializeOwned>(
     contexto: &ContextoSincronizacion<'_>,
     url: &str,
 ) -> Result<Vec<T>, SincronizacionError> {
+    // Si no se puede leer, se repite por la red con el manejo de siempre.
+    if let Some(filas) = anticipados::tomar(Pedido::simple(url))
+        .and_then(|cuerpo| serde_json::from_str(&cuerpo).ok())
+    {
+        return Ok(filas);
+    }
     let respuesta = cliente
         .get(url)
         .header("apikey", contexto.apikey)
@@ -94,28 +101,16 @@ where
 
     let mut desde = 0_usize;
     loop {
-        let respuesta = cliente
-            .get(&url)
-            .header("apikey", contexto.apikey)
-            .header("Authorization", format!("Bearer {}", contexto.token))
-            .header("Range-Unit", "items")
-            .header(
-                "Range",
-                format!("{desde}-{}", desde + TAMANO_PAGINA_REMOTA - 1),
-            )
-            .send()
-            .map_err(NubeError::Red)?;
-
-        // `is_success()` ya cubre el 206 Partial Content que `PostgREST`
-        // devuelve cuando la página pedida no alcanza a cubrir todo lo que
-        // hay -- no hace falta distinguirlo de un 200 normal, el criterio
-        // de "¿hay más?" de abajo (cuántas filas vinieron) es el mismo.
-        if !respuesta.status().is_success() {
-            let status = respuesta.status().as_u16();
-            let cuerpo = respuesta.text().unwrap_or_default();
-            return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
-        }
-        let pagina: Vec<T> = respuesta.json().map_err(NubeError::Red)?;
+        let anticipada: Option<Vec<T>> = if desde == 0 {
+            anticipados::tomar(Pedido::primera_pagina(&url))
+                .and_then(|cuerpo| serde_json::from_str(&cuerpo).ok())
+        } else {
+            None
+        };
+        let pagina = match anticipada {
+            Some(pagina) => pagina,
+            None => pedir_pagina(cliente, contexto, &url, desde)?,
+        };
         let recibidas_en_esta_pagina = pagina.len();
         let hay_mas = recibidas_en_esta_pagina == TAMANO_PAGINA_REMOTA;
         por_pagina(pagina)?;
@@ -125,6 +120,39 @@ where
         desde += TAMANO_PAGINA_REMOTA;
     }
     Ok(())
+}
+
+/// Una página de `url` (que ya trae su `order=`) a partir de la fila
+/// `desde`.
+fn pedir_pagina<T: serde::de::DeserializeOwned>(
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    url: &str,
+    desde: usize,
+) -> Result<Vec<T>, SincronizacionError> {
+    let respuesta = cliente
+        .get(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Range-Unit", "items")
+        .header(
+            "Range",
+            format!("{desde}-{}", desde + TAMANO_PAGINA_REMOTA - 1),
+        )
+        .send()
+        .map_err(NubeError::Red)?;
+
+    // `is_success()` ya cubre el 206 Partial Content que `PostgREST`
+    // devuelve cuando la página pedida no alcanza a cubrir todo lo que hay
+    // -- no hace falta distinguirlo de un 200 normal, el criterio de "¿hay
+    // más?" de `obtener_json_paginado_con` (cuántas filas vinieron) es el
+    // mismo.
+    if !respuesta.status().is_success() {
+        let status = respuesta.status().as_u16();
+        let cuerpo = respuesta.text().unwrap_or_default();
+        return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
+    }
+    Ok(respuesta.json().map_err(NubeError::Red)?)
 }
 
 /// Baja `url` página por página y guarda cada página en su propia
