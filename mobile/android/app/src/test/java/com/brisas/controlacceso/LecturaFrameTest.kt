@@ -146,6 +146,36 @@ class LecturaFrameTest {
         assertTrue((1..6).none { planificador.leerCodigo() })
     }
 
+    @Test
+    fun laFotoDelPdf417SoloSePideConElReversoEnCuadroYSinMrz() {
+        val planificador = PlanificadorLectores(habilitado = true, framesMemoria = 2)
+        assertFalse(planificador.hayPistaReverso())
+        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
+        assertTrue(planificador.hayPistaReverso())
+        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = true)
+        assertFalse(planificador.hayPistaReverso())
+        assertFalse(
+            PlanificadorLectores(habilitado = false).also {
+                it.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
+            }.hayPistaReverso(),
+        )
+    }
+
+    @Test
+    fun lasFotosDelPdf417SeResumenSinDatosDeLaPersona() {
+        var ahora = 0L
+        val metricas = MetricasOcr(habilitadas = true, reloj = { ahora }, cadaCuantosFrames = 100)
+        metricas.registrarFotoPdf417(ResultadoFotoPdf417.SIN_CODIGO, ms = 400, anchoPx = 3024, detectados = 0)
+        ahora = 2_500_000_000
+        metricas.registrarFotoPdf417(ResultadoFotoPdf417.LEIDA, ms = 600, anchoPx = 3024, detectados = 1)
+        val datos = metricas.datos()
+        assertEquals(mapOf("LEIDA" to 1, "SIN_CODIGO" to 1), datos["pdf417_fotos"])
+        assertEquals(1, datos["pdf417_fotos_con_codigo_detectado"])
+        assertEquals(500f, datos["pdf417_foto_ms_mediana"])
+        assertEquals(3024f, datos["pdf417_foto_ancho_px_mediana"])
+        assertEquals(2500L, datos["ms_hasta_pdf417_en_foto"])
+    }
+
     // --- Métricas (sin datos personales) ---
 
     @Test
@@ -279,6 +309,7 @@ class LecturaFrameTest {
     fun laPlacaSeMuestraComoVaImpresa() {
         assertEquals("CL 371931", placaComoSeImprime("CL371931"))
         assertEquals("BPH-485", placaComoSeImprime("BPH485"))
+        assertEquals("M 947369", placaComoSeImprime("M947369"))
         assertEquals("22906", placaComoSeImprime("22906"))
     }
 }

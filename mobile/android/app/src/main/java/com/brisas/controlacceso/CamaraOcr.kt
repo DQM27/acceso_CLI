@@ -129,6 +129,8 @@ fun iniciarCamara(
     onFallo: (String) -> Unit,
     // La cámara ya conectada: la usa la linterna (`EstadoCamaraOcr`).
     onCamaraLista: (androidx.camera.core.Camera) -> Unit = {},
+    // Foto de alta resolución para el PDF417 (ver `FotografoPdf417`).
+    captura: androidx.camera.core.ImageCapture? = null,
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
     cameraProviderFuture.addListener(
@@ -153,16 +155,33 @@ fun iniciarCamara(
             // desde `analizarFrameOcr`) es quien de verdad lee `cropRect` y
             // recorta con eso antes de aplicar el recuadro guía -- ver su
             // doc-comment.
-                val grupoUseCases = UseCaseGroup.Builder()
-                    .addUseCase(preview)
-                    .addUseCase(analisis)
-                    .apply { previewView.viewPort?.let { setViewPort(it) } }
-                    .build()
-                val camara = proveedor.bindToLifecycle(
+                fun enlazar(conCaptura: Boolean) = proveedor.bindToLifecycle(
                     lifecycleOwner,
                     CameraSelector.DEFAULT_BACK_CAMERA,
-                    grupoUseCases,
+                    UseCaseGroup.Builder()
+                        .addUseCase(preview)
+                        .addUseCase(analisis)
+                        .apply {
+                            if (conCaptura) captura?.let { addUseCase(it) }
+                            previewView.viewPort?.let { setViewPort(it) }
+                        }
+                        .build(),
                 )
+                // Un equipo que no admita preview + análisis + foto a la
+                // vez sigue escaneando sin la foto (el PDF417 se busca
+                // igual en los frames): la foto nunca debe dejar la
+                // pantalla sin cámara.
+                val camara = if (captura == null) {
+                    enlazar(conCaptura = false)
+                } else {
+                    try {
+                        enlazar(conCaptura = true)
+                    } catch (_: IllegalArgumentException) {
+                        // CameraX valida la combinación antes de enlazar:
+                        // no quedó nada enlazado de este intento.
+                        enlazar(conCaptura = false)
+                    }
+                }
                 onCamaraLista(camara)
             } catch (_: Exception) {
                 if (sesionActiva.get()) onFallo("No se pudo iniciar la cámara")
@@ -359,7 +378,9 @@ private val UMBRAL_CONFIANZA_PALABRA = confianzaMinimaPalabra()
 /// diagnóstico de todos los códigos del frame para la telemetría. Los
 /// bytes crudos se ponen en cero en todos los casos (ver
 /// [leerPdf417ConMotivo]).
-private fun leerCodigos(codigos: List<Barcode>, anchoImagenPx: Int, metricas: MetricasOcr): DatosPdf417Cedula? {
+/// Lee los códigos que entregó ML Kit (de un frame o de una foto, ver
+/// `FotografoPdf417`) y registra el diagnóstico.
+internal fun leerCodigos(codigos: List<Barcode>, anchoImagenPx: Int, metricas: MetricasOcr): DatosPdf417Cedula? {
     var datos: DatosPdf417Cedula? = null
     var sinBytes = 0
     val motivos = mutableListOf<MotivoPdf417>()
