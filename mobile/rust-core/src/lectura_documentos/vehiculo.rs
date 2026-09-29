@@ -40,7 +40,9 @@ static PLACA_PARTICULAR: LazyLock<Regex> =
 // "COSTA RICA"/"CENTROAMERICA" mal leídos nunca calzan (una sola palabra
 // larga).
 static GRUPO_TRIPLE_MOTO: LazyLock<Regex> = LazyLock::new(|| patron(r"\b[A-Z0-9]{3}\b"));
-static PREFIJO_MOTO: LazyLock<Regex> = LazyLock::new(|| patron(r"\bM\b"));
+// La `M` de la moto a veces sale como `H` (mismo trazo con las patas
+// rectas, reportado en pruebas con placas viejas y nuevas): las dos cuentan.
+static PREFIJO_MOTO: LazyLock<Regex> = LazyLock::new(|| patron(r"\b[MH]\b"));
 // Número de unidad: la calcomanía es casi lo único en el recuadro. Única
 // muestra real `22906`; se admiten 4-6 dígitos.
 static NUMERO_UNIDAD: LazyLock<Regex> = LazyLock::new(|| patron(r"\b([0-9]{4,6})\b"));
@@ -138,6 +140,12 @@ pub struct LecturaVehiculo {
 const PREFIJO_CL_APILADO_LEIDO: &str = "E";
 const PREFIJO_CARGA_LIVIANA: &str = "CL";
 const DIGITOS_PLACA_CARGA: usize = 6;
+// Moto: `M` + 6 dígitos. Cuando la `M` queda delante de los dígitos, el
+// patrón de carga la toma como prefijo; leída como `H` (ver
+// `PREFIJO_MOTO`) se restituye igual que la "CL" apilada: no hay clase de
+// placa con prefijo "H" solo.
+const PREFIJO_MOTO_LEIDO: &str = "H";
+const PREFIJO_PLACA_MOTO: &str = "M";
 
 fn placa_de_carga(texto: &str) -> Option<Candidata> {
     PLACA_CARGA
@@ -148,18 +156,27 @@ fn placa_de_carga(texto: &str) -> Option<Candidata> {
                 char::is_ascii_digit,
                 digito_por_letra,
             )?;
-            let cl_restituida =
-                &c[1] == PREFIJO_CL_APILADO_LEIDO && digitos.len() == DIGITOS_PLACA_CARGA;
+            let seis_digitos = digitos.len() == DIGITOS_PLACA_CARGA;
+            let cl_restituida = &c[1] == PREFIJO_CL_APILADO_LEIDO && seis_digitos;
+            let es_moto =
+                seis_digitos && (&c[1] == PREFIJO_PLACA_MOTO || &c[1] == PREFIJO_MOTO_LEIDO);
             let prefijo = if cl_restituida {
                 PREFIJO_CARGA_LIVIANA
+            } else if es_moto {
+                PREFIJO_PLACA_MOTO
             } else {
                 &c[1]
+            };
+            let formato = if es_moto {
+                FormatoVehiculo::Moto
+            } else {
+                FormatoVehiculo::Carga
             };
             ((4..=6).contains(&digitos.len()) && correcciones <= MAXIMO_CORRECCIONES_POR_PLACA)
                 .then(|| Candidata {
                     valor: format!("{prefijo}{digitos}"),
                     correcciones,
-                    formato: FormatoVehiculo::Carga,
+                    formato,
                     cl_restituida,
                 })
         })
@@ -224,10 +241,10 @@ static PLACA_PREFIJO_Y_DIGITOS: LazyLock<Regex> =
 static PLACA_TRES_Y_TRES: LazyLock<Regex> = LazyLock::new(|| patron(r"^([A-Z]{3})([0-9]{3})$"));
 
 /// La placa como va impresa, para mostrarla y guardarla en el formulario:
-/// carga con un espacio tras el prefijo (`CL371931` -> `CL 371931`) y
-/// particular con guion (`BPH485` -> `BPH-485`). La moto (la `M` va en
-/// otro renglón de la placa física), el número de unidad y cualquier otra
-/// cosa quedan igual. El valor sin formato (`VehiculoRutaDetectado.valor`)
+/// prefijo y dígitos separados por un espacio (carga `CL371931` ->
+/// `CL 371931`, moto `M947369` -> `M 947369`) y particular con guion
+/// (`BPH485` -> `BPH-485`). El número de unidad y cualquier otra cosa
+/// quedan igual. El valor sin formato (`VehiculoRutaDetectado.valor`)
 /// sigue siendo el que se vota y se compara con el catálogo.
 #[uniffi::export]
 pub fn placa_como_se_imprime(valor: String) -> String {
@@ -239,10 +256,9 @@ pub fn placa_como_se_imprime(valor: String) -> String {
     if let Some(c) = PLACA_TRES_Y_TRES.captures(&compacta) {
         return format!("{}-{}", &c[1], &c[2]);
     }
-    match PLACA_PREFIJO_Y_DIGITOS.captures(&compacta) {
-        Some(c) if &c[1] != "M" => format!("{} {}", &c[1], &c[2]),
-        _ => valor,
-    }
+    PLACA_PREFIJO_Y_DIGITOS
+        .captures(&compacta)
+        .map_or(valor, |c| format!("{} {}", &c[1], &c[2]))
 }
 
 /// Igual que [`extraer_vehiculo`], con cómo se obtuvo la lectura.
@@ -354,9 +370,26 @@ mod tests {
         assert_eq!(impresa("C123456"), "C 123456");
         assert_eq!(impresa("BPH485"), "BPH-485");
         assert_eq!(impresa("bph 485"), "BPH-485");
-        // Moto, número de unidad y lo que no calza quedan igual.
-        assert_eq!(impresa("M947369"), "M947369");
+        assert_eq!(impresa("M947369"), "M 947369");
+        // Número de unidad y lo que no calza quedan igual.
         assert_eq!(impresa("807ACL"), "807ACL");
         assert_eq!(impresa("22906"), "22906");
+    }
+
+    #[test]
+    fn la_m_de_la_moto_leida_como_h_sigue_siendo_m() {
+        assert_eq!(
+            leer("COSTA RICA\n947\n369\nH"),
+            Some(("M947369".to_owned(), TipoVehiculoDetectado::Placa))
+        );
+        assert_eq!(
+            leer("H\n947\n369"),
+            Some(("M947369".to_owned(), TipoVehiculoDetectado::Placa))
+        );
+        let detalle = extraer_vehiculo_con_detalle("H 947 369".to_owned()).unwrap();
+        assert_eq!(
+            (detalle.formato, detalle.correcciones),
+            (FormatoVehiculo::Moto, 0)
+        );
     }
 }
