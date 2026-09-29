@@ -70,31 +70,17 @@ números y motivos (nunca bytes del código):
 | `pdf417_bytes_min` / `pdf417_bytes_max` | Largo de los bytes recibidos |
 | `pdf417_motivos` | Resultado del núcleo por código: `ACEPTADO`, `PREFIJO_CORTO`, `CEDULA_INVALIDA` (clave o formato distintos), `PRIMER_APELLIDO_INVALIDO` / `SEGUNDO_APELLIDO_INVALIDO` / `NOMBRE_INVALIDO` (posiciones corridas), `NOMBRE_O_APELLIDO_VACIO` |
 | `pdf417_errores_lector` | Veces que el lector de códigos terminó con error |
-| `pdf417_fotos` | Fotos de alta resolución por resultado: `LEIDA`, `CODIGO_INVALIDO`, `SIN_CODIGO`, `ERROR_CAPTURA`, `ERROR_LECTOR`, `ERROR_ENLACE` (no se pudo volver a poner el análisis) |
-| `pdf417_fotos_con_codigo_detectado` | Fotos en que ML Kit encontró algún PDF417 |
-| `pdf417_foto_ms_mediana` | Captura + decodificación + lector por foto (ms) |
-| `pdf417_foto_ancho_px_mediana` | Ancho (px) de la foto, ya rotada |
-| `ms_hasta_pdf417_en_foto` | Desde que se abrió la cámara hasta la primera foto con el código leído |
 
 Cómo leerlo: muchos frames con código y **0 detectados** = falta
 resolución (ML Kit ni lo encuentra); detectados pero **sin bytes** = ML
 Kit no entrega el binario; con **motivos de rechazo** = el formato del
 decodificador no calza con las tarjetas reales.
 
-Las pruebas del 2026-09-29 dieron 0 detectados en 127 frames con ~940 px
-de ancho: falta de resolución. Desde entonces, con el reverso en cuadro,
-la pantalla saca además fotos de ~12 MP (`FotografoPdf417`, una cada
-2 s como mucho); sus campos `pdf417_foto*` dicen si la resolución extra
-alcanza. Primera versión: `pdf417_foto_ancho_px_mediana` = 1080 (la foto
-enlazada junto con el análisis no subía de resolución); desde la segunda
-se cambia el análisis por la foto en cada disparo. Los motivos y largos de `pdf417_*` suman frames y fotos.
-
 ```sql
 select ocurrido_en, datos->>'pantalla', datos->>'frames_con_codigo',
        datos->>'pdf417_codigos_detectados', datos->>'pdf417_sin_bytes',
        datos->'pdf417_motivos', datos->>'imagen_ancho_px_mediana_con_codigo',
-       datos->>'pdf417_ancho_codigo_px_mediana', datos->'pdf417_fotos',
-       datos->>'pdf417_foto_ms_mediana', datos->>'ms_hasta_pdf417_en_foto'
+       datos->>'pdf417_ancho_codigo_px_mediana'
 from public.telemetria_diagnostico
 where tipo = 'ocr_sesion' and (datos->>'lector_pdf417')::boolean
 order by ocurrido_en desc;

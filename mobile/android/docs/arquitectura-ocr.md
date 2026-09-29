@@ -153,23 +153,6 @@ descifra sólo ese prefijo, valida y pone en cero lo que recibió. Nunca se
 descifran fechas ni huellas, nada se guarda ni se registra. Ver
 `mobile/rust-core/src/pdf417_cedula.rs`.
 
-Resolución: en el frame de análisis (1080p recortado al recuadro, ~940 px
-de ancho) ML Kit no llegó a detectar el código en pruebas reales. Por eso,
-cuando el texto indica el reverso de la cédula anterior
-(`PlanificadorLectores.hayPistaReverso`), `FotografoPdf417` saca una foto
-de hasta ~12 MP: una a la vez, como mucho cada 2 s, decodificada en su
-propio hilo y entregada en el hilo del analizador (serializada con los
-frames). La foto NO se enlaza junto con el análisis: con preview +
-análisis + foto a la vez, CameraX eligió 1080 px para la foto en un
-Samsung A25 (sin ganancia). `EnlazadorCamara` saca el análisis el instante
-de la foto (preview + foto a máxima resolución lo admite todo equipo) y lo
-vuelve a poner apenas llega; el preview se congela un momento. Los hilos
-propios nunca rechazan tareas: un rechazo dentro de un listener de ML Kit
-cerraba la app al salir de la pantalla con una foto en curso.
-La foto nunca se guarda y sus códigos pasan por el mismo `leerCodigos`
-(prefijo a Rust, bytes en cero). El tope de ~12 MP evita imágenes de
-~200 MB en memoria con sensores de 50 MP.
-
 ## Guía visual
 
 La guía es estática. Los rectángulos de ML Kit usan coordenadas del frame y

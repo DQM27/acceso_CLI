@@ -25,7 +25,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import uniffi.control_acceso_mobile.DatosPdf417Cedula
 
 
 @Composable
@@ -250,15 +249,6 @@ private fun VistaCamaraCedula(
                             }
                         }
                     }
-                // PDF417 leído de un frame o de una foto de alta resolución;
-                // corre en el hilo del analizador en los dos casos.
-                val procesarPdf417: (DatosPdf417Cedula) -> Unit = { datos ->
-                    if (!camara.detectada.get()) {
-                        val resultado = estabilizador.procesarPdf417(datos)
-                        camara.metricas.registrarResultadoDocumento(resultado)
-                        camara.enPrincipal { onResultado(resultado) }
-                    }
-                }
                 val onFallo: () -> Unit = {
                     if (camara.sesionActiva.get()) {
                         estado = EstadoEscaneo.BUSCANDO
@@ -290,18 +280,13 @@ private fun VistaCamaraCedula(
                             if (datosPdf417 != null) {
                                 // Corrección de errores propia del código:
                                 // gana sobre el texto del mismo frame.
-                                procesarPdf417(datosPdf417)
+                                val resultado = estabilizador.procesarPdf417(datosPdf417)
+                                camara.metricas.registrarResultadoDocumento(resultado)
+                                camara.enPrincipal { onResultado(resultado) }
                             } else {
                                 val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso, lectura.calidad)
                                 camara.metricas.registrarResultadoDocumento(resultado)
                                 planificador.registrarTexto(lectura.textos.any(::pareceReversoCedulaAnterior), resultado.hayMrz)
-                                // Reverso de la cédula anterior en cuadro:
-                                // foto de alta resolución para el PDF417,
-                                // que en el frame de análisis no alcanza a
-                                // detectarse (ver `FotografoPdf417`).
-                                if (planificador.hayPistaReverso() && !camara.detectada.get()) {
-                                    camara.fotografoPdf417?.intentar(procesarPdf417)
-                                }
                                 seguidorMrz.registrar(lectura.regionLeida, lectura.lineasMrz)
                                 val giro = encuadre.registrarOrientacion(resultado.orientacionSugerida, leidoCon)
                                 camara.enPrincipal {
@@ -325,7 +310,6 @@ private fun VistaCamaraCedula(
                         camara.vistaPreviaCamara = preview
                     },
                     onCamaraLista = { camara.camaraFisica = it },
-                    onEnlazador = { camara.enlazadorCamara = it },
                     onFallo = { mensaje ->
                         if (camara.sesionActiva.get()) {
                             estado = EstadoEscaneo.INVALIDO

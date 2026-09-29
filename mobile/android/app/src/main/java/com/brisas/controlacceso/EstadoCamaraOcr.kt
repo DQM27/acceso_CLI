@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import androidx.camera.core.Camera
 import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.runtime.Composable
@@ -53,11 +52,6 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         null
     }
     val ejecutorPrincipal: Executor = ContextCompat.getMainExecutor(contexto)
-
-    /// Foto de alta resolución para el PDF417: sólo con lector de códigos
-    /// (ver `FotografoPdf417`). Se enlaza sólo el instante de cada foto, en
-    /// lugar del análisis (ver `EnlazadorCamara`).
-    val capturaPdf417: ImageCapture? = if (lectorCodigos != null) construirCapturaPdf417() else null
 
     /// El hilo del analizador, para los listeners de ML Kit (ver
     /// `analizarFrameOcr`). Si ya se liberó, corre el listener en el lugar:
@@ -116,24 +110,6 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         registrar = { if (BuildConfig.DEBUG) Log.d(TAG_METRICAS_OCR, it) },
     )
 
-    /// Lo fija `iniciarCamara` al enlazar; sólo se usa en el hilo principal.
-    var enlazadorCamara: EnlazadorCamara? = null
-
-    /// Entrega sus resultados en el hilo del analizador, como un frame más.
-    val fotografoPdf417: FotografoPdf417? = capturaPdf417?.let { captura ->
-        lectorCodigos?.let { lector ->
-            FotografoPdf417(
-                captura = captura,
-                lector = lector,
-                entregarEn = ejecutorProcesamiento,
-                principal = ejecutorPrincipal,
-                enlazador = { enlazadorCamara },
-                sesionActiva = sesionActiva,
-                metricas = metricas,
-            )
-        }
-    }
-
     var cameraProvider: ProcessCameraProvider? by mutableStateOf(null)
     var vistaPreviaCamara: Preview? by mutableStateOf(null)
     var analisisCamara: ImageAnalysis? by mutableStateOf(null)
@@ -183,9 +159,8 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         detectada.set(true)
         trabajoResultado?.cancel()
         analisisCamara?.clearAnalyzer()
-        val casos = listOfNotNull(vistaPreviaCamara, analisisCamara, capturaPdf417).toTypedArray()
+        val casos = listOfNotNull(vistaPreviaCamara, analisisCamara).toTypedArray()
         if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
-        fotografoPdf417?.liberar()
         ejecutor.shutdown()
         recognizer.close()
         lectorCodigos?.close()

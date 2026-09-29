@@ -129,9 +129,6 @@ fun iniciarCamara(
     onFallo: (String) -> Unit,
     // La cámara ya conectada: la usa la linterna (`EstadoCamaraOcr`).
     onCamaraLista: (androidx.camera.core.Camera) -> Unit = {},
-    // Para cambiar el análisis por la foto del PDF417 sin soltar la cámara
-    // (ver `EnlazadorCamara`).
-    onEnlazador: (EnlazadorCamara) -> Unit = {},
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
     cameraProviderFuture.addListener(
@@ -156,9 +153,16 @@ fun iniciarCamara(
             // desde `analizarFrameOcr`) es quien de verdad lee `cropRect` y
             // recorta con eso antes de aplicar el recuadro guía -- ver su
             // doc-comment.
-                val enlazador = EnlazadorCamara(proveedor, lifecycleOwner, preview, analisis, previewView.viewPort)
-                val camara = enlazador.enlazar(analisis)
-                onEnlazador(enlazador)
+                val grupoUseCases = UseCaseGroup.Builder()
+                    .addUseCase(preview)
+                    .addUseCase(analisis)
+                    .apply { previewView.viewPort?.let { setViewPort(it) } }
+                    .build()
+                val camara = proveedor.bindToLifecycle(
+                    lifecycleOwner,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    grupoUseCases,
+                )
                 onCamaraLista(camara)
             } catch (_: Exception) {
                 if (sesionActiva.get()) onFallo("No se pudo iniciar la cámara")
@@ -166,47 +170,6 @@ fun iniciarCamara(
         },
         ContextCompat.getMainExecutor(ctx),
     )
-}
-
-/// Qué casos de uso comparten la cámara con el preview. Todo en el hilo
-/// principal (lo exige CameraX).
-///
-/// Existe por la foto del PDF417 (ver `FotografoPdf417`): con preview +
-/// análisis + foto enlazados a la vez, CameraX tiene que elegir una
-/// combinación de resoluciones que el equipo admita, y en pruebas reales
-/// (Samsung A25) la foto quedó en 1080 px, sin ninguna ganancia sobre el
-/// análisis. Preview + foto a máxima resolución, en cambio, lo garantiza
-/// todo equipo: se saca el análisis el instante de la foto y se vuelve a
-/// poner. El preview nunca se suelta (se congela un momento, no se apaga).
-class EnlazadorCamara(
-    private val proveedor: ProcessCameraProvider,
-    private val lifecycleOwner: androidx.lifecycle.LifecycleOwner,
-    private val preview: Preview,
-    private val analisis: ImageAnalysis,
-    private val viewPort: androidx.camera.core.ViewPort?,
-) {
-    /// Enlaza el preview junto con `casos`.
-    fun enlazar(vararg casos: androidx.camera.core.UseCase): androidx.camera.core.Camera = proveedor.bindToLifecycle(
-        lifecycleOwner,
-        CameraSelector.DEFAULT_BACK_CAMERA,
-        UseCaseGroup.Builder()
-            .addUseCase(preview)
-            .apply {
-                casos.forEach { addUseCase(it) }
-                viewPort?.let { setViewPort(it) }
-            }
-            .build(),
-    )
-
-    fun usarFoto(captura: androidx.camera.core.ImageCapture) {
-        proveedor.unbind(analisis)
-        enlazar(captura)
-    }
-
-    fun volverAlAnalisis(captura: androidx.camera.core.ImageCapture) {
-        proveedor.unbind(captura)
-        enlazar(analisis)
-    }
 }
 
 // Hubo acá un empujón manual de autofocus al centro (`FocusMeteringAction`)
@@ -396,9 +359,7 @@ private val UMBRAL_CONFIANZA_PALABRA = confianzaMinimaPalabra()
 /// diagnóstico de todos los códigos del frame para la telemetría. Los
 /// bytes crudos se ponen en cero en todos los casos (ver
 /// [leerPdf417ConMotivo]).
-/// Lee los códigos que entregó ML Kit (de un frame o de una foto, ver
-/// `FotografoPdf417`) y registra el diagnóstico.
-internal fun leerCodigos(codigos: List<Barcode>, anchoImagenPx: Int, metricas: MetricasOcr): DatosPdf417Cedula? {
+private fun leerCodigos(codigos: List<Barcode>, anchoImagenPx: Int, metricas: MetricasOcr): DatosPdf417Cedula? {
     var datos: DatosPdf417Cedula? = null
     var sinBytes = 0
     val motivos = mutableListOf<MotivoPdf417>()

@@ -199,12 +199,6 @@ class PlanificadorLectores(
         return contador % periodoSinPista == 0
     }
 
-    /// ¿El texto de los últimos frames dice que se ve el reverso de la
-    /// cédula anterior (y no un MRZ)? Ahí vale la pena la foto de alta
-    /// resolución (ver `FotografoPdf417`).
-    @Synchronized
-    fun hayPistaReverso(): Boolean = habilitado && framesConMrz == 0 && framesConPista > 0
-
     /// Resultado del texto de un frame.
     @Synchronized
     fun registrarTexto(pareceReversoConCodigo: Boolean, hayMrz: Boolean) {
@@ -279,13 +273,6 @@ class MetricasOcr(
     private var confirmadoVencido: Boolean? = null
     private val msRecorte = ArrayDeque<Float>()
     private val msReconocimiento = ArrayDeque<Float>()
-
-    // Fotos de alta resolución para el PDF417 (ver `FotografoPdf417`).
-    private val resultadosFotoPdf417 = sortedMapOf<String, Int>()
-    private val msFotoPdf417 = ArrayDeque<Float>()
-    private val anchosFotoPdf417 = ArrayDeque<Float>()
-    private var fotosConCodigoDetectado = 0
-    private var msHastaPdf417EnFoto: Long? = null
 
     /// Un frame que terminó de pasar por ML Kit. `nanosReconocimiento`
     /// cubre los dos lectores si corrieron en paralelo.
@@ -396,20 +383,6 @@ class MetricasOcr(
         if (habilitadas) reiniciosVotacion++
     }
 
-    /// Una foto de alta resolución para el PDF417: cómo terminó, cuánto
-    /// tardó (captura + decodificación + lector) y con qué ancho.
-    @Synchronized
-    fun registrarFotoPdf417(resultado: ResultadoFotoPdf417, ms: Long, anchoPx: Int?, detectados: Int) {
-        if (!habilitadas) return
-        resultadosFotoPdf417.merge(resultado.name, 1, Int::plus)
-        agregar(msFotoPdf417, ms.toFloat())
-        anchoPx?.let { agregar(anchosFotoPdf417, it.toFloat()) }
-        if (detectados > 0) fotosConCodigoDetectado++
-        if (resultado == ResultadoFotoPdf417.LEIDA && msHastaPdf417EnFoto == null) {
-            msHastaPdf417EnFoto = (reloj() - inicio) / 1_000_000
-        }
-    }
-
     /// El lector de códigos terminó con error (no "sin códigos").
     @Synchronized
     fun registrarErrorLectorCodigo() {
@@ -459,11 +432,6 @@ class MetricasOcr(
         "pdf417_bytes_max" to largosBytesPdf417.maxOrNull(),
         "pdf417_ancho_codigo_px_mediana" to mediana(anchosCodigoPx),
         "imagen_ancho_px_mediana_con_codigo" to mediana(anchosImagenConCodigoPx),
-        "pdf417_fotos" to resultadosFotoPdf417.toMap(),
-        "pdf417_fotos_con_codigo_detectado" to fotosConCodigoDetectado,
-        "pdf417_foto_ms_mediana" to mediana(msFotoPdf417),
-        "pdf417_foto_ancho_px_mediana" to mediana(anchosFotoPdf417),
-        "ms_hasta_pdf417_en_foto" to msHastaPdf417EnFoto,
         // Condiciones de captura: con qué nitidez, luz y reflejo se trabajó.
         "frames_medidos" to framesMedidos,
         "frames_con_linterna" to framesConLinterna,
