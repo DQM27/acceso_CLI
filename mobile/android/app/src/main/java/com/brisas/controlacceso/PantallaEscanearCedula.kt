@@ -325,7 +325,7 @@ private fun VistaCamaraCedula(
                         camara.vistaPreviaCamara = preview
                     },
                     onCamaraLista = { camara.camaraFisica = it },
-                    captura = camara.capturaPdf417,
+                    onEnlazador = { camara.enlazadorCamara = it },
                     onFallo = { mensaje ->
                         if (camara.sesionActiva.get()) {
                             estado = EstadoEscaneo.INVALIDO

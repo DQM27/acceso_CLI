@@ -55,8 +55,8 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
     val ejecutorPrincipal: Executor = ContextCompat.getMainExecutor(contexto)
 
     /// Foto de alta resolución para el PDF417: sólo con lector de códigos
-    /// (ver `FotografoPdf417`). La pantalla la enlaza junto con el preview y
-    /// el análisis.
+    /// (ver `FotografoPdf417`). Se enlaza sólo el instante de cada foto, en
+    /// lugar del análisis (ver `EnlazadorCamara`).
     val capturaPdf417: ImageCapture? = if (lectorCodigos != null) construirCapturaPdf417() else null
 
     /// El hilo del analizador, para los listeners de ML Kit (ver
@@ -116,10 +116,21 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         registrar = { if (BuildConfig.DEBUG) Log.d(TAG_METRICAS_OCR, it) },
     )
 
+    /// Lo fija `iniciarCamara` al enlazar; sólo se usa en el hilo principal.
+    var enlazadorCamara: EnlazadorCamara? = null
+
     /// Entrega sus resultados en el hilo del analizador, como un frame más.
     val fotografoPdf417: FotografoPdf417? = capturaPdf417?.let { captura ->
         lectorCodigos?.let { lector ->
-            FotografoPdf417(captura, lector, ejecutorProcesamiento, sesionActiva, metricas)
+            FotografoPdf417(
+                captura = captura,
+                lector = lector,
+                entregarEn = ejecutorProcesamiento,
+                principal = ejecutorPrincipal,
+                enlazador = { enlazadorCamara },
+                sesionActiva = sesionActiva,
+                metricas = metricas,
+            )
         }
     }
 

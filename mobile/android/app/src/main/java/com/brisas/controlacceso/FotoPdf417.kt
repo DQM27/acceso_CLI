@@ -37,62 +37,116 @@ fun construirCapturaPdf417(): ImageCapture = ImageCapture.Builder()
 /// Por qué (telemetría de pruebas reales): en 127 frames con el reverso en
 /// cuadro ML Kit no DETECTÓ ningún código. El frame de análisis (1080p)
 /// recortado al recuadro deja la tarjeta en ~940 px de ancho, y las barras
-/// del PDF417 quedan por debajo de lo que el lector necesita. Una foto de
-/// ~12 MP tiene unas 3,5 veces más píxeles por barra.
+/// del PDF417 quedan por debajo de lo que el lector necesita.
+///
+/// Cada foto: en el hilo principal se cambia el análisis por la foto (ver
+/// `EnlazadorCamara`: con los tres casos de uso a la vez la foto salía en
+/// 1080 px), se saca, y apenas llega se vuelve a poner el análisis; recién
+/// después se decodifica y se busca el código, en un hilo propio. El
+/// resultado se entrega en `entregarEn` (el hilo del analizador), así queda
+/// serializado con las lecturas de los frames.
 ///
 /// Se dispara sólo cuando el texto ya dice que se ve el reverso de la
 /// cédula anterior (ver `PlanificadorLectores.hayPistaReverso`), una foto a
-/// la vez y como mucho una cada [intervaloMs]. Decodificar la foto y
-/// buscar el código corre en un hilo propio para no frenar el análisis; el
-/// resultado se entrega en `entregarEn` (el hilo del analizador), así queda
-/// serializado con las lecturas de los frames. La foto nunca se guarda: se
-/// libera apenas ML Kit termina, y los bytes del código se tratan igual
-/// que en los frames (`leerCodigos`: sólo el prefijo va a Rust y todo se
-/// pone en cero).
+/// la vez y como mucho una cada [intervaloMs]: cada una congela el preview
+/// y pausa el texto un momento. La foto nunca se guarda: se libera apenas
+/// ML Kit termina, y los bytes del código se tratan igual que en los frames
+/// (`leerCodigos`: sólo el prefijo va a Rust y todo se pone en cero).
 class FotografoPdf417(
     private val captura: ImageCapture,
     private val lector: BarcodeScanner,
     private val entregarEn: Executor,
+    private val principal: Executor,
+    private val enlazador: () -> EnlazadorCamara?,
     private val sesionActiva: AtomicBoolean,
     private val metricas: MetricasOcr,
     private val intervaloMs: Long = INTERVALO_ENTRE_FOTOS_MS,
     private val reloj: () -> Long = SystemClock::elapsedRealtime,
 ) {
     private val hilo: ExecutorService = Executors.newSingleThreadExecutor()
+
+    /// Nunca rechaza: si el hilo ya se cerró (la pantalla se fue), la tarea
+    /// corre en el lugar. Un rechazo dentro de un listener de ML Kit tumbaba
+    /// la app (RejectedExecutionException en el hilo principal, Sentry
+    /// CONTROL-ACCESO-MOBILE-1) al salir de la pantalla con una foto en
+    /// curso.
+    private val ejecutorFoto = Executor { tarea ->
+        try {
+            hilo.execute(tarea)
+        } catch (_: RejectedExecutionException) {
+            tarea.run()
+        }
+    }
     private val enCurso = AtomicBoolean(false)
 
     @Volatile
     private var ultimaFotoMs: Long? = null
 
     /// Saca una foto si corresponde; `onDatos` recibe la cédula si el
-    /// código se leyó.
+    /// código se leyó. Se puede llamar desde cualquier hilo.
     fun intentar(onDatos: (DatosPdf417Cedula) -> Unit) {
         val ahora = reloj()
         val ultima = ultimaFotoMs
         if (!sesionActiva.get() || (ultima != null && ahora - ultima < intervaloMs)) return
         if (!enCurso.compareAndSet(false, true)) return
         ultimaFotoMs = ahora
+        principal.execute { fotografiar(onDatos) }
+    }
+
+    fun liberar() {
+        hilo.shutdown()
+    }
+
+    /// En el hilo principal.
+    private fun fotografiar(onDatos: (DatosPdf417Cedula) -> Unit) {
+        val enlace = enlazador()
+        if (!sesionActiva.get() || enlace == null) {
+            enCurso.set(false)
+            return
+        }
         val inicio = System.nanoTime()
+        val restaurar = restaurarUnaVez(enlace)
         try {
+            enlace.usarFoto(captura)
             captura.takePicture(
-                hilo,
+                ejecutorFoto,
                 object : ImageCapture.OnImageCapturedCallback() {
-                    override fun onCaptureSuccess(imagen: ImageProxy) = analizar(imagen, inicio, onDatos)
+                    override fun onCaptureSuccess(imagen: ImageProxy) {
+                        principal.execute(restaurar)
+                        analizar(imagen, inicio, onDatos)
+                    }
 
                     override fun onError(exception: ImageCaptureException) {
+                        principal.execute(restaurar)
                         metricas.registrarFotoPdf417(ResultadoFotoPdf417.ERROR_CAPTURA, msDesde(inicio), anchoPx = null, detectados = 0)
                         enCurso.set(false)
                     }
                 },
             )
         } catch (_: RuntimeException) {
-            // Cámara sin enlazar todavía (o ya liberada), o hilo cerrado.
+            // Combinación no admitida o cámara ya liberada: se vuelve al
+            // análisis y el escaneo sigue como sin foto.
+            restaurar.run()
+            metricas.registrarFotoPdf417(ResultadoFotoPdf417.ERROR_CAPTURA, msDesde(inicio), anchoPx = null, detectados = 0)
             enCurso.set(false)
         }
     }
 
-    fun liberar() {
-        hilo.shutdown()
+    /// Vuelve a poner el análisis, una sola vez aunque se pida desde dos
+    /// caminos, y sólo si la pantalla sigue abierta (si no, `liberar` de
+    /// `EstadoCamaraOcr` ya soltó todo y reenlazar dejaría la cámara
+    /// prendida). En el hilo principal.
+    private fun restaurarUnaVez(enlace: EnlazadorCamara): Runnable {
+        val hecho = AtomicBoolean(false)
+        return Runnable {
+            if (hecho.compareAndSet(false, true) && sesionActiva.get()) {
+                try {
+                    enlace.volverAlAnalisis(captura)
+                } catch (_: RuntimeException) {
+                    metricas.registrarFotoPdf417(ResultadoFotoPdf417.ERROR_ENLACE, 0, anchoPx = null, detectados = 0)
+                }
+            }
+        }
     }
 
     private fun analizar(imagen: ImageProxy, inicio: Long, onDatos: (DatosPdf417Cedula) -> Unit) {
@@ -106,6 +160,9 @@ class FotografoPdf417(
         val mapa = try {
             imagen.toBitmap()
         } catch (_: RuntimeException) {
+            null
+        } catch (_: OutOfMemoryError) {
+            // Una foto grande es prescindible: sin memoria se sigue sin ella.
             null
         } finally {
             imagen.close()
@@ -123,36 +180,33 @@ class FotografoPdf417(
             enCurso.set(false)
             return
         }
-        tarea.addOnCompleteListener(hilo) {
+        tarea.addOnCompleteListener(ejecutorFoto) {
             mapa.recycle()
             val codigos = tarea.takeIf { it.isSuccessful }?.result
             val ms = msDesde(inicio)
-            try {
-                entregarEn.execute {
-                    try {
-                        if (!sesionActiva.get()) return@execute
-                        if (codigos == null) {
-                            metricas.registrarErrorLectorCodigo()
-                            metricas.registrarFotoPdf417(ResultadoFotoPdf417.ERROR_LECTOR, ms, anchoPx, detectados = 0)
-                            return@execute
-                        }
-                        val datos = leerCodigos(codigos, anchoPx, metricas)
-                        val resultado = when {
-                            datos != null -> ResultadoFotoPdf417.LEIDA
-                            codigos.isNotEmpty() -> ResultadoFotoPdf417.CODIGO_INVALIDO
-                            else -> ResultadoFotoPdf417.SIN_CODIGO
-                        }
-                        metricas.registrarFotoPdf417(resultado, ms, anchoPx, codigos.size)
-                        if (datos != null) onDatos(datos)
-                    } finally {
-                        enCurso.set(false)
+            // `entregarEn` tampoco rechaza (ver `EstadoCamaraOcr.ejecutorProcesamiento`).
+            entregarEn.execute {
+                try {
+                    if (!sesionActiva.get()) {
+                        codigos?.forEach { it.rawBytes?.fill(0) }
+                        return@execute
                     }
+                    if (codigos == null) {
+                        metricas.registrarErrorLectorCodigo()
+                        metricas.registrarFotoPdf417(ResultadoFotoPdf417.ERROR_LECTOR, ms, anchoPx, detectados = 0)
+                        return@execute
+                    }
+                    val datos = leerCodigos(codigos, anchoPx, metricas)
+                    val resultado = when {
+                        datos != null -> ResultadoFotoPdf417.LEIDA
+                        codigos.isNotEmpty() -> ResultadoFotoPdf417.CODIGO_INVALIDO
+                        else -> ResultadoFotoPdf417.SIN_CODIGO
+                    }
+                    metricas.registrarFotoPdf417(resultado, ms, anchoPx, codigos.size)
+                    if (datos != null) onDatos(datos)
+                } finally {
+                    enCurso.set(false)
                 }
-            } catch (_: RejectedExecutionException) {
-                // El analizador ya cerró: nadie espera el resultado. Los
-                // bytes crudos de los códigos se ponen en cero igual.
-                codigos?.forEach { it.rawBytes?.fill(0) }
-                enCurso.set(false)
             }
         }
     }
@@ -161,8 +215,9 @@ class FotografoPdf417(
 }
 
 /// Cómo terminó una foto del PDF417 (sólo para la telemetría).
-enum class ResultadoFotoPdf417 { LEIDA, CODIGO_INVALIDO, SIN_CODIGO, ERROR_CAPTURA, ERROR_LECTOR }
+enum class ResultadoFotoPdf417 { LEIDA, CODIGO_INVALIDO, SIN_CODIGO, ERROR_CAPTURA, ERROR_LECTOR, ERROR_ENLACE }
 
-/// Entre foto y foto: da tiempo a que la persona acomode la tarjeta y no
+/// Entre foto y foto: cada una congela el preview y pausa el texto un
+/// momento; además da tiempo a que la persona acomode la tarjeta y no
 /// calienta el teléfono si el código no se deja leer.
-const val INTERVALO_ENTRE_FOTOS_MS = 1_200L
+const val INTERVALO_ENTRE_FOTOS_MS = 2_000L

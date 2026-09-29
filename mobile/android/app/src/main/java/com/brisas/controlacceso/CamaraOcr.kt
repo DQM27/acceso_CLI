@@ -129,8 +129,9 @@ fun iniciarCamara(
     onFallo: (String) -> Unit,
     // La cámara ya conectada: la usa la linterna (`EstadoCamaraOcr`).
     onCamaraLista: (androidx.camera.core.Camera) -> Unit = {},
-    // Foto de alta resolución para el PDF417 (ver `FotografoPdf417`).
-    captura: androidx.camera.core.ImageCapture? = null,
+    // Para cambiar el análisis por la foto del PDF417 sin soltar la cámara
+    // (ver `EnlazadorCamara`).
+    onEnlazador: (EnlazadorCamara) -> Unit = {},
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
     cameraProviderFuture.addListener(
@@ -155,33 +156,9 @@ fun iniciarCamara(
             // desde `analizarFrameOcr`) es quien de verdad lee `cropRect` y
             // recorta con eso antes de aplicar el recuadro guía -- ver su
             // doc-comment.
-                fun enlazar(conCaptura: Boolean) = proveedor.bindToLifecycle(
-                    lifecycleOwner,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
-                    UseCaseGroup.Builder()
-                        .addUseCase(preview)
-                        .addUseCase(analisis)
-                        .apply {
-                            if (conCaptura) captura?.let { addUseCase(it) }
-                            previewView.viewPort?.let { setViewPort(it) }
-                        }
-                        .build(),
-                )
-                // Un equipo que no admita preview + análisis + foto a la
-                // vez sigue escaneando sin la foto (el PDF417 se busca
-                // igual en los frames): la foto nunca debe dejar la
-                // pantalla sin cámara.
-                val camara = if (captura == null) {
-                    enlazar(conCaptura = false)
-                } else {
-                    try {
-                        enlazar(conCaptura = true)
-                    } catch (_: IllegalArgumentException) {
-                        // CameraX valida la combinación antes de enlazar:
-                        // no quedó nada enlazado de este intento.
-                        enlazar(conCaptura = false)
-                    }
-                }
+                val enlazador = EnlazadorCamara(proveedor, lifecycleOwner, preview, analisis, previewView.viewPort)
+                val camara = enlazador.enlazar(analisis)
+                onEnlazador(enlazador)
                 onCamaraLista(camara)
             } catch (_: Exception) {
                 if (sesionActiva.get()) onFallo("No se pudo iniciar la cámara")
@@ -189,6 +166,47 @@ fun iniciarCamara(
         },
         ContextCompat.getMainExecutor(ctx),
     )
+}
+
+/// Qué casos de uso comparten la cámara con el preview. Todo en el hilo
+/// principal (lo exige CameraX).
+///
+/// Existe por la foto del PDF417 (ver `FotografoPdf417`): con preview +
+/// análisis + foto enlazados a la vez, CameraX tiene que elegir una
+/// combinación de resoluciones que el equipo admita, y en pruebas reales
+/// (Samsung A25) la foto quedó en 1080 px, sin ninguna ganancia sobre el
+/// análisis. Preview + foto a máxima resolución, en cambio, lo garantiza
+/// todo equipo: se saca el análisis el instante de la foto y se vuelve a
+/// poner. El preview nunca se suelta (se congela un momento, no se apaga).
+class EnlazadorCamara(
+    private val proveedor: ProcessCameraProvider,
+    private val lifecycleOwner: androidx.lifecycle.LifecycleOwner,
+    private val preview: Preview,
+    private val analisis: ImageAnalysis,
+    private val viewPort: androidx.camera.core.ViewPort?,
+) {
+    /// Enlaza el preview junto con `casos`.
+    fun enlazar(vararg casos: androidx.camera.core.UseCase): androidx.camera.core.Camera = proveedor.bindToLifecycle(
+        lifecycleOwner,
+        CameraSelector.DEFAULT_BACK_CAMERA,
+        UseCaseGroup.Builder()
+            .addUseCase(preview)
+            .apply {
+                casos.forEach { addUseCase(it) }
+                viewPort?.let { setViewPort(it) }
+            }
+            .build(),
+    )
+
+    fun usarFoto(captura: androidx.camera.core.ImageCapture) {
+        proveedor.unbind(analisis)
+        enlazar(captura)
+    }
+
+    fun volverAlAnalisis(captura: androidx.camera.core.ImageCapture) {
+        proveedor.unbind(captura)
+        enlazar(analisis)
+    }
 }
 
 // Hubo acá un empujón manual de autofocus al centro (`FocusMeteringAction`)
