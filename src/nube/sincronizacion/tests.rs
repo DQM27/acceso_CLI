@@ -2909,6 +2909,7 @@ fn cierra_un_ingreso_remoto_y_lo_saca_de_la_cache() {
         &contexto(&base_url),
         "uuid-remoto",
         "Op Celular",
+        chrono::Utc::now(),
     )
     .unwrap();
 
@@ -2918,6 +2919,77 @@ fn cierra_un_ingreso_remoto_y_lo_saca_de_la_cache() {
         })
         .unwrap();
     assert_eq!(cacheados, 0);
+}
+
+/// Servidor de un solo pedido que devuelve el pedido COMPLETO (headers y
+/// cuerpo) por el canal.
+fn servidor_que_captura_el_cuerpo() -> (String, std::sync::mpsc::Receiver<String>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
+    let direccion = listener.local_addr().expect("dirección local");
+    let (enviar, recibir) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let Ok((mut socket, _)) = listener.accept() else {
+            return;
+        };
+        socket
+            .set_read_timeout(Some(Duration::from_secs(3)))
+            .expect("set_read_timeout");
+        let mut pedido = Vec::new();
+        let mut buffer = [0; 4096];
+        loop {
+            let texto = String::from_utf8_lossy(&pedido).to_string();
+            if let Some((cabecera, cuerpo)) = texto.split_once("\r\n\r\n") {
+                let largo = cabecera
+                    .lines()
+                    .find_map(|l| {
+                        l.to_ascii_lowercase()
+                            .strip_prefix("content-length:")
+                            .map(|v| v.trim().parse::<usize>().unwrap_or(0))
+                    })
+                    .unwrap_or(0);
+                if cuerpo.len() >= largo {
+                    break;
+                }
+            }
+            match socket.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(leidos) => pedido.extend_from_slice(&buffer[..leidos]),
+            }
+        }
+        let _ = enviar.send(String::from_utf8_lossy(&pedido).to_string());
+        let _ = socket.write_all(
+            b"HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+        );
+    });
+    (format!("http://{direccion}"), recibir)
+}
+
+#[test]
+fn el_cierre_remoto_sella_la_hora_que_le_pasan_no_la_del_reloj_crudo() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    let (base_url, pedido) = servidor_que_captura_el_cuerpo();
+    // Un reloj corregido que difiere del crudo: la hora enviada tiene que
+    // ser ésta, no `Utc::now()`.
+    let hora = crate::tiempo::parsear_utc("2026-01-01T08:00:30Z").unwrap();
+
+    cerrar_ingreso_remoto(
+        &connection,
+        &contexto(&base_url),
+        "uuid-remoto",
+        "Op PC",
+        hora,
+    )
+    .unwrap();
+
+    let pedido = pedido
+        .recv_timeout(Duration::from_secs(3))
+        .expect("pedido capturado");
+    let esperado = format!(
+        "\"hora_salida\":\"{}\"",
+        crate::tiempo::serializar_utc(hora)
+    );
+    assert!(pedido.contains(&esperado), "{pedido}");
 }
 
 #[test]
@@ -2945,6 +3017,7 @@ fn cierra_un_ingreso_proveedor_remoto_y_lo_saca_de_la_cache() {
         &contexto(&base_url),
         "uuid-remoto",
         "Op Celular",
+        chrono::Utc::now(),
     )
     .unwrap();
 

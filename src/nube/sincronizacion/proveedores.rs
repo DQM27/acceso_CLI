@@ -170,16 +170,18 @@ pub fn recibir_ingresos_proveedor_abiertos(
     Ok(remotos)
 }
 
-/// Espejo de [`cerrar_ingreso_remoto`], pero contra `ingresos_proveedor`.
+/// Espejo de [`cerrar_ingreso_remoto`] (también en cómo se sella `hora`),
+/// pero contra `ingresos_proveedor`.
 pub fn cerrar_ingreso_proveedor_remoto(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
     usuario_salida_nombre: &str,
+    hora: chrono::DateTime<chrono::Utc>,
 ) -> Result<(), SincronizacionError> {
     let cliente = cliente_http();
     let cuerpo = json!({
-        "hora_salida": crate::tiempo::serializar_utc(chrono::Utc::now()),
+        "hora_salida": crate::tiempo::serializar_utc(hora),
         "dispositivo_salida_id": contexto.dispositivo_id,
         "usuario_salida_nombre": usuario_salida_nombre,
     });

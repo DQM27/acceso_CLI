@@ -245,15 +245,21 @@ pub(in crate::nube) fn guardar_ingreso_remoto(
 /// `enviar_cierre_ingreso` -- "primero en llegar gana"). Nunca toca
 /// `registro_ingresos` local, sólo la caché `ingresos_remotos`: este
 /// ingreso no es -- y nunca fue -- del historial de este dispositivo.
+///
+/// `hora` la sella quien llama con su reloj CORREGIDO (`AppCore::ahora_utc`),
+/// igual que un registro local: con `Utc::now()` quedaba la hora cruda del
+/// equipo -- en pruebas, una PC con Windows 30 s adelantado dejaba salidas
+/// 30 s en el futuro.
 pub fn cerrar_ingreso_remoto(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
     usuario_salida_nombre: &str,
+    hora: chrono::DateTime<chrono::Utc>,
 ) -> Result<(), SincronizacionError> {
     let cliente = cliente_http();
     let cuerpo = json!({
-        "hora_salida": crate::tiempo::serializar_utc(chrono::Utc::now()),
+        "hora_salida": crate::tiempo::serializar_utc(hora),
         "dispositivo_salida_id": contexto.dispositivo_id,
         "usuario_salida_nombre": usuario_salida_nombre,
     });

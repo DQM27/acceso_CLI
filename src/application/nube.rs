@@ -429,6 +429,15 @@ impl AppCore {
         }
     }
 
+    /// La hora actual según el reloj de este núcleo (corregido contra el
+    /// servidor, ver [`crate::tiempo::RelojCorregido`]). Para lo que se
+    /// sella fuera de `AppCore` -- los cierres directos contra la nube (ver
+    /// `nube::cerrar_ingreso_remoto`) -- con la misma hora que un registro
+    /// local, nunca con el reloj crudo del equipo.
+    pub fn ahora_utc(&self) -> chrono::DateTime<chrono::Utc> {
+        self.reloj.ahora_utc()
+    }
+
     /// Último desfase medido (reloj del equipo MENOS el del servidor, en
     /// ms), o `None` si nunca se midió. Para diagnóstico: permite a la app
     /// comparar horas del servidor con las del equipo (p. ej. la latencia

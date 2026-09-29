@@ -161,16 +161,18 @@ pub fn recibir_devoluciones_propias_gafete_provisional(
 
 /// Espejo de [`cerrar_ingreso_proveedor_remoto`], pero para registrar la
 /// devolución de un préstamo de gafete provisional que OTRO dispositivo
-/// entregó.
+/// entregó. `hora` como en [`cerrar_ingreso_remoto`]: la del reloj
+/// corregido de quien llama.
 pub fn cerrar_prestamo_gafete_provisional_remoto(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     uuid: &str,
     usuario_devolucion_nombre: &str,
+    hora: chrono::DateTime<chrono::Utc>,
 ) -> Result<(), SincronizacionError> {
     let cliente = cliente_http();
     let cuerpo = json!({
-        "hora_devolucion": crate::tiempo::serializar_utc(chrono::Utc::now()),
+        "hora_devolucion": crate::tiempo::serializar_utc(hora),
         "dispositivo_devolucion_id": contexto.dispositivo_id,
         "usuario_devolucion_nombre": usuario_devolucion_nombre,
     });

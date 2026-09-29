@@ -280,10 +280,17 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         let conexion = self.conexion_secundaria()?;
-        control_acceso::nube::cerrar_ingreso_remoto(&conexion, &contexto, &uuid, &actor.nombre)
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
+        let hora = self.core_lock().ahora_utc();
+        control_acceso::nube::cerrar_ingreso_remoto(
+            &conexion,
+            &contexto,
+            &uuid,
+            &actor.nombre,
+            hora,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: interno(error),
+        })?;
         Ok(())
     }
 
@@ -309,11 +316,13 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         let conexion = self.conexion_secundaria()?;
+        let hora = self.core_lock().ahora_utc();
         control_acceso::nube::cerrar_ingreso_proveedor_remoto(
             &conexion,
             &contexto,
             &uuid,
             &actor.nombre,
+            hora,
         )
         .map_err(|error| NucleoError::Interno {
             mensaje: interno(error),
@@ -343,11 +352,13 @@ impl Nucleo {
             sitio_id: &token.sitio_id,
         };
         let conexion = self.conexion_secundaria()?;
+        let hora = self.core_lock().ahora_utc();
         control_acceso::nube::cerrar_prestamo_gafete_provisional_remoto(
             &conexion,
             &contexto,
             &uuid,
             &actor.nombre,
+            hora,
         )
         .map_err(|error| NucleoError::Interno {
             mensaje: interno(error),

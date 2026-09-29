@@ -533,7 +533,8 @@ pub fn cerrar_ingreso_remoto(uuid: String, state: tauri::State<GuiState>) -> Res
         sitio_id: &token.sitio_id,
     };
     let conexion = state.conexion_secundaria()?;
-    nube::cerrar_ingreso_remoto(&conexion, &contexto, &uuid, &actor.nombre)
+    let hora = state.core().ahora_utc();
+    nube::cerrar_ingreso_remoto(&conexion, &contexto, &uuid, &actor.nombre, hora)
         .map_err(mensaje_sincronizacion)
 }
 
@@ -587,7 +588,8 @@ pub fn cerrar_ingreso_proveedor_remoto(
         sitio_id: &token.sitio_id,
     };
     let conexion = state.conexion_secundaria()?;
-    nube::cerrar_ingreso_proveedor_remoto(&conexion, &contexto, &uuid, &actor.nombre)
+    let hora = state.core().ahora_utc();
+    nube::cerrar_ingreso_proveedor_remoto(&conexion, &contexto, &uuid, &actor.nombre, hora)
         .map_err(mensaje_sincronizacion)
 }
 
@@ -640,6 +642,13 @@ pub fn cerrar_prestamo_gafete_provisional_remoto(
         sitio_id: &token.sitio_id,
     };
     let conexion = state.conexion_secundaria()?;
-    nube::cerrar_prestamo_gafete_provisional_remoto(&conexion, &contexto, &uuid, &actor.nombre)
-        .map_err(mensaje_sincronizacion)
+    let hora = state.core().ahora_utc();
+    nube::cerrar_prestamo_gafete_provisional_remoto(
+        &conexion,
+        &contexto,
+        &uuid,
+        &actor.nombre,
+        hora,
+    )
+    .map_err(mensaje_sincronizacion)
 }
