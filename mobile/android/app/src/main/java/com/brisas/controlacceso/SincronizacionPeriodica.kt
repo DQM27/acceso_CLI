@@ -40,7 +40,17 @@ class SincronizacionPeriodica(
 ) {
     private var trabajo: Job? = null
 
-    fun iniciar() {
+    /**
+     * `inmediata`: al volver a primer plano (no en el primer arranque de la
+     * sesión, donde el login ya lanzó su propia sincronización) la primera
+     * corrida sale enseguida, en paralelo con la reconexión de Realtime, en
+     * vez de esperar el aviso de "canal suscrito" (~0,7 s) más la pausa de
+     * agrupación. Medido con telemetría: al desbloquear el teléfono el dato
+     * de otro dispositivo tardaba ~3 s en verse; la corrida que dispara la
+     * suscripción sigue ocurriendo después y cubre lo que cambie en el
+     * medio.
+     */
+    fun iniciar(inmediata: Boolean = false) {
         if (trabajo?.isActive == true) return
         trabajo = scope.launch {
             coroutineScope {
@@ -52,11 +62,15 @@ class SincronizacionPeriodica(
                         pendientes.trySend(Unit)
                     }
                 }
-                withTimeoutOrNull(ESPERA_INICIAL_MS) { pendientes.receive() }
+                if (!inmediata) {
+                    withTimeoutOrNull(ESPERA_INICIAL_MS) { pendientes.receive() }
+                }
                 // La primera corrida siempre es completa.
                 porSincronizar.anotar(null)
+                var agrupar = !inmediata
                 while (true) {
-                    delay(600)
+                    if (agrupar) delay(PAUSA_AGRUPACION_MS)
+                    agrupar = true
                     val tablas = porSincronizar.tomar()
                     try {
                         val resumen = withContext(Dispatchers.IO) {
@@ -94,6 +108,8 @@ class SincronizacionPeriodica(
 
     private companion object {
         const val ESPERA_INICIAL_MS = 10_000L
+        /** Junta avisos que llegan casi a la vez en una sola corrida. */
+        const val PAUSA_AGRUPACION_MS = 600L
         const val INTERVALO_MS = 2 * 60_000L
     }
 }
