@@ -36,8 +36,8 @@ android {
         // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "1.2.7"
+        versionCode = 20
+        versionName = "1.3.0"
 
         // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
         // el default acá es "development" (debug); `release {}` abajo lo
@@ -101,7 +101,7 @@ android {
             initWith(getByName("release"))
             applicationIdSuffix = ".diag"
             // Con el hash corto del commit al final, `version_app` de cada
-            // fila de telemetría dice de qué código salió ("1.2.7-diag+abc1234").
+            // fila de telemetría dice de qué código salió ("1.3.0-diag+abc1234").
             versionNameSuffix = "-diag+$hashCortoDelCommit"
             signingConfig = signingConfigs.getByName("debug")
             isDebuggable = false
