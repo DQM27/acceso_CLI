@@ -279,6 +279,7 @@ class LecturaFrameTest {
     fun laPlacaSeMuestraComoVaImpresa() {
         assertEquals("CL 371931", placaComoSeImprime("CL371931"))
         assertEquals("BPH-485", placaComoSeImprime("BPH485"))
+        assertEquals("M 947369", placaComoSeImprime("M947369"))
         assertEquals("22906", placaComoSeImprime("22906"))
     }
 }
