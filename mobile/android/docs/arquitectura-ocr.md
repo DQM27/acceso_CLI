@@ -183,6 +183,27 @@ vencerse. Durante el modo:
   congela un momento al entrar y al salir; si el equipo no admite la
   combinación, sigue con la normal.
 
+Resultado en staging (2026-09-29, cédula real): 4 de 4 sesiones leídas por el
+PDF417 (700 bytes, código de 1476-1776 px, `ACEPTADO`, con nombre), confirmadas
+en 3,6-6,2 s. Con una foto de la cédula en la pantalla de otro teléfono se
+leyeron 706 bytes y se rechazó (`CEDULA_INVALIDA`): la pantalla deforma el
+código, no es un problema del decodificador.
+
+**Pendiente: modo "sólo código" (sin probar en el teléfono).** Durante el modo
+el escáner baja a 3-4 fps porque el texto también se procesa sobre el
+análisis de 12 MP (50-64 ms de recorte y hasta 490-750 ms de texto por frame).
+Idea: en modo código, 4 de cada 5 frames sólo corren el lector de códigos
+sobre todo lo visible (sin recorte del recuadro, sin medir calidad, sin texto);
+1 de cada 5 lee el texto como plan B, para salir del modo si aparece un MRZ u
+otro documento. Piezas: `PlanCodigo.leerTexto` y `periodoTextoModoCodigo = 5`
+en `PlanificadorLectores`; en `analizarFrameOcr`, armar primero el recorte de
+todo lo visible y, si el frame es "sólo código", cerrar el `ImageProxy` y leer
+sólo el código (sin `onFallo` si no hay código: es lo esperable); métricas
+aparte (`modo_codigo_frames_solo_codigo`, `modo_codigo_solo_codigo_ms_mediana`)
+para no mezclarlas con los tiempos del texto. También: no volver a 1080p al
+confirmar si la pantalla se va a cerrar (el reenlace congela el preview justo
+en la confirmación).
+
 La telemetría (`modo_codigo_*` en `ocr_sesion` y el evento `camara_info`,
 ver `telemetria-diagnostico.md`) dice si el modo gana píxeles y si la cámara
 permitiría pedir más resolución al análisis.
