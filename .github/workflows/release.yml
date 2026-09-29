@@ -158,6 +158,21 @@ jobs:
       - name: Instalar cargo-ndk
         run: cargo install cargo-ndk
 
+      # Los tests van ANTES de compilar para Android: `./gradlew test` compila
+      # el núcleo para el HOST (ver `compilarNucleoParaHost` en
+      # build.gradle.kts), y `sqlite3mc-vendor-lib/dist` es una ruta fija, no
+      # por-target. Con el vendorizado de Android ya compilado (paso de abajo),
+      # `dist` trae el objeto arm64 y el enlace del host falla ("liblibsqlite3_sys
+      # ... rust-lld: error"): así falló el release v1.7.0 (2026-09-29), el
+      # primero con SQLite3MC como motor único. Por eso acá se vendoriza primero
+      # para el host, igual que en `ci.yml`, y el paso de Android lo pisa después.
+      - name: Compilar SQLite3MC vendorizado para el host (tests)
+        run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+
+      - name: Tests
+        working-directory: mobile/android
+        run: ./gradlew test
+
       # Mismo motor que desktop: SQLite3MC, el único (sin features desde
       # 2026-09-26; antes mobile/rust-core traía SQLCipher por default). El
       # vendorizado es un paso previo obligatorio (mismo motivo que el job de
@@ -193,10 +208,6 @@ jobs:
           keyAlias=$ANDROID_KEY_ALIAS
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
-
-      - name: Tests
-        working-directory: mobile/android
-        run: ./gradlew test
 
       - name: Compilar el APK de release
         working-directory: mobile/android
