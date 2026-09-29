@@ -217,6 +217,34 @@ pub fn extraer_vehiculo(texto: String) -> Option<VehiculoRutaDetectado> {
     extraer_vehiculo_con_detalle(texto).map(|l| l.vehiculo)
 }
 
+// Formato impreso: prefijo de 1-2 letras + dígitos (carga: `CL 371931`,
+// `C 123456`) y particular de 3 letras + 3 dígitos (`BPH-485`).
+static PLACA_PREFIJO_Y_DIGITOS: LazyLock<Regex> =
+    LazyLock::new(|| patron(r"^([A-Z]{1,2})([0-9]{4,6})$"));
+static PLACA_TRES_Y_TRES: LazyLock<Regex> = LazyLock::new(|| patron(r"^([A-Z]{3})([0-9]{3})$"));
+
+/// La placa como va impresa, para mostrarla y guardarla en el formulario:
+/// carga con un espacio tras el prefijo (`CL371931` -> `CL 371931`) y
+/// particular con guion (`BPH485` -> `BPH-485`). La moto (la `M` va en
+/// otro renglón de la placa física), el número de unidad y cualquier otra
+/// cosa quedan igual. El valor sin formato (`VehiculoRutaDetectado.valor`)
+/// sigue siendo el que se vota y se compara con el catálogo.
+#[uniffi::export]
+pub fn placa_como_se_imprime(valor: String) -> String {
+    let compacta: String = valor
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-')
+        .collect::<String>()
+        .to_uppercase();
+    if let Some(c) = PLACA_TRES_Y_TRES.captures(&compacta) {
+        return format!("{}-{}", &c[1], &c[2]);
+    }
+    match PLACA_PREFIJO_Y_DIGITOS.captures(&compacta) {
+        Some(c) if &c[1] != "M" => format!("{} {}", &c[1], &c[2]),
+        _ => valor,
+    }
+}
+
 /// Igual que [`extraer_vehiculo`], con cómo se obtuvo la lectura.
 #[uniffi::export]
 pub fn extraer_vehiculo_con_detalle(texto: String) -> Option<LecturaVehiculo> {
@@ -317,5 +345,18 @@ mod tests {
             FormatoVehiculo::Moto
         );
         assert_eq!(detalle("22906").formato, FormatoVehiculo::NumeroUnidad);
+    }
+
+    #[test]
+    fn la_placa_se_muestra_como_va_impresa() {
+        let impresa = |v: &str| placa_como_se_imprime(v.to_owned());
+        assert_eq!(impresa("CL371931"), "CL 371931");
+        assert_eq!(impresa("C123456"), "C 123456");
+        assert_eq!(impresa("BPH485"), "BPH-485");
+        assert_eq!(impresa("bph 485"), "BPH-485");
+        // Moto, número de unidad y lo que no calza quedan igual.
+        assert_eq!(impresa("M947369"), "M947369");
+        assert_eq!(impresa("807ACL"), "807ACL");
+        assert_eq!(impresa("22906"), "22906");
     }
 }

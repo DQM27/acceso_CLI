@@ -113,6 +113,7 @@ private fun VistaCamaraVehiculoRuta(
                                 extraerVehiculoConDetalle(texto)?.let { IndexedValue(indice, it) }
                             }
                             camara.metricas.registrarLecturaVehiculo(leida?.value, leida?.index)
+                            if (leida != null) camara.metricas.registrarPrimeraLectura()
                             val resultado = estabilizador.procesarLectura(leida?.value?.vehiculo, lectura.peso)
                             // Sólo si no hubo resultado, como antes: un
                             // frame que confirma no cuenta como inválido.
@@ -121,7 +122,7 @@ private fun VistaCamaraVehiculoRuta(
                                 when {
                                     resultado != null -> {
                                         estado = EstadoEscaneo.CONFIRMADO
-                                        ultimoMensaje = "${resultado.valor} confirmado"
+                                        ultimoMensaje = "${placaComoSeImprime(resultado.valor)} confirmado"
                                         if (camara.detectada.compareAndSet(false, true)) {
                                             camara.metricas.registrarConfirmacion()
                                             vibrarConfirmacion(contexto)

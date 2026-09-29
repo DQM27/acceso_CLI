@@ -126,7 +126,8 @@ fun PantallaProveedores(
         PantallaEscanearVehiculoRuta(
             onVehiculoDetectado = { detectado ->
                 escaneandoPlaca = false
-                viewModel.cambiarPlaca(detectado.valor)
+                // Como va impresa en la placa (`CL 371931`, `BPH-485`).
+                viewModel.cambiarPlaca(placaComoSeImprime(detectado.valor))
             },
             onCerrar = { escaneandoPlaca = false },
             mensajeInicial = "Apunte a la placa del vehículo",

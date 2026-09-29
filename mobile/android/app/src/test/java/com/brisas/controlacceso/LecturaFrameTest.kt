@@ -251,4 +251,34 @@ class LecturaFrameTest {
         // Nunca el valor de la placa.
         assertFalse(datos.values.any { it.toString().contains("371931") })
     }
+
+    @Test
+    fun registraComoTerminaLaSesionDeDocumentoSinNumeroNiNombre() {
+        var ahora = 0L
+        val metricas = MetricasOcr(habilitadas = true, reloj = { ahora }, cadaCuantosFrames = 100)
+        ahora = 300_000_000
+        metricas.registrarResultadoDocumento(ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "x"))
+        ahora = 800_000_000
+        metricas.registrarResultadoDocumento(ResultadoEstabilizacion(EstadoEscaneo.BUSCANDO, mensaje = "x", progreso = 0.5f))
+        ahora = 1_200_000_000
+        val documento = DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "112340567", nombre = "JUAN", fuenteDatos = FuenteDatos.MRZ)
+        metricas.registrarResultadoDocumento(
+            ResultadoEstabilizacion(EstadoEscaneo.CONFIRMADO, documento = documento, mensaje = "x", progreso = 1f, hayMrz = true),
+        )
+        val datos = metricas.datos()
+        assertEquals(800L, datos["ms_hasta_primera_lectura"])
+        assertEquals(mapOf("BUSCANDO" to 2, "CONFIRMADO" to 1), datos["documento_estados"])
+        assertEquals(1, datos["documento_frames_con_mrz"])
+        assertEquals("CEDULA_NACIONAL", datos["documento_confirmado_tipo"])
+        assertEquals("MRZ", datos["documento_confirmado_fuente"])
+        assertEquals(true, datos["documento_confirmado_con_nombre"])
+        assertFalse(datos.values.any { it.toString().contains("112340567") || it.toString().contains("JUAN") })
+    }
+
+    @Test
+    fun laPlacaSeMuestraComoVaImpresa() {
+        assertEquals("CL 371931", placaComoSeImprime("CL371931"))
+        assertEquals("BPH-485", placaComoSeImprime("BPH485"))
+        assertEquals("22906", placaComoSeImprime("22906"))
+    }
 }

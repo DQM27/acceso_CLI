@@ -100,6 +100,10 @@ números o nombres de formato; nunca el texto, la placa ni la imagen.
 | `vehiculo_por_version_texto` | Lecturas desde los renglones visuales o el texto original | Si E-3 ayuda en placas |
 | `vehiculo_frames_sin_lectura` | Frames con texto y sin placa | Cuánto cuesta leer (noche, distancia) |
 | `reinicios_votacion` | Veces que la votación empezó de cero por otra lectura | Tolerancia de la votación |
+| `ms_hasta_primera_lectura` | Primer frame con algo reconocido (placa, documento con datos o MRZ) | Separar "tardó en encontrarlo" de "tardó en confirmarlo" |
+| `documento_estados` | Frames por estado: `BUSCANDO`, `INVALIDO`, `CONFIRMADO` | Cuánto rojo ve quien opera |
+| `documento_frames_con_mrz` / `documento_progreso_maximo` | Frames con MRZ en cuadro y avance máximo de la votación | Qué tan cerca estuvo una sesión que no confirmó |
+| `documento_confirmado_tipo` / `_fuente` / `_con_nombre` / `_vencido` | Tipo, origen (`OCR_FRENTE`, `MRZ`, `PDF417`), si trajo nombre y si está vencido (nunca número ni nombre) | Qué lector resuelve cada caso |
 
 ```sql
 select ocurrido_en, datos->>'pantalla', datos->>'abierta_desde',

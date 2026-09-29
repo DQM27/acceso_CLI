@@ -48,5 +48,5 @@ pub use renglones_visuales::{
 pub use texto::FechaOcr;
 pub use vehiculo::{
     FormatoVehiculo, LecturaVehiculo, TipoVehiculoDetectado, VehiculoRutaDetectado,
-    extraer_vehiculo, extraer_vehiculo_con_detalle,
+    extraer_vehiculo, extraer_vehiculo_con_detalle, placa_como_se_imprime,
 };

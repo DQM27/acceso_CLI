@@ -30,3 +30,8 @@ fun extraerVehiculoConDetalle(texto: String): LecturaVehiculo? =
     uniffi.control_acceso_mobile.extraerVehiculoConDetalle(texto)
 
 typealias LecturaVehiculo = uniffi.control_acceso_mobile.LecturaVehiculo
+
+/// La placa como va impresa (`CL 371931`, `BPH-485`), para mostrarla y
+/// llenar el formulario. El valor sin formato es el que se vota y se busca
+/// en el catálogo de vehículos (Rutas), que lo compara exacto.
+fun placaComoSeImprime(valor: String): String = uniffi.control_acceso_mobile.placaComoSeImprime(valor)

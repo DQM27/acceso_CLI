@@ -715,6 +715,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo_con_detalle(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_placa_como_se_imprime(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_leer_mrz(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_largo_prefijo_pdf417_cedula(
@@ -1039,6 +1041,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_extraer_vehiculo_con_detalle(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_placa_como_se_imprime(`valor`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_leer_mrz(`lineas`: RustBuffer.ByValue,`anioActual`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_largo_prefijo_pdf417_cedula(uniffi_out_err: UniffiRustCallStatus, 
@@ -1227,6 +1231,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_extraer_vehiculo_con_detalle() and 0xFFFF) != 9950) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_placa_como_se_imprime() and 0xFFFF) != 4830) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 18012) {
@@ -9547,6 +9554,25 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
     
         
         FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * La placa como va impresa, para mostrarla y guardarla en el formulario:
+         * carga con un espacio tras el prefijo (`CL371931` -> `CL 371931`) y
+         * particular con guion (`BPH485` -> `BPH-485`). La moto (la `M` va en
+         * otro renglón de la placa física), el número de unidad y cualquier otra
+         * cosa quedan igual. El valor sin formato (`VehiculoRutaDetectado.valor`)
+         * sigue siendo el que se vota y se compara con el catálogo.
+         */ fun `placaComoSeImprime`(`valor`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_placa_como_se_imprime(
+    
+        
+        FfiConverterString.lower(`valor`),_status)
 }
     )
     }

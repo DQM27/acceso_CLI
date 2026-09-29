@@ -261,6 +261,16 @@ class MetricasOcr(
     private var vehiculosClRestituida = 0
     private val vehiculoPorVersionTexto = sortedMapOf<String, Int>()
     private var reiniciosVotacion = 0
+
+    // Documentos (pantalla de cédula): cómo avanzó y cómo terminó la sesión.
+    private var msHastaPrimeraLectura: Long? = null
+    private val estadosDocumento = sortedMapOf<String, Int>()
+    private var framesConMrz = 0
+    private var progresoMaximo = 0f
+    private var confirmadoTipo: String? = null
+    private var confirmadoFuente: String? = null
+    private var confirmadoConNombre: Boolean? = null
+    private var confirmadoVencido: Boolean? = null
     private val msRecorte = ArrayDeque<Float>()
     private val msReconocimiento = ArrayDeque<Float>()
 
@@ -336,6 +346,34 @@ class MetricasOcr(
         if (lectura.clRestituida) vehiculosClRestituida++
         val version = if (indiceTexto == 0) "visual" else "original"
         vehiculoPorVersionTexto.merge(version, 1, Int::plus)
+    }
+
+    /// Primer frame con algo reconocido (una placa, un documento con datos o
+    /// un MRZ): separa "tardó en encontrar el documento" de "tardó en
+    /// confirmarlo".
+    @Synchronized
+    fun registrarPrimeraLectura() {
+        if (habilitadas && msHastaPrimeraLectura == null) msHastaPrimeraLectura = (reloj() - inicio) / 1_000_000
+    }
+
+    /// Resultado del estabilizador de documentos en un frame. Del documento
+    /// confirmado sólo se guarda tipo, origen de los datos y si trajo nombre
+    /// o está vencido; nunca número ni nombre.
+    @Synchronized
+    fun registrarResultadoDocumento(resultado: ResultadoEstabilizacion) {
+        if (!habilitadas) return
+        estadosDocumento.merge(resultado.estado.name, 1, Int::plus)
+        if (resultado.hayMrz) framesConMrz++
+        progresoMaximo = maxOf(progresoMaximo, resultado.progreso)
+        val confirmado = resultado.estado == EstadoEscaneo.CONFIRMADO
+        if (resultado.hayMrz || resultado.progreso > 0f || confirmado) registrarPrimeraLectura()
+        val documento = resultado.documento
+        if (confirmado && documento != null) {
+            confirmadoTipo = documento.tipo.name
+            confirmadoFuente = documento.fuenteDatos.name
+            confirmadoConNombre = documento.nombre != null
+            confirmadoVencido = resultado.vencido
+        }
     }
 
     /// La votación se reinició porque un frame leyó OTRO vehículo (o un
@@ -419,6 +457,15 @@ class MetricasOcr(
         "vehiculo_cl_restituida" to vehiculosClRestituida,
         "vehiculo_por_version_texto" to vehiculoPorVersionTexto.toMap(),
         "reinicios_votacion" to reiniciosVotacion,
+        // Documentos.
+        "ms_hasta_primera_lectura" to msHastaPrimeraLectura,
+        "documento_estados" to estadosDocumento.toMap(),
+        "documento_frames_con_mrz" to framesConMrz,
+        "documento_progreso_maximo" to progresoMaximo,
+        "documento_confirmado_tipo" to confirmadoTipo,
+        "documento_confirmado_fuente" to confirmadoFuente,
+        "documento_confirmado_con_nombre" to confirmadoConNombre,
+        "documento_confirmado_vencido" to confirmadoVencido,
     )
 
     @Synchronized

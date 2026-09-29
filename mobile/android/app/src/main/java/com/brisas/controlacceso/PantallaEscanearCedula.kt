@@ -281,9 +281,11 @@ private fun VistaCamaraCedula(
                                 // Corrección de errores propia del código:
                                 // gana sobre el texto del mismo frame.
                                 val resultado = estabilizador.procesarPdf417(datosPdf417)
+                                camara.metricas.registrarResultadoDocumento(resultado)
                                 camara.enPrincipal { onResultado(resultado) }
                             } else {
                                 val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso, lectura.calidad)
+                                camara.metricas.registrarResultadoDocumento(resultado)
                                 planificador.registrarTexto(lectura.textos.any(::pareceReversoCedulaAnterior), resultado.hayMrz)
                                 seguidorMrz.registrar(lectura.regionLeida, lectura.lineasMrz)
                                 val giro = encuadre.registrarOrientacion(resultado.orientacionSugerida, leidoCon)
