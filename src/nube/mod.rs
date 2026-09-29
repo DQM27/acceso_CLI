@@ -13,6 +13,7 @@ pub mod cliente;
 pub mod credenciales;
 pub mod en_vivo;
 pub mod orquestacion;
+pub mod reloj_preciso;
 pub mod retencion;
 pub mod sincronizacion;
 

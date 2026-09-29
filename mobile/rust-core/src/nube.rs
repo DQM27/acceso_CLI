@@ -10,6 +10,15 @@ use crate::{
 
 #[uniffi::export]
 impl Nucleo {
+    /// Último desfase medido del reloj del teléfono contra el servidor (ms;
+    /// positivo = el teléfono va adelantado), `None` si nunca se midió. Se
+    /// mide en cada autenticación con precisión de milisegundos (ver
+    /// `control_acceso::nube::reloj_preciso`). Lo usa la telemetría de
+    /// diagnóstico para corregir la latencia de los avisos en vivo.
+    pub fn desfase_reloj_ms(&self) -> Option<i64> {
+        self.core_lock().desfase_reloj_ms()
+    }
+
     /// `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
     /// usa para decidir si mostrar la pantalla de arranque (pegar el
     /// secreto) en vez del login (ver `MainActivity.kt`).

@@ -126,7 +126,16 @@ impl CacheTokenDispositivo {
             }
         }
 
-        let token = autenticar_dispositivo(super::base_url(), secreto, metadata)?;
+        let mut token = autenticar_dispositivo(super::base_url(), secreto, metadata)?;
+        // Mejora el desfase del header `Date` (segundos) con la medición en
+        // milisegundos; si no se puede, queda el del header.
+        if let Some(preciso) = super::reloj_preciso::medir_desfase_ms(
+            super::base_url(),
+            super::apikey(),
+            &token.access_token,
+        ) {
+            token.desfase_reloj_ms = Some(preciso);
+        }
         *self
             .entrada
             .lock()

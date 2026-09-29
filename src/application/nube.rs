@@ -428,4 +428,14 @@ impl AppCore {
             log::warn!("no se pudo guardar el desfase de reloj medido: {error}");
         }
     }
+
+    /// Último desfase medido (reloj del equipo MENOS el del servidor, en
+    /// ms), o `None` si nunca se midió. Para diagnóstico: permite a la app
+    /// comparar horas del servidor con las del equipo (p. ej. la latencia
+    /// de los avisos en vivo).
+    pub fn desfase_reloj_ms(&self) -> Option<i64> {
+        crate::database::queries::desfase_reloj::leer(&self.connection)
+            .ok()
+            .flatten()
+    }
 }

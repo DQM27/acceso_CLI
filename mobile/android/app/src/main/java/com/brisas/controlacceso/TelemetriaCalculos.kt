@@ -291,7 +291,15 @@ class AgregadorRealtime {
     private var noAplicados = 0
     private val msAplicar = mutableListOf<Double>()
     private val latenciasMs = mutableListOf<Double>()
+    private var desfaseRelojMs: Long? = null
     private var vacio = true
+
+    /// Desfase del reloj con que se corrigen las latencias (`null` = no se
+    /// midió y la latencia incluye el desfase).
+    @Synchronized
+    fun desfaseReloj(ms: Long?) {
+        desfaseRelojMs = ms
+    }
 
     @Synchronized
     fun conectando() {
@@ -320,9 +328,9 @@ class AgregadorRealtime {
         vacio = false
     }
 
-    /// Un aviso recibido. `latenciaMs`: hora del teléfono menos la del
-    /// servidor al escribir (`changed_at`); incluye el desfase entre los dos
-    /// relojes, sirve para comparar, no como valor absoluto.
+    /// Un aviso recibido. `latenciaMs`: hora del teléfono (corregida con el
+    /// desfase medido, ver [desfaseReloj]) menos la del servidor al escribir
+    /// (`changed_at`).
     @Synchronized
     fun aviso(tabla: String?, bytesAviso: Int, ecoPropio: Boolean, latenciaMs: Long?) {
         vacio = false
@@ -367,6 +375,8 @@ class AgregadorRealtime {
             "latencia_ms_p90" to p(latenciasMs, 0.9),
             "latencia_ms_min" to latenciasMs.minOrNull()?.redondeado(),
             "latencia_ms_max" to latenciasMs.maxOrNull()?.redondeado(),
+            "latencia_corregida" to (desfaseRelojMs != null),
+            "desfase_reloj_ms" to desfaseRelojMs,
         )
         intentosConexion = 0
         msHastaSuscribir.clear()

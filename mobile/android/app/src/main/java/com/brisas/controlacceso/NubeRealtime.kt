@@ -95,6 +95,10 @@ class NubeRealtime(
             val secreto = secretoStore.cargar() ?: throw SecretoDispositivoNoEncontradoException()
             medirNucleo("sesionRealtimeNubeConSecreto") { nucleo.sesionRealtimeNubeConSecreto(secreto) }
         }
+        // Desfase del reloj medido en esta autenticación (precisión de ms):
+        // corrige la latencia de los avisos en la telemetría.
+        val desfaseRelojMs = if (Telemetria.activa) withContext(dispatcherIO) { nucleo.desfaseRelojMs() } else null
+        Telemetria.realtime?.desfaseReloj(desfaseRelojMs)
         val token = sesion.accessToken
         val supabase = createSupabaseClient(sesion.baseUrl, sesion.apikey) {
             install(Realtime) {
@@ -114,7 +118,7 @@ class NubeRealtime(
                             tabla = aviso.texto("table"),
                             bytesAviso = aviso.toString().length,
                             ecoPropio = ecoPropio,
-                            latenciaMs = aviso.texto("changed_at")?.let(::msDesde),
+                            latenciaMs = aviso.texto("changed_at")?.let { msDesde(it, desfaseRelojMs ?: 0L) },
                         )
                         // `dispositivo_id` es quien hizo ESTE cambio (el
                         // `sub` de su JWT, ver la migración
@@ -208,9 +212,10 @@ class NubeRealtime(
     }
 
     /// Milisegundos desde `instanteIso` (hora del servidor) hasta ahora (hora
-    /// del teléfono). `null` si no se puede leer la fecha.
-    private fun msDesde(instanteIso: String): Long? = try {
-        System.currentTimeMillis() - java.time.OffsetDateTime.parse(instanteIso).toInstant().toEpochMilli()
+    /// del teléfono corregida por `desfaseMs`). `null` si no se puede leer
+    /// la fecha.
+    private fun msDesde(instanteIso: String, desfaseMs: Long): Long? = try {
+        System.currentTimeMillis() - desfaseMs - java.time.OffsetDateTime.parse(instanteIso).toInstant().toEpochMilli()
     } catch (e: java.time.format.DateTimeParseException) {
         null
     }

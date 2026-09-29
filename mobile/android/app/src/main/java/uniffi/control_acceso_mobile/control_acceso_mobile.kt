@@ -775,6 +775,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos(
@@ -922,6 +924,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_configurar_dispositivo_inicial_con_secreto(`ptr`: Long,`secreto`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_desfase_reloj_ms(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_proveedor_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1321,6 +1325,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_configurar_dispositivo_inicial_con_secreto() and 0xFFFF) != 19589) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms() and 0xFFFF) != 4032) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos() and 0xFFFF) != 45361) {
@@ -2458,6 +2465,15 @@ public interface NucleoInterface {
     fun `configurarDispositivoInicialConSecreto`(`secreto`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
     
     /**
+     * Último desfase medido del reloj del teléfono contra el servidor (ms;
+     * positivo = el teléfono va adelantado), `None` si nunca se midió. Se
+     * mide en cada autenticación con precisión de milisegundos (ver
+     * `control_acceso::nube::reloj_preciso`). Lo usa la telemetría de
+     * diagnóstico para corregir la latencia de los avisos en vivo.
+     */
+    fun `desfaseRelojMs`(): kotlin.Long?
+    
+    /**
      * Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
      * `ingresos_proveedor_remotos`.
      */
@@ -3313,6 +3329,26 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         FfiConverterString.lower(`plataforma`),
         FfiConverterString.lower(`versionBuild`),
         FfiConverterString.lower(`appVersion`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Último desfase medido del reloj del teléfono contra el servidor (ms;
+     * positivo = el teléfono va adelantado), `None` si nunca se midió. Se
+     * mide en cada autenticación con precisión de milisegundos (ver
+     * `control_acceso::nube::reloj_preciso`). Lo usa la telemetría de
+     * diagnóstico para corregir la latencia de los avisos en vivo.
+     */override fun `desfaseRelojMs`(): kotlin.Long? {
+            return FfiConverterOptionalLong.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_desfase_reloj_ms(
+        it,
+        _status)
 }
     }
     )

@@ -120,12 +120,14 @@ order by ocurrido_en desc;
 ## Latencia de Realtime
 
 `latencia_ms_*` es la hora del teléfono al recibir el aviso menos
-`changed_at`, la hora del servidor al escribir la fila. Incluye el desfase
-entre los dos relojes. La corrección de reloj del núcleo (header HTTP
-`Date`, precisión de 1 s) no alcanza para milisegundos, así que se reporta
-crudo: sirve para comparar tablas, momentos y redes. El mínimo de muchos
-avisos se acerca al desfase; `p50 - min` es la latencia real más su
-variación.
+`changed_at`, la hora del servidor al escribir la fila. La hora del
+teléfono se corrige con el desfase de su reloj (`desfase_reloj_ms`), que
+el núcleo mide en cada autenticación con precisión de milisegundos
+(`public.hora_servidor_ms`, ver `src/nube/reloj_preciso.rs`): varias
+consultas y se usa la de viaje más corto, error de ±(la mitad de ese
+viaje). Si el proyecto no tiene la función, el desfase sale del header
+HTTP `Date` (±1 s) y la latencia sólo sirve para comparar;
+`latencia_corregida` dice si hubo desfase para corregir.
 
 ## Envío
 

@@ -211,6 +211,7 @@ class TelemetriaCalculosTest {
     fun agregaRealtimeSinContenidoYSeVacia() {
         val realtime = AgregadorRealtime()
         assertNull(realtime.vaciar())
+        realtime.desfaseReloj(-134)
         realtime.conectando()
         realtime.suscrito(msDesdeIntento = 850)
         realtime.aviso(tabla = "ingresos", bytesAviso = 2048, ecoPropio = false, latenciaMs = 120)
@@ -229,6 +230,8 @@ class TelemetriaCalculosTest {
         assertEquals(mapOf("UNSUBSCRIBED" to 1), r["fin_de_conexion"])
         assertEquals(2.0, r["minutos_conectado_max"])
         assertEquals(mapOf("IllegalStateException" to 1), r["errores"])
+        assertEquals(true, r["latencia_corregida"])
+        assertEquals(-134L, r["desfase_reloj_ms"])
         assertNull(realtime.vaciar())
     }
 }

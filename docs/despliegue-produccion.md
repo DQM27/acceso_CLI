@@ -40,6 +40,7 @@ sección "Aplicado en producción" con fecha y quién lo autorizó.
 | 3 | `optimiza_rls_e_indices_de_visitas` | `supabase/migrations/20260927121500_optimiza_rls_e_indices_de_visitas.sql` | `claude/rediseno-web-visitas` | Revisar con esa rama |
 | 4 | `rediseno_visitas_rpcs_vista_busqueda` | `supabase/migrations/20260927150000_rediseno_visitas_rpcs_vista_busqueda.sql` | `claude/rediseno-web-visitas` | Revisar con esa rama |
 | 5 | `rutas_documento_tramo_viaje` (+ `_fix_search_path`, `_indices_fk`) | **No existe en el repo** | `feat/rutas-documento-tramo-viaje` (19 sep, sin unir) | Desconocido |
+| 6 | `hora_servidor_ms` | `supabase/migrations/20260929020000_hora_servidor_ms.sql` | `claude/fusion-integral` (reloj en ms) | No |
 
 ### 2.1 Aviso en vivo con los datos (`cambio_nube_lleva_la_fila_de_ingresos`)
 
@@ -62,6 +63,26 @@ sección "Aplicado en producción" con fecha y quién lo autorizó.
   muestra en Activos en uno o dos segundos.
 - **Deshacer:** volver a crear la función con el cuerpo de
   `20260906044549_avisa_cambio_nube_segun_quien_escribe_no_quien_creo_la_fila.sql`.
+
+### 2.1b Hora del servidor en milisegundos (`hora_servidor_ms`)
+
+- **Qué hace:** crea `public.hora_servidor_ms()`, que devuelve la hora del
+  servidor en ms (`clock_timestamp()`). El núcleo (escritorio y móvil) la
+  consulta varias veces al autenticarse y mide el desfase del reloj del
+  equipo con precisión de milisegundos (`src/nube/reloj_preciso.rs`). Sin
+  datos de nadie; ejecutable por `anon` y `authenticated`.
+- **Compatibilidad:** sin la función, las apps siguen midiendo con el
+  header HTTP `Date` (precisión de 1 s), como antes. Se puede aplicar antes
+  o después de actualizarlas.
+- **Verificar después de aplicar:**
+
+  ```sql
+  select public.hora_servidor_ms() - (extract(epoch from now()) * 1000)::bigint as diferencia_ms;
+  ```
+
+  (debe dar un número chico y positivo). Aplicada en staging el
+  2026-09-29.
+- **Deshacer:** `drop function public.hora_servidor_ms();`
 
 ### 2.2 Nota: veto por persona, aplicado y revertido en staging
 
