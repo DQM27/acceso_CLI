@@ -33,7 +33,7 @@ export default function Login() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-texto">Panel administrativo</h1>
-            <p className="text-sm text-muted">Brisas</p>
+            <p className="text-sm text-muted">Lattis</p>
           </div>
         </div>
 
