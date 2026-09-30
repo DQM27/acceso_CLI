@@ -559,6 +559,10 @@ export default function Historial() {
         headerName: "Hora ingreso",
         flex: 1.3,
         minWidth: 130,
+        // Sin filtro propio: un filtro de texto sobre "HH:MI" era engañoso
+        // ("7" también trae 17:xx y 10:07). Para acotar por tiempo se usa
+        // "Fecha ingreso", que filtra el instante completo con índice.
+        filter: false,
         valueGetter: (p) => (p.data ? textoHora(p.data.hora_entrada) : ""),
       },
       {
@@ -575,6 +579,8 @@ export default function Historial() {
         headerName: "Hora salida",
         flex: 1.3,
         minWidth: 130,
+        // Ver "Hora ingreso": se filtra con "Fecha salida" (vacío = sigue adentro).
+        filter: false,
         valueGetter: (p) => (p.data ? (p.data.hora_salida ? textoHora(p.data.hora_salida) : "Activo") : ""),
       },
       { field: "usuario_entrada_nombre", headerName: "Dio ingreso", flex: 1.3, minWidth: 130 },

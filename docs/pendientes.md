@@ -169,11 +169,48 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   cédula de 130 ms a 29 ms; nombre específico de 135 ms a 22 ms; sin
   coincidencias de 113 ms a 6 ms. Costo aceptado: una sola palabra muy común
   (~4 % de las filas) tarda ~0,5 s porque trae todas las coincidencias antes de
-  paginar. Los textos de presentación siguen en la vista porque el orden y los
-  filtros del servidor dependen de ellos.
+  paginar.
+- [x] **Historial sin formato de pantalla en la vista** (2026-09-30, misma migración
+  `historial_busqueda_indexada`). Salen `hora_entrada_txt`/`hora_salida_txt`: el
+  panel ya formateaba la hora en el navegador y ordenaba por el instante; el
+  filtro de texto sobre "HH:MI" era engañoso ("7" traía 17:xx y 10:07), así que
+  las columnas "Hora ingreso/salida" ya no filtran y el tiempo se acota con
+  "Fecha ingreso/salida" (instante completo, con índice; vacío = sigue adentro).
+  `tipo_texto`, `medio_texto` y las columnas `*_p` se quedan a propósito: el orden
+  y los filtros del servidor trabajan sobre ellas.
+- [ ] **Traspaso 2026-09-30 (rama `refactor-panel-web`).** Estado para la sesión que
+  sigue. Producción (`xidaepyaljzkpbsxrqsm`) no se tocó: sólo consultas de lectura.
+  Todo lo de arriba fechado 2026-09-30 está aplicado y probado sólo en staging
+  (`pmrytjktlyiuikxuuxpr`). Queda, en este orden:
+  1. [ ] Alinear versiones de migración (entrada siguiente).
+  2. [ ] Compilar builds de diagnóstico nuevos (Android y escritorio, contra
+     staging) y probar con equipos: los instalados ya no sirven porque mandaban
+     `sitio_id` en contratistas/empresas/usuarios, creaban usuarios y el celular
+     cambiaba contraseñas. Probar también el aviso de gafete en uso de proveedor y
+     KOF, y el rechazo del celular con contraseña temporal.
+  3. [ ] Medir en producción antes y después (sólo lectura, con aprobación del
+     usuario): `pg_stat_user_tables` (seq_scan/seq_tup_read de contratistas,
+     empresas, administradores_panel, ingresos) y tiempos del historial.
+  4. [ ] Pasar a producción sólo con aprobación explícita del usuario.
+  5. [ ] Por decidir con el usuario (necesitan pantalla nueva en el panel): vista
+     "contratistas con estado" (PRAIND vencida o por vencer y si está adentro; en
+     producción había 14 activos con PRAIND vencida) y vista "adentro ahora"
+     (contratistas, proveedores y KOF dentro, por unidad).
+  Para medir en staging sin ensuciar datos: insertar filas sintéticas dentro de un
+  bloque `do $$ ... $$` con `set local session_replication_role = replica`,
+  consultar como admin (`set local role authenticated` + `request.jwt.claims` con el
+  correo de `administradores_panel`) y terminar con `raise exception` con los
+  resultados: el error revierte todo. Medir siempre bajo RLS, no como `postgres`
+  (como superusuario los índices de `like` sí se usan y los tiempos engañan).
 - [ ] **Versiones de migración desalineadas con staging.** Las migraciones aplicadas
   con el MCP quedaron registradas con la hora de aplicación, no con la del archivo.
   Alinear `supabase_migrations.schema_migrations` antes de usar `supabase db push`.
+  Ojo: en staging dos archivos se aplicaron en varios pasos que no existen como
+  archivo. `20260930120100_catalogo_global_sin_unidad` = `catalogo_global_sin_unidad`
+  + `catalogo_global_quita_sitio_id`. `20260930120400_historial_busqueda_indexada` =
+  `historial_busqueda_indexada` + `historial_busqueda_cedula_y_nombre` +
+  `panel_buscar_movimientos` + `panel_movimientos_sin_hora_txt`. El esquema final de
+  staging coincide con los archivos; sólo hay que dejar una versión por archivo.
 - [ ] **Test SQL `administradores_panel_autorizacion.sql` desactualizado.** Espera que un
   admin_global pueda insertar/borrar en `administradores_panel`, pero la migración
   `20260909192636_retira_escritura_directa_de_administradores_panel` quitó esas

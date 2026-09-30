@@ -24,7 +24,9 @@ interface ColumnaFiltrable {
 }
 
 /** `colId` de la grilla → columna del servidor. Las de texto van contra su
- * versión plegada (`plegar_texto`); las fechas contra el instante. */
+ * versión plegada (`plegar_texto`); las fechas contra el instante. Las
+ * columnas de hora no filtran (ver `Historial.tsx`): cualquier filtro que
+ * llegue con su `colId` se ignora, como el de una columna desconocida. */
 export const COLUMNAS_FILTRABLES: Record<string, ColumnaFiltrable> = {
   sitio_nombre: { tipo: "texto", columna: "unidad_p" },
   contratista_cedula: { tipo: "texto", columna: "cedula_p" },
@@ -35,9 +37,7 @@ export const COLUMNAS_FILTRABLES: Record<string, ColumnaFiltrable> = {
   medio_ingreso: { tipo: "texto", columna: "medio_p" },
   gafete_numero: { tipo: "numero", columna: "gafete_numero" },
   fecha_ingreso: { tipo: "fecha", columna: "hora_entrada" },
-  hora_ingreso: { tipo: "texto", columna: "hora_entrada_txt" },
   fecha_salida: { tipo: "fecha", columna: "hora_salida" },
-  hora_salida: { tipo: "texto", columna: "hora_salida_txt" },
   usuario_entrada_nombre: { tipo: "texto", columna: "usuario_entrada_p" },
   usuario_salida_nombre: { tipo: "texto", columna: "usuario_salida_p" },
 };

@@ -38,6 +38,11 @@ create index if not exists ingresos_cedula_patron_idx
 
 -- La vista cambia de forma (sale `texto_busqueda`, que mezclaba cédula,
 -- nombre, empresa y placa): hay que recrearla y volver a dar el permiso.
+-- También salen `hora_entrada_txt`/`hora_salida_txt` ("HH:MI"): eran formato
+-- de pantalla y su filtro de texto era engañoso; el panel formatea la hora y
+-- filtra por el instante completo (`hora_entrada`/`hora_salida`).
+-- `tipo_texto`/`medio_texto` y las columnas `*_p` se quedan: no son sólo
+-- formato, el orden y los filtros del servidor trabajan sobre ellas.
 -- `nombre_p` pasa a leer la columna guardada, así el filtro de columna por
 -- nombre también usa el índice de trigramas.
 drop view if exists public.panel_movimientos;
@@ -67,8 +72,6 @@ select
     when i.medio_ingreso = 'CAMINANDO' then 'CAMINANDO'
     else '—'
   end as medio_texto,
-  to_char(i.hora_entrada at time zone 'America/Costa_Rica', 'HH24:MI') as hora_entrada_txt,
-  coalesce(to_char(i.hora_salida at time zone 'America/Costa_Rica', 'HH24:MI'), 'Activo') as hora_salida_txt,
   public.plegar_texto(coalesce(s.nombre, '')) as unidad_p,
   public.plegar_texto(coalesce(i.contratista_cedula, '')) as cedula_p,
   i.contratista_nombre_plegado as nombre_p,

@@ -45,7 +45,9 @@ describe("expresionesDeFiltros -- texto", () => {
   it("usa la columna plegada de cada columna de la grilla", () => {
     expect(COLUMNAS_FILTRABLES.contratista_cedula.columna).toBe("cedula_p");
     expect(COLUMNAS_FILTRABLES.tipo_ingreso.columna).toBe("tipo_p");
-    expect(COLUMNAS_FILTRABLES.hora_salida.columna).toBe("hora_salida_txt");
+    // Las columnas de hora no filtran: el tiempo se acota con las de fecha.
+    expect(COLUMNAS_FILTRABLES.hora_ingreso).toBeUndefined();
+    expect(COLUMNAS_FILTRABLES.hora_salida).toBeUndefined();
   });
 });
 
