@@ -58,6 +58,12 @@ describe("public/_headers", () => {
     expect(styleSrc).not.toContain("unsafe-eval");
   });
 
+  it("font-src sólo agrega data: (íconos incrustados de Syncfusion, ver docs/decisiones-tecnicas.md), ningún origen externo", () => {
+    const linea = contenido.match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1];
+    if (!linea) throw new Error("No se encontró la línea Content-Security-Policy en _headers");
+    expect(linea.match(/font-src ([^;]+)/)?.[1]?.trim()).toBe("'self' data:");
+  });
+
   it("no deja que un buscador indexe el panel ni que el navegador cachee sus datos", () => {
     expect(contenido).toMatch(/X-Robots-Tag:\s*noindex/);
     expect(contenido).toMatch(/Cache-Control:\s*no-store/);

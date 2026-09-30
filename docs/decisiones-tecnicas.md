@@ -751,3 +751,61 @@ Además, las marcas de agua se guardan con microsegundos
 del `updated_at` real y `updated_at=gt.<marca>` volvía a traer todas las
 filas de ese segundo, para siempre (los encargados de ruta se cargaron en
 lote, todos en el mismo segundo).
+
+## 2026-09-30 — Pantalla "Análisis" del panel con Syncfusion, agregada en la base
+
+**Contexto.** El panel web ve el historial de todas las unidades operativas y
+el volumen va a crecer a millones de movimientos. Se evaluaron Tabulator y
+Perspective frente a AG Grid: ninguna grilla maneja millones de filas si se
+descargan al navegador; lo que escala es dónde se agrega. El Historial ya
+pagina en el servidor (modelo `infinite` de AG Grid), así que AG Grid se
+queda en todas las pantallas operativas. Escritorio tampoco cambia: cada
+equipo ve sólo el historial de su unidad (volumen acotado), y ahí tener las
+filas en memoria es lo más rápido.
+
+**Decisión.** Una sección nueva, "Análisis", con indicadores, gráficos y una
+tabla dinámica de Syncfusion Essential JS 2 (licencia Community,
+Essential Studio 35.x), alimentada por `panel_resumen_movimientos`: la base
+agrega y el navegador recibe pocos miles de filas en un solo `jsonb` (no
+`setof`, para no chocar con `max_rows = 1000` de PostgREST).
+
+- **Rendimiento medido** (Postgres 16 local, 1,2 millones de movimientos
+  sintéticos de 10 unidades, consultando como administrador bajo RLS, sin
+  paralelismo): 6 meses ~2 s, un año ~4,5 s, un mes de dos unidades ~0,1 s.
+  La primera versión con `grouping sets` y `count(distinct)` tardaba 12 s:
+  ordenaba en disco. Se reescribió con agregados por hash sobre bloques de
+  una hora con valores crudos (texto y zona horaria se calculan sobre el
+  resultado ya agregado) y `work_mem` propio de la función. El rango se
+  limita a 366 días por el corte de 8 s de `authenticated` en Supabase; si el
+  volumen anual pasa de unos 2 millones, el siguiente paso es una tabla de
+  agregados por hora mantenida al escribir.
+- **Sin campos calculados de la tabla dinámica.** Syncfusion los evalúa con
+  `Function(...)` (eval), que la CSP bloquea (`script-src 'self'`). No se
+  inyecta `CalculatedField` y la permanencia promedio (ponderada por
+  salidas) se calcula en `aggregateCellInfo` con JavaScript normal.
+- **CSP: `font-src 'self' data:`.** Los temas de Syncfusion traen su fuente
+  de íconos incrustada como `data:` en `@font-face`; verificado en navegador
+  real (`web/e2e/panel.spec.ts`), sin esto se bloquea. Mismo razonamiento que
+  `img-src data:` para AG Grid: un recurso `data:` no hace ninguna petición,
+  así que no abre un canal de salida. `script-src` no cambia (sigue sin
+  `unsafe-eval`); `_headers.test.ts` fija `font-src` en exactamente
+  `'self' data:`.
+- **Licencia.** La llave va en `VITE_SYNCFUSION_LICENSE` (variables del build
+  en Cloudflare, o `web/.env.local`), nunca versionada. Syncfusion la valida
+  en el navegador, así que termina dentro del bloque de Análisis publicado,
+  como en cualquier app con licencia; sin ella, los componentes funcionan con
+  un aviso de "trial". La licencia Community tiene condiciones de
+  elegibilidad (ingresos, cantidad de desarrolladores y empleados): hay que
+  confirmarlas antes de producción.
+- **Peso.** Todo Syncfusion vive en bloques diferidos: la carga inicial del
+  panel no cambia. Indicadores y gráficos: ~295 kB gzip; la tabla dinámica
+  (arrastra la grilla completa de Syncfusion y su exportación) ~940 kB gzip
+  en un bloque aparte que se carga detrás. Ojo: `Cache-Control: no-store` en
+  `/*` de `_headers` también alcanza a `/assets/*`, que tienen hash en el
+  nombre; se vuelven a descargar en cada visita. Cachearlos como inmutables
+  es una mejora aparte, válida para todo el panel.
+- **Tema.** Fluent 2 (`@syncfusion/ej2-fluent2-theme`, CSS por componente
+  desde la versión 35). `e-dark-mode` se sincroniza con `data-theme` y los
+  colores de marca y superficies apuntan a los tokens del panel
+  (`pantallas/analisis/syncfusion.css`); una prueba e2e verifica que todos
+  los fondos de la tabla dinámica en modo oscuro salen de esos tokens.
