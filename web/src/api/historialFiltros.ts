@@ -21,19 +21,15 @@ interface ColumnaFiltrable {
   /** Columna de `panel_movimientos` contra la que se compara. Para texto es la
    * versión sin tildes ni mayúsculas (`*_p`), salvo las de texto plano. */
   columna: string;
-  /** La columna también está dentro de `texto_busqueda` (indexada con
-   * trigramas, ver la migración `historial_busqueda_indexada`): su filtro
-   * suma un prefiltro contra ese índice para no recorrer todo el período. */
-  enTextoBusqueda?: boolean;
 }
 
 /** `colId` de la grilla → columna del servidor. Las de texto van contra su
  * versión plegada (`plegar_texto`); las fechas contra el instante. */
 export const COLUMNAS_FILTRABLES: Record<string, ColumnaFiltrable> = {
   sitio_nombre: { tipo: "texto", columna: "unidad_p" },
-  contratista_cedula: { tipo: "texto", columna: "cedula_p", enTextoBusqueda: true },
-  contratista_nombre: { tipo: "texto", columna: "nombre_p", enTextoBusqueda: true },
-  empresa_nombre: { tipo: "texto", columna: "empresa_p", enTextoBusqueda: true },
+  contratista_cedula: { tipo: "texto", columna: "cedula_p" },
+  contratista_nombre: { tipo: "texto", columna: "nombre_p" },
+  empresa_nombre: { tipo: "texto", columna: "empresa_p" },
   dispositivo_entrada_tipo: { tipo: "texto", columna: "dispositivo_entrada_tipo" },
   tipo_ingreso: { tipo: "texto", columna: "tipo_p" },
   medio_ingreso: { tipo: "texto", columna: "medio_p" },
@@ -171,24 +167,6 @@ function condicionFecha(columna: string, { type, dateFrom, dateTo }: CondicionAg
   }
 }
 
-/** Tipos de filtro de texto cuyo valor aparece sí o sí dentro del texto de la
- * columna: sólo esos admiten el prefiltro contra `texto_busqueda`. */
-const TIPOS_CON_PREFILTRO = new Set(["contains", "equals", "startsWith", "endsWith"]);
-
-/** Prefiltro con índice: cada palabra del valor debe aparecer en
- * `texto_busqueda`. Es una condición más amplia que la de la columna (nunca
- * descarta una fila que la columna aceptaría); sólo acota lo que Postgres
- * revisa. Sólo para una condición única: con dos unidas por OR no sirve. */
-function prefiltrosTextoBusqueda(condiciones: CondicionAg[]): string[] {
-  if (condiciones.length !== 1) return [];
-  const { type = "contains", filter } = condiciones[0];
-  if (!TIPOS_CON_PREFILTRO.has(type) || filter == null) return [];
-  return plegarTexto(String(filter))
-    .split(/\s+/)
-    .filter((palabra) => palabra.length > 0)
-    .map((palabra) => hoja("texto_busqueda", "like", `*${escaparLike(palabra)}*`));
-}
-
 function condicion(tipo: TipoFiltro, columna: string, datos: CondicionAg): string | null {
   if (tipo === "numero") return condicionNumero(columna, datos);
   if (tipo === "fecha") return condicionFecha(columna, datos);
@@ -212,8 +190,7 @@ export function expresionesDeFiltros(modelo: ModeloFiltros | undefined): string[
     if (!config || typeof valor !== "object" || valor === null) continue;
     const filtro = valor as FiltroAg;
     const condiciones = filtro.conditions ?? [filtro.condition1, filtro.condition2].filter((c) => c !== undefined);
-    const efectivas = condiciones.length > 0 ? condiciones : [filtro];
-    const expresionesColumna = efectivas
+    const expresionesColumna = (condiciones.length > 0 ? condiciones : [filtro])
       .map((datos) => condicion(config.tipo, config.columna, datos))
       .filter((expresion): expresion is string => expresion !== null);
     if (expresionesColumna.length === 0) continue;
@@ -222,7 +199,6 @@ export function expresionesDeFiltros(modelo: ModeloFiltros | undefined): string[
         ? expresionesColumna[0]
         : `${filtro.operator === "OR" ? "or" : "and"}(${expresionesColumna.join(",")})`,
     );
-    if (config.enTextoBusqueda) expresiones.push(...prefiltrosTextoBusqueda(efectivas));
   }
   return expresiones;
 }

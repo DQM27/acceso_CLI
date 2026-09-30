@@ -42,10 +42,10 @@ begin
   -- La búsqueda ignora tildes y mayúsculas.
   if not exists (
     select 1 from public.panel_movimientos
-    where texto_busqueda like '%' || public.plegar_texto('JOSE NANDU') || '%'
+    where nombre_p like '%' || public.plegar_texto('JOSE NANDU') || '%'
       and id = 'bbbbbbbb-0000-0000-0000-00000000b001'
   ) then
-    raise exception 'texto_busqueda no ignora tildes/mayusculas';
+    raise exception 'nombre_p no ignora tildes/mayusculas';
   end if;
 end $$;
 

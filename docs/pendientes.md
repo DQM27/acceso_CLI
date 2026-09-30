@@ -156,14 +156,21 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   coherencia de salida que proveedores (sin exigir salida posterior a la entrada,
   por relojes desfasados). `plegar_texto` con `search_path` fijo.
 - [x] **Historial del panel con búsqueda indexada** (2026-09-30,
-  `historial_busqueda_indexada`). `ingresos.texto_busqueda` es una columna generada
-  (cédula, nombre, empresa y placa sin tildes ni mayúsculas) con índice de trigramas;
-  la búsqueda general y los filtros de cédula, nombre y empresa lo usan. El panel ya
-  no pide conteo exacto: la grilla conoce el total al llegar a la última página y la
-  exportación detecta el tope pidiendo una fila de más. Medido en staging con 150.000
-  ingresos: página de 1,7-5,3 s a 71 ms, búsqueda de texto de 3,6 s a 110 ms. Los
-  textos de presentación (`tipo_texto`, `medio_texto`, `hora_*_txt`) siguen en la
-  vista porque el orden y los filtros del servidor dependen de ellos.
+  `historial_busqueda_indexada`). El buscador busca sólo cédula o nombre (empresa,
+  placa y lo demás quedan para los filtros de columna). Si el texto trae dígitos es
+  cédula: B-tree por prefijo (`text_pattern_ops`, porque la base usa intercalación
+  ICU); si no, nombre: trigramas (`pg_trgm`) sobre `contratista_nombre_plegado`
+  (columna generada). Bajo RLS Postgres no usa índices para `like` (no es
+  `leakproof`), así que la búsqueda pasa por `panel_buscar_movimientos`, una
+  función `security definer` que valida ella misma que quien llama sea
+  admin_global. El panel ya no pide conteo exacto (la grilla conoce el total al
+  llegar a la última página; la exportación detecta el tope con una fila de más).
+  Medido en staging con 150.000 ingresos en 6 meses: página de 1,7-5,3 s a ~50 ms;
+  cédula de 130 ms a 29 ms; nombre específico de 135 ms a 22 ms; sin
+  coincidencias de 113 ms a 6 ms. Costo aceptado: una sola palabra muy común
+  (~4 % de las filas) tarda ~0,5 s porque trae todas las coincidencias antes de
+  paginar. Los textos de presentación siguen en la vista porque el orden y los
+  filtros del servidor dependen de ellos.
 - [ ] **Versiones de migración desalineadas con staging.** Las migraciones aplicadas
   con el MCP quedaron registradas con la hora de aplicación, no con la del archivo.
   Alinear `supabase_migrations.schema_migrations` antes de usar `supabase db push`.

@@ -3,7 +3,6 @@ import {
   listarMovimientosPagina,
   listarMovimientosParaExportar,
   listarUnidadesOperativas,
-  palabrasDeBusqueda,
 } from "./historial";
 
 function mockConsulta(resultado: { data: unknown; error: unknown; count: number | null }) {
@@ -44,21 +43,14 @@ function filaVista(sobrescribir: Record<string, unknown> = {}) {
   };
 }
 
-const mocks = vi.hoisted(() => ({ from: vi.fn() }));
-vi.mock("../lib/supabase", () => ({ supabase: { from: mocks.from } }));
+const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
+vi.mock("../lib/supabase", () => ({ supabase: { from: mocks.from, rpc: mocks.rpc } }));
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 afterEach(() => {
   vi.restoreAllMocks();
-});
-
-describe("palabrasDeBusqueda", () => {
-  it("separa por espacios, pliega tildes, ignora vacíos y escapa \\, % y _ para like", () => {
-    expect(palabrasDeBusqueda("  Pérez   100%_x  ")).toEqual(["perez", "100\\%\\_x"]);
-    expect(palabrasDeBusqueda("   ")).toEqual([]);
-  });
 });
 
 describe("listarMovimientosPagina", () => {
@@ -108,7 +100,7 @@ describe("listarMovimientosPagina", () => {
     });
   });
 
-  it("aplica fechas (Costa Rica), unidades y una condición like por cada palabra de la búsqueda", async () => {
+  it("sin búsqueda lee la vista y aplica fechas (Costa Rica) y unidades como filtros", async () => {
     const encadenable = mockConsulta({ data: [], error: null, count: 0 });
     mocks.from.mockReturnValue(encadenable);
 
@@ -116,17 +108,64 @@ describe("listarMovimientosPagina", () => {
       desde: "2026-09-09",
       hasta: "2026-09-09",
       sitioIds: ["s1"],
-      busqueda: "José Pérez",
+      busqueda: "   ",
       pagina: 0,
       tamano: 50,
     });
 
+    expect(mocks.from).toHaveBeenCalledWith("panel_movimientos");
+    expect(mocks.rpc).not.toHaveBeenCalled();
     expect(encadenable.gte).toHaveBeenCalledWith("hora_entrada", "2026-09-09T00:00:00-06:00");
     expect(encadenable.lt).toHaveBeenCalledWith("hora_entrada", "2026-09-10T00:00:00-06:00");
     expect(encadenable.in).toHaveBeenCalledWith("sitio_id", ["s1"]);
-    expect(encadenable.like).toHaveBeenCalledTimes(2);
-    expect(encadenable.like).toHaveBeenCalledWith("texto_busqueda", "%jose%");
-    expect(encadenable.like).toHaveBeenCalledWith("texto_busqueda", "%perez%");
+  });
+
+  it("con búsqueda usa panel_buscar_movimientos (con índice) y le pasa fechas y unidades", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
+    mocks.rpc.mockReturnValue(encadenable);
+
+    await listarMovimientosPagina({
+      desde: "2026-09-09",
+      hasta: "2026-09-09",
+      sitioIds: ["s1"],
+      busqueda: "  José Pérez ",
+      pagina: 1,
+      tamano: 50,
+      filtros: { empresa_nombre: { filterType: "text", type: "equals", filter: "BAC" } },
+    });
+
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledWith("panel_buscar_movimientos", {
+      p_busqueda: "José Pérez",
+      p_desde: "2026-09-09T00:00:00-06:00",
+      p_hasta: "2026-09-10T00:00:00-06:00",
+      p_sitio_ids: ["s1"],
+    });
+    // Fechas y unidades ya van en la función; orden, filtros de columna y
+    // tramo se aplican igual que sobre la vista.
+    expect(encadenable.gte).not.toHaveBeenCalled();
+    expect(encadenable.lt).not.toHaveBeenCalled();
+    expect(encadenable.in).not.toHaveBeenCalled();
+    expect(encadenable.like).not.toHaveBeenCalled();
+    expect(encadenable.or).toHaveBeenCalledWith('empresa_p.eq."bac"');
+    expect(encadenable.order).toHaveBeenNthCalledWith(1, "hora_entrada", {
+      ascending: false,
+      nullsFirst: false,
+    });
+    expect(encadenable.range).toHaveBeenCalledWith(50, 99);
+  });
+
+  it("con búsqueda y sin fechas ni unidades manda nulos a la función", async () => {
+    mocks.rpc.mockReturnValue(mockConsulta({ data: [], error: null, count: 0 }));
+
+    await listarMovimientosPagina({ busqueda: "304510", pagina: 0, tamano: 50 });
+
+    expect(mocks.rpc).toHaveBeenCalledWith("panel_buscar_movimientos", {
+      p_busqueda: "304510",
+      p_desde: null,
+      p_hasta: null,
+      p_sitio_ids: null,
+    });
   });
 
   it("los filtros por columna de la grilla se aplican como un .or() por columna", async () => {
@@ -142,10 +181,8 @@ describe("listarMovimientosPagina", () => {
       },
     });
 
-    // La empresa suma su prefiltro contra el índice de texto_busqueda.
-    expect(encadenable.or).toHaveBeenCalledTimes(3);
+    expect(encadenable.or).toHaveBeenCalledTimes(2);
     expect(encadenable.or).toHaveBeenCalledWith('empresa_p.eq."bac"');
-    expect(encadenable.or).toHaveBeenCalledWith('texto_busqueda.like."*bac*"');
     expect(encadenable.or).toHaveBeenCalledWith("gafete_numero.gt.3");
   });
 
@@ -192,9 +229,12 @@ describe("listarMovimientosParaExportar", () => {
       const tamanos = [1000, 1000, 500];
       resolver({ data: tramo(tamanos[llamada++]), error: null, count: 2500 });
     };
-    mocks.from.mockReturnValue(encadenable);
+    // Con búsqueda, cada tramo sale de la función con índice.
+    mocks.rpc.mockReturnValue(encadenable);
 
     const resultado = await listarMovimientosParaExportar({ busqueda: "perez" });
+
+    expect(mocks.rpc).toHaveBeenCalledTimes(3);
 
     expect(resultado.filas).toHaveLength(2500);
     expect(resultado.truncado).toBe(false);

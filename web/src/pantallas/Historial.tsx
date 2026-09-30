@@ -597,7 +597,7 @@ export default function Historial() {
             controles={
               <div className="campo flex-[0_1_16rem]">
                 <input
-                  placeholder="Cédula, nombre, empresa…"
+                  placeholder="Cédula o nombre…"
                   value={busqueda}
                   onChange={(evento) => setBusqueda(evento.target.value)}
                 />

@@ -49,55 +49,6 @@ describe("expresionesDeFiltros -- texto", () => {
   });
 });
 
-describe("expresionesDeFiltros -- prefiltro con índice (texto_busqueda)", () => {
-  const filtro = (type: string, filter?: string) => ({ contratista_nombre: { filterType: "text", type, filter } });
-
-  it("cédula, nombre y empresa suman una condición por palabra contra texto_busqueda", () => {
-    expect(expresionesDeFiltros(filtro("contains", "Carlos Sá"))).toEqual([
-      'and(nombre_p.ilike."*carlos*",nombre_p.ilike."*sa*")',
-      'texto_busqueda.like."*carlos*"',
-      'texto_busqueda.like."*sa*"',
-    ]);
-    expect(
-      expresionesDeFiltros({ contratista_cedula: { filterType: "text", type: "startsWith", filter: "1-05" } }),
-    ).toEqual(['cedula_p.ilike."1-05*"', 'texto_busqueda.like."*1-05*"']);
-    expect(expresionesDeFiltros({ empresa_nombre: { filterType: "text", type: "equals", filter: "BAC" } })).toEqual([
-      'empresa_p.eq."bac"',
-      'texto_busqueda.like."*bac*"',
-    ]);
-  });
-
-  it("escapa los comodines de like igual que la condición de la columna", () => {
-    expect(expresionesDeFiltros(filtro("endsWith", "100%"))).toEqual([
-      'nombre_p.ilike."*100\\\\%"',
-      'texto_busqueda.like."*100\\\\%*"',
-    ]);
-  });
-
-  it("no se agrega cuando podría descartar filas que la columna acepta", () => {
-    // Negaciones y vacíos: el valor no tiene por qué aparecer en el texto.
-    for (const tipo of ["notEqual", "notContains", "blank", "notBlank"]) {
-      expect(expresionesDeFiltros(filtro(tipo, "ana")).join()).not.toContain("texto_busqueda");
-    }
-    // Dos condiciones unidas por OR: basta con una, el prefiltro exigiría ambas.
-    const dosCondiciones = {
-      contratista_nombre: {
-        filterType: "text",
-        operator: "OR",
-        conditions: [
-          { type: "equals", filter: "ana" },
-          { type: "equals", filter: "luis" },
-        ],
-      },
-    };
-    expect(expresionesDeFiltros(dosCondiciones).join()).not.toContain("texto_busqueda");
-    // Columnas que no forman parte de texto_busqueda.
-    expect(
-      expresionesDeFiltros({ sitio_nombre: { filterType: "text", type: "contains", filter: "brisas" } }),
-    ).toEqual(['unidad_p.ilike."*brisas*"']);
-  });
-});
-
 describe("expresionesDeFiltros -- número", () => {
   const filtro = (type: string, filter?: number, filterTo?: number) => ({
     gafete_numero: { filterType: "number", type, filter, filterTo },
@@ -211,11 +162,7 @@ describe("expresionesDeFiltros -- combinaciones", () => {
       gafete_numero: { filterType: "number", type: "equals", filter: 3 },
       inventada: { filterType: "text", type: "equals", filter: "x" },
     };
-    expect(expresionesDeFiltros(modelo)).toEqual([
-      'empresa_p.eq."bac"',
-      'texto_busqueda.like."*bac*"',
-      "gafete_numero.eq.3",
-    ]);
+    expect(expresionesDeFiltros(modelo)).toEqual(['empresa_p.eq."bac"', "gafete_numero.eq.3"]);
     expect(expresionesDeFiltros(undefined)).toEqual([]);
     expect(expresionesDeFiltros({})).toEqual([]);
   });

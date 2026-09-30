@@ -1,7 +1,7 @@
 import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
 import { inicioDiaCostaRicaUtc, inicioDiaSiguienteCostaRicaUtc } from "../tiempo";
-import { expresionesDeFiltros, plegarTexto } from "./historialFiltros";
+import { expresionesDeFiltros } from "./historialFiltros";
 import type { ModeloFiltros } from "./historialFiltros";
 
 export { plegarTexto } from "./historialFiltros";
@@ -63,8 +63,8 @@ export async function listarUnidadesOperativas(): Promise<UnidadOperativa[]> {
 // --- Paginación en el servidor -------------------------------------------
 //
 // Lee la vista `panel_movimientos` (migración `vista_panel_movimientos`): la
-// fila ya viene plana (unidad y dispositivo incluidos) y con `texto_busqueda`
-// sin tildes ni mayúsculas, así el servidor ordena, filtra y pagina. El
+// fila ya viene plana (unidad y dispositivo incluidos) y con columnas sin
+// tildes ni mayúsculas (`*_p`), así el servidor ordena, filtra y pagina. El
 // navegador sólo recibe la página que se ve, sin importar cuántas unidades
 // ni cuántos años de datos haya.
 
@@ -111,16 +111,6 @@ export interface PaginaMovimientos {
   total?: number;
 }
 
-/** Palabras de la búsqueda, ya plegadas y con `\`, `%` y `_` escapados para
- * `like` (una cédula o un nombre nunca se interpretan como comodines). Cada
- * palabra debe aparecer (en cualquier orden) en `texto_busqueda`. */
-export function palabrasDeBusqueda(busqueda: string): string[] {
-  return plegarTexto(busqueda)
-    .split(/\s+/)
-    .filter((palabra) => palabra.length > 0)
-    .map((palabra) => palabra.replace(/[\\%_]/g, "\\$&"));
-}
-
 const COLUMNAS_MOVIMIENTO =
   "id, sitio_id, sitio_nombre, contratista_cedula, contratista_nombre, empresa_nombre, " +
   "tipo_ingreso, medio_ingreso, gafete_numero, hora_entrada, hora_salida, " +
@@ -152,10 +142,27 @@ async function pedirTramo(
   primera: number,
   cantidad: number,
 ): Promise<MovimientoHistorial[]> {
-  const { desde, hasta, sitioIds, busqueda, filtros, orden } = consulta;
+  const { desde, hasta, sitioIds, filtros, orden } = consulta;
+  const busqueda = consulta.busqueda?.trim() ?? "";
+  const desdeUtc = desde ? inicioDiaCostaRicaUtc(desde) : undefined;
+  const hastaUtc = hasta ? inicioDiaSiguienteCostaRicaUtc(hasta) : undefined;
 
-  let peticion = supabase
-    .from("panel_movimientos")
+  // Con búsqueda (cédula o nombre) se usa `panel_buscar_movimientos`: bajo
+  // RLS, Postgres no puede usar índices para `like` sobre la vista y
+  // recorrería todo el período; la función sí los usa y valida ella misma
+  // que quien consulta sea administrador. Devuelve filas con la forma de la
+  // vista, así que el orden, los filtros de columna y el tramo se aplican
+  // igual en los dos casos. Fechas y unidades van adentro de la función.
+  const base = busqueda
+    ? supabase.rpc("panel_buscar_movimientos", {
+        p_busqueda: busqueda,
+        p_desde: desdeUtc ?? null,
+        p_hasta: hastaUtc ?? null,
+        p_sitio_ids: sitioIds ?? null,
+      })
+    : supabase.from("panel_movimientos");
+
+  let peticion = base
     .select(COLUMNAS_MOVIMIENTO)
     .order(orden?.campo ?? "hora_entrada", {
       ascending: !(orden?.descendente ?? true),
@@ -167,11 +174,10 @@ async function pedirTramo(
     .range(primera, primera + cantidad - 1);
 
   // Mismo criterio de día calendario de Costa Rica que `listarHistorial`.
-  if (desde) peticion = peticion.gte("hora_entrada", inicioDiaCostaRicaUtc(desde));
-  if (hasta) peticion = peticion.lt("hora_entrada", inicioDiaSiguienteCostaRicaUtc(hasta));
-  if (sitioIds) peticion = peticion.in("sitio_id", sitioIds);
-  for (const palabra of palabrasDeBusqueda(busqueda ?? "")) {
-    peticion = peticion.like("texto_busqueda", `%${palabra}%`);
+  if (!busqueda) {
+    if (desdeUtc) peticion = peticion.gte("hora_entrada", desdeUtc);
+    if (hastaUtc) peticion = peticion.lt("hora_entrada", hastaUtc);
+    if (sitioIds) peticion = peticion.in("sitio_id", sitioIds);
   }
   // Un `.or()` por columna filtrada: el AND entre columnas sale de aplicarlos todos.
   for (const expresion of expresionesDeFiltros(filtros)) {
