@@ -2,7 +2,6 @@
 
 use control_acceso::application::ResumenSincronizacion as ResumenSincronizacionNucleo;
 use control_acceso::database::queries::contratistas::ContratistaResumen as ContratistaResumenNucleo;
-use control_acceso::database::queries::usuarios::UsuarioResumen as UsuarioResumenNucleo;
 use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
@@ -435,40 +434,6 @@ impl From<ResultadoIngresoRegistradoNucleo> for ResultadoIngresoRegistrado {
             ResultadoIngresoRegistradoNucleo::Migrado => Self::Migrado,
         }
     }
-}
-
-/// Espejo de `UsuarioResumen` — sólo se expone a Root/Administrador
-/// (`Operacion::GestionarUsuarios`, `domain/autorizacion.rs`); Rust ya
-/// rechaza a un Operador con `OperacionNoAutorizada` aunque Kotlin
-/// oculte el menú, así que no hay doble mantenimiento de la regla real.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct UsuarioResumen {
-    pub id: i64,
-    pub cedula: String,
-    pub nombre: String,
-    pub rol: RolUsuario,
-    pub activo: bool,
-}
-
-impl From<UsuarioResumenNucleo> for UsuarioResumen {
-    fn from(usuario: UsuarioResumenNucleo) -> Self {
-        Self {
-            id: usuario.id,
-            cedula: usuario.cedula,
-            nombre: usuario.nombre,
-            rol: usuario.rol.into(),
-            activo: usuario.activo,
-        }
-    }
-}
-
-#[derive(Debug, Clone, uniffi::Record)]
-pub struct DatosUsuario {
-    pub cedula: String,
-    pub nombre: String,
-    pub password: String,
-    pub rol: RolUsuario,
-    pub activo: bool,
 }
 
 /// Ver `docs/planes-implementados/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.

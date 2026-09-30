@@ -81,7 +81,6 @@ pub(super) fn destino_lote(
         ("empresa", _) => Some(("empresas", Some("nombre"))),
         ("contratista", _) => Some(("contratistas", Some("identificacion"))),
         ("gafete", _) => Some(("gafetes", Some("sitio_id,numero"))),
-        ("usuario", _) => Some(("usuarios", Some("cedula"))),
         ("ingreso" | "salida_ruta", "cerrar") => None,
         ("ingreso", _) => Some(("ingresos", None)),
         ("ruta", _) => Some(("rutas", Some("numero"))),
@@ -108,7 +107,6 @@ pub(super) fn construir_cuerpo(
         "empresa" => construir_cuerpo_empresa(connection, contexto, uuid),
         "contratista" => construir_cuerpo_contratista(connection, contexto, uuid),
         "gafete" => construir_cuerpo_gafete(connection, contexto, uuid),
-        "usuario" => construir_cuerpo_usuario(connection, contexto, uuid),
         "ingreso" => construir_cuerpo_ingreso(connection, contexto, uuid),
         "ruta" => construir_cuerpo_ruta(connection, contexto, uuid),
         "vehiculo_ruta" => construir_cuerpo_vehiculo_ruta(connection, contexto, uuid),
@@ -227,7 +225,6 @@ pub(super) fn procesar_fila_individual(
         ("empresa", _) => enviar_empresa(cliente, connection, contexto, &fila.entidad_uuid),
         ("contratista", _) => enviar_contratista(cliente, connection, contexto, &fila.entidad_uuid),
         ("gafete", _) => enviar_gafete(cliente, connection, contexto, &fila.entidad_uuid),
-        ("usuario", _) => enviar_usuario(cliente, connection, contexto, &fila.entidad_uuid),
         ("ingreso", "cerrar") => {
             enviar_cierre_ingreso(cliente, connection, contexto, &fila.entidad_uuid)
         }
@@ -732,64 +729,6 @@ pub(super) fn enviar_gafete(
     let respuesta = cliente
         .post(format!(
             "{}/rest/v1/gafetes?on_conflict=sitio_id,numero,tipo",
-            contexto.base_url
-        ))
-        .header("apikey", contexto.apikey)
-        .header("Authorization", format!("Bearer {}", contexto.token))
-        .header("Prefer", "resolution=merge-duplicates,return=minimal")
-        .json(&cuerpo)
-        .send()
-        .map_err(NubeError::Red)?;
-
-    exigir_2xx(respuesta)
-}
-
-/// Usuarios globales (ROOT/ADMINISTRADOR/OPERADOR, espejo): mismo criterio
-/// de `upsert` que contratistas. Sin `password_hash` a propósito -- la
-/// nube nunca la recibe (ver `SIN_PASSWORD_LOCAL` en
-/// `services/password.rs`): distribuye quién existe y su rol/estado, cada
-/// dispositivo fija su propia contraseña local la primera vez que ese
-/// operador inicia sesión ahí.
-/// Ver el doc-comment de [`construir_cuerpo_contratista`] -- misma idea.
-pub(super) fn construir_cuerpo_usuario(
-    connection: &Connection,
-    contexto: &ContextoSincronizacion<'_>,
-    uuid: &str,
-) -> Result<Value, SincronizacionError> {
-    let (cedula, nombre, rol, activo): (String, String, String, i64) = connection.query_row(
-        "SELECT cedula, nombre, rol, activo FROM usuarios WHERE uuid = ?1",
-        params![uuid],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-    )?;
-
-    // Sin `sitio_id`: los usuarios son globales, igual que contratistas
-    // (migración `usuarios_globales_y_coherencia`).
-    Ok(json!({
-        "id": uuid,
-        "dispositivo_origen_id": contexto.dispositivo_id,
-        "cedula": cedula,
-        "nombre": nombre,
-        "rol": rol,
-        "activo": activo != 0,
-    }))
-}
-
-pub(super) fn enviar_usuario(
-    cliente: &reqwest::blocking::Client,
-    connection: &Connection,
-    contexto: &ContextoSincronizacion<'_>,
-    uuid: &str,
-) -> Result<(), SincronizacionError> {
-    let cuerpo = construir_cuerpo_usuario(connection, contexto, uuid)?;
-
-    // `on_conflict=cedula` -- la tabla remota ya tiene `UNIQUE(cedula)`, pero
-    // sin decirlo acá el upsert infiere la PK (`id`) como blanco del
-    // conflicto: reenviar este usuario con un `uuid` local distinto (mismo
-    // caso que contratistas/empresas) violaría esa constraint en vez de
-    // fusionarse.
-    let respuesta = cliente
-        .post(format!(
-            "{}/rest/v1/usuarios?on_conflict=cedula",
             contexto.base_url
         ))
         .header("apikey", contexto.apikey)

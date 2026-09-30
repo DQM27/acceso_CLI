@@ -79,10 +79,15 @@ fn fija_password_y_puede_iniciar_sesion_de_ahi_en_adelante() {
         Err(AutenticacionError::SinPasswordLocal)
     ));
 
-    // `cambiar_password` (no `cambiar_password_propio`) a propósito: el
-    // alta de contraseña en un dispositivo nuevo no exige conocer una
-    // anterior que nunca existió acá.
-    usuarios.cambiar_password(id, "mi-password-nueva").unwrap();
+    // Fijar el hash directo (no el cambio propio) a propósito: el alta de
+    // contraseña en un dispositivo nuevo no exige conocer una anterior que
+    // nunca existió acá.
+    usuarios
+        .cambiar_password_con_hash(
+            id,
+            &control_acceso::services::password::generar_hash("mi-password-nueva").unwrap(),
+        )
+        .unwrap();
 
     let sesion = autenticacion
         .autenticar("9-0002", "mi-password-nueva", Utc::now())

@@ -875,10 +875,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario(
-    ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_clave_publica_jwk(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_firmar_der(
@@ -1042,10 +1038,6 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(`ptr`: Long,`datos`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_clone_almacenclavedispositivo(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_free_almacenclavedispositivo(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1491,12 +1483,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() and 0xFFFF) != 14163) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_crear_usuario() and 0xFFFF) != 9310) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_usuarios() and 0xFFFF) != 41320) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_clave_publica_jwk() and 0xFFFF) != 37356) {
@@ -3330,20 +3316,6 @@ public interface NucleoInterface {
      */
     fun `cerrarSesion`()
     
-    /**
-     * Sólo Root/Administrador — Rust ya rechaza a un actor sin
-     * `Operacion::GestionarUsuarios` con `OperacionNoAutorizada`
-     * (`verificar_creacion_usuario`), y sólo Root puede crear otro Root
-     * (`puede_gestionar_usuario`). Kotlin oculta el menú para Operador
-     * como atajo de UX, no como el control real.
-     */
-    fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long
-    
-    /**
-     * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
-     */
-    fun `listarUsuarios`(`texto`: kotlin.String): List<UsuarioResumen>
-    
     companion object
 }
 
@@ -4555,46 +4527,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
 
     
-    /**
-     * Sólo Root/Administrador — Rust ya rechaza a un actor sin
-     * `Operacion::GestionarUsuarios` con `OperacionNoAutorizada`
-     * (`verificar_creacion_usuario`), y sólo Root puede crear otro Root
-     * (`puede_gestionar_usuario`). Kotlin oculta el menú para Operador
-     * como atajo de UX, no como el control real.
-     */
-    @Throws(NucleoException::class)override fun `crearUsuario`(`datos`: DatosUsuario): kotlin.Long {
-            return FfiConverterLong.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_crear_usuario(
-        it,
-        
-        FfiConverterTypeDatosUsuario.lower(`datos`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
-     */
-    @Throws(NucleoException::class)override fun `listarUsuarios`(`texto`: kotlin.String): List<UsuarioResumen> {
-            return FfiConverterSequenceTypeUsuarioResumen.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_usuarios(
-        it,
-        
-        FfiConverterString.lower(`texto`),_status)
-}
-    }
-    )
-    }
-    
-
-    
 
     
 
@@ -5655,59 +5587,6 @@ public object FfiConverterTypeDatosPdf417Cedula: FfiConverterRustBuffer<DatosPdf
             FfiConverterString.write(value.`cedula`, buf)
             FfiConverterString.write(value.`nombre`, buf)
             FfiConverterString.write(value.`apellidos`, buf)
-    }
-}
-
-
-
-data class DatosUsuario (
-    var `cedula`: kotlin.String
-    , 
-    var `nombre`: kotlin.String
-    , 
-    var `password`: kotlin.String
-    , 
-    var `rol`: RolUsuario
-    , 
-    var `activo`: kotlin.Boolean
-    
-){
-    
-
-    
-
-    
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeDatosUsuario: FfiConverterRustBuffer<DatosUsuario> {
-    override fun read(buf: ByteBuffer): DatosUsuario {
-        return DatosUsuario(
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterTypeRolUsuario.read(buf),
-            FfiConverterBoolean.read(buf),
-        )
-    }
-
-    override fun allocationSize(value: DatosUsuario) = (
-            FfiConverterString.allocationSize(value.`cedula`) +
-            FfiConverterString.allocationSize(value.`nombre`) +
-            FfiConverterString.allocationSize(value.`password`) +
-            FfiConverterTypeRolUsuario.allocationSize(value.`rol`) +
-            FfiConverterBoolean.allocationSize(value.`activo`)
-    )
-
-    override fun write(value: DatosUsuario, buf: ByteBuffer) {
-            FfiConverterString.write(value.`cedula`, buf)
-            FfiConverterString.write(value.`nombre`, buf)
-            FfiConverterString.write(value.`password`, buf)
-            FfiConverterTypeRolUsuario.write(value.`rol`, buf)
-            FfiConverterBoolean.write(value.`activo`, buf)
     }
 }
 
@@ -7606,65 +7485,6 @@ public object FfiConverterTypeSolicitudSalidaRuta: FfiConverterRustBuffer<Solici
             FfiConverterString.write(value.`numeroDocumento`, buf)
             FfiConverterString.write(value.`fechaDocumento`, buf)
             FfiConverterBoolean.write(value.`tieneCorreoAutorizacion`, buf)
-    }
-}
-
-
-
-/**
- * Espejo de `UsuarioResumen` — sólo se expone a Root/Administrador
- * (`Operacion::GestionarUsuarios`, `domain/autorizacion.rs`); Rust ya
- * rechaza a un Operador con `OperacionNoAutorizada` aunque Kotlin
- * oculte el menú, así que no hay doble mantenimiento de la regla real.
- */
-data class UsuarioResumen (
-    var `id`: kotlin.Long
-    , 
-    var `cedula`: kotlin.String
-    , 
-    var `nombre`: kotlin.String
-    , 
-    var `rol`: RolUsuario
-    , 
-    var `activo`: kotlin.Boolean
-    
-){
-    
-
-    
-
-    
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeUsuarioResumen: FfiConverterRustBuffer<UsuarioResumen> {
-    override fun read(buf: ByteBuffer): UsuarioResumen {
-        return UsuarioResumen(
-            FfiConverterLong.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterTypeRolUsuario.read(buf),
-            FfiConverterBoolean.read(buf),
-        )
-    }
-
-    override fun allocationSize(value: UsuarioResumen) = (
-            FfiConverterLong.allocationSize(value.`id`) +
-            FfiConverterString.allocationSize(value.`cedula`) +
-            FfiConverterString.allocationSize(value.`nombre`) +
-            FfiConverterTypeRolUsuario.allocationSize(value.`rol`) +
-            FfiConverterBoolean.allocationSize(value.`activo`)
-    )
-
-    override fun write(value: UsuarioResumen, buf: ByteBuffer) {
-            FfiConverterLong.write(value.`id`, buf)
-            FfiConverterString.write(value.`cedula`, buf)
-            FfiConverterString.write(value.`nombre`, buf)
-            FfiConverterTypeRolUsuario.write(value.`rol`, buf)
-            FfiConverterBoolean.write(value.`activo`, buf)
     }
 }
 
@@ -9992,34 +9812,6 @@ public object FfiConverterSequenceTypeSalidaRutaActivaResumen: FfiConverterRustB
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeSalidaRutaActivaResumen.write(it, buf)
-        }
-    }
-}
-
-
-
-
-/**
- * @suppress
- */
-public object FfiConverterSequenceTypeUsuarioResumen: FfiConverterRustBuffer<List<UsuarioResumen>> {
-    override fun read(buf: ByteBuffer): List<UsuarioResumen> {
-        val len = buf.getInt()
-        return List<UsuarioResumen>(len) {
-            FfiConverterTypeUsuarioResumen.read(buf)
-        }
-    }
-
-    override fun allocationSize(value: List<UsuarioResumen>): ULong {
-        val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeUsuarioResumen.allocationSize(it) }.sum()
-        return sizeForLength + sizeForItems
-    }
-
-    override fun write(value: List<UsuarioResumen>, buf: ByteBuffer) {
-        buf.putInt(value.size)
-        value.iterator().forEach {
-            FfiConverterTypeUsuarioResumen.write(it, buf)
         }
     }
 }

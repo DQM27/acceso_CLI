@@ -5,14 +5,8 @@ use std::{
 };
 
 use control_acceso::{
-    application::AppCore,
-    database::queries::usuarios::FiltroUsuarios,
-    models::usuario::RolUsuario,
-    services::{
-        autenticacion_service::UsuarioSesion,
-        error::{AutenticacionError, UsuarioServiceError},
-        usuario_service::{ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput},
-    },
+    application::AppCore, database::queries::usuarios::FiltroUsuarios, models::usuario::RolUsuario,
+    services::usuario_service::CrearRootInicialInput,
 };
 
 fn ruta(nombre: &str) -> PathBuf {
@@ -25,52 +19,22 @@ fn ruta(nombre: &str) -> PathBuf {
             .as_nanos()
     ))
 }
-fn root(core: &AppCore) -> i64 {
-    core.crear_root_inicial(CrearRootInicialInput {
-        cedula: "ROOT-1".into(),
-        nombre: "Root Inicial".into(),
-        password: "password-A".into(),
-    })
-    .unwrap()
-}
-fn sesion_root(core: &AppCore) -> UsuarioSesion {
-    core.autenticar("ROOT-1", "password-A").unwrap()
-}
-fn crear(
-    core: &AppCore,
-    actor: &UsuarioSesion,
-    cedula: &str,
-    nombre: &str,
-    rol: RolUsuario,
-    activo: bool,
-) -> i64 {
-    core.crear_usuario(
-        actor,
-        CrearUsuarioInput {
-            cedula: cedula.into(),
-            nombre: nombre.into(),
-            password: "password-A".into(),
-            rol,
-            activo,
-        },
-    )
-    .unwrap()
-}
 
+/// La búsqueda de usuarios (FTS) ignora tildes y mayúsculas, no expone el
+/// hash y sobrevive a reabrir la base. Los usuarios se dan de alta desde el
+/// panel web; en un equipo sólo existe el ROOT del arranque inicial.
 #[test]
-fn appcore_busca_crea_edita_activa_y_fts_sin_exponer_hash() {
-    let ruta = ruta("usuarios-crud");
+fn appcore_busca_usuarios_con_fts_sin_exponer_hash() {
+    let ruta = ruta("usuarios-busqueda");
     let core = AppCore::abrir(&ruta).unwrap();
-    root(&core);
-    let actor = sesion_root(&core);
-    let id = crear(
-        &core,
-        &actor,
-        "0-01",
-        "María José Hernández",
-        RolUsuario::Operador,
-        false,
-    );
+    let id = core
+        .crear_root_inicial(CrearRootInicialInput {
+            cedula: "0-01".into(),
+            nombre: "María José Hernández".into(),
+            password: "password-A".into(),
+        })
+        .unwrap();
+    let actor = core.autenticar("0-01", "password-A").unwrap();
     for texto in ["jose", "JOSÉ", "hernandez", "nandez"] {
         let items = core
             .buscar_usuarios(
@@ -81,41 +45,20 @@ fn appcore_busca_crea_edita_activa_y_fts_sin_exponer_hash() {
                 },
             )
             .unwrap();
-        assert_eq!(items.iter().find(|u| u.id == id).unwrap().cedula, "0-01");
+        let usuario = items.iter().find(|u| u.id == id).unwrap();
+        assert_eq!(usuario.cedula, "0-01");
+        assert_eq!(usuario.rol, RolUsuario::Root);
+        assert!(!format!("{usuario:?}").contains("password_hash"));
     }
-    core.actualizar_usuario(
-        &actor,
-        id,
-        ActualizarUsuarioInput {
-            cedula: "0-02".into(),
-            nombre: "José Peña".into(),
-            rol: RolUsuario::Administrador,
-        },
-        false,
-    )
-    .unwrap();
-    core.activar_usuario(&actor, id).unwrap();
-    let items = core
-        .buscar_usuarios(
-            &actor,
-            &FiltroUsuarios {
-                texto: Some("pena".into()),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    let u = items.iter().find(|u| u.id == id).unwrap();
-    assert!(u.activo);
-    assert_eq!(u.rol, RolUsuario::Administrador);
-    assert!(!format!("{u:?}").contains("password_hash"));
     drop(core);
+
     let core = AppCore::abrir(&ruta).unwrap();
-    let actor = sesion_root(&core);
+    let actor = core.autenticar("0-01", "password-A").unwrap();
     assert!(
         core.buscar_usuarios(
             &actor,
             &FiltroUsuarios {
-                texto: Some("pena".into()),
+                texto: Some("hernandez".into()),
                 ..Default::default()
             }
         )
@@ -123,69 +66,6 @@ fn appcore_busca_crea_edita_activa_y_fts_sin_exponer_hash() {
         .iter()
         .any(|u| u.id == id)
     );
-    drop(core);
-    fs::remove_file(ruta).unwrap();
-}
-
-#[test]
-fn password_real_cambia_autenticacion_y_persiste() {
-    let ruta = ruta("usuarios-password");
-    let core = AppCore::abrir(&ruta).unwrap();
-    root(&core);
-    let actor = sesion_root(&core);
-    let id = crear(
-        &core,
-        &actor,
-        "USR-1",
-        "Usuario",
-        RolUsuario::Operador,
-        true,
-    );
-    core.cambiar_password_usuario(&actor, id, "password-B")
-        .unwrap();
-    assert!(matches!(
-        core.autenticar("USR-1", "password-A"),
-        Err(AutenticacionError::CredencialesInvalidas)
-    ));
-    assert_eq!(core.autenticar("USR-1", "password-B").unwrap().id, id);
-    drop(core);
-    let core = AppCore::abrir(&ruta).unwrap();
-    assert_eq!(core.autenticar("USR-1", "password-B").unwrap().id, id);
-    drop(core);
-    fs::remove_file(ruta).unwrap();
-}
-
-#[test]
-fn n5_rechaza_edicion_y_desactivacion_del_ultimo_root_sin_cambios_parciales() {
-    let ruta = ruta("usuarios-root");
-    let core = AppCore::abrir(&ruta).unwrap();
-    let id = root(&core);
-    let actor = sesion_root(&core);
-    let error = core.actualizar_usuario(
-        &actor,
-        id,
-        ActualizarUsuarioInput {
-            cedula: "ROOT-NUEVO".into(),
-            nombre: "Nombre Nuevo".into(),
-            rol: RolUsuario::Administrador,
-        },
-        false,
-    );
-    assert!(matches!(error, Err(UsuarioServiceError::UltimoRootActivo)));
-    assert!(matches!(
-        core.desactivar_usuario(&actor, id),
-        Err(UsuarioServiceError::UltimoRootActivo)
-    ));
-    let u = core
-        .buscar_usuarios(&actor, &FiltroUsuarios::default())
-        .unwrap()
-        .into_iter()
-        .find(|u| u.id == id)
-        .unwrap();
-    assert_eq!(u.cedula, "ROOT-1");
-    assert_eq!(u.nombre, "Root Inicial");
-    assert_eq!(u.rol, RolUsuario::Root);
-    assert!(u.activo);
     drop(core);
     fs::remove_file(ruta).unwrap();
 }

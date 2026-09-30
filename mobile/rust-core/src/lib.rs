@@ -45,14 +45,14 @@ use error::{FalloSincronizacion, convertir_fallo_sincronizacion, interno};
 pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
-    ContratistaResumen, DatosContratista, DatosUsuario, Empresa, EmpresaProveedor, EncargadoRuta,
+    ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta,
     IngresoActivoResumen, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso, ModoBusquedaActivos,
     MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
     PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
     RegistroIngresoProveedorActivoResumen, ResultadoAcceso, ResultadoIngresoRegistrado,
     ResultadoLogin, ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta, ResultadoSalidaRuta,
     ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen, SesionRealtimeNube,
-    SolicitudSalidaRuta, TipoIngreso, UsuarioResumen, UsuarioSesion, VehiculoRuta,
+    SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
 };
 
 /// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,

@@ -1,6 +1,5 @@
 use rusqlite::{Connection, Row, Transaction, TransactionBehavior, params};
 
-use crate::database::cola_salida;
 use crate::database::error::DatabaseError;
 use crate::database::identificador::generar_uuid_v4;
 use crate::models::usuario::{RolUsuario, Usuario};
@@ -91,10 +90,9 @@ fn rol_a_texto(rol: RolUsuario) -> &'static str {
     }
 }
 
-/// ROOT viaja por la nube igual que ADMINISTRADOR/OPERADOR (ver migración
-/// `permite_root_en_usuarios_globales`) -- un dispositivo nuevo, sin
-/// ningún usuario local todavía, necesita poder recibir su ROOT real al
-/// pegar el secreto, no sólo administradores/operadores.
+/// Los usuarios no se suben a la nube desde un equipo: Supabase sólo deja
+/// escribir `usuarios` a un administrador del panel web, y cada equipo los
+/// recibe al sincronizar el catálogo. Por eso no se encolan.
 fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, DatabaseError> {
     let uuid = generar_uuid_v4();
     connection.execute(
@@ -115,9 +113,7 @@ fn insertar_usuario(connection: &Connection, usuario: &Usuario) -> Result<i64, D
             i64::from(usuario.password_temporal_cacheada),
         ],
     )?;
-    let id = connection.last_insert_rowid();
-    cola_salida::encolar(connection, "usuario", &uuid, "crear")?;
-    Ok(id)
+    Ok(connection.last_insert_rowid())
 }
 
 fn buscar_usuario_en_transaccion(
@@ -170,13 +166,6 @@ fn persistir_usuario(transaction: &Connection, usuario: &Usuario) -> Result<(), 
             usuario.id,
         ],
     )?;
-    // ROOT también se encola -- ver el comentario de `insertar_usuario`.
-    let uuid: String = transaction.query_row(
-        "SELECT uuid FROM usuarios WHERE id = ?1",
-        params![usuario.id],
-        |row| row.get(0),
-    )?;
-    cola_salida::encolar(transaction, "usuario", &uuid, "actualizar")?;
     Ok(())
 }
 

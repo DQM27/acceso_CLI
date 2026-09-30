@@ -13,7 +13,6 @@ use control_acceso::{
         autenticacion_service::UsuarioSesion,
         contratista_service::DatosActualizacionContratista,
         error::{EmpresaServiceError, UsuarioServiceError},
-        usuario_service::{ActualizarUsuarioInput, CrearUsuarioInput},
     },
 };
 
@@ -27,7 +26,7 @@ fn sesion(id: i64, rol: RolUsuario) -> UsuarioSesion {
 }
 
 #[test]
-fn cambio_propio_exige_password_actual_y_funciona_para_operador() {
+fn cambio_propio_exige_password_actual_y_funciona() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
     let core = AppCore::new(connection);
@@ -40,27 +39,15 @@ fn cambio_propio_exige_password_actual_y_funciona_para_operador() {
     )
     .unwrap();
     let root = core.autenticar("ROOT-REAL", "password-root").unwrap();
-    core.crear_usuario(
-        &root,
-        CrearUsuarioInput {
-            cedula: "OPERADOR-REAL".into(),
-            nombre: "Operador".into(),
-            password: "password-viejo".into(),
-            rol: RolUsuario::Operador,
-            activo: true,
-        },
-    )
-    .unwrap();
-    let operador = core.autenticar("OPERADOR-REAL", "password-viejo").unwrap();
 
     assert!(matches!(
-        core.cambiar_mi_password(&operador, "incorrecta", "password-nuevo"),
+        core.cambiar_mi_password(&root, "incorrecta", "password-nuevo"),
         Err(UsuarioServiceError::PasswordActualIncorrecta)
     ));
-    core.cambiar_mi_password(&operador, "password-viejo", "password-nuevo")
+    core.cambiar_mi_password(&root, "password-root", "password-nuevo")
         .unwrap();
-    assert!(core.autenticar("OPERADOR-REAL", "password-viejo").is_err());
-    assert!(core.autenticar("OPERADOR-REAL", "password-nuevo").is_ok());
+    assert!(core.autenticar("ROOT-REAL", "password-root").is_err());
+    assert!(core.autenticar("ROOT-REAL", "password-nuevo").is_ok());
 }
 
 fn base() -> AppCore {
@@ -85,7 +72,7 @@ fn base() -> AppCore {
 
 /// Aplanado de roles (ver docs/decisiones-tecnicas.md, 2026-09-11):
 /// `RolUsuario::puede()` devuelve `true` siempre, así que un OPERADOR con
-/// sesión válida SÍ puede hacer las cuatro operaciones de abajo -- lo único
+/// sesión válida SÍ puede hacer las tres operaciones de abajo -- lo único
 /// que sigue rechazando algo es que la sesión sea real y esté activa
 /// (`verificar_actor_activo`), no el rol en sí. Este test documentaba la
 /// restricción vieja; se actualiza para reflejar la real en vez de quedar
@@ -96,17 +83,6 @@ fn operador_con_sesion_activa_puede_invocar_comandos_antes_administrativos() {
     let operador = sesion(3, RolUsuario::Operador);
 
     core.desactivar_empresa(&operador, 1).unwrap();
-    core.crear_usuario(
-        &operador,
-        CrearUsuarioInput {
-            cedula: "NUEVO".into(),
-            nombre: "Nuevo".into(),
-            password: "password-nuevo".into(),
-            rol: RolUsuario::Operador,
-            activo: true,
-        },
-    )
-    .unwrap();
     core.buscar_auditoria(&operador, &FiltroAuditoria::default())
         .unwrap();
 
@@ -184,7 +160,7 @@ fn el_rol_real_se_resuelve_por_id_no_por_lo_que_declara_la_sesion() {
 }
 
 #[test]
-fn administrador_no_recibe_roots_y_tampoco_puede_tocar_su_id_a_mano() {
+fn administrador_no_recibe_roots_al_buscar_usuarios() {
     let core = base();
     let administrador = sesion(2, RolUsuario::Administrador);
     let usuarios = core
@@ -195,28 +171,6 @@ fn administrador_no_recibe_roots_y_tampoco_puede_tocar_su_id_a_mano() {
             .iter()
             .all(|usuario| usuario.rol != RolUsuario::Root)
     );
-
-    assert!(matches!(
-        core.actualizar_usuario(
-            &administrador,
-            1,
-            ActualizarUsuarioInput {
-                cedula: "ROOT-MANIPULADO".into(),
-                nombre: "Root".into(),
-                rol: RolUsuario::Root,
-            },
-            true,
-        ),
-        Err(UsuarioServiceError::OperacionNoAutorizada)
-    ));
-    assert!(matches!(
-        core.desactivar_usuario(&administrador, 1),
-        Err(UsuarioServiceError::OperacionNoAutorizada)
-    ));
-    assert!(matches!(
-        core.cambiar_password_usuario(&administrador, 1, "password-nuevo"),
-        Err(UsuarioServiceError::OperacionNoAutorizada)
-    ));
 }
 
 #[test]

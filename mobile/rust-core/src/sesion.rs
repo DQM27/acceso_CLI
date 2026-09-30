@@ -1,13 +1,9 @@
-//! Inicio y cierre de sesión (local y contra Supabase Auth) y gestión de usuarios.
+//! Inicio y cierre de sesión (local y contra Supabase Auth). Los usuarios
+//! se gestionan sólo desde el panel web.
 
-use control_acceso::database::queries::usuarios::FiltroUsuarios as FiltroUsuariosNucleo;
 use control_acceso::services::error::AutenticacionError as AutenticacionErrorNucleo;
-use control_acceso::services::usuario_service::CrearUsuarioInput as CrearUsuarioInputNucleo;
 
-use crate::{
-    DatosUsuario, Nucleo, NucleoError, ResultadoLogin, SesionSupabaseCacheada,
-    TOPE_PRESENCIA_SUPABASE, UsuarioResumen,
-};
+use crate::{Nucleo, NucleoError, ResultadoLogin, SesionSupabaseCacheada, TOPE_PRESENCIA_SUPABASE};
 
 #[uniffi::export]
 impl Nucleo {
@@ -158,41 +154,6 @@ impl Nucleo {
     pub fn cerrar_sesion(&self) {
         *self.sesion_lock() = None;
         *self.lock_sesion_supabase() = None;
-    }
-
-    /// Sólo Root/Administrador — ver el doc-comment de `UsuarioResumen`.
-    pub fn listar_usuarios(&self, texto: String) -> Result<Vec<UsuarioResumen>, NucleoError> {
-        let actor = self.actor_autenticado()?;
-        let core = self.core_lock();
-        let texto_normalizado = texto.trim();
-        let filtro = FiltroUsuariosNucleo {
-            texto: (!texto_normalizado.is_empty()).then(|| texto_normalizado.to_string()),
-            ..Default::default()
-        };
-        Ok(core
-            .buscar_usuarios(&actor, &filtro)?
-            .into_iter()
-            .map(Into::into)
-            .collect())
-    }
-
-    /// Sólo Root/Administrador — Rust ya rechaza a un actor sin
-    /// `Operacion::GestionarUsuarios` con `OperacionNoAutorizada`
-    /// (`verificar_creacion_usuario`), y sólo Root puede crear otro Root
-    /// (`puede_gestionar_usuario`). Kotlin oculta el menú para Operador
-    /// como atajo de UX, no como el control real.
-    pub fn crear_usuario(&self, datos: DatosUsuario) -> Result<i64, NucleoError> {
-        let actor = self.actor_autenticado()?;
-        Ok(self.core_lock().crear_usuario(
-            &actor,
-            CrearUsuarioInputNucleo {
-                cedula: datos.cedula,
-                nombre: datos.nombre,
-                password: datos.password,
-                rol: datos.rol.into(),
-                activo: datos.activo,
-            },
-        )?)
     }
 }
 
