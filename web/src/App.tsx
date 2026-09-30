@@ -128,6 +128,11 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
     });
   }, [seccionActual]);
 
+  useEffect(() => {
+    const etiqueta = SECCIONES.find((s) => s.id === seccionActual)?.etiqueta;
+    document.title = etiqueta ? `${etiqueta} — Panel de Acceso` : "Panel de Acceso";
+  }, [seccionActual]);
+
   function alternarColapsado() {
     setColapsado((actual) => {
       const siguiente = !actual;
@@ -138,8 +143,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
 
   return (
     <SesionProvider value={null}>
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+      <div className="flex h-full flex-col">
+        <div className="flex flex-1 min-h-0">
           {menuMovilAbierto && (
             <div className="shell-sidebar-velo" onClick={() => setMenuMovilAbierto(false)} />
           )}
@@ -154,7 +159,7 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             abiertoEnMovil={menuMovilAbierto}
           />
 
-          <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+          <main className="flex min-w-0 flex-1 flex-col">
             <button
               type="button"
               className="boton-menu-movil"
@@ -169,12 +174,7 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             {visitadas.map((id) => (
               <div
                 key={id}
-                style={{
-                  display: id === seccionActual ? "flex" : "none",
-                  flexDirection: "column",
-                  flex: 1,
-                  minHeight: 0,
-                }}
+                className={`min-h-0 flex-1 flex-col ${id === seccionActual ? "flex" : "hidden"}`}
               >
                 {/* Suspense por sección, no uno compartido -- así la
                     primera visita a una sección NUEVA (bajando su chunk)

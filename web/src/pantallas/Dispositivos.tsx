@@ -4,6 +4,7 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
+import EncabezadoPagina from "../componentes/EncabezadoPagina";
 import CodigoVinculacionEmitido from "../componentes/CodigoVinculacionEmitido";
 import { TEXTO_CREDENCIAL, TEXTO_EVENTO, tiempoRestante } from "../componentes/CodigoVinculacion.logica";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
@@ -392,14 +393,11 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         sortable: false,
         filter: false,
         cellRenderer: ({ data }: { data: FilaDispositivo }) => (
-          <div
-            style={{ display: "flex", gap: "0.4rem", justifyContent: "center", alignItems: "center", height: "100%" }}
-          >
+          <div className="flex h-full items-center justify-center gap-[0.4rem]">
             {!data.revoked_at && (
               <button
                 type="button"
-                className="boton"
-                style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+                className="boton px-[0.6rem] py-[0.2rem] text-[0.8rem]"
                 onClick={() => alRetirar(data)}
               >
                 Retirar
@@ -407,8 +405,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
             )}
             <button
               type="button"
-              className="boton"
-              style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
+              className="boton px-[0.6rem] py-[0.2rem] text-[0.8rem]"
               onClick={() => alEliminar(data)}
             >
               Eliminar
@@ -421,9 +418,13 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        <div style={{ flex: 1, minHeight: 0 }}>
+    <div className="flex h-full flex-col">
+      <EncabezadoPagina
+        titulo="Unidades y dispositivos"
+        descripcion="Equipos autorizados a sincronizar con cada unidad operativa."
+      />
+      <div className="pantalla-cuerpo min-h-0 flex-1">
+        <div className="min-h-0 flex-1">
           <Tabla<FilaDispositivo>
             id="dispositivos"
             columnas={columnas}
@@ -436,13 +437,13 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
             }
           />
         </div>
-        {cargando && filas.length === 0 && <p style={{ color: "var(--muted)" }}>Cargando…</p>}
-        <details style={{ marginTop: "0.75rem" }}>
-          <summary style={{ cursor: "pointer" }}>
+        {cargando && filas.length === 0 && <p className="text-muted">Cargando…</p>}
+        <details className="mt-3">
+          <summary className="cursor-pointer">
             Intentos y alertas ({eventos.length})
           </summary>
           {eventos.length === 0 ? (
-            <p style={{ color: "var(--muted)" }}>Sin intentos rechazados ni alertas recientes.</p>
+            <p className="text-muted">Sin intentos rechazados ni alertas recientes.</p>
           ) : (
             <table className="tabla-eventos">
               <thead>
@@ -470,17 +471,14 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
 
       {modalAbierto && (
         <Modal titulo="Nuevo dispositivo" onCerrar={cerrarModal}>
-            <form
-              onSubmit={alEnviarFormulario}
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
+            <form onSubmit={alEnviarFormulario} className="flex flex-col gap-4">
               <label className="campo">
                 Unidad operativa
-                <div style={{ display: "flex", gap: "0.5rem" }}>
+                <div className="flex gap-2">
                   <select
                     required
                     autoFocus
-                    style={{ flex: 1 }}
+                    className="flex-1"
                     value={sitioId}
                     disabled={creando}
                     onChange={(evento) => setSitioId(evento.target.value)}
@@ -530,7 +528,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
                 </p>
               )}
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+              <div className="flex justify-end gap-2">
                 <button type="button" className="boton" disabled={creando} onClick={cerrarModal}>
                   Cancelar
                 </button>
@@ -554,7 +552,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
 
       {modalSitioAbierto && (
         <Modal titulo="Nueva unidad operativa" onCerrar={cerrarModalSitio}>
-          <form onSubmit={alCrearSitio} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <form onSubmit={alCrearSitio} className="flex flex-col gap-3">
             <label className="campo">
               Nombre
               <input
@@ -573,7 +571,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
               </p>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <div className="flex justify-end gap-2">
               <button type="button" className="boton" disabled={creandoSitio} onClick={cerrarModalSitio}>
                 Cancelar
               </button>
