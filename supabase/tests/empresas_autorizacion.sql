@@ -28,25 +28,29 @@ select set_config('diagnostico.jwt_a', (select id::text from public.dispositivos
 
 set local role authenticated;
 
--- Crear: acotado al propio sitio.
+-- Crear: cualquier dispositivo vinculado (catálogo global, sin unidad).
 select set_config('request.jwt.claims',
   json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_a'), 'huella', 'diag-huella-jwt-a', 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
   true);
 do $$
 begin
-  insert into public.empresas (id, sitio_id, dispositivo_origen_id, nombre)
-  values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico empresa A');
+  insert into public.empresas (id, dispositivo_origen_id, nombre)
+  values (gen_random_uuid(), current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico empresa A');
   if not found then
-    raise exception 'Un dispositivo no pudo crear una empresa en su propio sitio';
+    raise exception 'Un dispositivo vinculado no pudo crear una empresa';
   end if;
 end $$;
 
+-- Una sesión sin dispositivo ni admin_global NO puede crear.
+select set_config('request.jwt.claims',
+  json_build_object('role', 'authenticated', 'email', 'diagnostico-sin-permiso@example.com')::text,
+  true);
 do $$
 begin
   begin
-    insert into public.empresas (id, sitio_id, dispositivo_origen_id, nombre)
-    values (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico empresa cruzada');
-    raise exception 'Un dispositivo del sitio A pudo crear una empresa para el sitio B';
+    insert into public.empresas (id, dispositivo_origen_id, nombre)
+    values (gen_random_uuid(), null, 'Diagnóstico empresa sin permiso');
+    raise exception 'Una sesión sin dispositivo ni admin_global pudo crear una empresa';
   exception
     when insufficient_privilege then null;
   end;

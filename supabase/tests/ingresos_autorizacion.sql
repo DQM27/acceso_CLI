@@ -16,8 +16,8 @@ insert into public.dispositivos (id, sitio_id, tipo, etiqueta, clave_publica_jwk
 select set_config('diagnostico.dispositivo_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico PC A'), true),
        set_config('diagnostico.dispositivo_visor', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico visor A'), true);
 
-insert into public.contratistas (id, sitio_id, dispositivo_origen_id, nombre) values
-  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico contratista');
+insert into public.contratistas (id, dispositivo_origen_id, nombre) values
+  (gen_random_uuid(), current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico contratista');
 select set_config('diagnostico.contratista_a', (select id::text from public.contratistas where nombre = 'Diagnóstico contratista'), true);
 
 insert into public.administradores_panel (correo) values (current_setting('diagnostico.correo_admin'));

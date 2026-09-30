@@ -80,20 +80,35 @@ pub struct ResumenDrenado {
     pub conflictos_gafete: Vec<ConflictoGafeteActivo>,
 }
 
-/// Un ingreso que este dispositivo registró con gafete, pero cuyo envío a
-/// la nube fue rechazado porque otro dispositivo del MISMO sitio ya tiene
-/// ese número activo -- el índice único parcial `ingresos_gafete_activo_sitio_idx`
-/// (ver la migración) lo detecta en el momento del `POST`, no en una
-/// consulta aparte. A diferencia de [`ConflictoIngresoActivo`] (simétrico:
-/// ambos lados "tienen razón" hasta que alguien decide), acá Postgres ya
-/// decidió -- el ingreso local de ESTE dispositivo es el que no quedó
-/// válido, así que el mensaje puede decirlo con esa certeza.
+/// Un movimiento con gafete (ingreso de contratista, ingreso de proveedor o
+/// préstamo de gafete provisional KOF) que este dispositivo registró, pero
+/// cuyo envío a la nube fue rechazado porque otro dispositivo del MISMO
+/// sitio ya tiene ese número activo -- el índice único parcial de "gafete
+/// en uso" de cada tabla (ver las migraciones) lo detecta en el momento del
+/// `POST`, no en una consulta aparte. A diferencia de
+/// [`ConflictoIngresoActivo`] (simétrico: ambos lados "tienen razón" hasta
+/// que alguien decide), acá Postgres ya decidió -- el movimiento local de
+/// ESTE dispositivo es el que no quedó válido, así que el mensaje puede
+/// decirlo con esa certeza.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ConflictoGafeteActivo {
-    pub contratista_nombre: String,
+    pub tipo: TipoMovimientoGafete,
+    /// Contratista, proveedor o encargado de ruta (KOF).
+    pub nombre: String,
     pub gafete_numero: i64,
-    pub fecha_hora_ingreso: String,
+    /// Hora de entrada (contratista, proveedor) o de entrega (KOF).
+    pub fecha_hora: String,
+}
+
+/// Qué movimiento entregó el gafete en conflicto.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum TipoMovimientoGafete {
+    Contratista,
+    Proveedor,
+    ProvisionalKof,
 }
 
 #[derive(Debug, thiserror::Error)]

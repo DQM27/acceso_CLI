@@ -6,9 +6,8 @@ import { supabase } from "../lib/supabase";
  * "Modelo de datos"): un contratista no pertenece a un sitio -- puede
  * entrar en cualquier unidad operativa salvo que se le niegue el acceso, y
  * esa baja se ve en TODOS los sitios a la vez (el aviso en vivo sale por el
- * canal de todas las unidades, ver `catalogo_global_sin_unidad`). `sitio_id`
- * admite null y el panel no lo usa: sólo queda porque las apps instaladas
- * todavía lo mandan al subir un alta.
+ * canal de todas las unidades). La tabla no tiene `sitio_id`: ver la
+ * migración `catalogo_global_sin_unidad`.
  * RLS: `admin_global` (`es_admin_global()`) O cualquier dispositivo
  * autenticado (JWT con `sitio_id` -- móvil/escritorio de cualquier sitio,
  * necesario para que `recibir_catalogo_del_sitio` sincronice el catálogo

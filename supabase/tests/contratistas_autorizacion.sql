@@ -1,7 +1,8 @@
 -- Ejecutar en una sola sesión. Todas las filas de prueba se revierten.
--- Dos sitios/dispositivos temporales (no dependen de datos reales) para
--- probar el aislamiento por sitio en INSERT y el acceso global de
--- admin_global en SELECT/UPDATE.
+-- Dos sitios/dispositivos temporales (no dependen de datos reales). El
+-- catálogo de contratistas es global (migración `catalogo_global_sin_unidad`):
+-- cualquier equipo vinculado crea, lee y actualiza; una sesión sin equipo ni
+-- admin_global no puede nada.
 begin;
 
 insert into public.sitios (id, nombre) values
@@ -33,26 +34,29 @@ select set_config('diagnostico.jwt_a', (select id::text from public.dispositivos
 
 set local role authenticated;
 
--- Un dispositivo del sitio A puede crear un contratista EN su propio sitio.
+-- Un dispositivo vinculado puede crear un contratista (sin unidad: es global).
 select set_config('request.jwt.claims',
   json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_a'), 'huella', 'diag-huella-jwt-a', 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
   true);
 do $$
 begin
-  insert into public.contratistas (id, sitio_id, dispositivo_origen_id, nombre)
-  values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico contratista A');
+  insert into public.contratistas (id, dispositivo_origen_id, nombre)
+  values (gen_random_uuid(), current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico contratista A');
   if not found then
-    raise exception 'Un dispositivo no pudo crear un contratista en su propio sitio';
+    raise exception 'Un dispositivo vinculado no pudo crear un contratista';
   end if;
 end $$;
 
--- Pero NO puede crear un contratista a nombre de otro sitio.
+-- Una sesión sin dispositivo ni admin_global NO puede crear.
+select set_config('request.jwt.claims',
+  json_build_object('role', 'authenticated', 'email', 'diagnostico-sin-permiso@example.com')::text,
+  true);
 do $$
 begin
   begin
-    insert into public.contratistas (id, sitio_id, dispositivo_origen_id, nombre)
-    values (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico contratista cruzado');
-    raise exception 'Un dispositivo del sitio A pudo crear un contratista para el sitio B';
+    insert into public.contratistas (id, dispositivo_origen_id, nombre)
+    values (gen_random_uuid(), null, 'Diagnóstico contratista sin permiso');
+    raise exception 'Una sesión sin dispositivo ni admin_global pudo crear un contratista';
   exception
     when insufficient_privilege then null;
   end;

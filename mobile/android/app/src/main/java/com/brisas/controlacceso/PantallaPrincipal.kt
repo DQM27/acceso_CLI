@@ -298,16 +298,15 @@ fun PantallaPrincipal(
 
         // A diferencia del de arriba (simétrico: ambos lados "tienen
         // razón" hasta que alguien decide), acá Postgres ya decidió -- el
-        // ingreso local de ESTE dispositivo es el que no quedó válido en
-        // la nube, así que el aviso lo dice con esa certeza. Sólo
-        // informativo por ahora (fase 3, PR #62): sin botón de acción
-        // directa -- se deja para una vuelta aparte si hace falta, una
-        // vez visto el comportamiento real.
+        // movimiento local de ESTE dispositivo (ingreso de contratista o
+        // de proveedor, o préstamo KOF) es el que no quedó válido en la
+        // nube, así que el aviso lo dice con esa certeza. Sólo informativo
+        // por ahora (fase 3, PR #62): sin botón de acción directa -- se
+        // deja para una vuelta aparte si hace falta, una vez visto el
+        // comportamiento real.
         for (conflicto in conflictosGafete) {
             Text(
-                "El ingreso de ${conflicto.contratistaNombre} con gafete ${conflicto.gafeteNumero} " +
-                    "(${textoFechaHora(conflicto.fechaHoraIngreso)}) no quedó registrado en la nube — " +
-                    "otro dispositivo de este sitio ya lo tiene asignado.",
+                mensajeConflictoGafete(conflicto, textoFechaHora(conflicto.fechaHora)),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),

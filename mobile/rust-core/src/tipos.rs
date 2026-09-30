@@ -518,17 +518,40 @@ pub struct ResumenSincronizacion {
 /// Espejo de `control_acceso::nube::ConflictoGafeteActivo`.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ConflictoGafeteActivo {
-    pub contratista_nombre: String,
+    pub tipo: TipoMovimientoGafete,
+    /// Contratista, proveedor o encargado de ruta (KOF).
+    pub nombre: String,
     pub gafete_numero: i64,
-    pub fecha_hora_ingreso: String,
+    /// Hora de entrada, o de entrega en KOF.
+    pub fecha_hora: String,
+}
+
+/// Espejo de `control_acceso::nube::TipoMovimientoGafete`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum TipoMovimientoGafete {
+    Contratista,
+    Proveedor,
+    ProvisionalKof,
+}
+
+impl From<control_acceso::nube::TipoMovimientoGafete> for TipoMovimientoGafete {
+    fn from(tipo: control_acceso::nube::TipoMovimientoGafete) -> Self {
+        use control_acceso::nube::TipoMovimientoGafete as Nucleo;
+        match tipo {
+            Nucleo::Contratista => Self::Contratista,
+            Nucleo::Proveedor => Self::Proveedor,
+            Nucleo::ProvisionalKof => Self::ProvisionalKof,
+        }
+    }
 }
 
 impl From<control_acceso::nube::ConflictoGafeteActivo> for ConflictoGafeteActivo {
     fn from(conflicto: control_acceso::nube::ConflictoGafeteActivo) -> Self {
         Self {
-            contratista_nombre: conflicto.contratista_nombre,
+            tipo: conflicto.tipo.into(),
+            nombre: conflicto.nombre,
             gafete_numero: conflicto.gafete_numero,
-            fecha_hora_ingreso: conflicto.fecha_hora_ingreso,
+            fecha_hora: conflicto.fecha_hora,
         }
     }
 }

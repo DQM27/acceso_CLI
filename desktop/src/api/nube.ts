@@ -79,10 +79,16 @@ export interface ConflictoIngresoProveedorActivo {
   sitio_conflicto: string;
 }
 
+/** Qué movimiento entregó el gafete en conflicto (`nube::TipoMovimientoGafete`). */
+export type TipoMovimientoGafete = "contratista" | "proveedor" | "provisional_kof";
+
 export interface ConflictoGafeteActivo {
-  contratista_nombre: string;
+  tipo: TipoMovimientoGafete;
+  /** Contratista, proveedor o encargado de ruta (KOF). */
+  nombre: string;
   gafete_numero: number;
-  fecha_hora_ingreso: string;
+  /** Hora de entrada, o de entrega en KOF. */
+  fecha_hora: string;
 }
 
 export interface SesionRealtimeNube {

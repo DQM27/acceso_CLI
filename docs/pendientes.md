@@ -138,16 +138,17 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
     escritorio, ambos contra staging con telemetría). Sólo instalaciones nuevas.
   - [ ] Borrar de staging las Edge Functions `admin-suspend-device` y
     `admin-crear-codigo-vinculacion` (ya no están en el repo).
-- [ ] **Catálogo global sin unidad: terminar en las apps.** Desde
-  `catalogo_global_sin_unidad` (2026-09-30) contratistas y empresas no dependen de
-  una unidad: `sitio_id` admite null y el aviso en vivo llega a todas las unidades.
-  Falta que escritorio y móvil dejen de mandar `sitio_id` al subir un alta
-  (`cola.rs`); cuando ninguna app en uso lo mande, borrar la columna.
-- [ ] **"Gafete en uso" único en proveedores y KOF.** `ingresos` ya lo tiene
-  (`ingresos_gafete_activo_sitio_idx`) y la cola de salida sabe resolver ese choque
-  (`es_conflicto_gafete_activo`). Para `ingresos_proveedor` y
-  `prestamos_gafete_provisional` primero hay que enseñarle a la cola ese conflicto;
-  si no, la fila reintenta hasta quedar fallida.
+- [x] **Catálogo global sin unidad** (2026-09-30, `catalogo_global_sin_unidad`).
+  `contratistas` y `empresas` ya no tienen `sitio_id` (en Supabase, apps y panel) y
+  su aviso en vivo llega a todas las unidades. Las tablas que sí son de una unidad
+  (ingresos, proveedores, KOF, gafetes, empresas de proveedores) no cambian. Las
+  apps anteriores a esta entrega no pueden subir altas de contratistas: los builds
+  de diagnóstico instalados en staging hay que regenerarlos.
+- [x] **Bloqueo cruzado de gafete en proveedores y KOF** (2026-09-30,
+  `gafete_en_uso_proveedor_y_kof`). Mismo esquema que contratistas: índice único de
+  "gafete en uso" por unidad en `ingresos_proveedor` y `prestamos_gafete_provisional`;
+  la cola marca el choque como conflicto y escritorio y Android avisan al operador
+  con el tipo de movimiento (`ConflictoGafeteActivo.tipo`).
 - [ ] **Versiones de migración desalineadas con staging.** Las migraciones aplicadas
   con el MCP quedaron registradas con la hora de aplicación, no con la del archivo.
   Alinear `supabase_migrations.schema_migrations` antes de usar `supabase db push`.

@@ -10,17 +10,22 @@
 --    panel (que no tiene unidad) tenía que inventar una.
 --
 -- Desde ahora:
--- - `sitio_id` admite null y el panel crea sin unidad.
+-- - `contratistas` y `empresas` ya no tienen `sitio_id`.
 -- - El aviso en vivo de contratistas y empresas llega a TODAS las unidades.
 -- - Cualquier equipo vinculado puede dar de alta, sin atarlo a su unidad.
 --
--- La columna no se borra todavía: las apps instaladas la mandan al subir un
--- alta (`cola.rs`) y PostgREST rechaza columnas que no existen. Ninguna app
--- la lee (`catalogo.rs` no la pide). Se podrá borrar cuando todas las apps
--- en uso dejen de mandarla.
+-- `sitio_id` SIGUE en las tablas que sí son de una unidad: `ingresos`,
+-- `ingresos_proveedor`, `prestamos_gafete_provisional`, `empresas_proveedor`
+-- y `gafetes`.
+--
+-- Las apps dejaron de mandar la columna en la misma entrega (`cola.rs`,
+-- `construir_cuerpo_contratista`/`construir_cuerpo_empresa`) y nunca la
+-- leyeron (`catalogo.rs`). Una app anterior a esta entrega fallaría al subir
+-- un alta; no hay ninguna en uso porque todos los equipos se reinstalan con
+-- el registro de dispositivos por código.
 
-alter table public.contratistas alter column sitio_id drop not null;
-alter table public.empresas alter column sitio_id drop not null;
+alter table public.contratistas drop column sitio_id;
+alter table public.empresas drop column sitio_id;
 
 -- Aviso en vivo a todas las unidades ----------------------------------------
 
@@ -125,8 +130,8 @@ begin
     return v_empresa;
   end if;
 
-  insert into public.empresas (id, sitio_id, dispositivo_origen_id, nombre, activa)
-  values (gen_random_uuid(), null, null, v_nombre, true)
+  insert into public.empresas (id, dispositivo_origen_id, nombre, activa)
+  values (gen_random_uuid(), null, v_nombre, true)
   returning * into v_empresa;
   return v_empresa;
 end;
@@ -212,10 +217,10 @@ begin
 
   -- `id` no tiene valor por defecto: cada equipo genera el suyo, y el panel también.
   insert into public.contratistas (
-    id, sitio_id, dispositivo_origen_id, nombre, identificacion, activo,
+    id, dispositivo_origen_id, nombre, identificacion, activo,
     empresa_id, empresa_nombre, tipo_ingreso, fecha_vencimiento_praind, es_personal_ruta
   ) values (
-    gen_random_uuid(), null, null, v_nombre, v_cedula, coalesce(p_con_acceso, true),
+    gen_random_uuid(), null, v_nombre, v_cedula, coalesce(p_con_acceso, true),
     v_empresa.id, v_empresa.nombre, p_tipo_ingreso, p_fecha_vencimiento_praind, false
   )
   returning * into v_fila;

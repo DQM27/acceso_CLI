@@ -78,6 +78,7 @@ import { EVENTO_CAMBIO_EN_VIVO } from "./eventosNube";
 import { MENSAJE_EXPULSION } from "./expulsionNube";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { registrarPantalla } from "./telemetria";
+import { mensajeConflictoGafete } from "./conflictoGafete";
 import { textoHora } from "./tiempo";
 import { SesionProvider } from "./contexto/SesionContexto";
 import {
@@ -563,9 +564,7 @@ function Shell({
     // una vuelta aparte si hace falta, una vez visto el comportamiento
     // real.
     for (const conflicto of resumen.conflictos_gafete) {
-      toast.warning(
-        `El ingreso de ${conflicto.contratista_nombre} con gafete ${conflicto.gafete_numero} (${textoHora(conflicto.fecha_hora_ingreso)}) no quedó registrado en la nube — otro dispositivo de este sitio ya lo tiene asignado.`,
-      );
+      toast.warning(mensajeConflictoGafete(conflicto, textoHora(conflicto.fecha_hora)));
     }
     return false;
   }

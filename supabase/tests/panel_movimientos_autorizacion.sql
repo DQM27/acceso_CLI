@@ -14,8 +14,8 @@ insert into public.dispositivos (id, sitio_id, tipo, etiqueta, clave_publica_jwk
 values ('cccccccc-0000-0000-0000-00000000c001', 'aaaaaaaa-0000-0000-0000-00000000a001',
         'pc', 'Diagnóstico panel', '{"kty":"EC"}', 'diag-huella-panel');
 
-insert into public.contratistas (id, sitio_id, dispositivo_origen_id, nombre)
-values ('dddddddd-0000-0000-0000-00000000d001', 'aaaaaaaa-0000-0000-0000-00000000a001',
+insert into public.contratistas (id, dispositivo_origen_id, nombre)
+values ('dddddddd-0000-0000-0000-00000000d001',
         'cccccccc-0000-0000-0000-00000000c001', 'José Ñandú Prueba');
 
 insert into public.ingresos (id, sitio_id, dispositivo_entrada_id, contratista_id,

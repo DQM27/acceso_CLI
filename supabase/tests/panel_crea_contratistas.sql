@@ -43,8 +43,8 @@ values (current_setting('diagnostico.correo_admin'));
 
 insert into public.sitios (id, nombre)
 values ('aaaaaaaa-0000-0000-0000-00000000a002', 'Unidad de prueba contratistas');
-insert into public.empresas (id, sitio_id, dispositivo_origen_id, nombre, activa)
-values ('eeeeeeee-0000-0000-0000-00000000e001', 'aaaaaaaa-0000-0000-0000-00000000a002', null, 'EMPRESA DE PRUEBA', true);
+insert into public.empresas (id, dispositivo_origen_id, nombre, activa)
+values ('eeeeeeee-0000-0000-0000-00000000e001', null, 'EMPRESA DE PRUEBA', true);
 
 -- 2. Quien no es administrador del panel no puede crear nada.
 set local role authenticated;
@@ -84,7 +84,6 @@ begin
   if fila.activo then raise exception 'debía quedar con el acceso denegado'; end if;
   if fila.es_personal_ruta is distinct from false then raise exception 'personal de ruta debía ser false'; end if;
   if fila.dispositivo_origen_id is not null then raise exception 'el panel no tiene equipo de origen'; end if;
-  if fila.sitio_id is not null then raise exception 'un contratista es global, no de una unidad'; end if;
   if fila.empresa_nombre <> 'EMPRESA DE PRUEBA' then raise exception 'empresa_nombre: %', fila.empresa_nombre; end if;
 
   -- El mismo documento escrito de otra forma es la misma persona.
@@ -155,7 +154,6 @@ begin
   -- Empresa: en mayúsculas y sin duplicar aunque cambien tildes o mayúsculas.
   empresa := public.panel_crear_empresa('  nueva   compañía ');
   if empresa.nombre <> 'NUEVA COMPAÑÍA' then raise exception 'nombre de empresa: %', empresa.nombre; end if;
-  if empresa.sitio_id is not null then raise exception 'una empresa es global, no de una unidad'; end if;
   if (public.panel_crear_empresa('NUEVA COMPANIA')).id <> empresa.id then
     raise exception 'la misma empresa se duplicó';
   end if;

@@ -5195,11 +5195,19 @@ public object FfiConverterTypeConfiguracionEstabilizador: FfiConverterRustBuffer
  * Espejo de `control_acceso::nube::ConflictoGafeteActivo`.
  */
 data class ConflictoGafeteActivo (
-    var `contratistaNombre`: kotlin.String
+    var `tipo`: TipoMovimientoGafete
+    , 
+    /**
+     * Contratista, proveedor o encargado de ruta (KOF).
+     */
+    var `nombre`: kotlin.String
     , 
     var `gafeteNumero`: kotlin.Long
     , 
-    var `fechaHoraIngreso`: kotlin.String
+    /**
+     * Hora de entrada, o de entrega en KOF.
+     */
+    var `fechaHora`: kotlin.String
     
 ){
     
@@ -5216,6 +5224,7 @@ data class ConflictoGafeteActivo (
 public object FfiConverterTypeConflictoGafeteActivo: FfiConverterRustBuffer<ConflictoGafeteActivo> {
     override fun read(buf: ByteBuffer): ConflictoGafeteActivo {
         return ConflictoGafeteActivo(
+            FfiConverterTypeTipoMovimientoGafete.read(buf),
             FfiConverterString.read(buf),
             FfiConverterLong.read(buf),
             FfiConverterString.read(buf),
@@ -5223,15 +5232,17 @@ public object FfiConverterTypeConflictoGafeteActivo: FfiConverterRustBuffer<Conf
     }
 
     override fun allocationSize(value: ConflictoGafeteActivo) = (
-            FfiConverterString.allocationSize(value.`contratistaNombre`) +
+            FfiConverterTypeTipoMovimientoGafete.allocationSize(value.`tipo`) +
+            FfiConverterString.allocationSize(value.`nombre`) +
             FfiConverterLong.allocationSize(value.`gafeteNumero`) +
-            FfiConverterString.allocationSize(value.`fechaHoraIngreso`)
+            FfiConverterString.allocationSize(value.`fechaHora`)
     )
 
     override fun write(value: ConflictoGafeteActivo, buf: ByteBuffer) {
-            FfiConverterString.write(value.`contratistaNombre`, buf)
+            FfiConverterTypeTipoMovimientoGafete.write(value.`tipo`, buf)
+            FfiConverterString.write(value.`nombre`, buf)
             FfiConverterLong.write(value.`gafeteNumero`, buf)
-            FfiConverterString.write(value.`fechaHoraIngreso`, buf)
+            FfiConverterString.write(value.`fechaHora`, buf)
     }
 }
 
@@ -8803,6 +8814,44 @@ public object FfiConverterTypeTipoIngreso: FfiConverterRustBuffer<TipoIngreso> {
     override fun allocationSize(value: TipoIngreso) = 4UL
 
     override fun write(value: TipoIngreso, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
+ * Espejo de `control_acceso::nube::TipoMovimientoGafete`.
+ */
+
+enum class TipoMovimientoGafete {
+    
+    CONTRATISTA,
+    PROVEEDOR,
+    PROVISIONAL_KOF;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTipoMovimientoGafete: FfiConverterRustBuffer<TipoMovimientoGafete> {
+    override fun read(buf: ByteBuffer) = try {
+        TipoMovimientoGafete.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: TipoMovimientoGafete) = 4UL
+
+    override fun write(value: TipoMovimientoGafete, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
