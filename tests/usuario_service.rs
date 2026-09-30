@@ -1,18 +1,15 @@
-//! `UsuarioService` en un equipo: el arranque inicial (ROOT), las búsquedas y
-//! el cambio de la contraseña propia. El alta y la edición de usuarios se
-//! hacen sólo desde el panel web.
+//! `UsuarioService` en un equipo: el arranque inicial (ROOT) y las
+//! búsquedas. El alta y la edición de usuarios se hacen sólo desde el panel
+//! web, y la contraseña se cambia sólo en escritorio, en Supabase Auth.
 
-use chrono::Utc;
 use rusqlite::Connection;
 
-use control_acceso::database::queries::auditoria::SqliteAuditoria;
 use control_acceso::database::repositories::usuario_repository::{
     SqliteUsuarioRepository, UsuarioRepository,
 };
 use control_acceso::database::schema::initialize_database;
 use control_acceso::models::usuario::RolUsuario;
-use control_acceso::services::autenticacion_service::AutenticacionService;
-use control_acceso::services::error::{AutenticacionError, UsuarioServiceError};
+use control_acceso::services::error::UsuarioServiceError;
 use control_acceso::services::password::generar_hash;
 use control_acceso::services::usuario_service::{CrearRootInicialInput, UsuarioService};
 
@@ -35,24 +32,6 @@ fn inicializar(connection: &Connection) -> i64 {
     UsuarioService::new(&repository)
         .crear_root_inicial(root_inicial("ROOT1", "Usuario Root", "password1"))
         .unwrap()
-}
-
-/// Cambio de la contraseña propia de `id`, auditado.
-fn cambiar_propia(
-    connection: &Connection,
-    id: i64,
-    actual: &str,
-    nueva: &str,
-) -> Result<(), UsuarioServiceError> {
-    let repository = SqliteUsuarioRepository::new(connection);
-    UsuarioService::new(&repository).cambiar_password_propio_auditado(
-        id,
-        actual,
-        nueva,
-        "Usuario Root",
-        Utc::now(),
-        &SqliteAuditoria::new(connection),
-    )
 }
 
 #[test]
@@ -130,66 +109,6 @@ fn busca_por_id_y_cedula_normalizada_y_reporta_inexistentes() {
         servicio.buscar_por_id(999),
         Err(UsuarioServiceError::UsuarioNoEncontrado)
     ));
-}
-
-#[test]
-fn cambio_propio_exige_la_actual_invalida_la_anterior_y_habilita_la_nueva() {
-    let connection = base();
-    let id = inicializar(&connection);
-
-    assert!(matches!(
-        cambiar_propia(&connection, id, "incorrecta", "password3"),
-        Err(UsuarioServiceError::PasswordActualIncorrecta)
-    ));
-    cambiar_propia(&connection, id, "password1", "password3").unwrap();
-
-    let repository = SqliteUsuarioRepository::new(&connection);
-    let auth = AutenticacionService::new(&repository);
-    assert!(matches!(
-        auth.autenticar("ROOT1", "password1", Utc::now()),
-        Err(AutenticacionError::CredencialesInvalidas)
-    ));
-    assert!(auth.autenticar("ROOT1", "password3", Utc::now()).is_ok());
-}
-
-#[test]
-fn cambio_propio_respeta_limite_de_ocho_caracteres() {
-    let connection = base();
-    let id = inicializar(&connection);
-
-    assert!(matches!(
-        cambiar_propia(&connection, id, "password1", "1234567"),
-        Err(UsuarioServiceError::PasswordDemasiadoCorto)
-    ));
-    cambiar_propia(&connection, id, "password1", "12345678").unwrap();
-    let repository = SqliteUsuarioRepository::new(&connection);
-    assert!(
-        AutenticacionService::new(&repository)
-            .autenticar("ROOT1", "12345678", Utc::now())
-            .is_ok()
-    );
-}
-
-#[test]
-fn validar_password_para_cambio_rechaza_corto_e_inexistente_sin_tocar_el_repositorio() {
-    let connection = base();
-    let id = inicializar(&connection);
-    let repository = SqliteUsuarioRepository::new(&connection);
-    let servicio = UsuarioService::new(&repository);
-    let hash_original = servicio.buscar_por_id(id).unwrap().password_hash;
-
-    assert!(matches!(
-        servicio.validar_password_para_cambio(id, "corta"),
-        Err(UsuarioServiceError::PasswordDemasiadoCorto)
-    ));
-    assert!(matches!(
-        servicio.validar_password_para_cambio(999, "password3"),
-        Err(UsuarioServiceError::UsuarioNoEncontrado)
-    ));
-    assert_eq!(
-        servicio.buscar_por_id(id).unwrap().password_hash,
-        hash_original
-    );
 }
 
 /// Regresión del hallazgo #4 de `docs/auditoria-dominio-2026-08-20.md`: una

@@ -50,31 +50,10 @@ pub use tipos::{
     MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
     PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
     RegistroIngresoProveedorActivoResumen, ResultadoAcceso, ResultadoIngresoRegistrado,
-    ResultadoLogin, ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta, ResultadoSalidaRuta,
+    ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta, ResultadoSalidaRuta,
     ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen, SesionRealtimeNube,
     SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
 };
-
-/// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,
-/// o un ROOT ya sincronizado a otro sitio) -- ver
-/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta del
-/// `TokenDispositivo` que cachea `Nucleo::cache_token`
-/// (identidad del DISPOSITIVO): esto es la identidad de la PERSONA. Vive
-/// sólo en memoria -- nunca se persiste a disco, mismo criterio que
-/// `desktop/src-tauri/src/estado.rs::SesionSupabaseCacheada`: cerrar la app
-/// siempre la pierde y el próximo arranque exige un login real de nuevo.
-struct SesionSupabaseCacheada {
-    access_token: String,
-    refresh_token: String,
-    expires_in: u64,
-    /// Última vez que se confirmó de verdad contra Supabase -- la base del
-    /// tope duro de `TOPE_PRESENCIA_SUPABASE`.
-    confirmada_en: std::time::Instant,
-}
-
-/// Mismo tope que escritorio (ver `estado.rs`) -- aplicado por el cliente,
-/// no depende de la configuración de expiración del proyecto de Supabase.
-const TOPE_PRESENCIA_SUPABASE: std::time::Duration = std::time::Duration::from_secs(12 * 60 * 60);
 
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
 /// abre una vez al arrancar la app y se reusa en todas las pantallas (login,
@@ -126,8 +105,6 @@ pub struct Nucleo {
     /// para que esa conexión secundaria pueda aplicar la misma clave que
     /// ya usa la principal.
     clave: Option<[u8; 32]>,
-    /// Ver `SesionSupabaseCacheada`.
-    sesion_supabase: Mutex<Option<SesionSupabaseCacheada>>,
 }
 
 /// Backend real de `log` (ver `interno()` más arriba) -- vuelca a Logcat,
@@ -264,7 +241,6 @@ impl Nucleo {
             sincronizacion_en_curso: Mutex::new(()),
             ruta_base_datos: PathBuf::from(ruta_base_datos),
             clave,
-            sesion_supabase: Mutex::new(None),
         }
     }
 

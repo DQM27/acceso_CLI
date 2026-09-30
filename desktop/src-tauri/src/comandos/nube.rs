@@ -251,22 +251,6 @@ fn intentar_sincronizacion(
         sitio_id: &token.sitio_id,
     };
 
-    // Renovación silenciosa de la sesión de Supabase Auth del usuario
-    // (distinta del token de DISPOSITIVO de arriba) -- ver
-    // docs/planes-implementados/plan-autenticacion-supabase-auth.md, "renovación en segundo
-    // plano". Mejor esfuerzo: sin sesión de Supabase (login local, ROOT
-    // del arranque inicial) o sin red, simplemente no hace nada -- el
-    // tope de 12h en `GuiState::access_token_supabase_vigente` sigue
-    // aplicando igual si esto no logra renovar a tiempo.
-    // Sólo en la sincronización completa: es una llamada de red más, y el
-    // pulso periódico (completo) ya la corre cada 2 minutos.
-    if alcance.es_completo()
-        && let Some(refresh_token) = state.refresh_token_supabase()
-        && let Ok(sesion) = nube::refrescar(nube::base_url(), nube::apikey(), &refresh_token)
-    {
-        state.iniciar_sesion_supabase(sesion);
-    }
-
     let conexion = state
         .conexion_secundaria()
         .map_err(FalloSincronizacion::Mensaje)?;

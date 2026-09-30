@@ -50,4 +50,3 @@ pub mod ingresos;
 pub mod nube;
 pub mod proveedores;
 pub mod rutas;
-pub mod usuarios;

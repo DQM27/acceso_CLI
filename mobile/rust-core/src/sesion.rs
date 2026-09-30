@@ -3,7 +3,19 @@
 
 use control_acceso::services::error::AutenticacionError as AutenticacionErrorNucleo;
 
-use crate::{Nucleo, NucleoError, ResultadoLogin, SesionSupabaseCacheada, TOPE_PRESENCIA_SUPABASE};
+use crate::{Nucleo, NucleoError, UsuarioSesion};
+
+/// El celular no cambia contraseñas: sólo el escritorio (en Supabase Auth).
+/// Una cuenta con la contraseña temporal del alta todavía sin cambiar no
+/// entra acá hasta que la cambie en una computadora.
+const MENSAJE_PASSWORD_TEMPORAL: &str = "Su contraseña es temporal: cámbiela primero en una \
+     computadora del puesto de seguridad y luego ingrese aquí con la nueva.";
+
+fn rechazo_password_temporal() -> NucleoError {
+    NucleoError::Rechazado {
+        mensaje: MENSAJE_PASSWORD_TEMPORAL.to_string(),
+    }
+}
 
 #[uniffi::export]
 impl Nucleo {
@@ -49,7 +61,7 @@ impl Nucleo {
         &self,
         cedula: String,
         password: String,
-    ) -> Result<ResultadoLogin, NucleoError> {
+    ) -> Result<UsuarioSesion, NucleoError> {
         let intento = self.core_lock().autenticar_con_estado(&cedula, &password);
         let (sesion, debe_cambiar_password) = match intento {
             Ok(resultado) => resultado,
@@ -67,6 +79,10 @@ impl Nucleo {
             }
             Err(otro) => return Err(otro.into()),
         };
+        // Contraseña temporal cacheada de un login anterior sin conexión.
+        if debe_cambiar_password {
+            return Err(rechazo_password_temporal());
+        }
 
         let autorizado_para_nube = self.core_lock().autorizar_uso_nube(&sesion).is_ok();
         let sigue_activo = if autorizado_para_nube && self.nube_configurada() {
@@ -92,59 +108,7 @@ impl Nucleo {
         }
 
         *self.sesion_lock() = Some(sesion.clone());
-        Ok(ResultadoLogin {
-            sesion: sesion.into(),
-            debe_cambiar_password,
-        })
-    }
-
-    /// Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-    /// tras `autenticar`) o rutinario --
-    /// `nube::cambiar_password` ya revalida `password_actual` con un login
-    /// real antes de aceptar la nueva, no confía en que la sesión siga
-    /// abierta.
-    pub fn cambiar_password_supabase(
-        &self,
-        password_actual: String,
-        password_nueva: String,
-    ) -> Result<(), NucleoError> {
-        let sesion = self.actor_autenticado()?;
-        let access_token = self
-            .access_token_supabase_vigente()
-            .ok_or(NucleoError::SesionSupabaseVencida)?;
-
-        control_acceso::nube::cambiar_password(
-            control_acceso::nube::base_url(),
-            control_acceso::nube::apikey(),
-            &access_token,
-            &sesion.cedula,
-            &password_actual,
-            &password_nueva,
-        )?;
-
-        // Best-effort, mismo criterio que en `autenticar_supabase` -- ver
-        // el doc-comment de `AppCore::cachear_password_local`. Refresca el
-        // caché con la contraseña NUEVA (y `debe_cambiar_password: false`,
-        // ya que el cambio se acaba de confirmar contra Supabase Auth):
-        // sin esto (hallazgo de auditoría 2026-09-24, MV-02), el caché
-        // seguía teniendo la contraseña VIEJA hasta el próximo login
-        // online -- la nueva contraseña quedaba rechazada offline por 24h
-        // mientras la vieja (o la temporal, si el cambio era obligatorio)
-        // seguía sirviendo para entrar sin conexión.
-        //
-        // El resultado se liga a una variable ANTES del `if let` a
-        // propósito -- mismo motivo que en `autenticar_supabase` un poco
-        // más arriba: `core_lock()` es un `MutexGuard`, y dejarlo como
-        // temporal directo en el scrutinee lo mantendría vivo durante todo
-        // el bloque, no sólo durante la llamada.
-        let resultado_cache =
-            self.core_lock()
-                .cachear_password_local(sesion.id, &password_nueva, false);
-        if let Err(error) = resultado_cache {
-            log::warn!("no se pudo refrescar el cacheo de login offline: {error}");
-        }
-
-        Ok(())
+        Ok(sesion.into())
     }
 
     /// Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
@@ -153,56 +117,10 @@ impl Nucleo {
     /// reabrir la base.
     pub fn cerrar_sesion(&self) {
         *self.sesion_lock() = None;
-        *self.lock_sesion_supabase() = None;
     }
 }
 
 impl Nucleo {
-    /// Guarda (o reemplaza) la sesión de Supabase Auth -- se llama tanto en
-    /// el login inicial (`autenticar_supabase`) como en cada renovación
-    /// exitosa en segundo plano (`sincronizar`),
-    /// siempre con una marca de tiempo nueva.
-    pub(super) fn iniciar_sesion_supabase(&self, sesion: control_acceso::nube::SesionSupabase) {
-        *self.lock_sesion_supabase() = Some(SesionSupabaseCacheada {
-            access_token: sesion.access_token,
-            refresh_token: sesion.refresh_token,
-            expires_in: sesion.expires_in,
-            confirmada_en: std::time::Instant::now(),
-        });
-    }
-
-    /// Token de acceso vigente para usar como `Authorization: Bearer`, si lo
-    /// hay -- `None` si nunca hubo sesión de Supabase, si el token técnico
-    /// ya venció, o si pasó `TOPE_PRESENCIA_SUPABASE` desde la última
-    /// confirmación real (aunque el token en sí siga sin vencer).
-    pub(super) fn access_token_supabase_vigente(&self) -> Option<String> {
-        let guard = self.lock_sesion_supabase();
-        let entrada = guard.as_ref()?;
-        let vigente_por = std::time::Duration::from_secs(entrada.expires_in);
-        let vencido = entrada.confirmada_en.elapsed() >= vigente_por
-            || entrada.confirmada_en.elapsed() >= TOPE_PRESENCIA_SUPABASE;
-        let token = entrada.access_token.clone();
-        drop(guard);
-        if vencido { None } else { Some(token) }
-    }
-
-    /// `refresh_token` actual, para la renovación en segundo plano -- `None`
-    /// si nunca hubo sesión de Supabase (usuario logueado localmente) o si
-    /// ya se cerró sesión.
-    pub(super) fn refresh_token_supabase(&self) -> Option<String> {
-        self.lock_sesion_supabase()
-            .as_ref()
-            .map(|entrada| entrada.refresh_token.clone())
-    }
-
-    pub(super) fn lock_sesion_supabase(
-        &self,
-    ) -> std::sync::MutexGuard<'_, Option<SesionSupabaseCacheada>> {
-        self.sesion_supabase
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
     /// Login contra Supabase Auth para un usuario global (Administrador/
     /// Operador, o un ROOT ya sincronizado a otro sitio) que todavía no
     /// tiene contraseña local en este teléfono -- ver
@@ -216,13 +134,18 @@ impl Nucleo {
         &self,
         cedula: &str,
         password: &str,
-    ) -> Result<ResultadoLogin, NucleoError> {
+    ) -> Result<UsuarioSesion, NucleoError> {
         let sesion_supabase = control_acceso::nube::login(
             control_acceso::nube::base_url(),
             control_acceso::nube::apikey(),
             cedula,
             password,
         )?;
+        // La temporal del alta se cambia en escritorio; ni se abre sesión ni
+        // se cachea para entrar sin conexión.
+        if sesion_supabase.debe_cambiar_password {
+            return Err(rechazo_password_temporal());
+        }
 
         // La identidad (nombre/rol/activo) ya está local -- llegó por el
         // catálogo sincronizado, Supabase Auth sólo confirmó que la
@@ -244,7 +167,6 @@ impl Nucleo {
         };
 
         *self.sesion_lock() = Some(identidad.clone());
-        self.iniciar_sesion_supabase(sesion_supabase.clone());
 
         // Best-effort a propósito -- mismo criterio que `login_supabase` en
         // desktop (ver el doc-comment de `AppCore::cachear_password_local`):
@@ -253,29 +175,19 @@ impl Nucleo {
         // próximo login online. Ver `Usuario::password_hash_confirmado_en`
         // y docs/decisiones-tecnicas.md, entrada 2026-09-18.
         //
-        // Propaga `sesion_supabase.debe_cambiar_password` al caché a
-        // propósito (hallazgo de auditoría 2026-09-24, MV-01/DF-03): si la
-        // contraseña recién verificada es una temporal todavía sin
-        // cambiar, un login sin conexión más adelante debe seguir
-        // exigiendo el cambio, no aceptarla como si ya fuera definitiva.
-        //
         // El resultado se liga a una variable ANTES del `if let` a propósito
         // -- `core_lock()` es un `MutexGuard`, y dejarlo como temporal
         // directo en el scrutinee lo mantendría vivo durante todo el bloque
         // (hasta la llave de cierre), no sólo durante la llamada -- riesgo
         // real de deadlock si algo más adelante necesitara el mismo candado.
-        let resultado_cache = self.core_lock().cachear_password_local(
-            identidad.id,
-            password,
-            sesion_supabase.debe_cambiar_password,
-        );
+        // `false`: una temporal ya fue rechazada más arriba.
+        let resultado_cache =
+            self.core_lock()
+                .cachear_password_local(identidad.id, password, false);
         if let Err(error) = resultado_cache {
             log::warn!("no se pudo cachear el login offline: {error}");
         }
 
-        Ok(ResultadoLogin {
-            sesion: identidad.into(),
-            debe_cambiar_password: sesion_supabase.debe_cambiar_password,
-        })
+        Ok(identidad.into())
     }
 }

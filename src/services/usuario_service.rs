@@ -1,46 +1,11 @@
-use chrono::{DateTime, Utc};
-
 use crate::database::error::DatabaseError;
-use crate::database::queries::auditoria::{AuditoriaWriter, EntidadAuditada};
-use crate::database::queries::usuarios::{FiltroUsuarios, UsuarioResumen, UsuariosQuery};
 use crate::database::repositories::usuario_repository::UsuarioRepository;
 use crate::models::usuario::{RolUsuario, Usuario};
 
 use super::error::UsuarioServiceError;
-use super::password::{generar_hash, validar_formato_hash, verificar_password};
+use super::password::{generar_hash, validar_formato_hash};
 
 const LONGITUD_MINIMA_PASSWORD: usize = 8;
-
-pub struct UsuarioConsultaService<'a, Q>
-where
-    Q: UsuariosQuery + ?Sized,
-{
-    consultas: &'a Q,
-}
-
-impl<'a, Q> UsuarioConsultaService<'a, Q>
-where
-    Q: UsuariosQuery + ?Sized,
-{
-    pub fn new(consultas: &'a Q) -> Self {
-        Self { consultas }
-    }
-
-    pub fn buscar_para_tabla(
-        &self,
-        filtro: &FiltroUsuarios,
-    ) -> Result<Vec<UsuarioResumen>, UsuarioServiceError> {
-        self.buscar_para_tabla_como(filtro, RolUsuario::Root)
-    }
-
-    pub fn buscar_para_tabla_como(
-        &self,
-        filtro: &FiltroUsuarios,
-        actor: RolUsuario,
-    ) -> Result<Vec<UsuarioResumen>, UsuarioServiceError> {
-        Ok(self.consultas.buscar_para_actor(filtro, actor)?)
-    }
-}
 
 pub struct CrearRootInicialInput {
     pub cedula: String,
@@ -73,95 +38,6 @@ where
         self.usuarios
             .buscar_por_cedula(cedula.trim())?
             .ok_or(UsuarioServiceError::UsuarioNoEncontrado)
-    }
-
-    pub fn validar_password_actual(
-        &self,
-        id: i64,
-        password_actual: &str,
-    ) -> Result<(), UsuarioServiceError> {
-        let usuario = self.buscar_por_id(id)?;
-        if verificar_password(password_actual, &usuario.password_hash)? {
-            Ok(())
-        } else {
-            Err(UsuarioServiceError::PasswordActualIncorrecta)
-        }
-    }
-
-    /// Parte barata del cambio de contraseña (sin Argon2).
-    pub fn validar_password_para_cambio(
-        &self,
-        id: i64,
-        nueva_password: &str,
-    ) -> Result<(), UsuarioServiceError> {
-        self.buscar_por_id(id)?;
-        validar_password(nueva_password)?;
-        Ok(())
-    }
-
-    /// Parte que sí escribe, recibiendo el hash ya calculado.
-    pub fn cambiar_password_con_hash(
-        &self,
-        id: i64,
-        password_hash: &str,
-    ) -> Result<(), UsuarioServiceError> {
-        validar_formato_hash(password_hash)?;
-        self.usuarios
-            .actualizar_password(id, password_hash)
-            .map_err(mapear_escritura_usuario)
-    }
-
-    /// Igual que `cambiar_password_con_hash`, pero deja un marcador en la
-    /// auditoría — sólo la fecha importa (decisión explícita del usuario:
-    /// "no valores, solo fecha"), así que `valor_anterior`/`valor_nuevo`
-    /// quedan en blanco a propósito, no es un descuido.
-    pub fn cambiar_password_con_hash_auditado<A: AuditoriaWriter + ?Sized>(
-        &self,
-        id: i64,
-        password_hash: &str,
-        actor_id: i64,
-        actor_nombre: &str,
-        fecha_hora: DateTime<Utc>,
-        auditoria: &A,
-    ) -> Result<(), UsuarioServiceError> {
-        let objetivo = self.buscar_por_id(id)?;
-        self.cambiar_password_con_hash(id, password_hash)?;
-        auditoria.registrar_cambio(
-            fecha_hora,
-            actor_id,
-            actor_nombre,
-            EntidadAuditada::Usuario,
-            id,
-            &objetivo.nombre,
-            "password",
-            None,
-            None,
-        )?;
-        Ok(())
-    }
-
-    /// Cambio de la contraseña propia, auditado — el propio usuario es tanto
-    /// el actor como el objetivo del cambio.
-    pub fn cambiar_password_propio_auditado<A: AuditoriaWriter + ?Sized>(
-        &self,
-        id: i64,
-        password_actual: &str,
-        nueva_password: &str,
-        actor_nombre: &str,
-        fecha_hora: DateTime<Utc>,
-        auditoria: &A,
-    ) -> Result<(), UsuarioServiceError> {
-        self.validar_password_para_cambio(id, nueva_password)?;
-        self.validar_password_actual(id, password_actual)?;
-        let password_hash = generar_hash(nueva_password)?;
-        self.cambiar_password_con_hash_auditado(
-            id,
-            &password_hash,
-            id,
-            actor_nombre,
-            fecha_hora,
-            auditoria,
-        )
     }
 
     pub fn listar(&self) -> Result<Vec<Usuario>, UsuarioServiceError> {

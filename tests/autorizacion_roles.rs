@@ -3,16 +3,13 @@ use rusqlite::Connection;
 use control_acceso::{
     application::AppCore,
     database::{
-        queries::{
-            auditoria::FiltroAuditoria, contratistas::FiltroContratistas, usuarios::FiltroUsuarios,
-        },
+        queries::{auditoria::FiltroAuditoria, contratistas::FiltroContratistas},
         schema::initialize_database,
     },
     models::{tipo_ingreso::TipoIngreso, usuario::RolUsuario},
     services::{
-        autenticacion_service::UsuarioSesion,
-        contratista_service::DatosActualizacionContratista,
-        error::{EmpresaServiceError, UsuarioServiceError},
+        autenticacion_service::UsuarioSesion, contratista_service::DatosActualizacionContratista,
+        error::EmpresaServiceError,
     },
 };
 
@@ -23,31 +20,6 @@ fn sesion(id: i64, rol: RolUsuario) -> UsuarioSesion {
         nombre: format!("Usuario {id}"),
         rol,
     }
-}
-
-#[test]
-fn cambio_propio_exige_password_actual_y_funciona() {
-    let connection = Connection::open_in_memory().unwrap();
-    initialize_database(&connection).unwrap();
-    let core = AppCore::new(connection);
-    core.crear_root_inicial(
-        control_acceso::services::usuario_service::CrearRootInicialInput {
-            cedula: "ROOT-REAL".into(),
-            nombre: "Root".into(),
-            password: "password-root".into(),
-        },
-    )
-    .unwrap();
-    let root = core.autenticar("ROOT-REAL", "password-root").unwrap();
-
-    assert!(matches!(
-        core.cambiar_mi_password(&root, "incorrecta", "password-nuevo"),
-        Err(UsuarioServiceError::PasswordActualIncorrecta)
-    ));
-    core.cambiar_mi_password(&root, "password-root", "password-nuevo")
-        .unwrap();
-    assert!(core.autenticar("ROOT-REAL", "password-root").is_err());
-    assert!(core.autenticar("ROOT-REAL", "password-nuevo").is_ok());
 }
 
 fn base() -> AppCore {
@@ -157,20 +129,6 @@ fn el_rol_real_se_resuelve_por_id_no_por_lo_que_declara_la_sesion() {
         .unwrap();
     assert_eq!(pagina.items[0].cedula, "100300300");
     assert_eq!(pagina.items[0].nombre, "NOMBRE CORREGIDO");
-}
-
-#[test]
-fn administrador_no_recibe_roots_al_buscar_usuarios() {
-    let core = base();
-    let administrador = sesion(2, RolUsuario::Administrador);
-    let usuarios = core
-        .buscar_usuarios(&administrador, &FiltroUsuarios::default())
-        .unwrap();
-    assert!(
-        usuarios
-            .iter()
-            .all(|usuario| usuario.rol != RolUsuario::Root)
-    );
 }
 
 #[test]

@@ -554,7 +554,6 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::empresas::crear_empresa,
         comandos::empresas::actualizar_empresa,
         comandos::empresas::establecer_empresa_activa,
-        comandos::usuarios::cambiar_mi_password,
         comandos::ingresos::listar_ingresos_activos,
         comandos::ingresos::preparar_ingreso,
         comandos::ingresos::registrar_ingreso,

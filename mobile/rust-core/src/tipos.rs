@@ -87,19 +87,6 @@ impl From<UsuarioSesionNucleo> for UsuarioSesion {
     }
 }
 
-/// Éxito de `Nucleo::autenticar`/`autenticar` -- mismo motivo
-/// que `desktop/src-tauri/src/comandos/autenticacion.rs::ResultadoLogin`:
-/// Kotlin necesita saber si tiene que forzar el cambio de contraseña antes
-/// de dejar operar. `false` siempre en la rama local (ROOT del arranque
-/// inicial, o cualquier cuenta que ya tenía password local de antes de esta
-/// migración) -- esa contraseña ya es la real, no una temporal de un solo
-/// uso. Ver docs/planes-implementados/plan-autenticacion-supabase-auth.md.
-#[derive(Debug, Clone, uniffi::Record)]
-pub struct ResultadoLogin {
-    pub sesion: UsuarioSesion,
-    pub debe_cambiar_password: bool,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum TipoIngreso {
     Praind,

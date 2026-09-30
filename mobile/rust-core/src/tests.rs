@@ -579,6 +579,41 @@ fn crear_empresa_y_cerrar_sesion() {
     assert!(matches!(resultado, Err(NucleoError::NoAutenticado)));
 }
 
+/// El celular no cambia contraseñas: una cuenta con la contraseña temporal
+/// del alta todavía sin cambiar no entra, y el mensaje manda a cambiarla en
+/// una computadora del puesto de seguridad.
+#[test]
+fn autenticar_con_contrasena_temporal_se_rechaza() {
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let ruta = archivo.path().to_str().unwrap().to_string();
+    let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+    conexion
+        .execute_batch(
+            "INSERT INTO usuarios (
+                 cedula, nombre, password_hash, rol, activo,
+                 password_hash_confirmado_en, password_temporal_cacheada
+             ) VALUES (
+                 '777777777', 'Usuario Nuevo',
+                 '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                 'OPERADOR', 1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 1
+             );",
+        )
+        .unwrap();
+    drop(conexion);
+
+    let nucleo = Nucleo::abrir(ruta).unwrap();
+    let resultado = nucleo.autenticar("777777777".to_string(), "clave_prueba_123".to_string());
+
+    match resultado {
+        Err(NucleoError::Rechazado { mensaje }) => assert!(mensaje.contains("puesto de seguridad")),
+        otro => panic!("se esperaba el rechazo por contraseña temporal, llegó {otro:?}"),
+    }
+    assert!(matches!(
+        nucleo.crear_empresa("Empresa".to_string()),
+        Err(NucleoError::NoAutenticado)
+    ));
+}
+
 #[test]
 fn registrar_ingreso_sin_sesion_falla() {
     let archivo = tempfile::NamedTempFile::new().unwrap();

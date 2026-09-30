@@ -5,7 +5,6 @@ use control_acceso::database::queries::usuarios::{
 };
 use control_acceso::database::schema::initialize_database;
 use control_acceso::models::usuario::RolUsuario;
-use control_acceso::services::usuario_service::UsuarioConsultaService;
 
 fn base() -> Connection {
     let connection = Connection::open_in_memory().unwrap();
@@ -119,9 +118,7 @@ fn service_devuelve_usuario_resumen_sin_perder_datos() {
     let connection = base();
     let id = insertar(&connection, "9001", "Operador Seguro", "OPERADOR", false);
     let query = SqliteUsuariosQuery::new(&connection);
-    let items = UsuarioConsultaService::new(&query)
-        .buscar_para_tabla(&FiltroUsuarios::default())
-        .unwrap();
+    let items = query.buscar(&FiltroUsuarios::default()).unwrap();
     assert_eq!(items[0].id, id);
     assert_eq!(items[0].nombre, "Operador Seguro");
     assert_eq!(items[0].rol, RolUsuario::Operador);

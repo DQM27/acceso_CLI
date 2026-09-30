@@ -57,18 +57,6 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
         return
     }
 
-    val cambioObligatorio = viewModel.cambioObligatorio
-    if (cambioObligatorio != null) {
-        PantallaCambioObligatorio(
-            nombre = cambioObligatorio.first.nombre,
-            error = viewModel.error,
-            enviando = viewModel.autenticando,
-            onCambiar = { nueva -> viewModel.completarCambioObligatorio(nueva) },
-            onCancelar = { viewModel.cancelarCambioObligatorio() },
-        )
-        return
-    }
-
     Column(
         modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

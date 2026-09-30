@@ -306,7 +306,6 @@ async fn login_supabase(
     };
 
     state.iniciar_sesion(identidad.clone());
-    state.iniciar_sesion_supabase(sesion_supabase.clone());
 
     // Best-effort a propósito (ver el doc-comment de `cachear_password_local`):
     // un fallo acá (disco lleno, lo que sea) no debe tumbar un login que ya
@@ -350,9 +349,11 @@ async fn login_supabase(
 }
 
 /// Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-/// tras `login`) o rutinario -- misma llamada, `nube::auth_supabase::cambiar_password`
-/// ya revalida `password_actual` con un login real antes de aceptar la
-/// nueva, no confía en que la sesión siga abierta.
+/// tras `login`) o rutinario (menú de usuario) -- misma llamada. El único
+/// lugar donde se cambia una contraseña es el escritorio, y siempre en
+/// Supabase Auth: `nube::auth_supabase::cambiar_password` revalida
+/// `password_actual` con un login real y usa ese token, así que funciona
+/// aunque la sesión se haya abierto sin conexión.
 #[tauri::command]
 pub async fn cambiar_password_supabase(
     password_actual: String,
@@ -361,9 +362,6 @@ pub async fn cambiar_password_supabase(
 ) -> Result<(), String> {
     let state = app.state::<GuiState>();
     let sesion = state.sesion_activa()?;
-    let access_token = state
-        .access_token_supabase_vigente()
-        .ok_or_else(|| "La sesión venció -- iniciá sesión de nuevo".to_string())?;
     // Se usan más abajo para refrescar el caché de login offline -- `sesion`
     // y `password_nueva` se mueven al `spawn_blocking` de acá abajo.
     let id_para_cache = sesion.id;
@@ -373,7 +371,6 @@ pub async fn cambiar_password_supabase(
         nube::cambiar_password(
             nube::base_url(),
             nube::apikey(),
-            &access_token,
             &sesion.cedula,
             &password_actual,
             &password_nueva,

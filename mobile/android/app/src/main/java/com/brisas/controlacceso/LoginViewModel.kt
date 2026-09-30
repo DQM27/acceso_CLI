@@ -16,7 +16,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
-import uniffi.control_acceso_mobile.ResultadoLogin
 import uniffi.control_acceso_mobile.UsuarioSesion
 
 /// Dueño del estado de [PantallaLogin] y de las llamadas a [Nucleo] para
@@ -48,16 +47,6 @@ class LoginViewModel(
     var propietarioSesion by mutableStateOf<PropietarioSesion?>(null)
         private set
 
-    /// Sesión recién autenticada contra Supabase Auth con
-    /// `debe_cambiar_password = true` (contraseña temporal de un solo uso,
-    /// ver docs/planes-implementados/plan-autenticacion-supabase-auth.md) -- `null` es el estado
-    /// normal; con esto puesto, [PantallaLogin] muestra el paso de cambio
-    /// obligatorio en vez de dejar entrar. `passwordActual` es la temporal
-    /// que recién tipeó, hace falta para que `cambiarPasswordSupabase`
-    /// revalide del lado del backend antes de aceptar la nueva.
-    var cambioObligatorio by mutableStateOf<Pair<UsuarioSesion, String>?>(null)
-        private set
-
     fun cambiarCedula(nueva: String) {
         cedula = nueva
     }
@@ -73,14 +62,13 @@ class LoginViewModel(
         val passwordTipeada = password
         viewModelScope.launch {
             try {
-                val resultado: ResultadoLogin = withContext(dispatcherIO) {
+                // Una contraseña temporal se rechaza en el núcleo con un
+                // mensaje que manda a cambiarla en escritorio: el celular no
+                // cambia contraseñas.
+                val sesionNueva = withContext(dispatcherIO) {
                     medirNucleo("autenticar") { nucleo.autenticar(cedula, passwordTipeada) }
                 }
-                if (resultado.debeCambiarPassword) {
-                    cambioObligatorio = resultado.sesion to passwordTipeada
-                    return@launch
-                }
-                abrirSesion(resultado.sesion)
+                abrirSesion(sesionNueva)
                 lanzarSincronizacionDeFondo()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
@@ -111,37 +99,6 @@ class LoginViewModel(
                 // reintenta solo.
             }
         }
-    }
-
-    /// Completa el cambio obligatorio tras `cambioObligatorio` --
-    /// `cambiarPasswordSupabase` ya revalida la temporal contra Supabase
-    /// antes de aceptar la nueva, la sesión local ya está abierta desde
-    /// `autenticar()` (esto no vuelve a autenticar, sólo cambia la
-    /// contraseña).
-    fun completarCambioObligatorio(passwordNueva: String) {
-        if (autenticando) return
-        val (sesionPendiente, passwordActual) = cambioObligatorio ?: return
-        error = null
-        autenticando = true
-        viewModelScope.launch {
-            try {
-                withContext(dispatcherIO) {
-                    medirNucleo("cambiarPasswordSupabase") { nucleo.cambiarPasswordSupabase(passwordActual, passwordNueva) }
-                }
-                abrirSesion(sesionPendiente)
-                cambioObligatorio = null
-                lanzarSincronizacionDeFondo()
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } finally {
-                autenticando = false
-            }
-        }
-    }
-
-    fun cancelarCambioObligatorio() {
-        cambioObligatorio = null
-        error = null
     }
 
     /// Sólo olvida el actor en memoria — el `Nucleo`/la conexión SQLite del

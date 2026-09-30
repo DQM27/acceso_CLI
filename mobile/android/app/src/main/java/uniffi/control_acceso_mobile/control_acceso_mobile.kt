@@ -871,8 +871,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_clave_publica_jwk(
@@ -1034,8 +1032,6 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_supabase(`ptr`: Long,`passwordActual`: RustBuffer.ByValue,`passwordNueva`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_clone_almacenclavedispositivo(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1476,10 +1472,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_ruta() and 0xFFFF) != 6026) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() and 0xFFFF) != 55358) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_supabase() and 0xFFFF) != 18936) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() and 0xFFFF) != 59674) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() and 0xFFFF) != 14163) {
@@ -3297,16 +3290,7 @@ public interface NucleoInterface {
      * espere -- acá retener el candado durante una sincronización
      * entera hubiera vuelto a sentirse lento.
      */
-    fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String): ResultadoLogin
-    
-    /**
-     * Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-     * tras `autenticar`) o rutinario --
-     * `nube::cambiar_password` ya revalida `password_actual` con un login
-     * real antes de aceptar la nueva, no confía en que la sesión siga
-     * abierta.
-     */
-    fun `cambiarPasswordSupabase`(`passwordActual`: kotlin.String, `passwordNueva`: kotlin.String)
+    fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String): UsuarioSesion
     
     /**
      * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
@@ -4471,8 +4455,8 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
      * espere -- acá retener el candado durante una sincronización
      * entera hubiera vuelto a sentirse lento.
      */
-    @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String): ResultadoLogin {
-            return FfiConverterTypeResultadoLogin.lift(
+    @Throws(NucleoException::class)override fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String): UsuarioSesion {
+            return FfiConverterTypeUsuarioSesion.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(
@@ -4484,28 +4468,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     }
     )
     }
-    
-
-    
-    /**
-     * Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-     * tras `autenticar`) o rutinario --
-     * `nube::cambiar_password` ya revalida `password_actual` con un login
-     * real antes de aceptar la nueva, no confía en que la sesión siga
-     * abierta.
-     */
-    @Throws(NucleoException::class)override fun `cambiarPasswordSupabase`(`passwordActual`: kotlin.String, `passwordNueva`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_supabase(
-        it,
-        
-        FfiConverterString.lower(`passwordActual`),
-        FfiConverterString.lower(`passwordNueva`),_status)
-}
-    }
-    
     
 
     
@@ -6933,53 +6895,6 @@ public object FfiConverterTypeResultadoEstabilizacion: FfiConverterRustBuffer<Re
 
 
 
-/**
- * Éxito de `Nucleo::autenticar`/`autenticar` -- mismo motivo
- * que `desktop/src-tauri/src/comandos/autenticacion.rs::ResultadoLogin`:
- * Kotlin necesita saber si tiene que forzar el cambio de contraseña antes
- * de dejar operar. `false` siempre en la rama local (ROOT del arranque
- * inicial, o cualquier cuenta que ya tenía password local de antes de esta
- * migración) -- esa contraseña ya es la real, no una temporal de un solo
- * uso. Ver docs/planes-implementados/plan-autenticacion-supabase-auth.md.
- */
-data class ResultadoLogin (
-    var `sesion`: UsuarioSesion
-    , 
-    var `debeCambiarPassword`: kotlin.Boolean
-    
-){
-    
-
-    
-
-    
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeResultadoLogin: FfiConverterRustBuffer<ResultadoLogin> {
-    override fun read(buf: ByteBuffer): ResultadoLogin {
-        return ResultadoLogin(
-            FfiConverterTypeUsuarioSesion.read(buf),
-            FfiConverterBoolean.read(buf),
-        )
-    }
-
-    override fun allocationSize(value: ResultadoLogin) = (
-            FfiConverterTypeUsuarioSesion.allocationSize(value.`sesion`) +
-            FfiConverterBoolean.allocationSize(value.`debeCambiarPassword`)
-    )
-
-    override fun write(value: ResultadoLogin, buf: ByteBuffer) {
-            FfiConverterTypeUsuarioSesion.write(value.`sesion`, buf)
-            FfiConverterBoolean.write(value.`debeCambiarPassword`, buf)
-    }
-}
-
-
-
 data class ResultadoRegistroEntrada (
     var `registroId`: kotlin.Long
     , 
@@ -8140,13 +8055,6 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
         
         class NoAutenticado(message: String) : NucleoException(message)
         
-    /**
-     * La sesión de Supabase Auth (la de la PERSONA, distinta del token del
-     * DISPOSITIVO) venció o nunca se abrió -- Kotlin debe mandar de vuelta
-     * al login. Ver `Nucleo::cambiar_password_supabase`.
-     */
-        class SesionSupabaseVencida(message: String) : NucleoException(message)
-        
         class FechaInvalida(message: String) : NucleoException(message)
         
     /**
@@ -8192,12 +8100,11 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
             3 -> NucleoException.UsuarioInactivo(FfiConverterString.read(buf))
             4 -> NucleoException.SinPasswordLocal(FfiConverterString.read(buf))
             5 -> NucleoException.NoAutenticado(FfiConverterString.read(buf))
-            6 -> NucleoException.SesionSupabaseVencida(FfiConverterString.read(buf))
-            7 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
-            8 -> NucleoException.GafeteOcupadoEnSitio(FfiConverterString.read(buf))
-            9 -> NucleoException.ProveedorActivoEnOtroSitio(FfiConverterString.read(buf))
-            10 -> NucleoException.Rechazado(FfiConverterString.read(buf))
-            11 -> NucleoException.Interno(FfiConverterString.read(buf))
+            6 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
+            7 -> NucleoException.GafeteOcupadoEnSitio(FfiConverterString.read(buf))
+            8 -> NucleoException.ProveedorActivoEnOtroSitio(FfiConverterString.read(buf))
+            9 -> NucleoException.Rechazado(FfiConverterString.read(buf))
+            10 -> NucleoException.Interno(FfiConverterString.read(buf))
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
         
@@ -8229,28 +8136,24 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
                 buf.putInt(5)
                 Unit
             }
-            is NucleoException.SesionSupabaseVencida -> {
+            is NucleoException.FechaInvalida -> {
                 buf.putInt(6)
                 Unit
             }
-            is NucleoException.FechaInvalida -> {
+            is NucleoException.GafeteOcupadoEnSitio -> {
                 buf.putInt(7)
                 Unit
             }
-            is NucleoException.GafeteOcupadoEnSitio -> {
+            is NucleoException.ProveedorActivoEnOtroSitio -> {
                 buf.putInt(8)
                 Unit
             }
-            is NucleoException.ProveedorActivoEnOtroSitio -> {
+            is NucleoException.Rechazado -> {
                 buf.putInt(9)
                 Unit
             }
-            is NucleoException.Rechazado -> {
-                buf.putInt(10)
-                Unit
-            }
             is NucleoException.Interno -> {
-                buf.putInt(11)
+                buf.putInt(10)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

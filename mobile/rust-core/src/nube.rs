@@ -421,20 +421,6 @@ impl Nucleo {
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
 
-        // Renovación silenciosa de la sesión de Supabase Auth (mejor
-        // esfuerzo). Sólo en la completa: una llamada de red más que el
-        // pulso ya hace.
-        if alcance.es_completo()
-            && let Some(refresh_token) = self.refresh_token_supabase()
-            && let Ok(sesion) = control_acceso::nube::refrescar(
-                control_acceso::nube::base_url(),
-                control_acceso::nube::apikey(),
-                &refresh_token,
-            )
-        {
-            self.iniciar_sesion_supabase(sesion);
-        }
-
         let token = self.autenticar_con_cache().map_err(|error| {
             FalloSincronizacion::Nucleo(NucleoError::Interno {
                 mensaje: interno(error),
