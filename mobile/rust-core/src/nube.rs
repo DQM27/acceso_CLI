@@ -36,7 +36,7 @@ impl Nucleo {
     }
 
     /// Descarta el token cacheado. Lo llama `NubeRealtime.kt` al recibir un
-    /// aviso de expulsión (suspendido/revocado): sin esto el teléfono seguía
+    /// aviso de expulsión (retirado en el panel): sin esto el teléfono seguía
     /// usando su token de hasta 1 h, las consultas en vivo le devolvían
     /// vacío (la política restrictiva filtra en silencio) y un chequeo como
     /// "ingreso activo en otro sitio" pasaba como si no hubiera conflicto.
@@ -90,7 +90,7 @@ impl Nucleo {
             app_version,
         );
         let token = self
-            .vincular_y_cachear(&codigo, None, Some(&metadata))
+            .vincular_y_cachear(&codigo, Some(&metadata))
             .map_err(error_de_nube_para_mostrar)?;
 
         let contexto = control_acceso::nube::ContextoSincronizacion {
@@ -136,36 +136,6 @@ impl Nucleo {
             conflictos_ingreso_proveedor: Vec::new(),
             conflictos_gafete: Vec::new(),
         })
-    }
-
-    /// Re-vincula un teléfono ya en uso con un código nuevo del panel, SIN
-    /// vaciar su base: lo pendiente de enviar se conserva. Exclusivo de ROOT,
-    /// igual que en escritorio (`comandos::nube::revincular_dispositivo`).
-    /// Si el teléfono ya estaba vinculado, el código tiene que ser del MISMO
-    /// dispositivo: el servidor lo verifica sin gastar el código.
-    #[allow(clippy::too_many_arguments)]
-    pub fn revincular_dispositivo(
-        &self,
-        codigo: String,
-        identificador_hardware: String,
-        nombre_dispositivo: String,
-        plataforma: String,
-        version_build: String,
-        app_version: String,
-    ) -> Result<(), NucleoError> {
-        let actor = self.actor_autenticado()?;
-        self.core_lock().autorizar_gestion_nube(&actor)?;
-        let metadata = metadata_del_telefono(
-            identificador_hardware,
-            nombre_dispositivo,
-            plataforma,
-            version_build,
-            app_version,
-        );
-        let esperado = self.cache_token.dispositivo_vinculado();
-        self.vincular_y_cachear(&codigo, esperado.as_deref(), Some(&metadata))
-            .map_err(error_de_nube_para_mostrar)?;
-        Ok(())
     }
 
     /// Sincronización completa, autenticada con la clave del teléfono.
@@ -244,7 +214,6 @@ impl Nucleo {
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             topic,
-            huella: self.cache_token.huella_vinculada(),
         })
     }
 
@@ -544,9 +513,9 @@ fn metadata_del_telefono(
     }
 }
 
-/// Los rechazos de la vinculación (código inválido o vencido, clave en uso,
-/// equipo suspendido...) son para la persona que está frente al teléfono:
-/// viajan como `Rechazado`, con el mismo texto que en escritorio.
+/// Los rechazos de la vinculación (código inválido o vencido, clave en uso)
+/// son para la persona que está frente al teléfono: viajan como
+/// `Rechazado`, con el mismo texto que en escritorio.
 fn error_de_nube_para_mostrar(error: control_acceso::nube::NubeError) -> NucleoError {
     NucleoError::Rechazado {
         mensaje: control_acceso::mensajes::mensaje_nube(error),

@@ -27,8 +27,8 @@ y `nube::credenciales::directorio_default`):
 **Un evento que destruye el `.db` y también `%APPDATA%` (disco muerto,
 perfil de Windows corrupto, reinstalación completa) se lleva la clave del
 dispositivo.** La recuperación NO es "reinstalar y que se sincronice
-solo": ese equipo ya no puede autenticarse como sí mismo. Se re-vincula
-con un código nuevo del panel.
+solo": ese equipo ya no puede autenticarse como sí mismo. Se registra
+como dispositivo nuevo con un código del panel y el anterior se retira.
 
 Esto es una propiedad buena, no un defecto a corregir: **no existe ningún
 atajo de recuperación que evite pasar por el panel** -- la restauración
@@ -62,11 +62,10 @@ fallan al arrancar, la app:
 
 La clave del dispositivo (`dispositivo-nube.clave`) NO se toca en este
 proceso -- sigue en `%APPDATA%`, separada de la base. Aun así, la pantalla
-de configuración inicial pide un código: el administrador usa
-"Re-vincular" en el panel (mismo `dispositivo_id`, conserva su
-historial) y el equipo lo canjea generando una clave nueva. Pendiente
-posible: si la clave sigue siendo válida, reconstruir sin pedir código
-(ver `docs/handoff-registro-dispositivos.md`).
+de configuración inicial pide un código: el administrador registra un
+dispositivo nuevo en el mismo sitio y retira el anterior; el equipo
+canjea el código generando una clave nueva (una clave ya vinculada nunca
+se ata a otro dispositivo).
 
 Implementación: `desktop/src-tauri/src/recuperacion_local.rs` (cuarentena +
 borrado, con tests) y `desktop/src-tauri/src/lib.rs`
@@ -74,18 +73,15 @@ borrado, con tests) y `desktop/src-tauri/src/lib.rs`
 
 ## Procedimiento (manual, si el diálogo automático no aplica)
 
-1. **En el panel, "Re-vincular" el dispositivo** (Dispositivos →
-   Re-vincular): emite un código de un solo uso para el MISMO
-   `dispositivo_id`, que conserva su sitio y todo su historial. Al
-   canjearse, cualquier clave anterior deja de servir en el acto (si el
-   equipo viejo sigue existiendo en otro lado, queda afuera).
-   Alternativa: dar de alta un dispositivo nuevo en el mismo sitio
-   (`admin-provision-device`, recibe el `sitio_id`).
-2. **Reinstalar la app** (o dejar que arranque en una máquina/perfil
+1. **En el panel, registrar un dispositivo nuevo** en el mismo sitio
+   (Dispositivos → Registrar, `admin-provision-device`): emite un código
+   de un solo uso.
+2. **Retirar el dispositivo anterior** (Dispositivos → Retirar,
+   `admin-revoke-device`): su clave y cualquier token ya emitido dejan de
+   servir en el acto (si el equipo viejo sigue existiendo en otro lado,
+   queda afuera).
+3. **Reinstalar la app** (o dejar que arranque en una máquina/perfil
    limpio) y vincularla con ese código (`vincular_dispositivo_inicial`).
-3. Si el equipo viejo no se va a volver a usar y se dio de alta uno nuevo,
-   revocar el viejo (`admin-revoke-device`) -- higiene, evita dejar un
-   `dispositivo_id` fantasma.
 4. Con eso:
    - **Inmediato:** el catálogo completo del sitio -- empresas,
      contratistas, gafetes, rutas, vehículos, encargados

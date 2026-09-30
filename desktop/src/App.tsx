@@ -75,7 +75,7 @@ import {
 } from "./api";
 import type { ResumenSincronizacion, Update, UsuarioSesion } from "./api";
 import { EVENTO_CAMBIO_EN_VIVO } from "./eventosNube";
-import { mensajeExpulsion } from "./expulsionNube";
+import { MENSAJE_EXPULSION } from "./expulsionNube";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { registrarPantalla } from "./telemetria";
 import { textoHora } from "./tiempo";
@@ -592,12 +592,12 @@ function Shell({
     const cancelarRealtime = iniciarRealtimeNube({
       onSincronizado: (resumen) => alSincronizarNube(resumen, false),
       onEstado: setEstadoConexionNube,
-      // La nube ya le cortó el acceso a este equipo (ver `expulsionNube.ts`):
-      // el token cacheado no sirve más. El trabajo local sigue disponible;
-      // el aviso queda fijo hasta que alguien lo cierre.
-      onExpulsado: (motivo) => {
+      // Este equipo fue retirado en el panel (ver `expulsionNube.ts`): el
+      // token cacheado no sirve más. El trabajo local sigue disponible; el
+      // aviso queda fijo hasta que alguien lo cierre.
+      onExpulsado: () => {
         void descartarTokenNube();
-        toast.error(mensajeExpulsion(motivo), { duration: Infinity, closeButton: true });
+        toast.error(MENSAJE_EXPULSION, { duration: Infinity, closeButton: true });
       },
       usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
     });

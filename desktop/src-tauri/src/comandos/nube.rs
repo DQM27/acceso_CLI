@@ -98,8 +98,6 @@ pub struct SesionRealtimeNube {
     pub dispositivo_id: String,
     pub tipo: String,
     pub topic: String,
-    /// Ver `CacheTokenDispositivo::huella_vinculada`.
-    pub huella: Option<String>,
 }
 
 /// Espejo de `nube::IngresoRemoto` -- un ingreso abierto por el otro
@@ -380,68 +378,6 @@ pub async fn vincular_dispositivo_inicial(
     .map_err(|error| format!("No se pudo completar el arranque inicial: {error}"))?
 }
 
-/// Cómo está vinculado este equipo, para la pantalla de la nube.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct EstadoVinculacion {
-    /// `"clave"` o `"sin_vincular"`.
-    pub credencial: &'static str,
-    pub dispositivo_id: Option<String>,
-    /// Huella de la clave vigente. La usa el aviso en vivo de expulsión
-    /// para no confundir la re-vinculación de este mismo equipo con una
-    /// expulsión (ver `nubeRealtime.ts`).
-    pub huella: Option<String>,
-}
-
-#[tauri::command]
-pub fn estado_vinculacion(state: tauri::State<'_, GuiState>) -> EstadoVinculacion {
-    let dispositivo_id = state.dispositivo_vinculado();
-    let credencial = if dispositivo_id.is_some() {
-        "clave"
-    } else {
-        "sin_vincular"
-    };
-    EstadoVinculacion {
-        credencial,
-        dispositivo_id,
-        huella: state.huella_vinculada(),
-    }
-}
-
-/// Re-vincula un equipo ya en uso con un código nuevo del panel (equipo
-/// reinstalado, clave perdida, o expulsado tras un "Re-vincular" en el
-/// panel), SIN vaciar su base: la bandeja de salida pendiente se conserva y
-/// se envía en la próxima sincronización. Exclusivo de ROOT, igual que el
-/// resto de la gestión de la nube.
-///
-/// Si el equipo ya estaba vinculado, el código tiene que ser del MISMO
-/// dispositivo (lo verifica el servidor sin gastar el código): sus datos
-/// locales pertenecen a ese dispositivo y a su sitio.
-#[tauri::command]
-pub async fn revincular_dispositivo(app: tauri::AppHandle, codigo: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<GuiState>();
-        let actor = state.sesion_activa()?;
-        state
-            .core()
-            .autorizar_gestion_nube(&actor)
-            .map_err(mensaje_gestion_nube)?;
-        let esperado = state.dispositivo_vinculado();
-        let token = state
-            .vincular(
-                &codigo,
-                esperado.as_deref(),
-                Some(&metadata_de_esta_maquina()),
-            )
-            .map_err(mensaje_nube)?;
-        if let Some(desfase_ms) = token.desfase_reloj_ms {
-            state.core().actualizar_desfase_reloj(desfase_ms);
-        }
-        Ok(())
-    })
-    .await
-    .map_err(|error| format!("No se pudo re-vincular el dispositivo: {error}"))?
-}
-
 /// Aviso en vivo con los datos (`cambio_nube` con `registro`): guarda la
 /// fila directo en la base local, sin consultar a la nube -- ver
 /// `nube::en_vivo`. `true` si la aplicó; `false` si el aviso no trae datos
@@ -526,7 +462,6 @@ fn preparar_sesion_realtime(state: &GuiState) -> Result<SesionRealtimeNube, Stri
         sitio_id: sesion.sitio_id,
         dispositivo_id: sesion.dispositivo_id,
         tipo: sesion.tipo,
-        huella: state.huella_vinculada(),
     })
 }
 

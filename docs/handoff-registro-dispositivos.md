@@ -11,9 +11,12 @@
   Producción (`xidaepyaljzkpbsxrqsm`) NO se toca. Antes hay que probarlo
   con equipos reales (ver "Prueba con equipos reales") y el usuario tiene
   que aprobarlo explícitamente.
-- **Sólo instalaciones nuevas** (decisión 2026-09-30): no se re-vincula
-  desde el teléfono un equipo que tenía el sistema viejo. Cada equipo de
-  prueba se instala de cero y se vincula con un código del panel.
+- **Sólo instalaciones nuevas** (decisión 2026-09-30): cada equipo se
+  instala de cero y se vincula con un código del panel.
+- **Sólo dos acciones: Registrar y Retirar** (decisión 2026-09-30, "la
+  solución más simple es la mejor"). No hay suspensión temporal ni
+  re-vinculación: un equipo reinstalado se registra como dispositivo nuevo
+  y el anterior se retira; los datos vuelven en la primera sincronización.
 - **Sin compatibilidad con el secreto de dispositivo.** Todos los equipos se
   reinstalan y se vinculan con código; no hay migración automática ni camino
   legado en ninguna capa.
@@ -23,29 +26,29 @@
 ## Cómo funciona (resumen)
 
 ```
-Panel web ──(admin-provision-device / admin-crear-codigo-vinculacion)──► código XXXX-XXXX-XX + QR
-                                                                          (15 min, un solo uso)
+Panel web ── Registrar (admin-provision-device) ──► código XXXX-XXXX-XX + QR
+                                                     (15 min, un solo uso)
 Equipo ── genera par EC P-256 (la privada nunca sale) ──► device-vincular { codigo, clave_publica_jwk }
           ◄── primer token (JWT 1 h con sitio_id, tipo, huella)
 Equipo ── device-auth { desafio: true } ──► desafío (JWT del servidor, 120 s)
 Equipo ── device-auth { asercion: JWS(desafío) firmado, kid = huella } ──► token
 Postgres ── política RESTRICTIVA "solo dispositivos vigentes" en toda tabla con RLS:
-            el token sólo sirve si el dispositivo no está revocado/suspendido
+            el token sólo sirve si el dispositivo no está retirado
             y la huella del token es la de su clave vigente.
-Suspender / revocar / re-vincular ──► corta al instante + broadcast `dispositivo_expulsado`
+Retirar (admin-revoke-device) ──► corta al instante + broadcast `dispositivo_expulsado`
+                                   (el equipo cierra el canal y no reintenta)
 ```
 
 - **Código**: 10 caracteres de `23456789ABCDEFGHJKLMNPQRSTUVWXYZ`; se guarda
   sólo su SHA-256. QR: `brisas-acceso://vincular?codigo=XXXXXXXXXX`.
 - **Huella**: RFC 7638 (SHA-256 del JWK canónico, base64url). Es el `kid` de
   la aserción y el claim `huella` del token.
-- **Re-vincular**: código nuevo para el MISMO `dispositivo_id` (conserva
-  sitio e historial). Al canjearlo, la clave anterior y sus tokens mueren.
-  Un equipo con datos locales manda `dispositivo_esperado`: un código de
-  otro dispositivo se rechaza sin gastarse.
+- **Canje**: `canjear_codigo_vinculacion` sólo vincula un dispositivo recién
+  registrado (sin clave) y no retirado. Un código no puede reemplazar la
+  clave de un dispositivo ya vinculado.
 - **Eventos de seguridad** (`eventos_seguridad_dispositivos`, visibles en el
   panel): `codigo_inexistente`, `codigo_usado`, `codigo_vencido`,
-  `codigo_anulado`, `codigo_de_otro_dispositivo`, `firma_invalida`,
+  `codigo_anulado`, `firma_invalida`,
   `hardware_distinto`.
 
 ## Mapa de archivos
@@ -54,12 +57,12 @@ Suspender / revocar / re-vincular ──► corta al instante + broadcast `dispo
 | --- | --- |
 | Migraciones | `supabase/migrations/20260929200000_revocacion_efectiva_dispositivos.sql` (clave_huella, `private.dispositivo_vigente()`, política restrictiva en loop, trigger de expulsión por Realtime), `20260929200100_vinculacion_dispositivos_por_codigo.sql` (quita `secret_hash`, `codigos_vinculacion`, `eventos_seguridad_dispositivos`, RPC `canjear_codigo_vinculacion`) |
 | Tests SQL | `supabase/tests/dispositivos_vigentes_y_vinculacion.sql` + los `*_autorizacion.sql` (dispositivos con clave y claim `huella`) |
-| Edge Functions | `supabase/functions/_shared/{http,admin,dispositivos}.ts`, `device-vincular`, `device-auth`, `admin-provision-device`, `admin-crear-codigo-vinculacion`, `admin-list-devices`, `admin-revoke-device` (+ refactor a `_shared` del resto de `admin-*`) |
+| Edge Functions | `supabase/functions/_shared/{http,admin,dispositivos}.ts`, `device-vincular`, `device-auth`, `admin-provision-device`, `admin-list-devices`, `admin-revoke-device` (+ refactor a `_shared` del resto de `admin-*`) |
 | Núcleo Rust | `src/nube/firmante.rs` (trait `FirmanteDispositivo`, aserción, `FirmanteArchivo` con DPAPI), `cache_token.rs` (`vincular`, `autenticar_con_cache`, `vinculado`), `cliente.rs` (`vincular_con_codigo`, `autenticar_con_firmante`), `credenciales.rs` (sólo almacenamiento protegido), `application/nube.rs` (`vincular_dispositivo_inicial`), `application/con_nube.rs` (reciben `&CacheTokenDispositivo`) |
 | Pruebas núcleo | `examples/probar_vinculacion.rs` (E2E contra staging), `tests/nube_smoke.rs` (manual, `#[ignore]`) |
-| Escritorio | `desktop/src-tauri/src/{lib.rs,estado.rs,comandos/nube.rs}`; frontend `PrimerArranque.tsx`, `VincularEquipoModal.tsx`, `MenuUsuario.tsx` ("Vincular este equipo", sólo ROOT), `expulsionNube.ts`, `nubeRealtime.ts` |
-| Panel web | `web/src/api/dispositivos.ts`, `pantallas/Dispositivos.tsx` (alta por sitio, Re-vincular, columna Vinculación, "Intentos y alertas"), `componentes/CodigoVinculacionEmitido.tsx` (QR con `uqr`, cuenta regresiva) |
-| Móvil Rust | `mobile/rust-core/src/firmante.rs` (callback UniFFI `AlmacenClaveDispositivo`), `nube.rs` (`vincular_dispositivo_inicial`, `revincular_dispositivo`, `nube_configurada`), APIs `*_verificado` en `ingresos.rs`/`gafetes.rs`/`proveedores.rs` |
+| Escritorio | `desktop/src-tauri/src/{lib.rs,estado.rs,comandos/nube.rs}`; frontend `PrimerArranque.tsx`, `expulsionNube.ts`, `nubeRealtime.ts` |
+| Panel web | `web/src/api/dispositivos.ts`, `pantallas/Dispositivos.tsx` (Registrar por sitio, Retirar, columna Vinculación, "Intentos y alertas"), `componentes/CodigoVinculacionEmitido.tsx` (QR con `uqr`, cuenta regresiva) |
+| Móvil Rust | `mobile/rust-core/src/firmante.rs` (callback UniFFI `AlmacenClaveDispositivo`), `nube.rs` (`vincular_dispositivo_inicial`, `descartar_token_nube`, `nube_configurada`), APIs `*_verificado` en `ingresos.rs`/`gafetes.rs`/`proveedores.rs` |
 | Android | `AlmacenClaveKeystore.kt` (alias `control_acceso_identidad_dispositivo`, secp256r1), `PantallaEscanearCodigoVinculacion.kt` (CameraX + ML Kit), `PantallaPrimerArranque.kt`, `PrimerArranqueViewModel.kt`, `ExpulsionNube.kt`, `NubeRealtime.kt`; bindings regenerados en `app/src/main/java/uniffi/control_acceso_mobile/` |
 
 Retirado: `SecretoDispositivoStore.kt`, `scripts/generar_secreto_dispositivo.mjs`,
@@ -67,25 +70,35 @@ la feature `cifrado-secreto-dispositivo-portable` y `aes-gcm`, todas las APIs
 `*_con_secreto` del núcleo móvil, `autenticar_dispositivo` del núcleo,
 `NubeDelDispositivo`, y el estado `secreto_legado` del panel y del escritorio.
 
+Retirado en la simplificación (2026-09-30): la suspensión temporal
+(`suspended_at`, `admin-suspend-device`, `NubeError::DispositivoSuspendido`)
+y la re-vinculación (`admin-crear-codigo-vinculacion`, `dispositivo_esperado`,
+el evento `codigo_de_otro_dispositivo`, `revincular_dispositivo` en
+escritorio y móvil, `VincularEquipoModal.tsx`, la huella en el aviso de
+expulsión). Las Edge Functions `admin-suspend-device` y
+`admin-crear-codigo-vinculacion` siguen desplegadas en staging y hay que
+borrarlas desde el dashboard.
+
 ## Estado
 
 | Parte | Estado |
 | --- | --- |
 | Migraciones | Aplicadas en staging (el retiro de `secret_hash` se aplicó como delta con `execute_sql`, idéntico a los archivos) |
-| Tests SQL en staging | 9 de 10 en verde. `administradores_panel_autorizacion.sql` falla **desde antes** (ver Problemas conocidos) |
-| Edge Functions | Las 11 desplegadas en staging con el código de la rama |
-| E2E real contra staging | 8/8: canje, clave marcada, autenticación por aserción, lectura RLS, código de un solo uso, re-vinculación con otra clave, clave anterior rechazada, token anterior sin acceso |
-| Núcleo Rust | `cargo clippy --all-targets --features nube,cifrado-secreto-dispositivo` limpio; `cargo test` con esas features en verde (482 lib + integración) |
-| Escritorio | clippy Windows (`x86_64-pc-windows-gnu`) limpio; `tsc`, `eslint`, vitest 271/271 |
-| Panel web | `tsc -b`, vitest 78/78 (Playwright 10/10 en la pasada anterior) |
-| Móvil `rust-core` | clippy limpio, 128 tests |
-| Android | bindings regenerados; `testDebugUnitTest` 333/333 |
+| Tests SQL en staging | 10 de 11 en verde (incluye `realtime_autorizacion.sql`: un retirado no entra al canal). `administradores_panel_autorizacion.sql` falla **desde antes** (ver Problemas conocidos) |
+| Edge Functions | Las 10 de la rama desplegadas en staging |
+| E2E real contra staging | Canje, clave marcada, autenticación por aserción, lectura RLS, código de un solo uso (`examples/probar_vinculacion.rs`) |
+| Equipos reales | PC y teléfono vinculados en staging con los builds de diagnóstico, 0 errores; canal en vivo funcionando |
+| Núcleo Rust | `cargo clippy --all-targets --features nube,cifrado-secreto-dispositivo` limpio; `cargo test` con esas features en verde |
+| Escritorio | clippy Windows (`x86_64-pc-windows-gnu`) limpio con y sin `telemetria`; `tsc`, `eslint`, vitest 269/269 |
+| Panel web | `tsc -b`, vitest 78/78, Playwright 10/10 |
+| Móvil `rust-core` | clippy limpio, tests en verde |
+| Android | bindings regenerados; `testDebugUnitTest` 331/331 |
 | Producción | **Pendiente de aprobación del usuario** |
 
 ## Datos de prueba en staging
 
 - Sitio "Prueba vinculación E2E" `baaf7b95-de9d-4ad9-a9e7-1517c4e66f8f`,
-  con el gafete 424242 (para que la prueba de re-vinculación tenga qué leer).
+  con el gafete 424242.
 - Dispositivo "PC prueba vinculación E2E" `e5a92524-1e2e-40f3-ab52-4cb5afab52aa`
   (vinculado a una clave temporal de la última corrida del ejemplo).
 - "Celular legado E2E" `d5f6a1fd-a3e2-4412-a1e3-a20122156850` (quedó sin
@@ -98,13 +111,13 @@ Se pueden reutilizar para otra corrida o borrar; no afectan a nadie.
 
 - Núcleo: una vez `cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml`,
   luego `cargo test --features nube,cifrado-secreto-dispositivo`.
-- E2E contra staging (crear antes dos códigos del mismo dispositivo, ver SQL
-  abajo):
+- E2E contra staging (registrar antes un dispositivo en el panel, o crear
+  un código para un dispositivo sin clave con el SQL de abajo):
 
   ```bash
   CONTROL_ACCESO_SUPABASE_URL=https://pmrytjktlyiuikxuuxpr.supabase.co \
   CONTROL_ACCESO_SUPABASE_APIKEY=sb_publishable_29DwMvfyj8Jq--LBcqxtBA_pTwWrDH4 \
-  cargo run --example probar_vinculacion --features nube -- <codigo> <codigo-revinculacion>
+  cargo run --example probar_vinculacion --features nube -- <codigo>
   ```
 
   ```sql
@@ -165,13 +178,13 @@ Pasos:
 2. Instalar los builds de diagnóstico **de cero** y vincular: el teléfono
    escanea el QR; la PC escribe el código.
 3. Probar: login, un ingreso, sincronizar, ver el cambio en vivo en el otro
-   equipo. Luego, desde el panel: suspender (los dos deben avisar y dejar de
-   sincronizar), reactivar, y revocar uno.
+   equipo. Luego, desde el panel, retirar uno: debe avisar al instante,
+   dejar de recibir avisos en vivo y no volver a sincronizar.
 4. Verificar en staging:
 
 ```sql
 -- Estado de los dispositivos de prueba
-select etiqueta, tipo, vinculado_en, last_seen_at, suspended_at, revoked_at,
+select etiqueta, tipo, vinculado_en, last_seen_at, revoked_at,
        left(clave_huella, 8) as huella, plataforma, app_version
 from public.dispositivos where sitio_id = '<sitio de prueba>' order by created_at;
 
@@ -200,24 +213,27 @@ ahí antes de dar por mala una prueba.
 
 ## Pasos para producción (cuando el usuario lo apruebe)
 
-Todo equipo pierde la conexión a la nube desde el paso 1 hasta que se
-re-vincula (el trabajo local sigue funcionando y la bandeja de salida se
-conserva). Conviene hacerlo en una ventana acordada.
+Todo equipo pierde la conexión a la nube desde el paso 2 hasta que se
+reinstala y se registra de nuevo. Lo que no se haya sincronizado antes se
+pierde con la reinstalación: sincronizar cada equipo justo antes. Conviene
+hacerlo en una ventana acordada.
 
 1. Integrar la rama a `main` (PR y revisión).
 2. Producción `xidaepyaljzkpbsxrqsm`: aplicar las migraciones
    `20260929200000_revocacion_efectiva_dispositivos` y
-   `20260929200100_vinculacion_dispositivos_por_codigo`.
+   `20260929200100_vinculacion_dispositivos_por_codigo` y
+   `20260930020000_realtime_solo_dispositivos_vigentes`.
    Confirmar antes que el secret `DEVICE_SIGNING_KEY` existe (ya lo usa
    `device-auth`).
-3. Desplegar las 11 Edge Functions de la tabla de arriba (con `_shared/`),
-   respetando `verify_jwt`. `admin-crear-codigo-vinculacion` es nueva.
+3. Desplegar las Edge Functions de la rama (con `_shared/`), respetando
+   `verify_jwt`, y borrar `admin-suspend-device`.
 4. Correr los tests SQL contra producción (hacen `rollback`) y revisar los
    advisors de seguridad.
 5. Publicar el panel web nuevo.
 6. Publicar las builds nuevas de escritorio y Android.
-7. Por cada equipo: panel → Dispositivos → **Re-vincular** → instalar la
-   versión nueva → canjear el código (el teléfono puede escanear el QR).
+7. Por cada equipo: panel → Dispositivos → **Registrar** uno nuevo en su
+   sitio → instalar la versión nueva de cero → canjear el código (el
+   teléfono puede escanear el QR) → **Retirar** el dispositivo viejo.
 8. Verificar en el panel que cada equipo aparece "Vinculado" y que no hay
    alertas inesperadas en "Intentos y alertas".
 
@@ -225,16 +241,10 @@ conserva). Conviene hacerlo en una ventana acordada.
 
 - **Producción** (arriba), con aprobación del usuario y después de la
   prueba con equipos reales.
-- Android no tiene pantalla de re-vincular a propósito (sólo instalaciones
-  nuevas); `Nucleo::revincular_dispositivo` queda en el núcleo sin usar.
-- **Reconstruir sin código** un equipo que perdió la base pero conserva su
-  clave (hoy la pantalla inicial siempre pide código; ver
-  `docs/recuperacion-sitio-local.md`).
-- **Realtime**: la autorización de `realtime.messages` mira sólo `sitio_id`.
-  Un equipo revocado con un token todavía vigente (máx. 1 h) podría
-  suscribirse al canal del sitio. Evaluar sumar `dispositivo_vigente()` a
-  esa política; el aviso `dispositivo_expulsado` no se pierde, porque el
-  equipo ya está suscrito cuando se lo expulsa.
+- Borrar de staging `admin-suspend-device` y `admin-crear-codigo-vinculacion`
+  (dashboard de Supabase → Edge Functions).
+- Repetir la prueba con equipos reales con builds de diagnóstico nuevos
+  (Registrar y Retirar).
 - F3 opcional de la propuesta: clave en TPM (Windows) y *key attestation*
   (Android).
 

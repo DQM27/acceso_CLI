@@ -605,10 +605,6 @@ pub struct SesionRealtimeNube {
     pub dispositivo_id: String,
     pub tipo: String,
     pub topic: String,
-    /// Huella de la clave de este teléfono (`None` sólo si no se pudo
-    /// leer). Distingue a este teléfono de otro vinculado con el
-    /// mismo `dispositivo_id` al recibir el aviso `dispositivo_expulsado`.
-    pub huella: Option<String>,
 }
 
 /// Un ingreso abierto por el otro dispositivo del mismo sitio -- no vive

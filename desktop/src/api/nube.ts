@@ -3,10 +3,9 @@ import { solicitarSincronizacionNube } from "../eventosNube";
 import type { MedioIngreso } from "./ingresos";
 import type { TipoIngreso } from "./contratistas";
 
-// Espejo de comandos/nube.rs. Este equipo se vincula a la nube canjeando un
-// código del panel: en el arranque inicial (`vincularDispositivoInicial`) o,
-// si ya está en uso, desde el menú de usuario (`revincularDispositivo`,
-// sólo ROOT). El resto (sincronizar, listar, cerrar) es de cualquier sesión
+// Espejo de comandos/nube.rs. Este equipo se vincula a la nube una sola vez,
+// canjeando un código del panel en el arranque inicial
+// (`vincularDispositivoInicial`). El resto (sincronizar, listar, cerrar) es de cualquier sesión
 // activa -- uso diario normal, no administración -- por eso el botón
 // "Sincronizar" vive en la barra de estado (`BarraNube.tsx`), visible
 // siempre.
@@ -95,10 +94,6 @@ export interface SesionRealtimeNube {
   dispositivo_id: string;
   tipo: string;
   topic: string;
-  /** Huella de la clave de este equipo (`null` sólo si no se pudo leer).
-   * Distingue a este equipo de otro vinculado con el mismo
-   * `dispositivo_id` al recibir `dispositivo_expulsado`. */
-  huella: string | null;
 }
 
 /** Ingreso abierto por el otro dispositivo del mismo sitio -- no vive en el
@@ -174,34 +169,11 @@ export function vincularDispositivoInicial(codigo: string): Promise<ResumenSincr
   return invoke("vincular_dispositivo_inicial", { codigo });
 }
 
-/** Re-vincula este equipo con un código nuevo del panel, sin tocar su base
- * local. Sólo ROOT. */
-export function revincularDispositivo(codigo: string): Promise<void> {
-  return invoke("revincular_dispositivo", { codigo });
-}
-
-export type CredencialNube = "clave" | "sin_vincular";
-
-export interface EstadoVinculacion {
-  credencial: CredencialNube;
-  dispositivo_id: string | null;
-  /** Huella de la clave vigente de este equipo (RFC 7638). */
-  huella: string | null;
-}
-
-export function estadoVinculacion(): Promise<EstadoVinculacion> {
-  return invoke("estado_vinculacion");
-}
-
 /** Descarta el token cacheado tras un aviso `dispositivo_expulsado`: la
  * próxima operación de nube pide uno nuevo y muestra el motivo real. */
 export function descartarTokenNube(): Promise<void> {
   return invoke("descartar_token_nube");
 }
-
-/** Motivo del aviso en vivo `dispositivo_expulsado` (ver la migración
- * `revocacion_efectiva_dispositivos`). */
-export type MotivoExpulsion = "revocado" | "suspendido" | "revinculado";
 
 export function sincronizarConNube(): Promise<ResumenSincronizacion> {
   return invoke("sincronizar_con_nube");

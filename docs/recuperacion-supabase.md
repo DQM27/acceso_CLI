@@ -87,10 +87,10 @@ es aparte, se configura desde el dashboard del proyecto
 
 ```sh
 supabase functions deploy device-auth
+supabase functions deploy device-vincular
 supabase functions deploy admin-list-devices
 supabase functions deploy admin-provision-device
 supabase functions deploy admin-revoke-device
-supabase functions deploy admin-suspend-device
 supabase functions deploy admin-delete-device
 supabase functions deploy admin-create-site
 supabase functions deploy sync-access-policy

@@ -9,7 +9,11 @@
 > **Estado (2026-09-30):** F0, F1 y F2 implementadas en la rama
 > `feat/registro-dispositivos-seguro` y probadas en staging; producción
 > pendiente de aprobación. Estado detallado, pruebas y pasos de despliegue:
-> `docs/handoff-registro-dispositivos.md`. La sección 2 describe el sistema
+> `docs/handoff-registro-dispositivos.md`. **Simplificación posterior
+> (2026-09-30):** el panel sólo ofrece *Registrar* y *Retirar*; se quitaron
+> la suspensión temporal y la re-vinculación que se mencionan abajo (un
+> equipo reinstalado se registra como nuevo y el anterior se retira). La
+> sección 2 describe el sistema
 > **anterior** (el del secreto), que ya se retiró.
 
 ## 1. Quién controla a quién
@@ -206,7 +210,7 @@ norma acepta como equivalente que la credencial esté ligada al remitente
 | **F2 — Par de claves** | Trait `FirmanteDispositivo` en el núcleo; implementaciones Android/Windows (iOS cuando exista la app); `device-auth` con aserción firmada; sin camino legado (ver §6). | H1 completo | 1–1,5 semanas |
 | **F3 — Opcional** | Clave en TPM en Windows; *key attestation* en Android para rechazar emuladores o equipos rooteados. | Endurecimiento | según necesidad |
 
-## 6. Migración: se re-vinculan todos los equipos (decisión 2026-09-30)
+## 6. Migración: se registran de nuevo todos los equipos (decisión 2026-09-30)
 
 La idea original era una migración transparente (aceptar el secreto hasta
 que cada equipo registrara su clave). Se descartó por decisión del usuario:
@@ -217,9 +221,10 @@ que **no existe camino legado**:
   existente queda "sin vincular" (conserva su `id`, sitio e historial).
 - `device-auth` sólo acepta aserciones firmadas; `dispositivo_vigente()`
   exige la `huella` en el token, así que ningún token viejo sirve.
-- Para cada equipo en campo: panel → Dispositivos → **Re-vincular** →
-  instalar la versión nueva de la app → canjear el código (o el QR en el
-  teléfono). Pasos completos en `docs/handoff-registro-dispositivos.md`.
+- Para cada equipo en campo: panel → Dispositivos → **Registrar** uno
+  nuevo → instalar la versión nueva de la app → canjear el código (o el QR
+  en el teléfono) → **Retirar** el viejo. Pasos completos en
+  `docs/handoff-registro-dispositivos.md`.
 
 Menos código y menos superficie de ataque: nunca conviven dos formas de
 autenticarse.

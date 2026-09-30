@@ -528,12 +528,9 @@ pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
 
     match error {
         NubeError::CredencialesInvalidas => {
-            "La nube ya no reconoce a este dispositivo (revocado o vinculado en otro equipo) \
-             -- pedí un código nuevo en el panel para volver a vincularlo"
+            "La nube ya no reconoce a este dispositivo (fue retirado en el panel) \
+             -- registralo como dispositivo nuevo con un código del panel"
                 .into()
-        }
-        NubeError::DispositivoSuspendido => {
-            "Este dispositivo fue suspendido -- contactá a un administrador".into()
         }
         NubeError::VersionDesactualizada => {
             "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando"
@@ -822,20 +819,20 @@ mod tests {
         );
     }
 
-    /// `DispositivoSuspendido`/`VersionDesactualizada` cada uno con su propio
+    /// `CredencialesInvalidas`/`VersionDesactualizada` cada uno con su propio
     /// mensaje -- no deben caer los dos en el mismo texto genérico (mismo
-    /// motivo que el test de arriba para gestión/uso), porque uno lo resuelve
-    /// un admin y el otro se resuelve actualizando la app.
+    /// motivo que el test de arriba para gestión/uso), porque uno se resuelve
+    /// registrando el equipo de nuevo y el otro actualizando la app.
     #[cfg(feature = "nube")]
     #[test]
-    fn dispositivo_suspendido_y_version_desactualizada_no_comparten_mensaje() {
+    fn credencial_rechazada_y_version_desactualizada_no_comparten_mensaje() {
         use crate::nube::NubeError;
 
-        let suspendido = mensaje_nube(NubeError::DispositivoSuspendido);
+        let rechazada = mensaje_nube(NubeError::CredencialesInvalidas);
         let desactualizada = mensaje_nube(NubeError::VersionDesactualizada);
 
-        assert_ne!(suspendido, desactualizada);
-        assert!(suspendido.contains("administrador"));
+        assert_ne!(rechazada, desactualizada);
+        assert!(rechazada.contains("código"));
         assert!(desactualizada.contains("actualizá") || desactualizada.contains("actualiza"));
     }
 
