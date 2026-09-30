@@ -57,9 +57,12 @@ export async function listarSitiosDelAnfitrion(signal?: AbortSignal) {
   const filas = z
     .array(z.object({ sitio_id: z.uuid(), sitios: sitioEsquema.nullable() }))
     .parse(data);
-  return filas
-    .map((f) => f.sitios)
-    .filter((s): s is NonNullable<typeof s> => s !== null);
+  // Una cuenta de administración ve las filas de todos los anfitriones (así lo
+  // permite la RLS), y cada sitio aparecería una vez por anfitrión: se deja
+  // un solo botón por sitio.
+  const porId = new Map<string, NonNullable<(typeof filas)[number]["sitios"]>>();
+  for (const { sitios } of filas) if (sitios) porId.set(sitios.id, sitios);
+  return [...porId.values()];
 }
 
 /** Todas las filas de `mis_visitas` visibles para quien llama (RLS ya
