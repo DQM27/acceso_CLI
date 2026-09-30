@@ -5,13 +5,11 @@ import { invocar, esObjeto } from "./_invocar";
 /**
  * Usuarios globales (ver docs/planes-implementados/plan-panel-administrativo-web.md, punto 4):
  * un usuario/operador no pertenece a un sitio -- dar de baja desde acá lo
- * deja sin acceso en TODOS a la vez. `sitio_id` en la tabla real queda como
- * dato de procedencia (qué dispositivo lo creó, o a qué sitio quedó
- * asociado un alta desde el panel), pero no se pide para esta lista -- no
- * aporta nada para decidir nada acá (mismo criterio que contratistas.ts).
- * RLS: SELECT/UPDATE global para cualquier sesión autenticada (migración
- * crea_usuarios_globales) -- INSERT sólo para admin_global (migración
- * admin_global_crea_usuarios) o un dispositivo creando en su propio sitio.
+ * deja sin acceso en TODOS a la vez (el aviso en vivo llega a todas las
+ * unidades). La tabla no tiene `sitio_id`: ver la migración
+ * `usuarios_globales_y_coherencia` (mismo criterio que contratistas.ts).
+ * RLS: SELECT para dispositivos y admin_global; INSERT/UPDATE sólo para
+ * admin_global.
  * ROOT viaja acá también desde 2026-09-06 (migración
  * permite_root_en_usuarios_globales) -- antes quedaba 100% local a cada
  * dispositivo.
@@ -64,14 +62,6 @@ export async function actualizarActivoUsuario(id: string, activo: boolean): Prom
   if (error) throw new Error(error.message);
 }
 
-/** Para elegir `sitio_id` al crear -- hoy sólo existe "Brisas", pero no
- * hay que asumirlo hardcodeado en el formulario. */
-export async function listarSitios(): Promise<{ id: string; nombre: string }[]> {
-  const { data, error } = await supabase.from("sitios").select("id, nombre").order("nombre");
-  if (error) throw new Error(error.message);
-  return data;
-}
-
 export interface UsuarioCreado {
   usuario_id: string;
   cedula: string;
@@ -104,7 +94,6 @@ function esPasswordReseteado(valor: unknown): valor is { usuario_id: string; pas
  * formulario web (sigue disponible por CLI/TUI: `crear_root_inicial`).
  */
 export function crearUsuario(datos: {
-  sitio_id: string;
   cedula: string;
   nombre: string;
   rol: "ADMINISTRADOR" | "OPERADOR";

@@ -39,10 +39,8 @@ where correo <> 'daniel.bleach1@gmail.com';
 -- dispositivo pegue su secreto y sincronice (ver PrimerArranque.tsx /
 -- PantallaPrimerArranque.kt). Requiere la migración
 -- permite_root_en_usuarios_globales ya aplicada (rol ROOT permitido).
-insert into public.usuarios (sitio_id, cedula, nombre, rol, activo)
-select id, '155824395105', 'Daniel Quintana', 'ROOT', true
-from public.sitios
-where nombre = 'Brisas';
+insert into public.usuarios (cedula, nombre, rol, activo)
+values ('155824395105', 'Daniel Quintana', 'ROOT', true);
 
 select
   (select count(*) from public.dispositivos) as dispositivos,

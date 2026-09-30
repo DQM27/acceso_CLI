@@ -762,9 +762,10 @@ pub(super) fn construir_cuerpo_usuario(
         |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
     )?;
 
+    // Sin `sitio_id`: los usuarios son globales, igual que contratistas
+    // (migración `usuarios_globales_y_coherencia`).
     Ok(json!({
         "id": uuid,
-        "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
         "cedula": cedula,
         "nombre": nombre,

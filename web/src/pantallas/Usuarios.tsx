@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
@@ -10,7 +10,6 @@ import { useLista } from "../componentes/useLista";
 import {
   actualizarActivoUsuario,
   crearUsuario,
-  listarSitios,
   listarUsuarios,
   resetearPasswordUsuario,
 } from "../api/usuarios";
@@ -32,10 +31,7 @@ import { mensajeError } from "../mensajeError";
  * grilla (viaja por la nube desde 2026-09-06) pero no se da de alta desde
  * acá a propósito -- eso sigue siendo CLI/TUI (`crear_root_inicial`).
  *
- * Sin selector de sitio a propósito, igual que el formulario de escritorio
- * no lo tiene -- hoy existe un solo sitio ("Brisas"); se resuelve solo al
- * abrir el modal. Si algún día hay más de uno, ahí sí hace falta sumar el
- * selector (y decidir qué sitio le corresponde a cada alta).
+ * Sin unidad operativa: un usuario es global, entra en cualquier unidad.
  */
 interface FilaUsuario extends Usuario {
   conectado: boolean;
@@ -46,7 +42,6 @@ export default function Usuarios() {
   const [busqueda, setBusqueda] = useState("");
 
   const [modalAbierto, setModalAbierto] = useState(false);
-  const [sitioId, setSitioId] = useState<string | null>(null);
   const [cedula, setCedula] = useState("");
   const [nombre, setNombre] = useState("");
   const [creando, setCreando] = useState(false);
@@ -58,11 +53,6 @@ export default function Usuarios() {
     password_temporal: string;
   } | null>(null);
   const [reseteando, setReseteando] = useState<string | null>(null);
-  // Guarda de vigencia para `abrirModal` -- ver ese comentario. Mismo
-  // patrón que `vigente` en AuthContexto/useAutoRefresh, pero como
-  // contador (no booleano) porque acá puede haber más de una apertura en
-  // vuelo, y sólo la última importa.
-  const aperturaModalRef = useRef(0);
 
   // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
   // desktop/mobile para su propio sync periódico. "usuarios" para el aviso
@@ -133,20 +123,6 @@ export default function Usuarios() {
   function abrirModal() {
     setModalAbierto(true);
     setErrorForm(null);
-    // Si el modal se cierra y se vuelve a abrir antes de que resuelva esta
-    // llamada, la respuesta de la apertura VIEJA no debe pisar el
-    // `sitioId` que ya eligió la apertura NUEVA -- de ahí el número de
-    // apertura: sólo aplica el resultado si sigue siendo la última.
-    const apertura = ++aperturaModalRef.current;
-    listarSitios()
-      .then((lista) => {
-        if (aperturaModalRef.current !== apertura) return;
-        setSitioId(lista[0]?.id ?? null);
-      })
-      .catch((error) => {
-        if (aperturaModalRef.current !== apertura) return;
-        toast.error(mensajeError(error));
-      });
   }
 
   function cerrarModal() {
@@ -158,15 +134,10 @@ export default function Usuarios() {
 
   async function alEnviarFormulario(evento: React.FormEvent) {
     evento.preventDefault();
-    if (!sitioId) {
-      setErrorForm("No hay ninguna unidad operativa configurada todavía.");
-      return;
-    }
     setCreando(true);
     setErrorForm(null);
     try {
       const creado = await crearUsuario({
-        sitio_id: sitioId,
         cedula: cedula.trim(),
         nombre: nombre.trim(),
         // El rol ya no distingue nada dentro de la app (aplanado de

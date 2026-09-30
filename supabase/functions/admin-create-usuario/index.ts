@@ -32,8 +32,9 @@ Deno.serve(async (req: Request) => {
     return json({ error: "unauthorized" }, 401);
   }
 
+  // Sin unidad: los usuarios son globales (migración
+  // `usuarios_globales_y_coherencia`).
   let body: {
-    sitio_id?: string;
     cedula?: string;
     nombre?: string;
     rol?: string;
@@ -44,12 +45,11 @@ Deno.serve(async (req: Request) => {
     return json({ error: "bad_request" }, 400);
   }
 
-  const sitioId = body.sitio_id?.trim();
   const cedula = body.cedula?.trim();
   const nombre = body.nombre?.trim();
   const rol = body.rol?.trim();
 
-  if (!sitioId || !cedula || !nombre || !rol || !["ROOT", "ADMINISTRADOR", "OPERADOR"].includes(rol)) {
+  if (!cedula || !nombre || !rol || !["ROOT", "ADMINISTRADOR", "OPERADOR"].includes(rol)) {
     return json({ error: "bad_request", detail: "faltan campos o rol invalido" }, 400);
   }
 
@@ -71,7 +71,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: usuario, error: usuarioError } = await supabase
     .from("usuarios")
-    .insert({ sitio_id: sitioId, cedula, nombre, rol, auth_user_id: authUser.user.id })
+    .insert({ cedula, nombre, rol, auth_user_id: authUser.user.id })
     .select("id")
     .single();
 

@@ -32,8 +32,8 @@ insert into public.administradores_panel (correo) values (current_setting('diagn
 -- Sembrado directo (bypassa RLS, como service_role) -- ya no hay forma de
 -- crear este usuario de prueba vía INSERT normal, que es justo lo que este
 -- test verifica.
-insert into public.usuarios (id, sitio_id, cedula, nombre, rol) values
-  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'diag-cedula-1', 'Diagnóstico operador', 'OPERADOR');
+insert into public.usuarios (id, cedula, nombre, rol) values
+  (gen_random_uuid(), 'diag-cedula-1', 'Diagnóstico operador', 'OPERADOR');
 
 -- Un dispositivo vigente por sitio como `sub` de los JWT simulados: la
 -- política restrictiva "solo dispositivos vigentes" exige que el token sea
@@ -53,8 +53,8 @@ select set_config('request.jwt.claims',
 do $$
 begin
   begin
-    insert into public.usuarios (id, sitio_id, cedula, nombre, rol)
-    values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'diag-cedula-2', 'Diagnóstico bloqueado', 'OPERADOR');
+    insert into public.usuarios (id, cedula, nombre, rol)
+    values (gen_random_uuid(), 'diag-cedula-2', 'Diagnóstico bloqueado', 'OPERADOR');
     raise exception 'Un dispositivo pudo crear un usuario (se esperaba que ya no pudiera)';
   exception
     when insufficient_privilege then null;
@@ -108,8 +108,8 @@ begin
   if not found then
     raise exception 'admin_global no puede actualizar usuarios';
   end if;
-  insert into public.usuarios (id, sitio_id, cedula, nombre, rol)
-  values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'diag-cedula-3', 'Diagnóstico admin_global', 'ADMINISTRADOR');
+  insert into public.usuarios (id, cedula, nombre, rol)
+  values (gen_random_uuid(), 'diag-cedula-3', 'Diagnóstico admin_global', 'ADMINISTRADOR');
   if not found then
     raise exception 'admin_global no pudo crear un usuario';
   end if;

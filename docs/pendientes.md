@@ -149,6 +149,12 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   "gafete en uso" por unidad en `ingresos_proveedor` y `prestamos_gafete_provisional`;
   la cola marca el choque como conflicto y escritorio y Android avisan al operador
   con el tipo de movimiento (`ConflictoGafeteActivo.tipo`).
+- [x] **Usuarios sin unidad y coherencia de salida** (2026-09-30,
+  `usuarios_globales_y_coherencia`). `usuarios` ya no tiene `sitio_id` y su aviso en
+  vivo llega a todas las unidades (una baja se ve al instante en todas);
+  `admin-create-usuario` y el panel ya no piden unidad. `ingresos` exige la misma
+  coherencia de salida que proveedores (sin exigir salida posterior a la entrada,
+  por relojes desfasados). `plegar_texto` con `search_path` fijo.
 - [ ] **Versiones de migración desalineadas con staging.** Las migraciones aplicadas
   con el MCP quedaron registradas con la hora de aplicación, no con la del archivo.
   Alinear `supabase_migrations.schema_migrations` antes de usar `supabase db push`.
