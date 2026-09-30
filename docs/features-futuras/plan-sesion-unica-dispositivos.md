@@ -6,6 +6,10 @@
 > + par de claves generado en el equipo. Ver
 > `propuesta-registro-dispositivos.md`. La sección 7 (sesión única por
 > persona) no cambia.
+>
+> **Actualización 2026-09-30:** ese reemplazo ya está implementado y probado
+> en staging, sin camino legado (el secreto de dispositivo se eliminó). Estado
+> y pasos a producción: `docs/handoff-registro-dispositivos.md`.
 
 > Documento de continuidad para retomar esta conversación en otra sesión.
 > Nace de una prueba manual del usuario: el mismo secreto de dispositivo

@@ -102,10 +102,9 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   repite. Falta decidir si `run()` debe negarse a arrancar con
   `sqlite-plano` fuera de un build de desarrollo explícito, o al menos
   avisar fuerte en la UI que la base no está cifrada de verdad.
-- [x] **Android: proteger el secreto del dispositivo con Keystore.** El secreto móvil
-  se guarda desde Kotlin con Android Keystore (`AES/GCM/NoPadding`) y el núcleo móvil recibe
-  el secreto descifrado sólo en memoria para autenticarse/sincronizar. Incluye migración
-  suave del archivo legado administrado por Rust; desktop mantiene su cifrado actual.
+- [x] **Android: proteger el secreto del dispositivo con Keystore.** (Superado
+  2026-09-30: el secreto se retiró; el teléfono firma con una clave EC que vive en
+  Android Keystore y nunca sale del hardware, ver `AlmacenClaveKeystore.kt`.)
 - [x] **Redactar `Debug` de credenciales de nube.** `TokenDispositivo`
   (`src/nube/cliente.rs`) y `SesionRealtimeNube` (`src/application/nube.rs`) tienen
   `Debug` manual con `access_token`/`apikey` redactados, cubierto por pruebas.
@@ -121,19 +120,25 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - [ ] **Mitigar timing attack en login local.** Si la cédula no existe,
   `AutenticacionService::buscar_candidato` rechaza sin correr Argon2; usar un hash dummy
   reduciría la diferencia de tiempo. Riesgo bajo, pero confirmado.
-- [ ] **Activación de dispositivo con verificación por correo.** Hoy el secreto correcto
-  activa el dispositivo. El flujo diseñado agrega un código por correo en la primera
-  activación del secreto, con estado intermedio antes de emitir el JWT final.
-- [ ] **Sesión única por dispositivo y presencia en tiempo real.** Ver
-  `docs/features-futuras/plan-sesion-unica-dispositivos.md`. El mismo secreto hoy activa más de un
-  dispositivo sin límite. Plan: secreto de un solo uso, identidad canónica del
-  dispositivo en Supabase, sesión propia desacoplada del secreto, panel de presencia,
-  y regla de desempate por fecha de alta + expulsión automática para conflictos
-  detectados offline.
-  - [x] Presencia en tiempo real ya funcionando (2026-09-08): Dispositivos.tsx y
-    Usuarios.tsx muestran en vivo quién/qué está conectado y desde dónde.
-  - [ ] El resto (secreto de un solo uso, identidad canónica, desempate offline)
-    sigue sin implementar.
+- [x] **Activación de dispositivo con verificación por correo.** (Descartado
+  2026-09-30: lo reemplaza el código de vinculación de un solo uso que emite el
+  panel, ver `docs/features-futuras/propuesta-registro-dispositivos.md`.)
+- [ ] **Registro de dispositivos por código + clave: pasar a producción.** Implementado
+  y probado en staging en la rama `feat/registro-dispositivos-seguro`; falta la
+  aprobación del usuario para desplegar en producción y re-vincular cada equipo. Pasos
+  y estado en `docs/handoff-registro-dispositivos.md`.
+  - [x] Presencia en tiempo real (2026-09-08): Dispositivos.tsx y Usuarios.tsx.
+  - [x] Un código sirve una sola vez; cada equipo tiene su propia clave; revocar,
+    suspender o re-vincular corta al instante (política restrictiva + aviso por Realtime).
+  - [ ] Pantalla de "Re-vincular este teléfono" en Android (el núcleo ya expone
+    `Nucleo::revincular_dispositivo`; falta la UI).
+  - [ ] Reconstruir un equipo cuya base local se perdió pero conserva su clave, sin
+    pedir código nuevo (ver `docs/recuperacion-sitio-local.md`).
+- [ ] **Test SQL `administradores_panel_autorizacion.sql` desactualizado.** Espera que un
+  admin_global pueda insertar/borrar en `administradores_panel`, pero la migración
+  `20260909192636_retira_escritura_directa_de_administradores_panel` quitó esas
+  políticas a propósito. Falla igual antes y después del registro por código
+  (verificado en staging 2026-09-30); hay que alinear el test con la decisión.
 - [ ] **Sesión única por SITIO, no por dispositivo ni global (decisión
   refinada 2026-09-12).** Ver `docs/features-futuras/plan-sesion-unica-dispositivos.md`,
   sección 7 -- reemplaza el planteo anterior de esta entrada. Política

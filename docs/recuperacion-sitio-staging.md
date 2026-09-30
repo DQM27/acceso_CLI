@@ -180,14 +180,12 @@ Ya implementado (punto 11 del plan de QA, cerrado 2026-09-18) -- ver
 
 ## Cómo probar de punta a punta una vez cargado el `DEVICE_SIGNING_KEY`
 
-1. Llamar `admin-provision-device` con `sitio_nombre`/`tipo`/`etiqueta`
-   para generar el primer secreto de dispositivo -- ya se puede hacer
-   desde el panel real (`http://localhost:5173` apuntado a staging,
-   logueado con Google) en vez de necesitar el `service_role` key
-   directo, ahora que `administradores_panel` tiene al menos un correo
-   autorizado.
-2. Activar un dispositivo (desktop o mobile, apuntado a este proyecto,
-   ver arriba) con ese secreto.
+1. Dar de alta el dispositivo desde el panel (`admin-provision-device`,
+   `http://localhost:5173` apuntado a staging, logueado con Google): el
+   panel muestra un código de vinculación de un solo uso y su QR (ver
+   `docs/handoff-registro-dispositivos.md`).
+2. Vincular un equipo (desktop o mobile, apuntado a este proyecto, ver
+   arriba) con ese código.
 3. Confirmar que trae el catálogo (vacío, es un proyecto nuevo) y que
    puede crear contratistas/ingresos/etc. sin que ninguna política RLS
    los rechace.
@@ -205,14 +203,14 @@ ni siquiera dos de staging).
 ## Aislar también lo local (2026-09-20)
 
 Apuntar a staging cambia solo la nube -- por defecto la app sigue
-escribiendo en el `control_acceso.db` real y reusando el secreto de
-activación real. Para un aislamiento completo hacen falta además:
+escribiendo en el `control_acceso.db` real y reusando la clave de
+dispositivo real. Para un aislamiento completo hacen falta además:
 
 - **`CONTROL_ACCESO_DB`** (ver `src/database/connection.rs`,
   `DATABASE_PATH_ENV`): ruta absoluta a un archivo distinto de
   `%LOCALAPPDATA%\ControlAcceso\control_acceso.db`.
-- **`APPDATA`**: `dispositivo-nube.secret` (el secreto de activación de
-  este dispositivo) y `db_key.dat` (clave SQLCipher en escritorio) viven
+- **`APPDATA`**: `dispositivo-nube.clave` (la clave privada de este
+  equipo) y `db_key.dat` (clave de la base en escritorio) viven
   en `%APPDATA%\ControlAcceso` -- separado de `%LOCALAPPDATA%` a
   propósito (ver `src/nube/credenciales.rs`, `ROAMING_APP_DATA_ENV`).
   Ese módulo no tiene su propia variable de override, así que la única
@@ -262,17 +260,21 @@ pisarse. No afecta el `.so`/bindings de UniFFI (van por `namespace`, no
 por `applicationId`) -- solo hizo falta recompilar el APK, no el núcleo
 Rust.
 
-## Generador local de secretos de dispositivo (2026-09-20)
+## Códigos de vinculación de prueba sin el panel
 
-`scripts/generar_secreto_dispositivo.mjs` genera, sin red, el mismo
-formato de secreto que `admin-provision-device` (`uuid+uuid`, hash
-SHA-256 hex) e imprime el SQL para insertarlo a mano contra el proyecto
-de staging. Pensado para activar dispositivos de prueba sin pasar por el
-panel/Google OAuth. Uso:
+El generador de secretos (`scripts/generar_secreto_dispositivo.mjs`) se
+retiró el 2026-09-30 junto con los secretos de dispositivo. Para vincular
+un equipo de prueba sin pasar por el panel/Google OAuth, se inserta el
+código directamente en staging (se guarda sólo su SHA-256):
 
+```sql
+insert into public.codigos_vinculacion (dispositivo_id, codigo_hash, creado_por, expira_en)
+values ('<dispositivo_id>', encode(sha256('PRUEBAK2M3'::bytea), 'hex'),
+        'prueba@staging', now() + interval '30 minutes');
 ```
-node scripts/generar_secreto_dispositivo.mjs --sitio "Sitio de prueba" --tipo pc --etiqueta "PC recepcion"
-```
+
+El código debe tener 10 caracteres del alfabeto
+`23456789ABCDEFGHJKLMNPQRSTUVWXYZ` (sin 0/O/1/I).
 
 ## Clonado de datos de producción → staging (2026-09-20)
 
@@ -318,12 +320,11 @@ pruebas (son sandbox, no hay integridad que proteger), pero una consulta
 con `inner join` a `contratistas`/`encargados_ruta` puede devolver menos
 filas de las que aparecen sueltas en esas tablas.
 
-**Nota sobre `dispositivos`:** se clonó completa (con `secret_hash`
-real de producción) solo para que las FK de las demás tablas
-(`dispositivo_origen_id`) no rompan -- esos hashes no dan acceso útil
-por sí solos (el proyecto de staging tiene su propio
-`DEVICE_SIGNING_KEY`, distinto del de producción) y no se puede
-recuperar el secreto en texto plano desde el hash.
+**Nota sobre `dispositivos`:** se clonó completa solo para que las FK de
+las demás tablas (`dispositivo_origen_id`) no rompan. Desde 2026-09-30 ya
+no existe `secret_hash`: esas filas quedan "sin vincular" y no dan acceso
+hasta que el panel les emita un código (ver
+`docs/handoff-registro-dispositivos.md`).
 
 **Usuario ROOT de prueba (creado a mano, 2026-09-20):** cédula `1`,
 contraseña `daniel`, sitio `Brisas`. Insertado directo en `auth.users` +

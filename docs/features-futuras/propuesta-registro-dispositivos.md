@@ -5,7 +5,12 @@
 > `plan-sesion-unica-dispositivos.md` y contra prácticas actuales de la
 > industria. Propone **reemplazar** los puntos 1–5 de ese plan por un
 > modelo más simple que resuelve los mismos problemas con menos piezas.
-> Nada de esto está implementado todavía.
+>
+> **Estado (2026-09-30):** F0, F1 y F2 implementadas en la rama
+> `feat/registro-dispositivos-seguro` y probadas en staging; producción
+> pendiente de aprobación. Estado detallado, pruebas y pasos de despliegue:
+> `docs/handoff-registro-dispositivos.md`. La sección 2 describe el sistema
+> **anterior** (el del secreto), que ya se retiró.
 
 ## 1. Quién controla a quién
 
@@ -197,20 +202,27 @@ norma acepta como equivalente que la credencial esté ligada al remitente
 | Fase | Contenido | Resuelve | Esfuerzo aprox. |
 | --- | --- | --- | --- |
 | **F0 — Correcciones rápidas** | `_shared/autorizacion_admin.ts` (H6); sitio por id (H5); no sobrescribir `identificador_hardware` si ya existe y registrar discrepancia (H3); `EdgeRuntime.waitUntil` (H7); broadcast de expulsión + TTL 1 h + `dispositivo_vigente()` en escrituras (H2). | H2, H3, H5, H6, H7 | 2–3 días |
-| **F1 — Códigos de vinculación** | Tabla + `admin-crear-codigo-vinculacion` + `device-vincular`; panel con QR, cuenta regresiva, estados *Pendiente / Vinculado / Suspendido / Revocado* y botón *Re-vincular*; escáner QR en Android (`mlkit:barcode-scanning` ya es dependencia); escritorio escribe el código. En esta fase el canje todavía devuelve un secreto (compatibilidad), pero de un solo uso. | H1 (activación), H4, H8 | 4–5 días |
-| **F2 — Par de claves** | Trait `FirmanteDispositivo` en el núcleo; implementaciones Android/iOS/Windows; `device-auth` v2 con aserción firmada; migración transparente (ver §6). | H1 completo | 1–1,5 semanas |
+| **F1 — Códigos de vinculación** | Tabla + `admin-crear-codigo-vinculacion` + `device-vincular`; panel con QR, cuenta regresiva, estados *Pendiente / Vinculado / Suspendido / Revocado* y botón *Re-vincular*; escáner QR en Android (`mlkit:barcode-scanning` ya es dependencia); escritorio escribe el código. (Implementado junto con F2: el canje ya ata la clave del equipo.) | H1 (activación), H4, H8 | 4–5 días |
+| **F2 — Par de claves** | Trait `FirmanteDispositivo` en el núcleo; implementaciones Android/Windows (iOS cuando exista la app); `device-auth` con aserción firmada; sin camino legado (ver §6). | H1 completo | 1–1,5 semanas |
 | **F3 — Opcional** | Clave en TPM en Windows; *key attestation* en Android para rechazar emuladores o equipos rooteados. | Endurecimiento | según necesidad |
 
-## 6. Migración sin re-vincular equipos en campo
+## 6. Migración: se re-vinculan todos los equipos (decisión 2026-09-30)
 
-1. `device-auth` acepta ambos caminos: aserción firmada (nuevo) o secreto
-   (legado, sólo para filas con `clave_publica_jwk IS NULL`).
-2. Un cliente actualizado que todavía se autentica por secreto genera su par
-   de claves y llama una sola vez a `device-registrar-clave` con su JWT
-   vigente; el servidor guarda la clave pública y pone `secret_hash = NULL`.
-3. El panel muestra qué equipos siguen en modo legado. Cuando no quede
-   ninguno (o tras una fecha límite, usando `VERSION_MINIMA_ACEPTADA`), se
-   elimina el camino por secreto.
+La idea original era una migración transparente (aceptar el secreto hasta
+que cada equipo registrara su clave). Se descartó por decisión del usuario:
+todos los equipos están en la nube y reinstalarlos no es un problema, así
+que **no existe camino legado**:
+
+- La migración `20260929200100` elimina `secret_hash`. Cada dispositivo
+  existente queda "sin vincular" (conserva su `id`, sitio e historial).
+- `device-auth` sólo acepta aserciones firmadas; `dispositivo_vigente()`
+  exige la `huella` en el token, así que ningún token viejo sirve.
+- Para cada equipo en campo: panel → Dispositivos → **Re-vincular** →
+  instalar la versión nueva de la app → canjear el código (o el QR en el
+  teléfono). Pasos completos en `docs/handoff-registro-dispositivos.md`.
+
+Menos código y menos superficie de ataque: nunca conviven dos formas de
+autenticarse.
 
 ## 7. Fuera de alcance
 
