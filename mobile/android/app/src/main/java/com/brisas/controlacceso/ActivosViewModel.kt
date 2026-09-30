@@ -54,11 +54,14 @@ sealed class SeleccionIngreso {
 enum class ModoBusqueda { ENTRADA, SALIDA_NOMBRE, SALIDA_GAFETE }
 
 /// Un número de gafete escrito y, si ya se buscó, el activo encontrado (o
-/// `null` si nadie adentro tiene ese gafete puesto) — la fila de
+/// `null` si nadie adentro tiene ese gafete puesto). Puede ser local o
+/// remoto: un ingreso con gafete registrado en la PC del puesto de control
+/// vive en la caché `ingresos_remotos`, no en el historial del teléfono, y
+/// también tiene que poder cerrarse por número desde acá — la fila de
 /// `CoincidenciaGafete` es lo que se pinta en el modo Salida: gafete antes
 /// de confirmar, mismo rol que la tabla de vista previa de
 /// `SalidaModal.tsx` en desktop.
-data class CoincidenciaGafete(val numero: Int, val activo: IngresoActivoResumen?)
+data class CoincidenciaGafete(val numero: Int, val fila: FilaActiva?)
 
 /// Fila local (este dispositivo) o remota (abierta por el otro dispositivo
 /// del mismo sitio, cacheada en `ingresos_remotos` -- nunca vive en el
@@ -67,13 +70,16 @@ data class CoincidenciaGafete(val numero: Int, val activo: IngresoActivoResumen?
 /// secciones separadas para poder cerrar cualquiera de las dos desde acá.
 sealed class FilaActiva {
     abstract val contratistaNombre: String
+    abstract val empresaNombre: String?
 
     data class Local(val activo: IngresoActivoResumen) : FilaActiva() {
         override val contratistaNombre get() = activo.contratistaNombre
+        override val empresaNombre get() = activo.empresaNombre
     }
 
     data class Remota(val remoto: IngresoRemoto) : FilaActiva() {
         override val contratistaNombre get() = remoto.contratistaNombre
+        override val empresaNombre get() = remoto.empresaNombre
     }
 }
 
@@ -266,13 +272,10 @@ class ActivosViewModel(
                         coincidenciasGafete = if (numeros.isEmpty()) {
                             emptyList()
                         } else {
-                            withContext(dispatcherIO) {
-                                numeros.map { numero ->
-                                    val resultado =
-                                        medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE) }
-                                    CoincidenciaGafete(numero, resultado.firstOrNull())
-                                }
-                            }
+                            // Una sola lectura de la caché remota para todos
+                            // los números escritos, no una por gafete.
+                            val remotos = remotosSeguro()
+                            numeros.map { numero -> CoincidenciaGafete(numero, filaPorGafete(numero, remotos)) }
                         }
                     }
                 }
@@ -283,6 +286,39 @@ class ActivosViewModel(
                 if (version == versionBusqueda) cargando = false
             }
         }
+    }
+
+    /// Primero el historial local (lo abierto en este teléfono); si nadie
+    /// adentro tiene ese gafete acá, la caché `ingresos_remotos` (lo abierto
+    /// en otro dispositivo del sitio, p. ej. la PC del puesto de control).
+    /// Antes sólo se miraba lo local, así que un ingreso con gafete hecho en
+    /// la PC aparecía como "sin ingreso activo" en el teléfono.
+    private suspend fun filaPorGafete(numero: Int, remotos: List<IngresoRemoto>): FilaActiva? {
+        val local = withContext(dispatcherIO) {
+            medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE) }
+        }.firstOrNull()
+        if (local != null) return FilaActiva.Local(local)
+        return remotos.firstOrNull { it.gafeteNumero == numero.toLong() }?.let { FilaActiva.Remota(it) }
+    }
+
+    /// Local: cierra en `registro_ingresos` (este dispositivo). Remota:
+    /// cierra directo contra la nube (`Nucleo.cerrarIngresoRemoto`) -- nunca
+    /// toca el historial local, esa fila no es -- ni fue -- de este
+    /// teléfono. Mismo criterio que `cerrarFila` en Activos.tsx de desktop.
+    /// Único camino de cierre para las tres formas de sacar a alguien
+    /// (selección, gafetes escritos y gafete escaneado).
+    private suspend fun cerrarFila(fila: FilaActiva) {
+        withContext(dispatcherIO) {
+            when (fila) {
+                is FilaActiva.Local -> medirNucleo("registrarSalida") { nucleo.registrarSalida(fila.activo.registroId) }
+                is FilaActiva.Remota -> {
+                    val secreto = secretoStore.cargar()
+                        ?: throw SecretoDispositivoNoEncontradoException()
+                    medirNucleo("cerrarIngresoRemotoConSecreto") { nucleo.cerrarIngresoRemotoConSecreto(secreto, fila.remoto.uuid) }
+                }
+            }
+        }
+        CambiosNube.cambioLocal()
     }
 
     fun elegir(contratista: ContratistaResumen) {
@@ -410,27 +446,12 @@ class ActivosViewModel(
         seleccionSalida = fila
     }
 
-    /// Local: cierra en `registro_ingresos` (este dispositivo). Remota:
-    /// cierra directo contra la nube (`Nucleo.cerrarIngresoRemoto`) -- nunca
-    /// toca el historial local, esa fila no es -- ni fue -- de este
-    /// teléfono. Mismo criterio que `cerrarFila` en Activos.tsx de desktop.
+    /// Ver [cerrarFila].
     fun confirmarSalida(fila: FilaActiva) {
         seleccionSalida = null
         viewModelScope.launch {
             try {
-                mutexMutaciones.withLock {
-                    withContext(dispatcherIO) {
-                        when (fila) {
-                            is FilaActiva.Local -> medirNucleo("registrarSalida") { nucleo.registrarSalida(fila.activo.registroId) }
-                            is FilaActiva.Remota -> {
-                                val secreto = secretoStore.cargar()
-                                    ?: throw SecretoDispositivoNoEncontradoException()
-                                medirNucleo("cerrarIngresoRemotoConSecreto") { nucleo.cerrarIngresoRemotoConSecreto(secreto, fila.remoto.uuid) }
-                            }
-                        }
-                    }
-                }
-                CambiosNube.cambioLocal()
+                mutexMutaciones.withLock { cerrarFila(fila) }
                 buscar()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
@@ -448,17 +469,19 @@ class ActivosViewModel(
                     val registrados = mutableListOf<String>()
                     val fallidos = mutableListOf<String>()
                     for (coincidencia in coincidencias) {
-                        val activoCoincidente = coincidencia.activo
-                        if (activoCoincidente == null) {
+                        val fila = coincidencia.fila
+                        if (fila == null) {
                             fallidos.add("gafete ${coincidencia.numero}: sin ingreso activo")
                             continue
                         }
                         try {
-                            withContext(dispatcherIO) { medirNucleo("registrarSalida") { nucleo.registrarSalida(activoCoincidente.registroId) } }
-                            CambiosNube.cambioLocal()
-                            registrados.add(activoCoincidente.contratistaNombre)
-                        } catch (excepcion: NucleoException) {
-                            fallidos.add("gafete ${coincidencia.numero}: ${excepcion.message}")
+                            cerrarFila(fila)
+                            registrados.add(fila.contratistaNombre)
+                        } catch (excepcion: Exception) {
+                            // Un gafete que falla (p. ej. remoto sin red) no
+                            // corta el resto del lote; lo inesperado se
+                            // relanza desde `mensajeDeErrorEsperado`.
+                            fallidos.add("gafete ${coincidencia.numero}: ${excepcion.mensajeDeErrorEsperado()}")
                         }
                     }
                     val partes = mutableListOf<String>()
@@ -494,23 +517,20 @@ class ActivosViewModel(
             mutexMutaciones.withLock {
                 enviandoGafetes = true
                 try {
-                    val activo = withContext(dispatcherIO) {
-                        medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos(numero.toString(), ModoBusquedaActivos.GAFETE) }.firstOrNull()
-                    }
-                    coincidenciasGafete = listOf(CoincidenciaGafete(numero, activo))
-                    if (activo == null) {
+                    val fila = filaPorGafete(numero, remotosSeguro())
+                    coincidenciasGafete = listOf(CoincidenciaGafete(numero, fila))
+                    if (fila == null) {
                         mensaje = "Gafete $numero: sin ingreso activo"
                         mensajeEsError = true
                     } else {
-                        withContext(dispatcherIO) { medirNucleo("registrarSalida") { nucleo.registrarSalida(activo.registroId) } }
-                        CambiosNube.cambioLocal()
-                        mensaje = "Salida registrada: ${activo.contratistaNombre}"
+                        cerrarFila(fila)
+                        mensaje = "Salida registrada: ${fila.contratistaNombre}"
                         mensajeEsError = false
                         texto = ""
                         coincidenciasGafete = emptyList()
                     }
-                } catch (excepcion: NucleoException) {
-                    mensaje = "Gafete $numero: ${excepcion.message}"
+                } catch (excepcion: Exception) {
+                    mensaje = "Gafete $numero: ${excepcion.mensajeDeErrorEsperado()}"
                     mensajeEsError = true
                 } finally {
                     enviandoGafetes = false

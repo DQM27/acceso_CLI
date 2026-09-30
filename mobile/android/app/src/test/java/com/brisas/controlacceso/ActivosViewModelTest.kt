@@ -200,6 +200,42 @@ class ActivosViewModelTest {
     }
 
     @Test
+    fun `salida por gafete encuentra un ingreso registrado en otro dispositivo del sitio`() = runTest(dispatcher) {
+        // Caso reportado: ingreso con gafete hecho en la PC del puesto de
+        // control; en el teléfono sólo vive en la caché `ingresos_remotos`
+        // y antes la búsqueda por número respondía "sin ingreso activo".
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            """
+            INSERT INTO ingresos_remotos (
+                uuid, sitio_id, contratista_nombre, hora_entrada, dispositivo_entrada_id,
+                actualizado_en, empresa_nombre, gafete_numero
+            ) VALUES (
+                'uuid-pc', 'sitio', 'Ingresado En PC', '2026-09-30T12:00:00Z', 'pc',
+                '2026-09-30T12:00:00Z', 'Empresa PC', 25
+            );
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE)
+        advanceUntilIdle()
+
+        viewModel.cambiarTexto("25, 30")
+        advanceUntilIdle()
+
+        val (encontrado, ausente) = viewModel.coincidenciasGafete
+        val fila = encontrado.fila
+        assertTrue(fila is FilaActiva.Remota)
+        assertEquals("uuid-pc", (fila as FilaActiva.Remota).remoto.uuid)
+        assertEquals("Empresa PC", fila.empresaNombre)
+        assertEquals(30, ausente.numero)
+        assertNull(ausente.fila)
+    }
+
+    @Test
     fun `elegir un contratista sin acceso autorizado lo bloquea en vez de dejarlo continuar`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(
             archivo,
