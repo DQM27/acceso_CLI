@@ -211,11 +211,12 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   `historial_busqueda_indexada` + `historial_busqueda_cedula_y_nombre` +
   `panel_buscar_movimientos` + `panel_movimientos_sin_hora_txt`. El esquema final de
   staging coincide con los archivos; sólo hay que dejar una versión por archivo.
-- [ ] **Test SQL `administradores_panel_autorizacion.sql` desactualizado.** Espera que un
-  admin_global pueda insertar/borrar en `administradores_panel`, pero la migración
+- [x] **Test SQL `administradores_panel_autorizacion.sql` desactualizado.** Esperaba que
+  un admin_global pudiera insertar/borrar en `administradores_panel`, pero la migración
   `20260909192636_retira_escritura_directa_de_administradores_panel` quitó esas
-  políticas a propósito. Falla igual antes y después del registro por código
-  (verificado en staging 2026-09-30); hay que alinear el test con la decisión.
+  políticas a propósito. Alineado 2026-09-30: ahora exige que ni un admin_global
+  pueda agregar ni borrar administradores con su sesión (sólo service_role). Pasa
+  en staging.
 - [ ] **Sesión única por SITIO, no por dispositivo ni global (decisión
   refinada 2026-09-12).** Ver `docs/features-futuras/plan-sesion-unica-dispositivos.md`,
   sección 7 -- reemplaza el planteo anterior de esta entrada. Política
