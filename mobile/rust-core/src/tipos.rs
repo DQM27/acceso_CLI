@@ -446,6 +446,10 @@ pub struct ResumenSincronizacion {
     /// la disparó -- ver `application::nube::ResumenSincronizacion::sesion_expulsada`.
     /// Kotlin debe cerrar la sesión local y volver al login apenas vea esto.
     pub sesion_expulsada: bool,
+    /// `true` si la sesión se cerró porque el usuario inició sesión en otra
+    /// unidad (sesión única por unidad); `sesion_expulsada` también es
+    /// `true`. Sólo cambia el aviso que muestra Kotlin.
+    pub sesion_en_otra_unidad: bool,
     /// `docs/pendientes.md`, "alertar luego al sincronizar" -- ingresos que
     /// quedaron activos en este teléfono pero que la nube dice que TAMBIÉN
     /// están activos en otro sitio (colados mientras este dispositivo
@@ -563,6 +567,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
             sesion_expulsada: resumen.sesion_expulsada,
+            sesion_en_otra_unidad: false,
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
             conflictos_gafete: Vec::new(),

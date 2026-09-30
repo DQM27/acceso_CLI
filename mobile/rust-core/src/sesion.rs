@@ -107,7 +107,7 @@ impl Nucleo {
             return Err(NucleoError::UsuarioInactivo);
         }
 
-        *self.sesion_lock() = Some(sesion.clone());
+        *self.sesion_lock() = Some((sesion.clone(), chrono::Utc::now()));
         Ok(sesion.into())
     }
 
@@ -117,6 +117,25 @@ impl Nucleo {
     /// reabrir la base.
     pub fn cerrar_sesion(&self) {
         *self.sesion_lock() = None;
+    }
+
+    /// Avisa a la nube que `cedula` salió en este teléfono (sesión única por
+    /// unidad y bitácora de sesiones del panel). Hace red: Kotlin la llama en
+    /// segundo plano DESPUÉS de `cerrar_sesion`, que es instantánea.
+    /// Best-effort: sin red o sin vincular no hace nada; la sesión de la
+    /// nube queda hasta que otro ingreso la reemplace.
+    pub fn cerrar_sesion_en_la_nube(&self, cedula: String) {
+        let resultado = self.autenticar_con_cache().and_then(|token| {
+            control_acceso::nube::cerrar_sesion_en_unidad(
+                control_acceso::nube::base_url(),
+                control_acceso::nube::apikey(),
+                &token,
+                &cedula,
+            )
+        });
+        if let Err(error) = resultado {
+            log::info!("no se pudo cerrar la sesión en la nube: {error}");
+        }
     }
 }
 
@@ -166,7 +185,7 @@ impl Nucleo {
             Err(otro) => return Err(otro.into()),
         };
 
-        *self.sesion_lock() = Some(identidad.clone());
+        *self.sesion_lock() = Some((identidad.clone(), chrono::Utc::now()));
 
         // Best-effort a propósito -- mismo criterio que `login_supabase` en
         // desktop (ver el doc-comment de `AppCore::cachear_password_local`):

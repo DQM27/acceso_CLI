@@ -66,7 +66,10 @@ pub struct Nucleo {
     /// como `usuario_ingreso_id`/`usuario_salida_id`. Se llena en
     /// `autenticar` y vive mientras dure el proceso (no hay "cerrar sesión"
     /// todavía en el piloto).
-    sesion: Mutex<Option<UsuarioSesionNucleo>>,
+    /// Con la hora (reloj de este teléfono) en que se abrió la sesión: la
+    /// sesión única por unidad la compara con los ingresos en otras
+    /// unidades (`nube::sesion_en_unidad`).
+    sesion: Mutex<Option<(UsuarioSesionNucleo, chrono::DateTime<chrono::Utc>)>>,
     /// Caché del último `TokenDispositivo`, deliberadamente FUERA del
     /// `Mutex<AppCore>` de arriba -- ver el doc-comment de
     /// `control_acceso::nube::CacheTokenDispositivo`. Antes de esto,
@@ -328,14 +331,21 @@ impl Nucleo {
         })
     }
 
-    fn sesion_lock(&self) -> std::sync::MutexGuard<'_, Option<UsuarioSesionNucleo>> {
+    #[allow(clippy::type_complexity)]
+    fn sesion_lock(
+        &self,
+    ) -> std::sync::MutexGuard<'_, Option<(UsuarioSesionNucleo, chrono::DateTime<chrono::Utc>)>>
+    {
         self.sesion
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn actor_autenticado(&self) -> Result<UsuarioSesionNucleo, NucleoError> {
-        self.sesion_lock().clone().ok_or(NucleoError::NoAutenticado)
+        self.sesion_lock()
+            .as_ref()
+            .map(|(sesion, _)| sesion.clone())
+            .ok_or(NucleoError::NoAutenticado)
     }
 
     /// Descarta el `TokenDispositivo` cacheado -- ver

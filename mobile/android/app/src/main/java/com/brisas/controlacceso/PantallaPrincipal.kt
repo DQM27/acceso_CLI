@@ -106,9 +106,18 @@ fun PantallaPrincipal(
     // locales dentro de `drenar_cola` (fase 3, PR #62) -- ver
     // `ResumenSincronizacion.conflictosGafete`.
     var conflictosGafete by remember { mutableStateOf<List<ConflictoGafeteActivo>>(emptyList()) }
+    // La sesión se cerró desde la nube (usuario desactivado, o entró en otra
+    // unidad): se avisa sólo en el segundo caso, que no es obvio para quien
+    // tiene el teléfono en la mano.
+    val alCerrarseLaSesion: (Boolean) -> Unit = { enOtraUnidad ->
+        if (enOtraUnidad) {
+            Toast.makeText(contexto, ExpulsionNube.MENSAJE_SESION_EN_OTRA_UNIDAD, Toast.LENGTH_LONG).show()
+        }
+        onCerrarSesion()
+    }
     val nubeViewModel: NubeViewModel =
         viewModel(
-            factory = NubeViewModel.factory(nucleo, onCerrarSesion),
+            factory = NubeViewModel.factory(nucleo, alCerrarseLaSesion),
         )
     val scope = rememberCoroutineScope()
     val realtime = remember(nucleo, scope, sesion) {
@@ -135,7 +144,7 @@ fun PantallaPrincipal(
                 // camino) ya trajo la baja -- cerrar sesión acá, no sólo
                 // refrescar pantallas que ya no deberían verse.
                 if (resumen.sesionExpulsada) {
-                    onCerrarSesion()
+                    alCerrarseLaSesion(resumen.sesionEnOtraUnidad)
                 } else {
                     refrescarNube += 1
                     conflictosIngreso = resumen.conflictosIngreso

@@ -105,9 +105,18 @@ class LoginViewModel(
     /// teléfono se quedan abiertos (son de la Activity, no de la sesión) —
     /// mismo criterio que `Nucleo::cerrar_sesion` del lado de Rust.
     fun cerrarSesion() {
+        val cedulaSaliente = sesion?.cedula
         propietarioSesion?.cerrar()
         propietarioSesion = null
         medirNucleo("cerrarSesion") { nucleo.cerrarSesion() }
+        // Avisa a la nube (sesión única por unidad y bitácora del panel) sin
+        // demorar la salida: hace red, así que va en segundo plano y nunca
+        // falla hacia la pantalla.
+        if (cedulaSaliente != null) {
+            viewModelScope.launch(dispatcherIO) {
+                runCatching { nucleo.cerrarSesionEnLaNube(cedulaSaliente) }
+            }
+        }
         sesion = null
         cedula = ""
         password = ""

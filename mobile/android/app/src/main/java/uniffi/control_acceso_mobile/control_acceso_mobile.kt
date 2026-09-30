@@ -873,6 +873,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion_en_la_nube(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_clave_publica_jwk(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_firmar_der(
@@ -1033,6 +1035,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion_en_la_nube(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_clone_almacenclavedispositivo(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
@@ -1476,6 +1480,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() and 0xFFFF) != 14163) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion_en_la_nube() and 0xFFFF) != 11186) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_clave_publica_jwk() and 0xFFFF) != 37356) {
@@ -3300,6 +3307,15 @@ public interface NucleoInterface {
      */
     fun `cerrarSesion`()
     
+    /**
+     * Avisa a la nube que `cedula` salió en este teléfono (sesión única por
+     * unidad y bitácora de sesiones del panel). Hace red: Kotlin la llama en
+     * segundo plano DESPUÉS de `cerrar_sesion`, que es instantánea.
+     * Best-effort: sin red o sin vincular no hace nada; la sesión de la
+     * nube queda hasta que otro ingreso la reemplace.
+     */
+    fun `cerrarSesionEnLaNube`(`cedula`: kotlin.String)
+    
     companion object
 }
 
@@ -4483,6 +4499,26 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(
         it,
         _status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Avisa a la nube que `cedula` salió en este teléfono (sesión única por
+     * unidad y bitácora de sesiones del panel). Hace red: Kotlin la llama en
+     * segundo plano DESPUÉS de `cerrar_sesion`, que es instantánea.
+     * Best-effort: sin red o sin vincular no hace nada; la sesión de la
+     * nube queda hasta que otro ingreso la reemplace.
+     */override fun `cerrarSesionEnLaNube`(`cedula`: kotlin.String)
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion_en_la_nube(
+        it,
+        
+        FfiConverterString.lower(`cedula`),_status)
 }
     }
     
@@ -7016,6 +7052,13 @@ data class ResumenSincronizacion (
     var `sesionExpulsada`: kotlin.Boolean
     , 
     /**
+     * `true` si la sesión se cerró porque el usuario inició sesión en otra
+     * unidad (sesión única por unidad); `sesion_expulsada` también es
+     * `true`. Sólo cambia el aviso que muestra Kotlin.
+     */
+    var `sesionEnOtraUnidad`: kotlin.Boolean
+    , 
+    /**
      * `docs/pendientes.md`, "alertar luego al sincronizar" -- ingresos que
      * quedaron activos en este teléfono pero que la nube dice que TAMBIÉN
      * están activos en otro sitio (colados mientras este dispositivo
@@ -7072,6 +7115,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterSequenceTypeConflictoIngresoActivo.read(buf),
             FfiConverterSequenceTypeConflictoIngresoProveedorActivo.read(buf),
             FfiConverterSequenceTypeConflictoGafeteActivo.read(buf),
@@ -7093,6 +7137,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterString.allocationSize(value.`dispositivoId`) +
             FfiConverterString.allocationSize(value.`tipo`) +
             FfiConverterBoolean.allocationSize(value.`sesionExpulsada`) +
+            FfiConverterBoolean.allocationSize(value.`sesionEnOtraUnidad`) +
             FfiConverterSequenceTypeConflictoIngresoActivo.allocationSize(value.`conflictosIngreso`) +
             FfiConverterSequenceTypeConflictoIngresoProveedorActivo.allocationSize(value.`conflictosIngresoProveedor`) +
             FfiConverterSequenceTypeConflictoGafeteActivo.allocationSize(value.`conflictosGafete`)
@@ -7113,6 +7158,7 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterString.write(value.`dispositivoId`, buf)
             FfiConverterString.write(value.`tipo`, buf)
             FfiConverterBoolean.write(value.`sesionExpulsada`, buf)
+            FfiConverterBoolean.write(value.`sesionEnOtraUnidad`, buf)
             FfiConverterSequenceTypeConflictoIngresoActivo.write(value.`conflictosIngreso`, buf)
             FfiConverterSequenceTypeConflictoIngresoProveedorActivo.write(value.`conflictosIngresoProveedor`, buf)
             FfiConverterSequenceTypeConflictoGafeteActivo.write(value.`conflictosGafete`, buf)

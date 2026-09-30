@@ -187,6 +187,16 @@ class NubeRealtime(
                         onCambio(tabla)
                     }
                     .launchIn(this)
+                // El usuario de este teléfono entró en otra unidad: la
+                // sincronización completa pregunta a la nube y, si la sesión
+                // ya no es vigente, la cierra (`sesionEnOtraUnidad`).
+                canal.broadcastFlow<JsonObject>("sesion_cerrada")
+                    .onEach { aviso ->
+                        if (ExpulsionNube.esCierreDeEstaSesion(aviso.texto("cedula"), usuarioCedula)) {
+                            onCambio(null)
+                        }
+                    }
+                    .launchIn(this)
                 canal.broadcastFlow<JsonObject>("dispositivo_expulsado")
                     .onEach { aviso ->
                         if (!ExpulsionNube.esParaEsteEquipo(aviso.texto("dispositivo_id"), sesion.dispositivoId)) {

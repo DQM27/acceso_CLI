@@ -128,6 +128,7 @@ impl Nucleo {
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             sesion_expulsada: false,
+            sesion_en_otra_unidad: false,
             // Activación inicial: base recién configurada, sin ingresos
             // locales todavía -- mismo criterio que
             // `From<ResumenSincronizacionNucleo>` arriba y que el equivalente
@@ -442,9 +443,36 @@ impl Nucleo {
             control_acceso::nube::PerfilDispositivo::Movil,
         )?;
 
-        let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
+        let mut sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
         if sesion_expulsada {
             *self.sesion_lock() = None;
+        }
+
+        // Sesión única por unidad -- mismo criterio que escritorio
+        // (`desktop/src-tauri/src/comandos/nube.rs`): cada sincronización,
+        // incluida la que sigue al login, registra la sesión en la nube y
+        // pregunta si sigue vigente. Falla "abierto": sin red no expulsa.
+        let mut sesion_en_otra_unidad = false;
+        let inicio = self
+            .sesion_lock()
+            .as_ref()
+            .map(|(_, iniciada_en)| *iniciada_en);
+        if let (false, Some(iniciada_en)) = (sesion_expulsada, inicio) {
+            match control_acceso::nube::sesion_en_unidad(
+                control_acceso::nube::base_url(),
+                control_acceso::nube::apikey(),
+                &token,
+                &actor.cedula,
+                iniciada_en,
+            ) {
+                Ok(control_acceso::nube::EstadoSesionUnidad::Desplazada) => {
+                    *self.sesion_lock() = None;
+                    sesion_expulsada = true;
+                    sesion_en_otra_unidad = true;
+                }
+                Ok(_) => {}
+                Err(error) => log::info!("no se pudo verificar la sesión en la nube: {error}"),
+            }
         }
 
         Ok(ResumenSincronizacion {
@@ -462,6 +490,7 @@ impl Nucleo {
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             sesion_expulsada,
+            sesion_en_otra_unidad,
             conflictos_ingreso: resumen
                 .conflictos_ingreso
                 .into_iter()

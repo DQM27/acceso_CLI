@@ -12,6 +12,14 @@ class ExpulsionNubeTest {
     }
 
     @Test
+    fun `el cierre de sesion solo es para el usuario de este telefono`() {
+        assertTrue(ExpulsionNube.esCierreDeEstaSesion("900000301", cedula = "900000301"))
+        assertFalse(ExpulsionNube.esCierreDeEstaSesion("900000302", cedula = "900000301"))
+        assertFalse(ExpulsionNube.esCierreDeEstaSesion(null, cedula = "900000301"))
+        assertFalse(ExpulsionNube.esCierreDeEstaSesion("", cedula = ""))
+    }
+
+    @Test
     fun `descarta avisos sin dispositivo`() {
         assertFalse(ExpulsionNube.esParaEsteEquipo(null, dispositivoId = "d1"))
     }

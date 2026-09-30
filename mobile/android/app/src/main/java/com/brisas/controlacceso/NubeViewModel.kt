@@ -31,7 +31,7 @@ class NubeViewModel(
     private val nucleo: Nucleo,
     // Misma reacción ante `sesionExpulsada` que el pulso periódico
     // (`SincronizacionPeriodica`, ver `PantallaPrincipal.kt`).
-    private val onSesionExpulsada: () -> Unit = {},
+    private val onSesionExpulsada: (enOtraUnidad: Boolean) -> Unit = {},
     // Ver el mismo parámetro en ActivosViewModel/RutasViewModel —
     // permite tests con tiempo controlado en vez de hilos reales.
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
@@ -62,7 +62,7 @@ class NubeViewModel(
                     medirNucleo("sincronizarConNube") { nucleo.sincronizarConNube() }
                 }
                 ultimoResumen = resumen
-                if (resumen.sesionExpulsada) onSesionExpulsada()
+                if (resumen.sesionExpulsada) onSesionExpulsada(resumen.sesionEnOtraUnidad)
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {
@@ -74,7 +74,7 @@ class NubeViewModel(
     companion object {
         fun factory(
             nucleo: Nucleo,
-            onSesionExpulsada: () -> Unit = {},
+            onSesionExpulsada: (enOtraUnidad: Boolean) -> Unit = {},
         ): ViewModelProvider.Factory = viewModelFactory {
             initializer { NubeViewModel(nucleo, onSesionExpulsada) }
         }

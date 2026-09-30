@@ -12,4 +12,16 @@ object ExpulsionNube {
 
     fun esParaEsteEquipo(dispositivoIdAviso: String?, dispositivoId: String): Boolean =
         dispositivoIdAviso == dispositivoId
+
+    /// Aviso cuando la sesión se cerró porque el usuario entró en otra unidad
+    /// (sesión única por unidad, migración `sesion_unica_por_unidad`).
+    const val MENSAJE_SESION_EN_OTRA_UNIDAD =
+        "Su usuario inició sesión en otra unidad: se cerró la sesión en este teléfono."
+
+    /// Aviso en vivo `sesion_cerrada`: es para este teléfono si nombra al
+    /// usuario con sesión abierta. Sólo dispara una sincronización: quien
+    /// decide si la sesión se cierra es la nube, no el aviso. Mismo criterio
+    /// que `expulsionNube.ts` en escritorio.
+    fun esCierreDeEstaSesion(cedulaAviso: String?, cedula: String): Boolean =
+        cedula.isNotEmpty() && cedulaAviso == cedula
 }
