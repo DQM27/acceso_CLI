@@ -23,7 +23,7 @@ function CodigoQr({ contenido, tamano = 200 }: { contenido: string; tamano?: num
       height={tamano}
       viewBox={`0 0 ${size} ${size}`}
       shapeRendering="crispEdges"
-      style={{ background: "#fff", borderRadius: 8 }}
+      className="rounded-lg bg-white"
     >
       <path d={modulos} fill="#000" />
     </svg>
@@ -57,27 +57,27 @@ export default function CodigoVinculacionEmitido({
       await navigator.clipboard.writeText(codigo);
       toast.success("Código copiado.");
     } catch {
-      toast.error("No se pudo copiar -- seleccioná el texto a mano.");
+      toast.error("No se pudo copiar -- seleccione el texto a mano.");
     }
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center" }}>
-      <p style={{ margin: 0, textAlign: "center" }}>
-        En el celular, escaneá este QR desde la pantalla de inicio de la app. En una PC, escribí el
+    <div className="flex flex-col items-center gap-4">
+      <p className="m-0 text-center">
+        En el celular, escanee este QR desde la pantalla de inicio de la app. En una PC, escriba el
         código. Sirve una sola vez y no se vuelve a mostrar.
       </p>
       <CodigoQr contenido={contenidoQr(codigo)} />
-      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-        <code style={{ fontSize: "1.6rem", letterSpacing: "0.15em", fontWeight: 600 }}>{codigo}</code>
+      <div className="flex items-center gap-2">
+        <code className="text-[1.6rem] font-semibold tracking-[0.15em]">{codigo}</code>
         <button type="button" className="boton" onClick={copiar}>
           Copiar
         </button>
       </div>
-      <p style={{ margin: 0, color: restante ? "var(--muted)" : "var(--error)" }} role="status">
-        {restante ? `Vence en ${restante}` : "Este código ya venció: eliminá este dispositivo y registralo de nuevo."}
+      <p className={`m-0 ${restante ? "text-muted" : "text-error"}`} role="status">
+        {restante ? `Vence en ${restante}` : "Este código ya venció: elimine este dispositivo y regístrelo de nuevo."}
       </p>
-      <div style={{ display: "flex", justifyContent: "flex-end", alignSelf: "stretch" }}>
+      <div className="flex justify-end self-stretch">
         <button type="button" className="boton boton-primario" onClick={onListo}>
           Listo
         </button>

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Usuarios from "./Usuarios";
 
@@ -44,7 +45,14 @@ describe("Usuarios -- abrirModal", () => {
       .mockReturnValueOnce(segundaApertura.promesa);
     mocks.crearUsuario.mockResolvedValue(undefined);
 
-    render(<Usuarios />);
+    // La pantalla carga con React Query: necesita su proveedor (sin reintentos,
+    // para que un fallo de la consulta de presencia no alargue la prueba).
+    const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={cliente}>
+        <Usuarios />
+      </QueryClientProvider>,
+    );
     await waitFor(() => expect(mocks.listarUsuarios).toHaveBeenCalled());
 
     fireEvent.click(screen.getByText("+ Nuevo"));

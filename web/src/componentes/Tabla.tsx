@@ -508,30 +508,17 @@ function TablaBase<T>(
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div className="flex h-full flex-col">
       <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          gap: "0.375rem",
-          marginBottom: "0.375rem",
-          flexWrap: "wrap",
-        }}
+        className="mb-[0.375rem] flex flex-wrap items-end justify-between gap-[0.375rem]"
       >
         <div
-          style={{
-            display: "flex",
-            alignItems: "flex-end",
-            gap: "0.375rem",
-            flexWrap: "wrap",
-            flex: 1,
-          }}
+          className="flex flex-1 flex-wrap items-end gap-[0.375rem]"
         >
           {controles}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+        <div className="flex items-center gap-[0.375rem]">
           {accionesDerecha}
 
           {/* Filtros y anchos de columna en una sola pieza de íconos
@@ -589,12 +576,7 @@ function TablaBase<T>(
             <ListaFlotante posicion={posicionSelector} ancho={220} alinear="derecha">
               <div
                 ref={popoverRef}
-                style={{
-                  padding: "0.75rem 1rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.4rem",
-                }}
+                className="flex flex-col gap-[0.4rem] px-4 py-3"
               >
                 {columnas
                   .map((columna) => ({ columna, clave: identidad(columna as ColDef<unknown>) }))
@@ -605,7 +587,7 @@ function TablaBase<T>(
                   .map(({ columna, clave }) => (
                     <label
                       key={clave}
-                      style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+                      className="flex items-center gap-2"
                     >
                       <input
                         type="checkbox"
@@ -621,7 +603,7 @@ function TablaBase<T>(
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div className="min-h-0 flex-1">
         <AgGridReact<T>
           theme={temaBrisas}
           defaultColDef={columnaBase}

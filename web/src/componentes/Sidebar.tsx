@@ -57,7 +57,7 @@ export default function Sidebar({
       </div>
 
       <div
-        style={{ flex: 1 }}
+        className="flex-1"
         title="Doble click para colapsar/expandir"
         onDoubleClick={onToggleColapsado}
       />

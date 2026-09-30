@@ -40,13 +40,12 @@ export default function FiltroFechaTabla({ date, onDateChange }: CustomDateProps
 
   return (
     <input
-      className="ag-input-field-input ag-text-field-input"
+      className="ag-input-field-input ag-text-field-input w-full"
       value={texto}
       onChange={alCambiar}
       placeholder="DD/MM/AAAA"
       inputMode="numeric"
       maxLength={10}
-      style={{ width: "100%" }}
     />
   );
 }

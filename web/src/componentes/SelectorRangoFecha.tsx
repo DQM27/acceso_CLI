@@ -154,26 +154,15 @@ export default function SelectorRangoFecha({
         <ListaFlotante posicion={posicion} ancho={280}>
           <div
             ref={popoverRef}
-            style={{
-              padding: "0.9rem",
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.75rem",
-            }}
+            className="flex flex-col gap-3 p-[0.9rem]"
           >
             <div>
               <p
-                style={{
-                  margin: "0 0 0.4rem",
-                  fontSize: "0.75rem",
-                  color: "var(--muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                }}
+                className="m-0 mb-[0.4rem] text-[0.75rem] uppercase tracking-[0.04em] text-muted"
               >
                 Acceso rápido
               </p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+              <div className="grid grid-cols-2 gap-[0.4rem]">
                 {PRESETS.map((preset) => (
                   <button
                     key={preset.etiqueta}
@@ -209,7 +198,7 @@ export default function SelectorRangoFecha({
                 onChange={(e) => setHastaBorrador(e.target.value)}
               />
             </label>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <div className="flex justify-end gap-2">
               <button type="button" className="boton" onClick={() => setAbierto(false)}>
                 Cancelar
               </button>

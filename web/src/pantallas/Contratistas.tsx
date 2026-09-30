@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check } from "lucide-react";
 import type { CellStyle, ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import AvisoTruncado from "../componentes/AvisoTruncado";
-import { useAutoRefresh } from "../componentes/useAutoRefresh";
+import { useLista } from "../componentes/useLista";
 import { actualizarAccesoContratista, listarContratistas } from "../api/contratistas";
 import type { Contratista } from "../api/contratistas";
 import { textoFechaDDMMYYYY } from "../tiempo";
@@ -29,39 +29,15 @@ const ESTILO_CENTRO_FLEX: CellStyle = { display: "flex", justifyContent: "center
  */
 export default function Contratistas() {
   const [busqueda, setBusqueda] = useState("");
-  const [filas, setFilas] = useState<Contratista[]>([]);
-  const [truncado, setTruncado] = useState(false);
-  const [cargando, setCargando] = useState(true);
-
-  const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
-    const silencioso = opciones?.silencioso ?? false;
-    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
-    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
-    // actualización como síncrona dentro del efecto que dispara la carga.
-    return Promise.resolve()
-      .then(() => {
-        if (!silencioso) setCargando(true);
-      })
-      .then(() => listarContratistas())
-      .then(({ filas, truncado }) => {
-        setFilas(filas);
-        setTruncado(truncado);
-      })
-      .catch((error) => {
-        if (!silencioso) toast.error(mensajeError(error));
-      })
-      .finally(() => {
-        if (!silencioso) setCargando(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    recargar();
-  }, [recargar]);
 
   // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
   // desktop/mobile para su propio sync periódico.
-  useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "contratistas,empresas");
+  const { datos, cargando, recargar } = useLista(["contratistas"], listarContratistas, {
+    intervaloMs: 120_000,
+    tablas: "contratistas,empresas",
+  });
+  const filas = datos?.filas ?? [];
+  const truncado = datos?.truncado ?? false;
 
   async function manejarEdicion(fila: Contratista) {
     try {
@@ -74,7 +50,7 @@ export default function Contratistas() {
       // si el guardado falla, hay que volver a pedir los datos reales para
       // que la celda no quede mintiendo.
       toast.error(mensajeError(error));
-      recargar();
+      void recargar();
     }
   }
 
@@ -139,7 +115,7 @@ export default function Contratistas() {
       <div className="pantalla-cuerpo min-h-0 flex-1">
         {truncado && (
           <AvisoTruncado
-            mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} contratistas -- se muestran solo los primeros (la búsqueda de acá arriba sólo filtra entre esos, no trae más).`}
+            mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} contratistas -- se muestran solo los primeros (la búsqueda de aquí arriba sólo filtra entre esos, no trae más).`}
           />
         )}
         <div className="min-h-0 flex-1">

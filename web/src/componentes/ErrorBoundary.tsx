@@ -52,7 +52,7 @@ export default class ErrorBoundary extends Component<
           </h2>
           <p style={{ margin: 0, color: "var(--muted)" }}>
             {this.props.mensaje ?? (
-              <>La página no puede seguir en este estado. Recargá para continuar.</>
+              <>La página no puede seguir en este estado. Recargue para continuar.</>
             )}
           </p>
           <p

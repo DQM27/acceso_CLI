@@ -631,3 +631,16 @@ input {
 }
 
 /* Más de 12 horas adentro (Activos, `claseFilaActiva`): fondo suave de
+
+/* Botones dentro de una celda de la grilla (Dispositivos, Usuarios). Van en CSS
+   propio y no en clases de Tailwind porque `.boton` no esta en una capa y gana
+   sobre `px-*`, `py-*` y `text-*`. Despues de `.boton`, misma especificidad. */
+.boton-celda {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.boton-celda-angosto {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.78rem;
+}

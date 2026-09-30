@@ -328,6 +328,9 @@ export default function Historial() {
   );
   const filtroPantallaRef = useRef(filtroPantalla);
   useEffect(() => {
+    // Primer render (o repetición de StrictMode): la grilla ya pidió su primera
+    // página con este mismo filtro, no hace falta pedirla otra vez.
+    if (filtroPantallaRef.current === filtroPantalla) return;
     filtroPantallaRef.current = filtroPantalla;
     // Cambió el filtro de pantalla: la grilla vuelve a pedir desde la página 1.
     tablaRef.current?.refrescar(true);

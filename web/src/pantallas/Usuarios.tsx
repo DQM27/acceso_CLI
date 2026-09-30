@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import AvisoTruncado from "../componentes/AvisoTruncado";
-import { useAutoRefresh } from "../componentes/useAutoRefresh";
+import { useLista } from "../componentes/useLista";
 import {
   actualizarActivoUsuario,
   crearUsuario,
@@ -43,9 +44,6 @@ interface FilaUsuario extends Usuario {
 
 export default function Usuarios() {
   const [busqueda, setBusqueda] = useState("");
-  const [filas, setFilas] = useState<Usuario[]>([]);
-  const [truncado, setTruncado] = useState(false);
-  const [cargando, setCargando] = useState(true);
 
   const [modalAbierto, setModalAbierto] = useState(false);
   const [sitioId, setSitioId] = useState<string | null>(null);
@@ -66,39 +64,18 @@ export default function Usuarios() {
   // vuelo, y sólo la última importa.
   const aperturaModalRef = useRef(0);
 
-  const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
-    const silencioso = opciones?.silencioso ?? false;
-    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
-    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
-    // actualización como síncrona dentro del efecto que dispara la carga.
-    return Promise.resolve()
-      .then(() => {
-        if (!silencioso) setCargando(true);
-      })
-      .then(() => listarUsuarios())
-      .then(({ filas, truncado }) => {
-        setFilas(filas);
-        setTruncado(truncado);
-      })
-      .catch((error) => {
-        if (!silencioso) toast.error(mensajeError(error));
-      })
-      .finally(() => {
-        if (!silencioso) setCargando(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    recargar();
-  }, [recargar]);
-
   // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
   // desktop/mobile para su propio sync periódico. "usuarios" para el aviso
   // en vivo (ver migración avisa_cambio_nube_en_usuarios) -- sin esto, una
   // baja/reactivación hecha desde otra sesión del panel o un dispositivo no
   // se veía acá hasta el próximo poll de 2 minutos (mismo gap que tenía
   // Contratistas.tsx antes de sumarle "contratistas,empresas").
-  useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "usuarios");
+  const { datos, cargando, recargar } = useLista(["usuarios"], listarUsuarios, {
+    intervaloMs: 120_000,
+    tablas: "usuarios",
+  });
+  const filas = datos?.filas ?? [];
+  const truncado = datos?.truncado ?? false;
 
   // Presencia en tiempo real (docs/features-futuras/plan-sesion-unica-dispositivos.md,
   // "Panel de presencia en tiempo real"): mismo mecanismo que
@@ -106,21 +83,18 @@ export default function Usuarios() {
   // viaja en el mismo `track()` -- quién tiene sesión abierta ahora y en
   // qué dispositivo. `etiquetaPorDispositivo` sólo sirve para mostrar el
   // nombre del dispositivo en vez de su UUID.
-  const [sitios, setSitios] = useState<{ id: string }[]>([]);
-  const [etiquetaPorDispositivo, setEtiquetaPorDispositivo] = useState<Record<string, string>>({});
-  useEffect(() => {
-    listarDispositivosYSitios()
-      .then(({ sitios, dispositivos }) => {
-        setSitios(sitios);
-        setEtiquetaPorDispositivo(
-          Object.fromEntries(dispositivos.map((d) => [d.id, d.etiqueta])),
-        );
-      })
-      .catch(() => {
-        // Sólo degrada la presencia a "sin nombre de dispositivo" -- la
-        // lista de usuarios en sí ya cargó por su cuenta.
-      });
-  }, []);
+  // Misma clave que Dispositivos.tsx: las dos pantallas comparten una sola
+  // petición. Si falla, sólo degrada la presencia a "sin nombre de
+  // dispositivo" -- la lista de usuarios en sí ya cargó por su cuenta.
+  const { data: dispositivosYSitios } = useQuery({
+    queryKey: ["dispositivos-y-sitios"],
+    queryFn: listarDispositivosYSitios,
+  });
+  const sitios = useMemo(() => dispositivosYSitios?.sitios ?? [], [dispositivosYSitios]);
+  const etiquetaPorDispositivo = useMemo(
+    () => Object.fromEntries((dispositivosYSitios?.dispositivos ?? []).map((d) => [d.id, d.etiqueta])),
+    [dispositivosYSitios],
+  );
 
   const sitioIds = useMemo(() => sitios.map((s) => s.id), [sitios]);
   const presenciaPorSitio = usePresenciaPorSitio(sitioIds);
@@ -152,7 +126,7 @@ export default function Usuarios() {
       // si el guardado falla, hay que volver a pedir los datos reales para
       // que la celda no quede mintiendo.
       toast.error(mensajeError(error));
-      recargar();
+      void recargar();
     }
   }
 
@@ -203,7 +177,7 @@ export default function Usuarios() {
         rol: "OPERADOR",
       });
       cerrarModal();
-      recargar();
+      void recargar();
       setCredencialGenerada({ cedula: creado.cedula, password_temporal: creado.password_temporal });
     } catch (error) {
       setErrorForm(mensajeError(error));
@@ -289,7 +263,7 @@ export default function Usuarios() {
         cellRenderer: ({ data }: { data: FilaUsuario }) => (
           <button
             type="button"
-            className="boton text-[0.78rem] px-2 py-[0.2rem]"
+            className="boton boton-celda-angosto"
             disabled={reseteando === data.id}
             onClick={() => manejarResetPassword(data)}
           >
@@ -306,7 +280,7 @@ export default function Usuarios() {
       <div className="pantalla-cuerpo min-h-0 flex-1">
         {truncado && (
           <AvisoTruncado
-            mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} usuarios -- se muestran solo los primeros (la búsqueda de acá arriba sólo filtra entre esos, no trae más).`}
+            mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} usuarios -- se muestran solo los primeros (la búsqueda de aquí arriba sólo filtra entre esos, no trae más).`}
           />
         )}
         <div className="min-h-0 flex-1">
@@ -362,7 +336,7 @@ export default function Usuarios() {
             </label>
 
             <p className="m-0 text-[0.8rem] text-muted">
-              Se genera una contraseña temporal de un solo uso -- se muestra acá apenas se
+              Se genera una contraseña temporal de un solo uso -- se muestra aquí apenas se
               cree, para copiar y enviarle a la persona. La va a tener que cambiar en su
               primer inicio de sesión.
             </p>

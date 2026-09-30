@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -6,7 +7,7 @@ import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
 import CodigoVinculacionEmitido from "../componentes/CodigoVinculacionEmitido";
 import { TEXTO_CREDENCIAL, TEXTO_EVENTO, tiempoRestante } from "../componentes/CodigoVinculacion.logica";
-import { useAutoRefresh } from "../componentes/useAutoRefresh";
+import { useLista } from "../componentes/useLista";
 import { usePresenciaPorSitio } from "../presenciaSitios";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
@@ -67,12 +68,8 @@ function textoFechaHora(iso: string): string {
  * `ConfirmacionSensible`): le cortan el paso al equipo para siempre.
  */
 export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
-  const [sitios, setSitios] = useState<{ id: string; nombre: string }[]>([]);
-  const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
-  const [codigosPendientes, setCodigosPendientes] = useState<CodigoPendiente[]>([]);
-  const [eventos, setEventos] = useState<EventoSeguridad[]>([]);
+  const clienteConsultas = useQueryClient();
   const [codigoMostrado, setCodigoMostrado] = useState<CodigoMostrado | null>(null);
-  const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [creando, setCreando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
@@ -97,39 +94,18 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     accion: () => Promise<void>;
   } | null>(null);
 
-  const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
-    const silencioso = opciones?.silencioso ?? false;
-    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
-    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
-    // actualización como síncrona dentro del efecto que dispara la carga.
-    return Promise.resolve()
-      .then(() => {
-        if (!silencioso) setCargando(true);
-      })
-      .then(() => listarDispositivosYSitios())
-      .then(({ sitios, dispositivos, codigos_pendientes, eventos }) => {
-        setSitios(sitios);
-        setDispositivos(dispositivos);
-        setCodigosPendientes(codigos_pendientes);
-        setEventos(eventos);
-      })
-      .catch((error) => {
-        if (!silencioso) toast.error(mensajeError(error));
-      })
-      .finally(() => {
-        if (!silencioso) setCargando(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    recargar();
-  }, [recargar]);
-
   // Canal Realtime sobre la tabla `dispositivos` para reflejar altas/bajas/
-  // suspensiones/último uso al instante (antes sólo refrescaba con el pulso
-  // de 2 minutos, o a mano) -- el intervalo queda como respaldo ante una
-  // reconexión de Realtime que tarde.
-  useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "dispositivos");
+  // suspensiones/último uso al instante -- el intervalo queda como respaldo
+  // ante una reconexión de Realtime que tarde. Misma clave que Usuarios.tsx:
+  // las dos pantallas comparten una sola petición.
+  const { datos, cargando, recargar } = useLista(["dispositivos-y-sitios"], listarDispositivosYSitios, {
+    intervaloMs: 120_000,
+    tablas: "dispositivos",
+  });
+  const sitios = useMemo(() => datos?.sitios ?? [], [datos]);
+  const dispositivos = useMemo<Dispositivo[]>(() => datos?.dispositivos ?? [], [datos]);
+  const codigosPendientes = useMemo<CodigoPendiente[]>(() => datos?.codigos_pendientes ?? [], [datos]);
+  const eventos = useMemo<EventoSeguridad[]>(() => datos?.eventos ?? [], [datos]);
 
   // Presencia en tiempo real (docs/features-futuras/plan-sesion-unica-dispositivos.md,
   // "Panel de presencia en tiempo real") -- suscripción compartida
@@ -191,7 +167,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     evento.preventDefault();
     const sitio = sitios.find((s) => s.id === sitioId);
     if (!sitio) {
-      setErrorForm("Elegí una unidad operativa (o creá una con el botón +).");
+      setErrorForm("Elija una unidad operativa (o cree una con el botón +).");
       return;
     }
     setCreando(true);
@@ -208,7 +184,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         codigo: resultado.codigo,
         expira_en: resultado.expira_en,
       });
-      recargar();
+      void recargar();
     } catch (error) {
       setErrorForm(mensajeError(error));
     } finally {
@@ -232,7 +208,12 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     setErrorSitio(null);
     try {
       const nuevo = await crearSitio({ nombre: nuevoSitioNombre.trim() });
-      setSitios((actual) => (actual.some((s) => s.id === nuevo.id) ? actual : [...actual, nuevo]));
+      // La unidad nueva aparece en la lista sin esperar a otra consulta.
+      clienteConsultas.setQueryData<typeof datos>(["dispositivos-y-sitios"], (actual) =>
+        actual && !actual.sitios.some((s) => s.id === nuevo.id)
+          ? { ...actual, sitios: [...actual.sitios, nuevo] }
+          : actual,
+      );
       setSitioId(nuevo.id);
       setModalSitioAbierto(false);
     } catch (error) {
@@ -396,7 +377,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
             {!data.revoked_at && (
               <button
                 type="button"
-                className="boton px-[0.6rem] py-[0.2rem] text-[0.8rem]"
+                className="boton boton-celda"
                 onClick={() => alRetirar(data)}
               >
                 Retirar
@@ -404,7 +385,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
             )}
             <button
               type="button"
-              className="boton px-[0.6rem] py-[0.2rem] text-[0.8rem]"
+              className="boton boton-celda"
               onClick={() => alEliminar(data)}
             >
               Eliminar
