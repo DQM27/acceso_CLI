@@ -209,7 +209,9 @@ export interface PeticionPagina {
  * ya filtrada y ordenada. */
 export interface OrigenServidor<T> {
   tamanoPagina: number;
-  cargarPagina: (peticion: PeticionPagina) => Promise<{ filas: T[]; total: number }>;
+  /** `total` sólo cuando se llegó al final; sin él, la grilla sigue pidiendo
+   * páginas hasta recibir una incompleta. */
+  cargarPagina: (peticion: PeticionPagina) => Promise<{ filas: T[]; total?: number }>;
   /** Una página no se pudo traer (la grilla queda con esa página vacía). */
   alFallar: (error: unknown) => void;
 }

@@ -62,14 +62,17 @@ describe("palabrasDeBusqueda", () => {
 });
 
 describe("listarMovimientosPagina", () => {
-  it("lee la vista panel_movimientos y devuelve la página con el total de todas las páginas", async () => {
-    const encadenable = mockConsulta({ data: [filaVista()], error: null, count: 4321 });
+  it("lee la vista panel_movimientos sin pedir conteo exacto y da el total al llegar a la última página", async () => {
+    const encadenable = mockConsulta({ data: [filaVista()], error: null, count: null });
     mocks.from.mockReturnValue(encadenable);
 
-    const resultado = await listarMovimientosPagina({ pagina: 0, tamano: 100 });
+    const resultado = await listarMovimientosPagina({ pagina: 2, tamano: 100 });
 
     expect(mocks.from).toHaveBeenCalledWith("panel_movimientos");
-    expect(resultado.total).toBe(4321);
+    // El conteo exacto recorre todo el filtro (segundos con volumen alto).
+    expect(encadenable.select).toHaveBeenCalledWith(expect.any(String));
+    // Página corta: es la última, así que el total se conoce sin contar.
+    expect(resultado.total).toBe(201);
     expect(resultado.filas).toHaveLength(1);
     expect(resultado.filas[0].sitio_nombre).toBe("Brisas");
     expect(resultado.filas[0].medio_texto).toBe("CAMINANDO");
@@ -139,8 +142,10 @@ describe("listarMovimientosPagina", () => {
       },
     });
 
-    expect(encadenable.or).toHaveBeenCalledTimes(2);
+    // La empresa suma su prefiltro contra el índice de texto_busqueda.
+    expect(encadenable.or).toHaveBeenCalledTimes(3);
     expect(encadenable.or).toHaveBeenCalledWith('empresa_p.eq."bac"');
+    expect(encadenable.or).toHaveBeenCalledWith('texto_busqueda.like."*bac*"');
     expect(encadenable.or).toHaveBeenCalledWith("gafete_numero.gt.3");
   });
 
@@ -166,6 +171,16 @@ describe("listarMovimientosPagina", () => {
     );
     await expect(listarMovimientosPagina({ pagina: 0, tamano: 50 })).rejects.toThrow();
   });
+
+  it("deja el total sin definir mientras la página venga llena", async () => {
+    const llena = Array.from({ length: 50 }, (_, i) => filaVista({ id: `f${i}` }));
+    mocks.from.mockReturnValue(mockConsulta({ data: llena, error: null, count: null }));
+
+    const resultado = await listarMovimientosPagina({ pagina: 0, tamano: 50 });
+
+    expect(resultado.filas).toHaveLength(50);
+    expect(resultado.total).toBeUndefined();
+  });
 });
 
 describe("listarMovimientosParaExportar", () => {
@@ -182,32 +197,48 @@ describe("listarMovimientosParaExportar", () => {
     const resultado = await listarMovimientosParaExportar({ busqueda: "perez" });
 
     expect(resultado.filas).toHaveLength(2500);
-    expect(resultado.total).toBe(2500);
     expect(resultado.truncado).toBe(false);
     expect(encadenable.range).toHaveBeenNthCalledWith(1, 0, 999);
     expect(encadenable.range).toHaveBeenNthCalledWith(2, 1000, 1999);
     expect(encadenable.range).toHaveBeenNthCalledWith(3, 2000, 2999);
-    // Sólo el primer tramo pide el conteo exacto: el total no cambia entre tramos.
-    expect(encadenable.select).toHaveBeenNthCalledWith(1, expect.any(String), { count: "exact" });
-    expect(encadenable.select).toHaveBeenNthCalledWith(2, expect.any(String), undefined);
-    expect(encadenable.select).toHaveBeenNthCalledWith(3, expect.any(String), undefined);
+    expect(encadenable.range).toHaveBeenCalledTimes(3);
   });
 
-  it("marca truncado cuando el filtro tiene más filas que el máximo", async () => {
-    const encadenable = mockConsulta({ data: [], error: null, count: 9999 });
+  it("al llegar al máximo pide una sola fila más para saber si quedó algo afuera", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: null });
+    const tramos = [1000, 1];
+    let llamada = 0;
     encadenable.then = (resolver: (valor: unknown) => void) =>
       resolver({
-        data: Array.from({ length: 1000 }, (_, i) => filaVista({ id: `f${i}` })),
+        data: Array.from({ length: tramos[llamada++] }, (_, i) => filaVista({ id: `f${i}` })),
         error: null,
-        count: 9999,
+        count: null,
       });
     mocks.from.mockReturnValue(encadenable);
 
     const resultado = await listarMovimientosParaExportar({}, 1000);
 
     expect(resultado.filas).toHaveLength(1000);
-    expect(resultado.total).toBe(9999);
     expect(resultado.truncado).toBe(true);
+    expect(encadenable.range).toHaveBeenNthCalledWith(2, 1000, 1000);
+  });
+
+  it("no marca truncado si el filtro tiene exactamente el máximo", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: null });
+    const tramos = [1000, 0];
+    let llamada = 0;
+    encadenable.then = (resolver: (valor: unknown) => void) =>
+      resolver({
+        data: Array.from({ length: tramos[llamada++] }, (_, i) => filaVista({ id: `f${i}` })),
+        error: null,
+        count: null,
+      });
+    mocks.from.mockReturnValue(encadenable);
+
+    const resultado = await listarMovimientosParaExportar({}, 1000);
+
+    expect(resultado.filas).toHaveLength(1000);
+    expect(resultado.truncado).toBe(false);
   });
 });
 

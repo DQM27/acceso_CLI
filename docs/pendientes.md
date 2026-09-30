@@ -155,6 +155,15 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   `admin-create-usuario` y el panel ya no piden unidad. `ingresos` exige la misma
   coherencia de salida que proveedores (sin exigir salida posterior a la entrada,
   por relojes desfasados). `plegar_texto` con `search_path` fijo.
+- [x] **Historial del panel con búsqueda indexada** (2026-09-30,
+  `historial_busqueda_indexada`). `ingresos.texto_busqueda` es una columna generada
+  (cédula, nombre, empresa y placa sin tildes ni mayúsculas) con índice de trigramas;
+  la búsqueda general y los filtros de cédula, nombre y empresa lo usan. El panel ya
+  no pide conteo exacto: la grilla conoce el total al llegar a la última página y la
+  exportación detecta el tope pidiendo una fila de más. Medido en staging con 150.000
+  ingresos: página de 1,7-5,3 s a 71 ms, búsqueda de texto de 3,6 s a 110 ms. Los
+  textos de presentación (`tipo_texto`, `medio_texto`, `hora_*_txt`) siguen en la
+  vista porque el orden y los filtros del servidor dependen de ellos.
 - [ ] **Versiones de migración desalineadas con staging.** Las migraciones aplicadas
   con el MCP quedaron registradas con la hora de aplicación, no con la del archivo.
   Alinear `supabase_migrations.schema_migrations` antes de usar `supabase db push`.

@@ -388,7 +388,7 @@ export default function Historial() {
   async function filasParaExportar(): Promise<MovimientoHistorial[] | null> {
     setExportando(true);
     try {
-      const { filas: todas, total, truncado } = await listarMovimientosParaExportar({
+      const { filas: todas, truncado } = await listarMovimientosParaExportar({
         ...filtroPantalla,
         filtros: tablaRef.current?.modeloFiltros(),
         orden: ordenDeConsulta(tablaRef.current?.orden()),
@@ -399,7 +399,7 @@ export default function Historial() {
       }
       if (truncado) {
         toast.warning(
-          `Se exportan las primeras ${todas.length.toLocaleString("es-CR")} de ${total.toLocaleString("es-CR")} filas. Acote las fechas o la unidad para exportar el resto.`,
+          `Se exportan las primeras ${todas.length.toLocaleString("es-CR")} filas; el filtro tiene más. Acote las fechas o la unidad para exportar el resto.`,
         );
       }
       return todas;

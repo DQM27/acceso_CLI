@@ -103,8 +103,12 @@ export interface ConsultaMovimientos {
 
 export interface PaginaMovimientos {
   filas: MovimientoHistorial[];
-  /** Total de filas que cumplen el filtro (todas las páginas). */
-  total: number;
+  /** Total de filas del filtro, sólo cuando esta página llegó al final (vino
+   * incompleta); `undefined` si puede haber más. Sin conteo exacto a
+   * propósito: con el volumen de varias unidades recorría la tabla entera
+   * (1,7-5,3 s con 150.000 filas en staging); la grilla sigue pidiendo
+   * páginas hasta recibir una incompleta. */
+  total?: number;
 }
 
 /** Palabras de la búsqueda, ya plegadas y con `\`, `%` y `_` escapados para
@@ -142,21 +146,17 @@ const movimientoEsquema = z.object({
 });
 
 /** Un tramo de filas (`primera`..`primera + cantidad - 1`) con el filtro y el
- * orden de `consulta`. Lo comparten la página en pantalla y la exportación.
- * `contar = false` evita recontar todo el filtro en cada tramo de una
- * exportación (el total no cambia entre tramos); `total` vuelve entonces
- * como las filas de este tramo. */
+ * orden de `consulta`. Lo comparten la página en pantalla y la exportación. */
 async function pedirTramo(
   consulta: Omit<ConsultaMovimientos, "pagina" | "tamano">,
   primera: number,
   cantidad: number,
-  contar = true,
-): Promise<PaginaMovimientos> {
+): Promise<MovimientoHistorial[]> {
   const { desde, hasta, sitioIds, busqueda, filtros, orden } = consulta;
 
   let peticion = supabase
     .from("panel_movimientos")
-    .select(COLUMNAS_MOVIMIENTO, contar ? { count: "exact" } : undefined)
+    .select(COLUMNAS_MOVIMIENTO)
     .order(orden?.campo ?? "hora_entrada", {
       ascending: !(orden?.descendente ?? true),
       nullsFirst: false,
@@ -178,14 +178,15 @@ async function pedirTramo(
     peticion = peticion.or(expresion);
   }
 
-  const { data, error, count } = await peticion;
+  const { data, error } = await peticion;
   if (error) throw new Error(error.message);
-  const filas = z.array(movimientoEsquema).parse(data);
-  return { filas, total: count ?? filas.length };
+  return z.array(movimientoEsquema).parse(data);
 }
 
 export async function listarMovimientosPagina(consulta: ConsultaMovimientos): Promise<PaginaMovimientos> {
-  return pedirTramo(consulta, consulta.pagina * consulta.tamano, consulta.tamano);
+  const primera = consulta.pagina * consulta.tamano;
+  const filas = await pedirTramo(consulta, primera, consulta.tamano);
+  return { filas, total: filas.length < consulta.tamano ? primera + filas.length : undefined };
 }
 
 // Supabase entrega como máximo 1.000 filas por petición.
@@ -196,9 +197,7 @@ export const MAXIMO_EXPORTACION = 50_000;
 
 export interface ResultadoExportacion {
   filas: MovimientoHistorial[];
-  /** Cuántas filas cumplen el filtro en total. */
-  total: number;
-  /** `true` si `total` supera lo exportado (se llegó a `MAXIMO_EXPORTACION`). */
+  /** `true` si el filtro tiene más filas que `MAXIMO_EXPORTACION`. */
   truncado: boolean;
 }
 
@@ -209,15 +208,13 @@ export async function listarMovimientosParaExportar(
   maximo: number = MAXIMO_EXPORTACION,
 ): Promise<ResultadoExportacion> {
   const filas: MovimientoHistorial[] = [];
-  let total = 0;
   while (filas.length < maximo) {
     const cantidad = Math.min(TRAMO_EXPORTACION, maximo - filas.length);
-    // Sólo el primer tramo cuenta: con 50 tramos eran 50 conteos completos.
-    const primero = filas.length === 0;
-    const tramo = await pedirTramo(consulta, filas.length, cantidad, primero);
-    if (primero) total = tramo.total;
-    filas.push(...tramo.filas);
-    if (tramo.filas.length < cantidad) break;
+    const tramo = await pedirTramo(consulta, filas.length, cantidad);
+    filas.push(...tramo);
+    if (tramo.length < cantidad) return { filas, truncado: false };
   }
-  return { filas, total, truncado: total > filas.length };
+  // Se llegó al máximo: una fila más dice si quedó algo afuera, sin contar todo.
+  const siguiente = await pedirTramo(consulta, maximo, 1);
+  return { filas, truncado: siguiente.length > 0 };
 }
