@@ -24,31 +24,31 @@
 
 :root,
 [data-theme="light"] {
-  --fondo: #faf6f5;
+  --fondo: #e6e9f2;
   --panel: #ffffff;
-  --panel-suave: #f4ecea;
-  --campo-fondo: #f7f1f0;
-  --borde: #e6d9d6;
-  --borde-fuerte: #c7b3ae;
-  --texto: #2a1f1d;
-  --muted: #7a6b67;
-  --texto-atenuado: #8f817d;
-  --acento: #b3261e;
-  --acento-hover: #c6362e;
-  --acento-presionado: #8c1d17;
-  --acento-suave: #fbe4e1;
+  --panel-suave: #eef0f8;
+  --campo-fondo: #f5f6fb;
+  --borde: #c3c9de;
+  --borde-fuerte: #8e98bd;
+  --texto: #1a1e30;
+  --muted: #454d70;
+  --texto-atenuado: #5a6386;
+  --acento: #2b55d1;
+  --acento-hover: #3b66e3;
+  --acento-presionado: #1f3fa0;
+  --acento-suave: #dbe3fa;
   --sobre-acento: #ffffff;
-  --exito: #2e7d4f;
-  --exito-suave: #e4f3ea;
+  --exito: #1b6a3a;
+  --exito-suave: #d9eee2;
   --sobre-exito: #ffffff;
-  --advertencia: #92660f;
-  --advertencia-suave: #faedd4;
+  --advertencia: #85570a;
+  --advertencia-suave: #f6e6c6;
   --sobre-advertencia: #ffffff;
   --error: #b3261e;
-  --error-suave: #fbe4e1;
+  --error-suave: #fbe0de;
   --sobre-error: #ffffff;
-  --sombra-panel: 0 8px 24px rgba(60, 30, 25, 0.12);
-  --velo: rgba(40, 20, 17, 0.45);
+  --sombra-panel: 0 2px 12px rgba(26, 30, 48, 0.14);
+  --velo: rgba(26, 30, 48, 0.5);
   color-scheme: light;
 }
 
