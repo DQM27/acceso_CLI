@@ -158,9 +158,14 @@ const movimientoEsquema = z.object({
   dispositivo_entrada_tipo: z.string().nullable(),
 });
 
-export async function listarMovimientosPagina(consulta: ConsultaMovimientos): Promise<PaginaMovimientos> {
-  const { desde, hasta, sitioIds, busqueda, orden, pagina, tamano } = consulta;
-  const primera = pagina * tamano;
+/** Un tramo de filas (`primera`..`primera + cantidad - 1`) con el filtro y el
+ * orden de `consulta`. Lo comparten la página en pantalla y la exportación. */
+async function pedirTramo(
+  consulta: Omit<ConsultaMovimientos, "pagina" | "tamano">,
+  primera: number,
+  cantidad: number,
+): Promise<PaginaMovimientos> {
+  const { desde, hasta, sitioIds, busqueda, orden } = consulta;
 
   let peticion = supabase
     .from("panel_movimientos")
@@ -172,7 +177,7 @@ export async function listarMovimientosPagina(consulta: ConsultaMovimientos): Pr
     // Desempate estable: sin él, dos filas con el mismo valor pueden repetirse
     // o saltarse entre una página y la siguiente.
     .order("id")
-    .range(primera, primera + tamano - 1);
+    .range(primera, primera + cantidad - 1);
 
   // Mismo criterio de día calendario de Costa Rica que `listarHistorial`.
   if (desde) peticion = peticion.gte("hora_entrada", inicioDiaCostaRicaUtc(desde));
@@ -186,6 +191,42 @@ export async function listarMovimientosPagina(consulta: ConsultaMovimientos): Pr
   if (error) throw new Error(error.message);
   const filas = z.array(movimientoEsquema).parse(data);
   return { filas, total: count ?? filas.length };
+}
+
+export async function listarMovimientosPagina(consulta: ConsultaMovimientos): Promise<PaginaMovimientos> {
+  return pedirTramo(consulta, consulta.pagina * consulta.tamano, consulta.tamano);
+}
+
+// Supabase entrega como máximo 1.000 filas por petición.
+const TRAMO_EXPORTACION = 1_000;
+/** Tope de filas de una exportación -- válvula de seguridad para que un
+ * rango enorme no deje la pestaña sin memoria. */
+export const MAXIMO_EXPORTACION = 50_000;
+
+export interface ResultadoExportacion {
+  filas: MovimientoHistorial[];
+  /** Cuántas filas cumplen el filtro en total. */
+  total: number;
+  /** `true` si `total` supera lo exportado (se llegó a `MAXIMO_EXPORTACION`). */
+  truncado: boolean;
+}
+
+/** Todas las filas del filtro y orden actuales (no sólo la página en
+ * pantalla), pedidas en tramos de 1.000, hasta `MAXIMO_EXPORTACION`. */
+export async function listarMovimientosParaExportar(
+  consulta: Omit<ConsultaMovimientos, "pagina" | "tamano">,
+  maximo: number = MAXIMO_EXPORTACION,
+): Promise<ResultadoExportacion> {
+  const filas: MovimientoHistorial[] = [];
+  let total = 0;
+  while (filas.length < maximo) {
+    const cantidad = Math.min(TRAMO_EXPORTACION, maximo - filas.length);
+    const tramo = await pedirTramo(consulta, filas.length, cantidad);
+    total = tramo.total;
+    filas.push(...tramo.filas);
+    if (tramo.filas.length < cantidad) break;
+  }
+  return { filas, total, truncado: total > filas.length };
 }
 
 export interface ResultadoHistorial {

@@ -1,19 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FileSpreadsheet, FileText } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
-import AvisoTruncado from "../componentes/AvisoTruncado";
+import Paginador, { totalPaginas } from "../componentes/Paginador";
 import EncabezadoPagina from "../componentes/EncabezadoPagina";
 import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
 import SelectorUnidadesOperativas, {
   textoUnidadesOperativas,
 } from "../componentes/SelectorUnidadesOperativas";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
+import { useDebounced } from "../componentes/useDebounced";
 import { useAuth } from "../contexto/AuthContexto";
-import { listarHistorial, listarUnidadesOperativas } from "../api/historial";
-import type { MovimientoHistorial, UnidadOperativa } from "../api/historial";
+import {
+  CAMPOS_ORDENABLES,
+  listarMovimientosPagina,
+  listarMovimientosParaExportar,
+  listarUnidadesOperativas,
+} from "../api/historial";
+import type { CampoOrdenable, ConsultaMovimientos, MovimientoHistorial } from "../api/historial";
 import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
 
@@ -225,69 +232,115 @@ export function generarHtmlHistorial(
 </html>`;
 }
 
+/** Filas por página. */
+const TAMANO_PAGINA = 100;
+
+/** Campo del servidor por el que se ordena al tocar el encabezado de una
+ * columna. Las columnas de fecha y hora comparten el mismo instante. */
+const CAMPO_ORDEN_POR_COLUMNA: Record<string, CampoOrdenable> = {
+  fecha_ingreso: "hora_entrada",
+  hora_ingreso: "hora_entrada",
+  fecha_salida: "hora_salida",
+  hora_salida: "hora_salida",
+};
+
+export function campoOrdenDeColumna(colId: string): CampoOrdenable | null {
+  const mapeado = CAMPO_ORDEN_POR_COLUMNA[colId];
+  if (mapeado) return mapeado;
+  return (CAMPOS_ORDENABLES as readonly string[]).includes(colId) ? (colId as CampoOrdenable) : null;
+}
+
 export default function Historial() {
   const { sesion } = useAuth();
-  const [filas, setFilas] = useState<MovimientoHistorial[]>([]);
-  const [truncado, setTruncado] = useState(false);
-  const [cargando, setCargando] = useState(true);
+  const clienteConsultas = useQueryClient();
   const [busqueda, setBusqueda] = useState("");
   // Mismo default que desktop/src/pantallas/Historial.tsx -- últimos 6
   // meses, `hasta` abierto para no perderse movimientos del día en curso.
   const [desde, setDesde] = useState(() => fechaHaceMeses(6));
   const [hasta, setHasta] = useState("");
-  const [unidades, setUnidades] = useState<UnidadOperativa[]>([]);
   // Sigue el mismo criterio que `ocultas` en `Tabla.tsx`: guarda lo
   // DESMARCADO, no lo marcado -- así una unidad que todavía no cargó (o una
   // nueva que se dio de alta después) nunca queda afuera del filtro por
   // accidente. Vacío = sin filtro (todas), ver `sitioIdsFiltro` más abajo.
   const [unidadesExcluidas, setUnidadesExcluidas] = useState<Set<string>>(new Set());
+  const [orden, setOrden] = useState<ConsultaMovimientos["orden"]>(undefined);
+  const [pagina, setPagina] = useState(0);
+  const [exportando, setExportando] = useState(false);
   const tablaRef = useRef<TablaHandle<MovimientoHistorial>>(null);
 
+  // Cada cambio de filtro u orden vuelve a la primera página: quedarse en la
+  // página 12 de un resultado que ahora tiene 2 páginas mostraría "vacío".
+  function conPrimeraPagina<A extends unknown[]>(accion: (...args: A) => void) {
+    return (...args: A) => {
+      accion(...args);
+      setPagina(0);
+    };
+  }
+
+  const { data: unidades = [], error: errorUnidades } = useQuery({
+    queryKey: ["historial", "unidades"],
+    queryFn: listarUnidadesOperativas,
+    staleTime: 5 * 60_000,
+  });
   useEffect(() => {
-    listarUnidadesOperativas()
-      .then(setUnidades)
-      .catch((error) => toast.error(mensajeError(error)));
-  }, []);
+    if (errorUnidades) toast.error(mensajeError(errorUnidades));
+  }, [errorUnidades]);
 
   // `undefined` (sin filtro) cuando nada está excluido -- a propósito
   // distinto de "mandar la lista completa de ids": así el primer render (con
   // `unidades` todavía vacío, antes de que responda `listarUnidadesOperativas`)
-  // no le pide a `listarHistorial` un `.in(sitio_id, [])` que traería cero
-  // filas por una carrera de carga, no porque alguien haya filtrado nada.
+  // no pide un `.in(sitio_id, [])` que traería cero filas por una carrera de
+  // carga, no porque alguien haya filtrado nada.
   const sitioIdsFiltro =
     unidadesExcluidas.size === 0
       ? undefined
       : unidades.filter((u) => !unidadesExcluidas.has(u.id)).map((u) => u.id);
 
-  const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
-    const silencioso = opciones?.silencioso ?? false;
-    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
-    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
-    // actualización como síncrona dentro del efecto que dispara la carga.
-    return Promise.resolve()
-      .then(() => {
-        if (!silencioso) setCargando(true);
-      })
-      .then(() => listarHistorial(desde || undefined, hasta || undefined, sitioIdsFiltro))
-      .then(({ filas, truncado }) => {
-        setFilas(filas);
-        setTruncado(truncado);
-      })
-      .catch((error) => {
-        if (!silencioso) toast.error(mensajeError(error));
-      })
-      .finally(() => {
-        if (!silencioso) setCargando(false);
-      });
-  }, [desde, hasta, unidadesExcluidas, unidades]);
+  // La búsqueda va al servidor: se espera a que la persona deje de escribir
+  // para no pedir una consulta por tecla.
+  const busquedaDebounced = useDebounced(busqueda, 300);
 
+  const filtro = useMemo(
+    () => ({
+      desde: desde || undefined,
+      hasta: hasta || undefined,
+      sitioIds: sitioIdsFiltro,
+      busqueda: busquedaDebounced,
+      orden,
+    }),
+    // `sitioIdsFiltro` se recalcula en cada render; sus dependencias reales
+    // son las dos de abajo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [desde, hasta, unidadesExcluidas, unidades, busquedaDebounced, orden],
+  );
+
+  const {
+    data: resultado,
+    isFetching,
+    error: errorMovimientos,
+  } = useQuery({
+    queryKey: ["historial", "movimientos", filtro, pagina],
+    queryFn: () => listarMovimientosPagina({ ...filtro, pagina, tamano: TAMANO_PAGINA }),
+    // Al cambiar de página u orden se sigue mostrando la anterior (atenuada)
+    // en vez de vaciar la tabla mientras llega la nueva.
+    placeholderData: keepPreviousData,
+  });
   useEffect(() => {
-    recargar();
-  }, [recargar]);
+    if (errorMovimientos) toast.error(mensajeError(errorMovimientos));
+  }, [errorMovimientos]);
+
+  const filas = resultado?.filas ?? [];
+  const total = resultado?.total ?? 0;
+  const cargando = isFetching;
 
   // Ver `useAutoRefresh` -- sin esto, un ingreso ya cerrado/sincronizado
-  // no aparecía hasta apretar "actualizar" a mano.
-  useAutoRefresh(() => recargar({ silencioso: true }), 30_000, "ingresos");
+  // no aparecía hasta apretar "actualizar" a mano. Realtime sólo INVALIDA la
+  // consulta de la página visible; no vuelve a bajar todo el historial.
+  useAutoRefresh(
+    () => void clienteConsultas.invalidateQueries({ queryKey: ["historial", "movimientos"] }),
+    30_000,
+    "ingresos",
+  );
 
   /** Columnas visibles AHORA en la grilla (selector "Columnas ▾" + el orden
    * en que la persona las dejó), mapeadas a su definición de export -- si
@@ -303,17 +356,32 @@ export default function Historial() {
       .filter((d): d is DefinicionColumnaExport => d !== undefined);
   }
 
-  function filasParaExportar(): MovimientoHistorial[] | null {
-    const visibles = tablaRef.current?.filasFiltradas() ?? filas;
-    if (visibles.length === 0) {
-      toast.error("No hay filas para exportar con el filtro actual.");
+  /** Trae del servidor TODAS las filas del filtro y orden actuales (no sólo la
+   * página en pantalla), hasta el máximo de una exportación. */
+  async function filasParaExportar(): Promise<MovimientoHistorial[] | null> {
+    setExportando(true);
+    try {
+      const { filas: todas, total: totalFiltro, truncado } = await listarMovimientosParaExportar(filtro);
+      if (todas.length === 0) {
+        toast.error("No hay filas para exportar con el filtro actual.");
+        return null;
+      }
+      if (truncado) {
+        toast.warning(
+          `Se exportan las primeras ${todas.length.toLocaleString("es-CR")} de ${totalFiltro.toLocaleString("es-CR")} filas. Acote las fechas o la unidad para exportar el resto.`,
+        );
+      }
+      return todas;
+    } catch (error) {
+      toast.error(mensajeError(error));
       return null;
+    } finally {
+      setExportando(false);
     }
-    return visibles;
   }
 
   async function exportarAExcel() {
-    const visibles = filasParaExportar();
+    const visibles = await filasParaExportar();
     if (!visibles) return;
     const definiciones = definicionesVisibles();
     if (definiciones.length === 0) {
@@ -343,8 +411,8 @@ export default function Historial() {
    * de impresión del resto de la página -- `window.print()` imprime la
    * ventana completa si no se aísla, arrastrando el sidebar/la grilla.
    */
-  function exportarAPdf() {
-    const visibles = filasParaExportar();
+  async function exportarAPdf() {
+    const visibles = await filasParaExportar();
     if (!visibles) return;
     const definiciones = definicionesVisibles();
     if (definiciones.length === 0) {
@@ -470,25 +538,22 @@ export default function Historial() {
         descripcion="Movimientos de contratistas registrados por los puestos de control."
       />
       <div className="pantalla-cuerpo min-h-0 flex-1">
-        {truncado && (
-          <AvisoTruncado
-            mensaje={`Este rango tiene más de ${filas.length.toLocaleString("es-CR")} movimientos — se muestran solo los primeros, y Excel/PDF exportan lo mismo que está cargado acá (a diferencia de escritorio, acá no hay un rango "completo" aparte). Acote las fechas para ver/exportar el resto.`}
-          />
-        )}
         <div className="min-h-0 flex-1">
           <Tabla<MovimientoHistorial>
             ref={tablaRef}
             id="historial"
             columnas={columnas}
             filas={filas}
-            filtrosPorColumna
-            busqueda={busqueda}
+            onOrdenCambia={conPrimeraPagina((nuevo) => {
+              const campo = nuevo ? campoOrdenDeColumna(nuevo.colId) : null;
+              setOrden(nuevo && campo ? { campo, descendente: nuevo.descendente } : undefined);
+            })}
             controles={
               <div className="campo flex-[0_1_16rem]">
                 <input
                   placeholder="Cédula, nombre, empresa…"
                   value={busqueda}
-                  onChange={(evento) => setBusqueda(evento.target.value)}
+                  onChange={(evento) => conPrimeraPagina(setBusqueda)(evento.target.value)}
                 />
               </div>
             }
@@ -497,31 +562,31 @@ export default function Historial() {
                 <SelectorUnidadesOperativas
                   unidades={unidades}
                   excluidas={unidadesExcluidas}
-                  onCambiar={setUnidadesExcluidas}
+                  onCambiar={conPrimeraPagina(setUnidadesExcluidas)}
                 />
                 <SelectorRangoFecha
                   desde={desde}
                   hasta={hasta}
-                  onAplicar={(nuevoDesde, nuevoHasta) => {
+                  onAplicar={conPrimeraPagina((nuevoDesde: string, nuevoHasta: string) => {
                     setDesde(nuevoDesde);
                     setHasta(nuevoHasta);
-                  }}
+                  })}
                 />
                 <button
                   type="button"
                   className="boton boton-icono"
-                  title="Exportar a Excel — respeta el filtro/orden/columnas actuales de la grilla"
+                  title="Exportar a Excel: todo el resultado del filtro actual, con las columnas visibles"
                   onClick={exportarAExcel}
-                  disabled={cargando}
+                  disabled={exportando}
                 >
                   <FileSpreadsheet size={16} />
                 </button>
                 <button
                   type="button"
                   className="boton boton-icono"
-                  title="Exportar a PDF — respeta el filtro/orden/columnas actuales de la grilla"
+                  title="Exportar a PDF: todo el resultado del filtro actual, con las columnas visibles"
                   onClick={exportarAPdf}
-                  disabled={cargando}
+                  disabled={exportando}
                 >
                   <FileText size={16} />
                 </button>
@@ -529,6 +594,13 @@ export default function Historial() {
             }
           />
         </div>
+        <Paginador
+          pagina={Math.min(pagina, totalPaginas(TAMANO_PAGINA, total) - 1)}
+          tamano={TAMANO_PAGINA}
+          total={total}
+          cargando={cargando}
+          onCambiar={setPagina}
+        />
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   listarHistorial,
   listarMovimientosPagina,
+  listarMovimientosParaExportar,
   listarUnidadesOperativas,
   palabrasDeBusqueda,
   plegarTexto,
@@ -242,6 +243,43 @@ describe("listarMovimientosPagina", () => {
     expect(encadenable.lt).not.toHaveBeenCalled();
     expect(encadenable.in).not.toHaveBeenCalled();
     expect(encadenable.like).not.toHaveBeenCalled();
+  });
+
+  it("exportar pide todo el filtro en tramos de 1.000 y se detiene al recibir un tramo corto", async () => {
+    const encadenable = encadenableConLike({ data: [], error: null, count: 2500 });
+    const tramo = (n: number) => Array.from({ length: n }, (_, i) => filaVista({ id: `f${i}` }));
+    let llamada = 0;
+    encadenable.then = (resolver: (valor: unknown) => void) => {
+      const tamanos = [1000, 1000, 500];
+      resolver({ data: tramo(tamanos[llamada++]), error: null, count: 2500 });
+    };
+    mocks.from.mockReturnValue(encadenable);
+
+    const resultado = await listarMovimientosParaExportar({ busqueda: "perez" });
+
+    expect(resultado.filas).toHaveLength(2500);
+    expect(resultado.total).toBe(2500);
+    expect(resultado.truncado).toBe(false);
+    expect(encadenable.range).toHaveBeenNthCalledWith(1, 0, 999);
+    expect(encadenable.range).toHaveBeenNthCalledWith(2, 1000, 1999);
+    expect(encadenable.range).toHaveBeenNthCalledWith(3, 2000, 2999);
+  });
+
+  it("exportar marca truncado cuando el filtro tiene más filas que el máximo", async () => {
+    const encadenable = encadenableConLike({ data: [], error: null, count: 9999 });
+    encadenable.then = (resolver: (valor: unknown) => void) =>
+      resolver({
+        data: Array.from({ length: 1000 }, (_, i) => filaVista({ id: `f${i}` })),
+        error: null,
+        count: 9999,
+      });
+    mocks.from.mockReturnValue(encadenable);
+
+    const resultado = await listarMovimientosParaExportar({}, 1000);
+
+    expect(resultado.filas).toHaveLength(1000);
+    expect(resultado.total).toBe(9999);
+    expect(resultado.truncado).toBe(true);
   });
 
   it("propaga el error como Error real y rechaza filas con forma inesperada", async () => {

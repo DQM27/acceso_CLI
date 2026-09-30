@@ -80,11 +80,12 @@ async function preparar(page: Page) {
         { id: "1", cedula: "1-2345-6789", nombre: "Operador de prueba", rol: "OPERADOR", activo: true },
       ]);
     if (url.pathname === "/rest/v1/sitios") return responder([sitio]);
-    if (url.pathname === "/rest/v1/ingresos")
+    if (url.pathname === "/rest/v1/panel_movimientos")
       return responder([
         {
           id: "1",
           sitio_id: sitio.id,
+          sitio_nombre: sitio.nombre,
           contratista_cedula: "1-2345-6789",
           contratista_nombre: "Contratista de prueba",
           empresa_nombre: "Empresa de prueba",
@@ -95,8 +96,7 @@ async function preparar(page: Page) {
           hora_salida: "2026-09-09T18:00:00Z",
           usuario_entrada_nombre: "Operador de prueba",
           usuario_salida_nombre: "Operador de prueba",
-          sitios: { nombre: sitio.nombre },
-          dispositivo_entrada: { tipo: "pc" },
+          dispositivo_entrada_tipo: "pc",
         },
       ]);
     if (url.pathname === "/functions/v1/admin-list-devices")
@@ -185,6 +185,8 @@ test("Historial (AG Grid) y exportación a PDF sin violaciones de CSP", async ({
   await preparar(page);
   await page.goto("/historial");
   await expect(page.getByText("Contratista de prueba")).toBeVisible();
+  // Paginación en el servidor: el paginador muestra el rango de la página.
+  await expect(page.getByText(/1–1 de 1/)).toBeVisible();
 
   // El punto de mayor riesgo real: exportarAPdf() escribe HTML crudo con un
   // <style> inline en un iframe oculto (about:blank hereda el CSP del

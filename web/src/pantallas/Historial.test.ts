@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFINICIONES_EXPORT, generarHtmlHistorial } from "./Historial";
+import { DEFINICIONES_EXPORT, campoOrdenDeColumna, generarHtmlHistorial } from "./Historial";
 import type { MovimientoHistorial } from "../api/historial";
 
 // Mismos tres casos que desktop/src-tauri/src/pdf/html.rs -- una sola
@@ -80,5 +80,20 @@ describe("generarHtmlHistorial", () => {
     const posicionNombre = html.indexOf("NOMBRE");
     expect(posicionGafete).toBeGreaterThan(0);
     expect(posicionGafete).toBeLessThan(posicionNombre);
+  });
+});
+
+describe("campoOrdenDeColumna", () => {
+  it("las columnas de fecha y hora ordenan por el instante correspondiente", () => {
+    expect(campoOrdenDeColumna("fecha_ingreso")).toBe("hora_entrada");
+    expect(campoOrdenDeColumna("hora_ingreso")).toBe("hora_entrada");
+    expect(campoOrdenDeColumna("fecha_salida")).toBe("hora_salida");
+    expect(campoOrdenDeColumna("hora_salida")).toBe("hora_salida");
+  });
+
+  it("las columnas con campo propio lo usan y una desconocida no ordena en el servidor", () => {
+    expect(campoOrdenDeColumna("empresa_nombre")).toBe("empresa_nombre");
+    expect(campoOrdenDeColumna("gafete_numero")).toBe("gafete_numero");
+    expect(campoOrdenDeColumna("inventada")).toBeNull();
   });
 });

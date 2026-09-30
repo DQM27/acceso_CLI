@@ -130,6 +130,11 @@ export interface TablaProps<T> {
   /** Filtro por columna (fila de filtros bajo el encabezado) en vez del
    * `controles` propio de la pantalla. */
   filtrosPorColumna?: boolean;
+  /** El orden lo resuelve el servidor (la tabla sólo muestra UNA página de
+   * un conjunto mayor): al ordenar una columna la grilla no reordena las filas
+   * que tiene, sino que avisa por `onOrdenCambia` para pedir la página ya
+   * ordenada. `null` = sin orden elegido. */
+  onOrdenCambia?: (orden: { colId: string; descendente: boolean } | null) => void;
   /** Identificador estable de esta grilla. Habilita persistir en
    * localStorage el orden, ancho, orden de columnas (sort) y cuáles están
    * ocultas. */
@@ -159,6 +164,7 @@ function TablaBase<T>(
     onCeldaEditada,
     onFilaDobleClic,
     filtrosPorColumna,
+    onOrdenCambia,
     id,
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
@@ -276,13 +282,29 @@ function TablaBase<T>(
     if (evento.finished) guardarLayout(ocultas);
   }
 
-  function alOrdenar(_evento: SortChangedEvent<T>) {
+  function alOrdenar(evento: SortChangedEvent<T>) {
     guardarLayout(ocultas);
+    if (!onOrdenCambia) return;
+    const ordenada = evento.api
+      .getColumnState()
+      .filter((columna) => columna.sort)
+      .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0))[0];
+    onOrdenCambia(ordenada ? { colId: ordenada.colId, descendente: ordenada.sort === "desc" } : null);
   }
 
   function alFijarColumna(_evento: ColumnPinnedEvent<T>) {
     guardarLayout(ocultas);
   }
+
+  const ordenEnServidor = onOrdenCambia !== undefined;
+  // Orden en el servidor: las filas ya llegan ordenadas, así que el comparador
+  // siempre "empata" y AG Grid (orden estable) las deja como vinieron en vez de
+  // reordenarlas con otro criterio de texto. Memoizado: un `defaultColDef`
+  // nuevo en cada render haría que AG Grid reaplique la configuración.
+  const defaultColDef = useMemo<ColDef>(() => {
+    const base = filtrosPorColumna && filtrosVisibles ? columnaPorDefectoConFiltro : columnaPorDefecto;
+    return ordenEnServidor ? { ...base, comparator: () => 0 } : base;
+  }, [filtrosPorColumna, filtrosVisibles, ordenEnServidor]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -369,9 +391,7 @@ function TablaBase<T>(
       <div style={{ flex: 1, minHeight: 0 }}>
         <AgGridReact<T>
           theme={temaBrisas}
-          defaultColDef={
-            filtrosPorColumna && filtrosVisibles ? columnaPorDefectoConFiltro : columnaPorDefecto
-          }
+          defaultColDef={defaultColDef}
           rowData={filas}
           columnDefs={columnasConVisibilidad}
           quickFilterText={busquedaDebounced}
