@@ -20,7 +20,7 @@ Deno.serve(async (req: Request) => {
     supabase
       .from("dispositivos")
       .select(
-        "id, sitio_id, tipo, etiqueta, created_at, revoked_at, suspended_at, last_seen_at, oculto_en_panel, " +
+        "id, sitio_id, tipo, etiqueta, created_at, revoked_at, last_seen_at, oculto_en_panel, " +
           "identificador_hardware, nombre_dispositivo, plataforma, version_build, app_version, last_ip, " +
           "clave_huella, vinculado_en",
       )

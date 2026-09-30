@@ -47,13 +47,12 @@ interface FilaDispositivo {
   id: string;
   sitio_id: string;
   tipo: string;
-  suspended_at: string | null;
   clave_huella: string | null;
   clave_publica_jwk: ClavePublicaP256 | null;
   identificador_hardware: string | null;
 }
 
-const COLUMNAS = "id, sitio_id, tipo, suspended_at, clave_huella, clave_publica_jwk, identificador_hardware";
+const COLUMNAS = "id, sitio_id, tipo, clave_huella, clave_publica_jwk, identificador_hardware";
 
 const credencialesInvalidas = () => json({ error: "invalid_credentials" }, 401);
 
@@ -76,10 +75,6 @@ Deno.serve(async (req: Request) => {
   if (typeof cuerpo.asercion !== "string") return json({ error: "bad_request" }, 400);
   const dispositivo = await autenticarConAsercion(supabase, cuerpo.asercion, ip);
   if (!dispositivo) return credencialesInvalidas();
-
-  // Suspensión temporal: el dispositivo existe y su credencial es válida,
-  // pero un admin lo bloqueó hasta reactivarlo.
-  if (dispositivo.suspended_at) return json({ error: "device_suspended" }, 403);
 
   // Sin versión mínima configurada, o sin que el cliente la mande, no se
   // bloquea: "no sé" nunca es motivo para rechazar. 426 Upgrade Required.

@@ -5,7 +5,7 @@ import { mensajeError } from "../mensajeError";
 
 /**
  * Confirmación por código de correo para acciones sensibles (alta/baja de
- * administradores, Revocar/Eliminar dispositivos, y cualquier otra mutación
+ * administradores, Retirar/Eliminar dispositivos, y cualquier otra mutación
  * que en el futuro necesite el mismo "sos vos ahora mismo" -- ver
  * `useVerificacionPorCorreo`). Absorbe el modal + form + manejo de error
  * que antes vivía duplicado en cada pantalla.
@@ -30,7 +30,7 @@ export default function ConfirmacionSensible({
   /** Correo de quien está haciendo la acción -- ahí llega el código. */
   correo: string;
   titulo: string;
-  /** Pregunta del primer paso, antes de mandar ningún código (ej. "¿Revocar
+  /** Pregunta del primer paso, antes de mandar ningún código (ej. "¿Retirar
    * 'Brisas - PC'? Va a dejar de poder sincronizar."). */
   pregunta: string;
   /** Texto del segundo paso, ya con el código pedido (ej. "agregás a

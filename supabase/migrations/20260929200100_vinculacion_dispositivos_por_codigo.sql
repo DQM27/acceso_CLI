@@ -4,9 +4,12 @@
 -- 4.2). Reemplaza al secreto permanente que el panel mostraba para copiar.
 --
 -- Flujo:
--- 1. El panel (admin-provision-device / admin-crear-codigo-vinculacion)
---    crea una fila en `codigos_vinculacion` con el SHA-256 del código,
---    vigencia corta y un solo uso.
+-- 1. El panel (admin-provision-device) da de alta el dispositivo y crea una
+--    fila en `codigos_vinculacion` con el SHA-256 del código, vigencia corta
+--    y un solo uso. El código sólo vincula un dispositivo que todavía no
+--    tiene clave: no existe "re-vincular" (decisión 2026-09-30). Un equipo
+--    reinstalado se da de alta como dispositivo nuevo y el viejo se retira;
+--    los datos vuelven solos con la primera sincronización.
 -- 2. El equipo llama a `device-vincular` con el código y SU clave pública
 --    (JWK P-256, sin la parte privada). La Edge Function llama a
 --    `canjear_codigo_vinculacion`, que en UNA transacción quema el código y
@@ -17,8 +20,8 @@
 --
 -- Sin camino legado (decisión explícita: todos los equipos se reinstalan y
 -- se vinculan con código): se elimina `secret_hash`. Un dispositivo que ya
--- existía queda "sin vincular" hasta que el panel le emita un código con
--- "Re-vincular"; conserva su `id` y todo su historial.
+-- existía queda sin clave y no puede autenticarse; se retira desde el panel
+-- y el equipo se da de alta de nuevo.
 
 alter table public.dispositivos
   drop column if exists secret_hash,
@@ -59,7 +62,6 @@ create table if not exists public.eventos_seguridad_dispositivos (
     'codigo_usado',
     'codigo_vencido',
     'codigo_anulado',
-    'codigo_de_otro_dispositivo',
     'firma_invalida',
     'hardware_distinto'
   )),
@@ -93,21 +95,16 @@ create policy "solo dispositivos vigentes" on public.eventos_seguridad_dispositi
   with check ((select private.dispositivo_vigente()));
 
 -- Canje atómico. Devuelve cero filas si el código no sirve (inexistente,
--- usado, vencido, anulado, de otro dispositivo, o el dispositivo ya fue
--- revocado); quien llama consulta el motivo aparte para registrarlo. Una
--- huella repetida (la misma clave pública para dos dispositivos) viola el
--- índice único y revierte todo, incluido el uso del código.
---
--- `p_dispositivo_esperado`: el equipo lo manda al re-vincularse con datos
--- locales ya cargados. Un código de OTRO dispositivo se rechaza sin
--- consumirse, para no atar esos datos a otro dispositivo u otro sitio.
+-- usado, vencido, anulado, o su dispositivo ya está vinculado o retirado);
+-- quien llama consulta el motivo aparte para registrarlo. Una huella
+-- repetida (la misma clave pública para dos dispositivos) viola el índice
+-- único y revierte todo, incluido el uso del código.
 create or replace function public.canjear_codigo_vinculacion(
   p_codigo_hash text,
   p_clave_publica_jwk jsonb,
   p_clave_huella text,
   p_metadata jsonb,
-  p_ip text,
-  p_dispositivo_esperado uuid default null
+  p_ip text
 )
 returns table (dispositivo_id uuid, sitio_id uuid, tipo text)
 language plpgsql
@@ -124,15 +121,18 @@ begin
      and c.usado_en is null
      and c.anulado_en is null
      and c.expira_en > pg_catalog.now()
-     and (p_dispositivo_esperado is null or c.dispositivo_id = p_dispositivo_esperado)
+     and exists (
+       select 1 from public.dispositivos d
+        where d.id = c.dispositivo_id
+          and d.revoked_at is null
+          and d.clave_huella is null
+     )
   returning c.dispositivo_id into v_dispositivo_id;
 
   if v_dispositivo_id is null then
     return;
   end if;
 
-  -- La metadata se reemplaza completa: re-vincular es, por definición,
-  -- otro equipo físico (o el mismo reinstalado).
   return query
   update public.dispositivos d
      set clave_publica_jwk = p_clave_publica_jwk,
@@ -147,11 +147,12 @@ begin
          app_version = p_metadata ->> 'app_version'
    where d.id = v_dispositivo_id
      and d.revoked_at is null
+     and d.clave_huella is null
   returning d.id, d.sitio_id, d.tipo;
 end;
 $$;
 
-revoke all on function public.canjear_codigo_vinculacion(text, jsonb, text, jsonb, text, uuid)
+revoke all on function public.canjear_codigo_vinculacion(text, jsonb, text, jsonb, text)
   from public, anon, authenticated;
-grant execute on function public.canjear_codigo_vinculacion(text, jsonb, text, jsonb, text, uuid)
+grant execute on function public.canjear_codigo_vinculacion(text, jsonb, text, jsonb, text)
   to service_role;

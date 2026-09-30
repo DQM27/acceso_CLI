@@ -1,5 +1,5 @@
 -- El canal en vivo (`realtime.messages`, tema `sitio:<id>`) autorizaba sólo
--- por `sitio_id` del JWT: un dispositivo suspendido o revocado con un token
+-- por `sitio_id` del JWT: un dispositivo retirado con un token
 -- todavía vigente (hasta 1 h) podía seguir suscribiéndose y recibiendo los
 -- avisos de su sitio, que traen la fila completa (`cambio_nube`).
 -- Encontrado en la prueba con equipos reales (staging, 2026-09-30).
@@ -11,8 +11,7 @@
 --
 -- Realtime evalúa esto al unirse al canal. Para cortar un canal ya abierto,
 -- los clientes lo cierran al recibir `dispositivo_expulsado` y al
--- reconectar esta política (y `device-auth`) los rechaza mientras sigan
--- suspendidos o revocados.
+-- reconectar esta política (y `device-auth`) los rechaza.
 
 drop policy if exists "solo dispositivos vigentes" on realtime.messages;
 

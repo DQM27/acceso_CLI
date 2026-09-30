@@ -5,7 +5,7 @@
 --   2. no entra al de otro sitio;
 --   3. una sesión sin sitio no entra;
 --   4. un cliente anónimo no entra;
---   5. un dispositivo suspendido no entra ni al de su propio sitio
+--   5. un dispositivo retirado no entra ni al de su propio sitio
 --      (`20260930020000_realtime_solo_dispositivos_vigentes`).
 begin;
 
@@ -75,7 +75,7 @@ begin
 end $$;
 
 reset role;
-update public.dispositivos set suspended_at = now()
+update public.dispositivos set revoked_at = now()
  where id = current_setting('diagnostico.disp_a')::uuid;
 set local role authenticated;
 select set_config('request.jwt.claims', (select a from jwt_prueba), true);
@@ -83,7 +83,7 @@ do $$
 begin
   if exists (select 1 from realtime.messages
              where id = current_setting('diagnostico.realtime_id')::uuid) then
-    raise exception 'Un dispositivo suspendido puede entrar al canal de su sitio';
+    raise exception 'Un dispositivo retirado puede entrar al canal de su sitio';
   end if;
 end $$;
 

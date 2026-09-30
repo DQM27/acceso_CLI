@@ -11,13 +11,11 @@ import { usePresenciaPorSitio } from "../presenciaSitios";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
 import {
-  crearCodigoVinculacion,
   crearSitio,
   eliminarDispositivo,
   listarDispositivosYSitios,
   provisionarDispositivo,
   revocarDispositivo,
-  suspenderDispositivo,
 } from "../api/dispositivos";
 import type {
   CodigoPendiente,
@@ -52,22 +50,21 @@ function textoFechaHora(iso: string): string {
 }
 
 /**
- * Alta, vinculación, baja y suspensión de dispositivos, autenticada con la
- * misma sesión de Google que el resto del panel (ver `api/dispositivos.ts`).
+ * Dos acciones sobre un equipo, nada más: Registrar y Retirar (ver
+ * docs/features-futuras/propuesta-registro-dispositivos.md). Autenticada con
+ * la misma sesión de Google que el resto del panel (ver `api/dispositivos.ts`).
  *
  * El panel es la única autoridad: un equipo nunca se da de alta solo. Al
- * crear un dispositivo (o con "Re-vincular") se emite un código de un solo
- * uso, con QR, que vence en minutos y se muestra UNA sola vez; el equipo lo
- * canjea y genera su propia clave (ver
- * docs/features-futuras/propuesta-registro-dispositivos.md). Los rechazos
- * (código usado, vencido, de otro dispositivo, firma inválida...) quedan en
- * "Intentos y alertas", con la IP.
+ * registrarlo se emite un código de un solo uso, con QR, que vence en
+ * minutos y se muestra UNA sola vez; el equipo lo canjea y genera su propia
+ * clave. Un equipo reinstalado o reemplazado se registra como uno nuevo (los
+ * datos vuelven con la primera sincronización) y el viejo se retira. Los
+ * rechazos (código usado, vencido, firma inválida...) quedan en "Intentos y
+ * alertas", con la IP.
  *
- * Revocar, Eliminar y Re-vincular un equipo que está en uso piden código de
- * confirmación por correo -- misma "sos vos ahora mismo" que alta/baja de
- * administradores (ver `ConfirmacionSensible`): las tres le cortan el paso
- * al equipo actual. Suspender no lo pide: es reversible con un click
- * (Reactivar).
+ * Retirar y Eliminar piden código de confirmación por correo -- misma "sos
+ * vos ahora mismo" que alta/baja de administradores (ver
+ * `ConfirmacionSensible`): le cortan el paso al equipo para siempre.
  */
 export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const [sitios, setSitios] = useState<{ id: string; nombre: string }[]>([]);
@@ -89,33 +86,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const [creandoSitio, setCreandoSitio] = useState(false);
   const [errorSitio, setErrorSitio] = useState<string | null>(null);
 
-  // Modal de confirmación simple (Suspender -- reversible con un click,
-  // Reactivar) -- reemplaza el confirm() nativo del navegador, que se ve
-  // fuera de lugar (barra con el dominio, botones del sistema) al lado del
-  // resto de la app. Mismo patrón que `confirmarSalidaMasiva` en
-  // desktop/src/pantallas/Activos.tsx.
-  const [confirmacion, setConfirmacion] = useState<{
-    titulo: string;
-    mensaje: string;
-    textoConfirmar: string;
-    accion: () => Promise<void>;
-  } | null>(null);
-  const [confirmando, setConfirmando] = useState(false);
-
-  async function ejecutarConfirmacion() {
-    if (!confirmacion) return;
-    setConfirmando(true);
-    try {
-      await confirmacion.accion();
-      setConfirmacion(null);
-    } catch (error) {
-      toast.error(mensajeError(error));
-    } finally {
-      setConfirmando(false);
-    }
-  }
-
-  // Revocar/Eliminar piden código de correo además de confirmar -- ver el
+  // Retirar/Eliminar piden código de correo además de confirmar -- ver el
   // doc-comment del componente. `accion` maneja su propio error/toast (no
   // tira), para que `ConfirmacionSensible` no se quede con una excepción
   // sin atrapar entre medio de su propio manejo del código.
@@ -293,15 +264,15 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     });
   }, [recargar]);
 
-  const alRevocar = useCallback((fila: FilaDispositivo) => {
+  const alRetirar = useCallback((fila: FilaDispositivo) => {
     setConfirmacionSensible({
-      titulo: "Revocar dispositivo",
-      pregunta: `¿Revocar "${fila.etiqueta}"? Ese dispositivo va a dejar de poder sincronizar.`,
-      descripcion: `revocar "${fila.etiqueta}" -- ese dispositivo va a dejar de poder sincronizar`,
+      titulo: "Retirar dispositivo",
+      pregunta: `¿Retirar "${fila.etiqueta}"? Es definitivo: ese equipo deja de sincronizar en el acto y no se puede reactivar.`,
+      descripcion: `retirar "${fila.etiqueta}" -- es definitivo, ese equipo deja de sincronizar en el acto`,
       accion: async () => {
         try {
           await revocarDispositivo(fila.id);
-          toast.success(`${fila.etiqueta} revocado.`);
+          toast.success(`${fila.etiqueta} retirado.`);
           setConfirmacionSensible(null);
           await recargar();
         } catch (error) {
@@ -310,64 +281,6 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       },
     });
   }, [recargar]);
-
-  const alSuspender = useCallback((fila: FilaDispositivo) => {
-    setConfirmacion({
-      titulo: "Suspender dispositivo",
-      mensaje: `¿Suspender "${fila.etiqueta}"? Va a dejar de poder sincronizar hasta que lo reactivés.`,
-      textoConfirmar: "Suspender",
-      accion: async () => {
-        await suspenderDispositivo(fila.id, true);
-        toast.success(`${fila.etiqueta} suspendido.`);
-        await recargar();
-      },
-    });
-  }, [recargar]);
-
-  const alReactivar = useCallback(
-    async (fila: FilaDispositivo) => {
-      try {
-        await suspenderDispositivo(fila.id, false);
-        toast.success(`${fila.etiqueta} reactivado.`);
-        recargar();
-      } catch (error) {
-        toast.error(mensajeError(error));
-      }
-    },
-    [recargar],
-  );
-
-  // Re-vincular: código nuevo para el MISMO dispositivo (conserva su
-  // historial). Si hay un equipo usándolo, al canjearse queda fuera: por eso
-  // pide confirmación por correo, igual que Revocar. Sin equipo vinculado
-  // (nunca se usó, o el código anterior venció) es sólo reemplazar el código.
-  const alRevincular = useCallback(
-    (fila: FilaDispositivo) => {
-      async function emitir() {
-        const emitido = await crearCodigoVinculacion(fila.id);
-        setCodigoMostrado({ titulo: fila.etiqueta, codigo: emitido.codigo, expira_en: emitido.expira_en });
-        await recargar();
-      }
-      if (fila.credencial === "sin_vincular") {
-        emitir().catch((error) => toast.error(mensajeError(error)));
-        return;
-      }
-      setConfirmacionSensible({
-        titulo: "Re-vincular dispositivo",
-        pregunta: `¿Generar un código nuevo para "${fila.etiqueta}"? Cuando se use, el equipo actual deja de sincronizar.`,
-        descripcion: `re-vincular "${fila.etiqueta}" -- cuando se use el código nuevo, el equipo actual deja de sincronizar`,
-        accion: async () => {
-          try {
-            await emitir();
-            setConfirmacionSensible(null);
-          } catch (error) {
-            toast.error(mensajeError(error));
-          }
-        },
-      });
-    },
-    [recargar],
-  );
 
   const columnas: ColDef<FilaDispositivo>[] = useMemo(
     () => [
@@ -442,10 +355,8 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         filter: false,
         cellRenderer: ({ data }: { data: FilaDispositivo }) => {
           const [texto, color] = data.revoked_at
-            ? ["Revocado", "var(--error)"]
-            : data.suspended_at
-              ? ["Suspendido", "var(--advertencia)"]
-              : ["Activo", "var(--exito)"];
+            ? ["Retirado", "var(--error)"]
+            : ["Activo", "var(--exito)"];
           return (
             <span className="chip" style={{ ["--chip-color" as string]: color }}>
               {texto}
@@ -476,52 +387,22 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       {
         colId: "acciones",
         headerName: "Acción",
-        flex: 2.2,
-        minWidth: 340,
+        flex: 1.2,
+        minWidth: 190,
         sortable: false,
         filter: false,
         cellRenderer: ({ data }: { data: FilaDispositivo }) => (
           <div
             style={{ display: "flex", gap: "0.4rem", justifyContent: "center", alignItems: "center", height: "100%" }}
           >
-            {!data.revoked_at &&
-              (data.suspended_at ? (
-                <button
-                  type="button"
-                  className="boton"
-                  style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-                  onClick={() => alReactivar(data)}
-                >
-                  Reactivar
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="boton"
-                  style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-                  onClick={() => alSuspender(data)}
-                >
-                  Suspender
-                </button>
-              ))}
             {!data.revoked_at && (
               <button
                 type="button"
                 className="boton"
                 style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-                onClick={() => alRevincular(data)}
+                onClick={() => alRetirar(data)}
               >
-                Re-vincular
-              </button>
-            )}
-            {!data.revoked_at && (
-              <button
-                type="button"
-                className="boton"
-                style={{ padding: "0.2rem 0.6rem", fontSize: "0.8rem" }}
-                onClick={() => alRevocar(data)}
-              >
-                Revocar
+                Retirar
               </button>
             )}
             <button
@@ -536,7 +417,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         ),
       },
     ],
-    [alReactivar, alSuspender, alRevincular, alRevocar, alEliminar],
+    [alRetirar, alEliminar],
   );
 
   return (
@@ -701,30 +582,6 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
               </button>
             </div>
           </form>
-        </Modal>
-      )}
-
-      {confirmacion && (
-        <Modal titulo={confirmacion.titulo} onCerrar={() => setConfirmacion(null)}>
-          <p style={{ marginTop: 0 }}>{confirmacion.mensaje}</p>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-            <button
-              type="button"
-              className="boton"
-              disabled={confirmando}
-              onClick={() => setConfirmacion(null)}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="boton boton-primario"
-              disabled={confirmando}
-              onClick={ejecutarConfirmacion}
-            >
-              {confirmando ? "Un momento…" : confirmacion.textoConfirmar}
-            </button>
-          </div>
         </Modal>
       )}
 

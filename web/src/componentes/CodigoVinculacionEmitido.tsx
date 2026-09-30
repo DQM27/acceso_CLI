@@ -75,7 +75,7 @@ export default function CodigoVinculacionEmitido({
         </button>
       </div>
       <p style={{ margin: 0, color: restante ? "var(--muted)" : "var(--error)" }} role="status">
-        {restante ? `Vence en ${restante}` : "Este código ya venció: generá uno nuevo con Re-vincular."}
+        {restante ? `Vence en ${restante}` : "Este código ya venció: eliminá este dispositivo y registralo de nuevo."}
       </p>
       <div style={{ display: "flex", justifyContent: "flex-end", alignSelf: "stretch" }}>
         <button type="button" className="boton boton-primario" onClick={onListo}>

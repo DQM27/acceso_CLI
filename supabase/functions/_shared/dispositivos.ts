@@ -175,9 +175,8 @@ export interface DispositivoAutenticable {
 /**
  * Token de sesión del dispositivo, firmado con `DEVICE_SIGNING_KEY` (la
  * misma que Postgres acepta). Lleva la `huella` de la clave del equipo:
- * `private.dispositivo_vigente()` la compara con la vigente (y rechaza un
- * token sin huella), así que un equipo re-vinculado deja inválido al
- * instante el token del anterior.
+ * `private.dispositivo_vigente()` la compara con la clave registrada del
+ * dispositivo y rechaza un token sin huella.
  */
 export async function emitirTokenDispositivo(dispositivo: DispositivoAutenticable) {
   const { privada, kid } = await clavesDelServidor();
@@ -253,7 +252,6 @@ export type TipoEventoSeguridad =
   | "codigo_usado"
   | "codigo_vencido"
   | "codigo_anulado"
-  | "codigo_de_otro_dispositivo"
   | "firma_invalida"
   | "hardware_distinto";
 

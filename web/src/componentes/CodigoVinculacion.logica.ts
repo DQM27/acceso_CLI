@@ -32,7 +32,6 @@ export const TEXTO_EVENTO: Record<TipoEventoSeguridad, string> = {
   codigo_usado: "Código ya usado",
   codigo_vencido: "Código vencido",
   codigo_anulado: "Código anulado",
-  codigo_de_otro_dispositivo: "Código de otro dispositivo",
   firma_invalida: "Firma inválida",
   hardware_distinto: "Hardware distinto al registrado",
 };

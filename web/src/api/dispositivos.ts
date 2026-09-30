@@ -29,7 +29,6 @@ export interface Dispositivo {
   etiqueta: string;
   created_at: string;
   revoked_at: string | null;
-  suspended_at: string | null;
   last_seen_at: string | null;
   oculto_en_panel: boolean;
   identificador_hardware: string | null;
@@ -56,7 +55,6 @@ export type TipoEventoSeguridad =
   | "codigo_usado"
   | "codigo_vencido"
   | "codigo_anulado"
-  | "codigo_de_otro_dispositivo"
   | "firma_invalida"
   | "hardware_distinto";
 
@@ -147,25 +145,8 @@ export function provisionarDispositivo(datos: {
   return invocar("admin-provision-device", esDispositivoProvisionado, datos);
 }
 
-/** Código nuevo para un dispositivo que ya existe ("Re-vincular"): conserva
- * su historial y, al canjearse, deja fuera al equipo anterior. También sirve
- * para reemplazar un código que venció sin usarse. */
-export function crearCodigoVinculacion(
-  dispositivoId: string,
-  vigenciaMinutos?: number,
-): Promise<CodigoEmitido> {
-  return invocar("admin-crear-codigo-vinculacion", esCodigoEmitido, {
-    dispositivo_id: dispositivoId,
-    ...(vigenciaMinutos ? { vigencia_minutos: vigenciaMinutos } : {}),
-  });
-}
-
 export function revocarDispositivo(dispositivoId: string): Promise<void> {
   return invocar("admin-revoke-device", loQueSea, { dispositivo_id: dispositivoId });
-}
-
-export function suspenderDispositivo(dispositivoId: string, suspendido: boolean): Promise<void> {
-  return invocar("admin-suspend-device", loQueSea, { dispositivo_id: dispositivoId, suspendido });
 }
 
 /**

@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { clienteServicio } from "../_shared/admin.ts";
-import { ipDelCliente, json, leerCuerpo, preflight, textoOpcional } from "../_shared/http.ts";
+import { ipDelCliente, json, leerCuerpo, preflight } from "../_shared/http.ts";
 import {
   LARGO_CODIGO,
   clavePublicaValida,
@@ -15,15 +15,12 @@ import {
 
 // Canje del código de vinculación que emitió el panel. El equipo manda:
 //
-//   { "codigo": "K7QM-R4XT-2P", "clave_publica_jwk": {kty,crv,x,y},
-//     "dispositivo_esperado"?: uuid, "metadata"? }
+//   { "codigo": "K7QM-R4XT-2P", "clave_publica_jwk": {kty,crv,x,y}, "metadata"? }
 //
 // y, si el código es vigente y no se usó, queda atado a esa clave pública
 // (canje atómico en `canjear_codigo_vinculacion`) y recibe su primer token,
 // con la misma forma que responde `device-auth`. La clave privada nunca viaja.
-//
-// `dispositivo_esperado` lo manda un equipo que se re-vincula con datos
-// locales ya cargados: un código de otro dispositivo se rechaza sin gastarse.
+// Un código sólo vincula un dispositivo nuevo (sin clave todavía).
 //
 // Cualquier rechazo responde lo mismo (`codigo_invalido`) para no ayudar a
 // adivinar, pero el motivo real queda en `eventos_seguridad_dispositivos`
@@ -31,8 +28,6 @@ import {
 //
 // Pública a propósito (`verify_jwt = false`): el equipo todavía no tiene
 // ninguna credencial.
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 Deno.serve(async (req: Request) => {
   const respuestaPreflight = preflight(req);
@@ -49,8 +44,6 @@ Deno.serve(async (req: Request) => {
   const ip = ipDelCliente(req);
   const metadata = metadataSaneada(cuerpo.metadata);
   const codigo = normalizarCodigo(cuerpo.codigo);
-  const dispositivoEsperado = textoOpcional(cuerpo.dispositivo_esperado);
-  if (dispositivoEsperado && !UUID.test(dispositivoEsperado)) return json({ error: "bad_request" }, 400);
 
   if (codigo.length !== LARGO_CODIGO) {
     await registrarEvento(supabase, { tipo: "codigo_inexistente", ip, detalle: { metadata } });
@@ -66,7 +59,6 @@ Deno.serve(async (req: Request) => {
     p_clave_huella: huella,
     p_metadata: metadata,
     p_ip: ip,
-    p_dispositivo_esperado: dispositivoEsperado,
   });
 
   // Índice único de `clave_huella`: esa clave ya pertenece a otro
@@ -76,7 +68,7 @@ Deno.serve(async (req: Request) => {
 
   const vinculado = (data as { dispositivo_id: string; sitio_id: string; tipo: string }[] | null)?.[0];
   if (!vinculado) {
-    await registrarRechazo(supabase, codigoHash, dispositivoEsperado, ip, metadata);
+    await registrarRechazo(supabase, codigoHash, ip, metadata);
     return json({ error: "codigo_invalido" }, 401);
   }
 
@@ -93,7 +85,6 @@ Deno.serve(async (req: Request) => {
 async function registrarRechazo(
   supabase: ReturnType<typeof clienteServicio>,
   codigoHash: string,
-  dispositivoEsperado: string | null,
   ip: string | null,
   metadata: unknown,
 ): Promise<void> {
@@ -107,14 +98,11 @@ async function registrarRechazo(
   if (fila?.usado_en) tipo = "codigo_usado";
   else if (fila?.anulado_en) tipo = "codigo_anulado";
   else if (fila && new Date(fila.expira_en) <= new Date()) tipo = "codigo_vencido";
-  else if (fila && dispositivoEsperado && fila.dispositivo_id !== dispositivoEsperado) {
-    tipo = "codigo_de_otro_dispositivo";
-  }
 
   await registrarEvento(supabase, {
     tipo,
     dispositivo_id: fila?.dispositivo_id ?? null,
     ip,
-    detalle: { metadata, dispositivo_esperado: dispositivoEsperado },
+    detalle: { metadata },
   });
 }

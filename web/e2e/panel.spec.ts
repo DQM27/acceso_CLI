@@ -110,7 +110,6 @@ async function preparar(page: Page) {
             etiqueta: "PC de prueba",
             created_at: "2026-09-09T12:00:00Z",
             revoked_at: null,
-            suspended_at: null,
             last_seen_at: null,
             oculto_en_panel: false,
             identificador_hardware: null,
