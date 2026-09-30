@@ -185,6 +185,8 @@ export type CredencialNube = "clave" | "sin_vincular";
 export interface EstadoVinculacion {
   credencial: CredencialNube;
   dispositivo_id: string | null;
+  /** Huella de la clave vigente de este equipo (RFC 7638). */
+  huella: string | null;
 }
 
 export function estadoVinculacion(): Promise<EstadoVinculacion> {

@@ -8,8 +8,12 @@
 ## Reglas de esta tarea (decididas por el usuario)
 
 - **Supabase: sólo staging (sandbox)**, proyecto `pmrytjktlyiuikxuuxpr`.
-  Producción (`xidaepyaljzkpbsxrqsm`) NO se toca hasta que el usuario lo
-  apruebe explícitamente ("pasamos a nube").
+  Producción (`xidaepyaljzkpbsxrqsm`) NO se toca. Antes hay que probarlo
+  con equipos reales (ver "Prueba con equipos reales") y el usuario tiene
+  que aprobarlo explícitamente.
+- **Sólo instalaciones nuevas** (decisión 2026-09-30): no se re-vincula
+  desde el teléfono un equipo que tenía el sistema viejo. Cada equipo de
+  prueba se instala de cero y se vincula con un código del panel.
 - **Sin compatibilidad con el secreto de dispositivo.** Todos los equipos se
   reinstalan y se vinculan con código; no hay migración automática ni camino
   legado en ninguna capa.
@@ -141,6 +145,59 @@ para verificar tipos de las funciones antes de desplegarlas y `deno run` para
 calcular con `jose` la huella RFC 7638 que usa un test de Rust. No forma parte
 del producto ni de las apps.
 
+## Prueba con equipos reales (staging, con telemetría)
+
+Los builds de prueba apuntan a staging y mandan telemetría a
+`telemetria_diagnostico` (staging). Ninguno toca producción ni la app real
+instalada en el equipo:
+
+| Build | Cómo se obtiene | Aislamiento |
+| --- | --- | --- |
+| Android `diagnostico` | Workflow manual **Build de prueba (mobile y escritorio)**, variante `diagnostico` (APK en Artifacts) | Paquete `com.dqm27.lattis.diag`, staging |
+| Escritorio diagnóstico | Mismo workflow, variante `escritorio-diagnostico` (instalador NSIS en Artifacts) | "Lattis Diagnostico" `com.dqm27.lattis.desktop.diag`, staging, base y claves propias, sin updater |
+
+Pasos:
+
+1. Panel web apuntado a staging (`web/.env.local`, ver
+   `docs/recuperacion-sitio-staging.md`) → Dispositivos → alta de un
+   dispositivo por equipo de prueba (PC y teléfono), cada uno en el sitio de
+   prueba.
+2. Instalar los builds de diagnóstico **de cero** y vincular: el teléfono
+   escanea el QR; la PC escribe el código.
+3. Probar: login, un ingreso, sincronizar, ver el cambio en vivo en el otro
+   equipo. Luego, desde el panel: suspender (los dos deben avisar y dejar de
+   sincronizar), reactivar, y revocar uno.
+4. Verificar en staging:
+
+```sql
+-- Estado de los dispositivos de prueba
+select etiqueta, tipo, vinculado_en, last_seen_at, suspended_at, revoked_at,
+       left(clave_huella, 8) as huella, plataforma, app_version
+from public.dispositivos where sitio_id = '<sitio de prueba>' order by created_at;
+
+-- Intentos rechazados / alertas
+select ocurrido_en, tipo, dispositivo_id, detalle
+from public.eventos_seguridad_dispositivos order by ocurrido_en desc limit 50;
+
+-- Llamadas de nube por equipo (vincular, sincronizar, etc.): llamadas y errores
+select version_app, datos->>'nombre' as operacion,
+       sum((datos->>'llamadas')::int) as llamadas, sum((datos->>'errores')::int) as errores
+from public.telemetria_diagnostico
+where tipo = 'llamada_nucleo' and recibido_en > now() - interval '1 day'
+group by 1, 2 order by errores desc, llamadas desc;
+
+-- Canal en vivo: conexiones, avisos y latencia
+select recibido_en, version_app, datos
+from public.telemetria_diagnostico
+where tipo = 'realtime' and recibido_en > now() - interval '1 day'
+order by recibido_en desc limit 50;
+```
+
+Los nombres exactos de los campos de cada evento están en
+`mobile/android/docs/telemetria-diagnostico.md` y
+`desktop/docs/telemetria-diagnostico.md`; si alguna columna difiere, revisar
+ahí antes de dar por mala una prueba.
+
 ## Pasos para producción (cuando el usuario lo apruebe)
 
 Todo equipo pierde la conexión a la nube desde el paso 1 hasta que se
@@ -166,9 +223,10 @@ conserva). Conviene hacerlo en una ventana acordada.
 
 ## Pendientes
 
-- **Producción** (arriba), con aprobación del usuario.
-- **Android: UI para re-vincular** un teléfono ya en uso. El núcleo ya expone
-  `Nucleo::revincular_dispositivo` (sólo ROOT); falta la pantalla.
+- **Producción** (arriba), con aprobación del usuario y después de la
+  prueba con equipos reales.
+- Android no tiene pantalla de re-vincular a propósito (sólo instalaciones
+  nuevas); `Nucleo::revincular_dispositivo` queda en el núcleo sin usar.
 - **Reconstruir sin código** un equipo que perdió la base pero conserva su
   clave (hoy la pantalla inicial siempre pide código; ver
   `docs/recuperacion-sitio-local.md`).

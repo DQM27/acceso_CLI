@@ -130,8 +130,9 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   - [x] Presencia en tiempo real (2026-09-08): Dispositivos.tsx y Usuarios.tsx.
   - [x] Un código sirve una sola vez; cada equipo tiene su propia clave; revocar,
     suspender o re-vincular corta al instante (política restrictiva + aviso por Realtime).
-  - [ ] Pantalla de "Re-vincular este teléfono" en Android (el núcleo ya expone
-    `Nucleo::revincular_dispositivo`; falta la UI).
+  - [ ] Probar con equipos reales usando los builds de diagnóstico (Android y
+    escritorio, ambos contra staging con telemetría). Sólo instalaciones nuevas:
+    no se re-vincula desde el teléfono (decisión 2026-09-30).
   - [ ] Reconstruir un equipo cuya base local se perdió pero conserva su clave, sin
     pedir código nuevo (ver `docs/recuperacion-sitio-local.md`).
 - [ ] **Test SQL `administradores_panel_autorizacion.sql` desactualizado.** Espera que un

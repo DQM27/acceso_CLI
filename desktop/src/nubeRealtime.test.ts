@@ -9,10 +9,12 @@ const mocks = vi.hoisted(() => ({
   enviar: vi.fn(),
   aplicarCambio: vi.fn(),
   crear: vi.fn(),
+  estado: vi.fn(),
 }));
 vi.mock("./api/nube", () => ({
   aplicarCambioNube: mocks.aplicarCambio,
   enviarCambiosNube: mocks.enviar,
+  estadoVinculacion: mocks.estado,
   sesionRealtimeNube: mocks.sesion,
   sincronizarConNube: mocks.sincronizar,
   sincronizarCambiosNube: mocks.sincronizarCambios,
@@ -46,6 +48,7 @@ beforeEach(() => {
   mocks.sincronizarCambios.mockResolvedValue(resumen);
   mocks.enviar.mockResolvedValue(resumen);
   mocks.aplicarCambio.mockResolvedValue(true);
+  mocks.estado.mockResolvedValue({ credencial: "clave", dispositivo_id: sesion.dispositivo_id, huella: sesion.huella });
   mocks.crear.mockImplementation((_url, _key, opciones) => {
     const control: CanalPrueba = {
       estado: () => {}, aviso: () => {}, expulsion: () => {}, accessToken: opciones.accessToken,
@@ -82,10 +85,24 @@ describe("sincronización por Realtime", () => {
 
     canal.expulsion({ payload: { dispositivo_id: "equipo-b", motivo: "revocado" } });
     canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revinculado", huella: "otra" } });
+    await vi.advanceTimersByTimeAsync(0);
     expect(onExpulsado).not.toHaveBeenCalled();
 
     canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "suspendido", huella: "huella-a" } });
+    await vi.advanceTimersByTimeAsync(0);
     expect(onExpulsado).toHaveBeenCalledWith("suspendido");
+  });
+
+  it("no se da por expulsado cuando este mismo equipo se acaba de re-vincular", async () => {
+    const onExpulsado = vi.fn();
+    const canal = await iniciar({ onExpulsado });
+    // El canal se abrió con "huella-a"; ya re-vinculado, la clave vigente es otra.
+    mocks.estado.mockResolvedValue({ credencial: "clave", dispositivo_id: "equipo-a", huella: "huella-nueva" });
+
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revinculado", huella: "huella-a" } });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(onExpulsado).not.toHaveBeenCalled();
   });
 
   it("un aviso con la fila se aplica al instante y no consulta la nube", async () => {

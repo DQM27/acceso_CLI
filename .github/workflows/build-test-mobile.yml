@@ -1,4 +1,4 @@
-name: Build de prueba (mobile)
+name: Build de prueba (mobile y escritorio)
 
 # Sólo manual, a pedido -- para bajar un APK de debug y probarlo sin
 # publicar nada en la pestaña Releases ni tocar las llaves de firma reales.
@@ -13,6 +13,13 @@ name: Build de prueba (mobile)
 # rendimiento a `telemetria_diagnostico` (ver
 # mobile/android/docs/telemetria-diagnostico.md). Se instala junto a la app
 # real y al build de debug sin pisarlos (paquete con sufijo `.diag`).
+#
+# Variante `escritorio-diagnostico`: el instalador de Windows con la feature
+# `telemetria` y `tauri.diagnostico.conf.json` ("Lattis Diagnostico",
+# identificador `.diag`, sin updater). Apunta a staging y usa base y claves
+# propias, así que convive con la app real sin tocarla (ver
+# desktop/docs/telemetria-diagnostico.md). El archivo conserva su nombre
+# para que el disparo manual siga funcionando.
 on:
   workflow_dispatch:
     inputs:
@@ -22,6 +29,7 @@ on:
         options:
           - debug
           - diagnostico
+          - escritorio-diagnostico
         default: debug
 
 permissions:
@@ -29,6 +37,7 @@ permissions:
 
 jobs:
   build-android-test:
+    if: ${{ inputs.variante != 'escritorio-diagnostico' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -91,5 +100,51 @@ jobs:
         with:
           name: ControlAcceso-Brisas-${{ inputs.variante }}-${{ github.sha }}
           path: mobile/android/app/build/outputs/apk/${{ inputs.variante }}/app-${{ inputs.variante }}.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  build-escritorio-diagnostico:
+    if: ${{ inputs.variante == 'escritorio-diagnostico' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Instalar toolchain de Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-18)
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: |
+            desktop/src-tauri
+            sqlite3mc-vendor-lib
+
+      # Motor SQLite único (SQLite3MC): la librería vendorizada se compila
+      # antes, igual que en release.yml.
+      - name: Compilar SQLite3MC vendorizado (paso previo obligatorio)
+        run: cargo build --release --manifest-path sqlite3mc-vendor-lib/Cargo.toml
+
+      - name: Instalar Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Instalar dependencias del frontend
+        working-directory: desktop
+        run: npm ci
+
+      # Sin firma de updater: `tauri.diagnostico.conf.json` apaga
+      # `createUpdaterArtifacts` y el build no registra el plugin.
+      - name: Compilar el instalador de diagnóstico
+        working-directory: desktop
+        run: npm run tauri build -- --features telemetria --config src-tauri/tauri.diagnostico.conf.json --bundles nsis
+
+      - name: Subir el instalador como artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Lattis-Diagnostico-escritorio-${{ github.sha }}
+          path: desktop/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 14

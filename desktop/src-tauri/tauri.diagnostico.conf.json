@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Lattis Diagnostico",
+  "identifier": "com.dqm27.lattis.desktop.diag",
+  "bundle": {
+    "createUpdaterArtifacts": false
+  }
+}

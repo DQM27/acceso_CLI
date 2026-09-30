@@ -8,17 +8,32 @@ empieza con `desktop-` (por ejemplo `desktop-1.6.8-diag+abc1234`, con el hash co
 
 ## Qué build la tiene
 
-Solo el que se compila con la feature `telemetria`:
+Solo el que se compila con la feature `telemetria` y la configuración de
+diagnóstico:
 
 ```
 cd desktop
-npm run tauri build -- --features telemetria
+npm run tauri build -- --features telemetria --config src-tauri/tauri.diagnostico.conf.json
 ```
+
+O desde GitHub: workflow manual **Build de prueba (mobile y escritorio)**,
+variante `escritorio-diagnostico` (el instalador queda como artifact).
 
 - Sin la feature (el build que se publica), `telemetria_activa()` devuelve
   `false`: el frontend no mide nada y el backend no arranca ningún hilo.
 - La dirección de staging está fija en `src-tauri/src/telemetria.rs`.
   Producción nunca recibe telemetría.
+- **Es un build de prueba, igual que el `diagnostico` de Android**
+  (`telemetria::aislar_build_de_diagnostico`, desde 2026-09-30):
+  - sus datos van a **staging**, no a producción;
+  - usa su propia base (`%LOCALAPPDATA%\ControlAccesoDiagnostico\`) y su
+    propia carpeta de claves (`%LOCALAPPDATA%\ControlAccesoDiagnosticoRoaming\`),
+    así que no toca la base ni la clave de la app real;
+  - se instala como "Lattis Diagnostico" (`com.dqm27.lattis.desktop.diag`),
+    al lado de la app real sin reemplazarla;
+  - no trae el actualizador (lo cambiaría por la versión publicada).
+  Si ya se exportaron a mano las variables de `scripts/activar_sandbox.ps1`,
+  se respetan.
 - La llave es la publicable. En esta tabla solo puede insertar (ver
   `supabase/scripts/telemetria_diagnostico_staging.sql`).
 

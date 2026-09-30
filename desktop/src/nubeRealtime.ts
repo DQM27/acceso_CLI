@@ -4,6 +4,7 @@ import {
   aplicarCambioNube,
   desfaseRelojMs,
   enviarCambiosNube,
+  estadoVinculacion,
   sesionRealtimeNube,
   sincronizarCambiosNube,
   sincronizarConNube,
@@ -276,8 +277,19 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
         })
         .on("broadcast", { event: "dispositivo_expulsado" }, ({ payload }) => {
           if (cancelado || cliente !== clienteActual) return;
-          const motivo = motivoSiEsParaEsteEquipo(payload, sesion);
-          if (motivo) opciones.onExpulsado?.(motivo);
+          // La huella se lee en el momento, no la de cuando se abrió el
+          // canal: si ESTE equipo se acaba de re-vincular, el aviso trae su
+          // huella anterior y no es una expulsión.
+          void estadoVinculacion()
+            .then(
+              (estado) => estado.huella ?? sesion.huella,
+              () => sesion.huella,
+            )
+            .then((huella) => {
+              if (cancelado) return;
+              const motivo = motivoSiEsParaEsteEquipo(payload, { dispositivo_id: sesion.dispositivo_id, huella });
+              if (motivo) opciones.onExpulsado?.(motivo);
+            });
         })
         .subscribe((estado, error) => {
           if (cancelado || cliente !== clienteActual) return;

@@ -476,7 +476,11 @@ fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()>
     // El updater no existe en móvil — esta app es 100% escritorio (ver
     // el comentario de crate-type arriba), pero se guarda el gate
     // igual, mismo criterio que el ejemplo oficial de Tauri.
-    #[cfg(desktop)]
+    //
+    // El build de diagnóstico no lo registra: es de prueba y apunta a
+    // staging, y "actualizarlo" lo reemplazaría por la versión de producción
+    // publicada en Releases. Sin el plugin, la búsqueda falla en silencio.
+    #[cfg(all(desktop, not(feature = "telemetria")))]
     app.plugin(tauri_plugin_updater::Builder::new().build())?;
 
     // Antes solo corría en debug -- en producción no quedaba ningún rastro
@@ -641,6 +645,8 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
 ///
 /// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
 pub fn run() {
+    #[cfg(feature = "telemetria")]
+    telemetria::aislar_build_de_diagnostico();
     let _guardia_sentry = inicializar_sentry();
     let (ruta_base_datos, instancia, clave_base_datos, core, firmante) = preparar_nucleo();
     if let Some(directorio) = ruta_base_datos.parent() {

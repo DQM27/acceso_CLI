@@ -386,6 +386,10 @@ pub struct EstadoVinculacion {
     /// `"clave"` o `"sin_vincular"`.
     pub credencial: &'static str,
     pub dispositivo_id: Option<String>,
+    /// Huella de la clave vigente. La usa el aviso en vivo de expulsión
+    /// para no confundir la re-vinculación de este mismo equipo con una
+    /// expulsión (ver `nubeRealtime.ts`).
+    pub huella: Option<String>,
 }
 
 #[tauri::command]
@@ -399,6 +403,7 @@ pub fn estado_vinculacion(state: tauri::State<'_, GuiState>) -> EstadoVinculacio
     EstadoVinculacion {
         credencial,
         dispositivo_id,
+        huella: state.huella_vinculada(),
     }
 }
 
