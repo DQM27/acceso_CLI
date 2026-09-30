@@ -6,6 +6,7 @@ import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import AvisoTruncado from "../componentes/AvisoTruncado";
 import { useLista } from "../componentes/useLista";
+import FormularioContratista from "./FormularioContratista";
 import { actualizarAccesoContratista, listarContratistas } from "../api/contratistas";
 import type { Contratista } from "../api/contratistas";
 import { textoFechaDDMMYYYY } from "../tiempo";
@@ -29,6 +30,7 @@ const ESTILO_CENTRO_FLEX: CellStyle = { display: "flex", justifyContent: "center
  */
 export default function Contratistas() {
   const [busqueda, setBusqueda] = useState("");
+  const [modalAbierto, setModalAbierto] = useState(false);
 
   // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
   // desktop/mobile para su propio sync periódico.
@@ -127,18 +129,33 @@ export default function Contratistas() {
             filtrosPorColumna
             onCeldaEditada={manejarEdicion}
             controles={
-              <div className="campo flex-[0_1_16rem]">
-                <input
-                  placeholder="Cédula o nombre…"
-                  value={busqueda}
-                  disabled={cargando}
-                  onChange={(evento) => setBusqueda(evento.target.value)}
-                />
-              </div>
+              <>
+                <button type="button" className="boton" onClick={() => setModalAbierto(true)}>
+                  + Nuevo
+                </button>
+                <div className="campo flex-[0_1_16rem]">
+                  <input
+                    placeholder="Cédula o nombre…"
+                    value={busqueda}
+                    disabled={cargando}
+                    onChange={(evento) => setBusqueda(evento.target.value)}
+                  />
+                </div>
+              </>
             }
           />
         </div>
       </div>
+
+      {modalAbierto && (
+        <FormularioContratista
+          onGuardado={() => {
+            setModalAbierto(false);
+            void recargar();
+          }}
+          onCerrar={() => setModalAbierto(false)}
+        />
+      )}
     </div>
   );
 }

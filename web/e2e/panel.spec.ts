@@ -62,6 +62,18 @@ async function preparar(page: Page) {
     if (url.pathname === "/auth/v1/user") return responder(usuario);
     if (url.pathname === "/auth/v1/logout") return responder({});
     if (url.pathname === "/rest/v1/administradores_panel") return responder({ correo });
+    if (url.pathname === "/rest/v1/empresas") return responder([{ id: "e1", nombre: "EMPRESA DE PRUEBA" }]);
+    if (url.pathname === "/rest/v1/rpc/panel_crear_contratista")
+      return responder({
+        id: "9",
+        identificacion: "112340567",
+        nombre: "ANA PEREZ",
+        empresa_nombre: "EMPRESA DE PRUEBA",
+        tipo_ingreso: "PRAIND",
+        fecha_vencimiento_praind: null,
+        es_personal_ruta: false,
+        activo: false,
+      });
     if (url.pathname === "/rest/v1/contratistas")
       return responder([
         {
@@ -153,6 +165,27 @@ test("Contratistas (AG Grid) carga sin violaciones de CSP", async ({ page }) => 
   await preparar(page);
   await page.goto("/contratistas");
   await expect(page.getByText("Contratista de prueba")).toBeVisible();
+});
+
+test("Contratistas: el modal registra a alguien con el acceso denegado", async ({ page }) => {
+  await preparar(page);
+  await page.goto("/contratistas");
+  await page.getByRole("button", { name: "+ Nuevo" }).click();
+
+  const modal = page.getByRole("dialog");
+  await expect(modal.getByText("Nuevo contratista")).toBeVisible();
+  await expect(modal.getByText("Fecha de vencimiento PRAIND")).toBeVisible();
+  // Denegar el acceso quita el PRAIND: a quien no va a entrar no se le pide.
+  await modal.getByLabel("Crear con el acceso denegado").check();
+  await expect(modal.getByText("Fecha de vencimiento PRAIND")).toBeHidden();
+
+  await modal.getByLabel("Cédula").fill("1-1234-0567");
+  await modal.getByLabel("Nombre").fill("Ana Perez");
+  await modal.getByLabel("Empresa", { exact: false }).first().selectOption("e1");
+  await modal.getByRole("button", { name: "Guardar" }).click();
+
+  await expect(page.getByText("ANA PEREZ registrado con el acceso denegado.")).toBeVisible();
+  await expect(modal).toBeHidden();
 });
 
 test("Usuarios (AG Grid) carga sin violaciones de CSP", async ({ page }) => {

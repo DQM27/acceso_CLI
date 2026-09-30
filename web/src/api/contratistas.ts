@@ -78,3 +78,65 @@ export async function actualizarAccesoContratista(id: string, activo: boolean): 
   const { error } = await supabase.from("contratistas").update({ activo }).eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+// --- Alta desde el panel --------------------------------------------------
+//
+// Darlo de alta como contratista con el acceso apagado es la forma de negar el
+// acceso a alguien que nunca fue contratista (un proveedor, por ejemplo): ver
+// docs/features-futuras/plan-veto-por-persona.md. La base sólo deja crear a un
+// equipo, así que el panel usa funciones que exigen ser administrador del
+// panel y aplican las mismas reglas del núcleo (cédula en forma única,
+// nombre en mayúsculas, PRAIND según el tipo). Ver la migración
+// `panel_crea_contratistas`. Los mensajes de error vienen ya en español.
+
+export interface Empresa {
+  id: string;
+  nombre: string;
+}
+
+const empresaEsquema = z.object({ id: z.string(), nombre: z.string() });
+
+/** Empresas activas (las de contratistas), para elegir en el alta. */
+export async function listarEmpresas(): Promise<Empresa[]> {
+  const { data, error } = await supabase
+    .from("empresas")
+    .select("id, nombre")
+    .eq("activa", true)
+    .order("nombre");
+  if (error) throw new Error(error.message);
+  return z.array(empresaEsquema).parse(data);
+}
+
+/** Crea la empresa, o devuelve la que ya existe con ese nombre (sin importar
+ * tildes ni mayúsculas). */
+export async function crearEmpresa(nombre: string): Promise<Empresa> {
+  const { data, error } = await supabase.rpc("panel_crear_empresa", { p_nombre: nombre });
+  if (error) throw new Error(error.message);
+  return empresaEsquema.parse(data);
+}
+
+export type TipoIngreso = "PRAIND" | "IN_HOUSE" | "POR_CORREO" | "SWAT";
+
+export interface DatosNuevoContratista {
+  cedula: string;
+  nombre: string;
+  empresa_id: string;
+  tipo_ingreso: TipoIngreso;
+  /** "AAAA-MM-DD"; `null` si no aplica. */
+  fecha_vencimiento_praind: string | null;
+  /** `false` lo crea con el acceso denegado (el bloqueo). */
+  con_acceso: boolean;
+}
+
+export async function crearContratista(datos: DatosNuevoContratista): Promise<Contratista> {
+  const { data, error } = await supabase.rpc("panel_crear_contratista", {
+    p_cedula: datos.cedula,
+    p_nombre: datos.nombre,
+    p_empresa_id: datos.empresa_id,
+    p_tipo_ingreso: datos.tipo_ingreso,
+    p_fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
+    p_con_acceso: datos.con_acceso,
+  });
+  if (error) throw new Error(error.message);
+  return filaContratistaEsquema.parse(data);
+}

@@ -42,6 +42,9 @@ export default function Modal({
     >
       <div
         className="tarjeta"
+        role="dialog"
+        aria-modal="true"
+        aria-label={titulo}
         style={{
           background: "var(--elevado)",
           boxShadow: "var(--sombra-panel)",
