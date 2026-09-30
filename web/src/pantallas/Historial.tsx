@@ -6,7 +6,6 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
 import Paginador, { totalPaginas } from "../componentes/Paginador";
-import EncabezadoPagina from "../componentes/EncabezadoPagina";
 import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
 import SelectorUnidadesOperativas, {
   textoUnidadesOperativas,
@@ -533,10 +532,6 @@ export default function Historial() {
 
   return (
     <div className="flex h-full flex-col">
-      <EncabezadoPagina
-        titulo="Historial"
-        descripcion="Movimientos de contratistas registrados por los puestos de control."
-      />
       <div className="pantalla-cuerpo min-h-0 flex-1">
         <div className="min-h-0 flex-1">
           <Tabla<MovimientoHistorial>
