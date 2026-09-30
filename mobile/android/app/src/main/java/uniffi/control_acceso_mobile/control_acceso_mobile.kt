@@ -815,6 +815,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_descartar_token_nube(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_dispositivo_vinculado(
@@ -981,6 +983,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_remoto(`ptr`: Long,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_prestamo_gafete_provisional_remoto(`ptr`: Long,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_descartar_token_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_desfase_reloj_ms(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1401,6 +1405,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto() and 0xFFFF) != 7518) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_descartar_token_nube() and 0xFFFF) != 2971) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms() and 0xFFFF) != 4032) {
@@ -3065,6 +3072,18 @@ public interface NucleoInterface {
     fun `cerrarPrestamoGafeteProvisionalRemoto`(`uuid`: kotlin.String)
     
     /**
+     * Descarta el token cacheado. Lo llama `NubeRealtime.kt` al recibir un
+     * aviso de expulsión (suspendido/revocado): sin esto el teléfono seguía
+     * usando su token de hasta 1 h, las consultas en vivo le devolvían
+     * vacío (la política restrictiva filtra en silencio) y un chequeo como
+     * "ingreso activo en otro sitio" pasaba como si no hubiera conflicto.
+     * Con el token descartado, la próxima operación de nube va a
+     * `device-auth` y recibe el motivo real. Mismo criterio que
+     * `descartar_token_nube` en escritorio.
+     */
+    fun `descartarTokenNube`()
+    
+    /**
      * Último desfase medido del reloj del teléfono contra el servidor (ms;
      * positivo = el teléfono va adelantado), `None` si nunca se midió. Se
      * mide en cada autenticación con precisión de milisegundos (ver
@@ -3901,6 +3920,28 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         it,
         
         FfiConverterString.lower(`uuid`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Descarta el token cacheado. Lo llama `NubeRealtime.kt` al recibir un
+     * aviso de expulsión (suspendido/revocado): sin esto el teléfono seguía
+     * usando su token de hasta 1 h, las consultas en vivo le devolvían
+     * vacío (la política restrictiva filtra en silencio) y un chequeo como
+     * "ingreso activo en otro sitio" pasaba como si no hubiera conflicto.
+     * Con el token descartado, la próxima operación de nube va a
+     * `device-auth` y recibe el motivo real. Mismo criterio que
+     * `descartar_token_nube` en escritorio.
+     */override fun `descartarTokenNube`()
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_descartar_token_nube(
+        it,
+        _status)
 }
     }
     

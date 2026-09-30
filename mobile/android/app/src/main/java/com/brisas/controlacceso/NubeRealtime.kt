@@ -10,11 +10,13 @@ import io.github.jan.supabase.realtime.broadcastFlow
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
@@ -116,6 +119,9 @@ class NubeRealtime(
         val canal = supabase.channel(sesion.topic) {
             isPrivate = true
         }
+        // Se completa si la nube expulsa a este teléfono: corta la conexión
+        // en vez de esperar a que venza el token (ver más abajo).
+        val expulsado = CompletableDeferred<Unit>()
 
         try {
             coroutineScope {
@@ -189,6 +195,11 @@ class NubeRealtime(
                         )?.let { motivo ->
                             Log.w("SincronizacionNube", "Este teléfono quedó fuera de la nube: $motivo")
                             onExpulsado(motivo)
+                            // El token cacheado ya no sirve: sin descartarlo,
+                            // las consultas en vivo le devolvían vacío y los
+                            // chequeos pasaban como si no hubiera conflicto.
+                            withContext(dispatcherIO) { runCatching { nucleo.descartarTokenNube() } }
+                            expulsado.complete(Unit)
                         }
                     }
                     .launchIn(this)
@@ -234,14 +245,30 @@ class NubeRealtime(
                     // estar muerto casi todo ese tiempo y sólo andaba el
                     // pulso de 2 minutos. Ahora se reconecta con sesión y
                     // token nuevos.
+                    // También termina si la nube expulsó a este teléfono: el
+                    // canal abierto seguía recibiendo los avisos del sitio.
+                    // Al reconectar, mientras siga suspendido o revocado,
+                    // `device-auth` y la política del canal lo rechazan y el
+                    // bucle de `iniciar` reintenta cada 30 s; al reactivarlo
+                    // vuelve solo.
                     val seCayo = withTimeoutOrNull(milisegundosHastaRenovar(sesion.expiresIn)) {
-                        canal.status.first { it != RealtimeChannel.Status.SUBSCRIBED }
+                        coroutineScope {
+                            val caida = async { canal.status.first { it != RealtimeChannel.Status.SUBSCRIBED }.name }
+                            try {
+                                select {
+                                    caida.onAwait { it }
+                                    expulsado.onAwait { "EXPULSADO" }
+                                }
+                            } finally {
+                                caida.cancel()
+                            }
+                        }
                     }
                     if (seCayo != null) {
                         Log.w("SincronizacionNube", "El canal de avisos se cayó ($seCayo); reconectando")
                     }
                     Telemetria.realtime?.terminado(
-                        motivo = seCayo?.name ?: "renovacion",
+                        motivo = seCayo ?: "renovacion",
                         msConectadoAhora = SystemClock.elapsedRealtime() - suscritoDesde,
                     )
                 } finally {

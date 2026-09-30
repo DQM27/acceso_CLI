@@ -286,9 +286,18 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
               () => sesion.huella,
             )
             .then((huella) => {
-              if (cancelado) return;
+              if (cancelado || cliente !== clienteActual) return;
               const motivo = motivoSiEsParaEsteEquipo(payload, { dispositivo_id: sesion.dispositivo_id, huella });
-              if (motivo) opciones.onExpulsado?.(motivo);
+              if (!motivo) return;
+              opciones.onExpulsado?.(motivo);
+              // Sin acceso a la nube, el canal abierto seguía recibiendo
+              // los avisos del sitio (con la fila completa). Se cierra ya
+              // y se reintenta con espera creciente: mientras siga
+              // suspendido o revocado, `device-auth` y la política del
+              // canal rechazan la reconexión; al reactivarlo vuelve solo.
+              anotarFinDeConexion("expulsado");
+              limpiarCanal();
+              reconectar();
             });
         })
         .subscribe((estado, error) => {

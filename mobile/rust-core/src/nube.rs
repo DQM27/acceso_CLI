@@ -35,6 +35,18 @@ impl Nucleo {
             .establecer_firmante(std::sync::Arc::new(FirmanteMovil(almacen)));
     }
 
+    /// Descarta el token cacheado. Lo llama `NubeRealtime.kt` al recibir un
+    /// aviso de expulsión (suspendido/revocado): sin esto el teléfono seguía
+    /// usando su token de hasta 1 h, las consultas en vivo le devolvían
+    /// vacío (la política restrictiva filtra en silencio) y un chequeo como
+    /// "ingreso activo en otro sitio" pasaba como si no hubiera conflicto.
+    /// Con el token descartado, la próxima operación de nube va a
+    /// `device-auth` y recibe el motivo real. Mismo criterio que
+    /// `descartar_token_nube` en escritorio.
+    pub fn descartar_token_nube(&self) {
+        self.invalidar_token_cacheado();
+    }
+
     /// `true` si este teléfono ya canjeó un código y tiene su clave en
     /// Android Keystore. Sin vincular no hay nube: Kotlin salta la
     /// sincronización de fondo y los chequeos en vivo no tocan la red.

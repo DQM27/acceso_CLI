@@ -93,6 +93,22 @@ describe("sincronización por Realtime", () => {
     expect(onExpulsado).toHaveBeenCalledWith("suspendido");
   });
 
+  it("al ser expulsado cierra el canal y vuelve a intentar conectar", async () => {
+    const onExpulsado = vi.fn();
+    const canal = await iniciar({ onExpulsado });
+    const primerCliente = mocks.crear.mock.results[0].value;
+
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "suspendido" } });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(onExpulsado).toHaveBeenCalledWith("suspendido");
+    expect(primerCliente.realtime.disconnect).toHaveBeenCalled();
+    expect(mocks.crear).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(mocks.sesion).toHaveBeenCalledTimes(2);
+  });
+
   it("no se da por expulsado cuando este mismo equipo se acaba de re-vincular", async () => {
     const onExpulsado = vi.fn();
     const canal = await iniciar({ onExpulsado });
