@@ -4,7 +4,6 @@ import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
-import EncabezadoPagina from "../componentes/EncabezadoPagina";
 import CodigoVinculacionEmitido from "../componentes/CodigoVinculacionEmitido";
 import { TEXTO_CREDENCIAL, TEXTO_EVENTO, tiempoRestante } from "../componentes/CodigoVinculacion.logica";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
@@ -419,10 +418,6 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
 
   return (
     <div className="flex h-full flex-col">
-      <EncabezadoPagina
-        titulo="Unidades y dispositivos"
-        descripcion="Equipos autorizados a sincronizar con cada unidad operativa."
-      />
       <div className="pantalla-cuerpo min-h-0 flex-1">
         <div className="min-h-0 flex-1">
           <Tabla<FilaDispositivo>

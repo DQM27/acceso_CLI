@@ -5,7 +5,6 @@ import type { CellStyle, ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import AvisoTruncado from "../componentes/AvisoTruncado";
-import EncabezadoPagina from "../componentes/EncabezadoPagina";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import { actualizarAccesoContratista, listarContratistas } from "../api/contratistas";
 import type { Contratista } from "../api/contratistas";
@@ -137,10 +136,6 @@ export default function Contratistas() {
 
   return (
     <div className="flex h-full flex-col">
-      <EncabezadoPagina
-        titulo="Contratistas"
-        descripcion="Personas con acceso autorizado y su estado de PRAIND."
-      />
       <div className="pantalla-cuerpo min-h-0 flex-1">
         {truncado && (
           <AvisoTruncado

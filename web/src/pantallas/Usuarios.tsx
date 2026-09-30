@@ -5,7 +5,6 @@ import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import AvisoTruncado from "../componentes/AvisoTruncado";
-import EncabezadoPagina from "../componentes/EncabezadoPagina";
 import { useAutoRefresh } from "../componentes/useAutoRefresh";
 import {
   actualizarActivoUsuario,
@@ -304,10 +303,6 @@ export default function Usuarios() {
 
   return (
     <div className="flex h-full flex-col">
-      <EncabezadoPagina
-        titulo="Usuarios"
-        descripcion="Personas que operan los puestos de control."
-      />
       <div className="pantalla-cuerpo min-h-0 flex-1">
         {truncado && (
           <AvisoTruncado
