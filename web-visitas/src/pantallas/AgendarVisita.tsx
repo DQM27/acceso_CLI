@@ -256,33 +256,13 @@ export default function AgendarVisita() {
                     onChange={(e) => actualizarInvitado(indice, "empresa", e.target.value)}
                   />
                 </label>
-                <details>
-                  <summary className="cursor-pointer text-sm text-muted">Más datos (opcional)</summary>
-                  <div className="mt-3 flex flex-col gap-3">
-                    <label className="campo">
-                      Placa del vehículo
-                      <input
-                        value={invitado.placa_vehiculo ?? ""}
-                        onChange={(e) => actualizarInvitado(indice, "placa_vehiculo", e.target.value)}
-                      />
-                    </label>
-                    <label className="campo">
-                      Teléfono
-                      <input
-                        value={invitado.telefono ?? ""}
-                        onChange={(e) => actualizarInvitado(indice, "telefono", e.target.value)}
-                      />
-                    </label>
-                    <label className="campo">
-                      Correo
-                      <input
-                        type="email"
-                        value={invitado.correo ?? ""}
-                        onChange={(e) => actualizarInvitado(indice, "correo", e.target.value)}
-                      />
-                    </label>
-                  </div>
-                </details>
+                <label className="campo">
+                  Placa del vehículo (opcional)
+                  <input
+                    value={invitado.placa_vehiculo ?? ""}
+                    onChange={(e) => actualizarInvitado(indice, "placa_vehiculo", e.target.value)}
+                  />
+                </label>
               </li>
             ))}
           </ul>
