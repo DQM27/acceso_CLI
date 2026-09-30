@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contenidoQr, tiempoRestante } from "./CodigoVinculacion.logica";
+import { contenidoQr, detalleEvento, tiempoRestante } from "./CodigoVinculacion.logica";
 
 describe("código de vinculación en el panel", () => {
   it("el QR lleva sólo el código, sin separadores, con el esquema de la app", () => {
@@ -16,5 +16,18 @@ describe("código de vinculación en el panel", () => {
     const ahora = Date.parse("2026-09-29T12:00:00Z");
     expect(tiempoRestante("2026-09-29T12:00:00Z", ahora)).toBeNull();
     expect(tiempoRestante("2026-09-29T11:59:00Z", ahora)).toBeNull();
+  });
+});
+
+describe("detalle de eventos de seguridad", () => {
+  it("la sesión movida dice quién era y de qué unidad se le cerró", () => {
+    const detalle = { cedula: "900000301", nombre: "OPERADOR UNO", sitio_anterior: "Brisas" };
+    expect(detalleEvento("sesion_en_otra_unidad", detalle)).toBe("OPERADOR UNO (900000301): se cerró su sesión en Brisas");
+  });
+
+  it("los demás eventos o un detalle malformado no agregan texto", () => {
+    expect(detalleEvento("codigo_usado", { cedula: "1" })).toBeNull();
+    expect(detalleEvento("sesion_en_otra_unidad", null)).toBeNull();
+    expect(detalleEvento("sesion_en_otra_unidad", {})).toBeNull();
   });
 });

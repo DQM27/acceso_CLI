@@ -178,50 +178,48 @@ para denuncias — el panel de administración debe poder consultarla
 directamente para cada dispositivo, no quedar oculta en una tabla que
 solo se mira cuando ya hubo un incidente.
 
-## 7. Sesión única por USUARIO -- pendiente, sin resolver (2026-09-08)
+## 7. Sesión única por UNIDAD -- implementada (2026-09-30)
 
-Distinto de todo lo anterior (que es sobre el *dispositivo* y su
-secreto): esto es evitar que la misma **persona** (cédula) tenga sesión
-iniciada en dos dispositivos a la vez. Motivado por ver, en producción,
-que nada lo impedía -- login es 100% local (SQLite en cada dispositivo),
-no hay ningún lugar central que sepa "esta cédula ya está adentro en
-otro lado".
+Historia: el 2026-09-08 se pensó en "bloquear el login nuevo" y en usar la
+presencia de Realtime, pero la presencia es por sitio y los usuarios son
+globales. El 2026-09-12 se refinó la regla y el 2026-09-30 el usuario la
+confirmó (rama `feat/sesion-unica-por-unidad`):
 
-**Ya construido y funcionando, útil como base:** presencia por sitio
-(punto 6) ya manda `usuario_cedula` en el mismo `track()` del
-dispositivo -- Usuarios.tsx en el panel ya muestra en vivo quién está
-conectado y desde qué dispositivo.
+- Un usuario SÍ puede tener sesión en varios equipos de la **misma unidad**
+  (PC y celular del mismo puesto: flexibilidad del día a día).
+- **No** puede tenerla en dos unidades distintas. **Gana el último
+  ingreso** y sólo se cierra la sesión de la unidad anterior; el equipo
+  sigue registrado.
+- Sin conexión se puede entrar (la operación no se detiene). Al volver la
+  red se reconcilia con la hora del ingreso: si en otra unidad hubo un
+  ingreso más reciente, la sesión sin conexión es la que se cierra.
 
-**Política ya decidida por el usuario:** si alguien ya está logueado en
-un dispositivo y otro intenta loguear con el mismo usuario, **bloquear
-el login nuevo** (no expulsar al viejo).
+**Cómo funciona** (migración `20260930130000_sesion_unica_por_unidad.sql`):
 
-**Intento descartado (2026-09-08): chequear contra la presencia
-existente al momento del login.** Se propuso que el dispositivo, antes
-de completar el login, chequee si esa cédula ya aparece presente en el
-canal de su propio sitio -- sin tabla nueva, sin problema de "candado
-fantasma" (la presencia se autolimpia sola si el otro socket se cae).
-**Rechazado por el usuario:** los usuarios son **globales**, no viven
-atados a un sitio (a diferencia de los dispositivos) -- un chequeo
-así solo ve presencia del mismo sitio, así que una misma persona podría
-loguearse sin bloqueo en dos sitios distintos a la vez. Con un solo
-sitio activo hoy ("Brisas") el hueco no se nota, pero la solución no es
-correcta de fondo para el modelo real (usuarios globales), así que no
-se implementó a medias.
+1. Tabla `sesiones_usuario` (usuario, equipo, unidad, hora del ingreso).
+   El "candado fantasma" no existe: no se bloquea nada, y una fila vieja se
+   reemplaza sola con el próximo ingreso en otra unidad.
+2. `sesion_usuario_en_unidad(cedula, iniciada_en)`: la llaman escritorio y
+   celular en **cada sincronización**, incluida la que sigue al login
+   (`nube::sesion_en_unidad` en el núcleo). Registra la sesión y responde
+   `vigente`, `desplazada` o `sin_usuario`. Con `desplazada` la app cierra
+   la sesión y avisa: "Su usuario inició sesión en otra unidad".
+3. Al desplazar a otra unidad, aviso en vivo `sesion_cerrada` por el canal
+   de esa unidad: los equipos cuyo usuario coincide sincronizan al
+   instante (decide la nube, no el aviso). Sin Realtime, la sincronización
+   periódica (~2 min) hace lo mismo.
+4. Evento de seguridad `sesion_en_otra_unidad` (panel → Dispositivos →
+   "Intentos y alertas"), con quién era y de qué unidad salió.
+5. `cerrar_sesion_usuario_en_unidad(cedula)`: salida voluntaria, en segundo
+   plano y best-effort.
+6. **Bitácora de sesiones** (pedido del usuario): `bitacora_sesiones` y la
+   vista `panel_bitacora_sesiones`, sección "Sesiones" del panel. Cada
+   inicio de sesión con usuario, unidad, equipo, fecha y hora de inicio y
+   de cierre, motivo (`salida`, `otra_unidad`, `desplazada`, `sin_cierre`)
+   y última actividad. Exporta a Excel, CSV y PDF.
 
-**Lo que hay que resolver la próxima vez que se retome:** un chequeo
-que de verdad sea global (todas las unidades operativas), no por sitio.
-Presence de Realtime no sirve tal cual para esto porque cada canal está
-scopeado a un sitio y un dispositivo no tiene permiso de escuchar la
-presencia de sitios ajenos (sólo el admin global lo tiene, vía
-`es_admin_global()` en la policy de presencia). Un chequeo genuinamente
-global probablemente necesita volver a la idea de una tabla/lock del
-lado de Supabase (ej. `sesiones_usuario` con `usuario_cedula` +
-`dispositivo_id` + marca de tiempo), con el problema del "candado
-fantasma" resuelto vía heartbeat/renovación periódica (el pulso de
-sincronización que ya existe cada ~2 minutos podría renovarlo) en vez
-de vía presence. No se diseñó en detalle todavía -- queda para la
-próxima sesión que retome este tema.
+Un error de red nunca expulsa a nadie (falla "abierto"), igual que el resto
+de los chequeos remotos. La TUI clásica queda fuera, como el resto.
 
 ## Orden de implementación
 

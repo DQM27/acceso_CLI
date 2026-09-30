@@ -6,7 +6,7 @@ import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import ConfirmacionSensible from "../componentes/ConfirmacionSensible";
 import CodigoVinculacionEmitido from "../componentes/CodigoVinculacionEmitido";
-import { TEXTO_CREDENCIAL, TEXTO_EVENTO, tiempoRestante } from "../componentes/CodigoVinculacion.logica";
+import { TEXTO_CREDENCIAL, TEXTO_EVENTO, detalleEvento, tiempoRestante } from "../componentes/CodigoVinculacion.logica";
 import { useLista } from "../componentes/useLista";
 import { usePresenciaPorSitio } from "../presenciaSitios";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
@@ -434,7 +434,12 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
                 {eventos.map((evento) => (
                   <tr key={evento.id}>
                     <td>{textoFechaHora(evento.ocurrido_en)}</td>
-                    <td>{TEXTO_EVENTO[evento.tipo] ?? evento.tipo}</td>
+                    <td>
+                      {TEXTO_EVENTO[evento.tipo] ?? evento.tipo}
+                      {detalleEvento(evento.tipo, evento.detalle) && (
+                        <span style={{ color: "var(--muted)" }}> — {detalleEvento(evento.tipo, evento.detalle)}</span>
+                      )}
+                    </td>
                     <td>{etiquetaPorDispositivo(evento.dispositivo_id)}</td>
                     <td>{evento.ip ?? "—"}</td>
                   </tr>

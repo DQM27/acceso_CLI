@@ -22,6 +22,15 @@ import {
 import type { CampoOrdenable, ConsultaMovimientos, MovimientoHistorial } from "../api/historial";
 import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
+import {
+  definicionesVisibles as columnasAExportar,
+  descargarArchivo,
+  descargarExcel,
+  generarCsv,
+  generarHtmlTabla,
+  imprimirHtml,
+} from "../exportacion";
+import type { DefinicionColumnaExport as DefinicionColumnaExportGenerica } from "../exportacion";
 
 /** "pc"/"mobile"/"visor" (`dispositivos.tipo`) → sólo el ícono, para la
  * columna "Dispositivo" -- tanto en pantalla como en Excel/PDF (mismo
@@ -47,12 +56,7 @@ export function textoDispositivo(tipo: string | null): string {
  * respetando el filtro/columnas visibles actuales de la grilla, igual que
  * hace escritorio.
  */
-export interface DefinicionColumnaExport {
-  colId: string;
-  etiqueta: string;
-  izquierda?: boolean;
-  valor: (fila: MovimientoHistorial) => string;
-}
+export type DefinicionColumnaExport = DefinicionColumnaExportGenerica<MovimientoHistorial>;
 
 export const DEFINICIONES_EXPORT: DefinicionColumnaExport[] = [
   { colId: "sitio_nombre", etiqueta: "Unidad operativa", valor: (f) => f.sitio_nombre ?? "" },
@@ -111,118 +115,18 @@ export const DEFINICIONES_EXPORT: DefinicionColumnaExport[] = [
   },
 ];
 
-/**
- * Historial multi-sitio para `admin_global` -- lee `ingresos` en Supabase
- * (ver `api/historial.ts` y la migración `agrega_columnas_historial_a_ingresos`),
- * no la base local de un sitio en particular como la versión de escritorio.
- * "Exportar a Excel" es client-side (SheetJS) en vez del exportador de
- * Rust/Tauri de `desktop/` -- este panel no tiene un proceso nativo del
- * lado del navegador que escriba el archivo.
- */
-/** Escapa lo mínimo indispensable para HTML -- mismo motivo que
- * `escapar` en `desktop/src-tauri/src/pdf/html.rs`: nombres/empresas
- * reales nunca se validaron como "sin `<`/`&`". */
-function escaparHtml(texto: string): string {
-  return texto
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/** Misma paleta clara y layout que `desktop/src-tauri/src/pdf/html.rs`
- * (título + subtítulo de filtro a la izquierda, "Generado por"/fecha a la
- * derecha, tabla en cebra, horizontal/landscape) -- así el PDF que sale de
- * la web se ve igual al que ya conocen del escritorio, aunque el motor que
- * lo imprime sea el navegador en vez de WebView2. */
+/** PDF del historial (ver `generarHtmlTabla`). */
 export function generarHtmlHistorial(
   filas: MovimientoHistorial[],
   columnas: DefinicionColumnaExport[],
   opciones: { generadoPor: string; filtro: string },
 ): string {
-  const encabezados = columnas
-    .map((c) => `<th${c.izquierda ? ' class="izquierda"' : ""}>${escaparHtml(c.etiqueta.toUpperCase())}</th>`)
-    .join("");
+  return generarHtmlTabla(filas, columnas, { titulo: "Historial de Movimientos", ...opciones });
+}
 
-  const filasHtml = filas
-    .map((fila) => {
-      const celdas = columnas
-        .map((c) => `<td${c.izquierda ? ' class="izquierda"' : ""}>${escaparHtml(c.valor(fila))}</td>`)
-        .join("");
-      return `<tr>${celdas}</tr>`;
-    })
-    .join("");
-
-  const generadoEn = new Date().toLocaleString("es-CR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  return `<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8" />
-<title>Historial de Movimientos</title>
-<style>
-  :root {
-    --acento: #087f91;
-    --texto: #172026;
-    --muted: #63717c;
-    --borde: #d8e0e5;
-    --panel-suave: #eef3f5;
-    --zebra: #d9eaf7;
-  }
-  @page { size: letter landscape; margin: 1.1cm 0.9cm; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 8.5pt;
-    color: var(--texto);
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    border-bottom: 2px solid var(--acento);
-    padding: 0 0.3cm 0.5em;
-    margin-bottom: 0.7em;
-  }
-  header h1 { margin: 0; font-size: 14pt; color: var(--acento); }
-  header .subtitulo { margin: 0.15em 0 0; font-size: 8.5pt; color: var(--muted); }
-  .meta { text-align: right; font-size: 8pt; color: var(--muted); line-height: 1.5; }
-  .meta strong { color: var(--texto); }
-  table { width: 100%; border-collapse: collapse; }
-  thead { display: table-header-group; }
-  tr { page-break-inside: avoid; }
-  th, td { border: 1px solid var(--borde); padding: 0.28em 0.4em; text-align: center; }
-  th { background: var(--panel-suave); font-weight: bold; font-size: 7.5pt; }
-  td.izquierda, th.izquierda { text-align: left; }
-  tbody tr:nth-child(even) { background: var(--zebra); }
-</style>
-</head>
-<body>
-  <header>
-    <div>
-      <h1>Historial de Movimientos</h1>
-      <p class="subtitulo">${escaparHtml(opciones.filtro)}</p>
-    </div>
-    <div class="meta">
-      Generado por: <strong>${escaparHtml(opciones.generadoPor)}</strong><br />
-      ${escaparHtml(generadoEn)}
-    </div>
-  </header>
-  <table>
-    <thead><tr>${encabezados}</tr></thead>
-    <tbody>${filasHtml}</tbody>
-  </table>
-</body>
-</html>`;
+/** CSV del historial (ver `generarCsv`). */
+export function generarCsvHistorial(filas: MovimientoHistorial[], columnas: DefinicionColumnaExport[]): string {
+  return generarCsv(filas, columnas);
 }
 
 /** Filas por página. */
@@ -251,29 +155,14 @@ function ordenDeConsulta(orden: OrdenTabla | null | undefined): ConsultaMovimien
   return orden && campo ? { campo, descendente: orden.descendente } : undefined;
 }
 
-/** CSV como el de escritorio: separador `;`, comillas si el texto lleva `;`,
- * comillas o saltos de línea. Empieza con BOM para que Excel lea las tildes. */
-export function generarCsvHistorial(
-  filas: MovimientoHistorial[],
-  columnas: DefinicionColumnaExport[],
-): string {
-  const celda = (texto: string) => (/[;"\r\n]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto);
-  const lineas = [
-    columnas.map((c) => celda(c.etiqueta)).join(";"),
-    ...filas.map((fila) => columnas.map((c) => celda(c.valor(fila))).join(";")),
-  ];
-  return "\uFEFF" + lineas.join("\r\n") + "\r\n";
-}
-
-function descargarArchivo(nombre: string, contenido: BlobPart, tipo: string) {
-  const url = URL.createObjectURL(new Blob([contenido], { type: tipo }));
-  const enlace = document.createElement("a");
-  enlace.href = url;
-  enlace.download = nombre;
-  enlace.click();
-  URL.revokeObjectURL(url);
-}
-
+/**
+ * Historial multi-sitio para `admin_global` -- lee `ingresos` en Supabase
+ * (ver `api/historial.ts` y la migración `agrega_columnas_historial_a_ingresos`),
+ * no la base local de un sitio en particular como la versión de escritorio.
+ * "Exportar a Excel" es client-side (SheetJS) en vez del exportador de
+ * Rust/Tauri de `desktop/` -- este panel no tiene un proceso nativo del
+ * lado del navegador que escriba el archivo.
+ */
 export default function Historial() {
   const { sesion } = useAuth();
   const clienteConsultas = useQueryClient();
@@ -376,10 +265,7 @@ export default function Historial() {
    * reflejar lo que la persona ve en pantalla, no siempre todas las
    * columnas sin importar qué ocultó. */
   function definicionesVisibles(): DefinicionColumnaExport[] {
-    const colIds = tablaRef.current?.columnasVisibles() ?? DEFINICIONES_EXPORT.map((d) => d.colId);
-    return colIds
-      .map((colId) => DEFINICIONES_EXPORT.find((d) => d.colId === colId))
-      .filter((d): d is DefinicionColumnaExport => d !== undefined);
+    return columnasAExportar(DEFINICIONES_EXPORT, tablaRef.current?.columnasVisibles());
   }
 
   /** Trae del servidor TODAS las filas del rango, unidades, búsqueda, filtros
@@ -421,13 +307,7 @@ export default function Historial() {
     }
 
     try {
-      const XLSX = await import("xlsx");
-      const encabezados = definiciones.map((d) => d.etiqueta);
-      const filasHoja = filas.map((fila) => definiciones.map((d) => d.valor(fila)));
-      const hoja = XLSX.utils.aoa_to_sheet([encabezados, ...filasHoja]);
-      const libro = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(libro, hoja, "Historial");
-      XLSX.writeFile(libro, "historial.xlsx");
+      await descargarExcel(filas, definiciones, { hoja: "Historial", archivo: "historial.xlsx" });
     } catch (error) {
       toast.error(`No se pudo exportar a Excel: ${mensajeError(error)}`);
     }
@@ -468,29 +348,7 @@ export default function Historial() {
       filtro: `Filtro: ${textoRangoFecha(desde, hasta)} — ${filtroUnidades}`,
     });
 
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.top = "-10000px";
-    iframe.style.left = "-10000px";
-    document.body.appendChild(iframe);
-
-    const documento = iframe.contentWindow?.document;
-    if (!documento) {
-      document.body.removeChild(iframe);
-      toast.error("No se pudo preparar el PDF.");
-      return;
-    }
-    documento.open();
-    documento.write(html);
-    documento.close();
-
-    iframe.contentWindow?.addEventListener("afterprint", () => {
-      document.body.removeChild(iframe);
-    });
-    // Esperar a que el iframe termine de pintar el HTML recién escrito --
-    // sin esto, `print()` puede dispararse sobre un documento todavía en
-    // blanco en algunos navegadores.
-    setTimeout(() => iframe.contentWindow?.print(), 150);
+    if (!imprimirHtml(html)) toast.error("No se pudo preparar el PDF.");
   }
 
   // useMemo -- mismo motivo que en desktop/: si `columnas` se recrea en

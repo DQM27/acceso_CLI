@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "sonner";
-import { DoorOpen, History, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
+import { DoorOpen, History, LogIn, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
@@ -17,8 +17,9 @@ const Historial = lazy(() => import("./pantallas/Historial"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
 const AdentroAhora = lazy(() => import("./pantallas/AdentroAhora"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
+const Sesiones = lazy(() => import("./pantallas/Sesiones"));
 
-export type Seccion = "dispositivos" | "historial" | "adentro" | "contratistas" | "usuarios";
+export type Seccion = "dispositivos" | "historial" | "adentro" | "contratistas" | "usuarios" | "sesiones";
 
 /** Ruta real de cada sección -- `Sidebar` arma sus `NavLink` con esto y
  * `Shell` compara `location.pathname` contra el mismo valor para decidir
@@ -50,6 +51,7 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "adentro", etiqueta: "Adentro ahora", Icono: DoorOpen },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
+  { id: "sesiones", etiqueta: "Sesiones", Icono: LogIn },
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
 ];
 
@@ -279,6 +281,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                     <Contratistas />
                   ) : id === "usuarios" ? (
                     <Usuarios />
+                  ) : id === "sesiones" ? (
+                    <Sesiones />
                   ) : (
                     <Dispositivos sesion={sesion} />
                   )}

@@ -110,6 +110,23 @@ async function preparar(page: Page) {
           usuario_entrada_nombre: "Operador de prueba",
         },
       ]);
+    if (url.pathname === "/rest/v1/panel_bitacora_sesiones")
+      return responder([
+        {
+          id: 7,
+          cedula: "900000301",
+          nombre: "Operador en sesión",
+          dispositivo_etiqueta: "PC recepción",
+          dispositivo_tipo: "pc",
+          sitio_id: sitio.id,
+          sitio_nombre: sitio.nombre,
+          iniciada_en: "2026-09-30T12:00:00Z",
+          cerrada_en: "2026-09-30T14:30:00Z",
+          motivo_cierre: "otra_unidad",
+          ultima_actividad: "2026-09-30T14:30:00Z",
+          abierta: false,
+        },
+      ]);
     if (url.pathname === "/rest/v1/usuarios")
       return responder([
         { id: "1", cedula: "1-2345-6789", nombre: "Operador de prueba", rol: "OPERADOR", activo: true },
@@ -216,6 +233,18 @@ test("Contratistas: el modal registra a alguien con el acceso denegado", async (
 
   await expect(page.getByText("ANA PEREZ registrado con el acceso denegado.")).toBeVisible();
   await expect(modal).toBeHidden();
+});
+
+test("Sesiones muestra la bitácora con el motivo del cierre", async ({ page }) => {
+  await preparar(page);
+  await page.goto("/sesiones");
+  await expect(page.getByText("Operador en sesión")).toBeVisible();
+  // En pantallas angostas la grilla virtualiza las columnas: "Estado" queda
+  // fuera de la vista y no se dibuja hasta desplazarse.
+  if (test.info().project.name === "escritorio") {
+    await expect(page.getByText("Entró en otra unidad")).toBeVisible();
+  }
+  await expect(page.getByRole("button", { name: "Exportar a PDF" })).toBeVisible();
 });
 
 test("Usuarios (AG Grid) carga sin violaciones de CSP", async ({ page }) => {
