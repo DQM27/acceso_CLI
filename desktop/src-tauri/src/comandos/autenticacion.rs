@@ -408,7 +408,29 @@ pub async fn cambiar_password_supabase(
     Ok(())
 }
 
+/// Cierra la sesión local al instante y, en segundo plano, avisa a la nube
+/// (sesión única por unidad y bitácora de sesiones del panel). Best-effort:
+/// sin red, la sesión de la nube queda abierta hasta que otro ingreso la
+/// reemplace, y en la bitácora aparece como "sin cierre" en el próximo
+/// ingreso de este equipo.
 #[tauri::command]
-pub fn cerrar_sesion(state: tauri::State<GuiState>) {
+pub fn cerrar_sesion(app: tauri::AppHandle) {
+    let state = app.state::<GuiState>();
+    let cedula = state.sesion_activa().ok().map(|sesion| sesion.cedula);
     state.cerrar_sesion();
+
+    let Some(cedula) = cedula else { return };
+    if !state.nube_vinculada() {
+        return;
+    }
+    let manejador = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = manejador.state::<GuiState>();
+        let resultado = state.autenticar_con_cache().and_then(|token| {
+            nube::cerrar_sesion_en_unidad(nube::base_url(), nube::apikey(), &token, &cedula)
+        });
+        if let Err(error) = resultado {
+            log::info!("no se pudo cerrar la sesión en la nube: {error}");
+        }
+    });
 }

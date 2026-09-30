@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use chrono::{DateTime, Utc};
+
 use control_acceso::application::AppCore;
 use control_acceso::database::connection::abrir_conexion_secundaria_escritura;
 use control_acceso::instancia::InstanciaGuard;
@@ -22,7 +24,10 @@ use zeroize::Zeroizing;
 /// aislado no debería dejar la app entera inutilizable hasta reiniciarla.
 pub struct GuiState {
     core: Mutex<AppCore>,
-    sesion: Mutex<Option<UsuarioSesion>>,
+    /// Usuario con sesión abierta y la hora (reloj de este equipo) en que la
+    /// abrió: la sesión única por unidad compara esa hora con la de los
+    /// ingresos en otras unidades (`nube::sesion_en_unidad`).
+    sesion: Mutex<Option<(UsuarioSesion, DateTime<Utc>)>>,
     /// Mantiene el candado de instancia vivo mientras dure la app — nunca se
     /// lee, sólo existe para que no se libere antes de tiempo (mismo patrón
     /// que `main.rs` con `_instancia`).
@@ -132,19 +137,25 @@ impl GuiState {
     /// necesitan — un solo lugar para ese chequeo repetido.
     pub fn sesion_activa(&self) -> Result<UsuarioSesion, String> {
         self.lock_sesion()
-            .clone()
+            .as_ref()
+            .map(|(sesion, _)| sesion.clone())
             .ok_or_else(|| "No hay una sesión activa".to_string())
     }
 
+    /// Sesión actual con la hora en que se abrió, o `None` sin sesión.
+    pub fn sesion_con_inicio(&self) -> Option<(UsuarioSesion, DateTime<Utc>)> {
+        self.lock_sesion().clone()
+    }
+
     pub fn iniciar_sesion(&self, sesion: UsuarioSesion) {
-        *self.lock_sesion() = Some(sesion);
+        *self.lock_sesion() = Some((sesion, Utc::now()));
     }
 
     pub fn cerrar_sesion(&self) {
         *self.lock_sesion() = None;
     }
 
-    fn lock_sesion(&self) -> MutexGuard<'_, Option<UsuarioSesion>> {
+    fn lock_sesion(&self) -> MutexGuard<'_, Option<(UsuarioSesion, DateTime<Utc>)>> {
         self.sesion
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

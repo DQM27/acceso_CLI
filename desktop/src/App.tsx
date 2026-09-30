@@ -75,7 +75,7 @@ import {
 } from "./api";
 import type { ResumenSincronizacion, Update, UsuarioSesion } from "./api";
 import { EVENTO_CAMBIO_EN_VIVO } from "./eventosNube";
-import { MENSAJE_EXPULSION } from "./expulsionNube";
+import { MENSAJE_EXPULSION, MENSAJE_SESION_EN_OTRA_UNIDAD } from "./expulsionNube";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { registrarPantalla } from "./telemetria";
 import { mensajeConflictoGafete } from "./conflictoGafete";
@@ -525,7 +525,11 @@ function Shell({
   // pantallas de una sesión que ya no existe.
   function manejarResumenSincronizacion(resumen: ResumenSincronizacion): boolean {
     if (resumen.sesion_expulsada) {
-      toast.error("Tu usuario fue desactivado — se cerró la sesión.");
+      toast.error(
+        resumen.sesion_en_otra_unidad
+          ? MENSAJE_SESION_EN_OTRA_UNIDAD
+          : "Tu usuario fue desactivado — se cerró la sesión.",
+      );
       onCerrarSesion();
       return true;
     }

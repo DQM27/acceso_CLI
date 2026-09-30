@@ -9,7 +9,7 @@ import {
   sincronizarConNube,
 } from "./api/nube";
 import type { ResumenSincronizacion } from "./api/nube";
-import { esExpulsionDeEsteEquipo } from "./expulsionNube";
+import { esCierreDeEstaSesion, esExpulsionDeEsteEquipo } from "./expulsionNube";
 import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 import { realtimeTelemetria, telemetriaActiva } from "./telemetria";
 import { latenciaDesde, tipoDeError } from "./telemetriaCalculos";
@@ -273,6 +273,13 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
             return;
           }
           programarSincronizacion(tabla);
+        })
+        .on("broadcast", { event: "sesion_cerrada" }, ({ payload }) => {
+          if (cancelado || cliente !== clienteActual) return;
+          // El usuario de este equipo entró en otra unidad. La sincronización
+          // pregunta a la nube si esta sesión sigue vigente y, si no, la
+          // cierra (ver `ResumenSincronizacion::sesion_en_otra_unidad`).
+          if (esCierreDeEstaSesion(payload, opciones.usuario?.cedula)) programarSincronizacion();
         })
         .on("broadcast", { event: "dispositivo_expulsado" }, ({ payload }) => {
           if (cancelado || cliente !== clienteActual) return;

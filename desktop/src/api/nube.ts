@@ -40,6 +40,10 @@ export interface ResumenSincronizacion {
    * (ver `App.tsx`, donde ya se cerró del lado de Rust; esto es sólo para
    * que la UI reaccione). */
   sesion_expulsada: boolean;
+  /** `true` si la sesión se cerró porque el usuario inició sesión en otra
+   * unidad (sesión única por unidad); `sesion_expulsada` también es `true`.
+   * Sólo cambia el aviso. */
+  sesion_en_otra_unidad: boolean;
   /** Ingresos que quedaron activos en este dispositivo pero que la nube
    * dice que TAMBIÉN están activos en otro sitio (`docs/pendientes.md`,
    * "alertar luego al sincronizar") -- mejor esfuerzo, vacío si el chequeo

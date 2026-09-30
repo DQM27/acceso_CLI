@@ -64,6 +64,10 @@ pub struct ResumenSincronizacion {
     /// el frontend debe cerrar la sesión local y volver al login apenas
     /// vea esto en `true`.
     pub sesion_expulsada: bool,
+    /// `true` cuando la sesión se cerró porque el usuario inició sesión en
+    /// otra unidad (sesión única por unidad, `nube::sesion_en_unidad`); en
+    /// ese caso `sesion_expulsada` también es `true`. Sólo cambia el aviso.
+    pub sesion_en_otra_unidad: bool,
     /// `docs/pendientes.md`, "alertar luego al sincronizar": ingresos que
     /// quedaron activos en este dispositivo pero que la nube dice que
     /// TAMBIÉN están activos en otro sitio (colado mientras este
@@ -266,13 +270,36 @@ fn intentar_sincronizacion(
     // mismo (no sólo avisa al frontend) para que el próximo comando que
     // dependa de `sesion_activa()` falle de inmediato, sin esperar a que la
     // pantalla reaccione al resumen.
-    let sesion_expulsada = match state.sesion_activa() {
+    let mut sesion_expulsada = match state.sesion_activa() {
         Ok(actor) if !state.core().sesion_sigue_activa(&actor) => {
             state.cerrar_sesion();
             true
         }
         _ => false,
     };
+
+    // Sesión única por unidad: cada sincronización registra la sesión en la
+    // nube y pregunta si sigue vigente (la primera, justo después del login,
+    // es la que la registra). Si el usuario entró después en otra unidad,
+    // esta sesión se cierra. Falla "abierto": un error de red no expulsa.
+    let mut sesion_en_otra_unidad = false;
+    if !sesion_expulsada && let Some((actor, iniciada_en)) = state.sesion_con_inicio() {
+        match nube::sesion_en_unidad(
+            nube::base_url(),
+            nube::apikey(),
+            &token,
+            &actor.cedula,
+            iniciada_en,
+        ) {
+            Ok(nube::EstadoSesionUnidad::Desplazada) => {
+                state.cerrar_sesion();
+                sesion_expulsada = true;
+                sesion_en_otra_unidad = true;
+            }
+            Ok(_) => {}
+            Err(error) => log::info!("no se pudo verificar la sesión en la nube: {error}"),
+        }
+    }
 
     Ok(ResumenSincronizacion {
         enviados: resumen.enviados,
@@ -295,6 +322,7 @@ fn intentar_sincronizacion(
         dispositivo_id: token.dispositivo_id,
         tipo: token.tipo,
         sesion_expulsada,
+        sesion_en_otra_unidad,
         conflictos_ingreso: resumen.conflictos_ingreso,
         conflictos_movimiento_visita: resumen.conflictos_movimiento_visita,
         conflictos_ingreso_proveedor: resumen.conflictos_ingreso_proveedor,
@@ -349,6 +377,7 @@ pub async fn vincular_dispositivo_inicial(
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
             sesion_expulsada: resumen.sesion_expulsada,
+            sesion_en_otra_unidad: false,
             // Base recién configurada, sin ningún ingreso ni movimiento de
             // visita local todavía -- no hay nada que pudiera chocar con
             // otro sitio en este momento.

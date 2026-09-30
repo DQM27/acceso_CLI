@@ -25,6 +25,7 @@ interface CanalPrueba {
     payload: { dispositivo_id: string; table?: string; operation?: string; registro?: unknown };
   }) => void;
   expulsion: (mensaje: { payload: unknown }) => void;
+  cierreSesion: (mensaje: { payload: unknown }) => void;
   accessToken: () => Promise<string>;
 }
 const canales: CanalPrueba[] = [];
@@ -47,12 +48,14 @@ beforeEach(() => {
   mocks.aplicarCambio.mockResolvedValue(true);
   mocks.crear.mockImplementation((_url, _key, opciones) => {
     const control: CanalPrueba = {
-      estado: () => {}, aviso: () => {}, expulsion: () => {}, accessToken: opciones.accessToken,
+      estado: () => {}, aviso: () => {}, expulsion: () => {}, cierreSesion: () => {},
+      accessToken: opciones.accessToken,
     };
     const canal = {
       on: vi.fn((_tipo, filtro: { event: string }, callback) => {
         if (filtro.event === "dispositivo_expulsado") control.expulsion = callback;
-        else control.aviso = callback;
+        else if (filtro.event === "sesion_cerrada") control.cierreSesion = callback;
+        else if (filtro.event === "cambio_nube") control.aviso = callback;
         return canal;
       }),
       subscribe: vi.fn((callback) => { control.estado = callback; return canal; }),
@@ -86,6 +89,19 @@ describe("sincronización por Realtime", () => {
     canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revocado" } });
     await vi.advanceTimersByTimeAsync(0);
     expect(onExpulsado).toHaveBeenCalledTimes(1);
+  });
+
+  it("el cierre de sesión por otra unidad sólo sincroniza si es del usuario de este equipo", async () => {
+    const canal = await iniciar({ usuario: { cedula: "900000301", nombre: "OPERADOR" } });
+
+    canal.cierreSesion({ payload: { cedula: "900000302" } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizar).not.toHaveBeenCalled();
+
+    // La sincronización completa es la que pregunta a la nube y cierra.
+    canal.cierreSesion({ payload: { cedula: "900000301" } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizar).toHaveBeenCalledTimes(1);
   });
 
   it("al ser retirado cierra el canal y no vuelve a conectar", async () => {
