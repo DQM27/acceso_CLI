@@ -192,10 +192,18 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
      usuario): `pg_stat_user_tables` (seq_scan/seq_tup_read de contratistas,
      empresas, administradores_panel, ingresos) y tiempos del historial.
   4. [ ] Pasar a producción sólo con aprobación explícita del usuario.
-  5. [ ] Por decidir con el usuario (necesitan pantalla nueva en el panel): vista
-     "contratistas con estado" (PRAIND vencida o por vencer y si está adentro; en
-     producción había 14 activos con PRAIND vencida) y vista "adentro ahora"
-     (contratistas, proveedores y KOF dentro, por unidad).
+  5. [x] Vistas `panel_contratistas_estado` y `panel_adentro_ahora` (migración
+     `vistas_estado_y_adentro`, prueba `panel_vistas_estado_y_adentro.sql`) con sus
+     pantallas en el panel: Contratistas muestra PRAIND, estado de acceso y si está
+     adentro; sección nueva "Adentro ahora" con conteo por tipo y resaltado desde
+     12 h adentro. El estado usa las mismas reglas que `verificar_acceso`
+     (src/domain/acceso.rs): si cambian ahí, cambiar la vista.
+  6. [ ] Llevar "Adentro ahora" y el estado de contratistas a escritorio (pedido del
+     usuario, sin fecha). En escritorio conviene calcularlo del SQLite local con
+     `verificar_acceso`, no leer la vista: así funciona sin conexión.
+  7. [ ] Opcional: publicar `ingresos_proveedor` y `prestamos_gafete_provisional` en
+     Realtime si "Adentro ahora" necesita refrescar al instante proveedores y KOF
+     (hoy se refrescan cada 30 s; contratistas sí al instante).
   Para medir en staging sin ensuciar datos: insertar filas sintéticas dentro de un
   bloque `do $$ ... $$` con `set local session_replication_role = replica`,
   consultar como admin (`set local role authenticated` + `request.jwt.claims` con el

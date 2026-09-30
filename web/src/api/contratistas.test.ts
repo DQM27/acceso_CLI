@@ -39,11 +39,40 @@ function filaCompleta(sobrescribir: Record<string, unknown> = {}) {
     fecha_vencimiento_praind: "2027-01-01",
     es_personal_ruta: false,
     activo: true,
+    empresa_activa: true,
+    requiere_praind: true,
+    dias_para_vencer: 90,
+    estado_praind: "VIGENTE",
+    estado_acceso: "PERMITIDO",
+    adentro_sitio_nombre: null,
+    adentro_desde: null,
     ...sobrescribir,
   };
 }
 
 describe("listarContratistas", () => {
+  it("lee la vista panel_contratistas_estado con el estado calculado en el servidor", async () => {
+    const encadenable = mockConsulta({
+      data: [filaCompleta({ estado_acceso: "PRAIND_VENCIDO", estado_praind: "VENCIDA", dias_para_vencer: -3 })],
+      error: null,
+      count: 1,
+    });
+    mocks.from.mockReturnValue(encadenable);
+
+    const resultado = await listarContratistas();
+
+    expect(mocks.from).toHaveBeenCalledWith("panel_contratistas_estado");
+    expect(resultado.filas[0].estado_acceso).toBe("PRAIND_VENCIDO");
+    expect(resultado.filas[0].dias_para_vencer).toBe(-3);
+  });
+
+  it("rechaza un estado que la vista no define", async () => {
+    mocks.from.mockReturnValue(
+      mockConsulta({ data: [filaCompleta({ estado_acceso: "INVENTADO" })], error: null, count: 1 }),
+    );
+    await expect(listarContratistas()).rejects.toThrow();
+  });
+
   it("truncado en false cuando el conteo real coincide con lo que vino", async () => {
     const filas = [filaCompleta()];
     mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 1 }));

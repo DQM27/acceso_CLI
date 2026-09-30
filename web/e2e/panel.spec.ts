@@ -74,17 +74,40 @@ async function preparar(page: Page) {
         es_personal_ruta: false,
         activo: false,
       });
-    if (url.pathname === "/rest/v1/contratistas")
+    if (url.pathname === "/rest/v1/panel_contratistas_estado")
       return responder([
         {
           id: "1",
           identificacion: "1-2345-6789",
           nombre: "Contratista de prueba",
           empresa_nombre: "Empresa de prueba",
-          tipo_ingreso: "OBRA",
-          fecha_vencimiento_praind: null,
+          tipo_ingreso: "PRAIND",
+          fecha_vencimiento_praind: "2026-09-01",
           es_personal_ruta: false,
           activo: true,
+          empresa_activa: true,
+          requiere_praind: true,
+          dias_para_vencer: -3,
+          estado_praind: "VENCIDA",
+          estado_acceso: "PRAIND_VENCIDO",
+          adentro_sitio_nombre: sitio.nombre,
+          adentro_desde: "2026-09-30T14:00:00Z",
+        },
+      ]);
+    if (url.pathname === "/rest/v1/panel_adentro_ahora")
+      return responder([
+        {
+          tipo: "PROVEEDOR",
+          id: "p1",
+          sitio_id: sitio.id,
+          sitio_nombre: sitio.nombre,
+          identificacion: "800000001",
+          nombre: "Proveedor de prueba",
+          empresa_nombre: "Distribuidora",
+          gafete_numero: 31,
+          placa: "ABC123",
+          hora_entrada: new Date(Date.now() - 90 * 60_000).toISOString(),
+          usuario_entrada_nombre: "Operador de prueba",
         },
       ]);
     if (url.pathname === "/rest/v1/usuarios")
@@ -165,6 +188,13 @@ test("Contratistas (AG Grid) carga sin violaciones de CSP", async ({ page }) => 
   await preparar(page);
   await page.goto("/contratistas");
   await expect(page.getByText("Contratista de prueba")).toBeVisible();
+});
+
+test("Adentro ahora muestra quién está adentro y el conteo por tipo", async ({ page }) => {
+  await preparar(page);
+  await page.goto("/adentro");
+  await expect(page.getByText("Proveedor de prueba")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "1 adentro" })).toContainText("Proveedor: 1");
 });
 
 test("Contratistas: el modal registra a alguien con el acceso denegado", async ({ page }) => {

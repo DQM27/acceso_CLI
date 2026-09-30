@@ -8,15 +8,16 @@ import AvisoTruncado from "../componentes/AvisoTruncado";
 import { useLista } from "../componentes/useLista";
 import FormularioContratista from "./FormularioContratista";
 import { actualizarAccesoContratista, listarContratistas } from "../api/contratistas";
-import type { Contratista } from "../api/contratistas";
-import { textoFechaDDMMYYYY } from "../tiempo";
+import type { ContratistaConEstado } from "../api/contratistas";
+import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { COLOR_NIVEL, ESTADOS_ACCESO, nivelPraind, textoEstadoPraind } from "./Contratistas.logica";
 import { mensajeError } from "../mensajeError";
 
 // Declarados afuera del array de columnas y ya tipados como `CellStyle` --
 // dentro del array, mezclar objetos literales con distintas claves
 // (`textAlign` acá, `display`/`justifyContent`/`alignItems` en
 // "es_personal_ruta") hace que TS infiera un único tipo combinado para
-// todos los elementos y rechace la asignación a `ColDef<Contratista>[]`.
+// todos los elementos y rechace la asignación a `ColDef<ContratistaConEstado>[]`.
 const ESTILO_IZQUIERDA: CellStyle = { textAlign: "left" };
 const ESTILO_CENTRO_FLEX: CellStyle = { display: "flex", justifyContent: "center", alignItems: "center" };
 
@@ -36,12 +37,13 @@ export default function Contratistas() {
   // desktop/mobile para su propio sync periódico.
   const { datos, cargando, recargar } = useLista(["contratistas"], listarContratistas, {
     intervaloMs: 120_000,
-    tablas: "contratistas,empresas",
+    // `ingresos`: la columna "Adentro" cambia con cada entrada y salida.
+    tablas: "contratistas,empresas,ingresos",
   });
   const filas = datos?.filas ?? [];
   const truncado = datos?.truncado ?? false;
 
-  async function manejarEdicion(fila: Contratista) {
+  async function manejarEdicion(fila: ContratistaConEstado) {
     try {
       await actualizarAccesoContratista(fila.id, fila.activo);
       toast.success(
@@ -56,7 +58,7 @@ export default function Contratistas() {
     }
   }
 
-  const columnas = useMemo<ColDef<Contratista>[]>(
+  const columnas = useMemo<ColDef<ContratistaConEstado>[]>(
     () => [
       {
         field: "identificacion",
@@ -79,6 +81,41 @@ export default function Contratistas() {
         flex: 1.3,
         minWidth: 130,
         valueFormatter: (p) => (p.value ? textoFechaDDMMYYYY(p.value) : ""),
+      },
+      {
+        // Estado de la PRAIND y de las reglas de acceso: los calcula la vista
+        // `panel_contratistas_estado` con las mismas reglas que el núcleo
+        // (src/domain/acceso.rs), así el panel dice lo mismo que el puesto
+        // de control al intentar registrar el ingreso.
+        colId: "estado_praind",
+        headerName: "PRAIND",
+        flex: 1.3,
+        minWidth: 140,
+        valueGetter: (p) => (p.data ? textoEstadoPraind(p.data) : ""),
+        cellStyle: (p) => {
+          const nivel = p.data ? nivelPraind(p.data.estado_praind) : null;
+          return nivel ? { color: COLOR_NIVEL[nivel], fontWeight: 600 } : null;
+        },
+      },
+      {
+        colId: "estado_acceso",
+        headerName: "Estado",
+        flex: 1.6,
+        minWidth: 170,
+        valueGetter: (p) => (p.data ? ESTADOS_ACCESO[p.data.estado_acceso].texto : ""),
+        cellStyle: (p) =>
+          p.data ? { color: COLOR_NIVEL[ESTADOS_ACCESO[p.data.estado_acceso].nivel], fontWeight: 600 } : null,
+      },
+      {
+        // Unidad y desde cuándo, si tiene un ingreso sin salida.
+        colId: "adentro",
+        headerName: "Adentro",
+        flex: 1.5,
+        minWidth: 160,
+        valueGetter: (p) =>
+          p.data?.adentro_desde
+            ? `${p.data.adentro_sitio_nombre ?? "—"} · ${textoFechaDDMMYYYY(fechaLocalYMD(p.data.adentro_desde))} ${textoHora(p.data.adentro_desde)}`
+            : "",
       },
       {
         // Solo lectura a propósito: el alcance pedido acá es la vista y la
@@ -121,7 +158,7 @@ export default function Contratistas() {
           />
         )}
         <div className="min-h-0 flex-1">
-          <Tabla<Contratista>
+          <Tabla<ContratistaConEstado>
             id="contratistas"
             columnas={columnas}
             filas={filas}

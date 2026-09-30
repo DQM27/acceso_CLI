@@ -32,8 +32,35 @@ export interface Contratista {
   activo: boolean;
 }
 
+/** Estado de la PRAIND según `panel_contratistas_estado`. */
+export type EstadoPraind = "NO_REQUIERE" | "SIN_REGISTRO" | "VENCIDA" | "POR_VENCER" | "VIGENTE";
+
+/** Resultado de las reglas de acceso (`verificar_acceso` del núcleo), tal
+ * como lo calcula `panel_contratistas_estado`. */
+export type EstadoAcceso =
+  | "EMPRESA_INACTIVA"
+  | "SIN_ACCESO"
+  | "PRAIND_NO_REGISTRADO"
+  | "PRAIND_VENCIDO"
+  | "PERMITIDO_CON_ADVERTENCIA"
+  | "PERMITIDO";
+
+/** Fila de la lista: el contratista más su estado calculado en el servidor
+ * (vista `panel_contratistas_estado`, migración `vistas_estado_y_adentro`)
+ * y, si tiene un ingreso abierto, dónde y desde cuándo está adentro. */
+export interface ContratistaConEstado extends Contratista {
+  empresa_activa: boolean;
+  requiere_praind: boolean;
+  /** Días hasta el vencimiento (negativo si ya venció); `null` sin fecha. */
+  dias_para_vencer: number | null;
+  estado_praind: EstadoPraind;
+  estado_acceso: EstadoAcceso;
+  adentro_sitio_nombre: string | null;
+  adentro_desde: string | null;
+}
+
 export interface ResultadoContratistas {
-  filas: Contratista[];
+  filas: ContratistaConEstado[];
   /** Ver el mismo campo en `ResultadoHistorial` (`api/historial.ts`) --
    * misma razón: AG Grid corre client-side (`componentes/Tabla.tsx`), sin
    * este tope la tabla completa crece sin cota junto con el catálogo real. */
@@ -55,23 +82,48 @@ const filaContratistaEsquema = z.object({
   activo: z.boolean(),
 });
 
+const filaContratistaConEstadoEsquema = filaContratistaEsquema.extend({
+  empresa_activa: z.boolean(),
+  requiere_praind: z.boolean(),
+  dias_para_vencer: z.number().nullable(),
+  estado_praind: z.enum(["NO_REQUIERE", "SIN_REGISTRO", "VENCIDA", "POR_VENCER", "VIGENTE"]),
+  estado_acceso: z.enum([
+    "EMPRESA_INACTIVA",
+    "SIN_ACCESO",
+    "PRAIND_NO_REGISTRADO",
+    "PRAIND_VENCIDO",
+    "PERMITIDO_CON_ADVERTENCIA",
+    "PERMITIDO",
+  ]),
+  adentro_sitio_nombre: z.string().nullable(),
+  adentro_desde: z.string().nullable(),
+});
+
 // Válvula de seguridad, no paginación real -- muy por encima de cualquier
 // catálogo de contratistas real de un solo sitio.
 const LIMITE_CONTRATISTAS = 10_000;
 
 export async function listarContratistas(): Promise<ResultadoContratistas> {
+  // La vista calcula el estado con las mismas reglas que el núcleo, así el
+  // panel no las reimplementa. Cambiar el acceso sigue siendo sobre la tabla
+  // (`actualizarAccesoContratista`).
   const { data, error, count } = await supabase
-    .from("contratistas")
+    .from("panel_contratistas_estado")
     .select(
       "id, identificacion, nombre, empresa_nombre, tipo_ingreso, " +
-        "fecha_vencimiento_praind, es_personal_ruta, activo",
+        "fecha_vencimiento_praind, es_personal_ruta, activo, empresa_activa, " +
+        "requiere_praind, dias_para_vencer, estado_praind, estado_acceso, " +
+        "adentro_sitio_nombre, adentro_desde",
       { count: "exact" },
     )
     .order("nombre")
     .range(0, LIMITE_CONTRATISTAS - 1);
 
   if (error) throw new Error(error.message);
-  return { filas: z.array(filaContratistaEsquema).parse(data), truncado: count !== null && count > data.length };
+  return {
+    filas: z.array(filaContratistaConEstadoEsquema).parse(data),
+    truncado: count !== null && count > data.length,
+  };
 }
 
 export async function actualizarAccesoContratista(id: string, activo: boolean): Promise<void> {
