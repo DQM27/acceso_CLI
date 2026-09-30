@@ -149,7 +149,6 @@ export default function DetalleVisita() {
           horaDesde={visita.hora_desde.slice(0, 5)}
           horaHasta={visita.hora_hasta.slice(0, 5)}
           motivo={visita.motivo ?? ""}
-          requiereEscolta={visita.requiere_escolta}
           invitados={visita.invitados}
           onCerrar={() => setEditando(false)}
         />
@@ -183,7 +182,6 @@ function ModalEditar({
   horaDesde: horaDesdeInicial,
   horaHasta: horaHastaInicial,
   motivo: motivoInicial,
-  requiereEscolta: requiereEscoltaInicial,
   invitados,
   onCerrar,
 }: {
@@ -193,7 +191,6 @@ function ModalEditar({
   horaDesde: string;
   horaHasta: string;
   motivo: string;
-  requiereEscolta: boolean;
   invitados: {
     tipo_documento: "CEDULA" | "DIMEX" | "PASAPORTE" | "OTRO";
     numero_documento: string;
@@ -209,7 +206,6 @@ function ModalEditar({
   const [horaDesde, setHoraDesde] = useState(horaDesdeInicial);
   const [horaHasta, setHoraHasta] = useState(horaHastaInicial);
   const [motivo, setMotivo] = useState(motivoInicial);
-  const [requiereEscolta, setRequiereEscolta] = useState(requiereEscoltaInicial);
 
   const editar = useMutation({
     mutationFn: () =>
@@ -220,7 +216,7 @@ function ModalEditar({
         hora_hasta: horaHasta,
         tipo_visita: "",
         motivo,
-        requiere_escolta: requiereEscolta,
+        requiere_escolta: false,
         sitios: [],
         invitados: invitados.map((i) => ({
           tipo_documento: i.tipo_documento,
@@ -260,10 +256,6 @@ function ModalEditar({
           <input type="time" value={horaHasta} onChange={(e) => setHoraHasta(e.target.value)} />
         </label>
       </div>
-      <label className="flex items-center gap-2 text-sm font-medium">
-        <input type="checkbox" checked={requiereEscolta} onChange={(e) => setRequiereEscolta(e.target.checked)} />
-        Esta visita necesita escolta
-      </label>
       <label className="campo">
         Motivo
         <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} />

@@ -34,7 +34,6 @@ export default function AgendarVisita() {
   const [horaHasta, setHoraHasta] = useState("17:00");
   const [sitiosElegidos, setSitiosElegidos] = useState<string[]>([]);
   const [motivo, setMotivo] = useState("");
-  const [requiereEscolta, setRequiereEscolta] = useState(false);
   const [invitados, setInvitados] = useState<InvitadoFormulario[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [erroresCampos, setErroresCampos] = useState<Record<string, string>>({});
@@ -106,7 +105,7 @@ export default function AgendarVisita() {
         hora_hasta: horaHasta,
         tipo_visita: "",
         motivo,
-        requiere_escolta: requiereEscolta,
+        requiere_escolta: false,
         sitios: sitiosElegidos,
         invitados,
       };
@@ -124,7 +123,7 @@ export default function AgendarVisita() {
         hora_hasta: horaHasta,
         tipo_visita: "",
         motivo,
-        requiere_escolta: requiereEscolta,
+        requiere_escolta: false,
         sitios: sitiosElegidos,
         invitados,
       });
@@ -358,14 +357,6 @@ export default function AgendarVisita() {
             {erroresCampos.hora_hasta && <span className="campo-error">{erroresCampos.hora_hasta}</span>}
           </label>
         </div>
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={requiereEscolta}
-            onChange={(e) => setRequiereEscolta(e.target.checked)}
-          />
-          Esta visita necesita escolta
-        </label>
       </section>
 
       {sitios && sitios.length > 1 && (
