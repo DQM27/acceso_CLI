@@ -138,6 +138,19 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
     escritorio, ambos contra staging con telemetría). Sólo instalaciones nuevas.
   - [ ] Borrar de staging las Edge Functions `admin-suspend-device` y
     `admin-crear-codigo-vinculacion` (ya no están en el repo).
+- [ ] **Catálogo global sin unidad: terminar en las apps.** Desde
+  `catalogo_global_sin_unidad` (2026-09-30) contratistas y empresas no dependen de
+  una unidad: `sitio_id` admite null y el aviso en vivo llega a todas las unidades.
+  Falta que escritorio y móvil dejen de mandar `sitio_id` al subir un alta
+  (`cola.rs`); cuando ninguna app en uso lo mande, borrar la columna.
+- [ ] **"Gafete en uso" único en proveedores y KOF.** `ingresos` ya lo tiene
+  (`ingresos_gafete_activo_sitio_idx`) y la cola de salida sabe resolver ese choque
+  (`es_conflicto_gafete_activo`). Para `ingresos_proveedor` y
+  `prestamos_gafete_provisional` primero hay que enseñarle a la cola ese conflicto;
+  si no, la fila reintenta hasta quedar fallida.
+- [ ] **Versiones de migración desalineadas con staging.** Las migraciones aplicadas
+  con el MCP quedaron registradas con la hora de aplicación, no con la del archivo.
+  Alinear `supabase_migrations.schema_migrations` antes de usar `supabase db push`.
 - [ ] **Test SQL `administradores_panel_autorizacion.sql` desactualizado.** Espera que un
   admin_global pueda insertar/borrar en `administradores_panel`, pero la migración
   `20260909192636_retira_escritura_directa_de_administradores_panel` quitó esas

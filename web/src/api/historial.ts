@@ -142,17 +142,21 @@ const movimientoEsquema = z.object({
 });
 
 /** Un tramo de filas (`primera`..`primera + cantidad - 1`) con el filtro y el
- * orden de `consulta`. Lo comparten la página en pantalla y la exportación. */
+ * orden de `consulta`. Lo comparten la página en pantalla y la exportación.
+ * `contar = false` evita recontar todo el filtro en cada tramo de una
+ * exportación (el total no cambia entre tramos); `total` vuelve entonces
+ * como las filas de este tramo. */
 async function pedirTramo(
   consulta: Omit<ConsultaMovimientos, "pagina" | "tamano">,
   primera: number,
   cantidad: number,
+  contar = true,
 ): Promise<PaginaMovimientos> {
   const { desde, hasta, sitioIds, busqueda, filtros, orden } = consulta;
 
   let peticion = supabase
     .from("panel_movimientos")
-    .select(COLUMNAS_MOVIMIENTO, { count: "exact" })
+    .select(COLUMNAS_MOVIMIENTO, contar ? { count: "exact" } : undefined)
     .order(orden?.campo ?? "hora_entrada", {
       ascending: !(orden?.descendente ?? true),
       nullsFirst: false,
@@ -208,8 +212,10 @@ export async function listarMovimientosParaExportar(
   let total = 0;
   while (filas.length < maximo) {
     const cantidad = Math.min(TRAMO_EXPORTACION, maximo - filas.length);
-    const tramo = await pedirTramo(consulta, filas.length, cantidad);
-    total = tramo.total;
+    // Sólo el primer tramo cuenta: con 50 tramos eran 50 conteos completos.
+    const primero = filas.length === 0;
+    const tramo = await pedirTramo(consulta, filas.length, cantidad, primero);
+    if (primero) total = tramo.total;
     filas.push(...tramo.filas);
     if (tramo.filas.length < cantidad) break;
   }

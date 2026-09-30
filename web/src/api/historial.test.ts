@@ -187,6 +187,10 @@ describe("listarMovimientosParaExportar", () => {
     expect(encadenable.range).toHaveBeenNthCalledWith(1, 0, 999);
     expect(encadenable.range).toHaveBeenNthCalledWith(2, 1000, 1999);
     expect(encadenable.range).toHaveBeenNthCalledWith(3, 2000, 2999);
+    // Sólo el primer tramo pide el conteo exacto: el total no cambia entre tramos.
+    expect(encadenable.select).toHaveBeenNthCalledWith(1, expect.any(String), { count: "exact" });
+    expect(encadenable.select).toHaveBeenNthCalledWith(2, expect.any(String), undefined);
+    expect(encadenable.select).toHaveBeenNthCalledWith(3, expect.any(String), undefined);
   });
 
   it("marca truncado cuando el filtro tiene más filas que el máximo", async () => {

@@ -5,9 +5,10 @@ import { supabase } from "../lib/supabase";
  * Contratistas globales (ver docs/planes-implementados/plan-panel-administrativo-web.md,
  * "Modelo de datos"): un contratista no pertenece a un sitio -- puede
  * entrar en cualquier unidad operativa salvo que se le niegue el acceso, y
- * esa baja se ve en TODOS los sitios a la vez. `sitio_id` en la tabla real
- * queda como dato de procedencia (qué dispositivo lo dio de alta), pero
- * el panel ni siquiera lo pide -- no aporta nada para decidir nada acá.
+ * esa baja se ve en TODOS los sitios a la vez (el aviso en vivo sale por el
+ * canal de todas las unidades, ver `catalogo_global_sin_unidad`). `sitio_id`
+ * admite null y el panel no lo usa: sólo queda porque las apps instaladas
+ * todavía lo mandan al subir un alta.
  * RLS: `admin_global` (`es_admin_global()`) O cualquier dispositivo
  * autenticado (JWT con `sitio_id` -- móvil/escritorio de cualquier sitio,
  * necesario para que `recibir_catalogo_del_sitio` sincronice el catálogo
@@ -86,8 +87,9 @@ export async function actualizarAccesoContratista(id: string, activo: boolean): 
 // docs/features-futuras/plan-veto-por-persona.md. La base sólo deja crear a un
 // equipo, así que el panel usa funciones que exigen ser administrador del
 // panel y aplican las mismas reglas del núcleo (cédula en forma única,
-// nombre en mayúsculas, PRAIND según el tipo). Ver la migración
-// `panel_crea_contratistas`. Los mensajes de error vienen ya en español.
+// nombre en mayúsculas, PRAIND según el tipo). Se crean sin unidad: el
+// catálogo es global. Ver las migraciones `panel_crea_contratistas` y
+// `catalogo_global_sin_unidad`. Los mensajes de error vienen ya en español.
 
 export interface Empresa {
   id: string;

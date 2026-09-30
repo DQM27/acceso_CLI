@@ -78,12 +78,13 @@ begin
   -- Bloqueado al crear: cédula en forma única, nombre en mayúsculas, sin PRAIND.
   fila := public.panel_crear_contratista(
     '1-1234-0567', '  josé  ñandú ', 'eeeeeeee-0000-0000-0000-00000000e001', 'PRAIND',
-    null, false, 'aaaaaaaa-0000-0000-0000-00000000a002');
+    null, false);
   if fila.identificacion <> '112340567' then raise exception 'cédula guardada: %', fila.identificacion; end if;
   if fila.nombre <> 'JOSÉ ÑANDÚ' then raise exception 'nombre guardado: %', fila.nombre; end if;
   if fila.activo then raise exception 'debía quedar con el acceso denegado'; end if;
   if fila.es_personal_ruta is distinct from false then raise exception 'personal de ruta debía ser false'; end if;
   if fila.dispositivo_origen_id is not null then raise exception 'el panel no tiene equipo de origen'; end if;
+  if fila.sitio_id is not null then raise exception 'un contratista es global, no de una unidad'; end if;
   if fila.empresa_nombre <> 'EMPRESA DE PRUEBA' then raise exception 'empresa_nombre: %', fila.empresa_nombre; end if;
 
   -- El mismo documento escrito de otra forma es la misma persona.
@@ -152,15 +153,30 @@ begin
   end;
 
   -- Empresa: en mayúsculas y sin duplicar aunque cambien tildes o mayúsculas.
-  empresa := public.panel_crear_empresa('  nueva   compañía ', 'aaaaaaaa-0000-0000-0000-00000000a002');
+  empresa := public.panel_crear_empresa('  nueva   compañía ');
   if empresa.nombre <> 'NUEVA COMPAÑÍA' then raise exception 'nombre de empresa: %', empresa.nombre; end if;
+  if empresa.sitio_id is not null then raise exception 'una empresa es global, no de una unidad'; end if;
   if (public.panel_crear_empresa('NUEVA COMPANIA')).id <> empresa.id then
     raise exception 'la misma empresa se duplicó';
   end if;
 end $$;
 
--- 4. Un usuario anónimo no puede ni llamarlas.
+-- 4. El catálogo es global: el aviso en vivo del alta sale por el canal de
+--    TODAS las unidades, no sólo el de una.
 reset role;
+do $$
+begin
+  if (
+    select count(distinct topic) from realtime.messages
+    where event = 'cambio_nube'
+      and payload ->> 'table' = 'contratistas'
+      and payload ->> 'id' = (select id::text from public.contratistas where identificacion = '112340567')
+  ) <> (select count(*) from public.sitios) then
+    raise exception 'El alta de un contratista no avisó a todas las unidades';
+  end if;
+end $$;
+
+-- 5. Un usuario anónimo no puede ni llamarlas.
 set local role anon;
 do $$
 begin
