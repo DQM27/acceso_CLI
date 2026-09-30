@@ -36,26 +36,25 @@ class ProveedoresViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(secretoStore: SecretoDispositivoStore = SecretoDispositivoStoreDePrueba()): ProveedoresViewModel =
-        ProveedoresViewModel(nucleo, secretoStore = secretoStore, dispatcherIO = dispatcher)
+    private fun viewModel(): ProveedoresViewModel =
+        ProveedoresViewModel(nucleo, dispatcherIO = dispatcher)
 
     @Test
     fun `registrar ingreso de proveedor sigue funcionando con el chequeo cruzado agregado por MV-04`() = runTest(dispatcher) {
         // MV-04 (auditoría 2026-09-24): el chequeo cruzado entre sitios no
         // rompe el camino feliz. Hoy vive en el núcleo
-        // (`application::registrar_ingreso_proveedor_verificado`). Secreto
-        // vacío (no `null`, eso tiraría `SecretoDispositivoNoEncontradoException`
-        // antes de llegar acá) cuenta como nube sin configurar: los chequeos
-        // de nube no tocan la red. Un secreto NO vacío pero inválido sí la
-        // toca (autenticación real contra Supabase) y no es reproducible en
-        // un test unitario sin red.
+        // (`application::registrar_ingreso_proveedor_verificado`). Un
+        // teléfono sin vincular cuenta como nube sin configurar: los
+        // chequeos de nube no tocan la red. Vinculado sí la tocan
+        // (autenticación real contra Supabase), algo que no es reproducible
+        // en un test unitario sin red.
         nucleo = NucleoDePrueba.abrir(
             archivo,
             "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'PROVEEDOR', 'DISPONIBLE');",
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
-        val viewModel = viewModel(SecretoDispositivoStoreDePrueba(secreto = ""))
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        val viewModel = viewModel()
         val empresaId = nucleo.crearEmpresaProveedor("Empresa Proveedora Test")
         advanceUntilIdle()
 
@@ -80,10 +79,10 @@ class ProveedoresViewModelTest {
             "INSERT INTO gafetes (numero, tipo, estado) VALUES (8, 'PROVEEDOR', 'DISPONIBLE');",
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
         val empresaId = nucleo.crearEmpresaProveedor("Empresa Proveedora Test")
         nucleo.registrarIngresoProveedor("111222333", "Proveedor Test", empresaId, null, 7L)
-        val viewModel = viewModel(SecretoDispositivoStoreDePrueba(secreto = ""))
+        val viewModel = viewModel()
         advanceUntilIdle()
 
         viewModel.cambiarCedula("111-222-333")

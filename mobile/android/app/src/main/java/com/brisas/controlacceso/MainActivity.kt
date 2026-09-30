@@ -165,11 +165,10 @@ private fun ContenidoAplicacion(entorno: EntornoAplicacion) {
     if (requiereArranque) {
         PantallaPrimerArranque(
             entorno.nucleo,
-            secretoStore = entorno.secretoStore,
             metadata = entorno.metadata,
             onListo = { requiereArranque = false },
         )
     } else {
-        PantallaLogin(entorno.nucleo, entorno.directorio, entorno.secretoStore)
+        PantallaLogin(entorno.nucleo, entorno.directorio)
     }
 }

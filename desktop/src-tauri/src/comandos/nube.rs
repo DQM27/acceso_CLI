@@ -5,16 +5,15 @@ use tauri::Manager;
 
 use crate::estado::GuiState;
 
-/// Metadata de esta PC, capturada una sola vez en la activación inicial --
+/// Metadata de esta PC, enviada al vincular y en cada autenticación --
 /// misma idea que `MetadatosDispositivoLocal.kt` en el lado móvil (ver
 /// `docs/features-futuras/plan-sesion-unica-dispositivos.md`), reusando los mismos nombres
 /// de campo aunque el significado en escritorio es distinto: `android_id`
 /// pasa a ser el Machine GUID de Windows (el mismo identificador estable
-/// que ya usa `cifrado-secreto-dispositivo` para cifrar el secreto en
-/// disco, no uno nuevo), `modelo` el nombre de esta PC en la red,
+/// de siempre, no uno nuevo), `modelo` el nombre de esta PC en la red,
 /// `fabricante`/`fingerprint` el sistema operativo y su arquitectura.
 /// Nada de esto es secreto en sí mismo -- viaja igual que el resto de esta
-/// metadata, en texto plano en el body de `device-auth`.
+/// metadata, en texto plano en el body de `device-vincular`/`device-auth`.
 fn metadata_de_esta_maquina() -> nube::MetadatosDispositivo {
     nube::MetadatosDispositivo {
         identificador_hardware: control_acceso::nube::credenciales::identificador_de_esta_maquina(),
@@ -147,7 +146,7 @@ pub struct PrestamoGafeteProvisionalRemoto {
 }
 
 /// Autentica este dispositivo contra el receptor -- un solo lugar para no
-/// repetir "cargar secreto + pedir token" en cada función de este archivo.
+/// repetir "autorizar + pedir token" en cada función de este archivo.
 /// Autoriza con `Operacion::UsarNube` (cualquier rol), no
 /// `GestionarNube` (exclusivo ROOT) -- sincronizar es uso diario normal, y
 /// el disparador automático de fondo (`crate::iniciar_sincronizacion_automatica`)
@@ -159,10 +158,7 @@ fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
         .autorizar_uso_nube(&actor)
         .map_err(mensaje_gestion_nube)?;
 
-    let secreto = state
-        .credencial_nube()
-        .ok_or_else(|| "Este dispositivo todavía no está vinculado a la nube".to_string())?;
-    let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
+    let token = state.autenticar_con_cache().map_err(mensaje_nube)?;
     // El candado ya se soltó (`autorizar_uso_nube` arriba fue la única
     // sección crítica) -- volver a pedirlo acá es una lectura/escritura
     // atómica sobre un `AtomicI64` (ver `RelojCorregido`), no compite con
@@ -387,7 +383,7 @@ pub async fn vincular_dispositivo_inicial(
 /// Cómo está vinculado este equipo, para la pantalla de la nube.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct EstadoVinculacion {
-    /// `"clave"`, `"secreto_legado"` o `"sin_vincular"`.
+    /// `"clave"` o `"sin_vincular"`.
     pub credencial: &'static str,
     pub dispositivo_id: Option<String>,
 }
@@ -395,10 +391,10 @@ pub struct EstadoVinculacion {
 #[tauri::command]
 pub fn estado_vinculacion(state: tauri::State<'_, GuiState>) -> EstadoVinculacion {
     let dispositivo_id = state.dispositivo_vinculado();
-    let credencial = match (&dispositivo_id, state.credencial_nube()) {
-        (Some(_), _) => "clave",
-        (None, Some(_)) => "secreto_legado",
-        (None, None) => "sin_vincular",
+    let credencial = if dispositivo_id.is_some() {
+        "clave"
+    } else {
+        "sin_vincular"
     };
     EstadoVinculacion {
         credencial,

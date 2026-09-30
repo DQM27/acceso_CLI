@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use control_acceso::application::{AppCore, NubeDelDispositivo};
+use control_acceso::application::AppCore;
 use control_acceso::database::connection::abrir_conexion_secundaria_escritura;
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::nube::{
@@ -95,15 +95,11 @@ impl GuiState {
         }
     }
 
-    /// Con qué se autentica este equipo ante la nube, en el formato que
-    /// espera `autenticar_con_cache`: `Some("")` si ya usa su clave,
-    /// `Some(secreto)` si todavía tiene el secreto legado, `None` si nunca se
-    /// vinculó (nube sin configurar).
-    pub fn credencial_nube(&self) -> Option<String> {
-        let secreto = nube::credenciales::cargar_secreto();
-        self.cache_token
-            .credencial_configurada(secreto.as_deref())
-            .then(|| secreto.unwrap_or_default())
+    /// `true` si este equipo ya canjeó un código y tiene su clave. Sin
+    /// vincular, la nube está sin configurar: no hay con quién chocar y
+    /// ningún chequeo remoto toca la red.
+    pub fn nube_vinculada(&self) -> bool {
+        self.cache_token.vinculado()
     }
 
     /// `dispositivo_id` al que está vinculada la clave de este equipo.
@@ -116,29 +112,15 @@ impl GuiState {
         self.cache_token.huella_vinculada()
     }
 
-    /// Canjea un código de vinculación (ver `CacheTokenDispositivo::vincular`)
-    /// y borra el secreto legado, que desde ahora no sirve para nada.
+    /// Canjea un código de vinculación (ver `CacheTokenDispositivo::vincular`).
     pub fn vincular(
         &self,
         codigo: &str,
         dispositivo_esperado: Option<&str>,
         metadata: Option<&nube::MetadatosDispositivo>,
     ) -> Result<TokenDispositivo, NubeError> {
-        let token = self
-            .cache_token
-            .vincular(codigo, dispositivo_esperado, metadata)?;
-        self.olvidar_secreto_legado();
-        Ok(token)
-    }
-
-    /// El secreto legado deja de servir en el servidor en cuanto el equipo
-    /// tiene clave; no hay motivo para dejarlo en disco.
-    fn olvidar_secreto_legado(&self) {
-        if self.cache_token.dispositivo_vinculado().is_some()
-            && let Err(error) = nube::credenciales::borrar_secreto()
-        {
-            log::warn!("no se pudo borrar el secreto legado: {error}");
-        }
+        self.cache_token
+            .vincular(codigo, dispositivo_esperado, metadata)
     }
 
     /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de
@@ -149,15 +131,9 @@ impl GuiState {
     /// hubiera autenticado segundos antes para sincronizar o loguearse --
     /// se sentía como que la app se colgaba en cada registro.
     ///
-    /// `secreto` vacío si el equipo ya usa su clave (ver [`Self::credencial_nube`]).
-    /// Si esta misma autenticación migró al equipo desde el secreto legado,
-    /// el archivo del secreto se borra.
-    pub fn autenticar_con_cache(&self, secreto: &str) -> Result<TokenDispositivo, NubeError> {
-        let token = self.cache_token.autenticar_con_cache(secreto)?;
-        if !secreto.is_empty() {
-            self.olvidar_secreto_legado();
-        }
-        Ok(token)
+    /// Sin vincular falla con `NubeError::SinCredencial`.
+    pub fn autenticar_con_cache(&self) -> Result<TokenDispositivo, NubeError> {
+        self.cache_token.autenticar_con_cache()
     }
 
     /// Descarta el `TokenDispositivo` cacheado -- ver
@@ -173,11 +149,8 @@ impl GuiState {
 
     /// Para las operaciones del núcleo que consultan la nube antes de
     /// escribir (`control_acceso::application::con_nube`).
-    pub fn nube_del_dispositivo<'a>(&'a self, secreto: Option<&'a str>) -> NubeDelDispositivo<'a> {
-        NubeDelDispositivo {
-            cache_token: &self.cache_token,
-            secreto,
-        }
+    pub fn nube_del_dispositivo(&self) -> &CacheTokenDispositivo {
+        &self.cache_token
     }
 
     /// Acceso al núcleo compartido por todos los comandos.

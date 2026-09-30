@@ -200,7 +200,7 @@ latencias de −950 ms durante toda la sesión.
 
 Qué mirar para el lag entre equipos: la latencia del aviso (servidor →
 equipo) es sólo el último tramo. Antes está lo que tarda el que guarda en
-subir el cambio: `llamada_nucleo` con `enviarCambiosConSecreto` (teléfono)
+subir el cambio: `llamada_nucleo` con `enviarCambios` (teléfono)
 o `enviar_cambios_nube` (escritorio), más la pausa de agrupación de 600 ms.
 
 ## Envío

@@ -20,10 +20,10 @@
 //! puramente por resiliencia ante fallas correlacionadas, no por
 //! confidencialidad -- ver `docs/recuperacion-sitio-local.md` y
 //! `control_acceso::nube::credenciales::directorio_credenciales_roaming`
-//! (misma carpeta que usa el secreto de dispositivo, por el mismo motivo).
+//! (misma carpeta que la clave privada del dispositivo, por el mismo motivo).
 //!
 //! Este módulo es exclusivo de escritorio Windows (`cfg(windows)`); Android
-//! usa su propio Keystore (`SecretoDispositivoStore.kt`), sin tocar nada de
+//! usa su propio Keystore (`AlmacenClaveKeystore.kt`), sin tocar nada de
 //! acá.
 
 use std::fs;
@@ -213,7 +213,7 @@ fn copiar_y_liberar(blob: CRYPT_INTEGER_BLOB) -> Vec<u8> {
 
 /// Escribe el blob protegido con un archivo temporal + rename atómico, para
 /// que un corte de energía a mitad de escritura nunca deje `db_key.dat` a
-/// medias (mismo patrón que `AndroidKeystoreSecretoDispositivoStore.kt`).
+/// medias (mismo patrón que `control_acceso::nube::credenciales::guardar_protegido_en`).
 fn guardar_atomico(ruta: &Path, contenido: &[u8]) -> std::io::Result<()> {
     if let Some(directorio) = ruta.parent() {
         fs::create_dir_all(directorio)?;

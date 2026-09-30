@@ -44,7 +44,7 @@ impl Reloj for RelojFijo {
 
 /// Reloj del sistema corregido por un desfase medido contra una hora
 /// confiable externa (el header `Date` de cualquier respuesta HTTPS del
-/// receptor en la nube, ver `nube::cliente::autenticar_dispositivo`) --
+/// receptor en la nube, ver `nube::cliente::token_de_respuesta`) --
 /// pensado para equipos cuyo reloj de Windows no se puede corregir
 /// (permisos, política corporativa, hardware sin pila/CMOS confiable).
 /// Reproducido en producción: un reloj adelantado ~11 minutos sin

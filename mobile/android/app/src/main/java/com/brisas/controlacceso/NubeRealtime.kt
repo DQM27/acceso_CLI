@@ -33,7 +33,6 @@ import uniffi.control_acceso_mobile.NucleoException
 
 class NubeRealtime(
     private val nucleo: Nucleo,
-    private val secretoStore: SecretoDispositivoStore,
     private val scope: CoroutineScope,
     // Quién tiene la sesión abierta en este teléfono ahora -- viaja en el
     // mismo `track()` que ya marca el dispositivo como presente, para que
@@ -52,6 +51,9 @@ class NubeRealtime(
     // Se guardó en la base local la fila que trajo un aviso en vivo: la
     // pantalla puede refrescarse sin esperar la sincronización.
     private val onCambioAplicado: () -> Unit = {},
+    // La nube le cortó el acceso a este teléfono (ver `ExpulsionNube.kt`).
+    // Corre en el hilo del canal: quien lo recibe publica a la pantalla.
+    private val onExpulsado: (MotivoExpulsion) -> Unit = {},
 ) {
     private var trabajo: Job? = null
 
@@ -92,8 +94,7 @@ class NubeRealtime(
         val inicioIntento = SystemClock.elapsedRealtime()
         Telemetria.realtime?.conectando()
         val sesion = withContext(dispatcherIO) {
-            val secreto = secretoStore.cargar() ?: throw SecretoDispositivoNoEncontradoException()
-            medirNucleo("sesionRealtimeNubeConSecreto") { nucleo.sesionRealtimeNubeConSecreto(secreto) }
+            medirNucleo("sesionRealtimeNube") { nucleo.sesionRealtimeNube() }
         }
         // Desfase del reloj (precisión de ms): corrige la latencia de los
         // avisos en la telemetría. Se vuelve a leer mientras el canal está
@@ -175,6 +176,20 @@ class NubeRealtime(
                         }
                         Log.i("SincronizacionNube", "Aviso remoto recibido (${tabla ?: "sin tabla"}); solicitando descarga")
                         onCambio(tabla)
+                    }
+                    .launchIn(this)
+                canal.broadcastFlow<JsonObject>("dispositivo_expulsado")
+                    .onEach { aviso ->
+                        MotivoExpulsion.paraEsteEquipo(
+                            dispositivoIdAviso = aviso.texto("dispositivo_id"),
+                            motivo = aviso.texto("motivo"),
+                            huellaAviso = aviso.texto("huella"),
+                            dispositivoId = sesion.dispositivoId,
+                            huella = sesion.huella,
+                        )?.let { motivo ->
+                            Log.w("SincronizacionNube", "Este teléfono quedó fuera de la nube: $motivo")
+                            onExpulsado(motivo)
+                        }
                     }
                     .launchIn(this)
                 try {

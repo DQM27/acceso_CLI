@@ -38,10 +38,10 @@ import uniffi.control_acceso_mobile.Nucleo
 /// [PantallaPrincipal] en vez de dibujar nada propio — mismo `Nucleo` para
 /// toda la app, no se reabre la base al loguear.
 @Composable
-fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispositivoStore) {
+fun PantallaLogin(nucleo: Nucleo, directorio: String) {
     RegistrarPantalla("login")
     val viewModel: LoginViewModel =
-        viewModel(factory = LoginViewModel.factory(nucleo, secretoStore))
+        viewModel(factory = LoginViewModel.factory(nucleo))
 
     val sesionActual = viewModel.sesion
     val propietarioSesion = viewModel.propietarioSesion
@@ -51,7 +51,6 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, secretoStore: SecretoDispo
                 nucleo = nucleo,
                 sesion = sesionActual,
                 directorio = directorio,
-                secretoStore = secretoStore,
                 onCerrarSesion = { viewModel.cerrarSesion() },
             )
         }

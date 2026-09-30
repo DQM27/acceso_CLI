@@ -9,14 +9,8 @@ import uniffi.control_acceso_mobile.NucleoException
 class ErroresNucleoTest {
 
     @Test
-    fun convierteLosTresErroresEsperadosEnSuMensaje() {
+    fun convierteLosErroresDelNucleoEnSuMensaje() {
         assertEquals("sin permiso", NucleoException.UsuarioInactivo("sin permiso").mensajeDeErrorEsperado())
-        assertEquals(
-            SecretoDispositivoNoEncontradoException().message,
-            SecretoDispositivoNoEncontradoException().mensajeDeErrorEsperado(),
-        )
-        val almacen = SecretoDispositivoStoreException(IllegalStateException("x"))
-        assertEquals(almacen.message, almacen.mensajeDeErrorEsperado())
     }
 
     @Test

@@ -34,9 +34,9 @@ pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con
 #[cfg(feature = "nube")]
 pub use con_nube::{
     EntregaGafeteProvisionalVerificadaError, IngresoProveedorVerificadoError,
-    IngresoVerificadoError, NubeDelDispositivo, NuevoIngresoProveedor,
-    entregar_gafete_provisional_verificado, preparar_ingreso_verificado,
-    registrar_ingreso_proveedor_verificado, registrar_ingreso_verificado,
+    IngresoVerificadoError, NuevoIngresoProveedor, entregar_gafete_provisional_verificado,
+    preparar_ingreso_verificado, registrar_ingreso_proveedor_verificado,
+    registrar_ingreso_verificado,
 };
 pub use historial::{
     ExportarHistorialError, buscar_historial_completo_con_conexion,

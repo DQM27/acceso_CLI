@@ -16,8 +16,8 @@ import org.junit.Test
 import uniffi.control_acceso_mobile.Nucleo
 
 /// Punto M7 de la auditoría móvil. Sólo el camino que no sale del
-/// teléfono: `conectar` con un secreto real habla con Supabase
-/// (`device-auth`), y un test unitario nunca debe tocar la nube.
+/// teléfono: `vincular` con un código completo habla con Supabase
+/// (`device-vincular`), y un test unitario nunca debe tocar la nube.
 @OptIn(ExperimentalCoroutinesApi::class)
 class PrimerArranqueViewModelTest {
     private val dispatcher = StandardTestDispatcher()
@@ -39,22 +39,25 @@ class PrimerArranqueViewModelTest {
     }
 
     @Test
-    fun `secreto vacio no guarda nada ni conecta`() = runTest(dispatcher) {
-        val almacen = SecretoDispositivoStoreDePrueba()
+    fun `un codigo incompleto no intenta vincular`() = runTest(dispatcher) {
         val vm = PrimerArranqueViewModel(
             nucleo,
-            almacen,
             MetadatosDispositivoLocal("hw", "Teléfono", "Android", "1", "1.0.0"),
             dispatcherIO = dispatcher,
         )
         var listo = false
 
-        vm.conectar("   ") { listo = true }
+        vm.vincular("K7QM-R4") { listo = true }
         advanceUntilIdle()
 
         assertFalse(listo)
-        assertFalse(vm.conectando)
+        assertFalse(vm.vinculando)
         assertNull(vm.error)
-        assertNull(almacen.cargar())
+    }
+
+    @Test
+    fun `sin clave vinculada la nube no esta configurada`() {
+        assertFalse(nucleo.nubeConfigurada())
+        assertNull(nucleo.dispositivoVinculado())
     }
 }

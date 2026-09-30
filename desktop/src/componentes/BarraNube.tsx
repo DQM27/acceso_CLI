@@ -40,7 +40,7 @@ function useEnLinea(): boolean {
  * estado — mismo lenguaje visual que `MenuUsuario` (`.barra-estado-boton`,
  * texto plano hasta el hover). Visible para cualquier rol activo:
  * sincronizar (`Operacion::UsarNube`) ya es uso diario normal, no exclusivo
- * de ROOT como configurar el secreto del dispositivo
+ * de ROOT como vincular este equipo
  * (`Operacion::GestionarNube`, eso sigue solo en la pantalla Nube). Antes
  * este botón vivía únicamente ahí, detrás de una pestaña que ni
  * Administrador ni Operador podían abrir.

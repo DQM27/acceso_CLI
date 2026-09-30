@@ -37,10 +37,9 @@ pub fn entregar_gafete_provisional(
     state: tauri::State<GuiState>,
 ) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
-    let secreto = state.credencial_nube();
     entregar_gafete_provisional_verificado(
         || state.core(),
-        state.nube_del_dispositivo(secreto.as_deref()),
+        state.nube_del_dispositivo(),
         &sesion,
         encargado_id,
         gafete_numero,

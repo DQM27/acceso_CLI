@@ -1,7 +1,7 @@
 //! Desfase del reloj de este equipo con precisión de milisegundos, al
 //! estilo NTP.
 //!
-//! El header HTTP `Date` (ver `cliente::autenticar_dispositivo`) trae
+//! El header HTTP `Date` (ver `cliente::token_de_respuesta`) trae
 //! segundos enteros: el desfase medido con él puede errar hasta 1 s. Acá se
 //! le pide la hora al servidor en milisegundos (`public.hora_servidor_ms`,
 //! migración `20260929075809_hora_servidor_ms.sql`) varias veces y se usa

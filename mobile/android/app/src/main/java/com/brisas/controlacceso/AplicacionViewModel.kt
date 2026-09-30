@@ -17,7 +17,6 @@ import uniffi.control_acceso_mobile.Nucleo
 data class EntornoAplicacion(
     val nucleo: Nucleo,
     val directorio: String,
-    val secretoStore: SecretoDispositivoStore,
     val metadata: MetadatosDispositivoLocal,
     val requiereConfiguracionInicial: Boolean,
 )
@@ -50,8 +49,8 @@ class AplicacionViewModel(application: Application) : AndroidViewModel(applicati
             // MV-03 (auditoría 2026-09-24): antes `Nucleo.abrir` -- sin
             // clave, sin importar qué motor SQLite estuviera compilado en
             // el .so, la base quedaba en texto plano de verdad. La clave
-            // sale del Keystore (ver ClaveBaseDatosStore.kt, mismo esquema
-            // que SecretoDispositivoStore), nunca derivada acá. Si el
+            // sale del Keystore (ver ClaveBaseDatosStore.kt), nunca
+            // derivada acá. Si el
             // archivo existente no es legible con esta clave -- el caso de
             // todo teléfono con la app instalada antes de este cambio --
             // Nucleo.abrirCifrado ya lo descarta y reconstruye solo (ver su
@@ -63,12 +62,14 @@ class AplicacionViewModel(application: Application) : AndroidViewModel(applicati
                 claveBaseDatos,
             )
             nucleo = abierto
-            val store = AndroidKeystoreSecretoDispositivoStore(context, abierto, directorio, identificador)
+            // Identidad del teléfono ante la nube: su propia clave en
+            // Android Keystore (ver AlmacenClaveKeystore.kt). Antes de
+            // cualquier operación de nube.
+            abierto.establecerAlmacenClave(AlmacenClaveKeystore(context))
             EstadoAplicacion.Lista(
                 EntornoAplicacion(
                     nucleo = abierto,
                     directorio = directorio,
-                    secretoStore = store,
                     metadata = MetadatosDispositivoLocal.capturar(context, identificador),
                     requiereConfiguracionInicial = abierto.requiereConfiguracionInicial(),
                 ),

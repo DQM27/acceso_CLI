@@ -39,7 +39,6 @@ sealed class FilaGafeteProvisionalActiva {
 /// `docs/features-futuras/plan-gafetes-provisionales-kof.md`.
 class GafetesProvisionalesViewModel(
     private val nucleo: Nucleo,
-    private val secretoStore: SecretoDispositivoStore,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var activos by mutableStateOf<List<FilaGafeteProvisionalActiva>>(emptyList())
@@ -122,9 +121,7 @@ class GafetesProvisionalesViewModel(
                 withContext(dispatcherIO) {
                     // El núcleo chequea en la misma llamada que el gafete
                     // no esté prestado en el otro dispositivo del sitio.
-                    val secreto = secretoStore.cargar()
-                        ?: throw SecretoDispositivoNoEncontradoException()
-                    medirNucleo("entregarGafeteProvisionalConSecreto") { nucleo.entregarGafeteProvisionalConSecreto(encargado.id, gafeteNumero, secreto) }
+                    medirNucleo("entregarGafeteProvisionalVerificado") { nucleo.entregarGafeteProvisionalVerificado(encargado.id, gafeteNumero) }
                 }
                 CambiosNube.cambioLocal()
                 mensaje = "Gafete entregado"
@@ -152,11 +149,8 @@ class GafetesProvisionalesViewModel(
                     when (fila) {
                         is FilaGafeteProvisionalActiva.Local ->
                             medirNucleo("registrarDevolucionGafeteProvisional") { nucleo.registrarDevolucionGafeteProvisional(fila.prestamo.id) }
-                        is FilaGafeteProvisionalActiva.Remota -> {
-                            val secreto = secretoStore.cargar()
-                                ?: throw SecretoDispositivoNoEncontradoException()
-                            medirNucleo("cerrarPrestamoGafeteProvisionalRemotoConSecreto") { nucleo.cerrarPrestamoGafeteProvisionalRemotoConSecreto(secreto, fila.remoto.uuid) }
-                        }
+                        is FilaGafeteProvisionalActiva.Remota ->
+                            medirNucleo("cerrarPrestamoGafeteProvisionalRemoto") { nucleo.cerrarPrestamoGafeteProvisionalRemoto(fila.remoto.uuid) }
                     }
                 }
                 CambiosNube.cambioLocal()
@@ -168,11 +162,8 @@ class GafetesProvisionalesViewModel(
     }
 
     companion object {
-        fun factory(
-            nucleo: Nucleo,
-            secretoStore: SecretoDispositivoStore,
-        ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { GafetesProvisionalesViewModel(nucleo, secretoStore) }
+        fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
+            initializer { GafetesProvisionalesViewModel(nucleo) }
         }
     }
 }

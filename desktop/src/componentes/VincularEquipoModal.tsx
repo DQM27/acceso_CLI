@@ -7,7 +7,6 @@ import { codigoCompleto, formatearCodigo } from "./CodigoVinculacion.logica";
 
 const DESCRIPCION_CREDENCIAL: Record<EstadoVinculacion["credencial"], string> = {
   clave: "Vinculado con su propia clave.",
-  secreto_legado: "Usa el secreto de antes; se pasa solo a clave en la próxima sincronización.",
   sin_vincular: "Todavía no está vinculado a la nube.",
 };
 

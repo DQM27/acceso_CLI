@@ -45,7 +45,7 @@ const ESPERA_INICIAL_SINCRONIZACION: Duration = Duration::from_secs(10);
 /// Sincronización con la nube en segundo plano, sin que nadie tenga que
 /// apretar "Sincronizar ahora". Silencioso en todo lo que no sea un envío
 /// exitoso: sin sesión activa, sesión sin permiso (`Operacion::GestionarNube`
-/// es exclusivo de Root), o sin secreto de dispositivo todavía configurado
+/// es exclusivo de Root), o un equipo todavía sin vincular
 /// no son errores acá, son estados normales antes/entre sesiones -- no hay
 /// consola donde mostrar nada, y no tiene sentido interrumpir a un
 /// Administrador u Operador con un fallo de una función que ni les
@@ -443,10 +443,10 @@ fn preparar_nucleo() -> (
     // Deliberadamente NO vive en la misma carpeta que `control_acceso.db`
     // (`directorio_base_datos`, `%LOCALAPPDATA%`) desde 2026-09-18: un
     // evento que corrompe/borra esa carpeta se llevaba puesto tanto la
-    // clave como el secreto de dispositivo (ver
+    // clave de la base como la del dispositivo (ver
     // `control_acceso::nube::credenciales::directorio_credenciales_roaming`
     // y `docs/recuperacion-sitio-local.md`). `%APPDATA%` es un árbol
-    // separado -- mismo motivo, misma carpeta que ese secreto.
+    // separado.
     let directorio_credenciales =
         control_acceso::nube::credenciales::directorio_credenciales_roaming().unwrap_or_else(
             || mostrar_error_fatal_y_salir("No se pudo resolver el directorio %APPDATA%"),
@@ -458,8 +458,8 @@ fn preparar_nucleo() -> (
     // ver `AppCore::establecer_version_app` y
     // docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md, punto 9.
     core.establecer_version_app(env!("CARGO_PKG_VERSION"));
-    // Identidad del equipo ante la nube: su propia clave, en la misma
-    // carpeta que el secreto legado (ver `control_acceso::nube::firmante`).
+    // Identidad del equipo ante la nube: su propia clave, en esa misma
+    // carpeta (ver `control_acceso::nube::firmante`).
     // Una sola instancia compartida por el núcleo y por `GuiState`: las dos
     // cachés de token firman con la misma clave.
     let firmante: Arc<dyn FirmanteDispositivo> =

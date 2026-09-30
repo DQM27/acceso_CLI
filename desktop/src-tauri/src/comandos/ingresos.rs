@@ -47,10 +47,9 @@ pub async fn preparar_ingreso(
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<GuiState>();
         let sesion = state.sesion_activa()?;
-        let secreto = state.credencial_nube();
         let (preparacion, bloqueo) = preparar_ingreso_verificado(
             || state.core(),
-            state.nube_del_dispositivo(secreto.as_deref()),
+            state.nube_del_dispositivo(),
             Some(&sesion),
             contratista_id,
         )
@@ -73,10 +72,9 @@ pub fn registrar_ingreso(
     state: tauri::State<GuiState>,
 ) -> Result<ResultadoRegistroEntrada, String> {
     let sesion = state.sesion_activa()?;
-    let secreto = state.credencial_nube();
     registrar_ingreso_verificado(
         || state.core(),
-        state.nube_del_dispositivo(secreto.as_deref()),
+        state.nube_del_dispositivo(),
         &sesion,
         contratista_id,
         medio,

@@ -21,7 +21,7 @@ pub enum NucleoError {
     #[error("usuario inactivo")]
     UsuarioInactivo,
     /// Usuario global (sincronizado) que todavía no fijó contraseña en
-    /// este teléfono. `Nucleo::autenticar`/`autenticar_con_secreto`
+    /// este teléfono. `Nucleo::autenticar`/`autenticar`
     /// interceptan esto internamente y redirigen a `autenticar_supabase`
     /// (ver el comentario ahí) -- Kotlin nunca ve este error para un
     /// usuario global. La variante sigue existiendo por el contrato FFI

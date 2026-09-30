@@ -11,8 +11,8 @@ use crate::{
 
 #[uniffi::export]
 impl Nucleo {
-    /// Login con el secreto que Kotlin descifra de Android Keystore (vacío =
-    /// nube sin configurar: no se toca la red).
+    /// Login local, con chequeos best-effort contra la nube si el teléfono
+    /// está vinculado (sin vincular no se toca la red).
     ///
     /// Dos chequeos contra la nube, uno para cada dirección de un cambio de
     /// estado remoto -- decisión explícita: "por seguridad, pero nunca
@@ -26,7 +26,7 @@ impl Nucleo {
     ///    que a este usuario lo hayan reactivado en otro dispositivo, o
     ///    creado en el panel/otro sitio DESPUÉS del primer arranque de este
     ///    teléfono, y esta base todavía no se enteró -- antes de rendirse,
-    ///    refresca sólo el catálogo (`refrescar_catalogo_sin_sesion_con_secreto`, sin
+    ///    refresca sólo el catálogo (`refrescar_catalogo_sin_sesion`, sin
     ///    sesión) y reintenta el login local una vez más. Sin esto, un
     ///    usuario nuevo o una reactivación remota nunca se podían reflejar
     ///    acá: la sincronización periódica (`SincronizacionPeriodica.kt`)
@@ -49,11 +49,10 @@ impl Nucleo {
     ///    aparte (ver `LoginViewModel.autenticar`) sin que este método la
     ///    espere -- acá retener el candado durante una sincronización
     ///    entera hubiera vuelto a sentirse lento.
-    pub fn autenticar_con_secreto(
+    pub fn autenticar(
         &self,
         cedula: String,
         password: String,
-        secreto: String,
     ) -> Result<ResultadoLogin, NucleoError> {
         let intento = self.core_lock().autenticar_con_estado(&cedula, &password);
         let (sesion, debe_cambiar_password) = match intento {
@@ -62,20 +61,20 @@ impl Nucleo {
                 AutenticacionErrorNucleo::UsuarioInactivo
                 | AutenticacionErrorNucleo::CredencialesInvalidas,
             ) => {
-                if !secreto.trim().is_empty() {
-                    let _ = self.refrescar_catalogo_sin_sesion_con_secreto(&secreto);
+                if self.nube_configurada() {
+                    let _ = self.refrescar_catalogo_sin_sesion();
                 }
                 self.core_lock().autenticar_con_estado(&cedula, &password)?
             }
             Err(AutenticacionErrorNucleo::SinPasswordLocal) => {
-                return self.autenticar_supabase(&cedula, &password, &secreto);
+                return self.autenticar_supabase(&cedula, &password);
             }
             Err(otro) => return Err(otro.into()),
         };
 
         let autorizado_para_nube = self.core_lock().autorizar_uso_nube(&sesion).is_ok();
-        let sigue_activo = if autorizado_para_nube && !secreto.trim().is_empty() {
-            let token = self.autenticar_con_cache(&secreto).ok();
+        let sigue_activo = if autorizado_para_nube && self.nube_configurada() {
+            let token = self.autenticar_con_cache().ok();
             token
                 .and_then(|token| {
                     let contexto = control_acceso::nube::ContextoSincronizacion {
@@ -104,7 +103,7 @@ impl Nucleo {
     }
 
     /// Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-    /// tras `autenticar_con_secreto`) o rutinario --
+    /// tras `autenticar`) o rutinario --
     /// `nube::cambiar_password` ya revalida `password_actual` con un login
     /// real antes de aceptar la nueva, no confía en que la sesión siga
     /// abierta.
@@ -200,7 +199,7 @@ impl Nucleo {
 impl Nucleo {
     /// Guarda (o reemplaza) la sesión de Supabase Auth -- se llama tanto en
     /// el login inicial (`autenticar_supabase`) como en cada renovación
-    /// exitosa en segundo plano (`sincronizar_con_secreto`),
+    /// exitosa en segundo plano (`sincronizar`),
     /// siempre con una marca de tiempo nueva.
     pub(super) fn iniciar_sesion_supabase(&self, sesion: control_acceso::nube::SesionSupabase) {
         *self.lock_sesion_supabase() = Some(SesionSupabaseCacheada {
@@ -248,16 +247,14 @@ impl Nucleo {
     /// tiene contraseña local en este teléfono -- ver
     /// docs/planes-implementados/plan-autenticacion-supabase-auth.md y el equivalente en
     /// escritorio (`desktop/src-tauri/src/comandos/autenticacion.rs::login_supabase`).
-    /// El refresco del catálogo con `secreto` es best-effort y sólo se
-    /// intenta si la identidad todavía no está en el catálogo local (sitio
-    /// recién conectado, o el alta acaba de ocurrir); secreto vacío = sin
-    /// nube, no se intenta. No exportado a `uniffi` (vive en este
+    /// El refresco del catálogo es best-effort y sólo se intenta si la
+    /// identidad todavía no está en el catálogo local (sitio recién
+    /// conectado, o el alta acaba de ocurrir) y el teléfono está vinculado. No exportado a `uniffi` (vive en este
     /// `impl Nucleo` plano).
     pub(super) fn autenticar_supabase(
         &self,
         cedula: &str,
         password: &str,
-        secreto: &str,
     ) -> Result<ResultadoLogin, NucleoError> {
         let sesion_supabase = control_acceso::nube::login(
             control_acceso::nube::base_url(),
@@ -277,8 +274,8 @@ impl Nucleo {
                 AutenticacionErrorNucleo::CredencialesInvalidas
                 | AutenticacionErrorNucleo::UsuarioInactivo,
             ) => {
-                if !secreto.trim().is_empty() {
-                    let _ = self.refrescar_catalogo_sin_sesion_con_secreto(secreto);
+                if self.nube_configurada() {
+                    let _ = self.refrescar_catalogo_sin_sesion();
                 }
                 self.core_lock().resolver_identidad_local(cedula)?
             }

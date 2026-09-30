@@ -86,10 +86,9 @@ pub fn registrar_ingreso_proveedor(
     state: tauri::State<GuiState>,
 ) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
-    let secreto = state.credencial_nube();
     registrar_ingreso_proveedor_verificado(
         || state.core(),
-        state.nube_del_dispositivo(secreto.as_deref()),
+        state.nube_del_dispositivo(),
         &sesion,
         solicitud.construir(),
     )

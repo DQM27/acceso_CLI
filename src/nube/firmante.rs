@@ -3,15 +3,15 @@
 //!
 //! Cada equipo genera su propio par EC P-256 y sólo entrega la clave
 //! pública; la privada nunca sale del equipo. Para autenticarse, firma un
-//! desafío del servidor (`device-auth`) y manda esa aserción en vez de un
-//! secreto compartido.
+//! desafío del servidor (`device-auth`) y manda esa aserción: no existe
+//! ningún secreto compartido con el servidor.
 //!
 //! El núcleo arma la aserción, calcula la huella y habla con el servidor;
 //! lo ÚNICO que depende de la plataforma es dónde vive la clave privada y
 //! quién firma, y eso queda detrás de [`FirmanteDispositivo`]:
 //!
 //! - Escritorio: [`FirmanteArchivo`], en este mismo módulo (clave en disco
-//!   protegida con DPAPI, igual que el secreto de antes).
+//!   protegida con DPAPI).
 //! - Android/iOS: implementado en Kotlin/Swift sobre Android Keystore /
 //!   Secure Enclave, expuesto al núcleo como callback de `UniFFI` (ver
 //!   `mobile/rust-core/src/firmante.rs`).
@@ -118,7 +118,7 @@ impl ClavePublicaJwk {
     }
 }
 
-/// Aserción que `device-auth` acepta en lugar del secreto: un JWS compacto
+/// Aserción que `device-auth` acepta como prueba de identidad: un JWS compacto
 /// firmado por el equipo, con su huella como `kid` y el desafío del
 /// servidor adentro. No lleva `iat`/`exp`: la frescura la da el desafío, que
 /// emite y fecha el servidor, así que el reloj del equipo no importa.
@@ -164,8 +164,8 @@ struct ClaveGuardada {
 }
 
 /// Firmante en software para escritorio: la clave privada vive en
-/// `<directorio>/dispositivo-nube.clave`, protegida con la misma DPAPI que
-/// ya protegía el secreto (ver `credenciales::guardar_protegido_en`). No es
+/// `<directorio>/dispositivo-nube.clave`, protegida con DPAPI (ver
+/// `credenciales::guardar_protegido_en`). No es
 /// una clave no-exportable como la de Android Keystore, pero nunca viaja
 /// por la red y deja al equipo listo para pasar a TPM más adelante sin
 /// tocar nada fuera de este tipo.
@@ -184,8 +184,8 @@ impl FirmanteArchivo {
         }
     }
 
-    /// El de escritorio, en `%APPDATA%\ControlAcceso` junto al secreto
-    /// legado. `None` si `%APPDATA%` no está disponible.
+    /// El de escritorio, en `%APPDATA%\ControlAcceso` (fuera de la carpeta
+    /// de la base local). `None` si `%APPDATA%` no está disponible.
     pub fn por_defecto() -> Option<Self> {
         super::credenciales::directorio_credenciales_roaming()
             .map(|directorio| Self::en(&directorio))

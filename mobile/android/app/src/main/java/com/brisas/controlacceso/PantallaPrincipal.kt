@@ -68,7 +68,6 @@ fun PantallaPrincipal(
     nucleo: Nucleo,
     sesion: UsuarioSesion,
     directorio: String,
-    secretoStore: SecretoDispositivoStore,
     onCerrarSesion: () -> Unit,
 ) {
     RegistrarPantalla("principal")
@@ -109,25 +108,26 @@ fun PantallaPrincipal(
     var conflictosGafete by remember { mutableStateOf<List<ConflictoGafeteActivo>>(emptyList()) }
     val nubeViewModel: NubeViewModel =
         viewModel(
-            factory = NubeViewModel.factory(nucleo, secretoStore, onCerrarSesion),
+            factory = NubeViewModel.factory(nucleo, onCerrarSesion),
         )
     val scope = rememberCoroutineScope()
-    val realtime = remember(nucleo, secretoStore, scope, sesion) {
+    val realtime = remember(nucleo, scope, sesion) {
         NubeRealtime(
             nucleo = nucleo,
-            secretoStore = secretoStore,
             scope = scope,
             usuarioCedula = sesion.cedula,
             usuarioNombre = sesion.nombre,
             // Aviso en vivo con la fila ya guardada: refresca Activos al
             // instante, sin esperar la sincronización.
             onCambioAplicado = { refrescarNube += 1 },
+            // El canal corre en `scope` (hilo principal): el aviso puede
+            // mostrarse directo. El trabajo local sigue disponible.
+            onExpulsado = { motivo -> Toast.makeText(contexto, motivo.mensaje, Toast.LENGTH_LONG).show() },
         )
     }
-    val sincronizacion = remember(nucleo, secretoStore, scope) {
+    val sincronizacion = remember(nucleo, scope) {
         SincronizacionPeriodica(
             nucleo = nucleo,
-            secretoStore = secretoStore,
             scope = scope,
             onSincronizado = { resumen ->
                 // Si a esta sesión la desactivaron en otro dispositivo, el
@@ -348,10 +348,10 @@ fun PantallaPrincipal(
                 // su pantalla no compila (antes eran textos y un `else`
                 // que caía en Activos en silencio ante un error de tipeo).
                 when (SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }) {
-                    SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, secretoStore, refrescarNube)
+                    SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, refrescarNube)
                     SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
-                    SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, secretoStore, refrescarNube)
-                    SeccionPrincipal.PROVEEDORES -> PantallaProveedores(nucleo, secretoStore, refrescarNube)
+                    SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
+                    SeccionPrincipal.PROVEEDORES -> PantallaProveedores(nucleo, refrescarNube)
                 }
             }
         }

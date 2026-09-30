@@ -31,6 +31,7 @@ uniffi::setup_scaffolding!();
 
 mod catalogo;
 mod error;
+mod firmante;
 mod gafetes;
 mod ingresos;
 mod nube;
@@ -41,6 +42,7 @@ mod tipos;
 
 pub use error::NucleoError;
 use error::{FalloSincronizacion, convertir_fallo_sincronizacion, interno};
+pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
     ContratistaResumen, DatosContratista, DatosUsuario, Empresa, EmpresaProveedor, EncargadoRuta,
@@ -83,7 +85,7 @@ pub struct Nucleo {
     core: Mutex<AppCore>,
     /// Actor autenticado — lo necesitan `registrar_ingreso`/`registrar_salida`
     /// como `usuario_ingreso_id`/`usuario_salida_id`. Se llena en
-    /// `autenticar_con_secreto` y vive mientras dure el proceso (no hay "cerrar sesión"
+    /// `autenticar` y vive mientras dure el proceso (no hay "cerrar sesión"
     /// todavía en el piloto).
     sesion: Mutex<Option<UsuarioSesionNucleo>>,
     /// Caché del último `TokenDispositivo`, deliberadamente FUERA del
@@ -97,7 +99,7 @@ pub struct Nucleo {
     /// iniciar sesión o al confirmar un ingreso con gafete, sobre todo si
     /// la sincronización periódica estaba en curso al mismo tiempo.
     cache_token: control_acceso::nube::CacheTokenDispositivo,
-    /// Serializa las sincronizaciones completas (`sincronizar_con_nube_con_secreto`,
+    /// Serializa las sincronizaciones completas (`sincronizar_con_nube`,
     /// llamada desde el timer periódico, un aviso Realtime Y el botón
     /// manual -- ver `SincronizacionPeriodica.kt`/`NubeViewModel.kt`) para
     /// que nunca corran dos en simultáneo pisándose la cola de salida --
@@ -289,23 +291,25 @@ impl Nucleo {
     /// `core_lock()`.
     fn autenticar_con_cache(
         &self,
-        secreto: &str,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        let token = self.cache_token.autenticar_con_cache(secreto)?;
+        let token = self.cache_token.autenticar_con_cache()?;
         self.aplicar_desfase_de(&token);
         Ok(token)
     }
 
-    /// Igual que [`Nucleo::autenticar_con_cache`], pero permite adjuntar
-    /// `metadata` cuando hace falta mandarla (sólo la activación inicial,
-    /// ver [`Nucleo::configurar_dispositivo_inicial_con_secreto`]). El resto
-    /// de los llamadores pasan `None` a través de `autenticar_con_cache`.
-    fn autenticar_y_cachear(
+    /// Canjea un código de vinculación (ver
+    /// `CacheTokenDispositivo::vincular`) y aplica el desfase de reloj del
+    /// primer token. Mismo reparto que [`Nucleo::autenticar_con_cache`]: la
+    /// red corre sin `core_lock()`.
+    fn vincular_y_cachear(
         &self,
-        secreto: &str,
+        codigo: &str,
+        dispositivo_esperado: Option<&str>,
         metadata: Option<&control_acceso::nube::MetadatosDispositivo>,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        let token = self.cache_token.autenticar_y_cachear(secreto, metadata)?;
+        let token = self
+            .cache_token
+            .vincular(codigo, dispositivo_esperado, metadata)?;
         self.aplicar_desfase_de(&token);
         Ok(token)
     }

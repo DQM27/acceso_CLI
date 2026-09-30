@@ -2,9 +2,7 @@
 //! desde la fachada de aplicación. El dispositivo se vincula en el arranque
 //! inicial canjeando un código del panel (`vincular_dispositivo_inicial`);
 //! desde ahí se autentica con su propia clave (ver `nube::firmante` y
-//! `docs/features-futuras/propuesta-registro-dispositivos.md`). Los equipos
-//! que todavía tienen el secreto de antes migran solos en su próxima
-//! autenticación. Sincronizar, leer y cerrar ingresos remotos
+//! `docs/features-futuras/propuesta-registro-dispositivos.md`). Sincronizar, leer y cerrar ingresos remotos
 //! (`Operacion::UsarNube`) es de cualquier rol -- uso diario normal (la
 //! pantalla Activos los usa), no administración.
 
@@ -88,10 +86,6 @@ pub enum GestionNubeError {
     UsoNoAutorizado,
     #[error("Error de SQLite: {0}")]
     Sqlite(#[from] rusqlite::Error),
-    #[error("Todavía no se guardó el secreto de este dispositivo")]
-    SinSecreto,
-    #[error("No se pudo guardar el secreto localmente: {0}")]
-    Io(#[from] std::io::Error),
     #[error(transparent)]
     Autenticacion(#[from] crate::nube::NubeError),
     #[error(transparent)]
@@ -197,10 +191,8 @@ impl AppCore {
     }
 
     /// Base vacía recién vinculada: nada propio que mandar, sólo el catálogo
-    /// para que el primer login tenga con quién autenticar. Pública para
-    /// que el móvil, que vincula sin el candado del núcleo tomado (ver
-    /// `mobile/rust-core/src/nube.rs`), reuse exactamente el mismo paso.
-    pub fn recibir_catalogo_inicial(
+    /// para que el primer login tenga con quién autenticar.
+    fn recibir_catalogo_inicial(
         &self,
         token: crate::nube::TokenDispositivo,
         perfil: crate::nube::PerfilDispositivo,
@@ -330,7 +322,7 @@ impl AppCore {
     /// Exclusivo de ROOT a propósito (no pasa por `RolUsuario::puede()`, que
     /// quedó aplanado a `true` siempre en el aplanado de roles -- ver
     /// `domain::autorizacion`): a diferencia de las operaciones que sí se
-    /// aplanaron, nadie decidió abrir la gestión del secreto de nube a
+    /// aplanaron, nadie decidió abrir la gestión de la vinculación a
     /// cualquier rol, así que se restaura el chequeo directo. Dormido en la
     /// práctica (ver el doc-comment del módulo), pero sigue siendo la única
     /// puerta real si algún día algo vuelve a llamarlo.
@@ -347,7 +339,7 @@ impl AppCore {
         Ok(())
     }
 
-    /// Sólo autoriza -- no toca la red ni el archivo del secreto.
+    /// Sólo autoriza -- no toca la red ni la clave del dispositivo.
     pub fn autorizar_uso_nube(&self, actor: &UsuarioSesion) -> Result<(), GestionNubeError> {
         let usuario = verificar_actor_activo(&self.connection, actor)
             .map_err(|error| match error {

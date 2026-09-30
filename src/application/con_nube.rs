@@ -21,41 +21,18 @@ use crate::services::registro_ingreso_service::{
     BloqueoIngreso, PreparacionIngreso, ResultadoRegistroEntrada,
 };
 
-/// Con qué hablar con la nube desde este dispositivo. `secreto` es el
-/// secreto legado, si el equipo todavía lo tiene; un equipo vinculado por
-/// código no tiene y se autentica con su clave (ver `nube::firmante`). Sin
-/// ninguna de las dos cosas, la nube está sin configurar: no hay con quién
-/// chocar y ningún chequeo remoto toca la red.
-#[derive(Clone, Copy)]
-pub struct NubeDelDispositivo<'a> {
-    pub cache_token: &'a CacheTokenDispositivo,
-    pub secreto: Option<&'a str>,
-}
-
-impl NubeDelDispositivo<'_> {
-    /// `None` si la nube no está configurada; si lo está, lo que hay que
-    /// pasarle a la caché como secreto (vacío si el equipo usa su clave).
-    fn credencial(&self) -> Option<&str> {
-        let secreto = self
-            .secreto
-            .map(str::trim)
-            .filter(|secreto| !secreto.is_empty());
-        self.cache_token
-            .credencial_configurada(secreto)
-            .then(|| secreto.unwrap_or_default())
-    }
-}
-
 /// Token vigente para consultar la nube. Autoriza al actor con el candado
 /// tomado (es `SQLite`, microsegundos) y lo suelta antes de autenticar.
+///
+/// Quien llama ya comprobó `nube.vinculado()`: un equipo sin vincular no
+/// tiene con quién chocar y ningún chequeo remoto toca la red.
 fn autenticar<G: Deref<Target = AppCore>>(
     nucleo: &impl Fn() -> G,
-    nube: NubeDelDispositivo<'_>,
-    secreto: &str,
+    nube: &CacheTokenDispositivo,
     actor: &UsuarioSesion,
 ) -> Result<TokenDispositivo, GestionNubeError> {
     nucleo().autorizar_uso_nube(actor)?;
-    let token = nube.cache_token.autenticar_con_cache(secreto)?;
+    let token = nube.autenticar_con_cache()?;
     if let Some(desfase_ms) = token.desfase_reloj_ms {
         nucleo().actualizar_desfase_reloj(desfase_ms);
     }
@@ -105,7 +82,7 @@ fn bloqueo_en_la_nube(
 /// `bloqueo_en_la_nube`); las pantallas sólo lo muestran.
 pub fn preparar_ingreso_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
-    nube: NubeDelDispositivo<'_>,
+    nube: &CacheTokenDispositivo,
     actor: Option<&UsuarioSesion>,
     contratista_id: i64,
 ) -> Result<(PreparacionIngreso, Option<BloqueoIngreso>), RegistroIngresoServiceError> {
@@ -114,12 +91,12 @@ pub fn preparar_ingreso_verificado<G: Deref<Target = AppCore>>(
     if local.is_some() {
         return Ok((preparacion, local));
     }
-    let Some(secreto) = nube.credencial() else {
+    if !nube.vinculado() {
         return Ok((preparacion, None));
-    };
+    }
     // Sin sesión no hay con qué autorizar la consulta: con nube
     // configurada eso cuenta como "no se pudo verificar".
-    let bloqueo = match actor.map(|actor| autenticar(&nucleo, nube, secreto, actor)) {
+    let bloqueo = match actor.map(|actor| autenticar(&nucleo, nube, actor)) {
         Some(Ok(token)) => bloqueo_en_la_nube(&contexto(&token), &preparacion.cedula),
         Some(Err(error)) => {
             log::warn!("ingreso: no se pudo autenticar para verificar: {error}");
@@ -153,7 +130,7 @@ pub enum IngresoVerificadoError {
 #[allow(clippy::too_many_arguments)]
 pub fn registrar_ingreso_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
-    nube: NubeDelDispositivo<'_>,
+    nube: &CacheTokenDispositivo,
     actor: &UsuarioSesion,
     contratista_id: i64,
     medio: MedioIngreso,
@@ -165,8 +142,8 @@ pub fn registrar_ingreso_verificado<G: Deref<Target = AppCore>>(
         return Err(IngresoVerificadoError::Bloqueado(bloqueo));
     }
 
-    if let Some(secreto) = nube.credencial() {
-        let token = autenticar(&nucleo, nube, secreto, actor).map_err(|error| {
+    if nube.vinculado() {
+        let token = autenticar(&nucleo, nube, actor).map_err(|error| {
             log::warn!("ingreso: no se pudo autenticar para verificar: {error}");
             IngresoVerificadoError::Bloqueado(BloqueoIngreso::SinVerificarEnLaNube)
         })?;
@@ -239,7 +216,7 @@ pub enum IngresoProveedorVerificadoError {
 /// 4. escribe (`AppCore::registrar_ingreso_proveedor`, reglas locales).
 pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
-    nube: NubeDelDispositivo<'_>,
+    nube: &CacheTokenDispositivo,
     actor: &UsuarioSesion,
     mut datos: NuevoIngresoProveedor,
 ) -> Result<i64, IngresoProveedorVerificadoError> {
@@ -253,8 +230,8 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
         return Err(IngresoProveedorServiceError::IngresoActivo.into());
     }
 
-    if let Some(secreto) = nube.credencial() {
-        let token = autenticar(&nucleo, nube, secreto, actor)?;
+    if nube.vinculado() {
+        let token = autenticar(&nucleo, nube, actor)?;
         let contexto = contexto(&token);
         // A la vez, como en `registrar_ingreso_verificado`; mismo orden al
         // evaluar.
@@ -309,13 +286,13 @@ pub enum EntregaGafeteProvisionalVerificadaError {
 /// (`AppCore::entregar_gafete_provisional`, reglas locales).
 pub fn entregar_gafete_provisional_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
-    nube: NubeDelDispositivo<'_>,
+    nube: &CacheTokenDispositivo,
     actor: &UsuarioSesion,
     encargado_id: i64,
     gafete_numero: i64,
 ) -> Result<i64, EntregaGafeteProvisionalVerificadaError> {
-    if let Some(secreto) = nube.credencial() {
-        let token = autenticar(&nucleo, nube, secreto, actor)?;
+    if nube.vinculado() {
+        let token = autenticar(&nucleo, nube, actor)?;
         if crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(
             &contexto(&token),
             gafete_numero,
@@ -392,13 +369,6 @@ mod tests {
         )
     }
 
-    fn sin_nube(cache: &CacheTokenDispositivo) -> NubeDelDispositivo<'_> {
-        NubeDelDispositivo {
-            cache_token: cache,
-            secreto: None,
-        }
-    }
-
     fn datos(cedula: &str, empresa_id: i64) -> NuevoIngresoProveedor {
         NuevoIngresoProveedor {
             cedula: cedula.into(),
@@ -416,7 +386,7 @@ mod tests {
 
         let id = registrar_ingreso_proveedor_verificado(
             || core.lock().unwrap(),
-            sin_nube(&cache),
+            &cache,
             &actor,
             datos("1-1111-1111", empresa_id),
         )
@@ -444,7 +414,7 @@ mod tests {
 
         let error = registrar_ingreso_proveedor_verificado(
             || core.lock().unwrap(),
-            sin_nube(&cache),
+            &cache,
             &actor,
             datos("2-2222-2222", empresa_id),
         )
@@ -454,31 +424,6 @@ mod tests {
             error,
             IngresoProveedorVerificadoError::Servicio(IngresoProveedorServiceError::IngresoActivo)
         ));
-    }
-
-    #[test]
-    fn un_secreto_en_blanco_cuenta_como_nube_sin_configurar() {
-        let cache = CacheTokenDispositivo::new();
-        let nube = NubeDelDispositivo {
-            cache_token: &cache,
-            secreto: Some("   "),
-        };
-        assert!(nube.credencial().is_none());
-    }
-
-    #[test]
-    fn una_clave_vinculada_cuenta_como_nube_configurada_aunque_no_haya_secreto() {
-        let directorio = tempfile::tempdir().unwrap();
-        let firmante = crate::nube::FirmanteArchivo::en(directorio.path());
-        crate::nube::FirmanteDispositivo::marcar_vinculada(&firmante, "disp-1").unwrap();
-        let cache = CacheTokenDispositivo::new();
-        cache.establecer_firmante(std::sync::Arc::new(firmante));
-
-        let nube = NubeDelDispositivo {
-            cache_token: &cache,
-            secreto: None,
-        };
-        assert_eq!(nube.credencial(), Some(""));
     }
 
     #[test]
@@ -497,7 +442,7 @@ mod tests {
         let entregar = || {
             entregar_gafete_provisional_verificado(
                 || core.lock().unwrap(),
-                sin_nube(&cache),
+                &cache,
                 &actor,
                 encargado_id,
                 12,
@@ -545,7 +490,7 @@ mod tests {
 
         registrar_ingreso_verificado(
             || core.lock().unwrap(),
-            sin_nube(&cache),
+            &cache,
             &actor,
             1,
             MedioIngreso::Caminando,
@@ -574,7 +519,7 @@ mod tests {
 
         let error = registrar_ingreso_verificado(
             || core.lock().unwrap(),
-            sin_nube(&cache),
+            &cache,
             &actor,
             1,
             MedioIngreso::Caminando,

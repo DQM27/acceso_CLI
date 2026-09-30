@@ -6,7 +6,7 @@ import { invocar, esObjeto, loQueSea } from "./_invocar";
  * contra `administradores_panel` (mismo criterio que el resto del panel via
  * RLS). `supabase.functions.invoke` manda el JWT de la sesión activa solo.
  *
- * Un dispositivo nuevo ya no recibe un secreto permanente: el panel emite un
+ * Ningún dispositivo recibe un secreto permanente: el panel emite un
  * código de vinculación de un solo uso (ver
  * docs/features-futuras/propuesta-registro-dispositivos.md) que el equipo
  * canjea, generando su propia clave.
@@ -20,7 +20,7 @@ export interface Sitio {
 export type TipoDispositivo = "pc" | "mobile" | "visor";
 
 /** Cómo se autentica hoy el equipo ante la nube. */
-export type CredencialDispositivo = "clave" | "secreto_legado" | "sin_vincular";
+export type CredencialDispositivo = "clave" | "sin_vincular";
 
 export interface Dispositivo {
   id: string;

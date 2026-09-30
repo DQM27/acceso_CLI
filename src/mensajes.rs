@@ -600,13 +600,6 @@ pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> Stri
             log::error!("gestión de nube: {error}");
             "No se pudo leer la base de datos local".into()
         }
-        GestionNubeError::SinSecreto => {
-            "Todavía no se guardó el secreto de este dispositivo".into()
-        }
-        GestionNubeError::Io(error) => {
-            log::error!("gestión de nube: {error}");
-            "No se pudo guardar el secreto localmente".into()
-        }
         GestionNubeError::Autenticacion(error) => mensaje_nube(error),
         GestionNubeError::Sincronizacion(error) => mensaje_sincronizacion(error),
         GestionNubeError::YaConfigurado => {

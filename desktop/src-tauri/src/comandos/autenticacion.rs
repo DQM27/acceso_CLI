@@ -87,7 +87,7 @@ fn intentar_login_local(
 /// todavía lo tiene marcado inactivo local" (ver `login`): en ese momento
 /// todavía no hay ninguna sesión válida que autorice nada, es justo lo que
 /// se está tratando de determinar. La identidad de la nube es del
-/// dispositivo (el secreto), no del usuario que intenta entrar, así que no
+/// dispositivo (su clave), no del usuario que intenta entrar, así que no
 /// hace falta una.
 ///
 /// `pub` (el módulo `comandos` no es público fuera del crate, así que esto
@@ -97,10 +97,7 @@ fn intentar_login_local(
 /// reintento de acá de más abajo casi nunca tiene que esperar los
 /// `ESPERA_MAXIMA_SYNC_LOGIN` completos.
 pub fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
-    let secreto = state
-        .credencial_nube()
-        .ok_or_else(|| "Este dispositivo todavía no está vinculado a la nube".to_string())?;
-    let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
+    let token = state.autenticar_con_cache().map_err(mensaje_nube)?;
     if let Some(desfase_ms) = token.desfase_reloj_ms {
         state.core().actualizar_desfase_reloj(desfase_ms);
     }
@@ -130,10 +127,7 @@ pub fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
 /// sincronización completa (cola, catálogo, historial...) sigue
 /// corriendo, pero en segundo plano -- ver `login`.
 fn usuario_sigue_activo_remoto(state: &GuiState, cedula: &str) -> Result<bool, String> {
-    let secreto = state
-        .credencial_nube()
-        .ok_or_else(|| "Este dispositivo todavía no está vinculado a la nube".to_string())?;
-    let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
+    let token = state.autenticar_con_cache().map_err(mensaje_nube)?;
     if let Some(desfase_ms) = token.desfase_reloj_ms {
         state.core().actualizar_desfase_reloj(desfase_ms);
     }

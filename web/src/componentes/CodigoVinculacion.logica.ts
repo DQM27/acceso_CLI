@@ -24,7 +24,6 @@ export function tiempoRestante(expiraEn: string, ahora: number): string | null {
 
 export const TEXTO_CREDENCIAL: Record<CredencialDispositivo, string> = {
   clave: "Vinculado",
-  secreto_legado: "Secreto anterior",
   sin_vincular: "Sin vincular",
 };
 

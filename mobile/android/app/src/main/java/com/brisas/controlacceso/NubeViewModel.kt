@@ -29,7 +29,6 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
 /// (`Operacion::UsarNube`).
 class NubeViewModel(
     private val nucleo: Nucleo,
-    private val secretoStore: SecretoDispositivoStore,
     // Misma reacción ante `sesionExpulsada` que el pulso periódico
     // (`SincronizacionPeriodica`, ver `PantallaPrincipal.kt`).
     private val onSesionExpulsada: () -> Unit = {},
@@ -60,9 +59,7 @@ class NubeViewModel(
         viewModelScope.launch {
             try {
                 val resumen = withContext(dispatcherIO) {
-                    val secreto = secretoStore.cargar()
-                        ?: throw SecretoDispositivoNoEncontradoException()
-                    medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
+                    medirNucleo("sincronizarConNube") { nucleo.sincronizarConNube() }
                 }
                 ultimoResumen = resumen
                 if (resumen.sesionExpulsada) onSesionExpulsada()
@@ -77,10 +74,9 @@ class NubeViewModel(
     companion object {
         fun factory(
             nucleo: Nucleo,
-            secretoStore: SecretoDispositivoStore,
             onSesionExpulsada: () -> Unit = {},
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { NubeViewModel(nucleo, secretoStore, onSesionExpulsada) }
+            initializer { NubeViewModel(nucleo, onSesionExpulsada) }
         }
     }
 }

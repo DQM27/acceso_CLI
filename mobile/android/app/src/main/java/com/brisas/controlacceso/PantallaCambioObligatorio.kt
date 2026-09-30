@@ -30,7 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 
-/// Reemplaza al formulario de login cuando `Nucleo.autenticarConSecreto`
+/// Reemplaza al formulario de login cuando `Nucleo.autenticar`
 /// devuelve `debe_cambiar_password = true` -- usuario global (Administrador/
 /// Operador, o un ROOT ya sincronizado a otro sitio) que todavía tiene la
 /// contraseña temporal de un solo uso generada por el panel (ver

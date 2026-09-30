@@ -58,12 +58,11 @@ import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalRemoto
 @Composable
 fun PantallaGafetesProvisionales(
     nucleo: Nucleo,
-    secretoStore: SecretoDispositivoStore,
     refrescarNube: Int = 0,
 ) {
     RegistrarPantalla("gafetes_provisionales")
     val viewModel: GafetesProvisionalesViewModel =
-        viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo, secretoStore))
+        viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo))
     var gafeteTexto by remember { mutableStateOf("") }
     var filaParaDevolver by remember { mutableStateOf<FilaGafeteProvisionalActiva?>(null) }
     val focoGafete = remember { FocusRequester() }

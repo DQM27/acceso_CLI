@@ -88,7 +88,7 @@ impl From<UsuarioSesionNucleo> for UsuarioSesion {
     }
 }
 
-/// Éxito de `Nucleo::autenticar`/`autenticar_con_secreto` -- mismo motivo
+/// Éxito de `Nucleo::autenticar`/`autenticar` -- mismo motivo
 /// que `desktop/src-tauri/src/comandos/autenticacion.rs::ResultadoLogin`:
 /// Kotlin necesita saber si tiene que forzar el cambio de contraseña antes
 /// de dejar operar. `false` siempre en la rama local (ROOT del arranque
@@ -248,7 +248,7 @@ pub struct PreparacionIngreso {
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
     /// Siempre `None`: el ingreso activo en otro sitio llega resuelto en
-    /// `mensaje_bloqueo` (ver `preparar_ingreso_con_secreto`).
+    /// `mensaje_bloqueo` (ver `preparar_ingreso_verificado`).
     pub activo_en_otro_sitio: Option<String>,
     pub gafetes_deuda: Vec<i64>,
     /// `None` si se puede continuar con este contratista; si no, el texto
@@ -500,7 +500,7 @@ pub struct ResumenSincronizacion {
     /// estaba offline). Mejor esfuerzo, vacío si el chequeo falla. Siempre
     /// vacío en la activación inicial (`From<ResumenSincronizacionNucleo>`,
     /// base recién configurada, sin ingresos locales todavía) -- sólo
-    /// `sincronizar_con_secreto` lo completa de verdad.
+    /// `sincronizar` lo completa de verdad.
     pub conflictos_ingreso: Vec<ConflictoIngresoActivo>,
     /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
     /// proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
@@ -605,6 +605,10 @@ pub struct SesionRealtimeNube {
     pub dispositivo_id: String,
     pub tipo: String,
     pub topic: String,
+    /// Huella de la clave de este teléfono (`None` sólo si no se pudo
+    /// leer). Distingue a este teléfono de otro vinculado con el
+    /// mismo `dispositivo_id` al recibir el aviso `dispositivo_expulsado`.
+    pub huella: Option<String>,
 }
 
 /// Un ingreso abierto por el otro dispositivo del mismo sitio -- no vive

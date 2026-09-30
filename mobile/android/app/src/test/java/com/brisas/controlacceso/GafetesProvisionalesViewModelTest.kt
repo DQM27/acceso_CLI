@@ -18,9 +18,9 @@ import org.junit.Test
 import uniffi.control_acceso_mobile.Nucleo
 
 /// Punto M7 de la auditoría móvil: este ViewModel no tenía tests. Nada de
-/// acá toca la red: la entrega con secreto válido hace un chequeo en vivo
-/// contra la nube, por eso sólo se prueba el camino sin secreto (que falla
-/// antes de salir del teléfono).
+/// acá toca la red: el teléfono de prueba no está vinculado, así que la
+/// entrega aplica sólo las reglas locales (el chequeo en vivo contra el
+/// otro dispositivo lo prueba el núcleo, `application::con_nube`).
 @OptIn(ExperimentalCoroutinesApi::class)
 class GafetesProvisionalesViewModelTest {
     private val dispatcher = StandardTestDispatcher()
@@ -49,11 +49,11 @@ class GafetesProvisionalesViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
     }
 
-    private fun viewModel(secreto: String? = null) =
-        GafetesProvisionalesViewModel(nucleo, SecretoDispositivoStoreDePrueba(secreto), dispatcherIO = dispatcher)
+    private fun viewModel() =
+        GafetesProvisionalesViewModel(nucleo, dispatcherIO = dispatcher)
 
     @Test
     fun `base vacia no falla`() = runTest(dispatcher) {
@@ -92,9 +92,9 @@ class GafetesProvisionalesViewModelTest {
     }
 
     @Test
-    fun `entregar sin secreto del dispositivo muestra el error y no presta`() = runTest(dispatcher) {
+    fun `entregar sin vincular presta con las reglas locales`() = runTest(dispatcher) {
         abrir()
-        val vm = viewModel(secreto = null)
+        val vm = viewModel()
         advanceUntilIdle()
         vm.cambiarTextoEncargado("araya")
         advanceUntilIdle()
@@ -102,9 +102,9 @@ class GafetesProvisionalesViewModelTest {
         var exito = false
         vm.entregar(5) { exito = true }
         advanceUntilIdle()
-        assertFalse(exito)
-        assertEquals(SecretoDispositivoNoEncontradoException().message, vm.error)
-        assertTrue(nucleo.listarGafetesProvisionalesActivos().isEmpty())
+        assertTrue(exito)
+        assertNull(vm.error)
+        assertEquals(1, nucleo.listarGafetesProvisionalesActivos().size)
     }
 
     @Test

@@ -49,12 +49,11 @@ import uniffi.control_acceso_mobile.Nucleo
 @Composable
 fun PantallaActivos(
     nucleo: Nucleo,
-    secretoStore: SecretoDispositivoStore,
     refrescarNube: Int = 0,
 ) {
     RegistrarPantalla("activos")
     val viewModel: ActivosViewModel =
-        viewModel(factory = ActivosViewModel.factory(nucleo, secretoStore))
+        viewModel(factory = ActivosViewModel.factory(nucleo))
     var escanerAbierto by remember { mutableStateOf(false) }
     var escanerGafeteSalidaAbierto by remember { mutableStateOf(false) }
     LaunchedEffect(refrescarNube) {

@@ -1,7 +1,7 @@
 //! Integración con el receptor en la nube — solo compilado con la feature
 //! `nube`. Ver `docs/planes-implementados/plan-persistencia-nube.md` para el diseño completo.
 //!
-//! Cubre: autenticación de dispositivo (secreto → token), el envío
+//! Cubre: identidad del dispositivo (código de vinculación y clave propia → token), el envío
 //! (`drenar_cola`) de la bandeja de salida local hacia el receptor, y la
 //! recepción (`recibir_ingresos_abiertos`/`cerrar_ingreso_remoto`) de lo
 //! que el otro dispositivo del mismo sitio tiene abierto ahora mismo.
@@ -24,7 +24,7 @@ pub use auth_supabase::{
     verificar_token_offline,
 };
 pub use cache_token::CacheTokenDispositivo;
-pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo, autenticar_dispositivo};
+pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo};
 pub use en_vivo::aplicar_cambio_en_vivo;
 pub use firmante::{ErrorFirmante, FirmanteArchivo, FirmanteDispositivo};
 pub use orquestacion::{PerfilDispositivo, ResumenSincronizacionNube, recibir, sincronizar};

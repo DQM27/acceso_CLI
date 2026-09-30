@@ -16,42 +16,44 @@ import uniffi.control_acceso_mobile.Nucleo
 
 /// Dueño del estado de [PantallaPrimerArranque] -- ver el doc-comment de esa
 /// pantalla. Un solo intento a la vez, sin reintento automático: si el
-/// secreto es inválido o no hay red, la persona lo ve y decide si reintenta.
+/// código es inválido o no hay red, la persona lo ve y decide si reintenta.
+///
+/// No guarda nada: el código es de un solo uso y no es una credencial. Al
+/// canjearlo, el núcleo genera la clave del teléfono en Android Keystore
+/// (ver `AlmacenClaveKeystore`) y sólo manda la pública.
 class PrimerArranqueViewModel(
     private val nucleo: Nucleo,
-    private val secretoStore: SecretoDispositivoStore,
     private val metadata: MetadatosDispositivoLocal,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
-    var conectando by mutableStateOf(false)
+    var vinculando by mutableStateOf(false)
         private set
     var error by mutableStateOf<String?>(null)
         private set
 
-    fun conectar(secreto: String, onListo: () -> Unit) {
-        if (conectando || secreto.isBlank()) return
+    fun vincular(codigo: String, onListo: () -> Unit) {
+        if (vinculando || !CodigoVinculacion.completo(codigo)) return
         error = null
-        conectando = true
+        vinculando = true
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    // Persistir primero permite reintentar/recuperar si la
-                    // operación remota termina y el proceso se interrumpe.
-                    secretoStore.guardar(secreto)
-                    medirNucleo("configurarDispositivoInicialConSecreto") { nucleo.configurarDispositivoInicialConSecreto(
-                        secreto = secreto,
-                        identificadorHardware = metadata.identificadorHardware,
-                        nombreDispositivo = metadata.nombreDispositivo,
-                        plataforma = metadata.plataforma,
-                        versionBuild = metadata.versionBuild,
-                        appVersion = metadata.appVersion,
-                    ) }
+                    medirNucleo("vincularDispositivoInicial") {
+                        nucleo.vincularDispositivoInicial(
+                            codigo = CodigoVinculacion.normalizar(codigo),
+                            identificadorHardware = metadata.identificadorHardware,
+                            nombreDispositivo = metadata.nombreDispositivo,
+                            plataforma = metadata.plataforma,
+                            versionBuild = metadata.versionBuild,
+                            appVersion = metadata.appVersion,
+                        )
+                    }
                 }
                 onListo()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {
-                conectando = false
+                vinculando = false
             }
         }
     }
@@ -59,10 +61,9 @@ class PrimerArranqueViewModel(
     companion object {
         fun factory(
             nucleo: Nucleo,
-            secretoStore: SecretoDispositivoStore,
             metadata: MetadatosDispositivoLocal,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { PrimerArranqueViewModel(nucleo, secretoStore, metadata) }
+            initializer { PrimerArranqueViewModel(nucleo, metadata) }
         }
     }
 }

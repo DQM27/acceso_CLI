@@ -95,8 +95,8 @@ export interface SesionRealtimeNube {
   dispositivo_id: string;
   tipo: string;
   topic: string;
-  /** Huella de la clave de este equipo, o `null` si todavía usa el secreto
-   * legado. Distingue a este equipo de otro vinculado con el mismo
+  /** Huella de la clave de este equipo (`null` sólo si no se pudo leer).
+   * Distingue a este equipo de otro vinculado con el mismo
    * `dispositivo_id` al recibir `dispositivo_expulsado`. */
   huella: string | null;
 }
@@ -180,7 +180,7 @@ export function revincularDispositivo(codigo: string): Promise<void> {
   return invoke("revincular_dispositivo", { codigo });
 }
 
-export type CredencialNube = "clave" | "secreto_legado" | "sin_vincular";
+export type CredencialNube = "clave" | "sin_vincular";
 
 export interface EstadoVinculacion {
   credencial: CredencialNube;

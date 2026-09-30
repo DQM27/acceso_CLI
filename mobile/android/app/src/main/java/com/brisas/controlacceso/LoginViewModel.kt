@@ -33,7 +33,6 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// login era la causa real del retraso de "un par de segundos" al entrar.
 class LoginViewModel(
     private val nucleo: Nucleo,
-    private val secretoStore: SecretoDispositivoStore,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var cedula by mutableStateOf("")
@@ -75,8 +74,7 @@ class LoginViewModel(
         viewModelScope.launch {
             try {
                 val resultado: ResultadoLogin = withContext(dispatcherIO) {
-                    val secreto = secretoStore.cargar().orEmpty()
-                    medirNucleo("autenticarConSecreto") { nucleo.autenticarConSecreto(cedula, passwordTipeada, secreto) }
+                    medirNucleo("autenticar") { nucleo.autenticar(cedula, passwordTipeada) }
                 }
                 if (resultado.debeCambiarPassword) {
                     cambioObligatorio = resultado.sesion to passwordTipeada
@@ -103,11 +101,12 @@ class LoginViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    val secreto = secretoStore.cargar() ?: return@withContext
-                    medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
+                    // Sin vincular: nada que sincronizar.
+                    if (!nucleo.nubeConfigurada()) return@withContext
+                    medirNucleo("sincronizarConNube") { nucleo.sincronizarConNube() }
                 }
             } catch (_: NucleoException) {
-                // Sin red, o sin secreto configurado todavía -- no es un
+                // Sin red, o sin vincular todavía -- no es un
                 // error que el login deba mostrar, el pulso periódico
                 // reintenta solo.
             }
@@ -170,11 +169,8 @@ class LoginViewModel(
     }
 
     companion object {
-        fun factory(
-            nucleo: Nucleo,
-            secretoStore: SecretoDispositivoStore,
-        ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { LoginViewModel(nucleo, secretoStore) }
+        fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
+            initializer { LoginViewModel(nucleo) }
         }
     }
 }
