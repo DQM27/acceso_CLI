@@ -22,7 +22,7 @@ Deno.serve(async (req: Request) => {
       .select(
         "id, sitio_id, tipo, etiqueta, created_at, revoked_at, suspended_at, last_seen_at, oculto_en_panel, " +
           "identificador_hardware, nombre_dispositivo, plataforma, version_build, app_version, last_ip, " +
-          "clave_huella, vinculado_en, secret_hash",
+          "clave_huella, vinculado_en",
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -41,11 +41,9 @@ Deno.serve(async (req: Request) => {
   const fallo = sitios.error ?? dispositivos.error ?? codigos.error ?? eventos.error;
   if (fallo) return json({ error: "consulta_error", detail: fallo.message }, 500);
 
-  // `secret_hash` nunca sale de acá: sólo se traduce a la forma en que el
-  // equipo se autentica hoy.
-  const filas = (dispositivos.data as unknown as Record<string, unknown>[]).map(({ secret_hash, ...fila }) => ({
+  const filas = (dispositivos.data as unknown as Record<string, unknown>[]).map((fila) => ({
     ...fila,
-    credencial: fila.clave_huella ? "clave" : secret_hash ? "secreto_legado" : "sin_vincular",
+    credencial: fila.clave_huella ? "clave" : "sin_vincular",
   }));
 
   return json({

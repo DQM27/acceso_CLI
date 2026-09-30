@@ -12,9 +12,9 @@ select set_config('diagnostico.sitio_a', (select id::text from public.sitios whe
        set_config('diagnostico.sitio_b', (select id::text from public.sitios where nombre = 'Diagnóstico B'), true),
        set_config('diagnostico.correo_admin', 'diagnostico-admin@example.com', true);
 
-insert into public.dispositivos (id, sitio_id, tipo, etiqueta, secret_hash) values
-  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico PC A', 'diag-hash-a'),
-  (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, 'pc', 'Diagnóstico PC B', 'diag-hash-b');
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, clave_publica_jwk, clave_huella) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico PC A', '{"kty":"EC"}', 'diag-huella-a'),
+  (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, 'pc', 'Diagnóstico PC B', '{"kty":"EC"}', 'diag-huella-b');
 
 select set_config('diagnostico.dispositivo_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico PC A'), true),
        set_config('diagnostico.dispositivo_b', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico PC B'), true);
@@ -25,9 +25,9 @@ insert into public.administradores_panel (correo) values (current_setting('diagn
 -- política restrictiva "solo dispositivos vigentes" exige que el token sea
 -- de un dispositivo real y activo (ver dispositivos_vigentes_y_vinculacion.sql).
 -- Sin esto, los casos negativos pasarían por esa política y no por la de sitio.
-insert into public.dispositivos (id, sitio_id, tipo, etiqueta, secret_hash) values
-  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico JWT A', 'diag-hash-jwt-a'),
-  (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, 'pc', 'Diagnóstico JWT B', 'diag-hash-jwt-b');
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, clave_publica_jwk, clave_huella) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico JWT A', '{"kty":"EC"}', 'diag-huella-jwt-a'),
+  (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, 'pc', 'Diagnóstico JWT B', '{"kty":"EC"}', 'diag-huella-jwt-b');
 select set_config('diagnostico.jwt_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT A'), true),
        set_config('diagnostico.jwt_b', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT B'), true);
 
@@ -35,7 +35,7 @@ set local role authenticated;
 
 -- Un dispositivo del sitio A puede crear un contratista EN su propio sitio.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_a'), 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_a'), 'huella', 'diag-huella-jwt-a', 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
   true);
 do $$
 begin
@@ -64,7 +64,7 @@ end $$;
 -- decide acotar esto por sitio, este test tiene que actualizarse junto con
 -- la política.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_b'), 'sitio_id', current_setting('diagnostico.sitio_b'))::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_b'), 'huella', 'diag-huella-jwt-b', 'sitio_id', current_setting('diagnostico.sitio_b'))::text,
   true);
 do $$
 begin

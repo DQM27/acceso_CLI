@@ -15,12 +15,13 @@
 -- 3. De ahí en adelante `device-auth` autentica al equipo verificando una
 --    aserción firmada con la clave privada, que nunca sale del equipo.
 --
--- `secret_hash` pasa a ser opcional: sólo lo conservan los equipos que
--- todavía no migraron (camino legado de `device-auth`). Al vincular o migrar
--- se pone en NULL, y ese secreto deja de servir para siempre.
+-- Sin camino legado (decisión explícita: todos los equipos se reinstalan y
+-- se vinculan con código): se elimina `secret_hash`. Un dispositivo que ya
+-- existía queda "sin vincular" hasta que el panel le emita un código con
+-- "Re-vincular"; conserva su `id` y todo su historial.
 
 alter table public.dispositivos
-  alter column secret_hash drop not null,
+  drop column if exists secret_hash,
   add column if not exists clave_publica_jwk jsonb,
   add column if not exists vinculado_en timestamptz;
 
@@ -136,7 +137,6 @@ begin
   update public.dispositivos d
      set clave_publica_jwk = p_clave_publica_jwk,
          clave_huella = p_clave_huella,
-         secret_hash = null,
          vinculado_en = pg_catalog.now(),
          last_seen_at = pg_catalog.now(),
          last_ip = p_ip,

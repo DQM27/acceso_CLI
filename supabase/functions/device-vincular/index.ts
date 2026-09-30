@@ -86,7 +86,7 @@ Deno.serve(async (req: Request) => {
     tipo: vinculado.tipo,
     clave_huella: huella,
   });
-  return json({ ...token, clave_registrada: true });
+  return json(token);
 });
 
 /** Averigua por qué no se pudo canjear y lo deja registrado. */

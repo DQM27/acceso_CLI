@@ -10,7 +10,8 @@
 --    del equipo; la usa la migración siguiente). Se crea acá porque
 --    `private.dispositivo_vigente()` ya la compara contra el claim `huella`
 --    del JWT: un equipo re-vinculado deja inválido al instante el token del
---    equipo anterior, aunque compartan `dispositivo_id`.
+--    equipo anterior, aunque compartan `dispositivo_id`. Un token sin
+--    `huella` (o un dispositivo sin clave) nunca es vigente.
 -- 2. `private.dispositivo_vigente()` y una política RESTRICTIVA
 --    "solo dispositivos vigentes" en cada tabla de `public` con RLS. Las
 --    políticas restrictivas se combinan con AND sobre las permisivas que ya
@@ -51,7 +52,7 @@ as $$
       where d.id = ((select auth.jwt()) ->> 'sub')::uuid
         and d.revoked_at is null
         and d.suspended_at is null
-        and d.clave_huella is not distinct from ((select auth.jwt()) ->> 'huella')
+        and d.clave_huella = ((select auth.jwt()) ->> 'huella')
     )
   end
 $$;

@@ -5,30 +5,24 @@ import { enSegundoPlano, ipDelCliente, json, leerCuerpo, preflight } from "../_s
 import {
   TTL_DESAFIO_SEGUNDOS,
   asercionValida,
-  clavePublicaValida,
   emitirDesafio,
   emitirTokenDispositivo,
-  huellaClave,
   metadataSaneada,
   registrarEvento,
-  sha256Hex,
   type ClavePublicaP256,
   type MetadatosDispositivo,
 } from "../_shared/dispositivos.ts";
 
-// Autentica un dispositivo y le emite su token de sesión. Tres formas de
-// llamarla (ver docs/features-futuras/propuesta-registro-dispositivos.md):
+// Autentica un dispositivo ya vinculado (ver device-vincular) y le emite su
+// token de sesión. Dos pasos (ver
+// docs/features-futuras/propuesta-registro-dispositivos.md):
 //
-// 1. `{ "desafio": true }` → `{ desafio, expires_in }`. Primer paso del
-//    camino con clave.
+// 1. `{ "desafio": true }` → `{ desafio, expires_in }`.
 // 2. `{ "asercion": "<JWS>", "metadata"? }` → token. El equipo firma el
 //    desafío con su clave privada (ES256, `kid` = huella RFC 7638 de su clave
-//    pública, `aud` = "device-auth"). Es el camino normal.
-// 3. `{ "secret": "...", "clave_publica_jwk"?, "metadata"? }` → token.
-//    Camino LEGADO para equipos que todavía tienen el secreto de antes. Si
-//    trae `clave_publica_jwk`, el equipo queda migrado en la misma llamada:
-//    se guarda su clave, el secreto deja de servir y la respuesta trae
-//    `clave_registrada: true`.
+//    pública, `aud` = "device-auth").
+//
+// No existe otro camino: no hay secretos compartidos.
 //
 // Pública a propósito (`verify_jwt = false`): es la puerta de entrada.
 
@@ -79,25 +73,9 @@ Deno.serve(async (req: Request) => {
   const ip = ipDelCliente(req);
   const metadata = metadataSaneada(cuerpo.metadata);
 
-  let dispositivo: FilaDispositivo;
-  let claveRegistrada = false;
-
-  if (typeof cuerpo.asercion === "string") {
-    const resultado = await autenticarConAsercion(supabase, cuerpo.asercion, ip);
-    if (!resultado) return credencialesInvalidas();
-    dispositivo = resultado;
-  } else if (typeof cuerpo.secret === "string" && cuerpo.secret) {
-    const { data } = await supabase
-      .from("dispositivos")
-      .select(COLUMNAS)
-      .eq("secret_hash", await sha256Hex(cuerpo.secret))
-      .is("revoked_at", null)
-      .maybeSingle<FilaDispositivo>();
-    if (!data) return credencialesInvalidas();
-    dispositivo = data;
-  } else {
-    return json({ error: "bad_request" }, 400);
-  }
+  if (typeof cuerpo.asercion !== "string") return json({ error: "bad_request" }, 400);
+  const dispositivo = await autenticarConAsercion(supabase, cuerpo.asercion, ip);
+  if (!dispositivo) return credencialesInvalidas();
 
   // Suspensión temporal: el dispositivo existe y su credencial es válida,
   // pero un admin lo bloqueó hasta reactivarlo.
@@ -113,37 +91,9 @@ Deno.serve(async (req: Request) => {
     return json({ error: "version_desactualizada", version_minima: VERSION_MINIMA_ACEPTADA }, 426);
   }
 
-  // Migración del camino legado: sólo si el equipo todavía no tiene clave.
-  // El `is("clave_huella", null)` evita pisar una clave ya vinculada si dos
-  // llamadas legadas llegan a la vez.
-  if (typeof cuerpo.secret === "string" && !dispositivo.clave_huella && cuerpo.clave_publica_jwk) {
-    const clave = await clavePublicaValida(cuerpo.clave_publica_jwk);
-    if (!clave) return json({ error: "clave_publica_invalida" }, 400);
-    const huella = await huellaClave(clave);
-    const { data: migrado, error } = await supabase
-      .from("dispositivos")
-      .update({
-        clave_publica_jwk: clave,
-        clave_huella: huella,
-        secret_hash: null,
-        vinculado_en: new Date().toISOString(),
-      })
-      .eq("id", dispositivo.id)
-      .is("clave_huella", null)
-      .select(COLUMNAS)
-      .maybeSingle<FilaDispositivo>();
-    if (error?.code === "23505") return json({ error: "clave_en_uso" }, 409);
-    if (error) return json({ error: "migracion_error", detail: error.message }, 500);
-    if (migrado) {
-      dispositivo = migrado;
-      claveRegistrada = true;
-    }
-  }
-
   enSegundoPlano(actualizarRastro(supabase, dispositivo, metadata, ip));
 
-  const token = await emitirTokenDispositivo(dispositivo);
-  return json({ ...token, clave_registrada: claveRegistrada });
+  return json(await emitirTokenDispositivo(dispositivo));
 });
 
 async function autenticarConAsercion(
