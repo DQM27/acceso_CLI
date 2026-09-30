@@ -24,6 +24,19 @@
 -- un alta; no hay ninguna en uso porque todos los equipos se reinstalan con
 -- el registro de dispositivos por código.
 
+-- Alta desde cualquier equipo -----------------------------------------------
+-- Va antes de borrar la columna: las políticas viejas dependen de `sitio_id`.
+
+drop policy if exists "crear contratistas del propio sitio" on public.contratistas;
+create policy "crear contratistas (global)" on public.contratistas
+  for insert to authenticated
+  with check (((select auth.jwt()) ->> 'sitio_id') is not null);
+
+drop policy if exists "crear empresas del propio sitio" on public.empresas;
+create policy "crear empresas (global)" on public.empresas
+  for insert to authenticated
+  with check (((select auth.jwt()) ->> 'sitio_id') is not null);
+
 alter table public.contratistas drop column sitio_id;
 alter table public.empresas drop column sitio_id;
 
@@ -83,18 +96,6 @@ drop trigger if exists empresas_emitir_cambio_nube on public.empresas;
 create trigger empresas_emitir_cambio_nube
   after insert or update or delete on public.empresas
   for each row execute function private.emitir_cambio_nube_global();
-
--- Alta desde cualquier equipo -----------------------------------------------
-
-drop policy if exists "crear contratistas del propio sitio" on public.contratistas;
-create policy "crear contratistas (global)" on public.contratistas
-  for insert to authenticated
-  with check (((select auth.jwt()) ->> 'sitio_id') is not null);
-
-drop policy if exists "crear empresas del propio sitio" on public.empresas;
-create policy "crear empresas (global)" on public.empresas
-  for insert to authenticated
-  with check (((select auth.jwt()) ->> 'sitio_id') is not null);
 
 -- El panel crea sin unidad --------------------------------------------------
 

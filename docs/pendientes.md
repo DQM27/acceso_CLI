@@ -182,7 +182,7 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   sigue. Producción (`xidaepyaljzkpbsxrqsm`) no se tocó: sólo consultas de lectura.
   Todo lo de arriba fechado 2026-09-30 está aplicado y probado sólo en staging
   (`pmrytjktlyiuikxuuxpr`). Queda, en este orden:
-  1. [ ] Alinear versiones de migración (entrada siguiente).
+  1. [x] Alinear versiones de migración (ver "Versiones de migración alineadas").
   2. [ ] Compilar builds de diagnóstico nuevos (Android y escritorio, contra
      staging) y probar con equipos: los instalados ya no sirven porque mandaban
      `sitio_id` en contratistas/empresas/usuarios, creaban usuarios y el celular
@@ -210,15 +210,37 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   correo de `administradores_panel`) y terminar con `raise exception` con los
   resultados: el error revierte todo. Medir siempre bajo RLS, no como `postgres`
   (como superusuario los índices de `like` sí se usan y los tiempos engañan).
-- [ ] **Versiones de migración desalineadas con staging.** Las migraciones aplicadas
-  con el MCP quedaron registradas con la hora de aplicación, no con la del archivo.
-  Alinear `supabase_migrations.schema_migrations` antes de usar `supabase db push`.
-  Ojo: en staging dos archivos se aplicaron en varios pasos que no existen como
-  archivo. `20260930120100_catalogo_global_sin_unidad` = `catalogo_global_sin_unidad`
-  + `catalogo_global_quita_sitio_id`. `20260930120400_historial_busqueda_indexada` =
-  `historial_busqueda_indexada` + `historial_busqueda_cedula_y_nombre` +
-  `panel_buscar_movimientos` + `panel_movimientos_sin_hora_txt`. El esquema final de
-  staging coincide con los archivos; sólo hay que dejar una versión por archivo.
+- [x] **Versiones de migración alineadas** (2026-09-30).
+  - Producción: sus 82 migraciones son exactamente los primeros 82 archivos del repo
+    (misma versión y nombre). Quedan pendientes para producción los 14 archivos desde
+    `20260929200000_revocacion_efectiva_dispositivos` hasta
+    `20260930120500_vistas_estado_y_adentro`.
+  - Probadas en limpio: las 96 migraciones se aplicaron en orden sobre un Postgres 16
+    local con un andamiaje mínimo de Supabase (roles, `auth`, `realtime`, `net`). El
+    esquema resultante coincide con staging (columnas, índices, políticas,
+    restricciones y código de funciones; sólo difieren objetos de otras ramas).
+  - Error encontrado y corregido: `catalogo_global_sin_unidad` borraba `sitio_id`
+    antes de quitar la política que dependía de la columna. En staging no se vio
+    porque se aplicó en dos pasos; en producción habría fallado.
+  - Staging: cada archivo del repo desde el 19 de septiembre tiene una fila con su
+    versión y nombre (los pasos parciales se unieron conservando su SQL). Respaldo
+    del historial anterior en `supabase_migrations.schema_migrations_respaldo_20260930`.
+    Siguen filas sin archivo en este repo: los lotes con los que se armó staging
+    (`lote_00`..`lote_04`, `fix_orden_esquema_private_antes_de_hora`) y cambios de
+    otras ramas (`rutas_documento_tramo_viaje*`, `rediseno_visitas_*`,
+    `optimiza_rls_e_indices_de_visitas`, `crea/revierte_personas_vetadas`).
+- [ ] **Dos objetos de producción que no están en ninguna migración** (hallado
+  2026-09-30 al aplicar el repo en limpio). No afectan a producción, que ya los tiene,
+  pero una base nueva armada sólo desde el repo falla sin ellos:
+  - La política `"dispositivos reciben broadcast de su sitio"` sobre
+    `realtime.messages`: `20260905091122_corregir_autorizacion_realtime` la modifica con
+    `alter policy`, pero ninguna migración la crea.
+  - El esquema `private`: se usa desde `20260906044549_avisa_cambio_nube_...`, pero se
+    crea en `20260912011504_documenta_creacion_esquema_private`.
+  Arreglo propuesto: una migración nueva al principio no sirve (ya están aplicadas).
+  Lo correcto es documentarlo en `docs/recuperacion-supabase.md` como paso previo al
+  restaurar desde cero, o agregar `create schema if not exists private` y la creación
+  de la política con `if not exists` en las migraciones más tempranas que los usan.
 - [x] **Test SQL `administradores_panel_autorizacion.sql` desactualizado.** Esperaba que
   un admin_global pudiera insertar/borrar en `administradores_panel`, pero la migración
   `20260909192636_retira_escritura_directa_de_administradores_panel` quitó esas
