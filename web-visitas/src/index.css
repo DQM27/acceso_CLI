@@ -69,6 +69,12 @@ svg {
   outline: 2px solid var(--acento);
   outline-offset: 2px;
 }
+/* El contenido recibe foco por código al cambiar de pantalla (para lectores
+   de pantalla); no es un control, así que no lleva borde. */
+#contenido:focus,
+#contenido:focus-visible {
+  outline: none;
+}
 .sr-only {
   position: absolute;
   width: 1px;
