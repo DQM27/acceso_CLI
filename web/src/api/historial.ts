@@ -72,6 +72,122 @@ export async function listarUnidadesOperativas(): Promise<UnidadOperativa[]> {
   return z.array(filaSitioEsquema).parse(data);
 }
 
+// --- Paginación en el servidor -------------------------------------------
+//
+// Lee la vista `panel_movimientos` (migración `vista_panel_movimientos`): la
+// fila ya viene plana (unidad y dispositivo incluidos) y con `texto_busqueda`
+// sin tildes ni mayúsculas, así el servidor ordena, filtra y pagina. El
+// navegador sólo recibe la página que se ve, sin importar cuántas unidades
+// ni cuántos años de datos haya.
+
+/** Campos por los que se puede ordenar en el servidor (columnas de la vista).
+ * Lista cerrada a propósito: el campo llega de la interfaz. */
+export const CAMPOS_ORDENABLES = [
+  "sitio_nombre",
+  "contratista_cedula",
+  "contratista_nombre",
+  "empresa_nombre",
+  "dispositivo_entrada_tipo",
+  "tipo_ingreso",
+  "medio_ingreso",
+  "gafete_numero",
+  "hora_entrada",
+  "hora_salida",
+  "usuario_entrada_nombre",
+  "usuario_salida_nombre",
+] as const;
+
+export type CampoOrdenable = (typeof CAMPOS_ORDENABLES)[number];
+
+export interface ConsultaMovimientos {
+  desde?: string;
+  hasta?: string;
+  /** `undefined` = todas las unidades; lista vacía = ninguna (cero filas). */
+  sitioIds?: string[];
+  busqueda?: string;
+  orden?: { campo: CampoOrdenable; descendente: boolean };
+  /** Base 0. */
+  pagina: number;
+  tamano: number;
+}
+
+export interface PaginaMovimientos {
+  filas: MovimientoHistorial[];
+  /** Total de filas que cumplen el filtro (todas las páginas). */
+  total: number;
+}
+
+/** Igual que `public.plegar_texto` en la base: sin tildes y en minúsculas
+ * (la ñ queda como n, igual que `unaccent`). */
+export function plegarTexto(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
+
+/** Palabras de la búsqueda, ya plegadas y con `\`, `%` y `_` escapados para
+ * `like` (una cédula o un nombre nunca se interpretan como comodines). Cada
+ * palabra debe aparecer (en cualquier orden) en `texto_busqueda`. */
+export function palabrasDeBusqueda(busqueda: string): string[] {
+  return plegarTexto(busqueda)
+    .split(/\s+/)
+    .filter((palabra) => palabra.length > 0)
+    .map((palabra) => palabra.replace(/[\\%_]/g, "\\$&"));
+}
+
+const COLUMNAS_MOVIMIENTO =
+  "id, sitio_id, sitio_nombre, contratista_cedula, contratista_nombre, empresa_nombre, " +
+  "tipo_ingreso, medio_ingreso, gafete_numero, hora_entrada, hora_salida, " +
+  "usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_tipo";
+
+const movimientoEsquema = z.object({
+  id: z.string(),
+  sitio_id: z.string(),
+  sitio_nombre: z.string().nullable(),
+  contratista_cedula: z.string().nullable(),
+  contratista_nombre: z.string(),
+  empresa_nombre: z.string().nullable(),
+  tipo_ingreso: z.string().nullable(),
+  medio_ingreso: z.string().nullable(),
+  gafete_numero: z.number().nullable(),
+  hora_entrada: z.string(),
+  hora_salida: z.string().nullable(),
+  usuario_entrada_nombre: z.string().nullable(),
+  usuario_salida_nombre: z.string().nullable(),
+  dispositivo_entrada_tipo: z.string().nullable(),
+});
+
+export async function listarMovimientosPagina(consulta: ConsultaMovimientos): Promise<PaginaMovimientos> {
+  const { desde, hasta, sitioIds, busqueda, orden, pagina, tamano } = consulta;
+  const primera = pagina * tamano;
+
+  let peticion = supabase
+    .from("panel_movimientos")
+    .select(COLUMNAS_MOVIMIENTO, { count: "exact" })
+    .order(orden?.campo ?? "hora_entrada", {
+      ascending: !(orden?.descendente ?? true),
+      nullsFirst: false,
+    })
+    // Desempate estable: sin él, dos filas con el mismo valor pueden repetirse
+    // o saltarse entre una página y la siguiente.
+    .order("id")
+    .range(primera, primera + tamano - 1);
+
+  // Mismo criterio de día calendario de Costa Rica que `listarHistorial`.
+  if (desde) peticion = peticion.gte("hora_entrada", inicioDiaCostaRicaUtc(desde));
+  if (hasta) peticion = peticion.lt("hora_entrada", inicioDiaSiguienteCostaRicaUtc(hasta));
+  if (sitioIds) peticion = peticion.in("sitio_id", sitioIds);
+  for (const palabra of palabrasDeBusqueda(busqueda ?? "")) {
+    peticion = peticion.like("texto_busqueda", `%${palabra}%`);
+  }
+
+  const { data, error, count } = await peticion;
+  if (error) throw new Error(error.message);
+  const filas = z.array(movimientoEsquema).parse(data);
+  return { filas, total: count ?? filas.length };
+}
+
 export interface ResultadoHistorial {
   filas: MovimientoHistorial[];
   /** `true` si el rango pedido tiene más filas que `LIMITE_HISTORIAL` -- ver

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { listarHistorial, listarUnidadesOperativas } from "./historial";
+import {
+  listarHistorial,
+  listarMovimientosPagina,
+  listarUnidadesOperativas,
+  palabrasDeBusqueda,
+  plegarTexto,
+} from "./historial";
 
 function mockConsulta(resultado: { data: unknown; error: unknown; count: number | null }) {
   const encadenable: Record<string, unknown> = {
@@ -135,6 +141,119 @@ describe("listarHistorial", () => {
 
     await listarHistorial(undefined, undefined, []);
     expect(encadenable.in).toHaveBeenCalledWith("sitio_id", []);
+  });
+});
+
+describe("plegarTexto / palabrasDeBusqueda", () => {
+  it("quita tildes, pasa a minúsculas y trata la ñ como n (igual que unaccent en la base)", () => {
+    expect(plegarTexto("José Ñandú")).toBe("jose nandu");
+  });
+
+  it("separa por espacios, ignora vacíos y escapa \\, % y _ para like", () => {
+    expect(palabrasDeBusqueda("  Pérez   100%_x  ")).toEqual(["perez", "100\\%\\_x"]);
+    expect(palabrasDeBusqueda("   ")).toEqual([]);
+  });
+});
+
+describe("listarMovimientosPagina", () => {
+  function encadenableConLike(resultado: { data: unknown; error: unknown; count: number | null }) {
+    const encadenable = mockConsulta(resultado);
+    encadenable.like = vi.fn(() => encadenable);
+    return encadenable;
+  }
+
+  function filaVista(sobrescribir: Record<string, unknown> = {}) {
+    const base: Record<string, unknown> = { ...filaCruda() };
+    delete base.sitios;
+    delete base.dispositivo_entrada;
+    return { ...base, sitio_nombre: "Brisas", dispositivo_entrada_tipo: "pc", ...sobrescribir };
+  }
+
+  it("lee la vista panel_movimientos y devuelve la página con el total de todas las páginas", async () => {
+    const encadenable = encadenableConLike({ data: [filaVista()], error: null, count: 4321 });
+    mocks.from.mockReturnValue(encadenable);
+
+    const resultado = await listarMovimientosPagina({ pagina: 0, tamano: 100 });
+
+    expect(mocks.from).toHaveBeenCalledWith("panel_movimientos");
+    expect(resultado.total).toBe(4321);
+    expect(resultado.filas).toHaveLength(1);
+    expect(resultado.filas[0].sitio_nombre).toBe("Brisas");
+  });
+
+  it("pide sólo el tramo de la página (base 0) y ordena por hora_entrada descendente con desempate por id", async () => {
+    const encadenable = encadenableConLike({ data: [], error: null, count: 0 });
+    mocks.from.mockReturnValue(encadenable);
+
+    await listarMovimientosPagina({ pagina: 2, tamano: 50 });
+
+    expect(encadenable.range).toHaveBeenCalledWith(100, 149);
+    expect(encadenable.order).toHaveBeenNthCalledWith(1, "hora_entrada", {
+      ascending: false,
+      nullsFirst: false,
+    });
+    expect(encadenable.order).toHaveBeenNthCalledWith(2, "id");
+  });
+
+  it("respeta el orden pedido", async () => {
+    const encadenable = encadenableConLike({ data: [], error: null, count: 0 });
+    mocks.from.mockReturnValue(encadenable);
+
+    await listarMovimientosPagina({
+      pagina: 0,
+      tamano: 50,
+      orden: { campo: "empresa_nombre", descendente: false },
+    });
+
+    expect(encadenable.order).toHaveBeenNthCalledWith(1, "empresa_nombre", {
+      ascending: true,
+      nullsFirst: false,
+    });
+  });
+
+  it("aplica fechas (Costa Rica), unidades y una condición like por cada palabra de la búsqueda", async () => {
+    const encadenable = encadenableConLike({ data: [], error: null, count: 0 });
+    mocks.from.mockReturnValue(encadenable);
+
+    await listarMovimientosPagina({
+      desde: "2026-09-09",
+      hasta: "2026-09-09",
+      sitioIds: ["s1"],
+      busqueda: "José Pérez",
+      pagina: 0,
+      tamano: 50,
+    });
+
+    expect(encadenable.gte).toHaveBeenCalledWith("hora_entrada", "2026-09-09T00:00:00-06:00");
+    expect(encadenable.lt).toHaveBeenCalledWith("hora_entrada", "2026-09-10T00:00:00-06:00");
+    expect(encadenable.in).toHaveBeenCalledWith("sitio_id", ["s1"]);
+    expect(encadenable.like).toHaveBeenCalledTimes(2);
+    expect(encadenable.like).toHaveBeenCalledWith("texto_busqueda", "%jose%");
+    expect(encadenable.like).toHaveBeenCalledWith("texto_busqueda", "%perez%");
+  });
+
+  it("sin filtros no manda gte, lt, in ni like", async () => {
+    const encadenable = encadenableConLike({ data: [], error: null, count: 0 });
+    mocks.from.mockReturnValue(encadenable);
+
+    await listarMovimientosPagina({ pagina: 0, tamano: 50 });
+
+    expect(encadenable.gte).not.toHaveBeenCalled();
+    expect(encadenable.lt).not.toHaveBeenCalled();
+    expect(encadenable.in).not.toHaveBeenCalled();
+    expect(encadenable.like).not.toHaveBeenCalled();
+  });
+
+  it("propaga el error como Error real y rechaza filas con forma inesperada", async () => {
+    mocks.from.mockReturnValue(
+      encadenableConLike({ data: null, error: { message: "timeout" }, count: null }),
+    );
+    await expect(listarMovimientosPagina({ pagina: 0, tamano: 50 })).rejects.toThrow("timeout");
+
+    mocks.from.mockReturnValue(
+      encadenableConLike({ data: [filaVista({ gafete_numero: "12" })], error: null, count: 1 }),
+    );
+    await expect(listarMovimientosPagina({ pagina: 0, tamano: 50 })).rejects.toThrow();
   });
 });
 
