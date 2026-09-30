@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Caché de compilación de TypeScript (`tsc -b`).
+*.tsbuildinfo
