@@ -615,6 +615,7 @@ pub struct IngresoRemoto {
     pub contratista_nombre: String,
     pub hora_entrada: String,
     pub usuario_entrada_nombre: Option<String>,
+    pub contratista_cedula: Option<String>,
     pub empresa_nombre: Option<String>,
     /// Necesario para la salida por gafete: sin él, un ingreso con gafete
     /// registrado en otro dispositivo (la PC del puesto de control) no se
@@ -629,6 +630,7 @@ impl From<IngresoRemotoNucleo> for IngresoRemoto {
             contratista_nombre: remoto.contratista_nombre,
             hora_entrada: remoto.hora_entrada,
             usuario_entrada_nombre: remoto.usuario_entrada_nombre,
+            contratista_cedula: remoto.contratista_cedula,
             empresa_nombre: remoto.empresa_nombre,
             gafete_numero: remoto.gafete_numero,
         }
