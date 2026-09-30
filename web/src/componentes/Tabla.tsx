@@ -3,17 +3,25 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import type { ReactNode } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
+import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
+import { Columns3, Funnel, RotateCcw, UnfoldHorizontal } from "lucide-react";
 import type {
   ColDef,
   ColumnMovedEvent,
   ColumnPinnedEvent,
   ColumnResizedEvent,
   ColumnState,
+  GetRowIdParams,
   GridReadyEvent,
+  IDatasource,
+  IGetRowsParams,
   SortChangedEvent,
+  TextMatcherParams,
 } from "ag-grid-community";
 import { useUsuarioId } from "../contexto/SesionContexto";
 import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
+import FiltroFechaTabla from "./FiltroFechaTabla";
+import { compararFechaYMD, textoTooltip } from "./Tabla.logica";
 import { useDebounced } from "./useDebounced";
 
 /**
@@ -42,6 +50,60 @@ const temaBrisas = themeQuartz.withParams({
   wrapperBorderRadius: "var(--radio)",
 });
 
+/** Sin tildes y en mayúsculas -- mismo criterio de "sin tildes/mayúsculas no
+ * importa" que el buscador del núcleo. El `quickFilterText` propio de AG Grid
+ * sólo hace `.toUpperCase()`, sin tocar diacríticos: buscar "Sanches" no
+ * encontraba a "Sánchez". */
+function plegar(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase();
+}
+
+/** `quickFilterParser`/`quickFilterMatcher`: el parser pliega cada palabra
+ * tecleada, el matcher pliega el texto agregado de la fila antes de comparar.
+ * Mismo AND implícito que el default de AG Grid: todas las palabras tienen
+ * que aparecer en algún lado de la fila. */
+function quickFilterParser(texto: string): string[] {
+  return plegar(texto)
+    .split(" ")
+    .filter((parte) => parte.length > 0);
+}
+
+function quickFilterMatcher(partes: string[], textoFila: string): boolean {
+  const plegado = plegar(textoFila);
+  return partes.every((parte) => plegado.includes(parte));
+}
+
+/** Lo mismo que el quick filter, pero en el filtro POR COLUMNA de texto (código
+ * aparte dentro de AG Grid): sin tildes y, en "contiene", por palabras. Sólo
+ * cuenta en las tablas que filtran en el navegador; las de servidor filtran en
+ * la base con las mismas reglas (`api/historialFiltros.ts`). */
+function textMatcher({ filterOption, value, filterText }: TextMatcherParams): boolean {
+  if (filterText == null) return true;
+  const valorPlegado = plegar(String(value ?? ""));
+  const textoPlegado = plegar(filterText);
+  switch (filterOption) {
+    case "notContains":
+      return !valorPlegado.includes(textoPlegado);
+    case "equals":
+      return valorPlegado === textoPlegado;
+    case "notEqual":
+      return valorPlegado !== textoPlegado;
+    case "startsWith":
+      return valorPlegado.startsWith(textoPlegado);
+    case "endsWith":
+      return valorPlegado.endsWith(textoPlegado);
+    case "contains":
+    default:
+      return textoPlegado
+        .split(" ")
+        .filter((parte) => parte.length > 0)
+        .every((parte) => valorPlegado.includes(parte));
+  }
+}
+
 const columnaPorDefecto: ColDef = {
   sortable: true,
   resizable: true,
@@ -52,14 +114,35 @@ const columnaPorDefecto: ColDef = {
   // centrado igual, sólo el dato cambia).
   headerClass: "columna-centrada",
   cellStyle: { textAlign: "center" },
+  // Texto completo al pasar el mouse, pero sólo en celdas cortadas
+  // ("KAREN DE LOS ANGELE…") -- ver `tooltipShowMode="whenTruncated"`.
+  tooltipValueGetter: textoTooltip,
 };
 
 const MENSAJE_SIN_FILAS = `<span style="color: var(--muted); font-size: 0.9rem;">Sin resultados</span>`;
+
+/** `type: "fecha"` / `type: "numero"` en la definición de una columna: filtro de
+ * fecha (antes, después, entre...) o de número (mayor que, menor que...) en vez
+ * del de texto. Sólo aplica con los filtros por columna visibles. */
+const FILTRO_FECHA: ColDef = {
+  filter: "agDateColumnFilter",
+  dateComponent: FiltroFechaTabla,
+  filterParams: {
+    comparator: compararFechaYMD,
+    inRangeFloatingFilterDateFormat: "DD/MM/YYYY",
+  },
+};
+
+const FILTRO_NUMERO: ColDef = {
+  filter: "agNumberColumnFilter",
+  filterParams: {},
+};
 
 const columnaPorDefectoConFiltro: ColDef = {
   ...columnaPorDefecto,
   filter: true,
   floatingFilter: true,
+  filterParams: { textMatcher },
 };
 
 export interface EstadoGuardado {
@@ -105,17 +188,45 @@ export function identidad(columna: ColDef<unknown>): string | undefined {
   return undefined;
 }
 
+/** Orden elegido en la grilla (una sola columna). */
+export interface OrdenTabla {
+  colId: string;
+  descendente: boolean;
+}
+
+/** Lo que la grilla le pide al servidor: un tramo de filas con su orden y sus
+ * filtros por columna (el `getFilterModel()` de AG Grid). */
+export interface PeticionPagina {
+  inicio: number;
+  cantidad: number;
+  orden: OrdenTabla | null;
+  filtros: Record<string, unknown>;
+}
+
+/** Tabla paginada en el servidor (modelo de filas infinito de AG Grid): la
+ * grilla no filtra ni ordena filas en el navegador, sino que pide cada página
+ * ya filtrada y ordenada. */
+export interface OrigenServidor<T> {
+  tamanoPagina: number;
+  cargarPagina: (peticion: PeticionPagina) => Promise<{ filas: T[]; total: number }>;
+  /** Una página no se pudo traer (la grilla queda con esa página vacía). */
+  alFallar: (error: unknown) => void;
+}
+
 export interface TablaProps<T> {
   columnas: ColDef<T>[];
-  filas: T[];
+  /** Filas que la tabla tiene cargadas. No se usa con `origenServidor`. */
+  filas?: T[];
   /** Controles propios de la pantalla (ej. buscador, "+ Nuevo…") — se
-   * muestran en la misma línea que "Columnas ▾", a la izquierda. */
+   * muestran en la misma línea que el grupo de íconos de columnas, a la
+   * izquierda. */
   controles?: ReactNode;
-  /** Igual que `controles`, pero a la derecha, junto a "Columnas ▾". */
+  /** Igual que `controles`, pero a la derecha, junto al grupo de columnas. */
   accionesDerecha?: ReactNode;
   /** Texto de búsqueda global (una sola caja, busca en todas las columnas)
    * — alternativa a `filtrosPorColumna` para listas donde un filtro por
-   * columna es más de lo que hace falta. */
+   * columna es más de lo que hace falta. Sólo en tablas que filtran en el
+   * navegador. */
   busqueda?: string;
   /** Checkbox por fila + checkbox de encabezado para seleccionar varias a la
    * vez. */
@@ -130,11 +241,11 @@ export interface TablaProps<T> {
   /** Filtro por columna (fila de filtros bajo el encabezado) en vez del
    * `controles` propio de la pantalla. */
   filtrosPorColumna?: boolean;
-  /** El orden lo resuelve el servidor (la tabla sólo muestra UNA página de
-   * un conjunto mayor): al ordenar una columna la grilla no reordena las filas
-   * que tiene, sino que avisa por `onOrdenCambia` para pedir la página ya
-   * ordenada. `null` = sin orden elegido. */
-  onOrdenCambia?: (orden: { colId: string; descendente: boolean } | null) => void;
+  /** Identidad estable de cada fila (obligatoria en la práctica con
+   * `origenServidor`: al refrescar, AG Grid reconoce la misma fila). */
+  idFila?: (fila: T) => string;
+  /** Paginación y filtros en el servidor, ver `OrigenServidor`. */
+  origenServidor?: OrigenServidor<T>;
   /** Identificador estable de esta grilla. Habilita persistir en
    * localStorage el orden, ancho, orden de columnas (sort) y cuáles están
    * ocultas. */
@@ -143,13 +254,22 @@ export interface TablaProps<T> {
 
 /** Mango imperativo opcional (`ref`) para que la pantalla pida datos que
  * viven adentro de la grilla sin tener que duplicar su estado — hoy "las
- * filas que quedaron visibles tras el filtro por columna" y "qué columnas
- * están visibles ahora". */
+ * filas que quedaron visibles tras el filtro por columna", "qué columnas
+ * están visibles ahora" y, en tablas de servidor, el filtro y el orden
+ * vigentes para exportar exactamente lo que se ve. */
 export interface TablaHandle<T> {
   filasFiltradas: () => T[];
   /** Identidades (`colId`/`field`) de las columnas visibles ahora mismo, en
    * el orden real de la grilla. */
   columnasVisibles: () => string[];
+  /** Tablas de servidor: vuelve a pedir la página actual (ej. llegó un cambio
+   * por Realtime), o desde la primera con `desdeElInicio` (ej. cambió el
+   * rango de fechas o la búsqueda de la pantalla). */
+  refrescar: (desdeElInicio?: boolean) => void;
+  /** Modelo de filtros por columna vigente (`getFilterModel()`). */
+  modeloFiltros: () => Record<string, unknown>;
+  /** Columna y dirección del orden vigente, o `null`. */
+  orden: () => OrdenTabla | null;
 }
 
 function TablaBase<T>(
@@ -164,7 +284,8 @@ function TablaBase<T>(
     onCeldaEditada,
     onFilaDobleClic,
     filtrosPorColumna,
-    onOrdenCambia,
+    idFila,
+    origenServidor,
     id,
   }: TablaProps<T>,
   ref: React.ForwardedRef<TablaHandle<T>>,
@@ -173,9 +294,9 @@ function TablaBase<T>(
   const idGrilla = idPorUsuario(id, usuarioId);
   // AG Grid recalcula el quickFilter sobre TODAS las filas cargadas
   // (client-side, ver el doc-comment de `busqueda` arriba) en cada
-  // pulsación -- con un dataset grande (historial, contratistas) eso es
-  // trabajo real por tecla. El input en sí (lo que la persona ve mientras
-  // escribe) no se debounce -- sólo lo que le llega a AG Grid.
+  // pulsación -- con un dataset grande eso es trabajo real por tecla. El
+  // input en sí (lo que la persona ve mientras escribe) no se debounce --
+  // sólo lo que le llega a AG Grid.
   const busquedaDebounced = useDebounced(busqueda, 250);
   const [ocultas, setOcultas] = useState<Set<string>>(
     () => new Set(leerEstadoGuardado(idGrilla)?.ocultas ?? []),
@@ -187,6 +308,8 @@ function TablaBase<T>(
   const apiRef = useRef<GridReadyEvent<T>["api"] | null>(null);
   const { campoRef: selectorRef, posicion: posicionSelector } = useListaFlotante(selectorAbierto);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const conFiltro = filtrosPorColumna === true && filtrosVisibles;
+  const enServidor = origenServidor !== undefined;
 
   // Mismo mecanismo que `SelectorRangoFecha`: cierra al clickear afuera del
   // botón y del popover (el popover vive en un portal a `document.body`, así
@@ -202,6 +325,13 @@ function TablaBase<T>(
     return () => document.removeEventListener("mousedown", alHacerClicAfuera);
   }, [selectorAbierto, selectorRef]);
 
+  function ordenVigente(): OrdenTabla | null {
+    const ordenada = (apiRef.current?.getColumnState() ?? [])
+      .filter((columna) => columna.sort)
+      .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0))[0];
+    return ordenada ? { colId: ordenada.colId, descendente: ordenada.sort === "desc" } : null;
+  }
+
   useImperativeHandle(ref, () => ({
     filasFiltradas: () => {
       const resultado: T[] = [];
@@ -214,16 +344,73 @@ function TablaBase<T>(
       (apiRef.current?.getColumnState() ?? [])
         .filter((columna) => !columna.hide)
         .map((columna) => columna.colId),
+    refrescar: (desdeElInicio) => {
+      const api = apiRef.current;
+      if (!api) return;
+      if (desdeElInicio) {
+        api.paginationGoToFirstPage();
+        api.purgeInfiniteCache();
+      } else {
+        api.refreshInfiniteCache();
+      }
+    },
+    modeloFiltros: () => (apiRef.current?.getFilterModel() ?? {}) as Record<string, unknown>,
+    orden: ordenVigente,
   }));
 
   const columnasConVisibilidad = useMemo(
     () =>
-      columnas.map((columna) => {
-        const clave = identidad(columna as ColDef<unknown>);
-        return clave ? { ...columna, hide: ocultas.has(clave) } : columna;
+      columnas.map((original) => {
+        const clave = identidad(original as ColDef<unknown>);
+        const { type, ...resto } = original;
+        let columna: ColDef<T> = clave ? { ...resto, hide: ocultas.has(clave) } : resto;
+        if (type === "fecha" && conFiltro) columna = { ...columna, ...(FILTRO_FECHA as ColDef<T>) };
+        if (type === "numero" && conFiltro) columna = { ...columna, ...(FILTRO_NUMERO as ColDef<T>) };
+        return columna;
       }),
-    [columnas, ocultas],
+    [columnas, ocultas, conFiltro],
   );
+
+  const columnaBase = useMemo<ColDef>(
+    () => ({
+      ...(conFiltro ? columnaPorDefectoConFiltro : columnaPorDefecto),
+      ...(idFila ? { enableCellChangeFlash: true } : {}),
+    }),
+    [conFiltro, idFila],
+  );
+
+  // El origen cambia de identidad en cada render de la pantalla; la grilla
+  // mantiene un solo `datasource` y siempre llama al más reciente.
+  const origenRef = useRef(origenServidor);
+  useEffect(() => {
+    origenRef.current = origenServidor;
+  });
+  const tamanoPagina = origenServidor?.tamanoPagina;
+  const datasource = useMemo<IDatasource | undefined>(() => {
+    if (tamanoPagina === undefined) return undefined;
+    return {
+      getRows(params: IGetRowsParams) {
+        const origen = origenRef.current;
+        if (!origen) {
+          params.failCallback();
+          return;
+        }
+        const primeraOrden = params.sortModel[0];
+        origen
+          .cargarPagina({
+            inicio: params.startRow,
+            cantidad: params.endRow - params.startRow,
+            orden: primeraOrden ? { colId: primeraOrden.colId, descendente: primeraOrden.sort === "desc" } : null,
+            filtros: params.filterModel as Record<string, unknown>,
+          })
+          .then(({ filas: pagina, total }) => params.successCallback(pagina, total))
+          .catch((error: unknown) => {
+            origen.alFallar(error);
+            params.failCallback();
+          });
+      },
+    };
+  }, [tamanoPagina]);
 
   function alternar(clave: string) {
     setOcultas((actual) => {
@@ -266,6 +453,36 @@ function TablaBase<T>(
     });
   }
 
+  /** Cada columna al ancho de su contenido. Se les saca el `flex` (reparto
+   * proporcional del espacio) porque si no, AG Grid lo vuelve a aplicar
+   * encima al primer cambio de tamaño. Queda guardado como cualquier otro
+   * cambio de ancho; "Restablecer anchos" vuelve al reparto original. */
+  function ajustarAnchos() {
+    const api = apiRef.current;
+    if (!api) return;
+    api.applyColumnState({
+      state: api.getColumnState().map((columna) => ({ colId: columna.colId, flex: null })),
+    });
+    api.autoSizeAllColumns();
+  }
+
+  function restablecerAnchos() {
+    const api = apiRef.current;
+    if (!api) return;
+    api.applyColumnState({
+      state: columnas
+        .map((columna) => ({
+          colId: identidad(columna as ColDef<unknown>),
+          flex: columna.flex ?? null,
+          width: columna.flex ? undefined : columna.width,
+        }))
+        .filter((estado): estado is { colId: string; flex: number | null; width: number | undefined } =>
+          estado.colId !== undefined,
+        ),
+    });
+    guardarLayout(ocultas);
+  }
+
   function alListo(evento: GridReadyEvent<T>) {
     apiRef.current = evento.api;
     const guardado = leerEstadoGuardado(idGrilla);
@@ -282,29 +499,13 @@ function TablaBase<T>(
     if (evento.finished) guardarLayout(ocultas);
   }
 
-  function alOrdenar(evento: SortChangedEvent<T>) {
+  function alOrdenar(_evento: SortChangedEvent<T>) {
     guardarLayout(ocultas);
-    if (!onOrdenCambia) return;
-    const ordenada = evento.api
-      .getColumnState()
-      .filter((columna) => columna.sort)
-      .sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0))[0];
-    onOrdenCambia(ordenada ? { colId: ordenada.colId, descendente: ordenada.sort === "desc" } : null);
   }
 
   function alFijarColumna(_evento: ColumnPinnedEvent<T>) {
     guardarLayout(ocultas);
   }
-
-  const ordenEnServidor = onOrdenCambia !== undefined;
-  // Orden en el servidor: las filas ya llegan ordenadas, así que el comparador
-  // siempre "empata" y AG Grid (orden estable) las deja como vinieron en vez de
-  // reordenarlas con otro criterio de texto. Memoizado: un `defaultColDef`
-  // nuevo en cada render haría que AG Grid reaplique la configuración.
-  const defaultColDef = useMemo<ColDef>(() => {
-    const base = filtrosPorColumna && filtrosVisibles ? columnaPorDefectoConFiltro : columnaPorDefecto;
-    return ordenEnServidor ? { ...base, comparator: () => 0 } : base;
-  }, [filtrosPorColumna, filtrosVisibles, ordenEnServidor]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -333,9 +534,54 @@ function TablaBase<T>(
         <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
           {accionesDerecha}
 
-          <div ref={selectorRef}>
-            <button type="button" className="boton" onClick={() => setSelectorAbierto((a) => !a)}>
-              Columnas ▾
+          {/* Filtros y anchos de columna en una sola pieza de íconos
+              (`.segmentado`), como en escritorio. El embudo es un interruptor
+              (relleno de acento con los filtros visibles); los otros dos son
+              acciones, y el último abre la lista de columnas visibles. */}
+          <div
+            ref={selectorRef}
+            className="segmentado"
+            role="group"
+            aria-label="Columnas: filtros, anchos y visibles"
+          >
+            {filtrosPorColumna && (
+              <button
+                type="button"
+                className="segmentado-interruptor"
+                title={filtrosVisibles ? "Ocultar filtros" : "Mostrar filtros"}
+                aria-label="Filtros por columna"
+                aria-pressed={filtrosVisibles}
+                onClick={alternarFiltrosVisibles}
+              >
+                <Funnel size={16} aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              title="Ajustar anchos al contenido"
+              aria-label="Ajustar anchos al contenido"
+              onClick={ajustarAnchos}
+            >
+              <UnfoldHorizontal size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              title="Restablecer anchos"
+              aria-label="Restablecer anchos"
+              onClick={restablecerAnchos}
+            >
+              <RotateCcw size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              title="Columnas visibles"
+              aria-label="Columnas visibles"
+              aria-expanded={selectorAbierto}
+              aria-pressed={selectorAbierto}
+              className="segmentado-interruptor"
+              onClick={() => setSelectorAbierto((a) => !a)}
+            >
+              <Columns3 size={16} aria-hidden="true" />
             </button>
           </div>
 
@@ -369,19 +615,6 @@ function TablaBase<T>(
                       {columna.headerName ?? clave}
                     </label>
                   ))}
-                {filtrosPorColumna && (
-                  <>
-                    <hr style={{ width: "100%", border: "none", borderTop: "1px solid var(--borde)", margin: "0.2rem 0" }} />
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <input
-                        type="checkbox"
-                        checked={filtrosVisibles}
-                        onChange={alternarFiltrosVisibles}
-                      />
-                      Filtros por columna
-                    </label>
-                  </>
-                )}
               </div>
             </ListaFlotante>
           )}
@@ -391,11 +624,36 @@ function TablaBase<T>(
       <div style={{ flex: 1, minHeight: 0 }}>
         <AgGridReact<T>
           theme={temaBrisas}
-          defaultColDef={defaultColDef}
-          rowData={filas}
+          defaultColDef={columnaBase}
+          {...(enServidor
+            ? {
+                rowModelType: "infinite" as const,
+                datasource,
+                cacheBlockSize: tamanoPagina,
+                pagination: true,
+                paginationPageSize: tamanoPagina,
+                paginationPageSizeSelector: false,
+                maxConcurrentDatasourceRequests: 1,
+              }
+            : {
+                rowData: filas ?? [],
+                quickFilterText: busquedaDebounced,
+                quickFilterParser,
+                quickFilterMatcher,
+                // "Álvarez" junto a las A, no al final de la lista.
+                accentedSort: true,
+              })}
+          getRowId={idFila ? (p: GetRowIdParams<T>) => idFila(p.data) : undefined}
           columnDefs={columnasConVisibilidad}
-          quickFilterText={busquedaDebounced}
           overlayNoRowsTemplate={MENSAJE_SIN_FILAS}
+          localeText={AG_GRID_LOCALE_ES}
+          // Sin el recuadro de foco al hacer clic en una celda (se veía feo y
+          // no copiaba nada) -- a cambio no hay navegación por flechas dentro
+          // de la grilla.
+          suppressCellFocus
+          columnHoverHighlight
+          tooltipShowMode="whenTruncated"
+          tooltipShowDelay={400}
           // Resguardo además de memoizar `columnas` en cada pantalla: si de
           // todos modos algo le pasa un `columnDefs` nuevo, esto evita que
           // AG Grid reordene según el orden literal del array en vez de

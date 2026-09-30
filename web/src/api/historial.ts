@@ -1,6 +1,11 @@
 import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
 import { inicioDiaCostaRicaUtc, inicioDiaSiguienteCostaRicaUtc } from "../tiempo";
+import { expresionesDeFiltros, plegarTexto } from "./historialFiltros";
+import type { ModeloFiltros } from "./historialFiltros";
+
+export { plegarTexto } from "./historialFiltros";
+export type { ModeloFiltros } from "./historialFiltros";
 
 /**
  * Espejo de `ingresos` en Supabase -- ver migración
@@ -30,28 +35,11 @@ export interface MovimientoHistorial {
   // "pc"/"mobile"/"visor" (`dispositivos.tipo`) -- null si el dispositivo
   // de entrada fue borrado, o para filas viejas sin dispositivo_entrada_id.
   dispositivo_entrada_tipo: string | null;
+  /** Tipo de ingreso como se lee en pantalla ("IN HOUSE"). */
+  tipo_texto: string;
+  /** "CAMINANDO", "VEHÍCULO" o la placa si el ingreso fue en vehículo. */
+  medio_texto: string;
 }
-
-// Valida en runtime la forma real de lo que devuelve Supabase -- ver el
-// mismo criterio en contratistas.ts/usuarios.ts. `z.infer` reemplaza a la
-// interfaz `FilaCruda` que había antes, para no mantener dos fuentes de
-// verdad del mismo shape.
-const filaCrudaEsquema = z.object({
-  id: z.string(),
-  sitio_id: z.string(),
-  sitios: z.object({ nombre: z.string() }).nullable(),
-  contratista_cedula: z.string().nullable(),
-  contratista_nombre: z.string(),
-  empresa_nombre: z.string().nullable(),
-  tipo_ingreso: z.string().nullable(),
-  medio_ingreso: z.string().nullable(),
-  gafete_numero: z.number().nullable(),
-  hora_entrada: z.string(),
-  hora_salida: z.string().nullable(),
-  usuario_entrada_nombre: z.string().nullable(),
-  usuario_salida_nombre: z.string().nullable(),
-  dispositivo_entrada: z.object({ tipo: z.string() }).nullable(),
-});
 
 export interface UnidadOperativa {
   id: string;
@@ -88,8 +76,8 @@ export const CAMPOS_ORDENABLES = [
   "contratista_nombre",
   "empresa_nombre",
   "dispositivo_entrada_tipo",
-  "tipo_ingreso",
-  "medio_ingreso",
+  "tipo_texto",
+  "medio_texto",
   "gafete_numero",
   "hora_entrada",
   "hora_salida",
@@ -105,6 +93,8 @@ export interface ConsultaMovimientos {
   /** `undefined` = todas las unidades; lista vacía = ninguna (cero filas). */
   sitioIds?: string[];
   busqueda?: string;
+  /** Filtros por columna de la grilla (`api.getFilterModel()`), ver `historialFiltros.ts`. */
+  filtros?: ModeloFiltros;
   orden?: { campo: CampoOrdenable; descendente: boolean };
   /** Base 0. */
   pagina: number;
@@ -115,15 +105,6 @@ export interface PaginaMovimientos {
   filas: MovimientoHistorial[];
   /** Total de filas que cumplen el filtro (todas las páginas). */
   total: number;
-}
-
-/** Igual que `public.plegar_texto` en la base: sin tildes y en minúsculas
- * (la ñ queda como n, igual que `unaccent`). */
-export function plegarTexto(texto: string): string {
-  return texto
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
 }
 
 /** Palabras de la búsqueda, ya plegadas y con `\`, `%` y `_` escapados para
@@ -139,7 +120,7 @@ export function palabrasDeBusqueda(busqueda: string): string[] {
 const COLUMNAS_MOVIMIENTO =
   "id, sitio_id, sitio_nombre, contratista_cedula, contratista_nombre, empresa_nombre, " +
   "tipo_ingreso, medio_ingreso, gafete_numero, hora_entrada, hora_salida, " +
-  "usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_tipo";
+  "usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_tipo, tipo_texto, medio_texto";
 
 const movimientoEsquema = z.object({
   id: z.string(),
@@ -156,6 +137,8 @@ const movimientoEsquema = z.object({
   usuario_entrada_nombre: z.string().nullable(),
   usuario_salida_nombre: z.string().nullable(),
   dispositivo_entrada_tipo: z.string().nullable(),
+  tipo_texto: z.string(),
+  medio_texto: z.string(),
 });
 
 /** Un tramo de filas (`primera`..`primera + cantidad - 1`) con el filtro y el
@@ -165,7 +148,7 @@ async function pedirTramo(
   primera: number,
   cantidad: number,
 ): Promise<PaginaMovimientos> {
-  const { desde, hasta, sitioIds, busqueda, orden } = consulta;
+  const { desde, hasta, sitioIds, busqueda, filtros, orden } = consulta;
 
   let peticion = supabase
     .from("panel_movimientos")
@@ -185,6 +168,10 @@ async function pedirTramo(
   if (sitioIds) peticion = peticion.in("sitio_id", sitioIds);
   for (const palabra of palabrasDeBusqueda(busqueda ?? "")) {
     peticion = peticion.like("texto_busqueda", `%${palabra}%`);
+  }
+  // Un `.or()` por columna filtrada: el AND entre columnas sale de aplicarlos todos.
+  for (const expresion of expresionesDeFiltros(filtros)) {
+    peticion = peticion.or(expresion);
   }
 
   const { data, error, count } = await peticion;
@@ -227,73 +214,4 @@ export async function listarMovimientosParaExportar(
     if (tramo.filas.length < cantidad) break;
   }
   return { filas, total, truncado: total > filas.length };
-}
-
-export interface ResultadoHistorial {
-  filas: MovimientoHistorial[];
-  /** `true` si el rango pedido tiene más filas que `LIMITE_HISTORIAL` -- ver
-   * esa constante. AG Grid corre en modo client-side (trae todo, filtra en
-   * el navegador, ver `componentes/Tabla.tsx`); sin este tope, un rango
-   * amplio (o el preset "Todo el historial", sin fecha) podía crecer sin
-   * cota junto con el uso real del sistema. Mismo criterio que
-   * `CargaCompleta.truncado` del núcleo Rust en la versión de escritorio
-   * (`desktop/src/pantallas/Historial.tsx`) -- filas visibles acotadas,
-   * exportar (Excel/PDF) sigue trayendo el rango completo sin este límite
-   * (ver `exportarAExcel`/`exportarAPdf` en `pantallas/Historial.tsx`).
-   */
-  truncado: boolean;
-}
-
-// Bien por encima de cualquier volumen real de un rango de fechas típico
-// (6 meses por defecto, ver `Historial.tsx`) -- es una válvula de
-// seguridad, no una paginación real: mientras el volumen se mantenga
-// razonable, nadie la nota.
-const LIMITE_HISTORIAL = 20_000;
-
-export async function listarHistorial(
-  desde?: string,
-  hasta?: string,
-  sitioIds?: string[],
-): Promise<ResultadoHistorial> {
-  let consulta = supabase
-    .from("ingresos")
-    .select(
-      "id, sitio_id, contratista_cedula, contratista_nombre, empresa_nombre, tipo_ingreso, " +
-        "medio_ingreso, gafete_numero, hora_entrada, hora_salida, usuario_entrada_nombre, " +
-        "usuario_salida_nombre, sitios(nombre), " +
-        "dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)",
-      { count: "exact" },
-    )
-    .order("hora_entrada", { ascending: false })
-    .range(0, LIMITE_HISTORIAL - 1);
-
-  // `desde`/`hasta` llegan como YMD del selector (día calendario en Costa
-  // Rica, ver `SelectorRangoFecha`), pero `hora_entrada` es un `timestamptz`
-  // en UTC -- compararlo contra el string crudo lo interpreta a medianoche
-  // UTC (no Costa Rica) y, para `hasta`, deja afuera casi todo ese día (sólo
-  // calificaría el instante exacto de esa medianoche). Con un rango amplio
-  // el corte pasaba desapercibido; con "Hoy"/"Ayer" (mismo día en desde y
-  // hasta) el rango resultante quedaba prácticamente vacío siempre. Mismo
-  // criterio que `rango_utc` en
-  // `desktop/src-tauri/src/comandos/historial.rs`: `hasta` es el inicio del
-  // día SIGUIENTE, límite exclusivo.
-  if (desde) consulta = consulta.gte("hora_entrada", inicioDiaCostaRicaUtc(desde));
-  if (hasta) consulta = consulta.lt("hora_entrada", inicioDiaSiguienteCostaRicaUtc(hasta));
-  // `undefined`/vacío es "sin filtro" (todas) -- ver `sitioIdsFiltro` en
-  // `Historial.tsx` sobre por qué eso está separado de "excluir todas", que
-  // sí manda una lista (vacía) acá y trae cero filas a propósito.
-  if (sitioIds) consulta = consulta.in("sitio_id", sitioIds);
-
-  const { data: crudo, error, count } = await consulta;
-  if (error) throw new Error(error.message);
-  const data = z.array(filaCrudaEsquema).parse(crudo);
-
-  return {
-    filas: data.map(({ sitios, dispositivo_entrada, ...resto }) => ({
-      ...resto,
-      sitio_nombre: sitios?.nombre ?? null,
-      dispositivo_entrada_tipo: dispositivo_entrada?.tipo ?? null,
-    })),
-    truncado: count !== null && count > data.length,
-  };
 }

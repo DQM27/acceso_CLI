@@ -97,6 +97,8 @@ async function preparar(page: Page) {
           usuario_entrada_nombre: "Operador de prueba",
           usuario_salida_nombre: "Operador de prueba",
           dispositivo_entrada_tipo: "pc",
+          tipo_texto: "OBRA",
+          medio_texto: "CAMINANDO",
         },
       ]);
     if (url.pathname === "/functions/v1/admin-list-devices")
@@ -185,8 +187,11 @@ test("Historial (AG Grid) y exportación a PDF sin violaciones de CSP", async ({
   await preparar(page);
   await page.goto("/historial");
   await expect(page.getByText("Contratista de prueba")).toBeVisible();
-  // Paginación en el servidor: el paginador muestra el rango de la página.
-  await expect(page.getByText(/1–1 de 1/)).toBeVisible();
+  // Paginación en el servidor: la grilla muestra el rango de la página y los
+  // tres botones de exportación (Excel, CSV y PDF) como en escritorio.
+  await expect(page.locator(".ag-paging-row-summary-content")).toHaveText("1 a 1 de 1");
+  await expect(page.getByRole("button", { name: "Exportar a Excel" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Exportar a CSV" })).toBeVisible();
 
   // El punto de mayor riesgo real: exportarAPdf() escribe HTML crudo con un
   // <style> inline en un iframe oculto (about:blank hereda el CSP del

@@ -4,9 +4,34 @@ import {
   fechaLocalYMD,
   inicioDiaCostaRicaUtc,
   inicioDiaSiguienteCostaRicaUtc,
+  interpretarFechaDDMMAAAA,
+  mascaraFechaDDMMAAAA,
+  textoFechaDDMMAAAA,
   textoFechaDDMMYYYY,
   textoHora,
 } from "./tiempo";
+
+describe("mascaraFechaDDMMAAAA / interpretarFechaDDMMAAAA / textoFechaDDMMAAAA", () => {
+  it("pone las barras solas y deja sólo dígitos (máximo 8)", () => {
+    expect(mascaraFechaDDMMAAAA("23092026")).toBe("23/09/2026");
+    expect(mascaraFechaDDMMAAAA("2309")).toBe("23/09");
+    expect(mascaraFechaDDMMAAAA("2")).toBe("2");
+    expect(mascaraFechaDDMMAAAA("23/09/2026999")).toBe("23/09/2026");
+  });
+
+  it("interpreta una fecha completa y válida; null si está incompleta o no existe", () => {
+    const fecha = interpretarFechaDDMMAAAA("23/09/2026");
+    expect(fecha?.getFullYear()).toBe(2026);
+    expect(fecha?.getMonth()).toBe(8);
+    expect(fecha?.getDate()).toBe(23);
+    expect(interpretarFechaDDMMAAAA("23/09/20")).toBeNull();
+    expect(interpretarFechaDDMMAAAA("31/02/2026")).toBeNull();
+  });
+
+  it("textoFechaDDMMAAAA es la inversa en hora local", () => {
+    expect(textoFechaDDMMAAAA(new Date(2026, 8, 5))).toBe("05/09/2026");
+  });
+});
 
 // Mismo test, mismos casos, que desktop/src/tiempo.test.ts -- este archivo
 // es una copia textual de ese original (ver el doc-comment de tiempo.ts)

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileSpreadsheet, FileText } from "lucide-react";
+import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
-import type { TablaHandle } from "../componentes/Tabla";
-import Paginador, { totalPaginas } from "../componentes/Paginador";
+import type { OrdenTabla, OrigenServidor, TablaHandle } from "../componentes/Tabla";
 import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
 import SelectorUnidadesOperativas, {
   textoUnidadesOperativas,
@@ -22,12 +21,6 @@ import {
 import type { CampoOrdenable, ConsultaMovimientos, MovimientoHistorial } from "../api/historial";
 import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
-
-export function textoMedio(medio: string | null): string {
-  if (medio === "CAMINANDO") return "Caminando";
-  if (medio === "VEHICULO") return "Vehículo";
-  return "";
-}
 
 /** "pc"/"mobile"/"visor" (`dispositivos.tipo`) → sólo el ícono, para la
  * columna "Dispositivo" -- tanto en pantalla como en Excel/PDF (mismo
@@ -80,8 +73,8 @@ export const DEFINICIONES_EXPORT: DefinicionColumnaExport[] = [
     etiqueta: "Dispositivo",
     valor: (f) => textoDispositivo(f.dispositivo_entrada_tipo),
   },
-  { colId: "tipo_ingreso", etiqueta: "Tipo", valor: (f) => f.tipo_ingreso ?? "" },
-  { colId: "medio_ingreso", etiqueta: "Medio", valor: (f) => textoMedio(f.medio_ingreso) },
+  { colId: "tipo_ingreso", etiqueta: "Tipo", valor: (f) => f.tipo_texto },
+  { colId: "medio_ingreso", etiqueta: "Medio", valor: (f) => f.medio_texto },
   {
     colId: "gafete_numero",
     etiqueta: "Gafete",
@@ -235,18 +228,49 @@ export function generarHtmlHistorial(
 const TAMANO_PAGINA = 100;
 
 /** Campo del servidor por el que se ordena al tocar el encabezado de una
- * columna. Las columnas de fecha y hora comparten el mismo instante. */
+ * columna. Las columnas de fecha y hora comparten el mismo instante, y las de
+ * tipo y medio ordenan por el texto que se ve ("IN HOUSE", la placa). */
 const CAMPO_ORDEN_POR_COLUMNA: Record<string, CampoOrdenable> = {
   fecha_ingreso: "hora_entrada",
   hora_ingreso: "hora_entrada",
   fecha_salida: "hora_salida",
   hora_salida: "hora_salida",
+  tipo_ingreso: "tipo_texto",
+  medio_ingreso: "medio_texto",
 };
 
 export function campoOrdenDeColumna(colId: string): CampoOrdenable | null {
   const mapeado = CAMPO_ORDEN_POR_COLUMNA[colId];
   if (mapeado) return mapeado;
   return (CAMPOS_ORDENABLES as readonly string[]).includes(colId) ? (colId as CampoOrdenable) : null;
+}
+
+function ordenDeConsulta(orden: OrdenTabla | null | undefined): ConsultaMovimientos["orden"] {
+  const campo = orden ? campoOrdenDeColumna(orden.colId) : null;
+  return orden && campo ? { campo, descendente: orden.descendente } : undefined;
+}
+
+/** CSV como el de escritorio: separador `;`, comillas si el texto lleva `;`,
+ * comillas o saltos de línea. Empieza con BOM para que Excel lea las tildes. */
+export function generarCsvHistorial(
+  filas: MovimientoHistorial[],
+  columnas: DefinicionColumnaExport[],
+): string {
+  const celda = (texto: string) => (/[;"\r\n]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto);
+  const lineas = [
+    columnas.map((c) => celda(c.etiqueta)).join(";"),
+    ...filas.map((fila) => columnas.map((c) => celda(c.valor(fila))).join(";")),
+  ];
+  return "\uFEFF" + lineas.join("\r\n") + "\r\n";
+}
+
+function descargarArchivo(nombre: string, contenido: BlobPart, tipo: string) {
+  const url = URL.createObjectURL(new Blob([contenido], { type: tipo }));
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = nombre;
+  enlace.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function Historial() {
@@ -262,19 +286,8 @@ export default function Historial() {
   // nueva que se dio de alta después) nunca queda afuera del filtro por
   // accidente. Vacío = sin filtro (todas), ver `sitioIdsFiltro` más abajo.
   const [unidadesExcluidas, setUnidadesExcluidas] = useState<Set<string>>(new Set());
-  const [orden, setOrden] = useState<ConsultaMovimientos["orden"]>(undefined);
-  const [pagina, setPagina] = useState(0);
   const [exportando, setExportando] = useState(false);
   const tablaRef = useRef<TablaHandle<MovimientoHistorial>>(null);
-
-  // Cada cambio de filtro u orden vuelve a la primera página: quedarse en la
-  // página 12 de un resultado que ahora tiene 2 páginas mostraría "vacío".
-  function conPrimeraPagina<A extends unknown[]>(accion: (...args: A) => void) {
-    return (...args: A) => {
-      accion(...args);
-      setPagina(0);
-    };
-  }
 
   const { data: unidades = [], error: errorUnidades } = useQuery({
     queryKey: ["historial", "unidades"],
@@ -299,49 +312,59 @@ export default function Historial() {
   // para no pedir una consulta por tecla.
   const busquedaDebounced = useDebounced(busqueda, 300);
 
-  const filtro = useMemo(
+  // Lo que decide la pantalla (rango, unidades, búsqueda). Los filtros por
+  // columna y el orden los lleva la grilla y se le piden al pedir cada página.
+  const filtroPantalla = useMemo(
     () => ({
       desde: desde || undefined,
       hasta: hasta || undefined,
       sitioIds: sitioIdsFiltro,
       busqueda: busquedaDebounced,
-      orden,
     }),
     // `sitioIdsFiltro` se recalcula en cada render; sus dependencias reales
     // son las dos de abajo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [desde, hasta, unidadesExcluidas, unidades, busquedaDebounced, orden],
+    [desde, hasta, unidadesExcluidas, unidades, busquedaDebounced],
   );
-
-  const {
-    data: resultado,
-    isFetching,
-    error: errorMovimientos,
-  } = useQuery({
-    queryKey: ["historial", "movimientos", filtro, pagina],
-    queryFn: () => listarMovimientosPagina({ ...filtro, pagina, tamano: TAMANO_PAGINA }),
-    // Al cambiar de página u orden se sigue mostrando la anterior (atenuada)
-    // en vez de vaciar la tabla mientras llega la nueva.
-    placeholderData: keepPreviousData,
-  });
+  const filtroPantallaRef = useRef(filtroPantalla);
   useEffect(() => {
-    if (errorMovimientos) toast.error(mensajeError(errorMovimientos));
-  }, [errorMovimientos]);
+    filtroPantallaRef.current = filtroPantalla;
+    // Cambió el filtro de pantalla: la grilla vuelve a pedir desde la página 1.
+    tablaRef.current?.refrescar(true);
+  }, [filtroPantalla]);
 
-  const filas = resultado?.filas ?? [];
-  const total = resultado?.total ?? 0;
-  const cargando = isFetching;
+  const origenServidor: OrigenServidor<MovimientoHistorial> = {
+    tamanoPagina: TAMANO_PAGINA,
+    cargarPagina: ({ inicio, cantidad, orden, filtros }) => {
+      const consulta: ConsultaMovimientos = {
+        ...filtroPantallaRef.current,
+        filtros,
+        orden: ordenDeConsulta(orden),
+        pagina: Math.floor(inicio / cantidad),
+        tamano: cantidad,
+      };
+      return clienteConsultas.fetchQuery({
+        queryKey: ["historial", "movimientos", consulta],
+        queryFn: () => listarMovimientosPagina(consulta),
+        staleTime: 10_000,
+      });
+    },
+    alFallar: (error) => toast.error(mensajeError(error)),
+  };
 
-  // Ver `useAutoRefresh` -- sin esto, un ingreso ya cerrado/sincronizado
-  // no aparecía hasta apretar "actualizar" a mano. Realtime sólo INVALIDA la
-  // consulta de la página visible; no vuelve a bajar todo el historial.
+  // Ver `useAutoRefresh` -- sin esto, un ingreso ya cerrado/sincronizado no
+  // aparecía hasta apretar "actualizar" a mano. Realtime sólo vuelve a pedir la
+  // página visible; no baja todo el historial.
   useAutoRefresh(
-    () => void clienteConsultas.invalidateQueries({ queryKey: ["historial", "movimientos"] }),
+    () => {
+      clienteConsultas.removeQueries({ queryKey: ["historial", "movimientos"] });
+      tablaRef.current?.refrescar();
+    },
     30_000,
     "ingresos",
   );
 
-  /** Columnas visibles AHORA en la grilla (selector "Columnas ▾" + el orden
+  /** Columnas visibles AHORA en la grilla (el selector de columnas + el orden
    * en que la persona las dejó), mapeadas a su definición de export -- si
    * `columnasVisibles()` no está disponible todavía (ref sin montar) cae a
    * todas, en el orden por defecto. Mismo criterio que
@@ -355,19 +378,24 @@ export default function Historial() {
       .filter((d): d is DefinicionColumnaExport => d !== undefined);
   }
 
-  /** Trae del servidor TODAS las filas del filtro y orden actuales (no sólo la
-   * página en pantalla), hasta el máximo de una exportación. */
+  /** Trae del servidor TODAS las filas del rango, unidades, búsqueda, filtros
+   * por columna y orden actuales (no sólo la página en pantalla), hasta el
+   * máximo de una exportación. */
   async function filasParaExportar(): Promise<MovimientoHistorial[] | null> {
     setExportando(true);
     try {
-      const { filas: todas, total: totalFiltro, truncado } = await listarMovimientosParaExportar(filtro);
+      const { filas: todas, total, truncado } = await listarMovimientosParaExportar({
+        ...filtroPantalla,
+        filtros: tablaRef.current?.modeloFiltros(),
+        orden: ordenDeConsulta(tablaRef.current?.orden()),
+      });
       if (todas.length === 0) {
         toast.error("No hay filas para exportar con el filtro actual.");
         return null;
       }
       if (truncado) {
         toast.warning(
-          `Se exportan las primeras ${todas.length.toLocaleString("es-CR")} de ${totalFiltro.toLocaleString("es-CR")} filas. Acote las fechas o la unidad para exportar el resto.`,
+          `Se exportan las primeras ${todas.length.toLocaleString("es-CR")} de ${total.toLocaleString("es-CR")} filas. Acote las fechas o la unidad para exportar el resto.`,
         );
       }
       return todas;
@@ -380,8 +408,8 @@ export default function Historial() {
   }
 
   async function exportarAExcel() {
-    const visibles = await filasParaExportar();
-    if (!visibles) return;
+    const filas = await filasParaExportar();
+    if (!filas) return;
     const definiciones = definicionesVisibles();
     if (definiciones.length === 0) {
       toast.error("No hay columnas visibles para exportar.");
@@ -391,7 +419,7 @@ export default function Historial() {
     try {
       const XLSX = await import("xlsx");
       const encabezados = definiciones.map((d) => d.etiqueta);
-      const filasHoja = visibles.map((fila) => definiciones.map((d) => d.valor(fila)));
+      const filasHoja = filas.map((fila) => definiciones.map((d) => d.valor(fila)));
       const hoja = XLSX.utils.aoa_to_sheet([encabezados, ...filasHoja]);
       const libro = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(libro, hoja, "Historial");
@@ -399,6 +427,17 @@ export default function Historial() {
     } catch (error) {
       toast.error(`No se pudo exportar a Excel: ${mensajeError(error)}`);
     }
+  }
+
+  async function exportarACsv() {
+    const filas = await filasParaExportar();
+    if (!filas) return;
+    const definiciones = definicionesVisibles();
+    if (definiciones.length === 0) {
+      toast.error("No hay columnas visibles para exportar.");
+      return;
+    }
+    descargarArchivo("historial.csv", generarCsvHistorial(filas, definiciones), "text/csv;charset=utf-8");
   }
 
   /** Mismo mecanismo que la exportación de escritorio (WebView2
@@ -411,8 +450,8 @@ export default function Historial() {
    * ventana completa si no se aísla, arrastrando el sidebar/la grilla.
    */
   async function exportarAPdf() {
-    const visibles = await filasParaExportar();
-    if (!visibles) return;
+    const filas = await filasParaExportar();
+    if (!filas) return;
     const definiciones = definicionesVisibles();
     if (definiciones.length === 0) {
       toast.error("No hay columnas visibles para exportar.");
@@ -420,7 +459,7 @@ export default function Historial() {
     }
 
     const filtroUnidades = textoUnidadesOperativas(unidades.length, unidadesExcluidas.size);
-    const html = generarHtmlHistorial(visibles, definiciones, {
+    const html = generarHtmlHistorial(filas, definiciones, {
       generadoPor: sesion?.nombre ?? sesion?.correo ?? "",
       filtro: `Filtro: ${textoRangoFecha(desde, hasta)} — ${filtroUnidades}`,
     });
@@ -453,15 +492,16 @@ export default function Historial() {
   // useMemo -- mismo motivo que en desktop/: si `columnas` se recrea en
   // cada render, AG Grid reaplica el orden/ancho literales encima del
   // layout que el usuario ya acomodó (persistido en localStorage vía
-  // `Tabla`).
+  // `Tabla`). Los textos de Tipo y Medio vienen ya armados de la vista
+  // (`tipo_texto`, `medio_texto`), así el filtro y el orden usan lo que se ve.
   const columnas: ColDef<MovimientoHistorial>[] = useMemo(
     () => [
       { field: "sitio_nombre", headerName: "Unidad operativa", flex: 1.3, minWidth: 160 },
       {
         field: "contratista_cedula",
         headerName: "Cédula",
-        flex: 1.1,
-        minWidth: 110,
+        flex: 1.2,
+        minWidth: 120,
         cellStyle: { textAlign: "left" },
       },
       {
@@ -479,16 +519,23 @@ export default function Historial() {
         minWidth: 110,
         valueFormatter: (p) => textoDispositivo(p.value ?? null),
       },
-      { field: "tipo_ingreso", headerName: "Tipo", flex: 1, minWidth: 100 },
+      {
+        field: "tipo_ingreso",
+        headerName: "Tipo",
+        flex: 1,
+        minWidth: 100,
+        valueGetter: (p) => p.data?.tipo_texto ?? "",
+      },
       {
         field: "medio_ingreso",
         headerName: "Medio",
         flex: 1,
         minWidth: 100,
-        valueFormatter: (p) => textoMedio(p.value),
+        valueGetter: (p) => p.data?.medio_texto ?? "",
       },
       {
         field: "gafete_numero",
+        type: "numero",
         headerName: "Gafete",
         flex: 0.9,
         minWidth: 90,
@@ -496,6 +543,7 @@ export default function Historial() {
       },
       {
         colId: "fecha_ingreso",
+        type: "fecha",
         headerName: "Fecha ingreso",
         flex: 1.4,
         minWidth: 140,
@@ -511,18 +559,19 @@ export default function Historial() {
       },
       {
         colId: "fecha_salida",
+        type: "fecha",
         headerName: "Fecha salida",
         flex: 1.4,
         minWidth: 140,
-        valueGetter: (p) => (p.data?.hora_salida ? fechaLocalYMD(p.data.hora_salida) : "Activo"),
-        valueFormatter: (p) => (p.value === "Activo" ? "Activo" : textoFechaDDMMYYYY(p.value)),
+        valueGetter: (p) => (p.data ? (p.data.hora_salida ? fechaLocalYMD(p.data.hora_salida) : "Activo") : ""),
+        valueFormatter: (p) => (p.value === "Activo" || !p.value ? (p.value ?? "") : textoFechaDDMMYYYY(p.value)),
       },
       {
         colId: "hora_salida",
         headerName: "Hora salida",
         flex: 1.3,
         minWidth: 130,
-        valueGetter: (p) => (p.data?.hora_salida ? textoHora(p.data.hora_salida) : "Activo"),
+        valueGetter: (p) => (p.data ? (p.data.hora_salida ? textoHora(p.data.hora_salida) : "Activo") : ""),
       },
       { field: "usuario_entrada_nombre", headerName: "Dio ingreso", flex: 1.3, minWidth: 130 },
       { field: "usuario_salida_nombre", headerName: "Dio salida", flex: 1.3, minWidth: 130 },
@@ -537,18 +586,16 @@ export default function Historial() {
           <Tabla<MovimientoHistorial>
             ref={tablaRef}
             id="historial"
+            idFila={idPorMovimiento}
             columnas={columnas}
-            filas={filas}
-            onOrdenCambia={conPrimeraPagina((nuevo) => {
-              const campo = nuevo ? campoOrdenDeColumna(nuevo.colId) : null;
-              setOrden(nuevo && campo ? { campo, descendente: nuevo.descendente } : undefined);
-            })}
+            filtrosPorColumna
+            origenServidor={origenServidor}
             controles={
               <div className="campo flex-[0_1_16rem]">
                 <input
                   placeholder="Cédula, nombre, empresa…"
                   value={busqueda}
-                  onChange={(evento) => conPrimeraPagina(setBusqueda)(evento.target.value)}
+                  onChange={(evento) => setBusqueda(evento.target.value)}
                 />
               </div>
             }
@@ -557,46 +604,71 @@ export default function Historial() {
                 <SelectorUnidadesOperativas
                   unidades={unidades}
                   excluidas={unidadesExcluidas}
-                  onCambiar={conPrimeraPagina(setUnidadesExcluidas)}
+                  onCambiar={setUnidadesExcluidas}
                 />
                 <SelectorRangoFecha
                   desde={desde}
                   hasta={hasta}
-                  onAplicar={conPrimeraPagina((nuevoDesde: string, nuevoHasta: string) => {
+                  onAplicar={(nuevoDesde, nuevoHasta) => {
                     setDesde(nuevoDesde);
                     setHasta(nuevoHasta);
-                  })}
+                  }}
                 />
-                <button
-                  type="button"
-                  className="boton boton-icono"
-                  title="Exportar a Excel: todo el resultado del filtro actual, con las columnas visibles"
-                  onClick={exportarAExcel}
-                  disabled={exportando}
-                >
-                  <FileSpreadsheet size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="boton boton-icono"
-                  title="Exportar a PDF: todo el resultado del filtro actual, con las columnas visibles"
-                  onClick={exportarAPdf}
-                  disabled={exportando}
-                >
-                  <FileText size={16} />
-                </button>
+                {/* Excel · CSV · PDF en una sola pieza de íconos, como en
+                    escritorio. Los tres traen TODO el resultado del filtro
+                    actual (no sólo la página en pantalla), con las columnas
+                    visibles y el orden vigente. */}
+                <div className="segmentado" role="group" aria-label="Exportar">
+                  <button
+                    type="button"
+                    title={
+                      exportando
+                        ? "Exportando…"
+                        : "Exportar a Excel — todo el resultado del filtro actual, con las columnas visibles"
+                    }
+                    aria-label="Exportar a Excel"
+                    onClick={exportarAExcel}
+                    disabled={exportando}
+                  >
+                    <FileSpreadsheet size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    title={
+                      exportando
+                        ? "Exportando…"
+                        : "Exportar a CSV — todo el resultado del filtro actual, con las columnas visibles"
+                    }
+                    aria-label="Exportar a CSV"
+                    onClick={exportarACsv}
+                    disabled={exportando}
+                  >
+                    <Sheet size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    title={
+                      exportando
+                        ? "Exportando…"
+                        : "Exportar a PDF — todo el resultado del filtro actual, con las columnas visibles"
+                    }
+                    aria-label="Exportar a PDF"
+                    onClick={exportarAPdf}
+                    disabled={exportando}
+                  >
+                    <FileText size={16} />
+                  </button>
+                </div>
               </>
             }
           />
         </div>
-        <Paginador
-          pagina={Math.min(pagina, totalPaginas(TAMANO_PAGINA, total) - 1)}
-          tamano={TAMANO_PAGINA}
-          total={total}
-          cargando={cargando}
-          onCambiar={setPagina}
-        />
       </div>
     </div>
   );
+}
+
+// Fuera del componente: `idFila` tiene que ser una función estable.
+function idPorMovimiento(fila: MovimientoHistorial): string {
+  return fila.id;
 }

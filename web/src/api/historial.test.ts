@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  listarHistorial,
   listarMovimientosPagina,
   listarMovimientosParaExportar,
   listarUnidadesOperativas,
   palabrasDeBusqueda,
-  plegarTexto,
 } from "./historial";
 
 function mockConsulta(resultado: { data: unknown; error: unknown; count: number | null }) {
@@ -16,17 +14,19 @@ function mockConsulta(resultado: { data: unknown; error: unknown; count: number 
     gte: vi.fn(() => encadenable),
     lt: vi.fn(() => encadenable),
     in: vi.fn(() => encadenable),
+    like: vi.fn(() => encadenable),
+    or: vi.fn(() => encadenable),
     returns: vi.fn(() => encadenable),
     then: (resolver: (valor: typeof resultado) => void) => resolver(resultado),
   };
   return encadenable;
 }
 
-function filaCruda(sobrescribir: Record<string, unknown> = {}) {
+function filaVista(sobrescribir: Record<string, unknown> = {}) {
   return {
     id: "1",
     sitio_id: "s1",
-    sitios: { nombre: "Brisas" },
+    sitio_nombre: "Brisas",
     contratista_cedula: "001",
     contratista_nombre: "Alguien",
     empresa_nombre: "Brisas",
@@ -37,7 +37,9 @@ function filaCruda(sobrescribir: Record<string, unknown> = {}) {
     hora_salida: null,
     usuario_entrada_nombre: "Quintana",
     usuario_salida_nombre: null,
-    dispositivo_entrada: { tipo: "pc" },
+    dispositivo_entrada_tipo: "pc",
+    tipo_texto: "PRAIND",
+    medio_texto: "CAMINANDO",
     ...sobrescribir,
   };
 }
@@ -52,126 +54,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("listarHistorial", () => {
-  it("truncado en false cuando el conteo real coincide con lo que vino, y aplana sitios/dispositivo", async () => {
-    const filas = [filaCruda()];
-    mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 1 }));
-
-    const resultado = await listarHistorial();
-
-    expect(resultado.truncado).toBe(false);
-    expect(resultado.filas).toHaveLength(1);
-    expect(resultado.filas[0].sitio_nombre).toBe("Brisas");
-    expect(resultado.filas[0].dispositivo_entrada_tipo).toBe("pc");
-  });
-
-  it("truncado en true cuando el conteo real es mayor que las filas devueltas (tope alcanzado)", async () => {
-    const filas = [filaCruda({ id: "1" }), filaCruda({ id: "2" })];
-    mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 100_000 }));
-
-    const resultado = await listarHistorial("2026-01-01", undefined);
-
-    expect(resultado.truncado).toBe(true);
-    expect(resultado.filas).toHaveLength(2);
-  });
-
-  it("sitio_nombre/dispositivo_entrada_tipo caen a null cuando vienen ausentes", async () => {
-    const filas = [filaCruda({ sitios: null, dispositivo_entrada: null })];
-    mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 1 }));
-
-    const resultado = await listarHistorial();
-
-    expect(resultado.filas[0].sitio_nombre).toBeNull();
-    expect(resultado.filas[0].dispositivo_entrada_tipo).toBeNull();
-  });
-
-  it("propaga el error de la consulta como Error real", async () => {
-    mocks.from.mockReturnValue(
-      mockConsulta({ data: null, error: { message: "timeout" }, count: null }),
-    );
-
-    await expect(listarHistorial()).rejects.toThrow("timeout");
-  });
-
-  it("lanza un error de validación si Supabase devuelve una fila con forma inesperada", async () => {
-    const filas = [filaCruda({ gafete_numero: "12" })];
-    mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 1 }));
-
-    await expect(listarHistorial()).rejects.toThrow();
-  });
-
-  it("convierte desde/hasta (YMD) a límites UTC de Costa Rica -- hasta es el inicio del día SIGUIENTE, exclusivo", async () => {
-    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
-    mocks.from.mockReturnValue(encadenable);
-
-    await listarHistorial("2026-09-09", "2026-09-09");
-
-    // Antes se mandaba el YMD crudo: `lte("hora_entrada", "2026-09-09")` sólo
-    // calificaba el instante exacto de esa medianoche UTC, dejando "Hoy"
-    // prácticamente siempre vacío. Ahora "hasta" es exclusivo contra el
-    // inicio del día siguiente en Costa Rica (UTC-6), así que el 9 de
-    // septiembre completo (hasta las 23:59:59 hora local) queda adentro.
-    expect(encadenable.gte).toHaveBeenCalledWith("hora_entrada", "2026-09-09T00:00:00-06:00");
-    expect(encadenable.lt).toHaveBeenCalledWith("hora_entrada", "2026-09-10T00:00:00-06:00");
-  });
-
-  it("cruza el fin de mes al calcular el día siguiente para 'hasta'", async () => {
-    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
-    mocks.from.mockReturnValue(encadenable);
-
-    await listarHistorial(undefined, "2026-09-30");
-
-    expect(encadenable.lt).toHaveBeenCalledWith("hora_entrada", "2026-10-01T00:00:00-06:00");
-  });
-
-  it("sin sitioIds no filtra por sitio", async () => {
-    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
-    mocks.from.mockReturnValue(encadenable);
-
-    await listarHistorial();
-
-    expect(encadenable.in).not.toHaveBeenCalled();
-  });
-
-  it("con sitioIds filtra con .in(sitio_id, ...) -- una lista vacía trae cero filas a propósito (todas las unidades excluidas)", async () => {
-    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
-    mocks.from.mockReturnValue(encadenable);
-
-    await listarHistorial(undefined, undefined, ["s1", "s2"]);
-    expect(encadenable.in).toHaveBeenCalledWith("sitio_id", ["s1", "s2"]);
-
-    await listarHistorial(undefined, undefined, []);
-    expect(encadenable.in).toHaveBeenCalledWith("sitio_id", []);
-  });
-});
-
-describe("plegarTexto / palabrasDeBusqueda", () => {
-  it("quita tildes, pasa a minúsculas y trata la ñ como n (igual que unaccent en la base)", () => {
-    expect(plegarTexto("José Ñandú")).toBe("jose nandu");
-  });
-
-  it("separa por espacios, ignora vacíos y escapa \\, % y _ para like", () => {
+describe("palabrasDeBusqueda", () => {
+  it("separa por espacios, pliega tildes, ignora vacíos y escapa \\, % y _ para like", () => {
     expect(palabrasDeBusqueda("  Pérez   100%_x  ")).toEqual(["perez", "100\\%\\_x"]);
     expect(palabrasDeBusqueda("   ")).toEqual([]);
   });
 });
 
 describe("listarMovimientosPagina", () => {
-  function encadenableConLike(resultado: { data: unknown; error: unknown; count: number | null }) {
-    const encadenable = mockConsulta(resultado);
-    encadenable.like = vi.fn(() => encadenable);
-    return encadenable;
-  }
-
-  function filaVista(sobrescribir: Record<string, unknown> = {}) {
-    const base: Record<string, unknown> = { ...filaCruda() };
-    delete base.sitios;
-    delete base.dispositivo_entrada;
-    return { ...base, sitio_nombre: "Brisas", dispositivo_entrada_tipo: "pc", ...sobrescribir };
-  }
-
   it("lee la vista panel_movimientos y devuelve la página con el total de todas las páginas", async () => {
-    const encadenable = encadenableConLike({ data: [filaVista()], error: null, count: 4321 });
+    const encadenable = mockConsulta({ data: [filaVista()], error: null, count: 4321 });
     mocks.from.mockReturnValue(encadenable);
 
     const resultado = await listarMovimientosPagina({ pagina: 0, tamano: 100 });
@@ -180,10 +72,11 @@ describe("listarMovimientosPagina", () => {
     expect(resultado.total).toBe(4321);
     expect(resultado.filas).toHaveLength(1);
     expect(resultado.filas[0].sitio_nombre).toBe("Brisas");
+    expect(resultado.filas[0].medio_texto).toBe("CAMINANDO");
   });
 
   it("pide sólo el tramo de la página (base 0) y ordena por hora_entrada descendente con desempate por id", async () => {
-    const encadenable = encadenableConLike({ data: [], error: null, count: 0 });
+    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
     mocks.from.mockReturnValue(encadenable);
 
     await listarMovimientosPagina({ pagina: 2, tamano: 50 });
@@ -197,7 +90,7 @@ describe("listarMovimientosPagina", () => {
   });
 
   it("respeta el orden pedido", async () => {
-    const encadenable = encadenableConLike({ data: [], error: null, count: 0 });
+    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
     mocks.from.mockReturnValue(encadenable);
 
     await listarMovimientosPagina({
@@ -213,7 +106,7 @@ describe("listarMovimientosPagina", () => {
   });
 
   it("aplica fechas (Costa Rica), unidades y una condición like por cada palabra de la búsqueda", async () => {
-    const encadenable = encadenableConLike({ data: [], error: null, count: 0 });
+    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
     mocks.from.mockReturnValue(encadenable);
 
     await listarMovimientosPagina({
@@ -233,8 +126,26 @@ describe("listarMovimientosPagina", () => {
     expect(encadenable.like).toHaveBeenCalledWith("texto_busqueda", "%perez%");
   });
 
-  it("sin filtros no manda gte, lt, in ni like", async () => {
-    const encadenable = encadenableConLike({ data: [], error: null, count: 0 });
+  it("los filtros por columna de la grilla se aplican como un .or() por columna", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
+    mocks.from.mockReturnValue(encadenable);
+
+    await listarMovimientosPagina({
+      pagina: 0,
+      tamano: 50,
+      filtros: {
+        empresa_nombre: { filterType: "text", type: "equals", filter: "BAC" },
+        gafete_numero: { filterType: "number", type: "greaterThan", filter: 3 },
+      },
+    });
+
+    expect(encadenable.or).toHaveBeenCalledTimes(2);
+    expect(encadenable.or).toHaveBeenCalledWith('empresa_p.eq."bac"');
+    expect(encadenable.or).toHaveBeenCalledWith("gafete_numero.gt.3");
+  });
+
+  it("sin filtros no manda gte, lt, in, like ni or", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: 0 });
     mocks.from.mockReturnValue(encadenable);
 
     await listarMovimientosPagina({ pagina: 0, tamano: 50 });
@@ -243,10 +154,23 @@ describe("listarMovimientosPagina", () => {
     expect(encadenable.lt).not.toHaveBeenCalled();
     expect(encadenable.in).not.toHaveBeenCalled();
     expect(encadenable.like).not.toHaveBeenCalled();
+    expect(encadenable.or).not.toHaveBeenCalled();
   });
 
-  it("exportar pide todo el filtro en tramos de 1.000 y se detiene al recibir un tramo corto", async () => {
-    const encadenable = encadenableConLike({ data: [], error: null, count: 2500 });
+  it("propaga el error como Error real y rechaza filas con forma inesperada", async () => {
+    mocks.from.mockReturnValue(mockConsulta({ data: null, error: { message: "timeout" }, count: null }));
+    await expect(listarMovimientosPagina({ pagina: 0, tamano: 50 })).rejects.toThrow("timeout");
+
+    mocks.from.mockReturnValue(
+      mockConsulta({ data: [filaVista({ gafete_numero: "12" })], error: null, count: 1 }),
+    );
+    await expect(listarMovimientosPagina({ pagina: 0, tamano: 50 })).rejects.toThrow();
+  });
+});
+
+describe("listarMovimientosParaExportar", () => {
+  it("pide todo el filtro en tramos de 1.000 y se detiene al recibir un tramo corto", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: 2500 });
     const tramo = (n: number) => Array.from({ length: n }, (_, i) => filaVista({ id: `f${i}` }));
     let llamada = 0;
     encadenable.then = (resolver: (valor: unknown) => void) => {
@@ -265,8 +189,8 @@ describe("listarMovimientosPagina", () => {
     expect(encadenable.range).toHaveBeenNthCalledWith(3, 2000, 2999);
   });
 
-  it("exportar marca truncado cuando el filtro tiene más filas que el máximo", async () => {
-    const encadenable = encadenableConLike({ data: [], error: null, count: 9999 });
+  it("marca truncado cuando el filtro tiene más filas que el máximo", async () => {
+    const encadenable = mockConsulta({ data: [], error: null, count: 9999 });
     encadenable.then = (resolver: (valor: unknown) => void) =>
       resolver({
         data: Array.from({ length: 1000 }, (_, i) => filaVista({ id: `f${i}` })),
@@ -280,18 +204,6 @@ describe("listarMovimientosPagina", () => {
     expect(resultado.filas).toHaveLength(1000);
     expect(resultado.total).toBe(9999);
     expect(resultado.truncado).toBe(true);
-  });
-
-  it("propaga el error como Error real y rechaza filas con forma inesperada", async () => {
-    mocks.from.mockReturnValue(
-      encadenableConLike({ data: null, error: { message: "timeout" }, count: null }),
-    );
-    await expect(listarMovimientosPagina({ pagina: 0, tamano: 50 })).rejects.toThrow("timeout");
-
-    mocks.from.mockReturnValue(
-      encadenableConLike({ data: [filaVista({ gafete_numero: "12" })], error: null, count: 1 }),
-    );
-    await expect(listarMovimientosPagina({ pagina: 0, tamano: 50 })).rejects.toThrow();
   });
 });
 
@@ -309,9 +221,7 @@ describe("listarUnidadesOperativas", () => {
   });
 
   it("propaga el error de la consulta como Error real", async () => {
-    mocks.from.mockReturnValue(
-      mockConsulta({ data: null, error: { message: "timeout" }, count: null }),
-    );
+    mocks.from.mockReturnValue(mockConsulta({ data: null, error: { message: "timeout" }, count: null }));
 
     await expect(listarUnidadesOperativas()).rejects.toThrow("timeout");
   });
