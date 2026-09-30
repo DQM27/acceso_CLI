@@ -25,3 +25,6 @@ test-results/
 *.njsproj
 *.sln
 *.sw?
+
+# Cache de compilacion de TypeScript (tsc -b)
+*.tsbuildinfo
