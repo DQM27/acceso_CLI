@@ -122,7 +122,7 @@ fun PantallaPrincipal(
             onCambioAplicado = { refrescarNube += 1 },
             // El canal corre en `scope` (hilo principal): el aviso puede
             // mostrarse directo. El trabajo local sigue disponible.
-            onExpulsado = { motivo -> Toast.makeText(contexto, motivo.mensaje, Toast.LENGTH_LONG).show() },
+            onExpulsado = { Toast.makeText(contexto, ExpulsionNube.MENSAJE, Toast.LENGTH_LONG).show() },
         )
     }
     val sincronizacion = remember(nucleo, scope) {

@@ -6,7 +6,7 @@ use control_acceso::application::AppCore;
 use control_acceso::database::connection::abrir_conexion_secundaria_escritura;
 use control_acceso::instancia::InstanciaGuard;
 use control_acceso::nube::{
-    self, CacheTokenDispositivo, FirmanteDispositivo, NubeError, SesionSupabase, TokenDispositivo,
+    CacheTokenDispositivo, FirmanteDispositivo, NubeError, SesionSupabase, TokenDispositivo,
 };
 use control_acceso::services::autenticacion_service::UsuarioSesion;
 use rusqlite::Connection;
@@ -100,27 +100,6 @@ impl GuiState {
     /// ningún chequeo remoto toca la red.
     pub fn nube_vinculada(&self) -> bool {
         self.cache_token.vinculado()
-    }
-
-    /// `dispositivo_id` al que está vinculada la clave de este equipo.
-    pub fn dispositivo_vinculado(&self) -> Option<String> {
-        self.cache_token.dispositivo_vinculado()
-    }
-
-    /// Ver `CacheTokenDispositivo::huella_vinculada`.
-    pub fn huella_vinculada(&self) -> Option<String> {
-        self.cache_token.huella_vinculada()
-    }
-
-    /// Canjea un código de vinculación (ver `CacheTokenDispositivo::vincular`).
-    pub fn vincular(
-        &self,
-        codigo: &str,
-        dispositivo_esperado: Option<&str>,
-        metadata: Option<&nube::MetadatosDispositivo>,
-    ) -> Result<TokenDispositivo, NubeError> {
-        self.cache_token
-            .vincular(codigo, dispositivo_esperado, metadata)
     }
 
     /// Reusa el último `TokenDispositivo` mientras siga vigente en vez de

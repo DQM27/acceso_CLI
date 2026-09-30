@@ -125,16 +125,19 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   panel, ver `docs/features-futuras/propuesta-registro-dispositivos.md`.)
 - [ ] **Registro de dispositivos por código + clave: pasar a producción.** Implementado
   y probado en staging en la rama `feat/registro-dispositivos-seguro`; falta la
-  aprobación del usuario para desplegar en producción y re-vincular cada equipo. Pasos
+  aprobación del usuario para desplegar en producción y registrar cada equipo. Pasos
   y estado en `docs/handoff-registro-dispositivos.md`.
   - [x] Presencia en tiempo real (2026-09-08): Dispositivos.tsx y Usuarios.tsx.
-  - [x] Un código sirve una sola vez; cada equipo tiene su propia clave; revocar,
-    suspender o re-vincular corta al instante (política restrictiva + aviso por Realtime).
+  - [x] Un código sirve una sola vez; cada equipo tiene su propia clave; retirar
+    corta al instante (política restrictiva + aviso por Realtime).
+  - [x] Sólo dos acciones en el panel: Registrar y Retirar (decisión 2026-09-30). Se
+    quitaron la suspensión temporal y la re-vinculación: un equipo reinstalado se
+    registra como nuevo y el anterior se retira; los datos vuelven en la primera
+    sincronización.
   - [ ] Probar con equipos reales usando los builds de diagnóstico (Android y
-    escritorio, ambos contra staging con telemetría). Sólo instalaciones nuevas:
-    no se re-vincula desde el teléfono (decisión 2026-09-30).
-  - [ ] Reconstruir un equipo cuya base local se perdió pero conserva su clave, sin
-    pedir código nuevo (ver `docs/recuperacion-sitio-local.md`).
+    escritorio, ambos contra staging con telemetría). Sólo instalaciones nuevas.
+  - [ ] Borrar de staging las Edge Functions `admin-suspend-device` y
+    `admin-crear-codigo-vinculacion` (ya no están en el repo).
 - [ ] **Test SQL `administradores_panel_autorizacion.sql` desactualizado.** Espera que un
   admin_global pueda insertar/borrar en `administradores_panel`, pero la migración
   `20260909192636_retira_escritura_directa_de_administradores_panel` quitó esas
@@ -273,7 +276,7 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
      en Vault con un nombre ligado a su `dispositivo_id`.
   2. Edge Function nueva (`device-fetch-db-key` o similar) que exige el
      mismo JWT que ya valida `device-auth`, y le entrega su clave desde
-     Vault -- chequea `revoked_at`/`suspended_at` igual que `device-auth`.
+     Vault -- chequea `revoked_at` igual que `device-auth`.
   3. La app la pide una sola vez, en `configurar_dispositivo_inicial`, y la
      usa para abrir/crear la base SQLCipher; se cachea localmente para
      poder operar offline después (ese caché sigue teniendo la misma

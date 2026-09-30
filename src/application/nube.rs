@@ -151,9 +151,8 @@ impl AppCore {
     /// auditoría 2026-09-24 (NR-07/NS-25) por no tener ningún llamador real.
     ///
     /// Se rechaza a propósito si ya existe algún usuario local -- este
-    /// camino es sólo el bootstrap de una base vacía. Un equipo ya en uso se
-    /// re-vincula sin tocar su base (ver `comandos::nube::revincular_dispositivo`
-    /// en escritorio y `Nucleo::revincular_dispositivo` en móvil).
+    /// camino es sólo el bootstrap de una base vacía: un equipo reinstalado
+    /// se registra como dispositivo nuevo y el anterior se retira en el panel.
     /// `metadata`, si viene, viaja en el mismo request que el canje -- ver
     /// `nube::MetadatosDispositivo`. Cada plataforma decide qué mandar (o
     /// `None`): escritorio arma la suya en
@@ -381,7 +380,7 @@ impl AppCore {
             }
             (None, None) => None,
         };
-        let token = self.cache_token.vincular(codigo, None, metadata)?;
+        let token = self.cache_token.vincular(codigo, metadata)?;
         self.aplicar_desfase_reloj(&token);
         Ok(token)
     }

@@ -304,12 +304,9 @@ impl Nucleo {
     fn vincular_y_cachear(
         &self,
         codigo: &str,
-        dispositivo_esperado: Option<&str>,
         metadata: Option<&control_acceso::nube::MetadatosDispositivo>,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        let token = self
-            .cache_token
-            .vincular(codigo, dispositivo_esperado, metadata)?;
+        let token = self.cache_token.vincular(codigo, metadata)?;
         self.aplicar_desfase_de(&token);
         Ok(token)
     }

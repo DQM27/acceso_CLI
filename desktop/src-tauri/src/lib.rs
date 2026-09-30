@@ -616,8 +616,6 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::gafetes::marcar_gafete_perdido_provisional_kof,
         comandos::gafetes::resolver_gafete,
         comandos::nube::vincular_dispositivo_inicial,
-        comandos::nube::revincular_dispositivo,
-        comandos::nube::estado_vinculacion,
         comandos::nube::descartar_token_nube,
         comandos::nube::sincronizar_con_nube,
         comandos::nube::sincronizar_cambios_nube,

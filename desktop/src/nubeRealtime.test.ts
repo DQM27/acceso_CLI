@@ -9,12 +9,10 @@ const mocks = vi.hoisted(() => ({
   enviar: vi.fn(),
   aplicarCambio: vi.fn(),
   crear: vi.fn(),
-  estado: vi.fn(),
 }));
 vi.mock("./api/nube", () => ({
   aplicarCambioNube: mocks.aplicarCambio,
   enviarCambiosNube: mocks.enviar,
-  estadoVinculacion: mocks.estado,
   sesionRealtimeNube: mocks.sesion,
   sincronizarConNube: mocks.sincronizar,
   sincronizarCambiosNube: mocks.sincronizarCambios,
@@ -35,7 +33,6 @@ const sesion = {
   base_url: "https://ejemplo.supabase.co", apikey: "publicable-prueba",
   access_token: "jwt-dispositivo", expires_in: 3600,
   sitio_id: "sitio-a", dispositivo_id: "equipo-a", topic: "sitio:sitio-a",
-  huella: "huella-a",
 };
 const resumen = { enviados: 0 };
 
@@ -48,7 +45,6 @@ beforeEach(() => {
   mocks.sincronizarCambios.mockResolvedValue(resumen);
   mocks.enviar.mockResolvedValue(resumen);
   mocks.aplicarCambio.mockResolvedValue(true);
-  mocks.estado.mockResolvedValue({ credencial: "clave", dispositivo_id: sesion.dispositivo_id, huella: sesion.huella });
   mocks.crear.mockImplementation((_url, _key, opciones) => {
     const control: CanalPrueba = {
       estado: () => {}, aviso: () => {}, expulsion: () => {}, accessToken: opciones.accessToken,
@@ -84,41 +80,25 @@ describe("sincronización por Realtime", () => {
     const canal = await iniciar({ onExpulsado });
 
     canal.expulsion({ payload: { dispositivo_id: "equipo-b", motivo: "revocado" } });
-    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revinculado", huella: "otra" } });
     await vi.advanceTimersByTimeAsync(0);
     expect(onExpulsado).not.toHaveBeenCalled();
 
-    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "suspendido", huella: "huella-a" } });
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revocado" } });
     await vi.advanceTimersByTimeAsync(0);
-    expect(onExpulsado).toHaveBeenCalledWith("suspendido");
+    expect(onExpulsado).toHaveBeenCalledTimes(1);
   });
 
-  it("al ser expulsado cierra el canal y vuelve a intentar conectar", async () => {
-    const onExpulsado = vi.fn();
-    const canal = await iniciar({ onExpulsado });
+  it("al ser retirado cierra el canal y no vuelve a conectar", async () => {
+    const canal = await iniciar({ onExpulsado: vi.fn() });
     const primerCliente = mocks.crear.mock.results[0].value;
 
-    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "suspendido" } });
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revocado" } });
     await vi.advanceTimersByTimeAsync(0);
-
-    expect(onExpulsado).toHaveBeenCalledWith("suspendido");
     expect(primerCliente.realtime.disconnect).toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(mocks.sesion).toHaveBeenCalledTimes(1);
     expect(mocks.crear).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(2_000);
-    expect(mocks.sesion).toHaveBeenCalledTimes(2);
-  });
-
-  it("no se da por expulsado cuando este mismo equipo se acaba de re-vincular", async () => {
-    const onExpulsado = vi.fn();
-    const canal = await iniciar({ onExpulsado });
-    // El canal se abrió con "huella-a"; ya re-vinculado, la clave vigente es otra.
-    mocks.estado.mockResolvedValue({ credencial: "clave", dispositivo_id: "equipo-a", huella: "huella-nueva" });
-
-    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revinculado", huella: "huella-a" } });
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(onExpulsado).not.toHaveBeenCalled();
   });
 
   it("un aviso con la fila se aplica al instante y no consulta la nube", async () => {

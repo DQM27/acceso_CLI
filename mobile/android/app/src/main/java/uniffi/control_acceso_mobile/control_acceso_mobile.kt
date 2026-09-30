@@ -835,8 +835,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_revincular_dispositivo(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sincronizar_cambios(
@@ -1004,8 +1002,6 @@ internal object UniffiLib {
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_revincular_dispositivo(`ptr`: Long,`codigo`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sincronizar_cambios(`ptr`: Long,`tablas`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1407,7 +1403,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto() and 0xFFFF) != 7518) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_descartar_token_nube() and 0xFFFF) != 2971) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_descartar_token_nube() and 0xFFFF) != 30803) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms() and 0xFFFF) != 4032) {
@@ -1435,9 +1431,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial() and 0xFFFF) != 38622) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_revincular_dispositivo() and 0xFFFF) != 15919) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube() and 0xFFFF) != 58544) {
@@ -3073,7 +3066,7 @@ public interface NucleoInterface {
     
     /**
      * Descarta el token cacheado. Lo llama `NubeRealtime.kt` al recibir un
-     * aviso de expulsión (suspendido/revocado): sin esto el teléfono seguía
+     * aviso de expulsión (retirado en el panel): sin esto el teléfono seguía
      * usando su token de hasta 1 h, las consultas en vivo le devolvían
      * vacío (la política restrictiva filtra en silencio) y un chequeo como
      * "ingreso activo en otro sitio" pasaba como si no hubiera conflicto.
@@ -3146,15 +3139,6 @@ public interface NucleoInterface {
      * código) en vez del login (ver `MainActivity.kt`).
      */
     fun `requiereConfiguracionInicial`(): kotlin.Boolean
-    
-    /**
-     * Re-vincula un teléfono ya en uso con un código nuevo del panel, SIN
-     * vaciar su base: lo pendiente de enviar se conserva. Exclusivo de ROOT,
-     * igual que en escritorio (`comandos::nube::revincular_dispositivo`).
-     * Si el teléfono ya estaba vinculado, el código tiene que ser del MISMO
-     * dispositivo: el servidor lo verifica sin gastar el código.
-     */
-    fun `revincularDispositivo`(`codigo`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String)
     
     /**
      * Lo mínimo para que Kotlin escuche Broadcast privado por sitio. El
@@ -3928,7 +3912,7 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
     /**
      * Descarta el token cacheado. Lo llama `NubeRealtime.kt` al recibir un
-     * aviso de expulsión (suspendido/revocado): sin esto el teléfono seguía
+     * aviso de expulsión (retirado en el panel): sin esto el teléfono seguía
      * usando su token de hasta 1 h, las consultas en vivo le devolvían
      * vacío (la política restrictiva filtra en silencio) y un chequeo como
      * "ingreso activo en otro sitio" pasaba como si no hubiera conflicto.
@@ -4113,32 +4097,6 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     }
     )
     }
-    
-
-    
-    /**
-     * Re-vincula un teléfono ya en uso con un código nuevo del panel, SIN
-     * vaciar su base: lo pendiente de enviar se conserva. Exclusivo de ROOT,
-     * igual que en escritorio (`comandos::nube::revincular_dispositivo`).
-     * Si el teléfono ya estaba vinculado, el código tiene que ser del MISMO
-     * dispositivo: el servidor lo verifica sin gastar el código.
-     */
-    @Throws(NucleoException::class)override fun `revincularDispositivo`(`codigo`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_revincular_dispositivo(
-        it,
-        
-        FfiConverterString.lower(`codigo`),
-        FfiConverterString.lower(`identificadorHardware`),
-        FfiConverterString.lower(`nombreDispositivo`),
-        FfiConverterString.lower(`plataforma`),
-        FfiConverterString.lower(`versionBuild`),
-        FfiConverterString.lower(`appVersion`),_status)
-}
-    }
-    
     
 
     
@@ -7510,13 +7468,6 @@ data class SesionRealtimeNube (
     var `tipo`: kotlin.String
     , 
     var `topic`: kotlin.String
-    , 
-    /**
-     * Huella de la clave de este teléfono (`None` sólo si no se pudo
-     * leer). Distingue a este teléfono de otro vinculado con el
-     * mismo `dispositivo_id` al recibir el aviso `dispositivo_expulsado`.
-     */
-    var `huella`: kotlin.String?
     
 ){
     
@@ -7541,7 +7492,6 @@ public object FfiConverterTypeSesionRealtimeNube: FfiConverterRustBuffer<SesionR
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
-            FfiConverterOptionalString.read(buf),
         )
     }
 
@@ -7553,8 +7503,7 @@ public object FfiConverterTypeSesionRealtimeNube: FfiConverterRustBuffer<SesionR
             FfiConverterString.allocationSize(value.`sitioId`) +
             FfiConverterString.allocationSize(value.`dispositivoId`) +
             FfiConverterString.allocationSize(value.`tipo`) +
-            FfiConverterString.allocationSize(value.`topic`) +
-            FfiConverterOptionalString.allocationSize(value.`huella`)
+            FfiConverterString.allocationSize(value.`topic`)
     )
 
     override fun write(value: SesionRealtimeNube, buf: ByteBuffer) {
@@ -7566,7 +7515,6 @@ public object FfiConverterTypeSesionRealtimeNube: FfiConverterRustBuffer<SesionR
             FfiConverterString.write(value.`dispositivoId`, buf)
             FfiConverterString.write(value.`tipo`, buf)
             FfiConverterString.write(value.`topic`, buf)
-            FfiConverterOptionalString.write(value.`huella`, buf)
     }
 }
 

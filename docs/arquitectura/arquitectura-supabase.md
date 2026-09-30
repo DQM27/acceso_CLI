@@ -103,9 +103,9 @@ Android Keystore en el teléfono). No existe ningún secreto compartido.
 **Revocación efectiva (invariante):** todas las tablas de `public` con RLS
 tienen además la política RESTRICTIVA `solo dispositivos vigentes`
 (`private.dispositivo_vigente()`): un JWT con `sitio_id` sólo pasa si su
-dispositivo existe, no está revocado ni suspendido, y la `huella` del
-token es la de su clave vigente. Suspender, revocar o re-vincular corta al
-instante incluso un token ya emitido, y avisa al equipo por Realtime
+dispositivo existe, no está retirado (`revoked_at`), y la `huella` del
+token es la de su clave vigente. Retirar un dispositivo corta al instante
+incluso un token ya emitido, y avisa al equipo por Realtime
 (`dispositivo_expulsado` en `sitio:<id>`). Las sesiones humanas (sin
 `sitio_id`) no se ven afectadas. **Toda tabla nueva con RLS debe llevar
 esta política** (la migración `20260929200000_revocacion_efectiva_dispositivos`
@@ -304,11 +304,9 @@ Supabase Auth válida cuyo correo esté en `administradores_panel`
 | `device-vincular` | Canjea un código de vinculación y ata la clave pública del equipo | Pública (`verify_jwt = false`); todo rechazo responde igual y queda en `eventos_seguridad_dispositivos` |
 | `device-auth` | Desafío + aserción firmada por el equipo → JWT del dispositivo | Pública (`verify_jwt = false`) |
 | `admin-provision-device` | Da de alta un dispositivo nuevo (por `sitio_id`) y emite su código de vinculación | El código vale 15 min por defecto (5–1440) y un solo uso |
-| `admin-crear-codigo-vinculacion` | "Re-vincular": código nuevo para un dispositivo existente | Conserva `dispositivo_id` e historial; al canjearse, la clave anterior deja de servir |
 | `admin-create-site` | Da de alta un sitio | |
 | `admin-list-devices` | Sitios, dispositivos (con `credencial`: `clave`/`sin_vincular`), códigos pendientes y eventos de seguridad | |
-| `admin-revoke-device` | Baja permanente de un dispositivo | Anula también sus códigos pendientes |
-| `admin-suspend-device` | Baja temporal (`suspended_at`) | Distinto de revocar — se puede reactivar |
+| `admin-revoke-device` | "Retirar": baja definitiva de un dispositivo | Anula también sus códigos pendientes. No hay suspensión ni re-vinculación: un equipo reinstalado se registra como dispositivo nuevo |
 | `admin-delete-device` | Borra un dispositivo, o lo oculta si tiene historial (FK) | |
 | `admin-create-usuario` | Crea un `usuarios` + su cuenta en Supabase Auth | Correo sintético `<cedula>@brisas.local`, contraseña temporal — este es el reemplazo de "crear usuario desde la app" |
 | `admin-reset-password-usuario` | Resetea la contraseña de un `usuarios` | Cubre también el backfill de usuarios viejos sin `auth_user_id` |

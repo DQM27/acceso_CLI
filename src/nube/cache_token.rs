@@ -133,33 +133,15 @@ impl CacheTokenDispositivo {
         self.dispositivo_vinculado().is_some()
     }
 
-    /// Huella RFC 7638 de la clave vinculada, si la hay. El aviso en vivo
-    /// `dispositivo_expulsado` trae la huella del equipo que queda fuera: al
-    /// re-vincular, el equipo nuevo comparte `dispositivo_id` con el viejo y
-    /// sólo comparando la huella sabe que el aviso no es para él.
-    pub fn huella_vinculada(&self) -> Option<String> {
-        let firmante = self.firmante()?;
-        firmante.dispositivo_vinculado()?;
-        let jwk = firmante.clave_publica_jwk().ok()?;
-        super::firmante::ClavePublicaJwk::desde_json(&jwk)
-            .ok()
-            .map(|clave| clave.huella())
-    }
-
     /// Canjea un código de vinculación del panel y cachea el primer token.
     ///
-    /// Si la clave vigente ya estaba vinculada (re-vincular), se estrena
-    /// una nueva antes de canjear: cada vinculación usa su propia clave. Si
-    /// todavía no estaba vinculada (primer arranque, o un intento anterior
-    /// con un código equivocado), se reutiliza.
-    ///
-    /// `dispositivo_esperado`: si viene, el código tiene que ser de ese
-    /// dispositivo; se usa al re-vincular un equipo que ya tiene datos
-    /// locales, para no atarlo por error a otro dispositivo u otro sitio.
+    /// Si la clave vigente ya estaba vinculada, se estrena una nueva antes
+    /// de canjear: una clave nunca se ata a dos dispositivos. Si todavía no
+    /// estaba vinculada (primer arranque, o un intento anterior con un
+    /// código equivocado), se reutiliza.
     pub fn vincular(
         &self,
         codigo: &str,
-        dispositivo_esperado: Option<&str>,
         metadata: Option<&MetadatosDispositivo>,
     ) -> Result<TokenDispositivo, NubeError> {
         let firmante = self.firmante().ok_or(NubeError::SinCredencial)?;
@@ -167,13 +149,7 @@ impl CacheTokenDispositivo {
             firmante.regenerar()?;
         }
         let jwk = firmante.clave_publica_jwk()?;
-        let token = vincular_con_codigo(
-            super::base_url(),
-            codigo,
-            &jwk,
-            dispositivo_esperado,
-            metadata,
-        )?;
+        let token = vincular_con_codigo(super::base_url(), codigo, &jwk, metadata)?;
         firmante.marcar_vinculada(&token.dispositivo_id)?;
         self.guardar(&token);
         Ok(token)

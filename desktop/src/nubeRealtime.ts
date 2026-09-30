@@ -4,13 +4,12 @@ import {
   aplicarCambioNube,
   desfaseRelojMs,
   enviarCambiosNube,
-  estadoVinculacion,
   sesionRealtimeNube,
   sincronizarCambiosNube,
   sincronizarConNube,
 } from "./api/nube";
-import type { MotivoExpulsion, ResumenSincronizacion } from "./api/nube";
-import { motivoSiEsParaEsteEquipo } from "./expulsionNube";
+import type { ResumenSincronizacion } from "./api/nube";
+import { esExpulsionDeEsteEquipo } from "./expulsionNube";
 import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 import { realtimeTelemetria, telemetriaActiva } from "./telemetria";
 import { latenciaDesde, tipoDeError } from "./telemetriaCalculos";
@@ -30,9 +29,9 @@ export type EstadoCanalRealtime = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" |
 interface OpcionesRealtimeNube {
   onSincronizado?: (resumen: ResumenSincronizacion) => void;
   onEstado?: (estado: EstadoCanalRealtime) => void;
-  /** Este equipo fue revocado, suspendido o re-vinculado en otro equipo
-   * (ver `expulsionNube.ts`). */
-  onExpulsado?: (motivo: MotivoExpulsion) => void;
+  /** Este equipo fue retirado en el panel (ver `expulsionNube.ts`). El
+   * canal en vivo ya se detuvo para siempre. */
+  onExpulsado?: () => void;
   // Quién tiene la sesión abierta en esta PC ahora -- viaja en el mismo
   // `track()` que ya marca el dispositivo como presente, para que el panel
   // pueda mostrar "usuarios en línea y desde dónde" (ver
@@ -277,28 +276,13 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
         })
         .on("broadcast", { event: "dispositivo_expulsado" }, ({ payload }) => {
           if (cancelado || cliente !== clienteActual) return;
-          // La huella se lee en el momento, no la de cuando se abrió el
-          // canal: si ESTE equipo se acaba de re-vincular, el aviso trae su
-          // huella anterior y no es una expulsión.
-          void estadoVinculacion()
-            .then(
-              (estado) => estado.huella ?? sesion.huella,
-              () => sesion.huella,
-            )
-            .then((huella) => {
-              if (cancelado || cliente !== clienteActual) return;
-              const motivo = motivoSiEsParaEsteEquipo(payload, { dispositivo_id: sesion.dispositivo_id, huella });
-              if (!motivo) return;
-              opciones.onExpulsado?.(motivo);
-              // Sin acceso a la nube, el canal abierto seguía recibiendo
-              // los avisos del sitio (con la fila completa). Se cierra ya
-              // y se reintenta con espera creciente: mientras siga
-              // suspendido o revocado, `device-auth` y la política del
-              // canal rechazan la reconexión; al reactivarlo vuelve solo.
-              anotarFinDeConexion("expulsado");
-              limpiarCanal();
-              reconectar();
-            });
+          if (!esExpulsionDeEsteEquipo(payload, sesion.dispositivo_id)) return;
+          // El retiro es definitivo: el servidor ya no autoriza este canal
+          // ni emite tokens para este equipo, así que se deja de escuchar
+          // el sitio y no se reintenta la conexión.
+          anotarFinDeConexion("expulsado");
+          detener();
+          opciones.onExpulsado?.();
         })
         .subscribe((estado, error) => {
           if (cancelado || cliente !== clienteActual) return;
@@ -347,10 +331,12 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, alCambioLocal);
   void conectar();
 
-  return () => {
+  function detener() {
     cancelado = true;
     window.removeEventListener(EVENTO_CAMBIO_LOCAL_NUBE, alCambioLocal);
     if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
     limpiarCanal();
-  };
+  }
+
+  return detener;
 }

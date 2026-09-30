@@ -9,15 +9,10 @@ use serde::Deserialize;
 pub enum NubeError {
     #[error("No se pudo contactar al receptor: {0}")]
     Red(#[from] reqwest::Error),
-    /// `device-auth` no reconoce la clave del equipo: revocado, o vinculado
-    /// después en otro equipo.
+    /// `device-auth` no reconoce la clave del equipo: fue retirado en el
+    /// panel.
     #[error("La nube ya no reconoce a este dispositivo")]
     CredencialesInvalidas,
-    /// El dispositivo existe y su clave es válida, pero un admin lo
-    /// suspendió temporalmente (`dispositivos.suspended_at` en `device-auth`)
-    /// -- distinto de `CredencialesInvalidas` (baja permanente).
-    #[error("Este dispositivo fue suspendido temporalmente")]
-    DispositivoSuspendido,
     /// `device-auth` rechazó esta versión por estar debajo del mínimo
     /// aceptado (`VERSION_MINIMA_ACEPTADA` en el receptor) -- ver
     /// `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
@@ -165,23 +160,17 @@ pub(crate) fn autenticar_con_firmante(
 }
 
 /// Canjea el código de vinculación que emitió el panel, atando la clave
-/// pública de este equipo al dispositivo. Devuelve el primer token. Con
-/// `dispositivo_esperado`, un código de otro dispositivo se rechaza sin
-/// consumirse.
+/// pública de este equipo al dispositivo. Devuelve el primer token.
 pub(crate) fn vincular_con_codigo(
     base_url: &str,
     codigo: &str,
     clave_publica_jwk: &str,
-    dispositivo_esperado: Option<&str>,
     metadata: Option<&MetadatosDispositivo>,
 ) -> Result<TokenDispositivo, NubeError> {
     let mut cuerpo = serde_json::json!({
         "codigo": codigo,
         "clave_publica_jwk": jwk_como_valor(clave_publica_jwk)?,
     });
-    if let Some(dispositivo_id) = dispositivo_esperado {
-        cuerpo["dispositivo_esperado"] = serde_json::Value::from(dispositivo_id);
-    }
     agregar_metadata(&mut cuerpo, metadata);
     let respuesta = cliente_http()
         .post(format!("{base_url}/functions/v1/device-vincular"))
@@ -213,7 +202,6 @@ fn token_de_respuesta(
 ) -> Result<TokenDispositivo, NubeError> {
     match respuesta.status() {
         reqwest::StatusCode::UNAUTHORIZED => return Err(no_autorizado),
-        reqwest::StatusCode::FORBIDDEN => return Err(NubeError::DispositivoSuspendido),
         reqwest::StatusCode::CONFLICT => return Err(NubeError::ClaveEnUso),
         // 426 Upgrade Required -- lo que `device-auth` manda cuando
         // `VERSION_MINIMA_ACEPTADA` rechaza esta versión. Ver
@@ -295,7 +283,6 @@ mod tests {
             base_url,
             "K7QMR4XT2P",
             r#"{"crv":"P-256","kty":"EC","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"}"#,
-            None,
             None,
         )
     }
@@ -390,18 +377,6 @@ mod tests {
         );
 
         assert!(matches!(canjear(&base_url), Err(NubeError::ClaveEnUso)));
-    }
-
-    #[test]
-    fn dispositivo_suspendido_se_reporta_como_tal() {
-        let base_url = servidor_de_una_respuesta(
-            "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\
-             Connection: close\r\n\r\n{\"error\":\"device_suspended\"}",
-        );
-
-        let resultado = canjear(&base_url);
-
-        assert!(matches!(resultado, Err(NubeError::DispositivoSuspendido)));
     }
 
     #[test]
