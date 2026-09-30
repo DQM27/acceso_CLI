@@ -5,7 +5,8 @@ import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { OrdenTabla, OrigenServidor, TablaHandle } from "../componentes/Tabla";
-import SelectorRangoFecha, { textoRangoFecha } from "../componentes/SelectorRangoFecha";
+import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
+import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import SelectorUnidadesOperativas, {
   textoUnidadesOperativas,
 } from "../componentes/SelectorUnidadesOperativas";

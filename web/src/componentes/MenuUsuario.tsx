@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { LogOut } from "lucide-react";
 import type { UsuarioSesion } from "../api";
-import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
+import { ListaFlotante } from "./ListaFlotante";
+import { useListaFlotante } from "./ListaFlotante.logica";
 
 /**
  * Nombre del usuario en la esquina inferior derecha de la barra de estado —

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
+import { ListaFlotante } from "./ListaFlotante";
+import { useListaFlotante } from "./ListaFlotante.logica";
 import type { UnidadOperativa } from "../api/historial";
 
 /**

@@ -191,8 +191,7 @@ test("Historial (AG Grid) y exportación a PDF sin violaciones de CSP", async ({
   // tres botones de exportación (Excel, CSV y PDF) como en escritorio.
   await expect(page.locator(".ag-paging-row-summary-content")).toHaveText("1 a 1 de 1");
   await expect(page.getByRole("button", { name: "Exportar a Excel" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Exportar a CSV" })).toBeVisible();
-  // El punto de mayor riesgo real: exportarAPdf() escribe HTML crudo con un
+  await expect(page.getByRole("button", { name: "Exportar a CSV" })).toBeVisible();  // El punto de mayor riesgo real: exportarAPdf() escribe HTML crudo con un
   // <style> inline en un iframe oculto (about:blank hereda el CSP del
   // documento que lo creó) -- si algo en la política bloquea ese estilo,
   // tiene que aparecer acá como violación real, no sólo en teoría. La

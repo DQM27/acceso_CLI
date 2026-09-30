@@ -1,107 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarDays } from "lucide-react";
-import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
-import { fechaYMD, textoFechaDDMMYYYY } from "../tiempo";
-
-/**
- * Botón "Período: ..." que abre un popover con accesos rápidos (Hoy, Esta
- * semana, etc.) + los dos campos de fecha para un rango custom. Copiado de
- * `desktop/src/componentes/SelectorRangoFecha.tsx`.
- *
- * Los cambios quedan en un borrador local (`desdeBorrador`/`hastaBorrador`)
- * hasta "Aplicar" — clickear un preset o tipear en los campos no dispara
- * `onAplicar` todavía, así el usuario puede tocar varias cosas antes de
- * confirmar (o "Cancelar" y no cambiar nada).
- */
-
-/** Mismo texto que muestra el botón "Período: ..." — se exporta para que
- * quien necesite describir el filtro activo en otro lado no reimplemente
- * este formateo. `desde`/`hasta` vacíos son extremos abiertos; se describe
- * cada combinación en vez de asumir que "falta uno" significa "sin
- * filtro". */
-export function textoRangoFecha(desde: string, hasta: string): string {
-  if (desde && hasta) return `${textoFechaDDMMYYYY(desde)} – ${textoFechaDDMMYYYY(hasta)}`;
-  if (desde) return `Desde ${textoFechaDDMMYYYY(desde)}`;
-  if (hasta) return `Hasta ${textoFechaDDMMYYYY(hasta)}`;
-  return "Todo el historial";
-}
-
-export interface Preset {
-  etiqueta: string;
-  calcular: (hoy: Date) => { desde: string; hasta: string };
-}
-
-/** Lunes de la semana que contiene `d` — la semana arranca en lunes acá
- * (convención de semana laboral), no domingo. */
-function inicioSemana(d: Date): Date {
-  const dia = d.getDay(); // 0 = domingo … 6 = sábado
-  const offset = dia === 0 ? 6 : dia - 1;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - offset);
-}
-
-export const PRESETS: Preset[] = [
-  {
-    etiqueta: "Hoy",
-    calcular: (hoy) => ({ desde: fechaYMD(hoy), hasta: fechaYMD(hoy) }),
-  },
-  {
-    etiqueta: "Ayer",
-    calcular: (hoy) => {
-      const ayer = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 1);
-      return { desde: fechaYMD(ayer), hasta: fechaYMD(ayer) };
-    },
-  },
-  {
-    etiqueta: "Esta semana",
-    calcular: (hoy) => ({ desde: fechaYMD(inicioSemana(hoy)), hasta: fechaYMD(hoy) }),
-  },
-  {
-    etiqueta: "Semana pasada",
-    calcular: (hoy) => {
-      const inicioActual = inicioSemana(hoy);
-      const inicioPasada = new Date(
-        inicioActual.getFullYear(),
-        inicioActual.getMonth(),
-        inicioActual.getDate() - 7,
-      );
-      const finPasada = new Date(
-        inicioActual.getFullYear(),
-        inicioActual.getMonth(),
-        inicioActual.getDate() - 1,
-      );
-      return { desde: fechaYMD(inicioPasada), hasta: fechaYMD(finPasada) };
-    },
-  },
-  {
-    etiqueta: "Este mes",
-    calcular: (hoy) => ({
-      desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), 1)),
-      hasta: fechaYMD(hoy),
-    }),
-  },
-  {
-    etiqueta: "Mes pasado",
-    calcular: (hoy) => ({
-      desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)),
-      // Día 0 del mes actual == último día del mes anterior.
-      hasta: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), 0)),
-    }),
-  },
-  {
-    etiqueta: "Últimos 7 días",
-    calcular: (hoy) => ({
-      desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 6)),
-      hasta: fechaYMD(hoy),
-    }),
-  },
-  {
-    etiqueta: "Últimos 30 días",
-    calcular: (hoy) => ({
-      desde: fechaYMD(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 29)),
-      hasta: fechaYMD(hoy),
-    }),
-  },
-];
+import { ListaFlotante } from "./ListaFlotante";
+import { useListaFlotante } from "./ListaFlotante.logica";
+import { textoRangoFecha, PRESETS, etiquetaCortaRango } from "./SelectorRangoFecha.logica";
 
 export default function SelectorRangoFecha({
   desde,
@@ -135,23 +36,47 @@ export default function SelectorRangoFecha({
     setAbierto(true);
   }
 
+  // El mismo botón abre y cierra (antes sólo abría; para cerrar había que
+  // hacer clic afuera -- pedido del usuario 2026-09-23). El clic-afuera de
+  // arriba ignora a propósito los clics sobre el botón, así que no chocan.
+  function alternar() {
+    if (abierto) {
+      setAbierto(false);
+    } else {
+      abrir();
+    }
+  }
+
   function aplicar() {
     onAplicar(desdeBorrador, hastaBorrador);
     setAbierto(false);
   }
 
-  const etiqueta = textoRangoFecha(desde, hasta);
-
   return (
     <>
       <div ref={campoRef}>
-        <button type="button" className="boton boton-icono" onClick={abrir}>
+        {/* Compacto: el ícono ya dice "período", así que sólo va el rango
+            corto (ver `etiquetaCortaRango`); el texto completo queda en el
+            título. En mayúsculas (pedido del usuario 2026-09-23) -- va en el
+            propio botón porque los botones no heredan `text-transform`. */}
+        <button
+          type="button"
+          className="boton boton-icono"
+          onClick={alternar}
+          aria-expanded={abierto}
+          title={`Período: ${textoRangoFecha(desde, hasta)}`}
+          style={{ textTransform: "uppercase", fontWeight: 400 }}
+        >
           <CalendarDays size={16} />
-          Período: {etiqueta}
+          {etiquetaCortaRango(desde, hasta)}
         </button>
       </div>
+      {/* Se abre al costado izquierdo del botón, a su misma altura (pedido
+          del usuario 2026-09-23), así nunca tapa los botones de al lado
+          (Excel/CSV/PDF). Ancho fijo: lo que piden los accesos rápidos en
+          dos columnas, cada uno en una sola línea. */}
       {abierto && posicion && (
-        <ListaFlotante posicion={posicion} ancho={280}>
+        <ListaFlotante posicion={posicion} ancho={260} direccion="izquierda">
           <div
             ref={popoverRef}
             className="flex flex-col gap-3 p-[0.9rem]"
@@ -166,16 +91,30 @@ export default function SelectorRangoFecha({
                 {PRESETS.map((preset) => (
                   <button
                     key={preset.etiqueta}
+                    title={preset.etiqueta}
                     type="button"
                     className="boton"
-                    style={{ padding: "0.4rem 0.6rem", fontSize: "0.85rem" }}
+                    style={{
+                      padding: "0.35rem 0.4rem",
+                      fontSize: "0.78rem",
+                      // Sin negrita y sin saltos: cada acceso rápido en una
+                      // sola línea (en negrita "SEMANA PASADA" y "ÚLTIMOS 30
+                      // DÍAS" se partían en dos).
+                      fontWeight: 400,
+                      whiteSpace: "nowrap",
+                      // En mayúsculas, como "ACCESO RÁPIDO".
+                      textTransform: "uppercase",
+                    }}
+                    // Un acceso rápido aplica y cierra en el acto (pedido del
+                    // usuario 2026-09-23: elegir y después "Aplicar" era un
+                    // paso de más). "Aplicar" queda para el rango a mano.
                     onClick={() => {
                       const rango = preset.calcular(new Date());
-                      setDesdeBorrador(rango.desde);
-                      setHastaBorrador(rango.hasta);
+                      onAplicar(rango.desde, rango.hasta);
+                      setAbierto(false);
                     }}
                   >
-                    {preset.etiqueta}
+                    {preset.corta}
                   </button>
                 ))}
               </div>

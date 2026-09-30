@@ -1,0 +1,104 @@
+import { describe, expect, it } from "vitest";
+import { PRESETS, etiquetaCortaRango, textoRangoFecha } from "./SelectorRangoFecha.logica";
+
+function rangoDe(etiqueta: string, hoy: Date) {
+  const preset = PRESETS.find((p) => p.etiqueta === etiqueta);
+  if (!preset) throw new Error(`No existe el preset "${etiqueta}"`);
+  return preset.calcular(hoy);
+}
+
+describe("PRESETS de SelectorRangoFecha", () => {
+  // Miércoles 12 de agosto de 2026 — día de semana "del medio" a propósito,
+  // para que "esta semana"/"semana pasada" no coincidan por casualidad con
+  // el propio hoy.
+  const hoy = new Date(2026, 7, 12);
+
+  it("Hoy y Ayer son un solo día", () => {
+    expect(rangoDe("Hoy", hoy)).toEqual({ desde: "2026-08-12", hasta: "2026-08-12" });
+    expect(rangoDe("Ayer", hoy)).toEqual({ desde: "2026-08-11", hasta: "2026-08-11" });
+  });
+
+  it("Esta semana arranca el lunes, no el domingo", () => {
+    expect(rangoDe("Esta semana", hoy)).toEqual({ desde: "2026-08-10", hasta: "2026-08-12" });
+  });
+
+  it("Semana pasada es la semana completa anterior (lunes a domingo)", () => {
+    expect(rangoDe("Semana pasada", hoy)).toEqual({ desde: "2026-08-03", hasta: "2026-08-09" });
+  });
+
+  it("Este mes va del día 1 hasta hoy", () => {
+    expect(rangoDe("Este mes", hoy)).toEqual({ desde: "2026-08-01", hasta: "2026-08-12" });
+  });
+
+  it("Mes pasado es el mes calendario completo anterior", () => {
+    expect(rangoDe("Mes pasado", hoy)).toEqual({ desde: "2026-07-01", hasta: "2026-07-31" });
+  });
+
+  it("Mes pasado cruza el límite de año correctamente (enero → diciembre del año anterior)", () => {
+    const eneroDe2026 = new Date(2026, 0, 15);
+    expect(rangoDe("Mes pasado", eneroDe2026)).toEqual({
+      desde: "2025-12-01",
+      hasta: "2025-12-31",
+    });
+  });
+
+  it("Últimos 7 días incluye hoy (6 días atrás + hoy = 7)", () => {
+    expect(rangoDe("Últimos 7 días", hoy)).toEqual({ desde: "2026-08-06", hasta: "2026-08-12" });
+  });
+
+  it("Últimos 30 días incluye hoy (29 días atrás + hoy = 30)", () => {
+    expect(rangoDe("Últimos 30 días", hoy)).toEqual({ desde: "2026-07-14", hasta: "2026-08-12" });
+  });
+});
+
+describe("textoRangoFecha", () => {
+  it("ambos extremos: rango con guion", () => {
+    expect(textoRangoFecha("2026-07-30", "2026-08-29")).toBe("30/07/2026 – 29/08/2026");
+  });
+
+  it("sólo desde: abierto hacia adelante", () => {
+    expect(textoRangoFecha("2026-07-30", "")).toBe("Desde 30/07/2026");
+  });
+
+  it("sólo hasta: abierto hacia atrás", () => {
+    expect(textoRangoFecha("", "2026-08-29")).toBe("Hasta 29/08/2026");
+  });
+
+  it("ninguno: sin filtro", () => {
+    expect(textoRangoFecha("", "")).toBe("Todo el historial");
+  });
+});
+
+describe("etiquetaCortaRango (texto del botón)", () => {
+  const hoy = new Date(2026, 7, 12);
+
+  it("usa el nombre del acceso rápido cuando el rango coincide con uno", () => {
+    expect(etiquetaCortaRango("2026-08-12", "2026-08-12", hoy)).toBe("Hoy");
+    expect(etiquetaCortaRango("2026-08-01", "2026-08-12", hoy)).toBe("Mes");
+    expect(etiquetaCortaRango("2026-08-06", "2026-08-12", hoy)).toBe("7 días");
+  });
+
+  it("si no coincide, muestra las fechas con año corto", () => {
+    expect(etiquetaCortaRango("2026-08-03", "2026-08-05", hoy)).toBe("03/08/26 – 05/08/26");
+    expect(etiquetaCortaRango("2026-03-01", "", hoy)).toBe("Desde 01/03/26");
+    expect(etiquetaCortaRango("", "2026-08-05", hoy)).toBe("Hasta 05/08/26");
+  });
+
+  it("los accesos para anular el filtro se muestran por su nombre", () => {
+    // Período con que abre Historial: 6 meses atrás, `hasta` abierto.
+    expect(etiquetaCortaRango("2026-02-12", "", hoy)).toBe("6 meses");
+    expect(etiquetaCortaRango("", "", hoy)).toBe("Todo");
+  });
+});
+
+describe("accesos para anular el filtro de fechas", () => {
+  const hoy = new Date(2026, 7, 12);
+
+  it("Últimos 6 meses deja 'hasta' abierto, igual que el arranque de Historial", () => {
+    expect(rangoDe("Últimos 6 meses", hoy)).toEqual({ desde: "2026-02-12", hasta: "" });
+  });
+
+  it("Todo el historial deja los dos extremos abiertos", () => {
+    expect(rangoDe("Todo el historial", hoy)).toEqual({ desde: "", hasta: "" });
+  });
+});

@@ -19,7 +19,8 @@ import type {
   TextMatcherParams,
 } from "ag-grid-community";
 import { useUsuarioId } from "../contexto/SesionContexto";
-import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
+import { ListaFlotante } from "./ListaFlotante";
+import { useListaFlotante } from "./ListaFlotante.logica";
 import FiltroFechaTabla from "./FiltroFechaTabla";
 import { compararFechaYMD, textoTooltip } from "./Tabla.logica";
 import { useDebounced } from "./useDebounced";
