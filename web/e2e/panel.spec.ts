@@ -164,7 +164,7 @@ test("Usuarios (AG Grid) carga sin violaciones de CSP", async ({ page }) => {
 test("Dispositivos carga sin violaciones de CSP", async ({ page }) => {
   await preparar(page);
   await page.goto("/dispositivos");
-  await expect(page.getByText("Brisas")).toBeVisible();
+  await expect(page.getByRole("gridcell", { name: "Brisas" })).toBeVisible();
   // El registro de intentos vive fuera de la grilla: se ve en cualquier
   // ancho (las columnas de la grilla se virtualizan en pantallas angostas).
   await page.getByText(/Intentos y alertas/).click();
@@ -192,7 +192,6 @@ test("Historial (AG Grid) y exportación a PDF sin violaciones de CSP", async ({
   await expect(page.locator(".ag-paging-row-summary-content")).toHaveText("1 a 1 de 1");
   await expect(page.getByRole("button", { name: "Exportar a Excel" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Exportar a CSV" })).toBeVisible();
-
   // El punto de mayor riesgo real: exportarAPdf() escribe HTML crudo con un
   // <style> inline en un iframe oculto (about:blank hereda el CSP del
   // documento que lo creó) -- si algo en la política bloquea ese estilo,

@@ -1,5 +1,5 @@
-import { Suspense, lazy, useEffect, useState } from "react";
-import { BrowserRouter, Navigate, useLocation } from "react-router-dom";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { BrowserRouter, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { History, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -69,6 +69,38 @@ function guardarSidebarColapsado(colapsado: boolean) {
   }
 }
 
+// Orden y secciones ocultas del menú, por navegador (igual que en escritorio,
+// que las guarda por usuario). `orden` guarda TODOS los ids -- incluidos los
+// ocultos, para poder volver a mostrarlos desde el menú contextual --, y
+// `ocultas` es el subconjunto no visible.
+const CLAVE_SIDEBAR_ORDEN = "web:sidebar:orden";
+const CLAVE_SIDEBAR_OCULTAS = "web:sidebar:ocultas";
+
+function seccionValida(id: unknown): id is Seccion {
+  return typeof id === "string" && SECCIONES.some((seccion) => seccion.id === id);
+}
+
+/** Lista de secciones guardada; `null` si no hay nada o el JSON está roto. Los
+ * ids que ya no existen en `SECCIONES` se descartan: una sección quitada del
+ * código no debe resucitar como "oculta" ni "reordenada" fantasma. */
+function leerListaSecciones(clave: string): Seccion[] | null {
+  try {
+    const guardado = localStorage.getItem(clave);
+    if (!guardado) return null;
+    return (JSON.parse(guardado) as unknown[]).filter(seccionValida);
+  } catch {
+    return null;
+  }
+}
+
+function guardarListaSecciones(clave: string, ids: Seccion[]) {
+  try {
+    localStorage.setItem(clave, JSON.stringify(ids));
+  } catch {
+    // Perder la preferencia no es motivo para romper el menú.
+  }
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -112,6 +144,58 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
   // usándolo a la vez, no para miles.
   const [visitadas, setVisitadas] = useState<Seccion[]>(() => (seccionActual ? [seccionActual] : []));
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
+  const navigate = useNavigate();
+  const [ordenSidebar, setOrdenSidebar] = useState<Seccion[]>(
+    () => leerListaSecciones(CLAVE_SIDEBAR_ORDEN) ?? SECCIONES.map((seccion) => seccion.id),
+  );
+  const [seccionesOcultas, setSeccionesOcultas] = useState<Seccion[]>(
+    () => leerListaSecciones(CLAVE_SIDEBAR_OCULTAS) ?? [],
+  );
+
+  const seccionesOrdenadas = useMemo(() => {
+    const porId = new Map(SECCIONES.map((seccion) => [seccion.id, seccion]));
+    const ordenadas = ordenSidebar
+      .map((id) => porId.get(id))
+      .filter((seccion): seccion is (typeof SECCIONES)[number] => seccion !== undefined);
+    // Cubre secciones nuevas agregadas al código después de que este navegador
+    // ya guardó un orden: aparecen al final en vez de desaparecer del menú.
+    const faltantes = SECCIONES.filter((seccion) => !ordenSidebar.includes(seccion.id));
+    return [...ordenadas, ...faltantes];
+  }, [ordenSidebar]);
+
+  const primeraVisible = seccionesOrdenadas.find((seccion) => !seccionesOcultas.includes(seccion.id));
+
+  function reordenarSidebar(orden: Seccion[]) {
+    setOrdenSidebar(orden);
+    guardarListaSecciones(CLAVE_SIDEBAR_ORDEN, orden);
+  }
+
+  function alternarVisibilidadSeccion(id: Seccion, visible: boolean) {
+    setSeccionesOcultas((actual) => {
+      const siguiente = visible ? actual.filter((x) => x !== id) : [...actual, id];
+      // Nunca ocultar la última sección visible: dejaría el menú vacío y sin
+      // forma de deshacerlo desde la interfaz.
+      if (siguiente.length >= SECCIONES.length) return actual;
+      guardarListaSecciones(CLAVE_SIDEBAR_OCULTAS, siguiente);
+      return siguiente;
+    });
+  }
+
+  function restablecerSidebar() {
+    const ordenPorDefecto = SECCIONES.map((seccion) => seccion.id);
+    setOrdenSidebar(ordenPorDefecto);
+    setSeccionesOcultas([]);
+    guardarListaSecciones(CLAVE_SIDEBAR_ORDEN, ordenPorDefecto);
+    guardarListaSecciones(CLAVE_SIDEBAR_OCULTAS, []);
+  }
+
+  // Si la sección activa se ocultó, hay que salir de ella: de lo contrario la
+  // persona queda viendo una pantalla que ya no tiene entrada en el menú.
+  useEffect(() => {
+    if (seccionActual && seccionesOcultas.includes(seccionActual) && primeraVisible) {
+      navigate(rutaSeccion(primeraVisible.id), { replace: true });
+    }
+  }, [seccionActual, seccionesOcultas, primeraVisible, navigate]);
   // Independiente de `colapsado` (que es el modo ícono-solo de escritorio,
   // por doble click): en mobile el sidebar es un cajón que está oculto o
   // abierto de par en par, nunca "colapsado a íconos" -- ver el media query
@@ -150,7 +234,11 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
           )}
 
           <Sidebar
-            secciones={SECCIONES}
+            secciones={seccionesOrdenadas}
+            ocultas={seccionesOcultas}
+            onReordenar={reordenarSidebar}
+            onCambiarVisibilidad={alternarVisibilidadSeccion}
+            onRestablecer={restablecerSidebar}
             // En mobile, elegir una sección cierra el cajón -- si no, tapa la
             // pantalla recién elegida hasta que la persona lo cierre a mano.
             onNavegar={() => setMenuMovilAbierto(false)}
@@ -170,7 +258,7 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             </button>
             {/* Ruta desconocida (incluida "/") -- mismo default de siempre:
                 caer en Historial en vez de una pantalla en blanco. */}
-            {!seccionActual && <Navigate to={rutaSeccion("historial")} replace />}
+            {!seccionActual && <Navigate to={rutaSeccion(primeraVisible?.id ?? "historial")} replace />}
             {visitadas.map((id) => (
               <div
                 key={id}

@@ -45,6 +45,9 @@
   },
   "dependencies": {
     "@ag-grid-community/locale": "^36.2.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@supabase/supabase-js": "^2.116.0",
     "@tanstack/react-query": "^5.104.0",
     "ag-grid-community": "^36.1.0",

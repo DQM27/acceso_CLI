@@ -182,7 +182,11 @@ input {
   gap: 0.7rem;
   width: 100%;
   text-align: left;
-  padding: 0.6rem 0.75rem;
+  /* Mismo alto exacto que los controles de la barra de herramientas
+     (`--control-altura`), con el ícono centrado: así el primer ícono del
+     menú queda a la altura de esa barra. */
+  min-height: var(--control-altura);
+  padding: 0 0.75rem;
   border: none;
   border-radius: var(--radio-chico);
   background: transparent;
@@ -204,7 +208,7 @@ input {
    no corrido a la izquierda por el padding horizontal normal. */
 .shell-sidebar-colapsada .nav-item {
   justify-content: center;
-  padding: 0.65rem 0;
+  padding: 0;
 }
 
 /* Oculta la etiqueta en modo colapsado de escritorio -- vía CSS, no
@@ -239,14 +243,57 @@ input {
    Login (marca-sello, tarjeta) propagado al resto de la app. Flota sobre
    `--fondo` (ver `body`) como una tarjeta más, mismo margen (0.375rem) que
    separa el contenido del borde de la ventana en `.pantalla-cuerpo`. */
+/* Columna lateral (Sidebar.tsx): cabecera con el botón de colapsar/expandir a la
+   altura de la barra de herramientas y, debajo, la tarjeta del menú a la altura
+   de la grilla. Igual que en escritorio. */
+.shell-columna-lateral {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  margin-left: 0.375rem;
+}
+
+/* Misma altura y posición que la barra de herramientas de `Tabla`: arranca donde
+   `.pantalla-cuerpo` (0.375rem * 2 + 1px), mide `--control-altura` y deja debajo
+   el mismo espacio (0.375rem) que separa esa barra de la grilla, así la tarjeta
+   del menú empieza justo donde empieza la grilla. */
+.shell-cabecera-lateral {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--control-altura);
+  margin-top: calc(0.375rem * 2 + 1px);
+  margin-bottom: 0.375rem;
+}
+
+/* Nombre de la app en la cabecera, con el menú abierto, en el color de acento.
+   Las letras (una <span> cada una, ver Sidebar.tsx) se reparten a lo ancho con
+   `space-between` hasta el botón. No se puede seleccionar: es marca. */
+.shell-marca {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  padding-left: 0.75rem;
+  margin-right: 0.75rem;
+  color: var(--acento);
+  font-size: 1.25rem;
+  font-weight: 700;
+  user-select: none;
+}
+
+/* Colapsada: el botón centrado en la columna angosta. */
+.shell-columna-lateral-colapsada .shell-cabecera-lateral {
+  justify-content: center;
+}
+
 .shell-sidebar {
   display: flex;
   flex-direction: column;
-  /* 10rem (valor de desktop/) se quedaba corto para "Administradores" —
-     única sección de este panel más larga que las de desktop. */
-  width: 11.5rem;
+  width: 10rem;
+  flex: 1;
+  min-height: 0;
   flex-shrink: 0;
-  margin: 0.375rem 0 0.375rem 0.375rem;
+  margin: 0 0 0.375rem 0;
   background: var(--panel-lateral);
   border: 1px solid var(--borde);
   border-radius: var(--radio);
@@ -303,8 +350,8 @@ input {
     display: flex;
   }
 
-  .shell-sidebar,
-  .shell-sidebar.shell-sidebar-colapsada {
+  .shell-columna-lateral,
+  .shell-columna-lateral.shell-columna-lateral-colapsada {
     position: fixed;
     top: 0;
     left: 0;
@@ -312,13 +359,26 @@ input {
     z-index: 40;
     width: 15rem;
     margin: 0;
-    border-radius: 0;
+    background: var(--panel-lateral);
     transform: translateX(-100%);
     transition: transform 0.2s ease;
   }
 
-  .shell-sidebar.shell-sidebar-abierta {
+  .shell-columna-lateral.shell-columna-abierta {
     transform: translateX(0);
+  }
+
+  /* El cajón se abre con el botón de hamburguesa de `.boton-menu-movil`. */
+  .shell-cabecera-lateral {
+    display: none;
+  }
+
+  .shell-sidebar,
+  .shell-sidebar.shell-sidebar-colapsada {
+    width: 100%;
+    margin: 0;
+    border: none;
+    border-radius: 0;
   }
 
   /* Forzada visible acá, sin importar `.shell-sidebar-colapsada` -- ver
@@ -396,7 +456,7 @@ input {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  padding: 0.75rem 0.375rem 0;
+  padding: 0.375rem 0.375rem 0;
 }
 
 .chip {
@@ -512,6 +572,9 @@ input {
   flex: 1;
   min-height: 0;
   padding: 0.375rem;
+  /* La barra de herramientas arranca a la misma altura que el botón de
+     colapsar/expandir del menú (`.shell-cabecera-lateral`, mismo valor). */
+  padding-top: calc(0.375rem * 2 + 1px);
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
@@ -643,4 +706,50 @@ input {
 .boton-celda-angosto {
   padding: 0.2rem 0.5rem;
   font-size: 0.78rem;
+}
+
+/* Menu contextual del sidebar (MenuContextualSecciones.tsx). Solo top y left
+   (donde se hizo el click derecho) se ponen en linea, porque son dinamicos. */
+.menu-contextual {
+  position: fixed;
+  z-index: 200;
+  min-width: 13rem;
+  background: var(--elevado);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  box-shadow: var(--sombra-panel);
+  padding: 0.3rem;
+}
+
+.menu-contextual-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  background: none;
+  border: none;
+  border-radius: var(--radio-chico);
+  color: var(--texto);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-contextual-item:hover:not(:disabled) {
+  background: var(--campo-fondo);
+}
+
+.menu-contextual-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.menu-contextual-item-tenue {
+  color: var(--muted);
+}
+
+.menu-contextual-separador {
+  border-top: 1px solid var(--borde);
+  margin: 0.3rem 0;
 }
