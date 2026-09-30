@@ -5571,6 +5571,8 @@ data class IngresoRemoto (
     , 
     var `usuarioEntradaNombre`: kotlin.String?
     , 
+    var `contratistaCedula`: kotlin.String?
+    , 
     var `empresaNombre`: kotlin.String?
     , 
     /**
@@ -5600,6 +5602,7 @@ public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemot
             FfiConverterString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterOptionalLong.read(buf),
         )
     }
@@ -5609,6 +5612,7 @@ public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemot
             FfiConverterString.allocationSize(value.`contratistaNombre`) +
             FfiConverterString.allocationSize(value.`horaEntrada`) +
             FfiConverterOptionalString.allocationSize(value.`usuarioEntradaNombre`) +
+            FfiConverterOptionalString.allocationSize(value.`contratistaCedula`) +
             FfiConverterOptionalString.allocationSize(value.`empresaNombre`) +
             FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`)
     )
@@ -5618,6 +5622,7 @@ public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemot
             FfiConverterString.write(value.`contratistaNombre`, buf)
             FfiConverterString.write(value.`horaEntrada`, buf)
             FfiConverterOptionalString.write(value.`usuarioEntradaNombre`, buf)
+            FfiConverterOptionalString.write(value.`contratistaCedula`, buf)
             FfiConverterOptionalString.write(value.`empresaNombre`, buf)
             FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
     }

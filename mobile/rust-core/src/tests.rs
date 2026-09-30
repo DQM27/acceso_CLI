@@ -348,6 +348,9 @@ fn aplicar_cambio_nube_deja_el_ingreso_del_otro_equipo_al_instante() {
     // hasta Kotlin: sin él, un ingreso hecho en la PC no se encuentra.
     assert_eq!(remotos[0].gafete_numero, Some(25));
     assert_eq!(remotos[0].empresa_nombre.as_deref(), Some("EMPRESA"));
+    // Necesaria para que la fila remota de Activos muestre los mismos
+    // campos que una local (nombre · cédula · empresa · gafete).
+    assert_eq!(remotos[0].contratista_cedula.as_deref(), Some("101110111"));
 }
 
 #[test]
