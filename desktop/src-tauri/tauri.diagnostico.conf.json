@@ -3,6 +3,18 @@
   "productName": "Lattis Diagnostico",
   "identifier": "com.dqm27.lattis.desktop.diag",
   "bundle": {
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": false,
+    "icon": [
+      "icons/diagnostico/32x32.png",
+      "icons/diagnostico/128x128.png",
+      "icons/diagnostico/128x128@2x.png",
+      "icons/diagnostico/icon.icns",
+      "icons/diagnostico/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/diagnostico/icon.ico"
+      }
+    }
   }
 }

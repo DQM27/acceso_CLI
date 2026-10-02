@@ -260,10 +260,6 @@ impl Reloj for RelojCorregido {
     }
 }
 
-pub fn ahora_costa_rica() -> DateTime<Tz> {
-    Utc::now().with_timezone(&ZONA_APLICACION)
-}
-
 pub fn fecha_costa_rica(instante: DateTime<Utc>) -> NaiveDate {
     instante.with_timezone(&ZONA_APLICACION).date_naive()
 }
@@ -304,10 +300,6 @@ pub fn serializar_marca_utc(instante: DateTime<Utc>) -> String {
 
 pub fn parsear_utc(valor: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
     DateTime::parse_from_rfc3339(valor).map(|instante| instante.with_timezone(&Utc))
-}
-
-pub fn hora_actual_texto() -> String {
-    ahora_costa_rica().format("%H:%M").to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
