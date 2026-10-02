@@ -4,11 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.SpanStyle
@@ -75,31 +81,52 @@ private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
 }
 
 /// Ver el doc-comment de [FilaActiva] -- un ingreso abierto por el otro
-/// dispositivo del sitio, sin cédula/empresa/gafete propios (esos datos
-/// nunca viajan en la caché `ingresos_remotos`, sólo lo mínimo para
-/// mostrarlo y poder cerrarlo).
+/// dispositivo del sitio (la PC del puesto de control), cacheado en
+/// `ingresos_remotos`. Mismos campos que [FilaActivoLocal] -- cédula,
+/// empresa y gafete sí viajan en la caché desde la migración 24, así que
+/// no hay motivo para mostrar menos acá -- salvo el indicativo de "otro
+/// dispositivo", que es un ícono en vez de texto para ahorrar espacio.
 @Composable
 private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(remoto.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        Text(
-            "Entrada ${textoFechaHora(remoto.horaEntrada)}" +
-                (remoto.usuarioEntradaNombre?.let { " ($it)" } ?: ""),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "Otro dispositivo",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(remoto.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(
+                buildAnnotatedString {
+                    append("${remoto.contratistaCedula ?: "—"} · ${remoto.empresaNombre ?: "—"} · ".uppercase())
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                        append(
+                            (if (remoto.gafeteNumero != null) "Gafete ${remoto.gafeteNumero}" else "Sin gafete")
+                                .uppercase(),
+                        )
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "Ingresó ${textoFechaHora(remoto.horaEntrada)} · dio ingreso ${remoto.usuarioEntradaNombre ?: "—"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            Icons.Default.Computer,
+            contentDescription = "Registrado en otro dispositivo",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
         )
     }
 }

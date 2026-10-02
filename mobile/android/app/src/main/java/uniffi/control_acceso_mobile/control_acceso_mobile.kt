@@ -6302,6 +6302,17 @@ data class IngresoRemoto (
     var `horaEntrada`: kotlin.String
     , 
     var `usuarioEntradaNombre`: kotlin.String?
+    , 
+    var `contratistaCedula`: kotlin.String?
+    , 
+    var `empresaNombre`: kotlin.String?
+    , 
+    /**
+     * Necesario para la salida por gafete: sin él, un ingreso con gafete
+     * registrado en otro dispositivo (la PC del puesto de control) no se
+     * podía encontrar por número desde el teléfono.
+     */
+    var `gafeteNumero`: kotlin.Long?
     
 ){
     
@@ -6322,6 +6333,9 @@ public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemot
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalLong.read(buf),
         )
     }
 
@@ -6329,7 +6343,10 @@ public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemot
             FfiConverterString.allocationSize(value.`uuid`) +
             FfiConverterString.allocationSize(value.`contratistaNombre`) +
             FfiConverterString.allocationSize(value.`horaEntrada`) +
-            FfiConverterOptionalString.allocationSize(value.`usuarioEntradaNombre`)
+            FfiConverterOptionalString.allocationSize(value.`usuarioEntradaNombre`) +
+            FfiConverterOptionalString.allocationSize(value.`contratistaCedula`) +
+            FfiConverterOptionalString.allocationSize(value.`empresaNombre`) +
+            FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`)
     )
 
     override fun write(value: IngresoRemoto, buf: ByteBuffer) {
@@ -6337,6 +6354,9 @@ public object FfiConverterTypeIngresoRemoto: FfiConverterRustBuffer<IngresoRemot
             FfiConverterString.write(value.`contratistaNombre`, buf)
             FfiConverterString.write(value.`horaEntrada`, buf)
             FfiConverterOptionalString.write(value.`usuarioEntradaNombre`, buf)
+            FfiConverterOptionalString.write(value.`contratistaCedula`, buf)
+            FfiConverterOptionalString.write(value.`empresaNombre`, buf)
+            FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
     }
 }
 

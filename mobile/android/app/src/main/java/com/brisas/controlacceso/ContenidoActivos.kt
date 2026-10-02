@@ -199,15 +199,16 @@ internal fun ContenidoModoSalidaGafete(
         }
 
         coincidencias.forEach { coincidencia ->
-            val activoCoincidente = coincidencia.activo
+            val filaCoincidente = coincidencia.fila
             Text(
                 "Gafete ${coincidencia.numero} · " +
                     (
-                        activoCoincidente?.let { "${it.contratistaNombre} · ${it.empresaNombre}" }
-                            ?: "Sin ingreso activo"
+                        filaCoincidente?.let { fila ->
+                            listOfNotNull(fila.contratistaNombre, fila.empresaNombre).joinToString(" · ")
+                        } ?: "Sin ingreso activo"
                     ),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (activoCoincidente != null) {
+                color = if (filaCoincidente != null) {
                     MaterialTheme.colorScheme.onSurface
                 } else {
                     MaterialTheme.colorScheme.error
@@ -216,7 +217,7 @@ internal fun ContenidoModoSalidaGafete(
             )
         }
 
-        val encontrados = coincidencias.filter { it.activo != null }
+        val encontrados = coincidencias.filter { it.fila != null }
         if (encontrados.isNotEmpty()) {
             BotonBrisas(
                 onClick = onRegistrarSalidaGafetes,

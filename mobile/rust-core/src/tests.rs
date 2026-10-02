@@ -311,12 +311,20 @@ fn aplicar_cambio_nube_deja_el_ingreso_del_otro_equipo_al_instante() {
     let aviso = r#"{"table":"ingresos","operation":"INSERT","id":"u1","sitio_id":"s1",
         "registro":{"id":"u1","sitio_id":"s1","contratista_nombre":"PERSONA",
         "contratista_cedula":"101110111","hora_entrada":"2026-09-27T12:00:00+00:00",
+        "empresa_nombre":"EMPRESA","gafete_numero":25,
         "dispositivo_entrada_id":"otro","hora_salida":null}}"#;
     assert!(nucleo.aplicar_cambio_nube(aviso.to_string()).unwrap());
 
     let remotos = nucleo.listar_ingresos_remotos().unwrap();
     assert_eq!(remotos.len(), 1);
     assert_eq!(remotos[0].contratista_nombre, "PERSONA");
+    // La salida por gafete del teléfono depende de que el número llegue
+    // hasta Kotlin: sin él, un ingreso hecho en la PC no se encuentra.
+    assert_eq!(remotos[0].gafete_numero, Some(25));
+    assert_eq!(remotos[0].empresa_nombre.as_deref(), Some("EMPRESA"));
+    // Necesaria para que la fila remota de Activos muestre los mismos
+    // campos que una local (nombre · cédula · empresa · gafete).
+    assert_eq!(remotos[0].contratista_cedula.as_deref(), Some("101110111"));
 }
 
 #[test]
