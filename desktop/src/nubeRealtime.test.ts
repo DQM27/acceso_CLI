@@ -24,6 +24,8 @@ interface CanalPrueba {
   aviso: (mensaje: {
     payload: { dispositivo_id: string; table?: string; operation?: string; registro?: unknown };
   }) => void;
+  expulsion: (mensaje: { payload: unknown }) => void;
+  cierreSesion: (mensaje: { payload: unknown }) => void;
   accessToken: () => Promise<string>;
 }
 const canales: CanalPrueba[] = [];
@@ -45,9 +47,17 @@ beforeEach(() => {
   mocks.enviar.mockResolvedValue(resumen);
   mocks.aplicarCambio.mockResolvedValue(true);
   mocks.crear.mockImplementation((_url, _key, opciones) => {
-    const control: CanalPrueba = { estado: () => {}, aviso: () => {}, accessToken: opciones.accessToken };
+    const control: CanalPrueba = {
+      estado: () => {}, aviso: () => {}, expulsion: () => {}, cierreSesion: () => {},
+      accessToken: opciones.accessToken,
+    };
     const canal = {
-      on: vi.fn((_tipo, _filtro, callback) => { control.aviso = callback; return canal; }),
+      on: vi.fn((_tipo, filtro: { event: string }, callback) => {
+        if (filtro.event === "dispositivo_expulsado") control.expulsion = callback;
+        else if (filtro.event === "sesion_cerrada") control.cierreSesion = callback;
+        else if (filtro.event === "cambio_nube") control.aviso = callback;
+        return canal;
+      }),
       subscribe: vi.fn((callback) => { control.estado = callback; return canal; }),
       track: vi.fn().mockResolvedValue(undefined),
     };
@@ -61,13 +71,52 @@ beforeEach(() => {
 });
 afterEach(() => { detener?.(); detener = undefined; vi.useRealTimers(); });
 
-async function iniciar() {
-  detener = iniciarRealtimeNube();
+async function iniciar(opciones: Parameters<typeof iniciarRealtimeNube>[0] = {}) {
+  detener = iniciarRealtimeNube(opciones);
   await vi.advanceTimersByTimeAsync(0);
   return canales[0];
 }
 
 describe("sincronización por Realtime", () => {
+  it("avisa la expulsión sólo cuando el aviso es para este equipo", async () => {
+    const onExpulsado = vi.fn();
+    const canal = await iniciar({ onExpulsado });
+
+    canal.expulsion({ payload: { dispositivo_id: "equipo-b", motivo: "revocado" } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onExpulsado).not.toHaveBeenCalled();
+
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revocado" } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onExpulsado).toHaveBeenCalledTimes(1);
+  });
+
+  it("el cierre de sesión por otra unidad sólo sincroniza si es del usuario de este equipo", async () => {
+    const canal = await iniciar({ usuario: { cedula: "900000301", nombre: "OPERADOR" } });
+
+    canal.cierreSesion({ payload: { cedula: "900000302" } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizar).not.toHaveBeenCalled();
+
+    // La sincronización completa es la que pregunta a la nube y cierra.
+    canal.cierreSesion({ payload: { cedula: "900000301" } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.sincronizar).toHaveBeenCalledTimes(1);
+  });
+
+  it("al ser retirado cierra el canal y no vuelve a conectar", async () => {
+    const canal = await iniciar({ onExpulsado: vi.fn() });
+    const primerCliente = mocks.crear.mock.results[0].value;
+
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revocado" } });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(primerCliente.realtime.disconnect).toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(mocks.sesion).toHaveBeenCalledTimes(1);
+    expect(mocks.crear).toHaveBeenCalledTimes(1);
+  });
+
   it("un aviso con la fila se aplica al instante y no consulta la nube", async () => {
     const recargas = vi.fn();
     window.addEventListener("nube:cambio-en-vivo", recargas);

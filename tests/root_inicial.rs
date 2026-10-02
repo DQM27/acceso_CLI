@@ -1,13 +1,17 @@
-use chrono::Utc;
+//! Arranque inicial (ROOT) y la regla del "último ROOT activo", que vive en
+//! el repositorio (ver `usuario_repository.rs`). El alta y la edición de
+//! usuarios se hacen desde el panel web; acá se prueban contra el
+//! repositorio, que es lo que las aplica al recibir el catálogo.
+
+use control_acceso::database::error::DatabaseError;
 use control_acceso::database::repositories::usuario_repository::{
     SqliteUsuarioRepository, UsuarioRepository,
 };
 use control_acceso::database::schema::initialize_database;
-use control_acceso::models::usuario::RolUsuario;
+use control_acceso::models::usuario::{RolUsuario, Usuario};
 use control_acceso::services::error::UsuarioServiceError;
-use control_acceso::services::usuario_service::{
-    ActualizarUsuarioInput, CrearRootInicialInput, CrearUsuarioInput, UsuarioService,
-};
+use control_acceso::services::password::generar_hash;
+use control_acceso::services::usuario_service::{CrearRootInicialInput, UsuarioService};
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::{Arc, Barrier};
@@ -26,14 +30,24 @@ fn root(cedula: &str) -> CrearRootInicialInput {
         password: "password1".to_string(),
     }
 }
-fn usuario(cedula: &str, rol: RolUsuario, activo: bool) -> CrearUsuarioInput {
-    CrearUsuarioInput {
+fn usuario(cedula: &str, rol: RolUsuario, activo: bool) -> Usuario {
+    Usuario {
+        id: 0,
         cedula: cedula.to_string(),
         nombre: "Usuario".to_string(),
-        password: "password2".to_string(),
+        password_hash: generar_hash("password2").unwrap(),
         rol,
         activo,
+        password_hash_confirmado_en: None,
+        password_temporal_cacheada: false,
     }
+}
+
+/// `id` con otro rol, leído del repositorio.
+fn con_rol(r: &SqliteUsuarioRepository<'_>, id: i64, rol: RolUsuario) -> Usuario {
+    let mut u = r.buscar_por_id(id).unwrap().unwrap();
+    u.rol = rol;
+    u
 }
 
 fn archivo_temporal(nombre: &str) -> PathBuf {
@@ -48,15 +62,14 @@ fn archivo_temporal(nombre: &str) -> PathBuf {
 }
 
 #[test]
-fn base_vacia_requiere_configuracion_y_crear_normal_es_rechazado() {
+fn base_vacia_requiere_configuracion_inicial() {
     let c = base();
     let r = SqliteUsuarioRepository::new(&c);
-    let s = UsuarioService::new(&r);
-    assert!(s.requiere_configuracion_inicial().unwrap());
-    assert!(matches!(
-        s.crear(usuario("2001", RolUsuario::Operador, true)),
-        Err(UsuarioServiceError::ConfiguracionInicialRequerida)
-    ));
+    assert!(
+        UsuarioService::new(&r)
+            .requiere_configuracion_inicial()
+            .unwrap()
+    );
 }
 
 #[test]
@@ -119,20 +132,12 @@ fn no_permite_desactivar_ni_degradar_ultimo_root_activo() {
     let s = UsuarioService::new(&r);
     let id = s.crear_root_inicial(root("ROOT1")).unwrap();
     assert!(matches!(
-        s.desactivar(id),
-        Err(UsuarioServiceError::UltimoRootActivo)
+        r.establecer_activo(id, false),
+        Err(DatabaseError::UltimoRootActivo)
     ));
     assert!(matches!(
-        s.actualizar_administracion(
-            id,
-            ActualizarUsuarioInput {
-                cedula: "ROOT1".to_string(),
-                nombre: "Root".to_string(),
-                rol: RolUsuario::Administrador
-            },
-            true,
-        ),
-        Err(UsuarioServiceError::UltimoRootActivo)
+        r.actualizar_protegiendo_ultimo_root(&con_rol(&r, id, RolUsuario::Administrador)),
+        Err(DatabaseError::UltimoRootActivo)
     ));
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
 }
@@ -145,49 +150,10 @@ fn unico_root_no_puede_convertirse_en_operador() {
     let id = s.crear_root_inicial(root("ROOT1")).unwrap();
 
     assert!(matches!(
-        s.actualizar_administracion(
-            id,
-            ActualizarUsuarioInput {
-                cedula: "ROOT1".to_string(),
-                nombre: "Root".to_string(),
-                rol: RolUsuario::Operador,
-            },
-            true,
-        ),
-        Err(UsuarioServiceError::UltimoRootActivo)
+        r.actualizar_protegiendo_ultimo_root(&con_rol(&r, id, RolUsuario::Operador)),
+        Err(DatabaseError::UltimoRootActivo)
     ));
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
-}
-
-#[test]
-fn unico_root_puede_cambiar_identidad_y_password() {
-    let c = base();
-    let r = SqliteUsuarioRepository::new(&c);
-    let s = UsuarioService::new(&r);
-    let id = s.crear_root_inicial(root("ROOT1")).unwrap();
-
-    s.actualizar_administracion(
-        id,
-        ActualizarUsuarioInput {
-            cedula: "ROOT-NUEVO".to_string(),
-            nombre: "Nombre Nuevo".to_string(),
-            rol: RolUsuario::Root,
-        },
-        true,
-    )
-    .unwrap();
-    s.cambiar_password(id, "password-nueva").unwrap();
-
-    let actualizado = s.buscar_por_id(id).unwrap();
-    assert_eq!(actualizado.cedula, "ROOT-NUEVO");
-    assert_eq!(actualizado.nombre, "Nombre Nuevo");
-    assert_eq!(actualizado.rol, RolUsuario::Root);
-    assert!(actualizado.activo);
-    assert!(
-        control_acceso::services::autenticacion_service::AutenticacionService::new(&r)
-            .autenticar("ROOT-NUEVO", "password-nueva", Utc::now())
-            .is_ok()
-    );
 }
 
 #[test]
@@ -196,8 +162,8 @@ fn con_dos_roots_puede_desactivar_uno_y_permanece_otro() {
     let r = SqliteUsuarioRepository::new(&c);
     let s = UsuarioService::new(&r);
     let primero = s.crear_root_inicial(root("ROOT1")).unwrap();
-    s.crear(usuario("ROOT2", RolUsuario::Root, true)).unwrap();
-    s.desactivar(primero).unwrap();
+    r.crear(&usuario("ROOT2", RolUsuario::Root, true)).unwrap();
+    r.establecer_activo(primero, false).unwrap();
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
 }
 
@@ -207,17 +173,9 @@ fn con_dos_roots_puede_degradar_uno_y_permanece_otro() {
     let r = SqliteUsuarioRepository::new(&c);
     let s = UsuarioService::new(&r);
     let primero = s.crear_root_inicial(root("ROOT1")).unwrap();
-    s.crear(usuario("ROOT2", RolUsuario::Root, true)).unwrap();
-    s.actualizar_administracion(
-        primero,
-        ActualizarUsuarioInput {
-            cedula: "ROOT1".to_string(),
-            nombre: "Anterior Root".to_string(),
-            rol: RolUsuario::Operador,
-        },
-        true,
-    )
-    .unwrap();
+    r.crear(&usuario("ROOT2", RolUsuario::Root, true)).unwrap();
+    r.actualizar_protegiendo_ultimo_root(&con_rol(&r, primero, RolUsuario::Operador))
+        .unwrap();
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
     assert_eq!(s.buscar_por_id(primero).unwrap().rol, RolUsuario::Operador);
 }
@@ -228,18 +186,10 @@ fn con_dos_roots_uno_puede_convertirse_en_administrador() {
     let r = SqliteUsuarioRepository::new(&c);
     let s = UsuarioService::new(&r);
     let primero = s.crear_root_inicial(root("ROOT1")).unwrap();
-    s.crear(usuario("ROOT2", RolUsuario::Root, true)).unwrap();
+    r.crear(&usuario("ROOT2", RolUsuario::Root, true)).unwrap();
 
-    s.actualizar_administracion(
-        primero,
-        ActualizarUsuarioInput {
-            cedula: "ROOT1".to_string(),
-            nombre: "Administrador".to_string(),
-            rol: RolUsuario::Administrador,
-        },
-        true,
-    )
-    .unwrap();
+    r.actualizar_protegiendo_ultimo_root(&con_rol(&r, primero, RolUsuario::Administrador))
+        .unwrap();
 
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
     assert_eq!(
@@ -254,32 +204,17 @@ fn promover_admin_activo_incrementa_roots_y_editar_no_root_no_activa_proteccion(
     let r = SqliteUsuarioRepository::new(&c);
     let s = UsuarioService::new(&r);
     s.crear_root_inicial(root("ROOT1")).unwrap();
-    let admin = s
-        .crear(usuario("ADMIN1", RolUsuario::Administrador, true))
+    let admin = r
+        .crear(&usuario("ADMIN1", RolUsuario::Administrador, true))
         .unwrap();
 
-    s.actualizar_administracion(
-        admin,
-        ActualizarUsuarioInput {
-            cedula: "ADMIN-EDITADO".to_string(),
-            nombre: "Administrador Editado".to_string(),
-            rol: RolUsuario::Administrador,
-        },
-        true,
-    )
-    .unwrap();
+    let mut editado = con_rol(&r, admin, RolUsuario::Administrador);
+    editado.nombre = "Administrador Editado".to_string();
+    r.actualizar_protegiendo_ultimo_root(&editado).unwrap();
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
 
-    s.actualizar_administracion(
-        admin,
-        ActualizarUsuarioInput {
-            cedula: "ADMIN-EDITADO".to_string(),
-            nombre: "Nuevo Root".to_string(),
-            rol: RolUsuario::Root,
-        },
-        true,
-    )
-    .unwrap();
+    r.actualizar_protegiendo_ultimo_root(&con_rol(&r, admin, RolUsuario::Root))
+        .unwrap();
     assert_eq!(r.contar_roots_activos().unwrap(), 2);
 }
 
@@ -338,8 +273,8 @@ fn dos_conexiones_no_pueden_desactivar_ambos_roots() {
         let repositorio = SqliteUsuarioRepository::new(&inicial);
         let servicio = UsuarioService::new(&repositorio);
         let primero = servicio.crear_root_inicial(root("ROOT-A")).unwrap();
-        let segundo = servicio
-            .crear(usuario("ROOT-B", RolUsuario::Root, true))
+        let segundo = repositorio
+            .crear(&usuario("ROOT-B", RolUsuario::Root, true))
             .unwrap();
         (primero, segundo)
     };
@@ -360,9 +295,8 @@ fn dos_conexiones_no_pueden_desactivar_ambos_roots() {
             thread::spawn(move || {
                 let conexion = Connection::open(ruta).unwrap();
                 let repositorio = SqliteUsuarioRepository::new(&conexion);
-                let servicio = UsuarioService::new(&repositorio);
                 barrera.wait();
-                servicio.desactivar(id)
+                repositorio.establecer_activo(id, false)
             })
         })
         .collect();
@@ -372,7 +306,7 @@ fn dos_conexiones_no_pueden_desactivar_ambos_roots() {
     assert_eq!(
         resultados
             .iter()
-            .filter(|r| matches!(r, Err(UsuarioServiceError::UltimoRootActivo)))
+            .filter(|r| matches!(r, Err(DatabaseError::UltimoRootActivo)))
             .count(),
         1
     );
@@ -389,7 +323,7 @@ fn root_inactivo_no_cuenta_como_activo() {
     let r = SqliteUsuarioRepository::new(&c);
     let s = UsuarioService::new(&r);
     s.crear_root_inicial(root("ROOT1")).unwrap();
-    s.crear(usuario("ROOT2", RolUsuario::Root, false)).unwrap();
+    r.crear(&usuario("ROOT2", RolUsuario::Root, false)).unwrap();
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
 }
 
@@ -399,10 +333,10 @@ fn activar_root_inactivo_lo_incluye_en_conteo() {
     let r = SqliteUsuarioRepository::new(&c);
     let s = UsuarioService::new(&r);
     s.crear_root_inicial(root("ROOT1")).unwrap();
-    let segundo = s.crear(usuario("ROOT2", RolUsuario::Root, false)).unwrap();
+    let segundo = r.crear(&usuario("ROOT2", RolUsuario::Root, false)).unwrap();
     assert_eq!(r.contar_roots_activos().unwrap(), 1);
 
-    s.activar(segundo).unwrap();
+    r.establecer_activo(segundo, true).unwrap();
 
     assert_eq!(r.contar_roots_activos().unwrap(), 2);
     assert!(s.buscar_por_id(segundo).unwrap().activo);

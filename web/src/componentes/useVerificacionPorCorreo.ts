@@ -23,9 +23,9 @@ function mensajeErrorEnEspanol(error: unknown): string {
   const mensaje = error instanceof Error ? error.message : String(error);
   const limite = mensaje.match(/only request this after (\d+) seconds?/i);
   if (limite) {
-    return `Por seguridad, esperá ${limite[1]} segundos antes de pedir otro código.`;
+    return `Por seguridad, espere ${limite[1]} segundos antes de pedir otro código.`;
   }
-  return "No se pudo enviar el código -- intentá de nuevo en un momento.";
+  return "No se pudo enviar el código -- intente de nuevo en un momento.";
 }
 
 export function useVerificacionPorCorreo(correo: string) {
@@ -67,8 +67,8 @@ export function useVerificacionPorCorreo(correo: string) {
       // sólo hace falta reintentar.
       const mensaje =
         error.status === undefined
-          ? "No se pudo verificar el código (falla de conexión) -- probá de nuevo."
-          : "Código inválido o vencido -- pedí uno nuevo.";
+          ? "No se pudo verificar el código (falla de conexión) -- pruebe de nuevo."
+          : "Código inválido o vencido -- pida uno nuevo.";
       setError(mensaje);
       throw new Error(mensaje);
     }

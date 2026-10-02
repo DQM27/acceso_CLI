@@ -44,7 +44,12 @@
     "wrangler": "4.146.0"
   },
   "dependencies": {
+    "@ag-grid-community/locale": "^36.2.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@supabase/supabase-js": "^2.116.0",
+    "@tanstack/react-query": "^5.104.0",
     "ag-grid-community": "^36.1.0",
     "ag-grid-react": "^36.1.0",
     "lucide-react": "^1.46.0",
@@ -52,6 +57,7 @@
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.3",
     "sonner": "^2.0.8",
+    "uqr": "^0.1.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.6.5"
   }

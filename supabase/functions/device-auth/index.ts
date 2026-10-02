@@ -1,23 +1,39 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
-import { SignJWT, importJWK } from "npm:jose@5";
+import { decodeProtectedHeader } from "npm:jose@5";
+import { clienteServicio } from "../_shared/admin.ts";
+import { enSegundoPlano, ipDelCliente, json, leerCuerpo, preflight } from "../_shared/http.ts";
+import {
+  COLUMNAS_NOMBRES,
+  TTL_DESAFIO_SEGUNDOS,
+  asercionValida,
+  emitirDesafio,
+  emitirTokenDispositivo,
+  metadataSaneada,
+  nombresDe,
+  registrarEvento,
+  type ClavePublicaP256,
+  type MetadatosDispositivo,
+} from "../_shared/dispositivos.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const SIGNING_KEY_JSON = Deno.env.get("DEVICE_SIGNING_KEY")!;
+// Autentica un dispositivo ya vinculado (ver device-vincular) y le emite su
+// token de sesión. Dos pasos (ver
+// docs/features-futuras/propuesta-registro-dispositivos.md):
+//
+// 1. `{ "desafio": true }` → `{ desafio, expires_in }`.
+// 2. `{ "asercion": "<JWS>", "metadata"? }` → token. El equipo firma el
+//    desafío con su clave privada (ES256, `kid` = huella RFC 7638 de su clave
+//    pública, `aud` = "device-auth").
+//
+// No existe otro camino: no hay secretos compartidos.
+//
+// Pública a propósito (`verify_jwt = false`): es la puerta de entrada.
 
-// Secret opcional (no una tabla -- cambia rara vez, no hace falta consultarla
-// en cada login) -- si no está seteado, el chequeo de versión mínima queda
-// desactivado por completo (comportamiento actual, sin romper nada). Se
-// configura con `supabase secrets set VERSION_MINIMA_ACEPTADA=1.5.0`.
-// Ver docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md, punto 9.
+// Secret opcional: sin él, el chequeo de versión mínima queda desactivado.
+// `supabase secrets set VERSION_MINIMA_ACEPTADA=1.5.0`. Ver
+// docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md, punto 9.
 const VERSION_MINIMA_ACEPTADA = Deno.env.get("VERSION_MINIMA_ACEPTADA") ?? null;
 
-/** Compara versiones "major.minor.patch" (sin sufijos de pre-release, mismo
- * esquema que ya usa el proyecto, ej. "1.5.3") -- true si `version` es
- * estrictamente menor que `minima`. Cualquier parte no numérica (o ausente)
- * cuenta como 0, para no reventar con algo malformado -- lo deja del lado
- * "está por debajo" en vez de tirar una excepción sin manejar. */
+/** `true` si `version` ("major.minor.patch") es menor que `minima`. */
 function versionPorDebajoDe(version: string, minima: string): boolean {
   const a = version.split(".").map((parte) => Number.parseInt(parte, 10) || 0);
   const b = minima.split(".").map((parte) => Number.parseInt(parte, 10) || 0);
@@ -29,171 +45,113 @@ function versionPorDebajoDe(version: string, minima: string): boolean {
   return false;
 }
 
-// 12h (antes 1h, 2026-09-12) -- un dispositivo real pasa horas sin
-// sincronizar (celular guardado, PC sin uso momentaneo) y el cliente sólo
-// renueva "on demand" antes de cada sync, no en segundo plano solo. Con 1h,
-// cualquier hueco de uso mayor a eso dejaba el token cacheado vencido hasta
-// el proximo intento -- mitigado ademas por el reintento automatico en
-// nube::SincronizacionError::token_dispositivo_vencido (ver
-// docs/decisiones-tecnicas.md), pero subir el TTL reduce cuanto necesita
-// ese reintento en la practica. Mismo tope que ya usa la sesion de persona
-// (TOPE_PRESENCIA_SUPABASE, 12h) para que quede parejo.
-const TOKEN_TTL_SECONDS = 12 * 60 * 60;
-
-// Permite llamadas desde un navegador (la mini web de historial, u otro
-// visor futuro) -- las apps nativas (Rust/Kotlin) nunca pasaron por CORS,
-// por eso esto no hacia falta antes. El secreto va en el body, no en una
-// credencial ambiente (cookie), asi que un origen abierto no expone nada:
-// sin el secreto correcto, la respuesta es 401 para cualquiera.
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-async function sha256Hex(text: string): Promise<string> {
-  const data = new TextEncoder().encode(text);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+interface FilaDispositivo {
+  id: string;
+  sitio_id: string;
+  tipo: string;
+  clave_huella: string | null;
+  clave_publica_jwk: ClavePublicaP256 | null;
+  identificador_hardware: string | null;
+  etiqueta: string | null;
+  sitios: { nombre: string } | null;
 }
 
+const COLUMNAS = `id, sitio_id, tipo, clave_huella, clave_publica_jwk, identificador_hardware, ${COLUMNAS_NOMBRES}`;
+
+const credencialesInvalidas = () => json({ error: "invalid_credentials" }, 401);
+
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  const respuestaPreflight = preflight(req);
+  if (respuestaPreflight) return respuestaPreflight;
+  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+
+  const cuerpo = await leerCuerpo(req);
+  if (!cuerpo) return json({ error: "bad_request" }, 400);
+
+  if (cuerpo.desafio === true) {
+    return json({ desafio: await emitirDesafio(), expires_in: TTL_DESAFIO_SEGUNDOS });
   }
 
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "method_not_allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-    });
-  }
+  const supabase = clienteServicio();
+  const ip = ipDelCliente(req);
+  const metadata = metadataSaneada(cuerpo.metadata);
 
-  let body: {
-    secret?: string;
-    metadata?: {
-      identificador_hardware?: string;
-      nombre_dispositivo?: string;
-      plataforma?: string;
-      version_build?: string;
-      app_version?: string;
-    };
-  };
-  try {
-    body = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "bad_request" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-    });
-  }
-
-  const secret = body.secret;
-  if (!secret || typeof secret !== "string") {
-    return new Response(JSON.stringify({ error: "bad_request" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-    });
-  }
-
-  // La IP la observa el propio servidor -- no depende de lo que mande el
-  // cliente (que se podria alterar con un APK modificado), asi que es el
-  // dato mas confiable para evidencia forense. Supabase Edge Functions
-  // corre detras de su proxy, que agrega este header; no hay acceso directo
-  // al socket TCP en Deno Deploy.
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
-
-  const secretHash = await sha256Hex(secret);
-
-  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-  const { data: dispositivo, error } = await supabase
-    .from("dispositivos")
-    .select("id, sitio_id, tipo, revoked_at, suspended_at")
-    .eq("secret_hash", secretHash)
-    .is("revoked_at", null)
-    .maybeSingle();
-
-  if (error || !dispositivo) {
-    return new Response(JSON.stringify({ error: "invalid_credentials" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-    });
-  }
-
-  // Suspension temporal (distinta de revoked_at, que es baja permanente):
-  // el dispositivo sigue existiendo con su secreto, pero no puede loguear
-  // hasta que un admin lo reactive. Un token ya emitido antes de suspender
-  // sigue valido hasta que expire (TOKEN_TTL_SECONDS) -- igual que pasa hoy
-  // con revocar.
-  if (dispositivo.suspended_at) {
-    return new Response(JSON.stringify({ error: "device_suspended" }), {
-      status: 403,
-      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-    });
-  }
+  if (typeof cuerpo.asercion !== "string") return json({ error: "bad_request" }, 400);
+  const dispositivo = await autenticarConAsercion(supabase, cuerpo.asercion, ip);
+  if (!dispositivo) return credencialesInvalidas();
 
   // Sin versión mínima configurada, o sin que el cliente la mande, no se
-  // bloquea nada -- "no sé" nunca es motivo para rechazar (evita dejar
-  // afuera de golpe a dispositivos que todavía no mandan `app_version` en
-  // cada renovación el día que se active este chequeo). 426 Upgrade
-  // Required: es exactamente lo que dice el estándar HTTP para este caso.
-  const appVersion = body.metadata?.app_version;
-  if (VERSION_MINIMA_ACEPTADA && appVersion && versionPorDebajoDe(appVersion, VERSION_MINIMA_ACEPTADA)) {
-    return new Response(
-      JSON.stringify({ error: "version_desactualizada", version_minima: VERSION_MINIMA_ACEPTADA }),
-      { status: 426, headers: { "Content-Type": "application/json", ...CORS_HEADERS } },
-    );
+  // bloquea: "no sé" nunca es motivo para rechazar. 426 Upgrade Required.
+  if (
+    VERSION_MINIMA_ACEPTADA &&
+    metadata.app_version &&
+    versionPorDebajoDe(metadata.app_version, VERSION_MINIMA_ACEPTADA)
+  ) {
+    return json({ error: "version_desactualizada", version_minima: VERSION_MINIMA_ACEPTADA }, 426);
   }
 
-  const jwk = JSON.parse(SIGNING_KEY_JSON);
-  const privateKey = await importJWK(jwk, "ES256");
+  enSegundoPlano(actualizarRastro(supabase, dispositivo, metadata, ip));
 
-  const now = Math.floor(Date.now() / 1000);
-  const token = await new SignJWT({
-    role: "authenticated",
-    sitio_id: dispositivo.sitio_id,
-    tipo: dispositivo.tipo,
-  })
-    .setProtectedHeader({ alg: "ES256", kid: jwk.kid, typ: "JWT" })
-    .setSubject(dispositivo.id)
-    .setIssuedAt(now)
-    .setExpirationTime(now + TOKEN_TTL_SECONDS)
-    .sign(privateKey);
-
-  // No bloquea la respuesta: si falla, no vale la pena tumbar el login por
-  // esto -- last_seen_at/last_ip/metadata son informativos, no un mecanismo
-  // de seguridad. metadata sólo viaja en la activación inicial (ver
-  // Nucleo.configurarDispositivoInicialConSecreto) -- sólo se pisan los
-  // campos que de verdad vinieron, para no borrar lo ya guardado en cada
-  // renovación de token de rutina, que no manda nada de esto.
-  const actualizacion: Record<string, string> = {
-    last_seen_at: new Date().toISOString(),
-  };
-  if (ip) actualizacion.last_ip = ip;
-  const metadata = body.metadata;
-  if (metadata && typeof metadata === "object") {
-    if (metadata.identificador_hardware) actualizacion.identificador_hardware = metadata.identificador_hardware;
-    if (metadata.nombre_dispositivo) actualizacion.nombre_dispositivo = metadata.nombre_dispositivo;
-    if (metadata.plataforma) actualizacion.plataforma = metadata.plataforma;
-    if (metadata.version_build) actualizacion.version_build = metadata.version_build;
-    if (metadata.app_version) actualizacion.app_version = metadata.app_version;
-  }
-  supabase
-    .from("dispositivos")
-    .update(actualizacion)
-    .eq("id", dispositivo.id)
-    .then(() => {});
-
-  return new Response(
-    JSON.stringify({
-      access_token: token,
-      expires_in: TOKEN_TTL_SECONDS,
-      sitio_id: dispositivo.sitio_id,
-      dispositivo_id: dispositivo.id,
-      tipo: dispositivo.tipo,
-    }),
-    { status: 200, headers: { "Content-Type": "application/json", ...CORS_HEADERS } },
-  );
+  return json(await emitirTokenDispositivo({ ...dispositivo, ...nombresDe(dispositivo) }));
 });
+
+async function autenticarConAsercion(
+  supabase: ReturnType<typeof clienteServicio>,
+  asercion: string,
+  ip: string | null,
+): Promise<FilaDispositivo | null> {
+  let huella: string | undefined;
+  try {
+    huella = decodeProtectedHeader(asercion).kid;
+  } catch {
+    return null;
+  }
+  if (!huella) return null;
+
+  const { data: dispositivo } = await supabase
+    .from("dispositivos")
+    .select(COLUMNAS)
+    .eq("clave_huella", huella)
+    .is("revoked_at", null)
+    .maybeSingle<FilaDispositivo>();
+  if (!dispositivo?.clave_publica_jwk) return null;
+
+  if (!(await asercionValida(asercion, dispositivo.clave_publica_jwk))) {
+    await registrarEvento(supabase, { tipo: "firma_invalida", dispositivo_id: dispositivo.id, ip });
+    return null;
+  }
+  return dispositivo;
+}
+
+/**
+ * Rastro informativo (`last_seen_at`, IP, metadata). Nunca pisa el
+ * identificador de hardware ya registrado: si llega uno distinto, queda como
+ * evento de seguridad para el panel en vez de borrar la evidencia.
+ */
+async function actualizarRastro(
+  supabase: ReturnType<typeof clienteServicio>,
+  dispositivo: FilaDispositivo,
+  metadata: MetadatosDispositivo,
+  ip: string | null,
+): Promise<void> {
+  const actualizacion: Record<string, string> = { last_seen_at: new Date().toISOString() };
+  if (ip) actualizacion.last_ip = ip;
+  for (const [campo, valor] of Object.entries(metadata)) {
+    if (valor && campo !== "identificador_hardware") actualizacion[campo] = valor;
+  }
+
+  const hardware = metadata.identificador_hardware;
+  if (hardware && !dispositivo.identificador_hardware) {
+    actualizacion.identificador_hardware = hardware;
+  } else if (hardware && hardware !== dispositivo.identificador_hardware) {
+    await registrarEvento(supabase, {
+      tipo: "hardware_distinto",
+      dispositivo_id: dispositivo.id,
+      ip,
+      detalle: { registrado: dispositivo.identificador_hardware, recibido: hardware, metadata },
+    });
+  }
+
+  const { error } = await supabase.from("dispositivos").update(actualizacion).eq("id", dispositivo.id);
+  if (error) console.error("no se pudo actualizar el rastro del dispositivo:", error.message);
+}

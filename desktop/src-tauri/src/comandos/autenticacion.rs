@@ -87,7 +87,7 @@ fn intentar_login_local(
 /// todavía lo tiene marcado inactivo local" (ver `login`): en ese momento
 /// todavía no hay ninguna sesión válida que autorice nada, es justo lo que
 /// se está tratando de determinar. La identidad de la nube es del
-/// dispositivo (el secreto), no del usuario que intenta entrar, así que no
+/// dispositivo (su clave), no del usuario que intenta entrar, así que no
 /// hace falta una.
 ///
 /// `pub` (el módulo `comandos` no es público fuera del crate, así que esto
@@ -97,12 +97,8 @@ fn intentar_login_local(
 /// reintento de acá de más abajo casi nunca tiene que esperar los
 /// `ESPERA_MAXIMA_SYNC_LOGIN` completos.
 pub fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
-    let secreto = nube::credenciales::cargar_secreto()
-        .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
-    let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
+    let token = state.autenticar_con_cache().map_err(mensaje_nube)?;
+    state.core().aplicar_token(&token);
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
         apikey: nube::apikey(),
@@ -129,12 +125,8 @@ pub fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
 /// sincronización completa (cola, catálogo, historial...) sigue
 /// corriendo, pero en segundo plano -- ver `login`.
 fn usuario_sigue_activo_remoto(state: &GuiState, cedula: &str) -> Result<bool, String> {
-    let secreto = nube::credenciales::cargar_secreto()
-        .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
-    let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
+    let token = state.autenticar_con_cache().map_err(mensaje_nube)?;
+    state.core().aplicar_token(&token);
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
         apikey: nube::apikey(),
@@ -310,7 +302,6 @@ async fn login_supabase(
     };
 
     state.iniciar_sesion(identidad.clone());
-    state.iniciar_sesion_supabase(sesion_supabase.clone());
 
     // Best-effort a propósito (ver el doc-comment de `cachear_password_local`):
     // un fallo acá (disco lleno, lo que sea) no debe tumbar un login que ya
@@ -354,9 +345,11 @@ async fn login_supabase(
 }
 
 /// Cambio de contraseña obligatorio (`debe_cambiar_password` en `true`
-/// tras `login`) o rutinario -- misma llamada, `nube::auth_supabase::cambiar_password`
-/// ya revalida `password_actual` con un login real antes de aceptar la
-/// nueva, no confía en que la sesión siga abierta.
+/// tras `login`) o rutinario (menú de usuario) -- misma llamada. El único
+/// lugar donde se cambia una contraseña es el escritorio, y siempre en
+/// Supabase Auth: `nube::auth_supabase::cambiar_password` revalida
+/// `password_actual` con un login real y usa ese token, así que funciona
+/// aunque la sesión se haya abierto sin conexión.
 #[tauri::command]
 pub async fn cambiar_password_supabase(
     password_actual: String,
@@ -365,9 +358,6 @@ pub async fn cambiar_password_supabase(
 ) -> Result<(), String> {
     let state = app.state::<GuiState>();
     let sesion = state.sesion_activa()?;
-    let access_token = state
-        .access_token_supabase_vigente()
-        .ok_or_else(|| "La sesión venció -- iniciá sesión de nuevo".to_string())?;
     // Se usan más abajo para refrescar el caché de login offline -- `sesion`
     // y `password_nueva` se mueven al `spawn_blocking` de acá abajo.
     let id_para_cache = sesion.id;
@@ -377,7 +367,6 @@ pub async fn cambiar_password_supabase(
         nube::cambiar_password(
             nube::base_url(),
             nube::apikey(),
-            &access_token,
             &sesion.cedula,
             &password_actual,
             &password_nueva,
@@ -415,7 +404,29 @@ pub async fn cambiar_password_supabase(
     Ok(())
 }
 
+/// Cierra la sesión local al instante y, en segundo plano, avisa a la nube
+/// (sesión única por unidad y bitácora de sesiones del panel). Best-effort:
+/// sin red, la sesión de la nube queda abierta hasta que otro ingreso la
+/// reemplace, y en la bitácora aparece como "sin cierre" en el próximo
+/// ingreso de este equipo.
 #[tauri::command]
-pub fn cerrar_sesion(state: tauri::State<GuiState>) {
+pub fn cerrar_sesion(app: tauri::AppHandle) {
+    let state = app.state::<GuiState>();
+    let cedula = state.sesion_activa().ok().map(|sesion| sesion.cedula);
     state.cerrar_sesion();
+
+    let Some(cedula) = cedula else { return };
+    if !state.nube_vinculada() {
+        return;
+    }
+    let manejador = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = manejador.state::<GuiState>();
+        let resultado = state.autenticar_con_cache().and_then(|token| {
+            nube::cerrar_sesion_en_unidad(nube::base_url(), nube::apikey(), &token, &cedula)
+        });
+        if let Err(error) = resultado {
+            log::info!("no se pudo cerrar la sesión en la nube: {error}");
+        }
+    });
 }

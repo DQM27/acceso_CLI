@@ -5,6 +5,7 @@ use std::time::Duration;
 use control_acceso::application::AppCore;
 use control_acceso::database::connection::ruta_base_datos;
 use control_acceso::instancia::InstanciaGuard;
+use control_acceso::nube::{FirmanteArchivo, FirmanteDispositivo};
 use control_acceso::tiempo::RelojCorregido;
 use tauri::{Emitter, Manager};
 use zeroize::Zeroizing;
@@ -44,7 +45,7 @@ const ESPERA_INICIAL_SINCRONIZACION: Duration = Duration::from_secs(10);
 /// Sincronización con la nube en segundo plano, sin que nadie tenga que
 /// apretar "Sincronizar ahora". Silencioso en todo lo que no sea un envío
 /// exitoso: sin sesión activa, sesión sin permiso (`Operacion::GestionarNube`
-/// es exclusivo de Root), o sin secreto de dispositivo todavía configurado
+/// es exclusivo de Root), o un equipo todavía sin vincular
 /// no son errores acá, son estados normales antes/entre sesiones -- no hay
 /// consola donde mostrar nada, y no tiene sentido interrumpir a un
 /// Administrador u Operador con un fallo de una función que ni les
@@ -88,11 +89,19 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
             let manejador = app.clone();
             let inicio = std::time::Instant::now();
             let es_arranque = alcance == control_acceso::nube::AlcanceSincronizacion::arranque();
-            let resultado = tauri::async_runtime::spawn_blocking(move || {
+            let tarea = tauri::async_runtime::spawn_blocking(move || {
                 let estado = manejador.state::<GuiState>();
-                comandos::nube::ejecutar_sincronizacion_con_alcance(&estado, alcance)
+                let resultado =
+                    comandos::nube::ejecutar_sincronizacion_con_alcance(&estado, alcance);
+                // Después de sincronizar, que es cuando se renueva el ancla.
+                let reloj = telemetria::activa().then(|| estado.core().estado_reloj());
+                (resultado, reloj)
             })
             .await;
+            let (resultado, reloj) = match tarea {
+                Ok((resultado, reloj)) => (Ok(resultado), reloj),
+                Err(error) => (Err(error), None),
+            };
             if telemetria::activa() {
                 telemetria::evento(
                     "sincronizacion_auto",
@@ -104,6 +113,17 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
                             Ok(Err(_)) => "error",
                             Err(_) => "tarea_fallida",
                         },
+                    }),
+                );
+            }
+            if let Some(reloj) = reloj {
+                telemetria::evento(
+                    "reloj",
+                    serde_json::json!({
+                        "confiable": reloj.confiable,
+                        "margen_ms": reloj.margen_ms,
+                        "diferencia_equipo_ms": reloj.diferencia_equipo_ms,
+                        "ancla_hace_ms": reloj.ancla_hace_ms,
                     }),
                 );
             }
@@ -416,7 +436,13 @@ fn configurar_cierre_de_splash(app: &tauri::App) {
 /// separado de `run()` únicamente para mantenerla bajo el tope de líneas de
 /// Clippy (`too_many_lines`); sin lógica propia, es el mismo arranque que
 /// antes vivía inline.
-fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) {
+fn preparar_nucleo() -> (
+    PathBuf,
+    InstanciaGuard,
+    Zeroizing<[u8; 32]>,
+    AppCore,
+    Arc<dyn FirmanteDispositivo>,
+) {
     let ruta_base_datos = ruta_base_datos().unwrap_or_else(|error| {
         mostrar_error_fatal_y_salir(&format!(
             "No se pudo resolver la ruta de la base de datos: {error}"
@@ -436,10 +462,10 @@ fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) 
     // Deliberadamente NO vive en la misma carpeta que `control_acceso.db`
     // (`directorio_base_datos`, `%LOCALAPPDATA%`) desde 2026-09-18: un
     // evento que corrompe/borra esa carpeta se llevaba puesto tanto la
-    // clave como el secreto de dispositivo (ver
+    // clave de la base como la del dispositivo (ver
     // `control_acceso::nube::credenciales::directorio_credenciales_roaming`
     // y `docs/recuperacion-sitio-local.md`). `%APPDATA%` es un árbol
-    // separado -- mismo motivo, misma carpeta que ese secreto.
+    // separado.
     let directorio_credenciales =
         control_acceso::nube::credenciales::directorio_credenciales_roaming().unwrap_or_else(
             || mostrar_error_fatal_y_salir("No se pudo resolver el directorio %APPDATA%"),
@@ -451,8 +477,15 @@ fn preparar_nucleo() -> (PathBuf, InstanciaGuard, Zeroizing<[u8; 32]>, AppCore) 
     // ver `AppCore::establecer_version_app` y
     // docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md, punto 9.
     core.establecer_version_app(env!("CARGO_PKG_VERSION"));
+    // Identidad del equipo ante la nube: su propia clave, en esa misma
+    // carpeta (ver `control_acceso::nube::firmante`).
+    // Una sola instancia compartida por el núcleo y por `GuiState`: las dos
+    // cachés de token firman con la misma clave.
+    let firmante: Arc<dyn FirmanteDispositivo> =
+        Arc::new(FirmanteArchivo::en(&directorio_credenciales));
+    core.establecer_firmante_dispositivo(Arc::clone(&firmante));
 
-    (ruta_base_datos, instancia, clave_base_datos, core)
+    (ruta_base_datos, instancia, clave_base_datos, core, firmante)
 }
 
 /// Registra los plugins que no se cargan siempre (updater fuera de móvil,
@@ -462,7 +495,11 @@ fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()>
     // El updater no existe en móvil — esta app es 100% escritorio (ver
     // el comentario de crate-type arriba), pero se guarda el gate
     // igual, mismo criterio que el ejemplo oficial de Tauri.
-    #[cfg(desktop)]
+    //
+    // El build de diagnóstico no lo registra: es de prueba y apunta a
+    // staging, y "actualizarlo" lo reemplazaría por la versión de producción
+    // publicada en Releases. Sin el plugin, la búsqueda falla en silencio.
+    #[cfg(all(desktop, not(feature = "telemetria")))]
     app.plugin(tauri_plugin_updater::Builder::new().build())?;
 
     // Antes solo corría en debug -- en producción no quedaba ningún rastro
@@ -536,7 +573,6 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::empresas::crear_empresa,
         comandos::empresas::actualizar_empresa,
         comandos::empresas::establecer_empresa_activa,
-        comandos::usuarios::cambiar_mi_password,
         comandos::ingresos::listar_ingresos_activos,
         comandos::ingresos::preparar_ingreso,
         comandos::ingresos::registrar_ingreso,
@@ -597,7 +633,8 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::gafetes::marcar_gafete_perdido_visita,
         comandos::gafetes::marcar_gafete_perdido_provisional_kof,
         comandos::gafetes::resolver_gafete,
-        comandos::nube::configurar_dispositivo_inicial,
+        comandos::nube::vincular_dispositivo_inicial,
+        comandos::nube::descartar_token_nube,
         comandos::nube::sincronizar_con_nube,
         comandos::nube::sincronizar_cambios_nube,
         comandos::nube::enviar_cambios_nube,
@@ -611,6 +648,7 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::nube::cerrar_prestamo_gafete_provisional_remoto,
         comandos::nube::fallos_permanentes_nube,
         comandos::nube::desfase_reloj_ms,
+        comandos::nube::identidad_equipo,
         telemetria::telemetria_activa,
         telemetria::telemetria_eventos,
         mostrar_ventana_principal,
@@ -624,12 +662,15 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
 ///
 /// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
 pub fn run() {
+    #[cfg(feature = "telemetria")]
+    telemetria::aislar_build_de_diagnostico();
     let _guardia_sentry = inicializar_sentry();
-    let (ruta_base_datos, instancia, clave_base_datos, core) = preparar_nucleo();
+    let (ruta_base_datos, instancia, clave_base_datos, core, firmante) = preparar_nucleo();
+    telemetria::usar_reloj(core.reloj());
     if let Some(directorio) = ruta_base_datos.parent() {
         telemetria::iniciar(directorio);
     }
-    let estado = GuiState::new(core, instancia, ruta_base_datos, clave_base_datos);
+    let estado = GuiState::new(core, instancia, ruta_base_datos, clave_base_datos, firmante);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

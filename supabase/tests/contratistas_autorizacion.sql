@@ -1,7 +1,8 @@
 -- Ejecutar en una sola sesión. Todas las filas de prueba se revierten.
--- Dos sitios/dispositivos temporales (no dependen de datos reales) para
--- probar el aislamiento por sitio en INSERT y el acceso global de
--- admin_global en SELECT/UPDATE.
+-- Dos sitios/dispositivos temporales (no dependen de datos reales). El
+-- catálogo de contratistas es global (migración `catalogo_global_sin_unidad`):
+-- cualquier equipo vinculado crea, lee y actualiza; una sesión sin equipo ni
+-- admin_global no puede nada.
 begin;
 
 insert into public.sitios (id, nombre) values
@@ -12,37 +13,50 @@ select set_config('diagnostico.sitio_a', (select id::text from public.sitios whe
        set_config('diagnostico.sitio_b', (select id::text from public.sitios where nombre = 'Diagnóstico B'), true),
        set_config('diagnostico.correo_admin', 'diagnostico-admin@example.com', true);
 
-insert into public.dispositivos (id, sitio_id, tipo, etiqueta, secret_hash) values
-  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico PC A', 'diag-hash-a'),
-  (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, 'pc', 'Diagnóstico PC B', 'diag-hash-b');
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, clave_publica_jwk, clave_huella) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico PC A', '{"kty":"EC"}', 'diag-huella-a'),
+  (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, 'pc', 'Diagnóstico PC B', '{"kty":"EC"}', 'diag-huella-b');
 
 select set_config('diagnostico.dispositivo_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico PC A'), true),
        set_config('diagnostico.dispositivo_b', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico PC B'), true);
 
 insert into public.administradores_panel (correo) values (current_setting('diagnostico.correo_admin'));
 
+-- Un dispositivo vigente por sitio como `sub` de los JWT simulados: la
+-- política restrictiva "solo dispositivos vigentes" exige que el token sea
+-- de un dispositivo real y activo (ver dispositivos_vigentes_y_vinculacion.sql).
+-- Sin esto, los casos negativos pasarían por esa política y no por la de sitio.
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, clave_publica_jwk, clave_huella) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico JWT A', '{"kty":"EC"}', 'diag-huella-jwt-a'),
+  (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, 'pc', 'Diagnóstico JWT B', '{"kty":"EC"}', 'diag-huella-jwt-b');
+select set_config('diagnostico.jwt_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT A'), true),
+       set_config('diagnostico.jwt_b', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT B'), true);
+
 set local role authenticated;
 
--- Un dispositivo del sitio A puede crear un contratista EN su propio sitio.
+-- Un dispositivo vinculado puede crear un contratista (sin unidad: es global).
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_a'), 'huella', 'diag-huella-jwt-a', 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
   true);
 do $$
 begin
-  insert into public.contratistas (id, sitio_id, dispositivo_origen_id, nombre)
-  values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico contratista A');
+  insert into public.contratistas (id, dispositivo_origen_id, nombre)
+  values (gen_random_uuid(), current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico contratista A');
   if not found then
-    raise exception 'Un dispositivo no pudo crear un contratista en su propio sitio';
+    raise exception 'Un dispositivo vinculado no pudo crear un contratista';
   end if;
 end $$;
 
--- Pero NO puede crear un contratista a nombre de otro sitio.
+-- Una sesión sin dispositivo ni admin_global NO puede crear.
+select set_config('request.jwt.claims',
+  json_build_object('role', 'authenticated', 'email', 'diagnostico-sin-permiso@example.com')::text,
+  true);
 do $$
 begin
   begin
-    insert into public.contratistas (id, sitio_id, dispositivo_origen_id, nombre)
-    values (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico contratista cruzado');
-    raise exception 'Un dispositivo del sitio A pudo crear un contratista para el sitio B';
+    insert into public.contratistas (id, dispositivo_origen_id, nombre)
+    values (gen_random_uuid(), null, 'Diagnóstico contratista sin permiso');
+    raise exception 'Una sesión sin dispositivo ni admin_global pudo crear un contratista';
   exception
     when insufficient_privilege then null;
   end;
@@ -54,7 +68,7 @@ end $$;
 -- decide acotar esto por sitio, este test tiene que actualizarse junto con
 -- la política.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_b'))::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_b'), 'huella', 'diag-huella-jwt-b', 'sitio_id', current_setting('diagnostico.sitio_b'))::text,
   true);
 do $$
 begin

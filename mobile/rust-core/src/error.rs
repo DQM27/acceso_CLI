@@ -21,7 +21,7 @@ pub enum NucleoError {
     #[error("usuario inactivo")]
     UsuarioInactivo,
     /// Usuario global (sincronizado) que todavía no fijó contraseña en
-    /// este teléfono. `Nucleo::autenticar`/`autenticar_con_secreto`
+    /// este teléfono. `Nucleo::autenticar`/`autenticar`
     /// interceptan esto internamente y redirigen a `autenticar_supabase`
     /// (ver el comentario ahí) -- Kotlin nunca ve este error para un
     /// usuario global. La variante sigue existiendo por el contrato FFI
@@ -35,11 +35,6 @@ pub enum NucleoError {
     SinPasswordLocal,
     #[error("no hay una sesión iniciada")]
     NoAutenticado,
-    /// La sesión de Supabase Auth (la de la PERSONA, distinta del token del
-    /// DISPOSITIVO) venció o nunca se abrió -- Kotlin debe mandar de vuelta
-    /// al login. Ver `Nucleo::cambiar_password_supabase`.
-    #[error("la sesión de nube venció -- iniciá sesión de nuevo")]
-    SesionSupabaseVencida,
     #[error("fecha de PRAIND inválida: {mensaje}")]
     FechaInvalida { mensaje: String },
     /// El gafete ya está activo en este sitio del lado de OTRO

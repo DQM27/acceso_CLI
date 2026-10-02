@@ -19,7 +19,7 @@ import uniffi.control_acceso_mobile.Nucleo
 /// `LoginViewModel.autenticar` intenta una sincronización corta antes de
 /// confirmar (ver su doc-comment) -- ya no es puramente síncrono, así que
 /// estos tests necesitan el mismo patrón `runTest`/`StandardTestDispatcher`
-/// que el resto de los ViewModelTest de la app. Sin secreto de nube en el store de prueba,
+/// que el resto de los ViewModelTest de la app. El teléfono de prueba no está vinculado:
 /// la sincronización de fondo no toca red y el login sigue con lo que ya
 /// validó local -- mismo comportamiento que en producción cuando el
 /// dispositivo no tiene la nube configurada.
@@ -45,7 +45,7 @@ class LoginViewModelTest {
 
     @Test
     fun `autenticar con credenciales validas guarda la sesion`() = runTest(dispatcher) {
-        val viewModel = LoginViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
+        val viewModel = LoginViewModel(nucleo, dispatcherIO = dispatcher)
 
         viewModel.cambiarCedula("999999999")
         viewModel.cambiarPassword(NucleoDePrueba.CLAVE_PRUEBA)
@@ -61,7 +61,7 @@ class LoginViewModelTest {
 
     @Test
     fun `autenticar con contrasena incorrecta deja error y no guarda sesion`() = runTest(dispatcher) {
-        val viewModel = LoginViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
+        val viewModel = LoginViewModel(nucleo, dispatcherIO = dispatcher)
 
         viewModel.cambiarCedula("999999999")
         viewModel.cambiarPassword("no-es-la-clave")
@@ -74,7 +74,7 @@ class LoginViewModelTest {
 
     @Test
     fun `cerrarSesion limpia cedula password y sesion`() = runTest(dispatcher) {
-        val viewModel = LoginViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
+        val viewModel = LoginViewModel(nucleo, dispatcherIO = dispatcher)
         viewModel.cambiarCedula("999999999")
         viewModel.cambiarPassword(NucleoDePrueba.CLAVE_PRUEBA)
         viewModel.autenticar()
@@ -91,7 +91,7 @@ class LoginViewModelTest {
 
     @Test
     fun `doble toque durante autenticacion no abre dos intentos`() = runTest(dispatcher) {
-        val viewModel = LoginViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
+        val viewModel = LoginViewModel(nucleo, dispatcherIO = dispatcher)
         viewModel.cambiarCedula("999999999")
         viewModel.cambiarPassword(NucleoDePrueba.CLAVE_PRUEBA)
 

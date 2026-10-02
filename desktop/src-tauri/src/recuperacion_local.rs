@@ -4,13 +4,12 @@
 //! decide CUÁNDO ofrecer esto (tras confirmación del usuario); este módulo
 //! sólo mueve archivos.
 //!
-//! El secreto de dispositivo (`dispositivo-nube.secret`) NO se toca acá --
-//! desde que vive en `%APPDATA%`, separado de la base (ver
-//! `clave_cifrado.rs`), sigue intacto en la mayoría de los casos que
-//! motivan esto (disco/perfil de la base dañado, no un reinstall completo
-//! del sistema), y dejarlo permite que el dispositivo se reactive con su
-//! propio secreto de siempre, sin que un administrador tenga que emitir
-//! uno nuevo.
+//! La clave del dispositivo (`dispositivo-nube.clave`) NO se toca acá --
+//! vive en `%APPDATA%`, separada de la base (ver `clave_cifrado.rs`), sigue
+//! intacta en la mayoría de los casos que motivan esto (disco/perfil de la
+//! base dañado, no un reinstall completo del sistema), y dejarla permite
+//! que el equipo se reconstruya con su misma identidad, sin que un
+//! administrador tenga que emitir un código nuevo.
 
 use std::fs;
 use std::path::{Path, PathBuf};

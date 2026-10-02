@@ -102,7 +102,7 @@ describe("App -- navegación entre secciones", () => {
     expect(montajes.contratistas).toHaveBeenCalledTimes(1);
   });
 
-  it("sólo la sección activa queda visible -- las demás quedan display:none", async () => {
+  it("sólo la sección activa queda visible -- las demás quedan ocultas con la clase hidden", async () => {
     render(<App />);
     await screen.findByText("Contenido de Historial");
 
@@ -111,7 +111,8 @@ describe("App -- navegación entre secciones", () => {
 
     const contenedorHistorial = screen.getByText("Contenido de Historial").parentElement;
     const contenedorUsuarios = screen.getByText("Contenido de Usuarios").parentElement;
-    expect(contenedorHistorial?.style.display).toBe("none");
-    expect(contenedorUsuarios?.style.display).toBe("flex");
+    expect(contenedorHistorial?.className).toContain("hidden");
+    expect(contenedorUsuarios?.className).toContain("flex");
+    expect(contenedorUsuarios?.className).not.toContain("hidden");
   });
 });

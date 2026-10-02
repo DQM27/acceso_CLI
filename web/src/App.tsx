@@ -1,7 +1,7 @@
-import { Suspense, lazy, useEffect, useState } from "react";
-import { BrowserRouter, Navigate, useLocation } from "react-router-dom";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { BrowserRouter, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "sonner";
-import { History, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
+import { DoorOpen, History, LogIn, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
@@ -15,9 +15,11 @@ import { SesionProvider } from "./contexto/SesionContexto";
 const Dispositivos = lazy(() => import("./pantallas/Dispositivos"));
 const Historial = lazy(() => import("./pantallas/Historial"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
+const AdentroAhora = lazy(() => import("./pantallas/AdentroAhora"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
+const Sesiones = lazy(() => import("./pantallas/Sesiones"));
 
-export type Seccion = "dispositivos" | "historial" | "contratistas" | "usuarios";
+export type Seccion = "dispositivos" | "historial" | "adentro" | "contratistas" | "usuarios" | "sesiones";
 
 /** Ruta real de cada sección -- `Sidebar` arma sus `NavLink` con esto y
  * `Shell` compara `location.pathname` contra el mismo valor para decidir
@@ -46,8 +48,10 @@ export function rutaSeccion(id: Seccion): string {
 // se llame igual en las dos apps.
 const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "historial", etiqueta: "Historial", Icono: History },
+  { id: "adentro", etiqueta: "Adentro ahora", Icono: DoorOpen },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
+  { id: "sesiones", etiqueta: "Sesiones", Icono: LogIn },
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
 ];
 
@@ -66,6 +70,38 @@ function guardarSidebarColapsado(colapsado: boolean) {
     localStorage.setItem(CLAVE_SIDEBAR_COLAPSADO, colapsado ? "1" : "0");
   } catch {
     // Ver comentario de leerSidebarColapsado.
+  }
+}
+
+// Orden y secciones ocultas del menú, por navegador (igual que en escritorio,
+// que las guarda por usuario). `orden` guarda TODOS los ids -- incluidos los
+// ocultos, para poder volver a mostrarlos desde el menú contextual --, y
+// `ocultas` es el subconjunto no visible.
+const CLAVE_SIDEBAR_ORDEN = "web:sidebar:orden";
+const CLAVE_SIDEBAR_OCULTAS = "web:sidebar:ocultas";
+
+function seccionValida(id: unknown): id is Seccion {
+  return typeof id === "string" && SECCIONES.some((seccion) => seccion.id === id);
+}
+
+/** Lista de secciones guardada; `null` si no hay nada o el JSON está roto. Los
+ * ids que ya no existen en `SECCIONES` se descartan: una sección quitada del
+ * código no debe resucitar como "oculta" ni "reordenada" fantasma. */
+function leerListaSecciones(clave: string): Seccion[] | null {
+  try {
+    const guardado = localStorage.getItem(clave);
+    if (!guardado) return null;
+    return (JSON.parse(guardado) as unknown[]).filter(seccionValida);
+  } catch {
+    return null;
+  }
+}
+
+function guardarListaSecciones(clave: string, ids: Seccion[]) {
+  try {
+    localStorage.setItem(clave, JSON.stringify(ids));
+  } catch {
+    // Perder la preferencia no es motivo para romper el menú.
   }
 }
 
@@ -112,6 +148,58 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
   // usándolo a la vez, no para miles.
   const [visitadas, setVisitadas] = useState<Seccion[]>(() => (seccionActual ? [seccionActual] : []));
   const [colapsado, setColapsado] = useState(leerSidebarColapsado);
+  const navigate = useNavigate();
+  const [ordenSidebar, setOrdenSidebar] = useState<Seccion[]>(
+    () => leerListaSecciones(CLAVE_SIDEBAR_ORDEN) ?? SECCIONES.map((seccion) => seccion.id),
+  );
+  const [seccionesOcultas, setSeccionesOcultas] = useState<Seccion[]>(
+    () => leerListaSecciones(CLAVE_SIDEBAR_OCULTAS) ?? [],
+  );
+
+  const seccionesOrdenadas = useMemo(() => {
+    const porId = new Map(SECCIONES.map((seccion) => [seccion.id, seccion]));
+    const ordenadas = ordenSidebar
+      .map((id) => porId.get(id))
+      .filter((seccion): seccion is (typeof SECCIONES)[number] => seccion !== undefined);
+    // Cubre secciones nuevas agregadas al código después de que este navegador
+    // ya guardó un orden: aparecen al final en vez de desaparecer del menú.
+    const faltantes = SECCIONES.filter((seccion) => !ordenSidebar.includes(seccion.id));
+    return [...ordenadas, ...faltantes];
+  }, [ordenSidebar]);
+
+  const primeraVisible = seccionesOrdenadas.find((seccion) => !seccionesOcultas.includes(seccion.id));
+
+  function reordenarSidebar(orden: Seccion[]) {
+    setOrdenSidebar(orden);
+    guardarListaSecciones(CLAVE_SIDEBAR_ORDEN, orden);
+  }
+
+  function alternarVisibilidadSeccion(id: Seccion, visible: boolean) {
+    setSeccionesOcultas((actual) => {
+      const siguiente = visible ? actual.filter((x) => x !== id) : [...actual, id];
+      // Nunca ocultar la última sección visible: dejaría el menú vacío y sin
+      // forma de deshacerlo desde la interfaz.
+      if (siguiente.length >= SECCIONES.length) return actual;
+      guardarListaSecciones(CLAVE_SIDEBAR_OCULTAS, siguiente);
+      return siguiente;
+    });
+  }
+
+  function restablecerSidebar() {
+    const ordenPorDefecto = SECCIONES.map((seccion) => seccion.id);
+    setOrdenSidebar(ordenPorDefecto);
+    setSeccionesOcultas([]);
+    guardarListaSecciones(CLAVE_SIDEBAR_ORDEN, ordenPorDefecto);
+    guardarListaSecciones(CLAVE_SIDEBAR_OCULTAS, []);
+  }
+
+  // Si la sección activa se ocultó, hay que salir de ella: de lo contrario la
+  // persona queda viendo una pantalla que ya no tiene entrada en el menú.
+  useEffect(() => {
+    if (seccionActual && seccionesOcultas.includes(seccionActual) && primeraVisible) {
+      navigate(rutaSeccion(primeraVisible.id), { replace: true });
+    }
+  }, [seccionActual, seccionesOcultas, primeraVisible, navigate]);
   // Independiente de `colapsado` (que es el modo ícono-solo de escritorio,
   // por doble click): en mobile el sidebar es un cajón que está oculto o
   // abierto de par en par, nunca "colapsado a íconos" -- ver el media query
@@ -128,6 +216,11 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
     });
   }, [seccionActual]);
 
+  useEffect(() => {
+    const etiqueta = SECCIONES.find((s) => s.id === seccionActual)?.etiqueta;
+    document.title = etiqueta ? `${etiqueta} — Panel de Acceso` : "Panel de Acceso";
+  }, [seccionActual]);
+
   function alternarColapsado() {
     setColapsado((actual) => {
       const siguiente = !actual;
@@ -138,14 +231,18 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
 
   return (
     <SesionProvider value={null}>
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+      <div className="flex h-full flex-col">
+        <div className="flex flex-1 min-h-0">
           {menuMovilAbierto && (
             <div className="shell-sidebar-velo" onClick={() => setMenuMovilAbierto(false)} />
           )}
 
           <Sidebar
-            secciones={SECCIONES}
+            secciones={seccionesOrdenadas}
+            ocultas={seccionesOcultas}
+            onReordenar={reordenarSidebar}
+            onCambiarVisibilidad={alternarVisibilidadSeccion}
+            onRestablecer={restablecerSidebar}
             // En mobile, elegir una sección cierra el cajón -- si no, tapa la
             // pantalla recién elegida hasta que la persona lo cierre a mano.
             onNavegar={() => setMenuMovilAbierto(false)}
@@ -154,7 +251,7 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             abiertoEnMovil={menuMovilAbierto}
           />
 
-          <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+          <main className="flex min-w-0 flex-1 flex-col">
             <button
               type="button"
               className="boton-menu-movil"
@@ -165,16 +262,11 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             </button>
             {/* Ruta desconocida (incluida "/") -- mismo default de siempre:
                 caer en Historial en vez de una pantalla en blanco. */}
-            {!seccionActual && <Navigate to={rutaSeccion("historial")} replace />}
+            {!seccionActual && <Navigate to={rutaSeccion(primeraVisible?.id ?? "historial")} replace />}
             {visitadas.map((id) => (
               <div
                 key={id}
-                style={{
-                  display: id === seccionActual ? "flex" : "none",
-                  flexDirection: "column",
-                  flex: 1,
-                  minHeight: 0,
-                }}
+                className={`min-h-0 flex-1 flex-col ${id === seccionActual ? "flex" : "hidden"}`}
               >
                 {/* Suspense por sección, no uno compartido -- así la
                     primera visita a una sección NUEVA (bajando su chunk)
@@ -183,10 +275,14 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                 <Suspense fallback={<div className="pantalla-cuerpo" role="status">Cargando pantalla…</div>}>
                   {id === "historial" ? (
                     <Historial />
+                  ) : id === "adentro" ? (
+                    <AdentroAhora />
                   ) : id === "contratistas" ? (
                     <Contratistas />
                   ) : id === "usuarios" ? (
                     <Usuarios />
+                  ) : id === "sesiones" ? (
+                    <Sesiones />
                   ) : (
                     <Dispositivos sesion={sesion} />
                   )}

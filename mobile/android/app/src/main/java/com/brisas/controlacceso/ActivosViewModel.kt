@@ -114,7 +114,6 @@ private fun gafetesDeTexto(texto: String): List<Int> =
 /// propaga sin envolver — es un bug, no un caso de negocio esperado.
 class ActivosViewModel(
     private val nucleo: Nucleo,
-    private val secretoStore: SecretoDispositivoStore,
     // Inyectable para poder correr los tests con un dispatcher de tiempo
     // controlado (StandardTestDispatcher) en vez de hilos reales — sin
     // esto los tests dependerían de una carrera real entre corrutinas,
@@ -311,11 +310,7 @@ class ActivosViewModel(
         withContext(dispatcherIO) {
             when (fila) {
                 is FilaActiva.Local -> medirNucleo("registrarSalida") { nucleo.registrarSalida(fila.activo.registroId) }
-                is FilaActiva.Remota -> {
-                    val secreto = secretoStore.cargar()
-                        ?: throw SecretoDispositivoNoEncontradoException()
-                    medirNucleo("cerrarIngresoRemotoConSecreto") { nucleo.cerrarIngresoRemotoConSecreto(secreto, fila.remoto.uuid) }
-                }
+                is FilaActiva.Remota -> medirNucleo("cerrarIngresoRemoto") { nucleo.cerrarIngresoRemoto(fila.remoto.uuid) }
             }
         }
         CambiosNube.cambioLocal()
@@ -328,31 +323,15 @@ class ActivosViewModel(
             try {
                 // Un solo cruce FFI: Rust decide localmente y, si los
                 // chequeos locales ya dejaron pasar, intenta además el
-                // chequeo cruzado entre sitios (`docs/pendientes.md`) --
-                // mejor esfuerzo, nunca bloquea por falta de secreto o de
-                // red. `mensajeBloqueo` llega ya resuelto (o `null` si se
-                // puede continuar); acá no se evalúa ninguna condición
-                // propia, sólo se lee el resultado.
-                //
-                // MV-05 (auditoría 2026-09-24): `secretoStore.cargar()`
-                // puede lanzar `SecretoDispositivoStoreException` (archivo
-                // del secreto corrupto, `AEADBadTagException` tras una
-                // restauración/migración, fallo del propio Keystore -- ver
-                // `SecretoDispositivoStore.kt`). Antes esa excepción no se
-                // capturaba acá (sólo `NucleoException` más abajo) y
-                // escapaba de `viewModelScope` sin manejador, tirando la
-                // app entera cada vez que se elegía un contratista. Se
-                // captura sólo alrededor de este cruce puntual y se sigue
-                // igual que el resto del archivo trata la falta de secreto:
-                // "sin chequeo cruzado", mejor esfuerzo, nunca bloquea la
-                // operación principal por esto.
-                val secreto = try {
-                    withContext(dispatcherIO) { secretoStore.cargar() }.orEmpty()
-                } catch (excepcion: SecretoDispositivoStoreException) {
-                    ""
-                }
+                // chequeo cruzado entre sitios (`docs/pendientes.md`) si el
+                // teléfono está vinculado. `mensajeBloqueo` llega ya
+                // resuelto (o `null` si se puede continuar); acá no se
+                // evalúa ninguna condición propia, sólo se lee el resultado.
+                // La clave del teléfono la usa el núcleo a través de
+                // `AlmacenClaveKeystore`; un fallo del Keystore llega como
+                // `NucleoException` y se trata abajo (hallazgo MV-05).
                 val preparacion = withContext(dispatcherIO) {
-                    medirNucleo("prepararIngresoConSecreto") { nucleo.prepararIngresoConSecreto(contratista.id, secreto) }
+                    medirNucleo("prepararIngresoVerificado") { nucleo.prepararIngresoVerificado(contratista.id) }
                 }
                 seleccionIngreso = preparacion.mensajeBloqueo?.let { mensaje ->
                     SeleccionIngreso.Bloqueada(preparacion, mensaje)
@@ -393,7 +372,7 @@ class ActivosViewModel(
     /// directo contra el núcleo). Las reglas de gafete y placa las aplica el
     /// núcleo; acá sólo se hace el chequeo
     /// de "gafete ocupado en otro dispositivo del sitio" + la escritura en
-    /// UNA sola llamada (`registrarIngresoConSecreto`): antes eran dos
+    /// UNA sola llamada (`registrarIngresoVerificado`): antes eran dos
     /// cruces FFI con una ventana entre medio donde otro dispositivo podía
     /// colarse. Corre en `viewModelScope`, así que salir de la pantalla a
     /// mitad de camino ya no se salta el aviso a la nube.
@@ -415,15 +394,7 @@ class ActivosViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    // Con gafete hace falta el secreto para el chequeo
-                    // cruzado entre dispositivos del sitio; sin gafete no se
-                    // toca la red y ningún secreto hace falta.
-                    val secreto = if (gafete != null) {
-                        secretoStore.cargar() ?: throw SecretoDispositivoNoEncontradoException()
-                    } else {
-                        secretoStore.cargar().orEmpty()
-                    }
-                    medirNucleo("registrarIngresoConSecreto") { nucleo.registrarIngresoConSecreto(preparacion.contratistaId, medio, gafete, placaTexto, secreto) }
+                    medirNucleo("registrarIngresoVerificado") { nucleo.registrarIngresoVerificado(preparacion.contratistaId, medio, gafete, placaTexto) }
                 }
                 onIngresoRegistrado()
             } catch (excepcion: Exception) {
@@ -552,11 +523,8 @@ class ActivosViewModel(
         // conceptos también ahí.
         private const val DEBOUNCE_BUSQUEDA_MS = 150L
 
-        fun factory(
-            nucleo: Nucleo,
-            secretoStore: SecretoDispositivoStore,
-        ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ActivosViewModel(nucleo, secretoStore) }
+        fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
+            initializer { ActivosViewModel(nucleo) }
         }
     }
 }

@@ -16,13 +16,13 @@ import javax.crypto.spec.GCMParameterSpec
 
 /// MV-03 (auditoría 2026-09-24): clave real de cifrado de
 /// `control_acceso.db` (SQLite3MC) -- 32 bytes al azar, protegidos con
-/// Android Keystore. Mismo patrón que [SecretoDispositivoStore] (dos
-/// capas separadas: Keystore protege la CLAVE, SQLite3MC protege la
+/// Android Keystore (dos capas separadas: Keystore protege la CLAVE, SQLite3MC protege la
 /// BASE -- copiar `control_acceso.db` y este archivo juntos a otro
 /// dispositivo no sirve de nada, la clave del Keystore no viaja), pero
-/// un archivo y un alias propios: mezclar esto con el secreto de
-/// dispositivo (que además puede no existir todavía en la primera
-/// activación) sería atar dos ciclos de vida que no tienen relación.
+/// un archivo y un alias propios: mezclar esto con la clave de identidad
+/// del dispositivo (`AlmacenClaveKeystore`, que además no existe hasta la
+/// vinculación y se regenera al re-vincular) sería atar dos ciclos de vida
+/// que no tienen relación.
 interface ClaveBaseDatosStore {
     /// Descifra la clave ya guardada, o genera una nueva (32 bytes de
     /// `SecureRandom`) y la guarda si es la primera vez que se llama --
@@ -53,8 +53,7 @@ class AndroidKeystoreClaveBaseDatosStore(context: Context) : ClaveBaseDatosStore
         cipher.init(Cipher.ENCRYPT_MODE, obtenerClaveKeystore())
         val cifrado = cipher.doFinal(clave)
         val contenido = MAGIC + byteArrayOf(cipher.iv.size.toByte()) + cipher.iv + cifrado
-        // Escritura atómica -- mismo criterio que
-        // AndroidKeystoreSecretoDispositivoStore.guardar: un corte de luz o
+        // Escritura atómica: un corte de luz o
         // un crash a mitad de escritura no debe dejar el archivo a medias
         // (eso sí sería perder la base para siempre, sin ninguna clave que
         // la abra).
@@ -117,9 +116,9 @@ class AndroidKeystoreClaveBaseDatosStore(context: Context) : ClaveBaseDatosStore
         const val TAG_BITS = 128
         const val LONGITUD_CLAVE = 32
         const val ARCHIVO_CLAVE = "base-datos.keystore"
-        // "BAK2", distinto del "BAK1" (0x31) de SecretoDispositivoStore --
-        // dos formatos de archivo independientes, aunque compartan el
-        // mismo esquema Keystore por dentro.
+        // "BAK2": el "BAK1" (0x31) lo usaba el archivo del secreto de
+        // dispositivo, retirado con la vinculación por código -- no se
+        // reutiliza para no confundir un archivo viejo con este.
         val MAGIC = byteArrayOf(0x42, 0x41, 0x4b, 0x32)
     }
 }

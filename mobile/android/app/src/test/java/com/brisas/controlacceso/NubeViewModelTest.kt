@@ -17,13 +17,13 @@ import org.junit.Before
 import org.junit.Test
 import uniffi.control_acceso_mobile.Nucleo
 
-/// Sólo cubre lo que se puede probar sin red real -- `sincronizar()` sin
-/// secreto en el store falla antes de que `Nucleo` intente hablar con la
+/// Sólo cubre lo que se puede probar sin red real -- `sincronizar()` en un
+/// teléfono sin vincular falla antes de que `Nucleo` intente hablar con la
 /// nube, así que alcanza para probar las reglas de autorización por rol
 /// (`Operacion::UsarNube` no es exclusivo de Root, a diferencia de la
 /// vieja `Operacion::GestionarNube`). Contra Supabase real no se prueba
 /// acá -- mismo motivo que `tests/nube_smoke.rs` del lado Rust
-/// (`#[ignore]`, requiere red y un secreto de dispositivo real).
+/// (`#[ignore]`, requiere red y un equipo vinculado de verdad).
 @OptIn(ExperimentalCoroutinesApi::class)
 class NubeViewModelTest {
     private val dispatcher = StandardTestDispatcher()
@@ -45,10 +45,10 @@ class NubeViewModelTest {
     }
 
     @Test
-    fun `sincronizar sin secreto guardado falla sin intentar red`() = runTest(dispatcher) {
+    fun `sincronizar sin vincular falla sin intentar red`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(archivoDb, NucleoDePrueba.sqlUsuarioRoot())
-        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
-        val viewModel = NubeViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        val viewModel = NubeViewModel(nucleo, dispatcherIO = dispatcher)
 
         viewModel.sincronizar()
         advanceUntilIdle()
@@ -59,7 +59,7 @@ class NubeViewModelTest {
     }
 
     @Test
-    fun `Operador puede intentar sincronizar y falla por falta de secreto, no por permiso`() =
+    fun `Operador puede intentar sincronizar y falla por no estar vinculado, no por permiso`() =
         runTest(dispatcher) {
             nucleo = NucleoDePrueba.abrir(
                 archivoDb,
@@ -69,18 +69,18 @@ class NubeViewModelTest {
                 );
                 """.trimIndent(),
             )
-            nucleo.autenticarConSecreto("888888888", NucleoDePrueba.CLAVE_PRUEBA, "")
-            val viewModel = NubeViewModel(nucleo, SecretoDispositivoStoreDePrueba(), dispatcherIO = dispatcher)
+            nucleo.autenticar("888888888", NucleoDePrueba.CLAVE_PRUEBA)
+            val viewModel = NubeViewModel(nucleo, dispatcherIO = dispatcher)
 
             viewModel.sincronizar()
             advanceUntilIdle()
 
             // Si autorizar_uso_nube rechazara al Operador, el mensaje sería
-            // de autorización; acá tiene que ser el de "sin secreto" --
+            // de autorización; acá tiene que ser el de "sin vincular" --
             // confirma que UsarNube (a diferencia de GestionarNube) no es
             // exclusivo de Root.
             val mensaje = viewModel.error
             assertNotNull(mensaje)
-            assertTrue(mensaje!!.contains("secreto", ignoreCase = true))
+            assertTrue(mensaje!!.contains("vinculado", ignoreCase = true))
         }
 }

@@ -21,23 +21,18 @@ impl Nucleo {
 
     /// Entrega con su regla en la misma llamada; la decide
     /// `application::entregar_gafete_provisional_verificado`, la misma que
-    /// usa escritorio. `secreto` vacío se salta el chequeo de nube.
-    pub fn entregar_gafete_provisional_con_secreto(
+    /// usa escritorio. Sin vincular se salta el chequeo de nube.
+    pub fn entregar_gafete_provisional_verificado(
         &self,
         encargado_id: i64,
         gafete_numero: i64,
-        secreto: String,
     ) -> Result<i64, NucleoError> {
         use control_acceso::application::{
-            EntregaGafeteProvisionalVerificadaError, NubeDelDispositivo,
-            entregar_gafete_provisional_verificado,
+            EntregaGafeteProvisionalVerificadaError, entregar_gafete_provisional_verificado,
         };
 
         let actor = self.actor_autenticado()?;
-        let nube = NubeDelDispositivo {
-            cache_token: &self.cache_token,
-            secreto: Some(secreto.as_str()),
-        };
+        let nube = &self.cache_token;
         entregar_gafete_provisional_verificado(
             || self.core_lock(),
             nube,

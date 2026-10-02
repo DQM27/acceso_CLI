@@ -31,6 +31,7 @@ uniffi::setup_scaffolding!();
 
 mod catalogo;
 mod error;
+mod firmante;
 mod gafetes;
 mod ingresos;
 mod nube;
@@ -41,38 +42,18 @@ mod tipos;
 
 pub use error::NucleoError;
 use error::{FalloSincronizacion, convertir_fallo_sincronizacion, interno};
+pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
-    ContratistaResumen, DatosContratista, DatosUsuario, Empresa, EmpresaProveedor, EncargadoRuta,
-    IngresoActivoResumen, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso, ModoBusquedaActivos,
-    MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
+    ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta, EstadoReloj,
+    IdentidadEquipo, IngresoActivoResumen, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso,
+    ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
     PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
     RegistroIngresoProveedorActivoResumen, ResultadoAcceso, ResultadoIngresoRegistrado,
-    ResultadoLogin, ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta, ResultadoSalidaRuta,
+    ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta, ResultadoSalidaRuta,
     ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen, SesionRealtimeNube,
-    SolicitudSalidaRuta, TipoIngreso, UsuarioResumen, UsuarioSesion, VehiculoRuta,
+    SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
 };
-
-/// Sesión de un usuario global contra Supabase Auth (Administrador/Operador,
-/// o un ROOT ya sincronizado a otro sitio) -- ver
-/// docs/planes-implementados/plan-autenticacion-supabase-auth.md. Distinta del
-/// `TokenDispositivo` que cachea `Nucleo::cache_token`
-/// (identidad del DISPOSITIVO): esto es la identidad de la PERSONA. Vive
-/// sólo en memoria -- nunca se persiste a disco, mismo criterio que
-/// `desktop/src-tauri/src/estado.rs::SesionSupabaseCacheada`: cerrar la app
-/// siempre la pierde y el próximo arranque exige un login real de nuevo.
-struct SesionSupabaseCacheada {
-    access_token: String,
-    refresh_token: String,
-    expires_in: u64,
-    /// Última vez que se confirmó de verdad contra Supabase -- la base del
-    /// tope duro de `TOPE_PRESENCIA_SUPABASE`.
-    confirmada_en: std::time::Instant,
-}
-
-/// Mismo tope que escritorio (ver `estado.rs`) -- aplicado por el cliente,
-/// no depende de la configuración de expiración del proyecto de Supabase.
-const TOPE_PRESENCIA_SUPABASE: std::time::Duration = std::time::Duration::from_secs(12 * 60 * 60);
 
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
 /// abre una vez al arrancar la app y se reusa en todas las pantallas (login,
@@ -81,11 +62,18 @@ const TOPE_PRESENCIA_SUPABASE: std::time::Duration = std::time::Duration::from_s
 #[derive(uniffi::Object)]
 pub struct Nucleo {
     core: Mutex<AppCore>,
+    /// El mismo reloj de `core` (hora del servidor + contador de arranque),
+    /// para leer la hora sin tomar el candado de `core`: la telemetría lo
+    /// consulta en cada evento (ver [`Nucleo::hora_confiable_ms`]).
+    reloj: std::sync::Arc<dyn control_acceso::tiempo::Reloj>,
     /// Actor autenticado — lo necesitan `registrar_ingreso`/`registrar_salida`
     /// como `usuario_ingreso_id`/`usuario_salida_id`. Se llena en
-    /// `autenticar_con_secreto` y vive mientras dure el proceso (no hay "cerrar sesión"
+    /// `autenticar` y vive mientras dure el proceso (no hay "cerrar sesión"
     /// todavía en el piloto).
-    sesion: Mutex<Option<UsuarioSesionNucleo>>,
+    /// Con la hora (reloj de este teléfono) en que se abrió la sesión: la
+    /// sesión única por unidad la compara con los ingresos en otras
+    /// unidades (`nube::sesion_en_unidad`).
+    sesion: Mutex<Option<(UsuarioSesionNucleo, control_acceso::nube::InicioSesion)>>,
     /// Caché del último `TokenDispositivo`, deliberadamente FUERA del
     /// `Mutex<AppCore>` de arriba -- ver el doc-comment de
     /// `control_acceso::nube::CacheTokenDispositivo`. Antes de esto,
@@ -97,7 +85,7 @@ pub struct Nucleo {
     /// iniciar sesión o al confirmar un ingreso con gafete, sobre todo si
     /// la sincronización periódica estaba en curso al mismo tiempo.
     cache_token: control_acceso::nube::CacheTokenDispositivo,
-    /// Serializa las sincronizaciones completas (`sincronizar_con_nube_con_secreto`,
+    /// Serializa las sincronizaciones completas (`sincronizar_con_nube`,
     /// llamada desde el timer periódico, un aviso Realtime Y el botón
     /// manual -- ver `SincronizacionPeriodica.kt`/`NubeViewModel.kt`) para
     /// que nunca corran dos en simultáneo pisándose la cola de salida --
@@ -124,8 +112,6 @@ pub struct Nucleo {
     /// para que esa conexión secundaria pueda aplicar la misma clave que
     /// ya usa la principal.
     clave: Option<[u8; 32]>,
-    /// Ver `SesionSupabaseCacheada`.
-    sesion_supabase: Mutex<Option<SesionSupabaseCacheada>>,
 }
 
 /// Backend real de `log` (ver `interno()` más arriba) -- vuelca a Logcat,
@@ -256,13 +242,13 @@ impl Nucleo {
     /// `conexion_secundaria()` pueda aplicar la misma clave.
     fn desde_core(ruta_base_datos: &str, core: AppCore, clave: Option<[u8; 32]>) -> Self {
         Self {
+            reloj: core.reloj(),
             core: Mutex::new(core),
             sesion: Mutex::new(None),
             cache_token: control_acceso::nube::CacheTokenDispositivo::new(),
             sincronizacion_en_curso: Mutex::new(()),
             ruta_base_datos: PathBuf::from(ruta_base_datos),
             clave,
-            sesion_supabase: Mutex::new(None),
         }
     }
 
@@ -285,28 +271,27 @@ impl Nucleo {
     /// reemplaza para móvil lo que antes hacía `AppCore::autenticar_con_cache`
     /// (ver el comentario de ese campo). La red corre sin `core_lock()`;
     /// sólo se toma DESPUÉS, para aplicar el desfase de reloj medido (ver
-    /// [`Nucleo::aplicar_desfase_de`]). Quien llama no debe tener tomado
+    /// [`Nucleo::aplicar_token_de`]). Quien llama no debe tener tomado
     /// `core_lock()`.
     fn autenticar_con_cache(
         &self,
-        secreto: &str,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        let token = self.cache_token.autenticar_con_cache(secreto)?;
-        self.aplicar_desfase_de(&token);
+        let token = self.cache_token.autenticar_con_cache()?;
+        self.aplicar_token_de(&token);
         Ok(token)
     }
 
-    /// Igual que [`Nucleo::autenticar_con_cache`], pero permite adjuntar
-    /// `metadata` cuando hace falta mandarla (sólo la activación inicial,
-    /// ver [`Nucleo::configurar_dispositivo_inicial_con_secreto`]). El resto
-    /// de los llamadores pasan `None` a través de `autenticar_con_cache`.
-    fn autenticar_y_cachear(
+    /// Canjea un código de vinculación (ver
+    /// `CacheTokenDispositivo::vincular`) y aplica el desfase de reloj del
+    /// primer token. Mismo reparto que [`Nucleo::autenticar_con_cache`]: la
+    /// red corre sin `core_lock()`.
+    fn vincular_y_cachear(
         &self,
-        secreto: &str,
+        codigo: &str,
         metadata: Option<&control_acceso::nube::MetadatosDispositivo>,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        let token = self.cache_token.autenticar_y_cachear(secreto, metadata)?;
-        self.aplicar_desfase_de(&token);
+        let token = self.cache_token.vincular(codigo, metadata)?;
+        self.aplicar_token_de(&token);
         Ok(token)
     }
 
@@ -319,10 +304,11 @@ impl Nucleo {
     /// y el login (`Nucleo::autenticar`) se lo saltaba -- medía el desfase
     /// y lo descartaba, y las autenticaciones siguientes, desde el caché, ya
     /// no lo traían, así que quedaba el de una medición vieja.
-    fn aplicar_desfase_de(&self, token: &control_acceso::nube::TokenDispositivo) {
-        if let Some(desfase_ms) = token.desfase_reloj_ms {
-            self.core_lock().actualizar_desfase_reloj(desfase_ms);
-        }
+    ///
+    /// También guarda la unidad y la etiqueta del equipo que trae el token
+    /// (ver `AppCore::aplicar_token`).
+    fn aplicar_token_de(&self, token: &control_acceso::nube::TokenDispositivo) {
+        self.core_lock().aplicar_token(token);
     }
 
     /// Conexión propia al mismo archivo, independiente de `core` -- mismo
@@ -351,14 +337,21 @@ impl Nucleo {
         })
     }
 
-    fn sesion_lock(&self) -> std::sync::MutexGuard<'_, Option<UsuarioSesionNucleo>> {
+    #[allow(clippy::type_complexity)]
+    fn sesion_lock(
+        &self,
+    ) -> std::sync::MutexGuard<'_, Option<(UsuarioSesionNucleo, control_acceso::nube::InicioSesion)>>
+    {
         self.sesion
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn actor_autenticado(&self) -> Result<UsuarioSesionNucleo, NucleoError> {
-        self.sesion_lock().clone().ok_or(NucleoError::NoAutenticado)
+        self.sesion_lock()
+            .as_ref()
+            .map(|(sesion, _)| sesion.clone())
+            .ok_or(NucleoError::NoAutenticado)
     }
 
     /// Descarta el `TokenDispositivo` cacheado -- ver

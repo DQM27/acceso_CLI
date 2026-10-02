@@ -102,76 +102,167 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   repite. Falta decidir si `run()` debe negarse a arrancar con
   `sqlite-plano` fuera de un build de desarrollo explícito, o al menos
   avisar fuerte en la UI que la base no está cifrada de verdad.
-- [x] **Android: proteger el secreto del dispositivo con Keystore.** El secreto móvil
-  se guarda desde Kotlin con Android Keystore (`AES/GCM/NoPadding`) y el núcleo móvil recibe
-  el secreto descifrado sólo en memoria para autenticarse/sincronizar. Incluye migración
-  suave del archivo legado administrado por Rust; desktop mantiene su cifrado actual.
+- [x] **Android: proteger el secreto del dispositivo con Keystore.** (Superado
+  2026-09-30: el secreto se retiró; el teléfono firma con una clave EC que vive en
+  Android Keystore y nunca sale del hardware, ver `AlmacenClaveKeystore.kt`.)
 - [x] **Redactar `Debug` de credenciales de nube.** `TokenDispositivo`
   (`src/nube/cliente.rs`) y `SesionRealtimeNube` (`src/application/nube.rs`) tienen
   `Debug` manual con `access_token`/`apikey` redactados, cubierto por pruebas.
-- [ ] **`cerrar_ingreso_remoto` manda `hora_salida` sin corregir desfase de
-  reloj.** A diferencia de otros caminos, calcula la hora con
-  `chrono::Utc::now()` crudo del dispositivo, no con el reloj corregido
-  contra el servidor. Encontrado en vivo (2026-09-08): una PC con el reloj
-  atrasado no llegó a mandar una hora mala a la nube porque el guardia
-  local (`RelojRetrocedido`) frenó antes, comparando contra el último
-  movimiento local -- pero ese guardia es local, no protege este camino
-  remoto. Sin reproducir todavía; anotado para revisar si vale la pena
-  aplicar la misma corrección de desfase acá.
+- [x] **`cerrar_ingreso_remoto` mandaba `hora_salida` sin corregir desfase de
+  reloj.** Resuelto: quien llama (escritorio y móvil) pasa la hora de
+  `AppCore::ahora_utc`, el reloj corregido con ancla (hora del servidor +
+  contador de arranque). Verificado 2026-10-02. Lo que queda con el reloj
+  crudo del equipo en código de producción es a propósito: medir el desfase
+  contra el servidor (`nube/cliente.rs`, `nube/reloj_preciso.rs`), la
+  implementación del propio reloj (`tiempo.rs`) y marcas de sincronización y
+  retención del historial, que no son registros del usuario.
 - [ ] **Mitigar timing attack en login local.** Si la cédula no existe,
   `AutenticacionService::buscar_candidato` rechaza sin correr Argon2; usar un hash dummy
   reduciría la diferencia de tiempo. Riesgo bajo, pero confirmado.
-- [ ] **Activación de dispositivo con verificación por correo.** Hoy el secreto correcto
-  activa el dispositivo. El flujo diseñado agrega un código por correo en la primera
-  activación del secreto, con estado intermedio antes de emitir el JWT final.
-- [ ] **Sesión única por dispositivo y presencia en tiempo real.** Ver
-  `docs/features-futuras/plan-sesion-unica-dispositivos.md`. El mismo secreto hoy activa más de un
-  dispositivo sin límite. Plan: secreto de un solo uso, identidad canónica del
-  dispositivo en Supabase, sesión propia desacoplada del secreto, panel de presencia,
-  y regla de desempate por fecha de alta + expulsión automática para conflictos
-  detectados offline.
-  - [x] Presencia en tiempo real ya funcionando (2026-09-08): Dispositivos.tsx y
-    Usuarios.tsx muestran en vivo quién/qué está conectado y desde dónde.
-  - [ ] El resto (secreto de un solo uso, identidad canónica, desempate offline)
-    sigue sin implementar.
-- [ ] **Sesión única por SITIO, no por dispositivo ni global (decisión
-  refinada 2026-09-12).** Ver `docs/features-futuras/plan-sesion-unica-dispositivos.md`,
-  sección 7 -- reemplaza el planteo anterior de esta entrada. Política
-  aclarada con el usuario: un mismo operador SÍ puede tener sesión abierta
-  en más de un dispositivo del MISMO sitio a la vez (PC + celular en
-  Brisas, uso normal), pero NO en dos sitios distintos al mismo tiempo
-  (logueado en Cartago no debería poder tener sesión viva en Brisas). El
-  primer diseño (chequear presencia del mismo sitio) ya no aplica tal cual
-  porque el disparador es "sitio", no "dispositivo" ni "global puro" --
-  hoy es más plausible que antes porque la identidad ya vive centralizada
-  en Supabase Auth (desktop y mobile migrados, ver
-  `docs/planes-implementados/plan-autenticacion-supabase-auth.md`), no repartida por dispositivo.
-
-  **Diseño propuesto, sin implementar:**
-  1. `usuarios` suma `sesion_sitio_id` (uuid, nullable, referencia
-     `sitios`) + `sesion_iniciada_en` (timestamptz).
-  2. Función `security definer` nueva (`marcar_sesion_activa`, mismo
-     patrón que `es_admin_global`/Edge Functions de dispositivos): la
-     llama el dispositivo (con su propio JWT, que ya trae `sitio_id`)
-     justo después de un login de persona exitoso. Si `sesion_sitio_id`
-     está `null` o ya es el mismo sitio, sólo actualiza el timestamp. Si
-     apunta a OTRO sitio, lo pisa con el nuevo (último login gana, mismo
-     criterio ya aceptado en otras partes del sistema para "bloqueo hasta
-     reconectar") y marca que hubo conflicto en la respuesta.
-  3. **Kick en vivo**: si hubo conflicto, broadcast por Realtime al sitio
-     viejo avisando que esa cédula se movió -- mismo mecanismo que ya
-     existe para presencia/expulsión de dispositivos.
-  4. **Red de seguridad sin Realtime**: la sincronización periódica
-     (~2 min, ya existe en desktop y mobile) chequea si `sesion_sitio_id`
-     remoto sigue siendo el propio; si no, cierra sesión local sola --
-     mismo patrón que ya usa `sesion_expulsada` hoy
-     (`ResumenSincronizacion::sesion_expulsada`).
-  5. Aplica a desktop y mobile (los dos con Supabase Auth ya andando). TUI
-     clásica queda fuera por ahora, igual que el resto de lo pendiente ahí.
-
-  No es una tarea chica: migración + función SQL + wiring de Realtime +
-  cambios en Rust core (nube:: nuevo + extender el chequeo de
-  "sigue activo") + desktop + mobile. Retomar en una pasada dedicada.
+- [x] **Activación de dispositivo con verificación por correo.** (Descartado
+  2026-09-30: lo reemplaza el código de vinculación de un solo uso que emite el
+  panel, ver `docs/features-futuras/propuesta-registro-dispositivos.md`.)
+- [ ] **Registro de dispositivos por código + clave: pasar a producción.** Implementado
+  y probado en staging en la rama `feat/registro-dispositivos-seguro`; falta la
+  aprobación del usuario para desplegar en producción y registrar cada equipo. Pasos
+  y estado en `docs/handoff-registro-dispositivos.md`.
+  - [x] Presencia en tiempo real (2026-09-08): Dispositivos.tsx y Usuarios.tsx.
+  - [x] Un código sirve una sola vez; cada equipo tiene su propia clave; retirar
+    corta al instante (política restrictiva + aviso por Realtime).
+  - [x] Sólo dos acciones en el panel: Registrar y Retirar (decisión 2026-09-30). Se
+    quitaron la suspensión temporal y la re-vinculación: un equipo reinstalado se
+    registra como nuevo y el anterior se retira; los datos vuelven en la primera
+    sincronización.
+  - [ ] Probar con equipos reales usando los builds de diagnóstico (Android y
+    escritorio, ambos contra staging con telemetría). Sólo instalaciones nuevas.
+  - [ ] Borrar de staging las Edge Functions `admin-suspend-device` y
+    `admin-crear-codigo-vinculacion` (ya no están en el repo).
+- [x] **Catálogo global sin unidad** (2026-09-30, `catalogo_global_sin_unidad`).
+  `contratistas` y `empresas` ya no tienen `sitio_id` (en Supabase, apps y panel) y
+  su aviso en vivo llega a todas las unidades. Las tablas que sí son de una unidad
+  (ingresos, proveedores, KOF, gafetes, empresas de proveedores) no cambian. Las
+  apps anteriores a esta entrega no pueden subir altas de contratistas: los builds
+  de diagnóstico instalados en staging hay que regenerarlos.
+- [x] **Bloqueo cruzado de gafete en proveedores y KOF** (2026-09-30,
+  `gafete_en_uso_proveedor_y_kof`). Mismo esquema que contratistas: índice único de
+  "gafete en uso" por unidad en `ingresos_proveedor` y `prestamos_gafete_provisional`;
+  la cola marca el choque como conflicto y escritorio y Android avisan al operador
+  con el tipo de movimiento (`ConflictoGafeteActivo.tipo`).
+- [x] **Usuarios sin unidad y coherencia de salida** (2026-09-30,
+  `usuarios_globales_y_coherencia`). `usuarios` ya no tiene `sitio_id` y su aviso en
+  vivo llega a todas las unidades (una baja se ve al instante en todas);
+  `admin-create-usuario` y el panel ya no piden unidad. `ingresos` exige la misma
+  coherencia de salida que proveedores (sin exigir salida posterior a la entrada,
+  por relojes desfasados). `plegar_texto` con `search_path` fijo.
+- [x] **Historial del panel con búsqueda indexada** (2026-09-30,
+  `historial_busqueda_indexada`). El buscador busca sólo cédula o nombre (empresa,
+  placa y lo demás quedan para los filtros de columna). Si el texto trae dígitos es
+  cédula: B-tree por prefijo (`text_pattern_ops`, porque la base usa intercalación
+  ICU); si no, nombre: trigramas (`pg_trgm`) sobre `contratista_nombre_plegado`
+  (columna generada). Bajo RLS Postgres no usa índices para `like` (no es
+  `leakproof`), así que la búsqueda pasa por `panel_buscar_movimientos`, una
+  función `security definer` que valida ella misma que quien llama sea
+  admin_global. El panel ya no pide conteo exacto (la grilla conoce el total al
+  llegar a la última página; la exportación detecta el tope con una fila de más).
+  Medido en staging con 150.000 ingresos en 6 meses: página de 1,7-5,3 s a ~50 ms;
+  cédula de 130 ms a 29 ms; nombre específico de 135 ms a 22 ms; sin
+  coincidencias de 113 ms a 6 ms. Costo aceptado: una sola palabra muy común
+  (~4 % de las filas) tarda ~0,5 s porque trae todas las coincidencias antes de
+  paginar.
+- [x] **Historial sin formato de pantalla en la vista** (2026-09-30, misma migración
+  `historial_busqueda_indexada`). Salen `hora_entrada_txt`/`hora_salida_txt`: el
+  panel ya formateaba la hora en el navegador y ordenaba por el instante; el
+  filtro de texto sobre "HH:MI" era engañoso ("7" traía 17:xx y 10:07), así que
+  las columnas "Hora ingreso/salida" ya no filtran y el tiempo se acota con
+  "Fecha ingreso/salida" (instante completo, con índice; vacío = sigue adentro).
+  `tipo_texto`, `medio_texto` y las columnas `*_p` se quedan a propósito: el orden
+  y los filtros del servidor trabajan sobre ellas.
+- [ ] **Traspaso 2026-09-30 (rama `refactor-panel-web`).** Estado para la sesión que
+  sigue. Producción (`xidaepyaljzkpbsxrqsm`) no se tocó: sólo consultas de lectura.
+  Todo lo de arriba fechado 2026-09-30 está aplicado y probado sólo en staging
+  (`pmrytjktlyiuikxuuxpr`). Queda, en este orden:
+  1. [x] Alinear versiones de migración (ver "Versiones de migración alineadas").
+  2. [ ] Compilar builds de diagnóstico nuevos (Android y escritorio, contra
+     staging) y probar con equipos: los instalados ya no sirven porque mandaban
+     `sitio_id` en contratistas/empresas/usuarios, creaban usuarios y el celular
+     cambiaba contraseñas. Probar también el aviso de gafete en uso de proveedor y
+     KOF, y el rechazo del celular con contraseña temporal.
+  3. [ ] Medir en producción antes y después (sólo lectura, con aprobación del
+     usuario): `pg_stat_user_tables` (seq_scan/seq_tup_read de contratistas,
+     empresas, administradores_panel, ingresos) y tiempos del historial.
+  4. [ ] Pasar a producción sólo con aprobación explícita del usuario.
+  5. [x] Vistas `panel_contratistas_estado` y `panel_adentro_ahora` (migración
+     `vistas_estado_y_adentro`, prueba `panel_vistas_estado_y_adentro.sql`) con sus
+     pantallas en el panel: Contratistas muestra PRAIND, estado de acceso y si está
+     adentro; sección nueva "Adentro ahora" con conteo por tipo y resaltado desde
+     12 h adentro. El estado usa las mismas reglas que `verificar_acceso`
+     (src/domain/acceso.rs): si cambian ahí, cambiar la vista.
+  6. [ ] Llevar "Adentro ahora" y el estado de contratistas a escritorio (pedido del
+     usuario, sin fecha). En escritorio conviene calcularlo del SQLite local con
+     `verificar_acceso`, no leer la vista: así funciona sin conexión.
+  7. [ ] Opcional: publicar `ingresos_proveedor` y `prestamos_gafete_provisional` en
+     Realtime si "Adentro ahora" necesita refrescar al instante proveedores y KOF
+     (hoy se refrescan cada 30 s; contratistas sí al instante).
+  Para medir en staging sin ensuciar datos: insertar filas sintéticas dentro de un
+  bloque `do $$ ... $$` con `set local session_replication_role = replica`,
+  consultar como admin (`set local role authenticated` + `request.jwt.claims` con el
+  correo de `administradores_panel`) y terminar con `raise exception` con los
+  resultados: el error revierte todo. Medir siempre bajo RLS, no como `postgres`
+  (como superusuario los índices de `like` sí se usan y los tiempos engañan).
+- [x] **Versiones de migración alineadas** (2026-09-30).
+  - Producción: sus 82 migraciones son exactamente los primeros 82 archivos del repo
+    (misma versión y nombre). Quedan pendientes para producción los 14 archivos desde
+    `20260929200000_revocacion_efectiva_dispositivos` hasta
+    `20260930120500_vistas_estado_y_adentro`.
+  - Probadas en limpio: las 96 migraciones se aplicaron en orden sobre un Postgres 16
+    local con un andamiaje mínimo de Supabase (roles, `auth`, `realtime`, `net`). El
+    esquema resultante coincide con staging (columnas, índices, políticas,
+    restricciones y código de funciones; sólo difieren objetos de otras ramas).
+  - Error encontrado y corregido: `catalogo_global_sin_unidad` borraba `sitio_id`
+    antes de quitar la política que dependía de la columna. En staging no se vio
+    porque se aplicó en dos pasos; en producción habría fallado.
+  - Staging: cada archivo del repo desde el 19 de septiembre tiene una fila con su
+    versión y nombre (los pasos parciales se unieron conservando su SQL). Respaldo
+    del historial anterior en `supabase_migrations.schema_migrations_respaldo_20260930`.
+    Siguen filas sin archivo en este repo: los lotes con los que se armó staging
+    (`lote_00`..`lote_04`, `fix_orden_esquema_private_antes_de_hora`) y cambios de
+    otras ramas (`rutas_documento_tramo_viaje*`, `rediseno_visitas_*`,
+    `optimiza_rls_e_indices_de_visitas`, `crea/revierte_personas_vetadas`).
+- [ ] **Dos objetos de producción que no están en ninguna migración** (hallado
+  2026-09-30 al aplicar el repo en limpio). No afectan a producción, que ya los tiene,
+  pero una base nueva armada sólo desde el repo falla sin ellos:
+  - La política `"dispositivos reciben broadcast de su sitio"` sobre
+    `realtime.messages`: `20260905091122_corregir_autorizacion_realtime` la modifica con
+    `alter policy`, pero ninguna migración la crea.
+  - El esquema `private`: se usa desde `20260906044549_avisa_cambio_nube_...`, pero se
+    crea en `20260912011504_documenta_creacion_esquema_private`.
+  Arreglo propuesto: una migración nueva al principio no sirve (ya están aplicadas).
+  Lo correcto es documentarlo en `docs/recuperacion-supabase.md` como paso previo al
+  restaurar desde cero, o agregar `create schema if not exists private` y la creación
+  de la política con `if not exists` en las migraciones más tempranas que los usan.
+- [x] **Test SQL `administradores_panel_autorizacion.sql` desactualizado.** Esperaba que
+  un admin_global pudiera insertar/borrar en `administradores_panel`, pero la migración
+  `20260909192636_retira_escritura_directa_de_administradores_panel` quitó esas
+  políticas a propósito. Alineado 2026-09-30: ahora exige que ni un admin_global
+  pueda agregar ni borrar administradores con su sesión (sólo service_role). Pasa
+  en staging.
+- [x] **Sesión única por unidad y bitácora de sesiones** (2026-09-30, rama
+  `feat/sesion-unica-por-unidad`, migración `sesion_unica_por_unidad`). Un usuario
+  puede estar en PC y celular de la misma unidad, pero no en dos unidades: gana el
+  último ingreso y se cierra la sesión de la anterior (con aviso en vivo, evento de
+  seguridad y reconciliación de ingresos sin conexión). Bitácora en el panel
+  (sección "Sesiones"). Diseño y detalle en
+  `docs/features-futuras/plan-sesion-unica-dispositivos.md`, sección 7.
+  - [x] Hora del servidor en vez de comparar relojes (2026-10-02): migración
+    `20261002150000_sesion_unica_hora_del_servidor` probada en staging con
+    `supabase/tests/sesion_unica_por_unidad.sql` y aplicada a mano en el SQL
+    Editor; `device-auth`, `device-vincular` y `admin-provision-device`
+    desplegadas en staging; advisors sin hallazgos nuevos. Detalle en
+    `docs/handoff-registro-dispositivos.md`.
+  - [ ] Registrar `20261002150000` en `supabase_migrations` de staging (se
+    aplicó desde el SQL Editor y no quedó anotada).
+  - [ ] Probar con equipos reales (dos unidades) con builds de diagnóstico.
+  - [ ] Producción: con aprobación del usuario, junto con el resto de la rama.
 - [ ] **Auditoría (`auditoria_cambios`/`gafetes_incidentes`) no se sincroniza
   entre dispositivos (hallazgo 2026-09-17, sin implementar).** Hoy las dos
   tablas son puramente locales -- no aparecen en `src/nube/sincronizacion.rs`
@@ -267,7 +358,7 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
      en Vault con un nombre ligado a su `dispositivo_id`.
   2. Edge Function nueva (`device-fetch-db-key` o similar) que exige el
      mismo JWT que ya valida `device-auth`, y le entrega su clave desde
-     Vault -- chequea `revoked_at`/`suspended_at` igual que `device-auth`.
+     Vault -- chequea `revoked_at` igual que `device-auth`.
   3. La app la pide una sola vez, en `configurar_dispositivo_inicial`, y la
      usa para abrir/crear la base SQLCipher; se cachea localmente para
      poder operar offline después (ese caché sigue teniendo la misma

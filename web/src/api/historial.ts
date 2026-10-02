@@ -1,6 +1,11 @@
 import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
 import { inicioDiaCostaRicaUtc, inicioDiaSiguienteCostaRicaUtc } from "../tiempo";
+import { expresionesDeFiltros } from "./historialFiltros";
+import type { ModeloFiltros } from "./historialFiltros";
+
+export { plegarTexto } from "./historialFiltros";
+export type { ModeloFiltros } from "./historialFiltros";
 
 /**
  * Espejo de `ingresos` en Supabase -- ver migración
@@ -30,28 +35,11 @@ export interface MovimientoHistorial {
   // "pc"/"mobile"/"visor" (`dispositivos.tipo`) -- null si el dispositivo
   // de entrada fue borrado, o para filas viejas sin dispositivo_entrada_id.
   dispositivo_entrada_tipo: string | null;
+  /** Tipo de ingreso como se lee en pantalla ("IN HOUSE"). */
+  tipo_texto: string;
+  /** "CAMINANDO", "VEHÍCULO" o la placa si el ingreso fue en vehículo. */
+  medio_texto: string;
 }
-
-// Valida en runtime la forma real de lo que devuelve Supabase -- ver el
-// mismo criterio en contratistas.ts/usuarios.ts. `z.infer` reemplaza a la
-// interfaz `FilaCruda` que había antes, para no mantener dos fuentes de
-// verdad del mismo shape.
-const filaCrudaEsquema = z.object({
-  id: z.string(),
-  sitio_id: z.string(),
-  sitios: z.object({ nombre: z.string() }).nullable(),
-  contratista_cedula: z.string().nullable(),
-  contratista_nombre: z.string(),
-  empresa_nombre: z.string().nullable(),
-  tipo_ingreso: z.string().nullable(),
-  medio_ingreso: z.string().nullable(),
-  gafete_numero: z.number().nullable(),
-  hora_entrada: z.string(),
-  hora_salida: z.string().nullable(),
-  usuario_entrada_nombre: z.string().nullable(),
-  usuario_salida_nombre: z.string().nullable(),
-  dispositivo_entrada: z.object({ tipo: z.string() }).nullable(),
-});
 
 export interface UnidadOperativa {
   id: string;
@@ -72,71 +60,167 @@ export async function listarUnidadesOperativas(): Promise<UnidadOperativa[]> {
   return z.array(filaSitioEsquema).parse(data);
 }
 
-export interface ResultadoHistorial {
+// --- Paginación en el servidor -------------------------------------------
+//
+// Lee la vista `panel_movimientos` (migración `vista_panel_movimientos`): la
+// fila ya viene plana (unidad y dispositivo incluidos) y con columnas sin
+// tildes ni mayúsculas (`*_p`), así el servidor ordena, filtra y pagina. El
+// navegador sólo recibe la página que se ve, sin importar cuántas unidades
+// ni cuántos años de datos haya.
+
+/** Campos por los que se puede ordenar en el servidor (columnas de la vista).
+ * Lista cerrada a propósito: el campo llega de la interfaz. */
+export const CAMPOS_ORDENABLES = [
+  "sitio_nombre",
+  "contratista_cedula",
+  "contratista_nombre",
+  "empresa_nombre",
+  "dispositivo_entrada_tipo",
+  "tipo_texto",
+  "medio_texto",
+  "gafete_numero",
+  "hora_entrada",
+  "hora_salida",
+  "usuario_entrada_nombre",
+  "usuario_salida_nombre",
+] as const;
+
+export type CampoOrdenable = (typeof CAMPOS_ORDENABLES)[number];
+
+export interface ConsultaMovimientos {
+  desde?: string;
+  hasta?: string;
+  /** `undefined` = todas las unidades; lista vacía = ninguna (cero filas). */
+  sitioIds?: string[];
+  busqueda?: string;
+  /** Filtros por columna de la grilla (`api.getFilterModel()`), ver `historialFiltros.ts`. */
+  filtros?: ModeloFiltros;
+  orden?: { campo: CampoOrdenable; descendente: boolean };
+  /** Base 0. */
+  pagina: number;
+  tamano: number;
+}
+
+export interface PaginaMovimientos {
   filas: MovimientoHistorial[];
-  /** `true` si el rango pedido tiene más filas que `LIMITE_HISTORIAL` -- ver
-   * esa constante. AG Grid corre en modo client-side (trae todo, filtra en
-   * el navegador, ver `componentes/Tabla.tsx`); sin este tope, un rango
-   * amplio (o el preset "Todo el historial", sin fecha) podía crecer sin
-   * cota junto con el uso real del sistema. Mismo criterio que
-   * `CargaCompleta.truncado` del núcleo Rust en la versión de escritorio
-   * (`desktop/src/pantallas/Historial.tsx`) -- filas visibles acotadas,
-   * exportar (Excel/PDF) sigue trayendo el rango completo sin este límite
-   * (ver `exportarAExcel`/`exportarAPdf` en `pantallas/Historial.tsx`).
-   */
+  /** Total de filas del filtro, sólo cuando esta página llegó al final (vino
+   * incompleta); `undefined` si puede haber más. Sin conteo exacto a
+   * propósito: con el volumen de varias unidades recorría la tabla entera
+   * (1,7-5,3 s con 150.000 filas en staging); la grilla sigue pidiendo
+   * páginas hasta recibir una incompleta. */
+  total?: number;
+}
+
+const COLUMNAS_MOVIMIENTO =
+  "id, sitio_id, sitio_nombre, contratista_cedula, contratista_nombre, empresa_nombre, " +
+  "tipo_ingreso, medio_ingreso, gafete_numero, hora_entrada, hora_salida, " +
+  "usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_tipo, tipo_texto, medio_texto";
+
+const movimientoEsquema = z.object({
+  id: z.string(),
+  sitio_id: z.string(),
+  sitio_nombre: z.string().nullable(),
+  contratista_cedula: z.string().nullable(),
+  contratista_nombre: z.string(),
+  empresa_nombre: z.string().nullable(),
+  tipo_ingreso: z.string().nullable(),
+  medio_ingreso: z.string().nullable(),
+  gafete_numero: z.number().nullable(),
+  hora_entrada: z.string(),
+  hora_salida: z.string().nullable(),
+  usuario_entrada_nombre: z.string().nullable(),
+  usuario_salida_nombre: z.string().nullable(),
+  dispositivo_entrada_tipo: z.string().nullable(),
+  tipo_texto: z.string(),
+  medio_texto: z.string(),
+});
+
+/** Un tramo de filas (`primera`..`primera + cantidad - 1`) con el filtro y el
+ * orden de `consulta`. Lo comparten la página en pantalla y la exportación. */
+async function pedirTramo(
+  consulta: Omit<ConsultaMovimientos, "pagina" | "tamano">,
+  primera: number,
+  cantidad: number,
+): Promise<MovimientoHistorial[]> {
+  const { desde, hasta, sitioIds, filtros, orden } = consulta;
+  const busqueda = consulta.busqueda?.trim() ?? "";
+  const desdeUtc = desde ? inicioDiaCostaRicaUtc(desde) : undefined;
+  const hastaUtc = hasta ? inicioDiaSiguienteCostaRicaUtc(hasta) : undefined;
+
+  // Con búsqueda (cédula o nombre) se usa `panel_buscar_movimientos`: bajo
+  // RLS, Postgres no puede usar índices para `like` sobre la vista y
+  // recorrería todo el período; la función sí los usa y valida ella misma
+  // que quien consulta sea administrador. Devuelve filas con la forma de la
+  // vista, así que el orden, los filtros de columna y el tramo se aplican
+  // igual en los dos casos. Fechas y unidades van adentro de la función.
+  const base = busqueda
+    ? supabase.rpc("panel_buscar_movimientos", {
+        p_busqueda: busqueda,
+        p_desde: desdeUtc ?? null,
+        p_hasta: hastaUtc ?? null,
+        p_sitio_ids: sitioIds ?? null,
+      })
+    : supabase.from("panel_movimientos");
+
+  let peticion = base
+    .select(COLUMNAS_MOVIMIENTO)
+    .order(orden?.campo ?? "hora_entrada", {
+      ascending: !(orden?.descendente ?? true),
+      nullsFirst: false,
+    })
+    // Desempate estable: sin él, dos filas con el mismo valor pueden repetirse
+    // o saltarse entre una página y la siguiente.
+    .order("id")
+    .range(primera, primera + cantidad - 1);
+
+  // Mismo criterio de día calendario de Costa Rica que `listarHistorial`.
+  if (!busqueda) {
+    if (desdeUtc) peticion = peticion.gte("hora_entrada", desdeUtc);
+    if (hastaUtc) peticion = peticion.lt("hora_entrada", hastaUtc);
+    if (sitioIds) peticion = peticion.in("sitio_id", sitioIds);
+  }
+  // Un `.or()` por columna filtrada: el AND entre columnas sale de aplicarlos todos.
+  for (const expresion of expresionesDeFiltros(filtros)) {
+    peticion = peticion.or(expresion);
+  }
+
+  const { data, error } = await peticion;
+  if (error) throw new Error(error.message);
+  return z.array(movimientoEsquema).parse(data);
+}
+
+export async function listarMovimientosPagina(consulta: ConsultaMovimientos): Promise<PaginaMovimientos> {
+  const primera = consulta.pagina * consulta.tamano;
+  const filas = await pedirTramo(consulta, primera, consulta.tamano);
+  return { filas, total: filas.length < consulta.tamano ? primera + filas.length : undefined };
+}
+
+// Supabase entrega como máximo 1.000 filas por petición.
+const TRAMO_EXPORTACION = 1_000;
+/** Tope de filas de una exportación -- válvula de seguridad para que un
+ * rango enorme no deje la pestaña sin memoria. */
+export const MAXIMO_EXPORTACION = 50_000;
+
+export interface ResultadoExportacion {
+  filas: MovimientoHistorial[];
+  /** `true` si el filtro tiene más filas que `MAXIMO_EXPORTACION`. */
   truncado: boolean;
 }
 
-// Bien por encima de cualquier volumen real de un rango de fechas típico
-// (6 meses por defecto, ver `Historial.tsx`) -- es una válvula de
-// seguridad, no una paginación real: mientras el volumen se mantenga
-// razonable, nadie la nota.
-const LIMITE_HISTORIAL = 20_000;
-
-export async function listarHistorial(
-  desde?: string,
-  hasta?: string,
-  sitioIds?: string[],
-): Promise<ResultadoHistorial> {
-  let consulta = supabase
-    .from("ingresos")
-    .select(
-      "id, sitio_id, contratista_cedula, contratista_nombre, empresa_nombre, tipo_ingreso, " +
-        "medio_ingreso, gafete_numero, hora_entrada, hora_salida, usuario_entrada_nombre, " +
-        "usuario_salida_nombre, sitios(nombre), " +
-        "dispositivo_entrada:dispositivos!ingresos_dispositivo_entrada_id_fkey(tipo)",
-      { count: "exact" },
-    )
-    .order("hora_entrada", { ascending: false })
-    .range(0, LIMITE_HISTORIAL - 1);
-
-  // `desde`/`hasta` llegan como YMD del selector (día calendario en Costa
-  // Rica, ver `SelectorRangoFecha`), pero `hora_entrada` es un `timestamptz`
-  // en UTC -- compararlo contra el string crudo lo interpreta a medianoche
-  // UTC (no Costa Rica) y, para `hasta`, deja afuera casi todo ese día (sólo
-  // calificaría el instante exacto de esa medianoche). Con un rango amplio
-  // el corte pasaba desapercibido; con "Hoy"/"Ayer" (mismo día en desde y
-  // hasta) el rango resultante quedaba prácticamente vacío siempre. Mismo
-  // criterio que `rango_utc` en
-  // `desktop/src-tauri/src/comandos/historial.rs`: `hasta` es el inicio del
-  // día SIGUIENTE, límite exclusivo.
-  if (desde) consulta = consulta.gte("hora_entrada", inicioDiaCostaRicaUtc(desde));
-  if (hasta) consulta = consulta.lt("hora_entrada", inicioDiaSiguienteCostaRicaUtc(hasta));
-  // `undefined`/vacío es "sin filtro" (todas) -- ver `sitioIdsFiltro` en
-  // `Historial.tsx` sobre por qué eso está separado de "excluir todas", que
-  // sí manda una lista (vacía) acá y trae cero filas a propósito.
-  if (sitioIds) consulta = consulta.in("sitio_id", sitioIds);
-
-  const { data: crudo, error, count } = await consulta;
-  if (error) throw new Error(error.message);
-  const data = z.array(filaCrudaEsquema).parse(crudo);
-
-  return {
-    filas: data.map(({ sitios, dispositivo_entrada, ...resto }) => ({
-      ...resto,
-      sitio_nombre: sitios?.nombre ?? null,
-      dispositivo_entrada_tipo: dispositivo_entrada?.tipo ?? null,
-    })),
-    truncado: count !== null && count > data.length,
-  };
+/** Todas las filas del filtro y orden actuales (no sólo la página en
+ * pantalla), pedidas en tramos de 1.000, hasta `MAXIMO_EXPORTACION`. */
+export async function listarMovimientosParaExportar(
+  consulta: Omit<ConsultaMovimientos, "pagina" | "tamano">,
+  maximo: number = MAXIMO_EXPORTACION,
+): Promise<ResultadoExportacion> {
+  const filas: MovimientoHistorial[] = [];
+  while (filas.length < maximo) {
+    const cantidad = Math.min(TRAMO_EXPORTACION, maximo - filas.length);
+    const tramo = await pedirTramo(consulta, filas.length, cantidad);
+    filas.push(...tramo);
+    if (tramo.length < cantidad) return { filas, truncado: false };
+  }
+  // Se llegó al máximo: una fila más dice si quedó algo afuera, sin contar todo.
+  const siguiente = await pedirTramo(consulta, maximo, 1);
+  return { filas, truncado: siguiente.length > 0 };
 }

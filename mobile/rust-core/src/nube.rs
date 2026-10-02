@@ -1,7 +1,8 @@
-//! Configuración del dispositivo, sincronización, Realtime y activos de otros equipos.
+//! Vinculación del dispositivo, sincronización, Realtime y activos de otros equipos.
 
 use control_acceso::application::GestionNubeError as GestionNubeErrorNucleo;
 
+use crate::firmante::{AlmacenClaveDispositivo, FirmanteMovil};
 use crate::{
     FalloSincronizacion, IngresoProveedorRemoto, IngresoRemoto, Nucleo, NucleoError,
     PrestamoGafeteProvisionalRemoto, ResumenSincronizacion, SesionRealtimeNube,
@@ -19,29 +20,87 @@ impl Nucleo {
         self.core_lock().desfase_reloj_ms()
     }
 
+    /// Hora del reloj confiable en ms desde 1970: la misma con que se sellan
+    /// los registros. No toma el candado del núcleo, así que la telemetría
+    /// puede llamarla en cada evento sin trabar nada.
+    pub fn hora_confiable_ms(&self) -> i64 {
+        self.reloj.ahora_utc().timestamp_millis()
+    }
+
+    /// Estado del reloj confiable, para la telemetría de diagnóstico (ver
+    /// [`crate::EstadoReloj`]).
+    pub fn estado_reloj(&self) -> crate::EstadoReloj {
+        let estado = self.core_lock().estado_reloj();
+        crate::EstadoReloj {
+            confiable: estado.confiable,
+            margen_ms: estado.margen_ms,
+            diferencia_equipo_ms: estado.diferencia_equipo_ms,
+            ancla_hace_ms: estado.ancla_hace_ms,
+        }
+    }
+
+    /// Unidad y etiqueta de este teléfono (ver [`crate::IdentidadEquipo`]).
+    /// No necesita sesión: el login también la muestra.
+    pub fn identidad_equipo(&self) -> crate::IdentidadEquipo {
+        let identidad = self.core_lock().identidad_equipo();
+        crate::IdentidadEquipo {
+            unidad: identidad.unidad,
+            etiqueta: identidad.etiqueta,
+        }
+    }
+
     /// `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
-    /// usa para decidir si mostrar la pantalla de arranque (pegar el
-    /// secreto) en vez del login (ver `MainActivity.kt`).
+    /// usa para decidir si mostrar la pantalla de arranque (vincular con un
+    /// código) en vez del login (ver `MainActivity.kt`).
     pub fn requiere_configuracion_inicial(&self) -> Result<bool, NucleoError> {
         Ok(self.core_lock().requiere_configuracion_inicial()?)
     }
 
-    /// Activación inicial de una base vacía. No persiste el secreto desde
-    /// Rust: Android lo guarda con Android Keystore y sólo entrega el
-    /// secreto descifrado en memoria para esta autenticación inicial. El
-    /// candado del núcleo sólo se toma para lo local, nunca durante la red.
+    /// Configura quién firma por este teléfono (Android Keystore, ver
+    /// `AlmacenClaveKeystore.kt`). Kotlin lo llama una sola vez, apenas abre
+    /// el núcleo y antes de cualquier operación de nube.
+    pub fn establecer_almacen_clave(&self, almacen: std::sync::Arc<dyn AlmacenClaveDispositivo>) {
+        self.cache_token
+            .establecer_firmante(std::sync::Arc::new(FirmanteMovil(almacen)));
+    }
+
+    /// Descarta el token cacheado. Lo llama `NubeRealtime.kt` al recibir un
+    /// aviso de expulsión (retirado en el panel): sin esto el teléfono seguía
+    /// usando su token de hasta 1 h, las consultas en vivo le devolvían
+    /// vacío (la política restrictiva filtra en silencio) y un chequeo como
+    /// "ingreso activo en otro sitio" pasaba como si no hubiera conflicto.
+    /// Con el token descartado, la próxima operación de nube va a
+    /// `device-auth` y recibe el motivo real. Mismo criterio que
+    /// `descartar_token_nube` en escritorio.
+    pub fn descartar_token_nube(&self) {
+        self.invalidar_token_cacheado();
+    }
+
+    /// `true` si este teléfono ya canjeó un código y tiene su clave en
+    /// Android Keystore. Sin vincular no hay nube: Kotlin salta la
+    /// sincronización de fondo y los chequeos en vivo no tocan la red.
+    pub fn nube_configurada(&self) -> bool {
+        self.cache_token.vinculado()
+    }
+
+    /// `dispositivo_id` al que está vinculada la clave de este teléfono, o
+    /// `None` si nunca se vinculó.
+    pub fn dispositivo_vinculado(&self) -> Option<String> {
+        self.cache_token.dispositivo_vinculado()
+    }
+
+    /// Activación inicial de una base vacía: canjea el código de vinculación
+    /// del panel (el teléfono genera su clave en Android Keystore y sólo
+    /// manda la pública) y trae el catálogo. El candado del núcleo sólo se
+    /// toma para lo local, nunca durante la red.
     ///
     /// Los parámetros de metadata (todos opcionales, `""` = no disponible)
-    /// viajan una única vez, en esta primera autenticación -- ver
-    /// `control_acceso::nube::MetadatosDispositivo`. No se vuelven a
-    /// reenviar en cada renovación de token porque casi nunca cambian, y
-    /// esto ya alcanza para que el panel de administración distinga el
-    /// teléfono físico detrás de cada secreto (ver
-    /// `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
+    /// viajan en el mismo canje -- ver
+    /// `control_acceso::nube::MetadatosDispositivo`.
     #[allow(clippy::too_many_arguments)]
-    pub fn configurar_dispositivo_inicial_con_secreto(
+    pub fn vincular_dispositivo_inicial(
         &self,
-        secreto: String,
+        codigo: String,
         identificador_hardware: String,
         nombre_dispositivo: String,
         plataforma: String,
@@ -52,19 +111,16 @@ impl Nucleo {
             return Err(NucleoError::from(GestionNubeErrorNucleo::YaConfigurado));
         }
 
-        let cadena_opcional = |texto: String| (!texto.trim().is_empty()).then_some(texto);
-        let metadata = control_acceso::nube::MetadatosDispositivo {
-            identificador_hardware: cadena_opcional(identificador_hardware),
-            nombre_dispositivo: cadena_opcional(nombre_dispositivo),
-            plataforma: cadena_opcional(plataforma),
-            version_build: cadena_opcional(version_build),
-            app_version: cadena_opcional(app_version),
-        };
+        let metadata = metadata_del_telefono(
+            identificador_hardware,
+            nombre_dispositivo,
+            plataforma,
+            version_build,
+            app_version,
+        );
         let token = self
-            .autenticar_y_cachear(&secreto, Some(&metadata))
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })?;
+            .vincular_y_cachear(&codigo, Some(&metadata))
+            .map_err(error_de_nube_para_mostrar)?;
 
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::base_url(),
@@ -101,6 +157,9 @@ impl Nucleo {
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             sesion_expulsada: false,
+            sesion_en_otra_unidad: false,
+            sesion_unidad: None,
+            sesion_transcurrido_ms: None,
             // Activación inicial: base recién configurada, sin ingresos
             // locales todavía -- mismo criterio que
             // `From<ResumenSincronizacionNucleo>` arriba y que el equivalente
@@ -111,47 +170,16 @@ impl Nucleo {
         })
     }
 
-    /// Lee el secreto guardado por versiones móviles anteriores a Android
-    /// Keystore. Kotlin lo usa sólo para migrarlo al almacén seguro nuevo.
-    pub fn cargar_secreto_dispositivo_legado(
-        &self,
-        directorio: String,
-        identificador_dispositivo: String,
-    ) -> Option<String> {
-        control_acceso::nube::credenciales::cargar_secreto_en_con_identificador(
-            std::path::Path::new(&directorio),
-            &identificador_dispositivo,
-        )
-    }
-
-    /// Borra el archivo legado de `cargar_secreto_dispositivo_legado` --
-    /// Kotlin lo llama justo después de migrar ese secreto al Keystore, para
-    /// no dejar la copia vieja (en texto plano, ver el módulo
-    /// `nube::credenciales`) huérfana en el almacenamiento de la app.
-    pub fn borrar_secreto_dispositivo_legado(&self, directorio: String) -> Result<(), NucleoError> {
-        control_acceso::nube::credenciales::borrar_secreto_en(std::path::Path::new(&directorio))
-            .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
-            })
-    }
-
-    /// Sincroniza usando el secreto ya descifrado por Android Keystore.
-    /// Evita que el núcleo móvil lea un secreto persistido en texto plano.
-    pub fn sincronizar_con_nube_con_secreto(
-        &self,
-        secreto: String,
-    ) -> Result<ResumenSincronizacion, NucleoError> {
-        self.sincronizar_con_secreto(
-            &secreto,
-            control_acceso::nube::AlcanceSincronizacion::completo(),
-        )
+    /// Sincronización completa, autenticada con la clave del teléfono.
+    pub fn sincronizar_con_nube(&self) -> Result<ResumenSincronizacion, NucleoError> {
+        self.sincronizar(control_acceso::nube::AlcanceSincronizacion::completo())
     }
 
     /// Aviso en vivo con los datos (`cambio_nube` con `registro`, tal cual
     /// llega por el canal, en JSON): guarda la fila directo en la base local
     /// sin consultar a la nube -- ver `control_acceso::nube::en_vivo`.
     /// `true` si la aplicó; `false` si el aviso no trae datos o su tabla
-    /// todavía no los manda (queda para `sincronizar_cambios_con_secreto`,
+    /// todavía no los manda (queda para `sincronizar_cambios`,
     /// que corre igual detrás). Sobre la conexión secundaria: nunca toma el
     /// candado del núcleo.
     pub fn aplicar_cambio_nube(&self, aviso_json: String) -> Result<bool, NucleoError> {
@@ -177,15 +205,13 @@ impl Nucleo {
     /// corría la sincronización completa (~12 consultas a la nube por un
     /// solo cambio). Una tabla desconocida o una lista vacía caen en la
     /// completa. La bandeja de salida se drena siempre.
-    pub fn sincronizar_cambios_con_secreto(
+    pub fn sincronizar_cambios(
         &self,
-        secreto: String,
         tablas: Vec<String>,
     ) -> Result<ResumenSincronizacion, NucleoError> {
-        self.sincronizar_con_secreto(
-            &secreto,
-            control_acceso::nube::AlcanceSincronizacion::desde_tablas(&tablas),
-        )
+        self.sincronizar(control_acceso::nube::AlcanceSincronizacion::desde_tablas(
+            &tablas,
+        ))
     }
 
     /// Sólo vacía la bandeja de salida, sin bajar nada: lo que corre tras
@@ -194,27 +220,18 @@ impl Nucleo {
     /// la sincronización completa antes de subirse (telemetría de staging:
     /// ~1,6 s de promedio y hasta 5 s), y el otro equipo recién veía el
     /// cambio al terminar. El pulso periódico sigue siendo completo.
-    pub fn enviar_cambios_con_secreto(
-        &self,
-        secreto: String,
-    ) -> Result<ResumenSincronizacion, NucleoError> {
-        self.sincronizar_con_secreto(
-            &secreto,
-            control_acceso::nube::AlcanceSincronizacion::solo_envio(),
-        )
+    pub fn enviar_cambios(&self) -> Result<ResumenSincronizacion, NucleoError> {
+        self.sincronizar(control_acceso::nube::AlcanceSincronizacion::solo_envio())
     }
 
-    /// Lo mínimo para que Kotlin escuche Broadcast privado por sitio, con el
-    /// secreto que Kotlin descifra de Android Keystore. El socket y sus
+    /// Lo mínimo para que Kotlin escuche Broadcast privado por sitio. El
+    /// socket y sus
     /// reconexiones viven fuera del núcleo.
-    pub fn sesion_realtime_nube_con_secreto(
-        &self,
-        secreto: String,
-    ) -> Result<SesionRealtimeNube, NucleoError> {
+    pub fn sesion_realtime_nube(&self) -> Result<SesionRealtimeNube, NucleoError> {
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
         let token = self
-            .autenticar_con_cache(&secreto)
+            .autenticar_con_cache()
             .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
             })?;
@@ -274,17 +291,13 @@ impl Nucleo {
 
     /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo
     /// del mismo sitio -- nunca toca el historial local de este teléfono.
-    /// Usa el secreto que Kotlin descifra de Android Keystore; el candado
+    /// El candado
     /// del núcleo sólo se toma para autorizar, nunca durante la red.
-    pub fn cerrar_ingreso_remoto_con_secreto(
-        &self,
-        secreto: String,
-        uuid: String,
-    ) -> Result<(), NucleoError> {
+    pub fn cerrar_ingreso_remoto(&self, uuid: String) -> Result<(), NucleoError> {
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
         let token = self
-            .autenticar_con_cache(&secreto)
+            .autenticar_con_cache()
             .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
             })?;
@@ -310,17 +323,13 @@ impl Nucleo {
         Ok(())
     }
 
-    /// Espejo de [`Self::cerrar_ingreso_remoto_con_secreto`], pero contra
+    /// Espejo de [`Self::cerrar_ingreso_remoto`], pero contra
     /// `ingresos_proveedor`.
-    pub fn cerrar_ingreso_proveedor_remoto_con_secreto(
-        &self,
-        secreto: String,
-        uuid: String,
-    ) -> Result<(), NucleoError> {
+    pub fn cerrar_ingreso_proveedor_remoto(&self, uuid: String) -> Result<(), NucleoError> {
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
         let token = self
-            .autenticar_con_cache(&secreto)
+            .autenticar_con_cache()
             .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
             })?;
@@ -346,17 +355,16 @@ impl Nucleo {
         Ok(())
     }
 
-    /// Espejo de [`Self::cerrar_ingreso_proveedor_remoto_con_secreto`],
+    /// Espejo de [`Self::cerrar_ingreso_proveedor_remoto`],
     /// pero contra `prestamos_gafete_provisional`.
-    pub fn cerrar_prestamo_gafete_provisional_remoto_con_secreto(
+    pub fn cerrar_prestamo_gafete_provisional_remoto(
         &self,
-        secreto: String,
         uuid: String,
     ) -> Result<(), NucleoError> {
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
         let token = self
-            .autenticar_con_cache(&secreto)
+            .autenticar_con_cache()
             .map_err(|error| NucleoError::Interno {
                 mensaje: interno(error),
             })?;
@@ -384,14 +392,11 @@ impl Nucleo {
 }
 
 impl Nucleo {
-    pub(super) fn refrescar_catalogo_sin_sesion_con_secreto(
-        &self,
-        secreto: &str,
-    ) -> Result<(), NucleoError> {
+    pub(super) fn refrescar_catalogo_sin_sesion(&self) -> Result<(), NucleoError> {
         let mapear_nube = |error: control_acceso::nube::NubeError| NucleoError::Interno {
             mensaje: interno(error),
         };
-        let token = self.autenticar_con_cache(secreto).map_err(mapear_nube)?;
+        let token = self.autenticar_con_cache().map_err(mapear_nube)?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::base_url(),
             apikey: control_acceso::nube::apikey(),
@@ -421,9 +426,8 @@ impl Nucleo {
     /// así ninguna otra sincronización se cuela entre el fallo y el
     /// reintento. Las etapas las decide `control_acceso::nube::sincronizar`
     /// con `alcance` y el perfil móvil (sin historiales).
-    pub(super) fn sincronizar_con_secreto(
+    pub(super) fn sincronizar(
         &self,
-        secreto: &str,
         alcance: control_acceso::nube::AlcanceSincronizacion,
     ) -> Result<ResumenSincronizacion, NucleoError> {
         let _sincronizacion = self
@@ -431,10 +435,10 @@ impl Nucleo {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        match self.intentar_sincronizar_con_secreto(secreto, alcance) {
+        match self.intentar_sincronizar(alcance) {
             Err(FalloSincronizacion::TokenVencido) => {
                 self.invalidar_token_cacheado();
-                self.intentar_sincronizar_con_secreto(secreto, alcance)
+                self.intentar_sincronizar(alcance)
                     .map_err(convertir_fallo_sincronizacion)
             }
             Err(otro) => Err(convertir_fallo_sincronizacion(otro)),
@@ -442,29 +446,14 @@ impl Nucleo {
         }
     }
 
-    pub(super) fn intentar_sincronizar_con_secreto(
+    pub(super) fn intentar_sincronizar(
         &self,
-        secreto: &str,
         alcance: control_acceso::nube::AlcanceSincronizacion,
     ) -> Result<ResumenSincronizacion, FalloSincronizacion> {
         let actor = self.actor_autenticado()?;
         self.core_lock().autorizar_uso_nube(&actor)?;
 
-        // Renovación silenciosa de la sesión de Supabase Auth (mejor
-        // esfuerzo). Sólo en la completa: una llamada de red más que el
-        // pulso ya hace.
-        if alcance.es_completo()
-            && let Some(refresh_token) = self.refresh_token_supabase()
-            && let Ok(sesion) = control_acceso::nube::refrescar(
-                control_acceso::nube::base_url(),
-                control_acceso::nube::apikey(),
-                &refresh_token,
-            )
-        {
-            self.iniciar_sesion_supabase(sesion);
-        }
-
-        let token = self.autenticar_con_cache(secreto).map_err(|error| {
+        let token = self.autenticar_con_cache().map_err(|error| {
             FalloSincronizacion::Nucleo(NucleoError::Interno {
                 mensaje: interno(error),
             })
@@ -485,9 +474,46 @@ impl Nucleo {
             control_acceso::nube::PerfilDispositivo::Movil,
         )?;
 
-        let sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
+        let mut sesion_expulsada = !self.core_lock().sesion_sigue_activa(&actor);
         if sesion_expulsada {
             *self.sesion_lock() = None;
+        }
+
+        // Sesión única por unidad -- mismo criterio que escritorio
+        // (`desktop/src-tauri/src/comandos/nube.rs`): cada sincronización,
+        // incluida la que sigue al login, registra la sesión en la nube y
+        // pregunta si sigue vigente. Falla "abierto": sin red no expulsa.
+        let mut sesion_en_otra_unidad = false;
+        let mut sesion_unidad = None;
+        let mut sesion_transcurrido_ms = None;
+        let inicio = self
+            .sesion_lock()
+            .as_ref()
+            .map(|(_, inicio)| inicio.clone());
+        if let (false, Some(inicio)) = (sesion_expulsada, inicio) {
+            let estado = control_acceso::nube::sesion_en_unidad(
+                control_acceso::nube::base_url(),
+                control_acceso::nube::apikey(),
+                &token,
+                &actor.cedula,
+                &inicio,
+            );
+            sesion_unidad = Some(
+                estado
+                    .as_ref()
+                    .map_or("error", |estado| estado.como_texto())
+                    .to_string(),
+            );
+            sesion_transcurrido_ms = Some(inicio.transcurrido_ms());
+            match estado {
+                Ok(control_acceso::nube::EstadoSesionUnidad::Desplazada) => {
+                    *self.sesion_lock() = None;
+                    sesion_expulsada = true;
+                    sesion_en_otra_unidad = true;
+                }
+                Ok(_) => {}
+                Err(error) => log::info!("no se pudo verificar la sesión en la nube: {error}"),
+            }
         }
 
         Ok(ResumenSincronizacion {
@@ -505,6 +531,9 @@ impl Nucleo {
             dispositivo_id: token.dispositivo_id,
             tipo: token.tipo,
             sesion_expulsada,
+            sesion_en_otra_unidad,
+            sesion_unidad,
+            sesion_transcurrido_ms,
             conflictos_ingreso: resumen
                 .conflictos_ingreso
                 .into_iter()
@@ -521,5 +550,32 @@ impl Nucleo {
                 .map(Into::into)
                 .collect(),
         })
+    }
+}
+
+/// Metadata del teléfono para el canje: `""` significa "no disponible".
+fn metadata_del_telefono(
+    identificador_hardware: String,
+    nombre_dispositivo: String,
+    plataforma: String,
+    version_build: String,
+    app_version: String,
+) -> control_acceso::nube::MetadatosDispositivo {
+    let opcional = |texto: String| (!texto.trim().is_empty()).then_some(texto);
+    control_acceso::nube::MetadatosDispositivo {
+        identificador_hardware: opcional(identificador_hardware),
+        nombre_dispositivo: opcional(nombre_dispositivo),
+        plataforma: opcional(plataforma),
+        version_build: opcional(version_build),
+        app_version: opcional(app_version),
+    }
+}
+
+/// Los rechazos de la vinculación (código inválido o vencido, clave en uso)
+/// son para la persona que está frente al teléfono: viajan como
+/// `Rechazado`, con el mismo texto que en escritorio.
+fn error_de_nube_para_mostrar(error: control_acceso::nube::NubeError) -> NucleoError {
+    NucleoError::Rechazado {
+        mensaje: control_acceso::mensajes::mensaje_nube(error),
     }
 }

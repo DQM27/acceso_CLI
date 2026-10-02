@@ -26,9 +26,9 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
  * hay una sincronización en curso. El timer es respaldo ante desconexiones.
  *
  * Un aviso en vivo que trae su tabla corre sólo esa parte
- * (`sincronizarCambiosConSecreto`, ver `AlcanceSincronizacion` en el
+ * (`sincronizarCambios`, ver `AlcanceSincronizacion` en el
  * núcleo); un registro local sólo sube lo pendiente
- * (`enviarCambiosConSecreto`, igual que escritorio); el pulso y la
+ * (`enviarCambios`, igual que escritorio); el pulso y la
  * reconexión del canal corren la completa. Antes cada aviso corría la
  * completa (~12 consultas a la nube por un solo cambio) -- el aviso llegaba
  * al instante, lo que tardaba era lo que se hacía al recibirlo. Lo mismo
@@ -36,7 +36,6 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
  */
 class SincronizacionPeriodica(
     private val nucleo: Nucleo,
-    private val secretoStore: SecretoDispositivoStore,
     private val scope: CoroutineScope,
     private val onSincronizado: (ResumenSincronizacion) -> Unit = {},
 ) {
@@ -83,16 +82,14 @@ class SincronizacionPeriodica(
                     val alcance = porSincronizar.tomar()
                     try {
                         val resumen = withContext(Dispatchers.IO) {
-                            val secreto = secretoStore.cargar()
-                                ?: throw SecretoDispositivoNoEncontradoException()
                             when (alcance) {
                                 AlcancePendiente.Completa ->
-                                    medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
+                                    medirNucleo("sincronizarConNube") { nucleo.sincronizarConNube() }
                                 is AlcancePendiente.Tablas ->
-                                    medirNucleo("sincronizarCambiosConSecreto") { nucleo.sincronizarCambiosConSecreto(secreto, alcance.tablas) }
+                                    medirNucleo("sincronizarCambios") { nucleo.sincronizarCambios(alcance.tablas) }
                                 AlcancePendiente.SoloEnvio ->
-                                    medirNucleo("enviarCambiosConSecreto") { nucleo.enviarCambiosConSecreto(secreto) }
-                            }
+                                    medirNucleo("enviarCambios") { nucleo.enviarCambios() }
+                            }.also { informarDiagnosticoSincronizacion(nucleo, it) }
                         }
                         Log.i("SincronizacionNube", "Recibidos: gafetes=${resumen.gafetesRecibidos}, historial=${resumen.movimientosHistorialRecibidos}, abiertos=${resumen.remotosAbiertos}")
                         onSincronizado(resumen)

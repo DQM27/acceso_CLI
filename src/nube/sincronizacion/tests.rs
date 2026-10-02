@@ -1172,9 +1172,10 @@ fn apertura_de_ingreso_con_gafete_ya_activo_en_otro_dispositivo_queda_fallida_de
     assert_eq!(
         resumen.conflictos_gafete,
         vec![ConflictoGafeteActivo {
-            contratista_nombre: "Persona de prueba".to_string(),
+            tipo: TipoMovimientoGafete::Contratista,
+            nombre: "Persona de prueba".to_string(),
             gafete_numero: 77,
-            fecha_hora_ingreso: "2026-01-01T08:00:00Z".to_string(),
+            fecha_hora: "2026-01-01T08:00:00Z".to_string(),
         }]
     );
 
@@ -3924,4 +3925,96 @@ fn catalogo_cortado_a_mitad_conserva_lo_bajado_y_no_avanza_la_marca() {
         )
         .unwrap();
     assert_eq!(marca, None, "sin todas las páginas, la marca no avanza");
+}
+
+/// Respuesta de `PostgREST` cuando el índice único de "gafete en uso"
+/// `indice` rechaza la apertura (`'static` como pide `servidor_de_una_respuesta`).
+fn respuesta_gafete_en_uso(indice: &str) -> &'static str {
+    let respuesta = format!(
+        "HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         {{\"code\":\"23505\",\"details\":null,\"hint\":null,\
+         \"message\":\"duplicate key value violates unique constraint \\\"{indice}\\\"\"}}"
+    );
+    Box::leak(respuesta.into_boxed_str())
+}
+
+fn estado_en_cola(connection: &Connection, entidad_uuid: &str) -> String {
+    connection
+        .query_row(
+            "SELECT estado FROM cola_salida WHERE entidad_uuid = ?1",
+            params![entidad_uuid],
+            |row| row.get(0),
+        )
+        .unwrap()
+}
+
+/// Mismo bloqueo cruzado que en contratistas: la apertura de un ingreso de
+/// proveedor con un gafete que otro dispositivo del sitio ya tiene activo
+/// queda fallida de inmediato y se reporta como conflicto de proveedor.
+#[test]
+fn ingreso_proveedor_con_gafete_ya_activo_en_otro_dispositivo_queda_fallido_de_inmediato() {
+    let (connection, uuid) = conexion_con_ingreso_proveedor(None);
+    let base_url = servidor_de_una_respuesta(respuesta_gafete_en_uso(
+        "ingresos_proveedor_gafete_activo_sitio_idx",
+    ));
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.fallidos, 1);
+    assert_eq!(
+        resumen.conflictos_gafete,
+        vec![ConflictoGafeteActivo {
+            tipo: TipoMovimientoGafete::Proveedor,
+            nombre: "Juan Perez".to_string(),
+            gafete_numero: 12,
+            fecha_hora: "2026-01-01T08:00:00Z".to_string(),
+        }]
+    );
+    assert_eq!(estado_en_cola(&connection, &uuid), "fallido");
+}
+
+/// Lo mismo para la entrega de un gafete provisional KOF.
+#[test]
+fn prestamo_kof_con_gafete_ya_activo_en_otro_dispositivo_queda_fallido_de_inmediato() {
+    let connection = conexion_con_un_prestamo_gafete_provisional_activo();
+    connection
+        .execute(
+            "INSERT INTO cola_salida (entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+             VALUES ('prestamo_gafete_provisional', 'uuid-prestamo', 'crear',
+                     '2026-08-01T08:00:00Z', '2026-08-01T08:00:00Z')",
+            [],
+        )
+        .unwrap();
+    let base_url = servidor_de_una_respuesta(respuesta_gafete_en_uso(
+        "prestamos_gafete_provisional_gafete_activo_sitio_idx",
+    ));
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.fallidos, 1);
+    assert_eq!(
+        resumen.conflictos_gafete,
+        vec![ConflictoGafeteActivo {
+            tipo: TipoMovimientoGafete::ProvisionalKof,
+            nombre: "Kendall Morales".to_string(),
+            gafete_numero: 4,
+            fecha_hora: "2026-08-01T08:00:00Z".to_string(),
+        }]
+    );
+    assert_eq!(estado_en_cola(&connection, "uuid-prestamo"), "fallido");
+}
+
+/// El índice de OTRA tabla no cuenta como conflicto de esta: un proveedor
+/// que choca con algo que no es su índice de "gafete en uso" sigue el
+/// camino normal de reintento.
+#[test]
+fn ingreso_proveedor_con_un_409_de_otro_indice_sigue_el_camino_normal() {
+    let (connection, uuid) = conexion_con_ingreso_proveedor(None);
+    let base_url =
+        servidor_de_una_respuesta(respuesta_gafete_en_uso("ingresos_gafete_activo_sitio_idx"));
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert!(resumen.conflictos_gafete.is_empty());
+    assert_eq!(estado_en_cola(&connection, &uuid), "pendiente");
 }

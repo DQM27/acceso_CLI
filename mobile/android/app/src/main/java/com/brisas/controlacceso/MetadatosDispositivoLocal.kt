@@ -3,9 +3,8 @@ package com.brisas.controlacceso
 import android.content.Context
 import android.os.Build
 
-/// Datos del teléfono físico, capturados una sola vez para la activación
-/// inicial (ver `PrimerArranqueViewModel.conectar` y
-/// `Nucleo.configurarDispositivoInicialConSecreto`). Ninguno es secreto en
+/// Datos del teléfono físico, enviados al vincularlo (ver
+/// `PrimerArranqueViewModel` y `Nucleo.vincularDispositivoInicial`). Ninguno es secreto en
 /// sí mismo -- observables por cualquier app en el propio teléfono -- ver
 /// `docs/features-futuras/plan-sesion-unica-dispositivos.md`. Nombres de campo neutrales a
 /// propósito -- el mismo contrato (`MetadatosDispositivo` en Rust) también

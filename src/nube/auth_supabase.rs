@@ -162,23 +162,23 @@ struct CuerpoActualizarPassword<'a> {
 
 /// Revalida `password_actual` con un login real (no confía en que la
 /// sesión siga abierta -- ver "Cambiar contraseña (rutina)" en el plan) y
-/// recién entonces cambia a `password_nueva`, limpiando
-/// `debe_cambiar_password`. `cedula` hace falta para la revalidación.
+/// con el token de ESE login cambia a `password_nueva`, limpiando
+/// `debe_cambiar_password`. Así funciona aunque la sesión del equipo se
+/// haya abierto sin conexión (sólo con la contraseña cacheada).
 pub fn cambiar_password(
     base_url: &str,
     apikey: &str,
-    access_token: &str,
     cedula: &str,
     password_actual: &str,
     password_nueva: &str,
 ) -> Result<(), AuthSupabaseError> {
-    login(base_url, apikey, cedula, password_actual)?;
+    let revalidada = login(base_url, apikey, cedula, password_actual)?;
 
     let cliente = cliente_http();
     let respuesta = cliente
         .put(format!("{base_url}/auth/v1/user"))
         .header("apikey", apikey)
-        .bearer_auth(access_token)
+        .bearer_auth(&revalidada.access_token)
         .json(&CuerpoActualizarPassword {
             password: password_nueva,
             data: serde_json::json!({ "debe_cambiar_password": false }),

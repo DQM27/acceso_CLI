@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { DEFINICIONES_EXPORT, generarHtmlHistorial } from "./Historial";
+import {
+  DEFINICIONES_EXPORT,
+  campoOrdenDeColumna,
+  generarCsvHistorial,
+  generarHtmlHistorial,
+} from "./Historial";
 import type { MovimientoHistorial } from "../api/historial";
 
 // Mismos tres casos que desktop/src-tauri/src/pdf/html.rs -- una sola
@@ -22,6 +27,8 @@ function fila(sobrescribir: Partial<MovimientoHistorial> = {}): MovimientoHistor
     usuario_entrada_nombre: "Quintana",
     usuario_salida_nombre: null,
     dispositivo_entrada_tipo: "pc",
+    tipo_texto: "PRAIND",
+    medio_texto: "CAMINANDO",
     ...sobrescribir,
   };
 }
@@ -80,5 +87,55 @@ describe("generarHtmlHistorial", () => {
     const posicionNombre = html.indexOf("NOMBRE");
     expect(posicionGafete).toBeGreaterThan(0);
     expect(posicionGafete).toBeLessThan(posicionNombre);
+  });
+});
+
+describe("campoOrdenDeColumna", () => {
+  it("las columnas de fecha y hora ordenan por el instante correspondiente", () => {
+    expect(campoOrdenDeColumna("fecha_ingreso")).toBe("hora_entrada");
+    expect(campoOrdenDeColumna("hora_ingreso")).toBe("hora_entrada");
+    expect(campoOrdenDeColumna("fecha_salida")).toBe("hora_salida");
+    expect(campoOrdenDeColumna("hora_salida")).toBe("hora_salida");
+  });
+
+  it("tipo y medio ordenan por el texto que se ve", () => {
+    expect(campoOrdenDeColumna("tipo_ingreso")).toBe("tipo_texto");
+    expect(campoOrdenDeColumna("medio_ingreso")).toBe("medio_texto");
+  });
+
+  it("las columnas con campo propio lo usan y una desconocida no ordena en el servidor", () => {
+    expect(campoOrdenDeColumna("empresa_nombre")).toBe("empresa_nombre");
+    expect(campoOrdenDeColumna("gafete_numero")).toBe("gafete_numero");
+    expect(campoOrdenDeColumna("inventada")).toBeNull();
+  });
+});
+
+describe("generarCsvHistorial", () => {
+  it("separa con ; , empieza con BOM y cierra cada línea con salto", () => {
+    const csv = generarCsvHistorial(
+      [fila({ contratista_nombre: "Ana", gafete_numero: 7 })],
+      columnas("contratista_nombre", "gafete_numero"),
+    );
+
+    expect(csv.charCodeAt(0)).toBe(0xfeff);
+    expect(csv.slice(1)).toBe("Nombre;Gafete\r\nAna;7\r\n");
+  });
+
+  it("pone comillas cuando el texto lleva ; comillas o salto de línea", () => {
+    const csv = generarCsvHistorial(
+      [fila({ contratista_nombre: 'Ana; "la" Pérez' })],
+      columnas("contratista_nombre"),
+    );
+
+    expect(csv).toContain('"Ana; ""la"" Pérez"');
+  });
+
+  it("Tipo y Medio salen con el texto ya armado por la vista", () => {
+    const csv = generarCsvHistorial(
+      [fila({ tipo_texto: "IN HOUSE", medio_texto: "ABC123" })],
+      columnas("tipo_ingreso", "medio_ingreso"),
+    );
+
+    expect(csv).toContain("IN HOUSE;ABC123");
   });
 });

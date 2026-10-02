@@ -12,7 +12,9 @@
 use chrono::Utc;
 use rusqlite::Connection;
 
-use control_acceso::database::repositories::usuario_repository::SqliteUsuarioRepository;
+use control_acceso::database::repositories::usuario_repository::{
+    SqliteUsuarioRepository, UsuarioRepository,
+};
 use control_acceso::database::schema::initialize_database;
 use control_acceso::models::usuario::RolUsuario;
 use control_acceso::services::autenticacion_service::AutenticacionService;
@@ -71,7 +73,6 @@ fn fija_password_y_puede_iniciar_sesion_de_ahi_en_adelante() {
     let connection = base_con_root();
     let id = insertar_usuario_global_sin_password(&connection, "9-0002");
     let repository = SqliteUsuarioRepository::new(&connection);
-    let usuarios = UsuarioService::new(&repository);
     let autenticacion = AutenticacionService::new(&repository);
 
     assert!(matches!(
@@ -79,10 +80,15 @@ fn fija_password_y_puede_iniciar_sesion_de_ahi_en_adelante() {
         Err(AutenticacionError::SinPasswordLocal)
     ));
 
-    // `cambiar_password` (no `cambiar_password_propio`) a propósito: el
-    // alta de contraseña en un dispositivo nuevo no exige conocer una
-    // anterior que nunca existió acá.
-    usuarios.cambiar_password(id, "mi-password-nueva").unwrap();
+    // Fijar el hash directo (no el cambio propio) a propósito: el alta de
+    // contraseña en un dispositivo nuevo no exige conocer una anterior que
+    // nunca existió acá.
+    repository
+        .actualizar_password(
+            id,
+            &control_acceso::services::password::generar_hash("mi-password-nueva").unwrap(),
+        )
+        .unwrap();
 
     let sesion = autenticacion
         .autenticar("9-0002", "mi-password-nueva", Utc::now())

@@ -5,7 +5,6 @@ use control_acceso::mensajes::{
 };
 use control_acceso::models::encargado_ruta::EncargadoRuta;
 use control_acceso::models::prestamo_gafete_provisional::PrestamoGafeteProvisionalActivoResumen;
-use control_acceso::nube;
 use rusqlite::params;
 
 use crate::comandos::historial::rango_utc;
@@ -38,10 +37,9 @@ pub fn entregar_gafete_provisional(
     state: tauri::State<GuiState>,
 ) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
-    let secreto = nube::credenciales::cargar_secreto();
     entregar_gafete_provisional_verificado(
         || state.core(),
-        state.nube_del_dispositivo(secreto.as_deref()),
+        state.nube_del_dispositivo(),
         &sesion,
         encargado_id,
         gafete_numero,

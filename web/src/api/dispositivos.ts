@@ -1,16 +1,15 @@
 import { invocar, esObjeto, loQueSea } from "./_invocar";
 
 /**
- * Alta/baja/suspensión de dispositivos -- llama a las Edge Functions
- * admin-list-devices/admin-provision-device/admin-revoke-device/
- * admin-suspend-device (las tres primeras ya las usaba el panel viejo,
- * `admin-panel/panel-dispositivos.html`). Ya no con la clave compartida
- * `x-admin-key`: ahora verifican la sesión real de Supabase Auth de quien
- * llama contra `administradores_panel`
- * (mismo criterio que el resto del panel via RLS). `supabase.functions.invoke`
- * manda el JWT de la sesión activa solo -- el panel viejo deja de
- * funcionar a partir de este cambio, a propósito (ver
- * docs/planes-implementados/plan-panel-administrativo-web.md).
+ * Alta, vinculación, baja y suspensión de dispositivos -- Edge Functions
+ * `admin-*` autenticadas con la sesión real de Supabase Auth de quien llama,
+ * contra `administradores_panel` (mismo criterio que el resto del panel via
+ * RLS). `supabase.functions.invoke` manda el JWT de la sesión activa solo.
+ *
+ * Ningún dispositivo recibe un secreto permanente: el panel emite un
+ * código de vinculación de un solo uso (ver
+ * docs/features-futuras/propuesta-registro-dispositivos.md) que el equipo
+ * canjea, generando su propia clave.
  */
 export interface Sitio {
   id: string;
@@ -20,6 +19,9 @@ export interface Sitio {
 
 export type TipoDispositivo = "pc" | "mobile" | "visor";
 
+/** Cómo se autentica hoy el equipo ante la nube. */
+export type CredencialDispositivo = "clave" | "sin_vincular";
+
 export interface Dispositivo {
   id: string;
   sitio_id: string;
@@ -27,7 +29,6 @@ export interface Dispositivo {
   etiqueta: string;
   created_at: string;
   revoked_at: string | null;
-  suspended_at: string | null;
   last_seen_at: string | null;
   oculto_en_panel: boolean;
   identificador_hardware: string | null;
@@ -36,38 +37,88 @@ export interface Dispositivo {
   version_build: string | null;
   app_version: string | null;
   last_ip: string | null;
+  /** Huella RFC 7638 de la clave del equipo, si ya tiene. */
+  clave_huella: string | null;
+  vinculado_en: string | null;
+  credencial: CredencialDispositivo;
 }
 
-export interface DispositivoProvisionado {
+export interface CodigoPendiente {
+  dispositivo_id: string;
+  expira_en: string;
+  creado_en: string;
+  creado_por: string;
+}
+
+export type TipoEventoSeguridad =
+  | "codigo_inexistente"
+  | "codigo_usado"
+  | "codigo_vencido"
+  | "codigo_anulado"
+  | "firma_invalida"
+  | "hardware_distinto"
+  | "sesion_en_otra_unidad"
+  | "sesion_en_duda";
+
+export interface EventoSeguridad {
+  id: number;
+  ocurrido_en: string;
+  dispositivo_id: string | null;
+  tipo: TipoEventoSeguridad;
+  ip: string | null;
+  detalle: unknown;
+}
+
+export interface EstadoDispositivos {
+  sitios: Sitio[];
+  dispositivos: Dispositivo[];
+  codigos_pendientes: CodigoPendiente[];
+  eventos: EventoSeguridad[];
+}
+
+/** Código recién emitido: sólo se ve acá, al crearlo. */
+export interface CodigoEmitido {
+  dispositivo_id: string;
+  codigo: string;
+  expira_en: string;
+}
+
+export interface DispositivoProvisionado extends CodigoEmitido {
   sitio_id: string;
   sitio_nombre: string;
-  dispositivo_id: string;
-  secret: string;
 }
 
 function esSitio(valor: unknown): valor is Sitio {
   return esObjeto(valor) && typeof valor.id === "string" && typeof valor.nombre === "string";
 }
 
-function esListaDispositivosYSitios(
-  valor: unknown,
-): valor is { sitios: Sitio[]; dispositivos: Dispositivo[] } {
+function esEstadoDispositivos(valor: unknown): valor is EstadoDispositivos {
   return (
     esObjeto(valor) &&
     Array.isArray(valor.sitios) &&
     Array.isArray(valor.dispositivos) &&
+    Array.isArray(valor.codigos_pendientes) &&
+    Array.isArray(valor.eventos) &&
     valor.sitios.every(esSitio) &&
     valor.dispositivos.every((d) => esObjeto(d) && typeof d.id === "string")
   );
 }
 
-function esDispositivoProvisionado(valor: unknown): valor is DispositivoProvisionado {
+function esCodigoEmitido(valor: unknown): valor is CodigoEmitido {
   return (
     esObjeto(valor) &&
-    typeof valor.sitio_id === "string" &&
-    typeof valor.sitio_nombre === "string" &&
     typeof valor.dispositivo_id === "string" &&
-    typeof valor.secret === "string"
+    typeof valor.codigo === "string" &&
+    typeof valor.expira_en === "string"
+  );
+}
+
+function esDispositivoProvisionado(valor: unknown): valor is DispositivoProvisionado {
+  return (
+    esCodigoEmitido(valor) &&
+    esObjeto(valor) &&
+    typeof valor.sitio_id === "string" &&
+    typeof valor.sitio_nombre === "string"
   );
 }
 
@@ -75,31 +126,29 @@ function esResultadoEliminar(valor: unknown): valor is { borrado: boolean } {
   return esObjeto(valor) && typeof valor.borrado === "boolean";
 }
 
-export function listarDispositivosYSitios(): Promise<{ sitios: Sitio[]; dispositivos: Dispositivo[] }> {
-  return invocar("admin-list-devices", esListaDispositivosYSitios);
+export function listarDispositivosYSitios(): Promise<EstadoDispositivos> {
+  return invocar("admin-list-devices", esEstadoDispositivos);
 }
 
 /** Crea (o reutiliza, si ya existe por nombre) un sitio suelto -- para el
- * desplegable de "Sitio" del alta de dispositivos, sin tener que crear un
- * dispositivo a la vez. */
+ * desplegable de "Unidad operativa" del alta de dispositivos. */
 export function crearSitio(datos: { nombre: string }): Promise<Sitio> {
   return invocar("admin-create-site", esSitio, datos);
 }
 
+/** Crea el dispositivo y su primer código de vinculación. El sitio va por
+ * id: un nombre mal escrito ya no puede crear un sitio nuevo en silencio. */
 export function provisionarDispositivo(datos: {
-  sitio_nombre: string;
+  sitio_id: string;
   tipo: TipoDispositivo;
   etiqueta: string;
+  vigencia_minutos?: number;
 }): Promise<DispositivoProvisionado> {
   return invocar("admin-provision-device", esDispositivoProvisionado, datos);
 }
 
 export function revocarDispositivo(dispositivoId: string): Promise<void> {
   return invocar("admin-revoke-device", loQueSea, { dispositivo_id: dispositivoId });
-}
-
-export function suspenderDispositivo(dispositivoId: string, suspendido: boolean): Promise<void> {
-  return invocar("admin-suspend-device", loQueSea, { dispositivo_id: dispositivoId, suspendido });
 }
 
 /**

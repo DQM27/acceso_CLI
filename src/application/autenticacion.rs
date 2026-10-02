@@ -52,7 +52,7 @@ impl AppCore {
     }
 
     /// Ver `AutenticacionService::autenticar_con_estado` -- para un login
-    /// LOCAL (mobile: `Nucleo::autenticar`/`autenticar_con_secreto`) que
+    /// LOCAL (mobile: `Nucleo::autenticar`) que
     /// necesita saber si debe exigir el cambio de contraseña, en vez de
     /// asumir siempre que no (hallazgo de auditoría 2026-09-24,
     /// MV-01/DF-03).

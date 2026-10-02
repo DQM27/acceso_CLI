@@ -60,16 +60,14 @@ necesita vía Cargo features (ver `[features]` en el `Cargo.toml` de la raíz):
 flowchart LR
     subgraph Flags["Cargo features de control_acceso"]
         F1["terminal-ui<br/>ratatui, crossterm, tui-input"]
-        F2["nube<br/>reqwest, serde_json, serde"]
-        F3["cifrado-secreto-dispositivo-portable<br/>aes-gcm, sha2"]
-        F4["cifrado-secreto-dispositivo<br/>+ machine-uid, Windows only"]
+        F2["nube<br/>reqwest, serde_json, serde,<br/>p256, sha2, base64"]
+        F4["cifrado-secreto-dispositivo<br/>DPAPI + machine-uid, Windows only"]
     end
 
     TUI["Binario TUI/CLI<br/>cargo build --release<br/>(sin --features)"] --> F1
 
     TAURI["desktop-tauri<br/>default-features = false<br/>features = [serde, nube,<br/>cifrado-secreto-dispositivo]"] --> F2
     TAURI --> F4
-    F4 -.->|"activa también"| F3
 
     UNIFFI["mobile-rust-core<br/>default-features = false<br/>features = [nube]"] --> F2
 ```
@@ -80,10 +78,12 @@ Tres consecuencias directas de esto, verificadas contra el código (no supuestas
   --release` (CI) ni `cargo build-native` pasan `--features nube` — es una herramienta
   local pura, sin sincronización a la nube. Si algún día eso cambia, es una decisión de
   producto explícita, no un descuido.
-- **Sólo escritorio cifra el secreto con el Machine GUID de Windows** (feature
-  `cifrado-secreto-dispositivo`, que depende de `machine-uid`, un crate que ni siquiera
-  se compila para Android). Móvil activa `nube` nada más — cifra su copia del secreto
-  del lado de Kotlin (Android Keystore), no en este crate.
+- **Sólo escritorio guarda la clave privada del dispositivo en disco, protegida con
+  DPAPI** (feature `cifrado-secreto-dispositivo`, que además trae `machine-uid` para la
+  metadata; ninguno de los dos se compila para Android). Móvil activa `nube` nada más —
+  su clave vive en Android Keystore y firma a través del callback
+  `AlmacenClaveDispositivo` (ver `mobile/rust-core/src/firmante.rs`). Desde 2026-09-30 no
+  existe ningún secreto de dispositivo.
 - **Agregar una dependencia nueva a una feature no afecta a quien no la activa.** Si
   mañana `cifrado-secreto-dispositivo` sumara otro crate de Windows, `mobile-rust-core`
   seguiría compilando exactamente igual — nunca pidió esa feature.
@@ -94,7 +94,7 @@ Este es el caso concreto que motivó el documento. `MetadatosDispositivo` (un `s
 con campos neutrales: `identificador_hardware`, `nombre_dispositivo`, `plataforma`,
 `version_build`, `app_version`) vive en `src/nube/cliente.rs` — en el núcleo, no en
 ninguno de los dos consumidores — porque la función que de verdad manda esos datos por
-HTTP (`autenticar_dispositivo`) también vive ahí, una sola vez.
+HTTP (`vincular_con_codigo` / `autenticar_con_firmante`) también vive ahí, una sola vez.
 
 ```mermaid
 sequenceDiagram
@@ -104,15 +104,18 @@ sequenceDiagram
     participant W as Windows (desktop-tauri)
     participant D as device-auth (Supabase)
 
-    Note over K,M: Activación desde el celular
-    K->>M: configurarDispositivoInicialConSecreto(secreto, identificadorHardware=ANDROID_ID, ...)
-    M->>N: MetadatosDispositivo { ... } + autenticar_dispositivo()
-    N->>D: POST /device-auth { secret, metadata }
+    Note over K,M: Vinculación desde el celular
+    K->>M: vincularDispositivoInicial(codigo, identificadorHardware=ANDROID_ID, ...)
+    M->>N: MetadatosDispositivo { ... } + vincular_con_codigo()
+    N->>D: POST /device-vincular { codigo, clave_publica_jwk, metadata }
 
-    Note over W,N: Activación desde la PC
+    Note over W,N: Vinculación desde la PC
     W->>N: metadata_de_esta_maquina() (Machine GUID, COMPUTERNAME, "Windows")
-    W->>N: MetadatosDispositivo { ... } + autenticar_dispositivo()
-    N->>D: POST /device-auth { secret, metadata }
+    W->>N: MetadatosDispositivo { ... } + vincular_con_codigo()
+    N->>D: POST /device-vincular { codigo, clave_publica_jwk, metadata }
+
+    Note over N,D: Cada renovación de token
+    N->>D: POST /device-auth { asercion firmada, metadata }
 ```
 
 Cada plataforma arma su propio valor para el mismo `struct` (Kotlin lee

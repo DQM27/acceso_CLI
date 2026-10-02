@@ -16,7 +16,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
-import uniffi.control_acceso_mobile.ResultadoLogin
 import uniffi.control_acceso_mobile.UsuarioSesion
 
 /// Dueño del estado de [PantallaLogin] y de las llamadas a [Nucleo] para
@@ -33,7 +32,6 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// login era la causa real del retraso de "un par de segundos" al entrar.
 class LoginViewModel(
     private val nucleo: Nucleo,
-    private val secretoStore: SecretoDispositivoStore,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var cedula by mutableStateOf("")
@@ -47,16 +45,6 @@ class LoginViewModel(
     var sesion by mutableStateOf<UsuarioSesion?>(null)
         private set
     var propietarioSesion by mutableStateOf<PropietarioSesion?>(null)
-        private set
-
-    /// Sesión recién autenticada contra Supabase Auth con
-    /// `debe_cambiar_password = true` (contraseña temporal de un solo uso,
-    /// ver docs/planes-implementados/plan-autenticacion-supabase-auth.md) -- `null` es el estado
-    /// normal; con esto puesto, [PantallaLogin] muestra el paso de cambio
-    /// obligatorio en vez de dejar entrar. `passwordActual` es la temporal
-    /// que recién tipeó, hace falta para que `cambiarPasswordSupabase`
-    /// revalide del lado del backend antes de aceptar la nueva.
-    var cambioObligatorio by mutableStateOf<Pair<UsuarioSesion, String>?>(null)
         private set
 
     fun cambiarCedula(nueva: String) {
@@ -74,15 +62,13 @@ class LoginViewModel(
         val passwordTipeada = password
         viewModelScope.launch {
             try {
-                val resultado: ResultadoLogin = withContext(dispatcherIO) {
-                    val secreto = secretoStore.cargar().orEmpty()
-                    medirNucleo("autenticarConSecreto") { nucleo.autenticarConSecreto(cedula, passwordTipeada, secreto) }
+                // Una contraseña temporal se rechaza en el núcleo con un
+                // mensaje que manda a cambiarla en escritorio: el celular no
+                // cambia contraseñas.
+                val sesionNueva = withContext(dispatcherIO) {
+                    medirNucleo("autenticar") { nucleo.autenticar(cedula, passwordTipeada) }
                 }
-                if (resultado.debeCambiarPassword) {
-                    cambioObligatorio = resultado.sesion to passwordTipeada
-                    return@launch
-                }
-                abrirSesion(resultado.sesion)
+                abrirSesion(sesionNueva)
                 lanzarSincronizacionDeFondo()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
@@ -103,55 +89,35 @@ class LoginViewModel(
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    val secreto = secretoStore.cargar() ?: return@withContext
-                    medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
+                    // Sin vincular: nada que sincronizar.
+                    if (!nucleo.nubeConfigurada()) return@withContext
+                    val resumen = medirNucleo("sincronizarConNube") { nucleo.sincronizarConNube() }
+                    informarDiagnosticoSincronizacion(nucleo, resumen)
                 }
             } catch (_: NucleoException) {
-                // Sin red, o sin secreto configurado todavía -- no es un
+                // Sin red, o sin vincular todavía -- no es un
                 // error que el login deba mostrar, el pulso periódico
                 // reintenta solo.
             }
         }
     }
 
-    /// Completa el cambio obligatorio tras `cambioObligatorio` --
-    /// `cambiarPasswordSupabase` ya revalida la temporal contra Supabase
-    /// antes de aceptar la nueva, la sesión local ya está abierta desde
-    /// `autenticar()` (esto no vuelve a autenticar, sólo cambia la
-    /// contraseña).
-    fun completarCambioObligatorio(passwordNueva: String) {
-        if (autenticando) return
-        val (sesionPendiente, passwordActual) = cambioObligatorio ?: return
-        error = null
-        autenticando = true
-        viewModelScope.launch {
-            try {
-                withContext(dispatcherIO) {
-                    medirNucleo("cambiarPasswordSupabase") { nucleo.cambiarPasswordSupabase(passwordActual, passwordNueva) }
-                }
-                abrirSesion(sesionPendiente)
-                cambioObligatorio = null
-                lanzarSincronizacionDeFondo()
-            } catch (excepcion: NucleoException) {
-                error = excepcion.message
-            } finally {
-                autenticando = false
-            }
-        }
-    }
-
-    fun cancelarCambioObligatorio() {
-        cambioObligatorio = null
-        error = null
-    }
-
     /// Sólo olvida el actor en memoria — el `Nucleo`/la conexión SQLite del
     /// teléfono se quedan abiertos (son de la Activity, no de la sesión) —
     /// mismo criterio que `Nucleo::cerrar_sesion` del lado de Rust.
     fun cerrarSesion() {
+        val cedulaSaliente = sesion?.cedula
         propietarioSesion?.cerrar()
         propietarioSesion = null
         medirNucleo("cerrarSesion") { nucleo.cerrarSesion() }
+        // Avisa a la nube (sesión única por unidad y bitácora del panel) sin
+        // demorar la salida: hace red, así que va en segundo plano y nunca
+        // falla hacia la pantalla.
+        if (cedulaSaliente != null) {
+            viewModelScope.launch(dispatcherIO) {
+                runCatching { nucleo.cerrarSesionEnLaNube(cedulaSaliente) }
+            }
+        }
         sesion = null
         cedula = ""
         password = ""
@@ -170,11 +136,8 @@ class LoginViewModel(
     }
 
     companion object {
-        fun factory(
-            nucleo: Nucleo,
-            secretoStore: SecretoDispositivoStore,
-        ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { LoginViewModel(nucleo, secretoStore) }
+        fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
+            initializer { LoginViewModel(nucleo) }
         }
     }
 }

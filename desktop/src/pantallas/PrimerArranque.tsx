@@ -1,34 +1,33 @@
 import { useState } from "react";
-import { configurarDispositivoInicial } from "../api";
+import { vincularDispositivoInicial } from "../api";
+import { codigoCompleto, formatearCodigo } from "../componentes/CodigoVinculacion.logica";
 
 /**
  * Única pantalla cuando la base está vacía (`requiereConfiguracionInicial`
  * en `App.tsx`) -- sin login todavía, porque no hay ningún usuario con
- * quien autenticar. Pegar el secreto trae el catálogo remoto completo
+ * quien autenticar. Canjear el código de vinculación que el panel generó
+ * para este equipo trae el catálogo remoto completo
  * (contratistas/empresas/gafetes/usuarios) en el mismo paso; los usuarios
  * llegan con el centinela `SIN_PASSWORD_LOCAL` (ver
  * `src/nube/sincronizacion.rs`), así que el primer login de cualquiera de
- * ellos cae solo en "fijar contraseña" -- ya existente, no hay nada nuevo
- * que construir ahí.
+ * ellos cae solo en "fijar contraseña".
  *
- * Reemplaza al mensaje fijo de "usá --reset-root/--cli" -- ese binario
- * de consola ya no existe en `main` (queda preservado sólo en la rama
- * `no-borrar-cli-tui`), así que este flujo pegando el secreto del panel
- * es hoy la única forma de arrancar un dispositivo nuevo.
+ * El código es de un solo uso y vence en minutos: no es una credencial. Al
+ * canjearlo, este equipo genera su propia clave y sólo manda la parte
+ * pública (ver `control_acceso::nube::firmante`).
  */
 export default function PrimerArranque({ onListo }: { onListo: () => void }) {
-  const [secreto, setSecreto] = useState("");
+  const [codigo, setCodigo] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function alEnviar(evento: React.FormEvent) {
     evento.preventDefault();
-    const valor = secreto.trim();
-    if (!valor) return;
+    if (!codigoCompleto(codigo)) return;
     setEnviando(true);
     setError(null);
     try {
-      await configurarDispositivoInicial(valor);
+      await vincularDispositivoInicial(codigo);
       onListo();
     } catch (error) {
       setError(String(error));
@@ -45,23 +44,26 @@ export default function PrimerArranque({ onListo }: { onListo: () => void }) {
         style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "1.75rem", width: "100%", maxWidth: 420 }}
       >
         <div>
-          <h2 style={{ margin: "0 0 0.35rem" }}>Conectar este dispositivo</h2>
+          <h2 style={{ margin: "0 0 0.35rem" }}>Vincular este equipo</h2>
           <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.9rem" }}>
-            Todavía no hay ningún usuario en esta base. Pegá el secreto que el panel de
-            administración generó para este dispositivo — trae el catálogo (incluidos los
-            usuarios) y con eso ya se puede iniciar sesión.
+            Escribí el código que muestra el panel de administración para este equipo. Vence en
+            pocos minutos y sirve una sola vez; al vincular se trae el catálogo, incluidos los
+            usuarios, y con eso ya se puede iniciar sesión.
           </p>
         </div>
 
         <label className="campo">
-          Secreto del dispositivo
+          Código de vinculación
           <input
-            type="password"
+            type="text"
             autoFocus
-            value={secreto}
-            onChange={(evento) => setSecreto(evento.target.value)}
-            placeholder="Pegá el secreto acá"
+            value={codigo}
+            onChange={(evento) => setCodigo(formatearCodigo(evento.target.value))}
+            placeholder="XXXX-XXXX-XX"
+            autoComplete="off"
+            spellCheck={false}
             disabled={enviando}
+            style={{ fontFamily: "var(--fuente-mono, monospace)", letterSpacing: "0.12em", textAlign: "center" }}
           />
         </label>
 
@@ -71,8 +73,8 @@ export default function PrimerArranque({ onListo }: { onListo: () => void }) {
           </p>
         )}
 
-        <button type="submit" className="boton boton-primario" disabled={enviando || !secreto.trim()}>
-          {enviando ? "Conectando…" : "Conectar y sincronizar"}
+        <button type="submit" className="boton boton-primario" disabled={enviando || !codigoCompleto(codigo)}>
+          {enviando ? "Vinculando…" : "Vincular y sincronizar"}
         </button>
       </form>
     </div>

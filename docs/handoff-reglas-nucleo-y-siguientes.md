@@ -122,7 +122,8 @@ Trampas conocidas:
   target `x86_64-pc-windows-gnu`, el SDK de Android en `/opt/android-sdk`
   (cmdline-tools + `platforms;android-36`, `build-tools;36.0.0`) y
   `npm ci` en `desktop/`. El núcleo con nube se prueba con
-  `cargo test --features nube,cifrado-secreto-dispositivo-portable`.
+  `cargo test --features nube,cifrado-secreto-dispositivo` (la feature
+  `cifrado-secreto-dispositivo-portable` se retiró el 2026-09-30).
 - Disco chico: si cargo falla con "No space left", borrar
   `target/debug/incremental` y `mobile/rust-core/target/debug`.
 - Estado al cerrar N1–N3: núcleo 667 (812 con nube), rust-core 58,

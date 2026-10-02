@@ -1,69 +1,35 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { clienteServicio, correoAdminAutorizado } from "../_shared/admin.ts";
+import { json, leerCuerpo, preflight, textoOpcional } from "../_shared/http.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-  });
-}
-
-// Reemplaza la clave compartida (x-admin-key) por identidad real -- ver
-// admin-list-devices/index.ts para el mismo patrón comentado en detalle.
-async function correoAdminAutorizado(
-  req: Request,
-  admin: ReturnType<typeof createClient>,
-): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!token) return null;
-
-  const { data: userData, error: userError } = await admin.auth.getUser(token);
-  const correo = userData?.user?.email;
-  if (userError || !correo) return null;
-
-  const { data: fila } = await admin
-    .from("administradores_panel")
-    .select("correo")
-    .eq("correo", correo)
-    .maybeSingle();
-
-  return fila ? correo : null;
-}
+// Baja permanente de un dispositivo. Corta el acceso en el acto: la política
+// restrictiva `solo dispositivos vigentes` rechaza su token aunque no haya
+// vencido, y el trigger `dispositivos_avisar_expulsion` avisa al equipo por
+// Realtime. También anula cualquier código de vinculación pendiente.
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
+  const respuestaPreflight = preflight(req);
+  if (respuestaPreflight) return respuestaPreflight;
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const supabase = clienteServicio();
+  if (!(await correoAdminAutorizado(req, supabase))) return json({ error: "unauthorized" }, 401);
 
-  if (!(await correoAdminAutorizado(req, supabase))) {
-    return json({ error: "unauthorized" }, 401);
-  }
+  const cuerpo = await leerCuerpo(req);
+  const dispositivoId = textoOpcional(cuerpo?.dispositivo_id);
+  if (!dispositivoId) return json({ error: "bad_request" }, 400);
 
-  let body: { dispositivo_id?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return json({ error: "bad_request" }, 400);
-  }
-
-  if (!body.dispositivo_id) return json({ error: "bad_request" }, 400);
-
-  const { error } = await supabase
-    .from("dispositivos")
-    .update({ revoked_at: new Date().toISOString() })
-    .eq("id", body.dispositivo_id);
-
+  const ahora = new Date().toISOString();
+  const { error } = await supabase.from("dispositivos").update({ revoked_at: ahora }).eq("id", dispositivoId);
   if (error) return json({ error: "revoke_error", detail: error.message }, 500);
+
+  const { error: codigosError } = await supabase
+    .from("codigos_vinculacion")
+    .update({ anulado_en: ahora })
+    .eq("dispositivo_id", dispositivoId)
+    .is("usado_en", null)
+    .is("anulado_en", null);
+  if (codigosError) return json({ error: "revoke_error", detail: codigosError.message }, 500);
 
   return json({ ok: true });
 });

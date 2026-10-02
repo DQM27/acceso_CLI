@@ -1,0 +1,11 @@
+-- La pantalla "Sesiones" del panel se refrescaba sólo cada minuto: la
+-- bitácora no estaba en la publicación de Realtime, así que un ingreso o un
+-- cierre no aparecía hasta cambiar de pantalla y volver. Mismo patrón que
+-- las demás tablas del panel (`useAutoRefresh`, Postgres Changes).
+--
+-- Postgres Changes respeta RLS: sólo el admin_global (la única política de
+-- lectura de `bitacora_sesiones`) recibe estos cambios; los equipos no.
+-- `sesiones_usuario` queda fuera a propósito: cambia en cada sincronización
+-- de cada equipo (~2 min) sólo para la "última actividad", y eso lo cubre el
+-- refresco periódico sin recargar la grilla a cada rato.
+alter publication supabase_realtime add table public.bitacora_sesiones;

@@ -31,6 +31,50 @@ const URL_STAGING: &str = "https://pmrytjktlyiuikxuuxpr.supabase.co";
 #[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
 const APIKEY_STAGING: &str = "sb_publishable_29DwMvfyj8Jq--LBcqxtBA_pTwWrDH4";
 
+/// El build de diagnóstico es un build de PRUEBA, igual que el
+/// `diagnostico` de Android (paquete `.diag`, base propia, staging): nunca
+/// debe tocar la nube de producción ni la base o las claves de la app real
+/// si las dos conviven en la misma PC. Apunta a staging y usa carpetas
+/// propias, salvo que ya se hayan elegido a mano (`scripts/activar_sandbox.ps1`).
+///
+/// Se llama como primera instrucción de `run()`, antes de que exista
+/// ningún otro hilo (Sentry, Tauri): modificar el entorno es seguro recién
+/// ahí.
+#[cfg(feature = "telemetria")]
+pub fn aislar_build_de_diagnostico() {
+    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+    let mut variables: Vec<(&str, std::ffi::OsString)> = vec![
+        ("CONTROL_ACCESO_SUPABASE_URL", URL_STAGING.into()),
+        ("CONTROL_ACCESO_SUPABASE_APIKEY", APIKEY_STAGING.into()),
+    ];
+    if let Some(local) = local {
+        variables.push((
+            "CONTROL_ACCESO_DB",
+            local
+                .join("ControlAccesoDiagnostico")
+                .join("control_acceso.db")
+                .into_os_string(),
+        ));
+        // `%APPDATA%\ControlAcceso` guarda la clave de la base y la del
+        // dispositivo (ver `control_acceso::nube::credenciales`).
+        variables.push((
+            "APPDATA",
+            local
+                .join("ControlAccesoDiagnosticoRoaming")
+                .into_os_string(),
+        ));
+    }
+    let sandbox_manual = std::env::var_os("CONTROL_ACCESO_SUPABASE_URL").is_some();
+    for (nombre, valor) in variables {
+        if sandbox_manual && std::env::var_os(nombre).is_some() {
+            continue;
+        }
+        // SAFETY: se llama al inicio de `run()`, con un solo hilo vivo
+        // (ver el doc-comment); nadie más lee ni escribe el entorno.
+        unsafe { std::env::set_var(nombre, valor) };
+    }
+}
+
 /// Tope de la cola: sin red por mucho tiempo, lo más viejo se descarta
 /// (y se cuenta) en vez de crecer sin límite.
 const MAXIMO_EN_COLA: usize = 5_000;
@@ -103,10 +147,28 @@ struct Telemetria {
 
 static TELEMETRIA: OnceLock<Telemetria> = OnceLock::new();
 
+/// El reloj del núcleo (hora del servidor + contador de arranque, ver
+/// `control_acceso::tiempo::RelojCorregido`): los eventos se sellan con la
+/// misma hora que los registros, no con la de Windows. Sin él (antes de
+/// abrir el núcleo), la del sistema.
+static RELOJ: OnceLock<std::sync::Arc<dyn control_acceso::tiempo::Reloj>> = OnceLock::new();
+
+/// Fija el reloj con que se sellan los eventos. Una sola vez, al abrir el
+/// núcleo.
+pub fn usar_reloj(reloj: std::sync::Arc<dyn control_acceso::tiempo::Reloj>) {
+    let _ = RELOJ.set(reloj);
+}
+
+fn ahora() -> chrono::DateTime<chrono::Utc> {
+    RELOJ
+        .get()
+        .map_or_else(chrono::Utc::now, |reloj| reloj.ahora_utc())
+}
+
 /// Una fila de `telemetria_diagnostico`, como la arma la app Android.
 fn fila(t: &Telemetria, tipo: &str, datos: serde_json::Value) -> String {
     serde_json::json!({
-        "ocurrido_en": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        "ocurrido_en": ahora().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         "dispositivo": t.dispositivo,
         "sesion": t.sesion,
         "version_app": t.version,

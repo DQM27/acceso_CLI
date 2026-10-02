@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import Modal from "../componentes/Modal";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import AvisoTruncado from "../componentes/AvisoTruncado";
-import { useAutoRefresh } from "../componentes/useAutoRefresh";
+import { useLista } from "../componentes/useLista";
 import {
   actualizarActivoUsuario,
   crearUsuario,
-  listarSitios,
   listarUsuarios,
   resetearPasswordUsuario,
 } from "../api/usuarios";
@@ -31,10 +31,7 @@ import { mensajeError } from "../mensajeError";
  * grilla (viaja por la nube desde 2026-09-06) pero no se da de alta desde
  * acá a propósito -- eso sigue siendo CLI/TUI (`crear_root_inicial`).
  *
- * Sin selector de sitio a propósito, igual que el formulario de escritorio
- * no lo tiene -- hoy existe un solo sitio ("Brisas"); se resuelve solo al
- * abrir el modal. Si algún día hay más de uno, ahí sí hace falta sumar el
- * selector (y decidir qué sitio le corresponde a cada alta).
+ * Sin unidad operativa: un usuario es global, entra en cualquier unidad.
  */
 interface FilaUsuario extends Usuario {
   conectado: boolean;
@@ -43,12 +40,8 @@ interface FilaUsuario extends Usuario {
 
 export default function Usuarios() {
   const [busqueda, setBusqueda] = useState("");
-  const [filas, setFilas] = useState<Usuario[]>([]);
-  const [truncado, setTruncado] = useState(false);
-  const [cargando, setCargando] = useState(true);
 
   const [modalAbierto, setModalAbierto] = useState(false);
-  const [sitioId, setSitioId] = useState<string | null>(null);
   const [cedula, setCedula] = useState("");
   const [nombre, setNombre] = useState("");
   const [creando, setCreando] = useState(false);
@@ -60,37 +53,6 @@ export default function Usuarios() {
     password_temporal: string;
   } | null>(null);
   const [reseteando, setReseteando] = useState<string | null>(null);
-  // Guarda de vigencia para `abrirModal` -- ver ese comentario. Mismo
-  // patrón que `vigente` en AuthContexto/useAutoRefresh, pero como
-  // contador (no booleano) porque acá puede haber más de una apertura en
-  // vuelo, y sólo la última importa.
-  const aperturaModalRef = useRef(0);
-
-  const recargar = useCallback((opciones?: { silencioso?: boolean }) => {
-    const silencioso = opciones?.silencioso ?? false;
-    // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
-    // directo -- evita que `react-hooks/set-state-in-effect` marque esta
-    // actualización como síncrona dentro del efecto que dispara la carga.
-    return Promise.resolve()
-      .then(() => {
-        if (!silencioso) setCargando(true);
-      })
-      .then(() => listarUsuarios())
-      .then(({ filas, truncado }) => {
-        setFilas(filas);
-        setTruncado(truncado);
-      })
-      .catch((error) => {
-        if (!silencioso) toast.error(mensajeError(error));
-      })
-      .finally(() => {
-        if (!silencioso) setCargando(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    recargar();
-  }, [recargar]);
 
   // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
   // desktop/mobile para su propio sync periódico. "usuarios" para el aviso
@@ -98,7 +60,12 @@ export default function Usuarios() {
   // baja/reactivación hecha desde otra sesión del panel o un dispositivo no
   // se veía acá hasta el próximo poll de 2 minutos (mismo gap que tenía
   // Contratistas.tsx antes de sumarle "contratistas,empresas").
-  useAutoRefresh(() => recargar({ silencioso: true }), 120_000, "usuarios");
+  const { datos, cargando, recargar } = useLista(["usuarios"], listarUsuarios, {
+    intervaloMs: 120_000,
+    tablas: "usuarios",
+  });
+  const filas = datos?.filas ?? [];
+  const truncado = datos?.truncado ?? false;
 
   // Presencia en tiempo real (docs/features-futuras/plan-sesion-unica-dispositivos.md,
   // "Panel de presencia en tiempo real"): mismo mecanismo que
@@ -106,21 +73,18 @@ export default function Usuarios() {
   // viaja en el mismo `track()` -- quién tiene sesión abierta ahora y en
   // qué dispositivo. `etiquetaPorDispositivo` sólo sirve para mostrar el
   // nombre del dispositivo en vez de su UUID.
-  const [sitios, setSitios] = useState<{ id: string }[]>([]);
-  const [etiquetaPorDispositivo, setEtiquetaPorDispositivo] = useState<Record<string, string>>({});
-  useEffect(() => {
-    listarDispositivosYSitios()
-      .then(({ sitios, dispositivos }) => {
-        setSitios(sitios);
-        setEtiquetaPorDispositivo(
-          Object.fromEntries(dispositivos.map((d) => [d.id, d.etiqueta])),
-        );
-      })
-      .catch(() => {
-        // Sólo degrada la presencia a "sin nombre de dispositivo" -- la
-        // lista de usuarios en sí ya cargó por su cuenta.
-      });
-  }, []);
+  // Misma clave que Dispositivos.tsx: las dos pantallas comparten una sola
+  // petición. Si falla, sólo degrada la presencia a "sin nombre de
+  // dispositivo" -- la lista de usuarios en sí ya cargó por su cuenta.
+  const { data: dispositivosYSitios } = useQuery({
+    queryKey: ["dispositivos-y-sitios"],
+    queryFn: listarDispositivosYSitios,
+  });
+  const sitios = useMemo(() => dispositivosYSitios?.sitios ?? [], [dispositivosYSitios]);
+  const etiquetaPorDispositivo = useMemo(
+    () => Object.fromEntries((dispositivosYSitios?.dispositivos ?? []).map((d) => [d.id, d.etiqueta])),
+    [dispositivosYSitios],
+  );
 
   const sitioIds = useMemo(() => sitios.map((s) => s.id), [sitios]);
   const presenciaPorSitio = usePresenciaPorSitio(sitioIds);
@@ -152,27 +116,13 @@ export default function Usuarios() {
       // si el guardado falla, hay que volver a pedir los datos reales para
       // que la celda no quede mintiendo.
       toast.error(mensajeError(error));
-      recargar();
+      void recargar();
     }
   }
 
   function abrirModal() {
     setModalAbierto(true);
     setErrorForm(null);
-    // Si el modal se cierra y se vuelve a abrir antes de que resuelva esta
-    // llamada, la respuesta de la apertura VIEJA no debe pisar el
-    // `sitioId` que ya eligió la apertura NUEVA -- de ahí el número de
-    // apertura: sólo aplica el resultado si sigue siendo la última.
-    const apertura = ++aperturaModalRef.current;
-    listarSitios()
-      .then((lista) => {
-        if (aperturaModalRef.current !== apertura) return;
-        setSitioId(lista[0]?.id ?? null);
-      })
-      .catch((error) => {
-        if (aperturaModalRef.current !== apertura) return;
-        toast.error(mensajeError(error));
-      });
   }
 
   function cerrarModal() {
@@ -184,15 +134,10 @@ export default function Usuarios() {
 
   async function alEnviarFormulario(evento: React.FormEvent) {
     evento.preventDefault();
-    if (!sitioId) {
-      setErrorForm("No hay ninguna unidad operativa configurada todavía.");
-      return;
-    }
     setCreando(true);
     setErrorForm(null);
     try {
       const creado = await crearUsuario({
-        sitio_id: sitioId,
         cedula: cedula.trim(),
         nombre: nombre.trim(),
         // El rol ya no distingue nada dentro de la app (aplanado de
@@ -203,7 +148,7 @@ export default function Usuarios() {
         rol: "OPERADOR",
       });
       cerrarModal();
-      recargar();
+      void recargar();
       setCredencialGenerada({ cedula: creado.cedula, password_temporal: creado.password_temporal });
     } catch (error) {
       setErrorForm(mensajeError(error));
@@ -289,8 +234,7 @@ export default function Usuarios() {
         cellRenderer: ({ data }: { data: FilaUsuario }) => (
           <button
             type="button"
-            className="boton"
-            style={{ fontSize: "0.78rem", padding: "0.2rem 0.5rem" }}
+            className="boton boton-celda-angosto"
             disabled={reseteando === data.id}
             onClick={() => manejarResetPassword(data)}
           >
@@ -303,14 +247,14 @@ export default function Usuarios() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
+    <div className="flex h-full flex-col">
+      <div className="pantalla-cuerpo min-h-0 flex-1">
         {truncado && (
           <AvisoTruncado
-            mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} usuarios -- se muestran solo los primeros (la búsqueda de acá arriba sólo filtra entre esos, no trae más).`}
+            mensaje={`Hay más de ${filas.length.toLocaleString("es-CR")} usuarios -- se muestran solo los primeros (la búsqueda de aquí arriba sólo filtra entre esos, no trae más).`}
           />
         )}
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div className="min-h-0 flex-1">
           <Tabla<FilaUsuario>
             id="usuarios"
             columnas={columnas}
@@ -323,7 +267,7 @@ export default function Usuarios() {
                 <button type="button" className="boton" onClick={abrirModal}>
                   + Nuevo
                 </button>
-                <div className="campo" style={{ flex: "0 1 16rem" }}>
+                <div className="campo flex-[0_1_16rem]">
                   <input
                     placeholder="Cédula o nombre…"
                     value={busqueda}
@@ -339,7 +283,7 @@ export default function Usuarios() {
 
       {modalAbierto && (
         <Modal titulo="Nuevo usuario" onCerrar={cerrarModal}>
-          <form onSubmit={alEnviarFormulario} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <form onSubmit={alEnviarFormulario} className="flex flex-col gap-3">
             <label className="campo">
               Cédula
               <input
@@ -362,9 +306,9 @@ export default function Usuarios() {
               />
             </label>
 
-            <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.8rem" }}>
-              Se genera una contraseña temporal de un solo uso -- se muestra acá apenas se
-              cree, para copiar y mandarle a la persona. La va a tener que cambiar en su
+            <p className="m-0 text-[0.8rem] text-muted">
+              Se genera una contraseña temporal de un solo uso -- se muestra aquí apenas se
+              cree, para copiar y enviarle a la persona. La va a tener que cambiar en su
               primer inicio de sesión.
             </p>
 
@@ -374,7 +318,7 @@ export default function Usuarios() {
               </p>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <div className="flex justify-end gap-2">
               <button type="button" className="boton" disabled={creando} onClick={cerrarModal}>
                 Cancelar
               </button>
@@ -391,26 +335,14 @@ export default function Usuarios() {
           titulo="Contraseña temporal generada"
           onCerrar={() => setCredencialGenerada(null)}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.85rem" }}>
-              Cédula <strong>{credencialGenerada.cedula}</strong> -- copiá esto y mandáselo a
+          <div className="flex flex-col gap-3">
+            <p className="m-0 text-[0.85rem] text-muted">
+              Cédula <strong>{credencialGenerada.cedula}</strong> -- copie esto y envíeselo a
               la persona (WhatsApp, en persona, lo que sea). No se vuelve a mostrar después de
               cerrar esta ventana.
             </p>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                padding: "0.6rem 0.8rem",
-                border: "1px solid var(--borde)",
-                borderRadius: "0.4rem",
-                fontFamily: "monospace",
-                fontSize: "1.1rem",
-                letterSpacing: "0.05em",
-              }}
-            >
-              <span style={{ flex: 1 }}>{credencialGenerada.password_temporal}</span>
+            <div className="flex items-center gap-2 rounded-[0.4rem] border border-borde px-[0.8rem] py-[0.6rem] font-mono text-[1.1rem] tracking-wider">
+              <span className="flex-1">{credencialGenerada.password_temporal}</span>
               <button
                 type="button"
                 className="boton"
@@ -422,7 +354,7 @@ export default function Usuarios() {
                 Copiar
               </button>
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div className="flex justify-end">
               <button
                 type="button"
                 className="boton boton-primario"

@@ -2,7 +2,6 @@
 
 use control_acceso::application::ResumenSincronizacion as ResumenSincronizacionNucleo;
 use control_acceso::database::queries::contratistas::ContratistaResumen as ContratistaResumenNucleo;
-use control_acceso::database::queries::usuarios::UsuarioResumen as UsuarioResumenNucleo;
 use control_acceso::domain::resultado_acceso::{
     MotivoDenegacion as MotivoDenegacionNucleo, ResultadoAcceso as ResultadoAccesoNucleo,
 };
@@ -86,19 +85,6 @@ impl From<UsuarioSesionNucleo> for UsuarioSesion {
             rol: sesion.rol.into(),
         }
     }
-}
-
-/// Éxito de `Nucleo::autenticar`/`autenticar_con_secreto` -- mismo motivo
-/// que `desktop/src-tauri/src/comandos/autenticacion.rs::ResultadoLogin`:
-/// Kotlin necesita saber si tiene que forzar el cambio de contraseña antes
-/// de dejar operar. `false` siempre en la rama local (ROOT del arranque
-/// inicial, o cualquier cuenta que ya tenía password local de antes de esta
-/// migración) -- esa contraseña ya es la real, no una temporal de un solo
-/// uso. Ver docs/planes-implementados/plan-autenticacion-supabase-auth.md.
-#[derive(Debug, Clone, uniffi::Record)]
-pub struct ResultadoLogin {
-    pub sesion: UsuarioSesion,
-    pub debe_cambiar_password: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -248,7 +234,7 @@ pub struct PreparacionIngreso {
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
     /// Siempre `None`: el ingreso activo en otro sitio llega resuelto en
-    /// `mensaje_bloqueo` (ver `preparar_ingreso_con_secreto`).
+    /// `mensaje_bloqueo` (ver `preparar_ingreso_verificado`).
     pub activo_en_otro_sitio: Option<String>,
     pub gafetes_deuda: Vec<i64>,
     /// `None` si se puede continuar con este contratista; si no, el texto
@@ -437,40 +423,6 @@ impl From<ResultadoIngresoRegistradoNucleo> for ResultadoIngresoRegistrado {
     }
 }
 
-/// Espejo de `UsuarioResumen` — sólo se expone a Root/Administrador
-/// (`Operacion::GestionarUsuarios`, `domain/autorizacion.rs`); Rust ya
-/// rechaza a un Operador con `OperacionNoAutorizada` aunque Kotlin
-/// oculte el menú, así que no hay doble mantenimiento de la regla real.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct UsuarioResumen {
-    pub id: i64,
-    pub cedula: String,
-    pub nombre: String,
-    pub rol: RolUsuario,
-    pub activo: bool,
-}
-
-impl From<UsuarioResumenNucleo> for UsuarioResumen {
-    fn from(usuario: UsuarioResumenNucleo) -> Self {
-        Self {
-            id: usuario.id,
-            cedula: usuario.cedula,
-            nombre: usuario.nombre,
-            rol: usuario.rol.into(),
-            activo: usuario.activo,
-        }
-    }
-}
-
-#[derive(Debug, Clone, uniffi::Record)]
-pub struct DatosUsuario {
-    pub cedula: String,
-    pub nombre: String,
-    pub password: String,
-    pub rol: RolUsuario,
-    pub activo: bool,
-}
-
 /// Ver `docs/planes-implementados/plan-persistencia-nube.md` y `ResumenSincronizacionNucleo`.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ResumenSincronizacion {
@@ -494,13 +446,23 @@ pub struct ResumenSincronizacion {
     /// la disparó -- ver `application::nube::ResumenSincronizacion::sesion_expulsada`.
     /// Kotlin debe cerrar la sesión local y volver al login apenas vea esto.
     pub sesion_expulsada: bool,
+    /// `true` si la sesión se cerró porque el usuario inició sesión en otra
+    /// unidad (sesión única por unidad); `sesion_expulsada` también es
+    /// `true`. Sólo cambia el aviso que muestra Kotlin.
+    pub sesion_en_otra_unidad: bool,
+    /// Qué respondió la nube a la sesión única en esta sincronización
+    /// (`vigente`, `desplazada`, `sin_usuario` o `error`), con los ms desde el
+    /// ingreso que se le mandaron. `None` si no se consultó (sin sesión, o
+    /// la activación inicial). Sólo para la telemetría de diagnóstico.
+    pub sesion_unidad: Option<String>,
+    pub sesion_transcurrido_ms: Option<u64>,
     /// `docs/pendientes.md`, "alertar luego al sincronizar" -- ingresos que
     /// quedaron activos en este teléfono pero que la nube dice que TAMBIÉN
     /// están activos en otro sitio (colados mientras este dispositivo
     /// estaba offline). Mejor esfuerzo, vacío si el chequeo falla. Siempre
     /// vacío en la activación inicial (`From<ResumenSincronizacionNucleo>`,
     /// base recién configurada, sin ingresos locales todavía) -- sólo
-    /// `sincronizar_con_secreto` lo completa de verdad.
+    /// `sincronizar` lo completa de verdad.
     pub conflictos_ingreso: Vec<ConflictoIngresoActivo>,
     /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
     /// proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
@@ -518,17 +480,40 @@ pub struct ResumenSincronizacion {
 /// Espejo de `control_acceso::nube::ConflictoGafeteActivo`.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ConflictoGafeteActivo {
-    pub contratista_nombre: String,
+    pub tipo: TipoMovimientoGafete,
+    /// Contratista, proveedor o encargado de ruta (KOF).
+    pub nombre: String,
     pub gafete_numero: i64,
-    pub fecha_hora_ingreso: String,
+    /// Hora de entrada, o de entrega en KOF.
+    pub fecha_hora: String,
+}
+
+/// Espejo de `control_acceso::nube::TipoMovimientoGafete`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum TipoMovimientoGafete {
+    Contratista,
+    Proveedor,
+    ProvisionalKof,
+}
+
+impl From<control_acceso::nube::TipoMovimientoGafete> for TipoMovimientoGafete {
+    fn from(tipo: control_acceso::nube::TipoMovimientoGafete) -> Self {
+        use control_acceso::nube::TipoMovimientoGafete as Nucleo;
+        match tipo {
+            Nucleo::Contratista => Self::Contratista,
+            Nucleo::Proveedor => Self::Proveedor,
+            Nucleo::ProvisionalKof => Self::ProvisionalKof,
+        }
+    }
 }
 
 impl From<control_acceso::nube::ConflictoGafeteActivo> for ConflictoGafeteActivo {
     fn from(conflicto: control_acceso::nube::ConflictoGafeteActivo) -> Self {
         Self {
-            contratista_nombre: conflicto.contratista_nombre,
+            tipo: conflicto.tipo.into(),
+            nombre: conflicto.nombre,
             gafete_numero: conflicto.gafete_numero,
-            fecha_hora_ingreso: conflicto.fecha_hora_ingreso,
+            fecha_hora: conflicto.fecha_hora,
         }
     }
 }
@@ -588,6 +573,9 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
             sesion_expulsada: resumen.sesion_expulsada,
+            sesion_en_otra_unidad: false,
+            sesion_unidad: None,
+            sesion_transcurrido_ms: None,
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
             conflictos_gafete: Vec::new(),
@@ -896,4 +884,25 @@ impl From<RegistroIngresoProveedorActivoResumenNucleo> for RegistroIngresoProvee
             usuario_ingreso_nombre: activo.usuario_ingreso_nombre,
         }
     }
+}
+
+/// Unidad y etiqueta con que el panel registró este teléfono, para el login
+/// y la barra de estado. Sólo informativas (ninguna regla depende de ellas):
+/// sirven para notar un equipo registrado en la unidad equivocada. `None`
+/// mientras no hayan llegado de la nube.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct IdentidadEquipo {
+    pub unidad: Option<String>,
+    pub etiqueta: Option<String>,
+}
+
+/// Estado del reloj confiable del teléfono (ver
+/// `control_acceso::tiempo::EstadoReloj`), para la telemetría de
+/// diagnóstico. Sólo números.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct EstadoReloj {
+    pub confiable: bool,
+    pub margen_ms: Option<u64>,
+    pub diferencia_equipo_ms: i64,
+    pub ancla_hace_ms: Option<u64>,
 }

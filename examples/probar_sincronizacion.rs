@@ -104,9 +104,12 @@ fn main() {
         .unwrap();
     println!("Pendientes en cola_salida antes de sincronizar: {pendientes}");
 
-    let secreto =
-        nube::credenciales::cargar_secreto().expect("no hay secreto de dispositivo guardado");
-    let token = nube::autenticar_dispositivo(nube::base_url(), &secreto, None)
+    let firmante = nube::FirmanteArchivo::por_defecto().expect("no se pudo resolver %APPDATA%");
+    let cache = nube::CacheTokenDispositivo::new();
+    cache.establecer_firmante(std::sync::Arc::new(firmante));
+    assert!(cache.vinculado(), "este equipo todavía no está vinculado");
+    let token = cache
+        .autenticar_y_cachear(None)
         .expect("no se pudo autenticar el dispositivo");
     println!(
         "Autenticado: sitio={} dispositivo={} tipo={}",

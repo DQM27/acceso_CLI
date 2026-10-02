@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -44,12 +45,8 @@ class ActivosViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(secretoStore: SecretoDispositivoStore = SecretoDispositivoStoreDePrueba()): ActivosViewModel =
-        ActivosViewModel(
-            nucleo,
-            secretoStore = secretoStore,
-            dispatcherIO = dispatcher,
-        )
+    private fun viewModel(): ActivosViewModel =
+        ActivosViewModel(nucleo, dispatcherIO = dispatcher)
 
     @Test
     fun `base vacia no falla y no muestra a nadie adentro`() = runTest(dispatcher) {
@@ -111,37 +108,6 @@ class ActivosViewModelTest {
     }
 
     @Test
-    fun `elegir sigue funcionando sin chequeo cruzado si falla el Keystore al leer el secreto`() = runTest(dispatcher) {
-        // MV-05 (auditoría 2026-09-24): antes, `SecretoDispositivoStoreException`
-        // al cargar el secreto escapaba de `viewModelScope` sin manejador y
-        // tiraba la app entera. Ahora se trata como "sin chequeo cruzado" --
-        // mejor esfuerzo, igual que la falta de secreto por cualquier otro
-        // motivo -- y la selección no debe quedar trabada en `Cargando`.
-        nucleo = NucleoDePrueba.abrir(
-            archivo,
-            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
-            """
-            INSERT INTO contratistas (
-                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
-            ) VALUES ('111111111', 'Contratista Test', 1, 'SWAT', 0, 1);
-            """.trimIndent(),
-            NucleoDePrueba.sqlUsuarioRoot(),
-        )
-        val viewModel = viewModel(SecretoDispositivoStoreDePrueba(lanzarAlCargar = true))
-        advanceUntilIdle()
-        viewModel.cambiarTexto("Contratista")
-        advanceUntilIdle()
-        val contratista = viewModel.resultadosBusqueda.single()
-
-        viewModel.elegir(contratista)
-        advanceUntilIdle()
-
-        val seleccion = viewModel.seleccionIngreso
-        assertTrue(seleccion is SeleccionIngreso.Formulario)
-        assertEquals("Contratista Test", (seleccion as SeleccionIngreso.Formulario).preparacion.nombre)
-    }
-
-    @Test
     fun `documento escaneado con coincidencia clara abre formulario de ingreso`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(
             archivo,
@@ -180,11 +146,7 @@ class ActivosViewModelTest {
             "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'CONTRATISTA', 'DISPONIBLE');",
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticarConSecreto(
-            "999999999",
-            NucleoDePrueba.CLAVE_PRUEBA,
-            "",
-        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
         nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, 7L, null)
         val viewModel = viewModel()
         advanceUntilIdle()
@@ -217,7 +179,7 @@ class ActivosViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
         val viewModel = viewModel()
         advanceUntilIdle()
         viewModel.cambiarModo(ModoBusqueda.SALIDA_GAFETE)
@@ -277,7 +239,7 @@ class ActivosViewModelTest {
 
     // --- Registro de ingreso desde el formulario (M2) ---
 
-    private fun kotlinx.coroutines.test.TestScope.formularioAbierto(tipo: String, secreto: String? = null): ActivosViewModel {
+    private fun kotlinx.coroutines.test.TestScope.formularioAbierto(tipo: String): ActivosViewModel {
         nucleo = NucleoDePrueba.abrir(
             archivo,
             "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
@@ -289,8 +251,8 @@ class ActivosViewModelTest {
             """.trimIndent(),
             NucleoDePrueba.sqlUsuarioRoot(),
         )
-        nucleo.autenticarConSecreto("999999999", NucleoDePrueba.CLAVE_PRUEBA, "")
-        val viewModel = viewModel(SecretoDispositivoStoreDePrueba(secreto))
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        val viewModel = viewModel()
         advanceUntilIdle()
         viewModel.cambiarTexto("Contratista")
         advanceUntilIdle()
@@ -325,13 +287,15 @@ class ActivosViewModelTest {
     }
 
     @Test
-    fun `con gafete y sin secreto del dispositivo muestra el error y no registra`() = runTest(dispatcher) {
-        val viewModel = formularioAbierto("PRAIND", secreto = null)
+    fun `con gafete inexistente lo rechaza el nucleo y no registra`() = runTest(dispatcher) {
+        // Sin vincular, el núcleo aplica sólo las reglas locales (el chequeo
+        // del gafete en el otro dispositivo lo prueba `application::con_nube`).
+        val viewModel = formularioAbierto("PRAIND")
 
         viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "7", "")
         advanceUntilIdle()
 
-        assertEquals(SecretoDispositivoNoEncontradoException().message, viewModel.errorIngreso)
+        assertNotNull(viewModel.errorIngreso)
         assertFalse(viewModel.registrandoIngreso)
         assertTrue(nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).isEmpty())
     }

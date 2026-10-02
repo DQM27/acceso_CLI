@@ -9,24 +9,34 @@ select set_config('diagnostico.sitio_a', (select id::text from public.sitios whe
        set_config('diagnostico.sitio_b', (select id::text from public.sitios where nombre = 'Diagnóstico B'), true),
        set_config('diagnostico.correo_admin', 'diagnostico-admin@example.com', true);
 
-insert into public.dispositivos (id, sitio_id, tipo, etiqueta, secret_hash) values
-  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico PC A', 'diag-hash-a'),
-  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'visor', 'Diagnóstico visor A', 'diag-hash-visor');
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, clave_publica_jwk, clave_huella) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico PC A', '{"kty":"EC"}', 'diag-huella-a'),
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'visor', 'Diagnóstico visor A', '{"kty":"EC"}', 'diag-huella-visor');
 
 select set_config('diagnostico.dispositivo_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico PC A'), true),
        set_config('diagnostico.dispositivo_visor', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico visor A'), true);
 
-insert into public.contratistas (id, sitio_id, dispositivo_origen_id, nombre) values
-  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico contratista');
+insert into public.contratistas (id, dispositivo_origen_id, nombre) values
+  (gen_random_uuid(), current_setting('diagnostico.dispositivo_a')::uuid, 'Diagnóstico contratista');
 select set_config('diagnostico.contratista_a', (select id::text from public.contratistas where nombre = 'Diagnóstico contratista'), true);
 
 insert into public.administradores_panel (correo) values (current_setting('diagnostico.correo_admin'));
+
+-- Un dispositivo vigente por sitio como `sub` de los JWT simulados: la
+-- política restrictiva "solo dispositivos vigentes" exige que el token sea
+-- de un dispositivo real y activo (ver dispositivos_vigentes_y_vinculacion.sql).
+-- Sin esto, los casos negativos pasarían por esa política y no por la de sitio.
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, clave_publica_jwk, clave_huella) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico JWT A', '{"kty":"EC"}', 'diag-huella-jwt-a'),
+  (gen_random_uuid(), current_setting('diagnostico.sitio_b')::uuid, 'pc', 'Diagnóstico JWT B', '{"kty":"EC"}', 'diag-huella-jwt-b');
+select set_config('diagnostico.jwt_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT A'), true),
+       set_config('diagnostico.jwt_b', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT B'), true);
 
 set local role authenticated;
 
 -- Un dispositivo 'pc' de su propio sitio puede registrar un ingreso.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_a'), 'tipo', 'pc')::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_a'), 'huella', 'diag-huella-jwt-a', 'sitio_id', current_setting('diagnostico.sitio_a'), 'tipo', 'pc')::text,
   true);
 do $$
 begin
@@ -51,7 +61,7 @@ end $$;
 
 -- Un dispositivo 'visor' (de solo lectura) NO puede registrar ingresos.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_a'), 'tipo', 'visor')::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.dispositivo_visor'), 'huella', 'diag-huella-visor', 'sitio_id', current_setting('diagnostico.sitio_a'), 'tipo', 'visor')::text,
   true);
 do $$
 begin
@@ -68,7 +78,7 @@ end $$;
 -- contratistas/usuarios, ingresos SÍ está acotado por sitio para
 -- dispositivos normales).
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_b'), 'tipo', 'pc')::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_b'), 'huella', 'diag-huella-jwt-b', 'sitio_id', current_setting('diagnostico.sitio_b'), 'tipo', 'pc')::text,
   true);
 do $$
 begin

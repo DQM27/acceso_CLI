@@ -42,36 +42,36 @@ exception
   when insufficient_privilege then null;
 end $$;
 
--- Un admin_global SÍ puede agregar a otro correo.
+-- Ni siquiera un admin_global puede agregar o quitar administradores con su
+-- sesión: la migración `retira_escritura_directa_de_administradores_panel`
+-- quitó esas políticas a propósito (una sesión de admin robada no debe poder
+-- fabricarse más acceso). El alta/baja se hace con service_role.
 select set_config('request.jwt.claims',
   json_build_object('role', 'authenticated', 'email', current_setting('diagnostico.correo_admin'))::text,
   true);
 do $$
 begin
   insert into public.administradores_panel (correo) values (current_setting('diagnostico.correo_normal'));
-  if not found then
-    raise exception 'admin_global no pudo agregar un nuevo administrador';
-  end if;
+  raise exception 'admin_global pudo agregar un administrador con su sesión';
+exception
+  when insufficient_privilege then null;
 end $$;
 
--- Un admin_global no puede borrarse a sí mismo (evita quedarse sin ningún
--- admin_global si es el único).
+-- Tampoco puede borrar a nadie: sin política de borrado, el DELETE no
+-- alcanza ninguna fila (ni la propia ni la de otro).
+reset role;
+insert into public.administradores_panel (correo)
+values (current_setting('diagnostico.correo_normal'));
+set local role authenticated;
 do $$
 begin
-  delete from public.administradores_panel where correo = current_setting('diagnostico.correo_admin');
+  delete from public.administradores_panel
+   where correo in (current_setting('diagnostico.correo_admin'),
+                    current_setting('diagnostico.correo_normal'));
   if found then
-    raise exception 'admin_global pudo borrar su propia fila';
+    raise exception 'admin_global pudo borrar administradores con su sesión';
   end if;
 end $$;
 
--- Pero sí puede borrar a otro admin.
-do $$
-begin
-  delete from public.administradores_panel where correo = current_setting('diagnostico.correo_normal');
-  if not found then
-    raise exception 'admin_global no pudo borrar a otro administrador';
-  end if;
-end $$;
-
-select '6 comprobaciones de autorización correctas' as resultado;
+select '5 comprobaciones de autorización correctas' as resultado;
 rollback;

@@ -3,6 +3,7 @@ pub mod desfase_reloj;
 pub mod empresas;
 pub mod gafetes;
 pub mod gafetes_incidentes;
+pub mod identidad_equipo;
 pub mod ingresos;
 pub mod usuarios;
 

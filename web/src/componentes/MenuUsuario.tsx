@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { LogOut } from "lucide-react";
 import type { UsuarioSesion } from "../api";
-import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
+import { ListaFlotante } from "./ListaFlotante";
+import { useListaFlotante } from "./ListaFlotante.logica";
 
 /**
  * Nombre del usuario en la esquina inferior derecha de la barra de estado —
@@ -47,10 +48,10 @@ export default function MenuUsuario({
         >
           <div
             ref={popoverRef}
-            style={{ padding: "0.9rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}
+            className="flex flex-col gap-3 p-[0.9rem]"
           >
-            <div style={{ minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600, color: "var(--texto)" }}>
+            <div className="min-w-0">
+              <p className="m-0 text-[0.9rem] font-semibold text-texto">
                 {sesion.nombre}
               </p>
               <span className="chip">{sesion.correo}</span>

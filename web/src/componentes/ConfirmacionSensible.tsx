@@ -5,7 +5,7 @@ import { mensajeError } from "../mensajeError";
 
 /**
  * Confirmación por código de correo para acciones sensibles (alta/baja de
- * administradores, Revocar/Eliminar dispositivos, y cualquier otra mutación
+ * administradores, Retirar/Eliminar dispositivos, y cualquier otra mutación
  * que en el futuro necesite el mismo "sos vos ahora mismo" -- ver
  * `useVerificacionPorCorreo`). Absorbe el modal + form + manejo de error
  * que antes vivía duplicado en cada pantalla.
@@ -30,7 +30,7 @@ export default function ConfirmacionSensible({
   /** Correo de quien está haciendo la acción -- ahí llega el código. */
   correo: string;
   titulo: string;
-  /** Pregunta del primer paso, antes de mandar ningún código (ej. "¿Revocar
+  /** Pregunta del primer paso, antes de mandar ningún código (ej. "¿Retirar
    * 'Brisas - PC'? Va a dejar de poder sincronizar."). */
   pregunta: string;
   /** Texto del segundo paso, ya con el código pedido (ej. "agregás a
@@ -117,9 +117,9 @@ export default function ConfirmacionSensible({
   return (
     <Modal titulo={titulo} onCerrar={cerrar}>
       {paso === "pregunta" ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <p style={{ margin: 0 }}>{pregunta}</p>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+        <div className="flex flex-col gap-4">
+          <p className="m-0">{pregunta}</p>
+          <div className="flex justify-end gap-2">
             <button type="button" className="boton" onClick={cerrar}>
               Cancelar
             </button>
@@ -129,9 +129,9 @@ export default function ConfirmacionSensible({
           </div>
         </div>
       ) : confirmacion.enviado ? (
-        <form onSubmit={alConfirmarCodigo} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <p style={{ margin: 0 }}>
-            Te mandamos un código a tu correo. Escribilo acá para {descripcion}.
+        <form onSubmit={alConfirmarCodigo} className="flex flex-col gap-4">
+          <p className="m-0">
+            Le enviamos un código a su correo. Escríbalo aquí para {descripcion}.
           </p>
           <label className="campo">
             Código de confirmación
@@ -153,7 +153,7 @@ export default function ConfirmacionSensible({
             </p>
           )}
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+          <div className="flex justify-end gap-2">
             <button type="button" className="boton" disabled={confirmando} onClick={cerrar}>
               Cancelar
             </button>
@@ -163,18 +163,18 @@ export default function ConfirmacionSensible({
           </div>
         </form>
       ) : confirmacion.error ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div className="flex flex-col gap-4">
           <p className="login-error" role="alert">
             {confirmacion.error}
           </p>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div className="flex justify-end">
             <button type="button" className="boton" onClick={cerrar}>
               Cerrar
             </button>
           </div>
         </div>
       ) : (
-        <p style={{ margin: 0, color: "var(--muted)" }}>Enviando código…</p>
+        <p className="m-0 text-muted">Enviando código…</p>
       )}
     </Modal>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ListaFlotante, useListaFlotante } from "./ListaFlotante";
+import { ListaFlotante } from "./ListaFlotante";
+import { useListaFlotante } from "./ListaFlotante.logica";
 import type { UnidadOperativa } from "../api/historial";
 
 /**
@@ -72,15 +73,10 @@ export default function SelectorUnidadesOperativas({
         <ListaFlotante posicion={posicion} ancho={220} alinear="izquierda">
           <div
             ref={popoverRef}
-            style={{
-              padding: "0.75rem 1rem",
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.4rem",
-            }}
+            className="flex flex-col gap-[0.4rem] px-4 py-3"
           >
             {unidades.map((unidad) => (
-              <label key={unidad.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <label key={unidad.id} className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={!excluidas.has(unidad.id)}

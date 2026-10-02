@@ -103,11 +103,7 @@ fn autenticar_con_credenciales_invalidas_falla() {
     let ruta = archivo.path().to_str().unwrap().to_string();
     let nucleo = Nucleo::abrir(ruta).unwrap();
 
-    let resultado = nucleo.autenticar_con_secreto(
-        "000000000".to_string(),
-        "loquesea".to_string(),
-        String::new(),
-    );
+    let resultado = nucleo.autenticar("000000000".to_string(), "loquesea".to_string());
 
     assert!(matches!(resultado, Err(NucleoError::CredencialesInvalidas)));
 }
@@ -149,11 +145,7 @@ fn preparar_y_registrar_ingreso_sin_gafete() {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
 
     let preparacion = nucleo.preparar_ingreso(1).unwrap();
@@ -166,13 +158,11 @@ fn preparar_y_registrar_ingreso_sin_gafete() {
     assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
 }
 
-/// Con `secreto` vacío ninguno de los dos métodos `_con_secreto` debe
-/// tocar la red -- `CacheTokenDispositivo` corta antes de intentar
-/// nada, así que el resultado tiene que ser idéntico al de las
-/// versiones sin secreto. Corre en CI (sin acceso a Internet) sin
-/// necesitar mockear HTTP.
+/// Sin vincular, ninguno de los dos métodos `_verificado` debe tocar la
+/// red: el resultado tiene que ser idéntico al de las versiones sólo
+/// locales. Corre en CI (sin acceso a Internet) sin mockear HTTP.
 #[test]
-fn con_secreto_vacio_los_metodos_con_secreto_no_tocan_la_red() {
+fn sin_vincular_los_metodos_verificados_no_tocan_la_red() {
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();
 
@@ -194,33 +184,27 @@ fn con_secreto_vacio_los_metodos_con_secreto_no_tocan_la_red() {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
 
-    let preparacion = nucleo
-        .preparar_ingreso_con_secreto(1, String::new())
-        .unwrap();
+    let preparacion = nucleo.preparar_ingreso_verificado(1).unwrap();
     assert_eq!(preparacion.mensaje_bloqueo, None);
     assert_eq!(preparacion.activo_en_otro_sitio, None);
 
     let resultado = nucleo
-        .registrar_ingreso_con_secreto(1, MedioIngreso::Caminando, None, None, String::new())
+        .registrar_ingreso_verificado(1, MedioIngreso::Caminando, None, None)
         .unwrap();
     assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
 }
 
-/// Cuando el bloqueo YA es local (ingreso activo) `preparar_ingreso_con_secreto`
+/// Cuando el bloqueo YA es local (ingreso activo) `preparar_ingreso_verificado`
 /// ni siquiera debe intentar el chequeo remoto -- de eso depende que
-/// este test pueda correr sin red: si tocara `CacheTokenDispositivo`
-/// con un secreto no vacío, fallaría por falta de conexión en CI. El
+/// este test pueda correr sin red: el teléfono está vinculado, así que si
+/// tocara `CacheTokenDispositivo` fallaría por falta de conexión en CI. El
 /// campo que le interesa a Kotlin es `mensaje_bloqueo`: antes tenía
 /// que recalcularlo con `puedeContinuar`/`mensajeBloqueo` propios.
 #[test]
-fn preparar_ingreso_con_secreto_no_toca_la_red_si_ya_hay_bloqueo_local() {
+fn preparar_ingreso_verificado_no_toca_la_red_si_ya_hay_bloqueo_local() {
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();
 
@@ -242,22 +226,20 @@ fn preparar_ingreso_con_secreto_no_toca_la_red_si_ya_hay_bloqueo_local() {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
     nucleo
         .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
         .unwrap();
 
-    // Secreto NO vacío a propósito -- si el chequeo remoto se
-    // intentara igual, este test colgaría o fallaría por falta de red
-    // en vez de terminar en microsegundos.
-    let preparacion = nucleo
-        .preparar_ingreso_con_secreto(1, "secreto-de-prueba".to_string())
-        .unwrap();
+    // Vinculado a propósito -- si el chequeo remoto se intentara igual,
+    // este test colgaría o fallaría por falta de red en vez de terminar en
+    // microsegundos.
+    nucleo.establecer_almacen_clave(std::sync::Arc::new(
+        crate::firmante::pruebas::AlmacenComoKeystore::vinculado_a("disp-prueba"),
+    ));
+    assert!(nucleo.nube_configurada());
+    let preparacion = nucleo.preparar_ingreso_verificado(1).unwrap();
 
     assert!(preparacion.tiene_ingreso_activo);
     assert_eq!(
@@ -266,13 +248,13 @@ fn preparar_ingreso_con_secreto_no_toca_la_red_si_ya_hay_bloqueo_local() {
     );
 }
 
-/// Secreto vacío = nube sin configurar: se registra con las reglas
-/// locales sin tocar la red. Con secreto, la verificación en vivo es
+/// Sin vincular = nube sin configurar: se registra con las reglas
+/// locales sin tocar la red. Vinculado, la verificación en vivo es
 /// estricta (si no se puede verificar, no se registra); eso lo prueban
 /// los tests de `application::con_nube` contra un servidor falso, nunca
 /// contra la nube real.
 #[test]
-fn registrar_ingreso_con_secreto_vacio_no_toca_la_red() {
+fn registrar_ingreso_verificado_sin_vincular_no_toca_la_red() {
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();
 
@@ -294,15 +276,11 @@ fn registrar_ingreso_con_secreto_vacio_no_toca_la_red() {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
 
     let resultado = nucleo
-        .registrar_ingreso_con_secreto(1, MedioIngreso::Caminando, None, None, String::new())
+        .registrar_ingreso_verificado(1, MedioIngreso::Caminando, None, None)
         .unwrap();
 
     assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
@@ -327,11 +305,7 @@ fn aplicar_cambio_nube_deja_el_ingreso_del_otro_equipo_al_instante() {
     drop(conexion);
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
 
     let aviso = r#"{"table":"ingresos","operation":"INSERT","id":"u1","sitio_id":"s1",
@@ -376,11 +350,7 @@ fn listar_activos_y_registrar_salida() {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
     let registro = nucleo
         .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
@@ -430,11 +400,7 @@ fn listar_activos_por_gafete_es_exacto_sin_ruido_de_cedula() {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
     nucleo
         .registrar_ingreso(1, MedioIngreso::Caminando, Some(7), None)
@@ -479,11 +445,7 @@ fn listar_empresas_y_crear_contratista() {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
 
     let empresas = nucleo.listar_empresas().unwrap();
@@ -528,11 +490,7 @@ fn crear_contratista_con_fecha_praind_invalida_falla() {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
 
     let resultado = nucleo.crear_contratista(DatosContratista {
@@ -567,11 +525,7 @@ fn crear_contratista_aplica_reglas_del_alta() {
     drop(conexion);
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
     let datos = |tipo, fecha: &str, ruta| DatosContratista {
         cedula: "444444444".to_string(),
@@ -621,11 +575,7 @@ fn crear_empresa_y_cerrar_sesion() {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
 
     let id = nucleo.crear_empresa("Empresa Nueva".to_string()).unwrap();
@@ -637,84 +587,39 @@ fn crear_empresa_y_cerrar_sesion() {
     assert!(matches!(resultado, Err(NucleoError::NoAutenticado)));
 }
 
-/// Antes del aplanado de autorización (ver
-/// docs/decisiones-tecnicas.md, 2026-09-11), un OPERADOR no podía
-/// listar/crear usuarios -- hoy cualquier sesión válida puede,
-/// `RolUsuario::puede()` ya devuelve `true` siempre en el núcleo
-/// compartido. Este test quedó desactualizado (mobile nunca se tocó en
-/// esa pasada, sólo TUI/desktop) y falló apenas se corrió después de
-/// esta migración -- se actualiza acá para reflejar el comportamiento
-/// real en vez de reintroducir una restricción que ya no existe.
+/// El celular no cambia contraseñas: una cuenta con la contraseña temporal
+/// del alta todavía sin cambiar no entra, y el mensaje manda a cambiarla en
+/// una computadora del puesto de seguridad.
 #[test]
-fn listar_usuarios_y_crear_usuario_no_depende_del_rol() {
+fn autenticar_con_contrasena_temporal_se_rechaza() {
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();
     let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
     conexion
         .execute_batch(
-            "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
-                 '999999999', 'Root Test',
+            "INSERT INTO usuarios (
+                 cedula, nombre, password_hash, rol, activo,
+                 password_hash_confirmado_en, password_temporal_cacheada
+             ) VALUES (
+                 '777777777', 'Usuario Nuevo',
                  '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
-                 'ROOT', 1
-             );
-             INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
-                 '888888888', 'Operador Test',
-                 '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
-                 'OPERADOR', 1
+                 'OPERADOR', 1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 1
              );",
         )
         .unwrap();
     drop(conexion);
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
-    nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
-        .unwrap();
+    let resultado = nucleo.autenticar("777777777".to_string(), "clave_prueba_123".to_string());
 
-    let id = nucleo
-        .crear_usuario(DatosUsuario {
-            cedula: "777777777".to_string(),
-            nombre: "Nuevo Usuario".to_string(),
-            password: "unaPassword123".to_string(),
-            rol: RolUsuario::Operador,
-            activo: true,
-        })
-        .unwrap();
-    assert!(id > 0);
-
-    let usuarios = nucleo.listar_usuarios(String::new()).unwrap();
-    assert!(usuarios.iter().any(|u| u.cedula == "777777777"));
-
-    nucleo.cerrar_sesion();
-    nucleo
-        .autenticar_con_secreto(
-            "888888888".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
-        .unwrap();
-
-    let usuarios_como_operador = nucleo.listar_usuarios(String::new()).unwrap();
-    assert!(
-        usuarios_como_operador
-            .iter()
-            .any(|u| u.cedula == "777777777")
-    );
-
-    let id_creado_por_operador = nucleo
-        .crear_usuario(DatosUsuario {
-            cedula: "666666666".to_string(),
-            nombre: "Otro Usuario".to_string(),
-            password: "unaPassword123".to_string(),
-            rol: RolUsuario::Operador,
-            activo: true,
-        })
-        .unwrap();
-    assert!(id_creado_por_operador > 0);
+    match resultado {
+        Err(NucleoError::Rechazado { mensaje }) => assert!(mensaje.contains("puesto de seguridad")),
+        otro => panic!("se esperaba el rechazo por contraseña temporal, llegó {otro:?}"),
+    }
+    assert!(matches!(
+        nucleo.crear_empresa("Empresa".to_string()),
+        Err(NucleoError::NoAutenticado)
+    ));
 }
 
 #[test]
@@ -750,11 +655,7 @@ fn nucleo_con_actor_y_ruta_79() -> Nucleo {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
     nucleo
 }
@@ -890,7 +791,7 @@ fn entregar_gafete_provisional_a_encargado_inexistente_falla() {
 /// Secreto vacío: sin chequeo de nube; las reglas locales siguen
 /// aplicando en la misma llamada (el mismo gafete no se presta dos veces).
 #[test]
-fn entregar_gafete_provisional_con_secreto_aplica_las_reglas_locales() {
+fn entregar_gafete_provisional_verificado_aplica_las_reglas_locales() {
     let nucleo = nucleo_con_actor_y_ruta_79();
     let encargado_id = nucleo
         .buscar_encargados_ruta("5040017".to_string())
@@ -898,10 +799,10 @@ fn entregar_gafete_provisional_con_secreto_aplica_las_reglas_locales() {
         .id;
 
     nucleo
-        .entregar_gafete_provisional_con_secreto(encargado_id, 12, String::new())
+        .entregar_gafete_provisional_verificado(encargado_id, 12)
         .unwrap();
     assert!(matches!(
-        nucleo.entregar_gafete_provisional_con_secreto(encargado_id, 12, String::new()),
+        nucleo.entregar_gafete_provisional_verificado(encargado_id, 12),
         Err(NucleoError::Rechazado { .. })
     ));
 }
@@ -926,11 +827,7 @@ fn nucleo_con_actor_empresa_proveedora_y_gafete() -> Nucleo {
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
     nucleo
-        .autenticar_con_secreto(
-            "999999999".to_string(),
-            "clave_prueba_123".to_string(),
-            String::new(),
-        )
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
     nucleo
 }
@@ -1010,22 +907,21 @@ fn registrar_ingreso_proveedor_con_empresa_inexistente_falla() {
 }
 
 /// La llamada combinada aplica la regla de "un ingreso abierto por
-/// cédula" antes de escribir (secreto vacío: sin chequeos de nube).
+/// cédula" antes de escribir (sin vincular: sin chequeos de nube).
 #[test]
-fn registrar_ingreso_proveedor_con_secreto_rechaza_cedula_ya_activa() {
+fn registrar_ingreso_proveedor_verificado_rechaza_cedula_ya_activa() {
     let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
     let empresa_id = nucleo
         .buscar_empresas_proveedor("maika".to_string())
         .unwrap()[0]
         .id;
     let registrar = || {
-        nucleo.registrar_ingreso_proveedor_con_secreto(
+        nucleo.registrar_ingreso_proveedor_verificado(
             "1-1111-1111".to_string(),
             "Juan Perez".to_string(),
             empresa_id,
             None,
             7,
-            String::new(),
         )
     };
 

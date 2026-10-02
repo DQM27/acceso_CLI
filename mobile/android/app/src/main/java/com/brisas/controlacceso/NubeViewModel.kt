@@ -29,10 +29,9 @@ import uniffi.control_acceso_mobile.ResumenSincronizacion
 /// (`Operacion::UsarNube`).
 class NubeViewModel(
     private val nucleo: Nucleo,
-    private val secretoStore: SecretoDispositivoStore,
     // Misma reacción ante `sesionExpulsada` que el pulso periódico
     // (`SincronizacionPeriodica`, ver `PantallaPrincipal.kt`).
-    private val onSesionExpulsada: () -> Unit = {},
+    private val onSesionExpulsada: (enOtraUnidad: Boolean) -> Unit = {},
     // Ver el mismo parámetro en ActivosViewModel/RutasViewModel —
     // permite tests con tiempo controlado en vez de hilos reales.
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
@@ -60,12 +59,11 @@ class NubeViewModel(
         viewModelScope.launch {
             try {
                 val resumen = withContext(dispatcherIO) {
-                    val secreto = secretoStore.cargar()
-                        ?: throw SecretoDispositivoNoEncontradoException()
-                    medirNucleo("sincronizarConNubeConSecreto") { nucleo.sincronizarConNubeConSecreto(secreto) }
+                    medirNucleo("sincronizarConNube") { nucleo.sincronizarConNube() }
+                        .also { informarDiagnosticoSincronizacion(nucleo, it) }
                 }
                 ultimoResumen = resumen
-                if (resumen.sesionExpulsada) onSesionExpulsada()
+                if (resumen.sesionExpulsada) onSesionExpulsada(resumen.sesionEnOtraUnidad)
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {
@@ -77,10 +75,9 @@ class NubeViewModel(
     companion object {
         fun factory(
             nucleo: Nucleo,
-            secretoStore: SecretoDispositivoStore,
-            onSesionExpulsada: () -> Unit = {},
+            onSesionExpulsada: (enOtraUnidad: Boolean) -> Unit = {},
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { NubeViewModel(nucleo, secretoStore, onSesionExpulsada) }
+            initializer { NubeViewModel(nucleo, onSesionExpulsada) }
         }
     }
 }

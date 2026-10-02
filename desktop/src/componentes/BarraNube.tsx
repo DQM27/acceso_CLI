@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
 import { descripcion } from "./BarraNube.logica";
+import IdentidadEquipo from "./IdentidadEquipo";
 import type { EstadoConexionNube } from "./BarraNube.logica";
 
 /** `navigator.onLine` refleja si el sistema operativo tiene una interfaz
@@ -40,7 +41,7 @@ function useEnLinea(): boolean {
  * estado — mismo lenguaje visual que `MenuUsuario` (`.barra-estado-boton`,
  * texto plano hasta el hover). Visible para cualquier rol activo:
  * sincronizar (`Operacion::UsarNube`) ya es uso diario normal, no exclusivo
- * de ROOT como configurar el secreto del dispositivo
+ * de ROOT como vincular este equipo
  * (`Operacion::GestionarNube`, eso sigue solo en la pantalla Nube). Antes
  * este botón vivía únicamente ahí, detrás de una pestaña que ni
  * Administrador ni Operador podían abrir.
@@ -65,6 +66,9 @@ export default function BarraNube({
   const { texto, color } = descripcion(estadoConexion, enLinea);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+      {/* Se relee al terminar cada sincronización: es cuando puede llegar
+          un token con la unidad o la etiqueta cambiadas. */}
+      <IdentidadEquipo recargar={sincronizando} className="barra-identidad-equipo" />
       <span
         title={`Avisos en vivo de la nube: ${texto}`}
         style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem", color }}

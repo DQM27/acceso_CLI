@@ -23,19 +23,15 @@ impl Nucleo {
     /// otro equipo del sitio) y, con nube, la verificación en vivo de que la
     /// persona no tenga un ingreso activo en ningún sitio. Las decide
     /// `application::preparar_ingreso_verificado`, la misma que usa
-    /// escritorio; Kotlin sólo muestra `mensaje_bloqueo`. `secreto` vacío =
+    /// escritorio; Kotlin sólo muestra `mensaje_bloqueo`. Sin vincular =
     /// nube sin configurar (sólo reglas locales). Nunca toca `core_lock()`
     /// durante la red.
-    pub fn preparar_ingreso_con_secreto(
+    pub fn preparar_ingreso_verificado(
         &self,
         contratista_id: i64,
-        secreto: String,
     ) -> Result<PreparacionIngreso, NucleoError> {
         let actor = self.actor_autenticado().ok();
-        let nube = control_acceso::application::NubeDelDispositivo {
-            cache_token: &self.cache_token,
-            secreto: Some(secreto.as_str()),
-        };
+        let nube = &self.cache_token;
         let (preparacion, bloqueo) = control_acceso::application::preparar_ingreso_verificado(
             || self.core_lock(),
             nube,
@@ -69,22 +65,18 @@ impl Nucleo {
     /// la persona sin ingreso activo en ningún sitio y el gafete libre en el
     /// otro dispositivo; si no se puede verificar, no se registra. Las
     /// decide `application::registrar_ingreso_verificado`, la misma que usa
-    /// escritorio. `secreto` vacío = nube sin configurar.
-    pub fn registrar_ingreso_con_secreto(
+    /// escritorio. Sin vincular = nube sin configurar.
+    pub fn registrar_ingreso_verificado(
         &self,
         contratista_id: i64,
         medio: MedioIngreso,
         gafete: Option<i64>,
         placa: Option<String>,
-        secreto: String,
     ) -> Result<ResultadoRegistroEntrada, NucleoError> {
-        use control_acceso::application::{IngresoVerificadoError, NubeDelDispositivo};
+        use control_acceso::application::IngresoVerificadoError;
 
         let actor = self.actor_autenticado()?;
-        let nube = NubeDelDispositivo {
-            cache_token: &self.cache_token,
-            secreto: Some(secreto.as_str()),
-        };
+        let nube = &self.cache_token;
         control_acceso::application::registrar_ingreso_verificado(
             || self.core_lock(),
             nube,

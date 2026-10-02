@@ -1,7 +1,10 @@
 use rusqlite::{Connection, params};
 use serde_json::{Value, json};
 
-use super::{ConflictoGafeteActivo, ContextoSincronizacion, ResumenDrenado, SincronizacionError};
+use super::{
+    ConflictoGafeteActivo, ContextoSincronizacion, ResumenDrenado, SincronizacionError,
+    TipoMovimientoGafete,
+};
 use crate::nube::cliente::{NubeError, cliente_http};
 
 pub(super) struct FilaCola {
@@ -78,7 +81,6 @@ pub(super) fn destino_lote(
         ("empresa", _) => Some(("empresas", Some("nombre"))),
         ("contratista", _) => Some(("contratistas", Some("identificacion"))),
         ("gafete", _) => Some(("gafetes", Some("sitio_id,numero"))),
-        ("usuario", _) => Some(("usuarios", Some("cedula"))),
         ("ingreso" | "salida_ruta", "cerrar") => None,
         ("ingreso", _) => Some(("ingresos", None)),
         ("ruta", _) => Some(("rutas", Some("numero"))),
@@ -105,7 +107,6 @@ pub(super) fn construir_cuerpo(
         "empresa" => construir_cuerpo_empresa(connection, contexto, uuid),
         "contratista" => construir_cuerpo_contratista(connection, contexto, uuid),
         "gafete" => construir_cuerpo_gafete(connection, contexto, uuid),
-        "usuario" => construir_cuerpo_usuario(connection, contexto, uuid),
         "ingreso" => construir_cuerpo_ingreso(connection, contexto, uuid),
         "ruta" => construir_cuerpo_ruta(connection, contexto, uuid),
         "vehiculo_ruta" => construir_cuerpo_vehiculo_ruta(connection, contexto, uuid),
@@ -224,7 +225,6 @@ pub(super) fn procesar_fila_individual(
         ("empresa", _) => enviar_empresa(cliente, connection, contexto, &fila.entidad_uuid),
         ("contratista", _) => enviar_contratista(cliente, connection, contexto, &fila.entidad_uuid),
         ("gafete", _) => enviar_gafete(cliente, connection, contexto, &fila.entidad_uuid),
-        ("usuario", _) => enviar_usuario(cliente, connection, contexto, &fila.entidad_uuid),
         ("ingreso", "cerrar") => {
             enviar_cierre_ingreso(cliente, connection, contexto, &fila.entidad_uuid)
         }
@@ -273,9 +273,7 @@ pub(super) fn procesar_fila_individual(
             resumen.enviados += 1;
         }
         Err(error)
-            if fila.entidad == "ingreso"
-                && fila.operacion != "cerrar"
-                && es_conflicto_gafete_activo(&error) =>
+            if fila.operacion != "cerrar" && es_conflicto_gafete_activo(&fila.entidad, &error) =>
         {
             // Fallo permanente por naturaleza -- Postgres ya rechazó este
             // gafete para este sitio del lado de OTRO dispositivo, nunca
@@ -284,15 +282,18 @@ pub(super) fn procesar_fila_individual(
             // de hasta un día -- eso es para fallas que sí pueden
             // resolverse solas (red, Postgres caído un rato), esto no.
             log::error!(
-                "cola_salida: fila {} (ingreso {}) chocó con un gafete ya activo en otro dispositivo del sitio, queda fallida de inmediato: {error}",
+                "cola_salida: fila {} ({} {}) chocó con un gafete ya activo en otro dispositivo del sitio, queda fallida de inmediato: {error}",
                 fila.id,
+                fila.entidad,
                 fila.entidad_uuid,
             );
             marcar(connection, fila.id, "fallido", Some(&error.to_string()))?;
             resumen.fallidos += 1;
-            resumen
-                .conflictos_gafete
-                .push(construir_conflicto_gafete(connection, &fila.entidad_uuid)?);
+            resumen.conflictos_gafete.push(construir_conflicto_gafete(
+                connection,
+                &fila.entidad,
+                &fila.entidad_uuid,
+            )?);
         }
         Err(error) => {
             // "pendiente" de nuevo -- no "fallido" -- para que
@@ -413,43 +414,73 @@ pub(super) fn exigir_2xx(
     Err(SincronizacionError::RespuestaInesperada { status, cuerpo })
 }
 
+/// Por cada entidad de la cola que entrega un gafete: el tipo de
+/// movimiento, el índice único de "gafete en uso" que la protege en la nube
+/// (ver las migraciones que los crean) y la consulta local que arma el
+/// aviso (nombre, gafete y hora de apertura).
+fn gafete_activo_de(entidad: &str) -> Option<(TipoMovimientoGafete, &'static str, &'static str)> {
+    match entidad {
+        "ingreso" => Some((
+            TipoMovimientoGafete::Contratista,
+            "ingresos_gafete_activo_sitio_idx",
+            "SELECT contratista_nombre, gafete_numero, fecha_hora_ingreso
+             FROM registro_ingresos WHERE uuid = ?1",
+        )),
+        "ingreso_proveedor" => Some((
+            TipoMovimientoGafete::Proveedor,
+            "ingresos_proveedor_gafete_activo_sitio_idx",
+            "SELECT nombre, gafete_numero, fecha_hora_ingreso
+             FROM registro_ingresos_proveedor WHERE uuid = ?1",
+        )),
+        "prestamo_gafete_provisional" => Some((
+            TipoMovimientoGafete::ProvisionalKof,
+            "prestamos_gafete_provisional_gafete_activo_sitio_idx",
+            "SELECT encargado_nombre, gafete_numero, fecha_hora_entrega
+             FROM prestamos_gafete_provisional WHERE uuid = ?1",
+        )),
+        _ => None,
+    }
+}
+
 /// Reconoce, por nombre, el `409` que Postgres devuelve cuando el índice
-/// único `ingresos_gafete_activo_sitio_idx` (ver la migración que lo crea)
-/// rechaza un `POST` porque otro dispositivo del mismo sitio ya tiene ese
-/// gafete activo. No cualquier `23505` -- sólo ESTE índice, nombrado en el
-/// cuerpo de la respuesta de `PostgREST` (`message`), para no confundirlo
-/// con una violación de unicidad distinta que el día de mañana pudiera
-/// darse por otro motivo.
-pub(super) fn es_conflicto_gafete_activo(error: &SincronizacionError) -> bool {
+/// único de "gafete en uso" de `entidad` rechaza un `POST` porque otro
+/// dispositivo del mismo sitio ya tiene ese gafete activo. No cualquier
+/// `23505` -- sólo ESE índice, nombrado en el cuerpo de la respuesta de
+/// `PostgREST` (`message`), para no confundirlo con una violación de
+/// unicidad distinta que el día de mañana pudiera darse por otro motivo.
+pub(super) fn es_conflicto_gafete_activo(entidad: &str, error: &SincronizacionError) -> bool {
+    let Some((_, indice, _)) = gafete_activo_de(entidad) else {
+        return false;
+    };
     matches!(
         error,
-        SincronizacionError::RespuestaInesperada { status: 409, cuerpo }
-            if cuerpo.contains("ingresos_gafete_activo_sitio_idx")
+        SincronizacionError::RespuestaInesperada { status: 409, cuerpo } if cuerpo.contains(indice)
     )
 }
 
-/// Arma [`ConflictoGafeteActivo`] con los mismos tres campos que ya lee
-/// `construir_cuerpo_ingreso` de la fila local -- nada nuevo. `gafete_numero`
-/// se lee como `i64` sin `Option`, sin `unwrap_or_default()`: el único
-/// camino que llega hasta acá es un choque de GAFETE, así que si esta fila
-/// no tuviera uno, `es_conflicto_gafete_activo` no la habría podido dejar
-/// pasar -- si esa premisa alguna vez fallara, mejor que la conversión de
-/// `rusqlite` reviente con un error real que fingir un gafete `0`.
+/// Arma [`ConflictoGafeteActivo`] con datos de la fila local -- nada nuevo.
+/// `gafete_numero` se lee como `i64` sin `Option`, sin `unwrap_or_default()`:
+/// el único camino que llega hasta acá es un choque de GAFETE, así que si
+/// esta fila no tuviera uno, `es_conflicto_gafete_activo` no la habría
+/// podido dejar pasar -- si esa premisa alguna vez fallara, mejor que la
+/// conversión de `rusqlite` reviente con un error real que fingir un gafete
+/// `0`.
 pub(super) fn construir_conflicto_gafete(
     connection: &Connection,
+    entidad: &str,
     uuid: &str,
 ) -> Result<ConflictoGafeteActivo, SincronizacionError> {
-    let (contratista_nombre, fecha_hora_ingreso, gafete_numero): (String, String, i64) = connection
-        .query_row(
-            "SELECT contratista_nombre, fecha_hora_ingreso, gafete_numero
-             FROM registro_ingresos WHERE uuid = ?1",
-            params![uuid],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )?;
+    let (tipo, _, consulta) =
+        gafete_activo_de(entidad).expect("sólo se llega acá con una entidad que entrega gafete");
+    let (nombre, gafete_numero, fecha_hora): (String, i64, String) =
+        connection.query_row(consulta, params![uuid], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?;
     Ok(ConflictoGafeteActivo {
-        contratista_nombre,
+        tipo,
+        nombre,
         gafete_numero,
-        fecha_hora_ingreso,
+        fecha_hora,
     })
 }
 
@@ -521,9 +552,10 @@ pub(super) fn construir_cuerpo_contratista(
         },
     )?;
 
+    // Sin `sitio_id`: contratistas y empresas son un catálogo global, no de
+    // una unidad (migración `catalogo_global_sin_unidad`).
     Ok(json!({
         "id": uuid,
-        "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
         "nombre": nombre,
         "identificacion": cedula,
@@ -586,7 +618,6 @@ pub(super) fn construir_cuerpo_empresa(
 
     Ok(json!({
         "id": uuid,
-        "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
         "nombre": nombre,
         "activa": activo != 0,
@@ -698,63 +729,6 @@ pub(super) fn enviar_gafete(
     let respuesta = cliente
         .post(format!(
             "{}/rest/v1/gafetes?on_conflict=sitio_id,numero,tipo",
-            contexto.base_url
-        ))
-        .header("apikey", contexto.apikey)
-        .header("Authorization", format!("Bearer {}", contexto.token))
-        .header("Prefer", "resolution=merge-duplicates,return=minimal")
-        .json(&cuerpo)
-        .send()
-        .map_err(NubeError::Red)?;
-
-    exigir_2xx(respuesta)
-}
-
-/// Usuarios globales (ROOT/ADMINISTRADOR/OPERADOR, espejo): mismo criterio
-/// de `upsert` que contratistas. Sin `password_hash` a propósito -- la
-/// nube nunca la recibe (ver `SIN_PASSWORD_LOCAL` en
-/// `services/password.rs`): distribuye quién existe y su rol/estado, cada
-/// dispositivo fija su propia contraseña local la primera vez que ese
-/// operador inicia sesión ahí.
-/// Ver el doc-comment de [`construir_cuerpo_contratista`] -- misma idea.
-pub(super) fn construir_cuerpo_usuario(
-    connection: &Connection,
-    contexto: &ContextoSincronizacion<'_>,
-    uuid: &str,
-) -> Result<Value, SincronizacionError> {
-    let (cedula, nombre, rol, activo): (String, String, String, i64) = connection.query_row(
-        "SELECT cedula, nombre, rol, activo FROM usuarios WHERE uuid = ?1",
-        params![uuid],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-    )?;
-
-    Ok(json!({
-        "id": uuid,
-        "sitio_id": contexto.sitio_id,
-        "dispositivo_origen_id": contexto.dispositivo_id,
-        "cedula": cedula,
-        "nombre": nombre,
-        "rol": rol,
-        "activo": activo != 0,
-    }))
-}
-
-pub(super) fn enviar_usuario(
-    cliente: &reqwest::blocking::Client,
-    connection: &Connection,
-    contexto: &ContextoSincronizacion<'_>,
-    uuid: &str,
-) -> Result<(), SincronizacionError> {
-    let cuerpo = construir_cuerpo_usuario(connection, contexto, uuid)?;
-
-    // `on_conflict=cedula` -- la tabla remota ya tiene `UNIQUE(cedula)`, pero
-    // sin decirlo acá el upsert infiere la PK (`id`) como blanco del
-    // conflicto: reenviar este usuario con un `uuid` local distinto (mismo
-    // caso que contratistas/empresas) violaría esa constraint en vez de
-    // fusionarse.
-    let respuesta = cliente
-        .post(format!(
-            "{}/rest/v1/usuarios?on_conflict=cedula",
             contexto.base_url
         ))
         .header("apikey", contexto.apikey)
@@ -1179,7 +1153,6 @@ pub(super) fn construir_cuerpo_empresa_proveedor(
 
     Ok(json!({
         "id": uuid,
-        "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
         "nombre": nombre,
         "activa": activo != 0,

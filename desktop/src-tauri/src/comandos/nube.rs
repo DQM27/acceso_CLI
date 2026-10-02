@@ -5,16 +5,15 @@ use tauri::Manager;
 
 use crate::estado::GuiState;
 
-/// Metadata de esta PC, capturada una sola vez en la activación inicial --
+/// Metadata de esta PC, enviada al vincular y en cada autenticación --
 /// misma idea que `MetadatosDispositivoLocal.kt` en el lado móvil (ver
 /// `docs/features-futuras/plan-sesion-unica-dispositivos.md`), reusando los mismos nombres
 /// de campo aunque el significado en escritorio es distinto: `android_id`
 /// pasa a ser el Machine GUID de Windows (el mismo identificador estable
-/// que ya usa `cifrado-secreto-dispositivo` para cifrar el secreto en
-/// disco, no uno nuevo), `modelo` el nombre de esta PC en la red,
+/// de siempre, no uno nuevo), `modelo` el nombre de esta PC en la red,
 /// `fabricante`/`fingerprint` el sistema operativo y su arquitectura.
 /// Nada de esto es secreto en sí mismo -- viaja igual que el resto de esta
-/// metadata, en texto plano en el body de `device-auth`.
+/// metadata, en texto plano en el body de `device-vincular`/`device-auth`.
 fn metadata_de_esta_maquina() -> nube::MetadatosDispositivo {
     nube::MetadatosDispositivo {
         identificador_hardware: control_acceso::nube::credenciales::identificador_de_esta_maquina(),
@@ -65,6 +64,10 @@ pub struct ResumenSincronizacion {
     /// el frontend debe cerrar la sesión local y volver al login apenas
     /// vea esto en `true`.
     pub sesion_expulsada: bool,
+    /// `true` cuando la sesión se cerró porque el usuario inició sesión en
+    /// otra unidad (sesión única por unidad, `nube::sesion_en_unidad`); en
+    /// ese caso `sesion_expulsada` también es `true`. Sólo cambia el aviso.
+    pub sesion_en_otra_unidad: bool,
     /// `docs/pendientes.md`, "alertar luego al sincronizar": ingresos que
     /// quedaron activos en este dispositivo pero que la nube dice que
     /// TAMBIÉN están activos en otro sitio (colado mientras este
@@ -145,7 +148,7 @@ pub struct PrestamoGafeteProvisionalRemoto {
 }
 
 /// Autentica este dispositivo contra el receptor -- un solo lugar para no
-/// repetir "cargar secreto + pedir token" en cada función de este archivo.
+/// repetir "autorizar + pedir token" en cada función de este archivo.
 /// Autoriza con `Operacion::UsarNube` (cualquier rol), no
 /// `GestionarNube` (exclusivo ROOT) -- sincronizar es uso diario normal, y
 /// el disparador automático de fondo (`crate::iniciar_sincronizacion_automatica`)
@@ -157,16 +160,12 @@ fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
         .autorizar_uso_nube(&actor)
         .map_err(mensaje_gestion_nube)?;
 
-    let secreto = nube::credenciales::cargar_secreto()
-        .ok_or_else(|| "Todavía no se guardó el secreto de este dispositivo".to_string())?;
-    let token = state.autenticar_con_cache(&secreto).map_err(mensaje_nube)?;
+    let token = state.autenticar_con_cache().map_err(mensaje_nube)?;
     // El candado ya se soltó (`autorizar_uso_nube` arriba fue la única
     // sección crítica) -- volver a pedirlo acá es una lectura/escritura
     // atómica sobre un `AtomicI64` (ver `RelojCorregido`), no compite con
     // nada lento.
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
+    state.core().aplicar_token(&token);
     Ok(token)
 }
 
@@ -254,22 +253,6 @@ fn intentar_sincronizacion(
         sitio_id: &token.sitio_id,
     };
 
-    // Renovación silenciosa de la sesión de Supabase Auth del usuario
-    // (distinta del token de DISPOSITIVO de arriba) -- ver
-    // docs/planes-implementados/plan-autenticacion-supabase-auth.md, "renovación en segundo
-    // plano". Mejor esfuerzo: sin sesión de Supabase (login local, ROOT
-    // del arranque inicial) o sin red, simplemente no hace nada -- el
-    // tope de 12h en `GuiState::access_token_supabase_vigente` sigue
-    // aplicando igual si esto no logra renovar a tiempo.
-    // Sólo en la sincronización completa: es una llamada de red más, y el
-    // pulso periódico (completo) ya la corre cada 2 minutos.
-    if alcance.es_completo()
-        && let Some(refresh_token) = state.refresh_token_supabase()
-        && let Ok(sesion) = nube::refrescar(nube::base_url(), nube::apikey(), &refresh_token)
-    {
-        state.iniciar_sesion_supabase(sesion);
-    }
-
     let conexion = state
         .conexion_secundaria()
         .map_err(FalloSincronizacion::Mensaje)?;
@@ -285,13 +268,48 @@ fn intentar_sincronizacion(
     // mismo (no sólo avisa al frontend) para que el próximo comando que
     // dependa de `sesion_activa()` falle de inmediato, sin esperar a que la
     // pantalla reaccione al resumen.
-    let sesion_expulsada = match state.sesion_activa() {
+    let mut sesion_expulsada = match state.sesion_activa() {
         Ok(actor) if !state.core().sesion_sigue_activa(&actor) => {
             state.cerrar_sesion();
             true
         }
         _ => false,
     };
+
+    // Sesión única por unidad: cada sincronización registra la sesión en la
+    // nube y pregunta si sigue vigente (la primera, justo después del login,
+    // es la que la registra). Si el usuario entró después en otra unidad,
+    // esta sesión se cierra. Falla "abierto": un error de red no expulsa.
+    let mut sesion_en_otra_unidad = false;
+    if !sesion_expulsada && let Some((actor, inicio)) = state.sesion_con_inicio() {
+        let estado = nube::sesion_en_unidad(
+            nube::base_url(),
+            nube::apikey(),
+            &token,
+            &actor.cedula,
+            &inicio,
+        );
+        // Build de diagnóstico: qué decidió la nube y con qué duración de
+        // sesión. Sin cédula ni nombre.
+        if crate::telemetria::activa() {
+            crate::telemetria::evento(
+                "sesion_unidad",
+                serde_json::json!({
+                    "resultado": estado.as_ref().map_or("error", |estado| estado.como_texto()),
+                    "transcurrido_ms": inicio.transcurrido_ms(),
+                }),
+            );
+        }
+        match estado {
+            Ok(nube::EstadoSesionUnidad::Desplazada) => {
+                state.cerrar_sesion();
+                sesion_expulsada = true;
+                sesion_en_otra_unidad = true;
+            }
+            Ok(_) => {}
+            Err(error) => log::info!("no se pudo verificar la sesión en la nube: {error}"),
+        }
+    }
 
     Ok(ResumenSincronizacion {
         enviados: resumen.enviados,
@@ -314,6 +332,7 @@ fn intentar_sincronizacion(
         dispositivo_id: token.dispositivo_id,
         tipo: token.tipo,
         sesion_expulsada,
+        sesion_en_otra_unidad,
         conflictos_ingreso: resumen.conflictos_ingreso,
         conflictos_movimiento_visita: resumen.conflictos_movimiento_visita,
         conflictos_ingreso_proveedor: resumen.conflictos_ingreso_proveedor,
@@ -323,25 +342,24 @@ fn intentar_sincronizacion(
 
 /// Arranque de una base vacía (`requiere_configuracion_inicial` en
 /// `comandos::autenticacion`) -- sin `sesion_activa()` a propósito, porque
-/// todavía no existe ningún usuario con quien loguearse. Guarda el secreto
-/// pegado en la pantalla de arranque (ver `App.tsx`) y trae el catálogo
-/// remoto completo, usuarios incluidos, para que el próximo intento de
-/// login ya tenga con quién autenticar (con el centinela
-/// `SIN_PASSWORD_LOCAL`, así que cae solo en "fijar contraseña").
+/// todavía no existe ningún usuario con quien loguearse. Canjea el código de
+/// vinculación que el panel generó para este equipo (ver
+/// `PrimerArranque.tsx`) y trae el catálogo remoto completo, usuarios
+/// incluidos, para que el próximo intento de login ya tenga con quién
+/// autenticar (con el centinela `SIN_PASSWORD_LOCAL`, así que cae solo en
+/// "fijar contraseña").
 #[tauri::command]
-pub async fn configurar_dispositivo_inicial(
+pub async fn vincular_dispositivo_inicial(
     app: tauri::AppHandle,
-    secreto: String,
+    codigo: String,
 ) -> Result<ResumenSincronizacion, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<GuiState>();
         let metadata = metadata_de_esta_maquina();
         let resumen = state
             .core()
-            .configurar_dispositivo_inicial(
-                None,
-                None,
-                &secreto,
+            .vincular_dispositivo_inicial(
+                &codigo,
                 Some(&metadata),
                 nube::PerfilDispositivo::Escritorio,
             )
@@ -351,7 +369,7 @@ pub async fn configurar_dispositivo_inicial(
             fallidos: resumen.fallidos,
             remotos_abiertos: resumen.remotos_abiertos,
             cierres_recibidos: resumen.cierres_recibidos,
-            // Núcleo (`AppCore::configurar_dispositivo_inicial`) no trae este
+            // Núcleo (`AppCore::vincular_dispositivo_inicial`) no trae este
             // campo -- mismo criterio que `conflictos_ingreso_proveedor` de
             // abajo: base recién configurada, nada que traer todavía.
             cierres_recibidos_proveedor: 0,
@@ -369,6 +387,7 @@ pub async fn configurar_dispositivo_inicial(
             dispositivo_id: resumen.dispositivo_id,
             tipo: resumen.tipo,
             sesion_expulsada: resumen.sesion_expulsada,
+            sesion_en_otra_unidad: false,
             // Base recién configurada, sin ningún ingreso ni movimiento de
             // visita local todavía -- no hay nada que pudiera chocar con
             // otro sitio en este momento.
@@ -467,6 +486,14 @@ fn preparar_sesion_realtime(state: &GuiState) -> Result<SesionRealtimeNube, Stri
         dispositivo_id: sesion.dispositivo_id,
         tipo: sesion.tipo,
     })
+}
+
+/// El aviso en vivo `dispositivo_expulsado` llegó para este equipo: el
+/// token cacheado ya no sirve (el servidor lo rechaza), así que se descarta
+/// para que la próxima operación de nube pida uno y muestre el motivo real.
+#[tauri::command]
+pub fn descartar_token_nube(state: tauri::State<'_, GuiState>) {
+    state.invalidar_token_cacheado();
 }
 
 /// Cuántas filas de `cola_salida` ya agotaron los reintentos automáticos
@@ -660,4 +687,23 @@ pub fn cerrar_prestamo_gafete_provisional_remoto(
 #[tauri::command]
 pub fn desfase_reloj_ms(state: tauri::State<GuiState>) -> Option<i64> {
     state.core().desfase_reloj_ms()
+}
+
+/// Unidad y etiqueta con que el panel registró esta PC, para el login y la
+/// barra de estado. Sólo informativas: si alguien registró el equipo en la
+/// unidad equivocada, se nota acá antes de que la sesión única empiece a
+/// cerrar sesiones. Campos `null` mientras no hayan llegado de la nube.
+#[derive(serde::Serialize)]
+pub struct IdentidadEquipoGui {
+    unidad: Option<String>,
+    etiqueta: Option<String>,
+}
+
+#[tauri::command]
+pub fn identidad_equipo(state: tauri::State<GuiState>) -> IdentidadEquipoGui {
+    let identidad = state.core().identidad_equipo();
+    IdentidadEquipoGui {
+        unidad: identidad.unidad,
+        etiqueta: identidad.etiqueta,
+    }
 }

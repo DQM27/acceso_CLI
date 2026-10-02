@@ -9,13 +9,15 @@ license = "MIT"
 default = []
 dev-auth = []
 serde = ["dep:serde", "chrono/serde"]
-nube = ["dep:reqwest", "dep:serde_json", "dep:jsonwebtoken", "serde"]
-cifrado-secreto-dispositivo-portable = ["dep:aes-gcm", "dep:sha2"]
-# `machine-uid` queda sólo para la metadata forense de activación (ver
-# `identificador_de_esta_maquina`, usada por `desktop-tauri`) -- ya NO
-# deriva la clave de cifrado del secreto: eso es DPAPI (`dep:windows`,
-# ligado al usuario de Windows, no a un identificador público adivinable).
-cifrado-secreto-dispositivo = ["dep:machine-uid", "dep:windows", "cifrado-secreto-dispositivo-portable"]
+# `p256`/`sha2`/`base64`: identidad del dispositivo por par de claves
+# (`nube::firmante`) -- firma ES256 de la aserción, huella RFC 7638 y
+# codificación base64url. `p256` ya venía en el árbol vía `jsonwebtoken`.
+nube = ["dep:reqwest", "dep:serde_json", "dep:jsonwebtoken", "dep:p256", "dep:sha2", "dep:base64", "serde"]
+# Escritorio: la clave privada del dispositivo se guarda con DPAPI
+# (`dep:windows`, ligado al usuario de Windows). `machine-uid` queda sólo
+# para la metadata forense de vinculación (ver
+# `identificador_de_esta_maquina`, usada por `desktop-tauri`).
+cifrado-secreto-dispositivo = ["dep:machine-uid", "dep:windows"]
 
 [dependencies]
 chrono = "0.4.45"
@@ -55,13 +57,22 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 # OpenSSL que ya documenta docs/pendientes.md para Android/Windows.
 # "aws_lc_rs" sería la otra opción soportada, pero trae ese mismo problema.
 jsonwebtoken = { version = "11", optional = true, features = ["rust_crypto"] }
+# `pkcs8` arrastra el soporte DER de `ecdsa`: Android Keystore entrega las
+# firmas en DER y hay que pasarlas a `r || s` (ver `firma_der_a_jws`).
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "pkcs8", "std"], optional = true }
+base64 = { version = "0.22", optional = true }
 machine-uid = { version = "0.6", optional = true }
-aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"], optional = true }
 sha2 = { version = "0.11", default-features = false, optional = true }
 
+[target.'cfg(unix)'.dependencies]
+# `clock_gettime(CLOCK_BOOTTIME)` para el contador de arranque que no se
+# detiene con el equipo suspendido (ver `reloj_arranque`). Ya estaba en el
+# árbol de dependencias.
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
-# DPAPI (`CryptProtectData`/`CryptUnprotectData`) para proteger el secreto
-# de dispositivo en disco -- ver `cifrado-secreto-dispositivo` arriba y
+# DPAPI (`CryptProtectData`/`CryptUnprotectData`) para proteger la clave
+# privada del dispositivo en disco -- ver `cifrado-secreto-dispositivo` arriba y
 # `nube::credenciales`. Misma versión que ya fija `desktop/src-tauri`.
 # DIFERIDO a propósito (ver docs/pendientes.md): `desktop/src-tauri` fija su
 # propio `windows`/`webview2-com` a lo que `wry` (vía tauri) trae
@@ -78,6 +89,10 @@ winresource = "0.1"
 
 [[example]]
 name = "probar_sincronizacion"
+required-features = ["nube"]
+
+[[example]]
+name = "probar_vinculacion"
 required-features = ["nube"]
 
 [lints.clippy]

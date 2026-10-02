@@ -24,29 +24,37 @@ select set_config('diagnostico.sitio_a', (select id::text from public.sitios whe
        set_config('diagnostico.sitio_b', (select id::text from public.sitios where nombre = 'Diagnóstico B'), true),
        set_config('diagnostico.correo_admin', 'diagnostico-admin@example.com', true);
 
-insert into public.dispositivos (id, sitio_id, tipo, etiqueta, secret_hash) values
-  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico PC A', 'diag-hash-a');
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, clave_publica_jwk, clave_huella) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico PC A', '{"kty":"EC"}', 'diag-huella-a');
 
 insert into public.administradores_panel (correo) values (current_setting('diagnostico.correo_admin'));
 
 -- Sembrado directo (bypassa RLS, como service_role) -- ya no hay forma de
 -- crear este usuario de prueba vía INSERT normal, que es justo lo que este
 -- test verifica.
-insert into public.usuarios (id, sitio_id, cedula, nombre, rol) values
-  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'diag-cedula-1', 'Diagnóstico operador', 'OPERADOR');
+insert into public.usuarios (id, cedula, nombre, rol) values
+  (gen_random_uuid(), 'diag-cedula-1', 'Diagnóstico operador', 'OPERADOR');
+
+-- Un dispositivo vigente por sitio como `sub` de los JWT simulados: la
+-- política restrictiva "solo dispositivos vigentes" exige que el token sea
+-- de un dispositivo real y activo (ver dispositivos_vigentes_y_vinculacion.sql).
+-- Sin esto, los casos negativos pasarían por esa política y no por la de sitio.
+insert into public.dispositivos (id, sitio_id, tipo, etiqueta, clave_publica_jwk, clave_huella) values
+  (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'pc', 'Diagnóstico JWT A', '{"kty":"EC"}', 'diag-huella-jwt-a');
+select set_config('diagnostico.jwt_a', (select id::text from public.dispositivos where etiqueta = 'Diagnóstico JWT A'), true);
 
 set local role authenticated;
 
 -- Crear: un dispositivo de su propio sitio YA NO puede -- antes de este
 -- cierre esto sí funcionaba.
 select set_config('request.jwt.claims',
-  json_build_object('role', 'authenticated', 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
+  json_build_object('role', 'authenticated', 'sub', current_setting('diagnostico.jwt_a'), 'huella', 'diag-huella-jwt-a', 'sitio_id', current_setting('diagnostico.sitio_a'))::text,
   true);
 do $$
 begin
   begin
-    insert into public.usuarios (id, sitio_id, cedula, nombre, rol)
-    values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'diag-cedula-2', 'Diagnóstico bloqueado', 'OPERADOR');
+    insert into public.usuarios (id, cedula, nombre, rol)
+    values (gen_random_uuid(), 'diag-cedula-2', 'Diagnóstico bloqueado', 'OPERADOR');
     raise exception 'Un dispositivo pudo crear un usuario (se esperaba que ya no pudiera)';
   exception
     when insufficient_privilege then null;
@@ -100,8 +108,8 @@ begin
   if not found then
     raise exception 'admin_global no puede actualizar usuarios';
   end if;
-  insert into public.usuarios (id, sitio_id, cedula, nombre, rol)
-  values (gen_random_uuid(), current_setting('diagnostico.sitio_a')::uuid, 'diag-cedula-3', 'Diagnóstico admin_global', 'ADMINISTRADOR');
+  insert into public.usuarios (id, cedula, nombre, rol)
+  values (gen_random_uuid(), 'diag-cedula-3', 'Diagnóstico admin_global', 'ADMINISTRADOR');
   if not found then
     raise exception 'admin_global no pudo crear un usuario';
   end if;

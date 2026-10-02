@@ -68,7 +68,6 @@ fun PantallaPrincipal(
     nucleo: Nucleo,
     sesion: UsuarioSesion,
     directorio: String,
-    secretoStore: SecretoDispositivoStore,
     onCerrarSesion: () -> Unit,
 ) {
     RegistrarPantalla("principal")
@@ -107,27 +106,37 @@ fun PantallaPrincipal(
     // locales dentro de `drenar_cola` (fase 3, PR #62) -- ver
     // `ResumenSincronizacion.conflictosGafete`.
     var conflictosGafete by remember { mutableStateOf<List<ConflictoGafeteActivo>>(emptyList()) }
+    // La sesión se cerró desde la nube (usuario desactivado, o entró en otra
+    // unidad): se avisa sólo en el segundo caso, que no es obvio para quien
+    // tiene el teléfono en la mano.
+    val alCerrarseLaSesion: (Boolean) -> Unit = { enOtraUnidad ->
+        if (enOtraUnidad) {
+            Toast.makeText(contexto, ExpulsionNube.MENSAJE_SESION_EN_OTRA_UNIDAD, Toast.LENGTH_LONG).show()
+        }
+        onCerrarSesion()
+    }
     val nubeViewModel: NubeViewModel =
         viewModel(
-            factory = NubeViewModel.factory(nucleo, secretoStore, onCerrarSesion),
+            factory = NubeViewModel.factory(nucleo, alCerrarseLaSesion),
         )
     val scope = rememberCoroutineScope()
-    val realtime = remember(nucleo, secretoStore, scope, sesion) {
+    val realtime = remember(nucleo, scope, sesion) {
         NubeRealtime(
             nucleo = nucleo,
-            secretoStore = secretoStore,
             scope = scope,
             usuarioCedula = sesion.cedula,
             usuarioNombre = sesion.nombre,
             // Aviso en vivo con la fila ya guardada: refresca Activos al
             // instante, sin esperar la sincronización.
             onCambioAplicado = { refrescarNube += 1 },
+            // El canal corre en `scope` (hilo principal): el aviso puede
+            // mostrarse directo. El trabajo local sigue disponible.
+            onExpulsado = { Toast.makeText(contexto, ExpulsionNube.MENSAJE, Toast.LENGTH_LONG).show() },
         )
     }
-    val sincronizacion = remember(nucleo, secretoStore, scope) {
+    val sincronizacion = remember(nucleo, scope) {
         SincronizacionPeriodica(
             nucleo = nucleo,
-            secretoStore = secretoStore,
             scope = scope,
             onSincronizado = { resumen ->
                 // Si a esta sesión la desactivaron en otro dispositivo, el
@@ -135,7 +144,7 @@ fun PantallaPrincipal(
                 // camino) ya trajo la baja -- cerrar sesión acá, no sólo
                 // refrescar pantallas que ya no deberían verse.
                 if (resumen.sesionExpulsada) {
-                    onCerrarSesion()
+                    alCerrarseLaSesion(resumen.sesionEnOtraUnidad)
                 } else {
                     refrescarNube += 1
                     conflictosIngreso = resumen.conflictosIngreso
@@ -210,6 +219,10 @@ fun PantallaPrincipal(
         }
     }
 
+    // Se relee al terminar cada sincronización: es cuando puede llegar un
+    // token con la unidad o la etiqueta cambiadas.
+    val textoIdentidad = rememberTextoIdentidadEquipo(nucleo, recargar = nubeViewModel.sincronizando)
+
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
@@ -224,7 +237,7 @@ fun PantallaPrincipal(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "Lattis",
+                    textoIdentidad ?: "Lattis",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -298,16 +311,15 @@ fun PantallaPrincipal(
 
         // A diferencia del de arriba (simétrico: ambos lados "tienen
         // razón" hasta que alguien decide), acá Postgres ya decidió -- el
-        // ingreso local de ESTE dispositivo es el que no quedó válido en
-        // la nube, así que el aviso lo dice con esa certeza. Sólo
-        // informativo por ahora (fase 3, PR #62): sin botón de acción
-        // directa -- se deja para una vuelta aparte si hace falta, una
-        // vez visto el comportamiento real.
+        // movimiento local de ESTE dispositivo (ingreso de contratista o
+        // de proveedor, o préstamo KOF) es el que no quedó válido en la
+        // nube, así que el aviso lo dice con esa certeza. Sólo informativo
+        // por ahora (fase 3, PR #62): sin botón de acción directa -- se
+        // deja para una vuelta aparte si hace falta, una vez visto el
+        // comportamiento real.
         for (conflicto in conflictosGafete) {
             Text(
-                "El ingreso de ${conflicto.contratistaNombre} con gafete ${conflicto.gafeteNumero} " +
-                    "(${textoFechaHora(conflicto.fechaHoraIngreso)}) no quedó registrado en la nube — " +
-                    "otro dispositivo de este sitio ya lo tiene asignado.",
+                mensajeConflictoGafete(conflicto, textoFechaHora(conflicto.fechaHora)),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -348,10 +360,10 @@ fun PantallaPrincipal(
                 // su pantalla no compila (antes eran textos y un `else`
                 // que caía en Activos en silencio ante un error de tipeo).
                 when (SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }) {
-                    SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, secretoStore, refrescarNube)
+                    SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, refrescarNube)
                     SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
-                    SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, secretoStore, refrescarNube)
-                    SeccionPrincipal.PROVEEDORES -> PantallaProveedores(nucleo, secretoStore, refrescarNube)
+                    SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
+                    SeccionPrincipal.PROVEEDORES -> PantallaProveedores(nucleo, refrescarNube)
                 }
             }
         }

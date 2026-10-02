@@ -9,18 +9,28 @@ use serde::Deserialize;
 pub enum NubeError {
     #[error("No se pudo contactar al receptor: {0}")]
     Red(#[from] reqwest::Error),
-    #[error("El secreto de este dispositivo fue rechazado o revocado")]
+    /// `device-auth` no reconoce la clave del equipo: fue retirado en el
+    /// panel.
+    #[error("La nube ya no reconoce a este dispositivo")]
     CredencialesInvalidas,
-    /// El dispositivo existe y su secreto es válido, pero un admin lo
-    /// suspendió temporalmente (`dispositivos.suspended_at` en `device-auth`)
-    /// -- distinto de `CredencialesInvalidas` (baja permanente).
-    #[error("Este dispositivo fue suspendido temporalmente")]
-    DispositivoSuspendido,
     /// `device-auth` rechazó esta versión por estar debajo del mínimo
     /// aceptado (`VERSION_MINIMA_ACEPTADA` en el receptor) -- ver
     /// `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
     #[error("Esta versión de la app ya no es compatible -- hace falta actualizar")]
     VersionDesactualizada,
+    /// `device-vincular` rechazó el código: no existe, ya se usó, venció o
+    /// se anuló. El motivo exacto queda registrado en el panel, no acá.
+    #[error("El código de vinculación no es válido o ya venció")]
+    CodigoVinculacionInvalido,
+    /// La clave pública que mandó este equipo ya está atada a otro
+    /// dispositivo (índice único de `clave_huella`).
+    #[error("La clave de este equipo ya está vinculada a otro dispositivo")]
+    ClaveEnUso,
+    /// El equipo nunca se vinculó (no tiene clave aceptada por el servidor).
+    #[error("Este dispositivo todavía no está vinculado a la nube")]
+    SinCredencial,
+    #[error(transparent)]
+    Firmante(#[from] super::firmante::ErrorFirmante),
 }
 
 /// Tope por operación de red contra el receptor (conexión + respuesta
@@ -59,8 +69,8 @@ pub(crate) fn cliente_http() -> reqwest::blocking::Client {
 
 /// Token que autoriza a este dispositivo a leer/escribir únicamente los
 /// datos de su propio sitio. Vence a los `expires_in` segundos — hay que
-/// volver a llamar a `autenticar_dispositivo` para renovarlo, no se refresca
-/// solo.
+/// volver a autenticarse para renovarlo (ver `CacheTokenDispositivo`), no se
+/// refresca solo.
 #[derive(Clone, Deserialize)]
 pub struct TokenDispositivo {
     pub access_token: String,
@@ -77,6 +87,15 @@ pub struct TokenDispositivo {
     /// tocar el reloj corregido en ese caso, no asumir desfase cero.
     #[serde(skip, default)]
     pub desfase_reloj_ms: Option<i64>,
+    /// Nombre de la unidad a la que quedó registrado el equipo, para
+    /// mostrarlo (login, barra de estado). Sólo informativo: ningún permiso
+    /// depende de él. `None` si el servidor no lo manda (versión anterior).
+    #[serde(default)]
+    pub sitio_nombre: Option<String>,
+    /// Etiqueta con la que el panel registró el equipo. Igual que
+    /// `sitio_nombre`: sólo para mostrar.
+    #[serde(default)]
+    pub etiqueta: Option<String>,
 }
 
 impl std::fmt::Debug for TokenDispositivo {
@@ -88,22 +107,23 @@ impl std::fmt::Debug for TokenDispositivo {
             .field("dispositivo_id", &self.dispositivo_id)
             .field("tipo", &self.tipo)
             .field("desfase_reloj_ms", &self.desfase_reloj_ms)
+            .field("sitio_nombre", &self.sitio_nombre)
+            .field("etiqueta", &self.etiqueta)
             .finish()
     }
 }
 
-/// Datos del dispositivo físico capturados en la activación inicial (ver
-/// `Nucleo::configurar_dispositivo_inicial_con_secreto` en móvil,
-/// `comandos::nube::configurar_dispositivo_inicial` en escritorio) -- sólo
-/// viajan una vez, no en cada renovación de token. Sirven para que el panel
-/// de administración distinga "el mismo dispositivo de siempre" de uno
-/// distinto usando el mismo secreto, y como evidencia si hace falta
-/// denunciar un intento de fraude (ver `docs/features-futuras/plan-sesion-unica-dispositivos.md`).
+/// Datos del dispositivo físico capturados al vincularlo (ver
+/// `Nucleo::vincular_dispositivo_inicial` en móvil,
+/// `comandos::nube::vincular_dispositivo_inicial` en escritorio). Sirven
+/// para que el panel de administración identifique el equipo físico, y el
+/// servidor nunca pisa el identificador de hardware ya registrado: si llega
+/// otro, lo deja como evento de seguridad (ver `device-auth`).
 /// Nombres de campo neutrales a propósito -- esto lo usan tanto móvil como
 /// escritorio, cada uno con su propio significado (ver los doc-comments de
 /// cada campo). Ninguno es secreto en sí mismo -- todos observables por
 /// cualquier app en el propio dispositivo -- así que viajan en texto plano
-/// en el body, igual que el secreto.
+/// en el body.
 #[derive(Default, serde::Serialize)]
 pub struct MetadatosDispositivo {
     /// Identificador estable de hardware: `Settings.Secure.ANDROID_ID` en
@@ -121,29 +141,79 @@ pub struct MetadatosDispositivo {
     pub app_version: Option<String>,
 }
 
-/// Intercambia el secreto de este dispositivo (ver `super::credenciales`)
-/// por un `TokenDispositivo` firmado por el receptor. `metadata`, si viene,
-/// se adjunta al mismo request -- ver `MetadatosDispositivo`.
-pub fn autenticar_dispositivo(
+/// Autenticación del equipo: pide un desafío al servidor, lo firma con la
+/// clave del equipo y lo canjea por un token. Dos idas y vueltas, a cambio
+/// de que ningún secreto viaje y de no depender del reloj del equipo.
+pub(crate) fn autenticar_con_firmante(
     base_url: &str,
-    secreto: &str,
+    firmante: &dyn super::firmante::FirmanteDispositivo,
     metadata: Option<&MetadatosDispositivo>,
 ) -> Result<TokenDispositivo, NubeError> {
-    let url = format!("{base_url}/functions/v1/device-auth");
-    let mut cuerpo = serde_json::json!({ "secret": secreto });
-    if let Some(metadata) = metadata
-        && let serde_json::Value::Object(mapa) = &mut cuerpo
-    {
-        mapa.insert(
-            "metadata".to_string(),
-            serde_json::to_value(metadata).unwrap_or_default(),
-        );
+    #[derive(Deserialize)]
+    struct RespuestaDesafio {
+        desafio: String,
     }
-    let respuesta = cliente_http().post(url).json(&cuerpo).send()?;
 
+    let url = format!("{base_url}/functions/v1/device-auth");
+    let desafio = cliente_http()
+        .post(&url)
+        .json(&serde_json::json!({ "desafio": true }))
+        .send()?
+        .error_for_status()?
+        .json::<RespuestaDesafio>()?
+        .desafio;
+
+    let asercion = super::firmante::construir_asercion(firmante, &desafio)?;
+    let mut cuerpo = serde_json::json!({ "asercion": asercion });
+    agregar_metadata(&mut cuerpo, metadata);
+    let respuesta = cliente_http().post(url).json(&cuerpo).send()?;
+    token_de_respuesta(respuesta, NubeError::CredencialesInvalidas)
+}
+
+/// Canjea el código de vinculación que emitió el panel, atando la clave
+/// pública de este equipo al dispositivo. Devuelve el primer token.
+pub(crate) fn vincular_con_codigo(
+    base_url: &str,
+    codigo: &str,
+    clave_publica_jwk: &str,
+    metadata: Option<&MetadatosDispositivo>,
+) -> Result<TokenDispositivo, NubeError> {
+    let mut cuerpo = serde_json::json!({
+        "codigo": codigo,
+        "clave_publica_jwk": jwk_como_valor(clave_publica_jwk)?,
+    });
+    agregar_metadata(&mut cuerpo, metadata);
+    let respuesta = cliente_http()
+        .post(format!("{base_url}/functions/v1/device-vincular"))
+        .json(&cuerpo)
+        .send()?;
+    token_de_respuesta(respuesta, NubeError::CodigoVinculacionInvalido)
+}
+
+fn jwk_como_valor(jwk: &str) -> Result<serde_json::Value, NubeError> {
+    serde_json::from_str(jwk).map_err(|error| {
+        NubeError::Firmante(super::firmante::ErrorFirmante::ClaveInvalida(
+            error.to_string(),
+        ))
+    })
+}
+
+fn agregar_metadata(cuerpo: &mut serde_json::Value, metadata: Option<&MetadatosDispositivo>) {
+    if let Some(metadata) = metadata {
+        cuerpo["metadata"] = serde_json::to_value(metadata).unwrap_or_default();
+    }
+}
+
+/// Traduce el estado HTTP de `device-auth`/`device-vincular` y lee el token.
+/// `no_autorizado` es lo que significa un 401 para quien llama: credencial
+/// rechazada al autenticar, código inválido al vincular.
+fn token_de_respuesta(
+    respuesta: reqwest::blocking::Response,
+    no_autorizado: NubeError,
+) -> Result<TokenDispositivo, NubeError> {
     match respuesta.status() {
-        reqwest::StatusCode::UNAUTHORIZED => return Err(NubeError::CredencialesInvalidas),
-        reqwest::StatusCode::FORBIDDEN => return Err(NubeError::DispositivoSuspendido),
+        reqwest::StatusCode::UNAUTHORIZED => return Err(no_autorizado),
+        reqwest::StatusCode::CONFLICT => return Err(NubeError::ClaveEnUso),
         // 426 Upgrade Required -- lo que `device-auth` manda cuando
         // `VERSION_MINIMA_ACEPTADA` rechaza esta versión. Ver
         // `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
@@ -191,7 +261,7 @@ mod tests {
     /// una conexión, drena el pedido (sin parsearlo — no hace falta para
     /// estas pruebas) y responde exactamente `respuesta` (línea de estado +
     /// headers + cuerpo, ya armados por quien llama). Devuelve la URL base
-    /// para pasarle a `autenticar_dispositivo`.
+    /// para pasarle a [`canjear`].
     fn servidor_de_una_respuesta(respuesta: impl Into<String>) -> String {
         let respuesta = respuesta.into();
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
@@ -216,15 +286,27 @@ mod tests {
         format!("http://{direccion}")
     }
 
+    /// Canje con una clave pública de prueba: una sola petición, así que
+    /// sirve para probar la lectura del token y la traducción de estados
+    /// HTTP que comparte con `autenticar_con_firmante`.
+    fn canjear(base_url: &str) -> Result<TokenDispositivo, NubeError> {
+        vincular_con_codigo(
+            base_url,
+            "K7QMR4XT2P",
+            r#"{"crv":"P-256","kty":"EC","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"}"#,
+            None,
+        )
+    }
+
     #[test]
-    fn autentica_exitosamente_y_devuelve_el_token() {
+    fn lee_el_token_de_la_respuesta() {
         let base_url = servidor_de_una_respuesta(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
              {\"access_token\":\"abc\",\"expires_in\":3600,\"sitio_id\":\"s1\",\
              \"dispositivo_id\":\"d1\",\"tipo\":\"pc\"}",
         );
 
-        let token = autenticar_dispositivo(&base_url, "cualquier-secreto", None).expect("token ok");
+        let token = canjear(&base_url).expect("token ok");
 
         assert_eq!(token.access_token, "abc");
         assert_eq!(token.expires_in, 3600);
@@ -246,6 +328,8 @@ mod tests {
             dispositivo_id: "d1".to_string(),
             tipo: "pc".to_string(),
             desfase_reloj_ms: Some(25),
+            sitio_nombre: None,
+            etiqueta: None,
         };
 
         let debug = format!("{token:?}");
@@ -270,7 +354,7 @@ mod tests {
              \"dispositivo_id\":\"d1\",\"tipo\":\"pc\"}}"
         ));
 
-        let token = autenticar_dispositivo(&base_url, "cualquier-secreto", None).expect("token ok");
+        let token = canjear(&base_url).expect("token ok");
 
         let desfase_ms = token
             .desfase_reloj_ms
@@ -284,27 +368,28 @@ mod tests {
     }
 
     #[test]
-    fn secreto_rechazado_da_credenciales_invalidas() {
+    fn codigo_rechazado_da_codigo_invalido() {
         let base_url = servidor_de_una_respuesta(
             "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n\
-             Connection: close\r\n\r\n{\"error\":\"invalid_credentials\"}",
+             Connection: close\r\n\r\n{\"error\":\"codigo_invalido\"}",
         );
 
-        let resultado = autenticar_dispositivo(&base_url, "secreto-invalido", None);
+        let resultado = canjear(&base_url);
 
-        assert!(matches!(resultado, Err(NubeError::CredencialesInvalidas)));
+        assert!(matches!(
+            resultado,
+            Err(NubeError::CodigoVinculacionInvalido)
+        ));
     }
 
     #[test]
-    fn dispositivo_suspendido_se_reporta_como_tal() {
+    fn clave_de_otro_dispositivo_da_clave_en_uso() {
         let base_url = servidor_de_una_respuesta(
-            "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\
-             Connection: close\r\n\r\n{\"error\":\"device_suspended\"}",
+            "HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\n\
+             Connection: close\r\n\r\n{\"error\":\"clave_en_uso\"}",
         );
 
-        let resultado = autenticar_dispositivo(&base_url, "secreto", None);
-
-        assert!(matches!(resultado, Err(NubeError::DispositivoSuspendido)));
+        assert!(matches!(canjear(&base_url), Err(NubeError::ClaveEnUso)));
     }
 
     #[test]
@@ -314,7 +399,7 @@ mod tests {
              Connection: close\r\n\r\n{\"error\":\"version_desactualizada\",\"version_minima\":\"2.0.0\"}",
         );
 
-        let resultado = autenticar_dispositivo(&base_url, "secreto", None);
+        let resultado = canjear(&base_url);
 
         assert!(matches!(resultado, Err(NubeError::VersionDesactualizada)));
     }
@@ -326,7 +411,7 @@ mod tests {
              Connection: close\r\n\r\n{\"error\":\"boom\"}",
         );
 
-        let resultado = autenticar_dispositivo(&base_url, "secreto", None);
+        let resultado = canjear(&base_url);
 
         assert!(matches!(resultado, Err(NubeError::Red(_))));
     }
@@ -338,7 +423,7 @@ mod tests {
              Connection: close\r\n\r\nesto no es json",
         );
 
-        let resultado = autenticar_dispositivo(&base_url, "secreto", None);
+        let resultado = canjear(&base_url);
 
         assert!(matches!(resultado, Err(NubeError::Red(_))));
     }

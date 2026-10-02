@@ -13,9 +13,8 @@ type ValoresCambioPassword = z.infer<typeof esquemaCambioPassword>;
  * la barra de estado (pedido del usuario 2026-09-23). Mismo comando que el
  * cambio obligatorio del primer login (`PasoCambioObligatorio` en
  * Login.tsx): `cambiar_password_supabase` revalida la actual contra
- * Supabase y refresca el caché de login offline con la nueva. No usa
- * `cambiarMiPassword` (sólo toca el hash local): con un usuario global la
- * contraseña local y la de Supabase quedarían distintas.
+ * Supabase y refresca el caché de login offline con la nueva. El escritorio
+ * es el único lugar donde se cambia una contraseña (el celular no lo hace).
  */
 export default function CambiarPasswordModal({ onCerrar }: { onCerrar: () => void }) {
   const {

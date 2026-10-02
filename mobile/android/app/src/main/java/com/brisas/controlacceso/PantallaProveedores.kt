@@ -76,12 +76,11 @@ private fun FilaProveedorActiva.coincideCon(busqueda: String): Boolean = when (t
 @Composable
 fun PantallaProveedores(
     nucleo: Nucleo,
-    secretoStore: SecretoDispositivoStore,
     refrescarNube: Int = 0,
 ) {
     RegistrarPantalla("proveedores")
     val viewModel: ProveedoresViewModel =
-        viewModel(factory = ProveedoresViewModel.factory(nucleo, secretoStore))
+        viewModel(factory = ProveedoresViewModel.factory(nucleo))
     // Sin esto, un cambio que llega de OTRO dispositivo (pulso periódico o
     // aviso Realtime) actualiza la caché local (`ingresos_proveedor_remotos`)
     // pero esta pantalla nunca se entera -- mismo criterio que

@@ -224,6 +224,26 @@ input {
   font-size: 0.8rem;
 }
 
+/* Unidad y etiqueta del equipo bajo el título del login: sirve para notar
+   un equipo registrado en la unidad equivocada (ver IdentidadEquipo.tsx). */
+.login-identidad-equipo {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Mismo dato en la barra de estado: texto plano, atenuado, sin truncar el
+   resto de la barra. */
+.barra-identidad-equipo {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 22rem;
+}
+
 /* Ítem del sidebar de navegación (App.tsx) — mismo lenguaje de hover/foco
    nítido que .boton, pero de ancho completo y sin borde (no es un botón de
    acción, es un item de lista). El estado activo lo decide React con

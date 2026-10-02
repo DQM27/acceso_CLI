@@ -45,7 +45,6 @@ private fun FilaProveedorActiva.cedula(): String = when (this) {
 /// ver `docs/features-futuras/plan-control-proveedores.md`).
 class ProveedoresViewModel(
     private val nucleo: Nucleo,
-    private val secretoStore: SecretoDispositivoStore,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var activos by mutableStateOf<List<FilaProveedorActiva>>(emptyList())
@@ -71,7 +70,7 @@ class ProveedoresViewModel(
     // dispositivo), quien opera se entera antes de llenar el resto. La
     // regla y el texto son del núcleo
     // (`Nucleo.avisoProveedorConIngresoActivo`); al registrar,
-    // `registrarIngresoProveedorConSecreto` la vuelve a aplicar.
+    // `registrarIngresoProveedorVerificado` la vuelve a aplicar.
     var cedulaConIngresoActivo by mutableStateOf(false)
         private set
     private var avisoCedulaActiva: String? = null
@@ -222,15 +221,12 @@ class ProveedoresViewModel(
                     // Todas las reglas (cédula activa aquí o en otro sitio,
                     // gafete en uso en el otro dispositivo) las aplica el
                     // núcleo en esta misma llamada.
-                    val secreto = secretoStore.cargar()
-                        ?: throw SecretoDispositivoNoEncontradoException()
-                    medirNucleo("registrarIngresoProveedorConSecreto") { nucleo.registrarIngresoProveedorConSecreto(
+                    medirNucleo("registrarIngresoProveedorVerificado") { nucleo.registrarIngresoProveedorVerificado(
                         cedula,
                         nombre,
                         empresa.id,
                         placa.trim().ifBlank { null },
                         gafeteNumero,
-                        secreto,
                     ) }
                 }
                 CambiosNube.cambioLocal()
@@ -280,11 +276,8 @@ class ProveedoresViewModel(
                 withContext(dispatcherIO) {
                     when (fila) {
                         is FilaProveedorActiva.Local -> medirNucleo("registrarSalidaProveedor") { nucleo.registrarSalidaProveedor(fila.registro.id) }
-                        is FilaProveedorActiva.Remota -> {
-                            val secreto = secretoStore.cargar()
-                                ?: throw SecretoDispositivoNoEncontradoException()
-                            medirNucleo("cerrarIngresoProveedorRemotoConSecreto") { nucleo.cerrarIngresoProveedorRemotoConSecreto(secreto, fila.remoto.uuid) }
-                        }
+                        is FilaProveedorActiva.Remota ->
+                            medirNucleo("cerrarIngresoProveedorRemoto") { nucleo.cerrarIngresoProveedorRemoto(fila.remoto.uuid) }
                     }
                 }
                 CambiosNube.cambioLocal()
@@ -296,11 +289,8 @@ class ProveedoresViewModel(
     }
 
     companion object {
-        fun factory(
-            nucleo: Nucleo,
-            secretoStore: SecretoDispositivoStore,
-        ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ProveedoresViewModel(nucleo, secretoStore) }
+        fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
+            initializer { ProveedoresViewModel(nucleo) }
         }
     }
 }

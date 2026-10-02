@@ -19,11 +19,11 @@ const ESPERA_MAXIMA_CHEQUEO_OTRO_SITIO: std::time::Duration = std::time::Duratio
 /// visitas -- misma idea: un visitante no puede estar activo en dos sitios
 /// a la vez, mismo criterio que un contratista.
 fn chequear_visitante_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Option<String> {
-    let secreto = nube::credenciales::cargar_secreto()?;
-    let token = state.autenticar_con_cache(&secreto).ok()?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
+    if !state.nube_vinculada() {
+        return None;
     }
+    let token = state.autenticar_con_cache().ok()?;
+    state.core().aplicar_token(&token);
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
         apikey: nube::apikey(),
@@ -39,16 +39,16 @@ fn chequear_visitante_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Op
 /// Espejo de `comandos::ingresos::gafete_libre_en_otro_dispositivo`, pero
 /// contra `movimientos_visita` -- mismo criterio: dos dispositivos del
 /// mismo sitio comparten el mismo rango de gafetes físicos de visita, cada
-/// uno sólo valida contra su propia base `SQLite`. Sin secreto guardado
+/// uno sólo valida contra su propia base `SQLite`. Sin vincular
 /// (dispositivo sin nube configurada) no hay con quién chocar, se salta sin
 /// tocar la red -- `Ok(true)` ("libre") directo.
 fn gafete_de_visita_libre_en_otro_dispositivo(
     state: &GuiState,
     numero: i64,
 ) -> Result<bool, String> {
-    let Some(secreto) = nube::credenciales::cargar_secreto() else {
+    if !state.nube_vinculada() {
         return Ok(true);
-    };
+    }
     let actor = state.sesion_activa()?;
     state
         .core()
@@ -56,11 +56,9 @@ fn gafete_de_visita_libre_en_otro_dispositivo(
         .map_err(control_acceso::mensajes::mensaje_gestion_nube)?;
 
     let token = state
-        .autenticar_con_cache(&secreto)
+        .autenticar_con_cache()
         .map_err(control_acceso::mensajes::mensaje_nube)?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
+    state.core().aplicar_token(&token);
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
         apikey: nube::apikey(),

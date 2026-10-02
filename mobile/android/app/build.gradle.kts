@@ -36,8 +36,8 @@ android {
         // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "1.3.1"
+        versionCode = 22
+        versionName = "1.4.0"
 
         // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
         // el default acá es "development" (debug); `release {}` abajo lo
@@ -113,6 +113,14 @@ android {
             buildConfigField("boolean", "TELEMETRIA", "true")
             manifestPlaceholders["sentryEnvironment"] = "diagnostico"
         }
+    }
+
+    // Los builds de prueba (debug y diagnostico) llevan el icono con la cinta
+    // TEST (`src/beta/res`, generado por `scripts/generar_iconos_beta.py`):
+    // junto a la app real en el mismo teléfono se distinguen a simple vista.
+    sourceSets {
+        getByName("debug").res.srcDir("src/beta/res")
+        getByName("diagnostico").res.srcDir("src/beta/res")
     }
 
     compileOptions {

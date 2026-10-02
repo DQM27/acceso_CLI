@@ -67,6 +67,7 @@ import PrimerArranque from "./pantallas/PrimerArranque";
 import {
   buscarActualizacion,
   cerrarSesion,
+  descartarTokenNube,
   instalarActualizacion,
   mostrarVentanaPrincipal,
   requiereConfiguracionInicial,
@@ -74,8 +75,10 @@ import {
 } from "./api";
 import type { ResumenSincronizacion, Update, UsuarioSesion } from "./api";
 import { EVENTO_CAMBIO_EN_VIVO } from "./eventosNube";
+import { MENSAJE_EXPULSION, MENSAJE_SESION_EN_OTRA_UNIDAD } from "./expulsionNube";
 import { emitirActualizacion, iniciarRealtimeNube } from "./nubeRealtime";
 import { registrarPantalla } from "./telemetria";
+import { mensajeConflictoGafete } from "./conflictoGafete";
 import { textoHora } from "./tiempo";
 import { SesionProvider } from "./contexto/SesionContexto";
 import {
@@ -320,8 +323,9 @@ export type Seccion =
  * No hay una sección "Usuarios": administrar usuarios globales (alta,
  * edición, reset de contraseña de otro usuario) quedó exclusivo del panel
  * administrativo web (ver docs/planes-implementados/plan-autenticacion-supabase-auth.md) — el
- * escritorio ya no origina cambios contra esa tabla, salvo que la propia
- * sesión cambie su propia contraseña (`cambiarMiPassword`). */
+ * escritorio ya no origina cambios contra esa tabla. La contraseña propia
+ * se cambia desde el menú de usuario (`CambiarPasswordModal`), en Supabase
+ * Auth: el escritorio es el único lugar donde se cambia. */
 const TODAS_LAS_SECCIONES: {
   id: Seccion;
   etiqueta: string;
@@ -521,7 +525,11 @@ function Shell({
   // pantallas de una sesión que ya no existe.
   function manejarResumenSincronizacion(resumen: ResumenSincronizacion): boolean {
     if (resumen.sesion_expulsada) {
-      toast.error("Tu usuario fue desactivado — se cerró la sesión.");
+      toast.error(
+        resumen.sesion_en_otra_unidad
+          ? MENSAJE_SESION_EN_OTRA_UNIDAD
+          : "Tu usuario fue desactivado — se cerró la sesión.",
+      );
       onCerrarSesion();
       return true;
     }
@@ -561,9 +569,7 @@ function Shell({
     // una vuelta aparte si hace falta, una vez visto el comportamiento
     // real.
     for (const conflicto of resumen.conflictos_gafete) {
-      toast.warning(
-        `El ingreso de ${conflicto.contratista_nombre} con gafete ${conflicto.gafete_numero} (${textoHora(conflicto.fecha_hora_ingreso)}) no quedó registrado en la nube — otro dispositivo de este sitio ya lo tiene asignado.`,
-      );
+      toast.warning(mensajeConflictoGafete(conflicto, textoHora(conflicto.fecha_hora)));
     }
     return false;
   }
@@ -590,6 +596,13 @@ function Shell({
     const cancelarRealtime = iniciarRealtimeNube({
       onSincronizado: (resumen) => alSincronizarNube(resumen, false),
       onEstado: setEstadoConexionNube,
+      // Este equipo fue retirado en el panel (ver `expulsionNube.ts`): el
+      // token cacheado no sirve más. El trabajo local sigue disponible; el
+      // aviso queda fijo hasta que alguien lo cierre.
+      onExpulsado: () => {
+        void descartarTokenNube();
+        toast.error(MENSAJE_EXPULSION, { duration: Infinity, closeButton: true });
+      },
       usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
     });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
@@ -610,10 +623,9 @@ function Shell({
 
   // Botón "Sincronizar" de la barra de estado (`BarraNube.tsx`) — visible
   // para cualquier rol activo, ver su doc-comment. `sincronizar_con_nube`
-  // ya falla con un mensaje claro (`GestionNubeError::SinSecreto`) si este
-  // dispositivo todavía no tiene el secreto configurado, así que no hace
-  // falta ocultar el botón para quien no puede configurarlo (eso sigue
-  // siendo exclusivo de ROOT en la pantalla Nube).
+  // ya falla con un mensaje claro si este equipo todavía no está vinculado,
+  // así que no hace falta ocultar el botón para quien no puede vincularlo
+  // (eso es exclusivo de ROOT, en el menú de usuario).
   async function sincronizarManualmente() {
     setSincronizandoManual(true);
     try {

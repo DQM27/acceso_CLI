@@ -3,13 +3,12 @@ import { solicitarSincronizacionNube } from "../eventosNube";
 import type { MedioIngreso } from "./ingresos";
 import type { TipoIngreso } from "./contratistas";
 
-// Espejo de comandos/nube.rs. El secreto de este dispositivo se configura
-// una sola vez, durante el arranque inicial (`configurarDispositivoInicial`)
-// -- no hay una pantalla aparte para tocarlo desde una sesión ya abierta
-// (ver docs/decisiones-tecnicas.md). El resto (sincronizar, listar, cerrar)
-// es de cualquier sesión activa -- uso diario normal, no administración --
-// por eso el botón "Sincronizar" vive en la barra de estado
-// (`BarraNube.tsx`), visible siempre.
+// Espejo de comandos/nube.rs. Este equipo se vincula a la nube una sola vez,
+// canjeando un código del panel en el arranque inicial
+// (`vincularDispositivoInicial`). El resto (sincronizar, listar, cerrar) es de cualquier sesión
+// activa -- uso diario normal, no administración -- por eso el botón
+// "Sincronizar" vive en la barra de estado (`BarraNube.tsx`), visible
+// siempre.
 
 export interface ResumenSincronizacion {
   enviados: number;
@@ -41,6 +40,10 @@ export interface ResumenSincronizacion {
    * (ver `App.tsx`, donde ya se cerró del lado de Rust; esto es sólo para
    * que la UI reaccione). */
   sesion_expulsada: boolean;
+  /** `true` si la sesión se cerró porque el usuario inició sesión en otra
+   * unidad (sesión única por unidad); `sesion_expulsada` también es `true`.
+   * Sólo cambia el aviso. */
+  sesion_en_otra_unidad: boolean;
   /** Ingresos que quedaron activos en este dispositivo pero que la nube
    * dice que TAMBIÉN están activos en otro sitio (`docs/pendientes.md`,
    * "alertar luego al sincronizar") -- mejor esfuerzo, vacío si el chequeo
@@ -80,10 +83,16 @@ export interface ConflictoIngresoProveedorActivo {
   sitio_conflicto: string;
 }
 
+/** Qué movimiento entregó el gafete en conflicto (`nube::TipoMovimientoGafete`). */
+export type TipoMovimientoGafete = "contratista" | "proveedor" | "provisional_kof";
+
 export interface ConflictoGafeteActivo {
-  contratista_nombre: string;
+  tipo: TipoMovimientoGafete;
+  /** Contratista, proveedor o encargado de ruta (KOF). */
+  nombre: string;
   gafete_numero: number;
-  fecha_hora_ingreso: string;
+  /** Hora de entrada, o de entrega en KOF. */
+  fecha_hora: string;
 }
 
 export interface SesionRealtimeNube {
@@ -163,11 +172,17 @@ export function medioIngresoDesdeNube(valor: string | null): MedioIngreso | null
 }
 
 /** Sólo tiene sentido con la base vacía (`requiereConfiguracionInicial`) --
- * ver `App.tsx`, pantalla "arranque". Guarda el secreto y trae el catálogo
- * remoto (usuarios incluidos) en el mismo paso, sin sesión: no hay con
- * quién loguearse todavía. */
-export function configurarDispositivoInicial(secreto: string): Promise<ResumenSincronizacion> {
-  return invoke("configurar_dispositivo_inicial", { secreto });
+ * ver `App.tsx`, pantalla "arranque". Canjea el código de vinculación del
+ * panel y trae el catálogo remoto (usuarios incluidos) en el mismo paso,
+ * sin sesión: no hay con quién loguearse todavía. */
+export function vincularDispositivoInicial(codigo: string): Promise<ResumenSincronizacion> {
+  return invoke("vincular_dispositivo_inicial", { codigo });
+}
+
+/** Descarta el token cacheado tras un aviso `dispositivo_expulsado`: la
+ * próxima operación de nube pide uno nuevo y muestra el motivo real. */
+export function descartarTokenNube(): Promise<void> {
+  return invoke("descartar_token_nube");
 }
 
 export function sincronizarConNube(): Promise<ResumenSincronizacion> {
@@ -237,4 +252,16 @@ export function fallosPermanentesNube(): Promise<number> {
  * telemetría de diagnóstico (latencia de los avisos en vivo). */
 export function desfaseRelojMs(): Promise<number | null> {
   return invoke<number | null>("desfase_reloj_ms");
+}
+
+/** Unidad y etiqueta con que el panel registró esta PC (ver
+ * `comandos::nube::identidad_equipo`). `null` mientras no hayan llegado de
+ * la nube. */
+export interface IdentidadEquipo {
+  unidad: string | null;
+  etiqueta: string | null;
+}
+
+export function obtenerIdentidadEquipo(): Promise<IdentidadEquipo> {
+  return invoke<IdentidadEquipo>("identidad_equipo");
 }

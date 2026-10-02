@@ -44,7 +44,9 @@ almacén primario del día a día.
 | Tabla | Qué guarda | Nota clave |
 | --- | --- | --- |
 | `sitios` | Cada ubicación física (ej. "Brisas") | Poquísimas filas, cambia rarísima vez |
-| `dispositivos` | Cada PC/celular/visor autorizado, con su `secret_hash` | El secreto es lo único que un dispositivo necesita para autenticarse — ver sección 4 |
+| `dispositivos` | Cada PC/celular/visor autorizado, con la clave pública de su equipo (`clave_publica_jwk`, `clave_huella`) | Sin `clave_huella` el dispositivo está "sin vincular" y ningún token suyo sirve — ver 3.1 |
+| `codigos_vinculacion` | Códigos de un solo uso que emite el panel para vincular un equipo | Sólo se guarda el SHA-256; sin políticas para clientes (lo usan las Edge Functions con `service_role`) |
+| `eventos_seguridad_dispositivos` | Intentos rechazados y alertas (código inválido/vencido/usado, firma inválida, hardware distinto) | Lo lee el panel vía `admin-list-devices`; sin políticas para clientes |
 | `contratistas` | Catálogo de personas autorizadas a entrar | **Global**, no por sitio (ver 3.2) |
 | `empresas` | Catálogo de empresas contratistas | También global |
 | `gafetes` | Inventario físico de gafetes por sitio | Sí es estrictamente por sitio, sin excepción |
@@ -80,13 +82,34 @@ Este es el punto que más confunde a quien lee el código por primera vez:
 
 ### 3.1 Identidad de dispositivo (el modelo original, "kiosco")
 
-Cuando un dispositivo se activa, llama a la Edge Function `device-auth` con
-su `secret_hash`. Si es válido, esa función firma un JWT propio (ES256, con
-`DEVICE_SIGNING_KEY`) con estos claims:
+Desde 2026-09-30 (ver `docs/features-futuras/propuesta-registro-dispositivos.md`
+y `docs/handoff-registro-dispositivos.md`), cada equipo tiene su propio par
+de claves EC P-256; la privada nunca sale del equipo (DPAPI en escritorio,
+Android Keystore en el teléfono). No existe ningún secreto compartido.
+
+1. **Vincular**: el panel emite un código de un solo uso (y su QR). El
+   equipo lo canjea en `device-vincular` mandando su clave pública; el
+   canje es atómico (`canjear_codigo_vinculacion`) y ata la clave al
+   dispositivo.
+2. **Autenticar**: el equipo pide un desafío a `device-auth`, lo firma con
+   su clave (JWS ES256, `kid` = huella RFC 7638) y lo devuelve. Si la firma
+   es válida, `device-auth` firma un JWT propio (ES256, con
+   `DEVICE_SIGNING_KEY`, 1 h) con estos claims:
 
 ```json
-{ "role": "authenticated", "sub": "<id del dispositivo>", "sitio_id": "<uuid del sitio>", "tipo": "pc | mobile | visor" }
+{ "role": "authenticated", "sub": "<id del dispositivo>", "sitio_id": "<uuid del sitio>", "tipo": "pc | mobile | visor", "huella": "<huella de la clave>" }
 ```
+
+**Revocación efectiva (invariante):** todas las tablas de `public` con RLS
+tienen además la política RESTRICTIVA `solo dispositivos vigentes`
+(`private.dispositivo_vigente()`): un JWT con `sitio_id` sólo pasa si su
+dispositivo existe, no está retirado (`revoked_at`), y la `huella` del
+token es la de su clave vigente. Retirar un dispositivo corta al instante
+incluso un token ya emitido, y avisa al equipo por Realtime
+(`dispositivo_expulsado` en `sitio:<id>`). Las sesiones humanas (sin
+`sitio_id`) no se ven afectadas. **Toda tabla nueva con RLS debe llevar
+esta política** (la migración `20260929200000_revocacion_efectiva_dispositivos`
+la creó en un loop sobre las existentes; las futuras la agregan a mano).
 
 Este JWT **no pasa por Supabase Auth** — es un token que la app arma y firma
 ella misma, y Postgres lo valida igual porque comparte la clave pública de
@@ -270,18 +293,20 @@ cualquiera (para el panel de presencia en tiempo real del panel web).
 
 ## 5. Edge Functions
 
-Todas (salvo `device-auth`) exigen una sesión de Supabase Auth válida cuyo
-correo esté en `administradores_panel` (`correoAdminAutorizado`, reemplazo
-de un viejo `x-admin-key` compartido).
+Todas (salvo `device-auth` y `device-vincular`) exigen una sesión de
+Supabase Auth válida cuyo correo esté en `administradores_panel`
+(`correoAdminAutorizado` en `_shared/admin.ts`, reemplazo de un viejo
+`x-admin-key` compartido). El código común vive en
+`supabase/functions/_shared/` (`http.ts`, `admin.ts`, `dispositivos.ts`).
 
 | Función | Qué hace | Nota |
 | --- | --- | --- |
-| `device-auth` | Autentica un dispositivo por `secret_hash`, firma su JWT | Único endpoint público sin auth de admin |
-| `admin-provision-device` | Da de alta un dispositivo nuevo, genera su secreto | El secreto se devuelve una sola vez, en texto plano |
+| `device-vincular` | Canjea un código de vinculación y ata la clave pública del equipo | Pública (`verify_jwt = false`); todo rechazo responde igual y queda en `eventos_seguridad_dispositivos` |
+| `device-auth` | Desafío + aserción firmada por el equipo → JWT del dispositivo | Pública (`verify_jwt = false`) |
+| `admin-provision-device` | Da de alta un dispositivo nuevo (por `sitio_id`) y emite su código de vinculación | El código vale 15 min por defecto (5–1440) y un solo uso |
 | `admin-create-site` | Da de alta un sitio | |
-| `admin-list-devices` | Lista dispositivos | |
-| `admin-revoke-device` | Baja permanente de un dispositivo | |
-| `admin-suspend-device` | Baja temporal (`suspended_at`) | Distinto de revocar — se puede reactivar |
+| `admin-list-devices` | Sitios, dispositivos (con `credencial`: `clave`/`sin_vincular`), códigos pendientes y eventos de seguridad | |
+| `admin-revoke-device` | "Retirar": baja definitiva de un dispositivo | Anula también sus códigos pendientes. No hay suspensión ni re-vinculación: un equipo reinstalado se registra como dispositivo nuevo |
 | `admin-delete-device` | Borra un dispositivo, o lo oculta si tiene historial (FK) | |
 | `admin-create-usuario` | Crea un `usuarios` + su cuenta en Supabase Auth | Correo sintético `<cedula>@brisas.local`, contraseña temporal — este es el reemplazo de "crear usuario desde la app" |
 | `admin-reset-password-usuario` | Resetea la contraseña de un `usuarios` | Cubre también el backfill de usuarios viejos sin `auth_user_id` |

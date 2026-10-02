@@ -61,26 +61,22 @@ impl Nucleo {
     /// Ingreso de proveedor con todas sus reglas en una sola llamada; el
     /// orden y qué falla frena los decide
     /// `application::registrar_ingreso_proveedor_verificado`, la misma que
-    /// usa escritorio. `secreto` vacío se salta los chequeos de nube.
-    pub fn registrar_ingreso_proveedor_con_secreto(
+    /// usa escritorio. Sin vincular se salta los chequeos de nube.
+    pub fn registrar_ingreso_proveedor_verificado(
         &self,
         cedula: String,
         nombre: String,
         empresa_id: i64,
         placa: Option<String>,
         gafete_numero: i64,
-        secreto: String,
     ) -> Result<i64, NucleoError> {
         use control_acceso::application::{
-            IngresoProveedorVerificadoError, NubeDelDispositivo, NuevoIngresoProveedor,
+            IngresoProveedorVerificadoError, NuevoIngresoProveedor,
             registrar_ingreso_proveedor_verificado,
         };
 
         let actor = self.actor_autenticado()?;
-        let nube = NubeDelDispositivo {
-            cache_token: &self.cache_token,
-            secreto: Some(secreto.as_str()),
-        };
+        let nube = &self.cache_token;
         let datos = NuevoIngresoProveedor {
             cedula,
             nombre,

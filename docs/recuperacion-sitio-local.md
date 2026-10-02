@@ -15,22 +15,26 @@ y `nube::credenciales::directorio_default`):
 
 - `control_acceso.db` -- la base en sí.
 - `db_key.dat` -- la clave de `SQLCipher`, protegida con DPAPI.
-- `dispositivo-nube.secret` -- el secreto que autentica a ESTE dispositivo
-  contra Supabase (`device-auth`), también protegido con DPAPI.
+- `dispositivo-nube.clave` -- la clave privada que identifica a ESTE
+  equipo ante Supabase (`device-auth`, ver `nube::firmante`), también
+  protegida con DPAPI. (Antes de 2026-09-30 era `dispositivo-nube.secret`,
+  un secreto compartido; se retiró.)
 
-**Esto significa que un evento que destruye el `.db` (disco muerto, perfil
-de Windows corrupto, reinstalación que borra la carpeta) casi siempre
-destruye también el secreto de dispositivo.** La recuperación NO es
-"reinstalar y que se sincronice solo" -- ese dispositivo ya no tiene forma
-de autenticarse como sí mismo. Hay que tratarlo como si fuera un
-dispositivo nuevo, con el flujo normal de aprovisionamiento.
+> Nota: desde 2026-09-18 `db_key.dat` y la clave del dispositivo viven en
+> `%APPDATA%\ControlAcceso`, separadas de la base (ver la sección de
+> abajo); el párrafo anterior describe el diseño original.
 
-Esto es una propiedad buena, no un defecto a corregir: significa que
-**no existe ningún atajo de recuperación que evite pasar por
-`admin-provision-device`** -- la restauración de un sitio usa exactamente
-la misma puerta de entrada, con la misma autorización de administrador,
-que dar de alta un dispositivo nuevo desde cero. No hay un camino más
-débil escondido para el caso de emergencia.
+**Un evento que destruye el `.db` y también `%APPDATA%` (disco muerto,
+perfil de Windows corrupto, reinstalación completa) se lleva la clave del
+dispositivo.** La recuperación NO es "reinstalar y que se sincronice
+solo": ese equipo ya no puede autenticarse como sí mismo. Se registra
+como dispositivo nuevo con un código del panel y el anterior se retira.
+
+Esto es una propiedad buena, no un defecto a corregir: **no existe ningún
+atajo de recuperación que evite pasar por el panel** -- la restauración
+usa la misma puerta de entrada, con la misma autorización de
+administrador, que vincular un equipo nuevo. No hay un camino más débil
+escondido para el caso de emergencia.
 
 ## Detección y cuarentena automáticas (escritorio, 2026-09-18)
 
@@ -50,17 +54,18 @@ fallan al arrancar, la app:
 4. Reintenta abrir una vez más. Como ya no quedan `control_acceso.db` ni
    `db_key.dat`, esto crea una base nueva y una clave nueva, exactamente el
    mismo camino que un sitio nunca activado -- de ahí en adelante sigue el
-   flujo normal de "requiere configuración inicial" (activar con secreto de
-   dispositivo, pantalla ya existente, sin código nuevo).
+   flujo normal de "requiere configuración inicial" (vincular con un
+   código del panel, pantalla ya existente).
 5. Si el usuario dice que no, o si el reintento del paso 4 también falla,
    se muestra el error fatal de siempre (mismo mensaje/log/Sentry que
    cualquier otro fallo de arranque).
 
-El secreto de dispositivo (`dispositivo-nube.secret`) NO se toca en este
-proceso -- sigue en `%APPDATA%`, separado desde el fix de arriba. En el
-caso más común (se corrompió sólo la base, no todo el perfil), el
-dispositivo puede reactivarse con su secreto de siempre en la pantalla de
-configuración inicial, sin que un administrador tenga que intervenir.
+La clave del dispositivo (`dispositivo-nube.clave`) NO se toca en este
+proceso -- sigue en `%APPDATA%`, separada de la base. Aun así, la pantalla
+de configuración inicial pide un código: el administrador registra un
+dispositivo nuevo en el mismo sitio y retira el anterior; el equipo
+canjea el código generando una clave nueva (una clave ya vinculada nunca
+se ata a otro dispositivo).
 
 Implementación: `desktop/src-tauri/src/recuperacion_local.rs` (cuarentena +
 borrado, con tests) y `desktop/src-tauri/src/lib.rs`
@@ -68,24 +73,20 @@ borrado, con tests) y `desktop/src-tauri/src/lib.rs`
 
 ## Procedimiento (manual, si el diálogo automático no aplica)
 
-1. **Si el dispositivo viejo todavía es alcanzable de algún modo** (ej. el
-   disco murió pero se pudo copiar el secreto antes), revocarlo con
-   `admin-revoke-device` -- higiene, no es estrictamente necesario para que
-   el nuevo funcione, pero evita dejar un `dispositivo_id` fantasma
-   habilitado en la tabla de dispositivos.
-2. **Aprovisionar un secreto nuevo** para el mismo sitio, vía
-   `admin-provision-device` (mismo `sitio_nombre` que ya existe -- la
-   función hace `upsert` por nombre, así que resuelve al `sitio_id` que ya
-   tenía toda la historia, no crea un sitio duplicado). Esto es una acción
-   de administrador, igual que activar cualquier PC/teléfono nuevo.
+1. **En el panel, registrar un dispositivo nuevo** en el mismo sitio
+   (Dispositivos → Registrar, `admin-provision-device`): emite un código
+   de un solo uso.
+2. **Retirar el dispositivo anterior** (Dispositivos → Retirar,
+   `admin-revoke-device`): su clave y cualquier token ya emitido dejan de
+   servir en el acto (si el equipo viejo sigue existiendo en otro lado,
+   queda afuera).
 3. **Reinstalar la app** (o dejar que arranque en una máquina/perfil
-   limpio) y activarla con el secreto nuevo del paso 2
-   (`configurar_dispositivo_inicial`).
+   limpio) y vincularla con ese código (`vincular_dispositivo_inicial`).
 4. Con eso:
    - **Inmediato:** el catálogo completo del sitio -- empresas,
      contratistas, gafetes, rutas, vehículos, encargados
      (`recibir_catalogo_del_sitio`/`recibir_catalogo_rutas_del_sitio`, ver
-     `application::nube::AppCore::configurar_dispositivo_inicial`).
+     `application::nube::AppCore::vincular_dispositivo_inicial`).
    - **Dentro de los próximos ~2 minutos**, sin que nadie tenga que hacer
      nada: la sincronización automática en segundo plano
      (`iniciar_sincronizacion_automatica`, cada

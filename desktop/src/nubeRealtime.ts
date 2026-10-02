@@ -9,6 +9,7 @@ import {
   sincronizarConNube,
 } from "./api/nube";
 import type { ResumenSincronizacion } from "./api/nube";
+import { esCierreDeEstaSesion, esExpulsionDeEsteEquipo } from "./expulsionNube";
 import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
 import { realtimeTelemetria, telemetriaActiva } from "./telemetria";
 import { latenciaDesde, tipoDeError } from "./telemetriaCalculos";
@@ -28,6 +29,9 @@ export type EstadoCanalRealtime = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" |
 interface OpcionesRealtimeNube {
   onSincronizado?: (resumen: ResumenSincronizacion) => void;
   onEstado?: (estado: EstadoCanalRealtime) => void;
+  /** Este equipo fue retirado en el panel (ver `expulsionNube.ts`). El
+   * canal en vivo ya se detuvo para siempre. */
+  onExpulsado?: () => void;
   // Quién tiene la sesión abierta en esta PC ahora -- viaja en el mismo
   // `track()` que ya marca el dispositivo como presente, para que el panel
   // pueda mostrar "usuarios en línea y desde dónde" (ver
@@ -270,6 +274,23 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
           }
           programarSincronizacion(tabla);
         })
+        .on("broadcast", { event: "sesion_cerrada" }, ({ payload }) => {
+          if (cancelado || cliente !== clienteActual) return;
+          // El usuario de este equipo entró en otra unidad. La sincronización
+          // pregunta a la nube si esta sesión sigue vigente y, si no, la
+          // cierra (ver `ResumenSincronizacion::sesion_en_otra_unidad`).
+          if (esCierreDeEstaSesion(payload, opciones.usuario?.cedula)) programarSincronizacion();
+        })
+        .on("broadcast", { event: "dispositivo_expulsado" }, ({ payload }) => {
+          if (cancelado || cliente !== clienteActual) return;
+          if (!esExpulsionDeEsteEquipo(payload, sesion.dispositivo_id)) return;
+          // El retiro es definitivo: el servidor ya no autoriza este canal
+          // ni emite tokens para este equipo, así que se deja de escuchar
+          // el sitio y no se reintenta la conexión.
+          anotarFinDeConexion("expulsado");
+          detener();
+          opciones.onExpulsado?.();
+        })
         .subscribe((estado, error) => {
           if (cancelado || cliente !== clienteActual) return;
           opciones.onEstado?.(estado);
@@ -317,10 +338,12 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
   window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, alCambioLocal);
   void conectar();
 
-  return () => {
+  function detener() {
     cancelado = true;
     window.removeEventListener(EVENTO_CAMBIO_LOCAL_NUBE, alCambioLocal);
     if (temporizadorSincronizar) window.clearTimeout(temporizadorSincronizar);
     limpiarCanal();
-  };
+  }
+
+  return detener;
 }

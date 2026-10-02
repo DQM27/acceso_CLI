@@ -1,5 +1,5 @@
-//! `GestionarNube` (configurar el secreto del dispositivo, hoy dormido --
-//! ver el doc-comment de `application::nube`) es exclusivo de ROOT;
+//! `GestionarNube` (re-vincular este equipo con un código nuevo) es
+//! exclusivo de ROOT;
 //! `UsarNube` (sincronizar/leer/cerrar ingresos remotos) es de cualquier rol
 //! activo. Este archivo falló el 2026-09-12 porque `autorizar_gestion_nube`
 //! había perdido su chequeo de rol en algún punto sin que nadie lo hubiera
