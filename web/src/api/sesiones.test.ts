@@ -83,6 +83,7 @@ describe("textos", () => {
     expect(textoEstadoSesion({ abierta: false, motivo_cierre: "otra_unidad" })).toBe("Entró en otra unidad");
     expect(textoEstadoSesion({ abierta: false, motivo_cierre: "desplazada" })).toBe("Desplazada por otra unidad");
     expect(textoEstadoSesion({ abierta: false, motivo_cierre: "sin_cierre" })).toBe("Sin cierre registrado");
+    expect(textoEstadoSesion({ abierta: false, motivo_cierre: "equipo_retirado" })).toBe("Equipo retirado");
   });
 
   it("duración en minutos, horas y días", () => {

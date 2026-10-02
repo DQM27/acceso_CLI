@@ -2,7 +2,14 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { clienteServicio, correoAdminAutorizado } from "../_shared/admin.ts";
 import { json, leerCuerpo, preflight, textoOpcional } from "../_shared/http.ts";
 
-// Intenta un borrado definitivo. Las tablas que referencian
+// Primero RETIRA el equipo (si no lo estaba): eliminar le corta el paso
+// para siempre, como retirar, aunque después no se pueda borrar. Antes, un
+// equipo con historial que se "eliminaba" sin retirar sólo quedaba oculto en
+// el panel y SEGUÍA pudiendo conectarse. Al retirarlo, la base cierra sus
+// sesiones en la bitácora (`cerrar_sesiones_al_retirar_equipo`) y le avisa
+// la expulsión en vivo, igual que `admin-revoke-device`.
+//
+// Después intenta un borrado definitivo. Las tablas que referencian
 // dispositivo_origen_id / dispositivo_entrada_id / dispositivo_salida_id
 // (contratistas, empresas, gafetes, usuarios, ingresos) NO tienen ON DELETE
 // CASCADE ("NO ACTION") -- si el dispositivo ya genero historial real,
@@ -22,6 +29,13 @@ Deno.serve(async (req: Request) => {
   const cuerpo = await leerCuerpo(req);
   const dispositivoId = textoOpcional(cuerpo?.dispositivo_id);
   if (!dispositivoId) return json({ error: "bad_request" }, 400);
+
+  const { error: revokeError } = await supabase
+    .from("dispositivos")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", dispositivoId)
+    .is("revoked_at", null);
+  if (revokeError) return json({ error: "revoke_error", detail: revokeError.message }, 500);
 
   const { error: deleteError } = await supabase.from("dispositivos").delete().eq("id", dispositivoId);
   if (!deleteError) return json({ ok: true, borrado: true });

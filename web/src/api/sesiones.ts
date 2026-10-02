@@ -8,7 +8,7 @@ import { inicioDiaCostaRicaUtc, inicioDiaSiguienteCostaRicaUtc } from "../tiempo
  * del cierre. Vista `panel_bitacora_sesiones` (migración
  * `sesion_unica_por_unidad`); la lee sólo el administrador del panel.
  */
-export type MotivoCierre = "salida" | "otra_unidad" | "desplazada" | "sin_cierre";
+export type MotivoCierre = "salida" | "otra_unidad" | "desplazada" | "sin_cierre" | "equipo_retirado";
 
 export interface SesionBitacora {
   id: number;
@@ -31,6 +31,7 @@ export const TEXTO_MOTIVO_CIERRE: Record<MotivoCierre, string> = {
   otra_unidad: "Entró en otra unidad",
   desplazada: "Desplazada por otra unidad",
   sin_cierre: "Sin cierre registrado",
+  equipo_retirado: "Equipo retirado",
 };
 
 /** Estado de la sesión en palabras: "Abierta" o el motivo del cierre. */
@@ -60,7 +61,7 @@ const sesionEsquema = z.object({
   sitio_nombre: z.string().nullable(),
   iniciada_en: z.string(),
   cerrada_en: z.string().nullable(),
-  motivo_cierre: z.enum(["salida", "otra_unidad", "desplazada", "sin_cierre"]).nullable(),
+  motivo_cierre: z.enum(["salida", "otra_unidad", "desplazada", "sin_cierre", "equipo_retirado"]).nullable(),
   ultima_actividad: z.string(),
   abierta: z.boolean(),
 });
