@@ -37,6 +37,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # eslint-plugin-react aún no soporta eslint 10 (ERESOLVE en npm ci).
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
     groups:
       npm-desktop:
         patterns:
@@ -47,6 +51,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # eslint-plugin-react aún no soporta eslint 10 (ERESOLVE en npm ci).
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
     groups:
       npm-web:
         patterns:
