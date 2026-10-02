@@ -281,17 +281,13 @@ fn intentar_sincronizacion(
     // es la que la registra). Si el usuario entró después en otra unidad,
     // esta sesión se cierra. Falla "abierto": un error de red no expulsa.
     let mut sesion_en_otra_unidad = false;
-    if !sesion_expulsada && let Some((actor, iniciada_en)) = state.sesion_con_inicio() {
-        // Lectura breve del candado, antes de la red: el último desfase
-        // medido, que el token de la caché no trae.
-        let desfase_reloj_ms = state.core().desfase_reloj_ms();
+    if !sesion_expulsada && let Some((actor, inicio)) = state.sesion_con_inicio() {
         match nube::sesion_en_unidad(
             nube::base_url(),
             nube::apikey(),
             &token,
             &actor.cedula,
-            iniciada_en,
-            desfase_reloj_ms,
+            &inicio,
         ) {
             Ok(nube::EstadoSesionUnidad::Desplazada) => {
                 state.cerrar_sesion();

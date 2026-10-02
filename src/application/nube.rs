@@ -428,13 +428,18 @@ impl AppCore {
     /// `database::queries::desfase_reloj`) para aplicarlo desde el próximo
     /// arranque, antes de hablar con la nube o si no hay internet.
     pub fn actualizar_desfase_reloj(&self, desfase_ms: i64) {
+        use crate::database::queries::desfase_reloj;
+
         self.reloj.actualizar_desfase_ms(desfase_ms);
-        if let Err(error) =
-            crate::database::queries::desfase_reloj::guardar(&self.connection, desfase_ms)
-        {
-            // La corrección en memoria ya quedó aplicada; sólo se pierde
-            // tenerla lista en el próximo arranque.
+        // La corrección en memoria ya quedó aplicada; si guardar falla sólo
+        // se pierde tenerla lista en el próximo arranque.
+        if let Err(error) = desfase_reloj::guardar(&self.connection, desfase_ms) {
             log::warn!("no se pudo guardar el desfase de reloj medido: {error}");
+        }
+        if let Some(ancla) = self.reloj.ancla()
+            && let Err(error) = desfase_reloj::guardar_ancla(&self.connection, &ancla)
+        {
+            log::warn!("no se pudo guardar el ancla de hora: {error}");
         }
     }
 

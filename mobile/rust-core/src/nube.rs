@@ -466,18 +466,14 @@ impl Nucleo {
         let inicio = self
             .sesion_lock()
             .as_ref()
-            .map(|(_, iniciada_en)| *iniciada_en);
-        if let (false, Some(iniciada_en)) = (sesion_expulsada, inicio) {
-            // El último desfase medido (el token de la caché no lo trae);
-            // el candado se suelta antes de la red.
-            let desfase_reloj_ms = self.core_lock().desfase_reloj_ms();
+            .map(|(_, inicio)| inicio.clone());
+        if let (false, Some(inicio)) = (sesion_expulsada, inicio) {
             match control_acceso::nube::sesion_en_unidad(
                 control_acceso::nube::base_url(),
                 control_acceso::nube::apikey(),
                 &token,
                 &actor.cedula,
-                iniciada_en,
-                desfase_reloj_ms,
+                &inicio,
             ) {
                 Ok(control_acceso::nube::EstadoSesionUnidad::Desplazada) => {
                     *self.sesion_lock() = None;

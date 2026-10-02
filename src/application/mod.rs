@@ -100,17 +100,24 @@ impl AppCore {
         Self::con_reloj(connection, Arc::new(RelojSistema))
     }
 
-    /// Aplica al reloj el último desfase guardado contra la hora del
-    /// servidor (ver `database::queries::desfase_reloj`), para que el equipo
-    /// selle con la hora de internet desde el arranque y no sólo tras la
-    /// primera respuesta de la nube. Sin medición guardada, o con un reloj
-    /// que no se corrige (`RelojSistema`, `RelojFijo`), no cambia nada.
+    /// Aplica al reloj lo último guardado contra la hora del servidor (ver
+    /// `database::queries::desfase_reloj`): el ancla, si sigue siendo de
+    /// este arranque del equipo, y el desfase como respaldo. Así el equipo
+    /// sella con la hora del servidor desde que abre, y no sólo tras la
+    /// primera respuesta de la nube. Con un reloj que no se corrige
+    /// (`RelojSistema`, `RelojFijo`), no cambia nada.
     pub fn con_reloj(connection: Connection, reloj: Arc<dyn Reloj>) -> Self {
-        match crate::database::queries::desfase_reloj::leer(&connection) {
-            Ok(Some(desfase_ms)) => reloj.actualizar_desfase_ms(desfase_ms),
-            Ok(None) => {}
-            Err(error) => log::warn!("no se pudo leer el desfase de reloj guardado: {error}"),
-        }
+        use crate::database::queries::desfase_reloj;
+
+        let desfase = desfase_reloj::leer(&connection).unwrap_or_else(|error| {
+            log::warn!("no se pudo leer el desfase de reloj guardado: {error}");
+            None
+        });
+        let ancla = desfase_reloj::leer_ancla(&connection).unwrap_or_else(|error| {
+            log::warn!("no se pudo leer el ancla de hora guardada: {error}");
+            None
+        });
+        reloj.restaurar(desfase, ancla);
         Self {
             connection,
             reloj,

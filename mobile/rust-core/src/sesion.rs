@@ -107,7 +107,7 @@ impl Nucleo {
             return Err(NucleoError::UsuarioInactivo);
         }
 
-        *self.sesion_lock() = Some((sesion.clone(), chrono::Utc::now()));
+        *self.sesion_lock() = Some((sesion.clone(), control_acceso::nube::InicioSesion::ahora()));
         Ok(sesion.into())
     }
 
@@ -185,7 +185,10 @@ impl Nucleo {
             Err(otro) => return Err(otro.into()),
         };
 
-        *self.sesion_lock() = Some((identidad.clone(), chrono::Utc::now()));
+        *self.sesion_lock() = Some((
+            identidad.clone(),
+            control_acceso::nube::InicioSesion::ahora(),
+        ));
 
         // Best-effort a propósito -- mismo criterio que `login_supabase` en
         // desktop (ver el doc-comment de `AppCore::cachear_password_local`):

@@ -25,6 +25,13 @@ describe("detalle de eventos de seguridad", () => {
     expect(detalleEvento("sesion_en_otra_unidad", detalle)).toBe("OPERADOR UNO (900000301): se cerró su sesión en Brisas");
   });
 
+  it("la sesión en duda dice quién era y en qué otra unidad sigue", () => {
+    const detalle = { cedula: "900000301", nombre: "OPERADOR UNO", sitio_otro: "Brisas" };
+    expect(detalleEvento("sesion_en_duda", detalle)).toBe(
+      "OPERADOR UNO (900000301): sigue también con sesión en Brisas",
+    );
+  });
+
   it("los demás eventos o un detalle malformado no agregan texto", () => {
     expect(detalleEvento("codigo_usado", { cedula: "1" })).toBeNull();
     expect(detalleEvento("sesion_en_otra_unidad", null)).toBeNull();

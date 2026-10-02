@@ -199,11 +199,23 @@ confirmó (rama `feat/sesion-unica-por-unidad`):
 1. Tabla `sesiones_usuario` (usuario, equipo, unidad, hora del ingreso).
    El "candado fantasma" no existe: no se bloquea nada, y una fila vieja se
    reemplaza sola con el próximo ingreso en otra unidad.
-2. `sesion_usuario_en_unidad(cedula, iniciada_en)`: la llaman escritorio y
-   celular en **cada sincronización**, incluida la que sigue al login
-   (`nube::sesion_en_unidad` en el núcleo). Registra la sesión y responde
-   `vigente`, `desplazada` o `sin_usuario`. Con `desplazada` la app cierra
-   la sesión y avisa: "Su usuario inició sesión en otra unidad".
+2. `sesion_usuario_en_unidad(cedula, sesion_id, transcurrido_ms)`: la llaman
+   escritorio y celular en **cada sincronización**, incluida la que sigue al
+   login (`nube::sesion_en_unidad` en el núcleo). Registra la sesión y
+   responde `vigente`, `desplazada` o `sin_usuario`. Con `desplazada` la app
+   cierra la sesión y avisa: "Su usuario inició sesión en otra unidad".
+
+   **La hora del ingreso la pone la nube** (migración
+   `20261002150000_sesion_unica_hora_del_servidor.sql`, 2026-10-02). El
+   equipo no manda su hora: manda cuánto pasó desde el ingreso según su
+   contador de arranque (`reloj_arranque`: no se puede mover y sigue contando
+   con el equipo suspendido) y la nube calcula `now() - transcurrido`. Mismo
+   principio que Kronos (Lyft) y TrustedTime (Google). Cada sesión tiene un
+   `sesion_id` propio (ya no se reconoce por la hora) y un margen de error
+   (5 s de red + 100 ppm de deriva). Sólo gana un ingreso **claramente**
+   posterior; si dos ingresos caen dentro de sus márgenes, no se cierra
+   ninguno y queda el evento `sesion_en_duda` en el panel: ante la duda,
+   nadie queda sin poder operar.
 3. Al desplazar a otra unidad, aviso en vivo `sesion_cerrada` por el canal
    de esa unidad: los equipos cuyo usuario coincide sincronizan al
    instante (decide la nube, no el aviso). Sin Realtime, la sincronización
@@ -220,6 +232,15 @@ confirmó (rama `feat/sesion-unica-por-unidad`):
 
 Un error de red nunca expulsa a nadie (falla "abierto"), igual que el resto
 de los chequeos remotos. La TUI clásica queda fuera, como el resto.
+
+**Hora de los registros** (2026-10-02): el reloj del núcleo
+(`tiempo::RelojCorregido`), que sella ingresos, salidas y auditoría, usa el
+mismo patrón: cada medición contra el servidor fija un ancla (hora del
+servidor + contador de arranque, guardada en la base, migración local 54) y
+la hora es `ancla + tiempo transcurrido en el contador`. Cambiar la hora del
+equipo sin conexión ya no altera los registros. Sin ancla válida (equipo
+reiniciado sin red) vuelve al desfase sobre el reloj del equipo y la hora se
+informa como no confiable (`Reloj::ahora_con_margen`).
 
 ## Orden de implementación
 

@@ -282,8 +282,9 @@ export type TipoEventoSeguridad =
   | "codigo_anulado"
   | "firma_invalida"
   | "hardware_distinto"
-  // Lo escribe la base (`sesion_usuario_en_unidad`), no una Edge Function.
-  | "sesion_en_otra_unidad";
+  // Los escribe la base (`sesion_usuario_en_unidad`), no una Edge Function.
+  | "sesion_en_otra_unidad"
+  | "sesion_en_duda";
 
 export async function registrarEvento(
   supabase: SupabaseClient,

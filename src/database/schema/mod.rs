@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 53;
+pub const SCHEMA_VERSION: i64 = 54;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -411,9 +411,23 @@ fn aplicar_migraciones_posteriores_a_29(
         *version = 52;
     }
 
+    aplicar_migraciones_posteriores_a_52(connection, version)
+}
+
+/// Continuación de `aplicar_migraciones_posteriores_a_29`, por el mismo
+/// motivo (no pasar el límite de líneas de una sola función).
+fn aplicar_migraciones_posteriores_a_52(
+    connection: &Connection,
+    version: &mut i64,
+) -> Result<(), SchemaError> {
     if *version == 52 {
         aplicar_migracion_53(connection)?;
         *version = 53;
+    }
+
+    if *version == 53 {
+        aplicar_migracion_54(connection)?;
+        *version = 54;
     }
 
     Ok(())
@@ -911,6 +925,18 @@ fn aplicar_migracion_53(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_53)?;
     transaction.execute_batch("PRAGMA user_version = 53")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Guarda el ancla del reloj confiable (hora del servidor + contador de
+/// arranque, ver `tiempo::Ancla`), para que al reabrir la app en el mismo
+/// arranque del equipo la hora siga sin depender del reloj de Windows o
+/// Android. `NULL` = sin ancla todavía.
+fn aplicar_migracion_54(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_54)?;
+    transaction.execute_batch("PRAGMA user_version = 54")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1582,3 +1608,5 @@ const MIGRACION_51: &str = include_str!("migraciones/migracion_51.sql");
 const MIGRACION_52: &str = include_str!("migraciones/migracion_52.sql");
 
 const MIGRACION_53: &str = include_str!("migraciones/migracion_53.sql");
+
+const MIGRACION_54: &str = include_str!("migraciones/migracion_54.sql");

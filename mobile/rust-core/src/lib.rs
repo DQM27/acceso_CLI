@@ -69,7 +69,7 @@ pub struct Nucleo {
     /// Con la hora (reloj de este teléfono) en que se abrió la sesión: la
     /// sesión única por unidad la compara con los ingresos en otras
     /// unidades (`nube::sesion_en_unidad`).
-    sesion: Mutex<Option<(UsuarioSesionNucleo, chrono::DateTime<chrono::Utc>)>>,
+    sesion: Mutex<Option<(UsuarioSesionNucleo, control_acceso::nube::InicioSesion)>>,
     /// Caché del último `TokenDispositivo`, deliberadamente FUERA del
     /// `Mutex<AppCore>` de arriba -- ver el doc-comment de
     /// `control_acceso::nube::CacheTokenDispositivo`. Antes de esto,
@@ -335,7 +335,7 @@ impl Nucleo {
     #[allow(clippy::type_complexity)]
     fn sesion_lock(
         &self,
-    ) -> std::sync::MutexGuard<'_, Option<(UsuarioSesionNucleo, chrono::DateTime<chrono::Utc>)>>
+    ) -> std::sync::MutexGuard<'_, Option<(UsuarioSesionNucleo, control_acceso::nube::InicioSesion)>>
     {
         self.sesion
             .lock()

@@ -57,7 +57,8 @@ export type TipoEventoSeguridad =
   | "codigo_anulado"
   | "firma_invalida"
   | "hardware_distinto"
-  | "sesion_en_otra_unidad";
+  | "sesion_en_otra_unidad"
+  | "sesion_en_duda";
 
 export interface EventoSeguridad {
   id: number;

@@ -182,6 +182,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "jsonwebtoken",
+ "libc",
  "log",
  "machine-uid",
  "p256",

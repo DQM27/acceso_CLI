@@ -29,7 +29,9 @@ pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo};
 pub use en_vivo::aplicar_cambio_en_vivo;
 pub use firmante::{ErrorFirmante, FirmanteArchivo, FirmanteDispositivo};
 pub use orquestacion::{PerfilDispositivo, ResumenSincronizacionNube, recibir, sincronizar};
-pub use sesion_unidad::{EstadoSesionUnidad, cerrar_sesion_en_unidad, sesion_en_unidad};
+pub use sesion_unidad::{
+    EstadoSesionUnidad, InicioSesion, cerrar_sesion_en_unidad, sesion_en_unidad,
+};
 pub use sincronizacion::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
     ConflictoMovimientoVisitaActivo, ContextoSincronizacion, IngresoActivoEnLaNube,

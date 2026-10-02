@@ -64,6 +64,12 @@ base64 = { version = "0.22", optional = true }
 machine-uid = { version = "0.6", optional = true }
 sha2 = { version = "0.11", default-features = false, optional = true }
 
+[target.'cfg(unix)'.dependencies]
+# `clock_gettime(CLOCK_BOOTTIME)` para el contador de arranque que no se
+# detiene con el equipo suspendido (ver `reloj_arranque`). Ya estaba en el
+# árbol de dependencias.
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
 # DPAPI (`CryptProtectData`/`CryptUnprotectData`) para proteger la clave
 # privada del dispositivo en disco -- ver `cifrado-secreto-dispositivo` arriba y
