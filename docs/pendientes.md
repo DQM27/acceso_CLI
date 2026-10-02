@@ -108,15 +108,14 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 - [x] **Redactar `Debug` de credenciales de nube.** `TokenDispositivo`
   (`src/nube/cliente.rs`) y `SesionRealtimeNube` (`src/application/nube.rs`) tienen
   `Debug` manual con `access_token`/`apikey` redactados, cubierto por pruebas.
-- [ ] **`cerrar_ingreso_remoto` manda `hora_salida` sin corregir desfase de
-  reloj.** A diferencia de otros caminos, calcula la hora con
-  `chrono::Utc::now()` crudo del dispositivo, no con el reloj corregido
-  contra el servidor. Encontrado en vivo (2026-09-08): una PC con el reloj
-  atrasado no llegó a mandar una hora mala a la nube porque el guardia
-  local (`RelojRetrocedido`) frenó antes, comparando contra el último
-  movimiento local -- pero ese guardia es local, no protege este camino
-  remoto. Sin reproducir todavía; anotado para revisar si vale la pena
-  aplicar la misma corrección de desfase acá.
+- [x] **`cerrar_ingreso_remoto` mandaba `hora_salida` sin corregir desfase de
+  reloj.** Resuelto: quien llama (escritorio y móvil) pasa la hora de
+  `AppCore::ahora_utc`, el reloj corregido con ancla (hora del servidor +
+  contador de arranque). Verificado 2026-10-02. Lo que queda con el reloj
+  crudo del equipo en código de producción es a propósito: medir el desfase
+  contra el servidor (`nube/cliente.rs`, `nube/reloj_preciso.rs`), la
+  implementación del propio reloj (`tiempo.rs`) y marcas de sincronización y
+  retención del historial, que no son registros del usuario.
 - [ ] **Mitigar timing attack en login local.** Si la cédula no existe,
   `AutenticacionService::buscar_candidato` rechaza sin correr Argon2; usar un hash dummy
   reduciría la diferencia de tiempo. Riesgo bajo, pero confirmado.
