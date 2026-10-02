@@ -18,6 +18,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -48,9 +49,10 @@ pub trait FirmanteDispositivo: Send + Sync {
     /// `r || s`, 64 bytes.
     fn firmar(&self, datos: &[u8]) -> Result<Vec<u8>, ErrorFirmante>;
 
-    /// Descarta el par vigente y genera uno nuevo. Se usa antes de canjear
-    /// un código cuando el par anterior ya estaba vinculado (re-vincular):
-    /// cada vinculación estrena clave.
+    /// Descarta el par vigente y genera uno nuevo. Se usa sólo cuando el
+    /// servidor respondió que el par vigente ya pertenece a otro dispositivo
+    /// (ver `CacheTokenDispositivo::vincular`): nunca antes de saber si el
+    /// código sirve.
     fn regenerar(&self) -> Result<(), ErrorFirmante>;
 
     /// `dispositivo_id` al que el servidor ató la clave vigente, o `None` si
@@ -174,6 +176,9 @@ pub struct FirmanteArchivo {
     /// Copia en memoria de lo guardado, para no leer ni desproteger el
     /// archivo en cada firma.
     estado: Mutex<Option<ClaveGuardada>>,
+    /// Para avisar una sola vez (no en cada chequeo) que la clave existe
+    /// pero no se puede leer.
+    avisado_ilegible: AtomicBool,
 }
 
 impl FirmanteArchivo {
@@ -181,6 +186,7 @@ impl FirmanteArchivo {
         Self {
             directorio: directorio.to_path_buf(),
             estado: Mutex::new(None),
+            avisado_ilegible: AtomicBool::new(false),
         }
     }
 
@@ -200,12 +206,14 @@ impl FirmanteArchivo {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if estado.is_none() {
-            *estado = Some(match self.leer() {
-                Some(guardada) => guardada,
-                None => self.guardar(ClaveGuardada {
+            *estado = Some(if let Some(guardada) = self.leer() {
+                guardada
+            } else {
+                self.apartar_clave_ilegible()?;
+                self.guardar(ClaveGuardada {
                     privada: nueva_clave_privada(),
                     dispositivo_id: None,
-                })?,
+                })?
             });
         }
         let guardada = estado.as_mut().ok_or_else(|| {
@@ -221,6 +229,35 @@ impl FirmanteArchivo {
     fn leer(&self) -> Option<ClaveGuardada> {
         let texto = super::credenciales::cargar_protegido_en(&self.directorio, ARCHIVO_CLAVE)?;
         serde_json::from_str(&texto).ok()
+    }
+
+    /// Si hay un archivo de clave que no se pudo leer (DPAPI no lo
+    /// desprotege: otro usuario de Windows, contraseña reseteada, archivo
+    /// corrupto), lo renombra a `<archivo>.ilegible-<segundos unix>` antes
+    /// de que se escriba una clave nueva. Nunca se sobrescribe: puede ser un
+    /// fallo pasajero (perfil sin cargar) y es la única copia de la
+    /// identidad del equipo, recuperable a mano o útil como evidencia.
+    fn apartar_clave_ilegible(&self) -> Result<(), ErrorFirmante> {
+        let ruta = self.directorio.join(ARCHIVO_CLAVE);
+        if !ruta.exists() {
+            return Ok(());
+        }
+        let segundos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |duracion| duracion.as_secs());
+        let destino = self
+            .directorio
+            .join(format!("{ARCHIVO_CLAVE}.ilegible-{segundos}"));
+        std::fs::rename(&ruta, &destino).map_err(|error| {
+            ErrorFirmante::Almacen(format!(
+                "la clave guardada no se puede leer y tampoco apartar: {error}"
+            ))
+        })?;
+        log::warn!(
+            "la clave de este equipo no se pudo leer; se apartó en {} y se genera una nueva",
+            destino.display()
+        );
+        Ok(())
     }
 
     fn guardar(&self, clave: ClaveGuardada) -> Result<ClaveGuardada, ErrorFirmante> {
@@ -278,6 +315,17 @@ impl FirmanteDispositivo for FirmanteArchivo {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if estado.is_none() {
             *estado = self.leer();
+            // Sin clave legible el equipo queda "sin configurar" y deja de
+            // sincronizar: que al menos quede registrado por qué.
+            if estado.is_none()
+                && self.directorio.join(ARCHIVO_CLAVE).exists()
+                && !self.avisado_ilegible.swap(true, Ordering::Relaxed)
+            {
+                log::warn!(
+                    "la clave de este equipo existe pero no se puede leer (¿otro usuario de \
+                     Windows o contraseña reseteada?): el equipo no puede conectarse a la nube"
+                );
+            }
         }
         estado
             .as_ref()
@@ -374,6 +422,43 @@ mod tests {
         let firmante = FirmanteArchivo::en(directorio.path());
         assert_eq!(firmante.dispositivo_vinculado(), None);
         assert!(!directorio.path().join(ARCHIVO_CLAVE).exists());
+    }
+
+    #[test]
+    fn una_clave_ilegible_se_aparta_y_nunca_se_sobrescribe() {
+        let directorio = directorio_temporal();
+        let ruta = directorio.path().join(ARCHIVO_CLAVE);
+        std::fs::write(&ruta, b"contenido que no se puede leer como clave").unwrap();
+        let firmante = FirmanteArchivo::en(directorio.path());
+
+        assert_eq!(firmante.dispositivo_vinculado(), None);
+        assert_eq!(
+            std::fs::read(&ruta).unwrap(),
+            b"contenido que no se puede leer como clave",
+            "consultar no toca el archivo"
+        );
+
+        // Vincular de nuevo necesita una clave: la ilegible queda apartada.
+        firmante.clave_publica_jwk().unwrap();
+        let apartados: Vec<_> = std::fs::read_dir(directorio.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entrada| {
+                entrada
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(&format!("{ARCHIVO_CLAVE}.ilegible-"))
+            })
+            .collect();
+        assert_eq!(apartados.len(), 1, "la clave vieja se conserva aparte");
+        assert_eq!(
+            std::fs::read(apartados[0].path()).unwrap(),
+            b"contenido que no se puede leer como clave"
+        );
+        assert!(
+            FirmanteArchivo::en(directorio.path()).leer().is_some(),
+            "la clave nueva sí se puede leer"
+        );
     }
 
     #[test]

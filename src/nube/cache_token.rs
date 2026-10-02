@@ -87,6 +87,10 @@ pub struct CacheTokenDispositivo {
     /// [`Self::guardar`]) que todavía nadie aplicó: viaja una sola vez, en
     /// el próximo token que se entregue.
     desfase_pendiente: Arc<Mutex<Option<i64>>>,
+    /// Código (normalizado) que vinculó la clave vigente en este proceso.
+    /// Ya está quemado en el servidor, así que guardarlo en memoria no
+    /// expone nada; sirve para reconocer un reintento (ver [`Self::vincular`]).
+    ultimo_codigo_canjeado: Mutex<Option<String>>,
 }
 
 impl Default for CacheTokenDispositivo {
@@ -101,6 +105,7 @@ impl CacheTokenDispositivo {
             entrada: Mutex::new(None),
             firmante: Mutex::new(None),
             desfase_pendiente: Arc::new(Mutex::new(None)),
+            ultimo_codigo_canjeado: Mutex::new(None),
         }
     }
 
@@ -135,22 +140,62 @@ impl CacheTokenDispositivo {
 
     /// Canjea un código de vinculación del panel y cachea el primer token.
     ///
-    /// Si la clave vigente ya estaba vinculada, se estrena una nueva antes
-    /// de canjear: una clave nunca se ata a dos dispositivos. Si todavía no
-    /// estaba vinculada (primer arranque, o un intento anterior con un
-    /// código equivocado), se reutiliza.
+    /// Una clave nunca se ata a dos dispositivos, pero la clave vigente
+    /// tampoco se descarta antes de saber que el código sirve: si se
+    /// regenerara primero, un código vencido o mal escrito dejaría al
+    /// equipo sin su única credencial válida (aislado de la nube hasta
+    /// registrarlo de nuevo). Por eso, con una clave ya vinculada:
+    ///
+    /// - El mismo código que este equipo acaba de canjear (reintento
+    ///   después de que fallara lo que sigue al canje, por ejemplo la red al
+    ///   bajar el catálogo) no se vuelve a canjear: se autentica con la
+    ///   clave, que ya es la de ese dispositivo.
+    /// - Si no, se canjea con la clave vigente. Sólo si el servidor responde
+    ///   que esa clave pertenece a otro dispositivo (equipo reinstalado
+    ///   cuyo registro anterior quedó en la nube) se estrena una y se
+    ///   reintenta; el servidor revierte ese primer canje, así que el código
+    ///   sigue sin usar. Cualquier otro error deja la clave intacta.
     pub fn vincular(
         &self,
         codigo: &str,
         metadata: Option<&MetadatosDispositivo>,
     ) -> Result<TokenDispositivo, NubeError> {
+        self.vincular_en(super::base_url(), codigo, metadata)
+    }
+
+    fn vincular_en(
+        &self,
+        base_url: &str,
+        codigo: &str,
+        metadata: Option<&MetadatosDispositivo>,
+    ) -> Result<TokenDispositivo, NubeError> {
         let firmante = self.firmante().ok_or(NubeError::SinCredencial)?;
-        if firmante.dispositivo_vinculado().is_some() {
-            firmante.regenerar()?;
-        }
-        let jwk = firmante.clave_publica_jwk()?;
-        let token = vincular_con_codigo(super::base_url(), codigo, &jwk, metadata)?;
+        let codigo_normalizado = normalizar_codigo(codigo);
+        let token = if firmante.dispositivo_vinculado().is_some() {
+            let ya_canjeado = self
+                .ultimo_codigo_canjeado
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_deref()
+                == Some(codigo_normalizado.as_str());
+            if ya_canjeado {
+                return self.autenticar_y_cachear(metadata);
+            }
+            match canjear_con(base_url, firmante.as_ref(), codigo, metadata) {
+                Err(NubeError::ClaveEnUso) => {
+                    firmante.regenerar()?;
+                    canjear_con(base_url, firmante.as_ref(), codigo, metadata)?
+                }
+                resultado => resultado?,
+            }
+        } else {
+            canjear_con(base_url, firmante.as_ref(), codigo, metadata)?
+        };
         firmante.marcar_vinculada(&token.dispositivo_id)?;
+        *self
+            .ultimo_codigo_canjeado
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(codigo_normalizado);
         self.guardar(&token);
         Ok(token)
     }
@@ -237,6 +282,27 @@ impl CacheTokenDispositivo {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
+}
+
+/// Canjea `codigo` con la clave vigente de `firmante`.
+fn canjear_con(
+    base_url: &str,
+    firmante: &dyn FirmanteDispositivo,
+    codigo: &str,
+    metadata: Option<&MetadatosDispositivo>,
+) -> Result<TokenDispositivo, NubeError> {
+    let jwk = firmante.clave_publica_jwk()?;
+    vincular_con_codigo(base_url, codigo, &jwk, metadata)
+}
+
+/// Misma normalización que `device-vincular`: mayúsculas y sólo
+/// alfanuméricos, para que `k7qm-r4xt-2p` y `K7QMR4XT2P` sean el mismo código.
+fn normalizar_codigo(codigo: &str) -> String {
+    codigo
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_uppercase())
+        .collect()
 }
 
 /// Saca (y deja vacío) el desfase pendiente.
@@ -340,6 +406,196 @@ mod tests {
             tomar(&pendiente),
             None,
             "ya aplicado: los siguientes aciertos no lo repiten"
+        );
+    }
+}
+
+/// Vincular nunca debe dejar al equipo sin su clave válida (ver
+/// [`CacheTokenDispositivo::vincular`]).
+#[cfg(test)]
+mod pruebas_vincular {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::Duration;
+
+    use super::{CacheTokenDispositivo, NubeError};
+    use crate::nube::firmante::{ErrorFirmante, FirmanteDispositivo};
+
+    /// Firmante en memoria: cada generación de clave tiene su propio JWK,
+    /// así se sabe qué clave viajó en cada canje.
+    #[derive(Default)]
+    struct FirmanteDePrueba {
+        estado: Mutex<(u32, Option<String>)>,
+    }
+
+    impl FirmanteDePrueba {
+        fn vinculado_a(dispositivo_id: &str) -> Arc<Self> {
+            Arc::new(Self {
+                estado: Mutex::new((1, Some(dispositivo_id.to_string()))),
+            })
+        }
+
+        fn generacion(&self) -> u32 {
+            self.estado.lock().unwrap().0
+        }
+    }
+
+    fn jwk_de(generacion: u32) -> String {
+        format!(r#"{{"crv":"P-256","kty":"EC","x":"clave-{generacion}","y":"y"}}"#)
+    }
+
+    impl FirmanteDispositivo for FirmanteDePrueba {
+        fn clave_publica_jwk(&self) -> Result<String, ErrorFirmante> {
+            Ok(jwk_de(self.generacion()))
+        }
+
+        fn firmar(&self, _datos: &[u8]) -> Result<Vec<u8>, ErrorFirmante> {
+            Ok(vec![0; 64])
+        }
+
+        fn regenerar(&self) -> Result<(), ErrorFirmante> {
+            let mut estado = self.estado.lock().unwrap();
+            *estado = (estado.0 + 1, None);
+            drop(estado);
+            Ok(())
+        }
+
+        fn dispositivo_vinculado(&self) -> Option<String> {
+            self.estado.lock().unwrap().1.clone()
+        }
+
+        fn marcar_vinculada(&self, dispositivo_id: &str) -> Result<(), ErrorFirmante> {
+            self.estado.lock().unwrap().1 = Some(dispositivo_id.to_string());
+            Ok(())
+        }
+    }
+
+    const TOKEN_D2: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+        Connection: close\r\n\r\n{\"access_token\":\"jwt\",\"expires_in\":3600,\
+        \"sitio_id\":\"s1\",\"dispositivo_id\":\"d2\",\"tipo\":\"pc\"}";
+    const CODIGO_INVALIDO: &str = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n\
+        Connection: close\r\n\r\n{\"error\":\"codigo_invalido\"}";
+    const CLAVE_EN_USO: &str = "HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\n\
+        Connection: close\r\n\r\n{\"error\":\"clave_en_uso\"}";
+
+    /// Responde `respuestas` en orden, una por conexión, y devuelve los
+    /// pedidos recibidos (para ver qué clave viajó).
+    fn servidor(respuestas: Vec<&'static str>) -> (String, Arc<Mutex<Vec<String>>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
+        let direccion = listener.local_addr().expect("dirección local");
+        let pedidos = Arc::new(Mutex::new(Vec::new()));
+        let registro = Arc::clone(&pedidos);
+        thread::spawn(move || {
+            for respuesta in respuestas {
+                let Ok((mut conexion, _)) = listener.accept() else {
+                    return;
+                };
+                conexion
+                    .set_read_timeout(Some(Duration::from_millis(200)))
+                    .expect("set_read_timeout");
+                let mut leido = Vec::new();
+                let mut buffer = [0_u8; 4096];
+                while let Ok(n) = conexion.read(&mut buffer) {
+                    if n == 0 {
+                        break;
+                    }
+                    leido.extend_from_slice(&buffer[..n]);
+                }
+                registro
+                    .lock()
+                    .unwrap()
+                    .push(String::from_utf8_lossy(&leido).to_string());
+                let _ = conexion.write_all(respuesta.as_bytes());
+            }
+        });
+        (format!("http://{direccion}"), pedidos)
+    }
+
+    fn cache_con(firmante: &Arc<FirmanteDePrueba>) -> CacheTokenDispositivo {
+        let cache = CacheTokenDispositivo::new();
+        cache.establecer_firmante(Arc::clone(firmante) as Arc<dyn FirmanteDispositivo>);
+        cache
+    }
+
+    #[test]
+    fn un_codigo_invalido_no_toca_la_clave_vinculada() {
+        let firmante = FirmanteDePrueba::vinculado_a("d1");
+        let (url, _) = servidor(vec![CODIGO_INVALIDO]);
+
+        let resultado = cache_con(&firmante).vincular_en(&url, "K7QMR4XT2P", None);
+
+        assert!(matches!(
+            resultado,
+            Err(NubeError::CodigoVinculacionInvalido)
+        ));
+        assert_eq!(
+            firmante.generacion(),
+            1,
+            "la clave buena sigue siendo la misma"
+        );
+        assert_eq!(firmante.dispositivo_vinculado().as_deref(), Some("d1"));
+    }
+
+    #[test]
+    fn un_error_de_red_no_toca_la_clave_vinculada() {
+        let firmante = FirmanteDePrueba::vinculado_a("d1");
+        // Puerto cerrado: nadie escucha.
+        let url = {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            format!("http://{}", listener.local_addr().unwrap())
+        };
+
+        let resultado = cache_con(&firmante).vincular_en(&url, "K7QMR4XT2P", None);
+
+        assert!(matches!(resultado, Err(NubeError::Red(_))));
+        assert_eq!(firmante.generacion(), 1);
+        assert_eq!(firmante.dispositivo_vinculado().as_deref(), Some("d1"));
+    }
+
+    #[test]
+    fn una_clave_de_otro_dispositivo_se_reemplaza_y_se_reintenta() {
+        let firmante = FirmanteDePrueba::vinculado_a("d1");
+        let (url, pedidos) = servidor(vec![CLAVE_EN_USO, TOKEN_D2]);
+
+        let token = cache_con(&firmante)
+            .vincular_en(&url, "K7QMR4XT2P", None)
+            .expect("el segundo canje, con clave nueva, funciona");
+
+        assert_eq!(token.dispositivo_id, "d2");
+        assert_eq!(firmante.generacion(), 2, "se estrenó una sola clave");
+        assert_eq!(firmante.dispositivo_vinculado().as_deref(), Some("d2"));
+        let pedidos = pedidos.lock().unwrap().clone();
+        assert!(
+            pedidos[0].contains("clave-1"),
+            "primero con la clave vigente"
+        );
+        assert!(pedidos[1].contains("clave-2"), "después con la nueva");
+    }
+
+    #[test]
+    fn reintentar_el_mismo_codigo_no_lo_vuelve_a_canjear() {
+        let firmante = Arc::new(FirmanteDePrueba::default());
+        // Una sola respuesta: un segundo canje no tendría con quién hablar.
+        let (url, pedidos) = servidor(vec![TOKEN_D2]);
+        let cache = cache_con(&firmante);
+
+        cache
+            .vincular_en(&url, "K7QM-R4XT-2P", None)
+            .expect("primer canje");
+        // Falló lo que seguía (por ejemplo, bajar el catálogo) y el usuario
+        // vuelve a ingresar el mismo código, escrito distinto.
+        let token = cache
+            .vincular_en(&url, "k7qmr4xt2p", None)
+            .expect("reintento con la clave ya vinculada");
+
+        assert_eq!(token.dispositivo_id, "d2");
+        assert_eq!(firmante.generacion(), 0, "nunca se regeneró la clave");
+        assert_eq!(
+            pedidos.lock().unwrap().len(),
+            1,
+            "el código se canjeó una sola vez"
         );
     }
 }
