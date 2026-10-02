@@ -39,6 +39,12 @@ los motivos de salida del proceso se guarda sólo el resumen antes de `:`
 
 ## Eventos (`tipo`)
 
+> **Hora de los eventos** (`ocurrido_en`): sale del reloj confiable del núcleo
+> (hora del servidor + contador de arranque), la misma con que se sellan los
+> registros, no del reloj del teléfono. Así los tiempos de todos los equipos se
+> comparan entre sí y con la bitácora. Antes de abrir el núcleo (los primeros
+> eventos del arranque) se usa la del sistema.
+
 | Tipo              | Cuándo                                | Datos principales |
 |-------------------|---------------------------------------|-------------------|
 | `sesion_inicio`   | al arrancar el proceso                | fabricante, modelo, Android, ABI, núcleos, RAM total, clase de memoria |

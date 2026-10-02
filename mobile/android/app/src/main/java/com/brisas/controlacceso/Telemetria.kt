@@ -56,6 +56,18 @@ object Telemetria {
         activa = true
     }
 
+    /// Hora con que se sellan los eventos: la del reloj confiable del núcleo
+    /// (la misma de los registros), una vez abierto. Antes, la del teléfono.
+    @Volatile
+    private var horaConfiableMs: (() -> Long)? = null
+
+    fun usarReloj(hora: () -> Long) {
+        horaConfiableMs = hora
+    }
+
+    internal fun ahora(): Instant =
+        horaConfiableMs?.let { hora -> runCatching { Instant.ofEpochMilli(hora()) }.getOrNull() } ?: Instant.now()
+
     fun evento(tipo: String, datos: Map<String, Any?> = emptyMap()) {
         motor?.encolar(tipo, datos)
     }
@@ -171,7 +183,7 @@ private class MotorTelemetria(private val app: Application) {
         cola.agregar(
             aJson(
                 mapOf(
-                    "ocurrido_en" to Instant.now().toString(),
+                    "ocurrido_en" to Telemetria.ahora().toString(),
                     "dispositivo" to dispositivo,
                     "sesion" to sesion,
                     "version_app" to versionApp,

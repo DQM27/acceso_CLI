@@ -666,6 +666,7 @@ pub fn run() {
     telemetria::aislar_build_de_diagnostico();
     let _guardia_sentry = inicializar_sentry();
     let (ruta_base_datos, instancia, clave_base_datos, core, firmante) = preparar_nucleo();
+    telemetria::usar_reloj(core.reloj());
     if let Some(directorio) = ruta_base_datos.parent() {
         telemetria::iniciar(directorio);
     }

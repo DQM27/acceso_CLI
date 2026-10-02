@@ -62,6 +62,9 @@ class AplicacionViewModel(application: Application) : AndroidViewModel(applicati
                 claveBaseDatos,
             )
             nucleo = abierto
+            // Los eventos de diagnóstico se sellan con la misma hora que los
+            // registros (sin efecto si el build no tiene telemetría).
+            if (BuildConfig.TELEMETRIA) Telemetria.usarReloj { abierto.horaConfiableMs() }
             // Identidad del teléfono ante la nube: su propia clave en
             // Android Keystore (ver AlmacenClaveKeystore.kt). Antes de
             // cualquier operación de nube.

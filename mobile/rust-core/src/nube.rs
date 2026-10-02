@@ -20,6 +20,13 @@ impl Nucleo {
         self.core_lock().desfase_reloj_ms()
     }
 
+    /// Hora del reloj confiable en ms desde 1970: la misma con que se sellan
+    /// los registros. No toma el candado del núcleo, así que la telemetría
+    /// puede llamarla en cada evento sin trabar nada.
+    pub fn hora_confiable_ms(&self) -> i64 {
+        self.reloj.ahora_utc().timestamp_millis()
+    }
+
     /// Estado del reloj confiable, para la telemetría de diagnóstico (ver
     /// [`crate::EstadoReloj`]).
     pub fn estado_reloj(&self) -> crate::EstadoReloj {

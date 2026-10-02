@@ -128,6 +128,13 @@ impl AppCore {
         }
     }
 
+    /// El reloj de este núcleo, para quien necesite la misma hora fuera del
+    /// candado de `AppCore` (la telemetría de diagnóstico sella sus eventos
+    /// con él: así todos los tiempos del sistema salen del mismo reloj).
+    pub fn reloj(&self) -> Arc<dyn Reloj> {
+        Arc::clone(&self.reloj)
+    }
+
     /// Estado del reloj confiable (ver [`crate::tiempo::EstadoReloj`]), para
     /// la telemetría de los builds de diagnóstico.
     pub fn estado_reloj(&self) -> crate::tiempo::EstadoReloj {

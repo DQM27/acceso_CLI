@@ -147,10 +147,28 @@ struct Telemetria {
 
 static TELEMETRIA: OnceLock<Telemetria> = OnceLock::new();
 
+/// El reloj del núcleo (hora del servidor + contador de arranque, ver
+/// `control_acceso::tiempo::RelojCorregido`): los eventos se sellan con la
+/// misma hora que los registros, no con la de Windows. Sin él (antes de
+/// abrir el núcleo), la del sistema.
+static RELOJ: OnceLock<std::sync::Arc<dyn control_acceso::tiempo::Reloj>> = OnceLock::new();
+
+/// Fija el reloj con que se sellan los eventos. Una sola vez, al abrir el
+/// núcleo.
+pub fn usar_reloj(reloj: std::sync::Arc<dyn control_acceso::tiempo::Reloj>) {
+    let _ = RELOJ.set(reloj);
+}
+
+fn ahora() -> chrono::DateTime<chrono::Utc> {
+    RELOJ
+        .get()
+        .map_or_else(chrono::Utc::now, |reloj| reloj.ahora_utc())
+}
+
 /// Una fila de `telemetria_diagnostico`, como la arma la app Android.
 fn fila(t: &Telemetria, tipo: &str, datos: serde_json::Value) -> String {
     serde_json::json!({
-        "ocurrido_en": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        "ocurrido_en": ahora().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         "dispositivo": t.dispositivo,
         "sesion": t.sesion,
         "version_app": t.version,

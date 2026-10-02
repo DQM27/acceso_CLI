@@ -827,6 +827,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_estado_reloj(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_hora_confiable_ms(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_identidad_equipo(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos(
@@ -994,6 +996,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_estado_reloj(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_hora_confiable_ms(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_identidad_equipo(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_proveedor_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1419,6 +1423,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_estado_reloj() and 0xFFFF) != 56993) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_hora_confiable_ms() and 0xFFFF) != 4495) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_identidad_equipo() and 0xFFFF) != 64459) {
@@ -3115,6 +3122,13 @@ public interface NucleoInterface {
     fun `estadoReloj`(): EstadoReloj
     
     /**
+     * Hora del reloj confiable en ms desde 1970: la misma con que se sellan
+     * los registros. No toma el candado del núcleo, así que la telemetría
+     * puede llamarla en cada evento sin trabar nada.
+     */
+    fun `horaConfiableMs`(): kotlin.Long
+    
+    /**
      * Unidad y etiqueta de este teléfono (ver [`crate::IdentidadEquipo`]).
      * No necesita sesión: el login también la muestra.
      */
@@ -4015,6 +4029,24 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCall() { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_estado_reloj(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Hora del reloj confiable en ms desde 1970: la misma con que se sellan
+     * los registros. No toma el candado del núcleo, así que la telemetría
+     * puede llamarla en cada evento sin trabar nada.
+     */override fun `horaConfiableMs`(): kotlin.Long {
+            return FfiConverterLong.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_hora_confiable_ms(
         it,
         _status)
 }

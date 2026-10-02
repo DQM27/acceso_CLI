@@ -51,6 +51,12 @@ pesa como máximo 16 KB.
 
 ## Eventos (`tipo`)
 
+> **Hora de los eventos** (`ocurrido_en`): sale del reloj confiable del núcleo
+> (hora del servidor + contador de arranque), la misma con que se sellan los
+> registros, no del reloj del Windows. Así los tiempos de todos los equipos se
+> comparan entre sí y con la bitácora. Antes de abrir el núcleo (los primeros
+> eventos del arranque) se usa la del sistema.
+
 | Tipo | Origen | Qué dice |
 |---|---|---|
 | `sesion_inicio` | Rust | SO, arquitectura, núcleos, RAM total |

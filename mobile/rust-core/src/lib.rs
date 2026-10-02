@@ -62,6 +62,10 @@ pub use tipos::{
 #[derive(uniffi::Object)]
 pub struct Nucleo {
     core: Mutex<AppCore>,
+    /// El mismo reloj de `core` (hora del servidor + contador de arranque),
+    /// para leer la hora sin tomar el candado de `core`: la telemetría lo
+    /// consulta en cada evento (ver [`Nucleo::hora_confiable_ms`]).
+    reloj: std::sync::Arc<dyn control_acceso::tiempo::Reloj>,
     /// Actor autenticado — lo necesitan `registrar_ingreso`/`registrar_salida`
     /// como `usuario_ingreso_id`/`usuario_salida_id`. Se llena en
     /// `autenticar` y vive mientras dure el proceso (no hay "cerrar sesión"
@@ -238,6 +242,7 @@ impl Nucleo {
     /// `conexion_secundaria()` pueda aplicar la misma clave.
     fn desde_core(ruta_base_datos: &str, core: AppCore, clave: Option<[u8; 32]>) -> Self {
         Self {
+            reloj: core.reloj(),
             core: Mutex::new(core),
             sesion: Mutex::new(None),
             cache_token: control_acceso::nube::CacheTokenDispositivo::new(),
