@@ -83,9 +83,9 @@ borrarlas desde el dashboard.
 
 | Parte | Estado |
 | --- | --- |
-| Migraciones | Aplicadas en staging (el retiro de `secret_hash` se aplicó como delta con `execute_sql`, idéntico a los archivos) |
-| Tests SQL en staging | 10 de 11 en verde (incluye `realtime_autorizacion.sql`: un retirado no entra al canal). `administradores_panel_autorizacion.sql` falla **desde antes** (ver Problemas conocidos) |
-| Edge Functions | Las 10 de la rama desplegadas en staging |
+| Migraciones | Aplicadas en staging (el retiro de `secret_hash` se aplicó como delta con `execute_sql`, idéntico a los archivos). `20261002150000_sesion_unica_hora_del_servidor` aplicada el 2026-10-02 desde el SQL Editor: **no figura en `supabase_migrations`** (ver Sesión única, abajo) |
+| Tests SQL en staging | 10 de 11 en verde (incluye `realtime_autorizacion.sql`: un retirado no entra al canal). `administradores_panel_autorizacion.sql` falla **desde antes** (ver Problemas conocidos). `sesion_unica_por_unidad.sql` pasó el 2026-10-02 con la migración nueva dentro de `begin … rollback` |
+| Edge Functions | Las 10 de la rama desplegadas en staging; `device-auth` (v8), `device-vincular` (v4) y `admin-provision-device` (v6) redesplegadas el 2026-10-02 |
 | E2E real contra staging | Canje, clave marcada, autenticación por aserción, lectura RLS, código de un solo uso (`examples/probar_vinculacion.rs`) |
 | Equipos reales | PC y teléfono vinculados en staging con los builds de diagnóstico, 0 errores; canal en vivo funcionando |
 | Núcleo Rust | `cargo clippy --all-targets --features nube,cifrado-secreto-dispositivo` limpio; `cargo test` con esas features en verde |
@@ -94,6 +94,43 @@ borrarlas desde el dashboard.
 | Móvil `rust-core` | clippy limpio, tests en verde |
 | Android | bindings regenerados; `testDebugUnitTest` 331/331 |
 | Producción | **Pendiente de aprobación del usuario** |
+
+## Sesión única con hora del servidor (aplicado en staging 2026-10-02)
+
+Rama `feat/sesion-unica-por-unidad`. El equipo ya no manda la hora de su
+reloj: manda `sesion_id` y los ms transcurridos desde el ingreso (contador de
+arranque); la nube calcula `now() - transcurrido` y aplica un margen de duda
+(evento `sesion_en_duda`). Además, unidad y etiqueta del equipo en el login y
+la barra de estado (las devuelven `device-auth` y `device-vincular`) y
+vigencia máxima del código de vinculación de 60 min.
+
+- **Migración** `20261002150000_sesion_unica_hora_del_servidor`: probada con
+  `supabase/tests/sesion_unica_por_unidad.sql` (migración dentro de la misma
+  transacción, termina en `rollback`) y luego aplicada a mano en el SQL
+  Editor. Verificado por consulta: firma `(text, uuid, bigint)` (la vieja
+  `(text, timestamptz)` ya no existe), columnas `sesiones_usuario.sesion_id`
+  y `margen_ms`, `bitacora_sesiones.sesion_id`, índice
+  `bitacora_sesiones_sesion_idx`, check con `sesion_en_duda`, `anon` sin
+  `execute` y `authenticated` con `execute`.
+- **Historial de migraciones:** al aplicarla desde el SQL Editor no se anotó
+  en `supabase_migrations.schema_migrations`. Registrarla (o
+  `supabase migration repair`) antes de usar `db push` contra staging.
+- **Edge Functions** (`deno check` limpio): `device-auth` y `device-vincular`
+  con `verify_jwt=false`, `admin-provision-device` con `verify_jwt=true`.
+  Desplegadas con el MCP de Supabase incluyendo `_shared/` (se subió una
+  copia de `_shared` sin los comentarios; el código es el mismo).
+- **Advisors de seguridad:** sin hallazgos nuevos. Aparece
+  `sesion_usuario_en_unidad` en "SECURITY DEFINER ejecutable por
+  authenticated", igual que su firma anterior y que
+  `cerrar_sesion_usuario_en_unidad`: es intencional (el equipo la llama con su
+  JWT y la función valida al equipo con `dispositivo_que_llama()`).
+- **Producción:** no se tocó. Esta migración y las tres funciones van junto con
+  el resto, tras la prueba con equipos reales.
+- Equipos sin actualizar: la firma vieja ya no existe; el chequeo remoto falla
+  "abierto" (no expulsa a nadie). Las sesiones abiertas de antes quedan sin
+  margen hasta que su equipo se actualice y sincronice.
+- Drift: staging tiene también `admin-suspend-device` y
+  `admin-crear-codigo-vinculacion`, que no están en el repo (ver Pendientes).
 
 ## Datos de prueba en staging
 
@@ -222,7 +259,9 @@ hacerlo en una ventana acordada.
 2. Producción `xidaepyaljzkpbsxrqsm`: aplicar las migraciones
    `20260929200000_revocacion_efectiva_dispositivos` y
    `20260929200100_vinculacion_dispositivos_por_codigo` y
-   `20260930020000_realtime_solo_dispositivos_vigentes`.
+   `20260930020000_realtime_solo_dispositivos_vigentes`, y las de sesión
+   única (`20260930130000_sesion_unica_por_unidad` y
+   `20261002150000_sesion_unica_hora_del_servidor`, en ese orden).
    Confirmar antes que el secret `DEVICE_SIGNING_KEY` existe (ya lo usa
    `device-auth`).
 3. Desplegar las Edge Functions de la rama (con `_shared/`), respetando

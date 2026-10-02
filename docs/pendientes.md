@@ -254,6 +254,14 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   seguridad y reconciliación de ingresos sin conexión). Bitácora en el panel
   (sección "Sesiones"). Diseño y detalle en
   `docs/features-futuras/plan-sesion-unica-dispositivos.md`, sección 7.
+  - [x] Hora del servidor en vez de comparar relojes (2026-10-02): migración
+    `20261002150000_sesion_unica_hora_del_servidor` probada en staging con
+    `supabase/tests/sesion_unica_por_unidad.sql` y aplicada a mano en el SQL
+    Editor; `device-auth`, `device-vincular` y `admin-provision-device`
+    desplegadas en staging; advisors sin hallazgos nuevos. Detalle en
+    `docs/handoff-registro-dispositivos.md`.
+  - [ ] Registrar `20261002150000` en `supabase_migrations` de staging (se
+    aplicó desde el SQL Editor y no quedó anotada).
   - [ ] Probar con equipos reales (dos unidades) con builds de diagnóstico.
   - [ ] Producción: con aprobación del usuario, junto con el resto de la rama.
 - [ ] **Auditoría (`auditoria_cambios`/`gafetes_incidentes`) no se sincroniza
