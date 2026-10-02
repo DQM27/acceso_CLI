@@ -37,6 +37,22 @@ pub trait Reloj: Send + Sync {
     }
 }
 
+/// Cómo está el reloj confiable ahora, para la telemetría de diagnóstico
+/// (ver `AppCore::estado_reloj`). Sólo números: nada identifica a nadie.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EstadoReloj {
+    /// `true` si la hora sale del ancla (servidor + contador de arranque).
+    pub confiable: bool,
+    /// Error posible de la hora, en ms. `None` = no confiable.
+    pub margen_ms: Option<u64>,
+    /// Reloj del equipo MENOS la hora que usa la app, en ms (positivo = el
+    /// equipo va adelantado). Un salto grande estando sin conexión es la
+    /// señal de que alguien movió la hora del equipo.
+    pub diferencia_equipo_ms: i64,
+    /// Hace cuánto se fijó el ancla, según el contador de arranque.
+    pub ancla_hace_ms: Option<u64>,
+}
+
 /// Una hora y cuánto puede estar equivocada.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HoraConMargen {

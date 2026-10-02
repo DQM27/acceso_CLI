@@ -450,6 +450,12 @@ pub struct ResumenSincronizacion {
     /// unidad (sesión única por unidad); `sesion_expulsada` también es
     /// `true`. Sólo cambia el aviso que muestra Kotlin.
     pub sesion_en_otra_unidad: bool,
+    /// Qué respondió la nube a la sesión única en esta sincronización
+    /// (`vigente`, `desplazada`, `sin_usuario` o `error`), con los ms desde el
+    /// ingreso que se le mandaron. `None` si no se consultó (sin sesión, o
+    /// la activación inicial). Sólo para la telemetría de diagnóstico.
+    pub sesion_unidad: Option<String>,
+    pub sesion_transcurrido_ms: Option<u64>,
     /// `docs/pendientes.md`, "alertar luego al sincronizar" -- ingresos que
     /// quedaron activos en este teléfono pero que la nube dice que TAMBIÉN
     /// están activos en otro sitio (colados mientras este dispositivo
@@ -568,6 +574,8 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             tipo: resumen.tipo,
             sesion_expulsada: resumen.sesion_expulsada,
             sesion_en_otra_unidad: false,
+            sesion_unidad: None,
+            sesion_transcurrido_ms: None,
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
             conflictos_gafete: Vec::new(),
@@ -877,4 +885,15 @@ impl From<RegistroIngresoProveedorActivoResumenNucleo> for RegistroIngresoProvee
 pub struct IdentidadEquipo {
     pub unidad: Option<String>,
     pub etiqueta: Option<String>,
+}
+
+/// Estado del reloj confiable del teléfono (ver
+/// `control_acceso::tiempo::EstadoReloj`), para la telemetría de
+/// diagnóstico. Sólo números.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct EstadoReloj {
+    pub confiable: bool,
+    pub margen_ms: Option<u64>,
+    pub diferencia_equipo_ms: i64,
+    pub ancla_hace_ms: Option<u64>,
 }

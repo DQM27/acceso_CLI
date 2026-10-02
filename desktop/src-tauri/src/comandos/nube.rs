@@ -282,13 +282,25 @@ fn intentar_sincronizacion(
     // esta sesión se cierra. Falla "abierto": un error de red no expulsa.
     let mut sesion_en_otra_unidad = false;
     if !sesion_expulsada && let Some((actor, inicio)) = state.sesion_con_inicio() {
-        match nube::sesion_en_unidad(
+        let estado = nube::sesion_en_unidad(
             nube::base_url(),
             nube::apikey(),
             &token,
             &actor.cedula,
             &inicio,
-        ) {
+        );
+        // Build de diagnóstico: qué decidió la nube y con qué duración de
+        // sesión. Sin cédula ni nombre.
+        if crate::telemetria::activa() {
+            crate::telemetria::evento(
+                "sesion_unidad",
+                serde_json::json!({
+                    "resultado": estado.as_ref().map_or("error", |estado| estado.como_texto()),
+                    "transcurrido_ms": inicio.transcurrido_ms(),
+                }),
+            );
+        }
+        match estado {
             Ok(nube::EstadoSesionUnidad::Desplazada) => {
                 state.cerrar_sesion();
                 sesion_expulsada = true;

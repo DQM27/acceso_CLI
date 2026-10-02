@@ -20,6 +20,18 @@ impl Nucleo {
         self.core_lock().desfase_reloj_ms()
     }
 
+    /// Estado del reloj confiable, para la telemetría de diagnóstico (ver
+    /// [`crate::EstadoReloj`]).
+    pub fn estado_reloj(&self) -> crate::EstadoReloj {
+        let estado = self.core_lock().estado_reloj();
+        crate::EstadoReloj {
+            confiable: estado.confiable,
+            margen_ms: estado.margen_ms,
+            diferencia_equipo_ms: estado.diferencia_equipo_ms,
+            ancla_hace_ms: estado.ancla_hace_ms,
+        }
+    }
+
     /// Unidad y etiqueta de este teléfono (ver [`crate::IdentidadEquipo`]).
     /// No necesita sesión: el login también la muestra.
     pub fn identidad_equipo(&self) -> crate::IdentidadEquipo {
@@ -139,6 +151,8 @@ impl Nucleo {
             tipo: token.tipo,
             sesion_expulsada: false,
             sesion_en_otra_unidad: false,
+            sesion_unidad: None,
+            sesion_transcurrido_ms: None,
             // Activación inicial: base recién configurada, sin ingresos
             // locales todavía -- mismo criterio que
             // `From<ResumenSincronizacionNucleo>` arriba y que el equivalente
@@ -463,18 +477,28 @@ impl Nucleo {
         // incluida la que sigue al login, registra la sesión en la nube y
         // pregunta si sigue vigente. Falla "abierto": sin red no expulsa.
         let mut sesion_en_otra_unidad = false;
+        let mut sesion_unidad = None;
+        let mut sesion_transcurrido_ms = None;
         let inicio = self
             .sesion_lock()
             .as_ref()
             .map(|(_, inicio)| inicio.clone());
         if let (false, Some(inicio)) = (sesion_expulsada, inicio) {
-            match control_acceso::nube::sesion_en_unidad(
+            let estado = control_acceso::nube::sesion_en_unidad(
                 control_acceso::nube::base_url(),
                 control_acceso::nube::apikey(),
                 &token,
                 &actor.cedula,
                 &inicio,
-            ) {
+            );
+            sesion_unidad = Some(
+                estado
+                    .as_ref()
+                    .map_or("error", |estado| estado.como_texto())
+                    .to_string(),
+            );
+            sesion_transcurrido_ms = Some(inicio.transcurrido_ms());
+            match estado {
                 Ok(control_acceso::nube::EstadoSesionUnidad::Desplazada) => {
                     *self.sesion_lock() = None;
                     sesion_expulsada = true;
@@ -501,6 +525,8 @@ impl Nucleo {
             tipo: token.tipo,
             sesion_expulsada,
             sesion_en_otra_unidad,
+            sesion_unidad,
+            sesion_transcurrido_ms,
             conflictos_ingreso: resumen
                 .conflictos_ingreso
                 .into_iter()

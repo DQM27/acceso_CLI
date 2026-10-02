@@ -47,3 +47,27 @@ fn sin_medicion_guardada_el_reloj_queda_como_el_del_equipo() {
 
     assert!((Utc::now() - reloj.ahora_utc()).num_seconds().abs() < 2);
 }
+
+#[test]
+fn el_estado_del_reloj_dice_si_la_hora_es_confiable() {
+    let directorio = tempfile::tempdir().unwrap();
+    let ruta = directorio.path().join("control_acceso.db");
+    let core = AppCore::abrir_con_reloj(&ruta, Arc::new(RelojCorregido::nuevo())).unwrap();
+
+    let sin_medir = core.estado_reloj();
+    assert!(!sin_medir.confiable);
+    assert_eq!(sin_medir.margen_ms, None);
+    assert_eq!(sin_medir.ancla_hace_ms, None);
+
+    // La nube mide el equipo 10 minutos adelantado: queda el ancla.
+    core.actualizar_desfase_reloj(DIEZ_MINUTOS_MS);
+    let medido = core.estado_reloj();
+    assert!(medido.confiable);
+    assert!(medido.margen_ms.is_some());
+    assert!(medido.ancla_hace_ms.is_some_and(|ms| ms < 1_000));
+    assert!(
+        (medido.diferencia_equipo_ms - DIEZ_MINUTOS_MS).abs() < 1_000,
+        "el equipo va ~10 min adelantado: {}",
+        medido.diferencia_equipo_ms
+    );
+}

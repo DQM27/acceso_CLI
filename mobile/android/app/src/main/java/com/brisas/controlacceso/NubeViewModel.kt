@@ -60,6 +60,7 @@ class NubeViewModel(
             try {
                 val resumen = withContext(dispatcherIO) {
                     medirNucleo("sincronizarConNube") { nucleo.sincronizarConNube() }
+                        .also { informarDiagnosticoSincronizacion(nucleo, it) }
                 }
                 ultimoResumen = resumen
                 if (resumen.sesionExpulsada) onSesionExpulsada(resumen.sesionEnOtraUnidad)

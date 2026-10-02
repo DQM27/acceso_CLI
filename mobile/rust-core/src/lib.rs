@@ -45,7 +45,7 @@ use error::{FalloSincronizacion, convertir_fallo_sincronizacion, interno};
 pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
-    ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta,
+    ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta, EstadoReloj,
     IdentidadEquipo, IngresoActivoResumen, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso,
     ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
     PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,

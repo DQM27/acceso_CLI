@@ -89,11 +89,19 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
             let manejador = app.clone();
             let inicio = std::time::Instant::now();
             let es_arranque = alcance == control_acceso::nube::AlcanceSincronizacion::arranque();
-            let resultado = tauri::async_runtime::spawn_blocking(move || {
+            let tarea = tauri::async_runtime::spawn_blocking(move || {
                 let estado = manejador.state::<GuiState>();
-                comandos::nube::ejecutar_sincronizacion_con_alcance(&estado, alcance)
+                let resultado =
+                    comandos::nube::ejecutar_sincronizacion_con_alcance(&estado, alcance);
+                // Después de sincronizar, que es cuando se renueva el ancla.
+                let reloj = telemetria::activa().then(|| estado.core().estado_reloj());
+                (resultado, reloj)
             })
             .await;
+            let (resultado, reloj) = match tarea {
+                Ok((resultado, reloj)) => (Ok(resultado), reloj),
+                Err(error) => (Err(error), None),
+            };
             if telemetria::activa() {
                 telemetria::evento(
                     "sincronizacion_auto",
@@ -105,6 +113,17 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
                             Ok(Err(_)) => "error",
                             Err(_) => "tarea_fallida",
                         },
+                    }),
+                );
+            }
+            if let Some(reloj) = reloj {
+                telemetria::evento(
+                    "reloj",
+                    serde_json::json!({
+                        "confiable": reloj.confiable,
+                        "margen_ms": reloj.margen_ms,
+                        "diferencia_equipo_ms": reloj.diferencia_equipo_ms,
+                        "ancla_hace_ms": reloj.ancla_hace_ms,
                     }),
                 );
             }

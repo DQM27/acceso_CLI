@@ -42,6 +42,8 @@ los motivos de salida del proceso se guarda sólo el resumen antes de `:`
 | Tipo              | Cuándo                                | Datos principales |
 |-------------------|---------------------------------------|-------------------|
 | `sesion_inicio`   | al arrancar el proceso                | fabricante, modelo, Android, ABI, núcleos, RAM total, clase de memoria |
+| `reloj`           | después de cada sincronización        | reloj confiable (hora del servidor + contador de arranque): `confiable`, `margen_ms`, `diferencia_equipo_ms` (reloj del teléfono menos la hora que usa la app; un salto grande sin conexión = alguien movió la hora) y `ancla_hace_ms` |
+| `sesion_unidad`   | en cada sincronización con sesión     | qué respondió la nube a la sesión única (`vigente`, `desplazada`, `sin_usuario` o `error`) y `transcurrido_ms` desde el ingreso; sin cédula ni nombre |
 | `arranque`        | primer frame dibujado                 | ms desde el inicio del proceso; en Android 15+ tipo y motivo del arranque (frío, tibio, caliente) |
 | `salida_anterior` | al arrancar, una vez por salida       | por qué murió el proceso antes (ANR, memoria, crash nativo/Java, usuario), PSS/RSS |
 | `pantalla`        | al entrar a cada pantalla             | ms hasta su primer frame |

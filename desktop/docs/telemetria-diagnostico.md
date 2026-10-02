@@ -58,6 +58,8 @@ pesa como máximo 16 KB.
 | `arranque` | Rust | `ms_hasta_ventana` desde que arrancó el proceso; `por`: `frontend` o `red_de_seguridad` (el splash se cerró por tiempo) |
 | `muestra_sistema` | Rust, cada 30 s | Memoria del proceso (en uso, privada y pico), CPU (`cpu_un_nucleo_pct`, `cpu_dispositivo_pct`), RAM libre del equipo y tamaño de la cola. No incluye los procesos de WebView2 |
 | `sincronizacion_auto` | Rust | Cada pulso automático: `ms`, si fue el de `arranque` y el `resultado` |
+| `reloj` | Rust, tras cada pulso automático | Reloj confiable (hora del servidor + contador de arranque): `confiable`, `margen_ms`, `diferencia_equipo_ms` (reloj de Windows menos la hora que usa la app; un salto grande sin conexión = alguien movió la hora) y `ancla_hace_ms` |
+| `sesion_unidad` | Rust, en cada sincronización con sesión | Qué respondió la nube a la sesión única (`vigente`, `desplazada`, `sin_usuario` o `error`) y `transcurrido_ms` desde el ingreso. Sin cédula ni nombre |
 | `panic` | Rust | Dónde ocurrió (`archivo:línea`) y en qué hilo, sin el mensaje. Se guarda en disco y sale en el próximo arranque |
 | `cierre` | Rust | Cierre normal: minutos que estuvo abierta |
 | `llamada_nucleo` | Frontend, cada 30 s | Por comando de Tauri, con el IPC incluido: llamadas, errores, p50/p90/máx y total en ms |

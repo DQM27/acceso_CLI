@@ -89,7 +89,7 @@ class SincronizacionPeriodica(
                                     medirNucleo("sincronizarCambios") { nucleo.sincronizarCambios(alcance.tablas) }
                                 AlcancePendiente.SoloEnvio ->
                                     medirNucleo("enviarCambios") { nucleo.enviarCambios() }
-                            }
+                            }.also { informarDiagnosticoSincronizacion(nucleo, it) }
                         }
                         Log.i("SincronizacionNube", "Recibidos: gafetes=${resumen.gafetesRecibidos}, historial=${resumen.movimientosHistorialRecibidos}, abiertos=${resumen.remotosAbiertos}")
                         onSincronizado(resumen)

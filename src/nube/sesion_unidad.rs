@@ -64,6 +64,17 @@ pub enum EstadoSesionUnidad {
     SinUsuario,
 }
 
+impl EstadoSesionUnidad {
+    /// Nombre técnico, el mismo que responde la nube (para la telemetría).
+    pub const fn como_texto(self) -> &'static str {
+        match self {
+            Self::Vigente => "vigente",
+            Self::Desplazada => "desplazada",
+            Self::SinUsuario => "sin_usuario",
+        }
+    }
+}
+
 /// Registra la sesión `inicio` de `cedula` en este equipo y dice si sigue
 /// vigente. Ante ingresos demasiado cercanos para saber cuál fue primero,
 /// la nube no cierra a nadie (responde `Vigente`).

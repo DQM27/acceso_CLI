@@ -128,6 +128,20 @@ impl AppCore {
         }
     }
 
+    /// Estado del reloj confiable (ver [`crate::tiempo::EstadoReloj`]), para
+    /// la telemetría de los builds de diagnóstico.
+    pub fn estado_reloj(&self) -> crate::tiempo::EstadoReloj {
+        let hora = self.reloj.ahora_con_margen();
+        crate::tiempo::EstadoReloj {
+            confiable: hora.margen_ms.is_some(),
+            margen_ms: hora.margen_ms,
+            diferencia_equipo_ms: (chrono::Utc::now() - hora.instante).num_milliseconds(),
+            ancla_hace_ms: self.reloj.ancla().map(|ancla| {
+                crate::reloj_arranque::ms_desde_arranque().saturating_sub(ancla.arranque_ms)
+            }),
+        }
+    }
+
     /// Fija la versión de la app para que viaje en CADA renovación de token
     /// de dispositivo (`nube::autenticar_y_cachear`), no sólo en la
     /// activación inicial -- para que el receptor pueda rechazar una versión

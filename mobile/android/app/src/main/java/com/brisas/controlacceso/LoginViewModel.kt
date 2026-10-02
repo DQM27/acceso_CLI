@@ -91,7 +91,8 @@ class LoginViewModel(
                 withContext(dispatcherIO) {
                     // Sin vincular: nada que sincronizar.
                     if (!nucleo.nubeConfigurada()) return@withContext
-                    medirNucleo("sincronizarConNube") { nucleo.sincronizarConNube() }
+                    val resumen = medirNucleo("sincronizarConNube") { nucleo.sincronizarConNube() }
+                    informarDiagnosticoSincronizacion(nucleo, resumen)
                 }
             } catch (_: NucleoException) {
                 // Sin red, o sin vincular todavía -- no es un

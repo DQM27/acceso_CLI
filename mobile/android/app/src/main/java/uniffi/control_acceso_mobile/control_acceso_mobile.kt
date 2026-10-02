@@ -825,6 +825,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_establecer_almacen_clave(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_estado_reloj(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_identidad_equipo(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos(
@@ -990,6 +992,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_establecer_almacen_clave(`ptr`: Long,`almacen`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_estado_reloj(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_identidad_equipo(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_proveedor_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1412,6 +1416,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_establecer_almacen_clave() and 0xFFFF) != 60535) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_estado_reloj() and 0xFFFF) != 56993) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_identidad_equipo() and 0xFFFF) != 64459) {
@@ -3102,6 +3109,12 @@ public interface NucleoInterface {
     fun `establecerAlmacenClave`(`almacen`: AlmacenClaveDispositivo)
     
     /**
+     * Estado del reloj confiable, para la telemetría de diagnóstico (ver
+     * [`crate::EstadoReloj`]).
+     */
+    fun `estadoReloj`(): EstadoReloj
+    
+    /**
      * Unidad y etiqueta de este teléfono (ver [`crate::IdentidadEquipo`]).
      * No necesita sesión: el login también la muestra.
      */
@@ -3991,6 +4004,23 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 }
     }
     
+    
+
+    
+    /**
+     * Estado del reloj confiable, para la telemetría de diagnóstico (ver
+     * [`crate::EstadoReloj`]).
+     */override fun `estadoReloj`(): EstadoReloj {
+            return FfiConverterTypeEstadoReloj.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_estado_reloj(
+        it,
+        _status)
+}
+    }
+    )
+    }
     
 
     
@@ -5870,6 +5900,59 @@ public object FfiConverterTypeEncargadoRuta: FfiConverterRustBuffer<EncargadoRut
 
 
 
+/**
+ * Estado del reloj confiable del teléfono (ver
+ * `control_acceso::tiempo::EstadoReloj`), para la telemetría de
+ * diagnóstico. Sólo números.
+ */
+data class EstadoReloj (
+    var `confiable`: kotlin.Boolean
+    , 
+    var `margenMs`: kotlin.ULong?
+    , 
+    var `diferenciaEquipoMs`: kotlin.Long
+    , 
+    var `anclaHaceMs`: kotlin.ULong?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeEstadoReloj: FfiConverterRustBuffer<EstadoReloj> {
+    override fun read(buf: ByteBuffer): EstadoReloj {
+        return EstadoReloj(
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterOptionalULong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: EstadoReloj) = (
+            FfiConverterBoolean.allocationSize(value.`confiable`) +
+            FfiConverterOptionalULong.allocationSize(value.`margenMs`) +
+            FfiConverterLong.allocationSize(value.`diferenciaEquipoMs`) +
+            FfiConverterOptionalULong.allocationSize(value.`anclaHaceMs`)
+    )
+
+    override fun write(value: EstadoReloj, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`confiable`, buf)
+            FfiConverterOptionalULong.write(value.`margenMs`, buf)
+            FfiConverterLong.write(value.`diferenciaEquipoMs`, buf)
+            FfiConverterOptionalULong.write(value.`anclaHaceMs`, buf)
+    }
+}
+
+
+
 data class FechaMrz (
     var `dia`: kotlin.UByte
     , 
@@ -7133,6 +7216,16 @@ data class ResumenSincronizacion (
     var `sesionEnOtraUnidad`: kotlin.Boolean
     , 
     /**
+     * Qué respondió la nube a la sesión única en esta sincronización
+     * (`vigente`, `desplazada`, `sin_usuario` o `error`), con los ms desde el
+     * ingreso que se le mandaron. `None` si no se consultó (sin sesión, o
+     * la activación inicial). Sólo para la telemetría de diagnóstico.
+     */
+    var `sesionUnidad`: kotlin.String?
+    , 
+    var `sesionTranscurridoMs`: kotlin.ULong?
+    , 
+    /**
      * `docs/pendientes.md`, "alertar luego al sincronizar" -- ingresos que
      * quedaron activos en este teléfono pero que la nube dice que TAMBIÉN
      * están activos en otro sitio (colados mientras este dispositivo
@@ -7190,6 +7283,8 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalULong.read(buf),
             FfiConverterSequenceTypeConflictoIngresoActivo.read(buf),
             FfiConverterSequenceTypeConflictoIngresoProveedorActivo.read(buf),
             FfiConverterSequenceTypeConflictoGafeteActivo.read(buf),
@@ -7212,6 +7307,8 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterString.allocationSize(value.`tipo`) +
             FfiConverterBoolean.allocationSize(value.`sesionExpulsada`) +
             FfiConverterBoolean.allocationSize(value.`sesionEnOtraUnidad`) +
+            FfiConverterOptionalString.allocationSize(value.`sesionUnidad`) +
+            FfiConverterOptionalULong.allocationSize(value.`sesionTranscurridoMs`) +
             FfiConverterSequenceTypeConflictoIngresoActivo.allocationSize(value.`conflictosIngreso`) +
             FfiConverterSequenceTypeConflictoIngresoProveedorActivo.allocationSize(value.`conflictosIngresoProveedor`) +
             FfiConverterSequenceTypeConflictoGafeteActivo.allocationSize(value.`conflictosGafete`)
@@ -7233,6 +7330,8 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
             FfiConverterString.write(value.`tipo`, buf)
             FfiConverterBoolean.write(value.`sesionExpulsada`, buf)
             FfiConverterBoolean.write(value.`sesionEnOtraUnidad`, buf)
+            FfiConverterOptionalString.write(value.`sesionUnidad`, buf)
+            FfiConverterOptionalULong.write(value.`sesionTranscurridoMs`, buf)
             FfiConverterSequenceTypeConflictoIngresoActivo.write(value.`conflictosIngreso`, buf)
             FfiConverterSequenceTypeConflictoIngresoProveedorActivo.write(value.`conflictosIngresoProveedor`, buf)
             FfiConverterSequenceTypeConflictoGafeteActivo.write(value.`conflictosGafete`, buf)
@@ -8734,6 +8833,38 @@ public object FfiConverterTypeTipoVehiculoDetectado: FfiConverterRustBuffer<Tipo
 }
 
 
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalULong: FfiConverterRustBuffer<kotlin.ULong?> {
+    override fun read(buf: ByteBuffer): kotlin.ULong? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterULong.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.ULong?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterULong.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.ULong?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterULong.write(value, buf)
+        }
+    }
+}
 
 
 
