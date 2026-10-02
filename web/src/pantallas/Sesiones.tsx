@@ -76,10 +76,14 @@ export default function Sesiones() {
   const [busqueda, setBusqueda] = useState("");
   const tablaRef = useRef<TablaHandle<SesionBitacora>>(null);
 
-  // La bitácora no está en la publicación de Realtime: se refresca cada minuto.
+  // Cada inicio o cierre de sesión llega en vivo (la bitácora está en la
+  // publicación de Realtime). El refresco cada minuto queda para la "última
+  // actividad" de las sesiones abiertas, que vive en `sesiones_usuario` y no
+  // se publica para no recargar la grilla en cada sincronización de cada
+  // equipo.
   const { datos, cargando } = useLista(["sesiones", desde, hasta], () => listarSesiones({ desde, hasta }), {
     intervaloMs: 60_000,
-    tablas: "",
+    tablas: "bitacora_sesiones",
   });
   const filas = useMemo(() => datos?.filas ?? [], [datos]);
 
