@@ -54,6 +54,7 @@
     "@syncfusion/ej2-locale": "35.1.37",
     "@syncfusion/ej2-pivotview": "35.1.37",
     "@syncfusion/ej2-react-charts": "35.1.37",
+    "@syncfusion/ej2-react-grids": "35.1.37",
     "@syncfusion/ej2-react-pivotview": "35.1.37",
     "@tanstack/react-query": "^5.104.0",
     "ag-grid-community": "^36.1.0",
