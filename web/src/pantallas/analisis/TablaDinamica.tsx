@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ConditionalFormatting,
+  DrillThrough,
   ExcelExport,
   FieldList,
   GroupingBar,
   Inject,
+  NumberFormatting,
+  PDFExport,
+  PivotChart,
   PivotViewComponent,
   Toolbar,
   VirtualScroll,
@@ -75,7 +80,16 @@ const DISENO_INICIAL: DataSourceSettingsModel = {
   ],
 };
 
-const BARRA: ToolbarItems[] = ["Export", "SubTotal", "GrandTotal", "FieldList"];
+const BARRA: ToolbarItems[] = [
+  "Grid",
+  "Chart",
+  "Export",
+  "SubTotal",
+  "GrandTotal",
+  "ConditionalFormatting",
+  "NumberFormatting",
+  "FieldList",
+];
 
 export default function TablaDinamica({ diario }: { diario: ResumenDiario[] }) {
   const pivotRef = useRef<PivotViewComponent>(null);
@@ -113,7 +127,7 @@ export default function TablaDinamica({ diario }: { diario: ResumenDiario[] }) {
         id="tabla-dinamica"
         ref={pivotRef}
         locale={CULTURA}
-        height={480}
+        height={760}
         width="100%"
         dataSourceSettings={disenoInicial}
         aggregateCellInfo={alAgregarCelda}
@@ -123,13 +137,32 @@ export default function TablaDinamica({ diario }: { diario: ResumenDiario[] }) {
         showFieldList
         showGroupingBar
         allowExcelExport
+        allowPdfExport
+        allowConditionalFormatting
+        allowNumberFormatting
+        allowDrillThrough
+        displayOption={{ view: "Both", primary: "Table" }}
+        chartSettings={{ chartSeries: { type: "Column" }, enableExport: true }}
         allowCalculatedField={false}
         allowDeferLayoutUpdate
         enableVirtualization
         enableHtmlSanitizer
         gridSettings={{ columnWidth: 120, allowSelection: false }}
       >
-        <Inject services={[FieldList, GroupingBar, Toolbar, ExcelExport, VirtualScroll]} />
+        <Inject
+          services={[
+            FieldList,
+            GroupingBar,
+            Toolbar,
+            ExcelExport,
+            PDFExport,
+            PivotChart,
+            ConditionalFormatting,
+            NumberFormatting,
+            DrillThrough,
+            VirtualScroll,
+          ]}
+        />
       </PivotViewComponent>
     </section>
   );
