@@ -219,6 +219,10 @@ fun PantallaPrincipal(
         }
     }
 
+    // Se relee al terminar cada sincronización: es cuando puede llegar un
+    // token con la unidad o la etiqueta cambiadas.
+    val textoIdentidad = rememberTextoIdentidadEquipo(nucleo, recargar = nubeViewModel.sincronizando)
+
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
@@ -233,7 +237,7 @@ fun PantallaPrincipal(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "Lattis",
+                    textoIdentidad ?: "Lattis",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

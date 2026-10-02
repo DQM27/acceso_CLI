@@ -352,10 +352,39 @@ impl AppCore {
         Ok(())
     }
 
-    fn aplicar_desfase_reloj(&self, token: &crate::nube::TokenDispositivo) {
+    /// Todo lo que un token recién entregado le enseña a este núcleo: el
+    /// desfase de reloj (si lo trae) y la unidad y etiqueta del equipo, para
+    /// mostrarlas. Un solo lugar para todos los que reciben tokens.
+    pub fn aplicar_token(&self, token: &crate::nube::TokenDispositivo) {
         if let Some(desfase_ms) = token.desfase_reloj_ms {
             self.actualizar_desfase_reloj(desfase_ms);
         }
+        self.recordar_identidad_equipo(token);
+    }
+
+    /// Guarda la unidad y la etiqueta que trae el token, sólo si cambiaron.
+    /// Un token sin ellas (servidor anterior) no borra lo que ya se sabía.
+    fn recordar_identidad_equipo(&self, token: &crate::nube::TokenDispositivo) {
+        use crate::database::queries::identidad_equipo;
+
+        let nueva = identidad_equipo::IdentidadEquipo {
+            unidad: token.sitio_nombre.clone(),
+            etiqueta: token.etiqueta.clone(),
+        };
+        if nueva.esta_vacia()
+            || identidad_equipo::leer(&self.connection).is_ok_and(|actual| actual == nueva)
+        {
+            return;
+        }
+        if let Err(error) = identidad_equipo::guardar(&self.connection, &nueva) {
+            log::warn!("no se pudo guardar la unidad de este equipo: {error}");
+        }
+    }
+
+    /// Unidad y etiqueta de este equipo, para el login y la barra de
+    /// estado. Vacía si todavía no llegaron de la nube.
+    pub fn identidad_equipo(&self) -> crate::database::queries::identidad_equipo::IdentidadEquipo {
+        crate::database::queries::identidad_equipo::leer(&self.connection).unwrap_or_default()
     }
 
     /// Canjea el código (ver [`Self::vincular_dispositivo_inicial`]). Sin
@@ -381,7 +410,7 @@ impl AppCore {
             (None, None) => None,
         };
         let token = self.cache_token.vincular(codigo, metadata)?;
-        self.aplicar_desfase_reloj(&token);
+        self.aplicar_token(&token);
         Ok(token)
     }
 

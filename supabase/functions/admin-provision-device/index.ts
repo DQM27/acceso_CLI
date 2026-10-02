@@ -9,7 +9,7 @@ import { emitirCodigoVinculacion, vigenciaSolicitada } from "../_shared/disposit
 // propia clave al canjearlo.
 //
 //   { "sitio_id": uuid, "tipo": "pc" | "mobile" | "visor", "etiqueta": texto,
-//     "vigencia_minutos"?: 5..1440 }
+//     "vigencia_minutos"?: 5..60 }
 //
 // El sitio se recibe por id y debe existir: antes se recibía por nombre con
 // un upsert, y un error de tipeo creaba un sitio nuevo en silencio.

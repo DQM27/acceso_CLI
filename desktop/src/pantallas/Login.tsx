@@ -6,6 +6,7 @@ import marca from "../assets/marca.png";
 import { cambiarPasswordSupabase, esErrorLogin, login } from "../api";
 import type { UsuarioSesion } from "../api";
 import { esquemaLogin, esquemaCambioObligatorio } from "./Login.logica";
+import IdentidadEquipo from "../componentes/IdentidadEquipo";
 
 type ValoresLogin = z.infer<typeof esquemaLogin>;
 
@@ -174,6 +175,7 @@ export default function Login({
               2026-09-19). Subtítulo real en su lugar. */}
           <div>
             <h1 className="text-lg font-semibold text-texto">Control de acceso</h1>
+            <IdentidadEquipo className="login-identidad-equipo" />
           </div>
         </div>
 

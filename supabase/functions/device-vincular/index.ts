@@ -2,11 +2,13 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { clienteServicio } from "../_shared/admin.ts";
 import { ipDelCliente, json, leerCuerpo, preflight } from "../_shared/http.ts";
 import {
+  COLUMNAS_NOMBRES,
   LARGO_CODIGO,
   clavePublicaValida,
   emitirTokenDispositivo,
   huellaClave,
   metadataSaneada,
+  nombresDe,
   normalizarCodigo,
   registrarEvento,
   sha256Hex,
@@ -72,11 +74,19 @@ Deno.serve(async (req: Request) => {
     return json({ error: "codigo_invalido" }, 401);
   }
 
+  // Sólo para mostrar en el equipo: si falla, el token sale igual sin nombres.
+  const { data: nombres } = await supabase
+    .from("dispositivos")
+    .select(COLUMNAS_NOMBRES)
+    .eq("id", vinculado.dispositivo_id)
+    .maybeSingle();
+
   const token = await emitirTokenDispositivo({
     id: vinculado.dispositivo_id,
     sitio_id: vinculado.sitio_id,
     tipo: vinculado.tipo,
     clave_huella: huella,
+    ...nombresDe(nombres),
   });
   return json(token);
 });

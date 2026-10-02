@@ -165,9 +165,7 @@ fn autenticar(state: &GuiState) -> Result<nube::TokenDispositivo, String> {
     // sección crítica) -- volver a pedirlo acá es una lectura/escritura
     // atómica sobre un `AtomicI64` (ver `RelojCorregido`), no compite con
     // nada lento.
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
+    state.core().aplicar_token(&token);
     Ok(token)
 }
 
@@ -284,12 +282,16 @@ fn intentar_sincronizacion(
     // esta sesión se cierra. Falla "abierto": un error de red no expulsa.
     let mut sesion_en_otra_unidad = false;
     if !sesion_expulsada && let Some((actor, iniciada_en)) = state.sesion_con_inicio() {
+        // Lectura breve del candado, antes de la red: el último desfase
+        // medido, que el token de la caché no trae.
+        let desfase_reloj_ms = state.core().desfase_reloj_ms();
         match nube::sesion_en_unidad(
             nube::base_url(),
             nube::apikey(),
             &token,
             &actor.cedula,
             iniciada_en,
+            desfase_reloj_ms,
         ) {
             Ok(nube::EstadoSesionUnidad::Desplazada) => {
                 state.cerrar_sesion();
@@ -677,4 +679,23 @@ pub fn cerrar_prestamo_gafete_provisional_remoto(
 #[tauri::command]
 pub fn desfase_reloj_ms(state: tauri::State<GuiState>) -> Option<i64> {
     state.core().desfase_reloj_ms()
+}
+
+/// Unidad y etiqueta con que el panel registró esta PC, para el login y la
+/// barra de estado. Sólo informativas: si alguien registró el equipo en la
+/// unidad equivocada, se nota acá antes de que la sesión única empiece a
+/// cerrar sesiones. Campos `null` mientras no hayan llegado de la nube.
+#[derive(serde::Serialize)]
+pub struct IdentidadEquipoGui {
+    unidad: Option<String>,
+    etiqueta: Option<String>,
+}
+
+#[tauri::command]
+pub fn identidad_equipo(state: tauri::State<GuiState>) -> IdentidadEquipoGui {
+    let identidad = state.core().identidad_equipo();
+    IdentidadEquipoGui {
+        unidad: identidad.unidad,
+        etiqueta: identidad.etiqueta,
+    }
 }

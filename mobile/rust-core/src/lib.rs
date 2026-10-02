@@ -46,8 +46,8 @@ pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
     ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta,
-    IngresoActivoResumen, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso, ModoBusquedaActivos,
-    MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
+    IdentidadEquipo, IngresoActivoResumen, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso,
+    ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
     PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
     RegistroIngresoProveedorActivoResumen, ResultadoAcceso, ResultadoIngresoRegistrado,
     ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta, ResultadoSalidaRuta,
@@ -266,13 +266,13 @@ impl Nucleo {
     /// reemplaza para móvil lo que antes hacía `AppCore::autenticar_con_cache`
     /// (ver el comentario de ese campo). La red corre sin `core_lock()`;
     /// sólo se toma DESPUÉS, para aplicar el desfase de reloj medido (ver
-    /// [`Nucleo::aplicar_desfase_de`]). Quien llama no debe tener tomado
+    /// [`Nucleo::aplicar_token_de`]). Quien llama no debe tener tomado
     /// `core_lock()`.
     fn autenticar_con_cache(
         &self,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
         let token = self.cache_token.autenticar_con_cache()?;
-        self.aplicar_desfase_de(&token);
+        self.aplicar_token_de(&token);
         Ok(token)
     }
 
@@ -286,7 +286,7 @@ impl Nucleo {
         metadata: Option<&control_acceso::nube::MetadatosDispositivo>,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
         let token = self.cache_token.vincular(codigo, metadata)?;
-        self.aplicar_desfase_de(&token);
+        self.aplicar_token_de(&token);
         Ok(token)
     }
 
@@ -299,10 +299,11 @@ impl Nucleo {
     /// y el login (`Nucleo::autenticar`) se lo saltaba -- medía el desfase
     /// y lo descartaba, y las autenticaciones siguientes, desde el caché, ya
     /// no lo traían, así que quedaba el de una medición vieja.
-    fn aplicar_desfase_de(&self, token: &control_acceso::nube::TokenDispositivo) {
-        if let Some(desfase_ms) = token.desfase_reloj_ms {
-            self.core_lock().actualizar_desfase_reloj(desfase_ms);
-        }
+    ///
+    /// También guarda la unidad y la etiqueta del equipo que trae el token
+    /// (ver `AppCore::aplicar_token`).
+    fn aplicar_token_de(&self, token: &control_acceso::nube::TokenDispositivo) {
+        self.core_lock().aplicar_token(token);
     }
 
     /// Conexión propia al mismo archivo, independiente de `core` -- mismo

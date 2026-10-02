@@ -98,9 +98,7 @@ fn intentar_login_local(
 /// `ESPERA_MAXIMA_SYNC_LOGIN` completos.
 pub fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
     let token = state.autenticar_con_cache().map_err(mensaje_nube)?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
+    state.core().aplicar_token(&token);
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
         apikey: nube::apikey(),
@@ -128,9 +126,7 @@ pub fn refrescar_catalogo_sin_sesion(state: &GuiState) -> Result<(), String> {
 /// corriendo, pero en segundo plano -- ver `login`.
 fn usuario_sigue_activo_remoto(state: &GuiState, cedula: &str) -> Result<bool, String> {
     let token = state.autenticar_con_cache().map_err(mensaje_nube)?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
+    state.core().aplicar_token(&token);
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
         apikey: nube::apikey(),

@@ -20,6 +20,16 @@ impl Nucleo {
         self.core_lock().desfase_reloj_ms()
     }
 
+    /// Unidad y etiqueta de este teléfono (ver [`crate::IdentidadEquipo`]).
+    /// No necesita sesión: el login también la muestra.
+    pub fn identidad_equipo(&self) -> crate::IdentidadEquipo {
+        let identidad = self.core_lock().identidad_equipo();
+        crate::IdentidadEquipo {
+            unidad: identidad.unidad,
+            etiqueta: identidad.etiqueta,
+        }
+    }
+
     /// `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
     /// usa para decidir si mostrar la pantalla de arranque (vincular con un
     /// código) en vez del login (ver `MainActivity.kt`).
@@ -458,12 +468,16 @@ impl Nucleo {
             .as_ref()
             .map(|(_, iniciada_en)| *iniciada_en);
         if let (false, Some(iniciada_en)) = (sesion_expulsada, inicio) {
+            // El último desfase medido (el token de la caché no lo trae);
+            // el candado se suelta antes de la red.
+            let desfase_reloj_ms = self.core_lock().desfase_reloj_ms();
             match control_acceso::nube::sesion_en_unidad(
                 control_acceso::nube::base_url(),
                 control_acceso::nube::apikey(),
                 &token,
                 &actor.cedula,
                 iniciada_en,
+                desfase_reloj_ms,
             ) {
                 Ok(control_acceso::nube::EstadoSesionUnidad::Desplazada) => {
                     *self.sesion_lock() = None;

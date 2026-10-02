@@ -868,3 +868,13 @@ impl From<RegistroIngresoProveedorActivoResumenNucleo> for RegistroIngresoProvee
         }
     }
 }
+
+/// Unidad y etiqueta con que el panel registró este teléfono, para el login
+/// y la barra de estado. Sólo informativas (ninguna regla depende de ellas):
+/// sirven para notar un equipo registrado en la unidad equivocada. `None`
+/// mientras no hayan llegado de la nube.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct IdentidadEquipo {
+    pub unidad: Option<String>,
+    pub etiqueta: Option<String>,
+}

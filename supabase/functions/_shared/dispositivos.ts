@@ -32,7 +32,12 @@ const TIPO_DESAFIO = "desafio_dispositivo";
  */
 const ALFABETO_CODIGO = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 export const LARGO_CODIGO = 10;
-export const VIGENCIA_CODIGO_MINUTOS = { porDefecto: 15, minima: 5, maxima: 24 * 60 };
+/**
+ * Mientras está vigente, el código sirve a quien lo use primero (una foto de
+ * la pantalla basta): la vigencia es la ventana de ese riesgo. Una hora
+ * alcanza para instalar y vincular; antes se permitían 24 h.
+ */
+export const VIGENCIA_CODIGO_MINUTOS = { porDefecto: 15, minima: 5, maxima: 60 };
 
 function generarCodigo(): string {
   const bytes = new Uint8Array(LARGO_CODIGO);
@@ -170,6 +175,9 @@ export interface DispositivoAutenticable {
   sitio_id: string;
   tipo: string;
   clave_huella: string | null;
+  /** Para mostrar en el equipo (login y barra de estado); no son claims. */
+  sitio_nombre?: string | null;
+  etiqueta?: string | null;
 }
 
 /**
@@ -201,7 +209,27 @@ export async function emitirTokenDispositivo(dispositivo: DispositivoAutenticabl
     sitio_id: dispositivo.sitio_id,
     dispositivo_id: dispositivo.id,
     tipo: dispositivo.tipo,
+    // Sólo informativos: el equipo los muestra para que se note si quedó
+    // registrado en la unidad equivocada. Ningún permiso depende de ellos.
+    sitio_nombre: dispositivo.sitio_nombre ?? null,
+    etiqueta: dispositivo.etiqueta ?? null,
   };
+}
+
+interface FilaNombres {
+  etiqueta: string | null;
+  // PostgREST devuelve un objeto para una relación "a uno", pero supabase-js
+  // sin tipos generados la infiere como arreglo: se aceptan las dos formas.
+  sitios: { nombre: string } | { nombre: string }[] | null;
+}
+
+/** Columnas para `select` que traen la etiqueta y el nombre de la unidad. */
+export const COLUMNAS_NOMBRES = "etiqueta, sitios(nombre)";
+
+/** Etiqueta y nombre de la unidad a partir de una fila con `COLUMNAS_NOMBRES`. */
+export function nombresDe(fila: FilaNombres | null | undefined): { sitio_nombre: string | null; etiqueta: string | null } {
+  const sitio = Array.isArray(fila?.sitios) ? fila.sitios[0] : fila?.sitios;
+  return { sitio_nombre: sitio?.nombre ?? null, etiqueta: fila?.etiqueta ?? null };
 }
 
 /**

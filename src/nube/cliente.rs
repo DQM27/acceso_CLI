@@ -87,6 +87,15 @@ pub struct TokenDispositivo {
     /// tocar el reloj corregido en ese caso, no asumir desfase cero.
     #[serde(skip, default)]
     pub desfase_reloj_ms: Option<i64>,
+    /// Nombre de la unidad a la que quedó registrado el equipo, para
+    /// mostrarlo (login, barra de estado). Sólo informativo: ningún permiso
+    /// depende de él. `None` si el servidor no lo manda (versión anterior).
+    #[serde(default)]
+    pub sitio_nombre: Option<String>,
+    /// Etiqueta con la que el panel registró el equipo. Igual que
+    /// `sitio_nombre`: sólo para mostrar.
+    #[serde(default)]
+    pub etiqueta: Option<String>,
 }
 
 impl std::fmt::Debug for TokenDispositivo {
@@ -98,6 +107,8 @@ impl std::fmt::Debug for TokenDispositivo {
             .field("dispositivo_id", &self.dispositivo_id)
             .field("tipo", &self.tipo)
             .field("desfase_reloj_ms", &self.desfase_reloj_ms)
+            .field("sitio_nombre", &self.sitio_nombre)
+            .field("etiqueta", &self.etiqueta)
             .finish()
     }
 }
@@ -317,6 +328,8 @@ mod tests {
             dispositivo_id: "d1".to_string(),
             tipo: "pc".to_string(),
             desfase_reloj_ms: Some(25),
+            sitio_nombre: None,
+            etiqueta: None,
         };
 
         let debug = format!("{token:?}");

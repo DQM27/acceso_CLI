@@ -352,6 +352,8 @@ mod tests {
             dispositivo_id: "d1".to_string(),
             tipo: "pc".to_string(),
             desfase_reloj_ms: Some(42),
+            sitio_nombre: None,
+            etiqueta: None,
         }
     }
 

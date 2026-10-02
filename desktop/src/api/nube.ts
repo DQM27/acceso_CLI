@@ -253,3 +253,15 @@ export function fallosPermanentesNube(): Promise<number> {
 export function desfaseRelojMs(): Promise<number | null> {
   return invoke<number | null>("desfase_reloj_ms");
 }
+
+/** Unidad y etiqueta con que el panel registró esta PC (ver
+ * `comandos::nube::identidad_equipo`). `null` mientras no hayan llegado de
+ * la nube. */
+export interface IdentidadEquipo {
+  unidad: string | null;
+  etiqueta: string | null;
+}
+
+export function obtenerIdentidadEquipo(): Promise<IdentidadEquipo> {
+  return invoke<IdentidadEquipo>("identidad_equipo");
+}

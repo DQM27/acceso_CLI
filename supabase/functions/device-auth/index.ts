@@ -3,11 +3,13 @@ import { decodeProtectedHeader } from "npm:jose@5";
 import { clienteServicio } from "../_shared/admin.ts";
 import { enSegundoPlano, ipDelCliente, json, leerCuerpo, preflight } from "../_shared/http.ts";
 import {
+  COLUMNAS_NOMBRES,
   TTL_DESAFIO_SEGUNDOS,
   asercionValida,
   emitirDesafio,
   emitirTokenDispositivo,
   metadataSaneada,
+  nombresDe,
   registrarEvento,
   type ClavePublicaP256,
   type MetadatosDispositivo,
@@ -50,9 +52,11 @@ interface FilaDispositivo {
   clave_huella: string | null;
   clave_publica_jwk: ClavePublicaP256 | null;
   identificador_hardware: string | null;
+  etiqueta: string | null;
+  sitios: { nombre: string } | null;
 }
 
-const COLUMNAS = "id, sitio_id, tipo, clave_huella, clave_publica_jwk, identificador_hardware";
+const COLUMNAS = `id, sitio_id, tipo, clave_huella, clave_publica_jwk, identificador_hardware, ${COLUMNAS_NOMBRES}`;
 
 const credencialesInvalidas = () => json({ error: "invalid_credentials" }, 401);
 
@@ -88,7 +92,7 @@ Deno.serve(async (req: Request) => {
 
   enSegundoPlano(actualizarRastro(supabase, dispositivo, metadata, ip));
 
-  return json(await emitirTokenDispositivo(dispositivo));
+  return json(await emitirTokenDispositivo({ ...dispositivo, ...nombresDe(dispositivo) }));
 });
 
 async function autenticarConAsercion(

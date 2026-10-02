@@ -23,9 +23,7 @@ fn chequear_visitante_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Op
         return None;
     }
     let token = state.autenticar_con_cache().ok()?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
+    state.core().aplicar_token(&token);
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
         apikey: nube::apikey(),
@@ -60,9 +58,7 @@ fn gafete_de_visita_libre_en_otro_dispositivo(
     let token = state
         .autenticar_con_cache()
         .map_err(control_acceso::mensajes::mensaje_nube)?;
-    if let Some(desfase_ms) = token.desfase_reloj_ms {
-        state.core().actualizar_desfase_reloj(desfase_ms);
-    }
+    state.core().aplicar_token(&token);
     let contexto = nube::ContextoSincronizacion {
         base_url: nube::base_url(),
         apikey: nube::apikey(),

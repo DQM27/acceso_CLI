@@ -825,6 +825,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_establecer_almacen_clave(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_identidad_equipo(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_remotos(
@@ -988,6 +990,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_establecer_almacen_clave(`ptr`: Long,`almacen`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_identidad_equipo(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_proveedor_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_ingresos_remotos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1408,6 +1412,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_establecer_almacen_clave() and 0xFFFF) != 60535) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_identidad_equipo() and 0xFFFF) != 64459) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_proveedor_remotos() and 0xFFFF) != 45361) {
@@ -3095,6 +3102,12 @@ public interface NucleoInterface {
     fun `establecerAlmacenClave`(`almacen`: AlmacenClaveDispositivo)
     
     /**
+     * Unidad y etiqueta de este teléfono (ver [`crate::IdentidadEquipo`]).
+     * No necesita sesión: el login también la muestra.
+     */
+    fun `identidadEquipo`(): IdentidadEquipo
+    
+    /**
      * Espejo de [`Self::listar_ingresos_remotos`], pero contra la caché
      * `ingresos_proveedor_remotos`.
      */
@@ -3978,6 +3991,23 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 }
     }
     
+    
+
+    
+    /**
+     * Unidad y etiqueta de este teléfono (ver [`crate::IdentidadEquipo`]).
+     * No necesita sesión: el login también la muestra.
+     */override fun `identidadEquipo`(): IdentidadEquipo {
+            return FfiConverterTypeIdentidadEquipo.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_identidad_equipo(
+        it,
+        _status)
+}
+    }
+    )
+    }
     
 
     
@@ -5925,6 +5955,50 @@ public object FfiConverterTypeFechaOcr: FfiConverterRustBuffer<FechaOcr> {
             FfiConverterUByte.write(value.`dia`, buf)
             FfiConverterUByte.write(value.`mes`, buf)
             FfiConverterInt.write(value.`anio`, buf)
+    }
+}
+
+
+
+/**
+ * Unidad y etiqueta con que el panel registró este teléfono, para el login
+ * y la barra de estado. Sólo informativas (ninguna regla depende de ellas):
+ * sirven para notar un equipo registrado en la unidad equivocada. `None`
+ * mientras no hayan llegado de la nube.
+ */
+data class IdentidadEquipo (
+    var `unidad`: kotlin.String?
+    , 
+    var `etiqueta`: kotlin.String?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeIdentidadEquipo: FfiConverterRustBuffer<IdentidadEquipo> {
+    override fun read(buf: ByteBuffer): IdentidadEquipo {
+        return IdentidadEquipo(
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: IdentidadEquipo) = (
+            FfiConverterOptionalString.allocationSize(value.`unidad`) +
+            FfiConverterOptionalString.allocationSize(value.`etiqueta`)
+    )
+
+    override fun write(value: IdentidadEquipo, buf: ByteBuffer) {
+            FfiConverterOptionalString.write(value.`unidad`, buf)
+            FfiConverterOptionalString.write(value.`etiqueta`, buf)
     }
 }
 

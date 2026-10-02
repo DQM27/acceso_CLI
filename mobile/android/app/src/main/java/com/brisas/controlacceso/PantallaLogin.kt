@@ -91,6 +91,17 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
             modifier = Modifier.padding(top = 16.dp),
         )
 
+        // Unidad y etiqueta con que quedó registrado el teléfono: si lo
+        // registraron en la unidad equivocada, se ve antes de entrar.
+        rememberTextoIdentidadEquipo(nucleo)?.let { texto ->
+            Text(
+                texto,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+
         OutlinedTextField(
             value = viewModel.cedula,
             onValueChange = { viewModel.cambiarCedula(it) },

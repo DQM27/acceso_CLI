@@ -32,19 +32,22 @@ pub enum EstadoSesionUnidad {
 /// Registra la sesión de `cedula` en este equipo y dice si sigue vigente.
 ///
 /// `iniciada_en` es la hora del ingreso según el reloj de ESTE equipo; se
-/// corrige con el desfase medido contra el servidor
-/// (`TokenDispositivo::desfase_reloj_ms`) para que dos equipos con relojes
-/// distintos se comparen bien.
+/// lleva al reloj del servidor con `desfase_reloj_ms`, el último desfase
+/// medido (`AppCore::desfase_reloj_ms`, guardado en la base). No sirve el
+/// del token: un token de la caché no lo trae, y sin corrección un equipo
+/// con el reloj atrasado registraría un ingreso "viejo" y la nube lo daría
+/// por desplazado aunque el usuario acabara de entrar.
 pub fn sesion_en_unidad(
     base_url: &str,
     apikey: &str,
     token: &TokenDispositivo,
     cedula: &str,
     iniciada_en: DateTime<Utc>,
+    desfase_reloj_ms: Option<i64>,
 ) -> Result<EstadoSesionUnidad, NubeError> {
     let cuerpo = serde_json::json!({
         "p_cedula": cedula,
-        "p_iniciada_en": hora_del_servidor(iniciada_en, token.desfase_reloj_ms).to_rfc3339(),
+        "p_iniciada_en": hora_del_servidor(iniciada_en, desfase_reloj_ms).to_rfc3339(),
     });
     let respuesta = cliente_http()
         .post(format!("{base_url}/rest/v1/rpc/sesion_usuario_en_unidad"))
@@ -157,22 +160,26 @@ mod tests {
             dispositivo_id: "equipo".to_string(),
             tipo: "pc".to_string(),
             desfase_reloj_ms,
+            sitio_nombre: None,
+            etiqueta: None,
         }
     }
 
     #[test]
-    fn llama_la_funcion_con_el_token_del_equipo_y_la_hora_corregida() {
+    fn llama_la_funcion_con_el_token_del_equipo_y_la_hora_corregida_con_el_desfase_guardado() {
         let (url, pedido) = servidor("\"desplazada\"", "200 OK");
         let local = DateTime::parse_from_rfc3339("2026-09-30T12:00:02Z")
             .unwrap()
             .with_timezone(&Utc);
 
+        // El token de la caché no trae desfase: se usa el guardado.
         let estado = sesion_en_unidad(
             &url,
             "clave-publica",
-            &token(Some(2_000)),
+            &token(None),
             "900000301",
             local,
+            Some(2_000),
         )
         .unwrap();
 
@@ -191,7 +198,8 @@ mod tests {
     #[test]
     fn un_error_del_servidor_es_error_no_expulsion() {
         let (url, _pedido) = servidor("{\"message\":\"no\"}", "403 Forbidden");
-        let resultado = sesion_en_unidad(&url, "clave", &token(None), "900000301", Utc::now());
+        let resultado =
+            sesion_en_unidad(&url, "clave", &token(None), "900000301", Utc::now(), None);
         assert!(resultado.is_err());
     }
 
