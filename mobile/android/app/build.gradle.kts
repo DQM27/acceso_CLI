@@ -115,6 +115,14 @@ android {
         }
     }
 
+    // Los builds de prueba (debug y diagnostico) llevan el icono con la cinta
+    // TEST (`src/beta/res`, generado por `scripts/generar_iconos_beta.py`):
+    // junto a la app real en el mismo teléfono se distinguen a simple vista.
+    sourceSets {
+        getByName("debug").res.srcDir("src/beta/res")
+        getByName("diagnostico").res.srcDir("src/beta/res")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
