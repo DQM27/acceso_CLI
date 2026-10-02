@@ -117,6 +117,7 @@ export default function TablaDinamica({ diario }: { diario: ResumenDiario[] }) {
         width="100%"
         dataSourceSettings={disenoInicial}
         aggregateCellInfo={alAgregarCelda}
+        cssClass="pivot-lista-campos"
         showToolbar
         toolbar={BARRA}
         showFieldList

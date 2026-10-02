@@ -52,3 +52,20 @@
   border-radius: var(--radio);
   overflow: hidden;
 }
+
+/*
+ * La lista de campos se abre como diálogo dentro de <body>, pero Syncfusion lo
+ * ubica con el `offsetTop` de la tabla (relativo a otro contenedor), así que
+ * aparecía abajo, fuera de la pantalla. Se centra sobre la ventana, como un
+ * modal. `cssClass` de la tabla se copia al diálogo. Con esto ya no se puede
+ * arrastrar, a cambio de que siempre quede a la vista.
+ */
+.pivot-lista-campos.e-dialog {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  max-width: min(900px, 95vw);
+  max-height: 95vh;
+  overflow: auto;
+}
