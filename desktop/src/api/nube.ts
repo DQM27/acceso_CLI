@@ -18,6 +18,8 @@ export interface ResumenSincronizacion {
   /** Mismo criterio que `cierres_recibidos`, pero para ingresos de
    * proveedor. */
   cierres_recibidos_proveedor: number;
+  /** Lo mismo para ingresos por correo. */
+  cierres_recibidos_correo: number;
   empresas_recibidas: number;
   contratistas_recibidos: number;
   gafetes_recibidos: number;
@@ -29,6 +31,8 @@ export interface ResumenSincronizacion {
   /** Mismo criterio que `historial_visitas_recibidos`, pero para ingresos
    * de proveedor. */
   historial_ingresos_proveedor_recibidos: number;
+  /** Lo mismo para ingresos por correo. */
+  historial_ingresos_correo_recibidos: number;
   /** Mismo criterio que `historial_visitas_recibidos`, pero para préstamos
    * de gafete provisional KOF. */
   historial_gafetes_provisionales_recibidos: number;
@@ -57,6 +61,8 @@ export interface ResumenSincronizacion {
    * proveedor -- una cédula que quedó activa en este dispositivo pero que
    * la nube dice que también está activa en otro sitio. */
   conflictos_ingreso_proveedor: ConflictoIngresoProveedorActivo[];
+  /** Lo mismo para ingresos por correo (mismo tipo de aviso). */
+  conflictos_ingreso_correo: ConflictoIngresoProveedorActivo[];
   /** Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
    * la nube fue rechazado porque otro dispositivo del mismo sitio ya
    * tiene ese número activo -- a diferencia de `conflictos_ingreso`, se
@@ -238,6 +244,30 @@ export function listarIngresosProveedorRemotos(): Promise<IngresoProveedorRemoto
  * proveedores (`historial_ingresos_proveedor_sitio`). */
 export async function cerrarIngresoProveedorRemoto(uuid: string): Promise<void> {
   await invoke("cerrar_ingreso_proveedor_remoto", { uuid });
+  solicitarSincronizacionNube();
+}
+
+/** Ingreso por correo abierto por el otro dispositivo del sitio (caché
+ * `ingresos_correo_remotos`, `comandos::nube::IngresoCorreoRemoto`). */
+export interface IngresoCorreoRemoto {
+  uuid: string;
+  cedula: string;
+  nombre: string;
+  motivo: string;
+  placa: string | null;
+  gafete_numero: number;
+  /** ISO 8601 (UTC). */
+  hora_entrada: string;
+  usuario_entrada_nombre: string;
+}
+
+export function listarIngresosCorreoRemotos(): Promise<IngresoCorreoRemoto[]> {
+  return invoke("listar_ingresos_correo_remotos");
+}
+
+/** Mismo criterio que `cerrarIngresoProveedorRemoto`. */
+export async function cerrarIngresoCorreoRemoto(uuid: string): Promise<void> {
+  await invoke("cerrar_ingreso_correo_remoto", { uuid });
   solicitarSincronizacionNube();
 }
 

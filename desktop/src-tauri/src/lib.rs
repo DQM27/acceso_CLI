@@ -556,7 +556,10 @@ fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
 }
 
 /// Todos los comandos Tauri que puede invocar el frontend -- separado de
-/// `run()` sólo para mantenerla bajo el tope de líneas de Clippy.
+/// `run()` sólo para mantenerla bajo el tope de líneas de Clippy. Es una
+/// lista plana de nombres (una línea por comando): partirla en dos no la
+/// haría más clara, así que el tope no aplica acá.
+#[allow(clippy::too_many_lines)]
 fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     tauri::generate_handler![
         comandos::autenticacion::requiere_configuracion_inicial,
@@ -610,6 +613,10 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::proveedores::registrar_salida_proveedor,
         comandos::proveedores::listar_proveedores_activos,
         comandos::proveedores::listar_historial_ingresos_proveedor_sitio,
+        comandos::correo::registrar_ingreso_correo,
+        comandos::correo::registrar_salida_correo,
+        comandos::correo::listar_correos_activos,
+        comandos::correo::listar_historial_ingresos_correo_sitio,
         comandos::gafetes_provisionales::buscar_encargados_ruta_provisional,
         comandos::gafetes_provisionales::entregar_gafete_provisional,
         comandos::gafetes_provisionales::registrar_devolucion_gafete_provisional,
@@ -644,6 +651,8 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::nube::cerrar_ingreso_remoto,
         comandos::nube::listar_ingresos_proveedor_remotos,
         comandos::nube::cerrar_ingreso_proveedor_remoto,
+        comandos::nube::listar_ingresos_correo_remotos,
+        comandos::nube::cerrar_ingreso_correo_remoto,
         comandos::nube::listar_prestamos_gafete_provisional_remotos,
         comandos::nube::cerrar_prestamo_gafete_provisional_remoto,
         comandos::nube::fallos_permanentes_nube,

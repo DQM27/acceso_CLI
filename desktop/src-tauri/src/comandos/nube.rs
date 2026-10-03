@@ -39,6 +39,8 @@ pub struct ResumenSincronizacion {
     /// Mismo criterio que `cierres_recibidos`, pero para ingresos de
     /// proveedor (`nube::recibir_cierres_de_ingresos_propios_proveedor`).
     pub cierres_recibidos_proveedor: u32,
+    /// Lo mismo para ingresos por correo.
+    pub cierres_recibidos_correo: u32,
     pub empresas_recibidas: u32,
     pub contratistas_recibidos: u32,
     pub gafetes_recibidos: u32,
@@ -53,6 +55,8 @@ pub struct ResumenSincronizacion {
     /// Mismo criterio que `historial_visitas_recibidos`, pero para ingresos
     /// de proveedor (`nube::recibir_historial_ingresos_proveedor_del_sitio`).
     pub historial_ingresos_proveedor_recibidos: u32,
+    /// Lo mismo para ingresos por correo.
+    pub historial_ingresos_correo_recibidos: u32,
     /// Mismo criterio que `historial_visitas_recibidos`, pero para préstamos
     /// de gafete provisional KOF
     /// (`nube::recibir_historial_gafetes_provisionales_del_sitio`).
@@ -83,6 +87,8 @@ pub struct ResumenSincronizacion {
     /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
     /// proveedor (`nube::proveedores_con_conflicto_activo`).
     pub conflictos_ingreso_proveedor: Vec<nube::ConflictoIngresoProveedorActivo>,
+    /// Lo mismo para ingresos por correo (`nube::correos_con_conflicto_activo`).
+    pub conflictos_ingreso_correo: Vec<nube::ConflictoIngresoProveedorActivo>,
     /// Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
     /// la nube fue rechazado porque otro dispositivo del mismo sitio ya
     /// tiene ese número activo -- a diferencia de `conflictos_ingreso`, se
@@ -128,6 +134,20 @@ pub struct IngresoProveedorRemoto {
     pub cedula: String,
     pub nombre: String,
     pub empresa_nombre: String,
+    pub placa: Option<String>,
+    pub gafete_numero: i64,
+    pub hora_entrada: String,
+    pub usuario_entrada_nombre: String,
+}
+
+/// Espejo de `nube::IngresoCorreoRemoto` -- mismo criterio que
+/// `IngresoProveedorRemoto`, con el motivo en vez de la empresa.
+#[derive(serde::Serialize)]
+pub struct IngresoCorreoRemoto {
+    pub uuid: String,
+    pub cedula: String,
+    pub nombre: String,
+    pub motivo: String,
     pub placa: Option<String>,
     pub gafete_numero: i64,
     pub hora_entrada: String,
@@ -317,10 +337,12 @@ fn intentar_sincronizacion(
         remotos_abiertos: resumen.remotos_abiertos,
         cierres_recibidos: resumen.cierres_recibidos,
         cierres_recibidos_proveedor: resumen.cierres_recibidos_proveedor,
+        cierres_recibidos_correo: resumen.cierres_recibidos_correo,
         movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
         citas_recibidas: resumen.citas_recibidas,
         historial_visitas_recibidos: resumen.historial_visitas_recibidos,
         historial_ingresos_proveedor_recibidos: resumen.historial_ingresos_proveedor_recibidos,
+        historial_ingresos_correo_recibidos: resumen.historial_ingresos_correo_recibidos,
         historial_gafetes_provisionales_recibidos: resumen
             .historial_gafetes_provisionales_recibidos,
         empresas_recibidas: resumen.catalogo.empresas_recibidas,
@@ -336,6 +358,7 @@ fn intentar_sincronizacion(
         conflictos_ingreso: resumen.conflictos_ingreso,
         conflictos_movimiento_visita: resumen.conflictos_movimiento_visita,
         conflictos_ingreso_proveedor: resumen.conflictos_ingreso_proveedor,
+        conflictos_ingreso_correo: resumen.conflictos_ingreso_correo,
         conflictos_gafete: resumen.conflictos_gafete,
     })
 }
@@ -373,10 +396,12 @@ pub async fn vincular_dispositivo_inicial(
             // campo -- mismo criterio que `conflictos_ingreso_proveedor` de
             // abajo: base recién configurada, nada que traer todavía.
             cierres_recibidos_proveedor: 0,
+            cierres_recibidos_correo: 0,
             movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
             citas_recibidas: resumen.citas_recibidas,
             historial_visitas_recibidos: resumen.historial_visitas_recibidos,
             historial_ingresos_proveedor_recibidos: 0,
+            historial_ingresos_correo_recibidos: 0,
             historial_gafetes_provisionales_recibidos: 0,
             empresas_recibidas: resumen.empresas_recibidas,
             contratistas_recibidos: resumen.contratistas_recibidos,
@@ -394,6 +419,7 @@ pub async fn vincular_dispositivo_inicial(
             conflictos_ingreso: Vec::new(),
             conflictos_movimiento_visita: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
+            conflictos_ingreso_correo: Vec::new(),
             conflictos_gafete: Vec::new(),
         })
     })
@@ -617,6 +643,61 @@ pub fn cerrar_ingreso_proveedor_remoto(
     let conexion = state.conexion_secundaria()?;
     let hora = state.core().ahora_utc();
     nube::cerrar_ingreso_proveedor_remoto(&conexion, &contexto, &uuid, &actor.nombre, hora)
+        .map_err(mensaje_sincronizacion)
+}
+
+/// Espejo de `listar_ingresos_proveedor_remotos`, contra la caché
+/// `ingresos_correo_remotos`.
+#[tauri::command]
+pub fn listar_ingresos_correo_remotos(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<IngresoCorreoRemoto>, String> {
+    state.sesion_activa()?;
+    let conexion = state.conexion_secundaria()?;
+    let mut statement = conexion
+        .prepare(
+            "SELECT uuid, cedula, nombre, motivo, placa, gafete_numero,
+                    hora_entrada, usuario_entrada_nombre
+             FROM ingresos_correo_remotos ORDER BY hora_entrada",
+        )
+        .map_err(super::mensaje_generico)?;
+    let filas = statement
+        .query_map([], |row| {
+            Ok(IngresoCorreoRemoto {
+                uuid: row.get(0)?,
+                cedula: row.get(1)?,
+                nombre: row.get(2)?,
+                motivo: row.get(3)?,
+                placa: row.get(4)?,
+                gafete_numero: row.get(5)?,
+                hora_entrada: row.get(6)?,
+                usuario_entrada_nombre: row.get(7)?,
+            })
+        })
+        .map_err(super::mensaje_generico)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(super::mensaje_generico)?;
+    Ok(filas)
+}
+
+/// Espejo de `cerrar_ingreso_proveedor_remoto`, contra `ingresos_correo`.
+#[tauri::command]
+pub fn cerrar_ingreso_correo_remoto(
+    uuid: String,
+    state: tauri::State<GuiState>,
+) -> Result<(), String> {
+    let actor = state.sesion_activa()?;
+    let token = autenticar(&state)?;
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+    let conexion = state.conexion_secundaria()?;
+    let hora = state.core().ahora_utc();
+    nube::cerrar_ingreso_correo_remoto(&conexion, &contexto, &uuid, &actor.nombre, hora)
         .map_err(mensaje_sincronizacion)
 }
 

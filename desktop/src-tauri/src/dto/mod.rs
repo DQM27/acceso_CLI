@@ -8,6 +8,7 @@
 //! `contratistas::tests` para el caso con más lógica.
 
 pub mod contratistas;
+pub mod correo;
 pub mod empresas;
 pub mod gafetes;
 pub mod proveedores;
