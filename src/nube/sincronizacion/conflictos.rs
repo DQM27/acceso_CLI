@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-use super::{ContextoSincronizacion, SincronizacionError, SitioEmbebido, obtener_json};
+use super::{ContextoSincronizacion, SincronizacionError, SitioEmbebido, llamar_rpc, obtener_json};
 use crate::nube::cliente::cliente_http;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,7 +17,7 @@ pub struct ConflictoIngresoActivo {
 #[derive(serde::Deserialize)]
 pub(super) struct FilaConflictoActivo {
     pub(super) contratista_cedula: Option<String>,
-    pub(super) sitios: Option<SitioEmbebido>,
+    pub(super) sitio_nombre: Option<String>,
 }
 
 /// `docs/pendientes.md`, mitad "offline, registrar y alertar luego al
@@ -33,6 +33,10 @@ pub(super) struct FilaConflictoActivo {
 /// ingresos activos -- así cada lado se entera y puede avisar sin
 /// necesitar un canal de mensajería aparte entre sitios ni una tabla nueva
 /// de "notificaciones pendientes".
+///
+/// Va por la función `contratistas_activos_en_otras_unidades` por el mismo
+/// motivo que `contratista_con_ingreso_activo`: la RLS de `ingresos` no deja
+/// ver lo de otras unidades, y la consulta directa siempre daba vacío.
 pub fn contratistas_con_conflicto_activo(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
@@ -52,21 +56,20 @@ pub fn contratistas_con_conflicto_activo(
     let cedulas = activos_locales
         .iter()
         .map(|(cedula, _)| cedula.as_str())
-        .collect::<Vec<_>>()
-        .join(",");
+        .collect::<Vec<_>>();
     let cliente = cliente_http();
-    let url = format!(
-        "{}/rest/v1/ingresos?contratista_cedula=in.({cedulas})&sitio_id=neq.{}&hora_salida=is.null\
-         &select=contratista_cedula,sitios(nombre)",
-        contexto.base_url, contexto.sitio_id,
-    );
-    let filas: Vec<FilaConflictoActivo> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaConflictoActivo> = llamar_rpc(
+        &cliente,
+        contexto,
+        "contratistas_activos_en_otras_unidades",
+        &serde_json::json!({ "p_cedulas": cedulas }),
+    )?;
 
     Ok(filas
         .into_iter()
         .filter_map(|fila| {
             let cedula = fila.contratista_cedula?;
-            let sitio = fila.sitios?.nombre;
+            let sitio = fila.sitio_nombre?;
             let nombre = activos_locales
                 .iter()
                 .find(|(c, _)| *c == cedula)

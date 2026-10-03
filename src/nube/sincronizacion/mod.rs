@@ -50,7 +50,9 @@ pub(in crate::nube) use ingresos::{
     FilaIngresoRemoto, aplicar_cierre_de_ingreso_propio, guardar_ingreso_remoto,
 };
 pub use paginado::traslape_historial;
-use paginado::{avanzar_marca, guardar_por_pagina, obtener_json, obtener_json_paginado_con};
+use paginado::{
+    avanzar_marca, guardar_por_pagina, llamar_rpc, obtener_json, obtener_json_paginado_con,
+};
 pub use proveedores::*;
 
 /// Todo lo que hace falta para hablar con el receptor en nombre de este

@@ -1190,6 +1190,62 @@ fn apertura_de_ingreso_con_gafete_ya_activo_en_otro_dispositivo_queda_fallida_de
     assert_eq!(intentos, 1);
 }
 
+/// Un ingreso registrado sin conexión cuyo contratista ya está adentro en
+/// otra unidad: la nube lo rechaza con `ingresos_contratista_activo_idx` y la
+/// fila queda `fallido` de inmediato (no se reintenta por días). No es un
+/// conflicto de gafete: el aviso lo da `contratistas_con_conflicto_activo`.
+#[test]
+fn apertura_de_ingreso_de_contratista_ya_adentro_queda_fallida_de_inmediato() {
+    let (connection, _contratista_uuid) = conexion_con_contratista();
+    connection.execute("DELETE FROM cola_salida", []).unwrap();
+    connection
+        .execute("INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES ('1', 'Op', 'h', 'OPERADOR', 1)", [])
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO registro_ingresos (
+                contratista_id, empresa_id, fecha_hora_ingreso, medio_ingreso, tipo_ingreso,
+                usuario_ingreso_id, contratista_cedula, contratista_nombre, empresa_nombre,
+                usuario_ingreso_nombre, es_personal_ruta, tiene_acceso, resultado_acceso,
+                reglas_version, gafete_numero, uuid
+            ) VALUES (
+                1, 1, '2026-01-01T08:00:00Z', 'CAMINANDO', 'SWAT',
+                1, '1-2345', 'Persona de prueba', 'Brisas',
+                'Op', 0, 1, 'PERMITIDO', 1, NULL, 'uuid-ingreso'
+            )",
+            [],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO cola_salida (
+                entidad, entidad_uuid, operacion, creado_en, actualizado_en
+            ) VALUES ('ingreso', 'uuid-ingreso', 'crear', '2026-01-01T08:00:00Z', '2026-01-01T08:00:00Z')",
+            [],
+        )
+        .unwrap();
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         {\"code\":\"23505\",\"details\":\"Key (contratista_cedula)=(1-2345) already exists.\",\
+         \"hint\":null,\"message\":\"duplicate key value violates unique constraint \\\"ingresos_contratista_activo_idx\\\"\"}",
+    );
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.enviados, 0);
+    assert_eq!(resumen.fallidos, 1);
+    assert!(resumen.conflictos_gafete.is_empty());
+    let (estado, intentos): (String, i64) = connection
+        .query_row(
+            "SELECT estado, intentos FROM cola_salida WHERE entidad_uuid = 'uuid-ingreso'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(estado, "fallido");
+    assert_eq!(intentos, 1);
+}
+
 /// Espejo del test anterior, pero con un `409` que NO nombra este
 /// índice -- un choque de unicidad genérico (o cualquier otro `409`)
 /// no debe tratarse como conflicto de gafete: sigue el camino normal
@@ -2133,8 +2189,11 @@ fn usuario_sigue_activo_remoto_sin_fila_asume_activo() {
     assert!(activo);
 }
 
+/// Va por la función `ingreso_activo_de_contratista` (POST a `/rpc`), no por
+/// `/rest/v1/ingresos`: la RLS no deja ver los ingresos de otras unidades, y
+/// la consulta directa siempre respondía "libre".
 #[test]
-fn contratista_con_ingreso_activo_busca_en_todos_los_sitios() {
+fn contratista_con_ingreso_activo_pregunta_a_la_funcion_de_la_nube() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let base_url = format!("http://{}", listener.local_addr().unwrap());
     let servidor = thread::spawn(move || {
@@ -2144,16 +2203,14 @@ fn contratista_con_ingreso_activo_busca_en_todos_los_sitios() {
             .unwrap();
         let mut pedido = Vec::new();
         let mut buffer = [0; 4096];
-        while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+        while !String::from_utf8_lossy(&pedido).contains("\"p_cedula\":\"2001\"") {
             let leidos = socket.read(&mut buffer).unwrap();
-            assert!(leidos > 0);
+            assert!(leidos > 0, "el pedido no trajo la cédula");
             pedido.extend_from_slice(&buffer[..leidos]);
         }
         let pedido = String::from_utf8(pedido).unwrap();
-        assert!(pedido.contains("contratista_cedula=eq.2001"));
-        assert!(!pedido.contains("sitio_id=neq"));
-        assert!(pedido.contains("hora_salida=is.null"));
-        let cuerpo = "[{\"sitio_id\":\"otro\",\"sitios\":{\"nombre\":\"Cartago\"}}]";
+        assert!(pedido.starts_with("POST /rest/v1/rpc/ingreso_activo_de_contratista "));
+        let cuerpo = "[{\"sitio_id\":\"otro\",\"sitio_nombre\":\"Cartago\"}]";
         write!(
             socket,
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
@@ -2225,7 +2282,7 @@ fn contratistas_con_conflicto_activo_solo_incluye_a_quien_de_verdad_choca() {
     let connection = conexion_con_dos_ingresos_activos();
     let base_url = servidor_de_una_respuesta(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"contratista_cedula\":\"2001\",\"sitios\":{\"nombre\":\"Cartago\"}}]",
+         [{\"contratista_cedula\":\"2001\",\"sitio_nombre\":\"Cartago\"}]",
     );
 
     let conflictos = contratistas_con_conflicto_activo(&connection, &contexto(&base_url)).unwrap();

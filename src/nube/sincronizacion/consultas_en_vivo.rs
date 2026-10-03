@@ -1,4 +1,4 @@
-use super::{ContextoSincronizacion, SincronizacionError, obtener_json};
+use super::{ContextoSincronizacion, SincronizacionError, llamar_rpc, obtener_json};
 use crate::nube::cliente::cliente_http;
 
 #[derive(serde::Deserialize)]
@@ -153,32 +153,38 @@ pub struct IngresoActivoEnLaNube {
 #[derive(serde::Deserialize)]
 pub(super) struct FilaIngresoActivoCualquierSitio {
     pub(super) sitio_id: String,
-    pub(super) sitios: Option<SitioEmbebido>,
+    pub(super) sitio_nombre: Option<String>,
 }
 
 /// Regla "un contratista no puede tener dos ingresos activos, ni en este
-/// sitio ni en otro": busca en la nube un ingreso abierto con esta cédula
-/// en CUALQUIER sitio. Quien llama propaga el error: si no se puede
+/// sitio ni en otro": pregunta a la nube si esta cédula tiene un ingreso
+/// abierto en CUALQUIER sitio. Quien llama propaga el error: si no se puede
 /// verificar, no se registra (decisión del dueño, igual que el gafete).
 /// Lo abierto por ESTE equipo ya lo frena antes el chequeo local.
+///
+/// Va por la función `ingreso_activo_de_contratista` y no por
+/// `/rest/v1/ingresos`: la RLS sólo le deja leer a cada equipo los ingresos
+/// de su sitio, así que la consulta directa nunca veía los de otra unidad y
+/// siempre respondía "libre" (visto en staging el 2026-10-03). La función
+/// responde sólo si está adentro y dónde, sin abrir el resto.
 pub fn contratista_con_ingreso_activo(
     contexto: &ContextoSincronizacion<'_>,
     cedula: &str,
 ) -> Result<Option<IngresoActivoEnLaNube>, SincronizacionError> {
     let cliente = cliente_http();
-    let url = format!(
-        "{}/rest/v1/ingresos?contratista_cedula=eq.{cedula}&hora_salida=is.null\
-         &select=sitio_id,sitios(nombre)&limit=1",
-        contexto.base_url,
-    );
-    let filas: Vec<FilaIngresoActivoCualquierSitio> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaIngresoActivoCualquierSitio> = llamar_rpc(
+        &cliente,
+        contexto,
+        "ingreso_activo_de_contratista",
+        &serde_json::json!({ "p_cedula": cedula }),
+    )?;
     Ok(filas.into_iter().next().map(|fila| {
         let mismo_sitio = fila.sitio_id == contexto.sitio_id;
         IngresoActivoEnLaNube {
             mismo_sitio,
             sitio_nombre: fila
-                .sitios
-                .map_or_else(|| "otro sitio".to_string(), |sitio| sitio.nombre),
+                .sitio_nombre
+                .unwrap_or_else(|| "otro sitio".to_string()),
         }
     }))
 }

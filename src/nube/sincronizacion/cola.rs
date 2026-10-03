@@ -295,6 +295,9 @@ pub(super) fn procesar_fila_individual(
                 &fila.entidad_uuid,
             )?);
         }
+        Err(error) if es_conflicto_ingreso_activo(&fila, &error) => {
+            marcar_fallida_por_ingreso_activo(connection, &fila, &error, resumen)?;
+        }
         Err(error) => {
             // "pendiente" de nuevo -- no "fallido" -- para que
             // `pendientes()` la vuelva a considerar más adelante, sujeta
@@ -456,6 +459,45 @@ pub(super) fn es_conflicto_gafete_activo(entidad: &str, error: &SincronizacionEr
         error,
         SincronizacionError::RespuestaInesperada { status: 409, cuerpo } if cuerpo.contains(indice)
     )
+}
+
+/// El contratista ya tiene un ingreso abierto en la nube (en otra unidad, o
+/// en otro equipo de esta) y el índice único `ingresos_contratista_activo_idx`
+/// rechazó este, típicamente registrado sin conexión. No se resuelve solo:
+/// queda fallido de inmediato, sin los reintentos con backoff. El aviso a
+/// quien opera lo da `contratistas_con_conflicto_activo` al terminar la
+/// sincronización (este ingreso sigue abierto localmente).
+fn marcar_fallida_por_ingreso_activo(
+    connection: &Connection,
+    fila: &FilaCola,
+    error: &SincronizacionError,
+    resumen: &mut ResumenDrenado,
+) -> Result<(), SincronizacionError> {
+    log::error!(
+        "cola_salida: fila {} ({} {}) rechazada: el contratista ya tiene un ingreso abierto en la nube, queda fallida de inmediato: {error}",
+        fila.id,
+        fila.entidad,
+        fila.entidad_uuid,
+    );
+    marcar(connection, fila.id, "fallido", Some(&error.to_string()))?;
+    resumen.fallidos += 1;
+    Ok(())
+}
+
+/// Un ingreso de contratista que la nube rechazó porque esa cédula ya tiene
+/// otro abierto (`ingresos_contratista_activo_idx`, migración
+/// `20261003170000_ingreso_unico_entre_unidades`). Igual que
+/// [`es_conflicto_gafete_activo`]: 409 de `PostgREST` con el nombre del
+/// índice en el cuerpo.
+/// El cierre nunca choca con este índice (sólo cuenta lo abierto).
+pub(super) fn es_conflicto_ingreso_activo(fila: &FilaCola, error: &SincronizacionError) -> bool {
+    fila.entidad == "ingreso"
+        && fila.operacion != "cerrar"
+        && matches!(
+            error,
+            SincronizacionError::RespuestaInesperada { status: 409, cuerpo }
+                if cuerpo.contains("ingresos_contratista_activo_idx")
+        )
 }
 
 /// Arma [`ConflictoGafeteActivo`] con datos de la fila local -- nada nuevo.

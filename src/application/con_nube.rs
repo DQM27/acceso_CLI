@@ -576,8 +576,7 @@ mod tests {
 
     #[test]
     fn la_nube_con_un_ingreso_en_este_sitio_bloquea_por_el_otro_equipo() {
-        let base =
-            nube_que_responde(r#"[{"sitio_id":"sitio-propio","sitios":{"nombre":"Brisas"}}]"#);
+        let base = nube_que_responde(r#"[{"sitio_id":"sitio-propio","sitio_nombre":"Brisas"}]"#);
         assert_eq!(
             bloqueo_contra(&base),
             Some(BloqueoIngreso::IngresoActivoEnOtroDispositivo)
@@ -586,7 +585,7 @@ mod tests {
 
     #[test]
     fn la_nube_con_un_ingreso_en_otro_sitio_bloquea_con_su_nombre() {
-        let base = nube_que_responde(r#"[{"sitio_id":"otro","sitios":{"nombre":"Cartago"}}]"#);
+        let base = nube_que_responde(r#"[{"sitio_id":"otro","sitio_nombre":"Cartago"}]"#);
         assert_eq!(
             bloqueo_contra(&base),
             Some(BloqueoIngreso::ActivoEnOtroSitio {
