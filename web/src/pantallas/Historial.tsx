@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isCancelledError, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
@@ -242,7 +242,13 @@ export default function Historial() {
         staleTime: 10_000,
       });
     },
-    alFallar: (error) => toast.error(mensajeError(error)),
+    // El refresco automático (abajo) hace `removeQueries` y eso cancela la
+    // página que justo se estaba pidiendo (CancelledError). No es un fallo:
+    // el `refrescar()` que le sigue la vuelve a pedir, así que no se avisa.
+    alFallar: (error) => {
+      if (isCancelledError(error)) return;
+      toast.error(mensajeError(error));
+    },
   };
 
   // Ver `useAutoRefresh` -- sin esto, un ingreso ya cerrado/sincronizado no
