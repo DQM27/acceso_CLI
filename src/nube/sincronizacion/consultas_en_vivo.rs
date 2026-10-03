@@ -171,22 +171,11 @@ pub fn contratista_con_ingreso_activo(
     contexto: &ContextoSincronizacion<'_>,
     cedula: &str,
 ) -> Result<Option<IngresoActivoEnLaNube>, SincronizacionError> {
-    let cliente = cliente_http();
-    let filas: Vec<FilaIngresoActivoCualquierSitio> = llamar_rpc(
-        &cliente,
+    activo_segun_funcion(
         contexto,
         "ingreso_activo_de_contratista",
         &serde_json::json!({ "p_cedula": cedula }),
-    )?;
-    Ok(filas.into_iter().next().map(|fila| {
-        let mismo_sitio = fila.sitio_id == contexto.sitio_id;
-        IngresoActivoEnLaNube {
-            mismo_sitio,
-            sitio_nombre: fila
-                .sitio_nombre
-                .unwrap_or_else(|| "otro sitio".to_string()),
-        }
-    }))
+    )
 }
 
 /// Un mismo visitante no puede estar activo en dos sitios a la vez: busca
@@ -212,23 +201,55 @@ pub fn visitante_activo_en_otro_sitio(
         .map(|sitio| sitio.nombre))
 }
 
-/// Espejo de [`visitante_activo_en_otro_sitio`],
-/// pero contra `ingresos_proveedor` -- misma cédula, no puede estar activa
-/// físicamente en dos sitios a la vez.
-pub fn proveedor_activo_en_otro_sitio(
+/// Regla "un proveedor no puede estar adentro dos veces, ni en este sitio ni
+/// en otro": pregunta a la nube si esta cédula tiene un ingreso de proveedor
+/// abierto en CUALQUIER sitio. Quien llama propaga el error: si no se puede
+/// verificar, no se registra (mismo criterio que contratistas).
+///
+/// Va por la función `ingreso_proveedor_activo` y no por
+/// `/rest/v1/ingresos_proveedor`: la RLS sólo deja leer a cada equipo lo de
+/// su sitio, así que la consulta directa nunca veía otra unidad.
+pub fn proveedor_con_ingreso_activo(
     contexto: &ContextoSincronizacion<'_>,
     cedula: &str,
-) -> Result<Option<String>, SincronizacionError> {
+) -> Result<Option<IngresoActivoEnLaNube>, SincronizacionError> {
+    activo_segun_funcion(
+        contexto,
+        "ingreso_proveedor_activo",
+        &serde_json::json!({ "p_cedula": cedula }),
+    )
+}
+
+/// Regla "un encargado no puede tener dos gafetes provisionales KOF a la
+/// vez, en ningún sitio": pregunta a la nube si el encargado con este código
+/// de empleado tiene un préstamo sin devolver (función
+/// `prestamo_provisional_activo_de_encargado`). El código de empleado, y no
+/// el id, es lo que identifica al encargado entre equipos.
+pub fn encargado_con_prestamo_provisional_activo(
+    contexto: &ContextoSincronizacion<'_>,
+    codigo_empleado: &str,
+) -> Result<Option<IngresoActivoEnLaNube>, SincronizacionError> {
+    activo_segun_funcion(
+        contexto,
+        "prestamo_provisional_activo_de_encargado",
+        &serde_json::json!({ "p_codigo_empleado": codigo_empleado }),
+    )
+}
+
+/// Común a las funciones `... returns table (sitio_id, sitio_nombre)` que
+/// responden dónde está activa una persona (a lo sumo una fila).
+fn activo_segun_funcion(
+    contexto: &ContextoSincronizacion<'_>,
+    funcion: &str,
+    cuerpo: &serde_json::Value,
+) -> Result<Option<IngresoActivoEnLaNube>, SincronizacionError> {
     let cliente = cliente_http();
-    let url = format!(
-        "{}/rest/v1/ingresos_proveedor?cedula=eq.{cedula}&sitio_id=neq.{}\
-         &hora_salida=is.null&select=sitios(nombre)&limit=1",
-        contexto.base_url, contexto.sitio_id,
-    );
-    let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
-    Ok(filas
-        .into_iter()
-        .next()
-        .and_then(|fila| fila.sitios)
-        .map(|sitio| sitio.nombre))
+    let filas: Vec<FilaIngresoActivoCualquierSitio> =
+        llamar_rpc(&cliente, contexto, funcion, cuerpo)?;
+    Ok(filas.into_iter().next().map(|fila| IngresoActivoEnLaNube {
+        mismo_sitio: fila.sitio_id == contexto.sitio_id,
+        sitio_nombre: fila
+            .sitio_nombre
+            .unwrap_or_else(|| "otro sitio".to_string()),
+    }))
 }

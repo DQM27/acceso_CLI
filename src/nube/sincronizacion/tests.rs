@@ -2509,8 +2509,13 @@ fn visitantes_con_conflicto_activo_sin_nada_local_no_llama_a_la_nube() {
     assert_eq!(conflictos, Vec::new());
 }
 
-#[test]
-fn proveedor_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
+/// Servidor de una sola petición que exige un POST a `/rest/v1/rpc/<funcion>`
+/// con `fragmento` en el cuerpo, y responde `respuesta` (JSON).
+fn servidor_rpc(
+    funcion: &'static str,
+    fragmento: &'static str,
+    respuesta: &'static str,
+) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let base_url = format!("http://{}", listener.local_addr().unwrap());
     let servidor = thread::spawn(move || {
@@ -2520,39 +2525,147 @@ fn proveedor_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
             .unwrap();
         let mut pedido = Vec::new();
         let mut buffer = [0; 4096];
-        while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
+        while !String::from_utf8_lossy(&pedido).contains(fragmento) {
             let leidos = socket.read(&mut buffer).unwrap();
-            assert!(leidos > 0);
+            assert!(leidos > 0, "el pedido no trajo {fragmento}");
             pedido.extend_from_slice(&buffer[..leidos]);
         }
         let pedido = String::from_utf8(pedido).unwrap();
-        assert!(pedido.contains("cedula=eq.1-2345"));
-        assert!(pedido.contains("sitio_id=neq.sitio-1"));
-        assert!(pedido.contains("hora_salida=is.null"));
-        let cuerpo = "[{\"sitios\":{\"nombre\":\"Cartago\"}}]";
+        assert!(pedido.starts_with(&format!("POST /rest/v1/rpc/{funcion} ")));
         write!(
             socket,
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
-            cuerpo.len()
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{respuesta}",
+            respuesta.len()
         )
         .unwrap();
     });
+    (base_url, servidor)
+}
 
-    let sitio = proveedor_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+/// Va por la función `ingreso_proveedor_activo`: la RLS no deja ver los
+/// ingresos de proveedor de otras unidades.
+#[test]
+fn proveedor_con_ingreso_activo_pregunta_a_la_funcion_de_la_nube() {
+    let (base_url, servidor) = servidor_rpc(
+        "ingreso_proveedor_activo",
+        "\"p_cedula\":\"1-2345\"",
+        "[{\"sitio_id\":\"otro\",\"sitio_nombre\":\"Cartago\"}]",
+    );
 
-    assert_eq!(sitio, Some("Cartago".to_string()));
+    let activo = proveedor_con_ingreso_activo(&contexto(&base_url), "1-2345").unwrap();
+
+    assert_eq!(
+        activo,
+        Some(IngresoActivoEnLaNube {
+            mismo_sitio: false,
+            sitio_nombre: "Cartago".to_string(),
+        })
+    );
     servidor.join().unwrap();
 }
 
 #[test]
-fn proveedor_activo_en_otro_sitio_sin_conflicto_devuelve_none() {
+fn proveedor_con_ingreso_activo_distingue_el_mismo_sitio() {
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"sitio_id\":\"sitio-1\",\"sitio_nombre\":\"Brisas\"}]",
+    );
+
+    let activo = proveedor_con_ingreso_activo(&contexto(&base_url), "1-2345").unwrap();
+
+    assert_eq!(activo.map(|a| a.mismo_sitio), Some(true));
+}
+
+#[test]
+fn proveedor_con_ingreso_activo_sin_conflicto_devuelve_none() {
     let base_url = servidor_de_una_respuesta(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
     );
 
-    let sitio = proveedor_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+    let activo = proveedor_con_ingreso_activo(&contexto(&base_url), "1-2345").unwrap();
 
-    assert_eq!(sitio, None);
+    assert_eq!(activo, None);
+}
+
+/// KOF: el encargado se busca por su código de empleado, no por su id.
+#[test]
+fn encargado_con_prestamo_provisional_activo_pregunta_por_codigo_de_empleado() {
+    let (base_url, servidor) = servidor_rpc(
+        "prestamo_provisional_activo_de_encargado",
+        "\"p_codigo_empleado\":\"KOF-77\"",
+        "[{\"sitio_id\":\"otro\",\"sitio_nombre\":\"Cartago\"}]",
+    );
+
+    let prestamo =
+        encargado_con_prestamo_provisional_activo(&contexto(&base_url), "KOF-77").unwrap();
+
+    assert_eq!(
+        prestamo,
+        Some(IngresoActivoEnLaNube {
+            mismo_sitio: false,
+            sitio_nombre: "Cartago".to_string(),
+        })
+    );
+    servidor.join().unwrap();
+}
+
+/// La cola reconoce el rechazo de cada índice "una persona, una apertura" y
+/// sólo el de su propia entidad; un cierre nunca cuenta.
+#[test]
+fn reconoce_el_rechazo_por_persona_ya_adentro_de_cada_entidad() {
+    fn fila(entidad: &str, operacion: &str) -> super::cola::FilaCola {
+        super::cola::FilaCola {
+            id: 1,
+            entidad: entidad.to_string(),
+            entidad_uuid: "uuid".to_string(),
+            operacion: operacion.to_string(),
+            intentos: 0,
+        }
+    }
+    fn rechazo(indice: &str) -> SincronizacionError {
+        SincronizacionError::RespuestaInesperada {
+            status: 409,
+            cuerpo: format!(
+                "{{\"code\":\"23505\",\"message\":\"duplicate key value violates unique constraint \\\"{indice}\\\"\"}}"
+            ),
+        }
+    }
+    use super::cola::es_conflicto_ingreso_activo as es_conflicto;
+
+    assert!(es_conflicto(
+        &fila("ingreso", "crear"),
+        &rechazo("ingresos_contratista_activo_idx")
+    ));
+    assert!(es_conflicto(
+        &fila("ingreso_proveedor", "crear"),
+        &rechazo("ingresos_proveedor_cedula_activa_idx")
+    ));
+    assert!(es_conflicto(
+        &fila("prestamo_gafete_provisional", "crear"),
+        &rechazo("prestamos_gafete_provisional_encargado_activo_idx"),
+    ));
+    // El índice de otra entidad, o el del gafete, no cuenta.
+    assert!(!es_conflicto(
+        &fila("ingreso_proveedor", "crear"),
+        &rechazo("ingresos_contratista_activo_idx")
+    ));
+    assert!(!es_conflicto(
+        &fila("ingreso_proveedor", "crear"),
+        &rechazo("ingresos_proveedor_gafete_activo_sitio_idx")
+    ));
+    // Un cierre nunca choca con estos índices.
+    assert!(!es_conflicto(
+        &fila("ingreso_proveedor", "cerrar"),
+        &rechazo("ingresos_proveedor_cedula_activa_idx")
+    ));
+    // Otro estado HTTP tampoco.
+    assert!(!es_conflicto(
+        &fila("ingreso_proveedor", "crear"),
+        &SincronizacionError::RespuestaInesperada {
+            status: 500,
+            cuerpo: "ingresos_proveedor_cedula_activa_idx".to_string()
+        },
+    ));
 }
 
 fn conexion_con_un_ingreso_proveedor_activo() -> Connection {
@@ -2583,7 +2696,7 @@ fn proveedores_con_conflicto_activo_solo_incluye_a_quien_de_verdad_choca() {
     let connection = conexion_con_un_ingreso_proveedor_activo();
     let base_url = servidor_de_una_respuesta(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"cedula\":\"1-2345\",\"sitios\":{\"nombre\":\"Cartago\"}}]",
+         [{\"cedula\":\"1-2345\",\"sitio_nombre\":\"Cartago\"}]",
     );
 
     let conflictos = proveedores_con_conflicto_activo(&connection, &contexto(&base_url)).unwrap();
