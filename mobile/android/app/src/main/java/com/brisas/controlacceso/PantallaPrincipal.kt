@@ -1,8 +1,12 @@
 package com.brisas.controlacceso
 
+import android.Manifest
 import android.app.Activity
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -90,6 +94,19 @@ fun PantallaPrincipal(
             ultimoTapAtras = ahora
             Toast.makeText(contexto, "Tocá de nuevo para salir", Toast.LENGTH_SHORT).show()
         }
+    }
+    // Notificaciones push (NotificacionesPush.kt): se piden acá, con la
+    // sesión ya abierta, y no en el primer arranque -- quien opera ya sabe
+    // para qué es la app. Si lo niega, Android deja de mostrar el diálogo
+    // después del segundo rechazo; la app sigue igual, sin avisos con la app
+    // cerrada.
+    val pedirPermisoNotificaciones = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (!NotificacionesPush.disponible(contexto)) return@LaunchedEffect
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !NotificacionesPush.permisoConcedido(contexto)) {
+            pedirPermisoNotificaciones.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        NotificacionesPush.tokenActual(contexto)
     }
     // `docs/pendientes.md`, "alertar luego al sincronizar" -- ver el mismo
     // campo en `desktop/src/App.tsx` (`manejarResumenSincronizacion`).
