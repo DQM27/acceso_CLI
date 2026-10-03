@@ -46,4 +46,14 @@ class AvisoPushTest {
         assertEquals("{\"p_token\":\"abc:DEF-123_x\"}", cuerpoRegistroTokenPush("abc:DEF-123_x"))
         assertEquals("{\"p_token\":\"a\\\"b\\\\c\"}", cuerpoRegistroTokenPush("a\"b\\c"))
     }
+
+    @Test
+    fun `tipo emergente va por el canal de emergencias`() {
+        assertEquals(
+            AvisoPush("Evacuación", "Salir por el portón norte", emergente = true),
+            avisoDeMensaje(mapOf("titulo" to "Evacuación", "cuerpo" to "Salir por el portón norte", "tipo" to "emergente"), null, null),
+        )
+        assertEquals(false, avisoDeMensaje(mapOf("titulo" to "Aviso", "tipo" to "normal"), null, null)?.emergente)
+        assertEquals(false, avisoDeMensaje(mapOf("titulo" to "Aviso"), null, null)?.emergente)
+    }
 }

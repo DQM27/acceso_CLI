@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -31,6 +33,8 @@ import uniffi.control_acceso_mobile.Nucleo
 /// hace nada en vez de reventar.
 object NotificacionesPush {
     const val CANAL_AVISOS = "avisos"
+    const val CANAL_EMERGENCIAS = "emergencias"
+    private val VIBRACION_EMERGENCIA = longArrayOf(0, 800, 300, 800, 300, 800)
     private const val ETIQUETA_LOG = "LattisPush"
     private const val PREFERENCIAS = "notificaciones_push"
     private const val CLAVE_TOKEN = "token"
@@ -40,11 +44,27 @@ object NotificacionesPush {
     /// Idempotente: Android ignora la creación de un canal que ya existe.
     /// Se llama al arrancar el proceso (AplicacionControlAcceso) para que el
     /// canal exista antes del primer mensaje, incluso con la app cerrada.
+    ///
+    /// Sonido y vibración de un canal quedan fijos al crearlo (Android no deja
+    /// cambiarlos después desde la app, sólo la persona en Ajustes): cambiar
+    /// los de "emergencias" exige un id de canal nuevo.
     fun crearCanales(context: Context) {
-        val canal = NotificationChannel(CANAL_AVISOS, "Avisos", NotificationManager.IMPORTANCE_HIGH).apply {
+        val avisos = NotificationChannel(CANAL_AVISOS, "Avisos", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Avisos del punto de acceso: equipo retirado, visitas y recordatorios"
         }
-        context.getSystemService(NotificationManager::class.java).createNotificationChannel(canal)
+        // Emergencias: sonido de alarma (sale por el volumen de alarma, que
+        // suele estar alto aunque el timbre esté bajo) y vibración larga.
+        val emergencias = NotificationChannel(CANAL_EMERGENCIAS, "Emergencias", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Avisos urgentes enviados por la administración"
+            enableVibration(true)
+            vibrationPattern = VIBRACION_EMERGENCIA
+            setSound(
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(),
+            )
+        }
+        context.getSystemService(NotificationManager::class.java).createNotificationChannels(listOf(avisos, emergencias))
     }
 
     /// Android 13+ pide permiso explícito para mostrar notificaciones; antes
@@ -62,12 +82,16 @@ object NotificacionesPush {
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val notificacion = NotificationCompat.Builder(context, CANAL_AVISOS)
+        val notificacion = NotificationCompat.Builder(context, if (aviso.emergente) CANAL_EMERGENCIAS else CANAL_AVISOS)
             .setSmallIcon(R.drawable.ic_notificacion)
             .setContentTitle(aviso.titulo)
             .setContentText(aviso.cuerpo)
             .setStyle(NotificationCompat.BigTextStyle().bigText(aviso.cuerpo))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            // Prioridad y categoría sólo cuentan antes de Android 8 (después
+            // manda el canal), salvo la categoría ALARM, que además le indica
+            // al sistema que es urgente (p. ej. para el modo No molestar).
+            .setPriority(if (aviso.emergente) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
+            .setCategory(if (aviso.emergente) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(abrirApp)
             .build()
