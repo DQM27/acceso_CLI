@@ -113,6 +113,7 @@ fun PantallaPrincipal(
         }
         if (NotificacionesPush.disponible(contexto)) {
             NotificacionesPush.tokenActual(contexto)
+            NotificacionesPush.registrarEnNube(contexto, nucleo)
         } else if (BuildConfig.DEBUG || BuildConfig.AMBIENTE_STAGING) {
             Toast.makeText(contexto, "Este APK no trae google-services.json: sin notificaciones push", Toast.LENGTH_LONG).show()
         }

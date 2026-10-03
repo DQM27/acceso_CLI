@@ -14,8 +14,13 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.coroutines.resume
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import uniffi.control_acceso_mobile.Nucleo
 
 /// Notificaciones push (Firebase Cloud Messaging): avisos que llegan aunque
 /// la app esté cerrada. La conexión Realtime (NubeRealtime.kt) sólo vive con
@@ -100,4 +105,38 @@ object NotificacionesPush {
 
     fun tokenGuardado(context: Context): String? =
         context.getSharedPreferences(PREFERENCIAS, Context.MODE_PRIVATE).getString(CLAVE_TOKEN, null)
+
+    /// Registra el token de este teléfono en Supabase
+    /// (`registrar_token_push`, migración 20261003150000_tokens_push), con el
+    /// JWT del equipo que ya usa Realtime. Se llama al iniciar sesión: el
+    /// token que FCM rota con la app cerrada (`onNewToken`) queda guardado y
+    /// sube en el próximo inicio de sesión. Sin red o sin nube configurada
+    /// no pasa nada: se reintenta la próxima vez.
+    suspend fun registrarEnNube(context: Context, nucleo: Nucleo): Boolean = withContext(Dispatchers.IO) {
+        val token = tokenGuardado(context) ?: return@withContext false
+        try {
+            val sesion = nucleo.sesionRealtimeNube()
+            val conexion = URL(urlRegistroTokenPush(sesion.baseUrl)).openConnection() as HttpURLConnection
+            try {
+                conexion.requestMethod = "POST"
+                conexion.connectTimeout = 15_000
+                conexion.readTimeout = 15_000
+                conexion.doOutput = true
+                conexion.setRequestProperty("apikey", sesion.apikey)
+                conexion.setRequestProperty("Authorization", "Bearer ${sesion.accessToken}")
+                conexion.setRequestProperty("Content-Type", "application/json")
+                conexion.outputStream.use { it.write(cuerpoRegistroTokenPush(token).toByteArray()) }
+                val codigo = conexion.responseCode
+                if (codigo !in 200..299) {
+                    Log.w(ETIQUETA_LOG, "registrar_token_push respondió $codigo")
+                }
+                codigo in 200..299
+            } finally {
+                conexion.disconnect()
+            }
+        } catch (e: Exception) {
+            Log.w(ETIQUETA_LOG, "No se pudo registrar el token push", e)
+            false
+        }
+    }
 }

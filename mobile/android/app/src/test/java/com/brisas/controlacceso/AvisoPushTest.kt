@@ -33,4 +33,17 @@ class AvisoPushTest {
         assertNull(avisoDeMensaje(mapOf("tipo" to "sincronizar"), null, null))
         assertNull(avisoDeMensaje(mapOf("titulo" to "  ", "cuerpo" to ""), " ", null))
     }
+
+    @Test
+    fun `url del registro de token con o sin barra final`() {
+        val esperado = "https://x.supabase.co/rest/v1/rpc/registrar_token_push"
+        assertEquals(esperado, urlRegistroTokenPush("https://x.supabase.co"))
+        assertEquals(esperado, urlRegistroTokenPush("https://x.supabase.co/"))
+    }
+
+    @Test
+    fun `cuerpo del registro de token`() {
+        assertEquals("{\"p_token\":\"abc:DEF-123_x\"}", cuerpoRegistroTokenPush("abc:DEF-123_x"))
+        assertEquals("{\"p_token\":\"a\\\"b\\\\c\"}", cuerpoRegistroTokenPush("a\"b\\c"))
+    }
 }

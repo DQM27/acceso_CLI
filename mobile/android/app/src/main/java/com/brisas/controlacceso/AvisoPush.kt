@@ -26,3 +26,14 @@ fun avisoDeMensaje(
     if (titulo == null && cuerpo == null) return null
     return AvisoPush(titulo = titulo ?: "Lattis", cuerpo = cuerpo.orEmpty())
 }
+
+/// URL de la función `registrar_token_push` de Supabase (PostgREST RPC).
+fun urlRegistroTokenPush(baseUrl: String): String = baseUrl.trimEnd('/') + "/rest/v1/rpc/registrar_token_push"
+
+/// Cuerpo JSON para `registrar_token_push`. Los tokens de FCM sólo traen
+/// letras, dígitos, `:`, `-` y `_`, pero igual se escapan comillas y barras
+/// para no armar un JSON roto si algún día cambia el formato.
+fun cuerpoRegistroTokenPush(token: String): String {
+    val escapado = token.replace("\\", "\\\\").replace("\"", "\\\"")
+    return "{\"p_token\":\"$escapado\"}"
+}
