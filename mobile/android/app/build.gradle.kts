@@ -5,6 +5,18 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Firebase Cloud Messaging (notificaciones con la app cerrada). El
+// `google-services.json` nunca va al repo (ver mobile/.gitignore): el repo es
+// público y la API key que trae quedaría expuesta para siempre en el
+// historial. Mismo criterio que keystore.properties: sin el archivo el build
+// sigue funcionando (CI, clones nuevos), sólo que la app no recibe push --
+// el plugin de Google Services falla el build si no lo encuentra, por eso se
+// aplica sólo cuando existe. Se baja de la consola de Firebase (proyecto
+// `lattis-f823c`) y se copia a mobile/android/app/.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // Firma de release — nunca al repo (ver mobile/.gitignore). Sin
 // keystore.properties el build de debug sigue funcionando igual; sólo
 // assembleRelease necesita esto.
@@ -176,6 +188,11 @@ dependencies {
     // captura crashes no manejados desde el primer arranque después de
     // instalarlo.
     implementation("io.sentry:sentry-android:8.9.0")
+    // Firebase Cloud Messaging: recibir avisos con la app cerrada (la
+    // conexión Realtime sólo vive con la app en primer plano, ver
+    // NubeRealtime.kt). El BOM fija versiones compatibles entre sí.
+    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+    implementation("com.google.firebase:firebase-messaging")
 
     // Tests unitarios de los ViewModel (JVM puro, sin emulador) — ver
     // mobile/android/app/src/test/.../NucleoDePrueba.kt para el porqué de cada uno.
