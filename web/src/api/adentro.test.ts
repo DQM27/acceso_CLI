@@ -50,6 +50,16 @@ describe("listarAdentroAhora", () => {
     expect(filas[0].tipo).toBe("PROVISIONAL_KOF");
   });
 
+  it("acepta los ingresos por correo, con el motivo en la columna de empresa", async () => {
+    mocks.from.mockReturnValue(
+      mockConsulta({ data: [fila({ tipo: "POR_CORREO", empresa_nombre: "Entrevista RH" })], error: null }),
+    );
+
+    const filas = await listarAdentroAhora();
+
+    expect(filas[0]).toMatchObject({ tipo: "POR_CORREO", empresa_nombre: "Entrevista RH" });
+  });
+
   it("propaga el error y rechaza un tipo desconocido", async () => {
     mocks.from.mockReturnValue(mockConsulta({ data: null, error: { message: "sin permiso" } }));
     await expect(listarAdentroAhora()).rejects.toThrow("sin permiso");

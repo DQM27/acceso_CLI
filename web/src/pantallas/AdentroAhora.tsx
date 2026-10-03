@@ -12,17 +12,17 @@ import {
 import type { PersonaAdentro, TipoAdentro } from "../api/adentro";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
-const TIPOS: TipoAdentro[] = ["CONTRATISTA", "PROVEEDOR", "PROVISIONAL_KOF"];
+const TIPOS: TipoAdentro[] = ["CONTRATISTA", "PROVEEDOR", "PROVISIONAL_KOF", "POR_CORREO"];
 
 /**
- * Quién está adentro ahora en cada unidad (contratistas, proveedores y
- * gafetes provisionales KOF sin salida). Sirve para el control diario, para
+ * Quién está adentro ahora en cada unidad (contratistas, proveedores,
+ * gafetes provisionales KOF e ingresos por correo sin salida). Sirve para el control diario, para
  * un conteo de emergencia y para ver salidas que se olvidaron marcar: quien
  * lleva más de `HORAS_ALERTA_ADENTRO` horas se resalta.
  *
- * Se refresca con cada cambio de `ingresos` (Realtime) y cada 30 s: proveedores
- * y préstamos KOF no están en la publicación de Realtime, así que dependen del
- * intervalo.
+ * Se refresca con cada cambio de `ingresos` (Realtime) y cada 30 s: proveedores,
+ * préstamos KOF e ingresos por correo no están en la publicación de Realtime,
+ * así que dependen del intervalo.
  */
 export default function AdentroAhora() {
   const [busqueda, setBusqueda] = useState("");
@@ -51,7 +51,7 @@ export default function AdentroAhora() {
       // En KOF es el código de empleado del encargado.
       { field: "identificacion", headerName: "Cédula / código", flex: 1.2, minWidth: 140 },
       { field: "nombre", headerName: "Nombre", flex: 1.8, minWidth: 180 },
-      { field: "empresa_nombre", headerName: "Empresa", flex: 1.3, minWidth: 140 },
+      { field: "empresa_nombre", headerName: "Empresa / motivo", flex: 1.3, minWidth: 140 },
       {
         field: "gafete_numero",
         headerName: "Gafete",
