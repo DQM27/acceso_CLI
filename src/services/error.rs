@@ -123,11 +123,8 @@ pub enum RegistroIngresoServiceError {
     IngresoActivo,
     #[error("El contratista ya tiene un ingreso activo en el otro dispositivo del sitio")]
     IngresoActivoEnOtroDispositivo,
-    #[error("El contratista requiere gafete")]
-    GafeteRequerido,
-    /// El medio de ingreso es `Vehiculo` y no se indicó placa -- mismo
-    /// criterio que `GafeteRequerido`, pero para el campo condicional al
-    /// medio en vez de al contratista (`MIGRACION_49`).
+    /// El medio de ingreso es `Vehiculo` y no se indicó placa
+    /// (`MIGRACION_49`).
     #[error("La placa es obligatoria cuando el ingreso es en vehículo")]
     PlacaRequerida,
     /// El medio de ingreso es `Caminando` pero se indicó una placa -- el

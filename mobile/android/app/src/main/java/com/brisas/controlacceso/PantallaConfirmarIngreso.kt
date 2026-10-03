@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.RadioButton
@@ -61,6 +62,9 @@ fun PantallaConfirmarIngreso(
     RegistrarPantalla("confirmar_ingreso")
     var medio by rememberSaveable { mutableStateOf(MedioIngreso.CAMINANDO) }
     var gafeteTexto by rememberSaveable { mutableStateOf("") }
+    // "Sin gafete" (S/G), pedido del usuario 2026-10-03: cualquier operador
+    // puede registrar sin gafete, sin motivo, igual que el personal de ruta.
+    var sinGafete by rememberSaveable { mutableStateOf(false) }
     var placaTexto by rememberSaveable { mutableStateOf("") }
     var escanerGafeteAbierto by remember { mutableStateOf(false) }
     BackHandler(enabled = !escanerGafeteAbierto, onBack = onCambiar)
@@ -197,6 +201,7 @@ fun PantallaConfirmarIngreso(
                     onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
                     label = { Text("Número de gafete") },
                     singleLine = true,
+                    enabled = !sinGafete,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     shape = FormaCampoBrisas,
                     colors = ColoresCampoBrisas(),
@@ -225,6 +230,7 @@ fun PantallaConfirmarIngreso(
                 BotonDiscretoBrisas(
                     onClick = { escanerGafeteAbierto = true },
                     modifier = Modifier.padding(start = 8.dp),
+                    enabled = !sinGafete,
                 ) {
                     Icon(
                         Icons.Default.PhotoCamera,
@@ -232,6 +238,22 @@ fun PantallaConfirmarIngreso(
                         modifier = Modifier.size(32.dp),
                     )
                 }
+            }
+            // Marcarlo borra el número tipeado: sin número el núcleo
+            // registra el ingreso S/G.
+            val alternarSinGafete = {
+                sinGafete = !sinGafete
+                if (sinGafete) gafeteTexto = ""
+                onLimpiarError()
+            }
+            Row(
+                modifier = Modifier
+                    .selectable(selected = sinGafete, onClick = alternarSinGafete)
+                    .padding(bottom = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = sinGafete, onCheckedChange = { alternarSinGafete() })
+                Text("Sin gafete")
             }
         }
 
@@ -246,8 +268,9 @@ fun PantallaConfirmarIngreso(
         // usuario 2026-09-20, para que las dos pantallas se sientan igual.
         // Cuando el contratista no requiere gafete no hay nada más que
         // completar (el medio de ingreso ya arranca con un valor elegido),
-        // así que el botón queda habilitado de entrada.
-        val gafeteListo = !preparacion.requiereGafete || gafeteTexto.trim().toLongOrNull() != null
+        // así que el botón queda habilitado de entrada. Si lo requiere, hace
+        // falta el número o marcar "Sin gafete": nunca queda S/G por olvido.
+        val gafeteListo = !preparacion.requiereGafete || sinGafete || gafeteTexto.trim().toLongOrNull() != null
         val placaLista = medio != MedioIngreso.VEHICULO || placaTexto.isNotBlank()
         BotonBrisas(
             onClick = { onRegistrar(medio, gafeteTexto, placaTexto) },

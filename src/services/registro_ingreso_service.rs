@@ -47,6 +47,9 @@ pub struct PreparacionIngreso {
     /// participa en la decisión: eso ya lo resolvió `resultado_acceso`.
     pub fecha_vencimiento_praind: Option<chrono::NaiveDate>,
     pub resultado_acceso: ResultadoAcceso,
+    /// El formulario pide el número de gafete, con la opción "Sin gafete"
+    /// (S/G). Si es `false` (personal de ruta, `InHouse`, `Swat`) no se
+    /// pregunta y el ingreso siempre queda S/G.
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
     /// El otro dispositivo del sitio tiene abierto un ingreso con esta
@@ -365,9 +368,12 @@ where
             return Err(RegistroIngresoServiceError::IngresoActivoEnOtroDispositivo);
         }
 
-        let gafete_numero = if contratista.requiere_gafete() {
-            let numero = gafete_numero.ok_or(RegistroIngresoServiceError::GafeteRequerido)?;
-
+        // Sin número = sin gafete (S/G), igual que el personal de ruta. Desde
+        // el pedido del usuario 2026-10-03 cualquier operador puede elegirlo
+        // ("Sin gafete" en el formulario), sin motivo: queda registrado quién
+        // hizo el ingreso. Con número se valida como siempre.
+        let gafete_numero = gafete_numero.filter(|_| contratista.requiere_gafete());
+        if let Some(numero) = gafete_numero {
             let gafete_encontrado = self
                 .gafetes
                 .buscar_por_numero(numero, TipoGafete::Contratista)?;
@@ -388,11 +394,7 @@ where
             {
                 return Err(RegistroIngresoServiceError::GafeteOcupado);
             }
-
-            Some(numero)
-        } else {
-            None
-        };
+        }
 
         let resultado_registrado = match &resultado_acceso {
             ResultadoAcceso::Permitido => ResultadoIngresoRegistrado::Permitido,
