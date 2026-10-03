@@ -4,8 +4,8 @@ use control_acceso::application::GestionNubeError as GestionNubeErrorNucleo;
 
 use crate::firmante::{AlmacenClaveDispositivo, FirmanteMovil};
 use crate::{
-    FalloSincronizacion, IngresoProveedorRemoto, IngresoRemoto, Nucleo, NucleoError,
-    PrestamoGafeteProvisionalRemoto, ResumenSincronizacion, SesionRealtimeNube,
+    FalloSincronizacion, IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, Nucleo,
+    NucleoError, PrestamoGafeteProvisionalRemoto, ResumenSincronizacion, SesionRealtimeNube,
     convertir_fallo_sincronizacion, interno,
 };
 
@@ -166,6 +166,7 @@ impl Nucleo {
             // en desktop/src-tauri/src/comandos/nube.rs.
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
+            conflictos_ingreso_correo: Vec::new(),
             conflictos_gafete: Vec::new(),
         })
     }
@@ -275,6 +276,18 @@ impl Nucleo {
             .collect())
     }
 
+    /// Espejo de [`Self::listar_ingresos_proveedor_remotos`], contra la
+    /// caché `ingresos_correo_remotos`.
+    pub fn listar_ingresos_correo_remotos(&self) -> Result<Vec<IngresoCorreoRemoto>, NucleoError> {
+        let actor = self.actor_autenticado()?;
+        Ok(self
+            .core_lock()
+            .listar_ingresos_correo_remotos(&actor)?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
     /// Espejo de [`Self::listar_ingresos_proveedor_remotos`], pero contra
     /// la caché `prestamos_gafete_provisional_remotos`.
     pub fn listar_prestamos_gafete_provisional_remotos(
@@ -343,6 +356,38 @@ impl Nucleo {
         let conexion = self.conexion_secundaria()?;
         let hora = self.core_lock().ahora_utc();
         control_acceso::nube::cerrar_ingreso_proveedor_remoto(
+            &conexion,
+            &contexto,
+            &uuid,
+            &actor.nombre,
+            hora,
+        )
+        .map_err(|error| NucleoError::Interno {
+            mensaje: interno(error),
+        })?;
+        Ok(())
+    }
+
+    /// Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], contra
+    /// `ingresos_correo`.
+    pub fn cerrar_ingreso_correo_remoto(&self, uuid: String) -> Result<(), NucleoError> {
+        let actor = self.actor_autenticado()?;
+        self.core_lock().autorizar_uso_nube(&actor)?;
+        let token = self
+            .autenticar_con_cache()
+            .map_err(|error| NucleoError::Interno {
+                mensaje: interno(error),
+            })?;
+        let contexto = control_acceso::nube::ContextoSincronizacion {
+            base_url: control_acceso::nube::base_url(),
+            apikey: control_acceso::nube::apikey(),
+            token: &token.access_token,
+            dispositivo_id: &token.dispositivo_id,
+            sitio_id: &token.sitio_id,
+        };
+        let conexion = self.conexion_secundaria()?;
+        let hora = self.core_lock().ahora_utc();
+        control_acceso::nube::cerrar_ingreso_correo_remoto(
             &conexion,
             &contexto,
             &uuid,
@@ -541,6 +586,11 @@ impl Nucleo {
                 .collect(),
             conflictos_ingreso_proveedor: resumen
                 .conflictos_ingreso_proveedor
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            conflictos_ingreso_correo: resumen
+                .conflictos_ingreso_correo
                 .into_iter()
                 .map(Into::into)
                 .collect(),

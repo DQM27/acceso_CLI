@@ -6,6 +6,7 @@ use control_acceso::services::error::ContratistaServiceError as ContratistaServi
 use control_acceso::services::error::EmpresaProveedorServiceError as EmpresaProveedorServiceErrorNucleo;
 use control_acceso::services::error::EmpresaServiceError as EmpresaServiceErrorNucleo;
 use control_acceso::services::error::GafeteProvisionalServiceError as GafeteProvisionalServiceErrorNucleo;
+use control_acceso::services::error::IngresoCorreoServiceError as IngresoCorreoServiceErrorNucleo;
 use control_acceso::services::error::IngresoProveedorServiceError as IngresoProveedorServiceErrorNucleo;
 use control_acceso::services::error::RegistroIngresoServiceError as RegistroIngresoServiceErrorNucleo;
 use control_acceso::services::error::RutaServiceError as RutaServiceErrorNucleo;
@@ -222,6 +223,19 @@ impl From<EmpresaProveedorServiceErrorNucleo> for NucleoError {
 
 /// Mismo criterio que contratistas: las reglas llegan con su mensaje,
 /// sólo la falla de base es `Interno`.
+impl From<IngresoCorreoServiceErrorNucleo> for NucleoError {
+    fn from(error: IngresoCorreoServiceErrorNucleo) -> Self {
+        match error {
+            IngresoCorreoServiceErrorNucleo::Database(_) => Self::Interno {
+                mensaje: interno(error),
+            },
+            regla => Self::Rechazado {
+                mensaje: control_acceso::mensajes::mensaje_ingreso_correo(regla),
+            },
+        }
+    }
+}
+
 impl From<IngresoProveedorServiceErrorNucleo> for NucleoError {
     fn from(error: IngresoProveedorServiceErrorNucleo) -> Self {
         match error {

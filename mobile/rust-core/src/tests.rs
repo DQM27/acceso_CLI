@@ -944,3 +944,81 @@ fn registrar_ingreso_proveedor_verificado_rechaza_cedula_ya_activa() {
             .is_some()
     );
 }
+
+fn nucleo_con_actor_y_gafete_de_visita() -> Nucleo {
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let ruta = archivo.path().to_str().unwrap().to_string();
+    let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+    conexion
+        .execute_batch(
+            "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                 '999999999', 'Actor Test',
+                 '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                 'ROOT', 1
+             );
+             INSERT INTO gafetes (numero, tipo, estado) VALUES (5, 'VISITA', 'DISPONIBLE');",
+        )
+        .unwrap();
+    drop(conexion);
+
+    let nucleo = Nucleo::abrir(ruta).unwrap();
+    nucleo
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+        .unwrap();
+    nucleo
+}
+
+/// Ingreso por correo de punta a punta (sin vincular: sin chequeos de nube):
+/// registra con gafete de visita, avisa la cédula ya adentro, rechaza el
+/// segundo ingreso y la salida lo saca de la lista.
+#[test]
+fn ingreso_por_correo_redondea_el_viaje() {
+    let nucleo = nucleo_con_actor_y_gafete_de_visita();
+    let registrar = || {
+        nucleo.registrar_ingreso_correo_verificado(
+            "1-1111-1111".to_string(),
+            "Ana Solano".to_string(),
+            "Entrevista RH".to_string(),
+            Some("  ".to_string()),
+            5,
+        )
+    };
+
+    let id = registrar().unwrap();
+    let activos = nucleo.listar_correos_activos().unwrap();
+    assert_eq!(activos.len(), 1);
+    assert_eq!(activos[0].motivo, "Entrevista RH");
+    assert_eq!(activos[0].placa, None);
+    assert!(
+        nucleo
+            .aviso_correo_con_ingreso_activo("1-1111-1111".to_string())
+            .unwrap()
+            .is_some()
+    );
+    assert!(matches!(
+        registrar(),
+        Err(NucleoError::Rechazado { mensaje })
+            if mensaje == "Esta persona ya tiene un ingreso por correo activo"
+    ));
+
+    nucleo.registrar_salida_correo(id).unwrap();
+    assert_eq!(nucleo.listar_correos_activos().unwrap(), Vec::new());
+}
+
+#[test]
+fn ingreso_por_correo_sin_motivo_lo_rechaza_el_nucleo() {
+    let nucleo = nucleo_con_actor_y_gafete_de_visita();
+
+    let resultado = nucleo.registrar_ingreso_correo_verificado(
+        "111111111".to_string(),
+        "Ana Solano".to_string(),
+        " ".to_string(),
+        None,
+        5,
+    );
+
+    assert!(matches!(
+        resultado,
+        Err(NucleoError::Rechazado { mensaje }) if mensaje == "Indique el motivo de la visita"
+    ));
+}

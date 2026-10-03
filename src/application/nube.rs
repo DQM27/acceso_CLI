@@ -8,7 +8,9 @@
 
 use crate::database::error::DatabaseError;
 use crate::domain::autorizacion::Operacion;
-use crate::nube::{IngresoProveedorRemoto, IngresoRemoto, PrestamoGafeteProvisionalRemoto};
+use crate::nube::{
+    IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, PrestamoGafeteProvisionalRemoto,
+};
 use crate::services::autenticacion_service::UsuarioSesion;
 
 use super::{AppCore, verificar_actor_activo};
@@ -281,6 +283,35 @@ impl AppCore {
                     cedula: row.get(1)?,
                     nombre: row.get(2)?,
                     empresa_nombre: row.get(3)?,
+                    placa: row.get(4)?,
+                    gafete_numero: row.get(5)?,
+                    hora_entrada: row.get(6)?,
+                    usuario_entrada_nombre: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(filas)
+    }
+
+    /// Espejo de [`Self::listar_ingresos_proveedor_remotos`], contra la
+    /// caché `ingresos_correo_remotos`.
+    pub fn listar_ingresos_correo_remotos(
+        &self,
+        actor: &UsuarioSesion,
+    ) -> Result<Vec<IngresoCorreoRemoto>, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        let mut statement = self.connection.prepare(
+            "SELECT uuid, cedula, nombre, motivo, placa, gafete_numero,
+                    hora_entrada, usuario_entrada_nombre
+             FROM ingresos_correo_remotos ORDER BY hora_entrada",
+        )?;
+        let filas = statement
+            .query_map([], |row| {
+                Ok(IngresoCorreoRemoto {
+                    uuid: row.get(0)?,
+                    cedula: row.get(1)?,
+                    nombre: row.get(2)?,
+                    motivo: row.get(3)?,
                     placa: row.get(4)?,
                     gafete_numero: row.get(5)?,
                     hora_entrada: row.get(6)?,
