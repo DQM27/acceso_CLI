@@ -315,15 +315,16 @@ fn flujo_personal_de_ruta_vigente_ignora_gafete_y_guarda_none() {
 }
 
 #[test]
-fn flujo_por_correo_persiste_gafete() {
+fn flujo_praind_en_vehiculo_persiste_gafete_y_placa() {
+    // Antes con un contratista "Por correo", tipo ya retirado (2026-10-03).
     let (connection, usuario_id) = preparar_base();
     let empresa_id = crear_empresa(&connection);
     let contratista_id = crear_contratista(
         &connection,
         empresa_id,
         "200100100",
-        TipoIngreso::PorCorreo,
-        None,
+        TipoIngreso::Praind,
+        Some(praind_vigente()),
         false,
         true,
     );
@@ -348,7 +349,7 @@ fn flujo_por_correo_persiste_gafete() {
         .unwrap();
     assert_eq!(ingreso.empresa_id, empresa_id);
     assert_eq!(ingreso.contratista_id, contratista_id);
-    assert_eq!(ingreso.tipo_ingreso, TipoIngreso::PorCorreo);
+    assert_eq!(ingreso.tipo_ingreso, TipoIngreso::Praind);
     assert_eq!(ingreso.medio_ingreso, MedioIngreso::Vehiculo);
     assert_eq!(ingreso.gafete_numero, Some(8));
 }

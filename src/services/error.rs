@@ -91,6 +91,10 @@ pub enum ContratistaServiceError {
     PraindVencido,
     #[error("Este tipo de ingreso no admite personal de ruta")]
     PersonalRutaNoAdmitido,
+    /// "Por correo" dejó de ser un tipo de contratista (pedido del usuario
+    /// 2026-10-03): esas visitas se registran como ingreso por correo.
+    #[error("El tipo de ingreso ya no se puede elegir")]
+    TipoIngresoRetirado,
     #[error("La cédula del contratista ya existe")]
     CedulaDuplicada,
     #[error("La sesión actual no está autorizada para realizar esta operación")]

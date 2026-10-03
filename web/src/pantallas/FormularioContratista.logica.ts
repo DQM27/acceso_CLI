@@ -1,11 +1,12 @@
 import type { TipoIngreso } from "../api/contratistas";
 
 /** Tipos de ingreso en el orden del formulario, con el texto que se lee en
- * pantalla ("IN HOUSE", no el valor interno "IN_HOUSE"). */
+ * pantalla ("IN HOUSE", no el valor interno "IN_HOUSE"). Sin "POR CORREO":
+ * dejó de ser un tipo de contratista (2026-10-03); esas visitas se registran
+ * como ingreso por correo en el escritorio y el teléfono. */
 export const TIPOS_INGRESO: { valor: TipoIngreso; etiqueta: string }[] = [
   { valor: "PRAIND", etiqueta: "PRAIND" },
   { valor: "IN_HOUSE", etiqueta: "IN HOUSE" },
-  { valor: "POR_CORREO", etiqueta: "POR CORREO" },
   { valor: "SWAT", etiqueta: "SWAT" },
 ];
 

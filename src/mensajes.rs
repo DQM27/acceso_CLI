@@ -66,7 +66,7 @@ pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
     use ContratistaServiceError::{
         CedulaDuplicada, CedulaInvalida, CedulaVacia, ContratistaNoEncontrado, Database,
         EmpresaNoEncontrada, NombreInvalido, NombreVacio, OperacionNoAutorizada,
-        PersonalRutaNoAdmitido, PraindRequerido, PraindVencido,
+        PersonalRutaNoAdmitido, PraindRequerido, PraindVencido, TipoIngresoRetirado,
     };
 
     match error {
@@ -79,6 +79,10 @@ pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
         PraindRequerido => "Fecha PRAIND requerida".into(),
         PraindVencido => "El PRAIND está vencido — ingrese una fecha vigente".into(),
         PersonalRutaNoAdmitido => "Personal de ruta sólo aplica a PRAIND e IN HOUSE".into(),
+        TipoIngresoRetirado => {
+            "«Por correo» ya no es un tipo de contratista: registre la visita en «Por correo»"
+                .into()
+        }
         CedulaDuplicada => "Ya existe un contratista con esa cédula".into(),
         OperacionNoAutorizada => "Su sesión no está autorizada para esta operación".into(),
         Database(error) => {

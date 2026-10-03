@@ -53,7 +53,7 @@ describe("lógica del formulario", () => {
   });
 
   it("los tipos salen con el texto que se lee, no el valor interno", () => {
-    expect(TIPOS_INGRESO.map((t) => t.etiqueta)).toEqual(["PRAIND", "IN HOUSE", "POR CORREO", "SWAT"]);
+    expect(TIPOS_INGRESO.map((t) => t.etiqueta)).toEqual(["PRAIND", "IN HOUSE", "SWAT"]);
   });
 });
 
