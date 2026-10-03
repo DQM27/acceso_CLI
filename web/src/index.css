@@ -92,7 +92,8 @@ input {
 }
 
 .campo input,
-.campo select {
+.campo select,
+.campo textarea {
   min-height: var(--control-altura);
   padding: 0.4rem 0.7rem;
   border-radius: var(--radio-chico);
@@ -107,13 +108,15 @@ input {
 }
 
 .campo input:focus,
-.campo select:focus {
+.campo select:focus,
+.campo textarea:focus {
   border-color: var(--acento);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 35%, transparent);
 }
 
 .campo input:disabled,
-.campo select:disabled {
+.campo select:disabled,
+.campo textarea:disabled {
   opacity: 0.6;
 }
 
