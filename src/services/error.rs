@@ -404,6 +404,41 @@ pub enum IngresoProveedorServiceError {
     Database(#[from] DatabaseError),
 }
 
+/// Ingreso "por correo" (visita autorizada por correo) -- mismo criterio
+/// que `IngresoProveedorServiceError`, con motivo en vez de empresa y
+/// gafete de visita.
+#[derive(Debug, thiserror::Error)]
+pub enum IngresoCorreoServiceError {
+    #[error("La cédula es obligatoria")]
+    CedulaVacia,
+    /// Esta cédula tiene el acceso negado como contratista.
+    #[error("Esta persona tiene el acceso denegado")]
+    AccesoNegado,
+    #[error("La cédula debe tener sólo números, entre 9 y 13 dígitos")]
+    CedulaInvalida,
+    #[error("El nombre es obligatorio")]
+    NombreVacio,
+    #[error("El motivo de la visita es obligatorio")]
+    MotivoVacio,
+    #[error("Esta cédula ya tiene un ingreso por correo activo")]
+    IngresoActivo,
+    #[error("El gafete de visita ya está en uso")]
+    GafeteOcupado,
+    /// El número no existe en el catálogo (`gafetes`, tipo `VISITA`).
+    #[error("El gafete no está registrado en el catálogo")]
+    GafeteNoRegistrado,
+    #[error("El gafete no está disponible: {0:?}")]
+    GafeteNoDisponible(EstadoGafete),
+    #[error("El ingreso por correo no está activo")]
+    RegistroNoActivo,
+    #[error("La salida no puede ser anterior al ingreso")]
+    SalidaAnteriorAIngreso,
+    #[error("La sesión que registra el movimiento no existe o está inactiva")]
+    OperadorNoAutorizado,
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum GafeteServiceError {
     #[error("El número de gafete debe ser mayor a cero")]

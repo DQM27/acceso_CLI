@@ -18,6 +18,7 @@ mod autenticacion;
 mod citas;
 #[cfg(feature = "nube")]
 mod con_nube;
+mod correo;
 // Reusa `lenguaje_comandos` (parser+resolver), que no depende de terminal —
 // sin feature gate, a diferencia de `cli/` (el loop real).
 mod catalogos;
