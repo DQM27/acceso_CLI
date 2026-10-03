@@ -532,6 +532,24 @@ pub fn mensaje_ingreso_proveedor_verificado(
 }
 
 #[cfg(feature = "nube")]
+pub fn mensaje_ingreso_correo_verificado(
+    error: crate::application::IngresoCorreoVerificadoError,
+) -> String {
+    use crate::application::IngresoCorreoVerificadoError;
+
+    match error {
+        IngresoCorreoVerificadoError::Servicio(error) => mensaje_ingreso_correo(error),
+        IngresoCorreoVerificadoError::ActivoEnOtroSitio { sitio } => {
+            format!("Esta persona ya tiene un ingreso por correo activo en {sitio}")
+        }
+        IngresoCorreoVerificadoError::GafeteOcupadoEnSitio { numero } => {
+            format!("El gafete de visita {numero} ya está en uso en otro dispositivo del sitio")
+        }
+        IngresoCorreoVerificadoError::Nube(error) => mensaje_gestion_nube(error),
+    }
+}
+
+#[cfg(feature = "nube")]
 pub fn mensaje_entrega_gafete_provisional_verificada(
     error: crate::application::EntregaGafeteProvisionalVerificadaError,
 ) -> String {

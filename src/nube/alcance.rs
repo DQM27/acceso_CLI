@@ -34,6 +34,9 @@ pub struct AlcanceSincronizacion {
     pub ingresos: bool,
     /// Ingresos de proveedores: mismas cuatro piezas que `ingresos`.
     pub ingresos_proveedor: bool,
+    /// Ingresos por correo: cierres propios, abiertos del sitio y
+    /// conflictos entre sitios (todavía sin historial del sitio).
+    pub ingresos_correo: bool,
     /// Préstamos de gafete provisional: abiertos, devoluciones propias e
     /// historial.
     pub gafetes_provisionales: bool,
@@ -58,6 +61,7 @@ impl AlcanceSincronizacion {
             catalogo_rutas: true,
             ingresos: true,
             ingresos_proveedor: true,
+            ingresos_correo: true,
             gafetes_provisionales: true,
             citas: true,
             visitas: true,
@@ -83,6 +87,7 @@ impl AlcanceSincronizacion {
             catalogo_rutas: false,
             ingresos: false,
             ingresos_proveedor: false,
+            ingresos_correo: false,
             gafetes_provisionales: false,
             citas: false,
             visitas: false,
@@ -99,6 +104,7 @@ impl AlcanceSincronizacion {
             catalogo_rutas: false,
             ingresos: false,
             ingresos_proveedor: false,
+            ingresos_correo: false,
             gafetes_provisionales: false,
             citas: false,
             visitas: false,
@@ -133,6 +139,7 @@ impl AlcanceSincronizacion {
                 "vehiculos_ruta" | "encargados_ruta" => alcance.catalogo_rutas = true,
                 "ingresos" => alcance.ingresos = true,
                 "ingresos_proveedor" => alcance.ingresos_proveedor = true,
+                "ingresos_correo" => alcance.ingresos_correo = true,
                 "prestamos_gafete_provisional" => alcance.gafetes_provisionales = true,
                 "cita_sitios" | "citas" => alcance.citas = true,
                 // Un check-in/out de visita también puede tocar la cita
@@ -154,6 +161,7 @@ impl AlcanceSincronizacion {
             && self.catalogo_rutas
             && self.ingresos
             && self.ingresos_proveedor
+            && self.ingresos_correo
             && self.gafetes_provisionales
             && self.citas
             && self.visitas
@@ -201,7 +209,7 @@ mod tests {
 
     #[test]
     fn cada_tabla_con_trigger_de_aviso_tiene_etapa_propia() {
-        // Las 14 tablas con trigger `*_emitir_cambio_nube` en Postgres
+        // Las 15 tablas con trigger `*_emitir_cambio_nube` en Postgres
         // (menos `salidas_ruta`, que no se recibe): ninguna debe caer en
         // el alcance completo por olvido.
         for tabla in [
@@ -213,6 +221,7 @@ mod tests {
             "gafetes",
             "ingresos",
             "ingresos_proveedor",
+            "ingresos_correo",
             "movimientos_visita",
             "prestamos_gafete_provisional",
             "rutas",

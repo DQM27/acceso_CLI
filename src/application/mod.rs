@@ -33,9 +33,10 @@ mod rutas;
 pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion};
 #[cfg(feature = "nube")]
 pub use con_nube::{
-    EntregaGafeteProvisionalVerificadaError, IngresoProveedorVerificadoError,
-    IngresoVerificadoError, NuevoIngresoProveedor, entregar_gafete_provisional_verificado,
-    preparar_ingreso_verificado, registrar_ingreso_proveedor_verificado,
+    EntregaGafeteProvisionalVerificadaError, IngresoCorreoVerificadoError,
+    IngresoProveedorVerificadoError, IngresoVerificadoError, NuevoIngresoCorreo,
+    NuevoIngresoProveedor, entregar_gafete_provisional_verificado, preparar_ingreso_verificado,
+    registrar_ingreso_correo_verificado, registrar_ingreso_proveedor_verificado,
     registrar_ingreso_verificado,
 };
 pub use historial::{

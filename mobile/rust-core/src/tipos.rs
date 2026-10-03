@@ -494,6 +494,7 @@ pub enum TipoMovimientoGafete {
     Contratista,
     Proveedor,
     ProvisionalKof,
+    PorCorreo,
 }
 
 impl From<control_acceso::nube::TipoMovimientoGafete> for TipoMovimientoGafete {
@@ -503,6 +504,7 @@ impl From<control_acceso::nube::TipoMovimientoGafete> for TipoMovimientoGafete {
             Nucleo::Contratista => Self::Contratista,
             Nucleo::Proveedor => Self::Proveedor,
             Nucleo::ProvisionalKof => Self::ProvisionalKof,
+            Nucleo::PorCorreo => Self::PorCorreo,
         }
     }
 }

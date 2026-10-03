@@ -25,5 +25,9 @@ class ConflictoGafeteTest {
             mensajeConflictoGafete(conflicto(TipoMovimientoGafete.PROVISIONAL_KOF), "08:00")
                 .startsWith("El préstamo del gafete provisional 12 a Juan Pérez (08:00)"),
         )
+        assertTrue(
+            mensajeConflictoGafete(conflicto(TipoMovimientoGafete.POR_CORREO), "08:00")
+                .startsWith("El ingreso por correo de Juan Pérez con gafete de visita 12 (08:00)"),
+        )
     }
 }
