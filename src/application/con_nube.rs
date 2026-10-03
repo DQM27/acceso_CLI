@@ -207,11 +207,15 @@ pub enum IngresoProveedorVerificadoError {
 /// 1. la cédula no tiene otro ingreso abierto en este sitio, ni en este
 ///    equipo ni en el otro dispositivo
 ///    (`AppCore::proveedor_con_ingreso_activo_en_sitio`);
-/// 2. ni en otro sitio (nube, mejor esfuerzo: si la consulta falla, deja
-///    pasar y el conflicto se detecta al sincronizar);
-/// 3. el gafete no está en uso en el otro dispositivo del sitio (nube; si
-///    no se puede verificar, frena: un gafete físico no puede duplicarse);
-/// 4. escribe (`AppCore::registrar_ingreso_proveedor`, reglas locales).
+/// 2. con nube configurada, en vivo: la cédula no tiene un ingreso abierto
+///    en ningún sitio (`ingreso_proveedor_activo`) y el gafete no está en uso
+///    en el otro dispositivo del sitio. Si no se puede verificar, no se
+///    registra (mismo criterio que contratistas; antes el paso del sitio
+///    era "mejor esfuerzo" y dejaba pasar);
+/// 3. escribe (`AppCore::registrar_ingreso_proveedor`, reglas locales).
+///
+/// Si dos equipos pasan el paso 2 en el mismo instante, decide el índice
+/// único `ingresos_proveedor_cedula_activa_idx`: gana el primero en escribir.
 pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
     nube: &CacheTokenDispositivo,
@@ -240,14 +244,22 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
                     datos.gafete_numero,
                 )
             });
-            let activo = crate::nube::proveedor_activo_en_otro_sitio(&contexto, &datos.cedula);
+            let activo = crate::nube::proveedor_con_ingreso_activo(&contexto, &datos.cedula);
             let ocupado = consulta_gafete
                 .join()
                 .unwrap_or_else(|panico| std::panic::resume_unwind(panico));
             (activo, ocupado)
         });
-        if let Some(sitio) = activo_en_otro_sitio.ok().flatten() {
-            return Err(IngresoProveedorVerificadoError::ActivoEnOtroSitio { sitio });
+        match activo_en_otro_sitio.map_err(GestionNubeError::from)? {
+            Some(activo) if activo.mismo_sitio => {
+                return Err(IngresoProveedorServiceError::IngresoActivo.into());
+            }
+            Some(activo) => {
+                return Err(IngresoProveedorVerificadoError::ActivoEnOtroSitio {
+                    sitio: activo.sitio_nombre,
+                });
+            }
+            None => {}
         }
         if gafete_ocupado.map_err(GestionNubeError::from)? {
             return Err(IngresoProveedorVerificadoError::GafeteOcupadoEnSitio {
@@ -278,10 +290,17 @@ pub enum EntregaGafeteProvisionalVerificadaError {
     Nube(#[from] GestionNubeError),
 }
 
-/// Entrega de gafete provisional: si el gafete ya está prestado en el otro
-/// dispositivo del sitio (nube) no se entrega, y si no se puede verificar
-/// tampoco (un gafete físico no puede duplicarse). Recién ahí escribe
-/// (`AppCore::entregar_gafete_provisional`, reglas locales).
+/// Entrega de gafete provisional KOF con todas sus reglas:
+/// 1. con nube configurada, en vivo y a la vez: el gafete no está prestado
+///    en el otro dispositivo del sitio, y el encargado (por su código de
+///    empleado) no tiene otro gafete provisional sin devolver en ningún sitio
+///    (`prestamo_provisional_activo_de_encargado`). Si no se puede verificar,
+///    no se entrega (un gafete físico no puede duplicarse);
+/// 2. escribe (`AppCore::entregar_gafete_provisional`, reglas locales: el
+///    encargado existe, está activo y no tiene otro préstamo en este equipo).
+///
+/// Si dos equipos pasan el paso 1 en el mismo instante, decide el índice
+/// único `prestamos_gafete_provisional_encargado_activo_idx`.
 pub fn entregar_gafete_provisional_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
     nube: &CacheTokenDispositivo,
@@ -290,18 +309,39 @@ pub fn entregar_gafete_provisional_verificado<G: Deref<Target = AppCore>>(
     gafete_numero: i64,
 ) -> Result<i64, EntregaGafeteProvisionalVerificadaError> {
     if nube.vinculado() {
+        // Sin encargado en el catálogo local no hay a quién buscar: la
+        // escritura de abajo lo rechaza con su propio error.
+        let codigo_empleado = nucleo().codigo_empleado_de_encargado(encargado_id)?;
         let token = autenticar(&nucleo, nube, actor)?;
-        if crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(
-            &contexto(&token),
-            gafete_numero,
-        )
-        .map_err(GestionNubeError::from)?
-        {
+        let contexto = contexto(&token);
+        let (gafete_ocupado, prestamo_del_encargado) = std::thread::scope(|hilos| {
+            let consulta_encargado = hilos.spawn(|| {
+                codigo_empleado.as_deref().map_or(Ok(None), |codigo| {
+                    crate::nube::encargado_con_prestamo_provisional_activo(&contexto, codigo)
+                })
+            });
+            let ocupado = crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(
+                &contexto,
+                gafete_numero,
+            );
+            let prestamo = consulta_encargado
+                .join()
+                .unwrap_or_else(|panico| std::panic::resume_unwind(panico));
+            (ocupado, prestamo)
+        });
+        if gafete_ocupado.map_err(GestionNubeError::from)? {
             return Err(
                 EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio {
                     numero: gafete_numero,
                 },
             );
+        }
+        if let Some(prestamo) = prestamo_del_encargado.map_err(GestionNubeError::from)? {
+            log::info!(
+                "gafete provisional: el encargado ya tiene un préstamo sin devolver en {}",
+                prestamo.sitio_nombre
+            );
+            return Err(GafeteProvisionalServiceError::EncargadoYaTienePrestamoActivo.into());
         }
     }
 

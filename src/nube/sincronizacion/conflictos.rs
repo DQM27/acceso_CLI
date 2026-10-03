@@ -165,11 +165,13 @@ pub struct ConflictoIngresoProveedorActivo {
 #[derive(serde::Deserialize)]
 pub(super) struct FilaConflictoProveedorActivo {
     pub(super) cedula: Option<String>,
-    pub(super) sitios: Option<SitioEmbebido>,
+    pub(super) sitio_nombre: Option<String>,
 }
 
-/// Espejo de [`contratistas_con_conflicto_activo`]/[`visitantes_con_conflicto_activo`],
-/// pero contra `ingresos_proveedor`.
+/// Espejo de [`contratistas_con_conflicto_activo`], pero contra
+/// `ingresos_proveedor`: va por la función
+/// `proveedores_activos_en_otras_unidades` porque la RLS no deja ver lo de
+/// otras unidades (la consulta directa siempre daba vacío).
 pub fn proveedores_con_conflicto_activo(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
@@ -189,21 +191,20 @@ pub fn proveedores_con_conflicto_activo(
     let cedulas = activos_locales
         .iter()
         .map(|(cedula, _)| cedula.as_str())
-        .collect::<Vec<_>>()
-        .join(",");
+        .collect::<Vec<_>>();
     let cliente = cliente_http();
-    let url = format!(
-        "{}/rest/v1/ingresos_proveedor?cedula=in.({cedulas})&sitio_id=neq.{}\
-         &hora_salida=is.null&select=cedula,sitios(nombre)",
-        contexto.base_url, contexto.sitio_id,
-    );
-    let filas: Vec<FilaConflictoProveedorActivo> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaConflictoProveedorActivo> = llamar_rpc(
+        &cliente,
+        contexto,
+        "proveedores_activos_en_otras_unidades",
+        &serde_json::json!({ "p_cedulas": cedulas }),
+    )?;
 
     Ok(filas
         .into_iter()
         .filter_map(|fila| {
             let cedula = fila.cedula?;
-            let sitio = fila.sitios?.nombre;
+            let sitio = fila.sitio_nombre?;
             let nombre = activos_locales
                 .iter()
                 .find(|(c, _)| *c == cedula)

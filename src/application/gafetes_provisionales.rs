@@ -45,6 +45,19 @@ impl AppCore {
         Ok(id)
     }
 
+    /// Código de empleado del encargado (lo que lo identifica entre equipos
+    /// y sitios, ver `entregar_gafete_provisional_verificado`). `None` si no
+    /// está en el catálogo local.
+    pub fn codigo_empleado_de_encargado(
+        &self,
+        encargado_id: i64,
+    ) -> Result<Option<String>, GafeteProvisionalServiceError> {
+        use crate::database::repositories::encargado_ruta_repository::EncargadoRutaRepository;
+        Ok(SqliteEncargadoRutaRepository::new(&self.connection)
+            .buscar_por_id(encargado_id)?
+            .map(|encargado| encargado.codigo_empleado))
+    }
+
     pub fn registrar_devolucion_gafete_provisional(
         &self,
         actor: &UsuarioSesion,

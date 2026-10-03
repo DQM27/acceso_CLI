@@ -461,12 +461,14 @@ pub(super) fn es_conflicto_gafete_activo(entidad: &str, error: &SincronizacionEr
     )
 }
 
-/// El contratista ya tiene un ingreso abierto en la nube (en otra unidad, o
-/// en otro equipo de esta) y el índice único `ingresos_contratista_activo_idx`
-/// rechazó este, típicamente registrado sin conexión. No se resuelve solo:
-/// queda fallido de inmediato, sin los reintentos con backoff. El aviso a
-/// quien opera lo da `contratistas_con_conflicto_activo` al terminar la
-/// sincronización (este ingreso sigue abierto localmente).
+/// La persona ya tiene un ingreso (o préstamo KOF) abierto en la nube, en
+/// otra unidad o en otro equipo de esta, y el índice único de su entidad
+/// (ver [`indice_persona_activa_de`]) rechazó esta apertura, típicamente
+/// registrada sin conexión. No se resuelve sola: queda fallida de inmediato,
+/// sin los reintentos con backoff. Para contratistas y proveedores el aviso a
+/// quien opera lo dan `contratistas_con_conflicto_activo` y
+/// `proveedores_con_conflicto_activo` al terminar la sincronización (la fila
+/// sigue abierta localmente).
 fn marcar_fallida_por_ingreso_activo(
     connection: &Connection,
     fila: &FilaCola,
@@ -474,7 +476,7 @@ fn marcar_fallida_por_ingreso_activo(
     resumen: &mut ResumenDrenado,
 ) -> Result<(), SincronizacionError> {
     log::error!(
-        "cola_salida: fila {} ({} {}) rechazada: el contratista ya tiene un ingreso abierto en la nube, queda fallida de inmediato: {error}",
+        "cola_salida: fila {} ({} {}) rechazada: esa persona ya tiene un ingreso o préstamo abierto en la nube, queda fallida de inmediato: {error}",
         fila.id,
         fila.entidad,
         fila.entidad_uuid,
@@ -484,19 +486,31 @@ fn marcar_fallida_por_ingreso_activo(
     Ok(())
 }
 
-/// Un ingreso de contratista que la nube rechazó porque esa cédula ya tiene
-/// otro abierto (`ingresos_contratista_activo_idx`, migración
-/// `20261003170000_ingreso_unico_entre_unidades`). Igual que
-/// [`es_conflicto_gafete_activo`]: 409 de `PostgREST` con el nombre del
-/// índice en el cuerpo.
-/// El cierre nunca choca con este índice (sólo cuenta lo abierto).
+/// Índice único "una persona, un ingreso (o préstamo) abierto" que protege
+/// cada entidad de la cola en la nube: contratistas
+/// (`20261003170000_ingreso_unico_entre_unidades`), proveedores y préstamos
+/// de gafete provisional KOF (`20261003190000_ingreso_unico_proveedores_y_kof`).
+fn indice_persona_activa_de(entidad: &str) -> Option<&'static str> {
+    match entidad {
+        "ingreso" => Some("ingresos_contratista_activo_idx"),
+        "ingreso_proveedor" => Some("ingresos_proveedor_cedula_activa_idx"),
+        "prestamo_gafete_provisional" => Some("prestamos_gafete_provisional_encargado_activo_idx"),
+        _ => None,
+    }
+}
+
+/// Una apertura que la nube rechazó porque esa persona ya tiene otra abierta
+/// (ver [`indice_persona_activa_de`]). Igual que [`es_conflicto_gafete_activo`]:
+/// 409 de `PostgREST` con el nombre del índice en el cuerpo. El cierre nunca
+/// choca con estos índices (sólo cuenta lo abierto).
 pub(super) fn es_conflicto_ingreso_activo(fila: &FilaCola, error: &SincronizacionError) -> bool {
-    fila.entidad == "ingreso"
-        && fila.operacion != "cerrar"
+    let Some(indice) = indice_persona_activa_de(&fila.entidad) else {
+        return false;
+    };
+    fila.operacion != "cerrar"
         && matches!(
             error,
-            SincronizacionError::RespuestaInesperada { status: 409, cuerpo }
-                if cuerpo.contains("ingresos_contratista_activo_idx")
+            SincronizacionError::RespuestaInesperada { status: 409, cuerpo } if cuerpo.contains(indice)
         )
 }
 
