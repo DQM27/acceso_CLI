@@ -34,8 +34,7 @@ pub struct AlcanceSincronizacion {
     pub ingresos: bool,
     /// Ingresos de proveedores: mismas cuatro piezas que `ingresos`.
     pub ingresos_proveedor: bool,
-    /// Ingresos por correo: cierres propios, abiertos del sitio y
-    /// conflictos entre sitios (todavía sin historial del sitio).
+    /// Ingresos por correo: mismas cuatro piezas que `ingresos`.
     pub ingresos_correo: bool,
     /// Préstamos de gafete provisional: abiertos, devoluciones propias e
     /// historial.

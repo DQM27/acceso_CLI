@@ -949,7 +949,10 @@ fn aplicar_migracion_54(connection: &Connection) -> Result<(), SchemaError> {
 /// Ingreso "por correo" (visita autorizada por correo, comodín previo al
 /// módulo de Visitas): `registro_ingresos_correo` (mismo armazón que
 /// `registro_ingresos_proveedor`, con `motivo` en vez de empresa y gafete de
-/// visita), su caché del otro dispositivo `ingresos_correo_remotos`, y
+/// visita), su caché del otro dispositivo `ingresos_correo_remotos`, el
+/// historial del sitio que sólo llena el escritorio
+/// (`historial_ingresos_correo_sitio`, con su marca de agua en
+/// `sincronizacion_estado`), y
 /// `'ingreso_correo'` en el `CHECK` de `cola_salida.entidad` (se recrea,
 /// igual que en `MIGRACION_40`/`41`). Ninguna tabla nueva tiene hijos y
 /// `cola_salida` no tiene claves foráneas, así que no hace falta apagar

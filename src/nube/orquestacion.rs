@@ -64,6 +64,7 @@ pub struct ResumenSincronizacionNube {
     pub citas_recibidas: u32,
     pub historial_visitas_recibidos: u32,
     pub historial_ingresos_proveedor_recibidos: u32,
+    pub historial_ingresos_correo_recibidos: u32,
     pub historial_gafetes_provisionales_recibidos: u32,
     /// Los `conflictos_*` son de mejor esfuerzo: si la consulta falla
     /// quedan vacíos, nunca tumban una sincronización que por lo demás
@@ -188,6 +189,14 @@ fn recibir_en_orden(
     if alcance.ingresos_proveedor && historiales {
         resumen.historial_ingresos_proveedor_recibidos =
             sincronizacion::recibir_historial_ingresos_proveedor_del_sitio(
+                conexion,
+                contexto,
+                reconciliar,
+            )?;
+    }
+    if alcance.ingresos_correo && historiales {
+        resumen.historial_ingresos_correo_recibidos =
+            sincronizacion::recibir_historial_ingresos_correo_del_sitio(
                 conexion,
                 contexto,
                 reconciliar,

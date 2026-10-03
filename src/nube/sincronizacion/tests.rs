@@ -4425,3 +4425,47 @@ fn correos_con_conflicto_activo_avisan_la_otra_unidad() {
     );
     servidor.join().unwrap();
 }
+
+#[test]
+fn recibe_el_historial_de_ingresos_por_correo_y_omite_las_filas_ilegibles() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"id\":\"correo-malo\",\"cedula\":\"111111111\",\"nombre\":\"X\",\
+         \"motivo\":null,\"placa\":null,\"gafete_numero\":null,\
+         \"hora_entrada\":\"no-es-una-fecha\",\"hora_salida\":null,\
+         \"usuario_entrada_nombre\":null,\"usuario_salida_nombre\":null,\
+         \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":null,\
+         \"updated_at\":\"2026-01-01T08:00:00Z\"},\
+         {\"id\":\"correo-1\",\"cedula\":\"112345678\",\"nombre\":\"Ana Solano\",\
+         \"motivo\":\"Entrevista RH\",\"placa\":null,\"gafete_numero\":5,\
+         \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"hora_salida\":\"2026-01-01T09:00:00Z\",\
+         \"usuario_entrada_nombre\":\"Guardia\",\"usuario_salida_nombre\":\"Guardia\",\
+         \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":\"otro-dispositivo\",\
+         \"updated_at\":\"2026-01-01T09:00:05Z\"}]",
+    );
+
+    let recibidos =
+        recibir_historial_ingresos_correo_del_sitio(&connection, &contexto(&base_url), true)
+            .unwrap();
+
+    assert_eq!(recibidos, 1);
+    let (motivo, salida): (Option<String>, Option<String>) = connection
+        .query_row(
+            "SELECT motivo, hora_salida FROM historial_ingresos_correo_sitio WHERE uuid = 'correo-1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(motivo.as_deref(), Some("Entrevista RH"));
+    assert_eq!(salida.as_deref(), Some("2026-01-01T09:00:00Z"));
+    let marca: Option<String> = connection
+        .query_row(
+            "SELECT historial_ingresos_correo_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(marca.is_some());
+}

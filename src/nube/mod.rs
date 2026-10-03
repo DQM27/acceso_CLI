@@ -48,7 +48,7 @@ pub use sincronizacion::{
     recibir_cierres_de_ingresos_propios, recibir_cierres_de_ingresos_propios_correo,
     recibir_cierres_de_ingresos_propios_proveedor, recibir_citas_del_sitio,
     recibir_devoluciones_propias_gafete_provisional, recibir_historial_del_sitio,
-    recibir_historial_gafetes_provisionales_del_sitio,
+    recibir_historial_gafetes_provisionales_del_sitio, recibir_historial_ingresos_correo_del_sitio,
     recibir_historial_ingresos_proveedor_del_sitio, recibir_historial_visitas_del_sitio,
     recibir_ingresos_abiertos, recibir_ingresos_correo_abiertos,
     recibir_ingresos_proveedor_abiertos, recibir_prestamos_gafete_provisional_abiertos,
