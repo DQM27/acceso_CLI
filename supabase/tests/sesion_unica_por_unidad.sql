@@ -4,8 +4,9 @@
 -- `cerrar_sesion_usuario_en_unidad` y la bitácora (`bitacora_sesiones`,
 -- `panel_bitacora_sesiones`): varios equipos de la misma unidad conviven,
 -- otra unidad desplaza (gana el último ingreso), un ingreso sin conexión más
--- viejo queda desplazado, dos ingresos casi simultáneos no cierran a nadie
--- (duda), y cada inicio y cierre queda en la bitácora con su motivo.
+-- viejo queda desplazado, dos ingresos casi simultáneos se desempatan por
+-- orden de llegada (gana el último), y cada inicio y cierre queda en la
+-- bitácora con su motivo.
 --
 -- Dentro de la transacción `now()` no cambia, así que cada ingreso queda en
 -- `now() - transcurrido` exacto.
@@ -84,19 +85,22 @@ begin
   v := public.sesion_usuario_en_unidad('000000000', '11111111-0000-0000-0000-000000000099', 0);
   if v <> 'sin_usuario' then raise exception '7a: cédula desconocida, dio %', v; end if;
 
-  -- 8. Duda: ingresos en A y en B con 3 s de diferencia (menos que los
-  --    márgenes). No se cierra ninguno; las dos sesiones siguen.
+  -- 8. Empate: ingresos en A y en B con 500 ms de diferencia (menos que los
+  --    márgenes de ~1 s). Ya no queda en duda: gana el último en llegar a
+  --    la nube (PC B) y la sesión de A se cierra.
   perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c302', 'aaaaaaaa-0000-0000-0000-00000000a301', 'huella-cel-a');
   v := public.sesion_usuario_en_unidad('900000301', '11111111-0000-0000-0000-000000000006', 10 * m);
   if v <> 'vigente' then raise exception '8a: Celular A debería quedar vigente, dio %', v; end if;
   perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c303', 'aaaaaaaa-0000-0000-0000-00000000a302', 'huella-pc-b');
-  v := public.sesion_usuario_en_unidad('900000301', '11111111-0000-0000-0000-000000000007', 10 * m - 3000);
-  if v <> 'vigente' then raise exception '8b: en la duda PC B no cierra a nadie, dio %', v; end if;
+  v := public.sesion_usuario_en_unidad('900000301', '11111111-0000-0000-0000-000000000007', 10 * m - 500);
+  if v <> 'vigente' then raise exception '8b: en el empate gana PC B (llegó última), dio %', v; end if;
   perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c302', 'aaaaaaaa-0000-0000-0000-00000000a301', 'huella-cel-a');
   v := public.sesion_usuario_en_unidad('900000301', '11111111-0000-0000-0000-000000000006', 10 * m);
-  if v <> 'vigente' then raise exception '8c: en la duda Celular A tampoco queda fuera, dio %', v; end if;
-  perform public.cerrar_sesion_usuario_en_unidad('900000301');
+  if v <> 'desplazada' then raise exception '8c: Celular A debería quedar fuera, dio %', v; end if;
+  -- PC B sincroniza otra vez: sigue vigente (la decisión no se revisa).
   perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c303', 'aaaaaaaa-0000-0000-0000-00000000a302', 'huella-pc-b');
+  v := public.sesion_usuario_en_unidad('900000301', '11111111-0000-0000-0000-000000000007', 10 * m - 500);
+  if v <> 'vigente' then raise exception '8d: PC B debería seguir vigente, dio %', v; end if;
   perform public.cerrar_sesion_usuario_en_unidad('900000301');
 
   -- 9. Una duración negativa o absurda es un dato roto: error, no decisión.
@@ -131,9 +135,14 @@ begin
     raise exception 'Falta el evento de seguridad del cambio de unidad';
   end if;
   if (select count(*) from public.eventos_seguridad_dispositivos
-       where tipo = 'sesion_en_duda' and detalle ->> 'cedula' = '900000301'
-         and detalle ->> 'sitio_otro' = 'Unidad sesión A') <> 1 then
-    raise exception 'Falta (o se repitió) el evento de la sesión en duda';
+       where tipo = 'sesion_en_otra_unidad' and detalle ->> 'cedula' = '900000301'
+         and detalle ->> 'sitio_anterior' = 'Unidad sesión A'
+         and (detalle ->> 'equipos_cerrados')::int = 1) <> 1 then
+    raise exception 'Falta el evento de seguridad del empate resuelto';
+  end if;
+  if exists (select 1 from public.eventos_seguridad_dispositivos
+              where tipo = 'sesion_en_duda' and detalle ->> 'cedula' = '900000301') then
+    raise exception 'Ya no debería quedar ninguna sesión en duda';
   end if;
   if exists (select 1 from public.sesiones_usuario where usuario_id = '99999999-0000-0000-0000-000000000301') then
     raise exception 'Tras la salida no debería quedar ninguna sesión abierta';
@@ -160,7 +169,7 @@ begin
      'Celular A@Unidad sesión A=desplazada, ' ||
      'PC B@Unidad sesión B=sin_cierre, ' ||
      'PC B@Unidad sesión B=salida, ' ||
-     'Celular A@Unidad sesión A=salida, ' ||
+     'Celular A@Unidad sesión A=otra_unidad, ' ||
      'PC B@Unidad sesión B=salida'
   then
     raise exception 'Bitácora inesperada: %', v_obtenido;
