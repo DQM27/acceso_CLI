@@ -6,6 +6,7 @@ import {
   ColumnAutoSizeModule,
   ColumnHoverModule,
   DateFilterModule,
+  HighlightChangesModule,
   InfiniteRowModelModule,
   LocaleModule,
   ModuleRegistry,
@@ -23,6 +24,8 @@ import {
 // sólo registra el error #200 en la consola y la función no hace nada.
 // `InfiniteRowModelModule` + `PaginationModule` son las tablas paginadas en el
 // servidor (Historial): la grilla pide cada página con su filtro y su orden.
+// `HighlightChangesModule` es el destello de las celdas que cambian
+// (`enableCellChangeFlash` en Tabla.tsx, tablas que se refrescan en vivo).
 ModuleRegistry.registerModules([
   CellStyleModule,
   ClientSideRowModelApiModule,
@@ -31,6 +34,7 @@ ModuleRegistry.registerModules([
   ColumnAutoSizeModule,
   ColumnHoverModule,
   DateFilterModule,
+  HighlightChangesModule,
   InfiniteRowModelModule,
   LocaleModule,
   NumberFilterModule,
