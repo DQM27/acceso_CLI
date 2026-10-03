@@ -100,13 +100,22 @@ fun PantallaPrincipal(
     // para qué es la app. Si lo niega, Android deja de mostrar el diálogo
     // después del segundo rechazo; la app sigue igual, sin avisos con la app
     // cerrada.
+    //
+    // El permiso se pide aunque Firebase no esté disponible: antes dependía
+    // de eso, y un APK compilado sin google-services.json no pedía nada ni
+    // decía por qué (visto en la primera prueba en un teléfono real). En
+    // los builds de prueba se avisa en pantalla que a ese APK le falta la
+    // configuración de Firebase.
     val pedirPermisoNotificaciones = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(Unit) {
-        if (!NotificacionesPush.disponible(contexto)) return@LaunchedEffect
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !NotificacionesPush.permisoConcedido(contexto)) {
             pedirPermisoNotificaciones.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        NotificacionesPush.tokenActual(contexto)
+        if (NotificacionesPush.disponible(contexto)) {
+            NotificacionesPush.tokenActual(contexto)
+        } else if (BuildConfig.DEBUG || BuildConfig.AMBIENTE_STAGING) {
+            Toast.makeText(contexto, "Este APK no trae google-services.json: sin notificaciones push", Toast.LENGTH_LONG).show()
+        }
     }
     // `docs/pendientes.md`, "alertar luego al sincronizar" -- ver el mismo
     // campo en `desktop/src/App.tsx` (`manejarResumenSincronizacion`).
