@@ -126,20 +126,24 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       # Falla rápido y con un mensaje claro si todavía no se cargaron los
-      # 4 secretos -- sin esto, gradlew fallaría bastante más adelante (al
-      # firmar) con un error mucho menos obvio.
+      # 5 secretos -- sin esto, gradlew fallaría bastante más adelante (al
+      # firmar) con un error mucho menos obvio. GOOGLE_SERVICES_JSON también
+      # es obligatorio acá: sin él el APK compila igual pero sale sin
+      # notificaciones push, y un release no debe salir así en silencio.
       - name: Verificar secretos requeridos
         run: |
           test -n "$ANDROID_KEYSTORE_BASE64"
           test -n "$ANDROID_KEYSTORE_PASSWORD"
           test -n "$ANDROID_KEY_ALIAS"
           test -n "$ANDROID_KEY_PASSWORD"
+          test -n "$GOOGLE_SERVICES_JSON"
 
       - name: Instalar JDK 17
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -221,9 +225,28 @@ jobs:
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
 
+      # `google-services.json` nunca está en el repo (ver mobile/.gitignore:
+      # el repo es público) -- se reconstruye acá desde un secreto con el JSON
+      # crudo (no base64), igual que el keystore. En release es obligatorio:
+      # build.gradle.kts sólo aplica el plugin de Google Services si el
+      # archivo existe, y sin él la app sale sin notificaciones push. Se
+      # valida que sea JSON y que traiga el paquete de producción, sin
+      # imprimir su contenido.
+      - name: Restaurar la configuración de Firebase
+        working-directory: mobile/android
+        run: |
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          python3 -c "import json; d=json.load(open('app/google-services.json')); assert any(c['client_info']['android_client_info']['package_name']=='com.dqm27.lattis' for c in d['client']), 'falta el paquete com.dqm27.lattis'"
+
       - name: Compilar el APK de release
         working-directory: mobile/android
         run: ./gradlew assembleRelease
+
+      # Confirma que el plugin de Google Services sí procesó el JSON (si no,
+      # el APK habría salido sin push sin avisar).
+      - name: Verificar que se aplicó la configuración de Firebase
+        working-directory: mobile/android
+        run: test -d app/build/generated/res/processReleaseGoogleServices
 
       # El nombre del archivo usa el versionName real de mobile (ej. "1.2.3"),
       # NO el tag del Release (ej. "v1.6.4") -- ese tag es la versión de
