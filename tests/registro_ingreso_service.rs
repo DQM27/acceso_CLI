@@ -232,7 +232,7 @@ fn praind_normal_con_gafete_libre_crea_ingreso() {
 }
 
 #[test]
-fn praind_normal_sin_gafete_es_rechazado() {
+fn praind_normal_sin_gafete_entra_como_s_g() {
     let (connection, empresa_id, usuario_id) = preparar_base();
     let id = guardar_contratista(
         &connection,
@@ -257,10 +257,11 @@ fn praind_normal_sin_gafete_es_rechazado() {
         fecha_ingreso(),
     );
 
-    assert!(matches!(
-        resultado,
-        Err(RegistroIngresoServiceError::GafeteRequerido)
-    ));
+    // "Sin gafete" (S/G): cualquier operador puede elegirlo, igual que el
+    // personal de ruta. Queda el ingreso sin número.
+    let registro_id = resultado.unwrap().registro_id;
+    let ingreso = registros.buscar_por_id(registro_id).unwrap().unwrap();
+    assert_eq!(ingreso.gafete_numero, None);
 }
 
 #[test]

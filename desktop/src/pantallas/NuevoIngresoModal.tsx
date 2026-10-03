@@ -5,7 +5,7 @@ import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/
 import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
 import { buscarContratistas, prepararIngreso, registrarIngreso } from "../api";
 import type { ContratistaResumen, MedioIngreso, PreparacionIngreso } from "../api";
-import { avisosContratista, numeroDeGafete } from "./NuevoIngresoModal.logica";
+import { avisosContratista, gafeteParaRegistrar } from "./NuevoIngresoModal.logica";
 
 const DEBOUNCE_MS = 120;
 const MAX_RESULTADOS = 4;
@@ -44,6 +44,7 @@ export default function NuevoIngresoModal({
   const [seleccion, setSeleccion] = useState<Seleccion>({ tipo: "ninguna" });
   const [medio, setMedio] = useState<MedioIngreso>("Caminando");
   const [gafeteTexto, setGafeteTexto] = useState("");
+  const [sinGafete, setSinGafete] = useState(false);
   const [placaTexto, setPlacaTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -107,6 +108,7 @@ export default function NuevoIngresoModal({
       if (preparacion.mensaje_bloqueo === null) {
         setMedio("Caminando");
         setGafeteTexto("");
+        setSinGafete(false);
         setPlacaTexto("");
         setSeleccion({ tipo: "formulario", contratista, preparacion });
       } else {
@@ -126,13 +128,13 @@ export default function NuevoIngresoModal({
   async function confirmarIngreso() {
     if (seleccion.tipo !== "formulario") return;
     const { preparacion } = seleccion;
-    // Sólo se convierte el texto a número; si el gafete falta o la placa
-    // no corresponde al medio, lo decide y lo dice el núcleo.
-    const gafete = numeroDeGafete(gafeteTexto, preparacion.requiere_gafete);
-    if (gafete === undefined) {
-      setError("Ingrese un número de gafete válido");
+    // Si la placa no corresponde al medio, lo decide y lo dice el núcleo.
+    const entrada = gafeteParaRegistrar(gafeteTexto, preparacion.requiere_gafete, sinGafete);
+    if ("error" in entrada) {
+      setError(entrada.error);
       return;
     }
+    const { gafete } = entrada;
     setError(null);
     setEnviando(true);
     try {
@@ -332,16 +334,35 @@ export default function NuevoIngresoModal({
                 )}
 
                 {seleccion.preparacion.requiere_gafete && (
-                  <label className="campo">
-                    Número de gafete
-                    <input
-                      value={gafeteTexto}
-                      onChange={(evento) => setGafeteTexto(evento.target.value.replace(/\D/g, ""))}
-                      inputMode="numeric"
-                      autoFocus
-                      placeholder="Número de gafete"
-                    />
-                  </label>
+                  <>
+                    <label className="campo">
+                      Número de gafete
+                      <input
+                        value={gafeteTexto}
+                        onChange={(evento) => setGafeteTexto(evento.target.value.replace(/\D/g, ""))}
+                        inputMode="numeric"
+                        autoFocus
+                        disabled={sinGafete}
+                        placeholder={sinGafete ? "S/G" : "Número de gafete"}
+                      />
+                    </label>
+                    {/* Marcarlo borra el número tipeado: sin número el
+                        núcleo registra el ingreso S/G. */}
+                    <label
+                      style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={sinGafete}
+                        onChange={(evento) => {
+                          setSinGafete(evento.target.checked);
+                          if (evento.target.checked) setGafeteTexto("");
+                          setError(null);
+                        }}
+                      />
+                      Sin gafete
+                    </label>
+                  </>
                 )}
 
                 {error && (

@@ -275,15 +275,17 @@ class ActivosViewModelTest {
     }
 
     @Test
-    fun `gafete requerido y vacio lo rechaza el nucleo con su mensaje`() = runTest(dispatcher) {
+    fun `gafete requerido y vacio se registra como sin gafete`() = runTest(dispatcher) {
+        // El núcleo ya no rechaza el gafete vacío: queda S/G. Que sólo pueda
+        // llegar vacío con el check "Sin gafete" marcado lo garantiza la pantalla.
         val viewModel = formularioAbierto("PRAIND")
 
         viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "  ", "")
         advanceUntilIdle()
 
-        assertEquals("El gafete es requerido", viewModel.errorIngreso)
-        assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Formulario)
-        assertTrue(nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).isEmpty())
+        assertNull(viewModel.errorIngreso)
+        assertEquals(SeleccionIngreso.Ninguna, viewModel.seleccionIngreso)
+        assertEquals(1, nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).size)
     }
 
     @Test

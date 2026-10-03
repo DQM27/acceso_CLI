@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avisosContratista, numeroDeGafete } from "./NuevoIngresoModal.logica";
+import { avisosContratista, gafeteParaRegistrar } from "./NuevoIngresoModal.logica";
 
 describe("avisosContratista (chips del buscador)", () => {
   type Datos = Parameters<typeof avisosContratista>[0];
@@ -18,17 +18,26 @@ describe("avisosContratista (chips del buscador)", () => {
   });
 });
 
-describe("numeroDeGafete", () => {
-  it("sin gafete requerido o vacío es null (el núcleo decide si falta)", () => {
-    expect(numeroDeGafete("basura", false)).toBeNull();
-    expect(numeroDeGafete("   ", true)).toBeNull();
+describe("gafeteParaRegistrar", () => {
+  it("sin gafete requerido es S/G, aunque haya texto", () => {
+    expect(gafeteParaRegistrar("basura", false, false)).toEqual({ gafete: null });
   });
 
-  it("texto que no es número es undefined", () => {
-    expect(numeroDeGafete("abc", true)).toBeUndefined();
+  it("con «Sin gafete» marcado es S/G, aunque haya texto", () => {
+    expect(gafeteParaRegistrar("7", true, true)).toEqual({ gafete: null });
+  });
+
+  it("requerido y vacío, sin marcar «Sin gafete», pide el número", () => {
+    expect(gafeteParaRegistrar("   ", true, false)).toEqual({
+      error: "Ingrese el número de gafete o marque «Sin gafete»",
+    });
+  });
+
+  it("texto que no es número es un error", () => {
+    expect(gafeteParaRegistrar("abc", true, false)).toEqual({ error: "Ingrese un número de gafete válido" });
   });
 
   it("número con espacios se convierte", () => {
-    expect(numeroDeGafete("  7  ", true)).toBe(7);
+    expect(gafeteParaRegistrar("  7  ", true, false)).toEqual({ gafete: 7 });
   });
 });

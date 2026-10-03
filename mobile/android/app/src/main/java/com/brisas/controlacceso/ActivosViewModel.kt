@@ -380,8 +380,9 @@ class ActivosViewModel(
         val preparacion = (seleccionIngreso as? SeleccionIngreso.Formulario)?.preparacion ?: return
         if (registrandoIngreso) return
         errorIngreso = null
-        // Sólo se convierte el texto a número; si el gafete falta, o la
-        // placa no corresponde al medio, lo decide y lo dice el núcleo.
+        // Sólo se convierte el texto a número; vacío = "Sin gafete" (S/G),
+        // que la pantalla sólo permite con el check marcado. Si la placa no
+        // corresponde al medio, lo decide y lo dice el núcleo.
         val gafete: Long? = if (preparacion.requiereGafete && gafeteTexto.isNotBlank()) {
             gafeteTexto.trim().toLongOrNull() ?: run {
                 errorIngreso = "Ingrese un número de gafete válido"
