@@ -315,7 +315,7 @@ fn flujo_personal_de_ruta_vigente_ignora_gafete_y_guarda_none() {
 }
 
 #[test]
-fn flujo_por_correo_exige_y_persiste_gafete() {
+fn flujo_por_correo_persiste_gafete() {
     let (connection, usuario_id) = preparar_base();
     let empresa_id = crear_empresa(&connection);
     let contratista_id = crear_contratista(
@@ -331,18 +331,6 @@ fn flujo_por_correo_exige_y_persiste_gafete() {
     let registros = SqliteRegistroIngresoRepository::new(&connection);
     let gafetes = SqliteGafeteRepository::new(&connection);
     let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
-
-    assert!(matches!(
-        servicio.registrar_entrada(
-            contratista_id,
-            MedioIngreso::Vehiculo,
-            None,
-            Some("ABC123".to_string()),
-            usuario_id,
-            fecha_ingreso(),
-        ),
-        Err(RegistroIngresoServiceError::GafeteRequerido)
-    ));
 
     let ingreso_id = servicio
         .registrar_entrada(

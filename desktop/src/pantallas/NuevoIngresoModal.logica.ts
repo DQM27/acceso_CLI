@@ -1,14 +1,19 @@
 import type { ContratistaResumen } from "../api";
 
-/** Convierte el texto del gafete a número -- entrada, no regla: si hace
- * falta o no lo decide el núcleo (`requiere_gafete` viene de
- * `prepararIngreso`, y `registrar_ingreso` rechaza con su propio mensaje si
- * falta). `null` = sin gafete; `undefined` = el texto no es un número. */
-export function numeroDeGafete(texto: string, requiereGafete: boolean): number | null | undefined {
+/** El gafete a mandar al núcleo: `null` = sin gafete (S/G). Si el
+ * contratista requiere gafete (`requiere_gafete` de `prepararIngreso`), hace
+ * falta el número o marcar "Sin gafete" (pedido del usuario 2026-10-03,
+ * igual que el personal de ruta): así nunca queda S/G por olvido. */
+export function gafeteParaRegistrar(
+  texto: string,
+  requiereGafete: boolean,
+  sinGafete: boolean,
+): { gafete: number | null } | { error: string } {
+  if (!requiereGafete || sinGafete) return { gafete: null };
   const recortado = texto.trim();
-  if (!requiereGafete || !recortado) return null;
+  if (!recortado) return { error: "Ingrese el número de gafete o marque «Sin gafete»" };
   const numero = Number.parseInt(recortado, 10);
-  return Number.isNaN(numero) ? undefined : numero;
+  return Number.isNaN(numero) ? { error: "Ingrese un número de gafete válido" } : { gafete: numero };
 }
 
 export interface AvisoContratista {

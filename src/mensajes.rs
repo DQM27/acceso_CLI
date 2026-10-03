@@ -212,8 +212,8 @@ pub const MENSAJE_ACCESO_NEGADO: &str = "Esta persona tiene el acceso denegado."
 pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
     use RegistroIngresoServiceError::{
         AccesoDenegado, ContratistaNoEncontrado, GafeteNoDisponible, GafeteNoRegistrado,
-        GafeteOcupado, GafeteRequerido, IngresoActivo, IngresoActivoEnOtroDispositivo,
-        PlacaNoAplica, PlacaRequerida, RelojRetrocedido,
+        GafeteOcupado, IngresoActivo, IngresoActivoEnOtroDispositivo, PlacaNoAplica,
+        PlacaRequerida, RelojRetrocedido,
     };
 
     match error {
@@ -222,7 +222,6 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
         IngresoActivoEnOtroDispositivo => {
             "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio".into()
         }
-        GafeteRequerido => "El gafete es requerido".into(),
         PlacaRequerida => "La placa es obligatoria cuando el ingreso es en vehículo".into(),
         PlacaNoAplica => "No se puede indicar placa cuando el ingreso es a pie".into(),
         GafeteOcupado => "El gafete ya está en uso".into(),
