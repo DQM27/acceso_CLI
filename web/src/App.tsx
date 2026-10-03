@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "sonner";
-import { DoorOpen, History, LogIn, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
+import { BellRing, DoorOpen, History, LogIn, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
@@ -18,8 +18,16 @@ const Contratistas = lazy(() => import("./pantallas/Contratistas"));
 const AdentroAhora = lazy(() => import("./pantallas/AdentroAhora"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 const Sesiones = lazy(() => import("./pantallas/Sesiones"));
+const Avisos = lazy(() => import("./pantallas/Avisos"));
 
-export type Seccion = "dispositivos" | "historial" | "adentro" | "contratistas" | "usuarios" | "sesiones";
+export type Seccion =
+  | "dispositivos"
+  | "historial"
+  | "adentro"
+  | "contratistas"
+  | "usuarios"
+  | "sesiones"
+  | "avisos";
 
 /** Ruta real de cada sección -- `Sidebar` arma sus `NavLink` con esto y
  * `Shell` compara `location.pathname` contra el mismo valor para decidir
@@ -53,6 +61,7 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
   { id: "sesiones", etiqueta: "Sesiones", Icono: LogIn },
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
+  { id: "avisos", etiqueta: "Avisos", Icono: BellRing },
 ];
 
 const CLAVE_SIDEBAR_COLAPSADO = "web:sidebar:colapsado";
@@ -283,6 +292,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                     <Usuarios />
                   ) : id === "sesiones" ? (
                     <Sesiones />
+                  ) : id === "avisos" ? (
+                    <Avisos />
                   ) : (
                     <Dispositivos sesion={sesion} />
                   )}

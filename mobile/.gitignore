@@ -39,6 +39,12 @@ app/app/keystore/
 app/keystore/
 app/keystore.properties
 
+# Configuración de Firebase (FCM). El repo es público: la API key que trae
+# quedaría expuesta en el historial. Se baja de la consola de Firebase y se
+# copia a mano; sin el archivo el build compila igual, sin notificaciones
+# push (ver android/app/build.gradle.kts).
+android/app/google-services.json
+
 # iOS / Xcode
 ios/DerivedData/
 ios/build/

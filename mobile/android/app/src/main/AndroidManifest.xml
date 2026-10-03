@@ -7,6 +7,10 @@
          escáner con Vibrator/VibrationEffect en vez del haptic feedback
          semántico de Compose, que no deja elegir qué tan fuerte vibra. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Android 13+: permiso en tiempo de ejecución para mostrar las
+         notificaciones push (ver NotificacionesPush.kt). Se pide al entrar
+         a la pantalla principal, no en el primer arranque. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!-- La base de datos local trae cédulas, hashes de contraseña e
@@ -49,6 +53,24 @@
             android:value="${sentryEnvironment}" />
         <meta-data android:name="io.sentry.traces.sample-rate"
             android:value="0.0" />
+
+        <!-- Firebase Cloud Messaging: canal e ícono para los mensajes con
+             bloque `notification` que Android muestra solo con la app en
+             segundo plano (p. ej. una prueba desde la consola de Firebase).
+             Los de datos los arma ServicioMensajesPush con lo mismo. -->
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="avisos" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notificacion" />
+
+        <!-- No exportado: sólo lo invoca Google Play Services. -->
+        <service
+            android:name=".ServicioMensajesPush"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <activity
             android:name=".MainActivity"

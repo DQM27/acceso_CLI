@@ -2,6 +2,34 @@ use super::anticipados::{self, Pedido};
 use super::{ContextoSincronizacion, SincronizacionError};
 use crate::nube::cliente::NubeError;
 
+/// `POST /rest/v1/rpc/<funcion>` autenticado + deserializar la lista de
+/// filas que devuelve una función `returns table`. Para lo que un equipo no
+/// puede leer directo por RLS pero la nube sí le responde a través de una
+/// función `security definer` (p. ej. si un contratista está adentro en otra
+/// unidad, ver `ingreso_activo_de_contratista`).
+pub(super) fn llamar_rpc<T: serde::de::DeserializeOwned>(
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    funcion: &str,
+    cuerpo: &serde_json::Value,
+) -> Result<Vec<T>, SincronizacionError> {
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/rpc/{funcion}", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .json(cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    if !respuesta.status().is_success() {
+        let status = respuesta.status().as_u16();
+        let cuerpo = respuesta.text().unwrap_or_default();
+        return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
+    }
+    let filas = respuesta.json().map_err(NubeError::Red)?;
+    Ok(filas)
+}
+
 /// `GET` autenticado + deserializar la lista de filas -- compartido por
 /// todo lo que trae datos de la nube hacia acá (`recibir_ingresos_abiertos`,
 /// `recibir_catalogo_del_sitio`).

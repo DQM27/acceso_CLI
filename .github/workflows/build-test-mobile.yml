@@ -82,6 +82,23 @@ jobs:
           cargo ndk -t aarch64-linux-android build --release
           cp target/aarch64-linux-android/release/libcontrol_acceso_mobile.so ../android/app/src/main/jniLibs/arm64-v8a/
 
+      # `google-services.json` nunca está en el repo (ver mobile/.gitignore:
+      # el repo es público) -- se reconstruye desde un secreto con el JSON
+      # crudo. A diferencia de release.yml acá es OPCIONAL: un APK de prueba
+      # sin notificaciones push sigue sirviendo, así que si el secreto falta
+      # (p. ej. en un fork) sólo avisa y sigue. No se imprime su contenido.
+      - name: Restaurar la configuración de Firebase (opcional)
+        working-directory: mobile/android
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::warning::Falta el secreto GOOGLE_SERVICES_JSON: el APK de prueba saldrá sin notificaciones push."
+            exit 0
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          python3 -c "import json; d=json.load(open('app/google-services.json')); assert any(c['client_info']['android_client_info']['package_name'].startswith('com.dqm27.lattis') for c in d['client']), 'no trae paquetes com.dqm27.lattis'"
+
       # La variante llega por variable de entorno (no interpolada en el
       # script) y se valida contra la lista cerrada antes de usarla.
       - name: Compilar el APK

@@ -1,8 +1,12 @@
 package com.brisas.controlacceso
 
+import android.Manifest
 import android.app.Activity
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,6 +93,29 @@ fun PantallaPrincipal(
         } else {
             ultimoTapAtras = ahora
             Toast.makeText(contexto, "Tocá de nuevo para salir", Toast.LENGTH_SHORT).show()
+        }
+    }
+    // Notificaciones push (NotificacionesPush.kt): se piden acá, con la
+    // sesión ya abierta, y no en el primer arranque -- quien opera ya sabe
+    // para qué es la app. Si lo niega, Android deja de mostrar el diálogo
+    // después del segundo rechazo; la app sigue igual, sin avisos con la app
+    // cerrada.
+    //
+    // El permiso se pide aunque Firebase no esté disponible: antes dependía
+    // de eso, y un APK compilado sin google-services.json no pedía nada ni
+    // decía por qué (visto en la primera prueba en un teléfono real). En
+    // los builds de prueba se avisa en pantalla que a ese APK le falta la
+    // configuración de Firebase.
+    val pedirPermisoNotificaciones = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !NotificacionesPush.permisoConcedido(contexto)) {
+            pedirPermisoNotificaciones.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (NotificacionesPush.disponible(contexto)) {
+            NotificacionesPush.tokenActual(contexto)
+            NotificacionesPush.registrarEnNube(contexto, nucleo)
+        } else if (BuildConfig.DEBUG || BuildConfig.AMBIENTE_STAGING) {
+            Toast.makeText(contexto, "Este APK no trae google-services.json: sin notificaciones push", Toast.LENGTH_LONG).show()
         }
     }
     // `docs/pendientes.md`, "alertar luego al sincronizar" -- ver el mismo

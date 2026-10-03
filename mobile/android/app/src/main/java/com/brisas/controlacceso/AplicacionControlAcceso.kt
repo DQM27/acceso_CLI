@@ -28,6 +28,9 @@ class AplicacionControlAcceso : Application() {
         // Sólo en el build `diagnostico` (ver Telemetria.kt); en los demás
         // no hace nada.
         Telemetria.iniciar(this)
+        // Antes del primer mensaje push, que puede llegar con la app cerrada
+        // (Android levanta el proceso sólo para ServicioMensajesPush).
+        NotificacionesPush.crearCanales(this)
     }
 }
 

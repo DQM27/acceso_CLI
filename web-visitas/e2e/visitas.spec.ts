@@ -172,6 +172,10 @@ test("Activity conserva el mes del calendario al ir y volver entre pasos", async
 }) => {
   const errores: string[] = [];
   page.on("pageerror", (error) => errores.push(error.message));
+  // El calendario abre en el mes de "hoy": sin fijar el reloj, el test
+  // dependía de la fecha real y empezó a fallar el 1 de octubre de 2026.
+  // Mediodía en Costa Rica, lejos de cualquier borde de día o de mes.
+  await page.clock.setFixedTime(new Date("2026-09-15T12:00:00-06:00"));
   await preparar(page);
   await page.goto("/nueva");
   await expect(page.getByText("septiembre de 2026")).toBeVisible();
