@@ -147,16 +147,6 @@ pub fn gafete_de_correo_ocupado_en_otro_dispositivo(
     )
 }
 
-#[derive(serde::Deserialize)]
-pub(super) struct SitioEmbebido {
-    pub(super) nombre: String,
-}
-
-#[derive(serde::Deserialize)]
-pub(super) struct FilaIngresoActivoOtroSitio {
-    pub(super) sitios: Option<SitioEmbebido>,
-}
-
 /// Dónde tiene un contratista un ingreso abierto ahora mismo, según la
 /// nube (ver [`contratista_con_ingreso_activo`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -194,27 +184,34 @@ pub fn contratista_con_ingreso_activo(
     )
 }
 
-/// Un mismo visitante no puede estar activo en dos sitios a la vez: busca
-/// en `movimientos_visita` un movimiento abierto con esta cédula en OTRO
-/// sitio y devuelve su nombre. Pensada para llamarse
-/// desde `verificar_check_in_visita` (desktop), mejor esfuerzo, nunca
-/// bloqueante si no hay red.
+/// Un mismo visitante no puede estar adentro dos veces: pregunta a la nube
+/// si esta cédula tiene una visita abierta en otra unidad, o en esta pero
+/// abierta por el otro equipo, y devuelve el nombre de la unidad (con
+/// " (otro equipo de esta unidad)" en el segundo caso). Pensada para
+/// `verificar_check_in_visita` (escritorio). Lo abierto por ESTE equipo ya
+/// lo frena antes el chequeo local (`CitaServiceError::VisitanteYaEnSitio`),
+/// así que una fila de esta unidad que devuelva la nube es del otro equipo.
+///
+/// Va por la función `visita_activa_de_visitante` y no por
+/// `/rest/v1/movimientos_visita`: la RLS sólo deja leer a cada equipo las
+/// visitas de su unidad, así que la consulta directa con `sitio_id=neq.`
+/// siempre respondía vacío (revisión del 2026-10-04, punto 4).
 pub fn visitante_activo_en_otro_sitio(
     contexto: &ContextoSincronizacion<'_>,
     cedula: &str,
 ) -> Result<Option<String>, SincronizacionError> {
-    let cliente = cliente_http();
-    let url = format!(
-        "{}/rest/v1/movimientos_visita?visitante_cedula=eq.{cedula}&sitio_id=neq.{}\
-         &hora_salida=is.null&select=sitios(nombre)&limit=1",
-        contexto.base_url, contexto.sitio_id,
-    );
-    let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
-    Ok(filas
-        .into_iter()
-        .next()
-        .and_then(|fila| fila.sitios)
-        .map(|sitio| sitio.nombre))
+    Ok(activo_segun_funcion(
+        contexto,
+        "visita_activa_de_visitante",
+        &serde_json::json!({ "p_cedula": cedula }),
+    )?
+    .map(|activo| {
+        if activo.mismo_sitio {
+            format!("{} (otro equipo de esta unidad)", activo.sitio_nombre)
+        } else {
+            activo.sitio_nombre
+        }
+    }))
 }
 
 /// Regla "un proveedor no puede estar adentro dos veces, ni en este sitio ni

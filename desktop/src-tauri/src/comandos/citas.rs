@@ -148,6 +148,18 @@ pub fn registrar_entrada_visita(
             "El gafete {numero} ya está en uso en otro dispositivo del sitio"
         ));
     }
+    // Recién ahora (2026-10-04) la nube responde esto de verdad: antes la
+    // consulta chocaba con la RLS y siempre decía "libre". Si el visitante
+    // está adentro en otra unidad (o con el otro equipo de esta), no se
+    // registra: la nube lo rechazaría igual al sincronizar
+    // (`movimientos_visita_cedula_activa_idx`). Mejor esfuerzo, igual que en
+    // `verificar_check_in_visita`: sin red se registra y el aviso posterior
+    // a sincronizar avisa si chocó.
+    if let Some(sitio) = chequear_visitante_activo_en_otro_sitio(&state, &cedula) {
+        return Err(format!(
+            "El visitante ya tiene una visita activa en {sitio}"
+        ));
+    }
     state
         .core()
         .registrar_entrada_visita(&sesion, &cedula, gafete)

@@ -571,14 +571,16 @@ fn marcar_fallida_por_ingreso_activo(
 /// Índice único "una persona, un ingreso (o préstamo) abierto" que protege
 /// cada entidad de la cola en la nube: contratistas
 /// (`20261003170000_ingreso_unico_entre_unidades`), proveedores y préstamos
-/// de gafete provisional KOF (`20261003190000_ingreso_unico_proveedores_y_kof`)
-/// e ingresos por correo (`20261003210000_ingresos_por_correo`).
+/// de gafete provisional KOF (`20261003190000_ingreso_unico_proveedores_y_kof`),
+/// ingresos por correo (`20261003210000_ingresos_por_correo`) y visitas
+/// (`20261004130000_visitas_ven_otras_unidades`).
 fn indice_persona_activa_de(entidad: &str) -> Option<&'static str> {
     match entidad {
         "ingreso" => Some("ingresos_contratista_activo_idx"),
         "ingreso_proveedor" => Some("ingresos_proveedor_cedula_activa_idx"),
         "ingreso_correo" => Some("ingresos_correo_cedula_activa_idx"),
         "prestamo_gafete_provisional" => Some("prestamos_gafete_provisional_encargado_activo_idx"),
+        "movimiento_visita" => Some("movimientos_visita_cedula_activa_idx"),
         _ => None,
     }
 }

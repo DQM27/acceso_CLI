@@ -2403,38 +2403,39 @@ fn gafete_provisional_ocupado_en_otro_dispositivo_sin_conflicto_devuelve_false()
     assert!(!ocupado);
 }
 
+/// Va por la función `visita_activa_de_visitante`: la consulta directa a
+/// `/rest/v1/movimientos_visita?...&sitio_id=neq.` chocaba con la RLS (cada
+/// equipo sólo lee su unidad) y siempre daba vacío.
 #[test]
-fn visitante_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let base_url = format!("http://{}", listener.local_addr().unwrap());
-    let servidor = thread::spawn(move || {
-        let (mut socket, _) = listener.accept().unwrap();
-        socket
-            .set_read_timeout(Some(Duration::from_secs(3)))
-            .unwrap();
-        let mut pedido = Vec::new();
-        let mut buffer = [0; 4096];
-        while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
-            let leidos = socket.read(&mut buffer).unwrap();
-            assert!(leidos > 0);
-            pedido.extend_from_slice(&buffer[..leidos]);
-        }
-        let pedido = String::from_utf8(pedido).unwrap();
-        assert!(pedido.contains("visitante_cedula=eq.1-2345"));
-        assert!(pedido.contains("sitio_id=neq.sitio-1"));
-        assert!(pedido.contains("hora_salida=is.null"));
-        let cuerpo = "[{\"sitios\":{\"nombre\":\"Cartago\"}}]";
-        write!(
-            socket,
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
-            cuerpo.len()
-        )
-        .unwrap();
-    });
+fn visitante_activo_en_otro_sitio_pregunta_a_la_funcion_de_la_nube() {
+    let (base_url, servidor) = servidor_rpc(
+        "visita_activa_de_visitante",
+        "\"p_cedula\":\"1-2345\"",
+        "[{\"sitio_id\":\"otro\",\"sitio_nombre\":\"Cartago\"}]",
+    );
 
     let sitio = visitante_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
 
     assert_eq!(sitio, Some("Cartago".to_string()));
+    servidor.join().unwrap();
+}
+
+/// Una visita abierta en ESTA unidad sólo puede ser del otro equipo (lo
+/// propio lo frena antes el chequeo local): se nombra así.
+#[test]
+fn visitante_activo_en_esta_unidad_se_nombra_como_otro_equipo() {
+    let (base_url, servidor) = servidor_rpc(
+        "visita_activa_de_visitante",
+        "\"p_cedula\":\"1-2345\"",
+        "[{\"sitio_id\":\"sitio-1\",\"sitio_nombre\":\"Brisas\"}]",
+    );
+
+    let sitio = visitante_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+
+    assert_eq!(
+        sitio,
+        Some("Brisas (otro equipo de esta unidad)".to_string())
+    );
     servidor.join().unwrap();
 }
 
@@ -2482,12 +2483,14 @@ fn conexion_con_dos_movimientos_visita_activos() -> Connection {
 #[test]
 fn visitantes_con_conflicto_activo_solo_incluye_a_quien_de_verdad_choca() {
     let connection = conexion_con_dos_movimientos_visita_activos();
-    let base_url = servidor_de_una_respuesta(
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"visitante_cedula\":\"1-2345\",\"sitios\":{\"nombre\":\"Cartago\"}}]",
+    let (base_url, servidor) = servidor_rpc(
+        "visitantes_activos_en_otras_unidades",
+        "\"p_cedulas\":[\"1-2345\",\"6-7890\"]",
+        "[{\"visitante_cedula\":\"1-2345\",\"sitio_nombre\":\"Cartago\"}]",
     );
 
     let conflictos = visitantes_con_conflicto_activo(&connection, &contexto(&base_url)).unwrap();
+    servidor.join().unwrap();
 
     assert_eq!(
         conflictos,
@@ -4593,4 +4596,31 @@ fn solo_un_cierre_puede_esperar_a_su_apertura() {
     let mut ajena = fila(2, "cerrar");
     ajena.entidad_uuid = "otro-uuid".to_string();
     assert!(!super::cola::cierre_espera_su_apertura(&connection, &ajena).unwrap());
+}
+
+/// Visitas (`20261004130000_visitas_ven_otras_unidades`): el 409 del índice
+/// único de cédula activa deja la apertura fallida de inmediato, como en
+/// contratistas; el cierre nunca choca con ese índice.
+#[test]
+fn la_cola_reconoce_el_rechazo_por_visitante_ya_adentro() {
+    let fila = |operacion: &str| super::cola::FilaCola {
+        id: 1,
+        entidad: "movimiento_visita".to_string(),
+        entidad_uuid: "uuid".to_string(),
+        operacion: operacion.to_string(),
+        intentos: 0,
+    };
+    let rechazo = SincronizacionError::RespuestaInesperada {
+        status: 409,
+        cuerpo: "duplicate key value violates unique constraint \"movimientos_visita_cedula_activa_idx\""
+            .to_string(),
+    };
+    assert!(super::cola::es_conflicto_ingreso_activo(
+        &fila("crear"),
+        &rechazo
+    ));
+    assert!(!super::cola::es_conflicto_ingreso_activo(
+        &fila("cerrar"),
+        &rechazo
+    ));
 }
