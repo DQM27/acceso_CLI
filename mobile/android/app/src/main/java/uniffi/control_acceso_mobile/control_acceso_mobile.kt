@@ -9170,7 +9170,12 @@ enum class TipoMovimientoGafete {
     CONTRATISTA,
     PROVEEDOR,
     PROVISIONAL_KOF,
-    POR_CORREO;
+    POR_CORREO,
+    /**
+     * Visita (gafete de visita). El teléfono no registra visitas, así que
+     * nunca le llega; está para que el espejo sea completo.
+     */
+    VISITA;
 
     
 

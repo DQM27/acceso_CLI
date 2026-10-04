@@ -29,5 +29,9 @@ class ConflictoGafeteTest {
             mensajeConflictoGafete(conflicto(TipoMovimientoGafete.POR_CORREO), "08:00")
                 .startsWith("El ingreso por correo de Juan Pérez con gafete de visita 12 (08:00)"),
         )
+        assertTrue(
+            mensajeConflictoGafete(conflicto(TipoMovimientoGafete.VISITA), "08:00")
+                .startsWith("El check-in de visita de Juan Pérez con gafete de visita 12 (08:00)"),
+        )
     }
 }

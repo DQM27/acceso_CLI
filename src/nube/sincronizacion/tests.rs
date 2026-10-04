@@ -4624,3 +4624,45 @@ fn la_cola_reconoce_el_rechazo_por_visitante_ya_adentro() {
         &rechazo
     ));
 }
+
+/// `20261004140000_gafete_de_visita_unico_en_visitas`: una visita cuyo
+/// gafete ya tiene abierto el otro equipo de la unidad (otra visita, o un
+/// ingreso por correo vía el trigger de gafete compartido) queda fallida de
+/// inmediato y avisa como choque de gafete, con tipo `Visita`.
+#[test]
+fn visita_con_gafete_ya_activo_queda_fallida_con_aviso() {
+    let connection = conexion_con_dos_movimientos_visita_activos();
+    connection
+        .execute_batch(
+            "DELETE FROM cola_salida;
+             INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre)
+                 VALUES (3, 'uuid-v3', 1, '5-5555', 'Visitante Tres');
+             INSERT INTO movimientos_visita (
+                 id, uuid, cita_visitante_id, gafete_numero, fecha_hora_entrada,
+                 usuario_entrada_id, usuario_entrada_nombre,
+                 visitante_cedula, visitante_nombre, anfitrion_nombre
+             ) VALUES (3, 'uuid-m3', 3, 7, '2026-08-01T09:00:00Z', 1, 'Operador',
+                 '5-5555', 'Visitante Tres', 'Ana');
+             INSERT INTO cola_salida (entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+             VALUES ('movimiento_visita', 'uuid-m3', 'crear',
+                     '2026-08-01T09:00:00Z', '2026-08-01T09:00:00Z');",
+        )
+        .unwrap();
+    let base_url = servidor_de_una_respuesta(respuesta_gafete_en_uso(
+        "movimientos_visita_gafete_activo_sitio_idx",
+    ));
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.fallidos, 1);
+    assert_eq!(
+        resumen.conflictos_gafete,
+        vec![ConflictoGafeteActivo {
+            tipo: TipoMovimientoGafete::Visita,
+            nombre: "Visitante Tres".to_string(),
+            gafete_numero: 7,
+            fecha_hora: "2026-08-01T09:00:00Z".to_string(),
+        }]
+    );
+    assert_eq!(estado_en_cola(&connection, "uuid-m3"), "fallido");
+}

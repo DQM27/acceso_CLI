@@ -115,6 +115,9 @@ pub enum TipoMovimientoGafete {
     ProvisionalKof,
     /// Ingreso por correo (gafete de visita).
     PorCorreo,
+    /// Visita (módulo de citas; gafete de visita). Sólo el escritorio
+    /// registra visitas.
+    Visita,
 }
 
 #[derive(Debug, thiserror::Error)]

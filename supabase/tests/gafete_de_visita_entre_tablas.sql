@@ -11,6 +11,9 @@
 --   802 en la misma unidad se rechaza.
 -- - Cerrada la visita, el gafete queda libre para un ingreso por correo.
 -- - Una visita sin gafete no se frena.
+-- - 20261004140000: dos visitas con el mismo gafete abierto en la unidad se
+--   rechazan (`movimientos_visita_gafete_activo_sitio_idx`), y el rechazo de
+--   una visita por un ingreso por correo nombra ese índice.
 begin;
 
 insert into public.sitios (id, nombre) values
@@ -85,8 +88,29 @@ begin
             'bbbbbbbb-0000-0000-0000-00000000b812', '900000802', 'VISITANTE DOS', 802, now(), 'OPERADOR PRUEBA');
   exception when unique_violation then
     v_rechazado := true;
+    get stacked diagnostics v_mensaje = message_text;
   end;
-  if not v_rechazado then raise exception 'G4: el 802 está en un ingreso por correo abierto, la visita debía rechazarse'; end if;
+  if not v_rechazado then raise exception 'G4a: el 802 está en un ingreso por correo abierto, la visita debía rechazarse'; end if;
+  -- 20261004140000: el rechazo de una visita nombra su índice, para que la
+  -- cola lo trate como choque de gafete.
+  if v_mensaje not like '%movimientos_visita_gafete_activo_sitio_idx%' then
+    raise exception 'G4b: el mensaje debe nombrar movimientos_visita_gafete_activo_sitio_idx, dio: %', v_mensaje;
+  end if;
+
+  -- 4c. Dos visitas con el mismo gafete en la misma unidad: la segunda se
+  --     rechaza (20261004140000; antes la nube las aceptaba).
+  v_rechazado := false;
+  begin
+    insert into public.movimientos_visita (id, sitio_id, dispositivo_entrada_id, cita_visitante_id, visitante_cedula, visitante_nombre, gafete_numero, hora_entrada, usuario_entrada_nombre)
+    values (gen_random_uuid(), 'aaaaaaaa-0000-0000-0000-00000000a801', 'cccccccc-0000-0000-0000-00000000c802',
+            'bbbbbbbb-0000-0000-0000-00000000b812', '900000802', 'VISITANTE DOS', 801, now(), 'OPERADOR PRUEBA');
+  exception when unique_violation then
+    v_rechazado := true;
+    get stacked diagnostics v_mensaje = message_text;
+  end;
+  if not v_rechazado or v_mensaje not like '%movimientos_visita_gafete_activo_sitio_idx%' then
+    raise exception 'G4c: el 801 ya está en una visita abierta de A, la segunda visita debía rechazarse por el índice (%)', v_mensaje;
+  end if;
 
   -- 5. Una visita sin gafete no choca con nada.
   insert into public.movimientos_visita (id, sitio_id, dispositivo_entrada_id, cita_visitante_id, visitante_cedula, visitante_nombre, gafete_numero, hora_entrada, usuario_entrada_nombre)

@@ -514,6 +514,12 @@ fn gafete_activo_de(entidad: &str) -> Option<(TipoMovimientoGafete, &'static str
             "SELECT nombre, gafete_numero, fecha_hora_ingreso
              FROM registro_ingresos_correo WHERE uuid = ?1",
         )),
+        "movimiento_visita" => Some((
+            TipoMovimientoGafete::Visita,
+            "movimientos_visita_gafete_activo_sitio_idx",
+            "SELECT visitante_nombre, gafete_numero, fecha_hora_entrada
+             FROM movimientos_visita WHERE uuid = ?1",
+        )),
         "prestamo_gafete_provisional" => Some((
             TipoMovimientoGafete::ProvisionalKof,
             "prestamos_gafete_provisional_gafete_activo_sitio_idx",
