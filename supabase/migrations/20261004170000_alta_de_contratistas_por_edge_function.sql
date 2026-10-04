@@ -1,0 +1,24 @@
+-- El alta de contratistas desde el panel pasa a la Edge Function
+-- `admin-crear-contratista` (ver docs/arquitectura/reglas-compartidas.md).
+--
+-- `panel_crear_contratista` repetía en SQL las reglas de criterio del núcleo
+-- (cédula, nombre, tipo, PRAIND) y se había desviado: seguía aceptando
+-- "POR CORREO", que el núcleo retiró el 2026-10-03, y no tenía la regla de
+-- personal de ruta. La Edge Function valida con el MISMO código que
+-- escritorio y teléfono (el crate `reglas/` compilado a WebAssembly) y guarda
+-- con la cuenta de servicio. Las garantías que necesitan ver todos los datos
+-- se quedan acá, en la base:
+--   * cédula repetida: índice único `contratistas_cedula_normalizada_key`
+--     (la función traduce su 23505 a "Ya existe un contratista con esa
+--     cédula");
+--   * quién puede escribir: RLS. Un administrador del panel no tiene política
+--     de INSERT sobre `contratistas`, así que sin la función no puede crear
+--     nada por su cuenta;
+--   * aviso a los equipos: el trigger `contratistas_emitir_cambio_nube`.
+--
+-- ORDEN DE DESPLIEGUE (si no, el panel viejo se queda sin poder crear
+-- contratistas un rato): 1) desplegar la Edge Function
+-- `admin-crear-contratista`; 2) publicar el panel web que la usa; 3) recién
+-- entonces aplicar esta migración.
+
+drop function public.panel_crear_contratista(text, text, uuid, text, date, boolean);

@@ -63,7 +63,7 @@ async function preparar(page: Page) {
     if (url.pathname === "/auth/v1/logout") return responder({});
     if (url.pathname === "/rest/v1/administradores_panel") return responder({ correo });
     if (url.pathname === "/rest/v1/empresas") return responder([{ id: "e1", nombre: "EMPRESA DE PRUEBA" }]);
-    if (url.pathname === "/rest/v1/rpc/panel_crear_contratista")
+    if (url.pathname === "/functions/v1/admin-crear-contratista")
       return responder({
         id: "9",
         identificacion: "112340567",

@@ -1,0 +1,71 @@
+// Reglas de negocio del núcleo (crate `reglas/` en Rust) compiladas a
+// WebAssembly: las Edge Functions validan con el MISMO código que
+// escritorio, teléfono y el panel web (ver docs/arquitectura/reglas-compartidas.md).
+//
+// El paquete lo genera scripts/generar-reglas-wasm.sh en ./reglas/; el .wasm
+// viaja en base64 porque el despliegue de funciones sólo admite texto. Se
+// carga una sola vez, al importar este módulo.
+
+import {
+  admitePersonalRuta,
+  huellaFuentes,
+  initSync,
+  requiereGafete,
+  requierePraind,
+  tiposIngresoSeleccionables,
+  validarContratista as validarContratistaWasm,
+} from "./reglas/reglas.js";
+import { REGLAS_WASM_BASE64 } from "./reglas/reglas_wasm_base64.ts";
+
+function base64ABytes(base64: string): Uint8Array {
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  return bytes;
+}
+
+initSync({ module: base64ABytes(REGLAS_WASM_BASE64) });
+
+export type TipoIngreso = "PRAIND" | "IN_HOUSE" | "POR_CORREO" | "SWAT";
+
+export interface DatosContratistaReglas {
+  cedula: string;
+  nombre: string;
+  tipo_ingreso: string;
+  /** "AAAA-MM-DD", o null. */
+  fecha_vencimiento_praind: string | null;
+  es_personal_ruta?: boolean;
+  tiene_acceso?: boolean;
+}
+
+export interface ContratistaValido {
+  cedula: string;
+  nombre: string;
+  tipo_ingreso: TipoIngreso;
+  fecha_vencimiento_praind: string | null;
+  es_personal_ruta: boolean;
+  tiene_acceso: boolean;
+}
+
+export type ResultadoValidacion =
+  | { ok: true; contratista: ContratistaValido }
+  | { ok: false; codigo: string; mensaje: string };
+
+/** Todas las reglas de criterio de un contratista nuevo. `hoy`: "AAAA-MM-DD"
+ * en Costa Rica. */
+export function validarContratista(datos: DatosContratistaReglas, hoy: string): ResultadoValidacion {
+  return validarContratistaWasm(datos, hoy) as ResultadoValidacion;
+}
+
+/** La fecha de hoy en Costa Rica, "AAAA-MM-DD" (la que decide si un PRAIND
+ * está vencido, igual que en las apps). */
+export function hoyCostaRica(ahora: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Costa_Rica",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(ahora);
+}
+
+export { admitePersonalRuta, huellaFuentes, requiereGafete, requierePraind, tiposIngresoSeleccionables };

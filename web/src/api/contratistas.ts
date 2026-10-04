@@ -1,4 +1,5 @@
 import { z } from "../lib/validacion";
+import { esObjeto, invocar } from "./_invocar";
 import { supabase } from "../lib/supabase";
 
 /**
@@ -181,15 +182,12 @@ export interface DatosNuevoContratista {
   con_acceso: boolean;
 }
 
+/** Alta por la Edge Function `admin-crear-contratista`: valida con las
+ * reglas del núcleo (las mismas que el formulario, vía WebAssembly) y las que
+ * necesitan datos (empresa, cédula repetida), y guarda. Si rechaza, el error
+ * trae el mismo texto que muestran las apps. Reemplaza a la función SQL
+ * `panel_crear_contratista` (ver docs/arquitectura/reglas-compartidas.md). */
 export async function crearContratista(datos: DatosNuevoContratista): Promise<Contratista> {
-  const { data, error } = await supabase.rpc("panel_crear_contratista", {
-    p_cedula: datos.cedula,
-    p_nombre: datos.nombre,
-    p_empresa_id: datos.empresa_id,
-    p_tipo_ingreso: datos.tipo_ingreso,
-    p_fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
-    p_con_acceso: datos.con_acceso,
-  });
-  if (error) throw new Error(error.message);
-  return filaContratistaEsquema.parse(data);
+  const fila = await invocar("admin-crear-contratista", esObjeto, { ...datos });
+  return filaContratistaEsquema.parse(fila);
 }
