@@ -8,7 +8,7 @@ license = "MIT"
 [features]
 default = []
 dev-auth = []
-serde = ["dep:serde", "chrono/serde"]
+serde = ["dep:serde", "chrono/serde", "control_acceso_reglas/serde"]
 # `p256`/`sha2`/`base64`: identidad del dispositivo por par de claves
 # (`nube::firmante`) -- firma ES256 de la aserción, huella RFC 7638 y
 # codificación base64url. `p256` ya venía en el árbol vía `jsonwebtoken`.
@@ -20,6 +20,9 @@ nube = ["dep:reqwest", "dep:serde_json", "dep:jsonwebtoken", "dep:p256", "dep:sh
 cifrado-secreto-dispositivo = ["dep:machine-uid", "dep:windows"]
 
 [dependencies]
+# Reglas de negocio puras, compartidas con el panel web y las Edge Functions
+# (`reglas/`, compiladas a WebAssembly en `reglas/wasm`).
+control_acceso_reglas = { path = "reglas" }
 chrono = "0.4.45"
 chrono-tz = "0.10.4"
 # Motor ÚNICO: SQLite3 Multiple Ciphers (ChaCha20-Poly1305), decisión

@@ -9,6 +9,13 @@
 # se commitea.
 /sqlite3mc-vendor-lib/target/
 /sqlite3mc-vendor-lib/dist/
+# Crate de reglas compartidas (`reglas/`) y su envoltura WebAssembly: sus
+# compilaciones sueltas. El crate es una dependencia por ruta del núcleo, así
+# que su Cargo.lock propio no se usa; el de `reglas/wasm` sí se commitea
+# (fija las versiones con las que se genera el paquete WebAssembly).
+/reglas/target/
+/reglas/Cargo.lock
+/reglas/wasm/target/
 
 # Experimentos: cancha de pruebas, no código de producción — el que se usa de
 # verdad vive integrado en el proyecto (ver desktop/src-tauri, núcleo raíz).

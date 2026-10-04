@@ -118,6 +118,25 @@ pub enum EmpresaServiceError {
     Database(#[from] DatabaseError),
 }
 
+/// Las reglas de criterio del contratista viven en el crate compartido
+/// (`ErrorContratista`); acá cada motivo se traduce a su variante de
+/// siempre, así los mensajes y quien los maneja no cambian.
+impl From<crate::domain::contratista::ErrorContratista> for ContratistaServiceError {
+    fn from(error: crate::domain::contratista::ErrorContratista) -> Self {
+        use crate::domain::contratista::ErrorContratista;
+        match error {
+            ErrorContratista::CedulaVacia => Self::CedulaVacia,
+            ErrorContratista::CedulaInvalida => Self::CedulaInvalida,
+            ErrorContratista::NombreVacio => Self::NombreVacio,
+            ErrorContratista::NombreInvalido => Self::NombreInvalido,
+            ErrorContratista::TipoIngresoRetirado => Self::TipoIngresoRetirado,
+            ErrorContratista::PersonalRutaNoAdmitido => Self::PersonalRutaNoAdmitido,
+            ErrorContratista::PraindRequerido => Self::PraindRequerido,
+            ErrorContratista::PraindVencido => Self::PraindVencido,
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum RegistroIngresoServiceError {
     #[error("Contratista no encontrado")]

@@ -7,9 +7,9 @@ use crate::database::queries::contratistas::{
 };
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
-use crate::domain::cedula::{Cedula, CedulaInvalida};
+use crate::domain::cedula::Cedula;
 use crate::domain::contratista::{
-    admite_personal_ruta, normalizar_nombre, praind_vencido, tipo_ingreso_seleccionable,
+    DatosContratista as DatosReglasContratista, EstadoAnterior, validar_contratista,
 };
 use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
@@ -280,17 +280,12 @@ where
     }
 
     /// Todas las reglas del contratista, iguales al crear y al editar y
-    /// para cualquier interfaz (escritorio, móvil):
-    /// - cédula obligatoria, sólo dígitos;
-    /// - nombre obligatorio, sólo letras, guardado en mayúsculas;
-    /// - la empresa existe;
-    /// - personal de ruta sólo para PRAIND e IN HOUSE;
-    /// - PRAIND obligatorio si el tipo lo requiere, y vigente.
-    ///
-    /// Al editar (`anterior` presente), "vigente" y "personal de ruta" sólo
-    /// se revisan si cambió lo que deciden (fecha, tipo o la casilla): si
-    /// no, a alguien con el PRAIND ya vencido no se le podría ni quitar el
-    /// acceso ni corregir el nombre.
+    /// para cualquier interfaz (escritorio, móvil y, vía WebAssembly, el
+    /// panel web y la Edge Function `admin-crear-contratista`):
+    /// 1. las de criterio, en `validar_contratista` (crate de reglas
+    ///    compartidas): cédula, nombre, tipo elegible, personal de ruta y
+    ///    PRAIND;
+    /// 2. la que necesita datos: la empresa existe.
     #[allow(clippy::too_many_arguments)]
     fn armar(
         &self,
@@ -304,60 +299,39 @@ where
         es_personal_ruta: bool,
         tiene_acceso: bool,
     ) -> Result<Contratista, ContratistaServiceError> {
-        let cedula = match Cedula::normalizar(cedula) {
-            Ok(cedula) if cedula.es_nacional_o_de_extranjero() => cedula,
-            Err(CedulaInvalida::Vacia) => return Err(ContratistaServiceError::CedulaVacia),
-            Ok(_) | Err(_) => return Err(ContratistaServiceError::CedulaInvalida),
-        };
-        let cedula = cedula.as_str();
-
-        if nombre.trim().is_empty() {
-            return Err(ContratistaServiceError::NombreVacio);
-        }
-        let nombre = normalizar_nombre(nombre).ok_or(ContratistaServiceError::NombreInvalido)?;
+        let estado_anterior = anterior.map(|previo| EstadoAnterior {
+            tipo_ingreso: previo.tipo_ingreso,
+            es_personal_ruta: previo.es_personal_ruta,
+            fecha_vencimiento_praind: previo.fecha_vencimiento_praind,
+        });
+        let valido = validar_contratista(
+            DatosReglasContratista {
+                cedula,
+                nombre,
+                tipo_ingreso,
+                fecha_vencimiento_praind,
+                es_personal_ruta,
+                tiene_acceso,
+            },
+            estado_anterior.as_ref(),
+            self.hoy,
+        )?;
 
         let empresa = self
             .empresas
             .buscar_por_id(empresa_id)?
             .ok_or(ContratistaServiceError::EmpresaNoEncontrada)?;
 
-        let cambia_tipo_o_ruta = anterior.is_none_or(|previo| {
-            previo.tipo_ingreso != tipo_ingreso || previo.es_personal_ruta != es_personal_ruta
-        });
-        let cambia_praind = cambia_tipo_o_ruta
-            || anterior
-                .is_none_or(|previo| previo.fecha_vencimiento_praind != fecha_vencimiento_praind);
-
-        let cambia_tipo = anterior.is_none_or(|previo| previo.tipo_ingreso != tipo_ingreso);
-        if cambia_tipo && !tipo_ingreso_seleccionable(tipo_ingreso) {
-            return Err(ContratistaServiceError::TipoIngresoRetirado);
-        }
-
-        if cambia_tipo_o_ruta && es_personal_ruta && !admite_personal_ruta(tipo_ingreso) {
-            return Err(ContratistaServiceError::PersonalRutaNoAdmitido);
-        }
-
-        let contratista = Contratista::nuevo(
+        Ok(Contratista::nuevo(
             id,
-            cedula.to_string(),
-            nombre,
+            valido.cedula,
+            valido.nombre,
             &empresa,
-            tipo_ingreso,
-            fecha_vencimiento_praind,
-            es_personal_ruta,
-            tiene_acceso,
-        );
-
-        if contratista.requiere_praind() {
-            if contratista.fecha_vencimiento_praind.is_none() {
-                return Err(ContratistaServiceError::PraindRequerido);
-            }
-            if cambia_praind && praind_vencido(contratista.fecha_vencimiento_praind, self.hoy) {
-                return Err(ContratistaServiceError::PraindVencido);
-            }
-        }
-
-        Ok(contratista)
+            valido.tipo_ingreso,
+            valido.fecha_vencimiento_praind,
+            valido.es_personal_ruta,
+            valido.tiene_acceso,
+        ))
     }
 }
 

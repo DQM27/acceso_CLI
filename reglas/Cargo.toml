@@ -1,0 +1,21 @@
+[package]
+name = "control_acceso_reglas"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Reglas de negocio puras de Control Acceso, compartidas por el núcleo, el panel web y las Edge Functions"
+license = "MIT"
+publish = false
+
+# Reglas puras: sin base de datos, sin red, sin reloj del sistema. Sólo
+# `chrono` (fechas, sin la zona horaria del sistema) y `thiserror`. Así el
+# mismo código compila para escritorio, Android y WebAssembly (`reglas/wasm`).
+
+[features]
+default = []
+serde = ["dep:serde", "chrono/serde"]
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["std"] }
+serde = { version = "1", features = ["derive"], optional = true }
+thiserror = "2"
