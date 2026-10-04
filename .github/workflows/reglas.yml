@@ -1,0 +1,74 @@
+name: Reglas compartidas y Edge Functions
+
+# Las reglas de criterio viven en `reglas/` (Rust) y se usan desde el núcleo,
+# el panel web y las Edge Functions (WebAssembly). Ver
+# docs/arquitectura/reglas-compartidas.md.
+on:
+  push:
+    paths:
+      - "reglas/**"
+      - "supabase/functions/**"
+      - "scripts/generar-reglas-wasm.sh"
+      - ".github/workflows/reglas.yml"
+  pull_request:
+    paths:
+      - "reglas/**"
+      - "supabase/functions/**"
+      - "scripts/generar-reglas-wasm.sh"
+      - ".github/workflows/reglas.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  reglas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable (2026-09-18)
+        with:
+          components: rustfmt, clippy
+
+      - name: Formato (reglas y su envoltura WebAssembly)
+        run: |
+          cargo fmt --check --manifest-path reglas/Cargo.toml
+          cargo fmt --check --manifest-path reglas/wasm/Cargo.toml
+
+      - name: Clippy y tests (reglas)
+        working-directory: reglas
+        run: |
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
+      - name: Clippy y tests (envoltura WebAssembly, compilada nativa)
+        working-directory: reglas/wasm
+        run: |
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
+  edge-functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Deno de la versión fija con la que se verificaron las funciones,
+      # bajado de sus releases oficiales.
+      - name: Instalar Deno 2.9.7
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/deno.zip" \
+            https://github.com/denoland/deno/releases/download/v2.9.7/deno-x86_64-unknown-linux-gnu.zip
+          unzip -q "$RUNNER_TEMP/deno.zip" -d "$RUNNER_TEMP/deno"
+          echo "$RUNNER_TEMP/deno" >> "$GITHUB_PATH"
+
+      - name: Tipos, lint y tests de las Edge Functions
+        working-directory: supabase/functions
+        run: |
+          deno check */index.ts _shared/*.ts
+          deno lint --ignore=_shared/reglas
+          deno test
