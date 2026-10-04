@@ -9,7 +9,7 @@ Mantener este archivo al día: cada cambio que se aplique en staging se anota
 aquí en el mismo commit. Cuando se aplique en producción, se mueve a la
 sección "Aplicado en producción" con fecha y quién lo autorizó.
 
-Última revisión: 2026-09-29.
+Última revisión: 2026-10-04.
 
 ## 1. Antes de empezar
 
@@ -137,6 +137,37 @@ columnas que usan las apps de la rama:
   filas). En producción sí están. No bloquea el PR, pero las pruebas de
   rutas contra staging van a fallar hasta resolver la rama de rutas.
 - `telemetria_diagnostico` sólo existe en staging, como corresponde.
+
+### 2.6 Edge Function `admin-crear-contratista` (reglas compartidas, 2026-10-04)
+
+Rama `feat/reglas-compartidas`. Contexto completo en
+`docs/arquitectura/reglas-compartidas.md`.
+
+- **Aplicado en staging:** la Edge Function `admin-crear-contratista`
+  (versión 1, `verify_jwt` activado). El `index.ts` desplegado es una sola
+  línea que importa el de GitHub **fijado al commit `f054c7b`**; Supabase lo
+  empaqueta al desplegar, no consulta GitHub en cada petición. Para producción
+  conviene desplegarla con `supabase functions deploy admin-crear-contratista`
+  desde el repo.
+- **Probado en staging** con un administrador temporal (borrado al terminar,
+  junto con los dos contratistas de prueba; staging quedó con los mismos
+  conteos que antes):
+  - alta válida → 200, con cédula y nombre normalizados, y aviso a las 3
+    unidades;
+  - la misma cédula escrita distinto → 409 "Ya existe un contratista con esa
+    cédula";
+  - "POR CORREO" → 422 (la función SQL vieja lo aceptaba);
+  - PRAIND vencido → 422; empresa inexistente → 404;
+  - PRAIND sin fecha pero sin acceso → 200;
+  - sin sesión → 401 de la puerta de Supabase; con la clave anónima → 401 de
+    la función.
+- **NO aplicado en staging todavía:** la migración
+  `20261004170000_alta_de_contratistas_por_edge_function` (borra
+  `panel_crear_contratista`). Un panel de otra rama apuntado a staging todavía
+  la usa. Se aplica cuando el panel nuevo sea el que se use contra staging.
+- **Orden en producción:** 1) desplegar la función; 2) publicar el panel web;
+  3) aplicar la migración. La función nueva puede convivir con la SQL vieja
+  sin problema; sólo la migración rompe el panel viejo.
 
 ## 3. Cambios de la base local de los equipos (SQLite)
 
