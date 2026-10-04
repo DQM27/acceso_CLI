@@ -4,7 +4,8 @@
 --   que el proveedor está adentro en la unidad A (la RLS se lo oculta); el
 --   índice único rechaza un segundo ingreso abierto de la misma cédula en
 --   cualquier unidad y deja registrarlo de nuevo tras la salida; y
---   `proveedores_activos_en_otras_unidades` reporta sólo lo de otras unidades.
+--   `proveedores_activos_en_otras_unidades` reporta lo de otras unidades y,
+--   desde 20261004120000, lo abierto por el otro equipo de la misma unidad.
 -- - Gafete provisional KOF (el encargado se identifica por su código de
 --   empleado): `prestamo_provisional_activo_de_encargado` ve el préstamo de
 --   otra unidad; el índice único rechaza un segundo préstamo sin devolver al
@@ -63,9 +64,18 @@ begin
   -- 3. El aviso posterior a sincronizar: B lo ve; A no ve el propio.
   select count(*) into v_n from public.proveedores_activos_en_otras_unidades(array['900000601', '000000000']);
   if v_n <> 1 then raise exception 'P3a: B debería ver 1 proveedor en otra unidad, vio %', v_n; end if;
-  perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c603', 'aaaaaaaa-0000-0000-0000-00000000a601', 'huella-prov-a2');
+  -- El equipo que lo registró no se avisa a sí mismo.
+  perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c601', 'aaaaaaaa-0000-0000-0000-00000000a601', 'huella-prov-a');
   select count(*) into v_n from public.proveedores_activos_en_otras_unidades(array['900000601']);
-  if v_n <> 0 then raise exception 'P3b: A no debería ver su propio ingreso como de otra unidad'; end if;
+  if v_n <> 0 then raise exception 'P3b: el equipo que lo registró no debería verse a sí mismo'; end if;
+  -- El OTRO equipo de la misma unidad sí se avisa (20261004120000): si lo
+  -- pregunta es porque también lo tiene abierto localmente, y el índice
+  -- único le rechazó (o le va a rechazar) ese ingreso.
+  perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c603', 'aaaaaaaa-0000-0000-0000-00000000a601', 'huella-prov-a2');
+  select count(*), max(sitio_nombre) into v_n, v_nombre from public.proveedores_activos_en_otras_unidades(array['900000601']);
+  if v_n <> 1 or v_nombre <> 'Unidad proveedor A (otro equipo de esta unidad)' then
+    raise exception 'P3c: el otro equipo de la unidad debería ver el duplicado, vio % / %', v_n, v_nombre;
+  end if;
 
   -- 4. Segundo ingreso abierto de la misma cédula en la misma unidad (otro equipo).
   begin

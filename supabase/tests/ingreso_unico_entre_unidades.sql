@@ -5,7 +5,9 @@
 -- persona está adentro en la unidad A (antes la RLS se lo ocultaba); el
 -- índice único rechaza el segundo ingreso abierto en cualquier unidad, pero
 -- deja registrar de nuevo después de la salida; y
--- `contratistas_activos_en_otras_unidades` reporta sólo lo de otras unidades.
+-- `contratistas_activos_en_otras_unidades` reporta lo de otras unidades y,
+-- desde 20261004120000, lo abierto por el otro equipo de la misma unidad
+-- (nunca lo abierto por el equipo que pregunta).
 begin;
 
 insert into public.sitios (id, nombre) values
@@ -59,9 +61,18 @@ begin
   select count(*) into v_n from public.contratistas_activos_en_otras_unidades(array['900000501', '000000000']);
   if v_n <> 1 then raise exception '3a: B debería ver 1 activo en otra unidad, vio %', v_n; end if;
   --    Desde A no reporta su propio ingreso.
-  perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c503', 'aaaaaaaa-0000-0000-0000-00000000a501', 'huella-ing-a2');
+  -- El equipo que lo registró no se avisa a sí mismo.
+  perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c501', 'aaaaaaaa-0000-0000-0000-00000000a501', 'huella-ing-a');
   select count(*) into v_n from public.contratistas_activos_en_otras_unidades(array['900000501']);
-  if v_n <> 0 then raise exception '3b: A no debería ver su propio ingreso como de otra unidad'; end if;
+  if v_n <> 0 then raise exception '3b: el equipo que lo registró no debería verse a sí mismo'; end if;
+  -- El OTRO equipo de la misma unidad sí se avisa (20261004120000): si lo
+  -- pregunta es porque también lo tiene abierto localmente, y el índice
+  -- único le rechazó (o le va a rechazar) ese ingreso.
+  perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c503', 'aaaaaaaa-0000-0000-0000-00000000a501', 'huella-ing-a2');
+  select count(*), max(sitio_nombre) into v_n, v_nombre from public.contratistas_activos_en_otras_unidades(array['900000501']);
+  if v_n <> 1 or v_nombre <> 'Unidad ingreso A (otro equipo de esta unidad)' then
+    raise exception '3c: el otro equipo de la unidad debería ver el duplicado, vio % / %', v_n, v_nombre;
+  end if;
 
   -- 4. Segundo ingreso abierto de la misma cédula, en la misma unidad (otro
   --    equipo, p. ej. registrado sin conexión): rechazado por el índice.
