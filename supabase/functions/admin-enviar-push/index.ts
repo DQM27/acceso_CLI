@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { clienteServicio, correoAdminAutorizado } from "../_shared/admin.ts";
 import { type Aviso, enviarMensaje, leerCuentaServicio, tokenAccesoGoogle } from "../_shared/fcm.ts";
 import { json, leerCuerpo, preflight, textoOpcional } from "../_shared/http.ts";

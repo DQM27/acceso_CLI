@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { decodeProtectedHeader } from "npm:jose@5";
 import { clienteServicio } from "../_shared/admin.ts";
 import { enSegundoPlano, ipDelCliente, json, leerCuerpo, preflight } from "../_shared/http.ts";
