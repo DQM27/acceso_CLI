@@ -28,6 +28,42 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 
 ## Seguridad y nube
 
+- [x] **Revisión de carreras de los cambios del 2026-10-03 (resuelto
+  2026-10-04).** Detalle completo en
+  `docs/auditorias/revision-carreras-2026-10-04.md`. Arreglado: (1) la cola
+  ya no manda un `cerrar` mientras su `crear` siga pendiente (antes la
+  persona podía quedar adentro para siempre en la nube y bloqueada en todas
+  las unidades); (2) el gafete de visita se controla entre visitas e
+  ingresos por correo en los dos sentidos: local, en vivo y con un trigger
+  en la nube; (3) un ingreso rechazado por chocar con el otro equipo de la
+  misma unidad ahora avisa; (6) `admin-enviar-push` borra tokens muertos
+  por token y no por equipo.
+
+- [ ] **Visitas: "¿ya está adentro en otra unidad?" sigue ciego por RLS --
+  hallazgo 2026-10-04.** `visitante_activo_en_otro_sitio` y
+  `visitantes_con_conflicto_activo` consultan `/rest/v1/movimientos_visita`
+  directo y siempre responden "libre" (mismo bug que se corrigió el
+  2026-10-03 para contratistas y proveedores). Hace falta una función
+  `security definer` como `ingreso_correo_activo` y un índice único de
+  cédula activa en `movimientos_visita`, verificando antes que no haya
+  duplicados abiertos en staging y producción.
+
+- [ ] **Decidir si una cédula puede estar adentro por dos vías a la vez --
+  hallazgo 2026-10-04.** Contratistas, proveedores e ingresos por correo
+  tienen índices de cédula activa separados: hoy alguien puede estar
+  adentro como contratista y también por correo. Si no debe pasar, hace
+  falta un control cruzado (trigger con candado por cédula, como el de
+  gafete de visita en `20261004120000`).
+
+- [ ] **Caché de remotos: un cierre manual puede "revivir" un instante --
+  hallazgo 2026-10-04.** `cerrar_ingreso_*_remoto` borra la fila de la
+  caché, pero una sincronización que leyó la nube justo antes la vuelve a
+  insertar hasta la siguiente pasada. Menor: se corrige sola.
+
+- [ ] **Historial del panel web sin ingresos por correo ni de proveedores --
+  hallazgo 2026-10-04.** Sólo "Adentro ahora" los muestra; la vista del
+  historial (`panel_movimientos`) es sólo de contratistas.
+
 - [x] **El pipeline de release real (no sólo `cargo tauri dev`) publicaba
   builds sin cifrar de verdad, en silencio (hallazgo 2026-09-12, resuelto
   2026-09-12).** `desktop/src-tauri` compilaba con `sqlite-plano` como
