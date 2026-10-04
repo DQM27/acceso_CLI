@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import FormularioContratista from "./FormularioContratista";
-import { TIPOS_INGRESO, errorAntesDeEnviar, pidePraind } from "./FormularioContratista.logica";
+import { errorAntesDeEnviar, pidePraind, tiposIngreso } from "./FormularioContratista.logica";
 
 const mocks = vi.hoisted(() => ({
   listarEmpresas: vi.fn(),
@@ -47,13 +47,32 @@ describe("lógica del formulario", () => {
     expect(pidePraind("PRAIND", false)).toBe(false);
   });
 
-  it("solo exige elegir la empresa antes de enviar", () => {
-    expect(errorAntesDeEnviar({ empresaId: "" })).toBe("Elija la empresa");
-    expect(errorAntesDeEnviar({ empresaId: "e1" })).toBeNull();
+  it("avisa antes de enviar con las reglas y los mensajes del núcleo", () => {
+    const base = {
+      empresaId: "e1",
+      cedula: "112340567",
+      nombre: "Ana",
+      tipo: "SWAT" as const,
+      praind: null,
+      conAcceso: true,
+    };
+    const hoy = "2026-10-04";
+    expect(errorAntesDeEnviar(base, hoy)).toBeNull();
+    expect(errorAntesDeEnviar({ ...base, empresaId: "" }, hoy)).toBe("Elija la empresa");
+    expect(errorAntesDeEnviar({ ...base, cedula: "12" }, hoy)).toBe(
+      "La cédula debe tener sólo números, entre 9 y 13 dígitos",
+    );
+    expect(errorAntesDeEnviar({ ...base, tipo: "PRAIND" }, hoy)).toBe("Fecha PRAIND requerida");
+    expect(errorAntesDeEnviar({ ...base, tipo: "PRAIND", praind: "2026-10-03" }, hoy)).toBe(
+      "El PRAIND está vencido — ingrese una fecha vigente",
+    );
+    expect(errorAntesDeEnviar({ ...base, tipo: "POR_CORREO" }, hoy)).toContain("ya no es un tipo de contratista");
+    // Los datos van primero: con la cédula mal y sin empresa, avisa la cédula.
+    expect(errorAntesDeEnviar({ ...base, cedula: "", empresaId: "" }, hoy)).toBe("La cédula es obligatoria");
   });
 
-  it("los tipos salen con el texto que se lee, no el valor interno", () => {
-    expect(TIPOS_INGRESO.map((t) => t.etiqueta)).toEqual(["PRAIND", "IN HOUSE", "SWAT"]);
+  it("los tipos los decide el núcleo y salen con el texto que se lee", () => {
+    expect(tiposIngreso().map((t) => t.etiqueta)).toEqual(["PRAIND", "IN HOUSE", "SWAT"]);
   });
 });
 
@@ -126,6 +145,8 @@ describe("FormularioContratista", () => {
 
     fireEvent.change(screen.getByLabelText("Cédula"), { target: { value: "112340567" } });
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Ana" } });
+    // Con los datos válidos (PRAIND incluido), lo único que falta es la empresa.
+    fireEvent.change(screen.getByLabelText("Fecha de vencimiento PRAIND"), { target: { value: "2030-01-31" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
 
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Elija la empresa"));

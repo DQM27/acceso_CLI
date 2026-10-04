@@ -3,3 +3,10 @@
 # un archivo como modificado sin cambios reales por mezcla CRLF/LF
 # (ver desktop/src-tauri/Cargo.toml, que quedó commiteado en CRLF).
 * text=auto eol=lf
+
+# Paquete WebAssembly de las reglas compartidas: lo genera
+# scripts/generar-reglas-wasm.sh, no se edita a mano. El base64 del módulo es
+# una sola línea enorme: sin diff de texto.
+web/src/reglas/wasm/** linguist-generated=true
+supabase/functions/_shared/reglas/** linguist-generated=true
+supabase/functions/_shared/reglas/reglas_wasm_base64.ts -diff

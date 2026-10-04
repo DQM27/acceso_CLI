@@ -1,0 +1,75 @@
+import iniciarWasm, { initSync } from "./wasm/reglas";
+import * as wasm from "./wasm/reglas";
+import type { TipoIngreso } from "../api/contratistas";
+
+/**
+ * Reglas de negocio del núcleo (crate `reglas/` en Rust), compiladas a
+ * WebAssembly: el panel usa el MISMO código que escritorio, teléfono y la
+ * Edge Function `admin-crear-contratista`, en vez de repetir las reglas en
+ * TypeScript (ver docs/arquitectura/reglas-compartidas.md).
+ *
+ * Esto sirve para avisar mientras se llena el formulario. La decisión de
+ * guardar la toma el servidor (la Edge Function valida otra vez con este
+ * mismo paquete): lo que corre en el navegador se puede saltar.
+ *
+ * El paquete se carga una vez al arrancar (`iniciarReglas` en `main.tsx`).
+ * Se regenera con `scripts/generar-reglas-wasm.sh`.
+ */
+
+let cargando: Promise<void> | null = null;
+
+/** Carga el módulo WebAssembly (una sola vez). */
+export function iniciarReglas(): Promise<void> {
+  cargando ??= iniciarWasm().then(() => undefined);
+  return cargando;
+}
+
+/** Carga el módulo desde sus bytes, sin `fetch` (tests en Node). */
+export function iniciarReglasDesdeBytes(bytes: BufferSource): void {
+  initSync({ module: bytes });
+  cargando = Promise.resolve();
+}
+
+/** Datos del formulario de alta, con los códigos de la nube. */
+export interface DatosContratistaReglas {
+  cedula: string;
+  nombre: string;
+  tipo_ingreso: TipoIngreso;
+  /** "AAAA-MM-DD", o null si no se cargó. */
+  fecha_vencimiento_praind: string | null;
+  es_personal_ruta?: boolean;
+  tiene_acceso?: boolean;
+}
+
+export interface ContratistaValido {
+  cedula: string;
+  nombre: string;
+  tipo_ingreso: TipoIngreso;
+  fecha_vencimiento_praind: string | null;
+  es_personal_ruta: boolean;
+  tiene_acceso: boolean;
+}
+
+export type ResultadoValidacion =
+  | { ok: true; contratista: ContratistaValido }
+  | { ok: false; codigo: string; mensaje: string };
+
+export const reglas = {
+  /** ¿Este tipo (o ser personal de ruta) exige fecha de PRAIND? */
+  requierePraind: (tipo: TipoIngreso, personalRuta = false): boolean =>
+    wasm.requierePraind(tipo, personalRuta),
+  /** ¿Este tipo exige gafete al entrar? */
+  requiereGafete: (tipo: TipoIngreso, personalRuta = false): boolean =>
+    wasm.requiereGafete(tipo, personalRuta),
+  /** ¿Este tipo admite la casilla "personal de ruta"? */
+  admitePersonalRuta: (tipo: TipoIngreso): boolean => wasm.admitePersonalRuta(tipo),
+  /** Tipos que se pueden elegir para un contratista nuevo, en orden. */
+  tiposIngresoSeleccionables: (): TipoIngreso[] => wasm.tiposIngresoSeleccionables() as TipoIngreso[],
+  /** Cédula en su forma única, o undefined si no es de contratista. */
+  normalizarCedula: (texto: string): string | undefined => wasm.normalizarCedulaContratista(texto),
+  /** Todas las reglas de criterio de un contratista nuevo. `hoy`: "AAAA-MM-DD". */
+  validarContratista: (datos: DatosContratistaReglas, hoy: string): ResultadoValidacion =>
+    wasm.validarContratista(datos, hoy) as ResultadoValidacion,
+  /** Huella de las fuentes con que se generó el paquete (ver reglas.test.ts). */
+  huellaFuentes: (): string => wasm.huellaFuentes(),
+};

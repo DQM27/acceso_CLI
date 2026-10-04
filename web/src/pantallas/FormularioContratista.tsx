@@ -6,7 +6,7 @@ import { crearContratista, crearEmpresa, listarEmpresas } from "../api/contratis
 import type { Empresa, TipoIngreso } from "../api/contratistas";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 import { mensajeError } from "../mensajeError";
-import { TIPOS_INGRESO, errorAntesDeEnviar, pidePraind } from "./FormularioContratista.logica";
+import { errorAntesDeEnviar, pidePraind, tiposIngreso } from "./FormularioContratista.logica";
 
 /**
  * Alta de un contratista desde el panel. Sirve para dos cosas: registrar a un
@@ -15,10 +15,13 @@ import { TIPOS_INGRESO, errorAntesDeEnviar, pidePraind } from "./FormularioContr
  * denegado y ninguna puerta lo deja entrar (ver
  * docs/features-futuras/plan-veto-por-persona.md).
  *
- * Aquí no se replica ninguna regla: cédula, nombre, PRAIND y cédula repetida
- * los valida la base al guardar (migración `panel_crea_contratistas`) y su
- * mensaje se muestra tal cual. Igual que en escritorio, el nombre y la cédula
- * solo admiten lo válido mientras se escribe.
+ * Aquí no se replica ninguna regla: las de criterio (cédula, nombre, tipo,
+ * PRAIND) las aporta el núcleo vía WebAssembly (`src/reglas`) para avisar
+ * antes de enviar, y la Edge Function `admin-crear-contratista` las vuelve a
+ * aplicar con el mismo código al guardar, junto con las que necesitan datos
+ * (empresa existente, cédula repetida). Su mensaje se muestra tal cual. Igual
+ * que en escritorio, el nombre y la cédula solo admiten lo válido mientras se
+ * escribe.
  *
  * La empresa es obligatoria porque los equipos descartan un contratista sin una
  * empresa que puedan resolver, y entonces el bloqueo no les llegaría.
@@ -71,7 +74,14 @@ export default function FormularioContratista({
 
   async function alEnviar(evento: React.FormEvent) {
     evento.preventDefault();
-    const problema = errorAntesDeEnviar({ empresaId });
+    const problema = errorAntesDeEnviar({
+      empresaId,
+      cedula,
+      nombre,
+      tipo,
+      praind: mostrarPraind && praind ? praind : null,
+      conAcceso: !denegado,
+    });
     if (problema) {
       setError(problema);
       return;
@@ -190,7 +200,7 @@ export default function FormularioContratista({
             disabled={enviando}
             onChange={(evento) => setTipo(evento.target.value as TipoIngreso)}
           >
-            {TIPOS_INGRESO.map(({ valor, etiqueta }) => (
+            {tiposIngreso().map(({ valor, etiqueta }) => (
               <option key={valor} value={valor}>
                 {etiqueta}
               </option>

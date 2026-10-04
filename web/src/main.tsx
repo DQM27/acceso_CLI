@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
 import ErrorBoundary from "./componentes/ErrorBoundary";
 import "./index.css";
+import { iniciarReglas } from "./reglas";
 
 const raiz = document.getElementById("root");
 if (!raiz) {
@@ -22,12 +23,22 @@ const clienteConsultas = new QueryClient({
   },
 });
 
-createRoot(raiz).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <QueryClientProvider client={clienteConsultas}>
-        <App />
-      </QueryClientProvider>
-    </ErrorBoundary>
-  </StrictMode>,
-);
+// Las reglas del núcleo (WebAssembly, ver src/reglas) se cargan antes de
+// mostrar el panel: los formularios las consultan de forma sincrónica. Si no
+// cargan (navegador sin WebAssembly), el panel igual se muestra y el error
+// queda en la consola; guardar sigue validándose en el servidor.
+iniciarReglas()
+  .catch((error: unknown) => console.error("No se pudieron cargar las reglas del núcleo:", error))
+  .finally(() => mostrarPanel(raiz));
+
+function mostrarPanel(raiz: HTMLElement) {
+  createRoot(raiz).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <QueryClientProvider client={clienteConsultas}>
+          <App />
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+}
