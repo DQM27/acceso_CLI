@@ -22,21 +22,27 @@ insert into public.contratistas (id, dispositivo_origen_id, nombre)
 values ('dddddddd-0000-0000-0000-00000000d101',
         'cccccccc-0000-0000-0000-00000000c101', 'María Zúñiga Solano');
 
+-- El ingreso de hace 40 días va con salida: desde
+-- 20261003170000_ingreso_unico_entre_unidades una misma cédula no puede
+-- tener dos ingresos abiertos (`ingresos_contratista_activo_idx`), y con los
+-- dos abiertos este fixture ya no se podía insertar.
 insert into public.ingresos (id, sitio_id, dispositivo_entrada_id, contratista_id,
-                             contratista_cedula, contratista_nombre, hora_entrada)
+                             contratista_cedula, contratista_nombre, hora_entrada,
+                             hora_salida, usuario_salida_nombre)
 values
   -- Hoy, unidad A.
   ('bbbbbbbb-0000-0000-0000-00000000b101', 'aaaaaaaa-0000-0000-0000-00000000a101',
    'cccccccc-0000-0000-0000-00000000c101', 'dddddddd-0000-0000-0000-00000000d101',
-   '987650001', 'María Zúñiga Solano', now()),
+   '987650001', 'María Zúñiga Solano', now(), null, null),
   -- Hace 40 días, unidad B.
   ('bbbbbbbb-0000-0000-0000-00000000b102', 'aaaaaaaa-0000-0000-0000-00000000a102',
    'cccccccc-0000-0000-0000-00000000c101', 'dddddddd-0000-0000-0000-00000000d101',
-   '987650001', 'María Zúñiga Solano', now() - interval '40 days'),
+   '987650001', 'María Zúñiga Solano', now() - interval '40 days',
+   now() - interval '40 days' + interval '8 hours', 'OPERADOR PRUEBA'),
   -- Otra persona cuya cédula contiene (pero no empieza con) el prefijo.
   ('bbbbbbbb-0000-0000-0000-00000000b103', 'aaaaaaaa-0000-0000-0000-00000000a101',
    'cccccccc-0000-0000-0000-00000000c101', 'dddddddd-0000-0000-0000-00000000d101',
-   '198765000', 'Pedro Araya', now());
+   '198765000', 'Pedro Araya', now(), null, null);
 
 set local role authenticated;
 
