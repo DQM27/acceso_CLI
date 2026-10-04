@@ -92,6 +92,11 @@ where
         if self.registros.buscar_ingreso_activo(cedula)?.is_some() {
             return Err(IngresoProveedorServiceError::IngresoActivo);
         }
+        // Una persona no puede estar adentro por dos vías: si ya entró como
+        // contratista o por correo, no entra también como proveedor.
+        if let Some(via) = self.registros.adentro_por_otra_via(cedula)? {
+            return Err(IngresoProveedorServiceError::AdentroPorOtraVia(via));
+        }
 
         let gafete_encontrado = self
             .gafetes
@@ -168,6 +173,7 @@ mod tests {
     use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
     use crate::database::repositories::registro_ingreso_proveedor_repository::SqliteRegistroIngresoProveedorRepository;
     use crate::database::schema::initialize_database;
+    use crate::models::via_ingreso::ViaIngreso;
     use chrono::Utc;
     use rusqlite::Connection;
 
@@ -211,6 +217,43 @@ mod tests {
         servicio.registrar_salida(id, Utc::now(), 1).unwrap();
 
         assert!(servicio.listar_activos().unwrap().is_empty());
+    }
+
+    /// Una persona no puede estar adentro por dos vías: adentro por correo
+    /// (aunque la cédula venga escrita distinto), no entra como proveedor.
+    #[test]
+    fn registrar_ingreso_de_alguien_adentro_por_correo_falla() {
+        let (connection, empresa_id) = conexion_con_empresa_y_gafete();
+        connection
+            .execute(
+                "INSERT INTO registro_ingresos_correo (cedula, nombre, motivo, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid)
+                 VALUES ('111111111', 'Juan Perez', 'Entrevista RH', 4,
+                    '2026-10-03T14:00:00Z', 1, 'Operador', 'uuid-correo')",
+                [],
+            )
+            .unwrap();
+        let registros = SqliteRegistroIngresoProveedorRepository::new(&connection);
+        let empresas = SqliteEmpresaProveedorRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = IngresoProveedorService::new(&registros, &empresas, &gafetes);
+
+        let error = servicio
+            .registrar_ingreso(
+                "1-1111-1111",
+                "Juan Perez",
+                empresa_id,
+                None,
+                7,
+                1,
+                Utc::now(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            IngresoProveedorServiceError::AdentroPorOtraVia(ViaIngreso::PorCorreo)
+        ));
     }
 
     #[test]

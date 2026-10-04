@@ -4666,3 +4666,31 @@ fn visita_con_gafete_ya_activo_queda_fallida_con_aviso() {
     );
     assert_eq!(estado_en_cola(&connection, "uuid-m3"), "fallido");
 }
+
+/// Una persona no puede estar adentro por dos vías: la verificación en vivo
+/// pregunta a `persona_adentro_por_otra_via` con la vía propia.
+#[test]
+fn persona_adentro_por_otra_via_pregunta_a_la_funcion_de_la_nube() {
+    let (base_url, servidor) = servidor_rpc(
+        "persona_adentro_por_otra_via",
+        "\"p_via\":\"POR_CORREO\"",
+        "[{\"via\":\"CONTRATISTA\",\"sitio_id\":\"sitio-1\",\"sitio_nombre\":\"Brisas\"}]",
+    );
+
+    let adentro = persona_adentro_por_otra_via(
+        &contexto(&base_url),
+        "112345678",
+        crate::models::via_ingreso::ViaIngreso::PorCorreo,
+    )
+    .unwrap();
+
+    assert_eq!(
+        adentro,
+        Some(AdentroPorOtraViaEnLaNube {
+            via: crate::models::via_ingreso::ViaIngreso::Contratista,
+            sitio_nombre: "Brisas".to_string(),
+            mismo_sitio: true,
+        })
+    );
+    servidor.join().unwrap();
+}

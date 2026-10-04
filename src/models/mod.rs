@@ -15,3 +15,4 @@ pub mod salida_ruta;
 pub mod tipo_ingreso;
 pub mod usuario;
 pub mod vehiculo_ruta;
+pub mod via_ingreso;

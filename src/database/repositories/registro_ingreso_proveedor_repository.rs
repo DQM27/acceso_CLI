@@ -17,6 +17,7 @@ use crate::models::registro_ingreso_proveedor::{
     NuevoRegistroIngresoProveedor, RegistroIngresoProveedor, RegistroIngresoProveedorActivoResumen,
     SalidaRegistroIngresoProveedor,
 };
+use crate::models::via_ingreso::ViaIngreso;
 use crate::tiempo::{parsear_utc, serializar_utc};
 
 pub trait RegistroIngresoProveedorRepository {
@@ -27,6 +28,12 @@ pub trait RegistroIngresoProveedorRepository {
     /// ¿Esta cédula tiene el acceso negado como contratista? Ver
     /// `database::queries::contratistas::cedula_con_acceso_negado`.
     fn cedula_con_acceso_negado(&self, cedula: &str) -> Result<bool, DatabaseError>;
+
+    /// ¿Esta cédula ya está adentro por OTRA vía (contratista, proveedor o
+    /// por correo), en este equipo o en el otro de la unidad? Una persona no
+    /// puede estar adentro por dos vías a la vez. Ver
+    /// `database::queries::persona_adentro`.
+    fn adentro_por_otra_via(&self, cedula: &str) -> Result<Option<ViaIngreso>, DatabaseError>;
 
     /// Ingreso abierto (sin salida) para esta cédula -- mismo motivo que
     /// `RegistroIngresoRepository::buscar_ingreso_activo`: evitar que la
@@ -131,6 +138,14 @@ const SELECT_REGISTRO: &str = "
 ";
 
 impl RegistroIngresoProveedorRepository for SqliteRegistroIngresoProveedorRepository<'_> {
+    fn adentro_por_otra_via(&self, cedula: &str) -> Result<Option<ViaIngreso>, DatabaseError> {
+        crate::database::queries::persona_adentro::adentro_por_otra_via(
+            self.connection,
+            cedula,
+            ViaIngreso::Proveedor,
+        )
+    }
+
     fn cedula_con_acceso_negado(&self, cedula: &str) -> Result<bool, DatabaseError> {
         crate::database::queries::contratistas::cedula_con_acceso_negado(self.connection, cedula)
     }

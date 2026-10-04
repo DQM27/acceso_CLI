@@ -367,6 +367,12 @@ where
         {
             return Err(RegistroIngresoServiceError::IngresoActivoEnOtroDispositivo);
         }
+        // Una persona no puede estar adentro por dos vías: si ya entró como
+        // proveedor o por correo (acá o en el otro equipo), no entra también
+        // como contratista.
+        if let Some(via) = self.registros.adentro_por_otra_via(&contratista.cedula)? {
+            return Err(RegistroIngresoServiceError::AdentroPorOtraVia(via));
+        }
 
         // Sin número = sin gafete (S/G), igual que el personal de ruta. Desde
         // el pedido del usuario 2026-10-03 cualquier operador puede elegirlo

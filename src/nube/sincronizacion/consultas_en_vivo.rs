@@ -279,3 +279,60 @@ fn activo_segun_funcion(
             .unwrap_or_else(|| "otro sitio".to_string()),
     }))
 }
+
+/// Por qué otra vía (y dónde) está adentro una persona, según la nube (ver
+/// [`persona_adentro_por_otra_via`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdentroPorOtraViaEnLaNube {
+    pub via: crate::models::via_ingreso::ViaIngreso,
+    pub sitio_nombre: String,
+    pub mismo_sitio: bool,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaAdentroPorOtraVia {
+    via: String,
+    sitio_id: String,
+    sitio_nombre: Option<String>,
+}
+
+/// Regla "una persona no puede estar adentro por dos vías a la vez"
+/// (contratista, proveedor, por correo): pregunta a la nube si esta cédula
+/// está adentro por una vía distinta de `via`, en cualquier unidad o equipo
+/// (función `persona_adentro_por_otra_via`, que compara la cédula
+/// normalizada). Quien llama propaga el error: si no se puede verificar, no
+/// se registra (mismo criterio que la regla de la misma vía).
+pub fn persona_adentro_por_otra_via(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+    via: crate::models::via_ingreso::ViaIngreso,
+) -> Result<Option<AdentroPorOtraViaEnLaNube>, SincronizacionError> {
+    use crate::models::via_ingreso::ViaIngreso;
+
+    let via_texto = match via {
+        ViaIngreso::Contratista => "CONTRATISTA",
+        ViaIngreso::Proveedor => "PROVEEDOR",
+        ViaIngreso::PorCorreo => "POR_CORREO",
+    };
+    let filas: Vec<FilaAdentroPorOtraVia> = llamar_rpc(
+        &cliente_http(),
+        contexto,
+        "persona_adentro_por_otra_via",
+        &serde_json::json!({ "p_cedula": cedula, "p_via": via_texto }),
+    )?;
+    Ok(filas.into_iter().find_map(|fila| {
+        let via = match fila.via.as_str() {
+            "CONTRATISTA" => ViaIngreso::Contratista,
+            "PROVEEDOR" => ViaIngreso::Proveedor,
+            "POR_CORREO" => ViaIngreso::PorCorreo,
+            _ => return None,
+        };
+        Some(AdentroPorOtraViaEnLaNube {
+            via,
+            mismo_sitio: fila.sitio_id == contexto.sitio_id,
+            sitio_nombre: fila
+                .sitio_nombre
+                .unwrap_or_else(|| "otro sitio".to_string()),
+        })
+    }))
+}

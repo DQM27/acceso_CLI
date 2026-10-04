@@ -15,6 +15,7 @@
 use crate::domain::cita::MotivoDenegacionVisita;
 use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::models::gafete::EstadoGafete;
+use crate::models::via_ingreso::ViaIngreso;
 use crate::services::error::{
     AutenticacionError, CitaServiceError, ContratistaServiceError, EmpresaProveedorServiceError,
     EmpresaServiceError, EncargadoRutaServiceError, GafeteProvisionalServiceError,
@@ -214,7 +215,17 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
 /// `database::queries::contratistas::cedula_con_acceso_negado`).
 pub const MENSAJE_ACCESO_NEGADO: &str = "Esta persona tiene el acceso denegado.";
 
+/// Una persona no puede estar adentro por dos vías a la vez (contratista,
+/// proveedor, por correo): el mismo texto para las tres.
+fn mensaje_adentro_por_otra_via(via: ViaIngreso) -> String {
+    format!(
+        "Esta persona ya está adentro {} — registre primero esa salida",
+        via.texto()
+    )
+}
+
 pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
+    use RegistroIngresoServiceError::AdentroPorOtraVia;
     use RegistroIngresoServiceError::{
         AccesoDenegado, ContratistaNoEncontrado, GafeteNoDisponible, GafeteNoRegistrado,
         GafeteOcupado, IngresoActivo, IngresoActivoEnOtroDispositivo, PlacaNoAplica,
@@ -227,6 +238,7 @@ pub fn mensaje_ingreso(error: RegistroIngresoServiceError) -> String {
         IngresoActivoEnOtroDispositivo => {
             "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio".into()
         }
+        AdentroPorOtraVia(via) => mensaje_adentro_por_otra_via(via),
         PlacaRequerida => "La placa es obligatoria cuando el ingreso es en vehículo".into(),
         PlacaNoAplica => "No se puede indicar placa cuando el ingreso es a pie".into(),
         GafeteOcupado => "El gafete ya está en uso".into(),
@@ -444,6 +456,7 @@ pub fn mensaje_empresa_proveedor(error: EmpresaProveedorServiceError) -> String 
 }
 
 pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String {
+    use IngresoProveedorServiceError::AdentroPorOtraVia;
     use IngresoProveedorServiceError::{
         AccesoNegado, CedulaInvalida, CedulaVacia, EmpresaInactiva, EmpresaNoEncontrada,
         GafeteNoDisponible, GafeteNoRegistrado, GafeteOcupado, IngresoActivo, NombreVacio,
@@ -455,6 +468,7 @@ pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String 
         AccesoNegado => MENSAJE_ACCESO_NEGADO.into(),
         CedulaInvalida => "La cédula debe tener sólo números, entre 9 y 13 dígitos".into(),
         NombreVacio => "El nombre es obligatorio".into(),
+        AdentroPorOtraVia(via) => mensaje_adentro_por_otra_via(via),
         EmpresaNoEncontrada => "Empresa proveedora no encontrada".into(),
         EmpresaInactiva => "La empresa proveedora está dada de baja".into(),
         IngresoActivo => "Esta cédula ya tiene un ingreso de proveedor activo".into(),
@@ -475,6 +489,7 @@ pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String 
 }
 
 pub fn mensaje_ingreso_correo(error: IngresoCorreoServiceError) -> String {
+    use IngresoCorreoServiceError::AdentroPorOtraVia;
     use IngresoCorreoServiceError::{
         AccesoNegado, CedulaInvalida, CedulaVacia, GafeteNoDisponible, GafeteNoRegistrado,
         GafeteOcupado, IngresoActivo, MotivoVacio, NombreVacio, OperadorNoAutorizado,
@@ -486,6 +501,7 @@ pub fn mensaje_ingreso_correo(error: IngresoCorreoServiceError) -> String {
         AccesoNegado => MENSAJE_ACCESO_NEGADO.into(),
         CedulaInvalida => "La cédula debe tener sólo números, entre 9 y 13 dígitos".into(),
         NombreVacio => "El nombre es obligatorio".into(),
+        AdentroPorOtraVia(via) => mensaje_adentro_por_otra_via(via),
         MotivoVacio => "Indique el motivo de la visita".into(),
         IngresoActivo => "Esta persona ya tiene un ingreso por correo activo".into(),
         GafeteOcupado => "El gafete de visita ya está en uso".into(),
