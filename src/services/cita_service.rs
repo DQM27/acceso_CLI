@@ -140,7 +140,12 @@ where
                 ValidacionAsignacion::Asignable => {}
             }
 
-            if self.movimientos.buscar_activo_por_gafete(numero)?.is_some() {
+            // El mismo gafete físico de visita puede estar en manos de una
+            // visita o de un ingreso "por correo": hay que mirar las dos
+            // tablas (ver `gafete_en_uso_por_ingreso_correo`).
+            if self.movimientos.buscar_activo_por_gafete(numero)?.is_some()
+                || self.movimientos.gafete_en_uso_por_ingreso_correo(numero)?
+            {
                 return Err(CitaServiceError::GafeteOcupado);
             }
         }
@@ -455,6 +460,33 @@ mod tests {
 
         assert!(matches!(
             servicio.registrar_entrada("6-7890", Some(5), 1, Utc::now(), fecha("2026-08-12")),
+            Err(CitaServiceError::GafeteOcupado)
+        ));
+    }
+
+    #[test]
+    fn registrar_entrada_con_gafete_en_uso_por_un_ingreso_por_correo_falla() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-2345");
+        insertar_gafete_visita(&connection, 5);
+        // Alguien entró "por correo" con el gafete de visita 5 y sigue adentro.
+        connection
+            .execute(
+                "INSERT INTO registro_ingresos_correo (cedula, nombre, motivo, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid)
+                 VALUES ('111111111', 'Ana', 'Entrevista RH', 5,
+                    '2026-08-12T14:00:00Z', 1, 'Operador', 'uuid-correo-1')",
+                [],
+            )
+            .unwrap();
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
+
+        assert!(matches!(
+            servicio.registrar_entrada("1-2345", Some(5), 1, Utc::now(), fecha("2026-08-12")),
             Err(CitaServiceError::GafeteOcupado)
         ));
     }
