@@ -37,32 +37,35 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   ingresos por correo en los dos sentidos: local, en vivo y con un trigger
   en la nube; (3) un ingreso rechazado por chocar con el otro equipo de la
   misma unidad ahora avisa; (6) `admin-enviar-push` borra tokens muertos
-  por token y no por equipo.
+  por token y no por equipo. Segunda ronda, también resuelta: visitas ven
+  otras unidades (punto 4), gafete de visita único en la nube (punto 7), una
+  persona adentro por una sola vía (punto 5), lápidas en la caché de remotos
+  (punto 8) y `registrar_token_push` sin choques concurrentes (punto 9).
 
-- [ ] **Visitas: "¿ya está adentro en otra unidad?" sigue ciego por RLS --
-  hallazgo 2026-10-04.** `visitante_activo_en_otro_sitio` y
-  `visitantes_con_conflicto_activo` consultan `/rest/v1/movimientos_visita`
-  directo y siempre responden "libre" (mismo bug que se corrigió el
-  2026-10-03 para contratistas y proveedores). Hace falta una función
-  `security definer` como `ingreso_correo_activo` y un índice único de
-  cédula activa en `movimientos_visita`, verificando antes que no haya
-  duplicados abiertos en staging y producción.
+- [x] **Visitas: "¿ya está adentro en otra unidad?" sigue ciego por RLS --
+  hallazgo 2026-10-04, resuelto 2026-10-04.** `visitante_activo_en_otro_sitio`
+  y `visitantes_con_conflicto_activo` consultaban `/rest/v1/movimientos_visita`
+  directo y siempre respondían "libre". Ahora van por funciones `security
+  definer` y hay índice único de cédula activa (migración 20261004130000;
+  auditoría, punto 4).
 
-- [ ] **Decidir si una cédula puede estar adentro por dos vías a la vez --
-  hallazgo 2026-10-04.** Contratistas, proveedores e ingresos por correo
-  tienen índices de cédula activa separados: hoy alguien puede estar
-  adentro como contratista y también por correo. Si no debe pasar, hace
-  falta un control cruzado (trigger con candado por cédula, como el de
-  gafete de visita en `20261004120000`).
+- [x] **Decidir si una cédula puede estar adentro por dos vías a la vez --
+  hallazgo 2026-10-04, resuelto 2026-10-04: se bloquea.** Contratistas,
+  proveedores e ingresos por correo tenían índices de cédula activa
+  separados. Ahora hay control cruzado en las tres capas: local, en vivo y
+  un trigger con candado por cédula (migración 20261004150000; auditoría,
+  punto 5).
 
-- [ ] **Caché de remotos: un cierre manual puede "revivir" un instante --
-  hallazgo 2026-10-04.** `cerrar_ingreso_*_remoto` borra la fila de la
-  caché, pero una sincronización que leyó la nube justo antes la vuelve a
-  insertar hasta la siguiente pasada. Menor: se corrige sola.
+- [x] **Caché de remotos: un cierre manual puede "revivir" un instante --
+  hallazgo 2026-10-04, resuelto 2026-10-04.** `cerrar_*_remoto` borraba la
+  fila de la caché, pero una sincronización que leyó la nube justo antes la
+  volvía a insertar. Ahora el cierre deja una lápida local (migración local
+  56; auditoría, punto 8).
 
 - [ ] **Historial del panel web sin ingresos por correo ni de proveedores --
-  hallazgo 2026-10-04.** Sólo "Adentro ahora" los muestra; la vista del
-  historial (`panel_movimientos`) es sólo de contratistas.
+  hallazgo 2026-10-04. Función nueva, no bug.** Sólo "Adentro ahora" los
+  muestra; la vista del historial (`panel_movimientos`) es sólo de
+  contratistas.
 
 - [x] **El pipeline de release real (no sólo `cargo tauri dev`) publicaba
   builds sin cifrar de verdad, en silencio (hallazgo 2026-09-12, resuelto
