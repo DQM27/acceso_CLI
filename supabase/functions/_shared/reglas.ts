@@ -3,8 +3,8 @@
 // escritorio, teléfono y el panel web (ver docs/arquitectura/reglas-compartidas.md).
 //
 // El paquete lo genera scripts/generar-reglas-wasm.sh en ./reglas/; el .wasm
-// viaja en base64 porque el despliegue de funciones sólo admite texto. Se
-// carga una sola vez, al importar este módulo.
+// viaja comprimido (gzip) y en base64, porque el despliegue de funciones sólo
+// admite texto. Se carga una sola vez, al importar este módulo.
 
 import {
   admitePersonalRuta,
@@ -15,16 +15,21 @@ import {
   tiposIngresoSeleccionables,
   validarContratista as validarContratistaWasm,
 } from "./reglas/reglas.js";
-import { REGLAS_WASM_BASE64 } from "./reglas/reglas_wasm_base64.ts";
+import { REGLAS_WASM_GZIP_BASE64 } from "./reglas/reglas_wasm_base64.ts";
 
-function base64ABytes(base64: string): Uint8Array {
+function base64ABytes(base64: string): Uint8Array<ArrayBuffer> {
   const binario = atob(base64);
   const bytes = new Uint8Array(binario.length);
   for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
   return bytes;
 }
 
-initSync({ module: base64ABytes(REGLAS_WASM_BASE64) });
+async function descomprimir(gzip: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  const flujo = new Blob([gzip]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(flujo).arrayBuffer());
+}
+
+initSync({ module: await descomprimir(base64ABytes(REGLAS_WASM_GZIP_BASE64)) });
 
 export type TipoIngreso = "PRAIND" | "IN_HOUSE" | "POR_CORREO" | "SWAT";
 
