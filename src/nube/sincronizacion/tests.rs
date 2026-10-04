@@ -4469,3 +4469,128 @@ fn recibe_el_historial_de_ingresos_por_correo_y_omite_las_filas_ilegibles() {
         .unwrap();
     assert!(marca.is_some());
 }
+
+/// Ingreso por correo ya cerrado localmente con sus dos filas en la cola:
+/// el `crear` (id 1, con el estado/intentos/`actualizado_en` que se pidan) y
+/// el `cerrar` (id 2, recién encolado, sin intentos).
+fn conexion_con_apertura_y_cierre_en_cola(
+    estado_crear: &str,
+    intentos_crear: i64,
+    actualizado_crear: &str,
+) -> Connection {
+    let connection = conexion_con_ingreso_correo(Some("2026-01-01T09:00:00Z"));
+    connection.execute("DELETE FROM cola_salida", []).unwrap();
+    connection
+        .execute(
+            "INSERT INTO cola_salida (id, entidad, entidad_uuid, operacion, estado, intentos,
+                 creado_en, actualizado_en)
+             VALUES (1, 'ingreso_correo', 'uuid-correo', 'crear', ?1, ?2,
+                 '2026-01-01T08:00:00Z', ?3)",
+            params![estado_crear, intentos_crear, actualizado_crear],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO cola_salida (id, entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+             VALUES (2, 'ingreso_correo', 'uuid-correo', 'cerrar',
+                 '2026-01-01T09:00:00Z', '2026-01-01T09:00:00Z')",
+            [],
+        )
+        .unwrap();
+    connection
+}
+
+fn estado_e_intentos(connection: &Connection, id: i64) -> (String, i64) {
+    connection
+        .query_row(
+            "SELECT estado, intentos FROM cola_salida WHERE id = ?1",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap()
+}
+
+/// Carrera de la revisión del 2026-10-04: el `crear` falló una vez y espera
+/// su backoff (15 min desde "ahora"), el `cerrar` ya está listo. Antes el
+/// cierre salía solo, el `PATCH` no tocaba nada (204) y el `crear` posterior
+/// dejaba el ingreso abierto para siempre en la nube. Ahora el cierre ni
+/// siquiera se envía: queda pendiente, sin sumar intentos.
+#[test]
+fn el_cierre_no_sale_mientras_su_apertura_espera_el_reintento() {
+    let connection = conexion_con_apertura_y_cierre_en_cola(
+        "pendiente",
+        1,
+        &crate::tiempo::serializar_utc(chrono::Utc::now()),
+    );
+    // Sin respuestas: cualquier pedido a la red fallaría y sumaría un intento.
+    let (base_url, pedidos) = servidor_que_anota(Vec::new());
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen, ResumenDrenado::default());
+    assert!(pedidos.lock().unwrap().is_empty(), "no se mandó nada");
+    assert_eq!(
+        estado_e_intentos(&connection, 1),
+        ("pendiente".to_string(), 1)
+    );
+    assert_eq!(
+        estado_e_intentos(&connection, 2),
+        ("pendiente".to_string(), 0),
+        "el cierre espera intacto, sin gastar reintentos"
+    );
+}
+
+/// Si la apertura y el cierre están listos a la vez, salen en la misma
+/// pasada y en orden: primero el `POST` y después el `PATCH`.
+#[test]
+fn apertura_y_cierre_listos_salen_en_la_misma_pasada_y_en_orden() {
+    let connection = conexion_con_apertura_y_cierre_en_cola("pendiente", 0, "2026-01-01T08:00:00Z");
+    let (base_url, pedidos) = servidor_que_anota(vec![String::new(), String::new()]);
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.enviados, 2);
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert!(
+        pedidos[0].starts_with("POST /rest/v1/ingresos_correo "),
+        "{pedidos:?}"
+    );
+    assert!(
+        pedidos[1].starts_with("PATCH /rest/v1/ingresos_correo?id=eq.uuid-correo"),
+        "{pedidos:?}"
+    );
+    assert_eq!(estado_e_intentos(&connection, 2).0, "enviado");
+}
+
+/// Una apertura que la nube rechazó (`fallido`, por ejemplo por el índice
+/// único de cédula activa) no frena su cierre: el `PATCH` no toca nada y la
+/// fila sale de la cola en vez de quedar pendiente para siempre.
+#[test]
+fn el_cierre_sale_si_su_apertura_quedo_fallida() {
+    let connection = conexion_con_apertura_y_cierre_en_cola("fallido", 1, "2026-01-01T08:00:00Z");
+    let (base_url, pedidos) = servidor_que_anota(vec![String::new()]);
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.enviados, 1);
+    assert!(pedidos.lock().unwrap()[0].starts_with("PATCH "));
+    assert_eq!(estado_e_intentos(&connection, 2).0, "enviado");
+}
+
+#[test]
+fn solo_un_cierre_puede_esperar_a_su_apertura() {
+    let connection = conexion_con_apertura_y_cierre_en_cola("pendiente", 0, "2026-01-01T08:00:00Z");
+    let fila = |id, operacion: &str| super::cola::FilaCola {
+        id,
+        entidad: "ingreso_correo".to_string(),
+        entidad_uuid: "uuid-correo".to_string(),
+        operacion: operacion.to_string(),
+        intentos: 0,
+    };
+    assert!(super::cola::cierre_espera_su_apertura(&connection, &fila(2, "cerrar")).unwrap());
+    assert!(!super::cola::cierre_espera_su_apertura(&connection, &fila(1, "crear")).unwrap());
+    // Otro registro (otro uuid) no se frena por esta apertura.
+    let mut ajena = fila(2, "cerrar");
+    ajena.entidad_uuid = "otro-uuid".to_string();
+    assert!(!super::cola::cierre_espera_su_apertura(&connection, &ajena).unwrap());
+}
