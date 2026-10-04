@@ -483,19 +483,22 @@ segundo equipo.
 - **`mobile/rust-core`:** clippy y **130 tests**, 0 fallos. Bindings Kotlin
   regenerados y al día.
 - **Escritorio:** vitest y `tsc` de `desktop/` pasan. El crate de Tauri
-  (`desktop/src-tauri`) no se pudo compilar aquí porque faltan las
-  librerías GTK del sistema que pide `gdk-sys`. Sus cambios pasan
-  `rustfmt --check` y usan funciones ya exportadas por el núcleo. **Lo valida
-  la CI.**
-- **Android (Gradle):** no se pudo correr aquí. **Lo valida la CI.**
+  (`desktop/src-tauri`) es una app de Windows: en Linux no compila ni antes
+  ni después de estos cambios (`lib.rs`/`estado.rs` usan dependencias
+  sólo de Windows, como `zeroize`). Se verificó con el destino de Windows
+  (`cargo clippy --target x86_64-pc-windows-gnu --all-targets -D warnings`,
+  con MinGW): **sin errores ni avisos**.
+- **Android:** con el SDK instalado (plataforma y build-tools 36),
+  `./gradlew testDebugUnitTest` igual que la CI: **345 tests, 0 fallos**,
+  incluido el caso nuevo `VISITA` de `ConflictoGafeteTest`.
+- **Edge Functions:** con Deno 2.9.7, `deno check` de las 11 funciones sin
+  errores (incluida `admin-enviar-push`) y `deno lint` sin avisos, tras fijar
+  la versión mayor de los tipos del runtime.
 - **SQL:** se levantó un Postgres 16 local con las piezas propias de
   Supabase reemplazadas por equivalentes mínimos (`auth.jwt()`,
-  `realtime.send`, `vault`, `net.http_post`, roles) y se aplicaron **todas
-  las migraciones del repo en orden, incluidas las cinco nuevas**. Pasan
-  todos los tests de `supabase/tests/` menos `realtime_autorizacion.sql`,
-  que depende de la tabla real `realtime.messages` de Supabase (en el
-  reemplazo, `id` es de otro tipo). Por eso falla igual con o sin estos
-  cambios.
+  `realtime.messages`/`realtime.send`, `vault`, `net.http_post`, roles) y se
+  aplicaron **todas las migraciones del repo en orden, incluidas las cinco
+  nuevas**. Pasan **los 24 archivos de `supabase/tests/`**.
   - **Carreras reales probadas con dos sesiones:** gafete visita/correo,
     persona contratista/proveedor y token push.
   - Nota para quien repita esto: aplicar las migraciones desde cero exige
