@@ -4694,3 +4694,88 @@ fn persona_adentro_por_otra_via_pregunta_a_la_funcion_de_la_nube() {
     );
     servidor.join().unwrap();
 }
+
+const RESPUESTA_CORREO_REMOTO_ABIERTO: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+     [{\"id\":\"uuid-remoto\",\"cedula\":\"112345678\",\"nombre\":\"Ana Solano\",\
+     \"motivo\":\"Entrevista RH\",\"placa\":null,\"gafete_numero\":5,\
+     \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"usuario_entrada_nombre\":\"Op PC\",\
+     \"dispositivo_entrada_id\":\"otro-dispositivo\"}]";
+
+fn lapidas(connection: &Connection) -> Vec<String> {
+    let mut statement = connection
+        .prepare("SELECT uuid FROM remotos_cerrados_aca ORDER BY uuid")
+        .unwrap();
+    statement
+        .query_map([], |fila| fila.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
+/// Carrera de la revisión del 2026-10-04: quien opera cierra a mano un
+/// ingreso del otro equipo mientras una sincronización ya leyó la nube con
+/// ese ingreso todavía abierto. Antes, el reemplazo de la caché lo volvía a
+/// insertar y la persona reaparecía "adentro". Ahora el cierre deja una
+/// lápida y la recepción no lo vuelve a meter.
+#[test]
+fn un_ingreso_remoto_cerrado_aca_no_revive_con_una_lectura_vieja() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    // 1. Primera sincronización: el ingreso del otro equipo entra a la caché.
+    let base_url = servidor_de_una_respuesta(RESPUESTA_CORREO_REMOTO_ABIERTO);
+    recibir_ingresos_correo_abiertos(&connection, &contexto(&base_url)).unwrap();
+    // 2. Quien opera lo cierra a mano (la nube responde 204).
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+    );
+    cerrar_ingreso_correo_remoto(
+        &connection,
+        &contexto(&base_url),
+        "uuid-remoto",
+        "Guardia",
+        chrono::Utc::now(),
+    )
+    .unwrap();
+    assert_eq!(lapidas(&connection), vec!["uuid-remoto".to_string()]);
+
+    // 3. Una sincronización que leyó la nube ANTES del cierre trae el
+    //    ingreso todavía abierto: no vuelve a la caché.
+    let base_url = servidor_de_una_respuesta(RESPUESTA_CORREO_REMOTO_ABIERTO);
+    let recibidos = recibir_ingresos_correo_abiertos(&connection, &contexto(&base_url)).unwrap();
+    assert!(recibidos.is_empty(), "no debe revivir: {recibidos:?}");
+    let en_cache: i64 = connection
+        .query_row("SELECT COUNT(*) FROM ingresos_correo_remotos", [], |fila| {
+            fila.get(0)
+        })
+        .unwrap();
+    assert_eq!(en_cache, 0);
+    assert_eq!(lapidas(&connection), vec!["uuid-remoto".to_string()]);
+
+    // 4. Cuando la nube ya no lo devuelve abierto, la lápida se olvida.
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+    );
+    recibir_ingresos_correo_abiertos(&connection, &contexto(&base_url)).unwrap();
+    assert!(lapidas(&connection).is_empty());
+}
+
+/// Las lápidas se olvidan al día aunque la nube siga devolviendo el
+/// registro abierto (por ejemplo, si el cierre nunca llegó a aplicarse).
+#[test]
+fn una_lapida_de_mas_de_un_dia_se_olvida() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO remotos_cerrados_aca (uuid, tabla, cerrado_en)
+             VALUES ('uuid-remoto', 'ingresos_correo_remotos', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+    let base_url = servidor_de_una_respuesta(RESPUESTA_CORREO_REMOTO_ABIERTO);
+
+    let recibidos = recibir_ingresos_correo_abiertos(&connection, &contexto(&base_url)).unwrap();
+
+    assert_eq!(recibidos.len(), 1);
+    assert!(lapidas(&connection).is_empty());
+}

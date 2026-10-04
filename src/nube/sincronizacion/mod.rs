@@ -23,6 +23,7 @@ use super::cliente::NubeError;
 mod anticipados;
 mod catalogo;
 mod catalogo_rutas;
+mod cierres_remotos;
 mod citas;
 mod cola;
 mod conflictos;

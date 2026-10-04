@@ -420,6 +420,8 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              DROP TABLE registro_ingresos_correo;
              DROP TABLE ingresos_correo_remotos;
              DROP TABLE historial_ingresos_correo_sitio;
+             -- MIGRACION_56 (lápidas de cierres de remotos) también la crea.
+             DROP TABLE remotos_cerrados_aca;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo con MIGRACION_17/18, que crean `cola_salida` e
              -- `ingresos_remotos` desde cero -- ya existen por el
@@ -561,6 +563,8 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              DROP TABLE registro_ingresos_correo;
              DROP TABLE ingresos_correo_remotos;
              DROP TABLE historial_ingresos_correo_sitio;
+             -- MIGRACION_56 (lápidas de cierres de remotos) también la crea.
+             DROP TABLE remotos_cerrados_aca;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v10.
@@ -707,6 +711,8 @@ fn migracion_12_habilita_cambio_de_cedula() {
              DROP TABLE registro_ingresos_correo;
              DROP TABLE ingresos_correo_remotos;
              DROP TABLE historial_ingresos_correo_sitio;
+             -- MIGRACION_56 (lápidas de cierres de remotos) también la crea.
+             DROP TABLE remotos_cerrados_aca;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v11.
