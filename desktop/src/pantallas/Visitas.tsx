@@ -22,7 +22,14 @@ import {
   listarTodosLosCorreosActivos,
 } from "../api/correo";
 import { fechaHaceMeses, fechaLocalYMD, fechaYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
-import { TEXTO_ORIGEN, unirAdentro, unirHistorial, visitasEsperadasHoy } from "./Visitas.logica";
+import {
+  TEXTO_ORIGEN,
+  textoMedioDePlaca,
+  textoMedioVisita,
+  unirAdentro,
+  unirHistorial,
+  visitasEsperadasHoy,
+} from "./Visitas.logica";
 import type { FilaEsperada, FilaVisitaAdentro, FilaVisitaHistorial } from "./Visitas.logica";
 
 const NuevaVisitaModal = lazy(() => import("./NuevaVisitaModal"));
@@ -168,7 +175,14 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
       { field: "cedula", headerName: "Cédula", flex: 1.1, minWidth: 110, cellStyle: { textAlign: "left" } },
       { field: "empresa", headerName: "Empresa", flex: 1.1, minWidth: 120, valueFormatter: (p) => guion(p.value) },
-      { field: "placa_vehiculo", headerName: "Placa", flex: 0.8, minWidth: 90, valueFormatter: (p) => guion(p.value) },
+      {
+        colId: "medio",
+        headerName: "Medio de ingreso",
+        flex: 1,
+        minWidth: 130,
+        // Lo que escribió el anfitrión en la cita.
+        valueGetter: (p) => (p.data ? textoMedioDePlaca(p.data.placa_vehiculo) : ""),
+      },
       { field: "anfitrion_nombre", headerName: "Anfitrión", flex: 1.2, minWidth: 130 },
       { field: "motivo", headerName: "Motivo", flex: 1.3, minWidth: 130, valueFormatter: (p) => guion(p.value) },
       {
@@ -227,7 +241,13 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       { field: "empresa", headerName: "Empresa", flex: 1.1, minWidth: 120, valueFormatter: (p) => guion(p.value) },
       { field: "anfitrion", headerName: "Anfitrión", flex: 1.1, minWidth: 120, valueFormatter: (p) => guion(p.value) },
       { field: "motivo", headerName: "Motivo", flex: 1.4, minWidth: 140, valueFormatter: (p) => guion(p.value) },
-      { field: "placa", headerName: "Placa", flex: 0.8, minWidth: 90, valueFormatter: (p) => guion(p.value) },
+      {
+        colId: "medio",
+        headerName: "Medio de ingreso",
+        flex: 1,
+        minWidth: 130,
+        valueGetter: (p) => (p.data ? guion(textoMedioVisita(p.data)) : ""),
+      },
       {
         field: "gafete_numero",
         type: "numero",
@@ -285,7 +305,13 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       { field: "empresa", headerName: "Empresa", flex: 1.1, minWidth: 120, valueFormatter: (p) => guion(p.value) },
       { field: "anfitrion", headerName: "Anfitrión", flex: 1.1, minWidth: 120, valueFormatter: (p) => guion(p.value) },
       { field: "motivo", headerName: "Motivo", flex: 1.4, minWidth: 140, valueFormatter: (p) => guion(p.value) },
-      { field: "placa", headerName: "Placa", flex: 0.8, minWidth: 90, valueFormatter: (p) => guion(p.value) },
+      {
+        colId: "medio",
+        headerName: "Medio de ingreso",
+        flex: 1,
+        minWidth: 130,
+        valueGetter: (p) => (p.data ? guion(textoMedioVisita(p.data)) : ""),
+      },
       {
         field: "gafete_numero",
         type: "numero",

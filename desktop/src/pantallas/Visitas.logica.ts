@@ -4,6 +4,7 @@ import type {
   MovimientoVisitaActivoResumen,
 } from "../api";
 import type { FilaCorreoActiva, HistorialIngresoCorreoRemoto } from "../api/correo";
+import { textoMedioConPlaca } from "../api/ingresos";
 
 /**
  * Visitas y ingresos "por correo" en una sola pantalla (pedido del dueño
@@ -194,4 +195,19 @@ export function visitasEsperadasHoy(
       (a.hora_estimada ?? "99").localeCompare(b.hora_estimada ?? "99") ||
       a.nombre.localeCompare(b.nombre, "es"),
   );
+}
+
+/** Medio de ingreso, como en contratistas: la placa si vino en vehículo,
+ * "CAMINANDO" si no hay placa. Las visitas agendadas todavía no guardan el
+ * medio al entrar (sólo la cita trae la placa que escribió el anfitrión):
+ * para esas, `null` se muestra como "—". */
+export function textoMedioVisita(fila: { origen: OrigenVisita; placa: string | null }): string | null {
+  if (fila.origen === "AGENDADA") return null;
+  return textoMedioDePlaca(fila.placa);
+}
+
+/** "Sin placa = caminando", la misma regla del formulario. */
+export function textoMedioDePlaca(placa: string | null): string {
+  const conPlaca = placa?.trim() ? placa.trim() : null;
+  return textoMedioConPlaca(conPlaca ? "Vehiculo" : "Caminando", conPlaca);
 }

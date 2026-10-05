@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgendaVisitaResumen, MovimientoVisitaActivoResumen } from "../api";
 import type { FilaCorreoActiva, HistorialIngresoCorreoRemoto } from "../api/correo";
-import { unirAdentro, unirHistorial, visitasEsperadasHoy } from "./Visitas.logica";
+import { textoMedioDePlaca, textoMedioVisita, unirAdentro, unirHistorial, visitasEsperadasHoy } from "./Visitas.logica";
 
 function cita(cambios: Partial<AgendaVisitaResumen> = {}): AgendaVisitaResumen {
   return {
@@ -134,5 +134,19 @@ describe("unirAdentro y unirHistorial", () => {
     );
     expect(filas.map((fila) => fila.origen)).toEqual(["AGENDADA", "POR_CORREO"]);
     expect(filas[1]?.fecha_hora_salida).toBe("2026-10-04T16:00:00Z");
+  });
+});
+
+describe("medio de ingreso", () => {
+  it("sin placa es caminando; con placa, la placa (como en contratistas)", () => {
+    expect(textoMedioDePlaca(null)).toBe("CAMINANDO");
+    expect(textoMedioDePlaca("  ")).toBe("CAMINANDO");
+    expect(textoMedioDePlaca("BCD123")).toBe("BCD123");
+  });
+
+  it("las agendadas todavía no guardan el medio al entrar", () => {
+    expect(textoMedioVisita({ origen: "AGENDADA", placa: null })).toBeNull();
+    expect(textoMedioVisita({ origen: "POR_CORREO", placa: null })).toBe("CAMINANDO");
+    expect(textoMedioVisita({ origen: "POR_CORREO", placa: "BCD123" })).toBe("BCD123");
   });
 });

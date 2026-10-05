@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { listarTodosLosCorreosActivos, registrarIngresoCorreo } from "../api/correo";
+import type { MedioIngreso } from "../api";
 import { textoGafete, validarNumeroGafete } from "../busqueda";
 
 /**
  * Visita autorizada por correo: el guarda la registra a mano porque quien
  * la autoriza mandó un correo en vez de agendarla en la web. Lo usa
  * `NuevaVisitaModal` en el modo "Por correo" (antes era la sección aparte
- * "Por correo"). Gafete de VISITA obligatorio; placa vacía = llegó a pie.
+ * "Por correo"). Gafete de VISITA obligatorio. Medio de ingreso igual que el
+ * de contratistas: "Caminando" o "Vehículo" con su placa.
  * Las reglas las valida el núcleo (`registrar_ingreso_correo_verificado`);
  * acá sólo se pide lo mínimo para no mandar un formulario incompleto. No se
  * cierra al registrar, igual que el check-in: queda listo para la próxima.
@@ -22,6 +24,7 @@ export function FormularioPorCorreo({
   const [cedula, setCedula] = useState(cedulaInicial);
   const [nombre, setNombre] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [medio, setMedio] = useState<MedioIngreso>("Caminando");
   const [placa, setPlaca] = useState("");
   const [gafeteTexto, setGafeteTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export function FormularioPorCorreo({
     if (!cedula.trim()) return setError("La cédula es obligatoria");
     if (!nombre.trim()) return setError("El nombre es obligatorio");
     if (!motivo.trim()) return setError("Indique a quién visita y quién lo autorizó por correo");
+    if (medio === "Vehiculo" && !placa.trim()) return setError("Escriba la placa del vehículo");
     const gafete = validarNumeroGafete(gafeteTexto);
     if (!gafete.valido) return setError(gafete.mensaje);
     setError(null);
@@ -51,13 +55,15 @@ export function FormularioPorCorreo({
         cedula: cedula.trim(),
         nombre: nombre.trim(),
         motivo: motivo.trim(),
-        placa: placa.trim() || null,
+        // Sin placa = caminando (así lo guarda la nube).
+        placa: medio === "Vehiculo" ? placa.trim() : null,
         gafete_numero: gafete.numero,
       });
       setMensaje(`✓ Entrada registrada — ${nombre.trim()}`);
       setCedula("");
       setNombre("");
       setMotivo("");
+      setMedio("Caminando");
       setPlaca("");
       setGafeteTexto("");
       onRegistrado();
@@ -122,16 +128,39 @@ export function FormularioPorCorreo({
         />
       </label>
 
+      <div className="campo">
+        Medio de ingreso
+        <div style={{ display: "flex", gap: "0.75rem" }}>
+          {(["Caminando", "Vehiculo"] as const).map((opcion) => (
+            <label key={opcion} style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}>
+              <input
+                type="radio"
+                name="medio-correo"
+                checked={medio === opcion}
+                onChange={() => {
+                  setMedio(opcion);
+                  if (opcion === "Caminando") setPlaca("");
+                }}
+              />
+              {opcion === "Caminando" ? "Caminando" : "Vehículo"}
+            </label>
+          ))}
+        </div>
+      </div>
+
       <div style={{ display: "flex", gap: "0.75rem" }}>
-        <label className="campo" style={{ flex: 1 }}>
-          Placa (opcional)
-          <input
-            value={placa}
-            onChange={(evento) => setPlaca(evento.target.value.toUpperCase())}
-            autoComplete="off"
-            placeholder="Vacía = caminando"
-          />
-        </label>
+        {medio === "Vehiculo" && (
+          <label className="campo" style={{ flex: 1 }}>
+            Placa del vehículo
+            <input
+              value={placa}
+              onChange={(evento) => setPlaca(evento.target.value.toUpperCase())}
+              autoFocus
+              autoComplete="off"
+              placeholder="Placa del vehículo"
+            />
+          </label>
+        )}
         <label className="campo" style={{ flex: 1 }}>
           N.° de gafete de visita
           <input

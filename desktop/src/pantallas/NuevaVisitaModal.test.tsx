@@ -60,3 +60,19 @@ describe("NuevaVisitaModal", () => {
     expect(invoke).not.toHaveBeenCalledWith("registrar_ingreso_correo", expect.anything());
   });
 });
+
+describe("FormularioPorCorreo: medio de ingreso", () => {
+  it("caminando no pide placa; vehículo la exige", async () => {
+    nucleo({ mensaje: "x", informativo: false, alternativa_por_correo: false });
+    render(<NuevaVisitaModal onRegistrado={() => {}} onCerrar={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Autorizada por correo" }));
+
+    expect(screen.queryByLabelText("Placa del vehículo")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Cédula"), { target: { value: "200" } });
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "LUIS" } });
+    fireEvent.change(screen.getByLabelText("A quién visita y quién lo autorizó"), { target: { value: "RH" } });
+    fireEvent.click(screen.getByLabelText("Vehículo"));
+    fireEvent.click(screen.getByRole("button", { name: "Registrar entrada" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Escriba la placa del vehículo"));
+  });
+});
