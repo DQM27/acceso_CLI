@@ -28,7 +28,7 @@ choques: main no tiene ningún commit que la rama no tenga. No hay versiones de
 migración repetidas en el repo. (`prueba/radix-visitas` sale de
 `feat/web-visitas` y es aparte: no forma parte de este PR.)
 
-### 0.2 Migraciones de nube pendientes en producción (10, en este orden)
+### 0.2 Migraciones de nube pendientes en producción (11, en este orden)
 
 Producción tiene las 104 primeras del repo; le faltan exactamente estas. En
 staging se comparan por **nombre** (staging anota la hora de aplicación, no la
@@ -45,7 +45,8 @@ versión del archivo).
 | 7 | `20261004170000_alta_de_contratistas_por_edge_function.sql` | **A mano**, no figura. Verificado: `panel_crear_contratista` ya no existe | **Después** de desplegar la Edge Function `admin-crear-contratista` y publicar el panel nuevo: borra la función SQL que usa el panel viejo (ver 2.6) |
 | 8 | `20261005120000_usuarios_nombre_obligatorio.sql` | En el historial | Cuando sea (ver 2.7) |
 | 9 | `20261005130000_visitas_web_anfitrion.sql` | **En dos partes:** las funciones en el historial como `visitas_web_anfitrion_funciones`; los 7 `drop policy`, a mano. Verificado: 4 funciones nuevas y 0 políticas de escritura directa del anfitrión | Las funciones, cuando sea; los `drop policy`, **después** de publicar la web de visitas nueva (ver 2.8). Si se aplica el archivo entero, tiene que ser junto con la web |
-| 10 | `20261005140000_movimientos_visita_placa.sql` | En el historial | **Antes** de la app de escritorio nueva (ver 2.9) |
+| 10 | `20261005133000_guardar_cita_reglas_del_nucleo.sql` | En el historial | Después de la 9 (reemplaza `guardar_cita`, que crea la 9). No rompe nada: la web nueva ya valida igual. Antes, la consulta de sólo lectura de 2.8 |
+| 11 | `20261005140000_movimientos_visita_placa.sql` | En el historial | **Antes** de la app de escritorio nueva (ver 2.9) |
 
 Las tres "a mano" (6, 7 y la segunda parte de la 9) existen en staging aunque
 su historial no las nombre. Para producción conviene aplicarlas con la
