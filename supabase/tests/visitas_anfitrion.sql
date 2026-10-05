@@ -47,18 +47,63 @@ begin
     perform public.crear_cita_anfitrion(
       gen_random_uuid(), (now() at time zone 'America/Costa_Rica')::date, (now() at time zone 'America/Costa_Rica')::date,
       null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[],
-      '[{"cedula":"108470293","nombre":"A"},{"cedula":"1-0847-0293","nombre":"B"}]'::jsonb, null);
+      '[{"cedula":"108470293","nombre":"Ana"},{"cedula":"1-0847-0293","nombre":"Bea"}]'::jsonb, null);
     raise exception 'aceptó la misma cédula dos veces';
   exception when raise_exception then
     get stacked diagnostics v_mensaje = message_text;
     if v_mensaje not like 'Cédula duplicada%' then raise; end if;
   end;
 
+  -- Documento con las reglas del núcleo (migración
+  -- 20261005133000_guardar_cita_reglas_del_nucleo): lo que la portería no
+  -- reconocería no se agenda.
+  declare
+    v_doc text;
+  begin
+    foreach v_doc in array array[repeat('A', 21), 'AB', '12#45', '   '] loop
+      begin
+        perform public.crear_cita_anfitrion(
+          gen_random_uuid(), (now() at time zone 'America/Costa_Rica')::date, (now() at time zone 'America/Costa_Rica')::date,
+          null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[],
+          jsonb_build_array(jsonb_build_object('cedula', v_doc, 'nombre', 'Ana Prueba')), null);
+        raise exception 'aceptó el documento %', v_doc;
+      exception when raise_exception then
+        get stacked diagnostics v_mensaje = message_text;
+        if v_mensaje not like 'Documento de visitante inválido%' then raise; end if;
+      end;
+    end loop;
+  end;
+  -- Un nombre de una letra: rechazado.
+  begin
+    perform public.crear_cita_anfitrion(
+      gen_random_uuid(), (now() at time zone 'America/Costa_Rica')::date, (now() at time zone 'America/Costa_Rica')::date,
+      null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[],
+      '[{"cedula":"400000004","nombre":" A "}]'::jsonb, null);
+    raise exception 'aceptó un nombre de una letra';
+  exception when raise_exception then
+    get stacked diagnostics v_mensaje = message_text;
+    if v_mensaje <> 'Nombre de visitante inválido' then raise; end if;
+  end;
+  -- 20 caracteres sí; nombre con espacios colapsados y placa en mayúsculas.
+  declare
+    v_otra uuid := gen_random_uuid();
+    v_fila record;
+  begin
+    perform public.crear_cita_anfitrion(
+      v_otra, (now() at time zone 'America/Costa_Rica')::date, (now() at time zone 'America/Costa_Rica')::date,
+      null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[],
+      jsonb_build_array(jsonb_build_object('cedula', repeat('b', 20), 'nombre', '  Ana   María  Solís ', 'placa_vehiculo', ' abc123 ')), null);
+    select cedula, nombre, placa_vehiculo into v_fila from public.cita_visitantes where cita_id = v_otra;
+    if v_fila.cedula <> repeat('B', 20) or v_fila.nombre <> 'Ana María Solís' or v_fila.placa_vehiculo <> 'ABC123' then
+      raise exception 'no normalizó como el núcleo: %', row_to_json(v_fila);
+    end if;
+  end;
+
   -- Fecha pasada: rechazada.
   begin
     perform public.crear_cita_anfitrion(
       gen_random_uuid(), (now() at time zone 'America/Costa_Rica')::date - 1, (now() at time zone 'America/Costa_Rica')::date,
-      null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[], '[{"cedula":"1","nombre":"A"}]'::jsonb, null);
+      null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[], '[{"cedula":"100000001","nombre":"Ana Prueba"}]'::jsonb, null);
     raise exception 'aceptó una fecha pasada';
   exception when raise_exception then
     get stacked diagnostics v_mensaje = message_text;
@@ -119,7 +164,7 @@ begin
   begin
     perform public.editar_cita_anfitrion(
       v_cita, gen_random_uuid(), (now() at time zone 'America/Costa_Rica')::date, (now() at time zone 'America/Costa_Rica')::date,
-      null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[], '[{"cedula":"3","nombre":"X"}]'::jsonb, null);
+      null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[], '[{"cedula":"300000003","nombre":"Xavier Ruiz"}]'::jsonb, null);
     raise exception 'editó una cita cancelada';
   exception when raise_exception then null;
   end;
@@ -149,7 +194,7 @@ begin
   begin
     perform public.editar_cita_anfitrion(
       v_editada, gen_random_uuid(), (now() at time zone 'America/Costa_Rica')::date, (now() at time zone 'America/Costa_Rica')::date,
-      null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[], '[{"cedula":"3","nombre":"X"}]'::jsonb, null);
+      null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[], '[{"cedula":"300000003","nombre":"Xavier Ruiz"}]'::jsonb, null);
     raise exception 'editó una cita con alguien adentro';
   exception when raise_exception then null;
   end;
@@ -186,7 +231,7 @@ do $$
 begin
   perform public.crear_cita_anfitrion(
     gen_random_uuid(), (now() at time zone 'America/Costa_Rica')::date, (now() at time zone 'America/Costa_Rica')::date,
-    null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[], '[{"cedula":"1","nombre":"A"}]'::jsonb, null);
+    null, array['aaaaaaaa-0000-0000-0000-0000000000b1']::uuid[], '[{"cedula":"100000001","nombre":"Ana Prueba"}]'::jsonb, null);
   raise exception 'un anfitrión inactivo agendó';
 exception when insufficient_privilege then null;
 end $$;

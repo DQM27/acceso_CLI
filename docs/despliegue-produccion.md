@@ -343,8 +343,28 @@ Las funciones solas no rompen nada (la web vieja sigue funcionando); los
 `docs/arquitectura/reglas-compartidas.md`). Al publicarla, su `_headers` ya
 trae `'wasm-unsafe-eval'` en `script-src`; sin eso el navegador bloquea el
 paquete y el botón "Agendar" queda deshabilitado con el aviso de recargar.
-No hace falta migración para esto; el límite de 20 caracteres del documento
-en la base va aparte.
+El WebAssembly no necesita migración.
+
+**La base con las mismas reglas:** migración
+`20261005133000_guardar_cita_reglas_del_nucleo.sql`. `private.guardar_cita`
+deja de guardar "como vino" un documento que no se puede normalizar: exige
+la forma única de `normalizar_cedula`, de 3 a 20 caracteres (antes, hasta 30;
+uno de 21 a 30 se agendaba y la portería nunca lo reconocía). Además colapsa
+los espacios del nombre (mínimo 2 caracteres) y pasa la placa a mayúsculas.
+Sólo afecta lo que se guarde de ahí en adelante.
+
+| Estado en staging | |
+|---|---|
+| Aplicada el 2026-10-05 (nombre `guardar_cita_reglas_del_nucleo`) | Antes de aplicarla: 3 visitantes en `cita_visitantes`, ninguno fuera de la regla. Verificado en un bloque que se deshizo: 21 caracteres, `AB` y `12#45` → "Documento de visitante inválido…"; `01-0847-0293` / `  Ana   María ` / ` abc123 ` → `108470293` / `Ana María` / `ABC123`. Batería `supabase/tests/visitas_anfitrion.sql` en verde (con la función vieja falla en el caso de 21 caracteres) |
+
+**Antes de aplicarla en producción** (sólo lectura, con autorización):
+```sql
+select count(*) filter (where public.normalizar_cedula(cedula) is null or length(cedula) < 3) as fuera_de_regla
+from public.cita_visitantes;
+```
+Si da más de 0, esas citas ya no coinciden en la portería; se revisan a mano,
+pero no impiden aplicar la migración (no toca filas existentes). Va después de
+`20261005130000_visitas_web_anfitrion.sql`, que crea la función.
 
 ### 2.9 Escritorio: visitas unificadas y medio de ingreso (staging, 2026-10-05)
 
