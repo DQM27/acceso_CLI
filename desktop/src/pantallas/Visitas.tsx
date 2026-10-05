@@ -249,7 +249,6 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       <Suspense fallback={null}>
         {modalAbierto && (
           <VisitaCheckInModal
-            visitasActivas={filasActivas}
             onRegistrado={() => recargarActivas()}
             onCerrar={() => setModalAbierto(false)}
           />

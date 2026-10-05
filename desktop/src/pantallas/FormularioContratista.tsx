@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
-import { actualizarContratista, crearContratista, reglasFormularioContratista } from "../api";
+import {
+  actualizarContratista,
+  crearContratista,
+  reglasFormularioContratista,
+  tiposIngresoSeleccionables,
+} from "../api";
 import type {
   ContratistaResumen,
   DatosContratista,
@@ -11,7 +16,7 @@ import type {
   TipoIngreso,
 } from "../api";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
-import { TIPOS_ELEGIBLES, esquema } from "./FormularioContratista.logica";
+import { esquema } from "./FormularioContratista.logica";
 
 interface ValoresFormulario {
   cedula: string;
@@ -64,6 +69,25 @@ export default function FormularioContratista({
           tiene_acceso: true,
         },
   });
+
+  // Los tipos que se pueden elegir los decide el núcleo. El selector se
+  // monta recién cuando llegan, así toma el valor del formulario (al editar,
+  // el tipo que ya tenía) en vez del primero de la lista.
+  const [tiposElegibles, setTiposElegibles] = useState<TipoIngreso[] | null>(null);
+  const [errorTipos, setErrorTipos] = useState<string | null>(null);
+  useEffect(() => {
+    let vigente = true;
+    tiposIngresoSeleccionables()
+      .then((tipos) => {
+        if (vigente) setTiposElegibles(tipos);
+      })
+      .catch((error) => {
+        if (vigente) setErrorTipos(String(error));
+      });
+    return () => {
+      vigente = false;
+    };
+  }, []);
 
   const [esPersonalRuta, tipoIngreso, fechaPraind] = useWatch({
     control,
@@ -187,13 +211,20 @@ export default function FormularioContratista({
 
         <label className="campo">
           Tipo de ingreso
-          <select {...register("tipo_ingreso")}>
-            {TIPOS_ELEGIBLES.map((tipo) => (
-              <option key={tipo} value={tipo}>
-                {tipo}
-              </option>
-            ))}
-          </select>
+          {tiposElegibles ? (
+            <select {...register("tipo_ingreso")}>
+              {tiposElegibles.map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {tipo}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select disabled aria-busy={!errorTipos}>
+              <option>{errorTipos ? "No se pudieron cargar los tipos" : "Cargando…"}</option>
+            </select>
+          )}
+          {errorTipos && <span style={{ color: "var(--error)" }}>{errorTipos}</span>}
         </label>
 
         {reglas.admite_personal_ruta && (

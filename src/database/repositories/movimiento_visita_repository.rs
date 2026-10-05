@@ -25,6 +25,15 @@ pub trait MovimientoVisitaRepository {
         cita_visitante_id: i64,
     ) -> Result<Option<MovimientoVisita>, DatabaseError>;
 
+    /// El movimiento abierto de esta cédula, sin importar con qué cita o
+    /// registro de visitante entró: una persona con dos citas sigue siendo
+    /// una sola persona. Compara la cédula en forma única
+    /// (`NORMALIZAR_CEDULA`), así "1-0847-0293" y "108470293" son la misma.
+    fn buscar_activo_por_cedula(
+        &self,
+        cedula: &str,
+    ) -> Result<Option<MovimientoVisita>, DatabaseError>;
+
     /// Mismo motivo que `RegistroIngresoRepository::buscar_ingreso_activo_por_gafete`:
     /// evitar que un gafete quede asignado a dos movimientos abiertos a la
     /// vez -- acá el `CHECK` ya lo impide (`idx_movimientos_visita_gafete_activo`),
@@ -179,6 +188,22 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
              ORDER BY fecha_hora_entrada DESC LIMIT 1"
         ))?;
         match statement.query_row(params![cita_visitante_id], convertir_fila) {
+            Ok(movimiento) => Ok(Some(movimiento)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(DatabaseError::from(error)),
+        }
+    }
+
+    fn buscar_activo_por_cedula(
+        &self,
+        cedula: &str,
+    ) -> Result<Option<MovimientoVisita>, DatabaseError> {
+        let mut statement = self.connection.prepare(&format!(
+            "{SELECT_MOVIMIENTO} WHERE NORMALIZAR_CEDULA(visitante_cedula) = NORMALIZAR_CEDULA(?1)
+               AND fecha_hora_salida IS NULL
+             ORDER BY fecha_hora_entrada DESC LIMIT 1"
+        ))?;
+        match statement.query_row(params![cedula], convertir_fila) {
             Ok(movimiento) => Ok(Some(movimiento)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(error) => Err(DatabaseError::from(error)),

@@ -76,6 +76,12 @@ export interface ReglasFormularioContratista {
   aviso_praind: string | null;
 }
 
+/** Tipos que se pueden elegir para un contratista, en orden: los decide el
+ * núcleo (sin "Por correo", retirado). */
+export function tiposIngresoSeleccionables(): Promise<TipoIngreso[]> {
+  return invoke("tipos_ingreso_seleccionables");
+}
+
 export function reglasFormularioContratista(datos: {
   tipo_ingreso: TipoIngreso;
   es_personal_ruta: boolean;

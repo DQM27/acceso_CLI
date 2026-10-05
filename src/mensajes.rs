@@ -189,7 +189,11 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
         SinCitaVigente(MotivoDenegacionVisita::FueraDeVigencia) => {
             "Esta visita no está vigente hoy".into()
         }
-        VisitanteYaEnSitio => "Este visitante ya tiene un ingreso activo".into(),
+        VisitanteYaEnSitio { nombre } => {
+            format!(
+                "{nombre} ya tiene un ingreso activo — registre la salida antes de volver a entrar"
+            )
+        }
         GafeteOcupado => "El gafete ya está en uso por otra visita".into(),
         GafeteNoRegistrado => "El número de gafete no existe en el catálogo".into(),
         GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),

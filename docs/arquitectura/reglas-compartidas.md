@@ -130,17 +130,27 @@ a producción sólo después de probarlo ahí.
 - **Orden de los errores:** las reglas de criterio se revisan antes que la
   empresa. Si fallan las dos cosas, se avisa primero el problema de los datos.
 
+## Escritorio sin copias de reglas (2026-10-05)
+
+La pantalla de escritorio (React) ya no repite reglas: todo lo pregunta al
+núcleo.
+- **Tipos para elegir:** comando `tipos_ingreso_seleccionables` (núcleo,
+  `tipo_ingreso_seleccionable`). Antes la pantalla sacaba "Por correo" a mano
+  (`TIPOS_ELEGIBLES`).
+- **"¿Ya está adentro?" en visitas:** lo decide `CitaService::verificar_check_in`
+  al verificar la cédula, comparándola en forma única (`NORMALIZAR_CEDULA`) y
+  sin importar con qué cita entró. El error trae el nombre
+  (`VisitanteYaEnSitio { nombre }`), así el mensaje es el mismo que mostraba la
+  pantalla. Antes la pantalla lo revisaba con su propia lista (`estaYaAdentro`)
+  y el núcleo recién al guardar. El teléfono usa el mismo núcleo, así que
+  también avisa al verificar.
+
 ## Siguientes etapas
 
 - **Usuarios y dispositivos:** llevar a `reglas/` la parte de criterio (cédula,
   nombre, rol válido, etiqueta y tipo de equipo) y que sus Edge Functions
   (`admin-create-usuario`, `admin-provision-device`) la usen. La autoridad
   (quién puede) sigue en el servidor.
-- **Escritorio:** su frontend React ya le pregunta al núcleo qué mostrar
-  (comando `reglas_formulario_contratista`), pero le quedan dos restos en
-  TypeScript: `TIPOS_ELEGIBLES` (la lista de tipos del selector, sin "Por
-  correo") y `estaYaAdentro` (aviso previo al check-in; el núcleo lo vuelve a
-  revisar al registrar). Pueden pasar a un comando del núcleo.
 - **Chequeos de visitas contra la nube:** las verificaciones locales del
   check-in ya están en el núcleo (`application/citas.rs`, `CitaService`). Lo
   que queda en `desktop/src-tauri/src/comandos/citas.rs` son dos chequeos de

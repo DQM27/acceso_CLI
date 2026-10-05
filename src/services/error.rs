@@ -211,11 +211,12 @@ pub enum CitaServiceError {
     /// venció").
     #[error("No hay ninguna visita vigente para esta cédula: {0:?}")]
     SinCitaVigente(MotivoDenegacionVisita),
-    /// Este visitante ya tiene un movimiento abierto -- mismo criterio que
-    /// `RegistroIngresoServiceError::IngresoActivo`, no se puede entrar dos
-    /// veces sin salir primero.
-    #[error("Este visitante ya tiene un movimiento activo")]
-    VisitanteYaEnSitio,
+    /// Esta cédula ya tiene un movimiento de visita abierto -- mismo criterio
+    /// que `RegistroIngresoServiceError::IngresoActivo`, no se puede entrar
+    /// dos veces sin salir primero. Lleva el nombre del visitante para el
+    /// mensaje.
+    #[error("Este visitante ya tiene un movimiento activo: {nombre}")]
+    VisitanteYaEnSitio { nombre: String },
     /// El gafete ya está asignado a otro movimiento de visita abierto --
     /// mismo criterio que `RegistroIngresoServiceError::GafeteOcupado`.
     #[error("El gafete ya está asignado a otra visita")]

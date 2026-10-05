@@ -80,7 +80,22 @@ where
         let mut ultimo_motivo = None;
         for (cita, visitante) in candidatas {
             match verificar_cita(&cita, hoy) {
-                ResultadoVisita::Permitido => return Ok((cita, visitante)),
+                ResultadoVisita::Permitido => {
+                    // Quien ya está adentro no entra otra vez sin salir. Se
+                    // revisa acá, y no sólo al guardar, para que la pantalla
+                    // lo avise apenas se verifica la cédula, con la regla
+                    // del núcleo y no con una copia propia.
+                    if self
+                        .movimientos
+                        .buscar_activo_por_cedula(cedula.as_str())?
+                        .is_some()
+                    {
+                        return Err(CitaServiceError::VisitanteYaEnSitio {
+                            nombre: visitante.nombre,
+                        });
+                    }
+                    return Ok((cita, visitante));
+                }
                 ResultadoVisita::Denegado(motivo) => ultimo_motivo = Some(motivo),
             }
         }
@@ -118,15 +133,9 @@ where
         fecha_hora_entrada: DateTime<Utc>,
         hoy: NaiveDate,
     ) -> Result<i64, CitaServiceError> {
+        // `verificar_check_in` también frena a quien ya está adentro
+        // (`VisitanteYaEnSitio`), por cédula.
         let (cita, visitante) = self.verificar_check_in(cedula, hoy)?;
-
-        if self
-            .movimientos
-            .buscar_activo_por_visitante(visitante.id)?
-            .is_some()
-        {
-            return Err(CitaServiceError::VisitanteYaEnSitio);
-        }
 
         if let Some(numero) = gafete_numero {
             let gafete_encontrado = self.gafetes.buscar_por_numero(numero, TipoGafete::Visita)?;
@@ -439,8 +448,78 @@ mod tests {
 
         assert!(matches!(
             servicio.registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12")),
-            Err(CitaServiceError::VisitanteYaEnSitio)
+            Err(CitaServiceError::VisitanteYaEnSitio { .. })
         ));
+    }
+
+    #[test]
+    fn verificar_avisa_que_ya_esta_adentro_con_su_nombre() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-2345");
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
+        assert!(
+            servicio
+                .verificar_check_in("1-2345", fecha("2026-08-12"))
+                .is_ok()
+        );
+        servicio
+            .registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12"))
+            .unwrap();
+
+        match servicio.verificar_check_in("1-2345", fecha("2026-08-12")) {
+            Err(CitaServiceError::VisitanteYaEnSitio { nombre }) => assert_eq!(nombre, "Visitante"),
+            otro => panic!("debía avisar que ya está adentro, fue {otro:?}"),
+        }
+    }
+
+    #[test]
+    fn la_misma_persona_con_dos_citas_no_entra_dos_veces() {
+        // Dos citas vigentes, dos registros de visitante distintos, la misma
+        // cédula escrita de dos formas: sigue siendo una sola persona.
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_cita(&connection, 2, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "108470293");
+        insertar_visitante(&connection, 2, 2, "1-0847-0293");
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
+        servicio
+            .registrar_entrada("108470293", None, 1, Utc::now(), fecha("2026-08-12"))
+            .unwrap();
+
+        assert!(matches!(
+            servicio.registrar_entrada("01-0847-0293", None, 1, Utc::now(), fecha("2026-08-12")),
+            Err(CitaServiceError::VisitanteYaEnSitio { .. })
+        ));
+    }
+
+    #[test]
+    fn despues_de_salir_puede_volver_a_entrar() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-2345");
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
+        let movimiento = servicio
+            .registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12"))
+            .unwrap();
+        servicio
+            .registrar_salida(movimiento, Utc::now(), 1)
+            .unwrap();
+
+        assert!(
+            servicio
+                .verificar_check_in("1-2345", fecha("2026-08-12"))
+                .is_ok()
+        );
     }
 
     #[test]

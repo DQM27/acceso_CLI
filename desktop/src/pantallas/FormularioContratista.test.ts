@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TIPOS_ELEGIBLES, esquema } from "./FormularioContratista.logica";
+import { esquema } from "./FormularioContratista.logica";
 
 function valores(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -38,8 +38,5 @@ describe("esquema de FormularioContratista", () => {
   });
 });
 
-describe("tipos que ofrece el selector", () => {
-  it("no ofrece Por correo, retirado como tipo de contratista", () => {
-    expect(TIPOS_ELEGIBLES).toEqual(["Praind", "InHouse", "Swat"]);
-  });
-});
+// Qué tipos ofrece el selector lo decide el núcleo (comando
+// `tipos_ingreso_seleccionables`; regla probada en reglas/src/contratista.rs).
