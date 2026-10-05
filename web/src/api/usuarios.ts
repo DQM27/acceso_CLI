@@ -73,8 +73,14 @@ export async function editarUsuario(
   const nombre = datos.nombre.trim();
   if (!nombre) throw new Error("El nombre es obligatorio");
   const cambios = datos.rol ? { nombre, rol: datos.rol } : { nombre };
-  const { error } = await supabase.from("usuarios").update(cambios).eq("id", id);
+  // Si la RLS no lo deja (la sesión ya no es de un administrador), la base no
+  // da error: simplemente no cambia ninguna fila. Por eso se pide la fila de
+  // vuelta y, si no vuelve, se avisa en vez de mostrar "actualizado".
+  const { data, error } = await supabase.from("usuarios").update(cambios).eq("id", id).select("id");
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error("No se guardó: el usuario ya no existe o su sesión no tiene permiso para editarlo.");
+  }
 }
 
 export interface UsuarioCreado {

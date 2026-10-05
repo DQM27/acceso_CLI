@@ -165,6 +165,33 @@ verificar en la nube no se registra. Por eso **estas migraciones van ANTES de
 publicar las apps**. Producción además todavía no tiene `ingresos_por_correo`
 (`20261003210000`), que va antes que todas estas.
 
+### 2.7 Edición de contratistas y usuarios desde el panel (staging, 2026-10-05)
+
+Rama `feat/reglas-compartidas`, commit `4b8c3c5`.
+
+| Cambio | Estado en staging |
+|---|---|
+| Edge Function `admin-editar-contratista` (nueva) | Desplegada, versión 1, fijada a `4b8c3c5`, `verify_jwt` activado |
+| Edge Function `admin-crear-contratista` (acepta personal de ruta) | Desplegada, versión 3, fijada a `4b8c3c5` |
+| Migración `20261005120000_usuarios_nombre_obligatorio.sql` | Aplicada (nombre `usuarios_nombre_obligatorio`) |
+
+Probado contra staging con un administrador y un usuario temporales,
+borrados al terminar junto con el contratista de prueba:
+- alta con personal de ruta → 200;
+- editar nombre y cédula de alguien que está afuera → 200, lo que ejecuta la
+  consulta de "¿está adentro?";
+- pasar a POR CORREO → 422;
+- id inexistente → 404;
+- usuario: nombre y rol → guardado, nombre vacío → 23514, sin sesión de
+  administrador → 0 filas.
+
+El rechazo de la cédula de alguien adentro no se probó en vivo, para no
+crear una entrada falsa que llegara a los equipos del sandbox; está cubierto
+por los tests de Deno y del núcleo.
+
+Orden en producción: después de 2.6, desplegar las dos funciones, publicar
+el panel y aplicar la migración (no rompe nada si va antes).
+
 ### 2.6 Edge Function `admin-crear-contratista` (reglas compartidas, 2026-10-04)
 
 Rama `feat/reglas-compartidas`. Contexto completo en

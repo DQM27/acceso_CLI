@@ -68,6 +68,27 @@ La base conserva sólo lo que necesita ver todos los datos:
 - la RLS (un administrador no puede insertar directo);
 - el trigger que avisa a los equipos.
 
+### La edición desde el panel (2026-10-05)
+
+- **Contratistas:** botón "Editar" en cada fila. Se cambia todo: cédula,
+  nombre, empresa, tipo, PRAIND, personal de ruta y acceso. El formulario
+  valida con `validarContratista(datos, hoy, anterior)`. `anterior` es lo
+  que tenía guardado (`EstadoAnterior` del crate), y con eso a alguien con el
+  PRAIND ya vencido se le corrige el nombre sin tocar la fecha, y a uno viejo
+  "POR CORREO" se le corrigen los datos sin cambiarle el tipo. Guarda la Edge
+  Function `admin-editar-contratista`: sólo administradores, reglas con lo
+  guardado, la empresa existe, **no se cambia la cédula de quien está
+  adentro** (misma regla que el núcleo, `CedulaConIngresoActivo`) y la cédula
+  repetida la frena el índice único.
+- **Usuarios:** botón "Editar" con nombre y rol. La cédula no se cambia, porque
+  es con la que la persona inicia sesión. UPDATE directo bajo la RLS de
+  administrador; el nombre vacío lo rechaza la base
+  (`usuarios_nombre_obligatorio`) y el rol, `usuarios_rol_check`. Si la base
+  no cambió ninguna fila (sin permiso), la pantalla lo avisa en vez de decir
+  "actualizado".
+- **Escritorio:** la cédula del contratista también se corrige al editar
+  (cualquier usuario), con la misma regla de no cambiarla si está adentro.
+
 ### Velocidad
 
 - **El panel no espera al WebAssembly para mostrarse.** Empieza a cargarlo al

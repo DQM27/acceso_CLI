@@ -141,8 +141,8 @@ async function preparar(page: Page) {
           abierta: false,
         },
       ]);
-    if (url.pathname === "/rest/v1/usuarios" && peticion.method() === "PATCH")
-      return ruta.fulfill({ status: 204 });
+    // Como la base real con `select`: devuelve la fila cambiada.
+    if (url.pathname === "/rest/v1/usuarios" && peticion.method() === "PATCH") return responder([{ id: "1" }]);
     if (url.pathname === "/rest/v1/usuarios")
       return responder([
         { id: "1", cedula: "1-2345-6789", nombre: "Operador de prueba", rol: "OPERADOR", activo: true },

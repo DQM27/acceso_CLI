@@ -66,8 +66,9 @@ describe("listarUsuarios", () => {
 });
 
 describe("editarUsuario", () => {
-  function mockUpdate(error: unknown = null) {
-    const eq = vi.fn().mockResolvedValue({ error });
+  function mockUpdate(error: unknown = null, filas: unknown[] = [{ id: "u1" }]) {
+    const select = vi.fn().mockResolvedValue({ data: error ? null : filas, error });
+    const eq = vi.fn(() => ({ select }));
     const update = vi.fn(() => ({ eq }));
     mocks.from.mockReturnValue({ update });
     return { update, eq };
@@ -92,5 +93,10 @@ describe("editarUsuario", () => {
     await expect(editarUsuario("u1", { nombre: "   " })).rejects.toThrow("El nombre es obligatorio");
     mockUpdate({ message: "permission denied" });
     await expect(editarUsuario("u1", { nombre: "Ana" })).rejects.toThrow("permission denied");
+  });
+
+  it("si la base no cambió ninguna fila (sin permiso), avisa en vez de dar por hecho", async () => {
+    mockUpdate(null, []);
+    await expect(editarUsuario("u1", { nombre: "Ana" })).rejects.toThrow("No se guardó");
   });
 });
