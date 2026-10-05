@@ -230,6 +230,21 @@ vieja cancelaba con un `UPDATE` directo, y los `drop policy` lo deshabilitan.
 Las funciones solas no rompen nada (la web vieja sigue funcionando); los
 `drop policy` van después de publicar la web nueva.
 
+### 2.9 Escritorio: visitas unificadas y medio de ingreso (staging, 2026-10-05)
+
+Rama `feat/escritorio-pendientes` (sale de `feat/web-visitas`).
+
+| Cambio | Estado en staging |
+|---|---|
+| Migración `20261005140000_movimientos_visita_placa.sql`: columna `placa` en `movimientos_visita` (NULL = caminando), límite de 20 caracteres y la placa dentro del disparador de inmutabilidad | Aplicada (nombre `movimientos_visita_placa`). Verificado: columna, restricción y disparador. Batería `supabase/tests/movimientos_visita_placa.sql` en verde junto con las otras 25 |
+| App de escritorio: Visitas con "Esperadas hoy", "Adentro" e "Historial", "Por correo" dentro del modal "Nueva visita", medio de ingreso en el check-in | Sólo en la rama; se prueba con `npm run tauri dev` contra staging |
+
+**Orden en producción:** la migración **antes** que la app de escritorio
+nueva. La app sube `placa` con cada movimiento de visita y la pide al bajar
+el historial: sin la columna, la nube rechaza las dos cosas y la cola de
+visitas se traba. Las apps viejas no la mandan ni la piden, así que la
+migración sola no rompe nada.
+
 ### 2.6 Edge Function `admin-crear-contratista` (reglas compartidas, 2026-10-04)
 
 Rama `feat/reglas-compartidas`. Contexto completo en
@@ -274,6 +289,7 @@ Hay que tenerlos presentes al publicar versiones.
 | Migración local | Qué agrega | Rama |
 |---|---|---|
 | 52 | `sincronizacion_estado.desfase_reloj_ms` (hora de internet guardada entre arranques) | `claude/hora-de-internet` → `claude/prueba-integral` |
+| 57 | `movimientos_visita.placa` y `historial_visitas_sitio.placa` (medio de ingreso de las visitas agendadas) | `feat/escritorio-pendientes` |
 
 **Importante:** una vez que un equipo abre una versión con la migración 52,
 su base queda en el esquema 52 y **una app anterior ya no la abre**: la

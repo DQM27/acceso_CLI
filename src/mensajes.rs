@@ -238,8 +238,8 @@ fn mensaje_sin_cita_vigente(motivo: MotivoDenegacionVisita, anfitrion: &str) -> 
 pub fn mensaje_cita(error: CitaServiceError) -> String {
     use CitaServiceError::{
         AccesoNegado, GafeteNoDisponible, GafeteNoRegistrado, GafeteOcupado, MovimientoNoActivo,
-        OperadorNoAutorizado, RelojRetrocedido, SalidaAnteriorAEntrada, SinCitaRegistrada,
-        SinCitaVigente, VisitanteYaEnSitio,
+        OperadorNoAutorizado, PlacaInvalida, PlacaRequerida, RelojRetrocedido,
+        SalidaAnteriorAEntrada, SinCitaRegistrada, SinCitaVigente, VisitanteYaEnSitio,
     };
 
     match error {
@@ -251,6 +251,8 @@ pub fn mensaje_cita(error: CitaServiceError) -> String {
                 "{nombre} ya tiene un ingreso activo — registre la salida antes de volver a entrar"
             )
         }
+        PlacaRequerida => "Escriba la placa del vehículo".into(),
+        PlacaInvalida => "La placa no es válida: use hasta 20 letras y números".into(),
         GafeteOcupado => "El gafete ya está en uso por otra visita".into(),
         GafeteNoRegistrado => "El número de gafete no existe en el catálogo".into(),
         GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),

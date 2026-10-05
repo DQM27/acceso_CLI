@@ -4779,3 +4779,74 @@ fn una_lapida_de_mas_de_un_dia_se_olvida() {
     assert_eq!(recibidos.len(), 1);
     assert!(lapidas(&connection).is_empty());
 }
+
+/// Medio de ingreso de las visitas agendadas
+/// (`20261005140000_movimientos_visita_placa`): la placa sube con el
+/// movimiento y vuelve en el historial de la unidad; sin placa = caminando.
+#[test]
+fn la_placa_de_la_visita_sube_con_el_movimiento() {
+    let connection = conexion_con_dos_movimientos_visita_activos();
+    connection
+        .execute(
+            "UPDATE movimientos_visita SET placa = 'BCD123' WHERE uuid = 'uuid-m1'",
+            [],
+        )
+        .unwrap();
+    let (base_url, pedido) = servidor_que_captura_el_cuerpo();
+
+    super::cola::enviar_movimiento_visita(
+        &crate::nube::cliente::cliente_http(),
+        &connection,
+        &contexto(&base_url),
+        "uuid-m1",
+    )
+    .unwrap();
+
+    let pedido = pedido
+        .recv_timeout(Duration::from_secs(3))
+        .expect("pedido capturado");
+    assert!(pedido.contains("\"placa\":\"BCD123\""), "{pedido}");
+}
+
+#[test]
+fn el_historial_de_visitas_guarda_la_placa_y_tolera_que_no_venga() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    let fila = |id: &str, placa: &str| {
+        serde_json::from_str::<super::historial::FilaHistorialVisitaRemota>(&format!(
+            r#"{{"id":"{id}","visitante_cedula":"1-2345","visitante_nombre":"Visitante",
+                "empresa":null,"anfitrion_nombre":"Ana","motivo":null,"gafete_numero":null,
+                {placa}"hora_entrada":"2026-08-01T08:00:00Z","hora_salida":null,
+                "usuario_entrada_nombre":"Operador","usuario_salida_nombre":null,
+                "dispositivo_entrada_id":"disp","dispositivo_salida_id":null,
+                "updated_at":"2026-08-01T08:00:00Z"}}"#
+        ))
+        .unwrap()
+    };
+    let transaction = connection.unchecked_transaction().unwrap();
+    for remota in [fila("m-1", r#""placa":"BCD123","#), fila("m-2", "")] {
+        super::historial::guardar_fila_historial_visita(
+            &transaction,
+            &contexto("http://sin-red"),
+            &remota,
+            "2026-08-01T08:00:00Z",
+        )
+        .unwrap();
+    }
+    transaction.commit().unwrap();
+
+    let placas: Vec<(String, Option<String>)> = connection
+        .prepare("SELECT uuid, placa FROM historial_visitas_sitio ORDER BY uuid")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        placas,
+        vec![
+            ("m-1".to_string(), Some("BCD123".to_string())),
+            ("m-2".to_string(), None)
+        ]
+    );
+}

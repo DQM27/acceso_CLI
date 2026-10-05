@@ -134,11 +134,12 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
             INSERT INTO movimientos_visita (
                 cita_visitante_id, gafete_numero, fecha_hora_entrada,
                 usuario_entrada_id, usuario_entrada_nombre, uuid,
-                visitante_cedula, visitante_nombre, empresa, anfitrion_nombre, motivo
+                visitante_cedula, visitante_nombre, empresa, anfitrion_nombre, motivo, placa
             )
             SELECT :cita_visitante_id, :gafete_numero, :fecha_hora_entrada,
                    :usuario_entrada_id, u.nombre, :uuid,
-                   :visitante_cedula, :visitante_nombre, :empresa, :anfitrion_nombre, :motivo
+                   :visitante_cedula, :visitante_nombre, :empresa, :anfitrion_nombre, :motivo,
+                   :placa
             FROM usuarios AS u
             WHERE u.id = :usuario_entrada_id
             ",
@@ -153,6 +154,7 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
                 ":empresa": movimiento.empresa,
                 ":anfitrion_nombre": movimiento.anfitrion_nombre,
                 ":motivo": movimiento.motivo,
+                ":placa": movimiento.placa,
             },
         )?;
 
@@ -276,7 +278,7 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
             "
             SELECT
                 mv.id, cv.cedula, cv.nombre, cv.empresa, mv.gafete_numero,
-                mv.fecha_hora_entrada, c.anfitrion_nombre, c.motivo
+                mv.fecha_hora_entrada, c.anfitrion_nombre, c.motivo, mv.placa
             FROM movimientos_visita mv
             JOIN cita_visitantes cv ON cv.id = mv.cita_visitante_id
             JOIN citas c ON c.id = cv.cita_id
@@ -296,6 +298,7 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
                     fecha_hora_entrada_texto,
                     row.get::<_, String>(6)?,
                     row.get::<_, Option<String>>(7)?,
+                    row.get::<_, Option<String>>(8)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -312,6 +315,7 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
                     fecha_hora_entrada_texto,
                     anfitrion_nombre,
                     motivo,
+                    placa,
                 )| {
                     let fecha_hora_entrada = parsear_utc(&fecha_hora_entrada_texto)
                         .map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))?;
@@ -324,6 +328,7 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
                         fecha_hora_entrada,
                         anfitrion_nombre,
                         motivo,
+                        placa,
                     })
                 },
             )
@@ -394,6 +399,7 @@ mod tests {
             empresa: None,
             anfitrion_nombre: "Anfitrión".to_string(),
             motivo: None,
+            placa: None,
         }
     }
 
@@ -419,9 +425,23 @@ mod tests {
             .crear(&NuevoMovimientoVisita {
                 empresa: Some("Brisas SCH".to_string()),
                 motivo: Some("Auditoría".to_string()),
+                placa: Some("BCD123".to_string()),
                 ..nuevo(visitante_id, None)
             })
             .unwrap();
+
+        let placa: Option<String> = connection
+            .query_row(
+                "SELECT placa FROM movimientos_visita WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(placa.as_deref(), Some("BCD123"));
+        assert_eq!(
+            repo.listar_activos().unwrap()[0].placa.as_deref(),
+            Some("BCD123")
+        );
 
         let (cedula, nombre, empresa, anfitrion, motivo): (
             String,

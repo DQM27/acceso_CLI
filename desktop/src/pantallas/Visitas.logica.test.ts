@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgendaVisitaResumen, MovimientoVisitaActivoResumen } from "../api";
 import type { FilaCorreoActiva, HistorialIngresoCorreoRemoto } from "../api/correo";
-import { textoMedioDePlaca, textoMedioVisita, unirAdentro, unirHistorial, visitasEsperadasHoy } from "./Visitas.logica";
+import { textoMedioDePlaca, unirAdentro, unirHistorial, visitasEsperadasHoy } from "./Visitas.logica";
 
 function cita(cambios: Partial<AgendaVisitaResumen> = {}): AgendaVisitaResumen {
   return {
@@ -76,6 +76,7 @@ describe("unirAdentro y unirHistorial", () => {
     fecha_hora_entrada: "2026-10-05T14:00:00Z",
     anfitrion_nombre: "Daniel",
     motivo: "Reunión",
+    placa: "XYZ789",
   };
   const correo: FilaCorreoActiva = {
     origen: "remoto",
@@ -98,6 +99,8 @@ describe("unirAdentro y unirHistorial", () => {
     ]);
     expect(filas[0]?.fuente).toEqual({ tipo: "correo", fila: correo });
     expect(filas[1]?.fuente).toEqual({ tipo: "visita", id: 7 });
+    // La agendada ya trae su medio de ingreso.
+    expect(filas[1]?.placa).toBe("XYZ789");
     expect(new Set(filas.map((fila) => fila.clave)).size).toBe(2);
   });
 
@@ -124,6 +127,7 @@ describe("unirAdentro y unirHistorial", () => {
           anfitrion_nombre: "Daniel",
           motivo: null,
           gafete_numero: null,
+          placa: null,
           fecha_hora_entrada: "2026-10-05T14:00:00Z",
           fecha_hora_salida: null,
           usuario_entrada_nombre: "Guarda",
@@ -144,9 +148,4 @@ describe("medio de ingreso", () => {
     expect(textoMedioDePlaca("BCD123")).toBe("BCD123");
   });
 
-  it("las agendadas todavía no guardan el medio al entrar", () => {
-    expect(textoMedioVisita({ origen: "AGENDADA", placa: null })).toBeNull();
-    expect(textoMedioVisita({ origen: "POR_CORREO", placa: null })).toBe("CAMINANDO");
-    expect(textoMedioVisita({ origen: "POR_CORREO", placa: "BCD123" })).toBe("BCD123");
-  });
 });

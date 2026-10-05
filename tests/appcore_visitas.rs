@@ -77,7 +77,7 @@ fn en_vigencia() -> DateTime<Utc> {
 fn registrar_entrada_visita_rechaza_un_usuario_desactivado() {
     let core = AppCore::con_reloj(base(), Arc::new(RelojControlado::new(en_vigencia())));
 
-    let resultado = core.registrar_entrada_visita(&actor(2), "1-2345", None);
+    let resultado = core.registrar_entrada_visita(&actor(2), "1-2345", None, None);
 
     assert!(matches!(
         resultado,
@@ -89,7 +89,7 @@ fn registrar_entrada_visita_rechaza_un_usuario_desactivado() {
 fn registrar_entrada_visita_rechaza_un_usuario_inexistente() {
     let core = AppCore::con_reloj(base(), Arc::new(RelojControlado::new(en_vigencia())));
 
-    let resultado = core.registrar_entrada_visita(&actor(999), "1-2345", None);
+    let resultado = core.registrar_entrada_visita(&actor(999), "1-2345", None, None);
 
     assert!(matches!(
         resultado,
@@ -101,7 +101,7 @@ fn registrar_entrada_visita_rechaza_un_usuario_inexistente() {
 fn registrar_salida_visita_rechaza_un_usuario_desactivado_aunque_el_movimiento_sea_valido() {
     let core = AppCore::con_reloj(base(), Arc::new(RelojControlado::new(en_vigencia())));
     let movimiento_id = core
-        .registrar_entrada_visita(&actor(1), "1-2345", None)
+        .registrar_entrada_visita(&actor(1), "1-2345", None, None)
         .unwrap();
 
     let resultado = core.registrar_salida_visita(&actor(2), movimiento_id);
@@ -120,7 +120,7 @@ fn registrar_entrada_y_salida_visita_funcionan_con_un_operador_activo() {
     let core = AppCore::con_reloj(base(), Arc::new(RelojControlado::new(en_vigencia())));
 
     let movimiento_id = core
-        .registrar_entrada_visita(&actor(1), "1-2345", Some(7))
+        .registrar_entrada_visita(&actor(1), "1-2345", Some(7), None)
         .unwrap();
     core.registrar_salida_visita(&actor(1), movimiento_id)
         .unwrap();
@@ -134,7 +134,7 @@ fn registrar_entrada_visita_propaga_el_motivo_de_denegacion_del_servicio() {
         .unwrap();
     let core = AppCore::con_reloj(connection, Arc::new(RelojControlado::new(en_vigencia())));
 
-    let resultado = core.registrar_entrada_visita(&actor(1), "1-2345", None);
+    let resultado = core.registrar_entrada_visita(&actor(1), "1-2345", None, None);
 
     assert!(matches!(
         resultado,
@@ -150,7 +150,7 @@ fn registrar_salida_visita_detecta_un_reloj_retrocedido() {
     let reloj = Arc::new(RelojControlado::new(en_vigencia()));
     let core = AppCore::con_reloj(base(), reloj.clone());
     let movimiento_id = core
-        .registrar_entrada_visita(&actor(1), "1-2345", None)
+        .registrar_entrada_visita(&actor(1), "1-2345", None, None)
         .unwrap();
 
     reloj.establecer(en_vigencia() - chrono::Duration::minutes(1));

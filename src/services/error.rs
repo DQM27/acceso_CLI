@@ -227,6 +227,12 @@ pub enum CitaServiceError {
     /// mensaje.
     #[error("Este visitante ya tiene un movimiento activo: {nombre}")]
     VisitanteYaEnSitio { nombre: String },
+    /// Eligió "Vehículo" pero no escribió la placa.
+    #[error("Falta la placa del vehículo")]
+    PlacaRequerida,
+    /// La placa tiene más de 20 caracteres o caracteres de control.
+    #[error("La placa no es válida")]
+    PlacaInvalida,
     /// El gafete ya está asignado a otro movimiento de visita abierto --
     /// mismo criterio que `RegistroIngresoServiceError::GafeteOcupado`.
     #[error("El gafete ya está asignado a otra visita")]

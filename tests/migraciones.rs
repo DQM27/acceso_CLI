@@ -1183,6 +1183,21 @@ fn base_version_34_con_gafete_perdido() -> Connection {
     connection
         .execute_batch(&ddl_de("cita_visitantes"))
         .unwrap();
+    // `MIGRACION_57` les agrega `placa` a estas dos (existían desde v29/v33):
+    // mismo criterio que `ingresos_remotos` arriba, se crean con el DDL
+    // actual y se les suelta la columna que la migración vuelve a agregar.
+    connection
+        .execute_batch(&ddl_de("movimientos_visita"))
+        .unwrap();
+    connection
+        .execute_batch("ALTER TABLE movimientos_visita DROP COLUMN placa;")
+        .unwrap();
+    connection
+        .execute_batch(&ddl_de("historial_visitas_sitio"))
+        .unwrap();
+    connection
+        .execute_batch("ALTER TABLE historial_visitas_sitio DROP COLUMN placa;")
+        .unwrap();
     connection.execute_batch(DDL_GAFETES_Y_COLAS_V34).unwrap();
     insertar_referencias(&connection);
     connection

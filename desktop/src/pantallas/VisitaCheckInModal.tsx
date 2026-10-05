@@ -6,7 +6,7 @@ import {
   registrarEntradaVisita,
   verificarCheckInVisita,
 } from "../api";
-import type { PreparacionVisita } from "../api";
+import type { MedioIngreso, PreparacionVisita } from "../api";
 import { validarGafeteOpcional } from "./VisitaCheckInModal.logica";
 
 type Estado =
@@ -42,6 +42,10 @@ export function CheckInAgendada({
   const [cedula, setCedula] = useState(cedulaInicial);
   const [estado, setEstado] = useState<Estado>({ tipo: "buscando" });
   const [gafeteTexto, setGafeteTexto] = useState("");
+  // Medio de ingreso, como en contratistas. La placa de la cita (la escribió
+  // el anfitrión) es sólo la sugerencia: manda lo que ve el guarda.
+  const [medio, setMedio] = useState<MedioIngreso>("Caminando");
+  const [placaTexto, setPlacaTexto] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -87,6 +91,9 @@ export function CheckInAgendada({
         setEstado({ tipo: "bloqueada", mensaje: mensajeBloqueoVisita(preparacion) });
         return;
       }
+      const placaCita = preparacion.visitante.placa_vehiculo?.trim() ?? "";
+      setMedio(placaCita ? "Vehiculo" : "Caminando");
+      setPlacaTexto(placaCita.toUpperCase());
       setEstado({ tipo: "encontrada", preparacion });
     } catch (error) {
       const rechazo = error instanceof RechazoVisita ? error : null;
@@ -100,6 +107,10 @@ export function CheckInAgendada({
 
   async function confirmarEntrada() {
     if (estado.tipo !== "encontrada") return;
+    if (medio === "Vehiculo" && !placaTexto.trim()) {
+      setError("Escriba la placa del vehículo");
+      return;
+    }
     const resultado = validarGafeteOpcional(gafeteTexto);
     if (!resultado.valido) {
       setError(resultado.mensaje);
@@ -108,7 +119,11 @@ export function CheckInAgendada({
     setError(null);
     setEnviando(true);
     try {
-      await registrarEntradaVisita(estado.preparacion.visitante.cedula, resultado.numero);
+      await registrarEntradaVisita(
+        estado.preparacion.visitante.cedula,
+        resultado.numero,
+        medio === "Vehiculo" ? placaTexto.trim() : null,
+      );
       setMensaje(`✓ Entrada registrada — ${estado.preparacion.visitante.nombre}`);
       setEstado({ tipo: "buscando" });
       setCedula("");
@@ -209,6 +224,41 @@ export function CheckInAgendada({
                 ` · Llegada estimada: ${estado.preparacion.cita.hora_estimada.slice(0, 5)}`}
             </p>
           </div>
+
+          <div className="campo">
+            Medio de ingreso
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              {(["Caminando", "Vehiculo"] as const).map((opcion) => (
+                <label
+                  key={opcion}
+                  style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
+                >
+                  <input
+                    type="radio"
+                    name="medio-visita"
+                    checked={medio === opcion}
+                    onChange={() => {
+                      setMedio(opcion);
+                      if (opcion === "Caminando") setPlacaTexto("");
+                    }}
+                  />
+                  {opcion === "Caminando" ? "Caminando" : "Vehículo"}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {medio === "Vehiculo" && (
+            <label className="campo">
+              Placa del vehículo
+              <input
+                value={placaTexto}
+                onChange={(evento) => setPlacaTexto(evento.target.value.toUpperCase())}
+                autoComplete="off"
+                placeholder="Placa del vehículo"
+              />
+            </label>
+          )}
 
           <label className="campo">
             Número de gafete (opcional)

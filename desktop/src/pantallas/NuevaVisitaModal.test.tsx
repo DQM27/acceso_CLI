@@ -76,3 +76,47 @@ describe("FormularioPorCorreo: medio de ingreso", () => {
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Escriba la placa del vehículo"));
   });
 });
+
+describe("CheckInAgendada: medio de ingreso", () => {
+  it("sugiere la placa de la cita y la manda al registrar; caminando no manda placa", async () => {
+    const preparacion = {
+      cita: {
+        id: 1,
+        motivo: null,
+        fecha_desde: "2026-10-05",
+        fecha_hasta: "2026-10-05",
+        hora_estimada: null,
+        anfitrion_nombre: "Daniel",
+        anfitrion_correo: "d@example.invalid",
+        estado: "Vigente",
+      },
+      visitante: { id: 1, cita_id: 1, cedula: "100", nombre: "ANA", empresa: null, placa_vehiculo: "abc123" },
+      activo_en_otro_sitio: null,
+    };
+    invoke.mockImplementation((comando: string) => {
+      if (comando === "verificar_check_in_visita") return Promise.resolve(preparacion);
+      if (comando === "registrar_entrada_visita") return Promise.resolve(1);
+      return Promise.resolve([]);
+    });
+    render(<NuevaVisitaModal cedulaInicial="100" onRegistrado={() => {}} onCerrar={() => {}} />);
+
+    const placa = (await screen.findByLabelText("Placa del vehículo")) as HTMLInputElement;
+    expect(placa.value).toBe("ABC123");
+    expect((screen.getByLabelText("Vehículo") as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Registrar entrada" }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("registrar_entrada_visita", { cedula: "100", gafete: null, placa: "ABC123" }),
+    );
+
+    invoke.mockClear();
+    fireEvent.change(screen.getByLabelText("Cédula del visitante"), { target: { value: "100" } });
+    fireEvent.click(screen.getByRole("button", { name: "Verificar" }));
+    fireEvent.click(await screen.findByLabelText("Caminando"));
+    expect(screen.queryByLabelText("Placa del vehículo")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Registrar entrada" }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("registrar_entrada_visita", { cedula: "100", gafete: null, placa: null }),
+    );
+  });
+});
+

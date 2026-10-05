@@ -170,6 +170,8 @@ pub async fn verificar_check_in_visita(
 pub fn registrar_entrada_visita(
     cedula: String,
     gafete: Option<i64>,
+    // Medio de ingreso: `None` = caminando, la placa = vehículo.
+    placa: Option<String>,
     state: tauri::State<GuiState>,
 ) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
@@ -194,7 +196,7 @@ pub fn registrar_entrada_visita(
     }
     state
         .core()
-        .registrar_entrada_visita(&sesion, &cedula, gafete)
+        .registrar_entrada_visita(&sesion, &cedula, gafete, placa)
         .map_err(mensaje_cita)
 }
 
@@ -241,6 +243,8 @@ pub struct MovimientoHistorialVisitaRemoto {
     pub anfitrion_nombre: Option<String>,
     pub motivo: Option<String>,
     pub gafete_numero: Option<i64>,
+    /// Medio de ingreso: NULL = caminando (o entrada anterior a anotarlo).
+    pub placa: Option<String>,
     pub fecha_hora_entrada: String,
     pub fecha_hora_salida: Option<String>,
     pub usuario_entrada_nombre: Option<String>,
@@ -260,7 +264,7 @@ pub fn listar_historial_visitas_sitio(
         .prepare(
             "SELECT uuid, visitante_cedula, visitante_nombre, empresa, anfitrion_nombre,
                     motivo, gafete_numero, hora_entrada, hora_salida,
-                    usuario_entrada_nombre, usuario_salida_nombre
+                    usuario_entrada_nombre, usuario_salida_nombre, placa
              FROM historial_visitas_sitio
              WHERE hora_entrada >= ?1 AND hora_entrada < ?2
              ORDER BY hora_entrada DESC",
@@ -285,6 +289,7 @@ pub fn listar_historial_visitas_sitio(
                     fecha_hora_salida: row.get(8)?,
                     usuario_entrada_nombre: row.get(9)?,
                     usuario_salida_nombre: row.get(10)?,
+                    placa: row.get(11)?,
                 })
             },
         )

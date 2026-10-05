@@ -25,7 +25,6 @@ import { fechaHaceMeses, fechaLocalYMD, fechaYMD, textoFechaDDMMYYYY, textoHora 
 import {
   TEXTO_ORIGEN,
   textoMedioDePlaca,
-  textoMedioVisita,
   unirAdentro,
   unirHistorial,
   visitasEsperadasHoy,
@@ -246,7 +245,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
         headerName: "Medio de ingreso",
         flex: 1,
         minWidth: 130,
-        valueGetter: (p) => (p.data ? guion(textoMedioVisita(p.data)) : ""),
+        valueGetter: (p) => (p.data ? textoMedioDePlaca(p.data.placa) : ""),
       },
       {
         field: "gafete_numero",
@@ -310,7 +309,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
         headerName: "Medio de ingreso",
         flex: 1,
         minWidth: 130,
-        valueGetter: (p) => (p.data ? guion(textoMedioVisita(p.data)) : ""),
+        valueGetter: (p) => (p.data ? textoMedioDePlaca(p.data.placa) : ""),
       },
       {
         field: "gafete_numero",

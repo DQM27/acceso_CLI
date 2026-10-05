@@ -22,6 +22,8 @@ pub struct NuevoMovimientoVisita {
     pub empresa: Option<String>,
     pub anfitrion_nombre: String,
     pub motivo: Option<String>,
+    /// Medio de ingreso: la placa si entró en vehículo, `None` si caminando.
+    pub placa: Option<String>,
 }
 
 /// Fecha y usuario van juntos a propósito, en vez de ser 2 `Option`
@@ -61,4 +63,7 @@ pub struct MovimientoVisitaActivoResumen {
     pub fecha_hora_entrada: DateTime<Utc>,
     pub anfitrion_nombre: String,
     pub motivo: Option<String>,
+    /// La placa si entró en vehículo, `None` si caminando (o si entró antes
+    /// de que se anotara el medio).
+    pub placa: Option<String>,
 }

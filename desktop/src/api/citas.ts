@@ -66,6 +66,8 @@ export interface MovimientoVisitaActivoResumen {
   fecha_hora_entrada: string;
   anfitrion_nombre: string;
   motivo: string | null;
+  /** Medio de ingreso: la placa, o `null` si entró caminando. */
+  placa: string | null;
 }
 
 /** Por qué no sigue un check-in (espejo de `comandos::citas::RechazoVisita`).
@@ -113,11 +115,13 @@ export async function verificarCheckInVisita(cedula: string): Promise<Preparacio
   }
 }
 
+/** `placa`: `null` si entró caminando, la placa si entró en vehículo. */
 export async function registrarEntradaVisita(
   cedula: string,
   gafete: number | null,
+  placa: string | null,
 ): Promise<number> {
-  const id = await invoke<number>("registrar_entrada_visita", { cedula, gafete });
+  const id = await invoke<number>("registrar_entrada_visita", { cedula, gafete, placa });
   solicitarSincronizacionNube();
   return id;
 }
@@ -150,6 +154,8 @@ export interface MovimientoHistorialVisitaRemoto {
   fecha_hora_salida: string | null;
   usuario_entrada_nombre: string | null;
   usuario_salida_nombre: string | null;
+  /** Medio de ingreso: la placa, o `null` si entró caminando. */
+  placa: string | null;
 }
 
 export function listarHistorialVisitasSitio(

@@ -60,7 +60,7 @@ export function unirAdentro(
         empresa: visita.empresa,
         anfitrion: visita.anfitrion_nombre,
         motivo: visita.motivo,
-        placa: null,
+        placa: visita.placa,
         gafete_numero: visita.gafete_numero,
         fecha_hora_entrada: visita.fecha_hora_entrada,
         fuente: { tipo: "visita", id: visita.id },
@@ -115,7 +115,7 @@ export function unirHistorial(
         empresa: visita.empresa,
         anfitrion: visita.anfitrion_nombre,
         motivo: visita.motivo,
-        placa: null,
+        placa: visita.placa,
         gafete_numero: visita.gafete_numero,
         fecha_hora_entrada: visita.fecha_hora_entrada,
         fecha_hora_salida: visita.fecha_hora_salida,
@@ -197,14 +197,6 @@ export function visitasEsperadasHoy(
   );
 }
 
-/** Medio de ingreso, como en contratistas: la placa si vino en vehículo,
- * "CAMINANDO" si no hay placa. Las visitas agendadas todavía no guardan el
- * medio al entrar (sólo la cita trae la placa que escribió el anfitrión):
- * para esas, `null` se muestra como "—". */
-export function textoMedioVisita(fila: { origen: OrigenVisita; placa: string | null }): string | null {
-  if (fila.origen === "AGENDADA") return null;
-  return textoMedioDePlaca(fila.placa);
-}
 
 /** "Sin placa = caminando", la misma regla del formulario. */
 export function textoMedioDePlaca(placa: string | null): string {

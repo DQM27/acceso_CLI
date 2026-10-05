@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 56;
+pub const SCHEMA_VERSION: i64 = 57;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -438,6 +438,11 @@ fn aplicar_migraciones_posteriores_a_52(
     if *version == 55 {
         aplicar_migracion_56(connection)?;
         *version = 56;
+    }
+
+    if *version == 56 {
+        aplicar_migracion_57(connection)?;
+        *version = 57;
     }
 
     Ok(())
@@ -981,6 +986,17 @@ fn aplicar_migracion_56(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_56)?;
     transaction.execute_batch("PRAGMA user_version = 56")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Medio de ingreso de las visitas agendadas: columna `placa` (NULL =
+/// caminando) en `movimientos_visita` y en su caché `historial_visitas_sitio`.
+/// Sólo agrega columnas que aceptan NULL: las filas viejas quedan sin placa.
+fn aplicar_migracion_57(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_57)?;
+    transaction.execute_batch("PRAGMA user_version = 57")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1658,3 +1674,5 @@ const MIGRACION_54: &str = include_str!("migraciones/migracion_54.sql");
 const MIGRACION_55: &str = include_str!("migraciones/migracion_55.sql");
 
 const MIGRACION_56: &str = include_str!("migraciones/migracion_56.sql");
+
+const MIGRACION_57: &str = include_str!("migraciones/migracion_57.sql");
