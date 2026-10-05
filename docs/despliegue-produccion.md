@@ -151,7 +151,7 @@ se verificó que staging no tuviera visitas abiertas duplicadas (0 por cédula,
 | `20261004130000_visitas_ven_otras_unidades.sql` | `visitas_ven_otras_unidades` | Aplicada |
 | `20261004140000_gafete_de_visita_unico_en_visitas.sql` | `gafete_de_visita_unico_en_visitas` | Aplicada |
 | `20261004150000_persona_adentro_por_una_sola_via.sql` | `persona_adentro_por_una_sola_via` | Aplicada |
-| `20261004160000_registrar_token_push_sin_choques.sql` | — | **Pendiente**: la herramienta pide confirmar porque el cuerpo de la función tiene un `delete` |
+| `20261004160000_registrar_token_push_sin_choques.sql` | — (no figura en el historial) | Aplicada a mano por el dueño en el editor SQL de Supabase. El editor no la anota en `supabase_migrations.schema_migrations`: para saber si está, revisar que la función tenga el candado `token_push:` |
 
 Verificado después de aplicar: existen `persona_adentro_por_otra_via`,
 `visita_activa_de_visitante` y `visitantes_activos_en_otras_unidades`, los
