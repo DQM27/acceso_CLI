@@ -190,10 +190,13 @@ Rama `feat/reglas-compartidas`. Contexto completo en
   - PRAIND sin fecha pero sin acceso → 200;
   - sin sesión → 401 de la puerta de Supabase; con la clave anónima → 401 de
     la función.
-- **NO aplicado en staging todavía:** la migración
+- **Aplicado en staging el 2026-10-05:** la migración
   `20261004170000_alta_de_contratistas_por_edge_function` (borra
-  `panel_crear_contratista`). Un panel de otra rama apuntado a staging todavía
-  la usa. Se aplica cuando el panel nuevo sea el que se use contra staging.
+  `panel_crear_contratista`). La ejecutó el dueño en el editor SQL de
+  Supabase, así que no figura en el historial de migraciones. Verificado: la
+  función ya no existe (ninguna sobrecarga), no tenía dependencias y
+  `panel_crear_empresa` sigue. Desde ahora, en staging sólo el panel de esta
+  rama puede crear contratistas.
 - **Orden en producción:** 1) desplegar la función; 2) publicar el panel web;
   3) aplicar la migración. La función nueva puede convivir con la SQL vieja
   sin problema; sólo la migración rompe el panel viejo.
