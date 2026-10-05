@@ -1,11 +1,18 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { History, Plus, UserCheck } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import type { TablaHandle } from "../componentes/Tabla";
+import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
+import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
+import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
+import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
+import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import { listarHistorialVisitasSitio, listarVisitasActivas, registrarSalidaVisita } from "../api";
 import type { MovimientoHistorialVisitaRemoto, MovimientoVisitaActivoResumen } from "../api";
-import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
+import { fechaHaceMeses, fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 const VisitaCheckInModal = lazy(() => import("./VisitaCheckInModal"));
 
@@ -16,26 +23,31 @@ const ETIQUETAS_VISTA: Record<Vista, string> = {
   historial: "Historial",
 };
 
+/** Mismos controles que Proveedores y Por correo (pedido del dueño
+ * 2026-10-05): íconos del menú lateral con el relleno deslizante. */
+const OPCIONES_VISTA: OpcionSegmentada<Vista>[] = [
+  { valor: "activas", Icono: UserCheck, titulo: ETIQUETAS_VISTA.activas },
+  { valor: "historial", Icono: History, titulo: ETIQUETAS_VISTA.historial },
+];
+
 function ToggleVista({ vista, onCambiar }: { vista: Vista; onCambiar: (v: Vista) => void }) {
   return (
-    <div style={{ display: "flex", gap: "0.25rem" }}>
-      {(Object.keys(ETIQUETAS_VISTA) as Vista[]).map((opcion) => (
-        <button
-          key={opcion}
-          type="button"
-          className={opcion === vista ? "boton boton-primario" : "boton"}
-          disabled={opcion === vista}
-          onClick={() => onCambiar(opcion)}
-        >
-          {ETIQUETAS_VISTA[opcion]}
-        </button>
-      ))}
-    </div>
+    <SegmentadoOpciones opciones={OPCIONES_VISTA} valor={vista} onCambiar={onCambiar} etiqueta="Vista" />
   );
 }
 
+/** Identidad de fila para el destello de celdas cambiadas (`idFila`). */
+const idPorUuid = (fila: { uuid: string }) => fila.uuid;
+const idPorId = (fila: { id: number }) => String(fila.id);
+
+/** Las dos grillas quedan montadas y sólo se ve la elegida (mismo motivo
+ * que en Proveedores: no parpadea ni pierde scroll y filtros). */
+function claseCapaVista(visible: boolean): string {
+  return visible ? "capa-vista" : "capa-vista capa-vista-oculta";
+}
+
 /**
- * Lista de visitas activas + botón "+ Visita" que abre el check-in en un
+ * Lista de visitas activas + botón "+" (Nueva visita) que abre el check-in en un
  * modal -- mismo patrón que Activos/NuevoIngresoModal, sin ningún buscador
  * suelto sobre la pantalla (el único campo de búsqueda vive dentro del
  * modal; acá arriba de la grilla sólo va el filtro rápido, igual que
@@ -58,6 +70,12 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
   const [cargando, setCargando] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
+  // Período del historial: mismo arranque que los demás historiales
+  // ("Últimos 6 meses", `hasta` abierto).
+  const [desde, setDesde] = useState(() => fechaHaceMeses(6));
+  const [hasta, setHasta] = useState("");
+  // Para que la exportación lea lo que muestra la grilla (filtros incluidos).
+  const tablaHistorialRef = useRef<TablaHandle<MovimientoHistorialVisitaRemoto>>(null);
 
   const total = vista === "activas" ? filasActivas.length : filasHistorial.length;
   useBarraEstado(cargando ? "Cargando…" : `${total} ${vista === "historial" ? "movimientos" : "visitantes adentro"}`);
@@ -71,10 +89,10 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
 
   const recargarHistorial = useCallback(() => {
     setCargando(true);
-    return listarHistorialVisitasSitio()
+    return listarHistorialVisitasSitio(desde || undefined, hasta || undefined)
       .then(setFilasHistorial)
       .finally(() => setCargando(false));
-  }, []);
+  }, [desde, hasta]);
 
   useEffect(() => {
     let vigente = true;
@@ -109,6 +127,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       { field: "empresa", headerName: "Empresa", flex: 1.1, minWidth: 130, valueFormatter: (p) => p.value ?? "—" },
       {
         field: "gafete_numero",
+        type: "numero",
         headerName: "Gafete",
         flex: 0.8,
         minWidth: 90,
@@ -118,6 +137,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       { field: "motivo", headerName: "Motivo", flex: 1.2, minWidth: 130, valueFormatter: (p) => p.value ?? "—" },
       {
         colId: "fecha_entrada",
+        type: "fecha",
         headerName: "Fecha",
         flex: 1,
         minWidth: 105,
@@ -162,6 +182,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       { field: "empresa", headerName: "Empresa", flex: 1.1, minWidth: 130, valueFormatter: (p) => p.value ?? "—" },
       {
         field: "gafete_numero",
+        type: "numero",
         headerName: "Gafete",
         flex: 0.8,
         minWidth: 90,
@@ -171,6 +192,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       { field: "motivo", headerName: "Motivo", flex: 1.2, minWidth: 130, valueFormatter: (p) => p.value ?? "—" },
       {
         colId: "fecha_entrada",
+        type: "fecha",
         headerName: "Fecha",
         flex: 1,
         minWidth: 105,
@@ -201,17 +223,26 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          {vista === "activas" && (
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <div className={claseCapaVista(vista === "activas")}>
             <Tabla<MovimientoVisitaActivoResumen>
+              cargando={cargando}
+              filtrosPorColumna
               id="visitas-activas"
+              idFila={idPorId}
               columnas={columnasActivas}
               filas={filasActivas}
               busqueda={busqueda}
               controles={
                 <>
-                  <button type="button" className="boton" onClick={() => setModalAbierto(true)}>
-                    + Visita
+                  <button
+                    type="button"
+                    className="boton boton-icono"
+                    title="Nueva visita"
+                    aria-label="Nueva visita"
+                    onClick={() => setModalAbierto(true)}
+                  >
+                    <Plus size={16} aria-hidden="true" />
                   </button>
                   <div className="campo" style={{ flex: "0 1 16rem" }}>
                     <input
@@ -224,10 +255,14 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
               }
               accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
             />
-          )}
-          {vista === "historial" && (
+          </div>
+          <div className={claseCapaVista(vista === "historial")}>
             <Tabla<MovimientoHistorialVisitaRemoto>
+              ref={tablaHistorialRef}
+              cargando={cargando}
+              filtrosPorColumna
               id="visitas-historial"
+              idFila={idPorUuid}
               columnas={columnasHistorial}
               filas={filasHistorial}
               busqueda={busqueda}
@@ -240,9 +275,27 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
                   />
                 </div>
               }
-              accionesDerecha={<ToggleVista vista={vista} onCambiar={setVista} />}
+              accionesDerecha={
+                <>
+                  <SelectorRangoFecha
+                    desde={desde}
+                    hasta={hasta}
+                    onAplicar={(nuevoDesde, nuevoHasta) => {
+                      setDesde(nuevoDesde);
+                      setHasta(nuevoHasta);
+                    }}
+                  />
+                  <BotonesExportacion
+                    tablaRef={tablaHistorialRef}
+                    nombreArchivo="historial-visitas"
+                    titulo="Historial de Visitas"
+                    filtroDescripcion={`Filtro: ${textoRangoFecha(desde, hasta)}`}
+                  />
+                  <ToggleVista vista={vista} onCambiar={setVista} />
+                </>
+              }
             />
-          )}
+          </div>
         </div>
       </div>
 
