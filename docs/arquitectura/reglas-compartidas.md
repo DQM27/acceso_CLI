@@ -136,7 +136,14 @@ a producción sólo después de probarlo ahí.
   nombre, rol válido, etiqueta y tipo de equipo) y que sus Edge Functions
   (`admin-create-usuario`, `admin-provision-device`) la usen. La autoridad
   (quién puede) sigue en el servidor.
-- **Escritorio:** su frontend React repite algunas reglas (`TIPOS_ELEGIBLES`,
-  `estaYaAdentro`); puede usar el mismo paquete.
-- **Verificaciones de visitas:** pasar las de `desktop/src-tauri/src/comandos/citas.rs`
-  al núcleo (`application`), como las de contratistas, proveedores y correo.
+- **Escritorio:** su frontend React ya le pregunta al núcleo qué mostrar
+  (comando `reglas_formulario_contratista`), pero le quedan dos restos en
+  TypeScript: `TIPOS_ELEGIBLES` (la lista de tipos del selector, sin "Por
+  correo") y `estaYaAdentro` (aviso previo al check-in; el núcleo lo vuelve a
+  revisar al registrar). Pueden pasar a un comando del núcleo.
+- **Chequeos de visitas contra la nube:** las verificaciones locales del
+  check-in ya están en el núcleo (`application/citas.rs`, `CitaService`). Lo
+  que queda en `desktop/src-tauri/src/comandos/citas.rs` son dos chequeos de
+  mejor esfuerzo contra la nube: el gafete en uso en otro equipo y el
+  visitante adentro en otra unidad. Pueden pasar al núcleo para que el
+  teléfono use los mismos.
