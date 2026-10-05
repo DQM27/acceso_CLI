@@ -9,7 +9,7 @@ Mantener este archivo al día: cada cambio que se aplique en staging se anota
 aquí en el mismo commit. Cuando se aplique en producción, se mueve a la
 sección "Aplicado en producción" con fecha y quién lo autorizó.
 
-Última revisión: 2026-10-04.
+Última revisión: 2026-10-05.
 
 ## 1. Antes de empezar
 
@@ -144,8 +144,10 @@ Rama `feat/reglas-compartidas`. Contexto completo en
 `docs/arquitectura/reglas-compartidas.md`.
 
 - **Aplicado en staging:** la Edge Function `admin-crear-contratista`
-  (versión 1, `verify_jwt` activado). El `index.ts` desplegado es una sola
-  línea que importa el de GitHub **fijado al commit `f054c7b`**; Supabase lo
+  (versión 2 desde el 2026-10-05, `verify_jwt` activado). El `index.ts`
+  desplegado es una sola línea que importa el de GitHub **fijado al commit
+  `4f187b9`** (la versión 1, del 2026-10-04, estaba fijada a `f054c7b`; la 2
+  busca la empresa a la vez que la autorización); Supabase lo
   empaqueta al desplegar, no consulta GitHub en cada petición. Para producción
   conviene desplegarla con `supabase functions deploy admin-crear-contratista`
   desde el repo.
