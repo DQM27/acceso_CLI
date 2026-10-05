@@ -1,9 +1,9 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useBlocker } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Plus, Search, X } from "lucide-react";
-import { listarSitios, mensajeError, visitantesAnteriores } from "../api";
+import { Check, Plus } from "lucide-react";
+import { listarSitios, mensajeError } from "../api";
 import {
   esquemaCita,
   normalizarDocumento,
@@ -13,6 +13,8 @@ import {
 import type { FormularioCita, VisitanteAnterior, VisitanteFormulario } from "../dominio";
 import { hoyCostaRica, horaLegible, rangoLegible, sumarDias } from "../fecha";
 import { Aviso, Cargando, Dialogo } from "./Comunes";
+import BuscarAnteriores from "./BuscarAnteriores";
+import SelectorFecha from "./SelectorFecha";
 import { useEnLinea } from "../enLinea";
 
 type Errores = Record<string, string>;
@@ -197,50 +199,24 @@ export default function FormularioVisita({
             </button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <label className="campo" data-error={!!errores.fecha_desde}>
-              {cuando === "varios" ? "Desde" : "Fecha"}
-              <input
-                type="date"
-                min={hoy}
-                value={formulario.fecha_desde}
-                onChange={(e) => {
-                  const valor = e.target.value;
-                  setFormulario((f) => ({
-                    ...f,
-                    fecha_desde: valor,
-                    fecha_hasta: cuando === "varios" && f.fecha_hasta >= valor ? f.fecha_hasta : valor,
-                  }));
-                  setCuando((c) => (c === "varios" ? c : cuandoDe({ ...formulario, fecha_desde: valor, fecha_hasta: valor }, hoy)));
-                  setErrores((er) => ({ ...er, fecha_desde: "", fecha_hasta: "" }));
-                }}
-              />
-              {errores.fecha_desde && <span className="campo-error">{errores.fecha_desde}</span>}
-            </label>
-            {cuando === "varios" ? (
-              <label className="campo" data-error={!!errores.fecha_hasta}>
-                Hasta
-                <input
-                  type="date"
-                  min={formulario.fecha_desde}
-                  value={formulario.fecha_hasta}
-                  onChange={(e) => cambiar("fecha_hasta", e.target.value)}
-                />
-                {errores.fecha_hasta && <span className="campo-error">{errores.fecha_hasta}</span>}
-              </label>
-            ) : (
-              <label className="campo" data-error={!!errores.hora_estimada}>
-                Hora estimada
-                <input type="time" value={formulario.hora_estimada} onChange={(e) => cambiar("hora_estimada", e.target.value)} />
-                {errores.hora_estimada && <span className="campo-error">{errores.hora_estimada}</span>}
-              </label>
-            )}
-          </div>
-          {cuando === "varios" && (
-            <label className="campo max-w-[50%] pr-1" data-error={!!errores.hora_estimada}>
+            <SelectorFecha
+              rango={cuando === "varios"}
+              desde={formulario.fecha_desde}
+              hasta={formulario.fecha_hasta}
+              minimo={hoy}
+              error={errores.fecha_desde || errores.fecha_hasta}
+              onCambiar={(desde, hasta) => {
+                setFormulario((f) => ({ ...f, fecha_desde: desde, fecha_hasta: hasta }));
+                if (cuando !== "varios") setCuando(cuandoDe({ ...formulario, fecha_desde: desde, fecha_hasta: hasta }, hoy));
+                setErrores((er) => ({ ...er, fecha_desde: "", fecha_hasta: "" }));
+              }}
+            />
+            <label className="campo" data-error={!!errores.hora_estimada}>
               Hora estimada
               <input type="time" value={formulario.hora_estimada} onChange={(e) => cambiar("hora_estimada", e.target.value)} />
+              {errores.hora_estimada && <span className="campo-error">{errores.hora_estimada}</span>}
             </label>
-          )}
+          </div>
         </section>
 
         <section className="tarjeta flex flex-col gap-2.5 p-3.5" aria-labelledby="titulo-donde">
@@ -376,66 +352,3 @@ function TarjetaPersona({
     </fieldset>
   );
 }
-
-/** Buscador de personas que el anfitrión ya agendó antes. Sin texto muestra
- * las más recientes. */
-function BuscarAnteriores({ alElegir }: { alElegir: (persona: VisitanteAnterior) => void }) {
-  const id = useId();
-  const [texto, setTexto] = useState("");
-  const [busqueda, setBusqueda] = useState("");
-  useEffect(() => {
-    const espera = setTimeout(() => setBusqueda(texto), 250);
-    return () => clearTimeout(espera);
-  }, [texto]);
-  const resultados = useQuery({
-    queryKey: ["visitantes-anteriores", busqueda],
-    queryFn: ({ signal }) => visitantesAnteriores(busqueda, signal),
-    staleTime: 60_000,
-  });
-  const lista = (resultados.data ?? []).slice(0, busqueda ? 6 : 4);
-
-  return (
-    <div className="flex flex-col gap-2">
-      <label className="campo" htmlFor={id}>
-        Buscar a alguien que ya vino
-        <span className="relative">
-          <Search size={16} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" aria-hidden="true" />
-          <input
-            id={id}
-            type="search"
-            className="pl-8"
-            placeholder="Nombre o cédula"
-            value={texto}
-            autoComplete="off"
-            onChange={(e) => setTexto(e.target.value)}
-          />
-        </span>
-      </label>
-      {lista.length > 0 && (
-        <div className="flex flex-wrap gap-1.5" aria-label={busqueda ? "Resultados" : "Recientes"}>
-          {lista.map((persona) => (
-            <button
-              key={persona.cedula}
-              type="button"
-              className="boton boton-compacto bg-panel"
-              onClick={() => {
-                alElegir(persona);
-                setTexto("");
-              }}
-            >
-              <Plus size={14} aria-hidden="true" />
-              {persona.nombre}
-            </button>
-          ))}
-        </div>
-      )}
-      {busqueda && resultados.data?.length === 0 && (
-        <p className="m-0 flex items-center gap-1 text-[13px] text-muted">
-          <X size={14} aria-hidden="true" />
-          Nadie con ese nombre o cédula. Agréguelo abajo.
-        </p>
-      )}
-    </div>
-  );
-}
-

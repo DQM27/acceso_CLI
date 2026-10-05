@@ -116,9 +116,14 @@ async function preparar(
       const datos = peticion.postDataJSON() as Record<string, unknown>;
       llamadas.push({ rpc, datos });
       if (rpc === "visitantes_anteriores")
-        return responder([
-          { cedula: "305670891", nombre: "Carla Vargas", empresa: "Limpiezas del Sur", placa_vehiculo: null, ultima_vez: "2026-09-20" },
-        ]);
+        return responder(
+          datos.p_busqueda === "nadie"
+            ? []
+            : [
+                { cedula: "305670891", nombre: "Carla Vargas", empresa: "Limpiezas del Sur", placa_vehiculo: null, ultima_vez: "2026-09-20" },
+                { cedula: "401230456", nombre: "Mario Solís", empresa: null, placa_vehiculo: "CL1234", ultima_vez: "2026-09-12" },
+              ],
+        );
       if (rpc === "estado_visitantes_de_mis_citas") return responder(opciones.llegadas ?? []);
       if (rpc === "crear_cita_anfitrion" || rpc === "editar_cita_anfitrion") {
         if (fallosPendientes > 0) {
@@ -258,10 +263,21 @@ test("agendar: valida, dos lugares, reintento idempotente y aviso", async ({ pag
   await expect(page.getByRole("region", { name: "Próximas" }).getByText("Revisión de equipos")).toBeVisible();
 });
 
-test("agendar a alguien que ya vino, con un toque", async ({ page }) => {
+test("agendar a alguien que ya vino, desde el buscador", async ({ page }, info) => {
   const { llamadas } = await preparar(page);
   await page.goto("/agendar");
-  await page.getByRole("button", { name: "Carla Vargas" }).click();
+  const buscador = page.getByRole("combobox", { name: "Buscar a alguien que ya vino" });
+  await buscador.click();
+  const lista = page.getByRole("listbox", { name: "Personas que ya vinieron" });
+  await expect(lista.getByRole("option")).toHaveCount(2);
+  await page.screenshot({ path: `test-results/buscador-${info.project.name}.png` });
+  // Sin resultados: lo dice, sin lista vacía.
+  await buscador.fill("nadie");
+  await expect(page.getByText("Nadie con ese nombre o cédula.")).toBeVisible();
+  await buscador.fill("");
+  await expect(lista.getByRole("option")).toHaveCount(2);
+  await lista.getByRole("option", { name: /Carla Vargas/ }).click();
+  await expect(lista).toHaveCount(0);
   await expect(page.getByLabel(/^Nombre/)).toHaveValue("Carla Vargas");
   await expect(page.getByLabel("Empresa")).toHaveValue("Limpiezas del Sur");
   await expect(page.getByLabel(/^Nombre/)).toHaveCount(1);
@@ -369,4 +385,72 @@ test("sin conexión conserva el formulario y bloquea el envío", async ({ page, 
   await context.setOffline(false);
   await expect(page.getByRole("button", { name: "Agendar", exact: true })).toBeEnabled();
   await expect(page.getByLabel("Motivo")).toHaveValue("Reunión de prueba");
+});
+
+test("el buscador se maneja con el teclado", async ({ page }) => {
+  await preparar(page);
+  await page.goto("/agendar");
+  const buscador = page.getByRole("combobox", { name: "Buscar a alguien que ya vino" });
+  await buscador.focus();
+  await expect(page.getByRole("option")).toHaveCount(2);
+  await buscador.press("ArrowDown");
+  await expect(page.getByRole("option", { name: /Mario Solís/ })).toHaveAttribute("aria-selected", "true");
+  await buscador.press("Enter");
+  await expect(page.getByLabel(/^Nombre/)).toHaveValue("Mario Solís");
+  await expect(page.getByLabel("Placa")).toHaveValue("CL1234");
+  await buscador.click();
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await buscador.press("Escape");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+});
+
+test("calendario: un día o varios, sin días pasados", async ({ page }, info) => {
+  const { llamadas } = await preparar(page);
+  await page.goto("/agendar");
+  await page.getByLabel(/^Nombre/).fill("Ana Mora");
+  await page.getByLabel("Cédula o documento").fill("112340567");
+  await page.getByRole("button", { name: "Brisas" }).click();
+
+  await page.getByRole("button", { name: /^Fecha/ }).click();
+  const calendario = page.getByRole("grid");
+  await expect(calendario).toBeVisible();
+  await expect(page.getByText("octubre 2026")).toBeVisible();
+  // Los días pasados no se pueden elegir.
+  await expect(calendario.getByRole("button", { name: /\b4 de octubre/ })).toBeDisabled();
+  await page.screenshot({ path: `test-results/calendario-${info.project.name}.png` });
+  await calendario.getByRole("button", { name: /\b9 de octubre/ }).click();
+  await expect(calendario).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Fecha vie 9 oct/ })).toBeVisible();
+  // Ningún atajo marcado: no es hoy ni mañana.
+  await expect(page.getByRole("button", { name: "Hoy" })).toHaveAttribute("aria-pressed", "false");
+
+  await page.getByRole("button", { name: "Varios días" }).click();
+  await page.getByRole("button", { name: /^Días/ }).click();
+  await page.getByRole("grid").getByRole("button", { name: /13 de octubre/ }).click();
+  await expect(page.getByRole("grid")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Días vie 9 oct al mar 13 oct/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Agendar", exact: true }).click();
+  await expect(page.getByText(/Visita agendada/)).toBeVisible();
+  expect(llamadas("crear_cita_anfitrion")[0]).toMatchObject({ p_fecha_desde: "2026-10-09", p_fecha_hasta: "2026-10-13" });
+});
+
+test("menú de la cuenta: tema y cerrar sesión", async ({ page }, info) => {
+  await preparar(page);
+  await page.goto("/visitas");
+  await page.getByRole("button", { name: "Cuenta de Daniel Quintana" }).click();
+  const menu = page.getByRole("menu");
+  await expect(menu).toContainText("anfitrion@example.invalid");
+  await page.screenshot({ path: `test-results/menu-${info.project.name}.png` });
+  await menu.getByRole("menuitem", { name: /Tema/ }).click();
+  await expect(menu).toHaveCount(0);
+  const tema = await page.evaluate(() => document.documentElement.dataset.theme);
+  expect(["light", "dark"]).toContain(tema);
+  await page.getByRole("button", { name: "Cuenta de Daniel Quintana" }).press("Enter");
+  await expect(page.getByRole("menuitem", { name: /Tema/ })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page.getByRole("button", { name: "Cuenta de Daniel Quintana" }).click();
+  await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
+  await expect(page.getByRole("button", { name: "Continuar con Google" })).toBeVisible();
 });

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Link } from "react-router-dom";
 import { ChevronLeft, LogOut, Moon, Sun } from "lucide-react";
 import { useAuth } from "../contexto/AuthContexto";
@@ -19,25 +20,16 @@ function iniciales(nombre: string) {
 export default function Encabezado({ titulo, volver }: { titulo?: string; volver?: string }) {
   const { anfitrion, cerrarSesion } = useAuth();
   const { tema, alternar } = useTema();
-  const [abierto, setAbierto] = useState(false);
   const [saliendo, setSaliendo] = useState(false);
-  const menu = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!abierto) return;
-    const alClic = (evento: MouseEvent) => {
-      if (!menu.current?.contains(evento.target as Node)) setAbierto(false);
-    };
-    const alTecla = (evento: KeyboardEvent) => {
-      if (evento.key === "Escape") setAbierto(false);
-    };
-    document.addEventListener("mousedown", alClic);
-    document.addEventListener("keydown", alTecla);
-    return () => {
-      document.removeEventListener("mousedown", alClic);
-      document.removeEventListener("keydown", alTecla);
-    };
-  }, [abierto]);
+  async function salir() {
+    setSaliendo(true);
+    try {
+      await cerrarSesion();
+    } finally {
+      setSaliendo(false);
+    }
+  }
 
   return (
     <header className="sticky top-0 z-20 border-b border-borde bg-panel">
@@ -57,50 +49,36 @@ export default function Encabezado({ titulo, volver }: { titulo?: string; volver
         </div>
 
         {anfitrion && (
-          <div className="relative" ref={menu}>
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-borde bg-acento-suave text-[13px] font-semibold text-acento"
-              aria-haspopup="menu"
-              aria-expanded={abierto}
-              aria-label={`Cuenta de ${anfitrion.nombre}`}
-              onClick={() => setAbierto((a) => !a)}
-            >
-              {iniciales(anfitrion.nombre)}
-            </button>
-            {abierto && (
-              <div
-                role="menu"
-                className="tarjeta absolute right-0 top-11 z-30 flex w-64 flex-col gap-1 p-2 shadow-[var(--sombra-panel)]"
+          // No modal: sin bloqueo de scroll, que inyectaría un <style> y la CSP
+          // lo rechaza.
+          <DropdownMenu.Root modal={false}>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-borde bg-acento-suave text-[13px] font-semibold text-acento"
+                aria-label={`Cuenta de ${anfitrion.nombre}`}
               >
-                <div className="px-2 py-1">
-                  <div className="font-semibold">{anfitrion.nombre}</div>
+                {iniciales(anfitrion.nombre)}
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content className="flotante w-64 p-1.5" align="end" sideOffset={6} collisionPadding={12}>
+                <DropdownMenu.Label className="px-2.5 pb-2 pt-1.5">
+                  <div className="font-semibold text-texto">{anfitrion.nombre}</div>
                   <div className="truncate text-[13px] text-muted">{anfitrion.correo}</div>
-                </div>
-                <button type="button" role="menuitem" className="boton boton-discreto justify-start" onClick={alternar}>
-                  {tema === "light" ? <Moon aria-hidden="true" /> : <Sun aria-hidden="true" />}
+                </DropdownMenu.Label>
+                <DropdownMenu.Separator className="my-1 h-px bg-borde" />
+                <DropdownMenu.Item className="opcion-lista" onSelect={alternar}>
+                  {tema === "light" ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
                   {tema === "light" ? "Tema oscuro" : "Tema claro"}
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="boton boton-discreto justify-start"
-                  disabled={saliendo}
-                  onClick={async () => {
-                    setSaliendo(true);
-                    try {
-                      await cerrarSesion();
-                    } finally {
-                      setSaliendo(false);
-                    }
-                  }}
-                >
-                  <LogOut aria-hidden="true" />
+                </DropdownMenu.Item>
+                <DropdownMenu.Item className="opcion-lista" disabled={saliendo} onSelect={salir}>
+                  <LogOut size={16} aria-hidden="true" />
                   Cerrar sesión
-                </button>
-              </div>
-            )}
-          </div>
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         )}
       </div>
     </header>
