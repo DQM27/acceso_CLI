@@ -6,7 +6,7 @@
 //! hay PRAIND ni advertencias intermedias que evaluar acá. Binario:
 //! permitida o no.
 
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 
 use crate::models::cita::{Cita, EstadoCita};
 
@@ -31,9 +31,29 @@ pub enum ResultadoVisita {
 pub enum MotivoDenegacionVisita {
     /// El anfitrión (o un administrador) canceló la cita.
     CitaCancelada,
-    /// `hoy` cae afuera de `[fecha_desde, fecha_hasta]` -- incluye tanto
-    /// "todavía no empieza" como "ya venció".
-    FueraDeVigencia,
+    /// La cita es para más adelante: vale desde `fecha_desde`. Se dice la
+    /// fecha para que la portería sepa que la visita existe (pedido del
+    /// dueño 2026-10-05: "la cita la tiene para el día X" en vez de "no
+    /// tiene visita agendada").
+    TodaviaNoEmpieza { fecha_desde: NaiveDate },
+    /// La cita ya pasó: su último día fue `fecha_hasta`.
+    Vencida { fecha_hasta: NaiveDate },
+}
+
+impl MotivoDenegacionVisita {
+    /// Cuál explica mejor por qué no entra cuando la cédula tiene varias
+    /// citas que no valen hoy: la próxima que viene (la más cercana) antes
+    /// que una cancelada, y ésta antes que una vencida (la más reciente).
+    /// Menor = más relevante.
+    pub fn relevancia(&self) -> (u8, i64) {
+        match self {
+            Self::TodaviaNoEmpieza { fecha_desde } => {
+                (0, i64::from(fecha_desde.num_days_from_ce()))
+            }
+            Self::CitaCancelada => (1, 0),
+            Self::Vencida { fecha_hasta } => (2, -i64::from(fecha_hasta.num_days_from_ce())),
+        }
+    }
 }
 
 /// No recibe `sitio_id` a propósito: el dispositivo sólo llega a evaluar
@@ -46,8 +66,15 @@ pub fn verificar_cita(cita: &Cita, hoy: NaiveDate) -> ResultadoVisita {
     if cita.estado == EstadoCita::Cancelada {
         return ResultadoVisita::Denegado(MotivoDenegacionVisita::CitaCancelada);
     }
-    if hoy < cita.fecha_desde || hoy > cita.fecha_hasta {
-        return ResultadoVisita::Denegado(MotivoDenegacionVisita::FueraDeVigencia);
+    if hoy < cita.fecha_desde {
+        return ResultadoVisita::Denegado(MotivoDenegacionVisita::TodaviaNoEmpieza {
+            fecha_desde: cita.fecha_desde,
+        });
+    }
+    if hoy > cita.fecha_hasta {
+        return ResultadoVisita::Denegado(MotivoDenegacionVisita::Vencida {
+            fecha_hasta: cita.fecha_hasta,
+        });
     }
     ResultadoVisita::Permitido
 }
@@ -105,20 +132,24 @@ mod tests {
     }
 
     #[test]
-    fn antes_de_fecha_desde_deniega_por_fuera_de_vigencia() {
+    fn antes_de_fecha_desde_deniega_y_dice_desde_cuando_vale() {
         let cita = cita(EstadoCita::Vigente, "2026-08-10", "2026-08-15");
         assert_eq!(
             verificar_cita(&cita, fecha("2026-08-09")),
-            ResultadoVisita::Denegado(MotivoDenegacionVisita::FueraDeVigencia)
+            ResultadoVisita::Denegado(MotivoDenegacionVisita::TodaviaNoEmpieza {
+                fecha_desde: fecha("2026-08-10")
+            })
         );
     }
 
     #[test]
-    fn despues_de_fecha_hasta_deniega_por_fuera_de_vigencia() {
+    fn despues_de_fecha_hasta_deniega_y_dice_hasta_cuando_valia() {
         let cita = cita(EstadoCita::Vigente, "2026-08-10", "2026-08-15");
         assert_eq!(
             verificar_cita(&cita, fecha("2026-08-16")),
-            ResultadoVisita::Denegado(MotivoDenegacionVisita::FueraDeVigencia)
+            ResultadoVisita::Denegado(MotivoDenegacionVisita::Vencida {
+                fecha_hasta: fecha("2026-08-15")
+            })
         );
     }
 
@@ -131,7 +162,9 @@ mod tests {
         );
         assert_eq!(
             verificar_cita(&cita, fecha("2026-08-11")),
-            ResultadoVisita::Denegado(MotivoDenegacionVisita::FueraDeVigencia)
+            ResultadoVisita::Denegado(MotivoDenegacionVisita::Vencida {
+                fecha_hasta: fecha("2026-08-10")
+            })
         );
     }
 
@@ -143,6 +176,40 @@ mod tests {
         assert_eq!(
             verificar_cita(&cita, fecha("2026-01-01")),
             ResultadoVisita::Denegado(MotivoDenegacionVisita::CitaCancelada)
+        );
+    }
+
+    #[test]
+    fn la_proxima_cita_explica_mejor_que_una_cancelada_o_vencida() {
+        let proxima = MotivoDenegacionVisita::TodaviaNoEmpieza {
+            fecha_desde: fecha("2026-08-20"),
+        };
+        let mas_lejana = MotivoDenegacionVisita::TodaviaNoEmpieza {
+            fecha_desde: fecha("2026-09-01"),
+        };
+        let vencida_reciente = MotivoDenegacionVisita::Vencida {
+            fecha_hasta: fecha("2026-08-01"),
+        };
+        let vencida_vieja = MotivoDenegacionVisita::Vencida {
+            fecha_hasta: fecha("2026-01-01"),
+        };
+        let mut motivos = vec![
+            vencida_vieja,
+            MotivoDenegacionVisita::CitaCancelada,
+            mas_lejana,
+            vencida_reciente,
+            proxima,
+        ];
+        motivos.sort_by_key(MotivoDenegacionVisita::relevancia);
+        assert_eq!(
+            motivos,
+            vec![
+                proxima,
+                mas_lejana,
+                MotivoDenegacionVisita::CitaCancelada,
+                vencida_reciente,
+                vencida_vieja
+            ]
         );
     }
 }

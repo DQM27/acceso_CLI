@@ -138,9 +138,10 @@ fn registrar_entrada_visita_propaga_el_motivo_de_denegacion_del_servicio() {
 
     assert!(matches!(
         resultado,
-        Err(CitaServiceError::SinCitaVigente(
-            MotivoDenegacionVisita::CitaCancelada
-        ))
+        Err(CitaServiceError::SinCitaVigente {
+            motivo: MotivoDenegacionVisita::CitaCancelada,
+            ..
+        })
     ));
 }
 

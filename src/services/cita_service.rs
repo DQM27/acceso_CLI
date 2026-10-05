@@ -77,7 +77,9 @@ where
             return Err(CitaServiceError::SinCitaRegistrada);
         }
 
-        let mut ultimo_motivo = None;
+        // Si ninguna vale hoy, se informa la que mejor lo explica (la
+        // próxima, si hay), con su anfitrión.
+        let mut mejor: Option<(MotivoDenegacionVisita, String)> = None;
         for (cita, visitante) in candidatas {
             match verificar_cita(&cita, hoy) {
                 ResultadoVisita::Permitido => {
@@ -96,19 +98,24 @@ where
                     }
                     return Ok((cita, visitante));
                 }
-                ResultadoVisita::Denegado(motivo) => ultimo_motivo = Some(motivo),
+                ResultadoVisita::Denegado(motivo) => {
+                    if mejor
+                        .as_ref()
+                        .is_none_or(|(actual, _)| motivo.relevancia() < actual.relevancia())
+                    {
+                        mejor = Some((motivo, cita.anfitrion_nombre));
+                    }
+                }
             }
         }
 
-        // `candidatas` no estaba vacío y ningún brazo devolvió `Permitido`
-        // antes -- el bucle siempre pasó por la rama `Denegado` al menos
-        // una vez, así que este `unwrap_or` nunca debería usar su
-        // respaldo. Se prefiere un valor por defecto inofensivo a un
-        // `.expect()` que pudiera entrar en pánico si esta garantía
-        // alguna vez deja de sostenerse.
-        Err(CitaServiceError::SinCitaVigente(
-            ultimo_motivo.unwrap_or(MotivoDenegacionVisita::FueraDeVigencia),
-        ))
+        // `candidatas` no estaba vacío y ninguna fue `Permitido`, así que
+        // `mejor` siempre tiene valor; el respaldo evita un `.expect()`.
+        let (motivo, anfitrion) = mejor.unwrap_or((
+            MotivoDenegacionVisita::Vencida { fecha_hasta: hoy },
+            String::new(),
+        ));
+        Err(CitaServiceError::SinCitaVigente { motivo, anfitrion })
     }
 
     /// Ejecuta la decisión definitiva usando los repositorios recibidos --
@@ -322,7 +329,10 @@ mod tests {
 
         assert!(matches!(
             error,
-            CitaServiceError::SinCitaVigente(MotivoDenegacionVisita::CitaCancelada)
+            CitaServiceError::SinCitaVigente {
+                motivo: MotivoDenegacionVisita::CitaCancelada,
+                ..
+            }
         ));
     }
 
@@ -342,7 +352,46 @@ mod tests {
 
         assert!(matches!(
             error,
-            CitaServiceError::SinCitaVigente(MotivoDenegacionVisita::FueraDeVigencia)
+            CitaServiceError::SinCitaVigente {
+                motivo: MotivoDenegacionVisita::Vencida { fecha_hasta },
+                ..
+            } if fecha_hasta == fecha("2026-01-15")
+        ));
+    }
+
+    #[test]
+    fn sin_cita_para_hoy_informa_la_proxima_con_su_anfitrion() {
+        // Pedido del dueño 2026-10-05: si la visita es para otro día, la
+        // portería debe ver para cuándo es, no "no tiene visita".
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-01-10", "2026-01-15", "VIGENTE");
+        insertar_cita(&connection, 2, "2026-08-10", "2026-08-15", "CANCELADA");
+        insertar_cita(&connection, 3, "2026-09-01", "2026-09-01", "VIGENTE");
+        insertar_cita(&connection, 4, "2026-08-14", "2026-08-14", "VIGENTE");
+        connection
+            .execute(
+                "UPDATE citas SET anfitrion_nombre = 'Ana Mora' WHERE id = 4",
+                [],
+            )
+            .unwrap();
+        for (id, cita) in [(1, 1), (2, 2), (3, 3), (4, 4)] {
+            insertar_visitante(&connection, id, cita, "1-2345");
+        }
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
+
+        let error = servicio
+            .verificar_check_in("1-2345", fecha("2026-08-12"))
+            .unwrap_err();
+
+        assert!(matches!(
+            &error,
+            CitaServiceError::SinCitaVigente {
+                motivo: MotivoDenegacionVisita::TodaviaNoEmpieza { fecha_desde },
+                anfitrion,
+            } if *fecha_desde == fecha("2026-08-14") && anfitrion == "Ana Mora"
         ));
     }
 
@@ -427,9 +476,10 @@ mod tests {
 
         assert!(matches!(
             servicio.registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12")),
-            Err(CitaServiceError::SinCitaVigente(
-                MotivoDenegacionVisita::CitaCancelada
-            ))
+            Err(CitaServiceError::SinCitaVigente {
+                motivo: MotivoDenegacionVisita::CitaCancelada,
+                ..
+            })
         ));
     }
 

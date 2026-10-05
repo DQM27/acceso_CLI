@@ -210,12 +210,17 @@ pub enum CitaServiceError {
     #[error("Esta persona tiene el acceso denegado")]
     AccesoNegado,
     /// Existe al menos una cita para esta cédula, pero ninguna aplica hoy
-    /// -- el motivo viaja en la variante (de la última candidata
-    /// evaluada) para que la interfaz pueda mostrar algo más útil que
-    /// "no se puede" (ej. "esta cita fue cancelada" o "esta cita ya
-    /// venció").
-    #[error("No hay ninguna visita vigente para esta cédula: {0:?}")]
-    SinCitaVigente(MotivoDenegacionVisita),
+    /// -- el motivo viaja en la variante (de la cita más relevante, ver
+    /// `MotivoDenegacionVisita::relevancia`) para que la interfaz diga
+    /// algo útil: "tiene visita para el martes 6 de octubre", "fue
+    /// cancelada", "venció el...".
+    #[error("No hay ninguna visita vigente para esta cédula: {motivo:?}")]
+    SinCitaVigente {
+        motivo: MotivoDenegacionVisita,
+        /// De la cita que explica el motivo, para que la portería sepa a
+        /// quién llamar.
+        anfitrion: String,
+    },
     /// Esta cédula ya tiene un movimiento de visita abierto -- mismo criterio
     /// que `RegistroIngresoServiceError::IngresoActivo`, no se puede entrar
     /// dos veces sin salir primero. Lleva el nombre del visitante para el
