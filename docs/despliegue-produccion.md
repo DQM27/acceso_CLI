@@ -207,7 +207,7 @@ porque la herramienta de Supabase se cuelga con los `drop policy`:
 | Parte | Estado en staging |
 |---|---|
 | Funciones (todo menos los `drop policy`): `crear_cita_anfitrion` (reemplazada), `editar_cita_anfitrion`, `cancelar_cita_anfitrion`, `estado_visitantes_de_mis_citas`, `visitantes_anteriores` y las auxiliares de `private` | Aplicada (nombre `visitas_web_anfitrion_funciones`) |
-| Los 7 `drop policy` de escritura directa del anfitrión (al principio del archivo) | **Pendiente**: correrlos el dueño en el editor SQL. El editor no lo anota en el historial; para saber si está, revisar que no quede ninguna política `anfitrion%` que no sea `SELECT` en esas tres tablas |
+| Los 7 `drop policy` de escritura directa del anfitrión (al principio del archivo) | Aplicada el 2026-10-05 por el dueño en el editor SQL (no figura en el historial). Verificado: no queda ninguna política `anfitrion%` que no sea `SELECT` en esas tres tablas (sólo la restrictiva "solo dispositivos vigentes"); como anfitrión, un `insert` directo → 42501 y un `update` directo → 0 filas, mientras crear y cancelar por las funciones siguen funcionando |
 
 Probado contra staging como anfitrión (dentro de una transacción que se
 deshizo; no quedó nada guardado):
