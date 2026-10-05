@@ -100,11 +100,14 @@ pub struct PreparacionVisita {
 
 /// Por qué no sigue un check-in. `informativo`: la visita existe pero es
 /// para otro día (`CitaServiceError::es_informativo`), la pantalla lo
-/// muestra como aviso y no como error.
+/// muestra como aviso y no como error. `alternativa_por_correo`: no hay
+/// cita que valga hoy y nada lo impide, la pantalla ofrece registrarla como
+/// autorizada por correo (`CitaServiceError::admite_registro_por_correo`).
 #[derive(Debug, serde::Serialize)]
 pub struct RechazoVisita {
     mensaje: String,
     informativo: bool,
+    alternativa_por_correo: bool,
 }
 
 impl From<String> for RechazoVisita {
@@ -112,6 +115,7 @@ impl From<String> for RechazoVisita {
         Self {
             mensaje,
             informativo: false,
+            alternativa_por_correo: false,
         }
     }
 }
@@ -119,9 +123,11 @@ impl From<String> for RechazoVisita {
 impl From<CitaServiceError> for RechazoVisita {
     fn from(error: CitaServiceError) -> Self {
         let informativo = error.es_informativo();
+        let alternativa_por_correo = error.admite_registro_por_correo();
         Self {
             mensaje: mensaje_cita(error),
             informativo,
+            alternativa_por_correo,
         }
     }
 }

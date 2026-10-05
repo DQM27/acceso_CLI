@@ -52,6 +52,15 @@ describe("comoRechazoVisita", () => {
     expect(String(rechazo)).toBe("Tiene una visita agendada para el martes 6 de octubre");
   });
 
+  it("dice si se puede registrar como autorizada por correo", () => {
+    expect(
+      comoRechazoVisita({ mensaje: "No hay ninguna visita agendada", informativo: false, alternativa_por_correo: true })
+        .alternativaPorCorreo,
+    ).toBe(true);
+    expect(comoRechazoVisita({ mensaje: "La visita fue cancelada.", informativo: false }).alternativaPorCorreo).toBe(false);
+    expect(comoRechazoVisita("No hay sesión activa").alternativaPorCorreo).toBe(false);
+  });
+
   it("los demás rechazos y los textos sueltos son errores", () => {
     expect(comoRechazoVisita({ mensaje: "La visita fue cancelada.", informativo: false }).informativo).toBe(false);
     const suelto = comoRechazoVisita("No hay sesión activa");

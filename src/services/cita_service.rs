@@ -272,10 +272,11 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
-        assert!(matches!(
-            servicio.verificar_check_in("1-2345", fecha("2026-08-10")),
-            Err(CitaServiceError::SinCitaRegistrada)
-        ));
+        let error = servicio
+            .verificar_check_in("1-2345", fecha("2026-08-10"))
+            .unwrap_err();
+        assert!(error.admite_registro_por_correo());
+        assert!(matches!(error, CitaServiceError::SinCitaRegistrada));
     }
 
     #[test]
@@ -327,6 +328,8 @@ mod tests {
             .verificar_check_in("1-2345", fecha("2026-08-12"))
             .unwrap_err();
 
+        // Si el anfitrión la canceló, la portería no la salta "por correo".
+        assert!(!error.admite_registro_por_correo());
         assert!(matches!(
             error,
             CitaServiceError::SinCitaVigente {
@@ -351,6 +354,7 @@ mod tests {
             .unwrap_err();
 
         assert!(!error.es_informativo());
+        assert!(error.admite_registro_por_correo());
         assert!(matches!(
             error,
             CitaServiceError::SinCitaVigente {
@@ -395,6 +399,7 @@ mod tests {
             } if *fecha_desde == fecha("2026-08-14") && anfitrion == "Ana Mora"
         ));
         assert!(error.es_informativo());
+        assert!(error.admite_registro_por_correo());
     }
 
     #[test]

@@ -257,6 +257,22 @@ pub enum CitaServiceError {
 }
 
 impl CitaServiceError {
+    /// No hay cita que valga hoy, pero tampoco algo que lo impida: el
+    /// guarda puede registrarla como visita autorizada por correo (con el
+    /// correo que la respalde). No se ofrece si el anfitrión la canceló, si
+    /// la persona tiene el acceso negado o si ya está adentro.
+    pub fn admite_registro_por_correo(&self) -> bool {
+        matches!(
+            self,
+            Self::SinCitaRegistrada
+                | Self::SinCitaVigente {
+                    motivo: MotivoDenegacionVisita::TodaviaNoEmpieza { .. }
+                        | MotivoDenegacionVisita::Vencida { .. },
+                    ..
+                }
+        )
+    }
+
     /// No es una falla: la visita existe pero es para otro día. La pantalla
     /// lo muestra como aviso, no como error (pedido del dueño 2026-10-05).
     pub fn es_informativo(&self) -> bool {

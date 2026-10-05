@@ -49,7 +49,6 @@ import {
   IdCard,
   Loader2,
   LogOut,
-  Mail,
   Route,
   Truck,
   UserCheck,
@@ -117,7 +116,6 @@ const Gafetes = lazy(() => import("./pantallas/Gafetes"));
 const Rutas = lazy(() => import("./pantallas/Rutas"));
 const CatalogoRutas = lazy(() => import("./pantallas/CatalogoRutas"));
 const Proveedores = lazy(() => import("./pantallas/Proveedores"));
-const PorCorreo = lazy(() => import("./pantallas/PorCorreo"));
 const GafetesProvisionales = lazy(() => import("./pantallas/GafetesProvisionales"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
@@ -311,7 +309,6 @@ export type Seccion =
   | "gafetes"
   | "catalogoRutas"
   | "proveedores"
-  | "porCorreo"
   | "gafetesProvisionales";
 
 /** Aplanado de autorización (ver docs/decisiones-tecnicas.md 2026-09-11):
@@ -350,9 +347,9 @@ const TODAS_LAS_SECCIONES: {
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
   { id: "catalogoRutas", etiqueta: "Catálogo KOF", Icono: Truck },
   { id: "proveedores", etiqueta: "Proveedores", Icono: Boxes },
-  // Visitas autorizadas por correo: comodín mientras se termina Visitas
-  // (pedido del usuario 2026-10-03).
-  { id: "porCorreo", etiqueta: "Por correo", Icono: Mail },
+  // "Por correo" ya no es una sección: vive dentro de Visitas (modo "Por
+  // correo" del modal Nueva visita), pedido del dueño 2026-10-05. Un orden
+  // guardado que todavía la nombre la ignora (ver `seccionesOrdenadas`).
   { id: "gafetesProvisionales", etiqueta: "KOF", Icono: BadgeCheck },
 ];
 
@@ -797,8 +794,6 @@ function Shell({
                           <CatalogoRutas />
                         ) : id === "proveedores" ? (
                           <Proveedores refrescarSenal={refrescarActivos} />
-                        ) : id === "porCorreo" ? (
-                          <PorCorreo refrescarSenal={refrescarActivos} />
                         ) : (
                           <GafetesProvisionales refrescarSenal={refrescarActivos} />
                         )}

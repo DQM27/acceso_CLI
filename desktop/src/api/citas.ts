@@ -74,11 +74,15 @@ export interface MovimientoVisitaActivoResumen {
  * hace `String(error)` sigue viendo el texto de siempre. */
 export class RechazoVisita extends Error {
   readonly informativo: boolean;
+  /** No hay cita que valga hoy y nada lo impide: se puede registrar como
+   * visita autorizada por correo. */
+  readonly alternativaPorCorreo: boolean;
 
-  constructor(mensaje: string, informativo: boolean) {
+  constructor(mensaje: string, informativo: boolean, alternativaPorCorreo = false) {
     super(mensaje);
     this.name = "RechazoVisita";
     this.informativo = informativo;
+    this.alternativaPorCorreo = alternativaPorCorreo;
   }
 
   override toString(): string {
@@ -86,12 +90,17 @@ export class RechazoVisita extends Error {
   }
 }
 
-/** Lo que manda el comando al fallar: `{ mensaje, informativo }`, o un
+/** Lo que manda el comando al fallar: `{ mensaje, informativo,
+ * alternativa_por_correo }`, o un
  * texto suelto si falló antes (por ejemplo, sin sesión). */
 export function comoRechazoVisita(error: unknown): RechazoVisita {
   if (typeof error === "object" && error !== null && "mensaje" in error) {
-    const { mensaje, informativo } = error as { mensaje: unknown; informativo?: unknown };
-    return new RechazoVisita(String(mensaje), informativo === true);
+    const { mensaje, informativo, alternativa_por_correo } = error as {
+      mensaje: unknown;
+      informativo?: unknown;
+      alternativa_por_correo?: unknown;
+    };
+    return new RechazoVisita(String(mensaje), informativo === true, alternativa_por_correo === true);
   }
   return new RechazoVisita(String(error), false);
 }
