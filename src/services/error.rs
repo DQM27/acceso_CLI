@@ -256,6 +256,20 @@ pub enum CitaServiceError {
     Database(#[from] DatabaseError),
 }
 
+impl CitaServiceError {
+    /// No es una falla: la visita existe pero es para otro día. La pantalla
+    /// lo muestra como aviso, no como error (pedido del dueño 2026-10-05).
+    pub fn es_informativo(&self) -> bool {
+        matches!(
+            self,
+            Self::SinCitaVigente {
+                motivo: MotivoDenegacionVisita::TodaviaNoEmpieza { .. },
+                ..
+            }
+        )
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum RutaServiceError {
     #[error("La placa del vehículo es obligatoria")]

@@ -3,6 +3,7 @@ use control_acceso::mensajes::mensaje_cita;
 use control_acceso::models::cita::{Cita, CitaVisitante, EstadoCita};
 use control_acceso::models::movimiento_visita::MovimientoVisitaActivoResumen;
 use control_acceso::nube;
+use control_acceso::services::error::CitaServiceError;
 use rusqlite::params;
 use tauri::Manager;
 
@@ -97,6 +98,34 @@ pub struct PreparacionVisita {
     pub activo_en_otro_sitio: Option<String>,
 }
 
+/// Por qué no sigue un check-in. `informativo`: la visita existe pero es
+/// para otro día (`CitaServiceError::es_informativo`), la pantalla lo
+/// muestra como aviso y no como error.
+#[derive(Debug, serde::Serialize)]
+pub struct RechazoVisita {
+    mensaje: String,
+    informativo: bool,
+}
+
+impl From<String> for RechazoVisita {
+    fn from(mensaje: String) -> Self {
+        Self {
+            mensaje,
+            informativo: false,
+        }
+    }
+}
+
+impl From<CitaServiceError> for RechazoVisita {
+    fn from(error: CitaServiceError) -> Self {
+        let informativo = error.es_informativo();
+        Self {
+            mensaje: mensaje_cita(error),
+            informativo,
+        }
+    }
+}
+
 /// Async por el mismo motivo que `preparar_ingreso`
 /// (`comandos/ingresos.rs`): el chequeo local (`AppCore::verificar_check_in_visita`)
 /// es instantáneo y siempre corre; el remoto (`activo_en_otro_sitio`, mejor
@@ -105,13 +134,10 @@ pub struct PreparacionVisita {
 pub async fn verificar_check_in_visita(
     cedula: String,
     app: tauri::AppHandle,
-) -> Result<PreparacionVisita, String> {
+) -> Result<PreparacionVisita, RechazoVisita> {
     let state = app.state::<GuiState>();
     state.sesion_activa()?;
-    let (cita, visitante) = state
-        .core()
-        .verificar_check_in_visita(&cedula)
-        .map_err(mensaje_cita)?;
+    let (cita, visitante) = state.core().verificar_check_in_visita(&cedula)?;
 
     let visitante_cedula = visitante.cedula.clone();
     let manejador = app.clone();

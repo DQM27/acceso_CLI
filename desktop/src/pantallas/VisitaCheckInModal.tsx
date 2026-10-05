@@ -3,6 +3,7 @@ import Modal from "../componentes/Modal";
 import {
   mensajeBloqueoVisita,
   puedeContinuarVisita,
+  RechazoVisita,
   registrarEntradaVisita,
   verificarCheckInVisita,
 } from "../api";
@@ -16,7 +17,9 @@ type Estado =
   | { tipo: "bloqueada"; mensaje: string }
   /** El núcleo no deja seguir: sin cita, cita cancelada o vencida, acceso
    * negado, o la persona ya está adentro. Su mensaje se muestra tal cual. */
-  | { tipo: "rechazada"; mensaje: string };
+  | { tipo: "rechazada"; mensaje: string }
+  /** La visita existe pero es para otro día: aviso, no error. */
+  | { tipo: "informativa"; mensaje: string };
 
 /**
  * Check-in de visitas por cédula -- mismo armazón que `NuevoIngresoModal`
@@ -71,7 +74,8 @@ export default function VisitaCheckInModal({
       }
       setEstado({ tipo: "encontrada", preparacion });
     } catch (error) {
-      setEstado({ tipo: "rechazada", mensaje: String(error) });
+      const informativa = error instanceof RechazoVisita && error.informativo;
+      setEstado({ tipo: informativa ? "informativa" : "rechazada", mensaje: String(error) });
     }
   }
 
@@ -131,6 +135,12 @@ export default function VisitaCheckInModal({
 
         {estado.tipo === "rechazada" && (
           <p className="login-error" role="alert">
+            {estado.mensaje}
+          </p>
+        )}
+
+        {estado.tipo === "informativa" && (
+          <p className="aviso-informativo" role="status">
             {estado.mensaje}
           </p>
         )}

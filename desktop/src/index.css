@@ -219,6 +219,19 @@ input {
   line-height: 1.4;
 }
 
+/* Aviso que no es un error (por ejemplo, la visita es para otro día):
+   mismos márgenes que .login-error, en el color de información. */
+.aviso-informativo {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--info) 45%, var(--borde));
+  border-radius: var(--radio-chico);
+  background: color-mix(in srgb, var(--info) 12%, transparent);
+  color: var(--texto);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
 .login-error-campo {
   color: var(--error);
   font-size: 0.8rem;

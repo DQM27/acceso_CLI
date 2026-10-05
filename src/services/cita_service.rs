@@ -350,6 +350,7 @@ mod tests {
             .verificar_check_in("1-2345", fecha("2026-08-12"))
             .unwrap_err();
 
+        assert!(!error.es_informativo());
         assert!(matches!(
             error,
             CitaServiceError::SinCitaVigente {
@@ -393,6 +394,7 @@ mod tests {
                 anfitrion,
             } if *fecha_desde == fecha("2026-08-14") && anfitrion == "Ana Mora"
         ));
+        assert!(error.es_informativo());
     }
 
     #[test]

@@ -68,8 +68,40 @@ export interface MovimientoVisitaActivoResumen {
   motivo: string | null;
 }
 
-export function verificarCheckInVisita(cedula: string): Promise<PreparacionVisita> {
-  return invoke("verificar_check_in_visita", { cedula });
+/** Por qué no sigue un check-in (espejo de `comandos::citas::RechazoVisita`).
+ * `informativo`: la visita existe pero es para otro día, se muestra como
+ * aviso y no como error. `toString` devuelve sólo el mensaje, así quien
+ * hace `String(error)` sigue viendo el texto de siempre. */
+export class RechazoVisita extends Error {
+  readonly informativo: boolean;
+
+  constructor(mensaje: string, informativo: boolean) {
+    super(mensaje);
+    this.name = "RechazoVisita";
+    this.informativo = informativo;
+  }
+
+  override toString(): string {
+    return this.message;
+  }
+}
+
+/** Lo que manda el comando al fallar: `{ mensaje, informativo }`, o un
+ * texto suelto si falló antes (por ejemplo, sin sesión). */
+export function comoRechazoVisita(error: unknown): RechazoVisita {
+  if (typeof error === "object" && error !== null && "mensaje" in error) {
+    const { mensaje, informativo } = error as { mensaje: unknown; informativo?: unknown };
+    return new RechazoVisita(String(mensaje), informativo === true);
+  }
+  return new RechazoVisita(String(error), false);
+}
+
+export async function verificarCheckInVisita(cedula: string): Promise<PreparacionVisita> {
+  try {
+    return await invoke<PreparacionVisita>("verificar_check_in_visita", { cedula });
+  } catch (error) {
+    throw comoRechazoVisita(error);
+  }
 }
 
 export async function registrarEntradaVisita(
