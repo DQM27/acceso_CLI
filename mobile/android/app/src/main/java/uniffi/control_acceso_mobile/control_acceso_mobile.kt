@@ -8342,9 +8342,10 @@ data class VisitaParaEntrar (
     var `motivo`: kotlin.String?
     , 
     /**
-     * Último día de la cita (`AAAA-MM-DD`): igual a hoy si es de un día.
+     * "Sólo hoy" o "Hasta el jueves 8 de octubre", calculado con el reloj
+     * del núcleo (`mensajes::vigencia_cita`).
      */
-    var `fechaHasta`: kotlin.String
+    var `vigencia`: kotlin.String
     , 
     /**
      * Hora estimada de llegada ("HH:MM"), sólo informativa.
@@ -8388,7 +8389,7 @@ public object FfiConverterTypeVisitaParaEntrar: FfiConverterRustBuffer<VisitaPar
             FfiConverterOptionalString.allocationSize(value.`empresa`) +
             FfiConverterString.allocationSize(value.`anfitrion`) +
             FfiConverterOptionalString.allocationSize(value.`motivo`) +
-            FfiConverterString.allocationSize(value.`fechaHasta`) +
+            FfiConverterString.allocationSize(value.`vigencia`) +
             FfiConverterOptionalString.allocationSize(value.`horaEstimada`) +
             FfiConverterOptionalString.allocationSize(value.`placaSugerida`)
     )
@@ -8399,7 +8400,7 @@ public object FfiConverterTypeVisitaParaEntrar: FfiConverterRustBuffer<VisitaPar
             FfiConverterOptionalString.write(value.`empresa`, buf)
             FfiConverterString.write(value.`anfitrion`, buf)
             FfiConverterOptionalString.write(value.`motivo`, buf)
-            FfiConverterString.write(value.`fechaHasta`, buf)
+            FfiConverterString.write(value.`vigencia`, buf)
             FfiConverterOptionalString.write(value.`horaEstimada`, buf)
             FfiConverterOptionalString.write(value.`placaSugerida`, buf)
     }

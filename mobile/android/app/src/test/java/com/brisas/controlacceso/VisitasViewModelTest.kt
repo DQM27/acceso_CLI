@@ -1,7 +1,6 @@
 package com.brisas.controlacceso
 
 import java.io.File
-import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -114,21 +113,16 @@ class VisitasViewModelTest {
     }
 
     @Test
-    fun `en vehiculo sin placa no registra`() = runTest(dispatcher) {
+    fun `en vehiculo sin placa lo rechaza el nucleo con su mensaje`() = runTest(dispatcher) {
         val viewModel = abrir(cita(1, "200000002", 0, 0))
         viewModel.verificar("200000002")
         advanceUntilIdle()
+        assertEquals("Sólo hoy", (viewModel.verificacion as VerificacionVisita.Entrada).visita.vigencia)
         viewModel.cambiarEnVehiculo(true)
         viewModel.registrarEntrada()
         advanceUntilIdle()
+        assertEquals("Escriba la placa del vehículo", viewModel.error)
         assertNull(viewModel.hecho)
         assertTrue(viewModel.verificacion is VerificacionVisita.Entrada)
-    }
-
-    @Test
-    fun `la vigencia dice solo hoy o hasta que dia`() {
-        val hoy = LocalDate.of(2026, 10, 5)
-        assertEquals("Sólo hoy", vigencia("2026-10-05", hoy))
-        assertEquals("Hasta el 07/10", vigencia("2026-10-07", hoy))
     }
 }

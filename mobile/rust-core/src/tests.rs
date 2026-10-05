@@ -1060,6 +1060,11 @@ fn visita_se_verifica_entra_y_sale_con_una_sola_cedula() {
     assert_eq!(visita.anfitrion, "Laura Mora");
     assert_eq!(visita.motivo.as_deref(), Some("Auditoría"));
     assert_eq!(visita.placa_sugerida.as_deref(), Some("ABC123"));
+    assert!(
+        visita.vigencia.starts_with("Hasta el "),
+        "{}",
+        visita.vigencia
+    );
 
     nucleo
         .registrar_entrada_visita(visita.cedula, Some(5), Some(" abc123 ".to_string()))

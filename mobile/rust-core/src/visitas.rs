@@ -3,7 +3,7 @@
 //! en escritorio y en el panel web). Mismo molde que `correo.rs`: las reglas
 //! las decide el núcleo, acá sólo se traducen para Kotlin.
 
-use control_acceso::mensajes::{mensaje_cita, mensaje_entrada_visita_verificada};
+use control_acceso::mensajes::{mensaje_cita, mensaje_entrada_visita_verificada, vigencia_cita};
 use control_acceso::models::movimiento_visita::MovimientoVisitaActivoResumen;
 use control_acceso::services::error::CitaServiceError;
 
@@ -19,8 +19,9 @@ pub struct VisitaParaEntrar {
     pub empresa: Option<String>,
     pub anfitrion: String,
     pub motivo: Option<String>,
-    /// Último día de la cita (`AAAA-MM-DD`): igual a hoy si es de un día.
-    pub fecha_hasta: String,
+    /// "Sólo hoy" o "Hasta el jueves 8 de octubre", calculado con el reloj
+    /// del núcleo (`mensajes::vigencia_cita`).
+    pub vigencia: String,
     /// Hora estimada de llegada ("HH:MM"), sólo informativa.
     pub hora_estimada: Option<String>,
     /// La placa que dejó anotada el anfitrión, para proponer "vehículo".
@@ -92,6 +93,7 @@ impl Nucleo {
                 visita: adentro.into(),
             });
         }
+        let hoy = control_acceso::tiempo::fecha_costa_rica(self.reloj.ahora_utc());
         Ok(match nucleo.verificar_check_in_visita(&cedula) {
             Ok((cita, visitante)) => VerificacionVisita::Entrada {
                 visita: VisitaParaEntrar {
@@ -100,7 +102,7 @@ impl Nucleo {
                     empresa: visitante.empresa,
                     anfitrion: cita.anfitrion_nombre,
                     motivo: cita.motivo,
-                    fecha_hasta: cita.fecha_hasta.to_string(),
+                    vigencia: vigencia_cita(cita.fecha_hasta, hoy),
                     hora_estimada: cita.hora_estimada,
                     placa_sugerida: visitante.placa_vehiculo,
                 },

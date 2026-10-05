@@ -42,7 +42,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -55,7 +54,8 @@ import uniffi.control_acceso_mobile.VisitaParaEntrar
 /// campo de cédula (escrita o escaneada) y el núcleo decide qué sigue --
 /// entrada si tiene cita hoy, salida si ya está adentro, o un aviso (azul si
 /// la cita es para otro día). Sin listas ni historial: eso se consulta en
-/// escritorio y en el panel web. Vive bajo la pestaña "Externos"
+/// escritorio y en el panel web. Sin lógica propia: cada texto y cada
+/// decisión vienen del núcleo. Vive bajo la pestaña "Externos"
 /// ([PantallaExternos]).
 @Composable
 fun PantallaVisitas(nucleo: Nucleo) {
@@ -160,7 +160,7 @@ private fun Entrada(visita: VisitaParaEntrar, viewModel: VisitasViewModel, onEsc
         Text(visita.nombre, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         visita.empresa?.let { Dato(it) }
         Dato("Visita a ${visita.anfitrion}" + (visita.motivo?.let { " · $it" } ?: ""))
-        Dato(vigencia(visita.fechaHasta) + (visita.horaEstimada?.let { " · llega ~$it" } ?: ""))
+        Dato(visita.vigencia + (visita.horaEstimada?.let { " · llega ~$it" } ?: ""))
     }
 
     FilaPildoras(
@@ -196,7 +196,7 @@ private fun Entrada(visita: VisitaParaEntrar, viewModel: VisitasViewModel, onEsc
     )
     BotonBrisas(
         onClick = viewModel::registrarEntrada,
-        enabled = !viewModel.registrando && !(viewModel.enVehiculo && viewModel.placa.isBlank()),
+        enabled = !viewModel.registrando,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(if (viewModel.registrando) "Registrando…" else "Registrar entrada")
@@ -288,14 +288,6 @@ private fun BotonCuadrado(icono: ImageVector, descripcion: String, onClick: () -
     ) {
         Icon(icono, contentDescription = descripcion, tint = MaterialTheme.colorScheme.primary)
     }
-}
-
-private val ZONA_COSTA_RICA: ZoneId = ZoneId.of("America/Costa_Rica")
-
-/// "Sólo hoy" o "Hasta el 07/10" -- `fechaHasta` viene como `AAAA-MM-DD`.
-internal fun vigencia(fechaHasta: String, hoy: LocalDate = LocalDate.now(ZONA_COSTA_RICA)): String {
-    val hasta = runCatching { LocalDate.parse(fechaHasta) }.getOrNull() ?: return "Vigente hoy"
-    return if (!hasta.isAfter(hoy)) "Sólo hoy" else "Hasta el ${hasta.format(DateTimeFormatter.ofPattern("dd/MM"))}"
 }
 
 private fun hora(iso: String): String {

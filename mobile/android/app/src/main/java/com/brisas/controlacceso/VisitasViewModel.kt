@@ -18,7 +18,8 @@ import uniffi.control_acceso_mobile.VerificacionVisita
 /// Estado y llamadas de [PantallaVisitas]: una cédula, y el núcleo decide qué
 /// sigue (`Nucleo.verificarVisita`): entrada si tiene cita hoy, salida si ya
 /// está adentro, o un aviso. Sin listas ni historial: el historial se
-/// consulta en escritorio y en el panel web.
+/// consulta en escritorio y en el panel web. Sin reglas propias: lee lo
+/// que responde el núcleo y lo muestra.
 class VisitasViewModel(
     private val nucleo: Nucleo,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
@@ -50,9 +51,9 @@ class VisitasViewModel(
         private set
 
     fun cambiarCedula(nueva: String) {
-        // Las visitas admiten pasaporte: letras y números; los separadores
-        // los quita el núcleo.
-        cedula = nueva.uppercase().filter { it.isLetterOrDigit() || it == '-' || it == ' ' }
+        // Tal cual: qué es un documento válido y su forma única lo decide
+        // el núcleo al verificar.
+        cedula = nueva
         verificacion = null
         error = null
     }
@@ -66,12 +67,12 @@ class VisitasViewModel(
     }
 
     fun cambiarPlaca(nueva: String) {
-        placa = nueva.uppercase()
+        placa = nueva
     }
 
     /// Escrita (al confirmar el teclado) o escaneada.
     fun verificar(texto: String = cedula) {
-        if (texto.isBlank() || verificando) return
+        if (verificando) return
         cedula = texto
         verificando = true
         error = null
@@ -97,22 +98,23 @@ class VisitasViewModel(
         }
     }
 
-    /// Gafete opcional (sin número = S/G). Caminando o en vehículo con placa.
+    /// Gafete vacío = sin gafete. En vehículo se manda la placa tal cual:
+    /// si falta o no sirve, lo dice el núcleo (`PlacaRequerida`/`PlacaInvalida`).
     fun registrarEntrada() {
         val visita = (verificacion as? VerificacionVisita.Entrada)?.visita ?: return
-        if (registrando || (enVehiculo && placa.isBlank())) return
+        if (registrando) return
         registrando = true
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    // Las reglas (cita vigente, gafete libre aquí y en el
-                    // otro equipo, visitante adentro en otra unidad) las
-                    // aplica el núcleo en esta llamada.
+                    // Las reglas (cita vigente, placa, gafete libre aquí y
+                    // en el otro equipo, visitante adentro en otra unidad)
+                    // las aplica el núcleo en esta llamada.
                     medirNucleo("registrarEntradaVisita") {
                         nucleo.registrarEntradaVisita(
                             visita.cedula,
                             gafete.toLongOrNull(),
-                            placa.trim().takeIf { enVehiculo && it.isNotEmpty() },
+                            placa.takeIf { enVehiculo },
                         )
                     }
                 }
