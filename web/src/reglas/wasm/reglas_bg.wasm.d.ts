@@ -7,7 +7,7 @@ export const normalizarCedulaContratista: (a: number, b: number) => [number, num
 export const requiereGafete: (a: number, b: number, c: number) => number;
 export const requierePraind: (a: number, b: number, c: number) => number;
 export const tiposIngresoSeleccionables: () => [number, number];
-export const validarContratista: (a: any, b: number, c: number) => [number, number, number];
+export const validarContratista: (a: any, b: number, c: number, d: any) => [number, number, number];
 export const __wbindgen_malloc: (a: number, b: number) => number;
 export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
 export const __wbindgen_externrefs: WebAssembly.Table;

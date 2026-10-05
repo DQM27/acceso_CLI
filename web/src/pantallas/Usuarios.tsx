@@ -18,9 +18,10 @@ import { listarDispositivosYSitios } from "../api/dispositivos";
 import { usePresenciaPorSitio } from "../presenciaSitios";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 import { mensajeError } from "../mensajeError";
+import FormularioEditarUsuario from "./FormularioEditarUsuario";
 
 /**
- * Vista + baja + alta de operadores/administradores globales (ver
+ * Vista + baja + alta + edición (nombre y rol) de operadores/administradores globales (ver
  * docs/planes-implementados/plan-panel-administrativo-web.md, punto 4). El toggle "Activo" ES
  * la baja (y la reactivación) -- global, no por sitio, ver `api/usuarios.ts`.
  * El alta genera una contraseña temporal de un solo uso (Supabase Auth,
@@ -53,6 +54,8 @@ export default function Usuarios() {
     password_temporal: string;
   } | null>(null);
   const [reseteando, setReseteando] = useState<string | null>(null);
+  // Usuario que se está editando (nombre y rol), o null.
+  const [editando, setEditando] = useState<Usuario | null>(null);
 
   // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
   // desktop/mobile para su propio sync periódico. "usuarios" para el aviso
@@ -187,6 +190,21 @@ export default function Usuarios() {
 
   const columnas: ColDef<FilaUsuario>[] = useMemo(
     () => [
+      {
+        // Primera columna: a mano también en pantallas angostas, donde la
+        // grilla virtualiza las columnas del final.
+        colId: "editar",
+        headerName: "",
+        flex: 0.7,
+        minWidth: 90,
+        filter: false,
+        sortable: false,
+        cellRenderer: ({ data }: { data: FilaUsuario }) => (
+          <button type="button" className="boton boton-celda-angosto" onClick={() => setEditando(data)}>
+            Editar
+          </button>
+        ),
+      },
       { field: "cedula", headerName: "Cédula", flex: 1, minWidth: 130, cellStyle: { textAlign: "left" } },
       { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
       { field: "rol", headerName: "Rol", flex: 1, minWidth: 130 },
@@ -280,6 +298,17 @@ export default function Usuarios() {
           />
         </div>
       </div>
+
+      {editando && (
+        <FormularioEditarUsuario
+          usuario={editando}
+          onGuardado={() => {
+            setEditando(null);
+            void recargar();
+          }}
+          onCerrar={() => setEditando(null)}
+        />
+      )}
 
       {modalAbierto && (
         <Modal titulo="Nuevo usuario" onCerrar={cerrarModal}>

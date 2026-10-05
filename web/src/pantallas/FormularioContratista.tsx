@@ -2,15 +2,16 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Modal from "../componentes/Modal";
-import { crearContratista, crearEmpresa, listarEmpresas } from "../api/contratistas";
-import type { Empresa, TipoIngreso } from "../api/contratistas";
+import { crearContratista, crearEmpresa, editarContratista, listarEmpresas } from "../api/contratistas";
+import type { ContratistaConEstado, Empresa, TipoIngreso } from "../api/contratistas";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 import { mensajeError } from "../mensajeError";
 import { useEstadoReglas } from "../reglas";
-import { errorAntesDeEnviar, pidePraind, tiposIngreso } from "./FormularioContratista.logica";
+import { admitePersonalRuta, errorAntesDeEnviar, pidePraind, tiposIngreso } from "./FormularioContratista.logica";
 
 /**
- * Alta de un contratista desde el panel. Sirve para dos cosas: registrar a un
+ * Alta y edición de un contratista desde el panel (con `contratista`, edita
+ * ese). El alta sirve para dos cosas: registrar a un
  * contratista de verdad y, sobre todo, **negar el acceso a alguien que nunca
  * fue contratista** (un proveedor, por ejemplo): se lo da de alta con el acceso
  * denegado y ninguna puerta lo deja entrar (ver
@@ -30,11 +31,18 @@ import { errorAntesDeEnviar, pidePraind, tiposIngreso } from "./FormularioContra
  * El formulario necesita las reglas cargadas (deciden los tipos y cuándo se pide
  * PRAIND). Casi siempre ya lo están al abrirlo; si no, espera.
  */
-export default function FormularioContratista(props: { onGuardado: () => void; onCerrar: () => void }) {
+interface Props {
+  /** Si viene, se edita este contratista; si no, es un alta. */
+  contratista?: ContratistaConEstado;
+  onGuardado: () => void;
+  onCerrar: () => void;
+}
+
+export default function FormularioContratista(props: Props) {
   const estadoReglas = useEstadoReglas();
   if (estadoReglas === "lista") return <FormularioConReglas {...props} />;
   return (
-    <Modal titulo="Nuevo contratista" onCerrar={props.onCerrar}>
+    <Modal titulo={props.contratista ? "Editar contratista" : "Nuevo contratista"} onCerrar={props.onCerrar}>
       {estadoReglas === "cargando" ? (
         <p className="m-0 text-muted">Cargando…</p>
       ) : (
@@ -51,16 +59,20 @@ export default function FormularioContratista(props: { onGuardado: () => void; o
   );
 }
 
-function FormularioConReglas({ onGuardado, onCerrar }: { onGuardado: () => void; onCerrar: () => void }) {
+function FormularioConReglas({ contratista, onGuardado, onCerrar }: Props) {
   const clienteConsultas = useQueryClient();
   const { data: empresas = [] } = useQuery({ queryKey: ["empresas"], queryFn: listarEmpresas });
 
-  const [cedula, setCedula] = useState("");
-  const [nombre, setNombre] = useState("");
-  const [empresaId, setEmpresaId] = useState("");
-  const [tipo, setTipo] = useState<TipoIngreso>("PRAIND");
-  const [praind, setPraind] = useState("");
-  const [denegado, setDenegado] = useState(false);
+  // Al editar arranca con lo guardado; el tipo que ya tenía se ofrece aunque
+  // esté retirado (ver `tiposIngreso`).
+  const tipoGuardado = (contratista?.tipo_ingreso ?? undefined) as TipoIngreso | undefined;
+  const [cedula, setCedula] = useState(contratista?.identificacion ?? "");
+  const [nombre, setNombre] = useState(contratista?.nombre ?? "");
+  const [empresaId, setEmpresaId] = useState(contratista?.empresa_id ?? "");
+  const [tipo, setTipo] = useState<TipoIngreso>(tipoGuardado ?? "PRAIND");
+  const [praind, setPraind] = useState(contratista?.fecha_vencimiento_praind ?? "");
+  const [personalRuta, setPersonalRuta] = useState(contratista?.es_personal_ruta ?? false);
+  const [denegado, setDenegado] = useState(contratista ? !contratista.activo : false);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +80,18 @@ function FormularioConReglas({ onGuardado, onCerrar }: { onGuardado: () => void;
   const [nombreEmpresa, setNombreEmpresa] = useState("");
   const [guardandoEmpresa, setGuardandoEmpresa] = useState(false);
 
-  const mostrarPraind = pidePraind(tipo, !denegado);
+  // La casilla sólo existe para los tipos que la admiten: si se cambia a otro
+  // tipo, no se manda un `true` que quedó del anterior.
+  const mostrarPersonalRuta = admitePersonalRuta(tipo);
+  const esPersonalRuta = mostrarPersonalRuta && personalRuta;
+  const mostrarPraind = pidePraind(tipo, !denegado, esPersonalRuta);
+  const anterior = contratista
+    ? {
+        tipo_ingreso: tipoGuardado ?? tipo,
+        es_personal_ruta: contratista.es_personal_ruta ?? false,
+        fecha_vencimiento_praind: contratista.fecha_vencimiento_praind,
+      }
+    : undefined;
 
   async function alCrearEmpresa() {
     setGuardandoEmpresa(true);
@@ -100,6 +123,8 @@ function FormularioConReglas({ onGuardado, onCerrar }: { onGuardado: () => void;
       tipo,
       praind: mostrarPraind && praind ? praind : null,
       conAcceso: !denegado,
+      personalRuta: esPersonalRuta,
+      anterior,
     });
     if (problema) {
       setError(problema);
@@ -108,19 +133,26 @@ function FormularioConReglas({ onGuardado, onCerrar }: { onGuardado: () => void;
     setEnviando(true);
     setError(null);
     try {
-      const creado = await crearContratista({
+      const datos = {
         cedula: cedula.trim(),
         nombre: nombre.trim(),
         empresa_id: empresaId,
         tipo_ingreso: tipo,
         fecha_vencimiento_praind: mostrarPraind && praind ? praind : null,
         con_acceso: !denegado,
-      });
-      toast.success(
-        denegado
-          ? `${creado.nombre} registrado con el acceso denegado.`
-          : `${creado.nombre} registrado.`,
-      );
+        es_personal_ruta: esPersonalRuta,
+      };
+      if (contratista) {
+        const editado = await editarContratista(contratista.id, datos);
+        toast.success(`${editado.nombre} actualizado.`);
+      } else {
+        const creado = await crearContratista(datos);
+        toast.success(
+          denegado
+            ? `${creado.nombre} registrado con el acceso denegado.`
+            : `${creado.nombre} registrado.`,
+        );
+      }
       onGuardado();
     } catch (fallo) {
       setError(mensajeError(fallo));
@@ -130,7 +162,7 @@ function FormularioConReglas({ onGuardado, onCerrar }: { onGuardado: () => void;
   }
 
   return (
-    <Modal titulo="Nuevo contratista" onCerrar={onCerrar}>
+    <Modal titulo={contratista ? "Editar contratista" : "Nuevo contratista"} onCerrar={onCerrar}>
       <form onSubmit={alEnviar} className="flex flex-col gap-3">
         <label className="campo">
           Cédula
@@ -219,13 +251,25 @@ function FormularioConReglas({ onGuardado, onCerrar }: { onGuardado: () => void;
             disabled={enviando}
             onChange={(evento) => setTipo(evento.target.value as TipoIngreso)}
           >
-            {tiposIngreso().map(({ valor, etiqueta }) => (
+            {tiposIngreso(tipoGuardado).map(({ valor, etiqueta }) => (
               <option key={valor} value={valor}>
                 {etiqueta}
               </option>
             ))}
           </select>
         </label>
+
+        {mostrarPersonalRuta && (
+          <label className="flex items-center gap-[0.4rem] text-texto">
+            <input
+              type="checkbox"
+              checked={personalRuta}
+              disabled={enviando}
+              onChange={(evento) => setPersonalRuta(evento.target.checked)}
+            />
+            Personal de ruta
+          </label>
+        )}
 
         {mostrarPraind && (
           <label className="campo">
@@ -247,12 +291,14 @@ function FormularioConReglas({ onGuardado, onCerrar }: { onGuardado: () => void;
               disabled={enviando}
               onChange={(evento) => setDenegado(evento.target.checked)}
             />
-            Crear con el acceso denegado
+            {contratista ? "Acceso denegado" : "Crear con el acceso denegado"}
           </label>
-          <p className="m-0 text-[0.8rem] text-muted">
-            Úselo para negar el acceso a alguien que no es contratista, por ejemplo un proveedor:
-            queda registrado y ninguna puerta lo deja entrar.
-          </p>
+          {!contratista && (
+            <p className="m-0 text-[0.8rem] text-muted">
+              Úselo para negar el acceso a alguien que no es contratista, por ejemplo un proveedor:
+              queda registrado y ninguna puerta lo deja entrar.
+            </p>
+          )}
         </div>
 
         {error && (

@@ -8,7 +8,7 @@
 
 use chrono::NaiveDate;
 use control_acceso_reglas::cedula::Cedula;
-use control_acceso_reglas::contratista::{self, DatosContratista};
+use control_acceso_reglas::contratista::{self, DatosContratista, EstadoAnterior};
 use control_acceso_reglas::tipo_ingreso::TipoIngreso;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -107,6 +107,16 @@ enum Resultado {
     },
 }
 
+/// Al editar: lo que el contratista tenía guardado (decide qué reglas se
+/// vuelven a revisar, ver `validar_contratista` del crate de reglas).
+#[derive(Deserialize)]
+struct EntradaAnterior {
+    tipo_ingreso: String,
+    #[serde(default)]
+    es_personal_ruta: bool,
+    fecha_vencimiento_praind: Option<String>,
+}
+
 fn invalido(codigo: &'static str, mensaje: &str) -> Resultado {
     Resultado::Invalido {
         ok: false,
@@ -119,20 +129,35 @@ fn fecha(texto: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(texto, "%Y-%m-%d").ok()
 }
 
-/// Valida un contratista NUEVO con todas las reglas de criterio
+/// Valida un contratista con todas las reglas de criterio
 /// (`control_acceso_reglas::contratista::validar_contratista`).
 ///
 /// `datos`: `{ cedula, nombre, tipo_ingreso, fecha_vencimiento_praind,
 /// es_personal_ruta?, tiene_acceso? }`. `hoy`: la fecha de Costa Rica,
-/// `"AAAA-MM-DD"`.
+/// `"AAAA-MM-DD"`. `anterior` (sólo al editar, si no `undefined`/`null`): lo
+/// que tenía guardado, `{ tipo_ingreso, es_personal_ruta?,
+/// fecha_vencimiento_praind }`; con él, a alguien con el PRAIND ya vencido se
+/// le puede corregir el nombre o quitar el acceso sin cambiar la fecha.
 ///
 /// Devuelve `{ ok: true, contratista }` con los datos normalizados, o
 /// `{ ok: false, codigo, mensaje }` con el primer motivo que falla.
 #[wasm_bindgen(js_name = validarContratista)]
-pub fn validar_contratista(datos: JsValue, hoy: &str) -> Result<JsValue, JsError> {
-    let resultado = match serde_wasm_bindgen::from_value::<EntradaContratista>(datos) {
-        Err(_) => invalido("datos_invalidos", "Faltan datos del contratista"),
-        Ok(entrada) => validar(&entrada, hoy),
+pub fn validar_contratista(
+    datos: JsValue,
+    hoy: &str,
+    anterior: JsValue,
+) -> Result<JsValue, JsError> {
+    let anterior = if anterior.is_undefined() || anterior.is_null() {
+        Ok(None)
+    } else {
+        serde_wasm_bindgen::from_value::<EntradaAnterior>(anterior).map(Some)
+    };
+    let resultado = match (
+        serde_wasm_bindgen::from_value::<EntradaContratista>(datos),
+        anterior,
+    ) {
+        (Ok(entrada), Ok(anterior)) => validar(&entrada, hoy, anterior.as_ref()),
+        _ => invalido("datos_invalidos", "Faltan datos del contratista"),
     };
     // `None` viaja como `null` (no `undefined`): es lo que esperan el panel y
     // la Edge Function, y lo que guarda Postgres.
@@ -142,10 +167,27 @@ pub fn validar_contratista(datos: JsValue, hoy: &str) -> Result<JsValue, JsError
         .map_err(|error| JsError::new(&error.to_string()))
 }
 
-fn validar(entrada: &EntradaContratista, hoy: &str) -> Resultado {
+fn validar(
+    entrada: &EntradaContratista,
+    hoy: &str,
+    anterior: Option<&EntradaAnterior>,
+) -> Resultado {
     let Some(hoy) = fecha(hoy) else {
         return invalido("fecha_invalida", "La fecha de hoy no es válida");
     };
+    // Lo guardado viene de la base: un tipo o una fecha que no se entienden
+    // no deberían pasar nunca, pero si pasan se valida como un alta (lo más
+    // estricto) en vez de fallar.
+    let anterior = anterior.and_then(|previo| {
+        Some(EstadoAnterior {
+            tipo_ingreso: tipo(&previo.tipo_ingreso)?,
+            es_personal_ruta: previo.es_personal_ruta,
+            fecha_vencimiento_praind: match previo.fecha_vencimiento_praind.as_deref() {
+                None | Some("") => None,
+                Some(texto) => Some(fecha(texto)?),
+            },
+        })
+    });
     let Some(tipo_ingreso) = tipo(&entrada.tipo_ingreso) else {
         return invalido("tipo_ingreso_invalido", "El tipo de ingreso no es válido");
     };
@@ -166,7 +208,7 @@ fn validar(entrada: &EntradaContratista, hoy: &str) -> Resultado {
             es_personal_ruta: entrada.es_personal_ruta,
             tiene_acceso: entrada.tiene_acceso,
         },
-        None,
+        anterior.as_ref(),
         hoy,
     ) {
         Ok(valido) => Resultado::Valido {
@@ -220,27 +262,66 @@ mod tests {
     #[test]
     fn valida_con_las_reglas_del_nucleo() {
         assert!(matches!(
-            validar(&entrada("SWAT", None), "2026-10-04"),
+            validar(&entrada("SWAT", None), "2026-10-04", None),
             Resultado::Valido { contratista, .. } if contratista.cedula == "111111111" && contratista.nombre == "ANA SOLANO"
         ));
         assert!(matches!(
-            validar(&entrada("POR_CORREO", None), "2026-10-04"),
+            validar(&entrada("POR_CORREO", None), "2026-10-04", None),
             Resultado::Invalido {
                 codigo: "tipo_ingreso_retirado",
                 ..
             }
         ));
         assert!(matches!(
-            validar(&entrada("PRAIND", Some("2026-10-03")), "2026-10-04"),
+            validar(&entrada("PRAIND", Some("2026-10-03")), "2026-10-04", None),
             Resultado::Invalido {
                 codigo: "praind_vencido",
                 ..
             }
         ));
         assert!(matches!(
-            validar(&entrada("PRAIND", Some("ayer")), "2026-10-04"),
+            validar(&entrada("PRAIND", Some("ayer")), "2026-10-04", None),
             Resultado::Invalido {
                 codigo: "fecha_invalida",
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn al_editar_respeta_lo_que_ya_tenia_guardado() {
+        let anterior = |tipo: &str, praind: Option<&str>| EntradaAnterior {
+            tipo_ingreso: tipo.into(),
+            es_personal_ruta: false,
+            fecha_vencimiento_praind: praind.map(Into::into),
+        };
+        // Un contratista viejo "por correo" se puede corregir sin cambiarle el tipo...
+        assert!(matches!(
+            validar(
+                &entrada("POR_CORREO", None),
+                "2026-10-04",
+                Some(&anterior("POR_CORREO", None))
+            ),
+            Resultado::Valido { .. }
+        ));
+        // ...y con el PRAIND ya vencido se le corrige el nombre sin tocar la fecha.
+        assert!(matches!(
+            validar(
+                &entrada("PRAIND", Some("2026-10-03")),
+                "2026-10-04",
+                Some(&anterior("PRAIND", Some("2026-10-03")))
+            ),
+            Resultado::Valido { .. }
+        ));
+        // Pero si cambia la fecha, tiene que quedar vigente.
+        assert!(matches!(
+            validar(
+                &entrada("PRAIND", Some("2026-10-02")),
+                "2026-10-04",
+                Some(&anterior("PRAIND", Some("2026-10-03")))
+            ),
+            Resultado::Invalido {
+                codigo: "praind_vencido",
                 ..
             }
         ));

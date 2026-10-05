@@ -35,17 +35,20 @@ export function requierePraind(tipo_ingreso: string, personal_ruta: boolean): bo
 export function tiposIngresoSeleccionables(): string[];
 
 /**
- * Valida un contratista NUEVO con todas las reglas de criterio
+ * Valida un contratista con todas las reglas de criterio
  * (`control_acceso_reglas::contratista::validar_contratista`).
  *
  * `datos`: `{ cedula, nombre, tipo_ingreso, fecha_vencimiento_praind,
  * es_personal_ruta?, tiene_acceso? }`. `hoy`: la fecha de Costa Rica,
- * `"AAAA-MM-DD"`.
+ * `"AAAA-MM-DD"`. `anterior` (sólo al editar, si no `undefined`/`null`): lo
+ * que tenía guardado, `{ tipo_ingreso, es_personal_ruta?,
+ * fecha_vencimiento_praind }`; con él, a alguien con el PRAIND ya vencido se
+ * le puede corregir el nombre o quitar el acceso sin cambiar la fecha.
  *
  * Devuelve `{ ok: true, contratista }` con los datos normalizados, o
  * `{ ok: false, codigo, mensaje }` con el primer motivo que falla.
  */
-export function validarContratista(datos: any, hoy: string): any;
+export function validarContratista(datos: any, hoy: string, anterior: any): any;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -57,7 +60,7 @@ export interface InitOutput {
     readonly requiereGafete: (a: number, b: number, c: number) => number;
     readonly requierePraind: (a: number, b: number, c: number) => number;
     readonly tiposIngresoSeleccionables: () => [number, number];
-    readonly validarContratista: (a: any, b: number, c: number) => [number, number, number];
+    readonly validarContratista: (a: any, b: number, c: number, d: any) => [number, number, number];
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;

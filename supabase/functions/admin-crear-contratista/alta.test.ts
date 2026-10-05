@@ -120,6 +120,21 @@ Deno.test("la autorización y la empresa se consultan a la vez", async () => {
   assertEquals(orden.slice(0, 2), ["autorizar:inicio", "empresa:inicio"]);
 });
 
+Deno.test("personal de ruta: se guarda si el tipo lo admite y pide PRAIND aunque sea SWAT", async () => {
+  const { puertos, guardados } = puertosDePrueba();
+  const conRuta = await procesarAlta({ ...valido, es_personal_ruta: true }, HOY, puertos);
+  assertEquals(conRuta.estado, 200);
+  assertEquals(guardados[0].es_personal_ruta, true);
+
+  const swatConRuta = await procesarAlta(
+    { ...valido, tipo_ingreso: "SWAT", es_personal_ruta: true, fecha_vencimiento_praind: null },
+    HOY,
+    puertos,
+  );
+  assertEquals(swatConRuta.estado, 422);
+  assertEquals(swatConRuta.cuerpo.error, "personal_ruta_no_admitido");
+});
+
 Deno.test("cuerpo vacío o malformado", async () => {
   const { puertos } = puertosDePrueba();
   assertEquals((await procesarAlta(null, HOY, puertos)).estado, 400);

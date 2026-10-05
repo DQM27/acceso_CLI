@@ -10,6 +10,7 @@ import {
   admitePersonalRuta,
   huellaFuentes,
   initSync,
+  normalizarCedulaContratista,
   requiereGafete,
   requierePraind,
   tiposIngresoSeleccionables,
@@ -52,14 +53,25 @@ export interface ContratistaValido {
   tiene_acceso: boolean;
 }
 
+/** Al editar: lo que el contratista tenía guardado. */
+export interface EstadoAnteriorContratista {
+  tipo_ingreso: string;
+  es_personal_ruta: boolean;
+  fecha_vencimiento_praind: string | null;
+}
+
 export type ResultadoValidacion =
   | { ok: true; contratista: ContratistaValido }
   | { ok: false; codigo: string; mensaje: string };
 
-/** Todas las reglas de criterio de un contratista nuevo. `hoy`: "AAAA-MM-DD"
- * en Costa Rica. */
-export function validarContratista(datos: DatosContratistaReglas, hoy: string): ResultadoValidacion {
-  return validarContratistaWasm(datos, hoy) as ResultadoValidacion;
+/** Todas las reglas de criterio de un contratista. `hoy`: "AAAA-MM-DD" en
+ * Costa Rica. `anterior`: sólo al editar, lo que tenía guardado. */
+export function validarContratista(
+  datos: DatosContratistaReglas,
+  hoy: string,
+  anterior?: EstadoAnteriorContratista,
+): ResultadoValidacion {
+  return validarContratistaWasm(datos, hoy, anterior ?? null) as ResultadoValidacion;
 }
 
 /** La fecha de hoy en Costa Rica, "AAAA-MM-DD" (la que decide si un PRAIND
@@ -73,4 +85,11 @@ export function hoyCostaRica(ahora: Date = new Date()): string {
   }).format(ahora);
 }
 
-export { admitePersonalRuta, huellaFuentes, requiereGafete, requierePraind, tiposIngresoSeleccionables };
+export {
+  admitePersonalRuta,
+  huellaFuentes,
+  normalizarCedulaContratista,
+  requiereGafete,
+  requierePraind,
+  tiposIngresoSeleccionables,
+};

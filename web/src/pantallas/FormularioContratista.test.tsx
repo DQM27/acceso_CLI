@@ -2,29 +2,54 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import FormularioContratista from "./FormularioContratista";
+import type { ContratistaConEstado } from "../api/contratistas";
 import { errorAntesDeEnviar, pidePraind, tiposIngreso } from "./FormularioContratista.logica";
 
 const mocks = vi.hoisted(() => ({
   listarEmpresas: vi.fn(),
   crearEmpresa: vi.fn(),
   crearContratista: vi.fn(),
+  editarContratista: vi.fn(),
   toastSuccess: vi.fn(),
 }));
 vi.mock("../api/contratistas", () => ({
   listarEmpresas: mocks.listarEmpresas,
   crearEmpresa: mocks.crearEmpresa,
   crearContratista: mocks.crearContratista,
+  editarContratista: mocks.editarContratista,
 }));
 vi.mock("sonner", () => ({ toast: { success: mocks.toastSuccess, error: vi.fn() } }));
 
-function montar(onGuardado = vi.fn(), onCerrar = vi.fn()) {
+function montar(onGuardado = vi.fn(), onCerrar = vi.fn(), contratista?: ContratistaConEstado) {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={cliente}>
-      <FormularioContratista onGuardado={onGuardado} onCerrar={onCerrar} />
+      <FormularioContratista contratista={contratista} onGuardado={onGuardado} onCerrar={onCerrar} />
     </QueryClientProvider>,
   );
   return { onGuardado, onCerrar };
+}
+
+function guardado(cambios: Partial<ContratistaConEstado> = {}): ContratistaConEstado {
+  return {
+    id: "c1",
+    identificacion: "112340567",
+    nombre: "ANA PÉREZ",
+    empresa_id: "e2",
+    empresa_nombre: "SODEXO",
+    tipo_ingreso: "SWAT",
+    fecha_vencimiento_praind: null,
+    es_personal_ruta: false,
+    activo: true,
+    empresa_activa: true,
+    requiere_praind: false,
+    dias_para_vencer: null,
+    estado_praind: "NO_REQUIERE",
+    estado_acceso: "PERMITIDO",
+    adentro_sitio_nombre: null,
+    adentro_desde: null,
+    ...cambios,
+  };
 }
 
 beforeEach(() => {
@@ -100,6 +125,7 @@ describe("FormularioContratista", () => {
       tipo_ingreso: "PRAIND",
       fecha_vencimiento_praind: null,
       con_acceso: false,
+      es_personal_ruta: false,
     });
     await waitFor(() => expect(onGuardado).toHaveBeenCalled());
     expect(mocks.toastSuccess).toHaveBeenCalledWith("ANA PÉREZ registrado con el acceso denegado.");
@@ -165,4 +191,53 @@ describe("FormularioContratista", () => {
     await waitFor(() => expect(mocks.crearEmpresa).toHaveBeenCalledWith("nueva sa"));
     await waitFor(() => expect((screen.getByLabelText(/^Empresa/) as HTMLSelectElement).value).toBe("e3"));
   });
+
+  it("edita: arranca con lo guardado y manda los cambios con el id", async () => {
+    mocks.editarContratista.mockResolvedValue({ nombre: "ANA MARÍA PÉREZ" });
+    const { onGuardado } = montar(vi.fn(), vi.fn(), guardado());
+    await waitFor(() => expect(screen.getByRole("option", { name: "SODEXO" })).toBeTruthy());
+
+    expect(screen.getByText("Editar contratista")).toBeTruthy();
+    expect((screen.getByLabelText("Cédula") as HTMLInputElement).value).toBe("112340567");
+    expect((screen.getByLabelText(/^Empresa/) as HTMLSelectElement).value).toBe("e2");
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Ana María Pérez" } });
+    fireEvent.change(screen.getByLabelText("Cédula"), { target: { value: "200000002" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await waitFor(() => expect(mocks.editarContratista).toHaveBeenCalledTimes(1));
+    expect(mocks.editarContratista).toHaveBeenCalledWith("c1", {
+      cedula: "200000002",
+      nombre: "Ana María Pérez",
+      empresa_id: "e2",
+      tipo_ingreso: "SWAT",
+      fecha_vencimiento_praind: null,
+      con_acceso: true,
+      es_personal_ruta: false,
+    });
+    expect(mocks.crearContratista).not.toHaveBeenCalled();
+    await waitFor(() => expect(onGuardado).toHaveBeenCalled());
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("ANA MARÍA PÉREZ actualizado.");
+  });
+
+  it("edita uno viejo POR CORREO sin obligar a cambiarle el tipo", async () => {
+    mocks.editarContratista.mockResolvedValue({ nombre: "LUIS" });
+    montar(vi.fn(), vi.fn(), guardado({ tipo_ingreso: "POR_CORREO", nombre: "LUIS" }));
+    await waitFor(() => expect(screen.getByRole("option", { name: "SODEXO" })).toBeTruthy());
+
+    expect(screen.getByRole("option", { name: "POR CORREO (retirado)" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(mocks.editarContratista).toHaveBeenCalledTimes(1));
+    expect(mocks.editarContratista.mock.calls[0][1]).toMatchObject({ tipo_ingreso: "POR_CORREO" });
+  });
+
+  it("personal de ruta: la casilla aparece sólo para los tipos que la admiten y pide PRAIND", async () => {
+    montar(vi.fn(), vi.fn(), guardado());
+    await waitFor(() => expect(screen.getByRole("option", { name: "SODEXO" })).toBeTruthy());
+
+    // SWAT no la admite.
+    expect(screen.queryByLabelText("Personal de ruta")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Tipo de ingreso"), { target: { value: "IN_HOUSE" } });
+    expect(screen.getByLabelText("Personal de ruta")).toBeTruthy();
+  });
 });
+

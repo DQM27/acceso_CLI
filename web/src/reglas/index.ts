@@ -87,6 +87,13 @@ export interface ContratistaValido {
   tiene_acceso: boolean;
 }
 
+/** Al editar: lo que el contratista tenía guardado. */
+export interface EstadoAnteriorContratista {
+  tipo_ingreso: TipoIngreso;
+  es_personal_ruta: boolean;
+  fecha_vencimiento_praind: string | null;
+}
+
 export type ResultadoValidacion =
   | { ok: true; contratista: ContratistaValido }
   | { ok: false; codigo: string; mensaje: string };
@@ -104,9 +111,13 @@ export const reglas = {
   tiposIngresoSeleccionables: (): TipoIngreso[] => wasm.tiposIngresoSeleccionables() as TipoIngreso[],
   /** Cédula en su forma única, o undefined si no es de contratista. */
   normalizarCedula: (texto: string): string | undefined => wasm.normalizarCedulaContratista(texto),
-  /** Todas las reglas de criterio de un contratista nuevo. `hoy`: "AAAA-MM-DD". */
-  validarContratista: (datos: DatosContratistaReglas, hoy: string): ResultadoValidacion =>
-    wasm.validarContratista(datos, hoy) as ResultadoValidacion,
+  /** Todas las reglas de criterio de un contratista. `hoy`: "AAAA-MM-DD".
+   * `anterior`: sólo al editar, lo que tenía guardado. */
+  validarContratista: (
+    datos: DatosContratistaReglas,
+    hoy: string,
+    anterior?: EstadoAnteriorContratista,
+  ): ResultadoValidacion => wasm.validarContratista(datos, hoy, anterior ?? null) as ResultadoValidacion,
   /** Huella de las fuentes con que se generó el paquete (ver reglas.test.ts). */
   huellaFuentes: (): string => wasm.huellaFuentes(),
 };

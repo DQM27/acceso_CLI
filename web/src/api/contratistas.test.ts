@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { crearContratista, crearEmpresa, listarContratistas, listarEmpresas } from "./contratistas";
+import { crearContratista, crearEmpresa, editarContratista, listarContratistas, listarEmpresas } from "./contratistas";
 
 /**
  * Construye un mock encadenable de la query de supabase-js
@@ -41,6 +41,7 @@ function filaCompleta(sobrescribir: Record<string, unknown> = {}) {
     fecha_vencimiento_praind: "2027-01-01",
     es_personal_ruta: false,
     activo: true,
+    empresa_id: "e1",
     empresa_activa: true,
     requiere_praind: true,
     dias_para_vencer: 90,
@@ -184,5 +185,43 @@ describe("crearContratista", () => {
   it("rechaza una respuesta con forma inesperada", async () => {
     mocks.invoke.mockResolvedValue({ data: filaCompleta({ activo: "sí" }), error: null });
     await expect(crearContratista(datos)).rejects.toThrow();
+  });
+});
+
+describe("editarContratista", () => {
+  it("llama a la Edge Function admin-editar-contratista con el id y devuelve la fila", async () => {
+    mocks.invoke.mockResolvedValue({ data: filaCompleta({ nombre: "ANA" }), error: null });
+    const datos = {
+      cedula: "112340567",
+      nombre: "Ana",
+      empresa_id: "e1",
+      tipo_ingreso: "SWAT" as const,
+      fecha_vencimiento_praind: null,
+      con_acceso: true,
+      es_personal_ruta: false,
+    };
+
+    const editado = await editarContratista("c1", datos);
+
+    expect(mocks.invoke).toHaveBeenCalledWith("admin-editar-contratista", { body: { id: "c1", ...datos } });
+    expect(editado.nombre).toBe("ANA");
+  });
+
+  it("propaga el mensaje de la función (por ejemplo, cédula de alguien adentro)", async () => {
+    const detalle = "No se puede cambiar la cédula mientras está adentro — registre primero la salida";
+    const respuesta = new Response(JSON.stringify({ error: "cedula_con_ingreso_activo", detail: detalle }), {
+      status: 409,
+    });
+    mocks.invoke.mockResolvedValue({ data: null, error: { message: "non-2xx", context: respuesta } });
+    await expect(
+      editarContratista("c1", {
+        cedula: "200000002",
+        nombre: "Ana",
+        empresa_id: "e1",
+        tipo_ingreso: "SWAT",
+        fecha_vencimiento_praind: null,
+        con_acceso: true,
+      }),
+    ).rejects.toThrow(detalle);
   });
 });

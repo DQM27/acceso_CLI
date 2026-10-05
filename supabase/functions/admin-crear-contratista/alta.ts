@@ -3,12 +3,17 @@
 // necesita datos (quién llama, la empresa existe, guardar). Separada de
 // `index.ts` para probarla con `deno test` (alta.test.ts).
 
+import {
+  type EmpresaEncontrada,
+  MENSAJE_CEDULA_DUPLICADA,
+  MENSAJE_EMPRESA_NO_ENCONTRADA,
+  type ResultadoGuardar,
+  texto,
+  UUID,
+} from "../_shared/contratistas.ts";
 import { type ContratistaValido, validarContratista } from "../_shared/reglas.ts";
 
-export interface EmpresaEncontrada {
-  id: string;
-  nombre: string;
-}
+export type { EmpresaEncontrada } from "../_shared/contratistas.ts";
 
 export interface Puertos {
   /** El correo de quien llama si es administrador del panel, o null. */
@@ -17,25 +22,15 @@ export interface Puertos {
   buscarEmpresa(id: string): Promise<EmpresaEncontrada | null>;
   /** Guarda y devuelve la fila creada; `"cedula_duplicada"` si el índice
    * único de cédula la rechazó. */
-  insertar(contratista: ContratistaValido, empresa: EmpresaEncontrada): Promise<
-    { ok: true; fila: Record<string, unknown> } | { ok: false; motivo: "cedula_duplicada" | "error"; detalle?: string }
-  >;
+  insertar(contratista: ContratistaValido, empresa: EmpresaEncontrada): Promise<ResultadoGuardar>;
 }
 
 export type RespuestaAlta =
   | { estado: 200; cuerpo: Record<string, unknown>; correo: string }
   | { estado: 400 | 401 | 404 | 409 | 422 | 500; cuerpo: { error: string; detail: string } };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Mismos textos que las apps (`mensajes::mensaje_contratista` del núcleo)
- * para lo que no es una regla de criterio. */
-const MENSAJE_EMPRESA_NO_ENCONTRADA = "La empresa seleccionada ya no existe";
-const MENSAJE_CEDULA_DUPLICADA = "Ya existe un contratista con esa cédula";
-
 export async function procesarAlta(cuerpo: unknown, hoy: string, puertos: Puertos): Promise<RespuestaAlta> {
   const datos = typeof cuerpo === "object" && cuerpo !== null ? cuerpo as Record<string, unknown> : {};
-  const texto = (valor: unknown) => (typeof valor === "string" ? valor : "");
 
   // Quién llama y la empresa se consultan A LA VEZ: son independientes, y
   // así el alta hace un viaje a la base menos (la autorización ya son dos:
@@ -64,8 +59,7 @@ export async function procesarAlta(cuerpo: unknown, hoy: string, puertos: Puerto
       fecha_vencimiento_praind: typeof datos.fecha_vencimiento_praind === "string"
         ? datos.fecha_vencimiento_praind
         : null,
-      // El panel no tiene la casilla "personal de ruta": siempre false.
-      es_personal_ruta: false,
+      es_personal_ruta: datos.es_personal_ruta === true,
       tiene_acceso: datos.con_acceso !== false,
     },
     hoy,

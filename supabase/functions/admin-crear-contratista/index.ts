@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { clienteServicio, correoAdminAutorizado } from "../_shared/admin.ts";
+import { columnasContratista } from "../_shared/contratistas.ts";
 import { json, leerCuerpo, preflight } from "../_shared/http.ts";
 import { hoyCostaRica } from "../_shared/reglas.ts";
 import { procesarAlta } from "./alta.ts";
@@ -18,7 +19,7 @@ import { procesarAlta } from "./alta.ts";
 //    único `contratistas_cedula_normalizada_key`.
 //
 // Body: { cedula, nombre, empresa_id, tipo_ingreso, fecha_vencimiento_praind,
-//         con_acceso }. Responde la fila creada, o { error, detail } con el
+//         es_personal_ruta, con_acceso }. Responde la fila creada, o { error, detail } con el
 //         mismo texto que muestran las apps.
 
 Deno.serve(async (req: Request) => {
@@ -41,14 +42,7 @@ Deno.serve(async (req: Request) => {
           // `id` no tiene valor por defecto: cada equipo genera el suyo, y el panel también.
           id: crypto.randomUUID(),
           dispositivo_origen_id: null,
-          nombre: contratista.nombre,
-          identificacion: contratista.cedula,
-          activo: contratista.tiene_acceso,
-          empresa_id: empresa.id,
-          empresa_nombre: empresa.nombre,
-          tipo_ingreso: contratista.tipo_ingreso,
-          fecha_vencimiento_praind: contratista.fecha_vencimiento_praind,
-          es_personal_ruta: contratista.es_personal_ruta,
+          ...columnasContratista(contratista, empresa),
         })
         .select("*")
         .single();

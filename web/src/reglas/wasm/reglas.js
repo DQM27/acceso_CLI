@@ -87,23 +87,27 @@ export function tiposIngresoSeleccionables() {
 }
 
 /**
- * Valida un contratista NUEVO con todas las reglas de criterio
+ * Valida un contratista con todas las reglas de criterio
  * (`control_acceso_reglas::contratista::validar_contratista`).
  *
  * `datos`: `{ cedula, nombre, tipo_ingreso, fecha_vencimiento_praind,
  * es_personal_ruta?, tiene_acceso? }`. `hoy`: la fecha de Costa Rica,
- * `"AAAA-MM-DD"`.
+ * `"AAAA-MM-DD"`. `anterior` (sólo al editar, si no `undefined`/`null`): lo
+ * que tenía guardado, `{ tipo_ingreso, es_personal_ruta?,
+ * fecha_vencimiento_praind }`; con él, a alguien con el PRAIND ya vencido se
+ * le puede corregir el nombre o quitar el acceso sin cambiar la fecha.
  *
  * Devuelve `{ ok: true, contratista }` con los datos normalizados, o
  * `{ ok: false, codigo, mensaje }` con el primer motivo que falla.
  * @param {any} datos
  * @param {string} hoy
+ * @param {any} anterior
  * @returns {any}
  */
-export function validarContratista(datos, hoy) {
+export function validarContratista(datos, hoy, anterior) {
     const ptr0 = passStringToWasm0(hoy, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.validarContratista(datos, ptr0, len0);
+    const ret = wasm.validarContratista(datos, ptr0, len0, anterior);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -137,6 +141,10 @@ function __wbg_get_imports() {
         },
         __wbg___wbindgen_in_92f62ee1427d9e49: function(arg0, arg1) {
             const ret = arg0 in arg1;
+            return ret;
+        },
+        __wbg___wbindgen_is_null_e343b7d08827ba72: function(arg0) {
+            const ret = arg0 === null;
             return ret;
         },
         __wbg___wbindgen_is_object_3c45d4f2dde4e749: function(arg0) {
