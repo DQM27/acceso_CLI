@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { agruparCitas, esquemaCita, estadoVisitante, formularioDesdeCita, normalizarDocumento, tituloCita } from "../dominio";
-import type { Cita } from "../dominio";
+import { agruparCitas, estadoVisitante, formularioDesdeCita, normalizarDocumento, tituloCita, validarCita } from "../dominio";
+import type { Cita, FormularioCita } from "../dominio";
 import { estadoCita, horaLegible, hoyCostaRica, rangoLegible, sumarDias } from "../fecha";
 
-const datos = () => ({
+const datos = (): FormularioCita => ({
   fecha_desde: "2026-09-09",
   fecha_hasta: "2026-09-10",
   hora_estimada: "",
@@ -18,9 +18,19 @@ const datos = () => ({
     },
   ],
 });
-describe("validación de citas", () => {
+describe("validación de citas (reglas del núcleo)", () => {
+  const valida = (entrada: FormularioCita, hoy = "2026-09-09") => {
+    const resultado = validarCita(entrada, hoy);
+    if (!resultado.ok) throw new Error(JSON.stringify(resultado.errores));
+    return resultado.datos;
+  };
+  const errores = (entrada: FormularioCita, hoy = "2026-09-09") => {
+    const resultado = validarCita(entrada, hoy);
+    return resultado.ok ? {} : resultado.errores;
+  };
+
   it("normaliza documentos y campos opcionales", () => {
-    const resultado = esquemaCita("2026-09-09").parse(datos());
+    const resultado = valida(datos());
     expect(resultado.visitantes[0]).toMatchObject({
       cedula: "123456789",
       empresa: null,
@@ -29,19 +39,35 @@ describe("validación de citas", () => {
     expect(resultado.motivo).toBeNull();
     expect(normalizarDocumento(" ab-123 ")).toBe("AB123");
   });
+  it("la cédula sale igual que en el check-in de la portería (cero del TSE incluido)", () => {
+    expect(normalizarDocumento("01-0847-0293")).toBe("108470293");
+    expect(normalizarDocumento("1 0847 0293")).toBe("108470293");
+  });
   it("rechaza documentos duplicados aunque se escriban con separadores distintos", () => {
     const entrada = datos();
     const [primero] = entrada.visitantes;
     if (!primero) throw new Error("fixture sin visitantes");
     entrada.visitantes.push({ ...primero, cedula: "123456789" });
-    const resultado = esquemaCita("2026-09-09").safeParse(entrada);
-    expect(resultado.success).toBe(false);
-    if (!resultado.success)
-      expect(resultado.error.issues[0]?.path).toEqual([
-        "visitantes",
-        1,
-        "cedula",
-      ]);
+    expect(errores(entrada)).toEqual({ "visitantes.1.cedula": "Esta persona ya está en la lista." });
+  });
+  it("detecta el duplicado aunque una cédula lleve el cero del TSE", () => {
+    const entrada = datos();
+    const [primero] = entrada.visitantes;
+    if (!primero) throw new Error("fixture sin visitantes");
+    entrada.visitantes = [
+      { ...primero, cedula: "01-0847-0293" },
+      { ...primero, cedula: "108470293" },
+    ];
+    expect(errores(entrada)).toHaveProperty(["visitantes.1.cedula"]);
+  });
+  it("un documento de más de 20 caracteres no se agenda (la portería no lo reconocería)", () => {
+    const entrada = datos();
+    const [primero] = entrada.visitantes;
+    if (!primero) throw new Error("fixture sin visitantes");
+    entrada.visitantes = [{ ...primero, cedula: "A".repeat(21) }];
+    expect(errores(entrada)).toEqual({ "visitantes.0.cedula": "El documento admite hasta 20 caracteres." });
+    entrada.visitantes = [{ ...primero, cedula: "A".repeat(20) }];
+    expect(valida(entrada).visitantes[0]?.cedula).toBe("A".repeat(20));
   });
   it.each([
     { fecha_desde: "2026-09-08" },
@@ -52,43 +78,33 @@ describe("validación de citas", () => {
     { motivo: "x".repeat(1001) },
     { motivo: "texto\u0000oculto" },
   ])("rechaza rangos, cantidades o textos inválidos: %j", (cambio) => {
-    expect(
-      esquemaCita("2026-09-09").safeParse({ ...datos(), ...cambio })
-        .success,
-    ).toBe(false);
+    expect(validarCita({ ...datos(), ...cambio }, "2026-09-09").ok).toBe(false);
+  });
+  it("devuelve todos los errores, uno por campo, con su ruta", () => {
+    const entrada = { ...datos(), fecha_desde: "2026-09-08", sitios: [] };
+    const [primero] = entrada.visitantes;
+    if (!primero) throw new Error("fixture sin visitantes");
+    entrada.visitantes = [{ ...primero, nombre: "" }];
+    expect(Object.keys(errores(entrada)).sort()).toEqual(["fecha_desde", "sitios", "visitantes.0.nombre"]);
   });
   it("hora_estimada: vacía se guarda como null, un formato válido se conserva", () => {
-    const sinHora = esquemaCita("2026-09-09").parse(datos());
-    expect(sinHora.hora_estimada).toBeNull();
-    const conHora = esquemaCita("2026-09-09").parse({
-      ...datos(),
-      hora_estimada: "10:00",
-    });
-    expect(conHora.hora_estimada).toBe("10:00");
+    expect(valida(datos()).hora_estimada).toBeNull();
+    expect(valida({ ...datos(), hora_estimada: "10:00" }).hora_estimada).toBe("10:00");
   });
   it("rechaza una hora_estimada con formato inválido", () => {
-    expect(
-      esquemaCita("2026-09-09").safeParse({
-        ...datos(),
-        hora_estimada: "25:99",
-      }).success,
-    ).toBe(false);
+    expect(errores({ ...datos(), hora_estimada: "25:99" })).toHaveProperty("hora_estimada");
   });
   it("acepta una visita de un solo día y rechaza un grupo sin límite", () => {
     const entrada = datos();
     entrada.fecha_hasta = entrada.fecha_desde;
-    expect(esquemaCita("2026-09-09").safeParse(entrada).success).toBe(
-      true,
-    );
+    expect(validarCita(entrada, "2026-09-09").ok).toBe(true);
     const [primero] = entrada.visitantes;
     if (!primero) throw new Error("fixture sin visitantes");
     entrada.visitantes = Array.from({ length: 51 }, (_, i) => ({
       ...primero,
       cedula: `DOC${i}`,
     }));
-    expect(esquemaCita("2026-09-09").safeParse(entrada).success).toBe(
-      false,
-    );
+    expect(errores(entrada)).toHaveProperty("visitantes");
   });
 });
 describe("fechas de Costa Rica", () => {
@@ -187,7 +203,7 @@ describe("editar y duplicar", () => {
       sitios: ["00000000-0000-4000-8000-000000000001"],
       visitantes: [{ nombre: "Ana Mora", cedula: "123456789", empresa: "ACME", placa_vehiculo: "" }],
     });
-    expect(esquemaCita("2026-10-05").safeParse(formulario).success).toBe(true);
+    expect(validarCita(formulario, "2026-10-05").ok).toBe(true);
   });
   it("una cita en curso conserva su fecha final", () => {
     const formulario = formularioDesdeCita(cita({ fecha_desde: "2026-10-03", fecha_hasta: "2026-10-08" }), "2026-10-05");

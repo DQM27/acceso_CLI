@@ -159,9 +159,11 @@ test("login con CSP real, sin desbordamiento en ambos temas", async ({ page }, i
   const respuesta = await page.goto("/");
   if (!respuesta) throw new Error("La navegación a / no devolvió respuesta");
   const csp = respuesta.headers()["content-security-policy"];
-  expect(csp).toContain("script-src 'self'");
-  expect(csp).toContain("style-src 'self'");
-  expect(csp).not.toContain("unsafe-");
+  // 'wasm-unsafe-eval' es lo único permitido: deja compilar SÓLO WebAssembly
+  // (las reglas del núcleo), no `eval` de JavaScript.
+  expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval';");
+  expect(csp).toContain("style-src 'self';");
+  expect(csp.replace("'wasm-unsafe-eval'", "")).not.toContain("unsafe-");
   expect(respuesta.headers()["referrer-policy"]).toBe("no-referrer");
   expect(respuesta.headers()["x-frame-options"]).toBe("DENY");
   await expect(page.getByRole("button", { name: "Continuar con Google" })).toBeVisible();

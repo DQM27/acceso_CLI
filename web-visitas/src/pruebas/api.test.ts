@@ -9,6 +9,7 @@ import {
   mensajeError,
   visitantesAnteriores,
 } from "../api";
+import { CitaInvalida } from "../dominio";
 import { hoyCostaRica } from "../fecha";
 
 const dobles = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
@@ -79,7 +80,9 @@ describe("guardado atómico", () => {
     );
   });
   it("rechaza datos inválidos antes de hacer peticiones", async () => {
-    await expect(crearCita(id, { ...datos(), sitios: [] })).rejects.toThrow();
+    const rechazo = crearCita(id, { ...datos(), sitios: [] });
+    await expect(rechazo).rejects.toBeInstanceOf(CitaInvalida);
+    await expect(rechazo).rejects.toMatchObject({ errores: { sitios: "Elija al menos un lugar." } });
     expect(dobles.rpc).not.toHaveBeenCalled();
   });
   it("si no existe la RPC no hace escrituras parciales", async () => {

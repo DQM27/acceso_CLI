@@ -112,21 +112,25 @@ La base conserva sólo lo que necesita ver todos los datos:
    # wasm-pack 0.13: https://github.com/rustwasm/wasm-pack/releases
    ./scripts/generar-reglas-wasm.sh
    ```
-3. Commitear todo junto: fuentes y lo generado (`web/src/reglas/wasm/` y
-   `supabase/functions/_shared/reglas/`).
-4. Volver a desplegar la Edge Function que use la regla y el panel web.
+3. Commitear todo junto: fuentes y lo generado (`web/src/reglas/wasm/`,
+   `web-visitas/src/reglas/wasm/` y `supabase/functions/_shared/reglas/`).
+4. Volver a desplegar la Edge Function que use la regla, el panel web y la
+   web de visitas.
 
 Si se olvida el paso 2, **la CI falla**: `web/src/reglas/reglas.test.ts`
-calcula la huella de las fuentes de `reglas/` y la compara con la que trae
-el paquete commiteado (`huellaFuentes()`, calculada en `reglas/wasm/build.rs`).
-El workflow del panel también corre cuando cambia `reglas/**`.
+(y su gemelo `web-visitas/src/pruebas/reglas.test.ts`) calcula la huella de
+las fuentes de `reglas/` y la compara con la que trae el paquete commiteado
+(`huellaFuentes()`, calculada en `reglas/wasm/build.rs`). La web de visitas
+además comprueba que su copia sea idéntica byte a byte a la del panel. El
+workflow de las webs también corre cuando cambia `reglas/**`.
 
 El paquete se genera sin `wasm-opt`, así que no depende de descargar
 binaryen: con la misma versión de Rust, regenerar da los mismos bytes.
 
 ## Seguridad del navegador
 
-`public/_headers` agrega `'wasm-unsafe-eval'` a `script-src`. Es la directiva
+`public/_headers` (del panel y de la web de visitas) agrega
+`'wasm-unsafe-eval'` a `script-src`. Es la directiva
 estándar que permite **compilar WebAssembly**; no habilita `eval` ni
 `new Function` de JavaScript. El test de la política lo distingue y sigue
 prohibiendo `'unsafe-eval'`. Sin esa directiva, el navegador bloquearía el
@@ -165,6 +169,32 @@ núcleo.
   pantalla. Antes la pantalla lo revisaba con su propia lista (`estaYaAdentro`)
   y el núcleo recién al guardar. El teléfono usa el mismo núcleo, así que
   también avisa al verificar.
+
+## Web de visitas con las reglas del núcleo (2026-10-05)
+
+La web donde los anfitriones agendan visitas (`web-visitas/`) ya no valida
+con su propio esquema (zod): usa `reglas/src/cita.rs` por WebAssembly, el
+mismo paquete que el panel (`validarCita`, `normalizarDocumentoVisitante`).
+Esas reglas son las que después tendrá que cumplir también el teléfono.
+
+- **Qué revisa:** fechas (no en el pasado, rango en orden), hora `HH:MM`,
+  lugares (al menos uno, sin repetir, hasta 100), personas (al menos una,
+  hasta 50, sin repetir), largo y caracteres de nombre, empresa, placa y
+  motivo. Devuelve **todos** los errores, cada uno con su campo
+  (`visitantes.1.cedula`), para marcarlos en el formulario.
+- **Documento:** sale en la misma forma única que reconoce el check-in de la
+  portería (`Cedula::normalizar`: sin separadores, mayúsculas, sin el cero
+  del TSE, hasta 20 caracteres). Por eso `01-0847-0293` y `108470293` se
+  detectan como la misma persona.
+- **Lo que encontró la unificación:** la web y `guardar_cita` aceptaban
+  documentos de hasta 30 caracteres, pero el núcleo sólo reconoce hasta 20.
+  Un documento de 21 a 30 se podía agendar y nunca coincidía en el check-in.
+  La web ya lo rechaza; la base se alinea en su propia migración.
+- **Carga:** `iniciarReglas()` arranca en `main.tsx` sin frenar la primera
+  pantalla. El botón "Agendar" espera a que el paquete esté (`useEstadoReglas`)
+  y, si no carga, el formulario pide recargar la página.
+- **La decisión sigue en la base:** lo del navegador es para avisar mientras
+  se llena el formulario; `crear_cita_anfitrion` vuelve a revisar al guardar.
 
 ## Siguientes etapas
 

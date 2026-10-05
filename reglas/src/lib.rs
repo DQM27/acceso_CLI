@@ -12,5 +12,6 @@
 //! datos: el núcleo con su base local y la nube con Postgres.
 
 pub mod cedula;
+pub mod cita;
 pub mod contratista;
 pub mod tipo_ingreso;

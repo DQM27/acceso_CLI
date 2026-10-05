@@ -338,6 +338,14 @@ vieja cancelaba con un `UPDATE` directo, y los `drop policy` lo deshabilitan.
 Las funciones solas no rompen nada (la web vieja sigue funcionando); los
 `drop policy` van después de publicar la web nueva.
 
+**Reglas del núcleo en la web (2026-10-05):** la web valida la cita con
+`reglas/src/cita.rs` por WebAssembly (ver
+`docs/arquitectura/reglas-compartidas.md`). Al publicarla, su `_headers` ya
+trae `'wasm-unsafe-eval'` en `script-src`; sin eso el navegador bloquea el
+paquete y el botón "Agendar" queda deshabilitado con el aviso de recargar.
+No hace falta migración para esto; el límite de 20 caracteres del documento
+en la base va aparte.
+
 ### 2.9 Escritorio: visitas unificadas y medio de ingreso (staging, 2026-10-05)
 
 Rama `feat/escritorio-pendientes` (sale de `feat/web-visitas`).

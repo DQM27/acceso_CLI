@@ -2,12 +2,13 @@
 # Genera el paquete WebAssembly de las reglas compartidas (`reglas/wasm`) y lo
 # deja donde lo usan:
 #   - web/src/reglas/wasm/                      panel web (Vite lo empaqueta)
+#   - web-visitas/src/reglas/wasm/              web de visitas (misma copia)
 #   - supabase/functions/_shared/reglas/        Edge Functions (Deno), con el
 #                                               .wasm comprimido (gzip) y en
 #                                               base64
 #
 # Hay que correrlo cada vez que cambia algo en `reglas/` y commitear lo
-# generado. Si no, `web/src/reglas/reglas.test.ts` falla: compara la huella
+# generado. Si no, `web/src/reglas/reglas.test.ts` (y el de web-visitas) falla: compara la huella
 # de las fuentes con la del paquete commiteado (ver reglas/wasm/build.rs).
 #
 # Requiere: rustup target add wasm32-unknown-unknown, y wasm-pack 0.13.
@@ -15,12 +16,16 @@ set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
 WEB="$RAIZ/web/src/reglas/wasm"
+VISITAS="$RAIZ/web-visitas/src/reglas/wasm"
 DENO="$RAIZ/supabase/functions/_shared/reglas"
 
 wasm-pack build "$RAIZ/reglas/wasm" --release --target web \
   --out-dir "$WEB" --out-name reglas --no-pack
 # wasm-pack deja un .gitignore con "*" en la carpeta de salida: se commitea.
 rm -f "$WEB/.gitignore" "$WEB/package.json" "$WEB/README.md"
+
+mkdir -p "$VISITAS"
+cp "$WEB"/reglas.js "$WEB"/reglas.d.ts "$WEB"/reglas_bg.wasm "$WEB"/reglas_bg.wasm.d.ts "$VISITAS/"
 
 mkdir -p "$DENO"
 cp "$WEB/reglas.js" "$WEB/reglas.d.ts" "$DENO/"
@@ -34,4 +39,4 @@ cp "$WEB/reglas.js" "$WEB/reglas.d.ts" "$DENO/"
 } > "$DENO/reglas_wasm_base64.ts"
 
 echo "Paquete de reglas generado:"
-ls -la "$WEB" "$DENO"
+ls -la "$WEB" "$VISITAS" "$DENO"
