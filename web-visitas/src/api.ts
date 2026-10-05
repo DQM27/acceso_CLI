@@ -2,7 +2,8 @@ import { z } from "./lib/validacion";
 import { supabase } from "./lib/supabase";
 import {
   citaEsquema,
-  esquemaCita,
+  CitaInvalida,
+  validarCita,
   llegadaEsquema,
   sitioEsquema,
   visitanteAnteriorEsquema,
@@ -105,7 +106,10 @@ export async function visitantesAnteriores(busqueda: string, signal?: AbortSigna
 }
 
 function parametros(formulario: FormularioCita, fechaValidacion: string) {
-  const datos = esquemaCita(fechaValidacion).parse(formulario);
+  // Las reglas del núcleo (WebAssembly): la base vuelve a revisar todo.
+  const resultado = validarCita(formulario, fechaValidacion);
+  if (!resultado.ok) throw new CitaInvalida(resultado.errores);
+  const datos = resultado.datos;
   return {
     p_fecha_desde: datos.fecha_desde,
     p_fecha_hasta: datos.fecha_hasta,

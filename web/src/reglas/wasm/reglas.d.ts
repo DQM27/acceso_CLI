@@ -19,6 +19,13 @@ export function huellaFuentes(): string;
 export function normalizarCedulaContratista(texto: string): string | undefined;
 
 /**
+ * Documento de un visitante en su forma única (la misma que reconoce el
+ * check-in de la portería), o `undefined` si no es válido. Admite
+ * pasaportes con letras.
+ */
+export function normalizarDocumentoVisitante(texto: string): string | undefined;
+
+/**
  * ¿Este tipo exige gafete al entrar?
  */
 export function requiereGafete(tipo_ingreso: string, personal_ruta: boolean): boolean;
@@ -33,6 +40,20 @@ export function requierePraind(tipo_ingreso: string, personal_ruta: boolean): bo
  * siempre.
  */
 export function tiposIngresoSeleccionables(): string[];
+
+/**
+ * Valida una cita nueva con las reglas del núcleo
+ * (`control_acceso_reglas::cita::validar_cita`).
+ *
+ * `datos`: `{ fecha_desde, fecha_hasta, hora_estimada?, motivo?, sitios,
+ * visitantes: [{ nombre, cedula, empresa?, placa_vehiculo? }] }`, tal cual
+ * del formulario. `hoy`: la fecha de Costa Rica, `"AAAA-MM-DD"`.
+ *
+ * Devuelve `{ ok: true, cita }` con los datos normalizados (cédula en su
+ * forma única, textos recortados, vacíos como `null`), o `{ ok: false,
+ * errores: [{ campo, mensaje }] }` con todos los problemas.
+ */
+export function validarCita(datos: any, hoy: string): any;
 
 /**
  * Valida un contratista con todas las reglas de criterio
@@ -57,12 +78,16 @@ export interface InitOutput {
     readonly admitePersonalRuta: (a: number, b: number) => number;
     readonly huellaFuentes: () => [number, number];
     readonly normalizarCedulaContratista: (a: number, b: number) => [number, number];
+    readonly normalizarDocumentoVisitante: (a: number, b: number) => [number, number];
     readonly requiereGafete: (a: number, b: number, c: number) => number;
     readonly requierePraind: (a: number, b: number, c: number) => number;
     readonly tiposIngresoSeleccionables: () => [number, number];
+    readonly validarCita: (a: any, b: number, c: number) => [number, number, number];
     readonly validarContratista: (a: any, b: number, c: number, d: any) => [number, number, number];
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_exn_store: (a: number) => void;
+    readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __externref_drop_slice: (a: number, b: number) => void;

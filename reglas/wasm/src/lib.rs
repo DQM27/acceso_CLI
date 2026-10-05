@@ -1,13 +1,15 @@
 //! Las reglas de `control_acceso_reglas`, expuestas a JavaScript con
-//! `wasm-bindgen`. Las usan el panel web (para avisar mientras se llena el
-//! formulario) y la Edge Function `admin-crear-contratista` (para decidir si
-//! guarda). Es el mismo código que corre en escritorio y teléfono.
+//! `wasm-bindgen`. Las usan el panel web y la web de visitas (para avisar
+//! mientras se llena el formulario) y la Edge Function
+//! `admin-crear-contratista` (para decidir si guarda). Es el mismo código
+//! que corre en escritorio y teléfono.
 //!
 //! Los tipos de ingreso viajan con los códigos de la nube (`"PRAIND"`,
 //! `"IN_HOUSE"`, `"POR_CORREO"`, `"SWAT"`) y las fechas como `"AAAA-MM-DD"`.
 
 use chrono::NaiveDate;
 use control_acceso_reglas::cedula::Cedula;
+use control_acceso_reglas::cita::{self, CitaNueva, VisitanteNuevo};
 use control_acceso_reglas::contratista::{self, DatosContratista, EstadoAnterior};
 use control_acceso_reglas::tipo_ingreso::TipoIngreso;
 use serde::{Deserialize, Serialize};
@@ -228,6 +230,173 @@ fn validar(
     }
 }
 
+// ---- Visitas (web de visitas) ----
+
+/// Documento de un visitante en su forma única (la misma que reconoce el
+/// check-in de la portería), o `undefined` si no es válido. Admite
+/// pasaportes con letras.
+#[wasm_bindgen(js_name = normalizarDocumentoVisitante)]
+pub fn normalizar_documento_visitante(texto: &str) -> Option<String> {
+    cita::documento_de_visitante(texto)
+        .ok()
+        .map(Cedula::into_string)
+}
+
+#[derive(Deserialize)]
+struct EntradaVisitante {
+    #[serde(default)]
+    nombre: String,
+    #[serde(default)]
+    cedula: String,
+    #[serde(default)]
+    empresa: Option<String>,
+    #[serde(default)]
+    placa_vehiculo: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct EntradaCita {
+    #[serde(default)]
+    fecha_desde: String,
+    #[serde(default)]
+    fecha_hasta: String,
+    #[serde(default)]
+    hora_estimada: Option<String>,
+    #[serde(default)]
+    motivo: Option<String>,
+    #[serde(default)]
+    sitios: Vec<String>,
+    #[serde(default)]
+    visitantes: Vec<EntradaVisitante>,
+}
+
+#[derive(Serialize)]
+struct SalidaVisitante {
+    nombre: String,
+    cedula: String,
+    empresa: Option<String>,
+    placa_vehiculo: Option<String>,
+}
+
+#[derive(Serialize)]
+struct SalidaCita {
+    fecha_desde: String,
+    fecha_hasta: String,
+    /// `"HH:MM"`.
+    hora_estimada: Option<String>,
+    motivo: Option<String>,
+    sitios: Vec<String>,
+    visitantes: Vec<SalidaVisitante>,
+}
+
+#[derive(Serialize)]
+struct SalidaErrorCampo {
+    campo: String,
+    mensaje: String,
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum ResultadoCita {
+    Valida {
+        ok: bool,
+        cita: SalidaCita,
+    },
+    Invalida {
+        ok: bool,
+        errores: Vec<SalidaErrorCampo>,
+    },
+}
+
+fn invalida(campo: &str, mensaje: &str) -> ResultadoCita {
+    ResultadoCita::Invalida {
+        ok: false,
+        errores: vec![SalidaErrorCampo {
+            campo: campo.to_string(),
+            mensaje: mensaje.to_string(),
+        }],
+    }
+}
+
+/// Valida una cita nueva con las reglas del núcleo
+/// (`control_acceso_reglas::cita::validar_cita`).
+///
+/// `datos`: `{ fecha_desde, fecha_hasta, hora_estimada?, motivo?, sitios,
+/// visitantes: [{ nombre, cedula, empresa?, placa_vehiculo? }] }`, tal cual
+/// del formulario. `hoy`: la fecha de Costa Rica, `"AAAA-MM-DD"`.
+///
+/// Devuelve `{ ok: true, cita }` con los datos normalizados (cédula en su
+/// forma única, textos recortados, vacíos como `null`), o `{ ok: false,
+/// errores: [{ campo, mensaje }] }` con todos los problemas.
+#[wasm_bindgen(js_name = validarCita)]
+pub fn validar_cita(datos: JsValue, hoy: &str) -> Result<JsValue, JsError> {
+    let resultado = match serde_wasm_bindgen::from_value::<EntradaCita>(datos) {
+        Ok(entrada) => validar_cita_entrada(entrada, hoy),
+        Err(_) => invalida("formulario", "Faltan datos de la visita"),
+    };
+    let serializador = serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true);
+    resultado
+        .serialize(&serializador)
+        .map_err(|error| JsError::new(&error.to_string()))
+}
+
+fn validar_cita_entrada(entrada: EntradaCita, hoy: &str) -> ResultadoCita {
+    let Some(hoy) = fecha(hoy) else {
+        return invalida("formulario", "La fecha de hoy no es válida");
+    };
+    let nueva = CitaNueva {
+        fecha_desde: entrada.fecha_desde,
+        fecha_hasta: entrada.fecha_hasta,
+        hora_estimada: entrada.hora_estimada,
+        motivo: entrada.motivo,
+        sitios: entrada.sitios,
+        visitantes: entrada
+            .visitantes
+            .into_iter()
+            .map(|visitante| VisitanteNuevo {
+                nombre: visitante.nombre,
+                cedula: visitante.cedula,
+                empresa: visitante.empresa,
+                placa_vehiculo: visitante.placa_vehiculo,
+            })
+            .collect(),
+    };
+    match cita::validar_cita(&nueva, hoy) {
+        Ok(valida) => ResultadoCita::Valida {
+            ok: true,
+            cita: SalidaCita {
+                fecha_desde: valida.fecha_desde.format("%Y-%m-%d").to_string(),
+                fecha_hasta: valida.fecha_hasta.format("%Y-%m-%d").to_string(),
+                hora_estimada: valida
+                    .hora_estimada
+                    .map(|hora| hora.format("%H:%M").to_string()),
+                motivo: valida.motivo,
+                sitios: valida.sitios,
+                visitantes: valida
+                    .visitantes
+                    .into_iter()
+                    .map(|visitante| SalidaVisitante {
+                        nombre: visitante.nombre,
+                        cedula: visitante.cedula,
+                        empresa: visitante.empresa,
+                        placa_vehiculo: visitante.placa_vehiculo,
+                    })
+                    .collect(),
+            },
+        },
+        Err(errores) => ResultadoCita::Invalida {
+            ok: false,
+            errores: errores
+                .into_iter()
+                .map(|error| SalidaErrorCampo {
+                    campo: error.campo,
+                    mensaje: error.mensaje,
+                })
+                .collect(),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,5 +494,48 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn valida_una_visita_con_las_reglas_del_nucleo() {
+        let entrada = |cedula_dos: &str| EntradaCita {
+            fecha_desde: "2026-10-05".into(),
+            fecha_hasta: "2026-10-05".into(),
+            hora_estimada: Some("08:00".into()),
+            motivo: Some(" ".into()),
+            sitios: vec!["s1".into()],
+            visitantes: vec![
+                EntradaVisitante {
+                    nombre: "Ana Mora".into(),
+                    cedula: "01-0847-0293".into(),
+                    empresa: None,
+                    placa_vehiculo: None,
+                },
+                EntradaVisitante {
+                    nombre: "Luis Rojas".into(),
+                    cedula: cedula_dos.into(),
+                    empresa: Some("ACME".into()),
+                    placa_vehiculo: Some("bcd123".into()),
+                },
+            ],
+        };
+        assert!(matches!(
+            validar_cita_entrada(entrada("204560789"), "2026-10-05"),
+            ResultadoCita::Valida { cita, .. }
+                if cita.visitantes[0].cedula == "108470293"
+                    && cita.visitantes[1].placa_vehiculo.as_deref() == Some("BCD123")
+                    && cita.motivo.is_none()
+                    && cita.hora_estimada.as_deref() == Some("08:00")
+        ));
+        assert!(matches!(
+            validar_cita_entrada(entrada("108470293"), "2026-10-05"),
+            ResultadoCita::Invalida { errores, .. }
+                if errores.len() == 1 && errores[0].campo == "visitantes.1.cedula"
+        ));
+        assert_eq!(
+            normalizar_documento_visitante(" ab-123 ").as_deref(),
+            Some("AB123")
+        );
+        assert_eq!(normalizar_documento_visitante("1-2"), None);
     }
 }

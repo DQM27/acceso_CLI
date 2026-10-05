@@ -5,8 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Plus } from "lucide-react";
 import { listarSitios, mensajeError } from "../api";
 import {
-  esquemaCita,
   normalizarDocumento,
+  validarCita,
   visitanteVacio,
   MAX_VISITANTES,
 } from "../dominio";
@@ -16,6 +16,7 @@ import { Aviso, Cargando, Dialogo } from "./Comunes";
 import BuscarAnteriores from "./BuscarAnteriores";
 import SelectorFecha from "./SelectorFecha";
 import { useEnLinea } from "../enLinea";
+import { useEstadoReglas } from "../reglas";
 
 type Errores = Record<string, string>;
 type Cuando = "hoy" | "manana" | "otro" | "varios";
@@ -29,7 +30,7 @@ function cuandoDe(formulario: FormularioCita, hoy: string): Cuando {
 
 /** Formulario de una visita en una sola página: quién viene, cuándo, dónde y
  * el motivo, con el botón siempre visible abajo. Lo usan Agendar, Editar y
- * Duplicar. Valida con las mismas reglas que la base (`esquemaCita`); las que
+ * Duplicar. Valida con las reglas del núcleo (`validarCita`, WebAssembly); las que
  * necesitan datos (fecha del servidor, límites, que nadie haya entrado al
  * editar) las vuelve a revisar la base y su mensaje se muestra tal cual. */
 export default function FormularioVisita({
@@ -51,6 +52,8 @@ export default function FormularioVisita({
   const sinCambios = JSON.stringify(formulario) === JSON.stringify(inicial);
   // Sin conexión el aviso lo da AuthContexto; aquí sólo se frena el envío.
   const enLinea = useEnLinea();
+  // Las reglas del núcleo (WebAssembly) validan antes de enviar.
+  const estadoReglas = useEstadoReglas();
 
   const sitios = useQuery({ queryKey: ["sitios"], queryFn: ({ signal }) => listarSitios(signal), staleTime: 300_000 });
 
@@ -119,14 +122,9 @@ export default function FormularioVisita({
     evento.preventDefault();
     setErrorGeneral(null);
     const completo = { ...formulario, sitios: elegidos };
-    const resultado = esquemaCita(hoy).safeParse(completo);
-    if (!resultado.success) {
-      const nuevos: Errores = {};
-      for (const problema of resultado.error.issues) {
-        const clave = problema.path.join(".");
-        if (!nuevos[clave]) nuevos[clave] = problema.message;
-      }
-      setErrores(nuevos);
+    const resultado = validarCita(completo, hoy);
+    if (!resultado.ok) {
+      setErrores(resultado.errores);
       setErrorGeneral("Revise los datos marcados.");
       return;
     }
@@ -150,6 +148,9 @@ export default function FormularioVisita({
   return (
     <form onSubmit={enviar} noValidate className="flex min-h-[calc(100dvh-56px)] flex-col">
       <div className="mx-auto flex w-full max-w-[720px] flex-1 flex-col gap-3.5 p-4">
+        {estadoReglas === "error" && (
+          <Aviso>No se pudieron cargar las reglas para revisar la visita. Recargue la página.</Aviso>
+        )}
         {errorGeneral && <Aviso>{errorGeneral}</Aviso>}
 
         <section className="tarjeta flex flex-col gap-3 p-3.5" aria-labelledby="titulo-quien">
@@ -270,7 +271,7 @@ export default function FormularioVisita({
             </div>
             <div className="truncate">{nombresSitios.length ? nombresSitios.join(", ") : "Elija el lugar"}</div>
           </div>
-          <button type="submit" className="boton boton-primario min-h-11 shrink-0 px-5" disabled={enviando || !enLinea}>
+          <button type="submit" className="boton boton-primario min-h-11 shrink-0 px-5" disabled={enviando || !enLinea || estadoReglas !== "lista"}>
             {enviando ? "Guardando…" : textoBoton}
           </button>
         </div>
