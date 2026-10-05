@@ -98,6 +98,11 @@ pub enum ContratistaServiceError {
     TipoIngresoRetirado,
     #[error("La cédula del contratista ya existe")]
     CedulaDuplicada,
+    /// No se cambia la cédula de quien está adentro: su ingreso abierto
+    /// quedaría con la cédula vieja, y con la nueva podría volver a entrar
+    /// sin que nada lo frene (el "¿ya está adentro?" compara por cédula).
+    #[error("No se puede cambiar la cédula de un contratista que está adentro")]
+    CedulaConIngresoActivo,
     #[error("La sesión actual no está autorizada para realizar esta operación")]
     OperacionNoAutorizada,
     #[error(transparent)]

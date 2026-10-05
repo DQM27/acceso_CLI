@@ -65,9 +65,10 @@ pub fn mensaje_empresa(error: EmpresaServiceError) -> String {
 
 pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
     use ContratistaServiceError::{
-        CedulaDuplicada, CedulaInvalida, CedulaVacia, ContratistaNoEncontrado, Database,
-        EmpresaNoEncontrada, NombreInvalido, NombreVacio, OperacionNoAutorizada,
-        PersonalRutaNoAdmitido, PraindRequerido, PraindVencido, TipoIngresoRetirado,
+        CedulaConIngresoActivo, CedulaDuplicada, CedulaInvalida, CedulaVacia,
+        ContratistaNoEncontrado, Database, EmpresaNoEncontrada, NombreInvalido, NombreVacio,
+        OperacionNoAutorizada, PersonalRutaNoAdmitido, PraindRequerido, PraindVencido,
+        TipoIngresoRetirado,
     };
 
     match error {
@@ -85,6 +86,10 @@ pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
                 .into()
         }
         CedulaDuplicada => "Ya existe un contratista con esa cédula".into(),
+        CedulaConIngresoActivo => {
+            "No se puede cambiar la cédula mientras está adentro — registre primero la salida"
+                .into()
+        }
         OperacionNoAutorizada => "Su sesión no está autorizada para esta operación".into(),
         Database(error) => {
             log::error!("contratista: {error}");

@@ -158,6 +158,9 @@ export default function FormularioContratista({
         onSubmit={handleSubmit(alGuardar)}
         style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
       >
+        {/* La cédula también se corrige al editar (cualquier usuario). Las
+            reglas las pone el núcleo: forma única, no repetida, y no a
+            quien está adentro (`CedulaConIngresoActivo`). */}
         <label className="campo">
           Cédula
           <input
@@ -167,7 +170,6 @@ export default function FormularioContratista({
               },
             })}
             inputMode="numeric"
-            disabled={!!contratista}
           />
           {errors.cedula && <span style={{ color: "var(--error)" }}>{errors.cedula.message}</span>}
         </label>

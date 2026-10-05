@@ -71,6 +71,16 @@ pub fn adentro_por_otra_via(
     Ok(None)
 }
 
+/// ¿Esta cédula tiene un ingreso de contratista abierto, en este equipo o en
+/// el otro de la unidad? Para no cambiarle la cédula a quien está adentro.
+pub fn contratista_adentro(connection: &Connection, cedula: &str) -> Result<bool, DatabaseError> {
+    let (_, consulta) = CONSULTAS
+        .iter()
+        .find(|(via, _)| *via == ViaIngreso::Contratista)
+        .expect("la vía contratista está en CONSULTAS");
+    Ok(connection.query_row(consulta, params![cedula], |fila| fila.get(0))?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
