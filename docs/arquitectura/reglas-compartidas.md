@@ -189,7 +189,10 @@ Esas reglas son las que después tendrá que cumplir también el teléfono.
 - **Lo que encontró la unificación:** la web y `guardar_cita` aceptaban
   documentos de hasta 30 caracteres, pero el núcleo sólo reconoce hasta 20.
   Un documento de 21 a 30 se podía agendar y nunca coincidía en el check-in.
-  La web ya lo rechaza; la base se alinea en su propia migración.
+  La web ya lo rechaza, y la base también desde
+  `20261005133000_guardar_cita_reglas_del_nucleo` (`guardar_cita` exige la
+  forma única de 3 a 20 caracteres, colapsa los espacios del nombre y pasa la
+  placa a mayúsculas, igual que `cita.rs`).
 - **Carga:** `iniciarReglas()` arranca en `main.tsx` sin frenar la primera
   pantalla. El botón "Agendar" espera a que el paquete esté (`useEstadoReglas`)
   y, si no carga, el formulario pide recargar la página.
