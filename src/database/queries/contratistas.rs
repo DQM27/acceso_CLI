@@ -4,7 +4,7 @@ use rusqlite::{Connection, Row};
 use crate::database::error::DatabaseError;
 use crate::database::queries::{Igualdad, LIMITE_LISTADO_PREDETERMINADO as LIMITE_PREDETERMINADO};
 use crate::database::search::BusquedaTexto;
-use crate::domain::acceso::DIAS_ADVERTENCIA_PRAIND;
+use crate::domain::acceso::{DIAS_ADVERTENCIA_PRAIND, EstadoAccesoLista};
 use crate::models::tipo_ingreso::TipoIngreso;
 
 /// ¿Hay un contratista con esta cédula y el acceso negado (`tiene_acceso`
@@ -50,6 +50,7 @@ pub struct PaginaContratistas {
 /// Lectura compuesta lista para presentar sin resolver la empresa por separado.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[allow(clippy::struct_excessive_bools)] // Copia de una fila: cada bool es una columna o un EXISTS.
 pub struct ContratistaResumen {
     pub id: i64,
     pub empresa_id: i64,
@@ -67,6 +68,15 @@ pub struct ContratistaResumen {
     /// Lo llena `AppCore::buscar_contratistas` con el reloj del núcleo; la
     /// consulta lo deja en `None`.
     pub aviso_acceso: Option<String>,
+    /// `empresas.activo`: hace falta para evaluar `verificar_acceso`.
+    pub empresa_activa: bool,
+    /// Resultado completo de `verificar_acceso` para hoy (las mismas reglas
+    /// que al dar ingreso). Lo llena `AppCore::buscar_contratistas`; la
+    /// consulta lo deja en `None`.
+    pub estado_acceso: Option<EstadoAccesoLista>,
+    /// Días para que venza la PRAIND (negativo: vencida). Lo llena
+    /// `AppCore::buscar_contratistas`; `None` si no requiere o no hay fecha.
+    pub dias_para_vencer_praind: Option<i64>,
 }
 
 /// Estado de vencimiento de PRAIND a filtrar. `hoy` viaja con la variante en
@@ -278,6 +288,7 @@ impl ContratistasQuery for SqliteContratistasQuery<'_> {
             "SELECT
                 c.id, c.empresa_id, c.cedula, c.nombre, e.nombre, c.tipo_ingreso,
                 c.fecha_vencimiento_praind, c.es_personal_ruta, c.tiene_acceso,
+                e.activo,
                 EXISTS (
                     SELECT 1
                     FROM registro_ingresos AS r
@@ -339,8 +350,11 @@ fn convertir_fila(row: &Row<'_>) -> rusqlite::Result<ContratistaResumen> {
         fecha_vencimiento_praind,
         es_personal_ruta: row.get::<_, i64>(7)? != 0,
         tiene_acceso: row.get::<_, i64>(8)? != 0,
-        tiene_ingreso_activo: row.get::<_, i64>(9)? != 0,
+        empresa_activa: row.get::<_, i64>(9)? != 0,
+        tiene_ingreso_activo: row.get::<_, i64>(10)? != 0,
         aviso_acceso: None,
+        estado_acceso: None,
+        dias_para_vencer_praind: None,
     })
 }
 

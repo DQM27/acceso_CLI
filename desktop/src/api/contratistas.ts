@@ -41,7 +41,22 @@ export interface ContratistaResumen {
   tiene_ingreso_activo: boolean;
   /** "ACCESO DENEGADO" / "PRAIND VENCIDO", resuelto por el núcleo. */
   aviso_acceso: string | null;
+  empresa_activa: boolean;
+  /** Resultado completo de las reglas de acceso para hoy (núcleo,
+   * `verificar_acceso`): los mismos nombres que usa el panel web. */
+  estado_acceso: EstadoAccesoLista | null;
+  /** Días para que venza la PRAIND (negativo: vencida); `null` si no la
+   * requiere o no tiene fecha. */
+  dias_para_vencer_praind: number | null;
 }
+
+export type EstadoAccesoLista =
+  | "PERMITIDO"
+  | "PERMITIDO_CON_ADVERTENCIA"
+  | "PRAIND_VENCIDO"
+  | "PRAIND_NO_REGISTRADO"
+  | "SIN_ACCESO"
+  | "EMPRESA_INACTIVA";
 
 export interface PaginaContratistas {
   items: ContratistaResumen[];
