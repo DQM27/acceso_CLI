@@ -6,6 +6,7 @@ import { crearContratista, crearEmpresa, listarEmpresas } from "../api/contratis
 import type { Empresa, TipoIngreso } from "../api/contratistas";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 import { mensajeError } from "../mensajeError";
+import { useEstadoReglas } from "../reglas";
 import { errorAntesDeEnviar, pidePraind, tiposIngreso } from "./FormularioContratista.logica";
 
 /**
@@ -25,14 +26,32 @@ import { errorAntesDeEnviar, pidePraind, tiposIngreso } from "./FormularioContra
  *
  * La empresa es obligatoria porque los equipos descartan un contratista sin una
  * empresa que puedan resolver, y entonces el bloqueo no les llegaría.
+ *
+ * El formulario necesita las reglas cargadas (deciden los tipos y cuándo se pide
+ * PRAIND). Casi siempre ya lo están al abrirlo; si no, espera.
  */
-export default function FormularioContratista({
-  onGuardado,
-  onCerrar,
-}: {
-  onGuardado: () => void;
-  onCerrar: () => void;
-}) {
+export default function FormularioContratista(props: { onGuardado: () => void; onCerrar: () => void }) {
+  const estadoReglas = useEstadoReglas();
+  if (estadoReglas === "lista") return <FormularioConReglas {...props} />;
+  return (
+    <Modal titulo="Nuevo contratista" onCerrar={props.onCerrar}>
+      {estadoReglas === "cargando" ? (
+        <p className="m-0 text-muted">Cargando…</p>
+      ) : (
+        <p className="login-error" role="alert">
+          No se pudieron cargar las reglas del panel. Revise la conexión y recargue la página.
+        </p>
+      )}
+      <div className="mt-3 flex justify-end">
+        <button type="button" className="boton" onClick={props.onCerrar}>
+          Cerrar
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function FormularioConReglas({ onGuardado, onCerrar }: { onGuardado: () => void; onCerrar: () => void }) {
   const clienteConsultas = useQueryClient();
   const { data: empresas = [] } = useQuery({ queryKey: ["empresas"], queryFn: listarEmpresas });
 

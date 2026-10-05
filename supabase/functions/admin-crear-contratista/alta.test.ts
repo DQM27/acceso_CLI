@@ -6,9 +6,10 @@ import { type EmpresaEncontrada, procesarAlta, type Puertos } from "./alta.ts";
 const HOY = "2026-10-04";
 const EMPRESA: EmpresaEncontrada = { id: "11111111-1111-4111-8111-111111111111", nombre: "BAC" };
 
-function puertosDePrueba(opciones: { duplicada?: boolean } = {}) {
+function puertosDePrueba(opciones: { duplicada?: boolean; admin?: boolean } = {}) {
   const guardados: ContratistaValido[] = [];
   const puertos: Puertos = {
+    autorizar: () => Promise.resolve(opciones.admin === false ? null : "admin@example.com"),
     buscarEmpresa: (id) => Promise.resolve(id === EMPRESA.id ? EMPRESA : null),
     insertar: (contratista, empresa) => {
       if (opciones.duplicada) return Promise.resolve({ ok: false, motivo: "cedula_duplicada" });
@@ -85,6 +86,38 @@ Deno.test("empresa inexistente y cédula repetida", async () => {
   const duplicada = await procesarAlta(valido, HOY, puertosDePrueba({ duplicada: true }).puertos);
   assertEquals(duplicada.estado, 409);
   assertEquals(duplicada.cuerpo.detail, "Ya existe un contratista con esa cédula");
+});
+
+Deno.test("quien no es administrador recibe 401 y no se guarda nada, aunque los datos sean válidos", async () => {
+  const { puertos, guardados } = puertosDePrueba({ admin: false });
+  const respuesta = await procesarAlta(valido, HOY, puertos);
+  assertEquals(respuesta.estado, 401);
+  assertEquals(guardados.length, 0);
+  // Ni le cuenta qué regla falla: primero la autorización.
+  assertEquals((await procesarAlta({ ...valido, tipo_ingreso: "POR_CORREO" }, HOY, puertos)).estado, 401);
+});
+
+Deno.test("la autorización y la empresa se consultan a la vez", async () => {
+  const orden: string[] = [];
+  const demora = (ms: number) => new Promise((listo) => setTimeout(listo, ms));
+  const puertos: Puertos = {
+    autorizar: async () => {
+      orden.push("autorizar:inicio");
+      await demora(20);
+      orden.push("autorizar:fin");
+      return "admin@example.com";
+    },
+    buscarEmpresa: async () => {
+      orden.push("empresa:inicio");
+      await demora(5);
+      orden.push("empresa:fin");
+      return EMPRESA;
+    },
+    insertar: () => Promise.resolve({ ok: true, fila: {} }),
+  };
+  assertEquals((await procesarAlta(valido, HOY, puertos)).estado, 200);
+  // La empresa arranca antes de que termine la autorización.
+  assertEquals(orden.slice(0, 2), ["autorizar:inicio", "empresa:inicio"]);
 });
 
 Deno.test("cuerpo vacío o malformado", async () => {

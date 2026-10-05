@@ -13,7 +13,7 @@ import { procesarAlta } from "./alta.ts";
 //
 // 1. Quien llama es administrador del panel (`administradores_panel`).
 // 2. Reglas de criterio del núcleo (cédula, nombre, tipo, PRAIND).
-// 3. La empresa existe.
+// 3. La empresa existe (se busca a la vez que el paso 1).
 // 4. Guarda con la cuenta de servicio; la cédula repetida la frena el índice
 //    único `contratistas_cedula_normalizada_key`.
 //
@@ -27,10 +27,8 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const supabase = clienteServicio();
-  const correo = await correoAdminAutorizado(req, supabase);
-  if (!correo) return json({ error: "unauthorized", detail: "No tiene permiso para crear contratistas." }, 401);
-
   const respuesta = await procesarAlta(await leerCuerpo(req), hoyCostaRica(), {
+    autorizar: () => correoAdminAutorizado(req, supabase),
     async buscarEmpresa(id) {
       const { data, error } = await supabase.from("empresas").select("id, nombre").eq("id", id).maybeSingle();
       if (error) throw new Error(error.message);
@@ -64,7 +62,7 @@ Deno.serve(async (req: Request) => {
   });
 
   if (respuesta.estado === 200) {
-    console.log(`admin-crear-contratista: ${correo} creó un contratista`);
+    console.log(`admin-crear-contratista: ${respuesta.correo} creó un contratista`);
   }
   return json(respuesta.cuerpo, respuesta.estado);
 });

@@ -1,3 +1,4 @@
+import { useEffect, useSyncExternalStore } from "react";
 import iniciarWasm, { initSync } from "./wasm/reglas";
 import * as wasm from "./wasm/reglas";
 import type { TipoIngreso } from "../api/contratistas";
@@ -12,15 +13,32 @@ import type { TipoIngreso } from "../api/contratistas";
  * guardar la toma el servidor (la Edge Function valida otra vez con este
  * mismo paquete): lo que corre en el navegador se puede saltar.
  *
- * El paquete se carga una vez al arrancar (`iniciarReglas` en `main.tsx`).
- * Se regenera con `scripts/generar-reglas-wasm.sh`.
+ * El paquete empieza a cargarse al arrancar (`iniciarReglas` en `main.tsx`),
+ * sin frenar la primera pantalla: sólo lo necesitan los formularios, que
+ * esperan con `useEstadoReglas` si todavía no llegó. Se regenera con
+ * `scripts/generar-reglas-wasm.sh`.
  */
 
+export type EstadoReglas = "cargando" | "lista" | "error";
+
 let cargando: Promise<void> | null = null;
+let estado: EstadoReglas = "cargando";
+const oyentes = new Set<() => void>();
+
+function cambiarEstado(nuevo: EstadoReglas) {
+  estado = nuevo;
+  oyentes.forEach((avisar) => avisar());
+}
 
 /** Carga el módulo WebAssembly (una sola vez). */
 export function iniciarReglas(): Promise<void> {
-  cargando ??= iniciarWasm().then(() => undefined);
+  cargando ??= iniciarWasm().then(
+    () => cambiarEstado("lista"),
+    (error: unknown) => {
+      cambiarEstado("error");
+      throw error;
+    },
+  );
   return cargando;
 }
 
@@ -28,6 +46,25 @@ export function iniciarReglas(): Promise<void> {
 export function iniciarReglasDesdeBytes(bytes: BufferSource): void {
   initSync({ module: bytes });
   cargando = Promise.resolve();
+  cambiarEstado("lista");
+}
+
+/** Estado de carga de las reglas, para que un formulario espere a que estén
+ * (normalmente ya cargaron cuando alguien abre uno). Si nadie las pidió
+ * todavía, empieza a cargarlas. */
+export function useEstadoReglas(): EstadoReglas {
+  useEffect(() => {
+    iniciarReglas().catch(() => {
+      // El error queda en el estado ("error"); main.tsx ya lo registra.
+    });
+  }, []);
+  return useSyncExternalStore(
+    (avisar) => {
+      oyentes.add(avisar);
+      return () => oyentes.delete(avisar);
+    },
+    () => estado,
+  );
 }
 
 /** Datos del formulario de alta, con los códigos de la nube. */

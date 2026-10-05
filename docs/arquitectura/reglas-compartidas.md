@@ -68,6 +68,20 @@ La base conserva sólo lo que necesita ver todos los datos:
 - la RLS (un administrador no puede insertar directo);
 - el trigger que avisa a los equipos.
 
+### Velocidad
+
+- **El panel no espera al WebAssembly para mostrarse.** Empieza a cargarlo al
+  arrancar (64 KB comprimido) y sólo el formulario lo necesita. Si alguien lo
+  abre antes de que llegue, muestra "Cargando…" un instante
+  (`useEstadoReglas`).
+- **Guardar hace 3 viajes seguidos a la base, no 4.** La función revisa la
+  sesión y `administradores_panel` y, a la vez, busca la empresa; después
+  guarda. Si quien llama no es administrador, la empresa encontrada se
+  descarta. Medido en staging: unos 0,4 s por llamada una vez caliente y
+  0,8 s la primera (arranque en frío de la función). La función SQL de antes
+  era un solo viaje: es el costo de validar en el servidor con las reglas del
+  núcleo.
+
 ## Cambiar una regla
 
 1. Cambiarla en `reglas/src/` y ajustar sus tests (`cargo test` en `reglas/`).

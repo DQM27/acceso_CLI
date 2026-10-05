@@ -23,13 +23,11 @@ const clienteConsultas = new QueryClient({
   },
 });
 
-// Las reglas del núcleo (WebAssembly, ver src/reglas) se cargan antes de
-// mostrar el panel: los formularios las consultan de forma sincrónica. Si no
-// cargan (navegador sin WebAssembly), el panel igual se muestra y el error
-// queda en la consola; guardar sigue validándose en el servidor.
-iniciarReglas()
-  .catch((error: unknown) => console.error("No se pudieron cargar las reglas del núcleo:", error))
-  .finally(() => mostrarPanel(raiz));
+// Las reglas del núcleo (WebAssembly, ver src/reglas) empiezan a cargarse ya,
+// sin frenar la primera pantalla: sólo las usan los formularios, que esperan
+// si hace falta (`useEstadoReglas`).
+iniciarReglas().catch((error: unknown) => console.error("No se pudieron cargar las reglas del núcleo:", error));
+mostrarPanel(raiz);
 
 function mostrarPanel(raiz: HTMLElement) {
   createRoot(raiz).render(
