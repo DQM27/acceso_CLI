@@ -181,6 +181,28 @@ describe("sincronización por Realtime", () => {
     expect(mocks.sincronizar).toHaveBeenCalledTimes(1);
   });
 
+  it("el eco propio de una tabla con historial sólo en la nube baja esa tabla", async () => {
+    // Salida "por correo" hecha en esta PC: su historial es la copia de la
+    // nube, así que hay que bajarla para que aparezca sin esperar el pulso.
+    const canal = await iniciar();
+    canal.aviso({
+      payload: { dispositivo_id: "equipo-a", table: "ingresos_correo", operation: "UPDATE", registro: {} },
+    });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.aplicarCambio).not.toHaveBeenCalled();
+    expect(mocks.sincronizar).not.toHaveBeenCalled();
+    expect(mocks.sincronizarCambios).toHaveBeenCalledWith(["ingresos_correo"]);
+  });
+
+  it("el eco propio de contratistas se sigue ignorando: su historial ya ve lo local", async () => {
+    const canal = await iniciar();
+    canal.aviso({ payload: { dispositivo_id: "equipo-a", table: "ingresos", operation: "UPDATE", registro: {} } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.aplicarCambio).not.toHaveBeenCalled();
+    expect(mocks.sincronizarCambios).not.toHaveBeenCalled();
+    expect(mocks.sincronizar).not.toHaveBeenCalled();
+  });
+
   it("conserva cambios que llegan mientras la sincronización sigue en curso", async () => {
     let resolver: (valor: unknown) => void = () => {};
     mocks.enviar.mockImplementationOnce(() => new Promise((resolve) => { resolver = resolve; }));

@@ -138,6 +138,33 @@ columnas que usan las apps de la rama:
   rutas contra staging van a fallar hasta resolver la rama de rutas.
 - `telemetria_diagnostico` sólo existe en staging, como corresponde.
 
+### 2.5b Arreglos de condiciones de carrera (aplicados en staging el 2026-10-05)
+
+Rama `fix/carreras-ingresos-y-gafetes` (incluida en `feat/reglas-compartidas`).
+Detalle en `docs/auditorias/revision-carreras-2026-10-04.md`. Antes de aplicar
+se verificó que staging no tuviera visitas abiertas duplicadas (0 por cédula,
+0 por gafete).
+
+| Migración del repo | Nombre en staging | Estado en staging |
+|---|---|---|
+| `20261004120000_conflictos_misma_unidad_y_gafete_de_visita.sql` | `conflictos_misma_unidad_y_gafete_de_visita` | Aplicada |
+| `20261004130000_visitas_ven_otras_unidades.sql` | `visitas_ven_otras_unidades` | Aplicada |
+| `20261004140000_gafete_de_visita_unico_en_visitas.sql` | `gafete_de_visita_unico_en_visitas` | Aplicada |
+| `20261004150000_persona_adentro_por_una_sola_via.sql` | `persona_adentro_por_una_sola_via` | Aplicada |
+| `20261004160000_registrar_token_push_sin_choques.sql` | — | **Pendiente**: la herramienta pide confirmar porque el cuerpo de la función tiene un `delete` |
+
+Verificado después de aplicar: existen `persona_adentro_por_otra_via`,
+`visita_activa_de_visitante` y `visitantes_activos_en_otras_unidades`, los
+índices `movimientos_visita_cedula_activa_idx` y
+`movimientos_visita_gafete_activo_sitio_idx`, y los triggers de "una sola vía"
+y de gafete de visita compartido.
+
+**Importante para producción:** las apps de esta rama consultan
+`persona_adentro_por_otra_via` antes de registrar una entrada, y sin
+verificar en la nube no se registra. Por eso **estas migraciones van ANTES de
+publicar las apps**. Producción además todavía no tiene `ingresos_por_correo`
+(`20261003210000`), que va antes que todas estas.
+
 ### 2.6 Edge Function `admin-crear-contratista` (reglas compartidas, 2026-10-04)
 
 Rama `feat/reglas-compartidas`. Contexto completo en
