@@ -236,6 +236,9 @@
 
   /* Diálogo nativo (<dialog>): confirmar cancelación, etc. */
   .dialogo {
+    /* El reset de Tailwind pone margin: 0 a todo y eso le quita al <dialog>
+       el centrado del navegador: se iba a la esquina superior izquierda. */
+    margin: auto;
     width: min(420px, calc(100vw - 32px));
     padding: 0;
     border: 1px solid var(--borde);

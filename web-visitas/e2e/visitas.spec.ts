@@ -346,6 +346,12 @@ test("confirma salir sin guardar y no pierde lo escrito al quedarse", async ({ p
   await page.getByLabel("Motivo").fill("Reunión de prueba");
   await page.getByRole("link", { name: "Volver" }).click();
   await expect(page.getByRole("dialog")).toContainText("¿Salir sin guardar?");
+  // Centrado en la pantalla, no pegado a una esquina.
+  const caja = await page.getByRole("dialog").boundingBox();
+  const pantalla = page.viewportSize();
+  if (!caja || !pantalla) throw new Error("Sin medidas del diálogo");
+  expect(Math.abs(caja.x + caja.width / 2 - pantalla.width / 2)).toBeLessThan(2);
+  expect(Math.abs(caja.y + caja.height / 2 - pantalla.height / 2)).toBeLessThan(2);
   await page.getByRole("button", { name: "Seguir editando" }).click();
   await expect(page.getByLabel("Motivo")).toHaveValue("Reunión de prueba");
   await page.getByRole("link", { name: "Volver" }).click();
