@@ -11,6 +11,114 @@ sección "Aplicado en producción" con fecha y quién lo autorizó.
 
 Última revisión: 2026-10-05.
 
+## 0. Lista de verificación para el PR a main (auditada el 2026-10-05)
+
+Cruce hecho por nombre entre el repo (114 migraciones de nube), staging (53
+en su historial) y producción (104 en su historial, sólo lectura de la lista).
+
+### 0.1 Qué lleva el PR
+
+Las ramas forman una sola cadena, cada una contiene a la anterior:
+
+`main` → `feat/ingreso-por-correo` → `fix/carreras-ingresos-y-gafetes` →
+`feat/reglas-compartidas` → `feat/web-visitas` → `feat/escritorio-pendientes`
+
+Un PR de **`feat/escritorio-pendientes` contra `main`** lleva todo junto, sin
+choques: main no tiene ningún commit que la rama no tenga. No hay versiones de
+migración repetidas en el repo. (`prueba/radix-visitas` sale de
+`feat/web-visitas` y es aparte: no forma parte de este PR.)
+
+### 0.2 Migraciones de nube pendientes en producción (10, en este orden)
+
+Producción tiene las 104 primeras del repo; le faltan exactamente estas. En
+staging se comparan por **nombre** (staging anota la hora de aplicación, no la
+versión del archivo).
+
+| # | Archivo del repo | En staging | Cuándo va en producción |
+|---|---|---|---|
+| 1 | `20261003210000_ingresos_por_correo.sql` | En el historial | Antes de las apps nuevas |
+| 2 | `20261004120000_conflictos_misma_unidad_y_gafete_de_visita.sql` | En el historial | Antes de las apps nuevas (ver 2.5b) |
+| 3 | `20261004130000_visitas_ven_otras_unidades.sql` | En el historial | Igual que la 2. Antes, revisar 0.5 |
+| 4 | `20261004140000_gafete_de_visita_unico_en_visitas.sql` | En el historial | Igual que la 2. Antes, revisar 0.5 |
+| 5 | `20261004150000_persona_adentro_por_una_sola_via.sql` | En el historial | Igual que la 2 |
+| 6 | `20261004160000_registrar_token_push_sin_choques.sql` | **A mano**, no figura en el historial. Verificado: la función tiene el candado `token_push:` | Cuando sea; no rompe nada |
+| 7 | `20261004170000_alta_de_contratistas_por_edge_function.sql` | **A mano**, no figura. Verificado: `panel_crear_contratista` ya no existe | **Después** de desplegar la Edge Function `admin-crear-contratista` y publicar el panel nuevo: borra la función SQL que usa el panel viejo (ver 2.6) |
+| 8 | `20261005120000_usuarios_nombre_obligatorio.sql` | En el historial | Cuando sea (ver 2.7) |
+| 9 | `20261005130000_visitas_web_anfitrion.sql` | **En dos partes:** las funciones en el historial como `visitas_web_anfitrion_funciones`; los 7 `drop policy`, a mano. Verificado: 4 funciones nuevas y 0 políticas de escritura directa del anfitrión | Las funciones, cuando sea; los `drop policy`, **después** de publicar la web de visitas nueva (ver 2.8). Si se aplica el archivo entero, tiene que ser junto con la web |
+| 10 | `20261005140000_movimientos_visita_placa.sql` | En el historial | **Antes** de la app de escritorio nueva (ver 2.9) |
+
+Las tres "a mano" (6, 7 y la segunda parte de la 9) existen en staging aunque
+su historial no las nombre. Para producción conviene aplicarlas con la
+herramienta de migraciones, así quedan anotadas; si la herramienta se cuelga
+con los `drop` (le pasó a staging), el editor SQL sirve igual, y se verifican
+con las mismas consultas.
+
+### 0.3 Edge Functions
+
+| Función | Estado | Producción |
+|---|---|---|
+| `admin-crear-contratista` | Nueva. En staging, versión 3 | Desplegar antes de publicar el panel y antes de la migración 7 |
+| `admin-editar-contratista` | Nueva. En staging, versión 1 | Desplegar antes de publicar el panel |
+| Las otras 10 (`device-auth`, `admin-*`, `device-vincular`, `sync-access-policy`) | Sólo cambia la línea de tipos (`functions-js@2`), sin cambio de comportamiento | Volver a desplegar es opcional |
+
+### 0.4 Base local de los equipos (SQLite)
+
+Main está en el esquema **54**; la rama llega al **57**:
+- **55:** ingreso por correo;
+- **56:** lápidas de cierres de remotos;
+- **57:** placa de las visitas.
+
+Cada equipo migra solo al abrir la app nueva y **no hay vuelta atrás** (ver la
+sección 3). Probar primero en un solo equipo.
+
+### 0.5 Antes de aplicar las migraciones 2 a 5 en producción
+
+Las migraciones 3 y 4 crean índices únicos sobre las visitas abiertas. Si
+producción tuviera una persona o un gafete abiertos dos veces, ellas mismas se
+detienen con un mensaje claro ("cerrar las sobrantes antes de aplicar"), sin
+dejar nada a medias. Para no llevarse la sorpresa en pleno despliegue, con
+autorización correr antes en el editor SQL de producción (sólo lectura; deben
+dar 0 filas):
+
+```sql
+select visitante_cedula, count(*)
+from public.movimientos_visita where hora_salida is null
+group by 1 having count(*) > 1;
+
+select sitio_id, gafete_numero, count(*)
+from public.movimientos_visita
+where hora_salida is null and gafete_numero is not null
+group by 1, 2 having count(*) > 1;
+```
+
+### 0.6 Lo que hay en staging y NO va con este PR
+
+- **Rama vieja `claude/rediseno-web-visitas`:** `rediseno_visitas_tablas_nuevas`,
+  `optimiza_rls_e_indices_de_visitas` y `rediseno_visitas_rpcs_vista_busqueda`.
+  La web de visitas nueva no las usa (ver 2.8).
+- **`feat/analisis-syncfusion`:** `panel_resumen_movimientos` (en esa rama,
+  `20260930130100_panel_resumen_movimientos.sql`). Es otra línea de trabajo, con
+  su propio PR. Su versión no choca con las de main.
+- **`rutas_documento_tramo_viaje`** (y sus dos arreglos): no existen en el repo
+  (ver 2.4).
+- **`crea_personas_vetadas` / `revierte_personas_vetadas`:** se aplicaron y se
+  revirtieron en staging; no hay nada que llevar (ver 2.2).
+- **`lote_00` a `lote_04` y `fix_orden_esquema_private_antes_de_hora`:** con esto
+  se armó staging desde cero; equivalen a migraciones que producción ya tiene.
+
+### 0.7 Orden completo sugerido para producción
+
+1. Respaldo (sección 1).
+2. Migración 1 (`ingresos_por_correo`).
+3. Revisar 0.5 y aplicar las migraciones 2 a 5.
+4. Migraciones 6 y 8, y la parte de funciones de la 9.
+5. Migración 10 (`movimientos_visita_placa`).
+6. Desplegar `admin-crear-contratista` y `admin-editar-contratista`.
+7. Publicar el panel web, la web de visitas y las apps (escritorio y teléfono;
+   primero un equipo de prueba).
+8. Migración 7 y los `drop policy` de la 9.
+9. Anotar todo en la sección 5.
+
 ## 1. Antes de empezar
 
 1. **Respaldo.** Descargar un respaldo de la base de producción (Supabase →
