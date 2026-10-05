@@ -11,6 +11,7 @@ use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::movimiento_visita_repository::{
     MovimientoVisitaRepository, SqliteMovimientoVisitaRepository,
 };
+use crate::domain::cedula::Cedula;
 use crate::models::cita::{Cita, CitaVisitante};
 use crate::models::movimiento_visita::MovimientoVisitaActivoResumen;
 use crate::services::autenticacion_service::UsuarioSesion;
@@ -110,6 +111,25 @@ impl AppCore {
         &self,
     ) -> Result<Vec<MovimientoVisitaActivoResumen>, DatabaseError> {
         SqliteMovimientoVisitaRepository::new(&self.connection).listar_activos()
+    }
+
+    /// La visita abierta en este equipo de esa cédula, comparada en forma
+    /// única (como la guarda el check-in), o `None`. Para ofrecer la salida
+    /// apenas se verifica la cédula, sin lista de por medio. Sin `actor`: es
+    /// una lectura.
+    pub fn visita_activa_por_cedula(
+        &self,
+        cedula: &str,
+    ) -> Result<Option<MovimientoVisitaActivoResumen>, DatabaseError> {
+        let Ok(buscada) = Cedula::normalizar(cedula) else {
+            return Ok(None);
+        };
+        Ok(self
+            .listar_visitas_activas()?
+            .into_iter()
+            .find(|movimiento| {
+                Cedula::normalizar(&movimiento.cedula).is_ok_and(|propia| propia == buscada)
+            }))
     }
 
     /// Agenda de visitas del sitio -- lectura pura de `citas`/

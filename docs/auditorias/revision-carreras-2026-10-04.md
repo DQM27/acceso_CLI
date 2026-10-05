@@ -166,7 +166,7 @@ conexión, la nube aceptaba las dos filas, porque
    `gafete_de_visita_libre_en_otro_dispositivo`
    (`desktop/src-tauri/src/comandos/citas.rs`) ahora también consulta
    `gafete_de_correo_ocupado_en_otro_dispositivo` (la función ya existía; la
-   usa el ingreso por correo). El teléfono no tiene check-in de visitas.
+   usa el ingreso por correo). El teléfono no tenía check-in de visitas (desde el 2026-10-05 sí: usa la misma `application::registrar_entrada_visita_verificada` que escritorio).
 3. **Nube** — migración
    `20261004120000_conflictos_misma_unidad_y_gafete_de_visita.sql`, parte
    (2): trigger `before insert` en `ingresos_correo` y en

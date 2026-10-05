@@ -40,6 +40,7 @@ mod proveedores;
 mod rutas;
 mod sesion;
 mod tipos;
+mod visitas;
 
 pub use error::NucleoError;
 use error::{FalloSincronizacion, convertir_fallo_sincronizacion, interno};
@@ -55,6 +56,7 @@ pub use tipos::{
     ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen,
     SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
 };
+pub use visitas::{VerificacionVisita, VisitaAdentro, VisitaParaEntrar};
 
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
 /// abre una vez al arrancar la app y se reusa en todas las pantallas (login,

@@ -647,6 +647,15 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
 
 ## Android y lector de documentos
 
+- [x] **Visitas agendadas en el teléfono -- pedido del usuario 2026-10-05
+  ("minimalista y centrado en velocidad, nada de historial, sólo
+  verificación").** Hecho en `feat/visitas-movil`: opción "Visita" en
+  Externos (`PantallaVisitas`), una cédula y el núcleo decide entrada, salida
+  o aviso. Reglas compartidas con escritorio
+  (`application::registrar_entrada_visita_verificada`). Ver
+  `docs/despliegue-produccion.md` sección 2.10. Falta probarlo en un teléfono
+  real.
+
 - [ ] **Número de versión en el login de la app móvil -- pedido del usuario
   2026-10-03.** Mostrar la versión (`versionName`, ej. "v1.4.4") en la
   pantalla de login, con fuente chica y discreta: centrada abajo o en una

@@ -382,6 +382,24 @@ el historial: sin la columna, la nube rechaza las dos cosas y la cola de
 visitas se traba. Las apps viejas no la mandan ni la piden, así que la
 migración sola no rompe nada.
 
+### 2.10 Teléfono: verificación de visitas agendadas (2026-10-05)
+
+Rama `feat/visitas-movil` (sale de `feat/escritorio-pendientes`). En
+"Externos", la primera opción ahora es "Visita": un campo de cédula (escrita o
+escaneada) y el núcleo decide si sigue la entrada (gafete opcional, caminando
+o en vehículo), la salida (si ya está adentro en ese equipo) o un aviso (azul
+si la cita es para otro día). Sin listas ni historial.
+
+- **Sin migraciones nuevas.** El teléfono ya bajaba las citas y su cola ya
+  sabía subir movimientos de visita.
+- **Las reglas son las de escritorio:** los chequeos contra la nube de una
+  entrada (gafete en uso en el otro equipo, visitante adentro en otra unidad)
+  se pasaron del comando de escritorio a
+  `application::registrar_entrada_visita_verificada`, y ahora la usan los dos.
+- **Orden en producción:** igual que el escritorio nuevo, **después** de la
+  migración `20261005140000_movimientos_visita_placa.sql` (fila 11 de 0.2): el
+  teléfono también sube la placa con cada movimiento de visita.
+
 ### 2.6 Edge Function `admin-crear-contratista` (reglas compartidas, 2026-10-04)
 
 Rama `feat/reglas-compartidas`. Contexto completo en
