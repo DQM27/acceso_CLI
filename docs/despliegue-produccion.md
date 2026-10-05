@@ -192,6 +192,44 @@ por los tests de Deno y del núcleo.
 Orden en producción: después de 2.6, desplegar las dos funciones, publicar
 el panel y aplicar la migración (no rompe nada si va antes).
 
+### 2.8 Web de visitas nueva (staging, 2026-10-05)
+
+Rama `feat/web-visitas` (sale de `feat/reglas-compartidas`). Reemplaza a la
+línea vieja `claude/rediseno-web-visitas` (filas 2 a 4 y sección 2.3): la web
+nueva **no usa** esas tablas ni esas funciones, trabaja sobre el modelo de
+citas que ya leen escritorio y teléfono (`citas`, `cita_sitios`,
+`cita_visitantes`, `movimientos_visita`). Esas filas no se llevan a producción
+con esta rama.
+
+Migración `20261005130000_visitas_web_anfitrion.sql`, en dos partes en staging
+porque la herramienta de Supabase se cuelga con los `drop policy`:
+
+| Parte | Estado en staging |
+|---|---|
+| Funciones (todo menos los `drop policy`): `crear_cita_anfitrion` (reemplazada), `editar_cita_anfitrion`, `cancelar_cita_anfitrion`, `estado_visitantes_de_mis_citas`, `visitantes_anteriores` y las auxiliares de `private` | Aplicada (nombre `visitas_web_anfitrion_funciones`) |
+| Los 7 `drop policy` de escritura directa del anfitrión (al principio del archivo) | **Pendiente**: correrlos el dueño en el editor SQL. El editor no lo anota en el historial; para saber si está, revisar que no quede ninguna política `anfitrion%` que no sea `SELECT` en esas tres tablas |
+
+Probado contra staging como anfitrión (dentro de una transacción que se
+deshizo; no quedó nada guardado):
+- crear → id pedido; el reintento igual devuelve la misma; el mismo id con
+  otro contenido → 23505; fecha pasada → rechazada;
+- la cédula se guarda en su forma única (`1-0847-0293` → `108470293`);
+- personas anteriores: 3 sin filtro, 1 buscando por nombre;
+- editar → la vieja queda CANCELADA y la nueva VIGENTE; el reintento devuelve
+  la misma nueva; editar una cancelada → rechazado;
+- cancelar dos veces → sin error (idempotente);
+- otro anfitrión: cancelar → P0002, llegadas → 0 filas.
+
+El rechazo de editar "si alguien ya entró" está cubierto por
+`supabase/tests/visitas_anfitrion.sql`; no se probó en vivo porque la cita de
+prueba (`dfc2f424…`, cédula 900000077) todavía no tiene entrada en la
+portería del sandbox.
+
+**Orden en producción:** la migración y la web nueva salen **juntas**: la web
+vieja cancelaba con un `UPDATE` directo, y los `drop policy` lo deshabilitan.
+Las funciones solas no rompen nada (la web vieja sigue funcionando); los
+`drop policy` van después de publicar la web nueva.
+
 ### 2.6 Edge Function `admin-crear-contratista` (reglas compartidas, 2026-10-04)
 
 Rama `feat/reglas-compartidas`. Contexto completo en
@@ -252,7 +290,8 @@ equipo.
 3. Publicar apps (escritorio y móvil) desde N1. Primero un equipo de
    prueba, luego el resto. El acceso negado en todas las puertas viaja en
    las apps y no necesita nada en Supabase.
-4. Visitas y rutas: cada una con su rama, por separado.
+4. Visitas y rutas: cada una con su rama, por separado. Visitas: la web de
+   `feat/web-visitas` con su migración (sección 2.8), no la rama vieja.
 
 ## 5. Aplicado en producción
 
