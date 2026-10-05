@@ -48,6 +48,10 @@ salidas.set('desktop/src/diseno.css', css);
 salidas.set('desktop/src/controles.css', leer('design/controles.css'));
 salidas.set('web/src/diseno.css', css);
 salidas.set('web/src/controles.css', leer('design/controles.css'));
+// La web de visitas (anfitriones) usa el mismo sistema que el panel desde
+// 2026-10-05: misma familia visual, un solo lugar para cambiar un color.
+salidas.set('web-visitas/src/diseno.css', css);
+salidas.set('web-visitas/src/controles.css', leer('design/controles.css'));
 salidas.set('design/brisas.css', css + '\n' + leer('design/controles.css'));
 
 // Android/mobile YA NO sale de acá (2026-09-15) -- tiene su propia identidad

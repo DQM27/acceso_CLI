@@ -1,10 +1,15 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-const uuid = "00000000-0000-4000-8000-000000000001";
+// "Hoy" fijo: mediodía del lunes 5 de octubre de 2026 en Costa Rica, lejos
+// de cualquier borde de día. Sin esto las pruebas dependen de la fecha real.
+const AHORA = new Date("2026-10-05T12:00:00-06:00");
+const HOY = "2026-10-05";
+
+const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const correo = "anfitrion@example.invalid";
 const usuario = {
-  id: uuid,
+  id: id(1),
   aud: "authenticated",
   role: "authenticated",
   email: correo,
@@ -13,59 +18,66 @@ const usuario = {
   created_at: "2026-09-09T12:00:00Z",
 };
 const sitios = [
-  { id: uuid, nombre: "Brisas" },
-  { id: "00000000-0000-4000-8000-000000000002", nombre: "Cartago" },
+  { id: id(11), nombre: "Brisas" },
+  { id: id(12), nombre: "Cartago" },
 ];
 
+type Cita = Record<string, unknown> & { id: string; estado: string; fecha_hasta: string };
+
+function cita(n: number, cambios: Partial<Cita> = {}): Cita {
+  return {
+    id: id(n),
+    anfitrion_correo: correo,
+    motivo: null,
+    fecha_desde: HOY,
+    fecha_hasta: HOY,
+    hora_estimada: null,
+    estado: "VIGENTE",
+    created_at: "2026-10-01T15:00:00Z",
+    cita_sitios: [{ sitio_id: sitios[0].id, sitios: sitios[0] }],
+    cita_visitantes: [
+      { id: id(n * 100 + 1), nombre: "Ana Mora", cedula: "112340567", empresa: "ACME", placa_vehiculo: null },
+    ],
+    ...cambios,
+  };
+}
+
+const deHoy = cita(21, {
+  motivo: "Auditoría de seguridad",
+  hora_estimada: "09:00:00",
+  cita_visitantes: [
+    { id: id(2101), nombre: "Ana Mora", cedula: "112340567", empresa: "ACME", placa_vehiculo: null },
+    { id: id(2102), nombre: "Luis Rojas", cedula: "204560789", empresa: "ACME", placa_vehiculo: "BCD123" },
+  ],
+});
+const proxima = cita(22, { motivo: "Mantenimiento de aires", fecha_desde: "2026-10-07", fecha_hasta: "2026-10-08" });
+const cancelada = cita(23, { motivo: "Reunión suspendida", estado: "CANCELADA" });
+
 test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(AHORA);
   await page.addInitScript(() => {
     const estado = window as unknown as { violacionesCsp: string[] };
     estado.violacionesCsp = [];
-    document.addEventListener("securitypolicyviolation", (evento) =>
-      estado.violacionesCsp.push(evento.violatedDirective),
-    );
+    document.addEventListener("securitypolicyviolation", (evento) => estado.violacionesCsp.push(evento.violatedDirective));
   });
 });
 test.afterEach(async ({ page }) => {
-  const violaciones = await page.evaluate(
-    () => (window as unknown as { violacionesCsp: string[] }).violacionesCsp,
-  );
+  const violaciones = await page.evaluate(() => (window as unknown as { violacionesCsp: string[] }).violacionesCsp);
   expect(violaciones ?? []).toEqual([]);
 });
 
+async function sinDesborde(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+}
+
+/** Sesión de prueba y una nube falsa en memoria (citas y RPCs). */
 async function preparar(
   page: Page,
-  opciones: {
-    autorizado?: boolean;
-    falloGuardado?: boolean;
-    cita?: boolean;
-  } = {},
+  opciones: { autorizado?: boolean; falloGuardado?: boolean; citas?: Cita[]; llegadas?: unknown[] } = {},
 ) {
-  const guardados: Record<string, unknown>[] = [];
-  let citas: unknown[] = opciones.cita
-    ? [
-        {
-          id: uuid,
-          anfitrion_correo: correo,
-          motivo: "Reunión de coordinación",
-          fecha_desde: "2099-09-10",
-          fecha_hasta: "2099-09-11",
-          hora_estimada: "10:00:00",
-          estado: "VIGENTE",
-          created_at: "2026-09-09T12:00:00Z",
-          cita_sitios: [{ sitio_id: uuid, sitios: sitios[0] }],
-          cita_visitantes: [
-            {
-              id: uuid,
-              nombre: "Persona de prueba",
-              cedula: "DOC123",
-              empresa: "Empresa de prueba",
-              placa_vehiculo: null,
-            },
-          ],
-        },
-      ]
-    : [];
+  const llamadas: { rpc: string; datos: Record<string, unknown> }[] = [];
+  let citas = [...(opciones.citas ?? [])];
+  let fallosPendientes = opciones.falloGuardado ? 1 : 0;
   await page.addInitScript(
     ({ usuario }) => {
       const token = `prueba.${btoa(JSON.stringify({ sub: usuario.id, exp: Math.floor(Date.now() / 1000) + 3600 }))}.firma`;
@@ -83,51 +95,60 @@ async function preparar(
     },
     { usuario },
   );
-  await page.route(
-    "https://xidaepyaljzkpbsxrqsm.supabase.co/**",
-    async (ruta) => {
-      const url = new URL(ruta.request().url());
-      const responder = (datos: unknown, status = 200) =>
-        ruta.fulfill({
-          status,
-          contentType: "application/json",
-          body: JSON.stringify(datos),
-        });
-      if (url.pathname === "/auth/v1/user") return responder(usuario);
-      if (url.pathname === "/auth/v1/logout") return responder({});
-      if (url.pathname === "/rest/v1/anfitriones")
-        return responder(
-          opciones.autorizado === false
-            ? null
-            : { correo, nombre: "Daniel · Cuenta de prueba" },
-        );
-      if (url.pathname === "/rest/v1/sitios") return responder(sitios);
-      if (url.pathname === "/rest/v1/rpc/crear_cita_anfitrion") {
-        const datos = ruta.request().postDataJSON();
-        guardados.push(datos);
-        if (opciones.falloGuardado && guardados.length === 1)
+  await page.route("https://xidaepyaljzkpbsxrqsm.supabase.co/**", async (ruta) => {
+    const peticion = ruta.request();
+    const url = new URL(peticion.url());
+    const responder = (datos: unknown, status = 200) =>
+      ruta.fulfill({ status, contentType: "application/json", body: JSON.stringify(datos) });
+    if (url.pathname === "/auth/v1/user") return responder(usuario);
+    if (url.pathname === "/auth/v1/logout") return responder({});
+    if (url.pathname === "/rest/v1/anfitriones")
+      return responder(opciones.autorizado === false ? null : { correo, nombre: "Daniel Quintana" });
+    if (url.pathname === "/rest/v1/sitios") return responder(sitios);
+    if (url.pathname === "/rest/v1/citas") {
+      const porId = url.searchParams.get("id")?.replace("eq.", "");
+      if (porId) return responder(citas.filter((c) => c.id === porId));
+      if (url.searchParams.get("or")) return responder(citas.filter((c) => c.estado === "CANCELADA" || c.fecha_hasta < HOY));
+      return responder(citas.filter((c) => c.estado === "VIGENTE" && c.fecha_hasta >= HOY));
+    }
+    if (url.pathname.startsWith("/rest/v1/rpc/")) {
+      const rpc = url.pathname.slice("/rest/v1/rpc/".length);
+      const datos = peticion.postDataJSON() as Record<string, unknown>;
+      llamadas.push({ rpc, datos });
+      if (rpc === "visitantes_anteriores")
+        return responder([
+          { cedula: "305670891", nombre: "Carla Vargas", empresa: "Limpiezas del Sur", placa_vehiculo: null, ultima_vez: "2026-09-20" },
+        ]);
+      if (rpc === "estado_visitantes_de_mis_citas") return responder(opciones.llegadas ?? []);
+      if (rpc === "crear_cita_anfitrion" || rpc === "editar_cita_anfitrion") {
+        if (fallosPendientes > 0) {
+          fallosPendientes--;
           return responder({ code: "timeout", message: "fallo simulado" }, 503);
-        return responder(datos.p_id);
-      }
-      if (url.pathname === "/rest/v1/citas") {
-        if (ruta.request().method() === "PATCH") {
-          citas = citas.map((cita) => ({
-            ...(cita as object),
-            estado: "CANCELADA",
-          }));
-          return responder({ id: uuid });
         }
-        return responder(citas);
+        const nueva = String(rpc === "crear_cita_anfitrion" ? datos.p_id : datos.p_nuevo_id);
+        if (rpc === "editar_cita_anfitrion")
+          citas = citas.map((c) => (c.id === datos.p_id ? { ...c, estado: "CANCELADA" } : c));
+        citas.push(
+          cita(99, {
+            id: nueva,
+            motivo: (datos.p_motivo as string | null) ?? null,
+            fecha_desde: datos.p_fecha_desde as string,
+            fecha_hasta: datos.p_fecha_hasta as string,
+          }),
+        );
+        return responder(nueva);
       }
-      throw new Error(`Petición inesperada: ${url.pathname}`);
-    },
-  );
-  return { guardados };
+      if (rpc === "cancelar_cita_anfitrion") {
+        citas = citas.map((c) => (c.id === datos.p_id ? { ...c, estado: "CANCELADA" } : c));
+        return responder(null);
+      }
+    }
+    throw new Error(`Petición inesperada: ${peticion.method()} ${url.pathname}`);
+  });
+  return { llamadas: (rpc: string) => llamadas.filter((l) => l.rpc === rpc).map((l) => l.datos) };
 }
 
-test("login con CSP real, sin desbordamiento en ambos temas", async ({
-  page,
-}, info) => {
+test("login con CSP real, sin desbordamiento en ambos temas", async ({ page }, info) => {
   const errores: string[] = [];
   page.on("pageerror", (error) => errores.push(error.message));
   const respuesta = await page.goto("/");
@@ -138,283 +159,208 @@ test("login con CSP real, sin desbordamiento en ambos temas", async ({
   expect(csp).not.toContain("unsafe-");
   expect(respuesta.headers()["referrer-policy"]).toBe("no-referrer");
   expect(respuesta.headers()["x-frame-options"]).toBe("DENY");
-  await expect(
-    page.getByRole("button", { name: "Continuar con Google" }),
-  ).toBeVisible();
-  await page.screenshot({
-    path: `test-results/login-${info.project.name}.png`,
-    fullPage: true,
-  });
+  await expect(page.getByRole("button", { name: "Continuar con Google" })).toBeVisible();
+  await page.screenshot({ path: `test-results/login-${info.project.name}.png`, fullPage: true });
   await page.getByRole("button", { name: /Cambiar a tema/ }).click();
-  await page.screenshot({
-    path: `test-results/login-tema-${info.project.name}.png`,
-    fullPage: true,
-  });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
+  await page.screenshot({ path: `test-results/login-tema-${info.project.name}.png`, fullPage: true });
+  await sinDesborde(page);
   expect(errores).toEqual([]);
 });
 
 test("una cuenta sin autorización no ve la agenda", async ({ page }) => {
   await preparar(page, { autorizado: false });
-  await page.goto("/citas");
+  await page.goto("/visitas");
   await expect(page.getByRole("alert")).toContainText("no está autorizada");
-  await expect(
-    page.getByRole("heading", { name: "Mis citas", exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Mis visitas" })).toHaveCount(0);
 });
 
-test("Activity conserva el mes del calendario al ir y volver entre pasos", async ({
-  page,
-}) => {
-  const errores: string[] = [];
-  page.on("pageerror", (error) => errores.push(error.message));
-  // El calendario abre en el mes de "hoy": sin fijar el reloj, el test
-  // dependía de la fecha real y empezó a fallar el 1 de octubre de 2026.
-  // Mediodía en Costa Rica, lejos de cualquier borde de día o de mes.
-  await page.clock.setFixedTime(new Date("2026-09-15T12:00:00-06:00"));
-  await preparar(page);
-  await page.goto("/nueva");
-  await expect(page.getByText("septiembre de 2026")).toBeVisible();
-  await page.getByRole("button", { name: "Mes siguiente" }).click();
-  await expect(page.getByText("octubre de 2026")).toBeVisible();
-  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(page.getByLabel("Nombre completo")).toBeVisible();
-  await page.getByRole("button", { name: "Atrás" }).click();
-  // El calendario (SelectorFechas.tsx) sigue montado -- oculto por
-  // <Activity>, no destruido -- así que conserva el mes al que se había
-  // navegado en vez de volver al mes de "hoy".
-  await expect(page.getByText("octubre de 2026")).toBeVisible();
-  expect(errores).toEqual([]);
-});
-
-test("las fechas se completan 100% por teclado, sin tocar el calendario", async ({
-  page,
-}) => {
-  const { guardados } = await preparar(page);
-  await page.goto("/nueva");
-  // El stepper (componentes/PasoWizard.tsx) debe verse en TODOS los
-  // breakpoints -- este mismo test corre también bajo el proyecto "movil"
-  // (viewport angosto), a diferencia del viejo .indicador-paso que se
-  // ocultaba por completo ahí.
-  await expect(
-    page.getByRole("navigation", { name: "Progreso de la cita" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Paso 1 de 3: ¿Cuándo y dónde?"),
-  ).toBeAttached();
-  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
-  // Día/Mes/Año como 3 campos de texto es la vía de teclado real -- nunca
-  // se hace click ni drag sobre el calendario en este test.
-  const desde = page.getByRole("group", { name: "Desde" });
-  await desde.getByLabel("Día").fill("10");
-  await desde.getByLabel("Mes").fill("09");
-  await desde.getByLabel("Año").fill("2099");
-  const hasta = page.getByRole("group", { name: "Hasta" });
-  await hasta.getByLabel("Día").fill("12");
-  await hasta.getByLabel("Mes").fill("09");
-  await hasta.getByLabel("Año").fill("2099");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByLabel("Nombre completo").fill("Persona de prueba");
-  await page.getByLabel("Cédula o documento").fill("DOC123");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Revisá tu cita" }),
-  ).toBeVisible();
-  await expect(page.getByText("10 sept 2099 — 12 sept 2099")).toBeVisible();
-  await page.getByRole("button", { name: "Confirmar y agendar" }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Cita agendada" }),
-  ).toBeVisible();
-  expect(guardados[0]).toMatchObject({
-    p_fecha_desde: "2099-09-10",
-    p_fecha_hasta: "2099-09-12",
+test("Mis visitas: hoy con quién llegó, próximas e historial", async ({ page }, info) => {
+  const { llamadas } = await preparar(page, {
+    citas: [deHoy, proxima, cancelada],
+    llegadas: [
+      {
+        cita_visitante_id: id(2101),
+        sitio_nombre: "Brisas",
+        hora_entrada: "2026-10-05T15:12:00Z",
+        hora_salida: null,
+        gafete_numero: 7,
+      },
+    ],
   });
+  // Las rutas viejas llevan a la pantalla nueva.
+  await page.goto("/citas");
+  await expect(page).toHaveURL(/\/visitas$/);
+  await expect(page.getByRole("heading", { name: "Mis visitas" })).toBeVisible();
+  const hoy = page.getByRole("region", { name: "Hoy" });
+  await expect(hoy.getByText("Auditoría de seguridad")).toBeVisible();
+  await expect(hoy.getByText("Llegó 9:12 · gafete 7")).toBeVisible();
+  await expect(hoy.getByText("Sin llegar")).toBeVisible();
+  await expect(hoy.getByText("9:00")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Próximas" }).getByText("Mantenimiento de aires")).toBeVisible();
+  await expect(page.getByText("Reunión suspendida")).toHaveCount(0);
+  expect(llamadas("estado_visitantes_de_mis_citas")[0]).toEqual({ p_citas: [deHoy.id] });
+  await page.screenshot({ path: `test-results/mis-visitas-${info.project.name}.png`, fullPage: true });
+  await sinDesborde(page);
+
+  await page.getByRole("link", { name: "Ver historial" }).click();
+  await expect(page.getByText("Reunión suspendida")).toBeVisible();
+  await expect(page.getByText("Auditoría de seguridad")).toHaveCount(0);
 });
 
-test("grupo grande de visitantes: se colapsan, se pueden reabrir y la validación de duplicados sigue funcionando", async ({
-  page,
-}) => {
-  await preparar(page);
-  await page.goto("/nueva");
-  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
-  await page.getByRole("button", { name: "Continuar" }).click();
-  // 1 visitante ya existe por defecto -- se agregan 5 más (6 en total,
-  // por encima del umbral de colapso).
-  for (let i = 0; i < 5; i++) {
-    await page.getByRole("button", { name: "Agregar visitante" }).click();
-  }
-  for (let i = 0; i < 6; i++) {
-    await page.getByLabel("Nombre completo").nth(i).fill(`Persona ${i + 1}`);
-    await page.getByLabel("Cédula o documento").nth(i).fill(`DOC00${i + 1}`);
-  }
-  // Con 6 visitantes, uno del medio (ni el primero en pantalla ni el
-  // último agregado) queda colapsado por defecto -- su input no está
-  // visible aunque siga en el DOM.
-  await expect(page.getByLabel("Nombre completo").nth(2)).toBeHidden();
-  // Reabrirlo a mano (click en el <summary>) sigue funcionando.
-  await page.getByText("Persona 3 · DOC003").click();
-  await expect(page.getByLabel("Nombre completo").nth(2)).toBeVisible();
-  await page.getByLabel("Nombre completo").nth(2).fill("Persona 3 editada");
-  // Un duplicado entre dos visitantes cualesquiera se sigue detectando
-  // igual, sin importar cuántos haya ni cuáles estén colapsados -- el
-  // último (índice 5) queda abierto por defecto por ser el recién
-  // agregado, sin necesidad de reabrirlo a mano primero.
-  await page.getByLabel("Cédula o documento").nth(5).fill("DOC003");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(
-    page.getByText("Este documento ya está en la lista."),
-  ).toBeVisible();
-  await page.getByLabel("Cédula o documento").nth(5).fill("DOC006");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Revisá tu cita" }),
-  ).toBeVisible();
-  // El paso "Visitantes" sigue montado (oculto por <Activity>), así que su
-  // propio resumen colapsado también contiene este texto -- se acota a la
-  // sección de revisión, igual que ya se hizo para "hora_estimada".
-  await expect(
-    page.locator(".bloque-revision").getByText("Persona 3 editada"),
-  ).toBeVisible();
-  await expect(page.getByText("Visitantes (6)")).toBeVisible();
-});
+test("agendar: valida, dos lugares, reintento idempotente y aviso", async ({ page }, info) => {
+  const { llamadas } = await preparar(page, { falloGuardado: true });
+  await page.goto("/visitas");
+  await page.getByRole("link", { name: "Agendar" }).click();
+  await expect(page).toHaveURL(/\/agendar$/);
 
-test("grupo con dos sitios, validación y reintento idempotente", async ({
-  page,
-}, info) => {
-  const { guardados } = await preparar(page, { falloGuardado: true });
-  await page.goto("/nueva");
-  await expect(
-    page.getByRole("heading", { name: "Nueva cita", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(page.getByText("Seleccioná al menos un sitio.")).toBeVisible();
-  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
-  await page.locator(".selector-sitios").getByText("Cartago", { exact: true }).click();
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByLabel("Nombre completo").fill("Persona de prueba Uno");
-  await page.getByLabel("Cédula o documento").fill("DOC-123");
-  await page.getByRole("button", { name: "Agregar visitante" }).click();
-  await page.getByLabel("Nombre completo").nth(1).fill("Persona de prueba Dos");
-  await page.getByLabel("Cédula o documento").nth(1).fill("DOC123");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(
-    page.getByText("Este documento ya está en la lista."),
-  ).toBeVisible();
-  await page.getByLabel("Cédula o documento").nth(1).fill("DOC456");
-  await page.screenshot({
-    path: `test-results/nueva-${info.project.name}.png`,
-    fullPage: true,
-  });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Revisá tu cita" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Confirmar y agendar" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "No pudimos confirmar si tu cita quedó guardada",
-  );
-  await page.getByRole("button", { name: "Reintentar guardado" }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Cita agendada" }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Agendar", exact: true }).click();
+  await expect(page.getByRole("alert").first()).toContainText("Revise los datos marcados.");
+  await expect(page.getByText("Ingrese el nombre completo.")).toBeVisible();
+  await expect(page.getByText("Elija al menos un lugar.")).toBeVisible();
+
+  await page.getByLabel(/^Nombre/).fill("Ana Mora");
+  await page.getByLabel("Cédula o documento").fill("1-1234-0567");
+  await page.getByRole("button", { name: "Agregar persona" }).click();
+  await page.getByLabel(/^Nombre/).nth(1).fill("Luis Rojas");
+  await page.getByLabel("Cédula o documento").nth(1).fill("112340567");
+  await page.getByRole("button", { name: "Mañana" }).click();
+  await page.getByLabel("Hora estimada").fill("14:30");
+  await page.getByRole("button", { name: "Brisas" }).click();
+  await page.getByRole("button", { name: "Cartago" }).click();
+  await page.getByLabel("Motivo").fill("Revisión de equipos");
+  await page.getByRole("button", { name: "Agendar", exact: true }).click();
+  await expect(page.getByText("Esta persona ya está en la lista.")).toBeVisible();
+  await page.getByLabel("Cédula o documento").nth(1).fill("204560789");
+  await expect(page.getByText("2 personas · mar 6 oct · 14:30")).toBeVisible();
+  await page.screenshot({ path: `test-results/agendar-${info.project.name}.png`, fullPage: true });
+  await sinDesborde(page);
+
+  // La primera respuesta se pierde: se avisa y el reintento manda lo mismo.
+  await page.getByRole("button", { name: "Agendar", exact: true }).click();
+  await expect(page.getByRole("alert").first()).toContainText("No se pudo completar la solicitud");
+  await page.getByRole("button", { name: "Agendar", exact: true }).click();
+  await expect(page.getByText("Visita agendada: mar 6 oct")).toBeVisible();
+  await expect(page).toHaveURL(/\/visitas$/);
+  const guardados = llamadas("crear_cita_anfitrion");
   expect(guardados).toHaveLength(2);
   expect(guardados[0]).toEqual(guardados[1]);
-  expect(guardados[0]?.p_sitios).toHaveLength(2);
-  expect(guardados[0]?.p_visitantes).toHaveLength(2);
-});
-
-test("hora estimada es opcional, viaja a la RPC y se ve en Mis Citas", async ({
-  page,
-}) => {
-  const { guardados } = await preparar(page);
-  await page.goto("/nueva");
-  await page.locator(".selector-sitios").getByText("Brisas", { exact: true }).click();
-  await page.getByLabel(/Hora aproximada de llegada/).fill("14:30");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await page.getByLabel("Nombre completo").fill("Persona de prueba");
-  await page.getByLabel("Cédula o documento").fill("DOC123");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  // Aparece dos veces a propósito (resumen lateral + detalle principal,
-  // mismo patrón que "Fechas"/"Sitios") -- se acota a una sola zona.
-  await expect(
-    page.locator(".bloque-revision").getByText("2:30 p. m."),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Confirmar y agendar" }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Cita agendada" }),
-  ).toBeVisible();
-  expect(guardados[0]?.p_hora_estimada).toBe("14:30");
-});
-
-test("detalles, cancelación confirmada y modal por teclado", async ({
-  page,
-}, info) => {
-  await preparar(page, { cita: true });
-  await page.goto("/citas");
-  await expect(page.getByText("Reunión de coordinación")).toBeVisible();
-  await expect(page.getByText("10:00 a. m.")).toBeVisible();
-  await page.screenshot({
-    path: `test-results/agenda-${info.project.name}.png`,
-    fullPage: true,
+  expect(guardados[0]).toMatchObject({
+    p_fecha_desde: "2026-10-06",
+    p_fecha_hasta: "2026-10-06",
+    p_hora_estimada: "14:30",
+    p_motivo: "Revisión de equipos",
+    p_sitios: [sitios[0].id, sitios[1].id],
+    p_visitantes: [
+      expect.objectContaining({ nombre: "Ana Mora", cedula: "112340567" }),
+      expect.objectContaining({ nombre: "Luis Rojas", cedula: "204560789" }),
+    ],
   });
-  await page.getByRole("button", { name: "Ver detalles" }).click();
+  await expect(page.getByRole("region", { name: "Próximas" }).getByText("Revisión de equipos")).toBeVisible();
+});
+
+test("agendar a alguien que ya vino, con un toque", async ({ page }) => {
+  const { llamadas } = await preparar(page);
+  await page.goto("/agendar");
+  await page.getByRole("button", { name: "Carla Vargas" }).click();
+  await expect(page.getByLabel(/^Nombre/)).toHaveValue("Carla Vargas");
+  await expect(page.getByLabel("Empresa")).toHaveValue("Limpiezas del Sur");
+  await expect(page.getByLabel(/^Nombre/)).toHaveCount(1);
+  await page.getByRole("button", { name: "Brisas" }).click();
+  await page.getByRole("button", { name: "Agendar", exact: true }).click();
+  await expect(page.getByText(/Visita agendada/)).toBeVisible();
+  expect(llamadas("crear_cita_anfitrion")[0]).toMatchObject({
+    p_fecha_desde: HOY,
+    p_hora_estimada: null,
+    p_visitantes: [expect.objectContaining({ cedula: "305670891" })],
+  });
+});
+
+test("detalle: cancelar con confirmación y diálogo por teclado", async ({ page }, info) => {
+  const { llamadas } = await preparar(page, { citas: [deHoy] });
+  await page.goto(`/visitas/${deHoy.id}`);
+  await expect(page.getByRole("heading", { name: "Auditoría de seguridad" })).toBeVisible();
+  await expect(page.getByText("204560789 · ACME · placa BCD123")).toBeVisible();
+  await page.screenshot({ path: `test-results/detalle-${info.project.name}.png`, fullPage: true });
+  await sinDesborde(page);
+
+  const cancelar = page.getByRole("button", { name: "Cancelar visita" });
+  await cancelar.click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByRole("dialog")).toContainText("DOC123");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Ver detalles" }),
-  ).toBeFocused();
-  await page
-    .getByRole("button", { name: "Cancelar cita", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Sí, cancelar cita" }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "se canceló correctamente" }),
-  ).toBeVisible();
-  await expect(page.locator(".estado-cancelada")).toBeVisible();
+  await expect(cancelar).toBeFocused();
+
+  await cancelar.click();
+  await page.getByRole("button", { name: "Sí, cancelar" }).click();
+  await expect(page.getByText("Visita cancelada.")).toBeVisible();
+  await expect(page).toHaveURL(/\/visitas$/);
+  expect(llamadas("cancelar_cita_anfitrion")).toEqual([{ p_id: deHoy.id }]);
+  await expect(page.getByText("No tiene visitas para hoy.")).toBeVisible();
 });
 
-test("confirma abandonar el formulario y no pierde datos al quedarse", async ({
-  page,
-}) => {
-  await preparar(page);
-  await page.goto("/nueva");
-  await page.getByLabel(/Motivo de la visita/).fill("Reunión de prueba");
-  await page.locator(".volver").click();
-  await expect(page.getByRole("dialog")).toContainText("cambios sin guardar");
-  await page.getByRole("button", { name: "Seguir aquí" }).click();
-  await expect(page.getByLabel(/Motivo de la visita/)).toHaveValue(
-    "Reunión de prueba",
-  );
+test("editar: cancela la vieja y abre la nueva", async ({ page }) => {
+  const { llamadas } = await preparar(page, { citas: [proxima] });
+  await page.goto(`/visitas/${proxima.id}`);
+  await page.getByRole("link", { name: "Editar" }).click();
+  await expect(page.getByLabel("Motivo")).toHaveValue("Mantenimiento de aires");
+  await expect(page.getByRole("button", { name: "Varios días" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByLabel("Motivo").fill("Mantenimiento de aires (segunda visita)");
+  await page.getByRole("button", { name: "Guardar cambios" }).click();
+  await expect(page.getByText("Visita actualizada.")).toBeVisible();
+  const [edicion] = llamadas("editar_cita_anfitrion");
+  expect(edicion).toMatchObject({
+    p_id: proxima.id,
+    p_fecha_desde: "2026-10-07",
+    p_fecha_hasta: "2026-10-08",
+    p_motivo: "Mantenimiento de aires (segunda visita)",
+  });
+  expect(edicion?.p_nuevo_id).not.toBe(proxima.id);
+  await expect(page).toHaveURL(new RegExp(`/visitas/${String(edicion?.p_nuevo_id)}$`));
+  await expect(page.getByRole("heading", { name: "Mantenimiento de aires (segunda visita)" })).toBeVisible();
 });
 
-test("la pérdida de conexión conserva el formulario y bloquea el envío", async ({
-  page,
-  context,
-}) => {
+test("si alguien ya entró no se ofrece editar", async ({ page }) => {
+  await preparar(page, {
+    citas: [deHoy],
+    llegadas: [
+      {
+        cita_visitante_id: id(2101),
+        sitio_nombre: "Brisas",
+        hora_entrada: "2026-10-05T15:12:00Z",
+        hora_salida: "2026-10-05T17:40:00Z",
+        gafete_numero: 7,
+      },
+    ],
+  });
+  await page.goto(`/visitas/${deHoy.id}`);
+  await expect(page.getByText("Salió 11:40")).toBeVisible();
+  await expect(page.getByText(/ya entró: ya no se puede editar/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Editar" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Duplicar" })).toBeVisible();
+});
+
+test("confirma salir sin guardar y no pierde lo escrito al quedarse", async ({ page }) => {
   await preparar(page);
-  await page.goto("/nueva");
-  await page.getByLabel(/Motivo de la visita/).fill("Reunión de prueba");
+  await page.goto("/visitas");
+  await page.getByRole("link", { name: "Agendar" }).click();
+  await page.getByLabel("Motivo").fill("Reunión de prueba");
+  await page.getByRole("link", { name: "Volver" }).click();
+  await expect(page.getByRole("dialog")).toContainText("¿Salir sin guardar?");
+  await page.getByRole("button", { name: "Seguir editando" }).click();
+  await expect(page.getByLabel("Motivo")).toHaveValue("Reunión de prueba");
+  await page.getByRole("link", { name: "Volver" }).click();
+  await page.getByRole("button", { name: "Salir" }).click();
+  await expect(page).toHaveURL(/\/visitas$/);
+});
+
+test("sin conexión conserva el formulario y bloquea el envío", async ({ page, context }) => {
+  await preparar(page);
+  await page.goto("/agendar");
+  await page.getByLabel("Motivo").fill("Reunión de prueba");
   await context.setOffline(true);
-  await expect(page.getByRole("alert")).toContainText("sin conexión");
-  await expect(page.getByRole("button", { name: "Continuar" })).toBeDisabled();
-  await expect(page.getByLabel(/Motivo de la visita/)).toHaveValue(
-    "Reunión de prueba",
-  );
+  await expect(page.getByRole("alert").filter({ hasText: "Sin conexión" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Agendar", exact: true })).toBeDisabled();
   await context.setOffline(false);
-  await expect(page.getByRole("button", { name: "Continuar" })).toBeEnabled();
-  await expect(page.getByLabel(/Motivo de la visita/)).toHaveValue(
-    "Reunión de prueba",
-  );
+  await expect(page.getByRole("button", { name: "Agendar", exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Motivo")).toHaveValue("Reunión de prueba");
 });

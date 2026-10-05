@@ -1,1478 +1,292 @@
-/* Los tokens de diseño (--acento, --borde, --fuente, etc.) y Bootstrap se
-   cargan desde estilos/tema.scss, importado antes que este archivo en
-   main.tsx. El puente temporal .boton/.btn-* ya no hace falta -- todos
-   los componentes usan las clases de Bootstrap directamente (Fase 1 del
-   plan en docs/features-futuras/plan-rediseno-web-visitas.md). */
+/* Web de visitas (anfitriones), diseño A "Familia del panel": los mismos
+   tokens (design/brisas.json → diseno.css) y controles (controles.css) que el
+   panel web y el escritorio. Mobile-first: una columna de hasta 720 px.
 
-* {
-  box-sizing: border-box;
+   Todo lo propio va dentro de una capa (`@layer base` / `components`): así las
+   utilidades de Tailwind (`mt-2`, `gap-3`…) siempre ganan. Una regla suelta,
+   fuera de capa, les gana en silencio (el problema que tenía la rama vieja). */
+@import "tailwindcss";
+@import "./diseno.css";
+@import "./controles.css" layer(components);
+
+@theme {
+  --color-fondo: var(--fondo);
+  --color-panel: var(--panel);
+  --color-panel-suave: var(--panel-suave);
+  --color-campo: var(--campo-fondo);
+  --color-borde: var(--borde);
+  --color-borde-fuerte: var(--borde-fuerte);
+  --color-texto: var(--texto);
+  --color-muted: var(--muted);
+  --color-acento: var(--acento);
+  --color-acento-suave: var(--acento-suave);
+  --color-exito: var(--exito);
+  --color-exito-suave: var(--exito-suave);
+  --color-advertencia: var(--advertencia);
+  --color-advertencia-suave: var(--advertencia-suave);
+  --color-error: var(--error);
+  --color-error-suave: var(--error-suave);
+  --radius-DEFAULT: var(--radio);
+  --radius-chico: var(--radio-chico);
 }
-:root {
-  font-family: var(--fuente);
-  font-size: var(--fuente-base);
-  color: var(--texto);
-  background: var(--fondo);
-  font-synthesis: none;
-}
-body {
-  margin: 0;
-  min-width: 320px;
-}
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-button,
-a {
-  -webkit-tap-highlight-color: transparent;
-}
-button {
-  cursor: pointer;
-}
-a {
-  color: inherit;
-  text-decoration: none;
-}
-button:disabled {
-  cursor: default;
-}
-h1,
-h2,
-h3,
-p {
-  margin: 0;
-}
-h1 {
-  font-size: 30px;
-  font-weight: 650;
-  line-height: 1.2;
-  letter-spacing: -0.7px;
-}
-h2 {
-  font-size: var(--fuente-titulo);
-  font-weight: 600;
-}
-h3 {
-  font-size: 15px;
-  font-weight: 600;
-}
-p {
-  line-height: 1.6;
-}
-svg {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-/* `.btn` de Bootstrap es `inline-block` sin `gap` -- bien para texto solo,
-   pero todos los botones de esta app combinan ícono + texto (o son sólo
-   ícono). Sin esto, el ícono queda pegado al texto. */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-.btn svg {
-  width: 18px;
-  height: 18px;
-}
-:focus-visible {
-  outline: 2px solid var(--acento);
-  outline-offset: 3px;
-}
-h1:focus,
-main:focus,
-.resumen-errores:focus {
-  outline: none;
-}
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-.tarjeta {
-  background: var(--panel);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-}
-.texto-secundario,
-.ayuda-campo {
-  color: var(--muted);
-}
-.antetitulo {
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 1.5px;
-  color: var(--muted);
-}
-.marca {
-  display: flex;
-  align-items: center;
-  gap: var(--espacio-3);
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: -0.4px;
-}
-.marca img {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radio);
-}
-.marca-subtitulo {
-  display: block;
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--muted);
-  letter-spacing: 0;
-  margin-top: 2px;
-}
-.solo-icono {
-  width: var(--control-altura);
-  padding: 0;
-}
-/* `.btn-link` de Bootstrap hereda el color de link, que es nuestro
-   `$primary` (rojo) -- bien para un enlace de texto, pero un ícono
-   utilitario (cerrar, cambiar tema, cerrar sesión) en rojo le resta peso
-   al rojo como color de acción PRIMARIA. Gris neutro en reposo, acento
-   sólo al pasar el mouse o enfocar. */
-.btn-link.solo-icono {
-  --bs-btn-color: var(--muted);
-  --bs-btn-hover-color: var(--acento);
-  --bs-btn-active-color: var(--acento);
-}
-/* Ícono de "Actualizar" en Mis Citas mientras revalida en segundo plano
-   (poll cada 60s, volver a la pestaña) -- gira en el lugar en vez de
-   reemplazar la lista visible por el spinner de página completa. */
-.icono-girando {
-  animation: girar 1s linear infinite;
-}
-@keyframes girar {
-  to {
-    transform: rotate(360deg);
+
+@layer base {
+  html {
+    font-family: var(--fuente);
+    font-size: var(--fuente-base);
+    color: var(--texto);
+    background: var(--fondo);
+    -webkit-text-size-adjust: 100%;
   }
-}
-.sello-icono {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radio);
-  background: var(--acento-suave);
-  color: var(--acento);
-  flex-shrink: 0;
-}
-.sello-icono svg {
-  width: 24px;
-  height: 24px;
-}
-.enlace-boton {
-  display: block;
-  text-decoration: underline;
-  background: none;
-  padding: 4px 0;
-  border: 0;
-  color: inherit;
-  font-weight: 600;
-}
-.aviso-con-accion {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.error-fatal {
-  display: grid;
-  place-content: center;
-  gap: var(--espacio-4);
-  min-height: 100dvh;
-  padding: var(--espacio-6);
-  text-align: center;
-}
-.acceso {
-  display: flex;
-  flex-direction: column;
-  min-height: 100dvh;
-}
-.acceso-barra,
-.acceso-pie {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px 48px;
-}
-.acceso-contenido {
-  display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  align-items: center;
-  gap: 96px;
-  width: min(1120px, 100%);
-  padding: 56px 32px 80px;
-  margin: auto;
-}
-.acceso-presentacion h1 {
-  font-size: clamp(36px, 4vw, 52px);
-  letter-spacing: -1.5px;
-  line-height: 1.12;
-  margin: 20px 0;
-}
-.entrada {
-  color: var(--muted);
-  font-size: 16px;
-  max-width: 460px;
-}
-.pasos-acceso {
-  list-style: none;
-  margin: 40px 0 0;
-  padding: 0;
-  display: grid;
-  gap: var(--espacio-6);
-}
-.pasos-acceso li {
-  display: flex;
-  gap: var(--espacio-4);
-  align-items: center;
-}
-.pasos-acceso li > svg {
-  color: var(--acento);
-  width: 22px;
-  height: 22px;
-}
-.pasos-acceso strong {
-  display: block;
-  font-size: 14px;
-}
-.pasos-acceso span {
-  display: block;
-  font-size: 13px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-.acceso-tarjeta {
-  padding: 40px;
-  box-shadow: var(--sombra-panel);
-}
-.acceso-tarjeta .sello-icono {
-  margin-bottom: var(--espacio-8);
-}
-.acceso-tarjeta h2 {
-  font-size: 24px;
-  letter-spacing: -0.5px;
-  margin: 12px 0;
-}
-.acceso-tarjeta > p:not(.antetitulo) {
-  color: var(--muted);
-}
-.acceso-tarjeta .aviso {
-  margin-top: 24px;
-}
-.acceso-boton {
-  min-height: 48px;
-  width: 100%;
-  margin-top: 32px;
-  justify-content: space-between;
-  padding-inline: 20px;
-}
-.acceso-tarjeta .nota-acceso {
-  font-size: 12px;
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid var(--borde);
-}
-.acceso-pie {
-  font-size: 12px;
-  color: var(--muted);
-}
-/* Shell fijo, tipo desktop (AG Grid): nada de scroll a nivel de página
-   completa -- el sidebar y la cabecera de cada pantalla quedan quietos, y
-   sólo el contenido de la tarjeta principal scrollea adentro de su propio
-   contenedor. `height` (no `min-height`) + `overflow: hidden` en toda la
-   cadena es lo que fuerza esto: sin un techo real de altura en cada nivel,
-   el navegador vuelve a su comportamiento normal de página larga con
-   scroll global. */
-.portal {
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-/* Columna a la derecha del sidebar -- botón de menú móvil + contenido
-   scrolleable, mismo rol que el `<main>` de `Shell` en desktop/web. */
-.contenido-shell {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.barra-cuenta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.separador {
-  height: 16px;
-  width: 1px;
-  background: var(--borde);
-  margin-inline: 4px;
-}
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radio-capsula);
-  background: var(--acento-suave);
-  color: var(--acento);
-  font-weight: 600;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-.identidad {
-  display: grid;
-  gap: 2px;
-  font-size: 12px;
-  min-width: 0;
-}
-.identidad span {
-  color: var(--muted);
-  font-size: 11px;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.contenido {
-  padding: 20px 28px;
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  /* `auto`, no `hidden` -- pantallas cortas (Mis citas) nunca llegan a
-     necesitarlo porque su tarjeta ya scrollea sola adentro (`.lista-citas`,
-     `flex:1; min-height:0`); esto es el resguardo para pantallas más largas
-     que ese mismo molde (Nueva cita), que no tienen ese scroll interno
-     propio. */
-  overflow-y: auto;
-}
-.pagina {
-  max-width: 1600px;
-  width: 100%;
-  margin: 0 auto;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.encabezado-pagina {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 12px;
-}
-.encabezado-pagina .antetitulo {
-  margin-bottom: 6px;
-}
-.encabezado-pagina > .boton {
-  min-height: 40px;
-  white-space: nowrap;
-}
-/* A propósito NO `flex: 1` acá -- una tarjeta que siempre se estira al
-   máximo deja un hueco enorme entre el último ítem y la paginación cuando
-   hay pocas citas (encontrado con captura real). La tarjeta mide según su
-   contenido, con techo en el espacio disponible y scroll propio si se
-   pasa (`min-height: 0` + `overflow: hidden` alcanzan para eso en un
-   padre flex-column). */
-.agenda {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.lista-citas {
-  min-height: 0;
-  overflow-y: auto;
-}
-.agenda-herramientas {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--borde);
-}
-.filtros {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.filtro {
-  padding: 8px 14px;
-  min-height: 36px;
-  border-radius: var(--radio-chico);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 550;
-}
-.filtro:hover {
-  color: var(--texto);
-  background: var(--campo-fondo);
-}
-.filtro.activo {
-  background: var(--acento-suave);
-  color: var(--acento);
-  border-color: var(--borde);
-}
-.estado-vacio,
-.estado-agenda {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  text-align: center;
-  padding: 64px 24px;
-  overflow-y: auto;
-}
-.estado-vacio > p {
-  color: var(--muted);
-  max-width: 380px;
-  font-size: 14px;
-}
-.estado-vacio > .boton {
-  margin-top: 8px;
-}
-.vacio-icono {
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  border-radius: var(--radio);
-  background: var(--campo-fondo);
-  color: var(--muted);
-  margin-bottom: 8px;
-  border: 1px solid var(--borde);
-}
-.vacio-icono svg {
-  width: 30px;
-  height: 30px;
-}
-.cita {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid var(--borde);
-}
-.cita:last-child {
-  border-bottom: 0;
-}
-/* Toda la tarjeta (salvo "Cancelar cita") es un solo <button> -- "ver
-   detalles" ya no es una acción explícita más entre varias del mismo peso
-   (la "montaña de botones" que se buscaba evitar), es la tarjeta misma. */
-.cita-cuerpo {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex: 1;
-  min-width: 0;
-  padding: 18px 20px;
-  background: none;
-  border: 0;
-  text-align: left;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-.cita-cuerpo:hover {
-  background: var(--campo-fondo);
-}
-.cita-chevron {
-  flex-shrink: 0;
-  color: var(--muted);
-}
-.cita-acciones {
-  flex-shrink: 0;
-  padding-right: 20px;
-}
-.cita-fecha {
-  width: 60px;
-  min-height: 68px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-chico);
-  background: var(--campo-fondo);
-}
-.cita-fecha > span {
-  font-size: 24px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-.cita-fecha small {
-  color: var(--muted);
-  text-transform: uppercase;
-  font-size: 10px;
-}
-.cita-contenido {
-  flex: 1;
-  min-width: 0;
-}
-.cita-titulo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.cita-titulo h3 {
-  overflow-wrap: anywhere;
-}
-.estado {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: var(--radio-capsula);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.estado::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-radius: var(--radio-capsula);
-  background: currentColor;
-}
-.estado-vigente {
-  background: var(--exito-suave);
-  color: var(--exito);
-}
-.estado-cancelada {
-  background: var(--error-suave);
-  color: var(--error);
-}
-.estado-vencida {
-  background: var(--panel-suave);
-  color: var(--muted);
-}
-.cita-fechas {
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 6px;
-}
-.cita-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 8px;
-}
-.cita-meta > span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  overflow-wrap: anywhere;
-}
-.cita-meta svg {
-  width: 14px;
-  height: 14px;
-}
-.nota-agenda {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.nota-agenda svg {
-  width: 15px;
-  height: 15px;
-}
-.paginacion {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 20px;
-  background: var(--campo-fondo);
-  border-top: 1px solid var(--borde);
-  font-size: 12px;
-  color: var(--muted);
-}
-.paginacion > div {
-  display: flex;
-  gap: 8px;
-}
-/* Barra de estado -- de lado a lado, debajo de sidebar + contenido, mismo
-   lugar (y mismo nombre de clase) que la de desktop/web. Sin fondo/borde
-   propio a propósito: vive directo sobre `--fondo`. */
-.barra-estado {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 8px 24px;
-  font-size: 11px;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-.barra-estado .avatar {
-  width: 22px;
-  height: 22px;
-  font-size: 10px;
-}
-.barra-estado .identidad {
-  font-size: 11px;
-}
-.barra-estado .identidad span {
-  font-size: 10px;
-  max-width: 200px;
-}
-
-/* Sidebar de navegación (componentes/Sidebar.tsx) -- copiado tal cual del
-   lenguaje visual de desktop/web (mismo nombre de clases), sólo con las dos
-   secciones de este portal (Mis citas / Nueva cita). */
-.shell-sidebar {
-  display: flex;
-  flex-direction: column;
-  width: 11.5rem;
-  flex-shrink: 0;
-  margin: 6px 0 6px 6px;
-  background: var(--panel);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  transition: width 0.15s ease;
-}
-.shell-sidebar-colapsada {
-  width: 3.75rem;
-}
-.shell-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 6px 0;
-}
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  text-align: left;
-  padding: 10px 12px;
-  border: none;
-  border-radius: var(--radio-chico);
-  background: transparent;
-  color: var(--texto);
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-.nav-item svg {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-}
-.shell-sidebar-colapsada .nav-item {
-  justify-content: center;
-  padding: 10px 0;
-}
-.shell-sidebar-colapsada .nav-item-etiqueta {
-  display: none;
-}
-.nav-item:hover:not(.nav-item-activo) {
-  background: color-mix(in srgb, var(--campo-fondo) 60%, transparent);
-}
-.nav-item:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 2px var(--acento);
-}
-.nav-item-colapsar {
-  margin-top: auto;
-  border-top: 1px solid var(--borde);
-  border-radius: 0;
-  color: var(--muted);
-}
-.nav-item-activo {
-  background: var(--acento-relleno);
-  color: var(--sobre-acento);
-  font-weight: 600;
-  box-shadow: inset 2px 0 0 var(--acento);
-}
-
-/* Botón de menú (hamburguesa) que abre el cajón del sidebar en pantallas
-   angostas -- oculto en escritorio, donde el sidebar ya convive con el
-   contenido sin taparlo. */
-.boton-menu-movil {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  align-self: flex-start;
-  width: var(--control-tactil);
-  height: var(--control-tactil);
-  flex-shrink: 0;
-  margin: 6px 6px 0;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-chico);
-  background: var(--panel);
-  color: var(--texto);
-  cursor: pointer;
-}
-.boton-menu-movil:hover {
-  background: var(--acento-suave);
-  border-color: var(--acento);
-}
-
-/* Por debajo de este ancho el sidebar no comparte espacio con el
-   contenido -- se sale del flujo (`position: fixed`) y vive encima como un
-   cajón, oculto por defecto, con un velo detrás que lo cierra al tocar
-   afuera. */
-@media (max-width: 768px) {
-  .boton-menu-movil {
-    display: flex;
-  }
-  .shell-sidebar,
-  .shell-sidebar.shell-sidebar-colapsada {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    z-index: 40;
-    width: 15rem;
+  body {
     margin: 0;
-    border-radius: 0;
-    transform: translateX(-100%);
-    transition: transform 0.2s ease;
+    min-height: 100dvh;
+    background: var(--fondo);
+    line-height: 1.45;
   }
-  .shell-sidebar.shell-sidebar-abierta {
-    transform: translateX(0);
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
   }
-  .shell-sidebar-colapsada .nav-item-etiqueta {
-    display: inline;
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
   }
-  .shell-sidebar-colapsada .nav-item {
-    justify-content: flex-start;
-    padding: 10px 14px;
+  :focus-visible {
+    outline: 2px solid var(--acento);
+    outline-offset: 2px;
   }
-  .shell-sidebar-velo {
-    position: fixed;
-    inset: 0;
-    z-index: 39;
-    background: var(--velo);
-  }
-}
-.volver {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 24px;
-}
-.volver svg {
-  width: 14px;
-  height: 14px;
-}
-/* componentes/PasoWizard.tsx -- visible en TODOS los breakpoints a
-   propósito (el viejo .indicador-paso se ocultaba por completo en móvil,
-   justo donde más se usa esta pantalla). */
-.paso-wizard ol {
-  display: flex;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  gap: 4px;
-}
-.paso-wizard-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-.paso-wizard-item:last-child {
-  flex: 0 0 auto;
-}
-.paso-wizard-numero {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radio-capsula);
-  border: 1.5px solid var(--borde-fuerte);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-}
-.paso-wizard-numero svg {
-  width: 14px;
-  height: 14px;
-}
-.paso-wizard-activo .paso-wizard-numero {
-  border-color: var(--acento);
-  background: var(--acento-relleno);
-  color: var(--sobre-acento);
-}
-.paso-wizard-completado .paso-wizard-numero {
-  border-color: var(--acento);
-  color: var(--acento);
-  background: var(--acento-suave);
-}
-.paso-wizard-etiqueta {
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.paso-wizard-activo .paso-wizard-etiqueta {
-  color: var(--texto);
-}
-.paso-wizard-linea {
-  flex: 1;
-  height: 1.5px;
-  background: var(--borde);
-  min-width: 16px;
-}
-.paso-wizard-completado .paso-wizard-linea {
-  background: var(--acento);
-}
-@media (max-width: 640px) {
-  .paso-wizard-etiqueta {
-    display: none;
-  }
-  .paso-wizard-activo .paso-wizard-etiqueta {
-    display: inline;
-    white-space: normal;
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
   }
 }
-.formulario-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 24px;
-  align-items: start;
-}
-.bloque-formulario {
-  padding: 0 24px 24px;
-  margin: 0 0 24px;
-  min-width: 0;
-}
-.bloque-formulario legend {
-  float: left;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  padding: 24px 0 0;
-}
-.descripcion-bloque {
-  clear: both;
-  padding-top: 8px;
-  padding-bottom: 24px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.campo {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 550;
-  margin-bottom: 20px;
-  position: relative;
-}
-.campo:last-child {
-  margin-bottom: 0;
-}
-/* El aspecto del control (borde, fondo, foco) ahora lo da `.form-control`
-   de Bootstrap -- `.campo` sólo aporta el layout de label+ayuda+error. El
-   estado de error sigue marcándose con `aria-invalid`, no con `.is-invalid`
-   de Bootstrap (ver la nota sobre CSP en el plan). */
-.campo input[aria-invalid="true"],
-.campo textarea[aria-invalid="true"] {
-  border-color: var(--bs-danger);
-}
-.campo textarea {
-  resize: vertical;
-}
-.dos-columnas {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 16px;
-}
-.dos-columnas .campo {
-  margin-bottom: 20px;
-}
-/* componentes/CampoFechas.tsx -- Día/Mes/Año como 3 campos fijos en vez de
-   un <input type="date"> nativo (su orden depende del navegador de cada
-   visitante, no de esta app). */
-.campo-fecha-segmentada {
-  border: 0;
-  padding: 0;
-  margin: 0 0 20px;
-}
-.campo-fecha-segmentada legend {
-  font-size: 13px;
-  font-weight: 550;
-  padding: 0 0 8px;
-}
-.campo-fecha-segmentos {
-  display: flex;
-  gap: 8px;
-}
-.campo-fecha-segmentos label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--muted);
-}
-.campo-fecha-segmentos input {
-  width: 3.25rem;
-  text-align: center;
-}
-.campo-fecha-segmentos label:last-child input {
-  width: 4.5rem;
-}
-/* Desde/Hasta/Hora en una sola fila -- un grid de 2 columnas al 50% (como
-   era antes) dejaba un hueco enorme entre ambas fechas, porque los 3
-   campos juntos ocupan bastante menos que el ancho del panel. Con flex y
-   ancho de contenido (no `1fr`) quedan pegados, y envuelven a una fila
-   nueva en pantallas angostas. */
-.fila-fechas-hora {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-}
-.fila-fechas-hora .campo-fecha-segmentada {
-  margin-bottom: 0;
-}
-/* Ancho fijo, no de contenido -- sin esto, el texto de ayuda de adentro
-   (una oración larga) empuja a `.campo-hora` a estirarse para no
-   envolverse, lo que termina forzando el wrap de toda la fila mucho antes
-   de lo necesario. */
-.campo-hora {
-  flex: 0 0 13rem;
-}
-.campo-hora input {
-  max-width: 10rem;
-}
-/* `.opcional` normalmente flota en la esquina superior derecha del
-   `.campo` (hay lugar de sobra en un campo a lo ancho de la tarjeta) --
-   acá la etiqueta "Hora aproximada de llegada" ya ocupa las 2 líneas del
-   ancho angosto de esta columna, y esa insignia flotante quedaba pisando
-   el texto. En flujo normal, envuelve junto con la etiqueta en vez de
-   superponerse. */
-.campo-hora .opcional {
-  position: static;
-  display: block;
-}
-.opcional {
-  position: absolute;
-  top: 0;
-  right: 0;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--muted);
-}
-.obligatorio {
-  color: var(--muted);
-}
-.campo > .obligatorio {
-  position: absolute;
-  top: 0;
-  right: 0;
-}
-.ayuda-campo {
-  font-size: 12px;
-  font-weight: 400;
-}
-.contador {
-  text-align: right;
-}
-.error-campo {
-  color: var(--error);
-  font-size: 12px;
-  font-weight: 400;
-}
-/* Sitios de la visita: chips (`.btn-check` + `.btn`, patrón oficial de
-   Bootstrap para grupos de toggle) en vez de las tarjetas grandes de
-   antes -- mismo lenguaje visual que las píldoras de filtro de "Mis
-   citas", y no reserva una fila entera de alto por cada sitio cuando el
-   catálogo crece. `.btn-check` esconde el checkbox nativo por completo
-   (clip a 0×0, no pinta ningún ícono) -- sigue siendo un checkbox real
-   para teclado y lectores de pantalla, sólo cambia qué se ve. */
-.selector-sitios {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.contador-grupo {
-  font-size: 12px;
-  color: var(--muted);
-  margin-left: auto;
-}
-.visitantes-formulario {
-  display: grid;
-  gap: 16px;
-}
-.visitante-formulario {
-  padding: 16px;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-chico);
-  background: var(--campo-fondo);
-}
-/* `<details>/<summary>` nativo (componentes/VisitanteFormulario.tsx) --
-   colapsa las tarjetas ya completas cuando el grupo es grande, sin JS de
-   Bootstrap ni su `.accordion` (ese componente pinta la flecha con un
-   `background-image: data:` que la CSP de esta app bloquea). */
-.visitante-formulario > summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  font-size: 13px;
-  font-weight: 550;
-  cursor: pointer;
-  list-style: none;
-}
-.visitante-formulario > summary::-webkit-details-marker {
-  display: none;
-}
-.visitante-formulario > summary svg {
-  width: 16px;
-  height: 16px;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-.visitante-formulario > summary::after {
-  content: "";
-  margin-left: auto;
-  width: 7px;
-  height: 7px;
-  flex-shrink: 0;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
-  transform: rotate(45deg);
-  transition: transform var(--duracion);
-}
-.visitante-formulario[open] > summary::after {
-  transform: rotate(-135deg);
-}
-.visitante-formulario[open] > summary {
-  margin-bottom: 16px;
-}
-.visitante-resumen .texto-secundario {
-  color: var(--muted);
-  font-weight: 400;
-}
-.visitante-acciones {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-.visitante-formulario .dos-columnas .campo:nth-last-child(-n + 2) {
-  margin-bottom: 0;
-}
-.agregar-visitante {
-  margin: 20px 0 8px;
-}
-.acciones-formulario {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
-  margin-top: 24px;
-}
-.acciones-formulario > .ayuda-campo {
-  margin-right: auto;
-}
-.resumen-lateral {
-  position: sticky;
-  top: 24px;
-}
-.resumen-lateral .tarjeta {
-  padding: 24px;
-}
-.resumen-lateral .tarjeta > svg {
-  color: var(--acento);
-  margin-bottom: 16px;
-}
-.resumen-lateral h2 {
-  font-size: 14px;
-}
-.resumen-lateral dl {
-  margin: 24px 0 0;
-}
-.resumen-lateral dl > div {
-  padding-block: 16px;
-  border-top: 1px solid var(--borde);
-}
-dt {
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-dd {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-.resumen-lateral dd span {
-  display: block;
-  margin-top: 4px;
-  font-weight: 400;
-  color: var(--muted);
-}
-.consejo {
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
-  padding-inline: 4px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.consejo svg {
-  width: 16px;
-  height: 16px;
-  margin-top: 3px;
-}
-.bloque-revision {
-  padding: 24px;
-}
-.titulo-bloque {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.titulo-bloque > svg {
-  color: var(--acento);
-}
-.datos-revision {
-  display: grid;
-  gap: 20px;
-  margin: 24px 0;
-  padding: 24px 0;
-  border-block: 1px solid var(--borde);
-}
-.personas-revision {
-  list-style: none;
-  margin: 16px 0 0;
-  padding: 0;
-}
-.personas-revision li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--borde);
-  overflow-wrap: anywhere;
-}
-.personas-revision li:last-child {
-  border-bottom: 0;
-}
-.personas-revision strong {
-  display: block;
-  font-size: 13px;
-}
-.personas-revision li > div > span {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--muted);
-}
-/* `.modal-content` (clases de Bootstrap, ver componentes/Comunes.tsx) trae
-   fondo/borde/radio -- acá sólo el tamaño y posicionamiento del <dialog>
-   nativo, que Bootstrap asume resueltos por su propio wrapper .modal-dialog
-   (que no usamos, ver el plan). */
-.modal {
-  width: min(600px, calc(100vw - 32px));
-  max-height: calc(100dvh - 48px);
-  box-shadow: var(--sombra-panel);
-  margin: auto;
-  overflow-y: auto;
-}
-.modal::backdrop {
-  background: var(--velo);
-}
-.modal-body > p + p {
-  margin-top: 12px;
-}
-.modal-body > .alert {
-  margin-top: 16px;
-}
-.saltar {
-  position: fixed;
-  top: 12px;
-  left: 16px;
-  z-index: 100;
-  padding: 12px 16px;
-  background: var(--acento-relleno);
-  color: var(--sobre-acento);
-  border-radius: var(--radio-chico);
-}
-.saltar:not(:focus) {
-  clip-path: inset(50%);
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
-@media (max-width: 1150px) {
-  .contenido {
-    padding: 20px 20px;
+
+@layer components {
+  /* Tarjeta: el mismo panel del sistema (borde fino, radio 12). */
+  .tarjeta {
+    background: var(--panel);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
   }
-  .formulario-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .resumen-lateral {
-    display: none;
-  }
-  .cita-cuerpo {
-    gap: 16px;
-    padding: 16px;
-  }
-}
-@media (max-width: 800px) {
-  .acceso-barra,
-  .acceso-pie {
-    padding: 24px;
-  }
-  .acceso-contenido {
-    grid-template-columns: 1fr;
-    gap: 32px;
-    padding: 32px 24px;
-    max-width: 560px;
-  }
-  .pasos-acceso {
-    display: none;
-  }
-  .acceso-presentacion h1 {
-    font-size: 36px;
-  }
-  .identidad {
-    display: none;
-  }
-  .barra-cuenta {
-    gap: 8px;
-  }
-}
-@media (max-width: 540px) {
-  .acceso-tarjeta {
-    padding: 24px;
-  }
-  .acceso-pie {
-    font-size: 10px;
-  }
-  .contenido {
-    padding: 16px;
-  }
-  h1 {
-    font-size: 26px;
-  }
-  .encabezado-pagina {
-    flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 16px;
-  }
-  .agenda-herramientas {
-    flex-wrap: wrap;
-    padding: 12px;
-    gap: 8px;
-  }
-  .agenda-herramientas > .boton {
-    margin-left: auto;
+
+  /* Rótulo de sección ("HOY", "PRÓXIMAS"). */
+  .rotulo {
+    margin: 0;
     font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
   }
-  .filtro {
-    padding-inline: 12px;
-  }
-  .estado-vacio {
-    padding: 48px 20px;
-  }
-  .estado-vacio h2 {
-    font-size: 18px;
-  }
-  .cita {
-    flex-wrap: wrap;
-  }
-  .cita-cuerpo {
-    gap: 12px;
-    padding: 20px 16px;
-  }
-  .cita-fecha {
-    width: 48px;
-  }
-  .cita-acciones {
-    width: 100%;
-    justify-content: flex-end;
-    padding: 0 16px 12px;
-  }
-  .cita-titulo {
-    gap: 8px;
-  }
-  .cita-titulo h3 {
-    font-size: 14px;
-  }
-  .nota-agenda {
-    align-items: flex-start;
-    font-size: 11px;
-    padding-inline: 8px;
-  }
-  .paginacion {
-    padding: 16px 12px;
-  }
-  .paginacion .boton {
-    font-size: 12px;
-    padding-inline: 8px;
-  }
-  .separador,
-  .barra-cuenta .avatar {
-    display: none;
-  }
-  .barra-estado {
-    padding-inline: 16px;
-    font-size: 10px;
-  }
-  .bloque-formulario {
-    padding: 0 16px 20px;
-  }
-  .dos-columnas {
-    grid-template-columns: 1fr;
-  }
-  .visitante-formulario {
-    padding: 12px;
-  }
-  .visitante-formulario .dos-columnas .campo:nth-last-child(2) {
-    margin-bottom: 20px;
-  }
-  .acciones-formulario {
-    flex-wrap: wrap;
-  }
-  .modal {
-    padding: 20px;
-  }
-}
-@media (pointer: coarse) {
-  .campo input:not([type="checkbox"]),
-  .campo textarea,
-  .filtro {
-    min-height: var(--control-tactil);
+
+  /* Campo con etiqueta arriba; el control ocupa todo el ancho. */
+  .campo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--muted);
   }
   .campo input,
+  .campo select,
   .campo textarea {
-    font-size: 16px;
+    min-height: var(--control-altura);
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-chico);
+    background: var(--campo-fondo);
+    color: var(--texto);
+    font-size: 14px;
+    transition:
+      border-color var(--duracion),
+      box-shadow var(--duracion);
   }
-  .solo-icono {
-    width: var(--control-tactil);
+  .campo textarea {
+    padding: 8px 10px;
+    resize: vertical;
+  }
+  .campo input:focus,
+  .campo select:focus,
+  .campo textarea:focus {
+    outline: none;
+    border-color: var(--acento);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 25%, transparent);
+  }
+  .campo[data-error="true"] input,
+  .campo[data-error="true"] textarea {
+    border-color: var(--error);
+  }
+  .campo-error {
+    font-size: 12px;
+    color: var(--error);
+  }
+  @media (pointer: coarse) {
+    .campo input,
+    .campo select {
+      min-height: var(--control-tactil);
+      font-size: 16px; /* sin zoom automático al enfocar en el celular */
+    }
+  }
+
+  /* Cápsula de selección (Hoy / Mañana / Varios días). */
+  .capsula {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-capsula);
+    background: var(--panel);
+    color: var(--texto);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .capsula[aria-pressed="true"] {
+    border-color: var(--acento-relleno);
+    background: var(--acento-relleno);
+    color: var(--sobre-acento);
+  }
+  @media (pointer: coarse) {
+    .capsula {
+      min-height: 40px;
+    }
+  }
+
+  /* Opción de lista seleccionable (un sitio). */
+  .opcion {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-chico);
+    background: var(--panel);
+    color: var(--texto);
+    text-align: left;
+    cursor: pointer;
+  }
+  .opcion[aria-pressed="true"] {
+    border-color: var(--acento);
+    background: var(--acento-suave);
+    color: var(--acento);
+    font-weight: 600;
+  }
+
+  /* Estado de un visitante ("Llegó 9:12 · gafete 7"). */
+  .estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--radio-capsula);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .estado-adentro {
+    background: var(--exito-suave);
+    color: var(--exito);
+  }
+  .estado-espera,
+  .estado-salio {
+    background: var(--panel-suave);
+    color: var(--muted);
+  }
+  .estado-cancelada {
+    background: var(--error-suave);
+    color: var(--error);
+  }
+
+  /* Aviso en línea (error o información). */
+  .aviso {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-chico);
+    background: var(--panel-suave);
+    font-size: 13px;
+  }
+  .aviso-error {
+    border-color: color-mix(in srgb, var(--error) 45%, var(--borde));
+    background: var(--error-suave);
+    color: var(--error);
+  }
+
+  /* Barra fija al pie (Agendar): siempre visible en el celular. */
+  .barra-pie {
+    position: sticky;
+    bottom: 0;
+    background: var(--panel);
+    border-top: 1px solid var(--borde);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  /* Diálogo nativo (<dialog>): confirmar cancelación, etc. */
+  .dialogo {
+    width: min(420px, calc(100vw - 32px));
+    padding: 0;
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: var(--panel);
+    color: var(--texto);
+    box-shadow: var(--sombra-panel);
+  }
+  .dialogo::backdrop {
+    background: var(--velo);
+  }
+
+  .saltar {
+    position: absolute;
+    left: -9999px;
+  }
+  .saltar:focus {
+    left: 16px;
+    top: 8px;
+    z-index: 50;
+    padding: 8px 12px;
+    background: var(--panel);
+    border-radius: var(--radio-chico);
   }
 }
 
-/* Selector de fechas de "Nueva cita" (componentes/SelectorFechas.tsx) --
-   calendario propio, sin librería externa (ver el doc-comment del
-   componente: se reemplazó FullCalendar acá específicamente porque su
-   wrapper no convivía bien con <Activity> en el wizard). */
-.selector-fechas {
-  /* Sin este límite, la grilla de 7 columnas (`1fr` cada una) estira cada
-     celda al ancho completo del panel del wizard -- con `aspect-ratio: 1`
-     eso vuelve cada día un cuadrado gigante. Un selector de fecha no
-     necesita más ancho que el de un calendario de escritorio típico. */
-  max-width: 340px;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-chico);
-  padding: 12px;
-  background: var(--campo-fondo);
+/* Aviso flotante (avisos.ts). */
+@layer components {
+  .aviso-flotante {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 480px;
+    padding: 10px 10px 10px 14px;
+    background: var(--panel);
+    color: var(--texto);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.14);
+    animation: aparecer 0.18s ease-out;
+  }
+  @keyframes aparecer {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .aviso-flotante {
+      animation: none;
+    }
+  }
 }
-.selector-fechas-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.selector-fechas-nav {
-  display: flex;
-  gap: 4px;
-}
-.selector-fechas-titulo {
-  font-size: 14px;
-  font-weight: 600;
-}
-.selector-fechas-grilla {
-  display: grid;
-  gap: 2px;
-}
-.selector-fechas-fila {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-}
-.selector-fechas-encabezado span {
-  text-align: center;
-  font-size: 11px;
-  color: var(--muted);
-  padding-block: 4px;
-  text-transform: uppercase;
-}
-.selector-fechas-dia {
-  aspect-ratio: 1;
-  border: 1px solid transparent;
-  border-radius: var(--radio-chico);
-  background: transparent;
-  color: var(--texto);
-  font-size: 13px;
-  cursor: pointer;
-}
-.selector-fechas-dia:hover:not(:disabled) {
-  border-color: var(--borde-fuerte);
-}
-.selector-fechas-dia:disabled {
-  color: var(--texto-atenuado);
-  cursor: default;
-  opacity: 0.5;
-}
-.selector-fechas-dia-otro-mes {
-  color: var(--muted);
-}
-.selector-fechas-dia-hoy {
-  font-weight: 700;
-}
-.selector-fechas-dia-rango {
-  background: var(--acento-suave);
-}
-.selector-fechas-dia-limite {
-  background: var(--acento-relleno);
-  color: var(--sobre-acento);
-  font-weight: 600;
-}
-

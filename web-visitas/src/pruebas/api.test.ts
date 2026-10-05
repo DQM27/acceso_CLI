@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { crearCita, cancelarCita, listarCitas, mensajeError } from "../api";
+import {
+  cancelarCita,
+  crearCita,
+  editarCita,
+  listarCitasActuales,
+  listarHistorial,
+  llegadasDe,
+  mensajeError,
+  visitantesAnteriores,
+} from "../api";
 import { hoyCostaRica } from "../fecha";
 
 const dobles = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
@@ -22,29 +31,13 @@ const datos = () => ({
   ],
 });
 
+const METODOS = ["select", "eq", "gte", "lt", "or", "order", "range", "limit", "maybeSingle", "abortSignal"] as const;
 function consulta(respuesta: unknown) {
-  const resultado = Promise.resolve(respuesta);
-  const cadena = Object.assign(resultado, {
-    select: vi.fn(),
-    update: vi.fn(),
-    eq: vi.fn(),
-    gte: vi.fn(),
-    lt: vi.fn(),
-    order: vi.fn(),
-    range: vi.fn(),
-    single: vi.fn(),
-  });
-  for (const metodo of [
-    cadena.select,
-    cadena.update,
-    cadena.eq,
-    cadena.gte,
-    cadena.lt,
-    cadena.order,
-    cadena.range,
-    cadena.single,
-  ])
-    metodo.mockReturnValue(cadena);
+  const cadena = Object.assign(
+    Promise.resolve(respuesta),
+    Object.fromEntries(METODOS.map((m) => [m, vi.fn()])) as Record<(typeof METODOS)[number], ReturnType<typeof vi.fn>>,
+  );
+  for (const metodo of METODOS) cadena[metodo].mockReturnValue(cadena);
   dobles.from.mockReturnValue(cadena);
   return cadena;
 }
@@ -118,27 +111,66 @@ describe("guardado atómico", () => {
     await expect(crearCita(id, datos())).rejects.toThrow("no corresponde");
   });
 });
-describe("lectura y cancelación", () => {
-  it("acota propietario, estado y paginación en la consulta", async () => {
+describe("edición y cancelación", () => {
+  const nuevo = "00000000-0000-4000-8000-000000000009";
+  it("editar manda la cita vieja y la nueva en una sola RPC y confirma el id nuevo", async () => {
+    dobles.rpc.mockResolvedValue({ data: nuevo, error: null });
+    await expect(editarCita(id, nuevo, datos())).resolves.toBe(nuevo);
+    expect(dobles.rpc).toHaveBeenCalledWith(
+      "editar_cita_anfitrion",
+      expect.objectContaining({ p_id: id, p_nuevo_id: nuevo, p_visitantes: [expect.objectContaining({ cedula: "AB123" })] }),
+    );
+    expect(dobles.from).not.toHaveBeenCalled();
+    dobles.rpc.mockResolvedValue({ data: id, error: null });
+    await expect(editarCita(id, nuevo, datos())).rejects.toThrow("no corresponde");
+  });
+  it("editar valida antes de llamar al servidor", async () => {
+    await expect(editarCita(id, nuevo, { ...datos(), visitantes: [] })).rejects.toThrow();
+    await expect(editarCita("no-es-uuid", nuevo, datos())).rejects.toThrow();
+    expect(dobles.rpc).not.toHaveBeenCalled();
+  });
+  it("cancelar usa la RPC (no escribe la tabla) y propaga el error", async () => {
+    dobles.rpc.mockResolvedValue({ data: null, error: null });
+    await expect(cancelarCita(id)).resolves.toBeUndefined();
+    expect(dobles.rpc).toHaveBeenCalledWith("cancelar_cita_anfitrion", { p_id: id });
+    expect(dobles.from).not.toHaveBeenCalled();
+    dobles.rpc.mockResolvedValue({ data: null, error: { code: "P0002", message: "La visita no existe" } });
+    await expect(cancelarCita(id)).rejects.toMatchObject({ code: "P0002" });
+  });
+});
+describe("lecturas", () => {
+  it("las actuales se acotan al anfitrión, vigentes y de hoy en adelante", async () => {
     const cadena = consulta({ data: [], error: null });
-    await listarCitas(correo, "VENCIDA", 2);
+    await listarCitasActuales(correo);
     expect(cadena.eq).toHaveBeenCalledWith("anfitrion_correo", correo);
     expect(cadena.eq).toHaveBeenCalledWith("estado", "VIGENTE");
-    expect(cadena.lt).toHaveBeenCalledWith("fecha_hasta", hoyCostaRica());
-    expect(cadena.range).toHaveBeenCalledWith(24, 36);
+    expect(cadena.gte).toHaveBeenCalledWith("fecha_hasta", hoyCostaRica());
   });
-  it("solo confirma cancelación si el servidor devuelve la fila", async () => {
-    const cadena = consulta({ data: null, error: null });
-    await expect(cancelarCita(id, correo)).rejects.toThrow();
+  it("el historial trae canceladas o vencidas y pide una fila de más para saber si hay más", async () => {
+    const cadena = consulta({ data: [], error: null });
+    const resultado = await listarHistorial(correo, 2);
     expect(cadena.eq).toHaveBeenCalledWith("anfitrion_correo", correo);
-    expect(cadena.eq).toHaveBeenCalledWith("estado", "VIGENTE");
-    expect(cadena.update).toHaveBeenCalledWith({ estado: "CANCELADA" });
-    consulta({ data: { id }, error: null });
-    await expect(cancelarCita(id, correo)).resolves.toBeUndefined();
+    expect(cadena.or).toHaveBeenCalledWith(`estado.eq.CANCELADA,fecha_hasta.lt.${hoyCostaRica()}`);
+    expect(cadena.range).toHaveBeenCalledWith(40, 60);
+    expect(resultado).toEqual({ citas: [], hayMas: false });
   });
-  it("no muestra mensajes internos del servidor", () => {
-    expect(
-      mensajeError({ message: "SQL privado con datos de visitante" }),
-    ).not.toContain("SQL");
+  it("llegadas: sin citas no consulta; con citas valida la respuesta", async () => {
+    await expect(llegadasDe([])).resolves.toEqual([]);
+    expect(dobles.rpc).not.toHaveBeenCalled();
+    dobles.rpc.mockResolvedValue({ data: [{ cita_visitante_id: "x" }], error: null });
+    await expect(llegadasDe([id])).rejects.toThrow();
+    expect(dobles.rpc).toHaveBeenCalledWith("estado_visitantes_de_mis_citas", { p_citas: [id] });
+  });
+  it("visitantes anteriores: búsqueda vacía va como null", async () => {
+    const cadena = consulta({ data: [], error: null });
+    dobles.rpc.mockReturnValue(cadena);
+    await visitantesAnteriores("   ");
+    expect(dobles.rpc).toHaveBeenCalledWith("visitantes_anteriores", { p_busqueda: null });
+    await visitantesAnteriores(" ana ");
+    expect(dobles.rpc).toHaveBeenCalledWith("visitantes_anteriores", { p_busqueda: "ana" });
+  });
+  it("no muestra mensajes internos del servidor pero sí los de las reglas", () => {
+    expect(mensajeError({ message: "SQL privado con datos de visitante" })).not.toContain("SQL");
+    expect(mensajeError({ code: "P0001", message: "Alguien de esta visita ya entró" })).toBe("Alguien de esta visita ya entró");
   });
 });

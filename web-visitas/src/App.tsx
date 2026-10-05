@@ -1,202 +1,75 @@
-import { lazy, Suspense, useEffect, useState, ViewTransition } from "react";
-import {
-  createBrowserRouter,
-  RouterProvider,
-  Navigate,
-  Route,
-  Routes,
-  useLocation,
-} from "react-router-dom";
-import { CalendarDays, CirclePlus, LogOut, Menu, X } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { lazy, Suspense, useEffect } from "react";
+import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexto/AuthContexto";
-import { Aviso, Cargando, SelectorTema } from "./componentes/Comunes";
-import Sidebar from "./componentes/Sidebar";
+import { Aviso, Cargando } from "./componentes/Comunes";
 import Login from "./pantallas/Login";
-const MisCitas = lazy(() => import("./pantallas/MisCitas"));
-const NuevaCita = lazy(() => import("./pantallas/NuevaCita"));
+import MisVisitas from "./pantallas/MisVisitas";
 
-export type Seccion = "citas" | "nueva";
+const AgendarVisita = lazy(() => import("./pantallas/AgendarVisita"));
+const DetalleVisita = lazy(() => import("./pantallas/DetalleVisita"));
+const EditarVisita = lazy(() => import("./pantallas/EditarVisita"));
+const Historial = lazy(() => import("./pantallas/Historial"));
 
-/** Ruta real de cada sección -- `Sidebar` arma sus `NavLink` con esto. */
-export function rutaSeccion(id: Seccion): string {
-  return `/${id}`;
-}
-
-// Sólo dos secciones hoy -- pensado para crecer (ver Sidebar.tsx, copiado
-// tal cual de desktop/web) sin tener que rehacer el layout cuando se agregue
-// una tercera.
-const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
-  { id: "citas", etiqueta: "Mis citas", Icono: CalendarDays },
-  { id: "nueva", etiqueta: "Nueva cita", Icono: CirclePlus },
+const TITULOS: [RegExp, string][] = [
+  [/^\/agendar/, "Agendar visita"],
+  [/^\/historial/, "Historial"],
+  [/^\/visitas\/[^/]+\/editar/, "Editar visita"],
+  [/^\/visitas\/[^/]+/, "Visita"],
 ];
 
-const CLAVE_SIDEBAR_COLAPSADO = "brisas-visitas:sidebar:colapsado";
-
-function leerSidebarColapsado(): boolean {
-  try {
-    return localStorage.getItem(CLAVE_SIDEBAR_COLAPSADO) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function guardarSidebarColapsado(colapsado: boolean) {
-  try {
-    localStorage.setItem(CLAVE_SIDEBAR_COLAPSADO, colapsado ? "1" : "0");
-  } catch {
-    // Ver comentario de leerSidebarColapsado.
-  }
-}
-
-function Contenido() {
-  const { anfitrion, cargando } = useAuth();
-  if (cargando)
-    return (
-      <main className="error-fatal">
-        <Cargando texto="Verificando tu acceso…" />
-      </main>
-    );
-  if (!anfitrion) return <Login />;
-  return <Portal key={anfitrion.id} />;
-}
-
+/** Sin sesión de anfitrión: el login. Con sesión: la pantalla pedida. */
 function Portal() {
-  const { anfitrion, error, verificar, cerrarSesion } = useAuth();
-  const [saliendo, setSaliendo] = useState(false);
-  const [colapsado, setColapsado] = useState(leerSidebarColapsado);
-  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
+  const { anfitrion, cargando, error, verificar } = useAuth();
   const ruta = useLocation();
   useEffect(() => {
-    document.title = `${ruta.pathname === "/nueva" ? "Nueva cita" : "Mis citas"} · Brisas`;
-    document.getElementById("contenido")?.focus();
+    const titulo = TITULOS.find(([patron]) => patron.test(ruta.pathname))?.[1] ?? "Mis visitas";
+    document.title = `${titulo} · Visitas · Lattis`;
   }, [ruta.pathname]);
 
-  // `Contenido` sólo renderiza `<Portal>` mientras `anfitrion` no sea null
-  // (ver arriba), pero como `Portal` lee el mismo contexto de forma
-  // independiente, esta guarda deja a TypeScript/ESLint confirmarlo en vez
-  // de asumirlo con `!` -- y cubre sin romper nada el caso límite de una
-  // sesión que se invalida entre el chequeo de `Contenido` y este render.
-  // Va después de todos los hooks para no violar las Rules of Hooks.
-  if (!anfitrion) return null;
-
-  function alternarColapsado() {
-    setColapsado((actual) => {
-      const siguiente = !actual;
-      guardarSidebarColapsado(siguiente);
-      return siguiente;
-    });
-  }
-
+  if (cargando) return <Cargando texto="Verificando su acceso…" />;
+  if (!anfitrion) return <Login />;
   return (
-    <div className="portal">
+    <div key={anfitrion.id}>
       <a className="saltar" href="#contenido">
         Saltar al contenido
       </a>
-      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        {menuMovilAbierto && (
-          <div className="shell-sidebar-velo" onClick={() => setMenuMovilAbierto(false)} />
-        )}
-
-        <Sidebar
-          secciones={SECCIONES}
-          onNavegar={() => setMenuMovilAbierto(false)}
-          colapsado={colapsado}
-          onToggleColapsado={alternarColapsado}
-          abiertoEnMovil={menuMovilAbierto}
-        />
-
-        <main className="contenido-shell">
-          <button
-            type="button"
-            className="boton-menu-movil"
-            onClick={() => setMenuMovilAbierto((a) => !a)}
-            aria-expanded={menuMovilAbierto}
-            aria-label={menuMovilAbierto ? "Cerrar menú" : "Abrir menú"}
-          >
-            {menuMovilAbierto ? (
-              <X aria-hidden="true" />
-            ) : (
-              <Menu aria-hidden="true" />
-            )}
-          </button>
-          <div id="contenido" tabIndex={-1} className="contenido">
-            {error && (
-              <Aviso>
-                {error}
-                <button
-                  type="button"
-                  className="btn btn-link p-0 align-baseline"
-                  onClick={verificar}
-                >
-                  Volver a verificar
-                </button>
-              </Aviso>
-            )}
-            <Suspense fallback={<Cargando />}>
-              {/* React 19.3: cross-fade nativo entre Mis citas y Nueva cita
-                  -- `createBrowserRouter` ya envuelve la navegación en
-                  `startTransition` desde v6.4+, así que `ViewTransition`
-                  detecta el cambio de ruta sin nada más que envolver el
-                  contenido rutado. Nombre por defecto ("auto"): alcanza
-                  para el cross-fade simple, sin animar elementos
-                  individuales entre pantallas. */}
-              <ViewTransition>
-                <Routes>
-                  <Route path="/citas" element={<MisCitas />} />
-                  <Route path="/nueva" element={<NuevaCita />} />
-                  <Route path="*" element={<Navigate to="/citas" replace />} />
-                </Routes>
-              </ViewTransition>
-            </Suspense>
-          </div>
-        </main>
-      </div>
-
-      <div className="barra-estado">
-        <span>Brisas · Agenda de visitas · Hora de Costa Rica</span>
-        <div className="barra-cuenta">
-          <SelectorTema />
-          <span className="separador" />
-          <span className="avatar" aria-hidden="true">
-            {anfitrion.nombre.charAt(0).toUpperCase()}
-          </span>
-          <div className="identidad">
-            <strong>{anfitrion.nombre}</strong>
-            <span>{anfitrion.correo}</span>
-          </div>
-          <button
-            type="button"
-            className="btn btn-link solo-icono"
-            disabled={saliendo}
-            aria-label="Cerrar sesión"
-            onClick={async () => {
-              setSaliendo(true);
-              try {
-                await cerrarSesion();
-              } finally {
-                setSaliendo(false);
-              }
-            }}
-          >
-            <LogOut aria-hidden="true" />
-          </button>
+      {error && (
+        <div className="mx-auto max-w-[720px] px-4 pt-3">
+          <Aviso>
+            {error}{" "}
+            <button type="button" className="underline" onClick={verificar}>
+              Volver a verificar
+            </button>
+          </Aviso>
         </div>
-      </div>
+      )}
+      <Suspense fallback={<Cargando />}>
+        <Outlet />
+      </Suspense>
     </div>
   );
 }
 
 const enrutador = createBrowserRouter([
   {
-    path: "*",
     element: (
       <AuthProvider>
-        <Contenido />
+        <Portal />
       </AuthProvider>
     ),
+    children: [
+      { path: "/visitas", element: <MisVisitas /> },
+      { path: "/historial", element: <Historial /> },
+      { path: "/agendar", element: <AgendarVisita /> },
+      { path: "/visitas/:id", element: <DetalleVisita /> },
+      { path: "/visitas/:id/editar", element: <EditarVisita /> },
+      // "/", "/auth/callback" (vuelta de Google: Supabase lee el código de la
+      // URL) y cualquier ruta vieja ("/citas", "/nueva") van a Mis visitas.
+      { path: "*", element: <Navigate to="/visitas" replace /> },
+    ],
   },
 ]);
+
 export default function App() {
   return <RouterProvider router={enrutador} />;
 }
