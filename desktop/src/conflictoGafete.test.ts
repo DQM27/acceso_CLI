@@ -17,5 +17,8 @@ describe("aviso de gafete ya asignado en otro dispositivo", () => {
     expect(mensajeConflictoGafete({ ...base, tipo: "por_correo" }, "08:00")).toContain(
       "El ingreso por correo de Juan Pérez con gafete de visita 12 (08:00)",
     );
+    expect(mensajeConflictoGafete({ ...base, tipo: "visita" }, "08:00")).toContain(
+      "El check-in de visita de Juan Pérez con gafete de visita 12 (08:00)",
+    );
   });
 });

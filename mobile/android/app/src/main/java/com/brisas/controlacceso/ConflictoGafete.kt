@@ -19,6 +19,8 @@ fun mensajeConflictoGafete(conflicto: ConflictoGafeteActivo, hora: String): Stri
             "El ingreso por correo de $nombre con gafete de visita $gafete ($hora) $cierre"
         TipoMovimientoGafete.PROVISIONAL_KOF ->
             "El préstamo del gafete provisional $gafete a $nombre ($hora) $cierre"
+        TipoMovimientoGafete.VISITA ->
+            "El check-in de visita de $nombre con gafete de visita $gafete ($hora) $cierre"
         TipoMovimientoGafete.CONTRATISTA ->
             "El ingreso de $nombre con gafete $gafete ($hora) $cierre"
     }

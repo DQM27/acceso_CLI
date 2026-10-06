@@ -2403,38 +2403,39 @@ fn gafete_provisional_ocupado_en_otro_dispositivo_sin_conflicto_devuelve_false()
     assert!(!ocupado);
 }
 
+/// Va por la función `visita_activa_de_visitante`: la consulta directa a
+/// `/rest/v1/movimientos_visita?...&sitio_id=neq.` chocaba con la RLS (cada
+/// equipo sólo lee su unidad) y siempre daba vacío.
 #[test]
-fn visitante_activo_en_otro_sitio_excluye_el_sitio_actual_en_la_url() {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let base_url = format!("http://{}", listener.local_addr().unwrap());
-    let servidor = thread::spawn(move || {
-        let (mut socket, _) = listener.accept().unwrap();
-        socket
-            .set_read_timeout(Some(Duration::from_secs(3)))
-            .unwrap();
-        let mut pedido = Vec::new();
-        let mut buffer = [0; 4096];
-        while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
-            let leidos = socket.read(&mut buffer).unwrap();
-            assert!(leidos > 0);
-            pedido.extend_from_slice(&buffer[..leidos]);
-        }
-        let pedido = String::from_utf8(pedido).unwrap();
-        assert!(pedido.contains("visitante_cedula=eq.1-2345"));
-        assert!(pedido.contains("sitio_id=neq.sitio-1"));
-        assert!(pedido.contains("hora_salida=is.null"));
-        let cuerpo = "[{\"sitios\":{\"nombre\":\"Cartago\"}}]";
-        write!(
-            socket,
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}",
-            cuerpo.len()
-        )
-        .unwrap();
-    });
+fn visitante_activo_en_otro_sitio_pregunta_a_la_funcion_de_la_nube() {
+    let (base_url, servidor) = servidor_rpc(
+        "visita_activa_de_visitante",
+        "\"p_cedula\":\"1-2345\"",
+        "[{\"sitio_id\":\"otro\",\"sitio_nombre\":\"Cartago\"}]",
+    );
 
     let sitio = visitante_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
 
     assert_eq!(sitio, Some("Cartago".to_string()));
+    servidor.join().unwrap();
+}
+
+/// Una visita abierta en ESTA unidad sólo puede ser del otro equipo (lo
+/// propio lo frena antes el chequeo local): se nombra así.
+#[test]
+fn visitante_activo_en_esta_unidad_se_nombra_como_otro_equipo() {
+    let (base_url, servidor) = servidor_rpc(
+        "visita_activa_de_visitante",
+        "\"p_cedula\":\"1-2345\"",
+        "[{\"sitio_id\":\"sitio-1\",\"sitio_nombre\":\"Brisas\"}]",
+    );
+
+    let sitio = visitante_activo_en_otro_sitio(&contexto(&base_url), "1-2345").unwrap();
+
+    assert_eq!(
+        sitio,
+        Some("Brisas (otro equipo de esta unidad)".to_string())
+    );
     servidor.join().unwrap();
 }
 
@@ -2482,12 +2483,14 @@ fn conexion_con_dos_movimientos_visita_activos() -> Connection {
 #[test]
 fn visitantes_con_conflicto_activo_solo_incluye_a_quien_de_verdad_choca() {
     let connection = conexion_con_dos_movimientos_visita_activos();
-    let base_url = servidor_de_una_respuesta(
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"visitante_cedula\":\"1-2345\",\"sitios\":{\"nombre\":\"Cartago\"}}]",
+    let (base_url, servidor) = servidor_rpc(
+        "visitantes_activos_en_otras_unidades",
+        "\"p_cedulas\":[\"1-2345\",\"6-7890\"]",
+        "[{\"visitante_cedula\":\"1-2345\",\"sitio_nombre\":\"Cartago\"}]",
     );
 
     let conflictos = visitantes_con_conflicto_activo(&connection, &contexto(&base_url)).unwrap();
+    servidor.join().unwrap();
 
     assert_eq!(
         conflictos,
@@ -4468,4 +4471,311 @@ fn recibe_el_historial_de_ingresos_por_correo_y_omite_las_filas_ilegibles() {
         )
         .unwrap();
     assert!(marca.is_some());
+}
+
+/// Ingreso por correo ya cerrado localmente con sus dos filas en la cola:
+/// el `crear` (id 1, con el estado/intentos/`actualizado_en` que se pidan) y
+/// el `cerrar` (id 2, recién encolado, sin intentos).
+fn conexion_con_apertura_y_cierre_en_cola(
+    estado_crear: &str,
+    intentos_crear: i64,
+    actualizado_crear: &str,
+) -> Connection {
+    let connection = conexion_con_ingreso_correo(Some("2026-01-01T09:00:00Z"));
+    connection.execute("DELETE FROM cola_salida", []).unwrap();
+    connection
+        .execute(
+            "INSERT INTO cola_salida (id, entidad, entidad_uuid, operacion, estado, intentos,
+                 creado_en, actualizado_en)
+             VALUES (1, 'ingreso_correo', 'uuid-correo', 'crear', ?1, ?2,
+                 '2026-01-01T08:00:00Z', ?3)",
+            params![estado_crear, intentos_crear, actualizado_crear],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO cola_salida (id, entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+             VALUES (2, 'ingreso_correo', 'uuid-correo', 'cerrar',
+                 '2026-01-01T09:00:00Z', '2026-01-01T09:00:00Z')",
+            [],
+        )
+        .unwrap();
+    connection
+}
+
+fn estado_e_intentos(connection: &Connection, id: i64) -> (String, i64) {
+    connection
+        .query_row(
+            "SELECT estado, intentos FROM cola_salida WHERE id = ?1",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap()
+}
+
+/// Carrera de la revisión del 2026-10-04: el `crear` falló una vez y espera
+/// su backoff (15 min desde "ahora"), el `cerrar` ya está listo. Antes el
+/// cierre salía solo, el `PATCH` no tocaba nada (204) y el `crear` posterior
+/// dejaba el ingreso abierto para siempre en la nube. Ahora el cierre ni
+/// siquiera se envía: queda pendiente, sin sumar intentos.
+#[test]
+fn el_cierre_no_sale_mientras_su_apertura_espera_el_reintento() {
+    let connection = conexion_con_apertura_y_cierre_en_cola(
+        "pendiente",
+        1,
+        &crate::tiempo::serializar_utc(chrono::Utc::now()),
+    );
+    // Sin respuestas: cualquier pedido a la red fallaría y sumaría un intento.
+    let (base_url, pedidos) = servidor_que_anota(Vec::new());
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen, ResumenDrenado::default());
+    assert!(pedidos.lock().unwrap().is_empty(), "no se mandó nada");
+    assert_eq!(
+        estado_e_intentos(&connection, 1),
+        ("pendiente".to_string(), 1)
+    );
+    assert_eq!(
+        estado_e_intentos(&connection, 2),
+        ("pendiente".to_string(), 0),
+        "el cierre espera intacto, sin gastar reintentos"
+    );
+}
+
+/// Si la apertura y el cierre están listos a la vez, salen en la misma
+/// pasada y en orden: primero el `POST` y después el `PATCH`.
+#[test]
+fn apertura_y_cierre_listos_salen_en_la_misma_pasada_y_en_orden() {
+    let connection = conexion_con_apertura_y_cierre_en_cola("pendiente", 0, "2026-01-01T08:00:00Z");
+    let (base_url, pedidos) = servidor_que_anota(vec![String::new(), String::new()]);
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.enviados, 2);
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert!(
+        pedidos[0].starts_with("POST /rest/v1/ingresos_correo "),
+        "{pedidos:?}"
+    );
+    assert!(
+        pedidos[1].starts_with("PATCH /rest/v1/ingresos_correo?id=eq.uuid-correo"),
+        "{pedidos:?}"
+    );
+    assert_eq!(estado_e_intentos(&connection, 2).0, "enviado");
+}
+
+/// Una apertura que la nube rechazó (`fallido`, por ejemplo por el índice
+/// único de cédula activa) no frena su cierre: el `PATCH` no toca nada y la
+/// fila sale de la cola en vez de quedar pendiente para siempre.
+#[test]
+fn el_cierre_sale_si_su_apertura_quedo_fallida() {
+    let connection = conexion_con_apertura_y_cierre_en_cola("fallido", 1, "2026-01-01T08:00:00Z");
+    let (base_url, pedidos) = servidor_que_anota(vec![String::new()]);
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.enviados, 1);
+    assert!(pedidos.lock().unwrap()[0].starts_with("PATCH "));
+    assert_eq!(estado_e_intentos(&connection, 2).0, "enviado");
+}
+
+#[test]
+fn solo_un_cierre_puede_esperar_a_su_apertura() {
+    let connection = conexion_con_apertura_y_cierre_en_cola("pendiente", 0, "2026-01-01T08:00:00Z");
+    let fila = |id, operacion: &str| super::cola::FilaCola {
+        id,
+        entidad: "ingreso_correo".to_string(),
+        entidad_uuid: "uuid-correo".to_string(),
+        operacion: operacion.to_string(),
+        intentos: 0,
+    };
+    assert!(super::cola::cierre_espera_su_apertura(&connection, &fila(2, "cerrar")).unwrap());
+    assert!(!super::cola::cierre_espera_su_apertura(&connection, &fila(1, "crear")).unwrap());
+    // Otro registro (otro uuid) no se frena por esta apertura.
+    let mut ajena = fila(2, "cerrar");
+    ajena.entidad_uuid = "otro-uuid".to_string();
+    assert!(!super::cola::cierre_espera_su_apertura(&connection, &ajena).unwrap());
+}
+
+/// Visitas (`20261004130000_visitas_ven_otras_unidades`): el 409 del índice
+/// único de cédula activa deja la apertura fallida de inmediato, como en
+/// contratistas; el cierre nunca choca con ese índice.
+#[test]
+fn la_cola_reconoce_el_rechazo_por_visitante_ya_adentro() {
+    let fila = |operacion: &str| super::cola::FilaCola {
+        id: 1,
+        entidad: "movimiento_visita".to_string(),
+        entidad_uuid: "uuid".to_string(),
+        operacion: operacion.to_string(),
+        intentos: 0,
+    };
+    let rechazo = SincronizacionError::RespuestaInesperada {
+        status: 409,
+        cuerpo: "duplicate key value violates unique constraint \"movimientos_visita_cedula_activa_idx\""
+            .to_string(),
+    };
+    assert!(super::cola::es_conflicto_ingreso_activo(
+        &fila("crear"),
+        &rechazo
+    ));
+    assert!(!super::cola::es_conflicto_ingreso_activo(
+        &fila("cerrar"),
+        &rechazo
+    ));
+}
+
+/// `20261004140000_gafete_de_visita_unico_en_visitas`: una visita cuyo
+/// gafete ya tiene abierto el otro equipo de la unidad (otra visita, o un
+/// ingreso por correo vía el trigger de gafete compartido) queda fallida de
+/// inmediato y avisa como choque de gafete, con tipo `Visita`.
+#[test]
+fn visita_con_gafete_ya_activo_queda_fallida_con_aviso() {
+    let connection = conexion_con_dos_movimientos_visita_activos();
+    connection
+        .execute_batch(
+            "DELETE FROM cola_salida;
+             INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre)
+                 VALUES (3, 'uuid-v3', 1, '5-5555', 'Visitante Tres');
+             INSERT INTO movimientos_visita (
+                 id, uuid, cita_visitante_id, gafete_numero, fecha_hora_entrada,
+                 usuario_entrada_id, usuario_entrada_nombre,
+                 visitante_cedula, visitante_nombre, anfitrion_nombre
+             ) VALUES (3, 'uuid-m3', 3, 7, '2026-08-01T09:00:00Z', 1, 'Operador',
+                 '5-5555', 'Visitante Tres', 'Ana');
+             INSERT INTO cola_salida (entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+             VALUES ('movimiento_visita', 'uuid-m3', 'crear',
+                     '2026-08-01T09:00:00Z', '2026-08-01T09:00:00Z');",
+        )
+        .unwrap();
+    let base_url = servidor_de_una_respuesta(respuesta_gafete_en_uso(
+        "movimientos_visita_gafete_activo_sitio_idx",
+    ));
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.fallidos, 1);
+    assert_eq!(
+        resumen.conflictos_gafete,
+        vec![ConflictoGafeteActivo {
+            tipo: TipoMovimientoGafete::Visita,
+            nombre: "Visitante Tres".to_string(),
+            gafete_numero: 7,
+            fecha_hora: "2026-08-01T09:00:00Z".to_string(),
+        }]
+    );
+    assert_eq!(estado_en_cola(&connection, "uuid-m3"), "fallido");
+}
+
+/// Una persona no puede estar adentro por dos vías: la verificación en vivo
+/// pregunta a `persona_adentro_por_otra_via` con la vía propia.
+#[test]
+fn persona_adentro_por_otra_via_pregunta_a_la_funcion_de_la_nube() {
+    let (base_url, servidor) = servidor_rpc(
+        "persona_adentro_por_otra_via",
+        "\"p_via\":\"POR_CORREO\"",
+        "[{\"via\":\"CONTRATISTA\",\"sitio_id\":\"sitio-1\",\"sitio_nombre\":\"Brisas\"}]",
+    );
+
+    let adentro = persona_adentro_por_otra_via(
+        &contexto(&base_url),
+        "112345678",
+        crate::models::via_ingreso::ViaIngreso::PorCorreo,
+    )
+    .unwrap();
+
+    assert_eq!(
+        adentro,
+        Some(AdentroPorOtraViaEnLaNube {
+            via: crate::models::via_ingreso::ViaIngreso::Contratista,
+            sitio_nombre: "Brisas".to_string(),
+            mismo_sitio: true,
+        })
+    );
+    servidor.join().unwrap();
+}
+
+const RESPUESTA_CORREO_REMOTO_ABIERTO: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+     [{\"id\":\"uuid-remoto\",\"cedula\":\"112345678\",\"nombre\":\"Ana Solano\",\
+     \"motivo\":\"Entrevista RH\",\"placa\":null,\"gafete_numero\":5,\
+     \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"usuario_entrada_nombre\":\"Op PC\",\
+     \"dispositivo_entrada_id\":\"otro-dispositivo\"}]";
+
+fn lapidas(connection: &Connection) -> Vec<String> {
+    let mut statement = connection
+        .prepare("SELECT uuid FROM remotos_cerrados_aca ORDER BY uuid")
+        .unwrap();
+    statement
+        .query_map([], |fila| fila.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
+/// Carrera de la revisión del 2026-10-04: quien opera cierra a mano un
+/// ingreso del otro equipo mientras una sincronización ya leyó la nube con
+/// ese ingreso todavía abierto. Antes, el reemplazo de la caché lo volvía a
+/// insertar y la persona reaparecía "adentro". Ahora el cierre deja una
+/// lápida y la recepción no lo vuelve a meter.
+#[test]
+fn un_ingreso_remoto_cerrado_aca_no_revive_con_una_lectura_vieja() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    // 1. Primera sincronización: el ingreso del otro equipo entra a la caché.
+    let base_url = servidor_de_una_respuesta(RESPUESTA_CORREO_REMOTO_ABIERTO);
+    recibir_ingresos_correo_abiertos(&connection, &contexto(&base_url)).unwrap();
+    // 2. Quien opera lo cierra a mano (la nube responde 204).
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+    );
+    cerrar_ingreso_correo_remoto(
+        &connection,
+        &contexto(&base_url),
+        "uuid-remoto",
+        "Guardia",
+        chrono::Utc::now(),
+    )
+    .unwrap();
+    assert_eq!(lapidas(&connection), vec!["uuid-remoto".to_string()]);
+
+    // 3. Una sincronización que leyó la nube ANTES del cierre trae el
+    //    ingreso todavía abierto: no vuelve a la caché.
+    let base_url = servidor_de_una_respuesta(RESPUESTA_CORREO_REMOTO_ABIERTO);
+    let recibidos = recibir_ingresos_correo_abiertos(&connection, &contexto(&base_url)).unwrap();
+    assert!(recibidos.is_empty(), "no debe revivir: {recibidos:?}");
+    let en_cache: i64 = connection
+        .query_row("SELECT COUNT(*) FROM ingresos_correo_remotos", [], |fila| {
+            fila.get(0)
+        })
+        .unwrap();
+    assert_eq!(en_cache, 0);
+    assert_eq!(lapidas(&connection), vec!["uuid-remoto".to_string()]);
+
+    // 4. Cuando la nube ya no lo devuelve abierto, la lápida se olvida.
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
+    );
+    recibir_ingresos_correo_abiertos(&connection, &contexto(&base_url)).unwrap();
+    assert!(lapidas(&connection).is_empty());
+}
+
+/// Las lápidas se olvidan al día aunque la nube siga devolviendo el
+/// registro abierto (por ejemplo, si el cierre nunca llegó a aplicarse).
+#[test]
+fn una_lapida_de_mas_de_un_dia_se_olvida() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO remotos_cerrados_aca (uuid, tabla, cerrado_en)
+             VALUES ('uuid-remoto', 'ingresos_correo_remotos', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+    let base_url = servidor_de_una_respuesta(RESPUESTA_CORREO_REMOTO_ABIERTO);
+
+    let recibidos = recibir_ingresos_correo_abiertos(&connection, &contexto(&base_url)).unwrap();
+
+    assert_eq!(recibidos.len(), 1);
+    assert!(lapidas(&connection).is_empty());
 }

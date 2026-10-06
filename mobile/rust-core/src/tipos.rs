@@ -499,6 +499,9 @@ pub enum TipoMovimientoGafete {
     Proveedor,
     ProvisionalKof,
     PorCorreo,
+    /// Visita (gafete de visita). El teléfono no registra visitas, así que
+    /// nunca le llega; está para que el espejo sea completo.
+    Visita,
 }
 
 impl From<control_acceso::nube::TipoMovimientoGafete> for TipoMovimientoGafete {
@@ -509,6 +512,7 @@ impl From<control_acceso::nube::TipoMovimientoGafete> for TipoMovimientoGafete {
             Nucleo::Proveedor => Self::Proveedor,
             Nucleo::ProvisionalKof => Self::ProvisionalKof,
             Nucleo::PorCorreo => Self::PorCorreo,
+            Nucleo::Visita => Self::Visita,
         }
     }
 }

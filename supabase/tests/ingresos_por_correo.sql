@@ -2,7 +2,8 @@
 -- Cubre 20261003210000_ingresos_por_correo:
 -- - Un equipo de la unidad A registra un ingreso por correo; uno de la
 --   unidad B no lo lee (RLS), pero `ingreso_correo_activo` le dice que está
---   adentro en A, y `correos_activos_en_otras_unidades` lo reporta sólo a B.
+--   adentro en A, y `correos_activos_en_otras_unidades` lo reporta a B y al
+--   otro equipo de A (desde 20261004120000), nunca al equipo que lo registró.
 -- - Los índices únicos rechazan la misma cédula adentro dos veces (misma u
 --   otra unidad) y el mismo gafete dos veces en la unidad; tras la salida se
 --   puede registrar de nuevo.
@@ -59,9 +60,18 @@ begin
   -- 3. Aviso posterior a sincronizar: B lo ve; A no ve el propio.
   select count(*) into v_n from public.correos_activos_en_otras_unidades(array['900000701', '000000000']);
   if v_n <> 1 then raise exception 'C3a: B debería ver 1 ingreso en otra unidad, vio %', v_n; end if;
-  perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c703', 'aaaaaaaa-0000-0000-0000-00000000a701', 'huella-correo-a2');
+  -- El equipo que lo registró no se avisa a sí mismo.
+  perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c701', 'aaaaaaaa-0000-0000-0000-00000000a701', 'huella-correo-a');
   select count(*) into v_n from public.correos_activos_en_otras_unidades(array['900000701']);
-  if v_n <> 0 then raise exception 'C3b: A no debería ver su propio ingreso como de otra unidad'; end if;
+  if v_n <> 0 then raise exception 'C3b: el equipo que lo registró no debería verse a sí mismo'; end if;
+  -- El OTRO equipo de la misma unidad sí se avisa (20261004120000): si lo
+  -- pregunta es porque también lo tiene abierto localmente, y el índice
+  -- único le rechazó (o le va a rechazar) ese ingreso.
+  perform pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c703', 'aaaaaaaa-0000-0000-0000-00000000a701', 'huella-correo-a2');
+  select count(*), max(sitio_nombre) into v_n, v_nombre from public.correos_activos_en_otras_unidades(array['900000701']);
+  if v_n <> 1 or v_nombre <> 'Unidad correo A (otro equipo de esta unidad)' then
+    raise exception 'C3c: el otro equipo de la unidad debería ver el duplicado, vio % / %', v_n, v_nombre;
+  end if;
 
   -- 4. Misma cédula adentro dos veces: en la misma unidad...
   begin

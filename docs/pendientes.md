@@ -28,6 +28,45 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
 
 ## Seguridad y nube
 
+- [x] **Revisión de carreras de los cambios del 2026-10-03 (resuelto
+  2026-10-04).** Detalle completo en
+  `docs/auditorias/revision-carreras-2026-10-04.md`. Arreglado: (1) la cola
+  ya no manda un `cerrar` mientras su `crear` siga pendiente (antes la
+  persona podía quedar adentro para siempre en la nube y bloqueada en todas
+  las unidades); (2) el gafete de visita se controla entre visitas e
+  ingresos por correo en los dos sentidos: local, en vivo y con un trigger
+  en la nube; (3) un ingreso rechazado por chocar con el otro equipo de la
+  misma unidad ahora avisa; (6) `admin-enviar-push` borra tokens muertos
+  por token y no por equipo. Segunda ronda, también resuelta: visitas ven
+  otras unidades (punto 4), gafete de visita único en la nube (punto 7), una
+  persona adentro por una sola vía (punto 5), lápidas en la caché de remotos
+  (punto 8) y `registrar_token_push` sin choques concurrentes (punto 9).
+
+- [x] **Visitas: "¿ya está adentro en otra unidad?" sigue ciego por RLS --
+  hallazgo 2026-10-04, resuelto 2026-10-04.** `visitante_activo_en_otro_sitio`
+  y `visitantes_con_conflicto_activo` consultaban `/rest/v1/movimientos_visita`
+  directo y siempre respondían "libre". Ahora van por funciones `security
+  definer` y hay índice único de cédula activa (migración 20261004130000;
+  auditoría, punto 4).
+
+- [x] **Decidir si una cédula puede estar adentro por dos vías a la vez --
+  hallazgo 2026-10-04, resuelto 2026-10-04: se bloquea.** Contratistas,
+  proveedores e ingresos por correo tenían índices de cédula activa
+  separados. Ahora hay control cruzado en las tres capas: local, en vivo y
+  un trigger con candado por cédula (migración 20261004150000; auditoría,
+  punto 5).
+
+- [x] **Caché de remotos: un cierre manual puede "revivir" un instante --
+  hallazgo 2026-10-04, resuelto 2026-10-04.** `cerrar_*_remoto` borraba la
+  fila de la caché, pero una sincronización que leyó la nube justo antes la
+  volvía a insertar. Ahora el cierre deja una lápida local (migración local
+  56; auditoría, punto 8).
+
+- [ ] **Historial del panel web sin ingresos por correo ni de proveedores --
+  hallazgo 2026-10-04. Función nueva, no bug.** Sólo "Adentro ahora" los
+  muestra; la vista del historial (`panel_movimientos`) es sólo de
+  contratistas.
+
 - [x] **El pipeline de release real (no sólo `cargo tauri dev`) publicaba
   builds sin cifrar de verdad, en silencio (hallazgo 2026-09-12, resuelto
   2026-09-12).** `desktop/src-tauri` compilaba con `sqlite-plano` como

@@ -35,6 +35,15 @@ pub trait MovimientoVisitaRepository {
         gafete_numero: i64,
     ) -> Result<Option<MovimientoVisita>, DatabaseError>;
 
+    /// ¿El gafete de visita está en uso por un ingreso "por correo" abierto
+    /// en este equipo? Los dos registros comparten el mismo catálogo físico
+    /// de gafetes de visita (`TipoGafete::Visita`), pero cada uno vive en su
+    /// propia tabla y sus índices únicos no se ven entre sí: sin esta
+    /// consulta, el check-in de una visita podía entregar un gafete que ya
+    /// tenía alguien que entró por correo. El ingreso por correo ya hacía la
+    /// verificación inversa (`RegistroIngresoCorreoRepository::gafete_de_visita_en_uso`).
+    fn gafete_en_uso_por_ingreso_correo(&self, gafete_numero: i64) -> Result<bool, DatabaseError>;
+
     fn registrar_salida(
         &self,
         id: i64,
@@ -189,6 +198,17 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(error) => Err(DatabaseError::from(error)),
         }
+    }
+
+    fn gafete_en_uso_por_ingreso_correo(&self, gafete_numero: i64) -> Result<bool, DatabaseError> {
+        Ok(self.connection.query_row(
+            "SELECT EXISTS(
+                 SELECT 1 FROM registro_ingresos_correo
+                 WHERE gafete_numero = ?1 AND fecha_hora_salida IS NULL
+             )",
+            params![gafete_numero],
+            |row| row.get(0),
+        )?)
     }
 
     fn registrar_salida(
@@ -450,6 +470,33 @@ mod tests {
         assert!(activo.is_some());
         assert_eq!(activo.unwrap().gafete_numero, Some(3));
         assert!(repo.buscar_activo_por_gafete(99).unwrap().is_none());
+    }
+
+    #[test]
+    fn gafete_en_uso_por_ingreso_correo_solo_cuenta_los_abiertos() {
+        let (connection, _) = conexion_con_visitante();
+        let repo = SqliteMovimientoVisitaRepository::new(&connection);
+        connection
+            .execute_batch(
+                "INSERT INTO registro_ingresos_correo (cedula, nombre, motivo, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid)
+                 VALUES ('111111111', 'Ana', 'Entrevista RH', 4,
+                    '2026-10-03T14:00:00Z', 1, 'Operador', 'uuid-correo-1');
+                 INSERT INTO registro_ingresos_correo (cedula, nombre, motivo, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre,
+                    fecha_hora_salida, usuario_salida_id, usuario_salida_nombre, uuid)
+                 VALUES ('222222222', 'Luis', 'Entrevista RH', 5,
+                    '2026-10-03T14:00:00Z', 1, 'Operador',
+                    '2026-10-03T15:00:00Z', 1, 'Operador', 'uuid-correo-2');",
+            )
+            .unwrap();
+
+        assert!(repo.gafete_en_uso_por_ingreso_correo(4).unwrap());
+        assert!(
+            !repo.gafete_en_uso_por_ingreso_correo(5).unwrap(),
+            "un ingreso por correo ya cerrado no ocupa el gafete"
+        );
+        assert!(!repo.gafete_en_uso_por_ingreso_correo(6).unwrap());
     }
 
     #[test]

@@ -147,16 +147,6 @@ pub fn gafete_de_correo_ocupado_en_otro_dispositivo(
     )
 }
 
-#[derive(serde::Deserialize)]
-pub(super) struct SitioEmbebido {
-    pub(super) nombre: String,
-}
-
-#[derive(serde::Deserialize)]
-pub(super) struct FilaIngresoActivoOtroSitio {
-    pub(super) sitios: Option<SitioEmbebido>,
-}
-
 /// Dónde tiene un contratista un ingreso abierto ahora mismo, según la
 /// nube (ver [`contratista_con_ingreso_activo`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -194,27 +184,34 @@ pub fn contratista_con_ingreso_activo(
     )
 }
 
-/// Un mismo visitante no puede estar activo en dos sitios a la vez: busca
-/// en `movimientos_visita` un movimiento abierto con esta cédula en OTRO
-/// sitio y devuelve su nombre. Pensada para llamarse
-/// desde `verificar_check_in_visita` (desktop), mejor esfuerzo, nunca
-/// bloqueante si no hay red.
+/// Un mismo visitante no puede estar adentro dos veces: pregunta a la nube
+/// si esta cédula tiene una visita abierta en otra unidad, o en esta pero
+/// abierta por el otro equipo, y devuelve el nombre de la unidad (con
+/// " (otro equipo de esta unidad)" en el segundo caso). Pensada para
+/// `verificar_check_in_visita` (escritorio). Lo abierto por ESTE equipo ya
+/// lo frena antes el chequeo local (`CitaServiceError::VisitanteYaEnSitio`),
+/// así que una fila de esta unidad que devuelva la nube es del otro equipo.
+///
+/// Va por la función `visita_activa_de_visitante` y no por
+/// `/rest/v1/movimientos_visita`: la RLS sólo deja leer a cada equipo las
+/// visitas de su unidad, así que la consulta directa con `sitio_id=neq.`
+/// siempre respondía vacío (revisión del 2026-10-04, punto 4).
 pub fn visitante_activo_en_otro_sitio(
     contexto: &ContextoSincronizacion<'_>,
     cedula: &str,
 ) -> Result<Option<String>, SincronizacionError> {
-    let cliente = cliente_http();
-    let url = format!(
-        "{}/rest/v1/movimientos_visita?visitante_cedula=eq.{cedula}&sitio_id=neq.{}\
-         &hora_salida=is.null&select=sitios(nombre)&limit=1",
-        contexto.base_url, contexto.sitio_id,
-    );
-    let filas: Vec<FilaIngresoActivoOtroSitio> = obtener_json(&cliente, contexto, &url)?;
-    Ok(filas
-        .into_iter()
-        .next()
-        .and_then(|fila| fila.sitios)
-        .map(|sitio| sitio.nombre))
+    Ok(activo_segun_funcion(
+        contexto,
+        "visita_activa_de_visitante",
+        &serde_json::json!({ "p_cedula": cedula }),
+    )?
+    .map(|activo| {
+        if activo.mismo_sitio {
+            format!("{} (otro equipo de esta unidad)", activo.sitio_nombre)
+        } else {
+            activo.sitio_nombre
+        }
+    }))
 }
 
 /// Regla "un proveedor no puede estar adentro dos veces, ni en este sitio ni
@@ -280,5 +277,62 @@ fn activo_segun_funcion(
         sitio_nombre: fila
             .sitio_nombre
             .unwrap_or_else(|| "otro sitio".to_string()),
+    }))
+}
+
+/// Por qué otra vía (y dónde) está adentro una persona, según la nube (ver
+/// [`persona_adentro_por_otra_via`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdentroPorOtraViaEnLaNube {
+    pub via: crate::models::via_ingreso::ViaIngreso,
+    pub sitio_nombre: String,
+    pub mismo_sitio: bool,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaAdentroPorOtraVia {
+    via: String,
+    sitio_id: String,
+    sitio_nombre: Option<String>,
+}
+
+/// Regla "una persona no puede estar adentro por dos vías a la vez"
+/// (contratista, proveedor, por correo): pregunta a la nube si esta cédula
+/// está adentro por una vía distinta de `via`, en cualquier unidad o equipo
+/// (función `persona_adentro_por_otra_via`, que compara la cédula
+/// normalizada). Quien llama propaga el error: si no se puede verificar, no
+/// se registra (mismo criterio que la regla de la misma vía).
+pub fn persona_adentro_por_otra_via(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+    via: crate::models::via_ingreso::ViaIngreso,
+) -> Result<Option<AdentroPorOtraViaEnLaNube>, SincronizacionError> {
+    use crate::models::via_ingreso::ViaIngreso;
+
+    let via_texto = match via {
+        ViaIngreso::Contratista => "CONTRATISTA",
+        ViaIngreso::Proveedor => "PROVEEDOR",
+        ViaIngreso::PorCorreo => "POR_CORREO",
+    };
+    let filas: Vec<FilaAdentroPorOtraVia> = llamar_rpc(
+        &cliente_http(),
+        contexto,
+        "persona_adentro_por_otra_via",
+        &serde_json::json!({ "p_cedula": cedula, "p_via": via_texto }),
+    )?;
+    Ok(filas.into_iter().find_map(|fila| {
+        let via = match fila.via.as_str() {
+            "CONTRATISTA" => ViaIngreso::Contratista,
+            "PROVEEDOR" => ViaIngreso::Proveedor,
+            "POR_CORREO" => ViaIngreso::PorCorreo,
+            _ => return None,
+        };
+        Some(AdentroPorOtraViaEnLaNube {
+            via,
+            mismo_sitio: fila.sitio_id == contexto.sitio_id,
+            sitio_nombre: fila
+                .sitio_nombre
+                .unwrap_or_else(|| "otro sitio".to_string()),
+        })
     }))
 }

@@ -207,6 +207,50 @@ pub(super) fn drenar_grupo(
     Ok(())
 }
 
+/// ¿Esta fila es un cierre cuya apertura (el `crear` del mismo registro)
+/// sigue `pendiente` en la cola?
+///
+/// Carrera que evita (vista en la revisión del 2026-10-04): `pendientes()`
+/// sólo devuelve las filas cuyo backoff ya venció. Si el `crear` de un
+/// ingreso falló una vez (por ejemplo, un corte de red), queda esperando 15
+/// minutos; si en ese lapso se registra la salida, el `cerrar` (con 0
+/// intentos) sale primero. Su `PATCH ...&hora_salida=is.null` no encuentra
+/// la fila en la nube, `PostgREST` responde 204 igual y la fila quedaba
+/// marcada `enviado`. Después llegaba el `crear` y el ingreso quedaba
+/// ABIERTO para siempre en la nube: la persona figuraba adentro en el panel
+/// y el índice único de cédula activa (`*_cedula_activa_idx`,
+/// `ingresos_contratista_activo_idx`) le impedía volver a entrar en
+/// cualquier unidad. Este equipo no podía corregirlo: localmente la salida
+/// ya estaba hecha y la caché de remotos excluye los registros propios.
+///
+/// Por eso un cierre no sale mientras su apertura siga pendiente. Si la
+/// apertura quedó `fallido` (la nube la rechazó, por ejemplo por el índice
+/// único), el cierre sí sale: su `PATCH` no toca nada y la fila se cierra
+/// en la cola, que es lo correcto. Dentro de una misma pasada no hay
+/// demora: `agrupar_por_entidad_y_operacion` respeta el orden de creación,
+/// así que el grupo del `crear` se procesa antes que el del `cerrar`, y si
+/// el `crear` se envió bien, esta consulta ya lo ve `enviado`.
+pub(super) fn cierre_espera_su_apertura(
+    connection: &Connection,
+    fila: &FilaCola,
+) -> Result<bool, SincronizacionError> {
+    if fila.operacion != "cerrar" {
+        return Ok(false);
+    }
+    Ok(connection.query_row(
+        "SELECT EXISTS(
+             SELECT 1 FROM cola_salida
+             WHERE entidad = ?1
+               AND entidad_uuid = ?2
+               AND operacion <> 'cerrar'
+               AND estado = 'pendiente'
+               AND id < ?3
+         )",
+        params![fila.entidad, fila.entidad_uuid, fila.id],
+        |row| row.get(0),
+    )?)
+}
+
 /// Manda una fila a la nube según su `(entidad, operacion)`.
 fn enviar_fila(
     cliente: &reqwest::blocking::Client,
@@ -281,6 +325,19 @@ pub(super) fn procesar_fila_individual(
     fila: FilaCola,
     resumen: &mut ResumenDrenado,
 ) -> Result<(), SincronizacionError> {
+    if cierre_espera_su_apertura(connection, &fila)? {
+        // Ni enviada ni fallida: se queda `pendiente` tal cual (sin sumar
+        // intento ni mover `actualizado_en`), y la próxima pasada la vuelve
+        // a considerar. Ver `cierre_espera_su_apertura`.
+        log::info!(
+            "cola_salida: fila {} ({} cerrar {}) espera a que su apertura llegue a la nube",
+            fila.id,
+            fila.entidad,
+            fila.entidad_uuid,
+        );
+        return Ok(());
+    }
+
     let resultado = enviar_fila(cliente, connection, contexto, &fila);
 
     match resultado {
@@ -457,6 +514,12 @@ fn gafete_activo_de(entidad: &str) -> Option<(TipoMovimientoGafete, &'static str
             "SELECT nombre, gafete_numero, fecha_hora_ingreso
              FROM registro_ingresos_correo WHERE uuid = ?1",
         )),
+        "movimiento_visita" => Some((
+            TipoMovimientoGafete::Visita,
+            "movimientos_visita_gafete_activo_sitio_idx",
+            "SELECT visitante_nombre, gafete_numero, fecha_hora_entrada
+             FROM movimientos_visita WHERE uuid = ?1",
+        )),
         "prestamo_gafete_provisional" => Some((
             TipoMovimientoGafete::ProvisionalKof,
             "prestamos_gafete_provisional_gafete_activo_sitio_idx",
@@ -487,10 +550,13 @@ pub(super) fn es_conflicto_gafete_activo(entidad: &str, error: &SincronizacionEr
 /// otra unidad o en otro equipo de esta, y el índice único de su entidad
 /// (ver [`indice_persona_activa_de`]) rechazó esta apertura, típicamente
 /// registrada sin conexión. No se resuelve sola: queda fallida de inmediato,
-/// sin los reintentos con backoff. Para contratistas y proveedores el aviso a
-/// quien opera lo dan `contratistas_con_conflicto_activo` y
-/// `proveedores_con_conflicto_activo` al terminar la sincronización (la fila
-/// sigue abierta localmente).
+/// sin los reintentos con backoff. El aviso a quien opera lo dan
+/// `contratistas_con_conflicto_activo`, `proveedores_con_conflicto_activo` y
+/// `correos_con_conflicto_activo` al terminar la sincronización (la fila
+/// sigue abierta localmente). Desde `20261004120000` esas funciones de la
+/// nube también reportan el choque con el OTRO equipo de la misma unidad
+/// (antes sólo miraban otras unidades y ese caso no avisaba nada); el nombre
+/// de la unidad llega con " (otro equipo de esta unidad)".
 fn marcar_fallida_por_ingreso_activo(
     connection: &Connection,
     fila: &FilaCola,
@@ -511,14 +577,16 @@ fn marcar_fallida_por_ingreso_activo(
 /// Índice único "una persona, un ingreso (o préstamo) abierto" que protege
 /// cada entidad de la cola en la nube: contratistas
 /// (`20261003170000_ingreso_unico_entre_unidades`), proveedores y préstamos
-/// de gafete provisional KOF (`20261003190000_ingreso_unico_proveedores_y_kof`)
-/// e ingresos por correo (`20261003210000_ingresos_por_correo`).
+/// de gafete provisional KOF (`20261003190000_ingreso_unico_proveedores_y_kof`),
+/// ingresos por correo (`20261003210000_ingresos_por_correo`) y visitas
+/// (`20261004130000_visitas_ven_otras_unidades`).
 fn indice_persona_activa_de(entidad: &str) -> Option<&'static str> {
     match entidad {
         "ingreso" => Some("ingresos_contratista_activo_idx"),
         "ingreso_proveedor" => Some("ingresos_proveedor_cedula_activa_idx"),
         "ingreso_correo" => Some("ingresos_correo_cedula_activa_idx"),
         "prestamo_gafete_provisional" => Some("prestamos_gafete_provisional_encargado_activo_idx"),
+        "movimiento_visita" => Some("movimientos_visita_cedula_activa_idx"),
         _ => None,
     }
 }

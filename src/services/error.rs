@@ -2,6 +2,7 @@ use crate::database::error::DatabaseError;
 use crate::domain::cita::MotivoDenegacionVisita;
 use crate::domain::resultado_acceso::MotivoDenegacion;
 use crate::models::gafete::EstadoGafete;
+use crate::models::via_ingreso::ViaIngreso;
 
 #[derive(Debug, thiserror::Error)]
 pub enum PasswordError {
@@ -127,6 +128,10 @@ pub enum RegistroIngresoServiceError {
     IngresoActivo,
     #[error("El contratista ya tiene un ingreso activo en el otro dispositivo del sitio")]
     IngresoActivoEnOtroDispositivo,
+    /// La misma persona ya está adentro como proveedor o por correo, en este
+    /// equipo o en el otro de la unidad (`queries::persona_adentro`).
+    #[error("Esta persona ya está adentro por otra vía: {0:?}")]
+    AdentroPorOtraVia(ViaIngreso),
     /// El medio de ingreso es `Vehiculo` y no se indicó placa
     /// (`MIGRACION_49`).
     #[error("La placa es obligatoria cuando el ingreso es en vehículo")]
@@ -386,6 +391,10 @@ pub enum IngresoProveedorServiceError {
     EmpresaInactiva,
     #[error("Esta cédula ya tiene un ingreso de proveedor activo")]
     IngresoActivo,
+    /// La misma persona ya está adentro como contratista o por correo
+    /// (`queries::persona_adentro`).
+    #[error("Esta persona ya está adentro por otra vía: {0:?}")]
+    AdentroPorOtraVia(ViaIngreso),
     #[error("El gafete ya está asignado a otro ingreso de proveedor")]
     GafeteOcupado,
     /// El número no existe en el catálogo (`gafetes`, tipo `PROVEEDOR`).
@@ -423,6 +432,10 @@ pub enum IngresoCorreoServiceError {
     MotivoVacio,
     #[error("Esta cédula ya tiene un ingreso por correo activo")]
     IngresoActivo,
+    /// La misma persona ya está adentro como contratista o como proveedor
+    /// (`queries::persona_adentro`).
+    #[error("Esta persona ya está adentro por otra vía: {0:?}")]
+    AdentroPorOtraVia(ViaIngreso),
     #[error("El gafete de visita ya está en uso")]
     GafeteOcupado,
     /// El número no existe en el catálogo (`gafetes`, tipo `VISITA`).

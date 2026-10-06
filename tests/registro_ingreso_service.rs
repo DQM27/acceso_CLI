@@ -971,3 +971,49 @@ fn debe_encolar_hacia_la_nube_al_registrar_salida() {
 
     assert_eq!(contar_cola_salida_ingreso(&connection, &uuid, "cerrar"), 1);
 }
+
+/// Una persona no puede estar adentro por dos vías (revisión del
+/// 2026-10-04): si ya entró por correo con la misma cédula, no entra también
+/// como contratista.
+#[test]
+fn quien_ya_esta_adentro_por_correo_no_entra_como_contratista() {
+    let (connection, empresa_id, usuario_id) = preparar_base();
+    let id = guardar_contratista(
+        &connection,
+        &contratista(
+            "200000001",
+            empresa_id,
+            TipoIngreso::Praind,
+            Some(praind_vigente()),
+        ),
+    );
+    connection
+        .execute(
+            "INSERT INTO registro_ingresos_correo (cedula, nombre, motivo, gafete_numero,
+                fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid)
+             VALUES ('200000001', 'Contratista 200000001', 'Entrevista RH', 4,
+                '2026-08-11T13:00:00Z', ?1, 'Operador', 'uuid-correo')",
+            [usuario_id],
+        )
+        .unwrap();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let registros = SqliteRegistroIngresoRepository::new(&connection);
+    let gafetes = SqliteGafeteRepository::new(&connection);
+
+    let resultado = RegistroIngresoService::new(&contratistas, &registros, &gafetes)
+        .registrar_entrada(
+            id,
+            MedioIngreso::Caminando,
+            Some(10),
+            None,
+            usuario_id,
+            fecha_ingreso(),
+        );
+
+    assert!(matches!(
+        resultado,
+        Err(RegistroIngresoServiceError::AdentroPorOtraVia(
+            control_acceso::models::via_ingreso::ViaIngreso::PorCorreo
+        ))
+    ));
+}

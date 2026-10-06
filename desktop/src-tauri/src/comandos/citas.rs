@@ -37,11 +37,18 @@ fn chequear_visitante_activo_en_otro_sitio(state: &GuiState, cedula: &str) -> Op
 }
 
 /// Espejo de `comandos::ingresos::gafete_libre_en_otro_dispositivo`, pero
-/// contra `movimientos_visita` -- mismo criterio: dos dispositivos del
+/// contra los gafetes de visita -- mismo criterio: dos dispositivos del
 /// mismo sitio comparten el mismo rango de gafetes físicos de visita, cada
 /// uno sólo valida contra su propia base `SQLite`. Sin vincular
 /// (dispositivo sin nube configurada) no hay con quién chocar, se salta sin
 /// tocar la red -- `Ok(true)` ("libre") directo.
+///
+/// Mira las dos tablas que reparten gafetes de visita: `movimientos_visita`
+/// y `ingresos_correo` (el ingreso "por correo" usa el mismo catálogo). Antes
+/// sólo miraba la primera, así que una visita podía recibir un gafete que el
+/// otro equipo había entregado a alguien que entró por correo (el ingreso
+/// por correo ya hacía la verificación inversa, ver
+/// `application::registrar_ingreso_correo_verificado`).
 fn gafete_de_visita_libre_en_otro_dispositivo(
     state: &GuiState,
     numero: i64,
@@ -66,9 +73,14 @@ fn gafete_de_visita_libre_en_otro_dispositivo(
         dispositivo_id: &token.dispositivo_id,
         sitio_id: &token.sitio_id,
     };
-    let ocupado = nube::gafete_de_visita_ocupado_en_otro_dispositivo(&contexto, numero)
+    let ocupado_por_visita = nube::gafete_de_visita_ocupado_en_otro_dispositivo(&contexto, numero)
         .map_err(control_acceso::mensajes::mensaje_sincronizacion)?;
-    Ok(!ocupado)
+    if ocupado_por_visita {
+        return Ok(false);
+    }
+    let ocupado_por_correo = nube::gafete_de_correo_ocupado_en_otro_dispositivo(&contexto, numero)
+        .map_err(control_acceso::mensajes::mensaje_sincronizacion)?;
+    Ok(!ocupado_por_correo)
 }
 
 /// DTO de presentación -- `AppCore::verificar_check_in_visita` devuelve una
@@ -134,6 +146,18 @@ pub fn registrar_entrada_visita(
     {
         return Err(format!(
             "El gafete {numero} ya está en uso en otro dispositivo del sitio"
+        ));
+    }
+    // Recién ahora (2026-10-04) la nube responde esto de verdad: antes la
+    // consulta chocaba con la RLS y siempre decía "libre". Si el visitante
+    // está adentro en otra unidad (o con el otro equipo de esta), no se
+    // registra: la nube lo rechazaría igual al sincronizar
+    // (`movimientos_visita_cedula_activa_idx`). Mejor esfuerzo, igual que en
+    // `verificar_check_in_visita`: sin red se registra y el aviso posterior
+    // a sincronizar avisa si chocó.
+    if let Some(sitio) = chequear_visitante_activo_en_otro_sitio(&state, &cedula) {
+        return Err(format!(
+            "El visitante ya tiene una visita activa en {sitio}"
         ));
     }
     state

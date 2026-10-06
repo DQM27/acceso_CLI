@@ -50,6 +50,11 @@ pub fn recibir_prestamos_gafete_provisional_abiertos(
         "DELETE FROM prestamos_gafete_provisional_remotos WHERE sitio_id = ?1",
         params![contexto.sitio_id],
     )?;
+    super::cierres_remotos::olvidar_cierres_confirmados(
+        &transaction,
+        "prestamos_gafete_provisional_remotos",
+        filas.iter().map(|fila| fila.id.as_str()),
+    )?;
     let mut remotos = Vec::with_capacity(filas.len());
     for fila in filas {
         let existe_localmente: bool = transaction.query_row(
@@ -57,7 +62,9 @@ pub fn recibir_prestamos_gafete_provisional_abiertos(
             params![fila.id],
             |row| row.get(0),
         )?;
-        if existe_localmente {
+        // Lo propio no se duplica en la caché; lo que este equipo acaba de
+        // cerrar a mano tampoco vuelve (ver `cierres_remotos`).
+        if existe_localmente || super::cierres_remotos::cerrado_aca(&transaction, &fila.id)? {
             continue;
         }
         let hora_entrega = crate::tiempo::parsear_utc(&fila.hora_entrega)
@@ -192,9 +199,11 @@ pub fn cerrar_prestamo_gafete_provisional_remoto(
 
     exigir_2xx(respuesta)?;
 
-    connection.execute(
-        "DELETE FROM prestamos_gafete_provisional_remotos WHERE uuid = ?1",
-        params![uuid],
-    )?;
-    Ok(())
+    // Borra de la caché y anota la lápida juntos: una recepción que leyó la
+    // nube antes del cierre no la vuelve a meter (ver `cierres_remotos`).
+    super::cierres_remotos::anotar_cierre_remoto(
+        connection,
+        "prestamos_gafete_provisional_remotos",
+        uuid,
+    )
 }

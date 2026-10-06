@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { clienteServicio, correoAdminAutorizado } from "../_shared/admin.ts";
 import { type Aviso, enviarMensaje, leerCuentaServicio, tokenAccesoGoogle } from "../_shared/fcm.ts";
 import { json, leerCuerpo, preflight, textoOpcional } from "../_shared/http.ts";
@@ -21,11 +21,16 @@ import { json, leerCuerpo, preflight, textoOpcional } from "../_shared/http.ts";
 //
 // Sólo a equipos vigentes (no retirados) que hayan registrado su token
 // (`tokens_push`, lo registra la app al iniciar sesión). Los tokens que FCM
-// da por muertos se borran.
+// da por muertos se borran -- por el TOKEN, no por el equipo: el envío
+// tarda (lotes de 10 contra FCM) y en ese lapso el teléfono puede haber
+// registrado un token nuevo (`registrar_token_push` pisa la fila del
+// equipo). Borrar por `dispositivo_id` se llevaba ese token nuevo y válido,
+// y el equipo dejaba de recibir avisos hasta su próximo inicio de sesión.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_IDS = 500;
 const ENVIOS_EN_PARALELO = 10;
+const TOKENS_POR_BORRADO = 50;
 
 /** Lista de UUID válidos, `[]` si no vino, o `null` si vino mal. */
 function listaDeIds(valor: unknown): string[] | null {
@@ -99,13 +104,16 @@ Deno.serve(async (req: Request) => {
     );
     resultados.forEach((resultado, j) => {
       if (resultado === "enviado") enviados++;
-      else if (resultado === "token_invalido") invalidos.push(lote[j].dispositivo_id);
+      else if (resultado === "token_invalido") invalidos.push(lote[j].token);
       else fallidos++;
     });
   }
 
-  if (invalidos.length) {
-    const { error: borrarError } = await supabase.from("tokens_push").delete().in("dispositivo_id", invalidos);
+  // Sólo si la fila sigue teniendo el token muerto (ver arriba). En lotes:
+  // el filtro viaja en la URL y cada token de FCM ronda los 160 caracteres.
+  for (let i = 0; i < invalidos.length; i += TOKENS_POR_BORRADO) {
+    const lote = invalidos.slice(i, i + TOKENS_POR_BORRADO);
+    const { error: borrarError } = await supabase.from("tokens_push").delete().in("token", lote);
     if (borrarError) console.error("no se pudieron borrar tokens inválidos:", borrarError.message);
   }
 

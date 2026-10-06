@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-use super::{ContextoSincronizacion, SincronizacionError, SitioEmbebido, llamar_rpc, obtener_json};
+use super::{ContextoSincronizacion, SincronizacionError, llamar_rpc};
 use crate::nube::cliente::cliente_http;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,7 +96,7 @@ pub struct ConflictoMovimientoVisitaActivo {
 #[derive(serde::Deserialize)]
 pub(super) struct FilaConflictoVisitaActivo {
     pub(super) visitante_cedula: Option<String>,
-    pub(super) sitios: Option<SitioEmbebido>,
+    pub(super) sitio_nombre: Option<String>,
 }
 
 /// Mismo criterio y misma forma que `contratistas_con_conflicto_activo`,
@@ -105,6 +105,12 @@ pub(super) struct FilaConflictoVisitaActivo {
 /// para encontrar los que igual se colaron en otro sitio (ej. registrados
 /// mientras este dispositivo estaba offline). Deliberadamente simétrica --
 /// ambos sitios en conflicto corren esta misma consulta.
+///
+/// Va por la función `visitantes_activos_en_otras_unidades`: la consulta
+/// directa a `/rest/v1/movimientos_visita` chocaba con la RLS (cada equipo
+/// sólo lee su unidad) y siempre daba vacío. La función también reporta lo
+/// abierto por el otro equipo de la misma unidad (mismo criterio que
+/// contratistas, proveedores y correo desde 20261004120000).
 pub fn visitantes_con_conflicto_activo(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
@@ -124,21 +130,19 @@ pub fn visitantes_con_conflicto_activo(
     let cedulas = activos_locales
         .iter()
         .map(|(cedula, _)| cedula.as_str())
-        .collect::<Vec<_>>()
-        .join(",");
-    let cliente = cliente_http();
-    let url = format!(
-        "{}/rest/v1/movimientos_visita?visitante_cedula=in.({cedulas})&sitio_id=neq.{}\
-         &hora_salida=is.null&select=visitante_cedula,sitios(nombre)",
-        contexto.base_url, contexto.sitio_id,
-    );
-    let filas: Vec<FilaConflictoVisitaActivo> = obtener_json(&cliente, contexto, &url)?;
+        .collect::<Vec<_>>();
+    let filas: Vec<FilaConflictoVisitaActivo> = llamar_rpc(
+        &cliente_http(),
+        contexto,
+        "visitantes_activos_en_otras_unidades",
+        &serde_json::json!({ "p_cedulas": cedulas }),
+    )?;
 
     Ok(filas
         .into_iter()
         .filter_map(|fila| {
             let cedula = fila.visitante_cedula?;
-            let sitio = fila.sitios?.nombre;
+            let sitio = fila.sitio_nombre?;
             let nombre = activos_locales
                 .iter()
                 .find(|(c, _)| *c == cedula)

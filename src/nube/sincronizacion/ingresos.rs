@@ -167,6 +167,11 @@ pub fn recibir_ingresos_abiertos(
         "DELETE FROM ingresos_remotos WHERE sitio_id = ?1",
         params![contexto.sitio_id],
     )?;
+    super::cierres_remotos::olvidar_cierres_confirmados(
+        &transaction,
+        "ingresos_remotos",
+        filas.iter().map(|fila| fila.id.as_str()),
+    )?;
     let mut remotos = Vec::with_capacity(filas.len());
     for fila in filas {
         if let Some(remoto) = guardar_ingreso_remoto(&transaction, contexto.sitio_id, fila)? {
@@ -193,7 +198,10 @@ pub(in crate::nube) fn guardar_ingreso_remoto(
         params![fila.id],
         |row| row.get(0),
     )?;
-    if existe_localmente {
+    // Lo que este equipo acaba de cerrar a mano tampoco vuelve: ni por una
+    // recepción que leyó la nube antes del cierre, ni por un aviso en vivo
+    // atrasado (ver `cierres_remotos`).
+    if existe_localmente || super::cierres_remotos::cerrado_aca(connection, &fila.id)? {
         return Ok(None);
     }
     // Mismo motivo que en `aplicar_cierre_de_ingreso_propio`: el receptor
@@ -279,9 +287,7 @@ pub fn cerrar_ingreso_remoto(
 
     exigir_2xx(respuesta)?;
 
-    connection.execute(
-        "DELETE FROM ingresos_remotos WHERE uuid = ?1",
-        params![uuid],
-    )?;
-    Ok(())
+    // Borra de la caché y anota la lápida juntos: una recepción que leyó la
+    // nube antes del cierre no la vuelve a meter (ver `cierres_remotos`).
+    super::cierres_remotos::anotar_cierre_remoto(connection, "ingresos_remotos", uuid)
 }

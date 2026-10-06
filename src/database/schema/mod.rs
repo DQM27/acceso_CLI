@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 55;
+pub const SCHEMA_VERSION: i64 = 56;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -433,6 +433,11 @@ fn aplicar_migraciones_posteriores_a_52(
     if *version == 54 {
         aplicar_migracion_55(connection)?;
         *version = 55;
+    }
+
+    if *version == 55 {
+        aplicar_migracion_56(connection)?;
+        *version = 56;
     }
 
     Ok(())
@@ -961,6 +966,21 @@ fn aplicar_migracion_55(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_55)?;
     transaction.execute_batch("PRAGMA user_version = 55")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Lápidas de los registros del otro dispositivo que ESTE equipo cerró a mano
+/// (`remotos_cerrados_aca`): `cerrar_*_remoto` borra la fila de la caché
+/// `*_remotos` y anota su uuid en la misma transacción, y la recepción de
+/// abiertos no la vuelve a insertar mientras la lápida exista. Sin esto, una
+/// sincronización que leyó la nube un instante antes del cierre la volvía a
+/// meter en la caché y la persona reaparecía "adentro" hasta la siguiente
+/// pasada (revisión del 2026-10-04). Tabla nueva sin hijos ni padres.
+fn aplicar_migracion_56(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_56)?;
+    transaction.execute_batch("PRAGMA user_version = 56")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1636,3 +1656,5 @@ const MIGRACION_53: &str = include_str!("migraciones/migracion_53.sql");
 const MIGRACION_54: &str = include_str!("migraciones/migracion_54.sql");
 
 const MIGRACION_55: &str = include_str!("migraciones/migracion_55.sql");
+
+const MIGRACION_56: &str = include_str!("migraciones/migracion_56.sql");

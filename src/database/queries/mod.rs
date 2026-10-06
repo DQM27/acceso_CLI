@@ -5,6 +5,7 @@ pub mod gafetes;
 pub mod gafetes_incidentes;
 pub mod identidad_equipo;
 pub mod ingresos;
+pub mod persona_adentro;
 pub mod usuarios;
 
 /// Límites de página compartidos por Contratistas, Empresas y Usuarios —

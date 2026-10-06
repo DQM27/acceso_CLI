@@ -90,7 +90,7 @@ export interface ConflictoIngresoProveedorActivo {
 }
 
 /** Qué movimiento entregó el gafete en conflicto (`nube::TipoMovimientoGafete`). */
-export type TipoMovimientoGafete = "contratista" | "proveedor" | "provisional_kof" | "por_correo";
+export type TipoMovimientoGafete = "contratista" | "proveedor" | "provisional_kof" | "por_correo" | "visita";
 
 export interface ConflictoGafeteActivo {
   tipo: TipoMovimientoGafete;

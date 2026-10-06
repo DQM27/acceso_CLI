@@ -15,6 +15,8 @@ export function mensajeConflictoGafete(conflicto: ConflictoGafeteActivo, hora: s
       return `El ingreso del proveedor ${nombre} con gafete ${gafete} (${hora}) ${cierre}`;
     case "por_correo":
       return `El ingreso por correo de ${nombre} con gafete de visita ${gafete} (${hora}) ${cierre}`;
+    case "visita":
+      return `El check-in de visita de ${nombre} con gafete de visita ${gafete} (${hora}) ${cierre}`;
     case "provisional_kof":
       return `El préstamo del gafete provisional ${gafete} a ${nombre} (${hora}) ${cierre}`;
     case "contratista":

@@ -48,6 +48,13 @@ fn contexto(token: &TokenDispositivo) -> ContextoSincronizacion<'_> {
     }
 }
 
+/// Espera un hilo de una consulta paralela y relanza su pánico si lo hubo
+/// (genérico: cada consulta devuelve un tipo distinto).
+fn unir_hilo<T>(hilo: std::thread::ScopedJoinHandle<'_, T>) -> T {
+    hilo.join()
+        .unwrap_or_else(|panico| std::panic::resume_unwind(panico))
+}
+
 // ---- Ingreso de contratista ----
 
 /// Regla: un contratista no puede tener dos ingresos activos, ni en este
@@ -57,20 +64,52 @@ fn contexto(token: &TokenDispositivo) -> ContextoSincronizacion<'_> {
 /// locales). Si la consulta falla, `SinVerificarEnLaNube`: con nube
 /// configurada no se registra sin verificar (decisión del dueño, igual que
 /// el gafete).
+///
+/// Además, la persona no puede estar adentro por otra vía (como proveedor o
+/// por correo) en ninguna unidad (`persona_adentro_por_otra_via`, a la vez
+/// que la consulta principal). Ese caso se muestra con el bloqueo de "otro
+/// sitio" y la vía al lado del nombre ("Brisas (como proveedor)"), sin una
+/// variante nueva de `BloqueoIngreso`, que viaja a las dos apps.
 fn bloqueo_en_la_nube(
     contexto: &ContextoSincronizacion<'_>,
     cedula: &str,
 ) -> Option<BloqueoIngreso> {
-    match crate::nube::contratista_con_ingreso_activo(contexto, cedula) {
-        Ok(None) => None,
+    let (misma_via, otra_via) = std::thread::scope(|hilos| {
+        let consulta_otra_via = hilos.spawn(|| {
+            crate::nube::persona_adentro_por_otra_via(
+                contexto,
+                cedula,
+                crate::models::via_ingreso::ViaIngreso::Contratista,
+            )
+        });
+        let misma_via = crate::nube::contratista_con_ingreso_activo(contexto, cedula);
+        let otra_via = consulta_otra_via
+            .join()
+            .unwrap_or_else(|panico| std::panic::resume_unwind(panico));
+        (misma_via, otra_via)
+    });
+    match misma_via {
+        Ok(None) => {}
         Ok(Some(activo)) if activo.mismo_sitio => {
-            Some(BloqueoIngreso::IngresoActivoEnOtroDispositivo)
+            return Some(BloqueoIngreso::IngresoActivoEnOtroDispositivo);
         }
-        Ok(Some(activo)) => Some(BloqueoIngreso::ActivoEnOtroSitio {
-            sitio: activo.sitio_nombre,
-        }),
+        Ok(Some(activo)) => {
+            return Some(BloqueoIngreso::ActivoEnOtroSitio {
+                sitio: activo.sitio_nombre,
+            });
+        }
         Err(error) => {
             log::warn!("ingreso: no se pudo verificar en la nube: {error}");
+            return Some(BloqueoIngreso::SinVerificarEnLaNube);
+        }
+    }
+    match otra_via {
+        Ok(None) => None,
+        Ok(Some(adentro)) => Some(BloqueoIngreso::ActivoEnOtroSitio {
+            sitio: format!("{} ({})", adentro.sitio_nombre, adentro.via.texto()),
+        }),
+        Err(error) => {
+            log::warn!("ingreso: no se pudo verificar la otra vía en la nube: {error}");
             Some(BloqueoIngreso::SinVerificarEnLaNube)
         }
     }
@@ -89,6 +128,19 @@ pub fn preparar_ingreso_verificado<G: Deref<Target = AppCore>>(
     let local = preparacion.bloqueo();
     if local.is_some() {
         return Ok((preparacion, local));
+    }
+    // Adentro por otra vía en este equipo o en el otro de la unidad: se
+    // avisa ya en la vista previa (la escritura también lo rechaza, con
+    // `RegistroIngresoServiceError::AdentroPorOtraVia`).
+    if let Some(via) = crate::database::queries::persona_adentro::adentro_por_otra_via(
+        &nucleo().connection,
+        &preparacion.cedula,
+        crate::models::via_ingreso::ViaIngreso::Contratista,
+    )? {
+        let bloqueo = BloqueoIngreso::ActivoEnOtroSitio {
+            sitio: format!("esta unidad ({})", via.texto()),
+        };
+        return Ok((preparacion, Some(bloqueo)));
     }
     if !nube.vinculado() {
         return Ok((preparacion, None));
@@ -238,18 +290,26 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
         let contexto = contexto(&token);
         // A la vez, como en `registrar_ingreso_verificado`; mismo orden al
         // evaluar.
-        let (activo_en_otro_sitio, gafete_ocupado) = std::thread::scope(|hilos| {
+        let (activo_en_otro_sitio, gafete_ocupado, otra_via) = std::thread::scope(|hilos| {
             let consulta_gafete = hilos.spawn(|| {
                 crate::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(
                     &contexto,
                     datos.gafete_numero,
                 )
             });
+            let consulta_otra_via = hilos.spawn(|| {
+                crate::nube::persona_adentro_por_otra_via(
+                    &contexto,
+                    &datos.cedula,
+                    crate::models::via_ingreso::ViaIngreso::Proveedor,
+                )
+            });
             let activo = crate::nube::proveedor_con_ingreso_activo(&contexto, &datos.cedula);
-            let ocupado = consulta_gafete
-                .join()
-                .unwrap_or_else(|panico| std::panic::resume_unwind(panico));
-            (activo, ocupado)
+            (
+                activo,
+                unir_hilo(consulta_gafete),
+                unir_hilo(consulta_otra_via),
+            )
         });
         match activo_en_otro_sitio.map_err(GestionNubeError::from)? {
             Some(activo) if activo.mismo_sitio => {
@@ -261,6 +321,11 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
                 });
             }
             None => {}
+        }
+        // Una persona no puede estar adentro por dos vías (como contratista o
+        // por correo, en cualquier unidad).
+        if let Some(adentro) = otra_via.map_err(GestionNubeError::from)? {
+            return Err(IngresoProveedorServiceError::AdentroPorOtraVia(adentro.via).into());
         }
         if gafete_ocupado.map_err(GestionNubeError::from)? {
             return Err(IngresoProveedorVerificadoError::GafeteOcupadoEnSitio {
@@ -332,7 +397,7 @@ pub fn registrar_ingreso_correo_verificado<G: Deref<Target = AppCore>>(
         let token = autenticar(&nucleo, nube, actor)?;
         let contexto = contexto(&token);
         let numero = datos.gafete_numero;
-        let (activo_en_otro_sitio, gafete_en_correo, gafete_en_visita) =
+        let (activo_en_otro_sitio, gafete_en_correo, gafete_en_visita, otra_via) =
             std::thread::scope(|hilos| {
                 let en_correo = hilos.spawn(|| {
                     crate::nube::gafete_de_correo_ocupado_en_otro_dispositivo(&contexto, numero)
@@ -340,12 +405,20 @@ pub fn registrar_ingreso_correo_verificado<G: Deref<Target = AppCore>>(
                 let en_visita = hilos.spawn(|| {
                     crate::nube::gafete_de_visita_ocupado_en_otro_dispositivo(&contexto, numero)
                 });
+                let por_otra_via = hilos.spawn(|| {
+                    crate::nube::persona_adentro_por_otra_via(
+                        &contexto,
+                        &datos.cedula,
+                        crate::models::via_ingreso::ViaIngreso::PorCorreo,
+                    )
+                });
                 let activo = crate::nube::correo_con_ingreso_activo(&contexto, &datos.cedula);
-                let unir = |hilo: std::thread::ScopedJoinHandle<'_, _>| {
-                    hilo.join()
-                        .unwrap_or_else(|panico| std::panic::resume_unwind(panico))
-                };
-                (activo, unir(en_correo), unir(en_visita))
+                (
+                    activo,
+                    unir_hilo(en_correo),
+                    unir_hilo(en_visita),
+                    unir_hilo(por_otra_via),
+                )
             });
         match activo_en_otro_sitio.map_err(GestionNubeError::from)? {
             Some(activo) if activo.mismo_sitio => {
@@ -357,6 +430,11 @@ pub fn registrar_ingreso_correo_verificado<G: Deref<Target = AppCore>>(
                 });
             }
             None => {}
+        }
+        // Una persona no puede estar adentro por dos vías (como contratista o
+        // como proveedor, en cualquier unidad).
+        if let Some(adentro) = otra_via.map_err(GestionNubeError::from)? {
+            return Err(IngresoCorreoServiceError::AdentroPorOtraVia(adentro.via).into());
         }
         if gafete_en_correo.map_err(GestionNubeError::from)?
             || gafete_en_visita.map_err(GestionNubeError::from)?
@@ -672,29 +750,45 @@ mod tests {
     }
 
     /// Servidor HTTP falso que contesta una sola vez `cuerpo` como JSON.
-    fn nube_que_responde(cuerpo: &'static str) -> String {
+    /// Nube de prueba para `bloqueo_en_la_nube`, que hace dos consultas a
+    /// la vez: `cuerpo` responde la de la misma vía y `otra_via` la de
+    /// `persona_adentro_por_otra_via`.
+    fn nube_que_responde_con_otra_via(cuerpo: &'static str, otra_via: &'static str) -> String {
         use std::io::{BufRead, BufReader, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let direccion = listener.local_addr().unwrap();
         std::thread::spawn(move || {
-            let Ok((mut conexion, _)) = listener.accept() else {
-                return;
-            };
-            let mut lector = BufReader::new(conexion.try_clone().unwrap());
-            loop {
-                let mut linea = String::new();
-                if lector.read_line(&mut linea).unwrap_or(0) == 0 || linea == "\r\n" {
-                    break;
+            for _ in 0..2 {
+                let Ok((mut conexion, _)) = listener.accept() else {
+                    return;
+                };
+                let mut lector = BufReader::new(conexion.try_clone().unwrap());
+                let mut primera = String::new();
+                let _ = lector.read_line(&mut primera);
+                loop {
+                    let mut linea = String::new();
+                    if lector.read_line(&mut linea).unwrap_or(0) == 0 || linea == "\r\n" {
+                        break;
+                    }
                 }
+                let cuerpo = if primera.contains("persona_adentro_por_otra_via") {
+                    otra_via
+                } else {
+                    cuerpo
+                };
+                let respuesta = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+                     Content-Length: {}\r\nConnection: close\r\n\r\n{cuerpo}",
+                    cuerpo.len()
+                );
+                let _ = conexion.write_all(respuesta.as_bytes());
             }
-            let respuesta = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
-                 Content-Length: {}\r\nConnection: close\r\n\r\n{cuerpo}",
-                cuerpo.len()
-            );
-            let _ = conexion.write_all(respuesta.as_bytes());
         });
         format!("http://{direccion}")
+    }
+
+    fn nube_que_responde(cuerpo: &'static str) -> String {
+        nube_que_responde_con_otra_via(cuerpo, "[]")
     }
 
     fn bloqueo_contra(base_url: &str) -> Option<BloqueoIngreso> {
@@ -729,6 +823,23 @@ mod tests {
             bloqueo_contra(&base),
             Some(BloqueoIngreso::ActivoEnOtroSitio {
                 sitio: "Cartago".into()
+            })
+        );
+    }
+
+    /// Una persona no puede estar adentro por dos vías: adentro como
+    /// proveedor en otra unidad, no entra como contratista. Se muestra con el
+    /// bloqueo de "otro sitio" y la vía al lado del nombre.
+    #[test]
+    fn la_nube_con_la_persona_adentro_como_proveedor_bloquea_nombrando_la_via() {
+        let base = nube_que_responde_con_otra_via(
+            "[]",
+            r#"[{"via":"PROVEEDOR","sitio_id":"otro","sitio_nombre":"Cartago"}]"#,
+        );
+        assert_eq!(
+            bloqueo_contra(&base),
+            Some(BloqueoIngreso::ActivoEnOtroSitio {
+                sitio: "Cartago (como proveedor)".into()
             })
         );
     }

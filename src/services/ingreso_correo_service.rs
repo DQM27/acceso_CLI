@@ -86,6 +86,11 @@ where
         if self.registros.buscar_ingreso_activo(cedula)?.is_some() {
             return Err(IngresoCorreoServiceError::IngresoActivo);
         }
+        // Una persona no puede estar adentro por dos vías: si ya entró como
+        // contratista o como proveedor, no entra también por correo.
+        if let Some(via) = self.registros.adentro_por_otra_via(cedula)? {
+            return Err(IngresoCorreoServiceError::AdentroPorOtraVia(via));
+        }
 
         let gafete = self
             .gafetes
@@ -261,6 +266,34 @@ mod tests {
         assert!(matches!(
             servicio.registrar_ingreso(&datos("222222222", 3), 1, ahora()),
             Err(IngresoCorreoServiceError::GafeteOcupado)
+        ));
+    }
+
+    /// Una persona no puede estar adentro por dos vías: si el otro equipo de
+    /// la unidad la tiene adentro como proveedor (caché de remotos), no
+    /// entra también por correo.
+    #[test]
+    fn rechaza_a_quien_ya_esta_adentro_como_proveedor_en_el_otro_equipo() {
+        let connection = conexion_con_gafetes();
+        connection
+            .execute(
+                "INSERT INTO ingresos_proveedor_remotos (uuid, sitio_id, cedula, nombre,
+                    empresa_nombre, gafete_numero, hora_entrada, usuario_entrada_nombre,
+                    dispositivo_entrada_id, actualizado_en)
+                 VALUES ('r1', 's1', '111111111', 'Ana Solano', 'ACME', 9,
+                    '2026-10-03T13:00:00Z', 'Otro', 'd2', '2026-10-03T13:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let registros = SqliteRegistroIngresoCorreoRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = IngresoCorreoService::new(&registros, &gafetes);
+
+        assert!(matches!(
+            servicio.registrar_ingreso(&datos("1-1111-1111", 3), 1, ahora()),
+            Err(IngresoCorreoServiceError::AdentroPorOtraVia(
+                crate::models::via_ingreso::ViaIngreso::Proveedor
+            ))
         ));
     }
 

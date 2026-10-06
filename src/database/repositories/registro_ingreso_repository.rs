@@ -10,6 +10,7 @@ use crate::models::registro_ingreso::{
     SalidaRegistroIngreso,
 };
 use crate::models::tipo_ingreso::TipoIngreso;
+use crate::models::via_ingreso::ViaIngreso;
 use crate::tiempo::{parsear_utc, serializar_utc};
 
 pub trait RegistroIngresoRepository {
@@ -29,6 +30,12 @@ pub trait RegistroIngresoRepository {
         &self,
         cedula: &str,
     ) -> Result<bool, DatabaseError>;
+
+    /// ¿Esta cédula ya está adentro por OTRA vía (contratista, proveedor o
+    /// por correo), en este equipo o en el otro de la unidad? Una persona no
+    /// puede estar adentro por dos vías a la vez. Ver
+    /// `database::queries::persona_adentro`.
+    fn adentro_por_otra_via(&self, cedula: &str) -> Result<Option<ViaIngreso>, DatabaseError>;
 
     /// Busca quién tiene actualmente asignado un gafete.
     ///
@@ -314,6 +321,14 @@ impl RegistroIngresoRepository for SqliteRegistroIngresoRepository<'_> {
             params![cedula],
             |fila| fila.get(0),
         )?)
+    }
+
+    fn adentro_por_otra_via(&self, cedula: &str) -> Result<Option<ViaIngreso>, DatabaseError> {
+        crate::database::queries::persona_adentro::adentro_por_otra_via(
+            self.connection,
+            cedula,
+            ViaIngreso::Contratista,
+        )
     }
 
     fn buscar_ingreso_activo_por_gafete(
