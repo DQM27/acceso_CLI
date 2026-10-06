@@ -86,6 +86,7 @@ async function preparar(
   let citas = [...(opciones.citas ?? [])];
   let fallosPendientes = opciones.falloGuardado ? 1 : 0;
   const auth: { ruta: string; datos: Record<string, unknown> }[] = [];
+  let claveActivada: string | null = null;
   const sesionNueva = () => ({
     access_token: `prueba.${Buffer.from(JSON.stringify({ sub: usuario.id, exp: Math.floor(AHORA.getTime() / 1000) + 3600 })).toString("base64")}.firma`,
     refresh_token: "solo-prueba",
@@ -118,27 +119,21 @@ async function preparar(
     const url = new URL(peticion.url());
     const responder = (datos: unknown, status = 200) =>
       ruta.fulfill({ status, contentType: "application/json", body: JSON.stringify(datos) });
-    if (url.pathname === "/auth/v1/user") {
-      if (peticion.method() === "PUT") auth.push({ ruta: "user", datos: peticion.postDataJSON() });
-      return responder(usuario);
-    }
+    if (url.pathname === "/auth/v1/user") return responder(usuario);
     if (url.pathname === "/auth/v1/token" && url.searchParams.get("grant_type") === "password") {
       const datos = peticion.postDataJSON() as Record<string, unknown>;
       auth.push({ ruta: "password", datos });
-      return datos.password === "frase secreta de prueba"
+      return datos.password === "frase secreta de prueba" || datos.password === claveActivada
         ? responder(sesionNueva())
         : responder({ code: "invalid_credentials", message: "Invalid login credentials" }, 400);
     }
-    if (url.pathname === "/auth/v1/otp") {
-      auth.push({ ruta: "otp", datos: peticion.postDataJSON() });
-      return responder({});
-    }
-    if (url.pathname === "/auth/v1/verify") {
+    if (url.pathname === "/functions/v1/anfitrion-activar") {
       const datos = peticion.postDataJSON() as Record<string, unknown>;
-      auth.push({ ruta: "verify", datos });
-      return datos.token === "123456"
-        ? responder(sesionNueva())
-        : responder({ code: "otp_expired", message: "Token has expired or is invalid" }, 403);
+      auth.push({ ruta: "activar", datos });
+      if (datos.codigo !== "ABCDE23456")
+        return responder({ error: "codigo_invalido", detail: "Correo o código incorrecto, vencido o ya usado." }, 400);
+      claveActivada = String(datos.contrasena);
+      return responder({ ok: true });
     }
     if (url.pathname === "/auth/v1/logout") return responder({});
     if (url.pathname === "/rest/v1/anfitriones")
@@ -232,29 +227,36 @@ test("ingreso con correo y contraseña, con mensaje genérico ante un error", as
   expect(nube.auth("password").at(-1)).toMatchObject({ email: correo });
 });
 
-test("primer ingreso: código por correo y luego la contraseña", async ({ page }, info) => {
+test("primer ingreso: activa con el código de administración y entra", async ({ page }, info) => {
   const nube = await preparar(page, { sinSesion: true, citas: [deHoy] });
   await page.goto("/");
-  await page.getByRole("button", { name: "¿Olvidó su contraseña o es su primer ingreso?" }).click();
+  await page.getByRole("button", { name: "Primer ingreso: tengo un código de activación" }).click();
   await page.getByLabel("Correo de la empresa").fill(correo);
-  await page.getByRole("button", { name: "Enviar código" }).click();
-  expect(nube.auth("otp").at(-1)).toMatchObject({ email: correo, create_user: false });
-  await page.getByLabel("Código").fill("000000");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(page.getByRole("alert")).toContainText("vencido");
-  await page.getByLabel("Código").fill("123 456");
-  await page.getByRole("button", { name: "Continuar" }).click();
-  await expect(page.getByRole("heading", { name: "Defina su contraseña" })).toBeVisible();
-  await page.screenshot({ path: `test-results/definir-contrasena-${info.project.name}.png`, fullPage: true });
+  await page.getByLabel("Código de activación").fill("zzzzz-99999");
   await page.getByLabel("Contraseña nueva").fill("corta");
-  await page.getByRole("button", { name: "Guardar contraseña" }).click();
+  await page.getByRole("button", { name: "Activar e ingresar" }).click();
   await expect(page.getByText(/al menos 15 caracteres/i).first()).toBeVisible();
+  expect(nube.auth("activar")).toHaveLength(0);
   await page.getByLabel("Contraseña nueva").fill("el cafe de la tarde en cartago");
   await page.getByLabel("Repita la contraseña").fill("el cafe de la tarde en cartago");
-  await page.getByRole("button", { name: "Guardar contraseña" }).click();
+  await page.getByRole("button", { name: "Activar e ingresar" }).click();
+  await expect(page.getByRole("alert")).toContainText("Correo o código incorrecto");
+  await page.getByLabel("Código de activación").fill("abcde23456");
+  await page.screenshot({ path: `test-results/activar-${info.project.name}.png`, fullPage: true });
+  await page.getByRole("button", { name: "Activar e ingresar" }).click();
   await expect(page.getByText("Auditoría de seguridad")).toBeVisible();
-  expect(nube.auth("user").at(-1)).toMatchObject({ password: "el cafe de la tarde en cartago" });
+  expect(nube.auth("activar").at(-1)).toMatchObject({
+    correo,
+    codigo: "ABCDE23456",
+    contrasena: "el cafe de la tarde en cartago",
+  });
   await sinDesborde(page);
+});
+
+test("olvidó su contraseña: indica pedir un código a administración", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "¿Olvidó su contraseña?" }).click();
+  await expect(page.getByText(/restablezca su cuenta/)).toBeVisible();
 });
 
 test("una cuenta sin autorización no ve la agenda", async ({ page }) => {

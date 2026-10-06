@@ -25,13 +25,10 @@ interface EstadoAuth {
   cargando: boolean;
   verificado: boolean;
   error: string | null;
-  /** Entró con un código de correo y todavía no definió su contraseña: la
-   * agenda espera hasta que lo haga. */
-  debeDefinirContrasena: boolean;
   iniciarSesion: (correo: string, contrasena: string) => Promise<Resultado>;
-  solicitarCodigo: (correo: string) => Promise<Resultado>;
-  verificarCodigo: (correo: string, codigo: string) => Promise<Resultado>;
-  definirContrasena: (contrasena: string) => Promise<Resultado>;
+  /** Primer ingreso o después de un "restablecer" del panel: con el código
+   * de activación define su contraseña y entra. */
+  activarCuenta: (correo: string, codigo: string, contrasena: string) => Promise<Resultado>;
   cerrarSesion: () => Promise<void>;
   verificar: () => void;
 }
@@ -61,22 +58,15 @@ function esLimite(fallo: unknown) {
   return estado === 429 || (codigo?.startsWith("over_") ?? false);
 }
 
-// Marca "falta definir la contraseña" en la pestaña: si recarga a mitad del
-// paso, vuelve a la misma pantalla en vez de entrar a la agenda.
-const CLAVE_DEFINIR = `${CLAVE_SESION}-definir-contrasena`;
-function leerMarcaDefinir(): boolean {
+/** `{ error, detail }` de una Edge Function que respondió con error. */
+async function cuerpoDeError(fallo: unknown): Promise<{ error?: string; detail?: string } | null> {
+  const contexto = (fallo as { context?: unknown } | null)?.context;
+  if (!(contexto instanceof Response)) return null;
   try {
-    return sessionStorage.getItem(CLAVE_DEFINIR) === "1";
+    const cuerpo: unknown = await contexto.clone().json();
+    return typeof cuerpo === "object" && cuerpo !== null ? cuerpo : null;
   } catch {
-    return false;
-  }
-}
-function guardarMarcaDefinir(valor: boolean) {
-  try {
-    if (valor) sessionStorage.setItem(CLAVE_DEFINIR, "1");
-    else sessionStorage.removeItem(CLAVE_DEFINIR);
-  } catch {
-    /* Sin almacenamiento la marca vive solo en memoria. */
+    return null;
   }
 }
 
@@ -85,7 +75,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [cargando, setCargando] = useState(true);
   const [verificado, setVerificado] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [debeDefinirContrasena, setDebeDefinir] = useState(leerMarcaDefinir);
   const revision = useRef(0);
   const identidad = useRef<string | null>(null);
   const cierreSolicitado = useRef(false);
@@ -110,8 +99,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAnfitrion(null);
         setVerificado(false);
         setCargando(false);
-        guardarMarcaDefinir(false);
-        setDebeDefinir(false);
         return;
       }
       // Salir del callback de Auth antes de consultar el mismo cliente evita
@@ -236,95 +223,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const solicitarCodigo = useCallback(
-    async (correo: string): Promise<Resultado> => {
+  const activarCuenta = useCallback(
+    async (correo: string, codigo: string, contrasena: string): Promise<Resultado> => {
       try {
-        // `shouldCreateUser: false`: las cuentas se dan de alta por SQL
-        // (tabla `anfitriones`), nunca desde acá. La plantilla "Magic Link"
-        // del proyecto manda el código (`{{ .Token }}`), no un enlace.
-        const { error: fallo } = await supabase.auth.signInWithOtp({
-          email: normalizarCorreo(correo),
-          options: { shouldCreateUser: false },
+        const { error: fallo } = await supabase.functions.invoke("anfitrion-activar", {
+          body: { correo: normalizarCorreo(correo), codigo, contrasena },
         });
-        if (!fallo) return { ok: true };
-        if (esLimite(fallo)) return { ok: false, mensaje: DEMASIADOS_INTENTOS };
-        const { estado } = detalle(fallo);
-        // Un correo sin cuenta responde 422 ("Signups not allowed for otp")
-        // y uno bloqueado, otro 4xx. Se contesta igual que un envío exitoso
-        // para no revelar quién es anfitrión.
-        if (estado !== undefined && estado >= 400 && estado < 500)
-          return { ok: true };
-        return { ok: false, mensaje: SIN_CONEXION };
-      } catch {
-        return { ok: false, mensaje: SIN_CONEXION };
-      }
-    },
-    [],
-  );
-
-  const verificarCodigo = useCallback(
-    async (correo: string, codigo: string): Promise<Resultado> => {
-      cierreSolicitado.current = false;
-      setError(null);
-      try {
-        const { error: fallo } = await supabase.auth.verifyOtp({
-          email: normalizarCorreo(correo),
-          token: codigo.replace(/\s+/g, ""),
-          type: "email",
-        });
-        if (!fallo) {
-          guardarMarcaDefinir(true);
-          setDebeDefinir(true);
-          return { ok: true };
+        if (fallo) {
+          const cuerpo = await cuerpoDeError(fallo);
+          // `detail` es para la persona (mismo texto para todo código
+          // rechazado: no revela si la cuenta existe).
+          if (cuerpo?.detail && cuerpo.error !== "error")
+            return { ok: false, mensaje: cuerpo.detail };
+          return { ok: false, mensaje: SIN_CONEXION };
         }
-        if (esLimite(fallo)) return { ok: false, mensaje: DEMASIADOS_INTENTOS };
-        const { estado } = detalle(fallo);
-        if (estado !== undefined && estado >= 400 && estado < 500)
-          return {
-            ok: false,
-            mensaje: "Código incorrecto o vencido. Revise el último correo o pida otro código.",
-          };
-        return { ok: false, mensaje: SIN_CONEXION };
       } catch {
         return { ok: false, mensaje: SIN_CONEXION };
       }
-    },
-    [],
-  );
-
-  const definirContrasena = useCallback(
-    async (contrasena: string): Promise<Resultado> => {
-      try {
-        const { error: fallo } = await supabase.auth.updateUser({
-          password: contrasena,
-        });
-        if (!fallo) {
-          guardarMarcaDefinir(false);
-          setDebeDefinir(false);
-          return { ok: true };
-        }
-        if (esLimite(fallo)) return { ok: false, mensaje: DEMASIADOS_INTENTOS };
-        const { codigo, estado } = detalle(fallo);
-        if (codigo === "weak_password")
-          return {
+      // Activada: entra con la contraseña que acaba de elegir.
+      const ingreso = await iniciarSesion(correo, contrasena);
+      return ingreso.ok
+        ? ingreso
+        : {
             ok: false,
-            mensaje:
-              "El servidor rechazó esa contraseña por débil o porque aparece en filtraciones conocidas. Use otra frase.",
+            mensaje: "Su cuenta quedó activada, pero no se pudo ingresar. Ingrese con su correo y la contraseña nueva.",
           };
-        if (codigo === "same_password")
-          return { ok: false, mensaje: "Use una contraseña distinta de la anterior." };
-        if (estado === 401 || codigo === "session_not_found" || codigo === "session_expired")
-          return {
-            ok: false,
-            mensaje:
-              "La sesión del código terminó. Pida un código nuevo desde la pantalla de ingreso.",
-          };
-        return { ok: false, mensaje: SIN_CONEXION };
-      } catch {
-        return { ok: false, mensaje: SIN_CONEXION };
-      }
     },
-    [],
+    [iniciarSesion],
   );
 
   const cerrarSesion = useCallback(async () => {
@@ -342,8 +267,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "La sesión se cerró en esta pestaña, pero no se pudo confirmar el cierre en el servidor.",
       );
     } finally {
-      guardarMarcaDefinir(false);
-      setDebeDefinir(false);
       for (const clave of [
         CLAVE_SESION,
         `${CLAVE_SESION}-code-verifier`,
@@ -369,10 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verificado,
         error,
         iniciarSesion,
-        debeDefinirContrasena,
-        solicitarCodigo,
-        verificarCodigo,
-        definirContrasena,
+        activarCuenta,
         cerrarSesion,
         verificar: () => comprobar.current(),
       }}

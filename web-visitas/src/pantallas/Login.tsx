@@ -4,28 +4,35 @@ import { CalendarDays, MapPin, UserCheck } from "lucide-react";
 import { useAuth } from "../contexto/AuthContexto";
 import { Aviso, BotonTema } from "../componentes/Comunes";
 import { CampoContrasena } from "../componentes/CampoContrasena";
+import { LONGITUD_MINIMA, problemaDeContrasenaNueva } from "../lib/contrasena";
 import marca from "../assets/marca.png";
 
-type Modo = "ingresar" | "pedir-codigo" | "codigo";
+type Modo = "ingresar" | "activar" | "olvido";
 
 /** Entrada de anfitriones con el correo de la empresa y su contraseña. Misma
- * marca y misma tarjeta que el panel. Las cuentas no se crean acá: las da de
- * alta administración por SQL (ver README). El primer ingreso y la
- * recuperación usan un código de 6 dígitos que Supabase manda al correo. */
+ * marca y misma tarjeta que el panel. Las cuentas las crea administración
+ * desde el panel y entregan un código de activación: con él, la persona
+ * elige su contraseña (primer ingreso, o después de "restablecer"). */
 export default function Login() {
-  const { iniciarSesion, solicitarCodigo, verificarCodigo, error, verificar } = useAuth();
+  const { iniciarSesion, activarCuenta, error, verificar } = useAuth();
   const [modo, setModo] = useState<Modo>("ingresar");
   const [correo, setCorreo] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [codigo, setCodigo] = useState("");
+  const [nueva, setNueva] = useState("");
+  const [repetida, setRepetida] = useState("");
+  const [problema, setProblema] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [fallo, setFallo] = useState<string | null>(null);
 
   function cambiarModo(nuevo: Modo) {
     setModo(nuevo);
     setFallo(null);
+    setProblema(null);
     setContrasena("");
     setCodigo("");
+    setNueva("");
+    setRepetida("");
   }
 
   async function ingresar(evento: FormEvent) {
@@ -44,32 +51,18 @@ export default function Login() {
     }
   }
 
-  async function pedirCodigo(evento: FormEvent) {
+  async function activar(evento: FormEvent) {
     evento.preventDefault();
     if (enviando) return;
+    const motivo = problemaDeContrasenaNueva(nueva, correo);
+    setProblema(motivo ?? (nueva !== repetida ? "Las dos contraseñas no coinciden." : null));
+    if (motivo || nueva !== repetida) return;
     setEnviando(true);
     setFallo(null);
     try {
-      const resultado = await solicitarCodigo(correo);
-      if (resultado.ok) cambiarModo("codigo");
-      else setFallo(resultado.mensaje);
-    } finally {
-      setEnviando(false);
-    }
-  }
-
-  async function confirmarCodigo(evento: FormEvent) {
-    evento.preventDefault();
-    if (enviando) return;
-    setEnviando(true);
-    setFallo(null);
-    try {
-      const resultado = await verificarCodigo(correo, codigo);
-      // Si sale bien, el portal pasa solo a "Defina su contraseña".
-      if (!resultado.ok) {
-        setFallo(resultado.mensaje);
-        setCodigo("");
-      }
+      // Si sale bien, la sesión queda abierta y el portal pasa a la agenda.
+      const resultado = await activarCuenta(correo, codigo, nueva);
+      if (!resultado.ok) setFallo(resultado.mensaje);
     } finally {
       setEnviando(false);
     }
@@ -146,24 +139,55 @@ export default function Login() {
                   {enviando ? "Ingresando…" : "Ingresar"}
                 </button>
               </form>
-              <button type="button" className="self-center text-[13px] underline" onClick={() => cambiarModo("pedir-codigo")}>
-                ¿Olvidó su contraseña o es su primer ingreso?
-              </button>
+              <div className="flex flex-col items-center gap-2 text-[13px]">
+                <button type="button" className="underline" onClick={() => cambiarModo("activar")}>
+                  Primer ingreso: tengo un código de activación
+                </button>
+                <button type="button" className="underline" onClick={() => cambiarModo("olvido")}>
+                  ¿Olvidó su contraseña?
+                </button>
+              </div>
             </>
           )}
 
-          {modo === "pedir-codigo" && (
+          {modo === "activar" && (
             <>
-              <h2 className="m-0 text-base font-semibold">Crear o recuperar la contraseña</h2>
+              <h2 className="m-0 text-base font-semibold">Activar su cuenta</h2>
               <p className="m-0 text-[13px] text-muted">
-                Escriba su correo de la empresa. Si tiene una cuenta de anfitrión, le enviaremos un código de 6 dígitos
-                para definir su contraseña.
+                Escriba su correo, el código que le entregó administración y la contraseña que quiere usar desde ahora.
               </p>
-              <form className="flex flex-col gap-3" onSubmit={pedirCodigo}>
+              <form className="flex flex-col gap-3" onSubmit={activar}>
                 {campoCorreo}
+                <label className="campo">
+                  Código de activación
+                  <input
+                    value={codigo}
+                    required
+                    autoComplete="one-time-code"
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    maxLength={14}
+                    onChange={(evento) => setCodigo(evento.target.value.toUpperCase())}
+                  />
+                </label>
+                <CampoContrasena
+                  etiqueta="Contraseña nueva"
+                  valor={nueva}
+                  onCambiar={setNueva}
+                  autoComplete="new-password"
+                  ayuda={`Al menos ${LONGITUD_MINIMA} caracteres. Puede ser una frase; no hace falta mezclar símbolos.`}
+                  error={problema}
+                />
+                <CampoContrasena
+                  etiqueta="Repita la contraseña"
+                  valor={repetida}
+                  onCambiar={setRepetida}
+                  autoComplete="new-password"
+                />
                 {fallo && <Aviso>{fallo}</Aviso>}
                 <button type="submit" className="boton boton-primario min-h-11 w-full" disabled={enviando}>
-                  {enviando ? "Enviando…" : "Enviar código"}
+                  {enviando ? "Activando…" : "Activar e ingresar"}
                 </button>
               </form>
               <button type="button" className="self-center text-[13px] underline" onClick={() => cambiarModo("ingresar")}>
@@ -172,40 +196,16 @@ export default function Login() {
             </>
           )}
 
-          {modo === "codigo" && (
+          {modo === "olvido" && (
             <>
-              <h2 className="m-0 text-base font-semibold">Escriba el código</h2>
-              {/* El mismo texto exista o no la cuenta: no se revela quién es anfitrión. */}
+              <h2 className="m-0 text-base font-semibold">¿Olvidó su contraseña?</h2>
               <Aviso tipo="info">
-                Si {correo.trim()} corresponde a una cuenta de anfitrión, en unos minutos recibirá un código. Vence
-                pronto y sirve una sola vez.
+                Pida a administración que restablezca su cuenta. Le entregarán un código de activación nuevo, que vence
+                en 72 horas; con él podrá elegir una contraseña nueva en «Primer ingreso».
               </Aviso>
-              <form className="flex flex-col gap-3" onSubmit={confirmarCodigo}>
-                <label className="campo">
-                  Código
-                  <input
-                    value={codigo}
-                    required
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    pattern="[0-9 ]{6,12}"
-                    maxLength={12}
-                    onChange={(evento) => setCodigo(evento.target.value)}
-                  />
-                </label>
-                {fallo && <Aviso>{fallo}</Aviso>}
-                <button type="submit" className="boton boton-primario min-h-11 w-full" disabled={enviando}>
-                  {enviando ? "Verificando…" : "Continuar"}
-                </button>
-              </form>
-              <div className="flex justify-between text-[13px]">
-                <button type="button" className="underline" onClick={() => cambiarModo("pedir-codigo")}>
-                  Pedir otro código
-                </button>
-                <button type="button" className="underline" onClick={() => cambiarModo("ingresar")}>
-                  Volver a ingresar
-                </button>
-              </div>
+              <button type="button" className="boton min-h-11 w-full" onClick={() => cambiarModo("ingresar")}>
+                Volver a ingresar
+              </button>
             </>
           )}
 

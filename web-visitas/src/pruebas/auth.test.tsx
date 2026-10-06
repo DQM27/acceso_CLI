@@ -14,16 +14,14 @@ const dobles = vi.hoisted(() => ({
   getSession: vi.fn(),
   getUser: vi.fn(),
   signInWithPassword: vi.fn(),
-  signInWithOtp: vi.fn(),
-  verifyOtp: vi.fn(),
-  updateUser: vi.fn(),
+  invoke: vi.fn(),
   signOut: vi.fn(),
   onAuthStateChange: vi.fn(),
   from: vi.fn(),
 }));
 vi.mock("../lib/supabase", () => ({
   CLAVE_SESION: "prueba",
-  supabase: { auth: dobles, from: dobles.from },
+  supabase: { auth: dobles, from: dobles.from, functions: { invoke: dobles.invoke } },
 }));
 const sesion = (id = "A") => ({
   access_token: `token-${id}`,
@@ -45,7 +43,6 @@ function Vista() {
       {estado.error && <div role="alert">{estado.error}</div>}
       <button onClick={estado.verificar}>Verificar</button>
       <span data-testid="resultado">{resultado}</span>
-      <span data-testid="definir">{String(estado.debeDefinirContrasena)}</span>
       <button
         onClick={() =>
           void estado.iniciarSesion("  Ana@Example.Invalid ", "frase secreta larga").then(mostrar)
@@ -53,14 +50,12 @@ function Vista() {
       >
         Entrar
       </button>
-      <button onClick={() => void estado.solicitarCodigo("Ana@Example.Invalid").then(mostrar)}>
-        Pedir código
-      </button>
-      <button onClick={() => void estado.verificarCodigo("Ana@Example.Invalid", " 123 456 ").then(mostrar)}>
-        Verificar código
-      </button>
-      <button onClick={() => void estado.definirContrasena("frase secreta larga").then(mostrar)}>
-        Definir
+      <button
+        onClick={() =>
+          void estado.activarCuenta("Ana@Example.Invalid", "ABCDE23456", "frase secreta larga").then(mostrar)
+        }
+      >
+        Activar
       </button>
     </>
   );
@@ -228,78 +223,47 @@ describe("ingreso con correo y contraseña", () => {
   });
 });
 
-describe("código de correo (primer ingreso y recuperación)", () => {
-  it("pide el código sin crear cuentas", async () => {
-    dobles.signInWithOtp.mockResolvedValue({ data: {}, error: null });
+/** Error de `functions.invoke` con la respuesta de la Edge Function. */
+const errorFuncion = (status: number, cuerpo: unknown) =>
+  Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+    context: new Response(JSON.stringify(cuerpo), { status }),
+  });
+
+describe("activación con código", () => {
+  it("activa con el correo normalizado y entra con la contraseña nueva", async () => {
+    dobles.invoke.mockResolvedValue({ data: { ok: true }, error: null });
+    dobles.signInWithPassword.mockResolvedValue({ data: {}, error: null });
     montar();
-    expect(await pulsar("Pedir código")).toBe("ok");
-    expect(dobles.signInWithOtp).toHaveBeenCalledWith({
+    expect(await pulsar("Activar")).toBe("ok");
+    expect(dobles.invoke).toHaveBeenCalledWith("anfitrion-activar", {
+      body: { correo: "ana@example.invalid", codigo: "ABCDE23456", contrasena: "frase secreta larga" },
+    });
+    expect(dobles.signInWithPassword).toHaveBeenCalledWith({
       email: "ana@example.invalid",
-      options: { shouldCreateUser: false },
-    });
-  });
-  it("contesta igual si el correo no tiene cuenta", async () => {
-    dobles.signInWithOtp.mockResolvedValue({
-      data: {},
-      error: errorAuth(422, "otp_disabled"),
-    });
-    montar();
-    expect(await pulsar("Pedir código")).toBe("ok");
-  });
-  it("avisa el límite de envíos de correo", async () => {
-    dobles.signInWithOtp.mockResolvedValue({
-      data: {},
-      error: errorAuth(429, "over_email_send_rate_limit"),
-    });
-    montar();
-    expect(await pulsar("Pedir código")).toContain("Demasiados intentos");
-  });
-  it("con un código válido exige definir la contraseña", async () => {
-    dobles.verifyOtp.mockResolvedValue({ data: {}, error: null });
-    montar();
-    expect(await pulsar("Verificar código")).toBe("ok");
-    expect(dobles.verifyOtp).toHaveBeenCalledWith({
-      email: "ana@example.invalid",
-      token: "123456",
-      type: "email",
-    });
-    expect(screen.getByTestId("definir").textContent).toBe("true");
-  });
-  it("rechaza un código vencido sin marcar nada", async () => {
-    dobles.verifyOtp.mockResolvedValue({
-      data: {},
-      error: errorAuth(403, "otp_expired"),
-    });
-    montar();
-    expect(await pulsar("Verificar código")).toContain("vencido");
-    expect(screen.getByTestId("definir").textContent).toBe("false");
-  });
-  it("al guardar la contraseña ya no la pide", async () => {
-    dobles.verifyOtp.mockResolvedValue({ data: {}, error: null });
-    dobles.updateUser.mockResolvedValue({ data: {}, error: null });
-    montar();
-    await pulsar("Verificar código");
-    fireEvent.click(screen.getByText("Definir"));
-    await waitFor(() =>
-      expect(screen.getByTestId("definir").textContent).toBe("false"),
-    );
-  });
-  it("cerrar la sesión olvida el paso pendiente", async () => {
-    dobles.verifyOtp.mockResolvedValue({ data: {}, error: null });
-    montar();
-    await pulsar("Verificar código");
-    act(() => evento("SIGNED_OUT", null));
-    expect(screen.getByTestId("definir").textContent).toBe("false");
-  });
-  it("explica cuando el servidor rechaza la contraseña por débil", async () => {
-    dobles.updateUser.mockResolvedValue({
-      data: {},
-      error: errorAuth(422, "weak_password"),
-    });
-    montar();
-    expect(await pulsar("Definir")).toContain("filtraciones");
-    expect(dobles.updateUser).toHaveBeenCalledWith({
       password: "frase secreta larga",
     });
+  });
+  it("muestra el mensaje del servidor ante un código rechazado y no intenta entrar", async () => {
+    dobles.invoke.mockResolvedValue({
+      data: null,
+      error: errorFuncion(400, { error: "codigo_invalido", detail: "Correo o código incorrecto, vencido o ya usado." }),
+    });
+    montar();
+    expect(await pulsar("Activar")).toBe("Correo o código incorrecto, vencido o ya usado.");
+    expect(dobles.signInWithPassword).not.toHaveBeenCalled();
+  });
+  it("no muestra detalles internos de un error 500", async () => {
+    dobles.invoke.mockResolvedValue({
+      data: null,
+      error: errorFuncion(500, { error: "error", detail: "relation does not exist" }),
+    });
+    montar();
+    expect(await pulsar("Activar")).toContain("conexión");
+  });
+  it("si activó pero no pudo entrar, lo dice", async () => {
+    dobles.invoke.mockResolvedValue({ data: { ok: true }, error: null });
+    dobles.signInWithPassword.mockRejectedValue(new TypeError("Failed to fetch"));
+    montar();
+    expect(await pulsar("Activar")).toContain("quedó activada");
   });
 });
