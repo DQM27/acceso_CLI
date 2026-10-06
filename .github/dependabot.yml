@@ -7,6 +7,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # p256 0.14 (ecdsa 0.17) cambia la API y pide otro rand_core: se migra
+      # junto con mobile/rust-core, que usa la misma versión.
+      - dependency-name: p256
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       cargo-raiz:
         patterns:
@@ -17,6 +22,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Fijadas a la versión que ya traen tauri/wry y tauri-plugin-dialog (ver
+      # Cargo.toml). Subirlas solas deja dos windows-core en el árbol y no
+      # compila src/pdf/generador.rs. Se suben cuando las suba Tauri.
+      - dependency-name: webview2-com
+      - dependency-name: windows
+      - dependency-name: rfd
     groups:
       cargo-desktop:
         patterns:
@@ -27,6 +39,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # p256 0.14 (ecdsa 0.17) cambia la API y pide otro rand_core: no
+      # compila firmante.rs. Se migra junto con el núcleo.
+      - dependency-name: p256
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       cargo-mobile:
         patterns:
@@ -40,6 +57,11 @@ updates:
     ignore:
       # eslint-plugin-react aún no soporta eslint 10 (ERESOLVE en npm ci).
       - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+      # typescript-eslint aún no soporta TypeScript 7 (ERESOLVE en npm ci).
+      - dependency-name: typescript
         update-types: ["version-update:semver-major"]
     groups:
       npm-desktop:
@@ -55,6 +77,11 @@ updates:
       # eslint-plugin-react aún no soporta eslint 10 (ERESOLVE en npm ci).
       - dependency-name: eslint
         update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+      # typescript-eslint aún no soporta TypeScript 7 (ERESOLVE en npm ci).
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       npm-web:
         patterns:
@@ -65,6 +92,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # eslint-plugin-react aún no soporta eslint 10 (ERESOLVE en npm ci).
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+      # typescript-eslint aún no soporta TypeScript 7 (ERESOLVE en npm ci).
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       npm-web-visitas:
         patterns:

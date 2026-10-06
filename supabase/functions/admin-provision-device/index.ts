@@ -53,8 +53,11 @@ Deno.serve(async (req: Request) => {
       ...emitido,
     });
   } catch (errorCodigo) {
-    // Sin código, el dispositivo recién creado no serviría de nada.
+    // Sin código, el dispositivo recién creado no serviría de nada. El
+    // detalle del error queda en el log de la función; al panel sólo va un
+    // mensaje fijo, nunca el texto ni la traza de la excepción.
+    console.error("admin-provision-device: no se pudo emitir el código:", errorCodigo);
     await supabase.from("dispositivos").delete().eq("id", dispositivo.id);
-    return json({ error: "codigo_error", detail: String(errorCodigo) }, 500);
+    return json({ error: "codigo_error", detail: "No se pudo generar el código de vinculación" }, 500);
   }
 });
