@@ -395,6 +395,9 @@ pub(super) struct FilaHistorialVisitaRemota {
     pub(super) anfitrion_nombre: Option<String>,
     pub(super) motivo: Option<String>,
     pub(super) gafete_numero: Option<i64>,
+    /// Medio de ingreso (NULL = caminando).
+    #[serde(default)]
+    pub(super) placa: Option<String>,
     pub(super) hora_entrada: String,
     pub(super) hora_salida: Option<String>,
     pub(super) usuario_entrada_nombre: Option<String>,
@@ -445,8 +448,8 @@ pub(super) fn guardar_fila_historial_visita(
             uuid, sitio_id, visitante_cedula, visitante_nombre, empresa,
             anfitrion_nombre, motivo, gafete_numero, hora_entrada, hora_salida,
             usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_id,
-            dispositivo_salida_id, actualizado_en
-        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
+            dispositivo_salida_id, actualizado_en, placa
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)
         ON CONFLICT(uuid) DO UPDATE SET
             hora_salida = excluded.hora_salida,
             usuario_salida_nombre = excluded.usuario_salida_nombre,
@@ -469,6 +472,7 @@ pub(super) fn guardar_fila_historial_visita(
             fila.dispositivo_entrada_id,
             fila.dispositivo_salida_id,
             actualizado_en_servidor(&fila.updated_at, ahora),
+            fila.placa,
         ],
     )?;
 
@@ -510,8 +514,8 @@ pub fn recibir_historial_visitas_del_sitio(
         let url = format!(
             "{}/rest/v1/movimientos_visita?sitio_id=eq.{}{filtro}\
              &select=id,visitante_cedula,visitante_nombre,empresa,anfitrion_nombre,motivo,\
-             gafete_numero,hora_entrada,hora_salida,usuario_entrada_nombre,usuario_salida_nombre,\
-             dispositivo_entrada_id,dispositivo_salida_id,updated_at",
+             gafete_numero,placa,hora_entrada,hora_salida,usuario_entrada_nombre,\
+             usuario_salida_nombre,dispositivo_entrada_id,dispositivo_salida_id,updated_at",
             contexto.base_url, contexto.sitio_id,
         );
         obtener_json_paginado_con(

@@ -77,7 +77,9 @@ where
             return Err(CitaServiceError::SinCitaRegistrada);
         }
 
-        let mut ultimo_motivo = None;
+        // Si ninguna vale hoy, se informa la que mejor lo explica (la
+        // próxima, si hay), con su anfitrión.
+        let mut mejor: Option<(MotivoDenegacionVisita, String)> = None;
         for (cita, visitante) in candidatas {
             match verificar_cita(&cita, hoy) {
                 ResultadoVisita::Permitido => {
@@ -96,19 +98,24 @@ where
                     }
                     return Ok((cita, visitante));
                 }
-                ResultadoVisita::Denegado(motivo) => ultimo_motivo = Some(motivo),
+                ResultadoVisita::Denegado(motivo) => {
+                    if mejor
+                        .as_ref()
+                        .is_none_or(|(actual, _)| motivo.relevancia() < actual.relevancia())
+                    {
+                        mejor = Some((motivo, cita.anfitrion_nombre));
+                    }
+                }
             }
         }
 
-        // `candidatas` no estaba vacío y ningún brazo devolvió `Permitido`
-        // antes -- el bucle siempre pasó por la rama `Denegado` al menos
-        // una vez, así que este `unwrap_or` nunca debería usar su
-        // respaldo. Se prefiere un valor por defecto inofensivo a un
-        // `.expect()` que pudiera entrar en pánico si esta garantía
-        // alguna vez deja de sostenerse.
-        Err(CitaServiceError::SinCitaVigente(
-            ultimo_motivo.unwrap_or(MotivoDenegacionVisita::FueraDeVigencia),
-        ))
+        // `candidatas` no estaba vacío y ninguna fue `Permitido`, así que
+        // `mejor` siempre tiene valor; el respaldo evita un `.expect()`.
+        let (motivo, anfitrion) = mejor.unwrap_or((
+            MotivoDenegacionVisita::Vencida { fecha_hasta: hoy },
+            String::new(),
+        ));
+        Err(CitaServiceError::SinCitaVigente { motivo, anfitrion })
     }
 
     /// Ejecuta la decisión definitiva usando los repositorios recibidos --
@@ -129,6 +136,7 @@ where
         &self,
         cedula: &str,
         gafete_numero: Option<i64>,
+        placa: Option<String>,
         usuario_entrada_id: i64,
         fecha_hora_entrada: DateTime<Utc>,
         hoy: NaiveDate,
@@ -136,6 +144,7 @@ where
         // `verificar_check_in` también frena a quien ya está adentro
         // (`VisitanteYaEnSitio`), por cédula.
         let (cita, visitante) = self.verificar_check_in(cedula, hoy)?;
+        let placa = placa_de_visita(placa)?;
 
         if let Some(numero) = gafete_numero {
             let gafete_encontrado = self.gafetes.buscar_por_numero(numero, TipoGafete::Visita)?;
@@ -169,6 +178,7 @@ where
             empresa: visitante.empresa,
             anfitrion_nombre: cita.anfitrion_nombre,
             motivo: cita.motivo,
+            placa,
         })?)
     }
 
@@ -197,6 +207,23 @@ where
             usuario_salida_id,
         )?)
     }
+}
+
+/// Medio de ingreso: `None` = caminando. `Some` = vehículo, con la placa
+/// sin espacios en los bordes y en mayúsculas; vacía o inválida se rechaza
+/// (mismo límite que la nube: hasta 20 caracteres, sin caracteres de control).
+fn placa_de_visita(placa: Option<String>) -> Result<Option<String>, CitaServiceError> {
+    let Some(texto) = placa else {
+        return Ok(None);
+    };
+    let placa = texto.trim().to_uppercase();
+    if placa.is_empty() {
+        return Err(CitaServiceError::PlacaRequerida);
+    }
+    if placa.chars().count() > 20 || placa.chars().any(char::is_control) {
+        return Err(CitaServiceError::PlacaInvalida);
+    }
+    Ok(Some(placa))
 }
 
 #[cfg(test)]
@@ -265,10 +292,11 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
-        assert!(matches!(
-            servicio.verificar_check_in("1-2345", fecha("2026-08-10")),
-            Err(CitaServiceError::SinCitaRegistrada)
-        ));
+        let error = servicio
+            .verificar_check_in("1-2345", fecha("2026-08-10"))
+            .unwrap_err();
+        assert!(error.admite_registro_por_correo());
+        assert!(matches!(error, CitaServiceError::SinCitaRegistrada));
     }
 
     #[test]
@@ -320,9 +348,14 @@ mod tests {
             .verificar_check_in("1-2345", fecha("2026-08-12"))
             .unwrap_err();
 
+        // Si el anfitrión la canceló, la portería no la salta "por correo".
+        assert!(!error.admite_registro_por_correo());
         assert!(matches!(
             error,
-            CitaServiceError::SinCitaVigente(MotivoDenegacionVisita::CitaCancelada)
+            CitaServiceError::SinCitaVigente {
+                motivo: MotivoDenegacionVisita::CitaCancelada,
+                ..
+            }
         ));
     }
 
@@ -340,10 +373,53 @@ mod tests {
             .verificar_check_in("1-2345", fecha("2026-08-12"))
             .unwrap_err();
 
+        assert!(!error.es_informativo());
+        assert!(error.admite_registro_por_correo());
         assert!(matches!(
             error,
-            CitaServiceError::SinCitaVigente(MotivoDenegacionVisita::FueraDeVigencia)
+            CitaServiceError::SinCitaVigente {
+                motivo: MotivoDenegacionVisita::Vencida { fecha_hasta },
+                ..
+            } if fecha_hasta == fecha("2026-01-15")
         ));
+    }
+
+    #[test]
+    fn sin_cita_para_hoy_informa_la_proxima_con_su_anfitrion() {
+        // Pedido del dueño 2026-10-05: si la visita es para otro día, la
+        // portería debe ver para cuándo es, no "no tiene visita".
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-01-10", "2026-01-15", "VIGENTE");
+        insertar_cita(&connection, 2, "2026-08-10", "2026-08-15", "CANCELADA");
+        insertar_cita(&connection, 3, "2026-09-01", "2026-09-01", "VIGENTE");
+        insertar_cita(&connection, 4, "2026-08-14", "2026-08-14", "VIGENTE");
+        connection
+            .execute(
+                "UPDATE citas SET anfitrion_nombre = 'Ana Mora' WHERE id = 4",
+                [],
+            )
+            .unwrap();
+        for (id, cita) in [(1, 1), (2, 2), (3, 3), (4, 4)] {
+            insertar_visitante(&connection, id, cita, "1-2345");
+        }
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
+
+        let error = servicio
+            .verificar_check_in("1-2345", fecha("2026-08-12"))
+            .unwrap_err();
+
+        assert!(matches!(
+            &error,
+            CitaServiceError::SinCitaVigente {
+                motivo: MotivoDenegacionVisita::TodaviaNoEmpieza { fecha_desde },
+                anfitrion,
+            } if *fecha_desde == fecha("2026-08-14") && anfitrion == "Ana Mora"
+        ));
+        assert!(error.es_informativo());
+        assert!(error.admite_registro_por_correo());
     }
 
     #[test]
@@ -379,12 +455,57 @@ mod tests {
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         let id = servicio
-            .registrar_entrada("1-2345", Some(7), 1, Utc::now(), fecha("2026-08-12"))
+            .registrar_entrada("1-2345", Some(7), None, 1, Utc::now(), fecha("2026-08-12"))
             .unwrap();
 
         let movimiento = movimientos.buscar_por_id(id).unwrap().unwrap();
         assert_eq!(movimiento.gafete_numero, Some(7));
         assert!(movimiento.salida.is_none());
+    }
+
+    #[test]
+    fn registrar_entrada_guarda_el_medio_caminando_o_la_placa_normalizada() {
+        let connection = conexion();
+        insertar_cita(&connection, 1, "2026-08-10", "2026-08-15", "VIGENTE");
+        insertar_visitante(&connection, 1, 1, "1-2345");
+        insertar_visitante(&connection, 2, 1, "6-7890");
+        let repo = SqliteCitaRepository::new(&connection);
+        let movimientos = SqliteMovimientoVisitaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = CitaService::new(&repo, &movimientos, &gafetes);
+        let hoy = fecha("2026-08-12");
+
+        // Vehículo sin placa, o con una placa imposible: no entra.
+        assert!(matches!(
+            servicio.registrar_entrada("1-2345", None, Some("   ".into()), 1, Utc::now(), hoy),
+            Err(CitaServiceError::PlacaRequerida)
+        ));
+        assert!(matches!(
+            servicio.registrar_entrada("1-2345", None, Some("X".repeat(21)), 1, Utc::now(), hoy),
+            Err(CitaServiceError::PlacaInvalida)
+        ));
+        assert!(movimientos.listar_activos().unwrap().is_empty());
+
+        servicio
+            .registrar_entrada("1-2345", None, Some(" bcd123 ".into()), 1, Utc::now(), hoy)
+            .unwrap();
+        servicio
+            .registrar_entrada("6-7890", None, None, 1, Utc::now(), hoy)
+            .unwrap();
+        let mut placas: Vec<_> = movimientos
+            .listar_activos()
+            .unwrap()
+            .into_iter()
+            .map(|fila| (fila.cedula, fila.placa))
+            .collect();
+        placas.sort();
+        assert_eq!(
+            placas,
+            vec![
+                ("1-2345".to_string(), Some("BCD123".to_string())),
+                ("6-7890".to_string(), None),
+            ]
+        );
     }
 
     #[test]
@@ -398,7 +519,7 @@ mod tests {
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         let id = servicio
-            .registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12"))
+            .registrar_entrada("1-2345", None, None, 1, Utc::now(), fecha("2026-08-12"))
             .unwrap();
 
         let (cedula, nombre, anfitrion): (String, String, String) = connection
@@ -426,10 +547,11 @@ mod tests {
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         assert!(matches!(
-            servicio.registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12")),
-            Err(CitaServiceError::SinCitaVigente(
-                MotivoDenegacionVisita::CitaCancelada
-            ))
+            servicio.registrar_entrada("1-2345", None, None, 1, Utc::now(), fecha("2026-08-12")),
+            Err(CitaServiceError::SinCitaVigente {
+                motivo: MotivoDenegacionVisita::CitaCancelada,
+                ..
+            })
         ));
     }
 
@@ -443,11 +565,11 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         servicio
-            .registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12"))
+            .registrar_entrada("1-2345", None, None, 1, Utc::now(), fecha("2026-08-12"))
             .unwrap();
 
         assert!(matches!(
-            servicio.registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12")),
+            servicio.registrar_entrada("1-2345", None, None, 1, Utc::now(), fecha("2026-08-12")),
             Err(CitaServiceError::VisitanteYaEnSitio { .. })
         ));
     }
@@ -467,7 +589,7 @@ mod tests {
                 .is_ok()
         );
         servicio
-            .registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12"))
+            .registrar_entrada("1-2345", None, None, 1, Utc::now(), fecha("2026-08-12"))
             .unwrap();
 
         match servicio.verificar_check_in("1-2345", fecha("2026-08-12")) {
@@ -490,11 +612,18 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         servicio
-            .registrar_entrada("108470293", None, 1, Utc::now(), fecha("2026-08-12"))
+            .registrar_entrada("108470293", None, None, 1, Utc::now(), fecha("2026-08-12"))
             .unwrap();
 
         assert!(matches!(
-            servicio.registrar_entrada("01-0847-0293", None, 1, Utc::now(), fecha("2026-08-12")),
+            servicio.registrar_entrada(
+                "01-0847-0293",
+                None,
+                None,
+                1,
+                Utc::now(),
+                fecha("2026-08-12")
+            ),
             Err(CitaServiceError::VisitanteYaEnSitio { .. })
         ));
     }
@@ -509,7 +638,7 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         let movimiento = servicio
-            .registrar_entrada("1-2345", None, 1, Utc::now(), fecha("2026-08-12"))
+            .registrar_entrada("1-2345", None, None, 1, Utc::now(), fecha("2026-08-12"))
             .unwrap();
         servicio
             .registrar_salida(movimiento, Utc::now(), 1)
@@ -534,11 +663,11 @@ mod tests {
         let gafetes = SqliteGafeteRepository::new(&connection);
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         servicio
-            .registrar_entrada("1-2345", Some(5), 1, Utc::now(), fecha("2026-08-12"))
+            .registrar_entrada("1-2345", Some(5), None, 1, Utc::now(), fecha("2026-08-12"))
             .unwrap();
 
         assert!(matches!(
-            servicio.registrar_entrada("6-7890", Some(5), 1, Utc::now(), fecha("2026-08-12")),
+            servicio.registrar_entrada("6-7890", Some(5), None, 1, Utc::now(), fecha("2026-08-12")),
             Err(CitaServiceError::GafeteOcupado)
         ));
     }
@@ -565,7 +694,7 @@ mod tests {
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         assert!(matches!(
-            servicio.registrar_entrada("1-2345", Some(5), 1, Utc::now(), fecha("2026-08-12")),
+            servicio.registrar_entrada("1-2345", Some(5), None, 1, Utc::now(), fecha("2026-08-12")),
             Err(CitaServiceError::GafeteOcupado)
         ));
     }
@@ -581,7 +710,14 @@ mod tests {
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         assert!(matches!(
-            servicio.registrar_entrada("1-2345", Some(99), 1, Utc::now(), fecha("2026-08-12")),
+            servicio.registrar_entrada(
+                "1-2345",
+                Some(99),
+                None,
+                1,
+                Utc::now(),
+                fecha("2026-08-12")
+            ),
             Err(CitaServiceError::GafeteNoRegistrado)
         ));
     }
@@ -604,7 +740,7 @@ mod tests {
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         assert!(matches!(
-            servicio.registrar_entrada("1-2345", Some(3), 1, Utc::now(), fecha("2026-08-12")),
+            servicio.registrar_entrada("1-2345", Some(3), None, 1, Utc::now(), fecha("2026-08-12")),
             Err(CitaServiceError::GafeteNoDisponible(EstadoGafete::Perdido))
         ));
     }
@@ -626,7 +762,7 @@ mod tests {
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
 
         assert!(matches!(
-            servicio.registrar_entrada("1-2345", Some(7), 1, Utc::now(), fecha("2026-08-12")),
+            servicio.registrar_entrada("1-2345", Some(7), None, 1, Utc::now(), fecha("2026-08-12")),
             Err(CitaServiceError::GafeteNoRegistrado)
         ));
     }
@@ -642,7 +778,7 @@ mod tests {
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         let entrada = Utc::now();
         let id = servicio
-            .registrar_entrada("1-2345", None, 1, entrada, fecha("2026-08-12"))
+            .registrar_entrada("1-2345", None, None, 1, entrada, fecha("2026-08-12"))
             .unwrap();
 
         servicio.registrar_salida(id, entrada, 1).unwrap();
@@ -662,7 +798,7 @@ mod tests {
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         let entrada = Utc::now();
         let id = servicio
-            .registrar_entrada("1-2345", None, 1, entrada, fecha("2026-08-12"))
+            .registrar_entrada("1-2345", None, None, 1, entrada, fecha("2026-08-12"))
             .unwrap();
 
         assert!(matches!(
@@ -682,7 +818,7 @@ mod tests {
         let servicio = CitaService::new(&repo, &movimientos, &gafetes);
         let entrada = Utc::now();
         let id = servicio
-            .registrar_entrada("1-2345", None, 1, entrada, fecha("2026-08-12"))
+            .registrar_entrada("1-2345", None, None, 1, entrada, fecha("2026-08-12"))
             .unwrap();
         servicio.registrar_salida(id, entrada, 1).unwrap();
 

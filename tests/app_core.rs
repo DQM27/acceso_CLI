@@ -318,3 +318,123 @@ fn buscar_contratistas_trae_el_aviso_de_acceso_con_el_reloj_del_nucleo() {
         ]
     );
 }
+
+/// Un contratista por cada resultado de las reglas (ver la prueba de abajo).
+fn crear_contratistas_de_prueba(
+    contratistas: &SqliteContratistaRepository<'_>,
+    activa: i64,
+    inactiva: i64,
+) {
+    use chrono::NaiveDate;
+
+    let dia = |d| NaiveDate::from_ymd_opt(2026, 10, d);
+    for (cedula, empresa, tipo, fecha, tiene_acceso) in [
+        ("2001", activa, TipoIngreso::Praind, dia(31), true),
+        ("2002", activa, TipoIngreso::Praind, dia(10), true),
+        ("2003", activa, TipoIngreso::Praind, dia(1), true),
+        ("2004", activa, TipoIngreso::Praind, None, true),
+        ("2005", activa, TipoIngreso::Praind, dia(31), false),
+        ("2006", inactiva, TipoIngreso::Praind, dia(31), true),
+        ("2007", activa, TipoIngreso::Swat, None, true),
+    ] {
+        contratistas
+            .crear(&Contratista::reconstruir(
+                0,
+                cedula.to_owned(),
+                format!("CONTRATISTA {cedula}"),
+                empresa,
+                tipo,
+                fecha,
+                false,
+                tiene_acceso,
+                true,
+            ))
+            .unwrap();
+    }
+}
+
+#[test]
+fn buscar_contratistas_trae_el_estado_completo_de_las_reglas() {
+    use chrono::{TimeZone, Utc};
+    use control_acceso::domain::acceso::EstadoAccesoLista;
+    use control_acceso::tiempo::RelojFijo;
+    use std::sync::Arc;
+
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    let activa = empresas
+        .crear(&Empresa {
+            id: 0,
+            nombre: "Brisas".to_owned(),
+            activo: true,
+        })
+        .unwrap();
+    let inactiva = empresas
+        .crear(&Empresa {
+            id: 0,
+            nombre: "Cerrada".to_owned(),
+            activo: true,
+        })
+        .unwrap();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    crear_contratistas_de_prueba(&contratistas, activa, inactiva);
+    // Al crear, la empresa queda activa: se desactiva después, como en la app.
+    empresas.establecer_activo(inactiva, false).unwrap();
+    let reloj = Arc::new(RelojFijo::new(
+        Utc.with_ymd_and_hms(2026, 10, 5, 15, 0, 0).unwrap(),
+    ));
+    let core = AppCore::con_reloj(connection, reloj);
+
+    let mut estados: Vec<_> = core
+        .buscar_contratistas(&FiltroContratistas::default())
+        .unwrap()
+        .items
+        .into_iter()
+        .map(|fila| {
+            (
+                fila.cedula,
+                fila.estado_acceso,
+                fila.dias_para_vencer_praind,
+            )
+        })
+        .collect();
+    estados.sort_by(|a, b| a.0.cmp(&b.0));
+
+    assert_eq!(
+        estados,
+        vec![
+            (
+                "2001".to_owned(),
+                Some(EstadoAccesoLista::PermitidoConAdvertencia),
+                Some(26)
+            ),
+            (
+                "2002".to_owned(),
+                Some(EstadoAccesoLista::PermitidoConAdvertencia),
+                Some(5)
+            ),
+            (
+                "2003".to_owned(),
+                Some(EstadoAccesoLista::PraindVencido),
+                Some(-4)
+            ),
+            (
+                "2004".to_owned(),
+                Some(EstadoAccesoLista::PraindNoRegistrado),
+                None
+            ),
+            (
+                "2005".to_owned(),
+                Some(EstadoAccesoLista::SinAcceso),
+                Some(26)
+            ),
+            (
+                "2006".to_owned(),
+                Some(EstadoAccesoLista::EmpresaInactiva),
+                Some(26)
+            ),
+            ("2007".to_owned(), Some(EstadoAccesoLista::Permitido), None),
+        ]
+    );
+}

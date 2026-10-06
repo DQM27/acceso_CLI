@@ -1067,6 +1067,7 @@ pub(super) fn enviar_movimiento_visita(
         empresa,
         anfitrion_nombre,
         motivo,
+        placa,
     ): (
         i64,
         Option<i64>,
@@ -1077,10 +1078,11 @@ pub(super) fn enviar_movimiento_visita(
         Option<String>,
         Option<String>,
         Option<String>,
+        Option<String>,
     ) = connection.query_row(
         "
         SELECT cita_visitante_id, gafete_numero, fecha_hora_entrada, usuario_entrada_nombre,
-               visitante_cedula, visitante_nombre, empresa, anfitrion_nombre, motivo
+               visitante_cedula, visitante_nombre, empresa, anfitrion_nombre, motivo, placa
         FROM movimientos_visita
         WHERE uuid = ?1
         ",
@@ -1096,6 +1098,7 @@ pub(super) fn enviar_movimiento_visita(
                 row.get(6)?,
                 row.get(7)?,
                 row.get(8)?,
+                row.get(9)?,
             ))
         },
     )?;
@@ -1116,6 +1119,9 @@ pub(super) fn enviar_movimiento_visita(
         "anfitrion_nombre": anfitrion_nombre,
         "motivo": motivo,
         "gafete_numero": gafete_numero,
+        // Medio de ingreso: NULL = caminando (columna de la migración
+        // 20261005140000, que va antes que esta app).
+        "placa": placa,
         "hora_entrada": fecha_hora_entrada,
         "usuario_entrada_nombre": usuario_entrada_nombre,
     });

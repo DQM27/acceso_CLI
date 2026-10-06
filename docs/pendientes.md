@@ -237,6 +237,9 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
      12 h adentro. El estado usa las mismas reglas que `verificar_acceso`
      (src/domain/acceso.rs): si cambian ahí, cambiar la vista.
   6. [ ] Llevar "Adentro ahora" y el estado de contratistas a escritorio (pedido del
+     usuario, sin fecha). **Estado de contratistas: hecho el 2026-10-05**
+     (`feat/escritorio-pendientes`: columnas "Estado" y "Adentro" calculadas en
+     el núcleo con `verificar_acceso`). Falta "Adentro ahora". Texto original:
      usuario, sin fecha). En escritorio conviene calcularlo del SQLite local con
      `verificar_acceso`, no leer la vista: así funciona sin conexión.
   7. [ ] Opcional: publicar `ingresos_proveedor` y `prestamos_gafete_provisional` en
@@ -320,7 +323,13 @@ históricos pueden seguir existiendo como contexto, pero esta lista manda.
   contratistas/gafetes (catálogos chicos), auditoría crece sin techo, más
   parecido a `historial` (que sí tiene lógica de carga incremental/límite,
   ver `Historial.tsx`/`Auditoria.tsx` con su banner de "truncado").
-- [ ] **El chequeo cross-device de "gafete ya ocupado en el sitio" no está
+- [x] **Resuelto (verificado 2026-10-05):** desde el 2026-09-27 el escritorio usa
+  las operaciones verificadas del núcleo (`application::con_nube`:
+  `registrar_ingreso_verificado`, `registrar_ingreso_proveedor_verificado`,
+  `registrar_ingreso_correo_verificado`, `entregar_gafete_provisional_verificado`)
+  y el check-in de visitas consulta la nube en `comandos/citas.rs`. Lo de abajo
+  queda como antecedente.
+- [x] **El chequeo cross-device de "gafete ya ocupado en el sitio" no está
   conectado en escritorio (hallazgo 2026-09-17).** El núcleo ya tiene las
   cuatro variantes (`AppCore::gafete_ocupado_en_sitio`/
   `gafete_provisional_ocupado_en_sitio`/`gafete_de_proveedor_ocupado_en_sitio`,

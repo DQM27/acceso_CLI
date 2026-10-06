@@ -64,11 +64,13 @@ impl AppCore {
         Ok(resultado)
     }
 
+    /// `placa`: `None` si entró caminando, la placa si entró en vehículo.
     pub fn registrar_entrada_visita(
         &self,
         actor: &UsuarioSesion,
         cedula: &str,
         gafete_numero: Option<i64>,
+        placa: Option<String>,
     ) -> Result<i64, CitaServiceError> {
         self.en_transaccion_con_reloj_validado_visita(actor, |transaction, ahora| {
             let citas = SqliteCitaRepository::new(transaction);
@@ -77,6 +79,7 @@ impl AppCore {
             CitaService::new(&citas, &movimientos, &gafetes).registrar_entrada(
                 cedula,
                 gafete_numero,
+                placa,
                 actor.id,
                 ahora,
                 fecha_costa_rica(ahora),

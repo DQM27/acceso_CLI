@@ -14,10 +14,11 @@ use crate::database::queries::gafetes_incidentes::{
 };
 use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
-use crate::domain::acceso::aviso_acceso_en_lista;
+use crate::domain::acceso::{aviso_acceso_en_lista, dias_para_vencer_praind, verificar_acceso};
 use crate::domain::autorizacion::Operacion;
 use crate::domain::contratista::praind_vencido;
 use crate::mensajes::mensaje_aviso_acceso_lista;
+use crate::models::contratista::Contratista;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::contratista_service::{
     ContratistaConsultaService, ContratistaService, DatosActualizacionContratista, DatosContratista,
@@ -92,6 +93,21 @@ impl AppCore {
                 hoy,
             )
             .map(mensaje_aviso_acceso_lista);
+            // Las mismas reglas que al dar ingreso, para mostrar el estado
+            // completo en la lista (igual que el panel web).
+            let modelo = Contratista::reconstruir(
+                contratista.id,
+                contratista.cedula.clone(),
+                contratista.nombre.clone(),
+                contratista.empresa_id,
+                contratista.tipo_ingreso,
+                contratista.fecha_vencimiento_praind,
+                contratista.es_personal_ruta,
+                contratista.tiene_acceso,
+                contratista.empresa_activa,
+            );
+            contratista.estado_acceso = Some(verificar_acceso(&modelo, hoy).into());
+            contratista.dias_para_vencer_praind = dias_para_vencer_praind(&modelo, hoy);
         }
         Ok(pagina)
     }

@@ -66,17 +66,62 @@ export interface MovimientoVisitaActivoResumen {
   fecha_hora_entrada: string;
   anfitrion_nombre: string;
   motivo: string | null;
+  /** Medio de ingreso: la placa, o `null` si entró caminando. */
+  placa: string | null;
 }
 
-export function verificarCheckInVisita(cedula: string): Promise<PreparacionVisita> {
-  return invoke("verificar_check_in_visita", { cedula });
+/** Por qué no sigue un check-in (espejo de `comandos::citas::RechazoVisita`).
+ * `informativo`: la visita existe pero es para otro día, se muestra como
+ * aviso y no como error. `toString` devuelve sólo el mensaje, así quien
+ * hace `String(error)` sigue viendo el texto de siempre. */
+export class RechazoVisita extends Error {
+  readonly informativo: boolean;
+  /** No hay cita que valga hoy y nada lo impide: se puede registrar como
+   * visita autorizada por correo. */
+  readonly alternativaPorCorreo: boolean;
+
+  constructor(mensaje: string, informativo: boolean, alternativaPorCorreo = false) {
+    super(mensaje);
+    this.name = "RechazoVisita";
+    this.informativo = informativo;
+    this.alternativaPorCorreo = alternativaPorCorreo;
+  }
+
+  override toString(): string {
+    return this.message;
+  }
 }
 
+/** Lo que manda el comando al fallar: `{ mensaje, informativo,
+ * alternativa_por_correo }`, o un
+ * texto suelto si falló antes (por ejemplo, sin sesión). */
+export function comoRechazoVisita(error: unknown): RechazoVisita {
+  if (typeof error === "object" && error !== null && "mensaje" in error) {
+    const { mensaje, informativo, alternativa_por_correo } = error as {
+      mensaje: unknown;
+      informativo?: unknown;
+      alternativa_por_correo?: unknown;
+    };
+    return new RechazoVisita(String(mensaje), informativo === true, alternativa_por_correo === true);
+  }
+  return new RechazoVisita(String(error), false);
+}
+
+export async function verificarCheckInVisita(cedula: string): Promise<PreparacionVisita> {
+  try {
+    return await invoke<PreparacionVisita>("verificar_check_in_visita", { cedula });
+  } catch (error) {
+    throw comoRechazoVisita(error);
+  }
+}
+
+/** `placa`: `null` si entró caminando, la placa si entró en vehículo. */
 export async function registrarEntradaVisita(
   cedula: string,
   gafete: number | null,
+  placa: string | null,
 ): Promise<number> {
-  const id = await invoke<number>("registrar_entrada_visita", { cedula, gafete });
+  const id = await invoke<number>("registrar_entrada_visita", { cedula, gafete, placa });
   solicitarSincronizacionNube();
   return id;
 }
@@ -109,6 +154,8 @@ export interface MovimientoHistorialVisitaRemoto {
   fecha_hora_salida: string | null;
   usuario_entrada_nombre: string | null;
   usuario_salida_nombre: string | null;
+  /** Medio de ingreso: la placa, o `null` si entró caminando. */
+  placa: string | null;
 }
 
 export function listarHistorialVisitasSitio(

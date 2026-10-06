@@ -210,18 +210,29 @@ pub enum CitaServiceError {
     #[error("Esta persona tiene el acceso denegado")]
     AccesoNegado,
     /// Existe al menos una cita para esta cédula, pero ninguna aplica hoy
-    /// -- el motivo viaja en la variante (de la última candidata
-    /// evaluada) para que la interfaz pueda mostrar algo más útil que
-    /// "no se puede" (ej. "esta cita fue cancelada" o "esta cita ya
-    /// venció").
-    #[error("No hay ninguna visita vigente para esta cédula: {0:?}")]
-    SinCitaVigente(MotivoDenegacionVisita),
+    /// -- el motivo viaja en la variante (de la cita más relevante, ver
+    /// `MotivoDenegacionVisita::relevancia`) para que la interfaz diga
+    /// algo útil: "tiene visita para el martes 6 de octubre", "fue
+    /// cancelada", "venció el...".
+    #[error("No hay ninguna visita vigente para esta cédula: {motivo:?}")]
+    SinCitaVigente {
+        motivo: MotivoDenegacionVisita,
+        /// De la cita que explica el motivo, para que la portería sepa a
+        /// quién llamar.
+        anfitrion: String,
+    },
     /// Esta cédula ya tiene un movimiento de visita abierto -- mismo criterio
     /// que `RegistroIngresoServiceError::IngresoActivo`, no se puede entrar
     /// dos veces sin salir primero. Lleva el nombre del visitante para el
     /// mensaje.
     #[error("Este visitante ya tiene un movimiento activo: {nombre}")]
     VisitanteYaEnSitio { nombre: String },
+    /// Eligió "Vehículo" pero no escribió la placa.
+    #[error("Falta la placa del vehículo")]
+    PlacaRequerida,
+    /// La placa tiene más de 20 caracteres o caracteres de control.
+    #[error("La placa no es válida")]
+    PlacaInvalida,
     /// El gafete ya está asignado a otro movimiento de visita abierto --
     /// mismo criterio que `RegistroIngresoServiceError::GafeteOcupado`.
     #[error("El gafete ya está asignado a otra visita")]
@@ -249,6 +260,36 @@ pub enum CitaServiceError {
     OperadorNoAutorizado,
     #[error(transparent)]
     Database(#[from] DatabaseError),
+}
+
+impl CitaServiceError {
+    /// No hay cita que valga hoy, pero tampoco algo que lo impida: el
+    /// guarda puede registrarla como visita autorizada por correo (con el
+    /// correo que la respalde). No se ofrece si el anfitrión la canceló, si
+    /// la persona tiene el acceso negado o si ya está adentro.
+    pub fn admite_registro_por_correo(&self) -> bool {
+        matches!(
+            self,
+            Self::SinCitaRegistrada
+                | Self::SinCitaVigente {
+                    motivo: MotivoDenegacionVisita::TodaviaNoEmpieza { .. }
+                        | MotivoDenegacionVisita::Vencida { .. },
+                    ..
+                }
+        )
+    }
+
+    /// No es una falla: la visita existe pero es para otro día. La pantalla
+    /// lo muestra como aviso, no como error (pedido del dueño 2026-10-05).
+    pub fn es_informativo(&self) -> bool {
+        matches!(
+            self,
+            Self::SinCitaVigente {
+                motivo: MotivoDenegacionVisita::TodaviaNoEmpieza { .. },
+                ..
+            }
+        )
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

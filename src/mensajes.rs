@@ -180,25 +180,79 @@ pub fn mensaje_salida(error: RegistroIngresoServiceError) -> String {
     }
 }
 
+/// "martes 6 de octubre": para que la portería lea la fecha sin pensar.
+pub fn fecha_larga(fecha: chrono::NaiveDate) -> String {
+    use chrono::Datelike;
+
+    const DIAS: [&str; 7] = [
+        "lunes",
+        "martes",
+        "miércoles",
+        "jueves",
+        "viernes",
+        "sábado",
+        "domingo",
+    ];
+    const MESES: [&str; 12] = [
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
+    ];
+    let dia = DIAS[fecha.weekday().num_days_from_monday() as usize];
+    let mes = MESES[fecha.month0() as usize];
+    format!("{dia} {} de {mes}", fecha.day())
+}
+
+/// La visita existe pero no vale hoy: se dice cuál es y de quién, en vez
+/// de un "no tiene visita" que confunde a la portería.
+fn mensaje_sin_cita_vigente(motivo: MotivoDenegacionVisita, anfitrion: &str) -> String {
+    let de_quien = if anfitrion.trim().is_empty() {
+        String::new()
+    } else {
+        format!(" (anfitrión: {})", anfitrion.trim())
+    };
+    match motivo {
+        MotivoDenegacionVisita::TodaviaNoEmpieza { fecha_desde } => format!(
+            "Tiene una visita agendada para el {}{de_quien}, no para hoy. Si debe entrar hoy, el anfitrión tiene que cambiar la fecha.",
+            fecha_larga(fecha_desde)
+        ),
+        MotivoDenegacionVisita::Vencida { fecha_hasta } => format!(
+            "Su visita venció el {}{de_quien}. Si debe entrar, el anfitrión tiene que agendarla de nuevo.",
+            fecha_larga(fecha_hasta)
+        ),
+        MotivoDenegacionVisita::CitaCancelada => {
+            format!("La visita fue cancelada{de_quien}.")
+        }
+    }
+}
+
 pub fn mensaje_cita(error: CitaServiceError) -> String {
     use CitaServiceError::{
         AccesoNegado, GafeteNoDisponible, GafeteNoRegistrado, GafeteOcupado, MovimientoNoActivo,
-        OperadorNoAutorizado, RelojRetrocedido, SalidaAnteriorAEntrada, SinCitaRegistrada,
-        SinCitaVigente, VisitanteYaEnSitio,
+        OperadorNoAutorizado, PlacaInvalida, PlacaRequerida, RelojRetrocedido,
+        SalidaAnteriorAEntrada, SinCitaRegistrada, SinCitaVigente, VisitanteYaEnSitio,
     };
 
     match error {
         AccesoNegado => MENSAJE_ACCESO_NEGADO.into(),
         SinCitaRegistrada => "No hay ninguna visita agendada para esta cédula".into(),
-        SinCitaVigente(MotivoDenegacionVisita::CitaCancelada) => "Esta visita fue cancelada".into(),
-        SinCitaVigente(MotivoDenegacionVisita::FueraDeVigencia) => {
-            "Esta visita no está vigente hoy".into()
-        }
+        SinCitaVigente { motivo, anfitrion } => mensaje_sin_cita_vigente(motivo, &anfitrion),
         VisitanteYaEnSitio { nombre } => {
             format!(
                 "{nombre} ya tiene un ingreso activo — registre la salida antes de volver a entrar"
             )
         }
+        PlacaRequerida => "Escriba la placa del vehículo".into(),
+        PlacaInvalida => "La placa no es válida: use hasta 20 letras y números".into(),
         GafeteOcupado => "El gafete ya está en uso por otra visita".into(),
         GafeteNoRegistrado => "El número de gafete no existe en el catálogo".into(),
         GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),
@@ -683,6 +737,38 @@ pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> Stri
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn la_fecha_se_escribe_en_espanol() {
+        let dia = |t: &str| t.parse::<chrono::NaiveDate>().unwrap();
+        assert_eq!(super::fecha_larga(dia("2026-10-06")), "martes 6 de octubre");
+        assert_eq!(super::fecha_larga(dia("2026-03-01")), "domingo 1 de marzo");
+    }
+
+    #[test]
+    fn una_visita_de_otro_dia_dice_para_cuando_es_y_de_quien() {
+        use crate::domain::cita::MotivoDenegacionVisita;
+        use crate::services::error::CitaServiceError;
+
+        let dia = |t: &str| t.parse::<chrono::NaiveDate>().unwrap();
+        let mensaje = super::mensaje_cita(CitaServiceError::SinCitaVigente {
+            motivo: MotivoDenegacionVisita::TodaviaNoEmpieza {
+                fecha_desde: dia("2026-10-06"),
+            },
+            anfitrion: "Daniel Quintana".into(),
+        });
+        assert_eq!(
+            mensaje,
+            "Tiene una visita agendada para el martes 6 de octubre (anfitrión: Daniel Quintana), no para hoy. Si debe entrar hoy, el anfitrión tiene que cambiar la fecha."
+        );
+        let vencida = super::mensaje_cita(CitaServiceError::SinCitaVigente {
+            motivo: MotivoDenegacionVisita::Vencida {
+                fecha_hasta: dia("2026-10-04"),
+            },
+            anfitrion: String::new(),
+        });
+        assert!(vencida.starts_with("Su visita venció el domingo 4 de octubre."));
+    }
+
     #[test]
     fn mensaje_vencimiento_praind_cuenta_dias() {
         let hoy = chrono::NaiveDate::from_ymd_opt(2026, 9, 12).unwrap();

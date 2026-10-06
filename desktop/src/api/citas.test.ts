@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mensajeBloqueoVisita, puedeContinuarVisita } from "./citas";
+import { comoRechazoVisita, mensajeBloqueoVisita, puedeContinuarVisita } from "./citas";
 import type { PreparacionVisita } from "./citas";
 
 function preparacion(overrides: Partial<PreparacionVisita> = {}): PreparacionVisita {
@@ -42,5 +42,29 @@ describe("mensajeBloqueoVisita", () => {
     expect(
       mensajeBloqueoVisita(preparacion({ activo_en_otro_sitio: "Cartago" })),
     ).toBe("Visitante ya tiene un movimiento activo en Cartago.");
+  });
+});
+
+describe("comoRechazoVisita", () => {
+  it("una visita para otro día llega como aviso informativo", () => {
+    const rechazo = comoRechazoVisita({ mensaje: "Tiene una visita agendada para el martes 6 de octubre", informativo: true });
+    expect(rechazo.informativo).toBe(true);
+    expect(String(rechazo)).toBe("Tiene una visita agendada para el martes 6 de octubre");
+  });
+
+  it("dice si se puede registrar como autorizada por correo", () => {
+    expect(
+      comoRechazoVisita({ mensaje: "No hay ninguna visita agendada", informativo: false, alternativa_por_correo: true })
+        .alternativaPorCorreo,
+    ).toBe(true);
+    expect(comoRechazoVisita({ mensaje: "La visita fue cancelada.", informativo: false }).alternativaPorCorreo).toBe(false);
+    expect(comoRechazoVisita("No hay sesión activa").alternativaPorCorreo).toBe(false);
+  });
+
+  it("los demás rechazos y los textos sueltos son errores", () => {
+    expect(comoRechazoVisita({ mensaje: "La visita fue cancelada.", informativo: false }).informativo).toBe(false);
+    const suelto = comoRechazoVisita("No hay sesión activa");
+    expect(suelto.informativo).toBe(false);
+    expect(String(suelto)).toBe("No hay sesión activa");
   });
 });
