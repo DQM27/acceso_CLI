@@ -56,11 +56,6 @@ class VisitasViewModel(
     var error by mutableStateOf<String?>(null)
         private set
 
-    /// Confirmación de lo último que se registró ("Entrada registrada ·
-    /// Carlos Rojas"), mientras la pantalla ya espera la próxima cédula.
-    var hecho by mutableStateOf<String?>(null)
-        private set
-
     init {
         refrescar()
     }
@@ -109,7 +104,6 @@ class VisitasViewModel(
         cedula = texto
         verificando = true
         error = null
-        hecho = null
         val consultada = texto
         viewModelScope.launch {
             try {
@@ -157,7 +151,7 @@ class VisitasViewModel(
                     }
                 }
                 CambiosNube.cambioLocal()
-                terminar("Entrada registrada · ${visita.nombre}")
+                limpiar()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {
@@ -179,7 +173,7 @@ class VisitasViewModel(
                     medirNucleo("registrarSalidaVisita") { nucleo.registrarSalidaVisita(visita.origen) }
                 }
                 CambiosNube.cambioLocal()
-                terminar("Salida registrada · ${visita.nombre}")
+                limpiar()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {
@@ -189,7 +183,9 @@ class VisitasViewModel(
         }
     }
 
-    /// Vuelve a la cédula vacía, lista para la próxima persona.
+    /// Vuelve a la cédula vacía, lista para la próxima persona. Sin mensaje
+    /// de confirmación: la lista de quién está adentro ya muestra el cambio
+    /// (pedido del usuario 2026-10-06: el mensaje quedaba pegado y sobraba).
     fun limpiar() {
         cedula = ""
         verificacion = null
@@ -197,11 +193,6 @@ class VisitasViewModel(
         enVehiculo = false
         placa = ""
         error = null
-    }
-
-    private fun terminar(confirmacion: String) {
-        limpiar()
-        hecho = confirmacion
     }
 
     companion object {

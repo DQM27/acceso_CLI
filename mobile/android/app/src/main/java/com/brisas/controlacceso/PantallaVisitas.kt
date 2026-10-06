@@ -22,7 +22,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -145,8 +144,6 @@ fun PantallaVisitas(nucleo: Nucleo, refrescarNube: Int = 0) {
                 Text(if (viewModel.verificando) "Verificando…" else "Verificar")
             }
         }
-
-        viewModel.hecho?.let { Confirmacion(it) }
 
         viewModel.error?.let { mensaje ->
             Text(mensaje, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
@@ -279,18 +276,6 @@ private fun Aviso(mensaje: String, informativo: Boolean, onOtraCedula: () -> Uni
     }
     BotonDiscretoBrisas(onClick = onOtraCedula, modifier = Modifier.fillMaxWidth()) {
         Text("Otra cédula")
-    }
-}
-
-@Composable
-private fun Confirmacion(texto: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Text(texto, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
     }
 }
 

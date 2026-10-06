@@ -78,7 +78,6 @@ class VisitasViewModelTest {
         viewModel.registrarEntrada()
         advanceUntilIdle()
         assertNull(viewModel.error)
-        assertEquals("Entrada registrada · Carlos Rojas", viewModel.hecho)
         assertEquals("", viewModel.cedula)
         assertNull(viewModel.verificacion)
         // Queda en la lista de quién está adentro, como en contratistas.
@@ -97,7 +96,6 @@ class VisitasViewModelTest {
         advanceUntilIdle()
         assertNull(viewModel.error)
         assertNull(viewModel.seleccionSalida)
-        assertEquals("Salida registrada · Carlos Rojas", viewModel.hecho)
         assertTrue(viewModel.adentro.isEmpty())
     }
 
@@ -142,7 +140,7 @@ class VisitasViewModelTest {
         viewModel.registrarEntrada()
         advanceUntilIdle()
         assertNull(viewModel.error)
-        assertEquals("Entrada registrada · Carlos Rojas", viewModel.hecho)
+        assertEquals(listOf("Carlos Rojas"), viewModel.adentro.map { it.nombre })
     }
 
     @Test
@@ -155,7 +153,7 @@ class VisitasViewModelTest {
         viewModel.registrarEntrada()
         advanceUntilIdle()
         assertEquals("Escriba la placa del vehículo", viewModel.error)
-        assertNull(viewModel.hecho)
+        assertTrue(viewModel.adentro.isEmpty())
         assertTrue(viewModel.verificacion is VerificacionVisita.Entrada)
     }
 }
