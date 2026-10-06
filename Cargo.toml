@@ -63,7 +63,7 @@ jsonwebtoken = { version = "11", optional = true, features = ["rust_crypto"] }
 # `pkcs8` arrastra el soporte DER de `ecdsa`: Android Keystore entrega las
 # firmas en DER y hay que pasarlas a `r || s` (ver `firma_der_a_jws`).
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "pkcs8", "std"], optional = true }
-base64 = { version = "0.22", optional = true }
+base64 = { version = "0.23", optional = true }
 machine-uid = { version = "0.6", optional = true }
 sha2 = { version = "0.11", default-features = false, optional = true }
 
