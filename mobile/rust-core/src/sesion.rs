@@ -137,6 +137,19 @@ impl Nucleo {
             log::info!("no se pudo cerrar la sesión en la nube: {error}");
         }
     }
+
+    /// La app se cierra con una sesión abierta (salir con "atrás" o
+    /// deslizarla fuera de las recientes): cuenta como cerrar sesión, igual
+    /// que el escritorio al cerrar la ventana. Si no, la bitácora del panel
+    /// mostraba la sesión abierta hasta el próximo ingreso y la cerraba como
+    /// "sin cierre", sin la hora real. Hace red: Kotlin la llama en segundo
+    /// plano. Sin sesión abierta no hace nada.
+    pub fn cerrar_sesion_al_salir(&self) {
+        let cedula = self.sesion_lock().take().map(|(sesion, _)| sesion.cedula);
+        if let Some(cedula) = cedula {
+            self.cerrar_sesion_en_la_nube(cedula);
+        }
+    }
 }
 
 impl Nucleo {

@@ -1,5 +1,6 @@
 package com.brisas.controlacceso
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.ViewTreeObserver
 import android.view.WindowManager
@@ -144,6 +145,10 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         Telemetria.enPrimerPlano(true)
+        // Para enterarse si deslizan la app fuera de las recientes (ver
+        // CierreSesionAlSalir.kt). En primer plano Android lo permite; si
+        // igual lo rechaza, sólo se pierde ese aviso.
+        runCatching { startService(Intent(this, ServicioCierreSesion::class.java)) }
     }
 
     override fun onStop() {

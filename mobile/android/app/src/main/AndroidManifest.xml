@@ -72,6 +72,13 @@
             </intent-filter>
         </service>
 
+        <!-- Avisa el cierre de sesión cuando deslizan la app fuera de las
+             recientes (ver CierreSesionAlSalir.kt). -->
+        <service
+            android:name=".ServicioCierreSesion"
+            android:exported="false"
+            android:stopWithTask="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
