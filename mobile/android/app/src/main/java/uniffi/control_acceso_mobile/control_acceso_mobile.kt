@@ -893,6 +893,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion_en_la_nube(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_visitas_adentro(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_entrada_visita(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_visita(
@@ -1080,9 +1082,11 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion_en_la_nube(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_listar_visitas_adentro(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_entrada_visita(`ptr`: Long,`cedula`: RustBuffer.ByValue,`gafeteNumero`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_visita(`ptr`: Long,`movimientoId`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_visita(`ptr`: Long,`origen`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_verificar_visita(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1560,13 +1564,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion_en_la_nube() and 0xFFFF) != 11186) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_visitas_adentro() and 0xFFFF) != 33782) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_entrada_visita() and 0xFFFF) != 16704) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_visita() and 0xFFFF) != 34360) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_visita() and 0xFFFF) != 32905) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_verificar_visita() and 0xFFFF) != 169) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_verificar_visita() and 0xFFFF) != 2750) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_clave_publica_jwk() and 0xFFFF) != 37356) {
@@ -3456,18 +3463,32 @@ public interface NucleoInterface {
     fun `cerrarSesionEnLaNube`(`cedula`: kotlin.String)
     
     /**
+     * Quién está adentro por visita en la unidad: primero las de este
+     * equipo, después las del otro (caché que llena la sincronización y
+     * refresca el aviso en vivo). Sin nube vinculada, sólo las de acá.
+     */
+    fun `listarVisitasAdentro`(): List<VisitaAdentro>
+    
+    /**
      * Entrada con todas sus reglas (`application::registrar_entrada_visita_verificada`,
      * la misma que usa escritorio). `placa`: `None` = caminando.
      */
     fun `registrarEntradaVisita`(`cedula`: kotlin.String, `gafeteNumero`: kotlin.Long?, `placa`: kotlin.String?): kotlin.Long
     
-    fun `registrarSalidaVisita`(`movimientoId`: kotlin.Long)
+    /**
+     * Salida de una visita adentro, según dónde entró: en este equipo se
+     * cierra local (y la cola la sube); en el otro, se cierra en la nube
+     * (el candado del núcleo sólo se toma para autorizar, nunca durante la
+     * red).
+     */
+    fun `registrarSalidaVisita`(`origen`: OrigenVisita)
     
     /**
      * Una sola llamada por cédula (escrita o escaneada). Primero mira si ya
-     * está adentro en este equipo, después la cita (`verificar_check_in`, la
-     * misma regla que escritorio). Sólo lectura local, sin red: es lo que
-     * se ve al instante; los chequeos contra la nube corren al registrar.
+     * está adentro (en este equipo o, por la caché, en el otro), después la
+     * cita (`verificar_check_in`, la misma regla que escritorio). Sólo
+     * lectura local, sin red: es lo que se ve al instante; los chequeos
+     * contra la nube corren al registrar.
      */
     fun `verificarVisita`(`cedula`: kotlin.String): VerificacionVisita
     
@@ -4847,6 +4868,25 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * Quién está adentro por visita en la unidad: primero las de este
+     * equipo, después las del otro (caché que llena la sincronización y
+     * refresca el aviso en vivo). Sin nube vinculada, sólo las de acá.
+     */
+    @Throws(NucleoException::class)override fun `listarVisitasAdentro`(): List<VisitaAdentro> {
+            return FfiConverterSequenceTypeVisitaAdentro.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_listar_visitas_adentro(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Entrada con todas sus reglas (`application::registrar_entrada_visita_verificada`,
      * la misma que usa escritorio). `placa`: `None` = caminando.
      */
@@ -4867,14 +4907,20 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
 
     
-    @Throws(NucleoException::class)override fun `registrarSalidaVisita`(`movimientoId`: kotlin.Long)
+    /**
+     * Salida de una visita adentro, según dónde entró: en este equipo se
+     * cierra local (y la cola la sube); en el otro, se cierra en la nube
+     * (el candado del núcleo sólo se toma para autorizar, nunca durante la
+     * red).
+     */
+    @Throws(NucleoException::class)override fun `registrarSalidaVisita`(`origen`: OrigenVisita)
         = 
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_visita(
         it,
         
-        FfiConverterLong.lower(`movimientoId`),_status)
+        FfiConverterTypeOrigenVisita.lower(`origen`),_status)
 }
     }
     
@@ -4883,9 +4929,10 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     
     /**
      * Una sola llamada por cédula (escrita o escaneada). Primero mira si ya
-     * está adentro en este equipo, después la cita (`verificar_check_in`, la
-     * misma regla que escritorio). Sólo lectura local, sin red: es lo que
-     * se ve al instante; los chequeos contra la nube corren al registrar.
+     * está adentro (en este equipo o, por la caché, en el otro), después la
+     * cita (`verificar_check_in`, la misma regla que escritorio). Sólo
+     * lectura local, sin red: es lo que se ve al instante; los chequeos
+     * contra la nube corren al registrar.
      */
     @Throws(NucleoException::class)override fun `verificarVisita`(`cedula`: kotlin.String): VerificacionVisita {
             return FfiConverterTypeVerificacionVisita.lift(
@@ -8254,15 +8301,17 @@ public object FfiConverterTypeVehiculoRutaDetectado: FfiConverterRustBuffer<Vehi
 
 
 /**
- * Visita abierta en este equipo: la persona está adentro y se le ofrece la
- * salida.
+ * Visita que está adentro: una tarjeta de la lista, o lo que se ofrece al
+ * verificar su cédula.
  */
 data class VisitaAdentro (
-    var `movimientoId`: kotlin.Long
+    var `origen`: OrigenVisita
     , 
     var `cedula`: kotlin.String
     , 
     var `nombre`: kotlin.String
+    , 
+    var `empresa`: kotlin.String?
     , 
     var `anfitrion`: kotlin.String
     , 
@@ -8274,6 +8323,8 @@ data class VisitaAdentro (
      * RFC 3339.
      */
     var `fechaHoraEntrada`: kotlin.String
+    , 
+    var `usuarioEntradaNombre`: kotlin.String
     
 ){
     
@@ -8290,34 +8341,40 @@ data class VisitaAdentro (
 public object FfiConverterTypeVisitaAdentro: FfiConverterRustBuffer<VisitaAdentro> {
     override fun read(buf: ByteBuffer): VisitaAdentro {
         return VisitaAdentro(
-            FfiConverterLong.read(buf),
+            FfiConverterTypeOrigenVisita.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterOptionalLong.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
     }
 
     override fun allocationSize(value: VisitaAdentro) = (
-            FfiConverterLong.allocationSize(value.`movimientoId`) +
+            FfiConverterTypeOrigenVisita.allocationSize(value.`origen`) +
             FfiConverterString.allocationSize(value.`cedula`) +
             FfiConverterString.allocationSize(value.`nombre`) +
+            FfiConverterOptionalString.allocationSize(value.`empresa`) +
             FfiConverterString.allocationSize(value.`anfitrion`) +
             FfiConverterOptionalLong.allocationSize(value.`gafeteNumero`) +
             FfiConverterOptionalString.allocationSize(value.`placa`) +
-            FfiConverterString.allocationSize(value.`fechaHoraEntrada`)
+            FfiConverterString.allocationSize(value.`fechaHoraEntrada`) +
+            FfiConverterString.allocationSize(value.`usuarioEntradaNombre`)
     )
 
     override fun write(value: VisitaAdentro, buf: ByteBuffer) {
-            FfiConverterLong.write(value.`movimientoId`, buf)
+            FfiConverterTypeOrigenVisita.write(value.`origen`, buf)
             FfiConverterString.write(value.`cedula`, buf)
             FfiConverterString.write(value.`nombre`, buf)
+            FfiConverterOptionalString.write(value.`empresa`, buf)
             FfiConverterString.write(value.`anfitrion`, buf)
             FfiConverterOptionalLong.write(value.`gafeteNumero`, buf)
             FfiConverterOptionalString.write(value.`placa`, buf)
             FfiConverterString.write(value.`fechaHoraEntrada`, buf)
+            FfiConverterString.write(value.`usuarioEntradaNombre`, buf)
     }
 }
 
@@ -9065,6 +9122,99 @@ public object FfiConverterTypeOrientacionEncuadre: FfiConverterRustBuffer<Orient
 
 
 /**
+ * Dónde se registró la entrada: decide cómo se da la salida. Kotlin lo
+ * devuelve tal cual a [`Nucleo::registrar_salida_visita`].
+ */
+sealed class OrigenVisita {
+    
+    /**
+     * En este equipo.
+     */
+    data class EsteEquipo(
+        val `movimientoId`: kotlin.Long) : OrigenVisita()
+        
+    {
+        
+
+        companion object
+    }
+    
+    /**
+     * En el otro equipo de la unidad (la PC): la salida va a la nube.
+     */
+    data class OtroEquipo(
+        val `uuid`: kotlin.String) : OrigenVisita()
+        
+    {
+        
+
+        companion object
+    }
+    
+
+    
+
+    
+    
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOrigenVisita : FfiConverterRustBuffer<OrigenVisita>{
+    override fun read(buf: ByteBuffer): OrigenVisita {
+        return when(buf.getInt()) {
+            1 -> OrigenVisita.EsteEquipo(
+                FfiConverterLong.read(buf),
+                )
+            2 -> OrigenVisita.OtroEquipo(
+                FfiConverterString.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: OrigenVisita): ULong = when(value) {
+        is OrigenVisita.EsteEquipo -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterLong.allocationSize(value.`movimientoId`)
+            )
+        }
+        is OrigenVisita.OtroEquipo -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`uuid`)
+            )
+        }
+    }
+
+    override fun write(value: OrigenVisita, buf: ByteBuffer) {
+        when(value) {
+            is OrigenVisita.EsteEquipo -> {
+                buf.putInt(1)
+                FfiConverterLong.write(value.`movimientoId`, buf)
+                Unit
+            }
+            is OrigenVisita.OtroEquipo -> {
+                buf.putInt(2)
+                FfiConverterString.write(value.`uuid`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
+/**
  * Espejo de `ResultadoAcceso` — la decisión (PRAIND vencido, empresa
  * inactiva, etc.) ya viene tomada por `domain::acceso::verificar_acceso`;
  * Kotlin sólo la muestra, nunca la recalcula.
@@ -9505,7 +9655,7 @@ sealed class VerificacionVisita {
     }
     
     /**
-     * Ya está adentro (en este equipo): registrar la salida.
+     * Ya está adentro, en este equipo o en el otro: registrar la salida.
      */
     data class Salida(
         val `visita`: uniffi.control_acceso_mobile.VisitaAdentro) : VerificacionVisita()
@@ -10825,6 +10975,34 @@ public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeVehiculoRuta.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeVisitaAdentro: FfiConverterRustBuffer<List<VisitaAdentro>> {
+    override fun read(buf: ByteBuffer): List<VisitaAdentro> {
+        val len = buf.getInt()
+        return List<VisitaAdentro>(len) {
+            FfiConverterTypeVisitaAdentro.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<VisitaAdentro>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeVisitaAdentro.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<VisitaAdentro>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeVisitaAdentro.write(it, buf)
         }
     }
 }

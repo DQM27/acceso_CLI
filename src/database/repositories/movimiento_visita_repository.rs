@@ -98,15 +98,13 @@ fn convertir_fila(row: &Row) -> rusqlite::Result<MovimientoVisita> {
         })
         .transpose()?;
     let usuario_salida_id: Option<i64> = row.get(6)?;
-    // `CHECK (fecha_hora_salida IS NULL) = (usuario_salida_id IS NULL)` --
-    // ver el CHECK implícito de MIGRACION_28 (salida_unica) garantiza que
-    // ambos vienen juntos o ninguno.
-    let salida = fecha_hora_salida
-        .zip(usuario_salida_id)
-        .map(|(fecha_hora, usuario_id)| SalidaMovimientoVisita {
-            fecha_hora,
-            usuario_id,
-        });
+    // La fecha de salida manda: una salida que dio el otro equipo de la
+    // unidad llega sin usuario local (`usuario_salida_id` NULL) y sigue
+    // siendo una salida.
+    let salida = fecha_hora_salida.map(|fecha_hora| SalidaMovimientoVisita {
+        fecha_hora,
+        usuario_id: usuario_salida_id,
+    });
 
     Ok(MovimientoVisita {
         id: row.get(0)?,
@@ -278,7 +276,8 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
             "
             SELECT
                 mv.id, cv.cedula, cv.nombre, cv.empresa, mv.gafete_numero,
-                mv.fecha_hora_entrada, c.anfitrion_nombre, c.motivo, mv.placa
+                mv.fecha_hora_entrada, c.anfitrion_nombre, c.motivo, mv.placa,
+                mv.usuario_entrada_nombre
             FROM movimientos_visita mv
             JOIN cita_visitantes cv ON cv.id = mv.cita_visitante_id
             JOIN citas c ON c.id = cv.cita_id
@@ -299,6 +298,7 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
                     row.get::<_, String>(6)?,
                     row.get::<_, Option<String>>(7)?,
                     row.get::<_, Option<String>>(8)?,
+                    row.get::<_, String>(9)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -316,6 +316,7 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
                     anfitrion_nombre,
                     motivo,
                     placa,
+                    usuario_entrada_nombre,
                 )| {
                     let fecha_hora_entrada = parsear_utc(&fecha_hora_entrada_texto)
                         .map_err(|error| DatabaseError::FechaCorrupta(error.to_string()))?;
@@ -329,6 +330,7 @@ impl MovimientoVisitaRepository for SqliteMovimientoVisitaRepository<'_> {
                         anfitrion_nombre,
                         motivo,
                         placa,
+                        usuario_entrada_nombre,
                     })
                 },
             )

@@ -5,7 +5,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use crate::texto::plegar_para_busqueda;
 use crate::tiempo::{local_costa_rica_a_utc, parsear_utc, serializar_utc};
 
-pub const SCHEMA_VERSION: i64 = 57;
+pub const SCHEMA_VERSION: i64 = 58;
 
 /// Identifica un archivo `SQLite` como propio de Control Acceso (bytes de
 /// "BRIS" como entero de 32 bits). `0` es el valor que trae por defecto
@@ -443,6 +443,11 @@ fn aplicar_migraciones_posteriores_a_52(
     if *version == 56 {
         aplicar_migracion_57(connection)?;
         *version = 57;
+    }
+
+    if *version == 57 {
+        aplicar_migracion_58(connection)?;
+        *version = 58;
     }
 
     Ok(())
@@ -997,6 +1002,17 @@ fn aplicar_migracion_57(connection: &Connection) -> Result<(), SchemaError> {
     let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
     transaction.execute_batch(MIGRACION_57)?;
     transaction.execute_batch("PRAGMA user_version = 57")?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Caché de las visitas agendadas abiertas por el otro equipo de la unidad
+/// (`movimientos_visita_remotos`) y su lápida en `remotos_cerrados_aca`
+/// (se rehace la tabla para ampliar el `CHECK`; sin hijos ni padres).
+fn aplicar_migracion_58(connection: &Connection) -> Result<(), SchemaError> {
+    let transaction = Transaction::new_unchecked(connection, TransactionBehavior::Immediate)?;
+    transaction.execute_batch(MIGRACION_58)?;
+    transaction.execute_batch("PRAGMA user_version = 58")?;
     transaction.commit()?;
     Ok(())
 }
@@ -1676,3 +1692,4 @@ const MIGRACION_55: &str = include_str!("migraciones/migracion_55.sql");
 const MIGRACION_56: &str = include_str!("migraciones/migracion_56.sql");
 
 const MIGRACION_57: &str = include_str!("migraciones/migracion_57.sql");
+const MIGRACION_58: &str = include_str!("migraciones/migracion_58.sql");

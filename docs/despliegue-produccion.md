@@ -64,10 +64,13 @@ con las mismas consultas.
 
 ### 0.4 Base local de los equipos (SQLite)
 
-Main está en el esquema **54**; la rama llega al **57**:
+Main está en el esquema **54**; la rama llega al **57** (y `feat/visitas-movil`
+al **58**):
 - **55:** ingreso por correo;
 - **56:** lápidas de cierres de remotos;
-- **57:** placa de las visitas.
+- **57:** placa de las visitas;
+- **58:** visitas abiertas por el otro equipo de la unidad (sólo
+  `feat/visitas-movil`).
 
 Cada equipo migra solo al abrir la app nueva y **no hay vuelta atrás** (ver la
 sección 3). Probar primero en un solo equipo.
@@ -387,11 +390,21 @@ migración sola no rompe nada.
 Rama `feat/visitas-movil` (sale de `feat/escritorio-pendientes`). En
 "Externos", la primera opción ahora es "Visita": un campo de cédula (escrita o
 escaneada) y el núcleo decide si sigue la entrada (gafete opcional, caminando
-o en vehículo), la salida (si ya está adentro en ese equipo) o un aviso (azul
-si la cita es para otro día). Sin listas ni historial.
+o en vehículo), la salida (si ya está adentro, en ese equipo o en la PC) o un
+aviso (azul si la cita es para otro día). Debajo, quién está adentro por
+visita en toda la unidad, con las mismas tarjetas y el mismo diálogo de salida
+que contratistas (ícono de PC si entró por el otro equipo), refrescado en vivo.
+Sin historial.
 
-- **Sin migraciones nuevas.** El teléfono ya bajaba las citas y su cola ya
-  sabía subir movimientos de visita.
+- **Sin migraciones de nube.** Usa columnas que `movimientos_visita` ya tiene.
+- **Base local: migración 58** (`movimientos_visita_remotos`, caché de las
+  visitas abiertas por el otro equipo, y su lápida en `remotos_cerrados_aca`).
+  La sincronización la llena en los dos perfiles (el historial de visitas
+  sigue siendo sólo de la PC). Dar salida a una visita del otro equipo la
+  cierra en la nube; y una visita propia a la que el otro equipo dio salida se
+  cierra también en local (`recibir_cierres_de_movimientos_visita_propios`).
+- **En vivo:** el aviso de `movimientos_visita` ya existía; dispara la
+  sincronización de esa tabla y la lista se vuelve a leer.
 - **Las reglas son las de escritorio:** los chequeos contra la nube de una
   entrada (gafete en uso en el otro equipo, visitante adentro en otra unidad)
   se pasaron del comando de escritorio a
@@ -445,6 +458,7 @@ Hay que tenerlos presentes al publicar versiones.
 |---|---|---|
 | 52 | `sincronizacion_estado.desfase_reloj_ms` (hora de internet guardada entre arranques) | `claude/hora-de-internet` → `claude/prueba-integral` |
 | 57 | `movimientos_visita.placa` y `historial_visitas_sitio.placa` (medio de ingreso de las visitas agendadas) | `feat/escritorio-pendientes` |
+| 58 | `movimientos_visita_remotos` (visitas abiertas por el otro equipo) y `movimientos_visita_remotos` permitido en `remotos_cerrados_aca` | `feat/visitas-movil` |
 
 **Importante:** una vez que un equipo abre una versión con la migración 52,
 su base queda en el esquema 52 y **una app anterior ya no la abre**: la

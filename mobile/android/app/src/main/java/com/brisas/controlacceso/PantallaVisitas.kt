@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -28,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,10 +46,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.OrigenVisita
 import uniffi.control_acceso_mobile.VerificacionVisita
 import uniffi.control_acceso_mobile.VisitaAdentro
 import uniffi.control_acceso_mobile.VisitaParaEntrar
@@ -53,14 +55,20 @@ import uniffi.control_acceso_mobile.VisitaParaEntrar
 /// Visitas agendadas en la portería, pensada para la velocidad: un solo
 /// campo de cédula (escrita o escaneada) y el núcleo decide qué sigue --
 /// entrada si tiene cita hoy, salida si ya está adentro, o un aviso (azul si
-/// la cita es para otro día). Sin listas ni historial: eso se consulta en
-/// escritorio y en el panel web. Sin lógica propia: cada texto y cada
-/// decisión vienen del núcleo. Vive bajo la pestaña "Externos"
+/// la cita es para otro día). Debajo, quién está adentro en la unidad con
+/// las mismas tarjetas y el mismo diálogo de salida que contratistas
+/// ([TarjetaActivo], [DialogoRegistrarSalida]); lo que entró por la PC lleva
+/// su ícono y se refresca en vivo (`refrescarNube`). Sin historial: eso se
+/// consulta en escritorio y en el panel web. Sin lógica propia: cada texto
+/// y cada decisión vienen del núcleo. Vive bajo la pestaña "Externos"
 /// ([PantallaExternos]).
 @Composable
-fun PantallaVisitas(nucleo: Nucleo) {
+fun PantallaVisitas(nucleo: Nucleo, refrescarNube: Int = 0) {
     RegistrarPantalla("visitas")
     val viewModel: VisitasViewModel = viewModel(factory = VisitasViewModel.factory(nucleo))
+    LaunchedEffect(refrescarNube) {
+        if (refrescarNube > 0) viewModel.refrescar()
+    }
     var escaneando by remember { mutableStateOf(false) }
     var escaneandoPlaca by remember { mutableStateOf(false) }
 
@@ -91,10 +99,17 @@ fun PantallaVisitas(nucleo: Nucleo) {
         return
     }
 
+    viewModel.seleccionSalida?.let { visita ->
+        DialogoRegistrarSalida(
+            detalle = detalleSalida(visita),
+            onDismiss = { viewModel.elegirSeleccionSalida(null) },
+            onConfirmar = { viewModel.confirmarSalida(visita) },
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .imePadding()
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -133,26 +148,72 @@ fun PantallaVisitas(nucleo: Nucleo) {
 
         viewModel.hecho?.let { Confirmacion(it) }
 
-        when (val verificacion = viewModel.verificacion) {
-            is VerificacionVisita.Entrada -> Entrada(
-                visita = verificacion.visita,
-                viewModel = viewModel,
-                onEscanearPlaca = { escaneandoPlaca = true },
-            )
-            is VerificacionVisita.Salida -> Salida(verificacion.visita, viewModel)
-            is VerificacionVisita.Aviso -> Aviso(
-                mensaje = verificacion.mensaje,
-                informativo = verificacion.informativo,
-                onOtraCedula = viewModel::limpiar,
-            )
-            null -> {}
-        }
-
         viewModel.error?.let { mensaje ->
             Text(mensaje, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
+
+        val verificacion = viewModel.verificacion
+        if (verificacion == null || verificacion is VerificacionVisita.Salida) {
+            // Sin cédula verificada: quién está adentro (tocar = salida).
+            ListaAdentro(viewModel.adentro, onElegir = viewModel::elegirSeleccionSalida)
+        } else {
+            Column(
+                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                when (verificacion) {
+                    is VerificacionVisita.Entrada -> Entrada(
+                        visita = verificacion.visita,
+                        viewModel = viewModel,
+                        onEscanearPlaca = { escaneandoPlaca = true },
+                    )
+                    is VerificacionVisita.Aviso -> Aviso(
+                        mensaje = verificacion.mensaje,
+                        informativo = verificacion.informativo,
+                        onOtraCedula = viewModel::limpiar,
+                    )
+                    is VerificacionVisita.Salida -> {}
+                }
+            }
+        }
     }
 }
+
+/// Mismas tarjetas que la lista de contratistas adentro ([TarjetaActivo]).
+@Composable
+private fun ListaAdentro(visitas: List<VisitaAdentro>, onElegir: (VisitaAdentro) -> Unit) {
+    ListaConDesvanecido {
+        LazyColumn(
+            contentPadding = PaddingValues(top = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            items(visitas, key = { clave(it.origen) }) { visita ->
+                TarjetaActivo(
+                    nombre = visita.nombre,
+                    detalle = "${visita.cedula} · ${visita.empresa ?: "Visita a ${visita.anfitrion}"}",
+                    gafeteNumero = visita.gafeteNumero,
+                    fechaHoraIngreso = visita.fechaHoraEntrada,
+                    dioIngreso = visita.usuarioEntradaNombre,
+                    otroEquipo = visita.origen is OrigenVisita.OtroEquipo,
+                    onClick = { onElegir(visita) },
+                )
+            }
+        }
+    }
+}
+
+private fun clave(origen: OrigenVisita): String =
+    when (origen) {
+        is OrigenVisita.EsteEquipo -> "local-${origen.movimientoId}"
+        is OrigenVisita.OtroEquipo -> "remota-${origen.uuid}"
+    }
+
+/// Mismo texto que el diálogo de salida de contratistas.
+private fun detalleSalida(visita: VisitaAdentro): String =
+    when (visita.origen) {
+        is OrigenVisita.EsteEquipo -> "${visita.nombre} · ${visita.cedula} · visita a ${visita.anfitrion}"
+        is OrigenVisita.OtroEquipo -> "${visita.nombre} · $TEXTO_OTRO_DISPOSITIVO"
+    }
 
 @Composable
 private fun Entrada(visita: VisitaParaEntrar, viewModel: VisitasViewModel, onEscanearPlaca: () -> Unit) {
@@ -203,26 +264,6 @@ private fun Entrada(visita: VisitaParaEntrar, viewModel: VisitasViewModel, onEsc
     }
 }
 
-@Composable
-private fun Salida(visita: VisitaAdentro, viewModel: VisitasViewModel) {
-    Tarjeta {
-        Text(visita.nombre, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-        Dato("Adentro desde ${hora(visita.fechaHoraEntrada)} · visita a ${visita.anfitrion}")
-        Dato(
-            (visita.gafeteNumero?.let { "Gafete $it" } ?: "Sin gafete") +
-                (visita.placa?.let { " · $it" } ?: " · caminando"),
-            destacado = true,
-        )
-    }
-    BotonBrisas(
-        onClick = viewModel::registrarSalida,
-        enabled = !viewModel.registrando,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(if (viewModel.registrando) "Registrando…" else "Registrar salida")
-    }
-}
-
 /// Azul (`tertiary`) si la cita existe para otro día; rojo si no hay nada
 /// que lo deje entrar.
 @Composable
@@ -267,12 +308,11 @@ private fun Tarjeta(contenido: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun Dato(texto: String, destacado: Boolean = false) {
+private fun Dato(texto: String) {
     Text(
         texto,
         style = MaterialTheme.typography.bodyMedium,
-        fontWeight = if (destacado) FontWeight.SemiBold else FontWeight.Normal,
-        color = if (destacado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
@@ -288,9 +328,4 @@ private fun BotonCuadrado(icono: ImageVector, descripcion: String, onClick: () -
     ) {
         Icon(icono, contentDescription = descripcion, tint = MaterialTheme.colorScheme.primary)
     }
-}
-
-private fun hora(iso: String): String {
-    val instante = instanteFechaHora(iso) ?: return "—"
-    return ZonedDateTime.ofInstant(instante, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
 }

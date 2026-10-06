@@ -56,7 +56,7 @@ pub use tipos::{
     ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen,
     SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
 };
-pub use visitas::{VerificacionVisita, VisitaAdentro, VisitaParaEntrar};
+pub use visitas::{OrigenVisita, VerificacionVisita, VisitaAdentro, VisitaParaEntrar};
 
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
 /// abre una vez al arrancar la app y se reusa en todas las pantallas (login,

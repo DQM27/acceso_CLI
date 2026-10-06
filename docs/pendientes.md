@@ -653,8 +653,20 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   Externos (`PantallaVisitas`), una cédula y el núcleo decide entrada, salida
   o aviso. Reglas compartidas con escritorio
   (`application::registrar_entrada_visita_verificada`). Ver
-  `docs/despliegue-produccion.md` sección 2.10. Falta probarlo en un teléfono
-  real.
+  `docs/despliegue-produccion.md` sección 2.10. Probado en un debug el
+  2026-10-06; de esa prueba salió el pedido de abajo.
+
+- [x] **Visitas adentro en el teléfono, idéntico a contratistas -- pedido del
+  usuario 2026-10-06.** "No me muestra las visitas que están adentro para
+  darle salida": ahora la pantalla lista quién está adentro en la unidad con
+  las mismas tarjetas (`TarjetaActivo`, ícono de PC si entró por el otro
+  equipo) y el mismo diálogo de salida (`DialogoRegistrarSalida`), en vivo.
+  Núcleo: caché `movimientos_visita_remotos` (migración local 58), salida
+  remota y cierres recibidos. Falta probarlo en un teléfono real.
+
+- [ ] **Escritorio: mostrar en "Adentro" las visitas que entraron por el
+  teléfono.** El núcleo ya baja la caché `movimientos_visita_remotos` también
+  en la PC; falta usarla en `Visitas.tsx` (hoy sólo lista las locales).
 
 - [ ] **Número de versión en el login de la app móvil -- pedido del usuario
   2026-10-03.** Mostrar la versión (`versionName`, ej. "v1.4.4") en la

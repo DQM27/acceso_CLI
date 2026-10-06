@@ -1030,13 +1030,14 @@ fn ingreso_por_correo_sin_motivo_lo_rechaza_el_nucleo() {
 }
 
 /// Una cita del anfitrión "Laura Mora" con un visitante, entre `desde` y
-/// `hasta` días contados desde hoy.
+/// `hasta` días contados desde hoy en Costa Rica (UTC-6, sin horario de
+/// verano): el mismo "hoy" que usa el núcleo, para que no falle de noche.
 fn cita_de_visita(id: i64, cedula: &str, desde: i32, hasta: i32) -> String {
     format!(
         "INSERT INTO citas (id, uuid, motivo, fecha_desde, fecha_hasta, anfitrion_nombre,
              anfitrion_correo, estado, creado_en)
-         VALUES ({id}, 'uuid-cita-{id}', 'Auditoría', date('now', '{desde} day'),
-             date('now', '{hasta} day'), 'Laura Mora', 'laura@ejemplo.com', 'VIGENTE',
+         VALUES ({id}, 'uuid-cita-{id}', 'Auditoría', date('now', '-6 hours', '{desde} day'),
+             date('now', '-6 hours', '{hasta} day'), 'Laura Mora', 'laura@ejemplo.com', 'VIGENTE',
              '2026-08-01T00:00:00Z');
          INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre, placa_vehiculo)
          VALUES ({id}, 'uuid-visitante-{id}', {id}, '{cedula}', 'Carlos Rojas', 'ABC123');"
@@ -1078,14 +1079,54 @@ fn visita_se_verifica_entra_y_sale_con_una_sola_cedula() {
     assert_eq!(adentro.gafete_numero, Some(5));
     assert_eq!(adentro.placa.as_deref(), Some("ABC123"));
     assert_eq!(adentro.nombre, "Carlos Rojas");
+    assert_eq!(adentro.usuario_entrada_nombre, "Actor Test");
+    assert!(matches!(adentro.origen, OrigenVisita::EsteEquipo { .. }));
+    assert_eq!(
+        nucleo.listar_visitas_adentro().unwrap(),
+        vec![adentro.clone()]
+    );
 
-    nucleo
-        .registrar_salida_visita(adentro.movimiento_id)
-        .unwrap();
+    nucleo.registrar_salida_visita(adentro.origen).unwrap();
+    assert!(nucleo.listar_visitas_adentro().unwrap().is_empty());
     assert!(matches!(
         nucleo.verificar_visita("108470293".to_string()).unwrap(),
         VerificacionVisita::Entrada { .. }
     ));
+}
+
+/// Una visita que entró por la PC (caché `movimientos_visita_remotos`)
+/// aparece en la lista con su origen, y al verificar su cédula se ofrece la
+/// salida, no una entrada nueva.
+#[test]
+fn visita_que_entro_por_el_otro_equipo_se_lista_y_ofrece_la_salida() {
+    let nucleo = nucleo_con_actor_gafete_de_visita_y(&format!(
+        "{}
+         INSERT INTO movimientos_visita_remotos (uuid, sitio_id, cedula, nombre, empresa,
+             anfitrion_nombre, motivo, gafete_numero, placa, hora_entrada,
+             usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en)
+         VALUES ('uuid-pc', 's1', '108470293', 'Carlos Rojas', NULL, 'Laura Mora',
+             'Auditoría', 7, NULL, '2026-10-06T14:00:00Z', 'Guarda PC', 'pc',
+             '2026-10-06T14:00:00Z');",
+        cita_de_visita(1, "108470293", -1, 1)
+    ));
+
+    let lista = nucleo.listar_visitas_adentro().unwrap();
+    assert_eq!(lista.len(), 1);
+    assert_eq!(
+        lista[0].origen,
+        OrigenVisita::OtroEquipo {
+            uuid: "uuid-pc".into()
+        }
+    );
+    assert_eq!(lista[0].usuario_entrada_nombre, "Guarda PC");
+    assert_eq!(lista[0].gafete_numero, Some(7));
+
+    let VerificacionVisita::Salida { visita } =
+        nucleo.verificar_visita("1-0847-0293".to_string()).unwrap()
+    else {
+        panic!("se esperaba la salida de la visita de la PC");
+    };
+    assert_eq!(visita, lista[0]);
 }
 
 /// Una cita para otro día es un aviso informativo; sin cita, un aviso

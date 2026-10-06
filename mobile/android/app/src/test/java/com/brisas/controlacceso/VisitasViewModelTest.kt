@@ -15,6 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.OrigenVisita
 import uniffi.control_acceso_mobile.VerificacionVisita
 
 /// Contra el núcleo real (sin vincular: sin chequeos de nube), mismo
@@ -39,11 +40,11 @@ class VisitasViewModelTest {
     }
 
     /// Cita de "Laura Mora" para un visitante, entre `desde` y `hasta` días
-    /// contados desde hoy.
+    /// contados desde hoy en Costa Rica (UTC-6), el "hoy" del núcleo.
     private fun cita(id: Int, cedula: String, desde: Int, hasta: Int, placa: String? = null) = listOf(
         """INSERT INTO citas (id, uuid, motivo, fecha_desde, fecha_hasta, anfitrion_nombre,
                anfitrion_correo, estado, creado_en)
-           VALUES ($id, 'uuid-cita-$id', 'Auditoría', date('now', '$desde day'), date('now', '$hasta day'),
+           VALUES ($id, 'uuid-cita-$id', 'Auditoría', date('now', '-6 hours', '$desde day'), date('now', '-6 hours', '$hasta day'),
                'Laura Mora', 'laura@ejemplo.com', 'VIGENTE', '2026-08-01T00:00:00Z')""",
         """INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre, placa_vehiculo)
            VALUES ($id, 'uuid-visitante-$id', $id, '$cedula', 'Carlos Rojas', ${placa?.let { "'$it'" } ?: "NULL"})""",
@@ -80,17 +81,49 @@ class VisitasViewModelTest {
         assertEquals("Entrada registrada · Carlos Rojas", viewModel.hecho)
         assertEquals("", viewModel.cedula)
         assertNull(viewModel.verificacion)
+        // Queda en la lista de quién está adentro, como en contratistas.
+        assertEquals(listOf("Carlos Rojas"), viewModel.adentro.map { it.nombre })
+        assertTrue(viewModel.adentro.single().origen is OrigenVisita.EsteEquipo)
 
+        // Verificar a alguien que ya está adentro abre el diálogo de salida.
         viewModel.verificar("108470293")
         advanceUntilIdle()
-        val salida = viewModel.verificacion as VerificacionVisita.Salida
-        assertEquals(5L, salida.visita.gafeteNumero)
-        assertEquals("ABC123", salida.visita.placa)
+        assertNull(viewModel.verificacion)
+        val salida = viewModel.seleccionSalida!!
+        assertEquals(5L, salida.gafeteNumero)
+        assertEquals("ABC123", salida.placa)
 
-        viewModel.registrarSalida()
+        viewModel.confirmarSalida(salida)
         advanceUntilIdle()
         assertNull(viewModel.error)
+        assertNull(viewModel.seleccionSalida)
         assertEquals("Salida registrada · Carlos Rojas", viewModel.hecho)
+        assertTrue(viewModel.adentro.isEmpty())
+    }
+
+    @Test
+    fun `una visita que entro por la PC aparece en la lista y sale desde su tarjeta`() = runTest(dispatcher) {
+        val viewModel = abrir(
+            cita(1, "108470293", -1, 1),
+            listOf(
+                """INSERT INTO movimientos_visita_remotos (uuid, sitio_id, cedula, nombre, empresa,
+                       anfitrion_nombre, motivo, gafete_numero, placa, hora_entrada,
+                       usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en)
+                   VALUES ('uuid-pc', 's1', '108470293', 'Carlos Rojas', NULL, 'Laura Mora',
+                       'Auditoría', 7, NULL, '2026-10-06T14:00:00Z', 'Guarda PC', 'pc',
+                       '2026-10-06T14:00:00Z')""",
+            ),
+        )
+        advanceUntilIdle()
+
+        val tarjeta = viewModel.adentro.single()
+        assertEquals(OrigenVisita.OtroEquipo("uuid-pc"), tarjeta.origen)
+        assertEquals("Guarda PC", tarjeta.usuarioEntradaNombre)
+
+        // Su cédula no ofrece otra entrada: abre la salida.
+        viewModel.verificar("108470293")
+        advanceUntilIdle()
+        assertEquals(tarjeta, viewModel.seleccionSalida)
     }
 
     @Test

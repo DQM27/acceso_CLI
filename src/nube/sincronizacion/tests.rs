@@ -4850,3 +4850,91 @@ fn el_historial_de_visitas_guarda_la_placa_y_tolera_que_no_venga() {
         ]
     );
 }
+
+/// Visita abierta por el otro equipo (la PC) y otra que es de este mismo
+/// equipo (`uuid-m1`): sólo la primera entra a la caché.
+const RESPUESTA_VISITAS_ABIERTAS: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+     [{\"id\":\"uuid-pc\",\"visitante_cedula\":\"112345678\",\"visitante_nombre\":\"Ana Solano\",\
+     \"empresa\":null,\"anfitrion_nombre\":\"Laura\",\"motivo\":\"Auditoría\",\
+     \"gafete_numero\":7,\"placa\":\"BCD123\",\"hora_entrada\":\"2026-08-01T09:00:00+00:00\",\
+     \"usuario_entrada_nombre\":\"Op PC\",\"dispositivo_entrada_id\":\"pc\"},\
+     {\"id\":\"uuid-m1\",\"visitante_cedula\":\"1-2345\",\"visitante_nombre\":\"Visitante Uno\",\
+     \"empresa\":null,\"anfitrion_nombre\":\"Ana\",\"motivo\":null,\"gafete_numero\":null,\
+     \"placa\":null,\"hora_entrada\":\"2026-08-01T08:00:00Z\",\
+     \"usuario_entrada_nombre\":\"Operador\",\"dispositivo_entrada_id\":\"este\"}]";
+
+/// Pedido del dueño 2026-10-06: el teléfono muestra las visitas que están
+/// adentro por la PC, como con contratistas.
+#[test]
+fn recibe_las_visitas_abiertas_del_otro_equipo_y_las_cachea() {
+    let connection = conexion_con_dos_movimientos_visita_activos();
+    let base_url = servidor_de_una_respuesta(RESPUESTA_VISITAS_ABIERTAS);
+
+    let recibidas = recibir_movimientos_visita_abiertos(&connection, &contexto(&base_url)).unwrap();
+
+    assert_eq!(recibidas.len(), 1, "la propia no se duplica: {recibidas:?}");
+    assert_eq!(recibidas[0].uuid, "uuid-pc");
+    assert_eq!(recibidas[0].gafete_numero, Some(7));
+    assert_eq!(recibidas[0].placa.as_deref(), Some("BCD123"));
+    assert_eq!(recibidas[0].hora_entrada, "2026-08-01T09:00:00Z");
+    let cacheadas: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM movimientos_visita_remotos",
+            [],
+            |fila| fila.get(0),
+        )
+        .unwrap();
+    assert_eq!(cacheadas, 1);
+}
+
+/// Una visita de la PC a la que este equipo dio salida no reaparece con
+/// una lectura vieja de la nube (lápida, como con "por correo").
+#[test]
+fn una_visita_del_otro_equipo_cerrada_aca_no_revive() {
+    let connection = conexion_con_dos_movimientos_visita_activos();
+    let base_url = servidor_de_una_respuesta(RESPUESTA_VISITAS_ABIERTAS);
+    recibir_movimientos_visita_abiertos(&connection, &contexto(&base_url)).unwrap();
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+    );
+    cerrar_movimiento_visita_remoto(
+        &connection,
+        &contexto(&base_url),
+        "uuid-pc",
+        "Guardia",
+        chrono::Utc::now(),
+    )
+    .unwrap();
+    assert_eq!(lapidas(&connection), vec!["uuid-pc".to_string()]);
+
+    let base_url = servidor_de_una_respuesta(RESPUESTA_VISITAS_ABIERTAS);
+    let recibidas = recibir_movimientos_visita_abiertos(&connection, &contexto(&base_url)).unwrap();
+    assert!(recibidas.is_empty(), "no debe revivir: {recibidas:?}");
+}
+
+/// La PC dio salida a una visita que entró por este equipo: se cierra acá
+/// también, sin usuario local, con el nombre de quien la dio.
+#[test]
+fn una_visita_propia_con_salida_en_el_otro_equipo_se_cierra_aca() {
+    let connection = conexion_con_dos_movimientos_visita_activos();
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"id\":\"uuid-m1\",\"hora_salida\":\"2026-08-01T10:00:00Z\",\
+         \"usuario_salida_nombre\":\"Guardia PC\"}]",
+    );
+
+    let aplicados =
+        recibir_cierres_de_movimientos_visita_propios(&connection, &contexto(&base_url)).unwrap();
+
+    assert_eq!(aplicados, 1);
+    let (salida, nombre): (String, String) = connection
+        .query_row(
+            "SELECT fecha_hora_salida, usuario_salida_nombre FROM movimientos_visita
+             WHERE uuid = 'uuid-m1'",
+            [],
+            |fila| Ok((fila.get(0)?, fila.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(salida, "2026-08-01T10:00:00Z");
+    assert_eq!(nombre, "Guardia PC");
+}

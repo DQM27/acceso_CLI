@@ -113,6 +113,17 @@ impl AppCore {
         SqliteMovimientoVisitaRepository::new(&self.connection).listar_activos()
     }
 
+    /// La visita de esa cédula abierta por el OTRO equipo de la unidad
+    /// (caché `movimientos_visita_remotos`), o `None`. Para ofrecer la
+    /// salida al verificar la cédula aunque haya entrado por la PC. Sin
+    /// `actor`: es una lectura.
+    pub fn visita_remota_por_cedula(
+        &self,
+        cedula: &str,
+    ) -> Result<Option<crate::nube::MovimientoVisitaRemoto>, DatabaseError> {
+        Ok(self.leer_visitas_remotas(Some(cedula))?.into_iter().next())
+    }
+
     /// La visita abierta en este equipo de esa cédula, comparada en forma
     /// única (como la guarda el check-in), o `None`. Para ofrecer la salida
     /// apenas se verifica la cédula, sin lista de por medio. Sin `actor`: es

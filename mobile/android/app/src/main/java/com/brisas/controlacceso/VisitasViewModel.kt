@@ -14,17 +14,28 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.VerificacionVisita
+import uniffi.control_acceso_mobile.VisitaAdentro
 
 /// Estado y llamadas de [PantallaVisitas]: una cédula, y el núcleo decide qué
 /// sigue (`Nucleo.verificarVisita`): entrada si tiene cita hoy, salida si ya
-/// está adentro, o un aviso. Sin listas ni historial: el historial se
-/// consulta en escritorio y en el panel web. Sin reglas propias: lee lo
-/// que responde el núcleo y lo muestra.
+/// está adentro, o un aviso. Debajo, quién está adentro en la unidad (este
+/// equipo y la PC), como en contratistas: tocar una tarjeta = salida. Sin
+/// historial: se consulta en escritorio y en el panel web. Sin reglas
+/// propias: lee lo que responde el núcleo y lo muestra.
 class VisitasViewModel(
     private val nucleo: Nucleo,
     private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     var cedula by mutableStateOf("")
+        private set
+
+    /// Quién está adentro por visita en la unidad (`Nucleo.listarVisitasAdentro`).
+    var adentro by mutableStateOf<List<VisitaAdentro>>(emptyList())
+        private set
+
+    /// La visita a la que se le está por dar salida (diálogo abierto): una
+    /// tarjeta tocada o la cédula verificada de alguien que ya está adentro.
+    var seleccionSalida by mutableStateOf<VisitaAdentro?>(null)
         private set
 
     /// `null` mientras no se verificó la cédula escrita.
@@ -49,6 +60,28 @@ class VisitasViewModel(
     /// Carlos Rojas"), mientras la pantalla ya espera la próxima cédula.
     var hecho by mutableStateOf<String?>(null)
         private set
+
+    init {
+        refrescar()
+    }
+
+    /// Al abrir, después de cada registro y con cada cambio de la nube
+    /// (`refrescarNube`, igual que contratistas).
+    fun refrescar() {
+        viewModelScope.launch {
+            try {
+                adentro = withContext(dispatcherIO) {
+                    medirNucleo("listarVisitasAdentro") { nucleo.listarVisitasAdentro() }
+                }
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
+            }
+        }
+    }
+
+    fun elegirSeleccionSalida(visita: VisitaAdentro?) {
+        seleccionSalida = visita
+    }
 
     fun cambiarCedula(nueva: String) {
         // Tal cual: qué es un documento válido y su forma única lo decide
@@ -84,6 +117,11 @@ class VisitasViewModel(
                     medirNucleo("verificarVisita") { nucleo.verificarVisita(consultada) }
                 }
                 if (consultada != cedula) return@launch // ya se escribió otra
+                if (resultado is VerificacionVisita.Salida) {
+                    // Ya está adentro: el mismo diálogo que al tocar su tarjeta.
+                    seleccionSalida = resultado.visita
+                    return@launch
+                }
                 verificacion = resultado
                 gafete = ""
                 // Si el anfitrión anotó la placa, se propone "vehículo".
@@ -124,18 +162,21 @@ class VisitasViewModel(
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 registrando = false
+                refrescar()
             }
         }
     }
 
-    fun registrarSalida() {
-        val visita = (verificacion as? VerificacionVisita.Salida)?.visita ?: return
+    /// Salida desde el diálogo: el núcleo sabe si entró por este equipo o
+    /// por la PC (`VisitaAdentro.origen`) y la da donde corresponde.
+    fun confirmarSalida(visita: VisitaAdentro) {
         if (registrando) return
         registrando = true
+        seleccionSalida = null
         viewModelScope.launch {
             try {
                 withContext(dispatcherIO) {
-                    medirNucleo("registrarSalidaVisita") { nucleo.registrarSalidaVisita(visita.movimientoId) }
+                    medirNucleo("registrarSalidaVisita") { nucleo.registrarSalidaVisita(visita.origen) }
                 }
                 CambiosNube.cambioLocal()
                 terminar("Salida registrada · ${visita.nombre}")
@@ -143,6 +184,7 @@ class VisitasViewModel(
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {
                 registrando = false
+                refrescar()
             }
         }
     }

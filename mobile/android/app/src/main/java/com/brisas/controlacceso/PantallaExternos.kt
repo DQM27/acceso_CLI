@@ -37,7 +37,7 @@ fun PantallaExternos(
         )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (TipoExterno.entries.getOrElse(tipo) { TipoExterno.VISITA }) {
-                TipoExterno.VISITA -> PantallaVisitas(nucleo)
+                TipoExterno.VISITA -> PantallaVisitas(nucleo, refrescarNube)
                 TipoExterno.PROVEEDOR -> PantallaProveedores(nucleo, refrescarNube)
                 TipoExterno.POR_CORREO -> PantallaPorCorreo(nucleo, refrescarNube)
             }
