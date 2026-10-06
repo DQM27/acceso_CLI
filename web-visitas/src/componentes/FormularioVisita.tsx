@@ -107,7 +107,7 @@ export default function FormularioVisita({
     setFormulario((f) => {
       if (f.visitantes.some((v) => normalizarDocumento(v.cedula) === normalizarDocumento(persona.cedula))) return f;
       const nueva = {
-        nombre: persona.nombre,
+        nombre: persona.nombre.toUpperCase(),
         cedula: persona.cedula,
         empresa: persona.empresa ?? "",
         placa_vehiculo: persona.placa_vehiculo ?? "",
@@ -323,7 +323,12 @@ function TarjetaPersona({
       <div className="grid grid-cols-2 gap-2">
         <label className="campo col-span-2" data-error={!!error("nombre")}>
           Nombre
-          <input value={visitante.nombre} autoComplete="off" onChange={(e) => onCambiar({ nombre: e.target.value })} />
+          {/* En mayúscula al escribir, como en el resto de la app. */}
+          <input
+            value={visitante.nombre}
+            autoComplete="off"
+            onChange={(e) => onCambiar({ nombre: e.target.value.toUpperCase() })}
+          />
           {error("nombre") && <span className="campo-error">{error("nombre")}</span>}
         </label>
         <label className="campo" data-error={!!error("cedula")}>

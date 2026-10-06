@@ -102,8 +102,10 @@ class CorreoViewModel(
         }
     }
 
+    /// En mayúscula al escribir (y al leerlo del documento), como el resto
+    /// de los nombres de la app (pedido del usuario 2026-10-06).
     fun cambiarNombre(nuevo: String) {
-        nombre = nuevo
+        nombre = nuevo.uppercase()
     }
 
     fun cambiarMotivo(nuevo: String) {
@@ -120,7 +122,7 @@ class CorreoViewModel(
         val nombreCompleto = listOfNotNull(nombreLeido, apellidosLeido)
             .filter { it.isNotBlank() }
             .joinToString(" ")
-        if (nombreCompleto.isNotBlank()) nombre = nombreCompleto
+        if (nombreCompleto.isNotBlank()) cambiarNombre(nombreCompleto)
     }
 
     fun registrarIngreso(gafeteNumero: Long, onExito: () -> Unit) {
