@@ -29,9 +29,28 @@ Las ramas forman una sola cadena, cada una contiene a la anterior:
 Se mergean **en ese orden, un PR por rama contra `main`**, con *merge commit*
 (no squash ni rebase: reescribir los commits rompería las ramas siguientes).
 Cada PR lleva sólo lo nuevo de su rama; la columna "Rama" de 0.2 dice qué
-migraciones trae cada uno. Mergear no aplica nada en Supabase ni publica las
-apps (salen con tags `v*`): producción cambia recién cuando se siguen los pasos
-de 0.7.
+migraciones trae cada uno.
+
+**Mergear a `main` aplica las migraciones en producción:** `main` está
+conectado a la integración de GitHub de Supabase con "Deploy to production"
+(desde el 2026-09-12, ver `docs/decisiones-tecnicas.md`). Cada PR aplica sus
+migraciones al entrar, en orden de versión. Las apps no se publican (salen con
+tags `v*`). Dos merges piden publicar algo enseguida:
+- **PR 3** (`feat/reglas-compartidas`, migración 7): borra la función con la
+  que el panel publicado crea contratistas. Antes del merge, desplegar
+  `admin-crear-contratista` y `admin-editar-contratista` en producción;
+  después, publicar el panel nuevo.
+- **PR 4** (`feat/web-visitas`, migración 9): quita la escritura directa del
+  anfitrión en citas. Publicar la web de visitas nueva enseguida.
+
+Chequeado en producción el 2026-10-06 (sólo lectura), para que ningún merge se
+corte a mitad:
+- 3 y 4: 0 visitas abiertas duplicadas por cédula o por gafete (0.5);
+- 7: `panel_crear_contratista` existe con la firma exacta que borra;
+- 8: es `not valid`, no revisa filas existentes;
+- 9: los `drop policy` usan `if exists`, y `crear_cita_anfitrion` tiene los
+  mismos argumentos y devuelve `uuid`, así que se puede reemplazar;
+- 5: sólo pone triggers para registros nuevos.
 
 Fuera de la cadena:
 - `prueba/radix-visitas`: ya está entera dentro de la cadena; no lleva PR.
