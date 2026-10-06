@@ -567,6 +567,7 @@ equipo.
 | 2026-10-06 | Migración 11 | Daniel Quintana (dueño), merge del PR #119 | Aplicada por la integración, antes de las apps nuevas de escritorio y teléfono (2.9). |
 | 2026-10-06 | Migraciones 12 y 13 | Daniel Quintana (dueño), merge del PR #121 | Aplicadas por la integración. Producción queda con 117 migraciones, las mismas y en el mismo orden que `main`. |
 | 2026-10-06 | Edge Function `admin-create-usuario` (versión 4, commit `e9056b9`) | Daniel Quintana (dueño), después del PR #121 | Nombre del usuario en mayúscula con la regla del núcleo (2.11). Responde 401 a quien no es administrador. Las 13 funciones de producción quedan iguales al repo. En staging, `admin-create-usuario` (v8) y `admin-enviar-push` (v2) desde el mismo commit; `admin-suspend-device`, `admin-crear-codigo-vinculacion` y la función de base `panel_resumen_movimientos` (análisis de Syncfusion) quedan sin tocar. |
+| 2026-10-06 | Edge Function `admin-provision-device` (versión 16, commit `470325a`) | Daniel Quintana (dueño), después del PR #125 | Si falla la emisión del código de vinculación ya no devuelve `String(error)` al panel: lo registra con `console.error` y responde un mensaje fijo (alerta #174 de CodeQL). Desplegada con la CLI de Supabase desde el archivo del repo, con `verify_jwt` activo. Responde 401 `{"error":"unauthorized"}` a un POST con la anon key y cuerpo `{}`. En staging, versión 8 con la misma prueba. |
 
 Asesor de seguridad de Supabase después de aplicar: sólo avisos anteriores
 (`plegar_texto` sin `search_path` fijo, `pg_net` en `public`, protección de
