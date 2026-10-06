@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAnfitrion(null);
           setVerificado(false);
           setError(
-            "Tu cuenta no está autorizada para agendar visitas. Contactá a administración para solicitar acceso.",
+            "Su cuenta no está autorizada para agendar visitas. Pida acceso a administración.",
           );
           await supabase.auth.signOut({ scope: "local" });
           return;
@@ -104,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!actual()) return;
         setVerificado(false);
         setError(
-          "No pudimos verificar tu acceso. Revisá tu conexión y volvé a intentarlo.",
+          "No se pudo verificar su acceso. Revise su conexión e intente de nuevo.",
         );
       } finally {
         if (actual()) setCargando(false);
@@ -120,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         programar(data.session);
       } catch {
         if (!activo || turno !== revision.current) return;
-        setError("No pudimos recuperar tu sesión. Volvé a iniciar sesión.");
+        setError("No se pudo recuperar su sesión. Vuelva a iniciar sesión.");
         setVerificado(false);
         setCargando(false);
       }
@@ -140,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ++revision.current;
       setVerificado(false);
       setError(
-        "Estás sin conexión. Tus cambios siguen en esta pestaña; reconectá para continuar.",
+        "Sin conexión. Sus cambios siguen en esta pestaña; cuando vuelva la conexión puede continuar.",
       );
     };
     const intervalo = setInterval(alVolver, 60_000);
@@ -173,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (fallo) throw fallo;
     } catch {
       setError(
-        "No pudimos abrir el inicio de sesión con Google. Intentá de nuevo.",
+        "No se pudo abrir el inicio de sesión con Google. Intente de nuevo.",
       );
     }
   }, []);
@@ -190,7 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (fallo) throw fallo;
     } catch {
       setError(
-        "La sesión se cerró en esta pestaña, pero no pudimos confirmar el cierre remoto.",
+        "La sesión se cerró en esta pestaña, pero no se pudo confirmar el cierre en el servidor.",
       );
     } finally {
       for (const clave of [

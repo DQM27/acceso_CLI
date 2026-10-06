@@ -1,135 +1,79 @@
 import { z } from "./lib/validacion";
 import { hoyCostaRica } from "./fecha";
+import { reglas } from "./reglas";
+import type { CitaValidaReglas } from "./reglas";
 
+/** Los mismos límites que `reglas/src/cita.rs` (lo comprueba
+ * `pruebas/reglas.test.ts`): acá sólo deciden cuándo ocultar "Agregar
+ * persona" y cuántos lugares pedir. */
 export const MAX_VISITANTES = 50;
 export const MAX_SITIOS = 100;
-// Intencional: valida que NO haya caracteres de control (requisito de
-// seguridad del contrato de backend, ver docs/auditorias/contrato-web-visitas.md
-// "Rechazar caracteres de control") -- no es una regex mal escrita.
-// eslint-disable-next-line no-control-regex
-const sinControl = /^[^\u0000-\u001f\u007f]*$/u;
-const texto = (maximo: number) =>
-  z
-    .string()
-    .trim()
-    .max(maximo, `Usá hasta ${maximo} caracteres.`)
-    .regex(
-      sinControl,
-      "Ese texto tiene un carácter que no podemos guardar (por ejemplo, pegado desde otro programa). Borralo y escribilo de nuevo.",
-    );
-const opcional = (maximo: number) => texto(maximo).transform((v) => v || null);
-// "HH:MM" de un <input type="time">. Vacío -> null (es opcional). El tipo de
-// entrada se queda en `string` (no `string | null`) a propósito -- es lo que
-// siempre entrega un <input> controlado, y `FormularioCita` (z.input) lo
-// necesita así para que `value={formulario.hora_estimada}` tipe bien.
-const horaOpcional = z
-  .string()
-  .refine((v) => v === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(v), {
-    message: "Ingresá una hora válida (HH:MM).",
-  })
-  .transform((v) => (v === "" ? null : v));
-
-export function normalizarDocumento(valor: string) {
-  return valor.trim().replace(/[\s-]/g, "").toUpperCase();
+/** Lo que se escribe en el formulario, tal cual. */
+export interface VisitanteFormulario {
+  nombre: string;
+  cedula: string;
+  empresa: string;
+  placa_vehiculo: string;
 }
 
-const visitanteEntrada = z.object({
-  nombre: texto(150).min(2, "Ingresá el nombre completo."),
-  cedula: texto(60)
-    .transform(normalizarDocumento)
-    .pipe(
-      z
-        .string()
-        .min(3, "Ingresá un documento válido.")
-        .max(30, "El documento admite hasta 30 caracteres.")
-        .regex(/^[A-Z0-9]+$/, "Usá letras, números, espacios o guiones."),
-    ),
-  empresa: opcional(150),
-  placa_vehiculo: opcional(20).transform((v) => v?.toUpperCase() ?? null),
-});
-
-/** Reglas de fecha compartidas entre la validación final (`esquemaNuevaCita`)
- * y la validación en vivo de `componentes/CampoFechas.tsx` (al tipear o
- * elegir en el calendario) -- una sola fuente de verdad, sin duplicar las
- * reglas en dos lugares. */
-export function validarRangoFechas(
-  desde: string,
-  hasta: string,
-  hoy = hoyCostaRica(),
-): { fecha_desde?: string; fecha_hasta?: string } {
-  const errores: { fecha_desde?: string; fecha_hasta?: string } = {};
-  if (desde < hoy)
-    errores.fecha_desde = "La fecha de inicio no puede estar en el pasado.";
-  if (hasta < desde)
-    errores.fecha_hasta = "La fecha final debe ser igual o posterior al inicio.";
-  return errores;
+export interface FormularioCita {
+  fecha_desde: string;
+  fecha_hasta: string;
+  /** "HH:MM" de un <input type="time">; vacía = sin hora. */
+  hora_estimada: string;
+  motivo: string;
+  sitios: string[];
+  visitantes: VisitanteFormulario[];
 }
 
-export function esquemaNuevaCita(hoy = hoyCostaRica()) {
-  return z
-    .object({
-      fecha_desde: z.iso.date("Seleccioná una fecha válida."),
-      fecha_hasta: z.iso.date("Seleccioná una fecha válida."),
-      hora_estimada: horaOpcional,
-      motivo: opcional(1000),
-      sitios: z
-        .array(z.uuid())
-        .min(1, "Seleccioná al menos un sitio.")
-        .max(MAX_SITIOS),
-      visitantes: z.array(visitanteEntrada).min(1).max(MAX_VISITANTES),
-    })
-    .superRefine((datos, contexto) => {
-      const erroresFecha = validarRangoFechas(
-        datos.fecha_desde,
-        datos.fecha_hasta,
-        hoy,
-      );
-      if (erroresFecha.fecha_desde)
-        contexto.addIssue({
-          code: "custom",
-          path: ["fecha_desde"],
-          message: erroresFecha.fecha_desde,
-        });
-      if (erroresFecha.fecha_hasta)
-        contexto.addIssue({
-          code: "custom",
-          path: ["fecha_hasta"],
-          message: erroresFecha.fecha_hasta,
-        });
-      if (new Set(datos.sitios).size !== datos.sitios.length)
-        contexto.addIssue({
-          code: "custom",
-          path: ["sitios"],
-          message: "Hay sitios repetidos.",
-        });
-      const documentos = new Set<string>();
-      datos.visitantes.forEach((visitante, i) => {
-        if (documentos.has(visitante.cedula))
-          contexto.addIssue({
-            code: "custom",
-            path: ["visitantes", i, "cedula"],
-            message: "Este documento ya está en la lista.",
-          });
-        documentos.add(visitante.cedula);
-      });
-    });
+/** La cita ya validada y normalizada por el núcleo, lista para la base. */
+export type DatosCita = CitaValidaReglas;
+
+export type ResultadoValidacion =
+  | { ok: true; datos: DatosCita }
+  | { ok: false; errores: Record<string, string> };
+
+/** Todas las reglas de una cita nueva, del núcleo (WebAssembly,
+ * `reglas/src/cita.rs`): fechas en hora de Costa Rica, límites, cédula en su
+ * forma única y repetidas aunque estén escritas distinto, placa y textos.
+ * `errores` va por campo ("fecha_desde", "visitantes.1.cedula"...); si un
+ * campo tiene más de un problema, se muestra el primero. */
+export function validarCita(formulario: FormularioCita, hoy = hoyCostaRica()): ResultadoValidacion {
+  const resultado = reglas.validarCita(formulario, hoy);
+  if (resultado.ok) return { ok: true, datos: resultado.cita };
+  const errores: Record<string, string> = {};
+  for (const { campo, mensaje } of resultado.errores) errores[campo] ??= mensaje;
+  return { ok: false, errores };
 }
 
-export type FormularioCita = z.input<ReturnType<typeof esquemaNuevaCita>>;
-export type NuevaCita = z.output<ReturnType<typeof esquemaNuevaCita>>;
-export const sitioEsquema = z.object({
-  id: z.uuid(),
-  nombre: z.string(),
-});
+/** Error de validación para quien llama a la API sin pasar por el formulario. */
+export class CitaInvalida extends Error {
+  readonly errores: Record<string, string>;
+
+  constructor(errores: Record<string, string>) {
+    super(Object.values(errores)[0] ?? "Revise los datos de la visita.");
+    this.name = "CitaInvalida";
+    this.errores = errores;
+  }
+}
+
+/** Documento en la forma única del núcleo (la que reconoce la portería). Si
+ * las reglas todavía no cargaron, una aproximación: sin separadores y en
+ * mayúsculas (sólo se usa para no sumar dos veces a la misma persona). */
+export function normalizarDocumento(valor: string): string {
+  return reglas.normalizarDocumento(valor) ?? valor.trim().replace(/[\s.-]/g, "").toUpperCase();
+}
+
+export const sitioEsquema = z.object({ id: z.uuid(), nombre: z.string() });
 export type Sitio = z.infer<typeof sitioEsquema>;
+
 export const citaEsquema = z.object({
   id: z.uuid(),
   anfitrion_correo: z.email(),
   motivo: z.string().nullable(),
   fecha_desde: z.iso.date(),
   fecha_hasta: z.iso.date(),
-  // "HH:MM:SS" tal cual la devuelve Postgres (columna `time`) -- sólo se
-  // muestra, nunca se re-envía, así que no hace falta validar el formato acá.
+  // "HH:MM:SS" tal cual la devuelve Postgres (columna `time`).
   hora_estimada: z.string().nullable(),
   estado: z.enum(["VIGENTE", "CANCELADA"]),
   created_at: z.string(),
@@ -142,15 +86,84 @@ export const citaEsquema = z.object({
       placa_vehiculo: z.string().nullable(),
     }),
   ),
-  cita_sitios: z.array(
-    z.object({ sitio_id: z.uuid(), sitios: sitioEsquema.nullable() }),
-  ),
+  cita_sitios: z.array(z.object({ sitio_id: z.uuid(), sitios: sitioEsquema.nullable() })),
 });
 export type Cita = z.infer<typeof citaEsquema>;
-export type FiltroEstado = "TODAS" | "VIGENTE" | "CANCELADA" | "VENCIDA";
-export const visitanteVacio = (): FormularioCita["visitantes"][number] => ({
+
+/** Último movimiento de un visitante en la portería
+ * (`estado_visitantes_de_mis_citas`). */
+export const llegadaEsquema = z.object({
+  cita_visitante_id: z.uuid(),
+  sitio_nombre: z.string(),
+  hora_entrada: z.string(),
+  hora_salida: z.string().nullable(),
+  gafete_numero: z.number().nullable(),
+});
+export type Llegada = z.infer<typeof llegadaEsquema>;
+
+/** Persona que el anfitrión ya agendó antes (`visitantes_anteriores`). */
+export const visitanteAnteriorEsquema = z.object({
+  cedula: z.string(),
+  nombre: z.string(),
+  empresa: z.string().nullable(),
+  placa_vehiculo: z.string().nullable(),
+  ultima_vez: z.iso.date(),
+});
+export type VisitanteAnterior = z.infer<typeof visitanteAnteriorEsquema>;
+
+export type EstadoVisitante =
+  | { tipo: "espera" }
+  | { tipo: "adentro"; desde: string; gafete: number | null; sitio: string }
+  | { tipo: "salio"; hora: string; sitio: string };
+
+export function estadoVisitante(llegada: Llegada | undefined): EstadoVisitante {
+  if (!llegada) return { tipo: "espera" };
+  if (llegada.hora_salida) return { tipo: "salio", hora: llegada.hora_salida, sitio: llegada.sitio_nombre };
+  return { tipo: "adentro", desde: llegada.hora_entrada, gafete: llegada.gafete_numero, sitio: llegada.sitio_nombre };
+}
+
+/** Separa las citas vigentes en "Hoy" (hoy cae dentro de su rango) y
+ * "Próximas" (empiezan después), cada grupo ordenado por fecha y hora. Las
+ * vencidas y canceladas van al historial. */
+export function agruparCitas(citas: Cita[], hoy = hoyCostaRica()) {
+  const orden = (a: Cita, b: Cita) =>
+    a.fecha_desde.localeCompare(b.fecha_desde) || (a.hora_estimada ?? "99").localeCompare(b.hora_estimada ?? "99");
+  const vigentes = citas.filter((c) => c.estado === "VIGENTE" && c.fecha_hasta >= hoy);
+  return {
+    hoy: vigentes.filter((c) => c.fecha_desde <= hoy).sort(orden),
+    proximas: vigentes.filter((c) => c.fecha_desde > hoy).sort(orden),
+  };
+}
+
+/** Título de una cita para la lista: el motivo, o quién viene. */
+export function tituloCita(cita: Pick<Cita, "motivo" | "cita_visitantes">) {
+  if (cita.motivo) return cita.motivo;
+  const personas = cita.cita_visitantes;
+  if (personas.length === 1) return `Visita de ${personas[0].nombre}`;
+  return `Visita de ${personas.length} personas`;
+}
+
+export const visitanteVacio = (): VisitanteFormulario => ({
   nombre: "",
   cedula: "",
   empresa: "",
   placa_vehiculo: "",
 });
+
+/** Valores del formulario a partir de una cita guardada (editar o duplicar). */
+export function formularioDesdeCita(cita: Cita, hoy = hoyCostaRica()): FormularioCita {
+  const desde = cita.fecha_desde < hoy ? hoy : cita.fecha_desde;
+  return {
+    fecha_desde: desde,
+    fecha_hasta: cita.fecha_hasta < desde ? desde : cita.fecha_hasta,
+    hora_estimada: cita.hora_estimada ? cita.hora_estimada.slice(0, 5) : "",
+    motivo: cita.motivo ?? "",
+    sitios: cita.cita_sitios.map((s) => s.sitio_id),
+    visitantes: cita.cita_visitantes.map((v) => ({
+      nombre: v.nombre,
+      cedula: v.cedula,
+      empresa: v.empresa ?? "",
+      placa_vehiculo: v.placa_vehiculo ?? "",
+    })),
+  };
+}

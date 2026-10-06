@@ -1,14 +1,56 @@
 # Agenda de visitas Brisas
 
-Aplicación para anfitriones: ingresar con Google, agendar personas y grupos en
-uno o varios sitios, consultar citas propias y cancelar. El registro físico de
-entrada/salida pertenece a la aplicación del punto de acceso.
+Aplicación para anfitriones: ingresar con Google, avisar a la portería quién
+viene, cuándo y a qué lugar, y ver cuándo llega cada persona. El registro físico
+de entrada/salida pertenece a la aplicación del punto de acceso.
+
+## Pantallas
+
+| Ruta | Qué hace |
+| --- | --- |
+| `/visitas` | Mis visitas: las de hoy con el estado de cada persona («Llegó 9:12 · gafete 7», «Sin llegar», «Salió»), se refresca cada 30 s; y las próximas. |
+| `/agendar` | Formulario de una sola página: ¿Quién viene? (con buscador de personas que ya vinieron), ¿Cuándo? (Hoy / Mañana / Varios días y hora estimada), ¿Dónde?, Motivo. Barra inferior con el resumen y el botón. `?desde=<id>` duplica una visita. |
+| `/visitas/:id` | Detalle: personas y su estado, lugar, motivo; Editar, Duplicar y Cancelar. |
+| `/visitas/:id/editar` | Editar. Sólo si la visita está vigente y nadie entró todavía. |
+| `/historial` | Canceladas y pasadas, paginado. |
+
+Las rutas viejas (`/citas`, `/nueva`) y la vuelta de Google (`/auth/callback`)
+llevan a `/visitas`.
+
+## Diseño
+
+Misma familia visual que el panel: los tokens de `design/brisas.json` y los
+controles compartidos, generados por `design/generar.mjs` en `src/diseno.css` y
+`src/controles.css` (no editarlos a mano). Tailwind v4 para la maquetación; lo
+propio vive en `@layer components` de `src/index.css` para que las utilidades
+siempre ganen. Una columna de hasta 720 px, pensada primero para el teléfono.
+Tema claro/oscuro con `data-theme` en `<html>` (clave `brisas:tema`), igual que
+el panel. Textos en «usted» y horas en 24 h.
+
+## Escrituras: sólo por funciones de la base
+
+El anfitrión no escribe tablas directamente: la migración
+`20261005130000_visitas_web_anfitrion.sql` quitó esas políticas. Todo pasa por
+funciones que validan dueño, fechas, límites y cuenta activa:
+
+- `crear_cita_anfitrion`: idempotente por el id que genera el cliente; un
+  reintento con el mismo contenido devuelve la misma cita.
+- `editar_cita_anfitrion`: cancela la vieja y crea la nueva en un solo paso, para
+  que el cambio llegue a todas las porterías (la sincronización del núcleo no
+  borra visitantes). Se rechaza si alguien de la visita ya entró.
+- `cancelar_cita_anfitrion`.
+- `estado_visitantes_de_mis_citas`: quién llegó, sin dar acceso a los
+  movimientos de la portería.
+- `visitantes_anteriores`: personas que ese anfitrión ya agendó.
+
+**Orden de despliegue:** esa migración y esta web salen juntas. La web anterior
+cancelaba con un `UPDATE` directo que la migración deshabilita.
 
 ## Organización
 
 - `web/` conserva el panel administrativo y su despliegue actual.
 - `web-visitas/` es esta aplicación, con dependencias y despliegue independientes.
-- `design/brisas.css` se importa directamente desde el diseño compartido generado;
+- `src/diseno.css` y `src/controles.css` los genera `design/generar.mjs`;
   `design/brisas.json` y `design/controles.css` siguen siendo la fuente de verdad.
 - No importa código del núcleo, escritorio, móvil ni del panel.
 
@@ -36,8 +78,15 @@ npx wrangler deploy --dry-run
 Las pruebas de navegador ejecutan el paquete de producción con Wrangler local
 en `127.0.0.1:8791`, con las cabeceras de seguridad reales. Interceptan Supabase
 con personas ficticias; no escriben en el proyecto real. Cubren temas, tamaños
-de pantalla, autorización denegada, formulario, duplicados, reintentos y
-cancelación. Las capturas quedan en `test-results/` (ignorado por Git).
+(escritorio y móvil), autorización denegada, Mis visitas con llegadas,
+historial, agendar con validación, duplicados, dos lugares y reintento
+idempotente, personas que ya vinieron, editar, cancelar, salir sin guardar y
+sin conexión. El reloj se fija en una fecha, y cualquier violación de la CSP
+hace fallar la prueba. Las capturas de cada pantalla quedan en `test-results/`
+(ignorado por Git).
+
+Los avisos breves («Visita agendada») son propios (`src/avisos.ts`) y no una
+librería: la CSP (`style-src 'self'`) no deja inyectar estilos.
 
 El flujo de GitHub Actions `.github/workflows/web.yml` verifica ambas aplicaciones
 en cada cambio relevante. No publica automáticamente.
@@ -61,9 +110,9 @@ conexión conserva el formulario de la misma cuenta y bloquea las escrituras.
 Cambiar de identidad o cerrar sesión limpia la interfaz. La preferencia de tema
 es el único dato que se guarda en `localStorage`.
 
-La lista se pagina en el servidor. El filtro «Vigentes» incluye citas futuras
-cuyo estado es `VIGENTE`; «Vencidas» compara la fecha final con el día actual en
-Costa Rica y nunca persiste un tercer estado.
+«Hoy» y «Próximas» son las citas `VIGENTE` cuya fecha final es hoy o después
+(día de Costa Rica). El historial (canceladas o con fecha final pasada) se pagina
+en el servidor. «Pasada» se calcula, nunca se guarda como un tercer estado.
 
 El formulario admite hasta 50 visitantes y 100 sitios por cita; no determina un
 máximo de días de negocio. Los límites, la normalización del documento y el

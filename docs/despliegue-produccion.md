@@ -192,6 +192,72 @@ por los tests de Deno y del núcleo.
 Orden en producción: después de 2.6, desplegar las dos funciones, publicar
 el panel y aplicar la migración (no rompe nada si va antes).
 
+### 2.8 Web de visitas nueva (staging, 2026-10-05)
+
+Rama `feat/web-visitas` (sale de `feat/reglas-compartidas`). Reemplaza a la
+línea vieja `claude/rediseno-web-visitas` (filas 2 a 4 y sección 2.3): la web
+nueva **no usa** esas tablas ni esas funciones, trabaja sobre el modelo de
+citas que ya leen escritorio y teléfono (`citas`, `cita_sitios`,
+`cita_visitantes`, `movimientos_visita`). Esas filas no se llevan a producción
+con esta rama.
+
+Migración `20261005130000_visitas_web_anfitrion.sql`, en dos partes en staging
+porque la herramienta de Supabase se cuelga con los `drop policy`:
+
+| Parte | Estado en staging |
+|---|---|
+| Funciones (todo menos los `drop policy`): `crear_cita_anfitrion` (reemplazada), `editar_cita_anfitrion`, `cancelar_cita_anfitrion`, `estado_visitantes_de_mis_citas`, `visitantes_anteriores` y las auxiliares de `private` | Aplicada (nombre `visitas_web_anfitrion_funciones`) |
+| Los 7 `drop policy` de escritura directa del anfitrión (al principio del archivo) | Aplicada el 2026-10-05 por el dueño en el editor SQL (no figura en el historial). Verificado: no queda ninguna política `anfitrion%` que no sea `SELECT` en esas tres tablas (sólo la restrictiva "solo dispositivos vigentes"); como anfitrión, un `insert` directo → 42501 y un `update` directo → 0 filas, mientras crear y cancelar por las funciones siguen funcionando |
+
+Probado contra staging como anfitrión (dentro de una transacción que se
+deshizo; no quedó nada guardado):
+- crear → id pedido; el reintento igual devuelve la misma; el mismo id con
+  otro contenido → 23505; fecha pasada → rechazada;
+- la cédula se guarda en su forma única (`1-0847-0293` → `108470293`);
+- personas anteriores: 3 sin filtro, 1 buscando por nombre;
+- editar → la vieja queda CANCELADA y la nueva VIGENTE; el reintento devuelve
+  la misma nueva; editar una cancelada → rechazado;
+- cancelar dos veces → sin error (idempotente);
+- otro anfitrión: cancelar → P0002, llegadas → 0 filas.
+
+El rechazo de editar "si alguien ya entró" está cubierto por
+`supabase/tests/visitas_anfitrion.sql`; no se probó en vivo porque la cita de
+prueba (`dfc2f424…`, cédula 900000077) todavía no tiene entrada en la
+portería del sandbox.
+
+**Orden en producción:** la migración y la web nueva salen **juntas**: la web
+vieja cancelaba con un `UPDATE` directo, y los `drop policy` lo deshabilitan.
+Las funciones solas no rompen nada (la web vieja sigue funcionando); los
+`drop policy` van después de publicar la web nueva.
+
+**Reglas del núcleo en la web (2026-10-05):** la web valida la cita con
+`reglas/src/cita.rs` por WebAssembly (ver
+`docs/arquitectura/reglas-compartidas.md`). Al publicarla, su `_headers` ya
+trae `'wasm-unsafe-eval'` en `script-src`; sin eso el navegador bloquea el
+paquete y el botón "Agendar" queda deshabilitado con el aviso de recargar.
+El WebAssembly no necesita migración.
+
+**La base con las mismas reglas:** migración
+`20261005133000_guardar_cita_reglas_del_nucleo.sql`. `private.guardar_cita`
+deja de guardar "como vino" un documento que no se puede normalizar: exige
+la forma única de `normalizar_cedula`, de 3 a 20 caracteres (antes, hasta 30;
+uno de 21 a 30 se agendaba y la portería nunca lo reconocía). Además colapsa
+los espacios del nombre (mínimo 2 caracteres) y pasa la placa a mayúsculas.
+Sólo afecta lo que se guarde de ahí en adelante.
+
+| Estado en staging | |
+|---|---|
+| Aplicada el 2026-10-05 (nombre `guardar_cita_reglas_del_nucleo`) | Antes de aplicarla: 3 visitantes en `cita_visitantes`, ninguno fuera de la regla. Verificado en un bloque que se deshizo: 21 caracteres, `AB` y `12#45` → "Documento de visitante inválido…"; `01-0847-0293` / `  Ana   María ` / ` abc123 ` → `108470293` / `Ana María` / `ABC123`. Batería `supabase/tests/visitas_anfitrion.sql` en verde (con la función vieja falla en el caso de 21 caracteres) |
+
+**Antes de aplicarla en producción** (sólo lectura, con autorización):
+```sql
+select count(*) filter (where public.normalizar_cedula(cedula) is null or length(cedula) < 3) as fuera_de_regla
+from public.cita_visitantes;
+```
+Si da más de 0, esas citas ya no coinciden en la portería; se revisan a mano,
+pero no impiden aplicar la migración (no toca filas existentes). Va después de
+`20261005130000_visitas_web_anfitrion.sql`, que crea la función.
+
 ### 2.6 Edge Function `admin-crear-contratista` (reglas compartidas, 2026-10-04)
 
 Rama `feat/reglas-compartidas`. Contexto completo en
@@ -252,7 +318,8 @@ equipo.
 3. Publicar apps (escritorio y móvil) desde N1. Primero un equipo de
    prueba, luego el resto. El acceso negado en todas las puertas viaja en
    las apps y no necesita nada en Supabase.
-4. Visitas y rutas: cada una con su rama, por separado.
+4. Visitas y rutas: cada una con su rama, por separado. Visitas: la web de
+   `feat/web-visitas` con su migración (sección 2.8), no la rama vieja.
 
 ## 5. Aplicado en producción
 
