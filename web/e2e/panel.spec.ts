@@ -63,6 +63,26 @@ async function preparar(page: Page) {
     if (url.pathname === "/auth/v1/logout") return responder({});
     if (url.pathname === "/rest/v1/administradores_panel") return responder({ correo });
     if (url.pathname === "/rest/v1/empresas") return responder([{ id: "e1", nombre: "EMPRESA DE PRUEBA" }]);
+    if (url.pathname === "/rest/v1/rpc/panel_anfitriones")
+      return responder([
+        {
+          correo: "ana@empresa.example",
+          nombre: "ANA MORA",
+          activo: true,
+          estado: "activa",
+          codigo_vence: null,
+          creado_en: "2026-10-01T15:00:00Z",
+        },
+      ]);
+    if (url.pathname === "/functions/v1/admin-anfitriones") {
+      const datos = peticion.postDataJSON() as { accion: string; correo: string; nombre?: string };
+      return responder({
+        correo: datos.correo,
+        nombre: datos.nombre ?? "ANA MORA",
+        codigo: datos.accion === "crear" ? "ABCDE23456" : "FGHJK78923",
+        vence: "2026-10-09T18:00:00Z",
+      });
+    }
     if (url.pathname === "/functions/v1/admin-crear-contratista")
       return responder({
         id: "9",
@@ -286,6 +306,31 @@ test("Usuarios: Editar cambia nombre y rol, no la cédula", async ({ page }) => 
   await modal.getByRole("button", { name: "Guardar" }).click();
   expect((await pedido).postDataJSON()).toEqual({ nombre: "OPERADORA NUEVA", rol: "ADMINISTRADOR" });
   await expect(page.getByText("OPERADORA NUEVA actualizado.")).toBeVisible();
+});
+
+test("Anfitriones: alta y restablecer muestran el código de activación una sola vez", async ({ page }) => {
+  await preparar(page);
+  await page.goto("/anfitriones");
+  await expect(page.getByText("ANA MORA")).toBeVisible();
+
+  await page.getByRole("button", { name: "+ Nuevo" }).click();
+  const modal = page.getByRole("dialog");
+  await modal.getByLabel("Correo de la empresa").fill("luis@empresa.example");
+  await modal.getByLabel("Nombre").fill("luis rojas");
+  const alta = page.waitForRequest("**/functions/v1/admin-anfitriones");
+  await modal.getByRole("button", { name: "Crear anfitrión" }).click();
+  expect((await alta).postDataJSON()).toEqual({ accion: "crear", correo: "luis@empresa.example", nombre: "LUIS ROJAS" });
+  await expect(page.getByText("ABCDE-23456")).toBeVisible();
+  await page.getByRole("button", { name: "Ya lo copié" }).click();
+  await expect(page.getByText("ABCDE-23456")).toBeHidden();
+
+  // En pantallas angostas la grilla virtualiza las columnas del final.
+  if (test.info().project.name === "escritorio") {
+    const restablecer = page.waitForRequest("**/functions/v1/admin-anfitriones");
+    await page.getByRole("button", { name: "Restablecer contraseña" }).click();
+    expect((await restablecer).postDataJSON()).toEqual({ accion: "restablecer", correo: "ana@empresa.example" });
+    await expect(page.getByText("FGHJK-78923")).toBeVisible();
+  }
 });
 
 test("Sesiones muestra la bitácora con el motivo del cierre", async ({ page }) => {

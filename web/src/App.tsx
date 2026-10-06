@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "sonner";
-import { BellRing, DoorOpen, History, LogIn, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
+import { BellRing, CalendarCheck, DoorOpen, History, LogIn, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
@@ -17,6 +17,7 @@ const Historial = lazy(() => import("./pantallas/Historial"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
 const AdentroAhora = lazy(() => import("./pantallas/AdentroAhora"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
+const Anfitriones = lazy(() => import("./pantallas/Anfitriones"));
 const Sesiones = lazy(() => import("./pantallas/Sesiones"));
 const Avisos = lazy(() => import("./pantallas/Avisos"));
 
@@ -26,6 +27,7 @@ export type Seccion =
   | "adentro"
   | "contratistas"
   | "usuarios"
+  | "anfitriones"
   | "sesiones"
   | "avisos";
 
@@ -59,6 +61,8 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "adentro", etiqueta: "Adentro ahora", Icono: DoorOpen },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
+  // Cuentas de la web de visitas (visitas.megabrisas.com).
+  { id: "anfitriones", etiqueta: "Anfitriones", Icono: CalendarCheck },
   { id: "sesiones", etiqueta: "Sesiones", Icono: LogIn },
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
   { id: "avisos", etiqueta: "Avisos", Icono: BellRing },
@@ -290,6 +294,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                     <Contratistas />
                   ) : id === "usuarios" ? (
                     <Usuarios />
+                  ) : id === "anfitriones" ? (
+                    <Anfitriones />
                   ) : id === "sesiones" ? (
                     <Sesiones />
                   ) : id === "avisos" ? (
