@@ -559,6 +559,9 @@ equipo.
 |---|---|---|---|
 | 2026-09-29 | `cambio_nube_lleva_la_fila_de_ingresos` | Daniel Quintana (dueño), para el PR de `claude/fusion-integral` | `lleva_la_fila = true`; los 14 triggers siguen apuntando a la función. Definición anterior guardada: es la de `20260906044549_avisa_cambio_nube_segun_quien_escribe_no_quien_creo_la_fila.sql` (para deshacer). |
 | 2026-09-29 | `hora_servidor_ms` | Daniel Quintana (dueño), para el PR de `claude/fusion-integral` | `diferencia_ms = 5`; ejecutable por `anon` y `authenticated`. |
+| 2026-10-06 | Migración 1 (`ingresos_por_correo`) | Daniel Quintana (dueño), merge del PR #111 | La aplicó la integración de GitHub al mergear, con la versión del archivo (`20261003210000`). |
+| 2026-10-06 | Migraciones 2 a 6 | Daniel Quintana (dueño), merge del PR #115 | Aplicadas por la integración con sus versiones exactas. Antes, 0 visitas abiertas duplicadas (0.5). |
+| 2026-10-06 | Edge Functions `admin-crear-contratista` y `admin-editar-contratista` (nuevas, commit `88960f3`) y `admin-enviar-push` (versión 2, commit `aafae89`) | Daniel Quintana (dueño), antes del PR #116 | Desplegadas con un `index.ts` que importa el archivo del repo fijado al commit. Las tres responden 401 a quien no es administrador (arrancan y cargan el WebAssembly). La integración **no** despliega funciones: sólo migraciones. |
 
 Asesor de seguridad de Supabase después de aplicar: sólo avisos anteriores
 (`plegar_texto` sin `search_path` fijo, `pg_net` en `public`, protección de
