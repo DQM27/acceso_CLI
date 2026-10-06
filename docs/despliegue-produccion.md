@@ -11,44 +11,57 @@ sección "Aplicado en producción" con fecha y quién lo autorizó.
 
 Última revisión: 2026-10-05.
 
-## 0. Lista de verificación para el PR a main (auditada el 2026-10-05)
+## 0. Lista de verificación para los PR a main (auditada otra vez el 2026-10-06)
 
-Cruce hecho por nombre entre el repo (114 migraciones de nube), staging (53
-en su historial) y producción (104 en su historial, sólo lectura de la lista).
+Cruce hecho por nombre entre el repo (117 migraciones de nube en
+`feat/visitas-movil`, sin versiones repetidas), staging (55 en su historial) y
+producción (104 en su historial, sólo lectura de la lista). Todo lo que está en
+`main` ya está en producción, y producción no tiene nada que el repo no tenga.
 
-### 0.1 Qué lleva el PR
+### 0.1 Qué lleva cada PR
 
 Las ramas forman una sola cadena, cada una contiene a la anterior:
 
 `main` → `feat/ingreso-por-correo` → `fix/carreras-ingresos-y-gafetes` →
 `feat/reglas-compartidas` → `feat/web-visitas` → `feat/escritorio-pendientes`
+→ `feat/visitas-movil`
 
-Un PR de **`feat/escritorio-pendientes` contra `main`** lleva todo junto, sin
-choques: main no tiene ningún commit que la rama no tenga. No hay versiones de
-migración repetidas en el repo. (`prueba/radix-visitas` sale de
-`feat/web-visitas` y es aparte: no forma parte de este PR.)
+Se mergean **en ese orden, un PR por rama contra `main`**, con *merge commit*
+(no squash ni rebase: reescribir los commits rompería las ramas siguientes).
+Cada PR lleva sólo lo nuevo de su rama; la columna "Rama" de 0.2 dice qué
+migraciones trae cada uno. Mergear no aplica nada en Supabase ni publica las
+apps (salen con tags `v*`): producción cambia recién cuando se siguen los pasos
+de 0.7.
 
-### 0.2 Migraciones de nube pendientes en producción (11, en este orden)
+Fuera de la cadena:
+- `prueba/radix-visitas`: ya está entera dentro de la cadena; no lleva PR.
+- `feat/analisis-syncfusion`: otra línea, con su propia migración
+  (`panel_resumen_movimientos`, ya aplicada en staging). PR aparte.
+- `claude/rediseno-web-visitas`: reemplazada por la web de visitas nueva; no
+  se mergea (ver 0.6).
+- PR de Dependabot (#92, #94, #99, #103, #104, #106): después de la cadena.
+
+### 0.2 Migraciones de nube pendientes en producción (13, en este orden)
 
 Producción tiene las 104 primeras del repo; le faltan exactamente estas. En
 staging se comparan por **nombre** (staging anota la hora de aplicación, no la
 versión del archivo).
 
-| # | Archivo del repo | En staging | Cuándo va en producción |
-|---|---|---|---|
-| 1 | `20261003210000_ingresos_por_correo.sql` | En el historial | Antes de las apps nuevas |
-| 2 | `20261004120000_conflictos_misma_unidad_y_gafete_de_visita.sql` | En el historial | Antes de las apps nuevas (ver 2.5b) |
-| 3 | `20261004130000_visitas_ven_otras_unidades.sql` | En el historial | Igual que la 2. Antes, revisar 0.5 |
-| 4 | `20261004140000_gafete_de_visita_unico_en_visitas.sql` | En el historial | Igual que la 2. Antes, revisar 0.5 |
-| 5 | `20261004150000_persona_adentro_por_una_sola_via.sql` | En el historial | Igual que la 2 |
-| 6 | `20261004160000_registrar_token_push_sin_choques.sql` | **A mano**, no figura en el historial. Verificado: la función tiene el candado `token_push:` | Cuando sea; no rompe nada |
-| 7 | `20261004170000_alta_de_contratistas_por_edge_function.sql` | **A mano**, no figura. Verificado: `panel_crear_contratista` ya no existe | **Después** de desplegar la Edge Function `admin-crear-contratista` y publicar el panel nuevo: borra la función SQL que usa el panel viejo (ver 2.6) |
-| 8 | `20261005120000_usuarios_nombre_obligatorio.sql` | En el historial | Cuando sea (ver 2.7) |
-| 9 | `20261005130000_visitas_web_anfitrion.sql` | **En dos partes:** las funciones en el historial como `visitas_web_anfitrion_funciones`; los 7 `drop policy`, a mano. Verificado: 4 funciones nuevas y 0 políticas de escritura directa del anfitrión | Las funciones, cuando sea; los `drop policy`, **después** de publicar la web de visitas nueva (ver 2.8). Si se aplica el archivo entero, tiene que ser junto con la web |
-| 10 | `20261005133000_guardar_cita_reglas_del_nucleo.sql` | En el historial | Después de la 9 (reemplaza `guardar_cita`, que crea la 9). No rompe nada: la web nueva ya valida igual. Antes, la consulta de sólo lectura de 2.8 |
-| 11 | `20261005140000_movimientos_visita_placa.sql` | En el historial | **Antes** de la app de escritorio nueva (ver 2.9) |
-| 12 | `20261006100000_nombres_de_visitantes_en_mayuscula.sql` | En el historial (rama `feat/visitas-movil`) | Después de la 10 (reemplaza `guardar_cita`). No rompe nada (ver 2.11) |
-| 13 | `20261006101000_nombre_de_usuarios_en_mayuscula.sql` | En el historial (rama `feat/visitas-movil`) | Cuando sea (ver 2.11) |
+| # | Archivo del repo | Rama (PR) | En staging | Cuándo va en producción |
+|---|---|---|---|---|
+| 1 | `20261003210000_ingresos_por_correo.sql` | `feat/ingreso-por-correo` | En el historial | Antes de las apps nuevas |
+| 2 | `20261004120000_conflictos_misma_unidad_y_gafete_de_visita.sql` | `fix/carreras-ingresos-y-gafetes` | En el historial | Antes de las apps nuevas (ver 2.5b) |
+| 3 | `20261004130000_visitas_ven_otras_unidades.sql` | `fix/carreras-ingresos-y-gafetes` | En el historial | Igual que la 2. Antes, revisar 0.5 |
+| 4 | `20261004140000_gafete_de_visita_unico_en_visitas.sql` | `fix/carreras-ingresos-y-gafetes` | En el historial | Igual que la 2. Antes, revisar 0.5 |
+| 5 | `20261004150000_persona_adentro_por_una_sola_via.sql` | `fix/carreras-ingresos-y-gafetes` | En el historial | Igual que la 2 |
+| 6 | `20261004160000_registrar_token_push_sin_choques.sql` | `fix/carreras-ingresos-y-gafetes` | **A mano**, no figura en el historial. Verificado: la función tiene el candado `token_push:` | Cuando sea; no rompe nada |
+| 7 | `20261004170000_alta_de_contratistas_por_edge_function.sql` | `feat/reglas-compartidas` | **A mano**, no figura. Verificado: `panel_crear_contratista` ya no existe | **Después** de desplegar la Edge Function `admin-crear-contratista` y publicar el panel nuevo: borra la función SQL que usa el panel viejo (ver 2.6) |
+| 8 | `20261005120000_usuarios_nombre_obligatorio.sql` | `feat/reglas-compartidas` | En el historial | Cuando sea (ver 2.7) |
+| 9 | `20261005130000_visitas_web_anfitrion.sql` | `feat/web-visitas` | **En dos partes:** las funciones en el historial como `visitas_web_anfitrion_funciones`; los 7 `drop policy`, a mano. Verificado: 4 funciones nuevas y 0 políticas de escritura directa del anfitrión | Las funciones, cuando sea; los `drop policy`, **después** de publicar la web de visitas nueva (ver 2.8). Si se aplica el archivo entero, tiene que ser junto con la web |
+| 10 | `20261005133000_guardar_cita_reglas_del_nucleo.sql` | `feat/web-visitas` | En el historial | Después de la 9 (reemplaza `guardar_cita`, que crea la 9). No rompe nada: la web nueva ya valida igual. Antes, la consulta de sólo lectura de 2.8 |
+| 11 | `20261005140000_movimientos_visita_placa.sql` | `feat/escritorio-pendientes` | En el historial | **Antes** de las apps nuevas de escritorio y teléfono: las dos suben la placa (ver 2.9 y 2.10) |
+| 12 | `20261006100000_nombres_de_visitantes_en_mayuscula.sql` | `feat/visitas-movil` | En el historial | Después de la 10 (reemplaza `guardar_cita`). No rompe nada (ver 2.11) |
+| 13 | `20261006101000_nombre_de_usuarios_en_mayuscula.sql` | `feat/visitas-movil` | En el historial | Cuando sea (ver 2.11) |
 
 Las tres "a mano" (6, 7 y la segunda parte de la 9) existen en staging aunque
 su historial no las nombre. Para producción conviene aplicarlas con la
@@ -58,11 +71,24 @@ con las mismas consultas.
 
 ### 0.3 Edge Functions
 
-| Función | Estado | Producción |
-|---|---|---|
-| `admin-crear-contratista` | Nueva. En staging, versión 3 | Desplegar antes de publicar el panel y antes de la migración 7 |
-| `admin-editar-contratista` | Nueva. En staging, versión 1 | Desplegar antes de publicar el panel |
-| Las otras 10 (`device-auth`, `admin-*`, `device-vincular`, `sync-access-policy`) | Sólo cambia la línea de tipos (`functions-js@2`), sin cambio de comportamiento | Volver a desplegar es opcional |
+Comparadas el 2026-10-06 contra lo desplegado en staging y producción.
+
+| Función | Cambio en la cadena | Staging | Producción |
+|---|---|---|---|
+| `admin-crear-contratista` | Nueva (`feat/reglas-compartidas`) | Versión 3 | **Desplegar** antes de publicar el panel y antes de la migración 7 |
+| `admin-editar-contratista` | Nueva (`feat/reglas-compartidas`) | Versión 1 | **Desplegar** antes de publicar el panel |
+| `admin-enviar-push` | Borra tokens muertos por token, no por equipo (`fix/carreras-ingresos-y-gafetes`) | **No desplegado**: sigue la versión del 03/10 | **Desplegar** (también en staging) |
+| `admin-create-usuario` | Nombre en mayúscula con la regla del núcleo (`feat/visitas-movil`) | **No desplegado** (el trigger de la migración 13 cubre el alta mientras tanto) | Desplegar; sin apuro si la 13 ya está aplicada |
+| Las otras 8 (`device-auth`, `device-vincular`, `admin-create-site`, `admin-delete-device`, `admin-list-devices`, `admin-provision-device`, `admin-reset-password-usuario`, `admin-revoke-device`) | Sólo la línea de tipos (`functions-js@2`), sin cambio de comportamiento | — | Volver a desplegar es opcional |
+| `sync-access-policy` | Sin cambios | — | — |
+
+Staging además tiene `admin-suspend-device` y `admin-crear-codigo-vinculacion`,
+que no están en el repo ni en producción: no van.
+
+Para desplegar las que usan las reglas (`admin-crear-contratista`,
+`admin-editar-contratista`, `admin-create-usuario`) hay que subir también
+`_shared/reglas/` (el WebAssembly comprimido): conviene la CLI,
+`supabase functions deploy <nombre>`.
 
 ### 0.4 Base local de los equipos (SQLite)
 
@@ -114,12 +140,15 @@ group by 1, 2 having count(*) > 1;
 
 ### 0.7 Orden completo sugerido para producción
 
+Los números son los de la tabla de 0.2.
+
 1. Respaldo (sección 1).
 2. Migración 1 (`ingresos_por_correo`).
 3. Revisar 0.5 y aplicar las migraciones 2 a 5.
-4. Migraciones 6 y 8, y la parte de funciones de la 9.
-5. Migración 10 (`movimientos_visita_placa`).
-6. Desplegar `admin-crear-contratista` y `admin-editar-contratista`.
+4. Migraciones 6 y 8, la parte de funciones de la 9, y la 10.
+5. Migraciones 11 (`movimientos_visita_placa`), 12 y 13.
+6. Desplegar las Edge Functions de 0.3: `admin-crear-contratista`,
+   `admin-editar-contratista`, `admin-enviar-push` y `admin-create-usuario`.
 7. Publicar el panel web, la web de visitas y las apps (escritorio y teléfono;
    primero un equipo de prueba).
 8. Migración 7 y los `drop policy` de la 9.
