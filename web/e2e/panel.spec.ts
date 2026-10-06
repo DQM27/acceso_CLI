@@ -63,7 +63,7 @@ async function preparar(page: Page) {
     if (url.pathname === "/auth/v1/logout") return responder({});
     if (url.pathname === "/rest/v1/administradores_panel") return responder({ correo });
     if (url.pathname === "/rest/v1/empresas") return responder([{ id: "e1", nombre: "EMPRESA DE PRUEBA" }]);
-    if (url.pathname === "/rest/v1/rpc/panel_crear_contratista")
+    if (url.pathname === "/functions/v1/admin-crear-contratista")
       return responder({
         id: "9",
         identificacion: "112340567",
@@ -74,12 +74,26 @@ async function preparar(page: Page) {
         es_personal_ruta: false,
         activo: false,
       });
+    if (url.pathname === "/functions/v1/admin-editar-contratista") {
+      const cuerpo = peticion.postDataJSON() as { nombre: string };
+      return responder({
+        id: "1",
+        identificacion: "123456789",
+        nombre: cuerpo.nombre.toUpperCase(),
+        empresa_nombre: "EMPRESA DE PRUEBA",
+        tipo_ingreso: "PRAIND",
+        fecha_vencimiento_praind: "2026-09-01",
+        es_personal_ruta: false,
+        activo: true,
+      });
+    }
     if (url.pathname === "/rest/v1/panel_contratistas_estado")
       return responder([
         {
           id: "1",
           identificacion: "1-2345-6789",
           nombre: "Contratista de prueba",
+          empresa_id: "e1",
           empresa_nombre: "Empresa de prueba",
           tipo_ingreso: "PRAIND",
           fecha_vencimiento_praind: "2026-09-01",
@@ -127,6 +141,8 @@ async function preparar(page: Page) {
           abierta: false,
         },
       ]);
+    // Como la base real con `select`: devuelve la fila cambiada.
+    if (url.pathname === "/rest/v1/usuarios" && peticion.method() === "PATCH") return responder([{ id: "1" }]);
     if (url.pathname === "/rest/v1/usuarios")
       return responder([
         { id: "1", cedula: "1-2345-6789", nombre: "Operador de prueba", rol: "OPERADOR", activo: true },
@@ -233,6 +249,42 @@ test("Contratistas: el modal registra a alguien con el acceso denegado", async (
 
   await expect(page.getByText("ANA PEREZ registrado con el acceso denegado.")).toBeVisible();
   await expect(modal).toBeHidden();
+});
+
+test("Contratistas: Editar corrige los datos con las reglas del núcleo", async ({ page }) => {
+  await preparar(page);
+  await page.goto("/contratistas");
+  await expect(page.getByText("Contratista de prueba")).toBeVisible();
+  await page.getByRole("button", { name: "Editar" }).first().click();
+
+  const modal = page.getByRole("dialog");
+  await expect(modal.getByText("Editar contratista")).toBeVisible();
+  await expect(modal.getByLabel("Cédula")).toHaveValue("1-2345-6789");
+  // Tiene el PRAIND vencido: igual se le corrige el nombre sin tocar la fecha
+  // (las reglas del núcleo reciben lo que tenía guardado).
+  await modal.getByLabel("Nombre").fill("Contratista corregido");
+  const pedido = page.waitForRequest("**/functions/v1/admin-editar-contratista");
+  await modal.getByRole("button", { name: "Guardar" }).click();
+  expect((await pedido).postDataJSON()).toMatchObject({ id: "1", nombre: "Contratista corregido", empresa_id: "e1" });
+
+  await expect(page.getByText("CONTRATISTA CORREGIDO actualizado.")).toBeVisible();
+  await expect(modal).toBeHidden();
+});
+
+test("Usuarios: Editar cambia nombre y rol, no la cédula", async ({ page }) => {
+  await preparar(page);
+  await page.goto("/usuarios");
+  await expect(page.getByText("Operador de prueba")).toBeVisible();
+  await page.getByRole("button", { name: "Editar" }).first().click();
+
+  const modal = page.getByRole("dialog");
+  await expect(modal.getByLabel("Cédula")).toBeDisabled();
+  await modal.getByLabel("Nombre").fill("Operadora nueva");
+  await modal.getByLabel("Rol").selectOption("ADMINISTRADOR");
+  const pedido = page.waitForRequest((p) => p.url().includes("/rest/v1/usuarios") && p.method() === "PATCH");
+  await modal.getByRole("button", { name: "Guardar" }).click();
+  expect((await pedido).postDataJSON()).toEqual({ nombre: "Operadora nueva", rol: "ADMINISTRADOR" });
+  await expect(page.getByText("Operadora nueva actualizado.")).toBeVisible();
 });
 
 test("Sesiones muestra la bitácora con el motivo del cierre", async ({ page }) => {

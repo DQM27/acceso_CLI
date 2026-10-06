@@ -213,6 +213,16 @@ impl AppCore {
         {
             return Err(ContratistaServiceError::OperacionNoAutorizada);
         }
+        // Quien está adentro conserva su cédula hasta salir (ver
+        // `CedulaConIngresoActivo`).
+        if actual.cedula != cedula_nueva
+            && crate::database::queries::persona_adentro::contratista_adentro(
+                &transaction,
+                &actual.cedula,
+            )?
+        {
+            return Err(ContratistaServiceError::CedulaConIngresoActivo);
+        }
         if actual.tiene_acceso != datos.tiene_acceso
             && !actor_actual
                 .rol

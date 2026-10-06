@@ -1,4 +1,5 @@
 import { z } from "../lib/validacion";
+import { esObjeto, invocar } from "./_invocar";
 import { supabase } from "../lib/supabase";
 
 /**
@@ -49,6 +50,7 @@ export type EstadoAcceso =
  * (vista `panel_contratistas_estado`, migración `vistas_estado_y_adentro`)
  * y, si tiene un ingreso abierto, dónde y desde cuándo está adentro. */
 export interface ContratistaConEstado extends Contratista {
+  empresa_id: string | null;
   empresa_activa: boolean;
   requiere_praind: boolean;
   /** Días hasta el vencimiento (negativo si ya venció); `null` sin fecha. */
@@ -83,6 +85,7 @@ const filaContratistaEsquema = z.object({
 });
 
 const filaContratistaConEstadoEsquema = filaContratistaEsquema.extend({
+  empresa_id: z.string().nullable(),
   empresa_activa: z.boolean(),
   requiere_praind: z.boolean(),
   dias_para_vencer: z.number().nullable(),
@@ -110,7 +113,7 @@ export async function listarContratistas(): Promise<ResultadoContratistas> {
   const { data, error, count } = await supabase
     .from("panel_contratistas_estado")
     .select(
-      "id, identificacion, nombre, empresa_nombre, tipo_ingreso, " +
+      "id, identificacion, nombre, empresa_id, empresa_nombre, tipo_ingreso, " +
         "fecha_vencimiento_praind, es_personal_ruta, activo, empresa_activa, " +
         "requiere_praind, dias_para_vencer, estado_praind, estado_acceso, " +
         "adentro_sitio_nombre, adentro_desde",
@@ -179,17 +182,26 @@ export interface DatosNuevoContratista {
   fecha_vencimiento_praind: string | null;
   /** `false` lo crea con el acceso denegado (el bloqueo). */
   con_acceso: boolean;
+  /** Sólo para los tipos que lo admiten (PRAIND, IN HOUSE). */
+  es_personal_ruta?: boolean;
 }
 
+/** Alta por la Edge Function `admin-crear-contratista`: valida con las
+ * reglas del núcleo (las mismas que el formulario, vía WebAssembly) y las que
+ * necesitan datos (empresa, cédula repetida), y guarda. Si rechaza, el error
+ * trae el mismo texto que muestran las apps. Reemplaza a la función SQL
+ * `panel_crear_contratista` (ver docs/arquitectura/reglas-compartidas.md). */
 export async function crearContratista(datos: DatosNuevoContratista): Promise<Contratista> {
-  const { data, error } = await supabase.rpc("panel_crear_contratista", {
-    p_cedula: datos.cedula,
-    p_nombre: datos.nombre,
-    p_empresa_id: datos.empresa_id,
-    p_tipo_ingreso: datos.tipo_ingreso,
-    p_fecha_vencimiento_praind: datos.fecha_vencimiento_praind,
-    p_con_acceso: datos.con_acceso,
-  });
-  if (error) throw new Error(error.message);
-  return filaContratistaEsquema.parse(data);
+  const fila = await invocar("admin-crear-contratista", esObjeto, { ...datos });
+  return filaContratistaEsquema.parse(fila);
+}
+
+/** Edición por la Edge Function `admin-editar-contratista`: mismas reglas
+ * del núcleo que el formulario (con lo que el contratista tenía guardado),
+ * más las que necesitan datos (empresa, cédula repetida, no cambiar la cédula
+ * de quien está adentro). Si rechaza, el error trae el mismo texto que
+ * muestran las apps. */
+export async function editarContratista(id: string, datos: DatosNuevoContratista): Promise<Contratista> {
+  const fila = await invocar("admin-editar-contratista", esObjeto, { id, ...datos });
+  return filaContratistaEsquema.parse(fila);
 }

@@ -62,6 +62,27 @@ export async function actualizarActivoUsuario(id: string, activo: boolean): Prom
   if (error) throw new Error(error.message);
 }
 
+/** Edita nombre y rol (UPDATE directo: la RLS sólo se lo permite a un
+ * administrador del panel; el nombre vacío y un rol desconocido los rechaza la
+ * base). La cédula no se cambia: es con la que la persona inicia sesión. A un
+ * ROOT no se le cambia el rol desde acá, ni se da ROOT (ver `crearUsuario`). */
+export async function editarUsuario(
+  id: string,
+  datos: { nombre: string; rol?: "ADMINISTRADOR" | "OPERADOR" },
+): Promise<void> {
+  const nombre = datos.nombre.trim();
+  if (!nombre) throw new Error("El nombre es obligatorio");
+  const cambios = datos.rol ? { nombre, rol: datos.rol } : { nombre };
+  // Si la RLS no lo deja (la sesión ya no es de un administrador), la base no
+  // da error: simplemente no cambia ninguna fila. Por eso se pide la fila de
+  // vuelta y, si no vuelve, se avisa en vez de mostrar "actualizado".
+  const { data, error } = await supabase.from("usuarios").update(cambios).eq("id", id).select("id");
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error("No se guardó: el usuario ya no existe o su sesión no tiene permiso para editarlo.");
+  }
+}
+
 export interface UsuarioCreado {
   usuario_id: string;
   cedula: string;

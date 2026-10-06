@@ -859,6 +859,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "chrono-tz",
+ "control_acceso_reglas",
  "jsonwebtoken",
  "libc",
  "log",
@@ -875,6 +876,15 @@ dependencies = [
  "thiserror 2.0.20",
  "windows 0.62.2",
  "winresource",
+]
+
+[[package]]
+name = "control_acceso_reglas"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

@@ -570,6 +570,7 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::contratistas::crear_contratista,
         comandos::contratistas::actualizar_contratista,
         comandos::contratistas::reglas_formulario_contratista,
+        comandos::contratistas::tipos_ingreso_seleccionables,
         comandos::empresas::listar_empresas,
         comandos::empresas::listar_empresas_seleccionables,
         comandos::empresas::buscar_empresas,

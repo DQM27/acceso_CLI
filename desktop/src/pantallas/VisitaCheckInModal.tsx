@@ -6,16 +6,17 @@ import {
   registrarEntradaVisita,
   verificarCheckInVisita,
 } from "../api";
-import type { MovimientoVisitaActivoResumen, PreparacionVisita } from "../api";
-import { validarGafeteOpcional, estaYaAdentro } from "./VisitaCheckInModal.logica";
+import type { PreparacionVisita } from "../api";
+import { validarGafeteOpcional } from "./VisitaCheckInModal.logica";
 
 type Estado =
   | { tipo: "buscando" }
   | { tipo: "verificando" }
   | { tipo: "encontrada"; preparacion: PreparacionVisita }
-  | { tipo: "ya-adentro"; nombre: string }
   | { tipo: "bloqueada"; mensaje: string }
-  | { tipo: "sin-cita"; mensaje: string };
+  /** El núcleo no deja seguir: sin cita, cita cancelada o vencida, acceso
+   * negado, o la persona ya está adentro. Su mensaje se muestra tal cual. */
+  | { tipo: "rechazada"; mensaje: string };
 
 /**
  * Check-in de visitas por cédula -- mismo armazón que `NuevoIngresoModal`
@@ -24,17 +25,9 @@ type Estado =
  * cédula es exacta, no hay nada que buscar por texto parcial.
  */
 export default function VisitaCheckInModal({
-  visitasActivas,
   onRegistrado,
   onCerrar,
 }: {
-  /** Para bloquear "ya está adentro" desde el paso de Verificar, antes de
-   * expandir el panel de confirmación -- `verificar_check_in_visita` sólo
-   * confirma que la cita es válida hoy, no si el visitante ya entró; eso lo
-   * decide recién `registrar_entrada` en el backend (la fuente de verdad
-   * real, esto es sólo un filtro de UI para no hacer completar un
-   * formulario que de todos modos va a fallar al confirmar). */
-  visitasActivas: MovimientoVisitaActivoResumen[];
   onRegistrado: () => void;
   onCerrar: () => void;
 }) {
@@ -69,18 +62,16 @@ export default function VisitaCheckInModal({
     setGafeteTexto("");
     setEstado({ tipo: "verificando" });
     try {
+      // "¿Ya está adentro?" lo revisa el núcleo acá mismo: si ya entró,
+      // `verificarCheckInVisita` falla con su mensaje (cae en el catch).
       const preparacion = await verificarCheckInVisita(valor);
-      if (estaYaAdentro(visitasActivas, preparacion.visitante.cedula)) {
-        setEstado({ tipo: "ya-adentro", nombre: preparacion.visitante.nombre });
-        return;
-      }
       if (!puedeContinuarVisita(preparacion)) {
         setEstado({ tipo: "bloqueada", mensaje: mensajeBloqueoVisita(preparacion) });
         return;
       }
       setEstado({ tipo: "encontrada", preparacion });
     } catch (error) {
-      setEstado({ tipo: "sin-cita", mensaje: String(error) });
+      setEstado({ tipo: "rechazada", mensaje: String(error) });
     }
   }
 
@@ -138,15 +129,9 @@ export default function VisitaCheckInModal({
 
         {mensaje && <p style={{ color: "var(--exito)", margin: 0 }}>{mensaje}</p>}
 
-        {estado.tipo === "sin-cita" && (
+        {estado.tipo === "rechazada" && (
           <p className="login-error" role="alert">
             {estado.mensaje}
-          </p>
-        )}
-
-        {estado.tipo === "ya-adentro" && (
-          <p className="login-error" role="alert">
-            {estado.nombre} ya tiene un ingreso activo — registre la salida antes de volver a entrar.
           </p>
         )}
 

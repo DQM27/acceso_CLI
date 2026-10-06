@@ -1,4 +1,7 @@
 -- Ejecutar en una sola sesión. Todas las filas de prueba se revierten.
+-- Cubre la creación desde el panel: normalizar_cedula, panel_crear_empresa y,
+-- para contratistas, lo que sigue siendo de la base desde 20261004170000 (el
+-- alta la hace la Edge Function admin-crear-contratista).
 begin;
 
 -- 1. normalizar_cedula da lo mismo que el núcleo (tests/vectores_cedula.tsv).
@@ -46,7 +49,7 @@ values ('aaaaaaaa-0000-0000-0000-00000000a002', 'Unidad de prueba contratistas')
 insert into public.empresas (id, dispositivo_origen_id, nombre, activa)
 values ('eeeeeeee-0000-0000-0000-00000000e001', null, 'EMPRESA DE PRUEBA', true);
 
--- 2. Quien no es administrador del panel no puede crear nada.
+-- 2. Quien no es administrador del panel no puede crear empresas.
 set local role authenticated;
 select set_config('request.jwt.claims',
   json_build_object('role', 'authenticated', 'email', current_setting('diagnostico.correo_normal'))::text,
@@ -54,104 +57,40 @@ select set_config('request.jwt.claims',
 do $$
 begin
   begin
-    perform public.panel_crear_contratista('112340567', 'Ana', 'eeeeeeee-0000-0000-0000-00000000e001', 'SWAT');
-    raise exception 'Un usuario sin permiso pudo crear un contratista';
-  exception when insufficient_privilege then null;
-  end;
-  begin
     perform public.panel_crear_empresa('Empresa nueva');
     raise exception 'Un usuario sin permiso pudo crear una empresa';
   exception when insufficient_privilege then null;
   end;
 end $$;
 
--- 3. Un administrador del panel sí, con las reglas del núcleo.
+-- 3. Contratistas: desde 20261004170000 el alta del panel la hace la Edge
+--    Function `admin-crear-contratista` (reglas del núcleo, vía WebAssembly;
+--    sus tests están en supabase/functions/admin-crear-contratista/). Acá se
+--    prueba lo que sigue siendo de la base.
 select set_config('request.jwt.claims',
   json_build_object('role', 'authenticated', 'email', current_setting('diagnostico.correo_admin'))::text,
   true);
 do $$
 declare
-  fila public.contratistas;
   empresa public.empresas;
-  mensaje text;
 begin
-  -- Bloqueado al crear: cédula en forma única, nombre en mayúsculas, sin PRAIND.
-  fila := public.panel_crear_contratista(
-    '1-1234-0567', '  josé  ñandú ', 'eeeeeeee-0000-0000-0000-00000000e001', 'PRAIND',
-    null, false);
-  if fila.identificacion <> '112340567' then raise exception 'cédula guardada: %', fila.identificacion; end if;
-  if fila.nombre <> 'JOSÉ ÑANDÚ' then raise exception 'nombre guardado: %', fila.nombre; end if;
-  if fila.activo then raise exception 'debía quedar con el acceso denegado'; end if;
-  if fila.es_personal_ruta is distinct from false then raise exception 'personal de ruta debía ser false'; end if;
-  if fila.dispositivo_origen_id is not null then raise exception 'el panel no tiene equipo de origen'; end if;
-  if fila.empresa_nombre <> 'EMPRESA DE PRUEBA' then raise exception 'empresa_nombre: %', fila.empresa_nombre; end if;
+  -- 3a. La función SQL con las reglas duplicadas ya no existe.
+  if to_regprocedure('public.panel_crear_contratista(text, text, uuid, text, date, boolean)') is not null then
+    raise exception 'panel_crear_contratista debía estar retirada';
+  end if;
 
-  -- El mismo documento escrito de otra forma es la misma persona.
+  -- 3b. Ni un administrador del panel puede insertar directo (sin pasar por
+  --     la Edge Function y sus reglas): no tiene política de INSERT.
   begin
-    perform public.panel_crear_contratista('01-1234-0567', 'Otro', 'eeeeeeee-0000-0000-0000-00000000e001', 'SWAT');
-    raise exception 'Se creó dos veces la misma cédula';
-  exception when raise_exception then
-    get stacked diagnostics mensaje = message_text;
-    if mensaje <> 'La cédula del contratista ya existe' then raise; end if;
+    insert into public.contratistas (id, dispositivo_origen_id, nombre, identificacion, activo,
+                                     empresa_id, empresa_nombre, tipo_ingreso)
+    values (gen_random_uuid(), null, 'ANA', '112340567', true,
+            'eeeeeeee-0000-0000-0000-00000000e001', 'EMPRESA DE PRUEBA', 'POR_CORREO');
+    raise exception 'Un administrador pudo insertar un contratista sin la Edge Function';
+  exception when insufficient_privilege then null;
   end;
 
-  -- Con acceso: PRAIND obligatorio y vigente para PRAIND e IN HOUSE.
-  begin
-    perform public.panel_crear_contratista('223450678', 'Luis', 'eeeeeeee-0000-0000-0000-00000000e001', 'PRAIND');
-    raise exception 'Se aceptó PRAIND sin fecha';
-  exception when raise_exception then
-    get stacked diagnostics mensaje = message_text;
-    if mensaje <> 'La fecha de PRAIND es obligatoria' then raise; end if;
-  end;
-  begin
-    perform public.panel_crear_contratista('223450678', 'Luis', 'eeeeeeee-0000-0000-0000-00000000e001', 'IN_HOUSE', date '2020-01-01');
-    raise exception 'Se aceptó un PRAIND vencido';
-  exception when raise_exception then
-    get stacked diagnostics mensaje = message_text;
-    if mensaje <> 'El PRAIND está vencido' then raise; end if;
-  end;
-  -- POR CORREO y SWAT no piden PRAIND.
-  fila := public.panel_crear_contratista('223450678', 'Luis', 'eeeeeeee-0000-0000-0000-00000000e001', 'SWAT');
-  if not fila.activo then raise exception 'por defecto debía quedar con acceso'; end if;
-
-  -- Cédula, nombre, empresa y tipo inválidos.
-  begin
-    perform public.panel_crear_contratista('12345678', 'Ana', 'eeeeeeee-0000-0000-0000-00000000e001', 'SWAT');
-    raise exception 'Se aceptó una cédula de 8 dígitos';
-  exception when raise_exception then
-    get stacked diagnostics mensaje = message_text;
-    if mensaje <> 'La cédula debe tener sólo números, entre 9 y 13 dígitos' then raise; end if;
-  end;
-  begin
-    perform public.panel_crear_contratista('A12345678', 'Ana', 'eeeeeeee-0000-0000-0000-00000000e001', 'SWAT');
-    raise exception 'Se aceptó un pasaporte como contratista';
-  exception when raise_exception then
-    get stacked diagnostics mensaje = message_text;
-    if mensaje <> 'La cédula debe tener sólo números, entre 9 y 13 dígitos' then raise; end if;
-  end;
-  begin
-    perform public.panel_crear_contratista('334560789', 'Ana 2', 'eeeeeeee-0000-0000-0000-00000000e001', 'SWAT');
-    raise exception 'Se aceptó un nombre con números';
-  exception when raise_exception then
-    get stacked diagnostics mensaje = message_text;
-    if mensaje <> 'El nombre no puede tener números ni símbolos' then raise; end if;
-  end;
-  begin
-    perform public.panel_crear_contratista('334560789', 'Ana', gen_random_uuid(), 'SWAT');
-    raise exception 'Se aceptó una empresa inexistente';
-  exception when raise_exception then
-    get stacked diagnostics mensaje = message_text;
-    if mensaje <> 'Empresa no encontrada' then raise; end if;
-  end;
-  begin
-    perform public.panel_crear_contratista('334560789', 'Ana', 'eeeeeeee-0000-0000-0000-00000000e001', 'OTRO');
-    raise exception 'Se aceptó un tipo de ingreso inválido';
-  exception when raise_exception then
-    get stacked diagnostics mensaje = message_text;
-    if mensaje <> 'El tipo de ingreso no es válido' then raise; end if;
-  end;
-
-  -- Empresa: en mayúsculas y sin duplicar aunque cambien tildes o mayúsculas.
+  -- 3c. Empresa: en mayúsculas y sin duplicar aunque cambien tildes o mayúsculas.
   empresa := public.panel_crear_empresa('  nueva   compañía ');
   if empresa.nombre <> 'NUEVA COMPAÑÍA' then raise exception 'nombre de empresa: %', empresa.nombre; end if;
   if (public.panel_crear_empresa('NUEVA COMPANIA')).id <> empresa.id then
@@ -159,11 +98,26 @@ begin
   end if;
 end $$;
 
--- 4. El catálogo es global: el aviso en vivo del alta sale por el canal de
---    TODAS las unidades, no sólo el de una.
+-- 4. Lo que hace la Edge Function con la cuenta de servicio (que no pasa por
+--    RLS): la cédula repetida, escrita de otra forma, la frena el índice
+--    único (23505, que la función responde como 409), y el alta avisa por el
+--    canal de TODAS las unidades (el catálogo es global).
 reset role;
+insert into public.contratistas (id, dispositivo_origen_id, nombre, identificacion, activo,
+                                 empresa_id, empresa_nombre, tipo_ingreso)
+values (gen_random_uuid(), null, 'JOSÉ ÑANDÚ', '112340567', false,
+        'eeeeeeee-0000-0000-0000-00000000e001', 'EMPRESA DE PRUEBA', 'PRAIND');
 do $$
 begin
+  begin
+    insert into public.contratistas (id, dispositivo_origen_id, nombre, identificacion, activo,
+                                     empresa_id, empresa_nombre, tipo_ingreso)
+    values (gen_random_uuid(), null, 'OTRO', '01-1234-0567', true,
+            'eeeeeeee-0000-0000-0000-00000000e001', 'EMPRESA DE PRUEBA', 'SWAT');
+    raise exception 'Se creó dos veces la misma cédula';
+  exception when unique_violation then null;
+  end;
+
   if (
     select count(distinct topic) from realtime.messages
     where event = 'cambio_nube'
@@ -174,13 +128,13 @@ begin
   end if;
 end $$;
 
--- 5. Un usuario anónimo no puede ni llamarlas.
+-- 5. Un usuario anónimo no puede ni crear empresas.
 set local role anon;
 do $$
 begin
   begin
-    perform public.panel_crear_contratista('112340567', 'Ana', gen_random_uuid(), 'SWAT');
-    raise exception 'anon pudo llamar panel_crear_contratista';
+    perform public.panel_crear_empresa('Empresa anónima');
+    raise exception 'anon pudo llamar panel_crear_empresa';
   exception when insufficient_privilege then null;
   end;
 end $$;

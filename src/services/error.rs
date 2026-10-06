@@ -98,6 +98,11 @@ pub enum ContratistaServiceError {
     TipoIngresoRetirado,
     #[error("La cédula del contratista ya existe")]
     CedulaDuplicada,
+    /// No se cambia la cédula de quien está adentro: su ingreso abierto
+    /// quedaría con la cédula vieja, y con la nueva podría volver a entrar
+    /// sin que nada lo frene (el "¿ya está adentro?" compara por cédula).
+    #[error("No se puede cambiar la cédula de un contratista que está adentro")]
+    CedulaConIngresoActivo,
     #[error("La sesión actual no está autorizada para realizar esta operación")]
     OperacionNoAutorizada,
     #[error(transparent)]
@@ -116,6 +121,25 @@ pub enum EmpresaServiceError {
     OperacionNoAutorizada,
     #[error(transparent)]
     Database(#[from] DatabaseError),
+}
+
+/// Las reglas de criterio del contratista viven en el crate compartido
+/// (`ErrorContratista`); acá cada motivo se traduce a su variante de
+/// siempre, así los mensajes y quien los maneja no cambian.
+impl From<crate::domain::contratista::ErrorContratista> for ContratistaServiceError {
+    fn from(error: crate::domain::contratista::ErrorContratista) -> Self {
+        use crate::domain::contratista::ErrorContratista;
+        match error {
+            ErrorContratista::CedulaVacia => Self::CedulaVacia,
+            ErrorContratista::CedulaInvalida => Self::CedulaInvalida,
+            ErrorContratista::NombreVacio => Self::NombreVacio,
+            ErrorContratista::NombreInvalido => Self::NombreInvalido,
+            ErrorContratista::TipoIngresoRetirado => Self::TipoIngresoRetirado,
+            ErrorContratista::PersonalRutaNoAdmitido => Self::PersonalRutaNoAdmitido,
+            ErrorContratista::PraindRequerido => Self::PraindRequerido,
+            ErrorContratista::PraindVencido => Self::PraindVencido,
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -192,11 +216,12 @@ pub enum CitaServiceError {
     /// venció").
     #[error("No hay ninguna visita vigente para esta cédula: {0:?}")]
     SinCitaVigente(MotivoDenegacionVisita),
-    /// Este visitante ya tiene un movimiento abierto -- mismo criterio que
-    /// `RegistroIngresoServiceError::IngresoActivo`, no se puede entrar dos
-    /// veces sin salir primero.
-    #[error("Este visitante ya tiene un movimiento activo")]
-    VisitanteYaEnSitio,
+    /// Esta cédula ya tiene un movimiento de visita abierto -- mismo criterio
+    /// que `RegistroIngresoServiceError::IngresoActivo`, no se puede entrar
+    /// dos veces sin salir primero. Lleva el nombre del visitante para el
+    /// mensaje.
+    #[error("Este visitante ya tiene un movimiento activo: {nombre}")]
+    VisitanteYaEnSitio { nombre: String },
     /// El gafete ya está asignado a otro movimiento de visita abierto --
     /// mismo criterio que `RegistroIngresoServiceError::GafeteOcupado`.
     #[error("El gafete ya está asignado a otra visita")]

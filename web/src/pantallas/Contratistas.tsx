@@ -22,16 +22,17 @@ const ESTILO_IZQUIERDA: CellStyle = { textAlign: "left" };
 const ESTILO_CENTRO_FLEX: CellStyle = { display: "flex", justifyContent: "center", alignItems: "center" };
 
 /**
- * Vista + baja de contratistas (alcance pedido en
- * docs/planes-implementados/plan-panel-administrativo-web.md, punto 3) -- sin alta ni edición
- * de los demás campos todavía, a propósito: eso es un formulario aparte
- * que no se pidió todavía (ver Contratistas.tsx de desktop/ si hace falta
- * calcarlo). El toggle "Activo" ES la baja (y la reactivación) -- global,
- * no por sitio, ver `api/contratistas.ts`.
+ * Vista, alta, edición y baja de contratistas. "+ Nuevo" y "Editar" abren
+ * `FormularioContratista` (reglas del núcleo vía WebAssembly; guardan las Edge
+ * Functions `admin-crear-contratista` / `admin-editar-contratista`). El
+ * toggle "Activo" ES la baja (y la reactivación) -- global, no por sitio, ver
+ * `api/contratistas.ts`.
  */
 export default function Contratistas() {
   const [busqueda, setBusqueda] = useState("");
   const [modalAbierto, setModalAbierto] = useState(false);
+  // Contratista que se está editando (modal de edición abierto), o null.
+  const [editando, setEditando] = useState<ContratistaConEstado | null>(null);
 
   // Cambia rara vez (altas/bajas puntuales) -- mismo intervalo que usan
   // desktop/mobile para su propio sync periódico.
@@ -60,6 +61,21 @@ export default function Contratistas() {
 
   const columnas = useMemo<ColDef<ContratistaConEstado>[]>(
     () => [
+      {
+        // Primera columna: a mano también en pantallas angostas, donde la
+        // grilla virtualiza las columnas del final.
+        colId: "editar",
+        headerName: "",
+        flex: 0.7,
+        minWidth: 90,
+        filter: false,
+        sortable: false,
+        cellRenderer: ({ data }: { data: ContratistaConEstado }) => (
+          <button type="button" className="boton boton-celda-angosto" onClick={() => setEditando(data)}>
+            Editar
+          </button>
+        ),
+      },
       {
         field: "identificacion",
         // "Cédula", no "Identificación" -- mismo término que usan
@@ -118,17 +134,15 @@ export default function Contratistas() {
             : "",
       },
       {
-        // Solo lectura a propósito: el alcance pedido acá es la vista y la
-        // baja (columna "Activo" de abajo), no editar el resto de los
-        // campos -- ver el doc-comment de arriba.
+        // Sólo lectura en la grilla: se cambia con "Editar".
         field: "es_personal_ruta",
         headerName: "Personal de ruta",
         flex: 1.6,
         minWidth: 160,
         valueFormatter: (p) => (p.value ? "Sí" : "No"),
         // Render propio (no InterruptorCelda -- ese es el switch editable
-        // que usa desktop/src/pantallas/Contratistas.tsx; acá es de sólo
-        // lectura a propósito, ver el doc-comment de arriba) -- así el
+        // que usa desktop/src/pantallas/Contratistas.tsx; acá se cambia con
+        // "Editar") -- así el
         // ícono queda centrado y en verde cuando es "Sí" en vez del check
         // gris por defecto que AG Grid le pone a un campo booleano.
         cellStyle: ESTILO_CENTRO_FLEX,
@@ -183,6 +197,17 @@ export default function Contratistas() {
           />
         </div>
       </div>
+
+      {editando && (
+        <FormularioContratista
+          contratista={editando}
+          onGuardado={() => {
+            setEditando(null);
+            void recargar();
+          }}
+          onCerrar={() => setEditando(null)}
+        />
+      )}
 
       {modalAbierto && (
         <FormularioContratista

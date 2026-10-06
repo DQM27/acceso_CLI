@@ -57,6 +57,22 @@ export function emitirActualizacion(
   );
 }
 
+/** Tablas cuyo historial en esta PC es SÓLO la copia que baja de la nube
+ * (`historial_ingresos_correo_sitio`, `historial_ingresos_proveedor_sitio`,
+ * `historial_visitas_sitio`, `prestamos_gafete_provisional_historial_sitio`).
+ * A diferencia de contratistas, cuyo Historial junta las filas locales con la
+ * copia, acá un movimiento hecho en ESTA PC no aparece en su historial hasta
+ * que la copia se vuelve a bajar. Por eso el eco propio de estas tablas no se
+ * ignora: llega recién cuando la nube ya aceptó el cambio, y se baja esa
+ * tabla. Sin esto, la salida recién hecha aparecía en el historial con la
+ * sincronización de respaldo (hasta 2 minutos) o con "Sincronizar". */
+const TABLAS_CON_HISTORIAL_SOLO_NUBE = new Set([
+  "ingresos_correo",
+  "ingresos_proveedor",
+  "movimientos_visita",
+  "prestamos_gafete_provisional",
+]);
+
 // Espacia los reintentos cuando falta conexión o la sesión no está lista.
 const REINTENTO_BASE_MS = 2_000;
 const REINTENTO_TOPE_MS = 60_000;
@@ -250,8 +266,13 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
               ? latenciaDesde(payload.changed_at, Date.now(), desfaseReloj)
               : null,
           );
-          if (ecoPropio) return;
           const tabla = typeof payload?.table === "string" ? payload.table : undefined;
+          if (ecoPropio) {
+            // Lo propio ya está en esta PC; sólo hay que bajar la copia del
+            // historial de las tablas que no tienen otra (ver arriba).
+            if (tabla && TABLAS_CON_HISTORIAL_SOLO_NUBE.has(tabla)) programarSincronizacion(tabla);
+            return;
+          }
           // El aviso trae la fila: se guarda SÓLO esa fila (Activos e
           // Historial) y se refresca la pantalla, sin consultar la nube. Si
           // no se pudo aplicar, se sincroniza sólo su tabla. El pulso

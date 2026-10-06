@@ -1,10 +1,13 @@
 name: Verificación de las webs
 
+# `reglas/**` también: el panel lleva el paquete WebAssembly de las reglas y
+# `web/src/reglas/reglas.test.ts` falla si las fuentes cambiaron y el paquete
+# no se regeneró. Sin esta ruta, ese test no correría justo cuando importa.
 on:
   push:
-    paths: ["web/**", "web-visitas/**", "design/**", ".github/workflows/web.yml"]
+    paths: ["web/**", "web-visitas/**", "design/**", "reglas/**", ".github/workflows/web.yml"]
   pull_request:
-    paths: ["web/**", "web-visitas/**", "design/**", ".github/workflows/web.yml"]
+    paths: ["web/**", "web-visitas/**", "design/**", "reglas/**", ".github/workflows/web.yml"]
 
 permissions:
   contents: read

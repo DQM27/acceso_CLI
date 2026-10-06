@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { listarUsuarios } from "./usuarios";
+import { editarUsuario, listarUsuarios } from "./usuarios";
 
 function mockConsulta(resultado: { data: unknown; error: unknown; count: number | null }) {
   const encadenable: Record<string, unknown> = {
@@ -62,5 +62,41 @@ describe("listarUsuarios", () => {
     mocks.from.mockReturnValue(mockConsulta({ data: filas, error: null, count: 1 }));
 
     await expect(listarUsuarios()).rejects.toThrow();
+  });
+});
+
+describe("editarUsuario", () => {
+  function mockUpdate(error: unknown = null, filas: unknown[] = [{ id: "u1" }]) {
+    const select = vi.fn().mockResolvedValue({ data: error ? null : filas, error });
+    const eq = vi.fn(() => ({ select }));
+    const update = vi.fn(() => ({ eq }));
+    mocks.from.mockReturnValue({ update });
+    return { update, eq };
+  }
+
+  it("actualiza nombre (recortado) y rol de ese usuario", async () => {
+    const { update, eq } = mockUpdate();
+    await editarUsuario("u1", { nombre: "  Ana ", rol: "ADMINISTRADOR" });
+    expect(mocks.from).toHaveBeenCalledWith("usuarios");
+    expect(update).toHaveBeenCalledWith({ nombre: "Ana", rol: "ADMINISTRADOR" });
+    expect(eq).toHaveBeenCalledWith("id", "u1");
+  });
+
+  it("sin rol (un ROOT) sólo cambia el nombre, nunca la cédula", async () => {
+    const { update } = mockUpdate();
+    await editarUsuario("u1", { nombre: "Ana" });
+    expect(update).toHaveBeenCalledWith({ nombre: "Ana" });
+  });
+
+  it("no manda un nombre vacío, y propaga el error de la base", async () => {
+    mockUpdate();
+    await expect(editarUsuario("u1", { nombre: "   " })).rejects.toThrow("El nombre es obligatorio");
+    mockUpdate({ message: "permission denied" });
+    await expect(editarUsuario("u1", { nombre: "Ana" })).rejects.toThrow("permission denied");
+  });
+
+  it("si la base no cambió ninguna fila (sin permiso), avisa en vez de dar por hecho", async () => {
+    mockUpdate(null, []);
+    await expect(editarUsuario("u1", { nombre: "Ana" })).rejects.toThrow("No se guardó");
   });
 });

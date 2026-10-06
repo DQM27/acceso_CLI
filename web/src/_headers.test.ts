@@ -22,7 +22,10 @@ describe("public/_headers", () => {
     const scriptSrc = linea.match(/script-src ([^;]+)/)?.[1];
     expect(scriptSrc).toBeDefined();
     expect(scriptSrc).not.toContain("unsafe-inline");
-    expect(scriptSrc).not.toContain("unsafe-eval");
+    // 'wasm-unsafe-eval' sí: habilita SÓLO compilar WebAssembly (las reglas
+    // del núcleo, web/src/reglas), no `eval` ni `new Function` de JavaScript.
+    expect((scriptSrc ?? "").replace("'wasm-unsafe-eval'", "")).not.toContain("unsafe-eval");
+    expect(scriptSrc).toContain("'wasm-unsafe-eval'");
     expect(scriptSrc).toContain("'self'");
   });
 

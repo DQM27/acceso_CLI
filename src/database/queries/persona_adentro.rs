@@ -13,20 +13,20 @@ use rusqlite::{Connection, params};
 use crate::database::error::DatabaseError;
 use crate::models::via_ingreso::ViaIngreso;
 
-/// Por cada vía: lo abierto en este equipo y lo abierto en el otro equipo
-/// (caché), comparando la cédula en forma única (`NORMALIZAR_CEDULA`).
-const CONSULTAS: [(ViaIngreso, &str); 3] = [
-    (
-        ViaIngreso::Contratista,
-        "SELECT EXISTS(
+/// Contratista: lo abierto en este equipo y en la caché del otro equipo.
+const CONSULTA_CONTRATISTA: &str = "SELECT EXISTS(
              SELECT 1 FROM registro_ingresos
              WHERE fecha_hora_salida IS NULL
                AND NORMALIZAR_CEDULA(contratista_cedula) = NORMALIZAR_CEDULA(?1)
          ) OR EXISTS(
              SELECT 1 FROM ingresos_remotos
              WHERE NORMALIZAR_CEDULA(contratista_cedula) = NORMALIZAR_CEDULA(?1)
-         )",
-    ),
+         )";
+
+/// Por cada vía: lo abierto en este equipo y lo abierto en el otro equipo
+/// (caché), comparando la cédula en forma única (`NORMALIZAR_CEDULA`).
+const CONSULTAS: [(ViaIngreso, &str); 3] = [
+    (ViaIngreso::Contratista, CONSULTA_CONTRATISTA),
     (
         ViaIngreso::Proveedor,
         "SELECT EXISTS(
@@ -69,6 +69,12 @@ pub fn adentro_por_otra_via(
         }
     }
     Ok(None)
+}
+
+/// ¿Esta cédula tiene un ingreso de contratista abierto, en este equipo o en
+/// el otro de la unidad? Para no cambiarle la cédula a quien está adentro.
+pub fn contratista_adentro(connection: &Connection, cedula: &str) -> Result<bool, DatabaseError> {
+    Ok(connection.query_row(CONSULTA_CONTRATISTA, params![cedula], |fila| fila.get(0))?)
 }
 
 #[cfg(test)]

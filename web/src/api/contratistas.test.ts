@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { crearContratista, crearEmpresa, listarContratistas, listarEmpresas } from "./contratistas";
+import { crearContratista, crearEmpresa, editarContratista, listarContratistas, listarEmpresas } from "./contratistas";
 
 /**
  * Construye un mock encadenable de la query de supabase-js
@@ -19,8 +19,10 @@ function mockConsulta(resultado: { data: unknown; error: unknown; count: number 
   return encadenable;
 }
 
-const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
-vi.mock("../lib/supabase", () => ({ supabase: { from: mocks.from, rpc: mocks.rpc } }));
+const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), invoke: vi.fn() }));
+vi.mock("../lib/supabase", () => ({
+  supabase: { from: mocks.from, rpc: mocks.rpc, functions: { invoke: mocks.invoke } },
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -39,6 +41,7 @@ function filaCompleta(sobrescribir: Record<string, unknown> = {}) {
     fecha_vencimiento_praind: "2027-01-01",
     es_personal_ruta: false,
     activo: true,
+    empresa_id: "e1",
     empresa_activa: true,
     requiere_praind: true,
     dias_para_vencer: 90,
@@ -159,30 +162,66 @@ describe("crearContratista", () => {
     con_acceso: false,
   };
 
-  it("llama a panel_crear_contratista con los parametros de la base y devuelve la fila", async () => {
-    mocks.rpc.mockResolvedValue({ data: filaCompleta({ activo: false, nombre: "ANA" }), error: null });
+  it("llama a la Edge Function admin-crear-contratista y devuelve la fila", async () => {
+    mocks.invoke.mockResolvedValue({ data: filaCompleta({ activo: false, nombre: "ANA" }), error: null });
 
     const creado = await crearContratista(datos);
 
-    expect(mocks.rpc).toHaveBeenCalledWith("panel_crear_contratista", {
-      p_cedula: "112340567",
-      p_nombre: "Ana",
-      p_empresa_id: "e1",
-      p_tipo_ingreso: "SWAT",
-      p_fecha_vencimiento_praind: null,
-      p_con_acceso: false,
-    });
+    expect(mocks.invoke).toHaveBeenCalledWith("admin-crear-contratista", { body: datos });
+    expect(mocks.rpc).not.toHaveBeenCalled();
     expect(creado.activo).toBe(false);
     expect(creado.nombre).toBe("ANA");
   });
 
-  it("propaga el mensaje en español que devuelve la base", async () => {
-    mocks.rpc.mockResolvedValue({ data: null, error: { message: "La cédula del contratista ya existe" } });
-    await expect(crearContratista(datos)).rejects.toThrow("La cédula del contratista ya existe");
+  it("propaga el mensaje en español que devuelve la función", async () => {
+    const respuesta = new Response(
+      JSON.stringify({ error: "cedula_duplicada", detail: "Ya existe un contratista con esa cédula" }),
+      { status: 409 },
+    );
+    mocks.invoke.mockResolvedValue({ data: null, error: { message: "Edge Function returned a non-2xx", context: respuesta } });
+    await expect(crearContratista(datos)).rejects.toThrow("Ya existe un contratista con esa cédula");
   });
 
   it("rechaza una respuesta con forma inesperada", async () => {
-    mocks.rpc.mockResolvedValue({ data: filaCompleta({ activo: "sí" }), error: null });
+    mocks.invoke.mockResolvedValue({ data: filaCompleta({ activo: "sí" }), error: null });
     await expect(crearContratista(datos)).rejects.toThrow();
+  });
+});
+
+describe("editarContratista", () => {
+  it("llama a la Edge Function admin-editar-contratista con el id y devuelve la fila", async () => {
+    mocks.invoke.mockResolvedValue({ data: filaCompleta({ nombre: "ANA" }), error: null });
+    const datos = {
+      cedula: "112340567",
+      nombre: "Ana",
+      empresa_id: "e1",
+      tipo_ingreso: "SWAT" as const,
+      fecha_vencimiento_praind: null,
+      con_acceso: true,
+      es_personal_ruta: false,
+    };
+
+    const editado = await editarContratista("c1", datos);
+
+    expect(mocks.invoke).toHaveBeenCalledWith("admin-editar-contratista", { body: { id: "c1", ...datos } });
+    expect(editado.nombre).toBe("ANA");
+  });
+
+  it("propaga el mensaje de la función (por ejemplo, cédula de alguien adentro)", async () => {
+    const detalle = "No se puede cambiar la cédula mientras está adentro — registre primero la salida";
+    const respuesta = new Response(JSON.stringify({ error: "cedula_con_ingreso_activo", detail: detalle }), {
+      status: 409,
+    });
+    mocks.invoke.mockResolvedValue({ data: null, error: { message: "non-2xx", context: respuesta } });
+    await expect(
+      editarContratista("c1", {
+        cedula: "200000002",
+        nombre: "Ana",
+        empresa_id: "e1",
+        tipo_ingreso: "SWAT",
+        fecha_vencimiento_praind: null,
+        con_acceso: true,
+      }),
+    ).rejects.toThrow(detalle);
   });
 });

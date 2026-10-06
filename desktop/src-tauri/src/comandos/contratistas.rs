@@ -72,6 +72,22 @@ pub struct ReglasFormularioContratista {
     aviso_praind: Option<String>,
 }
 
+/// Los tipos de ingreso que se pueden elegir para un contratista, en orden.
+/// Los decide el núcleo (`tipo_ingreso_seleccionable`): "Por correo" no está
+/// porque el núcleo lo retiró, no porque la pantalla lo filtre.
+#[tauri::command]
+pub fn tipos_ingreso_seleccionables(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<control_acceso::models::tipo_ingreso::TipoIngreso>, String> {
+    use control_acceso::domain::contratista::tipo_ingreso_seleccionable;
+    use control_acceso::models::tipo_ingreso::TipoIngreso;
+    state.sesion_activa()?;
+    Ok(TipoIngreso::ALL
+        .into_iter()
+        .filter(|tipo| tipo_ingreso_seleccionable(*tipo))
+        .collect())
+}
+
 #[tauri::command]
 pub fn reglas_formulario_contratista(
     tipo_ingreso: control_acceso::models::tipo_ingreso::TipoIngreso,

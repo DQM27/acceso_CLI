@@ -1,0 +1,34 @@
+[package]
+name = "control_acceso_reglas_wasm"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Reglas de Control Acceso compiladas a WebAssembly para el panel web y las Edge Functions"
+license = "MIT"
+publish = false
+
+# Paquete aparte (no miembro del núcleo): sólo se compila para
+# `wasm32-unknown-unknown` con `scripts/generar-reglas-wasm.sh`. El resultado
+# se commitea en `web/src/reglas/wasm/` y `supabase/functions/_shared/reglas/`.
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+control_acceso_reglas = { path = ".." }
+chrono = { version = "0.4.45", default-features = false, features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+wasm-bindgen = "0.2"
+
+[profile.release]
+# Paquete chico: se descarga en el navegador y viaja embebido en la Edge
+# Function.
+opt-level = "s"
+lto = true
+codegen-units = 1
+
+# Sin `wasm-opt`: el paquete queda un poco más grande, pero no depende de
+# descargar binaryen y sale igual en cualquier máquina con el mismo Rust.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

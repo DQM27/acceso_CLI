@@ -9,7 +9,7 @@ Mantener este archivo al día: cada cambio que se aplique en staging se anota
 aquí en el mismo commit. Cuando se aplique en producción, se mueve a la
 sección "Aplicado en producción" con fecha y quién lo autorizó.
 
-Última revisión: 2026-09-29.
+Última revisión: 2026-10-05.
 
 ## 1. Antes de empezar
 
@@ -137,6 +137,96 @@ columnas que usan las apps de la rama:
   filas). En producción sí están. No bloquea el PR, pero las pruebas de
   rutas contra staging van a fallar hasta resolver la rama de rutas.
 - `telemetria_diagnostico` sólo existe en staging, como corresponde.
+
+### 2.5b Arreglos de condiciones de carrera (aplicados en staging el 2026-10-05)
+
+Rama `fix/carreras-ingresos-y-gafetes` (incluida en `feat/reglas-compartidas`).
+Detalle en `docs/auditorias/revision-carreras-2026-10-04.md`. Antes de aplicar
+se verificó que staging no tuviera visitas abiertas duplicadas (0 por cédula,
+0 por gafete).
+
+| Migración del repo | Nombre en staging | Estado en staging |
+|---|---|---|
+| `20261004120000_conflictos_misma_unidad_y_gafete_de_visita.sql` | `conflictos_misma_unidad_y_gafete_de_visita` | Aplicada |
+| `20261004130000_visitas_ven_otras_unidades.sql` | `visitas_ven_otras_unidades` | Aplicada |
+| `20261004140000_gafete_de_visita_unico_en_visitas.sql` | `gafete_de_visita_unico_en_visitas` | Aplicada |
+| `20261004150000_persona_adentro_por_una_sola_via.sql` | `persona_adentro_por_una_sola_via` | Aplicada |
+| `20261004160000_registrar_token_push_sin_choques.sql` | — (no figura en el historial) | Aplicada a mano por el dueño en el editor SQL de Supabase. El editor no la anota en `supabase_migrations.schema_migrations`: para saber si está, revisar que la función tenga el candado `token_push:` |
+
+Verificado después de aplicar: existen `persona_adentro_por_otra_via`,
+`visita_activa_de_visitante` y `visitantes_activos_en_otras_unidades`, los
+índices `movimientos_visita_cedula_activa_idx` y
+`movimientos_visita_gafete_activo_sitio_idx`, y los triggers de "una sola vía"
+y de gafete de visita compartido.
+
+**Importante para producción:** las apps de esta rama consultan
+`persona_adentro_por_otra_via` antes de registrar una entrada, y sin
+verificar en la nube no se registra. Por eso **estas migraciones van ANTES de
+publicar las apps**. Producción además todavía no tiene `ingresos_por_correo`
+(`20261003210000`), que va antes que todas estas.
+
+### 2.7 Edición de contratistas y usuarios desde el panel (staging, 2026-10-05)
+
+Rama `feat/reglas-compartidas`, commit `4b8c3c5`.
+
+| Cambio | Estado en staging |
+|---|---|
+| Edge Function `admin-editar-contratista` (nueva) | Desplegada, versión 1, fijada a `4b8c3c5`, `verify_jwt` activado |
+| Edge Function `admin-crear-contratista` (acepta personal de ruta) | Desplegada, versión 3, fijada a `4b8c3c5` |
+| Migración `20261005120000_usuarios_nombre_obligatorio.sql` | Aplicada (nombre `usuarios_nombre_obligatorio`) |
+
+Probado contra staging con un administrador y un usuario temporales,
+borrados al terminar junto con el contratista de prueba:
+- alta con personal de ruta → 200;
+- editar nombre y cédula de alguien que está afuera → 200, lo que ejecuta la
+  consulta de "¿está adentro?";
+- pasar a POR CORREO → 422;
+- id inexistente → 404;
+- usuario: nombre y rol → guardado, nombre vacío → 23514, sin sesión de
+  administrador → 0 filas.
+
+El rechazo de la cédula de alguien adentro no se probó en vivo, para no
+crear una entrada falsa que llegara a los equipos del sandbox; está cubierto
+por los tests de Deno y del núcleo.
+
+Orden en producción: después de 2.6, desplegar las dos funciones, publicar
+el panel y aplicar la migración (no rompe nada si va antes).
+
+### 2.6 Edge Function `admin-crear-contratista` (reglas compartidas, 2026-10-04)
+
+Rama `feat/reglas-compartidas`. Contexto completo en
+`docs/arquitectura/reglas-compartidas.md`.
+
+- **Aplicado en staging:** la Edge Function `admin-crear-contratista`
+  (versión 2 desde el 2026-10-05, `verify_jwt` activado). El `index.ts`
+  desplegado es una sola línea que importa el de GitHub **fijado al commit
+  `4f187b9`** (la versión 1, del 2026-10-04, estaba fijada a `f054c7b`; la 2
+  busca la empresa a la vez que la autorización); Supabase lo
+  empaqueta al desplegar, no consulta GitHub en cada petición. Para producción
+  conviene desplegarla con `supabase functions deploy admin-crear-contratista`
+  desde el repo.
+- **Probado en staging** con un administrador temporal (borrado al terminar,
+  junto con los dos contratistas de prueba; staging quedó con los mismos
+  conteos que antes):
+  - alta válida → 200, con cédula y nombre normalizados, y aviso a las 3
+    unidades;
+  - la misma cédula escrita distinto → 409 "Ya existe un contratista con esa
+    cédula";
+  - "POR CORREO" → 422 (la función SQL vieja lo aceptaba);
+  - PRAIND vencido → 422; empresa inexistente → 404;
+  - PRAIND sin fecha pero sin acceso → 200;
+  - sin sesión → 401 de la puerta de Supabase; con la clave anónima → 401 de
+    la función.
+- **Aplicado en staging el 2026-10-05:** la migración
+  `20261004170000_alta_de_contratistas_por_edge_function` (borra
+  `panel_crear_contratista`). La ejecutó el dueño en el editor SQL de
+  Supabase, así que no figura en el historial de migraciones. Verificado: la
+  función ya no existe (ninguna sobrecarga), no tenía dependencias y
+  `panel_crear_empresa` sigue. Desde ahora, en staging sólo el panel de esta
+  rama puede crear contratistas.
+- **Orden en producción:** 1) desplegar la función; 2) publicar el panel web;
+  3) aplicar la migración. La función nueva puede convivir con la SQL vieja
+  sin problema; sólo la migración rompe el panel viejo.
 
 ## 3. Cambios de la base local de los equipos (SQLite)
 
