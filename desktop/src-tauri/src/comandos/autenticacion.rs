@@ -2,6 +2,10 @@ use control_acceso::mensajes::{mensaje_nube, mensaje_sincronizacion};
 use control_acceso::nube;
 use control_acceso::services::autenticacion_service::{UsuarioSesion, verificar_candidato};
 use control_acceso::services::error::AutenticacionError;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
 use tauri::Manager;
 
 use crate::estado::GuiState;
@@ -421,12 +425,55 @@ pub fn cerrar_sesion(app: tauri::AppHandle) {
     }
     let manejador = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let state = manejador.state::<GuiState>();
-        let resultado = state.autenticar_con_cache().and_then(|token| {
-            nube::cerrar_sesion_en_unidad(nube::base_url(), nube::apikey(), &token, &cedula)
-        });
-        if let Err(error) = resultado {
-            log::info!("no se pudo cerrar la sesión en la nube: {error}");
-        }
+        avisar_cierre_a_la_nube(&manejador.state::<GuiState>(), &cedula);
     });
+}
+
+/// Cuánto puede demorar la salida de la app esperando el aviso de cierre a
+/// la nube. La ventana ya se cerró: el operador no ve la espera. Alcanza
+/// para pedir un token nuevo y hacer el aviso con red normal; con la red
+/// caída o lenta se sale igual y queda como hasta ahora ("sin cierre" en el
+/// próximo ingreso de este equipo).
+const ESPERA_CIERRE_AL_SALIR: Duration = Duration::from_secs(5);
+
+/// Cerrar la app con una sesión abierta (la X de la ventana, Alt+F4, apagar
+/// el equipo con la app abierta) cuenta como cerrar sesión: si no, la
+/// bitácora del panel mostraba la sesión abierta hasta el próximo ingreso y
+/// la cerraba como "sin cierre", sin la hora real. Se llama desde
+/// `RunEvent::Exit`, cuando ya no quedan ventanas, y espera el aviso a la
+/// nube como mucho `ESPERA_CIERRE_AL_SALIR`. Un cierre forzado (matar el
+/// proceso, corte de luz) no pasa por acá y sigue quedando "sin cierre".
+pub fn cerrar_sesion_al_salir(app: &tauri::AppHandle) {
+    let state = app.state::<GuiState>();
+    let cedula = state.sesion_activa().ok().map(|sesion| sesion.cedula);
+    state.cerrar_sesion();
+
+    let Some(cedula) = cedula else { return };
+    if !state.nube_vinculada() {
+        return;
+    }
+    let manejador = app.clone();
+    let (avisado, espera) = mpsc::channel();
+    thread::spawn(move || {
+        avisar_cierre_a_la_nube(&manejador.state::<GuiState>(), &cedula);
+        let _ = avisado.send(());
+    });
+    if espera.recv_timeout(ESPERA_CIERRE_AL_SALIR).is_err() {
+        log::info!(
+            "la app se cierra sin confirmar el cierre de sesión en la nube \
+             (más de {}s)",
+            ESPERA_CIERRE_AL_SALIR.as_secs()
+        );
+    }
+}
+
+/// Quita la sesión de este equipo en la nube y la cierra en la bitácora del
+/// panel con motivo "salida". Best-effort: un fallo sólo queda en el log.
+fn avisar_cierre_a_la_nube(state: &GuiState, cedula: &str) {
+    let resultado = state.autenticar_con_cache().and_then(|token| {
+        nube::cerrar_sesion_en_unidad(nube::base_url(), nube::apikey(), &token, cedula)
+    });
+    if let Err(error) = resultado {
+        log::info!("no se pudo cerrar la sesión en la nube: {error}");
+    }
 }

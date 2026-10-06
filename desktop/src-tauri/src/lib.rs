@@ -692,8 +692,9 @@ pub fn run() {
         .invoke_handler(manejador_de_comandos())
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|_, evento| {
+        .run(|app, evento| {
             if matches!(evento, tauri::RunEvent::Exit) {
+                comandos::autenticacion::cerrar_sesion_al_salir(app);
                 telemetria::cerrar();
             }
         });

@@ -897,6 +897,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion_al_salir(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion_en_la_nube(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_visitas_adentro(
@@ -1087,6 +1089,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion_al_salir(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion_en_la_nube(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -1577,6 +1581,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() and 0xFFFF) != 14163) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion_al_salir() and 0xFFFF) != 23130) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion_en_la_nube() and 0xFFFF) != 11186) {
@@ -3472,6 +3479,16 @@ public interface NucleoInterface {
     fun `cerrarSesion`()
     
     /**
+     * La app se cierra con una sesión abierta (salir con "atrás" o
+     * deslizarla fuera de las recientes): cuenta como cerrar sesión, igual
+     * que el escritorio al cerrar la ventana. Si no, la bitácora del panel
+     * mostraba la sesión abierta hasta el próximo ingreso y la cerraba como
+     * "sin cierre", sin la hora real. Hace red: Kotlin la llama en segundo
+     * plano. Sin sesión abierta no hace nada.
+     */
+    fun `cerrarSesionAlSalir`()
+    
+    /**
      * Avisa a la nube que `cedula` salió en este teléfono (sesión única por
      * unidad y bitácora de sesiones del panel). Hace red: Kotlin la llama en
      * segundo plano DESPUÉS de `cerrar_sesion`, que es instantánea.
@@ -4857,6 +4874,26 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCall() { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(
+        it,
+        _status)
+}
+    }
+    
+    
+
+    
+    /**
+     * La app se cierra con una sesión abierta (salir con "atrás" o
+     * deslizarla fuera de las recientes): cuenta como cerrar sesión, igual
+     * que el escritorio al cerrar la ventana. Si no, la bitácora del panel
+     * mostraba la sesión abierta hasta el próximo ingreso y la cerraba como
+     * "sin cierre", sin la hora real. Hace red: Kotlin la llama en segundo
+     * plano. Sin sesión abierta no hace nada.
+     */override fun `cerrarSesionAlSalir`()
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion_al_salir(
         it,
         _status)
 }

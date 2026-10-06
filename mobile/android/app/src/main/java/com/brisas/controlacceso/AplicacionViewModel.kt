@@ -69,6 +69,7 @@ class AplicacionViewModel(application: Application) : AndroidViewModel(applicati
             // Android Keystore (ver AlmacenClaveKeystore.kt). Antes de
             // cualquier operación de nube.
             abierto.establecerAlmacenClave(AlmacenClaveKeystore(context))
+            CierreSesionAlSalir.registrar(abierto)
             EstadoAplicacion.Lista(
                 EntornoAplicacion(
                     nucleo = abierto,
@@ -87,7 +88,13 @@ class AplicacionViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     override fun onCleared() {
-        (_estado.value as? EstadoAplicacion.Lista)?.entorno?.nucleo?.close()
+        // La Activity terminó de verdad (no es un giro de pantalla): si quedó
+        // una sesión abierta, se avisa su cierre antes de cerrar el núcleo
+        // (ver CierreSesionAlSalir.kt).
+        (_estado.value as? EstadoAplicacion.Lista)?.entorno?.nucleo?.let { nucleo ->
+            CierreSesionAlSalir.olvidar(nucleo)
+            CierreSesionAlSalir.ejecutar(nucleo) { nucleo.close() }
+        }
         super.onCleared()
     }
 }
