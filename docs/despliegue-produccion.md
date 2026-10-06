@@ -562,6 +562,11 @@ equipo.
 | 2026-10-06 | Migración 1 (`ingresos_por_correo`) | Daniel Quintana (dueño), merge del PR #111 | La aplicó la integración de GitHub al mergear, con la versión del archivo (`20261003210000`). |
 | 2026-10-06 | Migraciones 2 a 6 | Daniel Quintana (dueño), merge del PR #115 | Aplicadas por la integración con sus versiones exactas. Antes, 0 visitas abiertas duplicadas (0.5). |
 | 2026-10-06 | Edge Functions `admin-crear-contratista` y `admin-editar-contratista` (nuevas, commit `88960f3`) y `admin-enviar-push` (versión 2, commit `aafae89`) | Daniel Quintana (dueño), antes del PR #116 | Desplegadas con un `index.ts` que importa el archivo del repo fijado al commit. Las tres responden 401 a quien no es administrador (arrancan y cargan el WebAssembly). La integración **no** despliega funciones: sólo migraciones. |
+| 2026-10-06 | Migraciones 7 y 8 | Daniel Quintana (dueño), merge del PR #116 | Aplicadas por la integración con sus versiones exactas. La 7 borró `panel_crear_contratista` después de desplegar `admin-crear-contratista` (2.6). |
+| 2026-10-06 | Migraciones 9 y 10 | Daniel Quintana (dueño), merge del PR #118 | Aplicadas por la integración, la 9 entera (funciones y `drop policy`) junto con la web de visitas nueva (2.8). |
+| 2026-10-06 | Migración 11 | Daniel Quintana (dueño), merge del PR #119 | Aplicada por la integración, antes de las apps nuevas de escritorio y teléfono (2.9). |
+| 2026-10-06 | Migraciones 12 y 13 | Daniel Quintana (dueño), merge del PR #121 | Aplicadas por la integración. Producción queda con 117 migraciones, las mismas y en el mismo orden que `main`. |
+| 2026-10-06 | Edge Function `admin-create-usuario` (versión 4, commit `e9056b9`) | Daniel Quintana (dueño), después del PR #121 | Nombre del usuario en mayúscula con la regla del núcleo (2.11). Responde 401 a quien no es administrador. Las 13 funciones de producción quedan iguales al repo. En staging, `admin-create-usuario` (v8) y `admin-enviar-push` (v2) desde el mismo commit; `admin-suspend-device`, `admin-crear-codigo-vinculacion` y la función de base `panel_resumen_movimientos` (análisis de Syncfusion) quedan sin tocar. |
 
 Asesor de seguridad de Supabase después de aplicar: sólo avisos anteriores
 (`plegar_texto` sin `search_path` fijo, `pg_net` en `public`, protección de

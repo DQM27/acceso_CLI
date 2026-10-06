@@ -569,6 +569,12 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   desplegado; alcance visual y funcional pendiente de definir.
 - [ ] **Revisar roles y permisos Root/Administrador/Operador.** El modelo actual está en
   `domain::autorizacion`; falta decidir si las reglas coinciden con el uso real.
+- [ ] **Actualizar `feat/analisis-syncfusion` antes de mergearla.** Todavía llama a la
+  función SQL `panel_crear_contratista`, que la migración
+  `20261004170000_alta_de_contratistas_por_edge_function.sql` borró en producción el
+  2026-10-06. Tiene que crear contratistas con la Edge Function `admin-crear-contratista`.
+  La función de base `panel_resumen_movimientos` que usa el análisis existe sólo en
+  staging: su migración va con esa rama.
 - [x] **Reportes globales decididos: historial completo en Supabase.** `web/src/api/historial.ts`
   lee la tabla `ingresos` como historial multi-sitio y la migración
   `agrega_auditoria_completa_a_ingresos` agregó el detalle de auditoría que faltaba.
