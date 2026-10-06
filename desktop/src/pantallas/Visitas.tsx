@@ -180,7 +180,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       { field: "empresa", headerName: "Empresa", flex: 1.1, minWidth: 120, valueFormatter: (p) => guion(p.value) },
       {
         colId: "medio",
-        headerName: "Medio de ingreso",
+        headerName: "Medio",
         flex: 1,
         minWidth: 130,
         // Lo que escribió el anfitrión en la cita.
@@ -246,7 +246,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       { field: "motivo", headerName: "Motivo", flex: 1.4, minWidth: 140, valueFormatter: (p) => guion(p.value) },
       {
         colId: "medio",
-        headerName: "Medio de ingreso",
+        headerName: "Medio",
         flex: 1,
         minWidth: 130,
         valueGetter: (p) => (p.data ? textoMedioDePlaca(p.data.placa) : ""),
@@ -310,7 +310,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
       { field: "motivo", headerName: "Motivo", flex: 1.4, minWidth: 140, valueFormatter: (p) => guion(p.value) },
       {
         colId: "medio",
-        headerName: "Medio de ingreso",
+        headerName: "Medio",
         flex: 1,
         minWidth: 130,
         valueGetter: (p) => (p.data ? textoMedioDePlaca(p.data.placa) : ""),

@@ -240,9 +240,9 @@ export default function Historial() {
       },
       {
         field: "medio_ingreso",
-        headerName: "Medio de ingreso",
+        headerName: "Medio",
         flex: 1,
-        minWidth: 130,
+        minWidth: 100,
         valueGetter: (p) =>
           p.data?.medio_ingreso == null
             ? "—"
