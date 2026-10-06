@@ -647,6 +647,12 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
 
 ## Android y lector de documentos
 
+- [x] **Todo nombre de persona o empresa en mayúscula, regla del núcleo --
+  pedido del usuario 2026-10-06.** "El núcleo dicta las reglas y las
+  interfaces las interpretan", incluido el panel web. Ver
+  `docs/despliegue-produccion.md` sección 2.11. Falta desplegar la Edge
+  Function `admin-create-usuario` (el trigger de `usuarios` ya cubre el alta).
+
 - [x] **Visitas agendadas en el teléfono -- pedido del usuario 2026-10-05
   ("minimalista y centrado en velocidad, nada de historial, sólo
   verificación").** Hecho en `feat/visitas-movil`: opción "Visita" en

@@ -4,6 +4,7 @@ import Modal from "../componentes/Modal";
 import { actualizarEncargadoRuta, crearEncargadoRuta } from "../api";
 import type { EncargadoRuta } from "../api";
 import { esquema } from "./FormularioEncargadoRuta.logica";
+import { escribirNombreEnCampo } from "../nombres";
 
 interface ValoresFormulario {
   codigo_empleado: string;
@@ -74,7 +75,7 @@ export default function FormularioEncargadoRuta({
 
         <label className="campo">
           Nombre
-          <input {...register("nombre")} />
+          <input {...register("nombre", { onChange: (evento) => escribirNombreEnCampo(evento.target) })} />
           {errors.nombre && <span style={{ color: "var(--error)" }}>{errors.nombre.message}</span>}
         </label>
 

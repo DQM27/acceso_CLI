@@ -16,6 +16,7 @@ import uniffi.control_acceso_mobile.IngresoCorreoRemoto
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.RegistroIngresoCorreoActivoResumen
+import uniffi.control_acceso_mobile.nombreMientrasSeEscribe
 
 /// Fila fusionada local+remota de los ingresos por correo -- mismo criterio
 /// que [FilaProveedorActiva].
@@ -102,10 +103,10 @@ class CorreoViewModel(
         }
     }
 
-    /// En mayúscula al escribir (y al leerlo del documento), como el resto
-    /// de los nombres de la app (pedido del usuario 2026-10-06).
+    /// En mayúscula al escribir (y al leerlo del documento): la regla de todo
+    /// nombre la dicta el núcleo (`nombreMientrasSeEscribe`).
     fun cambiarNombre(nuevo: String) {
-        nombre = nuevo.uppercase()
+        nombre = nombreMientrasSeEscribe(nuevo)
     }
 
     fun cambiarMotivo(nuevo: String) {

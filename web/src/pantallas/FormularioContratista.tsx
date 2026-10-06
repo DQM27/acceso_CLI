@@ -6,7 +6,7 @@ import { crearContratista, crearEmpresa, editarContratista, listarEmpresas } fro
 import type { ContratistaConEstado, Empresa, TipoIngreso } from "../api/contratistas";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 import { mensajeError } from "../mensajeError";
-import { useEstadoReglas } from "../reglas";
+import { useEstadoReglas, reglas } from "../reglas";
 import { admitePersonalRuta, errorAntesDeEnviar, pidePraind, tiposIngreso } from "./FormularioContratista.logica";
 
 /**
@@ -182,7 +182,7 @@ function FormularioConReglas({ contratista, onGuardado, onCerrar }: Props) {
             required
             value={nombre}
             disabled={enviando}
-            onChange={(evento) => setNombre(sanearSoloLetras(evento.target.value))}
+            onChange={(evento) => setNombre(reglas.nombreMientrasSeEscribe(sanearSoloLetras(evento.target.value)))}
           />
         </label>
 

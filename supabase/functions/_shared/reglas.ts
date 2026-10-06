@@ -10,6 +10,7 @@ import {
   admitePersonalRuta,
   huellaFuentes,
   initSync,
+  nombreEnMayusculas,
   normalizarCedulaContratista,
   requiereGafete,
   requierePraind,
@@ -88,6 +89,7 @@ export function hoyCostaRica(ahora: Date = new Date()): string {
 export {
   admitePersonalRuta,
   huellaFuentes,
+  nombreEnMayusculas,
   normalizarCedulaContratista,
   requiereGafete,
   requierePraind,

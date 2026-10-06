@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import Modal from "../componentes/Modal";
 import { editarUsuario } from "../api/usuarios";
 import type { Usuario } from "../api/usuarios";
+import { reglas } from "../reglas";
 import { sanearSoloLetras } from "../validacion";
 import { mensajeError } from "../mensajeError";
 
@@ -62,7 +63,7 @@ export default function FormularioEditarUsuario({
             autoFocus
             value={nombre}
             disabled={guardando}
-            onChange={(evento) => setNombre(sanearSoloLetras(evento.target.value))}
+            onChange={(evento) => setNombre(reglas.nombreMientrasSeEscribe(sanearSoloLetras(evento.target.value)))}
           />
         </label>
 

@@ -17,6 +17,7 @@ import type {
 } from "../api";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 import { esquema } from "./FormularioContratista.logica";
+import { escribirNombreEnCampo } from "../nombres";
 
 interface ValoresFormulario {
   cedula: string;
@@ -178,9 +179,8 @@ export default function FormularioContratista({
           Nombre
           <input
             {...register("nombre", {
-              onChange: (evento) => {
-                evento.target.value = sanearSoloLetras(evento.target.value);
-              },
+              // Sólo letras y en mayúscula (regla del núcleo), mientras se escribe.
+              onChange: (evento) => escribirNombreEnCampo(evento.target, sanearSoloLetras),
             })}
           />
           {errors.nombre && <span style={{ color: "var(--error)" }}>{errors.nombre.message}</span>}

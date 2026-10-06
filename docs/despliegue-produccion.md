@@ -47,6 +47,8 @@ versión del archivo).
 | 9 | `20261005130000_visitas_web_anfitrion.sql` | **En dos partes:** las funciones en el historial como `visitas_web_anfitrion_funciones`; los 7 `drop policy`, a mano. Verificado: 4 funciones nuevas y 0 políticas de escritura directa del anfitrión | Las funciones, cuando sea; los `drop policy`, **después** de publicar la web de visitas nueva (ver 2.8). Si se aplica el archivo entero, tiene que ser junto con la web |
 | 10 | `20261005133000_guardar_cita_reglas_del_nucleo.sql` | En el historial | Después de la 9 (reemplaza `guardar_cita`, que crea la 9). No rompe nada: la web nueva ya valida igual. Antes, la consulta de sólo lectura de 2.8 |
 | 11 | `20261005140000_movimientos_visita_placa.sql` | En el historial | **Antes** de la app de escritorio nueva (ver 2.9) |
+| 12 | `20261006100000_nombres_de_visitantes_en_mayuscula.sql` | En el historial (rama `feat/visitas-movil`) | Después de la 10 (reemplaza `guardar_cita`). No rompe nada (ver 2.11) |
+| 13 | `20261006101000_nombre_de_usuarios_en_mayuscula.sql` | En el historial (rama `feat/visitas-movil`) | Cuando sea (ver 2.11) |
 
 Las tres "a mano" (6, 7 y la segunda parte de la 9) existen en staging aunque
 su historial no las nombre. Para producción conviene aplicarlas con la
@@ -412,6 +414,31 @@ Sin historial.
 - **Orden en producción:** igual que el escritorio nuevo, **después** de la
   migración `20261005140000_movimientos_visita_placa.sql` (fila 11 de 0.2): el
   teléfono también sube la placa con cada movimiento de visita.
+
+### 2.11 Todo nombre de persona o empresa en mayúscula (2026-10-06)
+
+Rama `feat/visitas-movil`. La regla vive en el núcleo
+(`reglas/src/nombre.rs`: `nombre_en_mayusculas` al guardar,
+`nombre_mientras_se_escribe` para las interfaces) y la usan todos:
+
+- **Núcleo (escritorio y teléfono), al guardar:** contratistas (ya lo hacía),
+  empresas, empresas de proveedores, proveedor (persona), "por correo",
+  encargados de ruta y el ROOT inicial.
+- **Citas (web de visitas):** `validarCita` por WASM pone en mayúscula el
+  nombre y la empresa del visitante; `guardar_cita` repite la regla (fila 12
+  de 0.2).
+- **Usuarios:** el alta (`admin-create-usuario`) usa la regla por WASM; la
+  edición desde el panel es un `update` directo, así que un trigger en
+  `usuarios` repite la regla para los dos caminos (fila 13).
+- **Interfaces, mientras se escribe:** panel y web de visitas con el WASM;
+  teléfono con `nombreMientrasSeEscribe` del núcleo (uniffi); escritorio con
+  `src/nombres.ts` (sólo llega al núcleo por comandos asíncronos; el núcleo
+  vuelve a aplicar la regla al guardar).
+- **No toca lo ya guardado.**
+- **Pendiente de desplegar:** la Edge Function `admin-create-usuario` con la
+  regla quedó en el repo pero **no** se desplegó en staging (sin CLI en la
+  sesión: hay que subir `_shared/reglas/`). Mientras tanto el trigger de la
+  fila 13 cubre el alta igual.
 
 ### 2.6 Edge Function `admin-crear-contratista` (reglas compartidas, 2026-10-04)
 

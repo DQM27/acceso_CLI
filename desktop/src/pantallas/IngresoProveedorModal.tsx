@@ -14,6 +14,7 @@ import type { EmpresaProveedor } from "../api/proveedores";
 import { coincideBusqueda, plegar, textoGafete, validarNumeroGafete } from "../busqueda";
 import { proveedoresConocidos, datosNuevoDesdeBusqueda } from "./IngresoProveedorModal.logica";
 import type { ProveedorConocido } from "./IngresoProveedorModal.logica";
+import { nombreMientrasSeEscribe } from "../nombres";
 
 const MAX_CONOCIDOS = 4;
 const MAX_EMPRESAS = 5;
@@ -316,7 +317,7 @@ export default function IngresoProveedorModal({
                     <input
                       ref={nombreRef}
                       value={nombre}
-                      onChange={(evento) => setNombre(evento.target.value.toUpperCase())}
+                      onChange={(evento) => setNombre(nombreMientrasSeEscribe(evento.target.value))}
                       autoComplete="off"
                     />
                   </label>

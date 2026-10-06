@@ -69,3 +69,8 @@ mod tests {
         assert_eq!(plegar_para_busqueda("Niño"), "nino");
     }
 }
+
+/// Regla de todo nombre de persona o empresa (en mayúscula), del crate de
+/// reglas compartido: la usan el núcleo al guardar y las interfaces mientras
+/// se escribe.
+pub use control_acceso_reglas::nombre::{nombre_en_mayusculas, nombre_mientras_se_escribe};

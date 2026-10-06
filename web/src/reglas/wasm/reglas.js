@@ -31,6 +31,48 @@ export function huellaFuentes() {
 }
 
 /**
+ * Todo nombre de persona o empresa, como se guarda: espacios de más fuera
+ * y en mayúscula (`nombre::nombre_en_mayusculas`).
+ * @param {string} texto
+ * @returns {string}
+ */
+export function nombreEnMayusculas(texto) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(texto, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.nombreEnMayusculas(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * Mientras se escribe en un campo de nombre: sólo mayúscula, sin tocar los
+ * espacios (`nombre::nombre_mientras_se_escribe`).
+ * @param {string} texto
+ * @returns {string}
+ */
+export function nombreMientrasSeEscribe(texto) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(texto, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.nombreMientrasSeEscribe(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * Cédula en su forma única (sin guiones, espacios ni el cero del TSE), o
  * `undefined` si no es una cédula de contratista (9 a 13 dígitos).
  * @param {string} texto

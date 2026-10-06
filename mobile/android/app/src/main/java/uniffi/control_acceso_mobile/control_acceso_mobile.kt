@@ -765,6 +765,10 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_leer_mrz(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_nombre_en_mayusculas(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_nombre_mientras_se_escribe(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_largo_prefijo_pdf417_cedula(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula(
@@ -1178,6 +1182,10 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_leer_mrz(`lineas`: RustBuffer.ByValue,`anioActual`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_nombre_en_mayusculas(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_nombre_mientras_se_escribe(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_largo_prefijo_pdf417_cedula(uniffi_out_err: UniffiRustCallStatus, 
     ): Int
     external fun uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula(`prefijo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1370,6 +1378,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 18012) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_nombre_en_mayusculas() and 0xFFFF) != 61760) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_nombre_mientras_se_escribe() and 0xFFFF) != 38617) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_largo_prefijo_pdf417_cedula() and 0xFFFF) != 60675) {
@@ -11379,6 +11393,34 @@ public object FfiConverterSequenceTypeVisitaAdentro: FfiConverterRustBuffer<List
         
         FfiConverterSequenceString.lower(`lineas`),
         FfiConverterInt.lower(`anioActual`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * El nombre como lo guarda el núcleo: espacios de más fuera y en mayúscula.
+         */ fun `nombreEnMayusculas`(`texto`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_nombre_en_mayusculas(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Mientras se escribe un nombre: en mayúscula, sin tocar los espacios.
+         */ fun `nombreMientrasSeEscribe`(`texto`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_nombre_mientras_se_escribe(
+    
+        
+        FfiConverterString.lower(`texto`),_status)
 }
     )
     }

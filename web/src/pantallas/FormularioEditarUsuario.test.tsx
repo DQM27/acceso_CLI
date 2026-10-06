@@ -33,10 +33,10 @@ describe("FormularioEditarUsuario", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
 
     await waitFor(() => expect(mocks.editarUsuario).toHaveBeenCalledTimes(1));
-    // El nombre sólo admite letras mientras se escribe.
-    expect(mocks.editarUsuario).toHaveBeenCalledWith("u1", { nombre: "Ana María", rol: "ADMINISTRADOR" });
+    // El nombre sólo admite letras mientras se escribe, en mayúscula (regla del núcleo).
+    expect(mocks.editarUsuario).toHaveBeenCalledWith("u1", { nombre: "ANA MARÍA", rol: "ADMINISTRADOR" });
     await waitFor(() => expect(onGuardado).toHaveBeenCalled());
-    expect(mocks.toastSuccess).toHaveBeenCalledWith("Ana María actualizado.");
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("ANA MARÍA actualizado.");
   });
 
   it("a un ROOT no se le cambia el rol", async () => {

@@ -4,6 +4,7 @@ import Modal from "../componentes/Modal";
 import { actualizarEmpresa, crearEmpresa } from "../api";
 import type { EmpresaResumen } from "../api";
 import { esquema } from "./FormularioEmpresa.logica";
+import { escribirNombreEnCampo } from "../nombres";
 
 interface ValoresFormulario {
   nombre: string;
@@ -50,7 +51,10 @@ export default function FormularioEmpresa({
       >
         <label className="campo">
           Nombre
-          <input {...register("nombre")} autoFocus />
+          <input
+            {...register("nombre", { onChange: (evento) => escribirNombreEnCampo(evento.target) })}
+            autoFocus
+          />
           {errors.nombre && <span style={{ color: "var(--error)" }}>{errors.nombre.message}</span>}
         </label>
 

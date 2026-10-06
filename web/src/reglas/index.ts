@@ -118,6 +118,11 @@ export const reglas = {
     hoy: string,
     anterior?: EstadoAnteriorContratista,
   ): ResultadoValidacion => wasm.validarContratista(datos, hoy, anterior ?? null) as ResultadoValidacion,
+  /** Mientras se escribe un nombre de persona o empresa: en mayúscula, como
+   * lo va a guardar el núcleo (regla `nombre`). Si las reglas todavía no
+   * cargaron, queda tal cual: igual se guarda en mayúscula. */
+  nombreMientrasSeEscribe: (texto: string): string =>
+    estado === "lista" ? wasm.nombreMientrasSeEscribe(texto) : texto,
   /** Huella de las fuentes con que se generó el paquete (ver reglas.test.ts). */
   huellaFuentes: (): string => wasm.huellaFuentes(),
 };

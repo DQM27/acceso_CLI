@@ -17,6 +17,8 @@ import uniffi.control_acceso_mobile.IngresoProveedorRemoto
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.RegistroIngresoProveedorActivoResumen
+import uniffi.control_acceso_mobile.nombreEnMayusculas
+import uniffi.control_acceso_mobile.nombreMientrasSeEscribe
 
 /// Fila fusionada local+remota de la lista de activos -- mismo criterio
 /// que `FilaActiva` en [ActivosViewModel]: un ingreso de proveedor abierto
@@ -135,20 +137,21 @@ class ProveedoresViewModel(
         }
     }
 
+    /// En mayúscula al escribir (y al leerlo del documento): la regla de todo
+    /// nombre la dicta el núcleo (`nombreMientrasSeEscribe`).
     fun cambiarNombre(nuevo: String) {
-        nombre = nuevo
+        nombre = nombreMientrasSeEscribe(nuevo)
     }
 
     fun cambiarPlaca(nuevo: String) {
         placa = nuevo.uppercase()
     }
 
-    /// Siempre en mayúscula, igual que `cambiarPlaca` -- pedido del usuario
-    /// (2026-09-23): los nombres de empresa proveedora se guardan en
-    /// mayúscula, y este mismo campo es el que da de alta una empresa nueva
-    /// (`crearEmpresa`). La búsqueda del núcleo no distingue mayúsculas.
+    /// Siempre en mayúscula (regla del núcleo para todo nombre): este mismo
+    /// campo es el que da de alta una empresa nueva (`crearEmpresa`). La
+    /// búsqueda del núcleo no distingue mayúsculas.
     fun cambiarTextoEmpresa(valor: String) {
-        val texto = valor.uppercase()
+        val texto = nombreMientrasSeEscribe(valor)
         textoEmpresa = texto
         empresaSeleccionada = null
         buscadorEmpresa.cancelar()
@@ -176,9 +179,8 @@ class ProveedoresViewModel(
     /// (Paso 2: "Crear empresa" cuando no aparece en la búsqueda).
     fun crearEmpresa(nombreNuevo: String) {
         if (creandoEmpresa || nombreNuevo.isBlank()) return
-        // Mayúscula también acá, no sólo en `cambiarTextoEmpresa` -- quien
-        // llame con otro texto (no el del campo) no debe poder saltársela.
-        val nombre = nombreNuevo.trim().uppercase()
+        // Como lo guarda el núcleo, para mostrarlo igual apenas se crea.
+        val nombre = nombreEnMayusculas(nombreNuevo)
         creandoEmpresa = true
         viewModelScope.launch {
             try {
@@ -208,7 +210,7 @@ class ProveedoresViewModel(
         val nombreCompleto = listOfNotNull(nombreLeido, apellidosLeido)
             .filter { it.isNotBlank() }
             .joinToString(" ")
-        if (nombreCompleto.isNotBlank()) nombre = nombreCompleto
+        if (nombreCompleto.isNotBlank()) cambiarNombre(nombreCompleto)
     }
 
     fun registrarIngreso(gafeteNumero: Long, onExito: () -> Unit) {

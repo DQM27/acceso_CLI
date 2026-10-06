@@ -16,6 +16,7 @@ use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSes
 use control_acceso::tiempo::RelojCorregido;
 
 mod mrz;
+mod nombres;
 pub use mrz::{CampoMrz, CorreccionAplicada, FechaMrz, FormatoMrz, RegistroMrz, leer_mrz};
 mod pdf417_cedula;
 pub use pdf417_cedula::{
