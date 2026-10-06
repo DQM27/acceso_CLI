@@ -5,13 +5,18 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "../contexto/AuthContexto";
+import type { Resultado } from "../contexto/AuthContexto";
 
 const dobles = vi.hoisted(() => ({
   getSession: vi.fn(),
   getUser: vi.fn(),
-  signInWithOAuth: vi.fn(),
+  signInWithPassword: vi.fn(),
+  signInWithOtp: vi.fn(),
+  verifyOtp: vi.fn(),
+  updateUser: vi.fn(),
   signOut: vi.fn(),
   onAuthStateChange: vi.fn(),
   from: vi.fn(),
@@ -28,6 +33,8 @@ let evento: (evento: string, sesion: unknown) => void;
 let resolverConsulta: ReturnType<typeof vi.fn>;
 function Vista() {
   const estado = useAuth();
+  const [resultado, setResultado] = useState("");
+  const mostrar = (r: Resultado) => setResultado(r.ok ? "ok" : r.mensaje);
   return (
     <>
       <span data-testid="cuenta">
@@ -37,11 +44,29 @@ function Vista() {
       <span data-testid="cargando">{String(estado.cargando)}</span>
       {estado.error && <div role="alert">{estado.error}</div>}
       <button onClick={estado.verificar}>Verificar</button>
-      <button onClick={() => void estado.iniciarSesion()}>Entrar</button>
+      <span data-testid="resultado">{resultado}</span>
+      <span data-testid="definir">{String(estado.debeDefinirContrasena)}</span>
+      <button
+        onClick={() =>
+          void estado.iniciarSesion("  Ana@Example.Invalid ", "frase secreta larga").then(mostrar)
+        }
+      >
+        Entrar
+      </button>
+      <button onClick={() => void estado.solicitarCodigo("Ana@Example.Invalid").then(mostrar)}>
+        Pedir código
+      </button>
+      <button onClick={() => void estado.verificarCodigo("Ana@Example.Invalid", " 123 456 ").then(mostrar)}>
+        Verificar código
+      </button>
+      <button onClick={() => void estado.definirContrasena("frase secreta larga").then(mostrar)}>
+        Definir
+      </button>
     </>
   );
 }
 beforeEach(() => {
+  sessionStorage.clear();
   vi.resetAllMocks();
   dobles.getSession.mockResolvedValue({
     data: { session: sesion() },
@@ -155,24 +180,126 @@ describe("autorización de anfitriones", () => {
     await screen.findByRole("alert");
     expect(screen.getByTestId("cargando").textContent).toBe("false");
   });
-  it("maneja errores de OAuth y usa un retorno de su propio origen", async () => {
-    dobles.signInWithOAuth.mockResolvedValue({
-      error: new Error("fallo"),
-      data: null,
+});
+
+/** Error con la forma de AuthApiError de Supabase. */
+const errorAuth = (status: number, code?: string) =>
+  Object.assign(new Error(code ?? "fallo"), { status, code });
+
+async function pulsar(boton: string) {
+  fireEvent.click(screen.getByText(boton));
+  await waitFor(() =>
+    expect(screen.getByTestId("resultado").textContent).not.toBe(""),
+  );
+  return screen.getByTestId("resultado").textContent;
+}
+
+describe("ingreso con correo y contraseña", () => {
+  it("normaliza el correo antes de enviarlo", async () => {
+    dobles.signInWithPassword.mockResolvedValue({ data: {}, error: null });
+    montar();
+    expect(await pulsar("Entrar")).toBe("ok");
+    expect(dobles.signInWithPassword).toHaveBeenCalledWith({
+      email: "ana@example.invalid",
+      password: "frase secreta larga",
+    });
+  });
+  it.each([
+    ["credenciales incorrectas", errorAuth(400, "invalid_credentials")],
+    ["correo sin confirmar", errorAuth(400, "email_not_confirmed")],
+    ["usuario bloqueado", errorAuth(403, "user_banned")],
+  ])("no revela el estado de la cuenta: %s", async (_caso, fallo) => {
+    dobles.signInWithPassword.mockResolvedValue({ data: {}, error: fallo });
+    montar();
+    expect(await pulsar("Entrar")).toBe("Correo o contraseña incorrectos.");
+  });
+  it("avisa el límite de intentos del servidor", async () => {
+    dobles.signInWithPassword.mockResolvedValue({
+      data: {},
+      error: errorAuth(429, "over_request_rate_limit"),
     });
     montar();
+    expect(await pulsar("Entrar")).toContain("Demasiados intentos");
+  });
+  it("distingue un problema de conexión", async () => {
+    dobles.signInWithPassword.mockRejectedValue(new TypeError("Failed to fetch"));
+    montar();
+    expect(await pulsar("Entrar")).toContain("conexión");
+  });
+});
+
+describe("código de correo (primer ingreso y recuperación)", () => {
+  it("pide el código sin crear cuentas", async () => {
+    dobles.signInWithOtp.mockResolvedValue({ data: {}, error: null });
+    montar();
+    expect(await pulsar("Pedir código")).toBe("ok");
+    expect(dobles.signInWithOtp).toHaveBeenCalledWith({
+      email: "ana@example.invalid",
+      options: { shouldCreateUser: false },
+    });
+  });
+  it("contesta igual si el correo no tiene cuenta", async () => {
+    dobles.signInWithOtp.mockResolvedValue({
+      data: {},
+      error: errorAuth(422, "otp_disabled"),
+    });
+    montar();
+    expect(await pulsar("Pedir código")).toBe("ok");
+  });
+  it("avisa el límite de envíos de correo", async () => {
+    dobles.signInWithOtp.mockResolvedValue({
+      data: {},
+      error: errorAuth(429, "over_email_send_rate_limit"),
+    });
+    montar();
+    expect(await pulsar("Pedir código")).toContain("Demasiados intentos");
+  });
+  it("con un código válido exige definir la contraseña", async () => {
+    dobles.verifyOtp.mockResolvedValue({ data: {}, error: null });
+    montar();
+    expect(await pulsar("Verificar código")).toBe("ok");
+    expect(dobles.verifyOtp).toHaveBeenCalledWith({
+      email: "ana@example.invalid",
+      token: "123456",
+      type: "email",
+    });
+    expect(screen.getByTestId("definir").textContent).toBe("true");
+  });
+  it("rechaza un código vencido sin marcar nada", async () => {
+    dobles.verifyOtp.mockResolvedValue({
+      data: {},
+      error: errorAuth(403, "otp_expired"),
+    });
+    montar();
+    expect(await pulsar("Verificar código")).toContain("vencido");
+    expect(screen.getByTestId("definir").textContent).toBe("false");
+  });
+  it("al guardar la contraseña ya no la pide", async () => {
+    dobles.verifyOtp.mockResolvedValue({ data: {}, error: null });
+    dobles.updateUser.mockResolvedValue({ data: {}, error: null });
+    montar();
+    await pulsar("Verificar código");
+    fireEvent.click(screen.getByText("Definir"));
     await waitFor(() =>
-      expect(screen.getByTestId("verificado").textContent).toBe("true"),
+      expect(screen.getByTestId("definir").textContent).toBe("false"),
     );
-    fireEvent.click(screen.getByText("Entrar"));
-    await screen.findByRole("alert");
-    expect(dobles.signInWithOAuth).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: "google",
-        options: expect.objectContaining({
-          redirectTo: `${window.location.origin}/auth/callback`,
-        }),
-      }),
-    );
+  });
+  it("cerrar la sesión olvida el paso pendiente", async () => {
+    dobles.verifyOtp.mockResolvedValue({ data: {}, error: null });
+    montar();
+    await pulsar("Verificar código");
+    act(() => evento("SIGNED_OUT", null));
+    expect(screen.getByTestId("definir").textContent).toBe("false");
+  });
+  it("explica cuando el servidor rechaza la contraseña por débil", async () => {
+    dobles.updateUser.mockResolvedValue({
+      data: {},
+      error: errorAuth(422, "weak_password"),
+    });
+    montar();
+    expect(await pulsar("Definir")).toContain("filtraciones");
+    expect(dobles.updateUser).toHaveBeenCalledWith({
+      password: "frase secreta larga",
+    });
   });
 });

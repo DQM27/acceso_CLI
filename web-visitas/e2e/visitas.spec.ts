@@ -13,7 +13,7 @@ const usuario = {
   aud: "authenticated",
   role: "authenticated",
   email: correo,
-  app_metadata: { provider: "google", providers: ["google"] },
+  app_metadata: { provider: "email", providers: ["email"] },
   user_metadata: {},
   created_at: "2026-09-09T12:00:00Z",
 };
@@ -73,34 +73,73 @@ async function sinDesborde(page: Page) {
 /** Sesión de prueba y una nube falsa en memoria (citas y RPCs). */
 async function preparar(
   page: Page,
-  opciones: { autorizado?: boolean; falloGuardado?: boolean; citas?: Cita[]; llegadas?: unknown[] } = {},
+  opciones: {
+    autorizado?: boolean;
+    falloGuardado?: boolean;
+    citas?: Cita[];
+    llegadas?: unknown[];
+    /** Sin sesión guardada: la prueba entra por la pantalla de ingreso. */
+    sinSesion?: boolean;
+  } = {},
 ) {
   const llamadas: { rpc: string; datos: Record<string, unknown> }[] = [];
   let citas = [...(opciones.citas ?? [])];
   let fallosPendientes = opciones.falloGuardado ? 1 : 0;
-  await page.addInitScript(
-    ({ usuario }) => {
-      const token = `prueba.${btoa(JSON.stringify({ sub: usuario.id, exp: Math.floor(Date.now() / 1000) + 3600 }))}.firma`;
-      sessionStorage.setItem(
-        "brisas-visitas-auth",
-        JSON.stringify({
-          access_token: token,
-          refresh_token: "solo-prueba",
-          token_type: "bearer",
-          expires_in: 3600,
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-          user: usuario,
-        }),
-      );
-    },
-    { usuario },
-  );
+  const auth: { ruta: string; datos: Record<string, unknown> }[] = [];
+  const sesionNueva = () => ({
+    access_token: `prueba.${Buffer.from(JSON.stringify({ sub: usuario.id, exp: Math.floor(AHORA.getTime() / 1000) + 3600 })).toString("base64")}.firma`,
+    refresh_token: "solo-prueba",
+    token_type: "bearer",
+    expires_in: 3600,
+    expires_at: Math.floor(AHORA.getTime() / 1000) + 3600,
+    user: usuario,
+  });
+  if (!opciones.sinSesion) {
+    await page.addInitScript(
+      ({ usuario }) => {
+        const token = `prueba.${btoa(JSON.stringify({ sub: usuario.id, exp: Math.floor(Date.now() / 1000) + 3600 }))}.firma`;
+        sessionStorage.setItem(
+          "brisas-visitas-auth",
+          JSON.stringify({
+            access_token: token,
+            refresh_token: "solo-prueba",
+            token_type: "bearer",
+            expires_in: 3600,
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+            user: usuario,
+          }),
+        );
+      },
+      { usuario },
+    );
+  }
   await page.route("https://xidaepyaljzkpbsxrqsm.supabase.co/**", async (ruta) => {
     const peticion = ruta.request();
     const url = new URL(peticion.url());
     const responder = (datos: unknown, status = 200) =>
       ruta.fulfill({ status, contentType: "application/json", body: JSON.stringify(datos) });
-    if (url.pathname === "/auth/v1/user") return responder(usuario);
+    if (url.pathname === "/auth/v1/user") {
+      if (peticion.method() === "PUT") auth.push({ ruta: "user", datos: peticion.postDataJSON() });
+      return responder(usuario);
+    }
+    if (url.pathname === "/auth/v1/token" && url.searchParams.get("grant_type") === "password") {
+      const datos = peticion.postDataJSON() as Record<string, unknown>;
+      auth.push({ ruta: "password", datos });
+      return datos.password === "frase secreta de prueba"
+        ? responder(sesionNueva())
+        : responder({ code: "invalid_credentials", message: "Invalid login credentials" }, 400);
+    }
+    if (url.pathname === "/auth/v1/otp") {
+      auth.push({ ruta: "otp", datos: peticion.postDataJSON() });
+      return responder({});
+    }
+    if (url.pathname === "/auth/v1/verify") {
+      const datos = peticion.postDataJSON() as Record<string, unknown>;
+      auth.push({ ruta: "verify", datos });
+      return datos.token === "123456"
+        ? responder(sesionNueva())
+        : responder({ code: "otp_expired", message: "Token has expired or is invalid" }, 403);
+    }
     if (url.pathname === "/auth/v1/logout") return responder({});
     if (url.pathname === "/rest/v1/anfitriones")
       return responder(opciones.autorizado === false ? null : { correo, nombre: "Daniel Quintana" });
@@ -150,7 +189,10 @@ async function preparar(
     }
     throw new Error(`Petición inesperada: ${peticion.method()} ${url.pathname}`);
   });
-  return { llamadas: (rpc: string) => llamadas.filter((l) => l.rpc === rpc).map((l) => l.datos) };
+  return {
+    llamadas: (rpc: string) => llamadas.filter((l) => l.rpc === rpc).map((l) => l.datos),
+    auth: (ruta: string) => auth.filter((a) => a.ruta === ruta).map((a) => a.datos),
+  };
 }
 
 test("login con CSP real, sin desbordamiento en ambos temas", async ({ page }, info) => {
@@ -166,12 +208,53 @@ test("login con CSP real, sin desbordamiento en ambos temas", async ({ page }, i
   expect(csp.replace("'wasm-unsafe-eval'", "")).not.toContain("unsafe-");
   expect(respuesta.headers()["referrer-policy"]).toBe("no-referrer");
   expect(respuesta.headers()["x-frame-options"]).toBe("DENY");
-  await expect(page.getByRole("button", { name: "Continuar con Google" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ingresar" })).toBeVisible();
   await page.screenshot({ path: `test-results/login-${info.project.name}.png`, fullPage: true });
   await page.getByRole("button", { name: /Cambiar a tema/ }).click();
   await page.screenshot({ path: `test-results/login-tema-${info.project.name}.png`, fullPage: true });
   await sinDesborde(page);
   expect(errores).toEqual([]);
+});
+
+test("ingreso con correo y contraseña, con mensaje genérico ante un error", async ({ page }) => {
+  const nube = await preparar(page, { sinSesion: true, citas: [deHoy] });
+  await page.goto("/");
+  await page.getByLabel("Correo de la empresa").fill("  Anfitrion@Example.Invalid ");
+  await page.getByLabel("Contraseña", { exact: true }).fill("otra clave cualquiera");
+  await page.getByRole("button", { name: "Ingresar" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Correo o contraseña incorrectos.");
+  await expect(page.getByLabel("Contraseña", { exact: true })).toHaveValue("");
+  await page.getByLabel("Contraseña", { exact: true }).fill("frase secreta de prueba");
+  await page.getByRole("button", { name: "Mostrar contraseña" }).click();
+  await expect(page.getByLabel("Contraseña", { exact: true })).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "Ingresar" }).click();
+  await expect(page.getByText("Auditoría de seguridad")).toBeVisible();
+  expect(nube.auth("password").at(-1)).toMatchObject({ email: correo });
+});
+
+test("primer ingreso: código por correo y luego la contraseña", async ({ page }, info) => {
+  const nube = await preparar(page, { sinSesion: true, citas: [deHoy] });
+  await page.goto("/");
+  await page.getByRole("button", { name: "¿Olvidó su contraseña o es su primer ingreso?" }).click();
+  await page.getByLabel("Correo de la empresa").fill(correo);
+  await page.getByRole("button", { name: "Enviar código" }).click();
+  expect(nube.auth("otp").at(-1)).toMatchObject({ email: correo, create_user: false });
+  await page.getByLabel("Código").fill("000000");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(page.getByRole("alert")).toContainText("vencido");
+  await page.getByLabel("Código").fill("123 456");
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(page.getByRole("heading", { name: "Defina su contraseña" })).toBeVisible();
+  await page.screenshot({ path: `test-results/definir-contrasena-${info.project.name}.png`, fullPage: true });
+  await page.getByLabel("Contraseña nueva").fill("corta");
+  await page.getByRole("button", { name: "Guardar contraseña" }).click();
+  await expect(page.getByText(/al menos 15 caracteres/i).first()).toBeVisible();
+  await page.getByLabel("Contraseña nueva").fill("el cafe de la tarde en cartago");
+  await page.getByLabel("Repita la contraseña").fill("el cafe de la tarde en cartago");
+  await page.getByRole("button", { name: "Guardar contraseña" }).click();
+  await expect(page.getByText("Auditoría de seguridad")).toBeVisible();
+  expect(nube.auth("user").at(-1)).toMatchObject({ password: "el cafe de la tarde en cartago" });
+  await sinDesborde(page);
 });
 
 test("una cuenta sin autorización no ve la agenda", async ({ page }) => {
@@ -455,5 +538,5 @@ test("menú de la cuenta: tema y cerrar sesión", async ({ page }, info) => {
   await expect(page.getByRole("menu")).toHaveCount(0);
   await page.getByRole("button", { name: "Cuenta de Daniel Quintana" }).click();
   await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
-  await expect(page.getByRole("button", { name: "Continuar con Google" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ingresar" })).toBeVisible();
 });

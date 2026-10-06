@@ -2,8 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 
 export const CLAVE_SESION = "brisas-visitas-auth";
 
-// La sesión dura lo que esta pestaña. El verificador PKCE sobrevive al retorno
-// de Google sin compartir tokens con el panel ni guardar datos de visitantes.
+// La sesión dura lo que esta pestaña: no se comparten tokens con el panel ni
+// quedan datos de visitantes en el equipo. El ingreso es con correo y
+// contraseña; el primer ingreso y la recuperación, con un código de 6
+// dígitos que llega al correo (`verifyOtp`). Ninguno pasa por la URL.
 //
 // URL/clave vienen de `.env` (versionado, valores de producción por
 // defecto) -- para apuntar el build local a staging sin tocar ese
@@ -36,7 +38,9 @@ export const supabase = createClient(
       },
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      // Sin OAuth ni enlaces mágicos no hay retorno que leer de la URL: nada
+      // de lo que llegue en la dirección abre una sesión por sí solo.
+      detectSessionInUrl: false,
     },
     global: {
       fetch: (entrada, opciones) =>

@@ -9,6 +9,7 @@ const AgendarVisita = lazy(() => import("./pantallas/AgendarVisita"));
 const DetalleVisita = lazy(() => import("./pantallas/DetalleVisita"));
 const EditarVisita = lazy(() => import("./pantallas/EditarVisita"));
 const Historial = lazy(() => import("./pantallas/Historial"));
+const DefinirContrasena = lazy(() => import("./pantallas/DefinirContrasena"));
 
 const TITULOS: [RegExp, string][] = [
   [/^\/agendar/, "Agendar visita"],
@@ -17,9 +18,10 @@ const TITULOS: [RegExp, string][] = [
   [/^\/visitas\/[^/]+/, "Visita"],
 ];
 
-/** Sin sesión de anfitrión: el login. Con sesión: la pantalla pedida. */
+/** Sin sesión de anfitrión: el login. Recién entrado con un código de
+ * correo: definir la contraseña. Con sesión: la pantalla pedida. */
 function Portal() {
-  const { anfitrion, cargando, error, verificar } = useAuth();
+  const { anfitrion, cargando, error, verificar, debeDefinirContrasena } = useAuth();
   const ruta = useLocation();
   useEffect(() => {
     const titulo = TITULOS.find(([patron]) => patron.test(ruta.pathname))?.[1] ?? "Mis visitas";
@@ -28,6 +30,12 @@ function Portal() {
 
   if (cargando) return <Cargando texto="Verificando su acceso…" />;
   if (!anfitrion) return <Login />;
+  if (debeDefinirContrasena)
+    return (
+      <Suspense fallback={<Cargando />}>
+        <DefinirContrasena />
+      </Suspense>
+    );
   return (
     <div key={anfitrion.id}>
       <a className="saltar" href="#contenido">
@@ -63,8 +71,8 @@ const enrutador = createBrowserRouter([
       { path: "/agendar", element: <AgendarVisita /> },
       { path: "/visitas/:id", element: <DetalleVisita /> },
       { path: "/visitas/:id/editar", element: <EditarVisita /> },
-      // "/", "/auth/callback" (vuelta de Google: Supabase lee el código de la
-      // URL) y cualquier ruta vieja ("/citas", "/nueva") van a Mis visitas.
+      // "/", la vieja vuelta de Google ("/auth/callback") y cualquier ruta
+      // vieja ("/citas", "/nueva") van a Mis visitas.
       { path: "*", element: <Navigate to="/visitas" replace /> },
     ],
   },
