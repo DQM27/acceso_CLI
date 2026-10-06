@@ -29,6 +29,12 @@ updates:
       - dependency-name: webview2-com
       - dependency-name: windows
       - dependency-name: rfd
+      # Pareja de @tauri-apps/* en desktop/package.json: las menores se
+      # suben a mano, juntas (ver el bloque npm de /desktop).
+      - dependency-name: tauri
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "tauri-plugin-*"
+        update-types: ["version-update:semver-minor"]
     groups:
       cargo-desktop:
         patterns:
@@ -55,6 +61,13 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     ignore:
+      # Los paquetes npm de Tauri tienen que ir en la misma versión menor que
+      # sus crates (tauri <-> @tauri-apps/api, tauri-plugin-X <->
+      # @tauri-apps/plugin-X); si no, `tauri build` se niega a empaquetar y
+      # la CI no lo detecta (no empaqueta). Las subidas menores de Tauri se
+      # hacen a mano, npm y cargo juntos.
+      - dependency-name: "@tauri-apps/*"
+        update-types: ["version-update:semver-minor"]
       # eslint-plugin-react aún no soporta eslint 10 (ERESOLVE en npm ci).
       - dependency-name: eslint
         update-types: ["version-update:semver-major"]
