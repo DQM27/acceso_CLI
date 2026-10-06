@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,11 +24,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -277,39 +278,38 @@ private fun FilaPrestamoGafeteProvisionalRemota(
     remoto: PrestamoGafeteProvisionalRemoto,
     onConfirmarDevolucion: () -> Unit,
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onConfirmarDevolucion)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(remoto.encargadoNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        // Mismo criterio que FilaPrestamoGafeteProvisionalLocal -- ver ese
-        // comentario.
-        Text(
-            buildAnnotatedString {
-                append("Código de empleado: ${remoto.encargadoCodigoEmpleado} · ".uppercase())
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) {
-                    append("Gafete ${remoto.gafeteNumero}".uppercase())
-                }
-            },
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "Entregado ${textoFechaHora(remoto.horaEntrega)} · entregó ${remoto.usuarioEntregaNombre}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "Otro dispositivo",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(remoto.encargadoNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            // Mismo criterio que FilaPrestamoGafeteProvisionalLocal -- ver ese
+            // comentario.
+            Text(
+                buildAnnotatedString {
+                    append("Código de empleado: ${remoto.encargadoCodigoEmpleado} · ".uppercase())
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) {
+                        append("Gafete ${remoto.gafeteNumero}".uppercase())
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "Entregado ${textoFechaHora(remoto.horaEntrega)} · entregó ${remoto.usuarioEntregaNombre}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // El mismo ícono que el resto de las listas, en vez de texto.
+        IconoOtroEquipo()
     }
 }
 

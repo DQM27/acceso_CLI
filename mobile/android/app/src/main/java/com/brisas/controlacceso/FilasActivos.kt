@@ -117,15 +117,21 @@ internal fun TarjetaActivo(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (otroEquipo) {
-            Icon(
-                Icons.Default.Computer,
-                contentDescription = "Registrado en otro dispositivo",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-        }
+        if (otroEquipo) IconoOtroEquipo()
     }
+}
+
+/// La marca de "entró por el otro equipo de la unidad": el mismo ícono en
+/// todas las listas (contratistas, visitas, por correo, proveedores y
+/// gafetes provisionales), nunca texto.
+@Composable
+internal fun IconoOtroEquipo() {
+    Icon(
+        Icons.Default.Computer,
+        contentDescription = "Registrado en otro dispositivo",
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.size(20.dp),
+    )
 }
 
 @Composable

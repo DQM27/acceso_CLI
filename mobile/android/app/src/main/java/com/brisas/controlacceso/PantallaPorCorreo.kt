@@ -1,7 +1,6 @@
 package com.brisas.controlacceso
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,10 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
@@ -29,21 +26,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -331,48 +324,23 @@ private fun FilaCorreoActiva.datos(): DatosFilaCorreo = when (this) {
     )
 }
 
-/// Misma tarjeta que [FilaProveedorActivo], con el motivo en vez de la
-/// empresa y "Otro dispositivo" en las filas remotas.
+/// La misma tarjeta que contratistas ([TarjetaActivo]), con el motivo en
+/// vez de la empresa y el ícono de la PC en las filas remotas.
 @Composable
 private fun FilaCorreoActivo(fila: FilaCorreoActiva, onConfirmarSalida: () -> Unit) {
     val (nombre, cedula, motivo, placa, gafete, ingreso, usuario, remota) = fila.datos()
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onConfirmarSalida)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        Text(
-            buildAnnotatedString {
-                append(("$cedula · $motivo" + (placa?.let { " · $it" } ?: "") + " · ").uppercase())
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
-                    append("Gafete $gafete".uppercase())
-                }
-            },
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "Ingresó ${textoFechaHora(ingreso)} · dio ingreso $usuario",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (remota) {
-            Text(
-                "Otro dispositivo",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-    }
+    TarjetaActivo(
+        nombre = nombre,
+        detalle = "$cedula · $motivo" + (placa?.let { " · $it" } ?: ""),
+        gafeteNumero = gafete,
+        fechaHoraIngreso = ingreso,
+        dioIngreso = usuario,
+        otroEquipo = remota,
+        onClick = onConfirmarSalida,
+    )
 }
 
-/// Mismo diálogo que [DialogoConfirmarSalidaProveedor].
+/// El mismo diálogo que contratistas ([DialogoRegistrarSalida]).
 @Composable
 private fun DialogoConfirmarSalidaCorreo(
     fila: FilaCorreoActiva?,
@@ -380,50 +348,13 @@ private fun DialogoConfirmarSalidaCorreo(
     onConfirmar: (FilaCorreoActiva) -> Unit,
 ) {
     if (fila == null) return
-
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            }
-            Text(
-                "Registrar salida",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 16.dp),
-            )
-            Text(
-                when (fila) {
-                    is FilaCorreoActiva.Local ->
-                        "${fila.registro.nombre} · ${fila.registro.cedula} · ${fila.registro.motivo} · Gafete ${fila.registro.gafeteNumero}"
-                    is FilaCorreoActiva.Remota ->
-                        "${fila.remoto.nombre} · registrado en otro dispositivo de la unidad operativa"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            BotonBrisas(
-                onClick = { onConfirmar(fila) },
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-            ) {
-                Text("Confirmar")
-            }
-            BotonDiscretoBrisas(onClick = onDismiss, modifier = Modifier.padding(top = 4.dp)) {
-                Text("Cancelar")
-            }
-        }
-    }
+    DialogoRegistrarSalida(
+        detalle = when (fila) {
+            is FilaCorreoActiva.Local ->
+                "${fila.registro.nombre} · ${fila.registro.cedula} · ${fila.registro.motivo} · Gafete ${fila.registro.gafeteNumero}"
+            is FilaCorreoActiva.Remota -> "${fila.remoto.nombre} · $TEXTO_OTRO_DISPOSITIVO"
+        },
+        onDismiss = onDismiss,
+        onConfirmar = { onConfirmar(fila) },
+    )
 }

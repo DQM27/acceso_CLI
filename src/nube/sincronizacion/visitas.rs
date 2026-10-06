@@ -70,6 +70,7 @@ pub fn recibir_cierres_de_movimientos_visita_propios(
 /// Visita agendada todavía abierta, registrada por el otro equipo de la
 /// unidad (caché `movimientos_visita_remotos`).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct MovimientoVisitaRemoto {
     pub uuid: String,
     pub cedula: String,

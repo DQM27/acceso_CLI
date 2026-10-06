@@ -11,9 +11,11 @@ import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import BotonesExportacion from "../componentes/BotonesExportacion";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
+  cerrarVisitaRemota,
   listarAgendaVisitas,
   listarHistorialVisitasSitio,
   listarVisitasActivas,
+  listarVisitasRemotas,
   registrarSalidaVisita,
 } from "../api";
 import {
@@ -108,19 +110,20 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
     return Promise.all([
       listarAgendaVisitas(),
       listarVisitasActivas(),
+      listarVisitasRemotas(),
       listarTodosLosCorreosActivos(),
       listarHistorialVisitasSitio(hoy, hoy),
     ])
-      .then(([agenda, visitas, correos, historialHoy]) =>
-        setEsperadas(visitasEsperadasHoy(agenda, [...visitas, ...correos], historialHoy, hoy)),
+      .then(([agenda, visitas, remotas, correos, historialHoy]) =>
+        setEsperadas(visitasEsperadasHoy(agenda, [...visitas, ...remotas, ...correos], historialHoy, hoy)),
       )
       .finally(() => setCargando(false));
   }, []);
 
   const recargarAdentro = useCallback(() => {
     setCargando(true);
-    return Promise.all([listarVisitasActivas(), listarTodosLosCorreosActivos()])
-      .then(([visitas, correos]) => setAdentro(unirAdentro(visitas, correos)))
+    return Promise.all([listarVisitasActivas(), listarVisitasRemotas(), listarTodosLosCorreosActivos()])
+      .then(([visitas, remotas, correos]) => setAdentro(unirAdentro(visitas, remotas, correos)))
       .finally(() => setCargando(false));
   }, []);
 
@@ -153,6 +156,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
     async (fila: FilaVisitaAdentro) => {
       try {
         if (fila.fuente.tipo === "visita") await registrarSalidaVisita(fila.fuente.id);
+        else if (fila.fuente.tipo === "visita_remota") await cerrarVisitaRemota(fila.fuente.uuid);
         else await cerrarFilaCorreoActiva(fila.fuente.fila);
         await recargarAdentro();
       } catch (error) {

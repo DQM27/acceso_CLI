@@ -664,9 +664,19 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
   Núcleo: caché `movimientos_visita_remotos` (migración local 58), salida
   remota y cierres recibidos. Falta probarlo en un teléfono real.
 
-- [ ] **Escritorio: mostrar en "Adentro" las visitas que entraron por el
-  teléfono.** El núcleo ya baja la caché `movimientos_visita_remotos` también
-  en la PC; falta usarla en `Visitas.tsx` (hoy sólo lista las locales).
+- [x] **Salida cruzada de visitas entre teléfono y PC -- pedido del usuario
+  2026-10-06.** La PC muestra en "Adentro" (y descarta de "Esperadas") las
+  visitas que entraron por el teléfono y les da salida en la nube
+  (`listar_visitas_remotas`, `cerrar_visita_remota`). Con el núcleo nuevo, la
+  PC también cierra en local sus visitas a las que el teléfono dio salida
+  (en staging el teléfono ya las cerraba bien en la nube; la PC vieja no se
+  enteraba).
+
+- [x] **Teléfono: el ícono de la PC en todas las listas -- pedido del usuario
+  2026-10-06.** "Por correo" (y también Proveedores y Gafetes provisionales)
+  mostraba el texto "Otro dispositivo"; ahora usan la misma tarjeta
+  (`TarjetaActivo`) o el mismo ícono (`IconoOtroEquipo`) y el mismo diálogo de
+  salida que contratistas.
 
 - [ ] **Número de versión en el login de la app móvil -- pedido del usuario
   2026-10-03.** Mostrar la versión (`versionName`, ej. "v1.4.4") en la
