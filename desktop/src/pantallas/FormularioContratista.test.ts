@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { esquema } from "./FormularioContratista.logica";
+import { TIPOS_ELEGIBLES, esquema } from "./FormularioContratista.logica";
 
 function valores(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     cedula: "108470293",
     nombre: "Marlon Quesada",
     empresa_id: "5",
-    tipo_ingreso: "PorCorreo",
+    tipo_ingreso: "Swat",
     fecha_vencimiento_praind: "",
     es_personal_ruta: false,
     tiene_acceso: true,
@@ -35,5 +35,11 @@ describe("esquema de FormularioContratista", () => {
     expect(esquema.safeParse(valores({ cedula: "108-470293" })).success).toBe(
       true,
     );
+  });
+});
+
+describe("tipos que ofrece el selector", () => {
+  it("no ofrece Por correo, retirado como tipo de contratista", () => {
+    expect(TIPOS_ELEGIBLES).toEqual(["Praind", "InHouse", "Swat"]);
   });
 });

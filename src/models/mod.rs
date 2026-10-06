@@ -8,6 +8,7 @@ pub mod medio_ingreso;
 pub mod movimiento_visita;
 pub mod prestamo_gafete_provisional;
 pub mod registro_ingreso;
+pub mod registro_ingreso_correo;
 pub mod registro_ingreso_proveedor;
 pub mod ruta;
 pub mod salida_ruta;

@@ -157,15 +157,11 @@ fun PantallaProveedores(
         viewModel.activos.filter { it.coincideCon(busqueda) }
     }
 
+    // Sin título propio: el selector de [PantallaExternos] ya dice dónde se
+    // está.
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Text(
-            "Proveedores",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

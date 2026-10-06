@@ -27,6 +27,7 @@ mod citas;
 mod cola;
 mod conflictos;
 mod consultas_en_vivo;
+mod correo;
 mod gafetes_provisionales;
 mod historial;
 mod ingresos;
@@ -39,6 +40,7 @@ pub use citas::*;
 pub use cola::*;
 pub use conflictos::*;
 pub use consultas_en_vivo::*;
+pub use correo::*;
 pub use gafetes_provisionales::*;
 pub use historial::*;
 pub use ingresos::*;
@@ -111,6 +113,8 @@ pub enum TipoMovimientoGafete {
     Contratista,
     Proveedor,
     ProvisionalKof,
+    /// Ingreso por correo (gafete de visita).
+    PorCorreo,
 }
 
 #[derive(Debug, thiserror::Error)]

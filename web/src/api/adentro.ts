@@ -2,13 +2,13 @@ import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
 
 /**
- * Quién está adentro ahora, por unidad: contratistas, proveedores y
- * préstamos de gafete provisional KOF sin salida. Vista
+ * Quién está adentro ahora, por unidad: contratistas, proveedores,
+ * préstamos de gafete provisional KOF e ingresos por correo sin salida. Vista
  * `panel_adentro_ahora` (migración `vistas_estado_y_adentro`): sólo lee
  * filas abiertas con índices parciales, así que no depende del tamaño del
  * historial. RLS: el administrador del panel ve todas las unidades.
  */
-export type TipoAdentro = "CONTRATISTA" | "PROVEEDOR" | "PROVISIONAL_KOF";
+export type TipoAdentro = "CONTRATISTA" | "PROVEEDOR" | "PROVISIONAL_KOF" | "POR_CORREO";
 
 export interface PersonaAdentro {
   tipo: TipoAdentro;
@@ -18,6 +18,7 @@ export interface PersonaAdentro {
   /** Cédula; en KOF, el código de empleado del encargado. */
   identificacion: string | null;
   nombre: string;
+  /** Empresa; en un ingreso por correo, el motivo de la visita. */
   empresa_nombre: string | null;
   gafete_numero: number | null;
   placa: string | null;
@@ -29,10 +30,11 @@ export const TEXTO_TIPO_ADENTRO: Record<TipoAdentro, string> = {
   CONTRATISTA: "Contratista",
   PROVEEDOR: "Proveedor",
   PROVISIONAL_KOF: "Provisional KOF",
+  POR_CORREO: "Por correo",
 };
 
 const personaAdentroEsquema = z.object({
-  tipo: z.enum(["CONTRATISTA", "PROVEEDOR", "PROVISIONAL_KOF"]),
+  tipo: z.enum(["CONTRATISTA", "PROVEEDOR", "PROVISIONAL_KOF", "POR_CORREO"]),
   id: z.string(),
   sitio_id: z.string(),
   sitio_nombre: z.string().nullable(),

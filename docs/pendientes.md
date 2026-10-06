@@ -599,6 +599,12 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
 
 ## Android y lector de documentos
 
+- [ ] **Número de versión en el login de la app móvil -- pedido del usuario
+  2026-10-03.** Mostrar la versión (`versionName`, ej. "v1.4.4") en la
+  pantalla de login, con fuente chica y discreta: centrada abajo o en una
+  esquina. Sirve para saber de un vistazo qué versión tiene cada teléfono
+  sin entrar a Ajustes de Android.
+
 - [ ] **`cargo ndk` para `mobile/rust-core` no compila localmente en Windows
   con el motor real (`cifrado-sqlite3mc`, default) -- hallazgo 2026-09-15.**
   El cross-compile de OpenSSL vendorizado (que arrastra `sqlite3mc` vía

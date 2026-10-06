@@ -41,6 +41,7 @@ pub mod auditoria;
 pub mod autenticacion;
 pub mod citas;
 pub mod contratistas;
+pub mod correo;
 pub mod empresas;
 pub mod exportacion;
 pub mod gafetes;

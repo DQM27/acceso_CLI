@@ -96,8 +96,13 @@ fn debe_crear_in_house_con_fecha() {
 }
 
 #[test]
-fn debe_crear_por_correo_sin_fecha() {
-    crear_y_recuperar(TipoIngreso::PorCorreo, None, false);
+fn por_correo_ya_no_se_puede_elegir_para_un_contratista_nuevo() {
+    // Retirado como tipo de contratista: esas visitas son ingresos por
+    // correo (`IngresoCorreoService`).
+    assert!(matches!(
+        crear_resultado(TipoIngreso::PorCorreo, None, false),
+        Err(ContratistaServiceError::TipoIngresoRetirado)
+    ));
 }
 
 #[test]
@@ -132,11 +137,6 @@ fn debe_rechazar_in_house_sin_fecha() {
         crear_resultado(TipoIngreso::InHouse, None, false),
         Err(ContratistaServiceError::PraindRequerido)
     ));
-}
-
-#[test]
-fn debe_permitir_por_correo_sin_fecha() {
-    assert!(crear_resultado(TipoIngreso::PorCorreo, None, false).is_ok());
 }
 
 #[test]
@@ -302,7 +302,7 @@ fn debe_actualizar_contratista() {
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
-    let mut entrada = actualizacion(empresa_id, TipoIngreso::PorCorreo);
+    let mut entrada = actualizacion(empresa_id, TipoIngreso::Swat);
     entrada.cedula = "300100100".to_string();
     entrada.nombre = "Nombre actualizado".to_string();
 
@@ -355,13 +355,13 @@ fn actualizar_conserva_tipo_ingreso_solicitado() {
     let contratistas = SqliteContratistaRepository::new(&connection);
     let empresas = SqliteEmpresaRepository::new(&connection);
     let servicio = ContratistaService::new(&contratistas, &empresas);
-    let entrada = actualizacion(empresa_id, TipoIngreso::PorCorreo);
+    let entrada = actualizacion(empresa_id, TipoIngreso::Swat);
 
     servicio.actualizar(id, entrada).unwrap();
 
     assert_eq!(
         servicio.buscar_por_id(id).unwrap().tipo_ingreso,
-        TipoIngreso::PorCorreo
+        TipoIngreso::Swat
     );
 }
 
@@ -443,7 +443,7 @@ fn debe_listar_contratistas() {
     servicio
         .crear(datos(empresa_id, TipoIngreso::Swat))
         .unwrap();
-    let mut segundo = datos(empresa_id, TipoIngreso::PorCorreo);
+    let mut segundo = datos(empresa_id, TipoIngreso::Swat);
     segundo.cedula = "200200200".to_string();
     segundo.nombre = "Persona Dos".to_string();
     servicio.crear(segundo).unwrap();
@@ -461,7 +461,7 @@ fn cedula_duplicada_devuelve_error_semantico_y_no_crea_otro_registro() {
         .crear(datos(empresa_id, TipoIngreso::Swat))
         .unwrap();
 
-    let resultado = servicio.crear(datos(empresa_id, TipoIngreso::PorCorreo));
+    let resultado = servicio.crear(datos(empresa_id, TipoIngreso::Swat));
 
     assert!(matches!(
         resultado,
@@ -542,7 +542,7 @@ fn debe_encolar_hacia_la_nube_al_actualizar() {
     let uuid = uuid_de_contratista(&connection, id);
 
     servicio
-        .actualizar(id, actualizacion(empresa_id, TipoIngreso::PorCorreo))
+        .actualizar(id, actualizacion(empresa_id, TipoIngreso::Swat))
         .unwrap();
 
     assert_eq!(contar_cola_salida(&connection, &uuid, "actualizar"), 1);
@@ -575,13 +575,12 @@ fn crear_con_reglas(
 
 #[test]
 fn rechaza_personal_de_ruta_en_tipos_que_no_lo_admiten() {
-    for tipo in [TipoIngreso::PorCorreo, TipoIngreso::Swat] {
-        let (_c, resultado) = crear_con_reglas(tipo, Some(fecha_praind()), true);
-        assert!(matches!(
-            resultado,
-            Err(ContratistaServiceError::PersonalRutaNoAdmitido)
-        ));
-    }
+    // `PorCorreo` tampoco lo admitía, pero ya no se puede elegir.
+    let (_c, resultado) = crear_con_reglas(TipoIngreso::Swat, Some(fecha_praind()), true);
+    assert!(matches!(
+        resultado,
+        Err(ContratistaServiceError::PersonalRutaNoAdmitido)
+    ));
 }
 
 #[test]
@@ -700,4 +699,17 @@ fn editar_sin_tocar_el_praind_vencido_deja_quitar_el_acceso() {
     cambio.tiene_acceso = false;
     servicio.actualizar(id, cambio).unwrap();
     assert!(!servicio.buscar_por_id(id).unwrap().tiene_acceso);
+}
+
+#[test]
+fn no_se_puede_cambiar_un_contratista_a_por_correo() {
+    let (connection, empresa_id, id) = preparar_actualizacion();
+    let contratistas = SqliteContratistaRepository::new(&connection);
+    let empresas = SqliteEmpresaRepository::new(&connection);
+    let servicio = ContratistaService::new(&contratistas, &empresas);
+
+    assert!(matches!(
+        servicio.actualizar(id, actualizacion(empresa_id, TipoIngreso::PorCorreo)),
+        Err(ContratistaServiceError::TipoIngresoRetirado)
+    ));
 }

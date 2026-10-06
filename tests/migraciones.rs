@@ -416,6 +416,10 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              DROP TABLE registro_ingresos_proveedor;
              DROP TABLE empresas_proveedor;
              DROP TABLE ingresos_proveedor_remotos;
+             -- MIGRACION_55 (ingreso por correo) también las crea.
+             DROP TABLE registro_ingresos_correo;
+             DROP TABLE ingresos_correo_remotos;
+             DROP TABLE historial_ingresos_correo_sitio;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo con MIGRACION_17/18, que crean `cola_salida` e
              -- `ingresos_remotos` desde cero -- ya existen por el
@@ -553,6 +557,10 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              DROP TABLE registro_ingresos_proveedor;
              DROP TABLE empresas_proveedor;
              DROP TABLE ingresos_proveedor_remotos;
+             -- MIGRACION_55 (ingreso por correo) también las crea.
+             DROP TABLE registro_ingresos_correo;
+             DROP TABLE ingresos_correo_remotos;
+             DROP TABLE historial_ingresos_correo_sitio;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v10.
@@ -695,6 +703,10 @@ fn migracion_12_habilita_cambio_de_cedula() {
              DROP TABLE registro_ingresos_proveedor;
              DROP TABLE empresas_proveedor;
              DROP TABLE ingresos_proveedor_remotos;
+             -- MIGRACION_55 (ingreso por correo) también las crea.
+             DROP TABLE registro_ingresos_correo;
+             DROP TABLE ingresos_correo_remotos;
+             DROP TABLE historial_ingresos_correo_sitio;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v11.
@@ -1127,6 +1139,14 @@ fn base_version_34_con_gafete_perdido() -> Connection {
     // `registro_ingresos` en este fixture -- nunca se creó.
     connection
         .execute_batch(&ddl_de("registro_ingresos"))
+        .unwrap();
+    // Su índice de texto completo (`MIGRACION_5`) también existía en v34, y
+    // `MIGRACION_49` le cuelga triggers. Sin él, la primera migración que
+    // renombra una tabla (`MIGRACION_55`, `cola_salida`) choca con "no such
+    // table: registro_ingresos_fts": `ALTER TABLE ... RENAME` revalida todos
+    // los triggers del esquema.
+    connection
+        .execute_batch(&ddl_de("registro_ingresos_fts"))
         .unwrap();
     // Mismo motivo: `ingresos_remotos` (MIGRACION_17) e `historial_sitio`
     // (MIGRACION_25) ya existían en v34, pero ninguna migración entre esa y

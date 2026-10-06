@@ -212,7 +212,9 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             )
             DropdownMenu(expanded = menuTipoAbierto, onDismissRequest = { menuTipoAbierto = false }) {
-                TipoIngreso.entries.forEach { tipo ->
+                // Sin "Por correo": dejó de ser un tipo de contratista
+                // (2026-10-03); esas visitas van en Externos → Por correo.
+                TipoIngreso.entries.filter { it != TipoIngreso.POR_CORREO }.forEach { tipo ->
                     DropdownMenuItem(
                         text = { Text(etiquetaTipo(tipo)) },
                         onClick = {

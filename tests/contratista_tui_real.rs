@@ -137,7 +137,7 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
                 "997997997",
                 "José Hernández",
                 e,
-                TipoIngreso::PorCorreo,
+                TipoIngreso::Swat,
                 None,
                 false,
             ),
@@ -152,7 +152,7 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
             "998998998",
             "José Álvarez",
             e,
-            TipoIngreso::PorCorreo,
+            TipoIngreso::Swat,
             None,
             false,
         ),
@@ -201,7 +201,7 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         .unwrap()
         .items[0];
     assert_eq!(conservado.nombre, "JOSÉ ÁLVAREZ");
-    assert_eq!(conservado.tipo_ingreso, TipoIngreso::PorCorreo);
+    assert_eq!(conservado.tipo_ingreso, TipoIngreso::Swat);
     assert!(matches!(
         core.crear_contratista(
             &actor,
@@ -235,7 +235,6 @@ fn matrices_praind_ruta_acceso_y_cedula_string_se_persisten() {
     let casos = [
         (TipoIngreso::Praind, false, true),
         (TipoIngreso::InHouse, false, true),
-        (TipoIngreso::PorCorreo, false, false),
         (TipoIngreso::Swat, false, false),
         (TipoIngreso::Praind, true, true),
     ];

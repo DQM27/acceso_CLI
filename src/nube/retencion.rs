@@ -15,11 +15,16 @@ use crate::tiempo::serializar_utc;
 pub const MESES_HISTORIAL_ESCRITORIO: u32 = 24;
 
 /// Cada caché con su columna de entrada y de salida (`NULL` = abierto).
-const CACHES_HISTORIAL: [(&str, &str, &str); 4] = [
+const CACHES_HISTORIAL: [(&str, &str, &str); 5] = [
     ("historial_sitio", "hora_entrada", "hora_salida"),
     ("historial_visitas_sitio", "hora_entrada", "hora_salida"),
     (
         "historial_ingresos_proveedor_sitio",
+        "hora_entrada",
+        "hora_salida",
+    ),
+    (
+        "historial_ingresos_correo_sitio",
         "hora_entrada",
         "hora_salida",
     ),
@@ -146,7 +151,7 @@ mod tests {
         let borradas =
             purgar_historiales_del_sitio(&conexion, limite_retencion(fecha(2026, 9), 24)).unwrap();
 
-        assert_eq!(borradas, 4);
+        assert_eq!(borradas, 5);
         for (tabla, _, _) in CACHES_HISTORIAL {
             assert_eq!(contar(&conexion, tabla), 2, "{tabla}");
             let queda_el_abierto: bool = conexion

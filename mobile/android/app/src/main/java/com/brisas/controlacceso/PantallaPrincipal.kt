@@ -129,6 +129,8 @@ fun PantallaPrincipal(
     // Rust y desktop ya lo mostraba (`App.tsx`), pero acá nadie lo leía
     // todavía.
     var conflictosIngresoProveedor by remember { mutableStateOf<List<ConflictoIngresoProveedorActivo>>(emptyList()) }
+    // Lo mismo para los ingresos por correo (mismo tipo de aviso).
+    var conflictosIngresoCorreo by remember { mutableStateOf<List<ConflictoIngresoProveedorActivo>>(emptyList()) }
     // Mismo criterio que `conflictosIngreso`, pero calculado con datos
     // locales dentro de `drenar_cola` (fase 3, PR #62) -- ver
     // `ResumenSincronizacion.conflictosGafete`.
@@ -176,6 +178,7 @@ fun PantallaPrincipal(
                     refrescarNube += 1
                     conflictosIngreso = resumen.conflictosIngreso
                     conflictosIngresoProveedor = resumen.conflictosIngresoProveedor
+                    conflictosIngresoCorreo = resumen.conflictosIngresoCorreo
                     conflictosGafete = resumen.conflictosGafete
                 }
             },
@@ -242,6 +245,7 @@ fun PantallaPrincipal(
             refrescarNube += 1
             conflictosIngreso = resumen.conflictosIngreso
             conflictosIngresoProveedor = resumen.conflictosIngresoProveedor
+            conflictosIngresoCorreo = resumen.conflictosIngresoCorreo
             conflictosGafete = resumen.conflictosGafete
         }
     }
@@ -335,6 +339,15 @@ fun PantallaPrincipal(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             )
         }
+        // Mismo texto que escritorio para los ingresos por correo.
+        for (conflicto in conflictosIngresoCorreo) {
+            Text(
+                "${conflicto.nombre} tiene un ingreso por correo activo acá Y en ${conflicto.sitioConflicto} — hay que resolverlo.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
+        }
 
         // A diferencia del de arriba (simétrico: ambos lados "tienen
         // razón" hasta que alguien decide), acá Postgres ya decidió -- el
@@ -390,7 +403,7 @@ fun PantallaPrincipal(
                     SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, refrescarNube)
                     SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
                     SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
-                    SeccionPrincipal.PROVEEDORES -> PantallaProveedores(nucleo, refrescarNube)
+                    SeccionPrincipal.EXTERNOS -> PantallaExternos(nucleo, refrescarNube)
                 }
             }
         }
@@ -412,7 +425,9 @@ enum class SeccionPrincipal(val etiqueta: String, val enDesarrollo: Boolean = fa
     ACTIVOS("Activos"),
     RUTAS("Rutas", enDesarrollo = true),
     KOF("KOF"),
-    PROVEEDORES("Proveedores"),
+    // Antes "Proveedores": ahora agrupa a quien entra sin catálogo
+    // (proveedores e ingresos por correo, ver [PantallaExternos]).
+    EXTERNOS("Externos"),
 }
 
 private val SECCIONES_VISIBLES = SeccionPrincipal.entries.filterNot { it.enDesarrollo }

@@ -15,6 +15,8 @@ fun mensajeConflictoGafete(conflicto: ConflictoGafeteActivo, hora: String): Stri
     return when (conflicto.tipo) {
         TipoMovimientoGafete.PROVEEDOR ->
             "El ingreso del proveedor $nombre con gafete $gafete ($hora) $cierre"
+        TipoMovimientoGafete.POR_CORREO ->
+            "El ingreso por correo de $nombre con gafete de visita $gafete ($hora) $cierre"
         TipoMovimientoGafete.PROVISIONAL_KOF ->
             "El préstamo del gafete provisional $gafete a $nombre ($hora) $cierre"
         TipoMovimientoGafete.CONTRATISTA ->

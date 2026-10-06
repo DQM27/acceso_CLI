@@ -9,6 +9,7 @@ pub mod encargado_ruta_service;
 pub mod error;
 pub mod gafete_provisional_service;
 pub mod gafete_service;
+pub mod ingreso_correo_service;
 pub mod ingreso_proveedor_service;
 pub mod password;
 pub mod registro_ingreso_service;

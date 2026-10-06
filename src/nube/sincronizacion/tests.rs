@@ -4188,3 +4188,284 @@ fn ingreso_proveedor_con_un_409_de_otro_indice_sigue_el_camino_normal() {
     assert!(resumen.conflictos_gafete.is_empty());
     assert_eq!(estado_en_cola(&connection, &uuid), "pendiente");
 }
+
+// ---- Ingreso por correo ----
+
+fn conexion_con_ingreso_correo(fecha_hora_salida: Option<&str>) -> Connection {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo)
+             VALUES ('1', 'Guardia', 'h', 'OPERADOR', 1)",
+            [],
+        )
+        .unwrap();
+    let usuario_salida_id = fecha_hora_salida.is_some().then_some(1_i64);
+    let usuario_salida_nombre = fecha_hora_salida.is_some().then_some("Guardia");
+    connection
+        .execute(
+            "INSERT INTO registro_ingresos_correo (
+                uuid, cedula, nombre, motivo, placa, gafete_numero,
+                fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre,
+                fecha_hora_salida, usuario_salida_id, usuario_salida_nombre
+            ) VALUES (
+                'uuid-correo', '112345678', 'Ana Solano', 'Entrevista RH', NULL, 5,
+                '2026-01-01T08:00:00Z', 1, 'Guardia', ?1, ?2, ?3
+            )",
+            params![fecha_hora_salida, usuario_salida_id, usuario_salida_nombre],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO cola_salida (entidad, entidad_uuid, operacion, creado_en, actualizado_en)
+             VALUES ('ingreso_correo', 'uuid-correo', ?1,
+                     '2026-01-01T08:00:00Z', '2026-01-01T08:00:00Z')",
+            params![if fecha_hora_salida.is_some() {
+                "cerrar"
+            } else {
+                "crear"
+            }],
+        )
+        .unwrap();
+    connection
+}
+
+/// Servidor de una sola petición que exige que empiece con `inicio` y traiga
+/// `fragmento` (en el cuerpo), y responde `respuesta` tal cual.
+fn servidor_que_exige(
+    inicio: &'static str,
+    fragmento: &'static str,
+    respuesta: &'static str,
+) -> (String, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base_url = format!("http://{}", listener.local_addr().unwrap());
+    let servidor = thread::spawn(move || {
+        let (mut socket, _) = listener.accept().unwrap();
+        socket
+            .set_read_timeout(Some(Duration::from_secs(3)))
+            .unwrap();
+        let mut pedido = Vec::new();
+        let mut buffer = [0; 4096];
+        while !String::from_utf8_lossy(&pedido).contains(fragmento) {
+            let leidos = socket.read(&mut buffer).unwrap();
+            assert!(leidos > 0, "el pedido no trajo {fragmento}");
+            pedido.extend_from_slice(&buffer[..leidos]);
+        }
+        let pedido = String::from_utf8(pedido).unwrap();
+        assert!(pedido.starts_with(inicio), "{pedido}");
+        socket.write_all(respuesta.as_bytes()).unwrap();
+    });
+    (base_url, servidor)
+}
+
+#[test]
+fn envia_la_apertura_de_un_ingreso_por_correo_con_su_motivo() {
+    let connection = conexion_con_ingreso_correo(None);
+    let (base_url, servidor) = servidor_que_exige(
+        "POST /rest/v1/ingresos_correo ",
+        "\"motivo\":\"Entrevista RH\"",
+        "HTTP/1.1 201 Created\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+    );
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.enviados, 1);
+    assert_eq!(resumen.fallidos, 0);
+    servidor.join().unwrap();
+}
+
+#[test]
+fn envia_el_cierre_de_un_ingreso_por_correo() {
+    let connection = conexion_con_ingreso_correo(Some("2026-01-01T09:00:00Z"));
+    let (base_url, servidor) = servidor_que_exige(
+        "PATCH /rest/v1/ingresos_correo?id=eq.uuid-correo&hora_salida=is.null ",
+        "\"hora_salida\":\"2026-01-01T09:00:00Z\"",
+        "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+    );
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.enviados, 1);
+    servidor.join().unwrap();
+}
+
+#[test]
+fn ingreso_por_correo_con_gafete_ya_activo_queda_fallido_con_aviso() {
+    let connection = conexion_con_ingreso_correo(None);
+    let base_url = servidor_de_una_respuesta(respuesta_gafete_en_uso(
+        "ingresos_correo_gafete_activo_sitio_idx",
+    ));
+
+    let resumen = drenar_cola(&connection, &contexto(&base_url), 10).unwrap();
+
+    assert_eq!(resumen.fallidos, 1);
+    assert_eq!(
+        resumen.conflictos_gafete,
+        vec![ConflictoGafeteActivo {
+            tipo: TipoMovimientoGafete::PorCorreo,
+            nombre: "Ana Solano".to_string(),
+            gafete_numero: 5,
+            fecha_hora: "2026-01-01T08:00:00Z".to_string(),
+        }]
+    );
+    assert_eq!(estado_en_cola(&connection, "uuid-correo"), "fallido");
+}
+
+#[test]
+fn la_cola_reconoce_el_rechazo_por_persona_ya_adentro_por_correo() {
+    let fila = super::cola::FilaCola {
+        id: 1,
+        entidad: "ingreso_correo".to_string(),
+        entidad_uuid: "uuid".to_string(),
+        operacion: "crear".to_string(),
+        intentos: 0,
+    };
+    let rechazo = |indice: &str| SincronizacionError::RespuestaInesperada {
+        status: 409,
+        cuerpo: format!("duplicate key value violates unique constraint \"{indice}\""),
+    };
+    assert!(super::cola::es_conflicto_ingreso_activo(
+        &fila,
+        &rechazo("ingresos_correo_cedula_activa_idx")
+    ));
+    assert!(!super::cola::es_conflicto_ingreso_activo(
+        &fila,
+        &rechazo("ingresos_proveedor_cedula_activa_idx")
+    ));
+}
+
+#[test]
+fn correo_con_ingreso_activo_pregunta_a_la_funcion_de_la_nube() {
+    let (base_url, servidor) = servidor_rpc(
+        "ingreso_correo_activo",
+        "\"p_cedula\":\"112345678\"",
+        "[{\"sitio_id\":\"otro\",\"sitio_nombre\":\"Cartago\"}]",
+    );
+
+    let activo = correo_con_ingreso_activo(&contexto(&base_url), "112345678").unwrap();
+
+    assert_eq!(
+        activo,
+        Some(IngresoActivoEnLaNube {
+            mismo_sitio: false,
+            sitio_nombre: "Cartago".to_string(),
+        })
+    );
+    servidor.join().unwrap();
+}
+
+#[test]
+fn recibe_ingresos_por_correo_abiertos_del_otro_dispositivo_y_los_cachea() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"id\":\"uuid-remoto\",\"cedula\":\"112345678\",\"nombre\":\"Ana Solano\",\
+         \"motivo\":\"Entrevista RH\",\"placa\":null,\"gafete_numero\":5,\
+         \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"usuario_entrada_nombre\":\"Op PC\",\
+         \"dispositivo_entrada_id\":\"otro-dispositivo\"}]",
+    );
+
+    let recibidos = recibir_ingresos_correo_abiertos(&connection, &contexto(&base_url)).unwrap();
+
+    assert_eq!(recibidos.len(), 1);
+    assert_eq!(recibidos[0].motivo, "Entrevista RH");
+    let cacheados: i64 = connection
+        .query_row("SELECT COUNT(*) FROM ingresos_correo_remotos", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(cacheados, 1);
+}
+
+#[test]
+fn un_ingreso_por_correo_propio_cerrado_por_otro_dispositivo_se_cierra_aca() {
+    let connection = conexion_con_ingreso_correo(None);
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"id\":\"uuid-correo\",\"hora_salida\":\"2026-01-01T10:00:00Z\",\
+         \"usuario_salida_nombre\":\"Guardia Celular\"}]",
+    );
+
+    let aplicados =
+        recibir_cierres_de_ingresos_propios_correo(&connection, &contexto(&base_url)).unwrap();
+
+    assert_eq!(aplicados, 1);
+    let (salida, nombre): (String, String) = connection
+        .query_row(
+            "SELECT fecha_hora_salida, usuario_salida_nombre FROM registro_ingresos_correo
+             WHERE uuid = 'uuid-correo'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(salida, "2026-01-01T10:00:00Z");
+    assert_eq!(nombre, "Guardia Celular");
+}
+
+#[test]
+fn correos_con_conflicto_activo_avisan_la_otra_unidad() {
+    let connection = conexion_con_ingreso_correo(None);
+    let (base_url, servidor) = servidor_rpc(
+        "correos_activos_en_otras_unidades",
+        "\"p_cedulas\":[\"112345678\"]",
+        "[{\"cedula\":\"112345678\",\"sitio_nombre\":\"Cartago\"}]",
+    );
+
+    let conflictos = correos_con_conflicto_activo(&connection, &contexto(&base_url)).unwrap();
+
+    assert_eq!(
+        conflictos,
+        vec![ConflictoIngresoProveedorActivo {
+            cedula: "112345678".to_string(),
+            nombre: "Ana Solano".to_string(),
+            sitio_conflicto: "Cartago".to_string(),
+        }]
+    );
+    servidor.join().unwrap();
+}
+
+#[test]
+fn recibe_el_historial_de_ingresos_por_correo_y_omite_las_filas_ilegibles() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"id\":\"correo-malo\",\"cedula\":\"111111111\",\"nombre\":\"X\",\
+         \"motivo\":null,\"placa\":null,\"gafete_numero\":null,\
+         \"hora_entrada\":\"no-es-una-fecha\",\"hora_salida\":null,\
+         \"usuario_entrada_nombre\":null,\"usuario_salida_nombre\":null,\
+         \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":null,\
+         \"updated_at\":\"2026-01-01T08:00:00Z\"},\
+         {\"id\":\"correo-1\",\"cedula\":\"112345678\",\"nombre\":\"Ana Solano\",\
+         \"motivo\":\"Entrevista RH\",\"placa\":null,\"gafete_numero\":5,\
+         \"hora_entrada\":\"2026-01-01T08:00:00Z\",\"hora_salida\":\"2026-01-01T09:00:00Z\",\
+         \"usuario_entrada_nombre\":\"Guardia\",\"usuario_salida_nombre\":\"Guardia\",\
+         \"dispositivo_entrada_id\":\"otro-dispositivo\",\"dispositivo_salida_id\":\"otro-dispositivo\",\
+         \"updated_at\":\"2026-01-01T09:00:05Z\"}]",
+    );
+
+    let recibidos =
+        recibir_historial_ingresos_correo_del_sitio(&connection, &contexto(&base_url), true)
+            .unwrap();
+
+    assert_eq!(recibidos, 1);
+    let (motivo, salida): (Option<String>, Option<String>) = connection
+        .query_row(
+            "SELECT motivo, hora_salida FROM historial_ingresos_correo_sitio WHERE uuid = 'correo-1'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(motivo.as_deref(), Some("Entrevista RH"));
+    assert_eq!(salida.as_deref(), Some("2026-01-01T09:00:00Z"));
+    let marca: Option<String> = connection
+        .query_row(
+            "SELECT historial_ingresos_correo_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(marca.is_some());
+}

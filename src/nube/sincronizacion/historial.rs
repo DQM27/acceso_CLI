@@ -749,6 +749,153 @@ pub(super) fn aplicar_pagina_historial_ingresos_proveedor(
 }
 
 #[derive(serde::Deserialize)]
+pub(super) struct FilaHistorialIngresoCorreoRemota {
+    pub(super) id: String,
+    pub(super) cedula: String,
+    pub(super) nombre: String,
+    pub(super) motivo: Option<String>,
+    pub(super) placa: Option<String>,
+    pub(super) gafete_numero: Option<i64>,
+    pub(super) hora_entrada: String,
+    pub(super) hora_salida: Option<String>,
+    pub(super) usuario_entrada_nombre: Option<String>,
+    pub(super) usuario_salida_nombre: Option<String>,
+    pub(super) dispositivo_entrada_id: String,
+    pub(super) dispositivo_salida_id: Option<String>,
+    pub(super) updated_at: String,
+}
+
+/// Espejo de [`guardar_fila_historial_ingreso_proveedor`] (mismo tipo de
+/// resultado), contra `historial_ingresos_correo_sitio`.
+fn guardar_fila_historial_ingreso_correo(
+    transaction: &rusqlite::Transaction<'_>,
+    contexto: &ContextoSincronizacion<'_>,
+    fila: &FilaHistorialIngresoCorreoRemota,
+    ahora: &str,
+) -> Result<FilaHistorialIngresoProveedorResultado, SincronizacionError> {
+    let Ok(hora_entrada) =
+        crate::tiempo::parsear_utc(&fila.hora_entrada).map(crate::tiempo::serializar_utc)
+    else {
+        return Ok(FilaHistorialIngresoProveedorResultado::Omitida);
+    };
+    let Ok(hora_salida) = fila
+        .hora_salida
+        .as_deref()
+        .map(crate::tiempo::parsear_utc)
+        .transpose()
+    else {
+        return Ok(FilaHistorialIngresoProveedorResultado::Omitida);
+    };
+
+    transaction.execute(
+        "
+        INSERT INTO historial_ingresos_correo_sitio (
+            uuid, sitio_id, cedula, nombre, motivo, placa, gafete_numero,
+            hora_entrada, hora_salida, usuario_entrada_nombre, usuario_salida_nombre,
+            dispositivo_entrada_id, dispositivo_salida_id, actualizado_en
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
+        ON CONFLICT(uuid) DO UPDATE SET
+            hora_salida = excluded.hora_salida,
+            usuario_salida_nombre = excluded.usuario_salida_nombre,
+            dispositivo_salida_id = excluded.dispositivo_salida_id,
+            actualizado_en = excluded.actualizado_en
+        ",
+        params![
+            fila.id,
+            contexto.sitio_id,
+            fila.cedula,
+            fila.nombre,
+            fila.motivo,
+            fila.placa,
+            fila.gafete_numero,
+            hora_entrada,
+            hora_salida.map(crate::tiempo::serializar_utc),
+            fila.usuario_entrada_nombre,
+            fila.usuario_salida_nombre,
+            fila.dispositivo_entrada_id,
+            fila.dispositivo_salida_id,
+            actualizado_en_servidor(&fila.updated_at, ahora),
+        ],
+    )?;
+    Ok(FilaHistorialIngresoProveedorResultado::Aplicada {
+        actualizado_en: crate::tiempo::parsear_utc(&fila.updated_at).ok(),
+    })
+}
+
+/// Espejo de [`recibir_historial_ingresos_proveedor_del_sitio`], contra
+/// `ingresos_correo` (marca de agua propia,
+/// `historial_ingresos_correo_actualizado_hasta`). Sólo escritorio.
+pub fn recibir_historial_ingresos_correo_del_sitio(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    reconciliar: bool,
+) -> Result<u32, SincronizacionError> {
+    let cliente = cliente_http();
+    let marca_anterior: Option<String> = connection.query_row(
+        "SELECT historial_ingresos_correo_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let filtros = filtros_de_historial(
+        connection,
+        contexto,
+        "ingresos_correo",
+        "historial_ingresos_correo_sitio",
+        marca_anterior.as_deref(),
+        reconciliar,
+    )?;
+
+    let mut recibidos_total = 0_u32;
+    let mut marca_mas_nueva = marca_inicial(marca_anterior.as_deref());
+    for filtro in filtros {
+        let url = format!(
+            "{}/rest/v1/ingresos_correo?sitio_id=eq.{}{filtro}\
+             &select=id,cedula,nombre,motivo,placa,gafete_numero,hora_entrada,hora_salida,\
+             usuario_entrada_nombre,usuario_salida_nombre,dispositivo_entrada_id,\
+             dispositivo_salida_id,updated_at",
+            contexto.base_url, contexto.sitio_id,
+        );
+        obtener_json_paginado_con(
+            &cliente,
+            contexto,
+            &url,
+            |pagina: Vec<FilaHistorialIngresoCorreoRemota>| {
+                let transaction = connection.unchecked_transaction()?;
+                let ahora = crate::tiempo::serializar_utc(chrono::Utc::now());
+                for fila in &pagina {
+                    let FilaHistorialIngresoProveedorResultado::Aplicada { actualizado_en } =
+                        guardar_fila_historial_ingreso_correo(
+                            &transaction,
+                            contexto,
+                            fila,
+                            &ahora,
+                        )?
+                    else {
+                        continue;
+                    };
+                    recibidos_total += 1;
+                    if let Some(actualizado_en) = actualizado_en
+                        && marca_mas_nueva.is_none_or(|marca| actualizado_en > marca)
+                    {
+                        marca_mas_nueva = Some(actualizado_en);
+                    }
+                }
+                if let Some(marca) = marca_mas_nueva {
+                    transaction.execute(
+                        "UPDATE sincronizacion_estado
+                         SET historial_ingresos_correo_actualizado_hasta = ?1 WHERE id = 1",
+                        params![crate::tiempo::serializar_marca_utc(marca)],
+                    )?;
+                }
+                transaction.commit()?;
+                Ok(())
+            },
+        )?;
+    }
+    Ok(recibidos_total)
+}
+
+#[derive(serde::Deserialize)]
 pub(super) struct FilaHistorialGafeteProvisionalRemota {
     pub(super) id: String,
     pub(super) encargado_nombre: String,

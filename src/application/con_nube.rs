@@ -15,7 +15,8 @@ use crate::models::medio_ingreso::MedioIngreso;
 use crate::nube::{CacheTokenDispositivo, ContextoSincronizacion, TokenDispositivo};
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::{
-    GafeteProvisionalServiceError, IngresoProveedorServiceError, RegistroIngresoServiceError,
+    GafeteProvisionalServiceError, IngresoCorreoServiceError, IngresoProveedorServiceError,
+    RegistroIngresoServiceError,
 };
 use crate::services::registro_ingreso_service::{
     BloqueoIngreso, PreparacionIngreso, ResultadoRegistroEntrada,
@@ -275,6 +276,104 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
         datos.empresa_id,
         datos.placa,
         datos.gafete_numero,
+    )?)
+}
+
+// ---- Ingreso por correo ----
+
+pub struct NuevoIngresoCorreo {
+    pub cedula: String,
+    pub nombre: String,
+    pub motivo: String,
+    pub placa: Option<String>,
+    pub gafete_numero: i64,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum IngresoCorreoVerificadoError {
+    #[error(transparent)]
+    Servicio(#[from] IngresoCorreoServiceError),
+    #[error("la cédula ya tiene un ingreso por correo activo en {sitio}")]
+    ActivoEnOtroSitio { sitio: String },
+    #[error("el gafete de visita {numero} ya está en uso en otro dispositivo del sitio")]
+    GafeteOcupadoEnSitio { numero: i64 },
+    #[error(transparent)]
+    Nube(#[from] GestionNubeError),
+}
+
+/// Ingreso por correo con todas sus reglas -- mismo orden que
+/// [`registrar_ingreso_proveedor_verificado`]:
+/// 1. la cédula no tiene otro ingreso por correo abierto en este sitio, ni
+///    en este equipo ni en el otro dispositivo
+///    (`AppCore::correo_con_ingreso_activo_en_sitio`);
+/// 2. con nube configurada, en vivo y a la vez: la cédula no está adentro
+///    por correo en ninguna unidad (`ingreso_correo_activo`), y el gafete de
+///    visita no está en uso en el otro dispositivo del sitio, ni por otro
+///    ingreso por correo ni por un movimiento de visita. Si no se puede
+///    verificar, no se registra;
+/// 3. escribe (`AppCore::registrar_ingreso_correo`, reglas locales).
+///
+/// Si dos equipos pasan el paso 2 en el mismo instante, deciden los índices
+/// únicos de `ingresos_correo`: gana el primero en escribir.
+pub fn registrar_ingreso_correo_verificado<G: Deref<Target = AppCore>>(
+    nucleo: impl Fn() -> G,
+    nube: &CacheTokenDispositivo,
+    actor: &UsuarioSesion,
+    mut datos: NuevoIngresoCorreo,
+) -> Result<i64, IngresoCorreoVerificadoError> {
+    if let Ok(cedula) = crate::domain::cedula::Cedula::normalizar(&datos.cedula) {
+        datos.cedula = cedula.into_string();
+    }
+    if nucleo().correo_con_ingreso_activo_en_sitio(&datos.cedula)? {
+        return Err(IngresoCorreoServiceError::IngresoActivo.into());
+    }
+
+    if nube.vinculado() {
+        let token = autenticar(&nucleo, nube, actor)?;
+        let contexto = contexto(&token);
+        let numero = datos.gafete_numero;
+        let (activo_en_otro_sitio, gafete_en_correo, gafete_en_visita) =
+            std::thread::scope(|hilos| {
+                let en_correo = hilos.spawn(|| {
+                    crate::nube::gafete_de_correo_ocupado_en_otro_dispositivo(&contexto, numero)
+                });
+                let en_visita = hilos.spawn(|| {
+                    crate::nube::gafete_de_visita_ocupado_en_otro_dispositivo(&contexto, numero)
+                });
+                let activo = crate::nube::correo_con_ingreso_activo(&contexto, &datos.cedula);
+                let unir = |hilo: std::thread::ScopedJoinHandle<'_, _>| {
+                    hilo.join()
+                        .unwrap_or_else(|panico| std::panic::resume_unwind(panico))
+                };
+                (activo, unir(en_correo), unir(en_visita))
+            });
+        match activo_en_otro_sitio.map_err(GestionNubeError::from)? {
+            Some(activo) if activo.mismo_sitio => {
+                return Err(IngresoCorreoServiceError::IngresoActivo.into());
+            }
+            Some(activo) => {
+                return Err(IngresoCorreoVerificadoError::ActivoEnOtroSitio {
+                    sitio: activo.sitio_nombre,
+                });
+            }
+            None => {}
+        }
+        if gafete_en_correo.map_err(GestionNubeError::from)?
+            || gafete_en_visita.map_err(GestionNubeError::from)?
+        {
+            return Err(IngresoCorreoVerificadoError::GafeteOcupadoEnSitio { numero });
+        }
+    }
+
+    Ok(nucleo().registrar_ingreso_correo(
+        actor,
+        &crate::services::ingreso_correo_service::DatosIngresoCorreo {
+            cedula: &datos.cedula,
+            nombre: &datos.nombre,
+            motivo: &datos.motivo,
+            placa: datos.placa,
+            gafete_numero: datos.gafete_numero,
+        },
     )?)
 }
 

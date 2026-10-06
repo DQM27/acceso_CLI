@@ -207,21 +207,14 @@ pub(super) fn drenar_grupo(
     Ok(())
 }
 
-/// Camino de una fila a la vez -- el único que existía antes del lote, y el
-/// que sigue manejando el cierre de ingreso y el fallback tras un lote
-/// fallido. Nunca devuelve error por una fila individual fallida -- eso
-/// queda registrado en la propia fila (`ultimo_error`, y
-/// `estado = 'fallido'` sólo tras [`INTENTOS_ANTES_DE_FALLO_PERMANENTE`]
-/// intentos); sólo devuelve error si no se pudo ni siquiera
-/// leer/actualizar la cola local.
-pub(super) fn procesar_fila_individual(
+/// Manda una fila a la nube según su `(entidad, operacion)`.
+fn enviar_fila(
     cliente: &reqwest::blocking::Client,
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
-    fila: FilaCola,
-    resumen: &mut ResumenDrenado,
+    fila: &FilaCola,
 ) -> Result<(), SincronizacionError> {
-    let resultado = match (fila.entidad.as_str(), fila.operacion.as_str()) {
+    match (fila.entidad.as_str(), fila.operacion.as_str()) {
         ("empresa", _) => enviar_empresa(cliente, connection, contexto, &fila.entidad_uuid),
         ("contratista", _) => enviar_contratista(cliente, connection, contexto, &fila.entidad_uuid),
         ("gafete", _) => enviar_gafete(cliente, connection, contexto, &fila.entidad_uuid),
@@ -261,11 +254,34 @@ pub(super) fn procesar_fila_individual(
         ("ingreso_proveedor", "cerrar") => {
             enviar_cierre_ingreso_proveedor(cliente, connection, contexto, &fila.entidad_uuid)
         }
+        ("ingreso_correo", "cerrar") => {
+            enviar_cierre_ingreso_correo(cliente, connection, contexto, &fila.entidad_uuid)
+        }
+        ("ingreso_correo", _) => {
+            enviar_ingreso_correo(cliente, connection, contexto, &fila.entidad_uuid)
+        }
         ("ingreso_proveedor", _) => {
             enviar_ingreso_proveedor(cliente, connection, contexto, &fila.entidad_uuid)
         }
         _ => Ok(()),
-    };
+    }
+}
+
+/// Camino de una fila a la vez -- el único que existía antes del lote, y el
+/// que sigue manejando el cierre de ingreso y el fallback tras un lote
+/// fallido. Nunca devuelve error por una fila individual fallida -- eso
+/// queda registrado en la propia fila (`ultimo_error`, y
+/// `estado = 'fallido'` sólo tras [`INTENTOS_ANTES_DE_FALLO_PERMANENTE`]
+/// intentos); sólo devuelve error si no se pudo ni siquiera
+/// leer/actualizar la cola local.
+pub(super) fn procesar_fila_individual(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    fila: FilaCola,
+    resumen: &mut ResumenDrenado,
+) -> Result<(), SincronizacionError> {
+    let resultado = enviar_fila(cliente, connection, contexto, &fila);
 
     match resultado {
         Ok(()) => {
@@ -435,6 +451,12 @@ fn gafete_activo_de(entidad: &str) -> Option<(TipoMovimientoGafete, &'static str
             "SELECT nombre, gafete_numero, fecha_hora_ingreso
              FROM registro_ingresos_proveedor WHERE uuid = ?1",
         )),
+        "ingreso_correo" => Some((
+            TipoMovimientoGafete::PorCorreo,
+            "ingresos_correo_gafete_activo_sitio_idx",
+            "SELECT nombre, gafete_numero, fecha_hora_ingreso
+             FROM registro_ingresos_correo WHERE uuid = ?1",
+        )),
         "prestamo_gafete_provisional" => Some((
             TipoMovimientoGafete::ProvisionalKof,
             "prestamos_gafete_provisional_gafete_activo_sitio_idx",
@@ -489,11 +511,13 @@ fn marcar_fallida_por_ingreso_activo(
 /// Índice único "una persona, un ingreso (o préstamo) abierto" que protege
 /// cada entidad de la cola en la nube: contratistas
 /// (`20261003170000_ingreso_unico_entre_unidades`), proveedores y préstamos
-/// de gafete provisional KOF (`20261003190000_ingreso_unico_proveedores_y_kof`).
+/// de gafete provisional KOF (`20261003190000_ingreso_unico_proveedores_y_kof`)
+/// e ingresos por correo (`20261003210000_ingresos_por_correo`).
 fn indice_persona_activa_de(entidad: &str) -> Option<&'static str> {
     match entidad {
         "ingreso" => Some("ingresos_contratista_activo_idx"),
         "ingreso_proveedor" => Some("ingresos_proveedor_cedula_activa_idx"),
+        "ingreso_correo" => Some("ingresos_correo_cedula_activa_idx"),
         "prestamo_gafete_provisional" => Some("prestamos_gafete_provisional_encargado_activo_idx"),
         _ => None,
     }
@@ -1354,6 +1378,87 @@ pub(super) fn enviar_cierre_ingreso_proveedor(
 
     let respuesta = cliente
         .patch(url)
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Ingresos por correo (cola), alta: mismo armazón que
+/// [`enviar_ingreso_proveedor`], con `motivo` en vez de empresa (no hay
+/// catálogo que resolver).
+pub(super) fn enviar_ingreso_correo(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let cuerpo = connection.query_row(
+        "
+        SELECT cedula, nombre, motivo, placa, gafete_numero,
+               fecha_hora_ingreso, usuario_ingreso_nombre
+        FROM registro_ingresos_correo
+        WHERE uuid = ?1
+        ",
+        params![uuid],
+        |row| {
+            Ok(json!({
+                "id": uuid,
+                "sitio_id": contexto.sitio_id,
+                "dispositivo_entrada_id": contexto.dispositivo_id,
+                "cedula": row.get::<_, String>(0)?,
+                "nombre": row.get::<_, String>(1)?,
+                "motivo": row.get::<_, String>(2)?,
+                "placa": row.get::<_, Option<String>>(3)?,
+                "gafete_numero": row.get::<_, i64>(4)?,
+                "hora_entrada": row.get::<_, String>(5)?,
+                "usuario_entrada_nombre": row.get::<_, String>(6)?,
+            }))
+        },
+    )?;
+
+    let respuesta = cliente
+        .post(format!("{}/rest/v1/ingresos_correo", contexto.base_url))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+        .json(&cuerpo)
+        .send()
+        .map_err(NubeError::Red)?;
+
+    exigir_2xx(respuesta)
+}
+
+/// Ingresos por correo (cola), cierre: mismo criterio de "primero en llegar
+/// gana" que [`enviar_cierre_ingreso_proveedor`].
+pub(super) fn enviar_cierre_ingreso_correo(
+    cliente: &reqwest::blocking::Client,
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuid: &str,
+) -> Result<(), SincronizacionError> {
+    let (fecha_hora_salida, usuario_salida_nombre): (Option<String>, Option<String>) = connection
+        .query_row(
+        "SELECT fecha_hora_salida, usuario_salida_nombre
+             FROM registro_ingresos_correo WHERE uuid = ?1",
+        params![uuid],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    let cuerpo = json!({
+        "hora_salida": fecha_hora_salida,
+        "dispositivo_salida_id": contexto.dispositivo_id,
+        "usuario_salida_nombre": usuario_salida_nombre,
+    });
+    let respuesta = cliente
+        .patch(format!(
+            "{}/rest/v1/ingresos_correo?id=eq.{uuid}&hora_salida=is.null",
+            contexto.base_url
+        ))
         .header("apikey", contexto.apikey)
         .header("Authorization", format!("Bearer {}", contexto.token))
         .header("Prefer", "return=minimal")

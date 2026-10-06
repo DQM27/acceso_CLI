@@ -55,6 +55,7 @@ pub struct ResumenSincronizacionNube {
     pub conflictos_gafete: Vec<ConflictoGafeteActivo>,
     pub cierres_recibidos: u32,
     pub cierres_recibidos_proveedor: u32,
+    pub cierres_recibidos_correo: u32,
     /// Ingresos que el otro dispositivo del sitio tiene abiertos.
     pub remotos_abiertos: u32,
     pub catalogo: ResumenCatalogo,
@@ -63,13 +64,16 @@ pub struct ResumenSincronizacionNube {
     pub citas_recibidas: u32,
     pub historial_visitas_recibidos: u32,
     pub historial_ingresos_proveedor_recibidos: u32,
+    pub historial_ingresos_correo_recibidos: u32,
     pub historial_gafetes_provisionales_recibidos: u32,
-    /// Los tres `conflictos_*` son de mejor esfuerzo: si la consulta falla
+    /// Los `conflictos_*` son de mejor esfuerzo: si la consulta falla
     /// quedan vacíos, nunca tumban una sincronización que por lo demás
     /// anduvo.
     pub conflictos_ingreso: Vec<ConflictoIngresoActivo>,
     pub conflictos_movimiento_visita: Vec<ConflictoMovimientoVisitaActivo>,
     pub conflictos_ingreso_proveedor: Vec<ConflictoIngresoProveedorActivo>,
+    /// Mismo tipo de aviso que proveedores, para los ingresos por correo.
+    pub conflictos_ingreso_correo: Vec<ConflictoIngresoProveedorActivo>,
 }
 
 /// Vacía la bandeja de salida (siempre, sea cual sea el alcance: es local
@@ -146,12 +150,19 @@ fn recibir_en_orden(
         resumen.cierres_recibidos_proveedor =
             sincronizacion::recibir_cierres_de_ingresos_propios_proveedor(conexion, contexto)?;
     }
+    if alcance.ingresos_correo {
+        resumen.cierres_recibidos_correo =
+            sincronizacion::recibir_cierres_de_ingresos_propios_correo(conexion, contexto)?;
+    }
     if alcance.ingresos {
         let remotos = sincronizacion::recibir_ingresos_abiertos(conexion, contexto)?;
         resumen.remotos_abiertos = u32::try_from(remotos.len()).unwrap_or(u32::MAX);
     }
     if alcance.ingresos_proveedor {
         sincronizacion::recibir_ingresos_proveedor_abiertos(conexion, contexto)?;
+    }
+    if alcance.ingresos_correo {
+        sincronizacion::recibir_ingresos_correo_abiertos(conexion, contexto)?;
     }
     if alcance.gafetes_provisionales {
         sincronizacion::recibir_prestamos_gafete_provisional_abiertos(conexion, contexto)?;
@@ -183,6 +194,14 @@ fn recibir_en_orden(
                 reconciliar,
             )?;
     }
+    if alcance.ingresos_correo && historiales {
+        resumen.historial_ingresos_correo_recibidos =
+            sincronizacion::recibir_historial_ingresos_correo_del_sitio(
+                conexion,
+                contexto,
+                reconciliar,
+            )?;
+    }
     if alcance.gafetes_provisionales && historiales {
         resumen.historial_gafetes_provisionales_recibidos =
             sincronizacion::recibir_historial_gafetes_provisionales_del_sitio(conexion, contexto)?;
@@ -201,6 +220,10 @@ fn recibir_en_orden(
         resumen.conflictos_ingreso_proveedor =
             sincronizacion::proveedores_con_conflicto_activo(conexion, contexto)
                 .unwrap_or_default();
+    }
+    if alcance.ingresos_correo {
+        resumen.conflictos_ingreso_correo =
+            sincronizacion::correos_con_conflicto_activo(conexion, contexto).unwrap_or_default();
     }
 
     Ok(resumen)
@@ -326,6 +349,7 @@ mod tests {
         for recurso in [
             "/ingresos",
             "/ingresos_proveedor",
+            "/ingresos_correo",
             "/prestamos_gafete_provisional",
             "/empresas",
             "/contratistas",

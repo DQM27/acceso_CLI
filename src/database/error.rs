@@ -12,6 +12,8 @@ pub enum DatabaseError {
     PrestamoGafeteProvisionalNoActivo,
     #[error("No existe un ingreso de proveedor activo con ese ID")]
     RegistroProveedorNoActivo,
+    #[error("No existe un ingreso por correo activo con ese ID")]
+    RegistroCorreoNoActivo,
     #[error("La configuración inicial ya fue realizada")]
     ConfiguracionInicialYaRealizada,
     #[error("Usuario no encontrado")]

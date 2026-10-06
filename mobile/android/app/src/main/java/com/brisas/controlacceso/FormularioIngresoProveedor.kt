@@ -225,16 +225,20 @@ private fun PasoEncabezadoProveedor(numero: Int, titulo: String, completado: Boo
 /// tarjetas de [PantallaRutas] (acá alcanza uno solo para la tarjeta: el
 /// documento trae los dos datos de una vez, igual que el carnet PRAIND en
 /// [PantallaNuevoContratista]).
+///
+/// `internal`: el ingreso por correo ([FormularioNuevoIngresoCorreo]) usa
+/// las mismas tarjetas con otro título.
 @Composable
-private fun PasoDatosProveedor(
+internal fun PasoDatosProveedor(
     completado: Boolean,
     cedula: String,
     nombre: String,
     onCambiarCedula: (String) -> Unit,
     onCambiarNombre: (String) -> Unit,
     onEscanear: () -> Unit,
+    titulo: String = "Datos del proveedor",
 ) {
-    TarjetaPasoProveedor(1, "Datos del proveedor", completado, onEscanear = onEscanear) {
+    TarjetaPasoProveedor(1, titulo, completado, onEscanear = onEscanear) {
         OutlinedTextField(
             value = cedula,
             onValueChange = onCambiarCedula,
@@ -363,7 +367,7 @@ private fun PasoEmpresaProveedora(
 /// `extraerVehiculo`/`LectorVehiculoRuta.kt`, genérico) y número de gafete
 /// (siempre tipeado -- no sale de ningún documento).
 @Composable
-private fun PasoVehiculoYGafete(
+internal fun PasoVehiculoYGafete(
     completado: Boolean,
     placa: String,
     onCambiarPlaca: (String) -> Unit,
@@ -371,8 +375,10 @@ private fun PasoVehiculoYGafete(
     gafeteTexto: String,
     onCambiarGafeteTexto: (String) -> Unit,
     onGafeteEnfocado: () -> Unit,
+    numero: Int = 3,
+    placeholderGafete: String = "Número de gafete",
 ) {
-    TarjetaPasoProveedor(3, "Vehículo y gafete", completado, onEscanear = onEscanearPlaca) {
+    TarjetaPasoProveedor(numero, "Vehículo y gafete", completado, onEscanear = onEscanearPlaca) {
         OutlinedTextField(
             value = placa,
             onValueChange = onCambiarPlaca,
@@ -385,7 +391,7 @@ private fun PasoVehiculoYGafete(
         OutlinedTextField(
             value = gafeteTexto,
             onValueChange = onCambiarGafeteTexto,
-            placeholder = { Text("Número de gafete") },
+            placeholder = { Text(placeholderGafete) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             shape = FormaCampoBrisas,
@@ -403,7 +409,7 @@ private fun PasoVehiculoYGafete(
 /// duplicado acá por el mismo motivo que [PasoEncabezadoProveedor]: es
 /// `private` allá).
 @Composable
-private fun TarjetaPasoProveedor(
+internal fun TarjetaPasoProveedor(
     numero: Int,
     titulo: String,
     completado: Boolean,

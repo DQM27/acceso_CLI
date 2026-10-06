@@ -11,7 +11,7 @@ import type {
   TipoIngreso,
 } from "../api";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
-import { TIPOS, esquema } from "./FormularioContratista.logica";
+import { TIPOS_ELEGIBLES, esquema } from "./FormularioContratista.logica";
 
 interface ValoresFormulario {
   cedula: string;
@@ -188,7 +188,7 @@ export default function FormularioContratista({
         <label className="campo">
           Tipo de ingreso
           <select {...register("tipo_ingreso")}>
-            {TIPOS.map((tipo) => (
+            {TIPOS_ELEGIBLES.map((tipo) => (
               <option key={tipo} value={tipo}>
                 {tipo}
               </option>

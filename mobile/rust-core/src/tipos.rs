@@ -15,6 +15,7 @@ use control_acceso::models::registro_ingreso::{
     MotivoResultadoIngreso as MotivoResultadoIngresoNucleo,
     ResultadoIngresoRegistrado as ResultadoIngresoRegistradoNucleo,
 };
+use control_acceso::models::registro_ingreso_correo::RegistroIngresoCorreoActivoResumen as RegistroIngresoCorreoActivoResumenNucleo;
 use control_acceso::models::registro_ingreso_proveedor::RegistroIngresoProveedorActivoResumen as RegistroIngresoProveedorActivoResumenNucleo;
 use control_acceso::models::ruta::Ruta as RutaNucleo;
 use control_acceso::models::salida_ruta::SalidaRutaActivaResumen as SalidaRutaActivaResumenNucleo;
@@ -467,6 +468,9 @@ pub struct ResumenSincronizacion {
     /// Mismo criterio que `conflictos_ingreso`, pero para ingresos de
     /// proveedor -- ver `control_acceso::nube::proveedores_con_conflicto_activo`.
     pub conflictos_ingreso_proveedor: Vec<ConflictoIngresoProveedorActivo>,
+    /// Lo mismo para ingresos por correo (mismo tipo de aviso) -- ver
+    /// `control_acceso::nube::correos_con_conflicto_activo`.
+    pub conflictos_ingreso_correo: Vec<ConflictoIngresoProveedorActivo>,
     /// Ingresos con gafete que ESTE dispositivo registró, pero cuyo envío a
     /// la nube fue rechazado porque otro dispositivo del mismo sitio ya
     /// tiene ese número activo (índice único
@@ -494,6 +498,7 @@ pub enum TipoMovimientoGafete {
     Contratista,
     Proveedor,
     ProvisionalKof,
+    PorCorreo,
 }
 
 impl From<control_acceso::nube::TipoMovimientoGafete> for TipoMovimientoGafete {
@@ -503,6 +508,7 @@ impl From<control_acceso::nube::TipoMovimientoGafete> for TipoMovimientoGafete {
             Nucleo::Contratista => Self::Contratista,
             Nucleo::Proveedor => Self::Proveedor,
             Nucleo::ProvisionalKof => Self::ProvisionalKof,
+            Nucleo::PorCorreo => Self::PorCorreo,
         }
     }
 }
@@ -578,6 +584,7 @@ impl From<ResumenSincronizacionNucleo> for ResumenSincronizacion {
             sesion_transcurrido_ms: None,
             conflictos_ingreso: Vec::new(),
             conflictos_ingreso_proveedor: Vec::new(),
+            conflictos_ingreso_correo: Vec::new(),
             conflictos_gafete: Vec::new(),
         }
     }
@@ -646,6 +653,35 @@ impl From<IngresoProveedorRemotoNucleo> for IngresoProveedorRemoto {
             cedula: remoto.cedula,
             nombre: remoto.nombre,
             empresa_nombre: remoto.empresa_nombre,
+            placa: remoto.placa,
+            gafete_numero: remoto.gafete_numero,
+            hora_entrada: remoto.hora_entrada,
+            usuario_entrada_nombre: remoto.usuario_entrada_nombre,
+        }
+    }
+}
+
+/// Espejo de [`IngresoProveedorRemoto`], para el ingreso por correo (el
+/// motivo en vez de la empresa) -- ver `control_acceso::nube::IngresoCorreoRemoto`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct IngresoCorreoRemoto {
+    pub uuid: String,
+    pub cedula: String,
+    pub nombre: String,
+    pub motivo: String,
+    pub placa: Option<String>,
+    pub gafete_numero: i64,
+    pub hora_entrada: String,
+    pub usuario_entrada_nombre: String,
+}
+
+impl From<control_acceso::nube::IngresoCorreoRemoto> for IngresoCorreoRemoto {
+    fn from(remoto: control_acceso::nube::IngresoCorreoRemoto) -> Self {
+        Self {
+            uuid: remoto.uuid,
+            cedula: remoto.cedula,
+            nombre: remoto.nombre,
+            motivo: remoto.motivo,
             placa: remoto.placa,
             gafete_numero: remoto.gafete_numero,
             hora_entrada: remoto.hora_entrada,
@@ -878,6 +914,35 @@ impl From<RegistroIngresoProveedorActivoResumenNucleo> for RegistroIngresoProvee
             cedula: activo.cedula,
             nombre: activo.nombre,
             empresa_nombre: activo.empresa_nombre,
+            placa: activo.placa,
+            gafete_numero: activo.gafete_numero,
+            fecha_hora_ingreso: activo.fecha_hora_ingreso.to_rfc3339(),
+            usuario_ingreso_nombre: activo.usuario_ingreso_nombre,
+        }
+    }
+}
+
+/// Espejo de `RegistroIngresoCorreoActivoResumen` -- fila de ingresos por
+/// correo sin salida todavía.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RegistroIngresoCorreoActivoResumen {
+    pub id: i64,
+    pub cedula: String,
+    pub nombre: String,
+    pub motivo: String,
+    pub placa: Option<String>,
+    pub gafete_numero: i64,
+    pub fecha_hora_ingreso: String,
+    pub usuario_ingreso_nombre: String,
+}
+
+impl From<RegistroIngresoCorreoActivoResumenNucleo> for RegistroIngresoCorreoActivoResumen {
+    fn from(activo: RegistroIngresoCorreoActivoResumenNucleo) -> Self {
+        Self {
+            id: activo.id,
+            cedula: activo.cedula,
+            nombre: activo.nombre,
+            motivo: activo.motivo,
             placa: activo.placa,
             gafete_numero: activo.gafete_numero,
             fecha_hora_ingreso: activo.fecha_hora_ingreso.to_rfc3339(),

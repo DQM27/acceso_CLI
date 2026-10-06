@@ -131,6 +131,22 @@ pub fn gafete_de_proveedor_ocupado_en_otro_dispositivo(
     )
 }
 
+/// Gafete de visita en uso por un ingreso por correo del otro dispositivo
+/// del sitio -- mismo criterio que
+/// [`gafete_de_proveedor_ocupado_en_otro_dispositivo`].
+pub fn gafete_de_correo_ocupado_en_otro_dispositivo(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, SincronizacionError> {
+    gafete_ocupado_en_otro_dispositivo_en(
+        contexto,
+        "ingresos_correo",
+        "dispositivo_entrada_id",
+        "hora_salida",
+        numero,
+    )
+}
+
 #[derive(serde::Deserialize)]
 pub(super) struct SitioEmbebido {
     pub(super) nombre: String,
@@ -216,6 +232,19 @@ pub fn proveedor_con_ingreso_activo(
     activo_segun_funcion(
         contexto,
         "ingreso_proveedor_activo",
+        &serde_json::json!({ "p_cedula": cedula }),
+    )
+}
+
+/// Misma regla que [`proveedor_con_ingreso_activo`], para el ingreso por
+/// correo (función `ingreso_correo_activo`).
+pub fn correo_con_ingreso_activo(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+) -> Result<Option<IngresoActivoEnLaNube>, SincronizacionError> {
+    activo_segun_funcion(
+        contexto,
+        "ingreso_correo_activo",
         &serde_json::json!({ "p_cedula": cedula }),
     )
 }

@@ -18,8 +18,9 @@ use crate::models::gafete::EstadoGafete;
 use crate::services::error::{
     AutenticacionError, CitaServiceError, ContratistaServiceError, EmpresaProveedorServiceError,
     EmpresaServiceError, EncargadoRutaServiceError, GafeteProvisionalServiceError,
-    GafeteServiceError, IngresoProveedorServiceError, RegistroIngresoServiceError,
-    RutaCatalogoServiceError, RutaServiceError, UsuarioServiceError, VehiculoRutaServiceError,
+    GafeteServiceError, IngresoCorreoServiceError, IngresoProveedorServiceError,
+    RegistroIngresoServiceError, RutaCatalogoServiceError, RutaServiceError, UsuarioServiceError,
+    VehiculoRutaServiceError,
 };
 
 /// `HashInvalido` va junto con `Database` a propósito: ambos son fallos de
@@ -65,7 +66,7 @@ pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
     use ContratistaServiceError::{
         CedulaDuplicada, CedulaInvalida, CedulaVacia, ContratistaNoEncontrado, Database,
         EmpresaNoEncontrada, NombreInvalido, NombreVacio, OperacionNoAutorizada,
-        PersonalRutaNoAdmitido, PraindRequerido, PraindVencido,
+        PersonalRutaNoAdmitido, PraindRequerido, PraindVencido, TipoIngresoRetirado,
     };
 
     match error {
@@ -78,6 +79,10 @@ pub fn mensaje_contratista(error: ContratistaServiceError) -> String {
         PraindRequerido => "Fecha PRAIND requerida".into(),
         PraindVencido => "El PRAIND está vencido — ingrese una fecha vigente".into(),
         PersonalRutaNoAdmitido => "Personal de ruta sólo aplica a PRAIND e IN HOUSE".into(),
+        TipoIngresoRetirado => {
+            "«Por correo» ya no es un tipo de contratista: registre la visita en «Por correo»"
+                .into()
+        }
         CedulaDuplicada => "Ya existe un contratista con esa cédula".into(),
         OperacionNoAutorizada => "Su sesión no está autorizada para esta operación".into(),
         Database(error) => {
@@ -469,6 +474,35 @@ pub fn mensaje_ingreso_proveedor(error: IngresoProveedorServiceError) -> String 
     }
 }
 
+pub fn mensaje_ingreso_correo(error: IngresoCorreoServiceError) -> String {
+    use IngresoCorreoServiceError::{
+        AccesoNegado, CedulaInvalida, CedulaVacia, GafeteNoDisponible, GafeteNoRegistrado,
+        GafeteOcupado, IngresoActivo, MotivoVacio, NombreVacio, OperadorNoAutorizado,
+        RegistroNoActivo, SalidaAnteriorAIngreso,
+    };
+
+    match error {
+        CedulaVacia => "La cédula es obligatoria".into(),
+        AccesoNegado => MENSAJE_ACCESO_NEGADO.into(),
+        CedulaInvalida => "La cédula debe tener sólo números, entre 9 y 13 dígitos".into(),
+        NombreVacio => "El nombre es obligatorio".into(),
+        MotivoVacio => "Indique el motivo de la visita".into(),
+        IngresoActivo => "Esta persona ya tiene un ingreso por correo activo".into(),
+        GafeteOcupado => "El gafete de visita ya está en uso".into(),
+        GafeteNoRegistrado => "El gafete de visita no está registrado en el catálogo".into(),
+        GafeteNoDisponible(_) => "El gafete no está disponible".into(),
+        RegistroNoActivo => "El ingreso por correo no está activo".into(),
+        SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
+        OperadorNoAutorizado => {
+            "La sesión que registra el movimiento no existe o está inactiva".into()
+        }
+        IngresoCorreoServiceError::Database(error) => {
+            log::error!("ingreso por correo: {error}");
+            "No se pudo registrar el movimiento".into()
+        }
+    }
+}
+
 #[cfg(feature = "nube")]
 pub fn mensaje_ingreso_verificado(error: crate::application::IngresoVerificadoError) -> String {
     use crate::application::IngresoVerificadoError;
@@ -497,6 +531,24 @@ pub fn mensaje_ingreso_proveedor_verificado(
             format!("El gafete {numero} ya está en uso en otro dispositivo del sitio")
         }
         IngresoProveedorVerificadoError::Nube(error) => mensaje_gestion_nube(error),
+    }
+}
+
+#[cfg(feature = "nube")]
+pub fn mensaje_ingreso_correo_verificado(
+    error: crate::application::IngresoCorreoVerificadoError,
+) -> String {
+    use crate::application::IngresoCorreoVerificadoError;
+
+    match error {
+        IngresoCorreoVerificadoError::Servicio(error) => mensaje_ingreso_correo(error),
+        IngresoCorreoVerificadoError::ActivoEnOtroSitio { sitio } => {
+            format!("Esta persona ya tiene un ingreso por correo activo en {sitio}")
+        }
+        IngresoCorreoVerificadoError::GafeteOcupadoEnSitio { numero } => {
+            format!("El gafete de visita {numero} ya está en uso en otro dispositivo del sitio")
+        }
+        IngresoCorreoVerificadoError::Nube(error) => mensaje_gestion_nube(error),
     }
 }
 

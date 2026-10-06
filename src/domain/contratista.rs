@@ -34,6 +34,14 @@ pub fn requiere_gafete_de(tipo_ingreso: TipoIngreso, personal_ruta: bool) -> boo
     !personal_ruta && matches!(tipo_ingreso, TipoIngreso::Praind | TipoIngreso::PorCorreo)
 }
 
+/// Regla de negocio (pedido del usuario 2026-10-03): `PorCorreo` ya no se
+/// elige para un contratista nuevo ni al cambiar el tipo -- esas visitas se
+/// registran como ingreso por correo (`IngresoCorreoService`). Sigue
+/// existiendo para leer datos viejos (en producción no había ninguno).
+pub fn tipo_ingreso_seleccionable(tipo_ingreso: TipoIngreso) -> bool {
+    !matches!(tipo_ingreso, TipoIngreso::PorCorreo)
+}
+
 /// Regla de negocio (pedido del usuario 2026-09-20): "personal de ruta"
 /// sólo existe para `Praind` e `InHouse`. `PorCorreo` y `Swat` no lo
 /// admiten. La aplica `ContratistaService` al crear y al editar.

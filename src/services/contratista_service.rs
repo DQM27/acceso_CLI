@@ -8,7 +8,9 @@ use crate::database::queries::contratistas::{
 use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
 use crate::domain::cedula::{Cedula, CedulaInvalida};
-use crate::domain::contratista::{admite_personal_ruta, normalizar_nombre, praind_vencido};
+use crate::domain::contratista::{
+    admite_personal_ruta, normalizar_nombre, praind_vencido, tipo_ingreso_seleccionable,
+};
 use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
 use crate::tiempo::fecha_costa_rica;
@@ -325,6 +327,11 @@ where
         let cambia_praind = cambia_tipo_o_ruta
             || anterior
                 .is_none_or(|previo| previo.fecha_vencimiento_praind != fecha_vencimiento_praind);
+
+        let cambia_tipo = anterior.is_none_or(|previo| previo.tipo_ingreso != tipo_ingreso);
+        if cambia_tipo && !tipo_ingreso_seleccionable(tipo_ingreso) {
+            return Err(ContratistaServiceError::TipoIngresoRetirado);
+        }
 
         if cambia_tipo_o_ruta && es_personal_ruta && !admite_personal_ruta(tipo_ingreso) {
             return Err(ContratistaServiceError::PersonalRutaNoAdmitido);

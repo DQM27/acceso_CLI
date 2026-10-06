@@ -30,6 +30,7 @@ pub use lectura_documentos::*;
 uniffi::setup_scaffolding!();
 
 mod catalogo;
+mod correo;
 mod error;
 mod firmante;
 mod gafetes;
@@ -46,13 +47,13 @@ pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
     ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta, EstadoReloj,
-    IdentidadEquipo, IngresoActivoResumen, IngresoProveedorRemoto, IngresoRemoto, MedioIngreso,
-    ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso, PreparacionIngreso,
-    PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
-    RegistroIngresoProveedorActivoResumen, ResultadoAcceso, ResultadoIngresoRegistrado,
-    ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta, ResultadoSalidaRuta,
-    ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen, SesionRealtimeNube,
-    SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
+    IdentidadEquipo, IngresoActivoResumen, IngresoCorreoRemoto, IngresoProveedorRemoto,
+    IngresoRemoto, MedioIngreso, ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso,
+    PreparacionIngreso, PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
+    RegistroIngresoCorreoActivoResumen, RegistroIngresoProveedorActivoResumen, ResultadoAcceso,
+    ResultadoIngresoRegistrado, ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta,
+    ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen,
+    SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
 };
 
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
