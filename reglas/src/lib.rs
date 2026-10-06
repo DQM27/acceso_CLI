@@ -14,4 +14,5 @@
 pub mod cedula;
 pub mod cita;
 pub mod contratista;
+pub mod nombre;
 pub mod tipo_ingreso;

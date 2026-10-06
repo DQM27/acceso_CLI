@@ -76,7 +76,8 @@ where
         if self.registros.cedula_con_acceso_negado(cedula)? {
             return Err(IngresoProveedorServiceError::AccesoNegado);
         }
-        let nombre = nombre.trim();
+        // Como todo nombre de persona o empresa: en mayúscula.
+        let nombre = control_acceso_reglas::nombre::nombre_en_mayusculas(nombre);
         if nombre.is_empty() {
             return Err(IngresoProveedorServiceError::NombreVacio);
         }
@@ -120,7 +121,7 @@ where
 
         Ok(self.registros.crear(&NuevoRegistroIngresoProveedor {
             cedula: cedula.to_string(),
-            nombre: nombre.to_string(),
+            nombre,
             empresa_id,
             empresa_nombre: empresa.nombre,
             placa,

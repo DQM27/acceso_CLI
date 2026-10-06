@@ -82,8 +82,11 @@ where
         validar_formato_hash(&password_hash)?;
         let cedula =
             normalizar_requerido(&input.cedula, UsuarioServiceError::CedulaVacia)?.to_string();
-        let nombre =
-            normalizar_requerido(&input.nombre, UsuarioServiceError::NombreVacio)?.to_string();
+        // Como todo nombre de persona o empresa: en mayúscula.
+        let nombre = control_acceso_reglas::nombre::nombre_en_mayusculas(normalizar_requerido(
+            &input.nombre,
+            UsuarioServiceError::NombreVacio,
+        )?);
         let usuario = Usuario {
             id: 0,
             cedula,

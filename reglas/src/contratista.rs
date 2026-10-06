@@ -54,12 +54,12 @@ pub fn praind_vencido(fecha_vencimiento: Option<NaiveDate>, hoy: NaiveDate) -> b
 /// MAYÚSCULAS con los espacios de más colapsados. `None` si no cumple o
 /// queda vacío.
 pub fn normalizar_nombre(nombre: &str) -> Option<String> {
-    let limpio = nombre.split_whitespace().collect::<Vec<_>>().join(" ");
+    let limpio = crate::nombre::nombre_en_mayusculas(nombre);
     let valido = !limpio.is_empty()
         && limpio
             .chars()
             .all(|c| c.is_alphabetic() || c == ' ' || c == '\'' || c == '-');
-    valido.then(|| limpio.to_uppercase())
+    valido.then_some(limpio)
 }
 
 /// Lo que llega del formulario (escritorio, teléfono o panel), tal cual.

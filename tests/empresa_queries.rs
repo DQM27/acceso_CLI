@@ -169,7 +169,7 @@ fn empresa_persiste_al_cerrar_y_reabrir_appcore() {
     {
         let core = AppCore::new(open_database(&ruta).unwrap());
         let items = core.buscar_empresas(&filtro(Some("persistente"))).unwrap();
-        assert_eq!(items[0].nombre, "Empresa Persistente");
+        assert_eq!(items[0].nombre, "EMPRESA PERSISTENTE");
         assert_eq!(items[0].contratistas, 0);
     }
     std::fs::remove_file(ruta).unwrap();

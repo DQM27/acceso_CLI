@@ -78,7 +78,8 @@ fn autenticacion_real_devuelve_contrato_seguro() {
 
     assert_eq!(sesion.id, id);
     assert_eq!(sesion.cedula, "ROOT1");
-    assert_eq!(sesion.nombre, "Root Principal");
+    // Como todo nombre de persona: en mayúscula.
+    assert_eq!(sesion.nombre, "ROOT PRINCIPAL");
     assert_eq!(sesion.rol, RolUsuario::Root);
 }
 
