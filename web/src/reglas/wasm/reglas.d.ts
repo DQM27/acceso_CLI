@@ -13,6 +13,18 @@ export function admitePersonalRuta(tipo_ingreso: string): boolean;
 export function huellaFuentes(): string;
 
 /**
+ * Todo nombre de persona o empresa, como se guarda: espacios de más fuera
+ * y en mayúscula (`nombre::nombre_en_mayusculas`).
+ */
+export function nombreEnMayusculas(texto: string): string;
+
+/**
+ * Mientras se escribe en un campo de nombre: sólo mayúscula, sin tocar los
+ * espacios (`nombre::nombre_mientras_se_escribe`).
+ */
+export function nombreMientrasSeEscribe(texto: string): string;
+
+/**
  * Cédula en su forma única (sin guiones, espacios ni el cero del TSE), o
  * `undefined` si no es una cédula de contratista (9 a 13 dígitos).
  */
@@ -77,6 +89,8 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly admitePersonalRuta: (a: number, b: number) => number;
     readonly huellaFuentes: () => [number, number];
+    readonly nombreEnMayusculas: (a: number, b: number) => [number, number];
+    readonly nombreMientrasSeEscribe: (a: number, b: number) => [number, number];
     readonly normalizarCedulaContratista: (a: number, b: number) => [number, number];
     readonly normalizarDocumentoVisitante: (a: number, b: number) => [number, number];
     readonly requiereGafete: (a: number, b: number, c: number) => number;

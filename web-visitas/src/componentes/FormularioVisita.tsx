@@ -16,7 +16,7 @@ import { Aviso, Cargando, Dialogo } from "./Comunes";
 import BuscarAnteriores from "./BuscarAnteriores";
 import SelectorFecha from "./SelectorFecha";
 import { useEnLinea } from "../enLinea";
-import { useEstadoReglas } from "../reglas";
+import { reglas, useEstadoReglas } from "../reglas";
 
 type Errores = Record<string, string>;
 type Cuando = "hoy" | "manana" | "otro" | "varios";
@@ -107,9 +107,9 @@ export default function FormularioVisita({
     setFormulario((f) => {
       if (f.visitantes.some((v) => normalizarDocumento(v.cedula) === normalizarDocumento(persona.cedula))) return f;
       const nueva = {
-        nombre: persona.nombre,
+        nombre: reglas.nombreMientrasSeEscribe(persona.nombre),
         cedula: persona.cedula,
-        empresa: persona.empresa ?? "",
+        empresa: reglas.nombreMientrasSeEscribe(persona.empresa ?? ""),
         placa_vehiculo: persona.placa_vehiculo ?? "",
       };
       // Si la única tarjeta está vacía, se reemplaza en vez de sumar otra.
@@ -323,7 +323,12 @@ function TarjetaPersona({
       <div className="grid grid-cols-2 gap-2">
         <label className="campo col-span-2" data-error={!!error("nombre")}>
           Nombre
-          <input value={visitante.nombre} autoComplete="off" onChange={(e) => onCambiar({ nombre: e.target.value })} />
+          {/* En mayúscula al escribir: regla del núcleo para todo nombre. */}
+          <input
+            value={visitante.nombre}
+            autoComplete="off"
+            onChange={(e) => onCambiar({ nombre: reglas.nombreMientrasSeEscribe(e.target.value) })}
+          />
           {error("nombre") && <span className="campo-error">{error("nombre")}</span>}
         </label>
         <label className="campo" data-error={!!error("cedula")}>
@@ -346,7 +351,7 @@ function TarjetaPersona({
             value={visitante.empresa ?? ""}
             placeholder="Opcional"
             autoComplete="off"
-            onChange={(e) => onCambiar({ empresa: e.target.value })}
+            onChange={(e) => onCambiar({ empresa: reglas.nombreMientrasSeEscribe(e.target.value) })}
           />
         </label>
       </div>

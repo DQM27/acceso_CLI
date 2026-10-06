@@ -82,7 +82,7 @@ fn root_inicial_es_root_activo_normalizado_y_cierra_configuracion() {
     let id = s.crear_root_inicial(entrada).unwrap();
     let u = s.buscar_por_id(id).unwrap();
     assert_eq!(u.cedula, "ROOT1");
-    assert_eq!(u.nombre, "Root Principal");
+    assert_eq!(u.nombre, "ROOT PRINCIPAL");
     assert_eq!(u.rol, RolUsuario::Root);
     assert!(u.activo);
     assert!(!s.requiere_configuracion_inicial().unwrap());

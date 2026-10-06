@@ -26,15 +26,16 @@ pub struct NuevoMovimientoVisita {
     pub placa: Option<String>,
 }
 
-/// Fecha y usuario van juntos a propósito, en vez de ser 2 `Option`
-/// independientes en `MovimientoVisita` -- mismo criterio que
-/// `SalidaRegistroIngreso`: la base ya exige "ambos o ninguno" con un
-/// `CHECK` (`MIGRACION_28`), este tipo hace esa regla imposible de romper
-/// del lado de Rust.
+/// La salida de un movimiento: la fecha siempre; el usuario local sólo si
+/// la dio este equipo (la que da el otro equipo de la unidad llega con su
+/// nombre, sin usuario de esta base).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SalidaMovimientoVisita {
     pub fecha_hora: DateTime<Utc>,
-    pub usuario_id: i64,
+    /// `None` si la salida la dio el otro equipo de la unidad
+    /// (`recibir_cierres_de_movimientos_visita_propios`): no hay usuario
+    /// local que anotar, sólo su nombre.
+    pub usuario_id: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -66,4 +67,6 @@ pub struct MovimientoVisitaActivoResumen {
     /// La placa si entró en vehículo, `None` si caminando (o si entró antes
     /// de que se anotara el medio).
     pub placa: Option<String>,
+    /// Quién le dio la entrada en la portería.
+    pub usuario_entrada_nombre: String,
 }

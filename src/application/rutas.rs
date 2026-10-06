@@ -155,7 +155,8 @@ impl AppCore {
         verificar_actor_activo(&transaction, actor)
             .map_err(EncargadoRutaServiceError::Database)?
             .ok_or(EncargadoRutaServiceError::OperacionNoAutorizada)?;
-        let id = SqliteEncargadoRutaRepository::new(&transaction).crear(encargado)?;
+        let encargado = con_nombre_en_mayusculas(encargado);
+        let id = SqliteEncargadoRutaRepository::new(&transaction).crear(&encargado)?;
         transaction
             .commit()
             .map_err(DatabaseError::from)
@@ -174,7 +175,8 @@ impl AppCore {
         verificar_actor_activo(&transaction, actor)
             .map_err(EncargadoRutaServiceError::Database)?
             .ok_or(EncargadoRutaServiceError::OperacionNoAutorizada)?;
-        SqliteEncargadoRutaRepository::new(&transaction).actualizar(encargado)?;
+        let encargado = con_nombre_en_mayusculas(encargado);
+        SqliteEncargadoRutaRepository::new(&transaction).actualizar(&encargado)?;
         transaction
             .commit()
             .map_err(DatabaseError::from)
@@ -413,6 +415,14 @@ fn verificar_operador_activo(
         Ok(())
     } else {
         Err(RutaServiceError::OperadorNoAutorizado)
+    }
+}
+
+/// Como todo nombre de persona o empresa: el del encargado en mayúscula.
+fn con_nombre_en_mayusculas(encargado: &EncargadoRuta) -> EncargadoRuta {
+    EncargadoRuta {
+        nombre: control_acceso_reglas::nombre::nombre_en_mayusculas(&encargado.nombre),
+        ..encargado.clone()
     }
 }
 

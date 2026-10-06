@@ -647,6 +647,43 @@ aspiracional -- lo que sigue sin marcar todavía no corrió.
 
 ## Android y lector de documentos
 
+- [x] **Todo nombre de persona o empresa en mayúscula, regla del núcleo --
+  pedido del usuario 2026-10-06.** "El núcleo dicta las reglas y las
+  interfaces las interpretan", incluido el panel web. Ver
+  `docs/despliegue-produccion.md` sección 2.11. Falta desplegar la Edge
+  Function `admin-create-usuario` (el trigger de `usuarios` ya cubre el alta).
+
+- [x] **Visitas agendadas en el teléfono -- pedido del usuario 2026-10-05
+  ("minimalista y centrado en velocidad, nada de historial, sólo
+  verificación").** Hecho en `feat/visitas-movil`: opción "Visita" en
+  Externos (`PantallaVisitas`), una cédula y el núcleo decide entrada, salida
+  o aviso. Reglas compartidas con escritorio
+  (`application::registrar_entrada_visita_verificada`). Ver
+  `docs/despliegue-produccion.md` sección 2.10. Probado en un debug el
+  2026-10-06; de esa prueba salió el pedido de abajo.
+
+- [x] **Visitas adentro en el teléfono, idéntico a contratistas -- pedido del
+  usuario 2026-10-06.** "No me muestra las visitas que están adentro para
+  darle salida": ahora la pantalla lista quién está adentro en la unidad con
+  las mismas tarjetas (`TarjetaActivo`, ícono de PC si entró por el otro
+  equipo) y el mismo diálogo de salida (`DialogoRegistrarSalida`), en vivo.
+  Núcleo: caché `movimientos_visita_remotos` (migración local 58), salida
+  remota y cierres recibidos. Falta probarlo en un teléfono real.
+
+- [x] **Salida cruzada de visitas entre teléfono y PC -- pedido del usuario
+  2026-10-06.** La PC muestra en "Adentro" (y descarta de "Esperadas") las
+  visitas que entraron por el teléfono y les da salida en la nube
+  (`listar_visitas_remotas`, `cerrar_visita_remota`). Con el núcleo nuevo, la
+  PC también cierra en local sus visitas a las que el teléfono dio salida
+  (en staging el teléfono ya las cerraba bien en la nube; la PC vieja no se
+  enteraba).
+
+- [x] **Teléfono: el ícono de la PC en todas las listas -- pedido del usuario
+  2026-10-06.** "Por correo" (y también Proveedores y Gafetes provisionales)
+  mostraba el texto "Otro dispositivo"; ahora usan la misma tarjeta
+  (`TarjetaActivo`) o el mismo ícono (`IconoOtroEquipo`) y el mismo diálogo de
+  salida que contratistas.
+
 - [ ] **Número de versión en el login de la app móvil -- pedido del usuario
   2026-10-03.** Mostrar la versión (`versionName`, ej. "v1.4.4") en la
   pantalla de login, con fuente chica y discreta: centrada abajo o en una

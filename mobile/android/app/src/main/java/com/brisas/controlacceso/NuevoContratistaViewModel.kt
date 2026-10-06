@@ -16,6 +16,7 @@ import uniffi.control_acceso_mobile.DatosContratista
 import uniffi.control_acceso_mobile.Empresa
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.TipoIngreso
+import uniffi.control_acceso_mobile.nombreMientrasSeEscribe
 
 /// Dueño del estado y de las llamadas a [Nucleo] del formulario "Nuevo
 /// contratista" (punto M1 de
@@ -90,10 +91,10 @@ class NuevoContratistaViewModel(
         cedula = texto.filter(Char::isDigit)
     }
 
-    /// Siempre en mayúscula, venga del teclado o del OCR (pedido del
-    /// usuario 2026-09-20).
+    /// Siempre en mayúscula, venga del teclado o del OCR: la regla de todo
+    /// nombre la dicta el núcleo (`nombreMientrasSeEscribe`).
     fun cambiarNombre(texto: String) {
-        nombre = texto.uppercase()
+        nombre = nombreMientrasSeEscribe(texto)
     }
 
     fun elegirEmpresa(empresa: Empresa) {
@@ -146,7 +147,7 @@ class NuevoContratistaViewModel(
         if (documento.numeroDocumento.isNotBlank()) {
             cedula = documento.numeroDocumento.filter(Char::isDigit).ifBlank { documento.numeroDocumento }
         }
-        documento.nombre?.let { nombre = it.uppercase() }
+        documento.nombre?.let { cambiarNombre(it) }
         tipoIngreso = TipoIngreso.PRAIND
         documento.vencimiento?.let { fechaPraind = it.aTextoDDMMYYYY() }
         val textoEmpresa = documento.empresa?.trim()

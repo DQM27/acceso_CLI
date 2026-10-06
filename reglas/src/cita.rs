@@ -141,11 +141,8 @@ fn validar_visitante(
     let campo = |nombre: &str| format!("visitantes.{indice}.{nombre}");
     let antes = errores.len();
 
-    let nombre = visitante
-        .nombre
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    // Como todo nombre de persona o empresa: en mayúscula.
+    let nombre = crate::nombre::nombre_en_mayusculas(&visitante.nombre);
     if nombre.chars().count() < MIN_NOMBRE {
         errores.push(error(&campo("nombre"), "Ingrese el nombre completo."));
     } else if nombre.chars().count() > MAX_NOMBRE {
@@ -167,7 +164,8 @@ fn validar_visitante(
         MAX_EMPRESA,
         &campo("empresa"),
         errores,
-    );
+    )
+    .map(|empresa| crate::nombre::nombre_en_mayusculas(&empresa));
     let placa_vehiculo = texto_opcional(
         visitante.placa_vehiculo.as_deref(),
         MAX_PLACA,
@@ -315,19 +313,27 @@ mod tests {
     }
 
     #[test]
-    fn normaliza_textos_cedula_y_placa() {
+    fn normaliza_textos_cedula_placa_y_nombre_en_mayuscula() {
         let valida = validar_cita(&cita(), hoy()).unwrap();
         assert_eq!(valida.motivo.as_deref(), Some("Revisión"));
         assert_eq!(valida.hora_estimada, NaiveTime::from_hms_opt(9, 30, 0));
         assert_eq!(
             valida.visitantes,
             vec![VisitanteValido {
-                nombre: "Ana Mora".into(),
+                nombre: "ANA MORA".into(),
                 cedula: "108470293".into(),
                 empresa: None,
                 placa_vehiculo: Some("BCD123".into()),
             }]
         );
+    }
+
+    #[test]
+    fn la_empresa_del_visitante_tambien_va_en_mayuscula() {
+        let mut entrada = cita();
+        entrada.visitantes[0].empresa = Some(" acme  s.a. ".into());
+        let valida = validar_cita(&entrada, hoy()).unwrap();
+        assert_eq!(valida.visitantes[0].empresa.as_deref(), Some("ACME S.A."));
     }
 
     #[test]

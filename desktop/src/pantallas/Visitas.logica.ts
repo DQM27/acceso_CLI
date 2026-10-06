@@ -2,6 +2,7 @@ import type {
   AgendaVisitaResumen,
   MovimientoHistorialVisitaRemoto,
   MovimientoVisitaActivoResumen,
+  MovimientoVisitaRemoto,
 } from "../api";
 import type { FilaCorreoActiva, HistorialIngresoCorreoRemoto } from "../api/correo";
 import { textoMedioConPlaca } from "../api/ingresos";
@@ -39,8 +40,12 @@ export interface FilaVisitaAdentro {
   gafete_numero: number | null;
   /** ISO 8601 (UTC). */
   fecha_hora_entrada: string;
-  /** Para dar la salida por el camino de cada una. */
-  fuente: { tipo: "visita"; id: number } | { tipo: "correo"; fila: FilaCorreoActiva };
+  /** Para dar la salida por el camino de cada una: la visita del otro
+   * equipo (el teléfono) se cierra en la nube. */
+  fuente:
+    | { tipo: "visita"; id: number }
+    | { tipo: "visita_remota"; uuid: string }
+    | { tipo: "correo"; fila: FilaCorreoActiva };
 }
 
 const masReciente = (a: { fecha_hora_entrada: string }, b: { fecha_hora_entrada: string }) =>
@@ -48,6 +53,7 @@ const masReciente = (a: { fecha_hora_entrada: string }, b: { fecha_hora_entrada:
 
 export function unirAdentro(
   visitas: MovimientoVisitaActivoResumen[],
+  visitasRemotas: MovimientoVisitaRemoto[],
   correos: FilaCorreoActiva[],
 ): FilaVisitaAdentro[] {
   return [
@@ -64,6 +70,21 @@ export function unirAdentro(
         gafete_numero: visita.gafete_numero,
         fecha_hora_entrada: visita.fecha_hora_entrada,
         fuente: { tipo: "visita", id: visita.id },
+      }),
+    ),
+    ...visitasRemotas.map(
+      (visita): FilaVisitaAdentro => ({
+        clave: `visita-remota-${visita.uuid}`,
+        origen: "AGENDADA",
+        cedula: visita.cedula,
+        nombre: visita.nombre,
+        empresa: visita.empresa,
+        anfitrion: visita.anfitrion_nombre,
+        motivo: visita.motivo,
+        placa: visita.placa,
+        gafete_numero: visita.gafete_numero,
+        fecha_hora_entrada: visita.hora_entrada,
+        fuente: { tipo: "visita_remota", uuid: visita.uuid },
       }),
     ),
     ...correos.map(

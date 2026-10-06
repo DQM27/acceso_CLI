@@ -1,0 +1,203 @@
+package com.brisas.controlacceso
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.VerificacionVisita
+import uniffi.control_acceso_mobile.VisitaAdentro
+
+/// Estado y llamadas de [PantallaVisitas]: una cédula, y el núcleo decide qué
+/// sigue (`Nucleo.verificarVisita`): entrada si tiene cita hoy, salida si ya
+/// está adentro, o un aviso. Debajo, quién está adentro en la unidad (este
+/// equipo y la PC), como en contratistas: tocar una tarjeta = salida. Sin
+/// historial: se consulta en escritorio y en el panel web. Sin reglas
+/// propias: lee lo que responde el núcleo y lo muestra.
+class VisitasViewModel(
+    private val nucleo: Nucleo,
+    private val dispatcherIO: CoroutineDispatcher = Dispatchers.IO,
+) : ViewModel() {
+    var cedula by mutableStateOf("")
+        private set
+
+    /// Quién está adentro por visita en la unidad (`Nucleo.listarVisitasAdentro`).
+    var adentro by mutableStateOf<List<VisitaAdentro>>(emptyList())
+        private set
+
+    /// La visita a la que se le está por dar salida (diálogo abierto): una
+    /// tarjeta tocada o la cédula verificada de alguien que ya está adentro.
+    var seleccionSalida by mutableStateOf<VisitaAdentro?>(null)
+        private set
+
+    /// `null` mientras no se verificó la cédula escrita.
+    var verificacion by mutableStateOf<VerificacionVisita?>(null)
+        private set
+    var verificando by mutableStateOf(false)
+        private set
+
+    var gafete by mutableStateOf("")
+        private set
+    var enVehiculo by mutableStateOf(false)
+        private set
+    var placa by mutableStateOf("")
+        private set
+    var registrando by mutableStateOf(false)
+        private set
+
+    var error by mutableStateOf<String?>(null)
+        private set
+
+    init {
+        refrescar()
+    }
+
+    /// Al abrir, después de cada registro y con cada cambio de la nube
+    /// (`refrescarNube`, igual que contratistas).
+    fun refrescar() {
+        viewModelScope.launch {
+            try {
+                adentro = withContext(dispatcherIO) {
+                    medirNucleo("listarVisitasAdentro") { nucleo.listarVisitasAdentro() }
+                }
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
+            }
+        }
+    }
+
+    fun elegirSeleccionSalida(visita: VisitaAdentro?) {
+        seleccionSalida = visita
+    }
+
+    fun cambiarCedula(nueva: String) {
+        // Tal cual: qué es un documento válido y su forma única lo decide
+        // el núcleo al verificar.
+        cedula = nueva
+        verificacion = null
+        error = null
+    }
+
+    fun cambiarGafete(nuevo: String) {
+        gafete = nuevo.filter(Char::isDigit)
+    }
+
+    fun cambiarEnVehiculo(vehiculo: Boolean) {
+        enVehiculo = vehiculo
+    }
+
+    fun cambiarPlaca(nueva: String) {
+        placa = nueva
+    }
+
+    /// Escrita (al confirmar el teclado) o escaneada.
+    fun verificar(texto: String = cedula) {
+        if (verificando) return
+        cedula = texto
+        verificando = true
+        error = null
+        val consultada = texto
+        viewModelScope.launch {
+            try {
+                val resultado = withContext(dispatcherIO) {
+                    medirNucleo("verificarVisita") { nucleo.verificarVisita(consultada) }
+                }
+                if (consultada != cedula) return@launch // ya se escribió otra
+                if (resultado is VerificacionVisita.Salida) {
+                    // Ya está adentro: el mismo diálogo que al tocar su tarjeta.
+                    seleccionSalida = resultado.visita
+                    return@launch
+                }
+                verificacion = resultado
+                gafete = ""
+                // Si el anfitrión anotó la placa, se propone "vehículo".
+                val sugerida = (resultado as? VerificacionVisita.Entrada)?.visita?.placaSugerida
+                enVehiculo = sugerida != null
+                placa = sugerida.orEmpty()
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
+            } finally {
+                verificando = false
+            }
+        }
+    }
+
+    /// Gafete vacío = sin gafete. En vehículo se manda la placa tal cual:
+    /// si falta o no sirve, lo dice el núcleo (`PlacaRequerida`/`PlacaInvalida`).
+    fun registrarEntrada() {
+        val visita = (verificacion as? VerificacionVisita.Entrada)?.visita ?: return
+        if (registrando) return
+        registrando = true
+        viewModelScope.launch {
+            try {
+                withContext(dispatcherIO) {
+                    // Las reglas (cita vigente, placa, gafete libre aquí y
+                    // en el otro equipo, visitante adentro en otra unidad)
+                    // las aplica el núcleo en esta llamada.
+                    medirNucleo("registrarEntradaVisita") {
+                        nucleo.registrarEntradaVisita(
+                            visita.cedula,
+                            gafete.toLongOrNull(),
+                            placa.takeIf { enVehiculo },
+                        )
+                    }
+                }
+                CambiosNube.cambioLocal()
+                limpiar()
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
+            } finally {
+                registrando = false
+                refrescar()
+            }
+        }
+    }
+
+    /// Salida desde el diálogo: el núcleo sabe si entró por este equipo o
+    /// por la PC (`VisitaAdentro.origen`) y la da donde corresponde.
+    fun confirmarSalida(visita: VisitaAdentro) {
+        if (registrando) return
+        registrando = true
+        seleccionSalida = null
+        viewModelScope.launch {
+            try {
+                withContext(dispatcherIO) {
+                    medirNucleo("registrarSalidaVisita") { nucleo.registrarSalidaVisita(visita.origen) }
+                }
+                CambiosNube.cambioLocal()
+                limpiar()
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
+            } finally {
+                registrando = false
+                refrescar()
+            }
+        }
+    }
+
+    /// Vuelve a la cédula vacía, lista para la próxima persona. Sin mensaje
+    /// de confirmación: la lista de quién está adentro ya muestra el cambio
+    /// (pedido del usuario 2026-10-06: el mensaje quedaba pegado y sobraba).
+    fun limpiar() {
+        cedula = ""
+        verificacion = null
+        gafete = ""
+        enVehiculo = false
+        placa = ""
+        error = null
+    }
+
+    companion object {
+        fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
+            initializer { VisitasViewModel(nucleo) }
+        }
+    }
+}

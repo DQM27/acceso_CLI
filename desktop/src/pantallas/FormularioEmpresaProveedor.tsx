@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Modal from "../componentes/Modal";
 import { crearEmpresaProveedor } from "../api/proveedores";
 import { esquema } from "./FormularioEmpresaProveedor.logica";
+import { escribirNombreEnCampo } from "../nombres";
 
 interface ValoresFormulario {
   nombre: string;
@@ -26,22 +27,17 @@ export default function FormularioEmpresaProveedor({
     defaultValues: { nombre: "" },
   });
 
-  // Siempre en mayúscula (pedido del usuario 2026-09-23), mismo criterio
-  // que el campo de empresa del móvil (`ProveedoresViewModel`). Se convierte
-  // mientras se escribe, conservando la posición del cursor -- reasignar
-  // `value` lo mandaría al final si se corrige a mitad del texto.
+  // En mayúscula mientras se escribe (regla del núcleo para todo nombre).
   const registroNombre = register("nombre");
   function alCambiarNombre(evento: ChangeEvent<HTMLInputElement>) {
-    const campo = evento.target;
-    const { selectionStart, selectionEnd } = campo;
-    campo.value = campo.value.toUpperCase();
-    campo.setSelectionRange(selectionStart, selectionEnd);
+    escribirNombreEnCampo(evento.target);
     return registroNombre.onChange(evento);
   }
 
   async function alGuardar(valores: ValoresFormulario) {
     try {
-      await crearEmpresaProveedor(valores.nombre.trim().toUpperCase());
+      // El núcleo lo guarda en mayúscula.
+      await crearEmpresaProveedor(valores.nombre.trim());
       onGuardado();
     } catch (error) {
       setError("root", { message: String(error) });

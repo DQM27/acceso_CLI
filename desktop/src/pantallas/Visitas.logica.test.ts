@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgendaVisitaResumen, MovimientoVisitaActivoResumen } from "../api";
+import type { AgendaVisitaResumen, MovimientoVisitaActivoResumen, MovimientoVisitaRemoto } from "../api";
 import type { FilaCorreoActiva, HistorialIngresoCorreoRemoto } from "../api/correo";
 import { textoMedioDePlaca, unirAdentro, unirHistorial, visitasEsperadasHoy } from "./Visitas.logica";
 
@@ -77,6 +77,19 @@ describe("unirAdentro y unirHistorial", () => {
     anfitrion_nombre: "Daniel",
     motivo: "Reunión",
     placa: "XYZ789",
+    usuario_entrada_nombre: "Guarda PC",
+  };
+  const remota: MovimientoVisitaRemoto = {
+    uuid: "v-tel",
+    cedula: "300",
+    nombre: "MARÍA",
+    empresa: null,
+    anfitrion_nombre: "Laura",
+    motivo: null,
+    gafete_numero: 9,
+    placa: null,
+    hora_entrada: "2026-10-05T14:30:00Z",
+    usuario_entrada_nombre: "Guarda teléfono",
   };
   const correo: FilaCorreoActiva = {
     origen: "remoto",
@@ -91,17 +104,20 @@ describe("unirAdentro y unirHistorial", () => {
     usuario_ingreso_nombre: "Guarda",
   };
 
-  it("adentro junta las dos, la más reciente primero, y sabe por dónde darles la salida", () => {
-    const filas = unirAdentro([visita], [correo]);
+  it("adentro junta las tres, la más reciente primero, y sabe por dónde darles la salida", () => {
+    const filas = unirAdentro([visita], [remota], [correo]);
     expect(filas.map((fila) => [fila.origen, fila.cedula])).toEqual([
       ["POR_CORREO", "200"],
+      ["AGENDADA", "300"],
       ["AGENDADA", "100"],
     ]);
     expect(filas[0]?.fuente).toEqual({ tipo: "correo", fila: correo });
-    expect(filas[1]?.fuente).toEqual({ tipo: "visita", id: 7 });
+    // La que entró por el teléfono se cierra en la nube.
+    expect(filas[1]?.fuente).toEqual({ tipo: "visita_remota", uuid: "v-tel" });
+    expect(filas[2]?.fuente).toEqual({ tipo: "visita", id: 7 });
     // La agendada ya trae su medio de ingreso.
-    expect(filas[1]?.placa).toBe("XYZ789");
-    expect(new Set(filas.map((fila) => fila.clave)).size).toBe(2);
+    expect(filas[2]?.placa).toBe("XYZ789");
+    expect(new Set(filas.map((fila) => fila.clave)).size).toBe(3);
   });
 
   it("el historial junta las dos con su origen", () => {

@@ -3,6 +3,8 @@
 export const memory: WebAssembly.Memory;
 export const admitePersonalRuta: (a: number, b: number) => number;
 export const huellaFuentes: () => [number, number];
+export const nombreEnMayusculas: (a: number, b: number) => [number, number];
+export const nombreMientrasSeEscribe: (a: number, b: number) => [number, number];
 export const normalizarCedulaContratista: (a: number, b: number) => [number, number];
 export const normalizarDocumentoVisitante: (a: number, b: number) => [number, number];
 export const requiereGafete: (a: number, b: number, c: number) => number;

@@ -16,6 +16,7 @@ use control_acceso::services::autenticacion_service::UsuarioSesion as UsuarioSes
 use control_acceso::tiempo::RelojCorregido;
 
 mod mrz;
+mod nombres;
 pub use mrz::{CampoMrz, CorreccionAplicada, FechaMrz, FormatoMrz, RegistroMrz, leer_mrz};
 mod pdf417_cedula;
 pub use pdf417_cedula::{
@@ -40,6 +41,7 @@ mod proveedores;
 mod rutas;
 mod sesion;
 mod tipos;
+mod visitas;
 
 pub use error::NucleoError;
 use error::{FalloSincronizacion, convertir_fallo_sincronizacion, interno};
@@ -55,6 +57,7 @@ pub use tipos::{
     ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen,
     SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
 };
+pub use visitas::{OrigenVisita, VerificacionVisita, VisitaAdentro, VisitaParaEntrar};
 
 /// Sesión del núcleo: dueña de la única conexión `SQLite` del teléfono. Se
 /// abre una vez al arrancar la app y se reusa en todas las pantallas (login,

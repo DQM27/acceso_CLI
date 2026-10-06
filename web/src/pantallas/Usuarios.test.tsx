@@ -45,7 +45,7 @@ describe("Usuarios -- alta", () => {
     await waitFor(() => expect(mocks.crearUsuario).toHaveBeenCalledTimes(1));
     expect(mocks.crearUsuario.mock.calls[0][0]).toEqual({
       cedula: "123456789",
-      nombre: "Alguien",
+      nombre: "ALGUIEN",
       rol: "OPERADOR",
     });
   });

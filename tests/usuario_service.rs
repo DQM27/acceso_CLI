@@ -44,7 +44,7 @@ fn root_inicial_normalizado_y_nunca_guarda_password_plano() {
         .unwrap();
     let usuario = servicio.buscar_por_id(id).unwrap();
     assert_eq!(usuario.cedula, "2001");
-    assert_eq!(usuario.nombre, "Persona Uno");
+    assert_eq!(usuario.nombre, "PERSONA UNO");
     assert_ne!(usuario.password_hash, "password1");
     assert_eq!(usuario.rol, RolUsuario::Root);
     assert!(usuario.activo);

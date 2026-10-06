@@ -68,7 +68,8 @@ where
         if self.registros.cedula_con_acceso_negado(cedula)? {
             return Err(IngresoCorreoServiceError::AccesoNegado);
         }
-        let nombre = datos.nombre.trim();
+        // Como todo nombre de persona o empresa: en mayúscula.
+        let nombre = control_acceso_reglas::nombre::nombre_en_mayusculas(datos.nombre);
         if nombre.is_empty() {
             return Err(IngresoCorreoServiceError::NombreVacio);
         }
@@ -113,7 +114,7 @@ where
 
         Ok(self.registros.crear(&NuevoRegistroIngresoCorreo {
             cedula: cedula.to_string(),
-            nombre: nombre.to_string(),
+            nombre,
             motivo: motivo.to_string(),
             placa,
             gafete_numero: datos.gafete_numero,
@@ -207,7 +208,7 @@ mod tests {
             .unwrap();
         let registro = registros.buscar_por_id(id).unwrap().unwrap();
         assert_eq!(registro.cedula, "111111111");
-        assert_eq!(registro.nombre, "Ana Solano");
+        assert_eq!(registro.nombre, "ANA SOLANO");
         assert_eq!(registro.motivo, "Entrevista RH - Laura");
         assert_eq!(registro.placa, None, "placa en blanco = a pie");
 

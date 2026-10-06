@@ -68,6 +68,8 @@ export interface MovimientoVisitaActivoResumen {
   motivo: string | null;
   /** Medio de ingreso: la placa, o `null` si entró caminando. */
   placa: string | null;
+  /** Quién le dio la entrada en la portería. */
+  usuario_entrada_nombre: string;
 }
 
 /** Por qué no sigue un check-in (espejo de `comandos::citas::RechazoVisita`).
@@ -133,6 +135,32 @@ export async function registrarSalidaVisita(movimientoId: number): Promise<void>
 
 export function listarVisitasActivas(): Promise<MovimientoVisitaActivoResumen[]> {
   return invoke("listar_visitas_activas");
+}
+
+/** Visita agendada abierta por el otro equipo de la unidad (el teléfono):
+ * espejo de `nube::MovimientoVisitaRemoto` (caché `movimientos_visita_remotos`). */
+export interface MovimientoVisitaRemoto {
+  uuid: string;
+  cedula: string;
+  nombre: string;
+  empresa: string | null;
+  anfitrion_nombre: string | null;
+  motivo: string | null;
+  gafete_numero: number | null;
+  placa: string | null;
+  /** ISO 8601 (UTC). */
+  hora_entrada: string;
+  usuario_entrada_nombre: string | null;
+}
+
+export function listarVisitasRemotas(): Promise<MovimientoVisitaRemoto[]> {
+  return invoke("listar_visitas_remotas");
+}
+
+/** La salida de una visita que entró por el otro equipo se da en la nube. */
+export async function cerrarVisitaRemota(uuid: string): Promise<void> {
+  await invoke("cerrar_visita_remota", { uuid });
+  solicitarSincronizacionNube();
 }
 
 /** Espejo de `comandos::citas::MovimientoHistorialVisitaRemoto` -- un

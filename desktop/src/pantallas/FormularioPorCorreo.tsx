@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { listarTodosLosCorreosActivos, registrarIngresoCorreo } from "../api/correo";
 import type { MedioIngreso } from "../api";
 import { textoGafete, validarNumeroGafete } from "../busqueda";
+import { nombreMientrasSeEscribe } from "../nombres";
 
 /**
  * Visita autorizada por correo: el guarda la registra a mano porque quien
@@ -105,7 +106,7 @@ export function FormularioPorCorreo({
           Nombre
           <input
             value={nombre}
-            onChange={(evento) => setNombre(evento.target.value.toUpperCase())}
+            onChange={(evento) => setNombre(nombreMientrasSeEscribe(evento.target.value))}
             autoFocus={!!cedulaInicial}
             autoComplete="off"
           />

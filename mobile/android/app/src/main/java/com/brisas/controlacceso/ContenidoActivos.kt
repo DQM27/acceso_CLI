@@ -255,10 +255,6 @@ private fun ListaActivos(activos: List<FilaActiva>, onClick: (FilaActiva) -> Uni
     }
 }
 
-/// Modal "Registrar salida" a mano en vez de `AlertDialog` -- el mockup pide
-/// un layout que `AlertDialog` no ofrece (icono circular arriba, botón
-/// principal de ancho completo, "Cancelar" como link chico debajo, todo
-/// centrado) en vez de los dos botones lado a lado de siempre.
 @Composable
 internal fun DialogoConfirmarSalida(
     fila: FilaActiva?,
@@ -266,7 +262,29 @@ internal fun DialogoConfirmarSalida(
     onConfirmar: (FilaActiva) -> Unit,
 ) {
     if (fila == null) return
+    DialogoRegistrarSalida(
+        detalle = when (fila) {
+            is FilaActiva.Local -> "${fila.activo.contratistaNombre} · ${fila.activo.cedula} · ${fila.activo.empresaNombre}"
+            is FilaActiva.Remota -> "${fila.remoto.contratistaNombre} · $TEXTO_OTRO_DISPOSITIVO"
+        },
+        onDismiss = onDismiss,
+        onConfirmar = { onConfirmar(fila) },
+    )
+}
 
+internal const val TEXTO_OTRO_DISPOSITIVO = "registrado en otro dispositivo de la unidad operativa"
+
+/// Modal "Registrar salida" a mano en vez de `AlertDialog` -- el mockup pide
+/// un layout que `AlertDialog` no ofrece (icono circular arriba, botón
+/// principal de ancho completo, "Cancelar" como link chico debajo, todo
+/// centrado) en vez de los dos botones lado a lado de siempre. Lo comparten
+/// contratistas y visitas.
+@Composable
+internal fun DialogoRegistrarSalida(
+    detalle: String,
+    onDismiss: () -> Unit,
+    onConfirmar: () -> Unit,
+) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -291,16 +309,13 @@ internal fun DialogoConfirmarSalida(
                 modifier = Modifier.padding(top = 16.dp),
             )
             Text(
-                when (fila) {
-                    is FilaActiva.Local -> "${fila.activo.contratistaNombre} · ${fila.activo.cedula} · ${fila.activo.empresaNombre}"
-                    is FilaActiva.Remota -> "${fila.remoto.contratistaNombre} · registrado en otro dispositivo de la unidad operativa"
-                },
+                detalle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
             )
             BotonBrisas(
-                onClick = { onConfirmar(fila) },
+                onClick = onConfirmar,
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             ) {
                 Text("Confirmar")

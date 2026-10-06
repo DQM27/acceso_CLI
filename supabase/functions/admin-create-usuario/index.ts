@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { clienteServicio, correoAdminAutorizado } from "../_shared/admin.ts";
 import { json, preflight } from "../_shared/http.ts";
+import { nombreEnMayusculas } from "../_shared/reglas.ts";
 
 // Sin 0/O/1/I/l -- se transcribe a mano una sola vez (WhatsApp, papel), nunca
 // se vuelve a mostrar después de esta respuesta. 10 caracteres de un alfabeto
@@ -46,7 +47,8 @@ Deno.serve(async (req: Request) => {
   }
 
   const cedula = body.cedula?.trim();
-  const nombre = body.nombre?.trim();
+  // Como todo nombre de persona o empresa: en mayúscula (regla del núcleo).
+  const nombre = body.nombre ? nombreEnMayusculas(body.nombre) : undefined;
   const rol = body.rol?.trim();
 
   if (!cedula || !nombre || !rol || !["ROOT", "ADMINISTRADOR", "OPERADOR"].includes(rol)) {

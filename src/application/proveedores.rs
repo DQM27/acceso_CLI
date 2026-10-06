@@ -377,6 +377,7 @@ mod tests {
 
         let resultados = core.buscar_empresas_proveedor("dos pinos").unwrap();
         assert_eq!(resultados.len(), 1);
-        assert_eq!(resultados[0].nombre, "Dos Pinos");
+        // Como todo nombre de empresa: en mayúscula.
+        assert_eq!(resultados[0].nombre, "DOS PINOS");
     }
 }

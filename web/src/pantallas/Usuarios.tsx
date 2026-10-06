@@ -16,6 +16,7 @@ import {
 import type { Usuario } from "../api/usuarios";
 import { listarDispositivosYSitios } from "../api/dispositivos";
 import { usePresenciaPorSitio } from "../presenciaSitios";
+import { reglas } from "../reglas";
 import { sanearSoloDigitos, sanearSoloLetras } from "../validacion";
 import { mensajeError } from "../mensajeError";
 import FormularioEditarUsuario from "./FormularioEditarUsuario";
@@ -331,7 +332,7 @@ export default function Usuarios() {
                 required
                 value={nombre}
                 disabled={creando}
-                onChange={(evento) => setNombre(sanearSoloLetras(evento.target.value))}
+                onChange={(evento) => setNombre(reglas.nombreMientrasSeEscribe(sanearSoloLetras(evento.target.value)))}
               />
             </label>
 

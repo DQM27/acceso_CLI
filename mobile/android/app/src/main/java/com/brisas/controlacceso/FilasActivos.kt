@@ -40,54 +40,48 @@ internal fun FilaActivo(fila: FilaActiva, onClick: () -> Unit) {
 
 @Composable
 private fun FilaActivoLocal(activo: IngresoActivoResumen, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(activo.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-        // Mayúscula + negrita en toda la línea, gafete en azul -- pedido
-        // explícito del usuario 2026-09-20: es un dato importante (lo que
-        // el guardia de salida necesita confirmar contra lo que la persona
-        // trae puesto), tiene que resaltar más que cédula/empresa. El
-        // estado de acceso (antes "Al día"/"PRAIND próximo a vencer"/motivo
-        // de denegación) se sacó de acá -- ya se mostró y se aceptó al
-        // momento de registrar el ingreso, repetirlo en cada tarjeta activa
-        // era ruido, no información nueva.
-        Text(
-            buildAnnotatedString {
-                append("${activo.cedula} · ${activo.empresaNombre} · ".uppercase())
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
-                    append(
-                        (if (activo.gafeteNumero != null) "Gafete ${activo.gafeteNumero}" else "Sin gafete")
-                            .uppercase(),
-                    )
-                }
-            },
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "Ingresó ${textoFechaHora(activo.fechaHoraIngreso)} · dio ingreso ${activo.usuarioIngresoNombre}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    TarjetaActivo(
+        nombre = activo.contratistaNombre,
+        detalle = "${activo.cedula} · ${activo.empresaNombre}",
+        gafeteNumero = activo.gafeteNumero,
+        fechaHoraIngreso = activo.fechaHoraIngreso,
+        dioIngreso = activo.usuarioIngresoNombre,
+        otroEquipo = false,
+        onClick = onClick,
+    )
 }
 
 /// Ver el doc-comment de [FilaActiva] -- un ingreso abierto por el otro
 /// dispositivo del sitio (la PC del puesto de control), cacheado en
-/// `ingresos_remotos`. Mismos campos que [FilaActivoLocal] -- cédula,
-/// empresa y gafete sí viajan en la caché desde la migración 24, así que
-/// no hay motivo para mostrar menos acá -- salvo el indicativo de "otro
-/// dispositivo", que es un ícono en vez de texto para ahorrar espacio.
+/// `ingresos_remotos`. Cédula, empresa y gafete sí viajan en la caché desde
+/// la migración 24, así que no hay motivo para mostrar menos acá.
 @Composable
 private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
+    TarjetaActivo(
+        nombre = remoto.contratistaNombre,
+        detalle = "${remoto.contratistaCedula ?: "—"} · ${remoto.empresaNombre ?: "—"}",
+        gafeteNumero = remoto.gafeteNumero,
+        fechaHoraIngreso = remoto.horaEntrada,
+        dioIngreso = remoto.usuarioEntradaNombre ?: "—",
+        otroEquipo = true,
+        onClick = onClick,
+    )
+}
+
+/// Tarjeta de quien está adentro (tocar = salida). La comparten
+/// contratistas y visitas para que se vean y se usen igual (pedido del
+/// usuario 2026-10-06). Lo que entró por el otro equipo de la unidad lleva
+/// el ícono de la PC a la derecha, en vez de texto, para ahorrar espacio.
+@Composable
+internal fun TarjetaActivo(
+    nombre: String,
+    detalle: String,
+    gafeteNumero: Long?,
+    fechaHoraIngreso: String,
+    dioIngreso: String,
+    otroEquipo: Boolean,
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -101,15 +95,16 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(remoto.contratistaNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            // Mayúscula + negrita en toda la línea, gafete en azul -- pedido
+            // explícito del usuario 2026-09-20: es lo que el guardia de
+            // salida confirma contra lo que la persona trae puesto, tiene
+            // que resaltar más que cédula/empresa.
             Text(
                 buildAnnotatedString {
-                    append("${remoto.contratistaCedula ?: "—"} · ${remoto.empresaNombre ?: "—"} · ".uppercase())
+                    append("$detalle · ".uppercase())
                     withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
-                        append(
-                            (if (remoto.gafeteNumero != null) "Gafete ${remoto.gafeteNumero}" else "Sin gafete")
-                                .uppercase(),
-                        )
+                        append((if (gafeteNumero != null) "Gafete $gafeteNumero" else "Sin gafete").uppercase())
                     }
                 },
                 style = MaterialTheme.typography.bodySmall,
@@ -117,18 +112,26 @@ private fun FilaActivoRemota(remoto: IngresoRemoto, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Ingresó ${textoFechaHora(remoto.horaEntrada)} · dio ingreso ${remoto.usuarioEntradaNombre ?: "—"}",
+                "Ingresó ${textoFechaHora(fechaHoraIngreso)} · dio ingreso $dioIngreso",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Icon(
-            Icons.Default.Computer,
-            contentDescription = "Registrado en otro dispositivo",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
-        )
+        if (otroEquipo) IconoOtroEquipo()
     }
+}
+
+/// La marca de "entró por el otro equipo de la unidad": el mismo ícono en
+/// todas las listas (contratistas, visitas, por correo, proveedores y
+/// gafetes provisionales), nunca texto.
+@Composable
+internal fun IconoOtroEquipo() {
+    Icon(
+        Icons.Default.Computer,
+        contentDescription = "Registrado en otro dispositivo",
+        tint = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.size(20.dp),
+    )
 }
 
 @Composable

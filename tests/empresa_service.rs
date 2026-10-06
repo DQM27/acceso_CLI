@@ -19,7 +19,7 @@ fn debe_crear_empresa_valida() {
 
     let id = servicio.crear("Empresa Uno").unwrap();
 
-    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "Empresa Uno");
+    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "EMPRESA UNO");
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn debe_aplicar_trim_al_crear() {
 
     let id = servicio.crear("  Empresa Uno  ").unwrap();
 
-    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "Empresa Uno");
+    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "EMPRESA UNO");
 }
 
 #[test]
@@ -67,7 +67,7 @@ fn debe_buscar_empresa_por_id() {
     let empresa = servicio.buscar_por_id(id).unwrap();
 
     assert_eq!(empresa.id, id);
-    assert_eq!(empresa.nombre, "Empresa Uno");
+    assert_eq!(empresa.nombre, "EMPRESA UNO");
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn debe_actualizar_empresa() {
 
     servicio.actualizar(id, "Nombre nuevo").unwrap();
 
-    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "Nombre nuevo");
+    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "NOMBRE NUEVO");
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn debe_aplicar_trim_al_actualizar() {
 
     servicio.actualizar(id, "  Nombre nuevo  ").unwrap();
 
-    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "Nombre nuevo");
+    assert_eq!(servicio.buscar_por_id(id).unwrap().nombre, "NOMBRE NUEVO");
 }
 
 #[test]
@@ -129,8 +129,8 @@ fn debe_listar_empresas() {
     let empresas = servicio.listar().unwrap();
 
     assert_eq!(empresas.len(), 2);
-    assert_eq!(empresas[0].nombre, "Empresa A");
-    assert_eq!(empresas[1].nombre, "Empresa B");
+    assert_eq!(empresas[0].nombre, "EMPRESA A");
+    assert_eq!(empresas[1].nombre, "EMPRESA B");
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn debe_rechazar_nombre_vacio_al_actualizar() {
     ));
     assert_eq!(
         servicio.buscar_por_id(id).unwrap().nombre,
-        "Nombre original"
+        "NOMBRE ORIGINAL"
     );
 }
 
@@ -237,7 +237,7 @@ fn actualizar_el_nombre_no_reactiva_una_empresa_desactivada() {
     servicio.actualizar(id, "Nombre nuevo").unwrap();
 
     let empresa = servicio.buscar_por_id(id).unwrap();
-    assert_eq!(empresa.nombre, "Nombre nuevo");
+    assert_eq!(empresa.nombre, "NOMBRE NUEVO");
     assert!(!empresa.activo);
 }
 
@@ -261,7 +261,7 @@ fn nombre_duplicado_produce_error_semantico_y_conserva_integridad() {
     ));
     assert_eq!(
         servicio.buscar_por_id(segundo_id).unwrap().nombre,
-        "Empresa Dos"
+        "EMPRESA DOS"
     );
 }
 

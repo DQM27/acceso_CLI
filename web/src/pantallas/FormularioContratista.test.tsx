@@ -117,10 +117,10 @@ describe("FormularioContratista", () => {
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
 
     await waitFor(() => expect(mocks.crearContratista).toHaveBeenCalledTimes(1));
-    // La cédula y el nombre se limpian mientras se escribe (solo dígitos / solo letras).
+    // La cédula y el nombre se limpian mientras se escribe (solo dígitos / solo letras, en mayúscula).
     expect(mocks.crearContratista).toHaveBeenCalledWith({
       cedula: "112340567",
-      nombre: "Ana Pérez",
+      nombre: "ANA PÉREZ",
       empresa_id: "e1",
       tipo_ingreso: "PRAIND",
       fecha_vencimiento_praind: null,
@@ -207,7 +207,7 @@ describe("FormularioContratista", () => {
     await waitFor(() => expect(mocks.editarContratista).toHaveBeenCalledTimes(1));
     expect(mocks.editarContratista).toHaveBeenCalledWith("c1", {
       cedula: "200000002",
-      nombre: "Ana María Pérez",
+      nombre: "ANA MARÍA PÉREZ",
       empresa_id: "e2",
       tipo_ingreso: "SWAT",
       fecha_vencimiento_praind: null,

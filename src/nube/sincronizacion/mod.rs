@@ -34,6 +34,7 @@ mod historial;
 mod ingresos;
 mod paginado;
 mod proveedores;
+mod visitas;
 
 pub use catalogo::*;
 pub use catalogo_rutas::*;
@@ -57,6 +58,7 @@ use paginado::{
     avanzar_marca, guardar_por_pagina, llamar_rpc, obtener_json, obtener_json_paginado_con,
 };
 pub use proveedores::*;
+pub use visitas::*;
 
 /// Todo lo que hace falta para hablar con el receptor en nombre de este
 /// dispositivo. `apikey` es la clave publicable del proyecto (no un

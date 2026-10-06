@@ -946,6 +946,11 @@ fn registrar_ingreso_proveedor_verificado_rechaza_cedula_ya_activa() {
 }
 
 fn nucleo_con_actor_y_gafete_de_visita() -> Nucleo {
+    nucleo_con_actor_gafete_de_visita_y("")
+}
+
+/// Igual, más lo que agregue `sql_extra` antes de abrir el núcleo.
+fn nucleo_con_actor_gafete_de_visita_y(sql_extra: &str) -> Nucleo {
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();
     let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
@@ -959,6 +964,7 @@ fn nucleo_con_actor_y_gafete_de_visita() -> Nucleo {
              INSERT INTO gafetes (numero, tipo, estado) VALUES (5, 'VISITA', 'DISPONIBLE');",
         )
         .unwrap();
+    conexion.execute_batch(sql_extra).unwrap();
     drop(conexion);
 
     let nucleo = Nucleo::abrir(ruta).unwrap();
@@ -1021,4 +1027,143 @@ fn ingreso_por_correo_sin_motivo_lo_rechaza_el_nucleo() {
         resultado,
         Err(NucleoError::Rechazado { mensaje }) if mensaje == "Indique el motivo de la visita"
     ));
+}
+
+/// Una cita del anfitrión "Laura Mora" con un visitante, entre `desde` y
+/// `hasta` días contados desde hoy en Costa Rica (UTC-6, sin horario de
+/// verano): el mismo "hoy" que usa el núcleo, para que no falle de noche.
+fn cita_de_visita(id: i64, cedula: &str, desde: i32, hasta: i32) -> String {
+    format!(
+        "INSERT INTO citas (id, uuid, motivo, fecha_desde, fecha_hasta, anfitrion_nombre,
+             anfitrion_correo, estado, creado_en)
+         VALUES ({id}, 'uuid-cita-{id}', 'Auditoría', date('now', '-6 hours', '{desde} day'),
+             date('now', '-6 hours', '{hasta} day'), 'Laura Mora', 'laura@ejemplo.com', 'VIGENTE',
+             '2026-08-01T00:00:00Z');
+         INSERT INTO cita_visitantes (id, uuid, cita_id, cedula, nombre, placa_vehiculo)
+         VALUES ({id}, 'uuid-visitante-{id}', {id}, '{cedula}', 'Carlos Rojas', 'ABC123');"
+    )
+}
+
+/// Visita de punta a punta en el teléfono (sin vincular: sin chequeos de
+/// nube): la cédula escrita con guiones encuentra la cita, entra con gafete
+/// y en vehículo, al volver a verificarla se ofrece la salida, y después de
+/// salir vuelve a ofrecerse la entrada (la cita sigue vigente).
+#[test]
+fn visita_se_verifica_entra_y_sale_con_una_sola_cedula() {
+    let nucleo = nucleo_con_actor_gafete_de_visita_y(&cita_de_visita(1, "108470293", -1, 1));
+
+    let VerificacionVisita::Entrada { visita } =
+        nucleo.verificar_visita("01-0847-0293".to_string()).unwrap()
+    else {
+        panic!("se esperaba la entrada");
+    };
+    assert_eq!(visita.cedula, "108470293");
+    assert_eq!(visita.anfitrion, "Laura Mora");
+    assert_eq!(visita.motivo.as_deref(), Some("Auditoría"));
+    assert_eq!(visita.placa_sugerida.as_deref(), Some("ABC123"));
+    assert!(
+        visita.vigencia.starts_with("Hasta el "),
+        "{}",
+        visita.vigencia
+    );
+
+    nucleo
+        .registrar_entrada_visita(visita.cedula, Some(5), Some(" abc123 ".to_string()))
+        .unwrap();
+
+    let VerificacionVisita::Salida { visita: adentro } =
+        nucleo.verificar_visita("1 0847 0293".to_string()).unwrap()
+    else {
+        panic!("se esperaba la salida");
+    };
+    assert_eq!(adentro.gafete_numero, Some(5));
+    assert_eq!(adentro.placa.as_deref(), Some("ABC123"));
+    assert_eq!(adentro.nombre, "Carlos Rojas");
+    assert_eq!(adentro.usuario_entrada_nombre, "Actor Test");
+    assert!(matches!(adentro.origen, OrigenVisita::EsteEquipo { .. }));
+    assert_eq!(
+        nucleo.listar_visitas_adentro().unwrap(),
+        vec![adentro.clone()]
+    );
+
+    nucleo.registrar_salida_visita(adentro.origen).unwrap();
+    assert!(nucleo.listar_visitas_adentro().unwrap().is_empty());
+    assert!(matches!(
+        nucleo.verificar_visita("108470293".to_string()).unwrap(),
+        VerificacionVisita::Entrada { .. }
+    ));
+}
+
+/// Una visita que entró por la PC (caché `movimientos_visita_remotos`)
+/// aparece en la lista con su origen, y al verificar su cédula se ofrece la
+/// salida, no una entrada nueva.
+#[test]
+fn visita_que_entro_por_el_otro_equipo_se_lista_y_ofrece_la_salida() {
+    let nucleo = nucleo_con_actor_gafete_de_visita_y(&format!(
+        "{}
+         INSERT INTO movimientos_visita_remotos (uuid, sitio_id, cedula, nombre, empresa,
+             anfitrion_nombre, motivo, gafete_numero, placa, hora_entrada,
+             usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en)
+         VALUES ('uuid-pc', 's1', '108470293', 'Carlos Rojas', NULL, 'Laura Mora',
+             'Auditoría', 7, NULL, '2026-10-06T14:00:00Z', 'Guarda PC', 'pc',
+             '2026-10-06T14:00:00Z');",
+        cita_de_visita(1, "108470293", -1, 1)
+    ));
+
+    let lista = nucleo.listar_visitas_adentro().unwrap();
+    assert_eq!(lista.len(), 1);
+    assert_eq!(
+        lista[0].origen,
+        OrigenVisita::OtroEquipo {
+            uuid: "uuid-pc".into()
+        }
+    );
+    assert_eq!(lista[0].usuario_entrada_nombre, "Guarda PC");
+    assert_eq!(lista[0].gafete_numero, Some(7));
+
+    let VerificacionVisita::Salida { visita } =
+        nucleo.verificar_visita("1-0847-0293".to_string()).unwrap()
+    else {
+        panic!("se esperaba la salida de la visita de la PC");
+    };
+    assert_eq!(visita, lista[0]);
+}
+
+/// Una cita para otro día es un aviso informativo; sin cita, un aviso
+/// común; y el gafete ocupado lo frena el núcleo al registrar.
+#[test]
+fn visita_sin_cita_de_hoy_es_un_aviso_y_el_gafete_ocupado_se_rechaza() {
+    let nucleo = nucleo_con_actor_gafete_de_visita_y(&format!(
+        "{}{}{}",
+        cita_de_visita(1, "108470293", 3, 4),
+        cita_de_visita(2, "200000002", 0, 0),
+        cita_de_visita(3, "300000003", 0, 0),
+    ));
+
+    assert!(matches!(
+        nucleo.verificar_visita("108470293".to_string()).unwrap(),
+        VerificacionVisita::Aviso {
+            informativo: true,
+            ..
+        }
+    ));
+    assert!(matches!(
+        nucleo.verificar_visita("999999998".to_string()).unwrap(),
+        VerificacionVisita::Aviso {
+            informativo: false,
+            ..
+        }
+    ));
+
+    nucleo
+        .registrar_entrada_visita("200000002".to_string(), Some(5), None)
+        .unwrap();
+    assert!(matches!(
+        nucleo.registrar_entrada_visita("300000003".to_string(), Some(5), None),
+        Err(NucleoError::Rechazado { .. })
+    ));
+    // Sin gafete (S/G) y caminando sí puede entrar.
+    nucleo
+        .registrar_entrada_visita("300000003".to_string(), None, None)
+        .unwrap();
 }

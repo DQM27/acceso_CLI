@@ -16,6 +16,7 @@ import uniffi.control_acceso_mobile.IngresoCorreoRemoto
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.NucleoException
 import uniffi.control_acceso_mobile.RegistroIngresoCorreoActivoResumen
+import uniffi.control_acceso_mobile.nombreMientrasSeEscribe
 
 /// Fila fusionada local+remota de los ingresos por correo -- mismo criterio
 /// que [FilaProveedorActiva].
@@ -102,8 +103,10 @@ class CorreoViewModel(
         }
     }
 
+    /// En mayúscula al escribir (y al leerlo del documento): la regla de todo
+    /// nombre la dicta el núcleo (`nombreMientrasSeEscribe`).
     fun cambiarNombre(nuevo: String) {
-        nombre = nuevo
+        nombre = nombreMientrasSeEscribe(nuevo)
     }
 
     fun cambiarMotivo(nuevo: String) {
@@ -120,7 +123,7 @@ class CorreoViewModel(
         val nombreCompleto = listOfNotNull(nombreLeido, apellidosLeido)
             .filter { it.isNotBlank() }
             .joinToString(" ")
-        if (nombreCompleto.isNotBlank()) nombre = nombreCompleto
+        if (nombreCompleto.isNotBlank()) cambiarNombre(nombreCompleto)
     }
 
     fun registrarIngreso(gafeteNumero: Long, onExito: () -> Unit) {

@@ -56,6 +56,8 @@ pub struct ResumenSincronizacionNube {
     pub cierres_recibidos: u32,
     pub cierres_recibidos_proveedor: u32,
     pub cierres_recibidos_correo: u32,
+    /// Visitas de este equipo a las que el otro equipo dio salida.
+    pub cierres_recibidos_visita: u32,
     /// Ingresos que el otro dispositivo del sitio tiene abiertos.
     pub remotos_abiertos: u32,
     pub catalogo: ResumenCatalogo,
@@ -154,6 +156,10 @@ fn recibir_en_orden(
         resumen.cierres_recibidos_correo =
             sincronizacion::recibir_cierres_de_ingresos_propios_correo(conexion, contexto)?;
     }
+    if alcance.visitas {
+        resumen.cierres_recibidos_visita =
+            sincronizacion::recibir_cierres_de_movimientos_visita_propios(conexion, contexto)?;
+    }
     if alcance.ingresos {
         let remotos = sincronizacion::recibir_ingresos_abiertos(conexion, contexto)?;
         resumen.remotos_abiertos = u32::try_from(remotos.len()).unwrap_or(u32::MAX);
@@ -163,6 +169,11 @@ fn recibir_en_orden(
     }
     if alcance.ingresos_correo {
         sincronizacion::recibir_ingresos_correo_abiertos(conexion, contexto)?;
+    }
+    // En los dos perfiles: el teléfono también muestra las visitas que
+    // están adentro por la PC (el historial sigue siendo sólo de la PC).
+    if alcance.visitas {
+        sincronizacion::recibir_movimientos_visita_abiertos(conexion, contexto)?;
     }
     if alcance.gafetes_provisionales {
         sincronizacion::recibir_prestamos_gafete_provisional_abiertos(conexion, contexto)?;
@@ -371,7 +382,24 @@ mod tests {
         let (_, movil) = correr(AlcanceSincronizacion::completo(), PerfilDispositivo::Movil);
 
         assert!(movil.len() < escritorio.len(), "{movil:#?}");
-        assert!(!pidio(&movil, "/movimientos_visita"), "{movil:#?}");
+        // De las visitas, el teléfono sólo pide las abiertas (para la lista
+        // de quién está adentro), nunca el historial: la única consulta que
+        // pide `dispositivo_salida_id` es la del historial.
+        let visitas_movil: Vec<&String> = movil
+            .iter()
+            .filter(|pedido| pedido.contains("/movimientos_visita"))
+            .collect();
+        assert!(!visitas_movil.is_empty(), "{movil:#?}");
+        assert!(
+            visitas_movil
+                .iter()
+                .all(|pedido| !pedido.contains("dispositivo_salida_id")),
+            "{visitas_movil:#?}"
+        );
+        assert!(
+            pidio(&escritorio, "dispositivo_salida_id"),
+            "{escritorio:#?}"
+        );
         // La consulta del historial de ingresos es la única que pide
         // `resultado_acceso`.
         assert!(pidio(&escritorio, "resultado_acceso"), "{escritorio:#?}");

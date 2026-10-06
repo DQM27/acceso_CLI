@@ -230,6 +230,22 @@ fn validar(
     }
 }
 
+// ---- Nombres (todas las interfaces) ----
+
+/// Todo nombre de persona o empresa, como se guarda: espacios de más fuera
+/// y en mayúscula (`nombre::nombre_en_mayusculas`).
+#[wasm_bindgen(js_name = nombreEnMayusculas)]
+pub fn nombre_en_mayusculas(texto: &str) -> String {
+    control_acceso_reglas::nombre::nombre_en_mayusculas(texto)
+}
+
+/// Mientras se escribe en un campo de nombre: sólo mayúscula, sin tocar los
+/// espacios (`nombre::nombre_mientras_se_escribe`).
+#[wasm_bindgen(js_name = nombreMientrasSeEscribe)]
+pub fn nombre_mientras_se_escribe(texto: &str) -> String {
+    control_acceso_reglas::nombre::nombre_mientras_se_escribe(texto)
+}
+
 // ---- Visitas (web de visitas) ----
 
 /// Documento de un visitante en su forma única (la misma que reconoce el

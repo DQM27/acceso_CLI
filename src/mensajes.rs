@@ -212,6 +212,16 @@ pub fn fecha_larga(fecha: chrono::NaiveDate) -> String {
     format!("{dia} {} de {mes}", fecha.day())
 }
 
+/// Hasta cuándo vale una cita que ya vale hoy: "Sólo hoy" o "Hasta el
+/// jueves 8 de octubre". La pantalla lo muestra tal cual.
+pub fn vigencia_cita(fecha_hasta: chrono::NaiveDate, hoy: chrono::NaiveDate) -> String {
+    if fecha_hasta <= hoy {
+        "Sólo hoy".into()
+    } else {
+        format!("Hasta el {}", fecha_larga(fecha_hasta))
+    }
+}
+
 /// La visita existe pero no vale hoy: se dice cuál es y de quién, en vez
 /// de un "no tiene visita" que confunde a la portería.
 fn mensaje_sin_cita_vigente(motivo: MotivoDenegacionVisita, anfitrion: &str) -> String {
@@ -632,6 +642,24 @@ pub fn mensaje_ingreso_correo_verificado(
 }
 
 #[cfg(feature = "nube")]
+pub fn mensaje_entrada_visita_verificada(
+    error: crate::application::EntradaVisitaVerificadaError,
+) -> String {
+    use crate::application::EntradaVisitaVerificadaError;
+
+    match error {
+        EntradaVisitaVerificadaError::Servicio(error) => mensaje_cita(error),
+        EntradaVisitaVerificadaError::ActivoEnOtroSitio { sitio } => {
+            format!("El visitante ya tiene una visita activa en {sitio}")
+        }
+        EntradaVisitaVerificadaError::GafeteOcupadoEnSitio { numero } => {
+            format!("El gafete {numero} ya está en uso en otro dispositivo del sitio")
+        }
+        EntradaVisitaVerificadaError::Nube(error) => mensaje_gestion_nube(error),
+    }
+}
+
+#[cfg(feature = "nube")]
 pub fn mensaje_entrega_gafete_provisional_verificada(
     error: crate::application::EntregaGafeteProvisionalVerificadaError,
 ) -> String {
@@ -742,6 +770,17 @@ mod tests {
         let dia = |t: &str| t.parse::<chrono::NaiveDate>().unwrap();
         assert_eq!(super::fecha_larga(dia("2026-10-06")), "martes 6 de octubre");
         assert_eq!(super::fecha_larga(dia("2026-03-01")), "domingo 1 de marzo");
+    }
+
+    #[test]
+    fn la_vigencia_dice_solo_hoy_o_hasta_que_dia() {
+        let dia = |t: &str| t.parse::<chrono::NaiveDate>().unwrap();
+        let hoy = dia("2026-10-05");
+        assert_eq!(super::vigencia_cita(hoy, hoy), "Sólo hoy");
+        assert_eq!(
+            super::vigencia_cita(dia("2026-10-08"), hoy),
+            "Hasta el jueves 8 de octubre"
+        );
     }
 
     #[test]

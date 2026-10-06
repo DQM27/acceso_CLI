@@ -1,4 +1,5 @@
 import type { HistorialIngresoProveedorRemoto } from "../api/proveedores";
+import { nombreMientrasSeEscribe } from "../nombres";
 
 /** Un proveedor que ya ingresó alguna vez al sitio, con los datos de su
  * ingreso más reciente. */
@@ -34,5 +35,5 @@ export function datosNuevoDesdeBusqueda(texto: string): { cedula: string; nombre
   const recortado = texto.trim();
   return /^[\d\s-]+$/.test(recortado)
     ? { cedula: recortado, nombre: "" }
-    : { cedula: "", nombre: recortado.toUpperCase() };
+    : { cedula: "", nombre: nombreMientrasSeEscribe(recortado) };
 }

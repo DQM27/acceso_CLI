@@ -11,6 +11,7 @@ use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::movimiento_visita_repository::{
     MovimientoVisitaRepository, SqliteMovimientoVisitaRepository,
 };
+use crate::domain::cedula::Cedula;
 use crate::models::cita::{Cita, CitaVisitante};
 use crate::models::movimiento_visita::MovimientoVisitaActivoResumen;
 use crate::services::autenticacion_service::UsuarioSesion;
@@ -110,6 +111,37 @@ impl AppCore {
         &self,
     ) -> Result<Vec<MovimientoVisitaActivoResumen>, DatabaseError> {
         SqliteMovimientoVisitaRepository::new(&self.connection).listar_activos()
+    }
+
+    /// La visita de esa cédula abierta por el OTRO equipo de la unidad
+    /// (caché `movimientos_visita_remotos`), o `None`. Para ofrecer la
+    /// salida al verificar la cédula aunque haya entrado por la PC. Sin
+    /// `actor`: es una lectura.
+    #[cfg(feature = "nube")]
+    pub fn visita_remota_por_cedula(
+        &self,
+        cedula: &str,
+    ) -> Result<Option<crate::nube::MovimientoVisitaRemoto>, DatabaseError> {
+        Ok(self.leer_visitas_remotas(Some(cedula))?.into_iter().next())
+    }
+
+    /// La visita abierta en este equipo de esa cédula, comparada en forma
+    /// única (como la guarda el check-in), o `None`. Para ofrecer la salida
+    /// apenas se verifica la cédula, sin lista de por medio. Sin `actor`: es
+    /// una lectura.
+    pub fn visita_activa_por_cedula(
+        &self,
+        cedula: &str,
+    ) -> Result<Option<MovimientoVisitaActivoResumen>, DatabaseError> {
+        let Ok(buscada) = Cedula::normalizar(cedula) else {
+            return Ok(None);
+        };
+        Ok(self
+            .listar_visitas_activas()?
+            .into_iter()
+            .find(|movimiento| {
+                Cedula::normalizar(&movimiento.cedula).is_ok_and(|propia| propia == buscada)
+            }))
     }
 
     /// Agenda de visitas del sitio -- lectura pura de `citas`/

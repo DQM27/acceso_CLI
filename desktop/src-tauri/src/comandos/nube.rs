@@ -701,6 +701,39 @@ pub fn cerrar_ingreso_correo_remoto(
         .map_err(mensaje_sincronizacion)
 }
 
+/// Visitas agendadas abiertas por el otro equipo de la unidad (caché
+/// `movimientos_visita_remotos`). Sin permiso de nube, lista vacía: mismo
+/// criterio que el teléfono, para no romper la vista "Adentro".
+#[tauri::command]
+pub fn listar_visitas_remotas(
+    state: tauri::State<GuiState>,
+) -> Result<Vec<nube::MovimientoVisitaRemoto>, String> {
+    let actor = state.sesion_activa()?;
+    Ok(state
+        .core()
+        .listar_visitas_remotas(&actor)
+        .unwrap_or_default())
+}
+
+/// Salida de una visita que entró por el otro equipo: se cierra en la nube
+/// (mismo criterio que `cerrar_ingreso_correo_remoto`).
+#[tauri::command]
+pub fn cerrar_visita_remota(uuid: String, state: tauri::State<GuiState>) -> Result<(), String> {
+    let actor = state.sesion_activa()?;
+    let token = autenticar(&state)?;
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+    let conexion = state.conexion_secundaria()?;
+    let hora = state.core().ahora_utc();
+    nube::cerrar_movimiento_visita_remoto(&conexion, &contexto, &uuid, &actor.nombre, hora)
+        .map_err(mensaje_sincronizacion)
+}
+
 /// Espejo de `listar_ingresos_proveedor_remotos`, pero contra la caché
 /// `prestamos_gafete_provisional_remotos`.
 #[tauri::command]

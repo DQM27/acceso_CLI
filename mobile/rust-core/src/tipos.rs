@@ -499,8 +499,8 @@ pub enum TipoMovimientoGafete {
     Proveedor,
     ProvisionalKof,
     PorCorreo,
-    /// Visita (gafete de visita). El teléfono no registra visitas, así que
-    /// nunca le llega; está para que el espejo sea completo.
+    /// Visita (gafete de visita): visitas agendadas, en escritorio o en el
+    /// teléfono (`visitas.rs`).
     Visita,
 }
 

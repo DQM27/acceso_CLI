@@ -15,8 +15,8 @@ use crate::models::medio_ingreso::MedioIngreso;
 use crate::nube::{CacheTokenDispositivo, ContextoSincronizacion, TokenDispositivo};
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::{
-    GafeteProvisionalServiceError, IngresoCorreoServiceError, IngresoProveedorServiceError,
-    RegistroIngresoServiceError,
+    CitaServiceError, GafeteProvisionalServiceError, IngresoCorreoServiceError,
+    IngresoProveedorServiceError, RegistroIngresoServiceError,
 };
 use crate::services::registro_ingreso_service::{
     BloqueoIngreso, PreparacionIngreso, ResultadoRegistroEntrada,
@@ -453,6 +453,85 @@ pub fn registrar_ingreso_correo_verificado<G: Deref<Target = AppCore>>(
             gafete_numero: datos.gafete_numero,
         },
     )?)
+}
+
+// ---- Entrada de una visita agendada ----
+
+#[derive(Debug, thiserror::Error)]
+pub enum EntradaVisitaVerificadaError {
+    #[error(transparent)]
+    Servicio(#[from] CitaServiceError),
+    #[error("el visitante ya tiene una visita activa en {sitio}")]
+    ActivoEnOtroSitio { sitio: String },
+    #[error("el gafete de visita {numero} ya está en uso en otro dispositivo del sitio")]
+    GafeteOcupadoEnSitio { numero: i64 },
+    #[error(transparent)]
+    Nube(#[from] GestionNubeError),
+}
+
+/// Entrada de una visita agendada con todas sus reglas. Antes estos chequeos
+/// vivían en el comando de escritorio; ahora los comparten escritorio y
+/// teléfono:
+/// 1. con nube configurada, en vivo y a la vez:
+///    - el gafete de visita (si lleva) no está en uso en el otro dispositivo
+///      del sitio, ni por una visita ni por un ingreso por correo (los dos
+///      reparten el mismo catálogo). Si no se puede verificar, no se
+///      registra: un gafete físico no puede duplicarse;
+///    - el visitante no está adentro en otra unidad ni con el otro equipo de
+///      esta. De **mejor esfuerzo**: sin red se registra, y si chocó lo frena
+///      la nube al sincronizar (`movimientos_visita_cedula_activa_idx`);
+/// 2. escribe (`AppCore::registrar_entrada_visita`: vuelve a verificar la
+///    cita, el gafete local y que no esté adentro en este equipo).
+pub fn registrar_entrada_visita_verificada<G: Deref<Target = AppCore>>(
+    nucleo: impl Fn() -> G,
+    nube: &CacheTokenDispositivo,
+    actor: &UsuarioSesion,
+    cedula: &str,
+    gafete_numero: Option<i64>,
+    placa: Option<String>,
+) -> Result<i64, EntradaVisitaVerificadaError> {
+    if nube.vinculado() {
+        match autenticar(&nucleo, nube, actor) {
+            Ok(token) => {
+                let contexto = contexto(&token);
+                let (activo_en_otro_sitio, gafete_ocupado) = std::thread::scope(|hilos| {
+                    let consulta_gafete = hilos.spawn(|| {
+                        gafete_numero
+                            .map(|numero| gafete_de_visita_ocupado(&contexto, numero))
+                            .transpose()
+                    });
+                    let activo = crate::nube::visitante_activo_en_otro_sitio(&contexto, cedula);
+                    (activo, unir_hilo(consulta_gafete))
+                });
+                if let (Some(numero), Some(true)) = (
+                    gafete_numero,
+                    gafete_ocupado.map_err(GestionNubeError::from)?,
+                ) {
+                    return Err(EntradaVisitaVerificadaError::GafeteOcupadoEnSitio { numero });
+                }
+                if let Ok(Some(sitio)) = activo_en_otro_sitio {
+                    return Err(EntradaVisitaVerificadaError::ActivoEnOtroSitio { sitio });
+                }
+            }
+            // Sin gafete no hay nada que deba verificarse sí o sí.
+            Err(error) if gafete_numero.is_some() => return Err(error.into()),
+            Err(error) => log::info!("no se pudo verificar la visita en la nube: {error}"),
+        }
+    }
+
+    Ok(nucleo().registrar_entrada_visita(actor, cedula, gafete_numero, placa)?)
+}
+
+/// El gafete de visita está en manos de otro dispositivo del sitio, por una
+/// visita o por un ingreso por correo.
+fn gafete_de_visita_ocupado(
+    contexto: &ContextoSincronizacion<'_>,
+    numero: i64,
+) -> Result<bool, crate::nube::SincronizacionError> {
+    Ok(
+        crate::nube::gafete_de_visita_ocupado_en_otro_dispositivo(contexto, numero)?
+            || crate::nube::gafete_de_correo_ocupado_en_otro_dispositivo(contexto, numero)?,
+    )
 }
 
 // ---- Entrega de gafete provisional KOF ----

@@ -9,7 +9,8 @@
 use crate::database::error::DatabaseError;
 use crate::domain::autorizacion::Operacion;
 use crate::nube::{
-    IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, PrestamoGafeteProvisionalRemoto,
+    IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, MovimientoVisitaRemoto,
+    PrestamoGafeteProvisionalRemoto,
 };
 use crate::services::autenticacion_service::UsuarioSesion;
 
@@ -316,6 +317,48 @@ impl AppCore {
                     gafete_numero: row.get(5)?,
                     hora_entrada: row.get(6)?,
                     usuario_entrada_nombre: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(filas)
+    }
+
+    /// Visitas agendadas abiertas por el otro equipo de la unidad (caché
+    /// `movimientos_visita_remotos`), de la más vieja a la más nueva.
+    pub fn listar_visitas_remotas(
+        &self,
+        actor: &UsuarioSesion,
+    ) -> Result<Vec<MovimientoVisitaRemoto>, GestionNubeError> {
+        self.autorizar_uso_nube(actor)?;
+        Ok(self.leer_visitas_remotas(None)?)
+    }
+
+    /// Lectura de la caché `movimientos_visita_remotos`; con `cedula`, sólo
+    /// la de esa persona (comparada en forma única).
+    pub(super) fn leer_visitas_remotas(
+        &self,
+        cedula: Option<&str>,
+    ) -> rusqlite::Result<Vec<MovimientoVisitaRemoto>> {
+        let mut statement = self.connection.prepare(
+            "SELECT uuid, cedula, nombre, empresa, anfitrion_nombre, motivo, gafete_numero,
+                    placa, hora_entrada, usuario_entrada_nombre
+             FROM movimientos_visita_remotos
+             WHERE ?1 IS NULL OR NORMALIZAR_CEDULA(cedula) = NORMALIZAR_CEDULA(?1)
+             ORDER BY hora_entrada",
+        )?;
+        let filas = statement
+            .query_map([cedula], |row| {
+                Ok(MovimientoVisitaRemoto {
+                    uuid: row.get(0)?,
+                    cedula: row.get(1)?,
+                    nombre: row.get(2)?,
+                    empresa: row.get(3)?,
+                    anfitrion_nombre: row.get(4)?,
+                    motivo: row.get(5)?,
+                    gafete_numero: row.get(6)?,
+                    placa: row.get(7)?,
+                    hora_entrada: row.get(8)?,
+                    usuario_entrada_nombre: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;

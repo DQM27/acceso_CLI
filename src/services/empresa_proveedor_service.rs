@@ -28,7 +28,7 @@ where
         let nombre = normalizar_nombre(nombre)?;
         let empresa = EmpresaProveedor {
             id: 0,
-            nombre: nombre.to_string(),
+            nombre,
             activo: true,
         };
 
@@ -48,7 +48,8 @@ where
         nombre: &str,
     ) -> Result<EmpresaProveedor, EmpresaProveedorServiceError> {
         self.empresas
-            .buscar_por_nombre(nombre.trim())?
+            // Con la misma regla con la que se guardó.
+            .buscar_por_nombre(&control_acceso_reglas::nombre::nombre_en_mayusculas(nombre))?
             .ok_or(EmpresaProveedorServiceError::EmpresaNoEncontrada)
     }
 
@@ -102,8 +103,10 @@ fn mapear_nombre_duplicado(error: DatabaseError) -> EmpresaProveedorServiceError
     }
 }
 
-fn normalizar_nombre(nombre: &str) -> Result<&str, EmpresaProveedorServiceError> {
-    let nombre = nombre.trim();
+/// Como todo nombre de persona o empresa: en mayúscula y sin espacios de
+/// más (`control_acceso_reglas::nombre`).
+fn normalizar_nombre(nombre: &str) -> Result<String, EmpresaProveedorServiceError> {
+    let nombre = control_acceso_reglas::nombre::nombre_en_mayusculas(nombre);
 
     if nombre.is_empty() {
         return Err(EmpresaProveedorServiceError::NombreEmpresaVacio);

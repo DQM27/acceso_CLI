@@ -18,9 +18,10 @@ import uniffi.control_acceso_mobile.Nucleo
 /// en el catálogo de contratistas. En vez de sumar una pestaña más a una
 /// fila ya apretada, la que era "Proveedores" se renombra y adentro un
 /// selector elige el tipo, igual que el selector de vista de la pantalla
-/// de ingreso: "Proveedor" ([PantallaProveedores]) o "Por correo"
-/// ([PantallaPorCorreo], visitas autorizadas por correo mientras se termina
-/// el módulo de Visitas). Cuando llegue Visitas, entra acá mismo.
+/// de ingreso: "Visita" ([PantallaVisitas], las agendadas en la web: el
+/// camino principal, por eso va primero), "Proveedor" ([PantallaProveedores])
+/// o "Por correo" ([PantallaPorCorreo], visitas sin agendar autorizadas por
+/// correo).
 @Composable
 fun PantallaExternos(
     nucleo: Nucleo,
@@ -35,7 +36,8 @@ fun PantallaExternos(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
         )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when (TipoExterno.entries.getOrElse(tipo) { TipoExterno.PROVEEDOR }) {
+            when (TipoExterno.entries.getOrElse(tipo) { TipoExterno.VISITA }) {
+                TipoExterno.VISITA -> PantallaVisitas(nucleo, refrescarNube)
                 TipoExterno.PROVEEDOR -> PantallaProveedores(nucleo, refrescarNube)
                 TipoExterno.POR_CORREO -> PantallaPorCorreo(nucleo, refrescarNube)
             }
@@ -44,6 +46,7 @@ fun PantallaExternos(
 }
 
 enum class TipoExterno(val etiqueta: String) {
+    VISITA("Visita"),
     PROVEEDOR("Proveedor"),
     POR_CORREO("Por correo"),
 }
