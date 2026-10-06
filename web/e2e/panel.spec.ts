@@ -265,7 +265,8 @@ test("Contratistas: Editar corrige los datos con las reglas del núcleo", async 
   await modal.getByLabel("Nombre").fill("Contratista corregido");
   const pedido = page.waitForRequest("**/functions/v1/admin-editar-contratista");
   await modal.getByRole("button", { name: "Guardar" }).click();
-  expect((await pedido).postDataJSON()).toMatchObject({ id: "1", nombre: "Contratista corregido", empresa_id: "e1" });
+  // El nombre ya viaja en mayúscula: regla del núcleo, aplicada mientras se escribe.
+  expect((await pedido).postDataJSON()).toMatchObject({ id: "1", nombre: "CONTRATISTA CORREGIDO", empresa_id: "e1" });
 
   await expect(page.getByText("CONTRATISTA CORREGIDO actualizado.")).toBeVisible();
   await expect(modal).toBeHidden();
@@ -283,8 +284,8 @@ test("Usuarios: Editar cambia nombre y rol, no la cédula", async ({ page }) => 
   await modal.getByLabel("Rol").selectOption("ADMINISTRADOR");
   const pedido = page.waitForRequest((p) => p.url().includes("/rest/v1/usuarios") && p.method() === "PATCH");
   await modal.getByRole("button", { name: "Guardar" }).click();
-  expect((await pedido).postDataJSON()).toEqual({ nombre: "Operadora nueva", rol: "ADMINISTRADOR" });
-  await expect(page.getByText("Operadora nueva actualizado.")).toBeVisible();
+  expect((await pedido).postDataJSON()).toEqual({ nombre: "OPERADORA NUEVA", rol: "ADMINISTRADOR" });
+  await expect(page.getByText("OPERADORA NUEVA actualizado.")).toBeVisible();
 });
 
 test("Sesiones muestra la bitácora con el motivo del cierre", async ({ page }) => {

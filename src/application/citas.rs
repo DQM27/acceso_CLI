@@ -117,6 +117,7 @@ impl AppCore {
     /// (caché `movimientos_visita_remotos`), o `None`. Para ofrecer la
     /// salida al verificar la cédula aunque haya entrado por la PC. Sin
     /// `actor`: es una lectura.
+    #[cfg(feature = "nube")]
     pub fn visita_remota_por_cedula(
         &self,
         cedula: &str,

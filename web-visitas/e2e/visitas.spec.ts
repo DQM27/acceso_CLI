@@ -258,8 +258,9 @@ test("agendar: valida, dos lugares, reintento idempotente y aviso", async ({ pag
     p_motivo: "Revisión de equipos",
     p_sitios: [sitios[0].id, sitios[1].id],
     p_visitantes: [
-      expect.objectContaining({ nombre: "Ana Mora", cedula: "112340567" }),
-      expect.objectContaining({ nombre: "Luis Rojas", cedula: "204560789" }),
+      // Todo nombre en mayúscula: regla del núcleo (`reglas/src/nombre.rs`).
+      expect.objectContaining({ nombre: "ANA MORA", cedula: "112340567" }),
+      expect.objectContaining({ nombre: "LUIS ROJAS", cedula: "204560789" }),
     ],
   });
   await expect(page.getByRole("region", { name: "Próximas" }).getByText("Revisión de equipos")).toBeVisible();
@@ -280,8 +281,8 @@ test("agendar a alguien que ya vino, desde el buscador", async ({ page }, info) 
   await expect(lista.getByRole("option")).toHaveCount(2);
   await lista.getByRole("option", { name: /Carla Vargas/ }).click();
   await expect(lista).toHaveCount(0);
-  await expect(page.getByLabel(/^Nombre/)).toHaveValue("Carla Vargas");
-  await expect(page.getByLabel("Empresa")).toHaveValue("Limpiezas del Sur");
+  await expect(page.getByLabel(/^Nombre/)).toHaveValue("CARLA VARGAS");
+  await expect(page.getByLabel("Empresa")).toHaveValue("LIMPIEZAS DEL SUR");
   await expect(page.getByLabel(/^Nombre/)).toHaveCount(1);
   await page.getByRole("button", { name: "Brisas" }).click();
   await page.getByRole("button", { name: "Agendar", exact: true }).click();
@@ -398,7 +399,7 @@ test("el buscador se maneja con el teclado", async ({ page }) => {
   await buscador.press("ArrowDown");
   await expect(page.getByRole("option", { name: /Mario Solís/ })).toHaveAttribute("aria-selected", "true");
   await buscador.press("Enter");
-  await expect(page.getByLabel(/^Nombre/)).toHaveValue("Mario Solís");
+  await expect(page.getByLabel(/^Nombre/)).toHaveValue("MARIO SOLÍS");
   await expect(page.getByLabel("Placa")).toHaveValue("CL1234");
   await buscador.click();
   await expect(page.getByRole("listbox")).toBeVisible();
