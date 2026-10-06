@@ -54,8 +54,8 @@ corte a mitad:
 
 Fuera de la cadena:
 - `prueba/radix-visitas`: ya está entera dentro de la cadena; no lleva PR.
-- `feat/analisis-syncfusion`: otra línea, con su propia migración
-  (`panel_resumen_movimientos`, ya aplicada en staging). PR aparte.
+- `feat/analisis-syncfusion`: reemplazada por `feat/analisis-pivot` (sólo la
+  tabla dinámica); su migración `panel_resumen_movimientos` va en esa rama.
 - `claude/rediseno-web-visitas`: reemplazada por la web de visitas nueva; no
   se mergea (ver 0.6).
 - PR de Dependabot (#92, #94, #99, #103, #104, #106): después de la cadena.
@@ -147,9 +147,12 @@ group by 1, 2 having count(*) > 1;
 - **Rama vieja `claude/rediseno-web-visitas`:** `rediseno_visitas_tablas_nuevas`,
   `optimiza_rls_e_indices_de_visitas` y `rediseno_visitas_rpcs_vista_busqueda`.
   La web de visitas nueva no las usa (ver 2.8).
-- **`feat/analisis-syncfusion`:** `panel_resumen_movimientos` (en esa rama,
-  `20260930130100_panel_resumen_movimientos.sql`). Es otra línea de trabajo, con
-  su propio PR. Su versión no choca con las de main.
+- **`panel_resumen_movimientos`** (Análisis del panel): entra por
+  `feat/analisis-pivot` como `20261006120000_panel_resumen_movimientos.sql`
+  (renumerada; en staging figura como `20261002121810`). El cuerpo es el mismo
+  que el de staging (verificado 2026-10-06) y funciona con el esquema actual.
+  Es `create or replace` y sólo agrega una función: no rompe apps viejas.
+  `feat/analisis-syncfusion` queda reemplazada por esa rama.
 - **`rutas_documento_tramo_viaje`** (y sus dos arreglos): no existen en el repo
   (ver 2.4).
 - **`crea_personas_vetadas` / `revierte_personas_vetadas`:** se aplicaron y se

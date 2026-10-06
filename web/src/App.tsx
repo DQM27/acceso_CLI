@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "sonner";
-import { BellRing, DoorOpen, History, LogIn, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
+import { BellRing, ChartColumn, DoorOpen, History, LogIn, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
@@ -16,6 +16,9 @@ const Dispositivos = lazy(() => import("./pantallas/Dispositivos"));
 const Historial = lazy(() => import("./pantallas/Historial"));
 const Contratistas = lazy(() => import("./pantallas/Contratistas"));
 const AdentroAhora = lazy(() => import("./pantallas/AdentroAhora"));
+// Trae la tabla dinámica de Syncfusion, el bloque más pesado del panel: sólo
+// se descarga al entrar a Análisis.
+const Analisis = lazy(() => import("./pantallas/Analisis"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 const Sesiones = lazy(() => import("./pantallas/Sesiones"));
 const Avisos = lazy(() => import("./pantallas/Avisos"));
@@ -23,6 +26,7 @@ const Avisos = lazy(() => import("./pantallas/Avisos"));
 export type Seccion =
   | "dispositivos"
   | "historial"
+  | "analisis"
   | "adentro"
   | "contratistas"
   | "usuarios"
@@ -56,6 +60,7 @@ export function rutaSeccion(id: Seccion): string {
 // se llame igual en las dos apps.
 const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "historial", etiqueta: "Historial", Icono: History },
+  { id: "analisis", etiqueta: "Análisis", Icono: ChartColumn },
   { id: "adentro", etiqueta: "Adentro ahora", Icono: DoorOpen },
   { id: "contratistas", etiqueta: "Contratistas", Icono: Users },
   { id: "usuarios", etiqueta: "Usuarios", Icono: UserCog },
@@ -284,6 +289,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                 <Suspense fallback={<div className="pantalla-cuerpo" role="status">Cargando pantalla…</div>}>
                   {id === "historial" ? (
                     <Historial />
+                  ) : id === "analisis" ? (
+                    <Analisis />
                   ) : id === "adentro" ? (
                     <AdentroAhora />
                   ) : id === "contratistas" ? (

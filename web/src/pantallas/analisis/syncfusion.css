@@ -1,0 +1,73 @@
+/*
+ * Tema Fluent 2 de Syncfusion (variante "lite", sin los tamaños táctiles
+ * agrandados) sólo para lo que usa la pantalla Análisis: la tabla dinámica y
+ * su lista de campos, que arrastran grilla, botones, diálogos y listas. Los
+ * gráficos son SVG y no necesitan hoja de estilos.
+ */
+@import "@syncfusion/ej2-fluent2-theme/styles/pivotview/index-lite.css";
+
+/*
+ * Colores de marca y superficies desde los tokens del panel (diseno.css), que
+ * ya cambian con el tema claro/oscuro. El resto de la paleta (hover, estados,
+ * sombras) la pone Fluent 2 según `e-dark-mode`, que `syncfusion.ts`
+ * sincroniza con `data-theme`. `:root.e-dark-mode` para ganarle al bloque
+ * oscuro de Fluent 2 cuando está activo.
+ */
+:root,
+:root.e-dark-mode {
+  --e-font-name: var(--fuente);
+  --color-sf-primary: var(--acento);
+  --color-sf-primary-dark: var(--acento-presionado);
+  --color-sf-primary-light: var(--acento-suave);
+  --color-sf-primary-lighter: var(--acento-suave);
+  --color-sf-primary-text-color: var(--sobre-acento);
+  --color-sf-primary-bg-color: var(--acento);
+  --color-sf-primary-bg-color-hover: var(--acento-hover);
+  --color-sf-primary-bg-color-pressed: var(--acento-presionado);
+  --color-sf-primary-border-color: var(--acento);
+  --color-sf-content-bg-color: var(--panel);
+  --color-sf-content-bg-color-alt1: var(--panel-suave);
+  --color-sf-content-bg-color-alt2: var(--campo-fondo);
+  --color-sf-content-bg-color-alt3: var(--panel-suave);
+  --color-sf-content-bg-color-alt4: var(--campo-fondo);
+  --color-sf-content-bg-color-hover: var(--panel-suave);
+  --color-sf-secondary-bg-color: var(--panel);
+  --color-sf-secondary-bg-color-hover: var(--panel-suave);
+  --color-sf-secondary-border-color: var(--borde);
+  --color-sf-content-text-color: var(--texto);
+  --color-sf-content-text-color-alt1: var(--muted);
+  --color-sf-content-text-color-alt2: var(--texto-atenuado);
+  --color-sf-icon-color: var(--muted);
+  --color-sf-border: var(--borde);
+  --color-sf-border-light: var(--borde);
+  --color-sf-border-alt: var(--borde-fuerte);
+  --color-sf-cell-selection-bg-color: var(--acento-suave);
+  --color-sf-tooltip-bg-color: var(--elevado);
+  --color-sf-tooltip-text-color: var(--texto);
+  --color-sf-tooltip-border: var(--borde);
+}
+
+/* La tabla dinámica con las esquinas y el borde de las demás tablas. */
+.analisis-pivot .e-pivotview {
+  border-radius: var(--radio);
+  overflow: hidden;
+}
+
+/*
+ * La lista de campos se abre como diálogo dentro de <body>, pero Syncfusion lo
+ * ubica con el `offsetTop` de la tabla (relativo a otro contenedor), así que
+ * aparecía abajo, fuera de la pantalla. Se centra sobre la ventana, como un
+ * modal. `cssClass` de la tabla se copia al diálogo. Con esto ya no se puede
+ * arrastrar, a cambio de que siempre quede a la vista. Se centra con márgenes
+ * automáticos y NO con `transform`: así no se pisa la animación de zoom con
+ * la que Syncfusion abre y cierra el diálogo.
+ */
+.pivot-lista-campos.e-dialog {
+  position: fixed !important;
+  inset: 0 !important;
+  margin: auto !important;
+  height: fit-content;
+  max-width: min(900px, 95vw);
+  max-height: 95vh;
+  overflow: auto;
+}

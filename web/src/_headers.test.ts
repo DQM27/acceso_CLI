@@ -70,4 +70,10 @@ describe("public/_headers", () => {
     expect(contenido).toMatch(/Referrer-Policy:\s*no-referrer/);
     expect(contenido).toMatch(/Cross-Origin-Opener-Policy:\s*same-origin/);
   });
+
+  it("font-src sólo agrega data: (íconos incrustados de Syncfusion, ver docs/decisiones-tecnicas.md), ningún origen externo", () => {
+    const linea = contenido.match(/^\s*Content-Security-Policy:\s*(.+)$/m)?.[1];
+    if (!linea) throw new Error("No se encontró la línea Content-Security-Policy en _headers");
+    expect(linea.match(/font-src ([^;]+)/)?.[1]?.trim()).toBe("'self' data:");
+  });
 });

@@ -751,3 +751,47 @@ Además, las marcas de agua se guardan con microsegundos
 del `updated_at` real y `updated_at=gt.<marca>` volvía a traer todas las
 filas de ese segundo, para siempre (los encargados de ruta se cargaron en
 lote, todos en el mismo segundo).
+
+## 2026-10-06 — Tabla dinámica de Syncfusion en "Análisis" del panel; el resto sigue con AG Grid
+
+**Contexto.** El panel web ve el historial de todas las unidades operativas y
+el volumen va a crecer a millones de movimientos. Ninguna grilla maneja
+millones de filas si se descargan al navegador; lo que escala es dónde se
+agrega. El Historial ya pagina en el servidor (modelo `infinite` de AG
+Grid), así que AG Grid se queda en todas las tablas del panel y del
+escritorio. En la rama `feat/analisis-syncfusion` se probaron además
+gráficos y la grilla de Syncfusion; se decidió (dueño, 2026-10-06) usar de
+Syncfusion **sólo la tabla dinámica** (PivotView) para análisis de datos.
+
+**Decisión.** Sección "Análisis" con cuatro indicadores del período y la
+tabla dinámica de Syncfusion Essential JS 2 (Essential Studio 35.x),
+alimentada por `panel_resumen_movimientos`: la base agrega y el navegador
+recibe pocos miles de filas en un solo `jsonb` (no `setof`, para no chocar
+con `max_rows = 1000` de PostgREST).
+
+- **Rendimiento medido** (Postgres 16 local, 1,2 millones de movimientos
+  sintéticos de 10 unidades, como administrador bajo RLS): 6 meses ~2 s, un
+  año ~4,5 s. El rango se limita a 366 días por el corte de 8 s de
+  `authenticated`; si el volumen anual pasa de unos 2 millones, el siguiente
+  paso es una tabla de agregados por hora mantenida al escribir. La función
+  también devuelve `por_hora` y `empresas` (eran para los gráficos
+  descartados); quedan por si se vuelven a usar y no cambian el costo de
+  forma apreciable.
+- **Sin campos calculados de la tabla dinámica.** Syncfusion los evalúa con
+  `Function(...)` (eval), que la CSP bloquea (`script-src` sin
+  `unsafe-eval`). No se inyecta `CalculatedField` y la permanencia promedio
+  (ponderada por salidas) se calcula en `aggregateCellInfo`.
+- **CSP: `font-src 'self' data:`.** Los temas de Syncfusion traen su fuente de
+  íconos incrustada como `data:`; sin esto se bloquea. Un recurso `data:` no
+  hace ninguna petición. `_headers.test.ts` fija `font-src` en exactamente
+  `'self' data:`.
+- **Licencia.** La llave va en `VITE_SYNCFUSION_LICENSE` (variables del build
+  en Cloudflare, o `web/.env.local`), nunca versionada. Sin ella la tabla
+  funciona con un aviso de "trial". La licencia Community tiene condiciones
+  de elegibilidad: confirmarlas antes de producción.
+- **Peso.** Syncfusion vive en bloques diferidos (`lazy`): la carga inicial
+  del panel no cambia; sólo se descarga al entrar a Análisis.
+- **Tema.** Fluent 2; `e-dark-mode` se sincroniza con `data-theme` y los
+  colores salen de los tokens del panel (`pantallas/analisis/syncfusion.css`).
+  Una prueba e2e verifica el modo oscuro.
+

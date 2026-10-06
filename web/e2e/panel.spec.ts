@@ -142,6 +142,34 @@ async function preparar(page: Page) {
         },
       ]);
     // Como la base real con `select`: devuelve la fila cambiada.
+    if (url.pathname === "/rest/v1/rpc/panel_resumen_movimientos")
+      return responder({
+        diario: [
+          {
+            dia: "2026-09-01",
+            unidad: sitio.nombre,
+            tipo_persona: "CONTRATISTA",
+            tipo_ingreso: "IN HOUSE",
+            medio: "CAMINANDO",
+            ingresos: 1234,
+            con_salida: 1200,
+            minutos_adentro: 180000,
+          },
+          {
+            dia: "2026-09-02",
+            unidad: sitio.nombre,
+            tipo_persona: "PROVEEDOR",
+            tipo_ingreso: "—",
+            medio: "VEHÍCULO",
+            ingresos: 56,
+            con_salida: 0,
+            minutos_adentro: 0,
+          },
+        ],
+        por_hora: [{ dia_semana: 2, hora: 7, ingresos: 900 }],
+        empresas: [{ empresa: "EMPRESA DE PRUEBA", tipo_persona: "CONTRATISTA", ingresos: 1234, personas: 80 }],
+        total: { ingresos: 1290, con_salida: 1200, minutos_adentro: 180000, personas: 87 },
+      });
     if (url.pathname === "/rest/v1/usuarios" && peticion.method() === "PATCH") return responder([{ id: "1" }]);
     if (url.pathname === "/rest/v1/usuarios")
       return responder([
@@ -344,4 +372,47 @@ test("Historial (AG Grid) y exportación a PDF sin violaciones de CSP", async ({
   // antes de que `print()` haga nada -- no hace falta esperar un diálogo.
   await page.getByRole("button", { name: /exportar a pdf/i }).click();
   await page.waitForTimeout(500);
+});
+
+test("Análisis muestra indicadores y la tabla dinámica de Syncfusion sin violaciones de CSP", async ({ page }) => {
+  await preparar(page);
+  await page.goto("/analisis");
+  await expect(page.getByText("Personas distintas")).toBeVisible();
+  // 180.000 min / 1.200 salidas = 150 min.
+  await expect(page.getByText("2 h 30 min")).toBeVisible();
+  // La tabla dinámica llega en su propio bloque: unidad × mes con ingresos y
+  // la permanencia ponderada (calculada sin eval, ver TablaDinamica.tsx).
+  const tabla = page.locator("#tabla-dinamica");
+  await expect(tabla.getByText(sitio.nombre).first()).toBeVisible({ timeout: 20_000 });
+  await expect(tabla.getByText("Permanencia promedio (min)").first()).toBeVisible();
+});
+
+test("Análisis sigue el tema oscuro del panel", async ({ page }) => {
+  await preparar(page);
+  await page.addInitScript(() => localStorage.setItem("web:tema", "dark"));
+  await page.goto("/analisis");
+  await expect(page.locator("#tabla-dinamica .e-grid").first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("html")).toHaveClass(/e-dark-mode/);
+  // Todos los fondos que pinta la tabla dinámica salen de los tokens del
+  // panel (no de la paleta oscura propia de Fluent 2).
+  const fondos = await page.locator("#tabla-dinamica").evaluate((raiz) => {
+    const colores = new Set<string>();
+    for (const el of [raiz, ...raiz.querySelectorAll("*")]) {
+      const color = getComputedStyle(el).backgroundColor;
+      if (color !== "rgba(0, 0, 0, 0)" && color !== "transparent") colores.add(color);
+    }
+    return [...colores];
+  });
+  const tokens = await page.evaluate(() =>
+    ["--panel", "--panel-suave", "--campo-fondo", "--elevado", "--acento", "--acento-suave"].map((token) => {
+      const prueba = document.createElement("div");
+      prueba.style.backgroundColor = `var(${token})`;
+      document.body.appendChild(prueba);
+      const color = getComputedStyle(prueba).backgroundColor;
+      prueba.remove();
+      return color;
+    }),
+  );
+  expect(fondos.length).toBeGreaterThan(0);
+  for (const fondo of fondos) expect(tokens).toContain(fondo);
 });
