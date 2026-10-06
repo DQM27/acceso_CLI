@@ -6,9 +6,33 @@ proyecto Supabase compartido `xidaepyaljzkpbsxrqsm`.
 **Pedido del cliente:** quitar «Continuar con Google» y usar un ingreso
 tradicional con el correo de dominio propio que ya tienen los anfitriones.
 
-**Estado:** solo investigación y documentación. No se cambió código,
-esquema ni configuración de producción. Las consultas a producción fueron
+**Estado:** investigación inicial; el modelo final quedó implementado (ver la
+actualización de abajo). No se cambió la configuración de producción. Las consultas a producción fueron
 de solo lectura y agregadas (conteos por dominio, sin datos personales).
+
+## Actualización: modelo implementado (2026-10-06)
+
+Después de esta investigación se acordó con el cliente un modelo **sin SMTP ni
+correos**, que reemplaza los controles C2, C11 y C12 de abajo:
+
+- **Alta y restablecer desde el panel** (sección Anfitriones, Edge Function
+  `admin-anfitriones`): la cuenta de Auth se crea con una contraseña aleatoria
+  y el panel muestra una sola vez un **código de activación**.
+- **El código no es una contraseña de Supabase:** se guarda como hash bcrypt
+  en `private.anfitriones_activacion`, vence a las 72 h, se agota con 5
+  intentos y con él nunca se abre una sesión. La persona lo canjea por su
+  contraseña en la web de visitas (`anfitrion-activar`).
+- **Política de contraseñas** NIST (15 caracteres, sin composición) aplicada
+  en el servidor. Mensajes genéricos (C10) en el ingreso y en la activación.
+- **Registro público apagado** (C1): ninguna cuenta se crea sola. Los
+  correos de administradores del panel no pueden ser anfitriones.
+- Riesgos que quedan y su mitigación: contraseña como único factor (MFA TOTP
+  en fase 2), el canal por el que se entrega el código (vencimiento, cierre de
+  sesiones al restablecer) e ingeniería social con el administrador (proceso
+  y bitácora `private.bitacora_anfitriones`).
+
+Implementación y pruebas: rama `feat/login-correo-web-visitas`,
+`docs/despliegue-produccion.md` (2.12) y `docs/decisiones-tecnicas.md`.
 
 ---
 

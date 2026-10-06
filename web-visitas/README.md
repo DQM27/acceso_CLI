@@ -1,6 +1,6 @@
 # Agenda de visitas Brisas
 
-Aplicación para anfitriones: ingresar con Google, avisar a la portería quién
+Aplicación para anfitriones: ingresar con su correo y contraseña, avisar a la portería quién
 viene, cuándo y a qué lugar, y ver cuándo llega cada persona. El registro físico
 de entrada/salida pertenece a la aplicación del punto de acceso.
 
@@ -14,8 +14,31 @@ de entrada/salida pertenece a la aplicación del punto de acceso.
 | `/visitas/:id/editar` | Editar. Sólo si la visita está vigente y nadie entró todavía. |
 | `/historial` | Canceladas y pasadas, paginado. |
 
-Las rutas viejas (`/citas`, `/nueva`) y la vuelta de Google (`/auth/callback`)
-llevan a `/visitas`.
+Las rutas viejas (`/citas`, `/nueva`) y la vieja vuelta de Google
+(`/auth/callback`) llevan a `/visitas`.
+
+## Ingreso y cuentas (sin Google, sin correos)
+
+- **Ingresar:** correo de la empresa y contraseña (`signInWithPassword`). Todo
+  error de credenciales muestra el mismo mensaje («Correo o contraseña
+  incorrectos.»): no revela si la cuenta existe.
+- **Alta y "olvidé mi contraseña":** las hace administración desde el panel
+  (sección **Anfitriones**, Edge Function `admin-anfitriones`). El panel
+  muestra **una sola vez** un código de activación (10 caracteres, vence a las
+  72 h, se agota con 5 intentos fallidos) que se le entrega a la persona.
+- **Primer ingreso:** «Primer ingreso: tengo un código de activación» → correo,
+  código y contraseña nueva (Edge Function pública `anfitrion-activar`). Con el
+  código nunca se abre una sesión: no es una contraseña de Supabase. Activada
+  la cuenta, la web entra con la contraseña nueva.
+- **Contraseñas:** mínimo 15 caracteres, sin reglas de composición, se puede
+  pegar y mostrar (NIST SP 800-63B-4). Se valida en la web y otra vez en la
+  función (`src/lib/contrasena.ts`, `supabase/functions/_shared/anfitriones.ts`).
+- **Deshabilitar** desde el panel bloquea la cuenta en Auth y cierra sus
+  sesiones; las funciones de la base además exigen `anfitriones.activo`.
+
+Detalle, amenazas y decisiones:
+[investigación de seguridad](../docs/auditorias/investigacion-login-correo-web-visitas-2026-10-06.md)
+y la migración `20261006130000_activacion_de_anfitriones_desde_el_panel.sql`.
 
 ## Diseño
 
@@ -64,8 +87,9 @@ npm ci --ignore-scripts
 npm run dev
 ```
 
-Abre `http://127.0.0.1:5174`. Para OAuth local, autorizar el retorno exacto
-`http://127.0.0.1:5174/auth/callback` en un entorno de Supabase apropiado.
+Abre `http://127.0.0.1:5174`. Para probar el ingreso real, apuntar el build a
+staging con `.env.local` (ver `src/lib/supabase.ts`) y crear un anfitrión de
+prueba desde el panel apuntado al mismo proyecto.
 
 ```powershell
 npm test
@@ -136,14 +160,22 @@ Antes de publicar:
    la respuesta del backend enlazada arriba. Repetir igual las pruebas de dos
    anfitriones / cuenta sin alta / dispositivo de otro sitio contra el entorno
    real antes de anunciar el dominio.
-2. Registrar `https://visitas.megabrisas.com/auth/callback` entre las URLs de retorno
-   de Supabase. Mantener la URL principal del panel y evitar comodines amplios.
-3. Configurar Cloudflare Access y las reglas antiabuso para este subdominio;
-   comprobar usuarios permitidos, cierre de Access, WAF y dominios alternativos.
-   La protección de Supabase se configura separadamente del dominio de la web.
-4. Volver a ejecutar las verificaciones y desplegar con `npx wrangler deploy`.
-5. Comprobar HTTPS y cabeceras en la URL final; completar un login real con Google
-   y la prueba funcional con dos anfitriones de prueba autorizados.
+2. Aplicar la migración `activacion_de_anfitriones_desde_el_panel`, desplegar
+   `admin-anfitriones` (`verify_jwt` activado) y `anfitrion-activar`
+   (`verify_jwt` desactivado: es pública a propósito) y publicar el panel con
+   la sección Anfitriones. Ver `docs/despliegue-produccion.md` (2.12).
+3. Configuración de Auth en el dashboard: apagar «Allow new users to sign up»
+   (las cuentas solo las crea el panel), activar «Prevent use of leaked
+   passwords» si el plan lo permite y dejar vacíos los «password requirements»
+   (la política de 15 caracteres la aplica `anfitrion-activar`). Ya no hace
+   falta ninguna URL de retorno para esta web.
+4. Reglas antiabuso de Cloudflare para este subdominio. Si se usa Cloudflare
+   Access, que **no** dependa de Google (por ejemplo, «One-time PIN» con la
+   lista de anfitriones) o quitarlo: el control de acceso real ya es la cuenta.
+5. Volver a ejecutar las verificaciones y desplegar con `npx wrangler deploy`.
+6. Comprobar HTTPS y cabeceras en la URL final; dar de alta dos anfitriones de
+   prueba desde el panel, activarlos con su código y completar la prueba
+   funcional.
 
 No se cambió el esquema ni se publicaron recursos en producción durante esta
 entrega. [Reporte de seguridad](../docs/auditorias/reporte-seguridad-web-2026-09-09.md).

@@ -751,3 +751,39 @@ Además, las marcas de agua se guardan con microsegundos
 del `updated_at` real y `updated_at=gt.<marca>` volvía a traer todas las
 filas de ese segundo, para siempre (los encargados de ruta se cargaron en
 lote, todos en el mismo segundo).
+
+---
+
+## 2026-10-06 — Web de visitas sin Google: código de activación desde el panel
+
+**Problema:** el cliente pidió quitar «Continuar con Google»: los anfitriones
+usan el correo de su dominio propio. Pasar a correo y contraseña cambia el
+origen de la identidad: con Google, el correo lo verifica Google; con
+contraseña, lo declara quien se registra. Toda la autorización (anfitriones
+y administradores del panel) decide por `auth.email()`.
+
+**Opciones descartadas:**
+- *Recuperación por enlace o código de correo* (Supabase): exige SMTP propio
+  (el de Supabase solo envía a miembros del equipo, 2 por hora), y quien
+  roba el buzón de un anfitrión toma su cuenta. El cliente no quiere pagar ni
+  mantener SMTP.
+- *Alta por SQL con un trigger que crea la cuenta de Auth* (primer intento,
+  aplicado solo en staging): resolvía el alta pero no la recuperación.
+- *La temporal como contraseña real de Supabase* (como los operadores):
+  Supabase no tiene vencimiento de contraseñas y las políticas RLS de lectura
+  dejan pasar a cualquier sesión del anfitrión, así que una temporal de
+  "72 horas" seguiría sirviendo para leer datos después de vencida.
+
+**Decisión:** el panel crea la cuenta con una contraseña aleatoria que nadie
+conoce y emite un **código de activación** (hash bcrypt en `private.`, vence a
+las 72 h, 5 intentos). La persona lo canjea en la web de visitas por su
+contraseña (`anfitrion-activar`), sin abrir nunca una sesión con el código.
+Restablecer = código nuevo + contraseña aleatoria + cierre de sesiones.
+Política de contraseñas NIST SP 800-63B-4 (15 caracteres, sin composición)
+aplicada en la función, porque el mínimo global de Supabase no puede subir
+sin romper las temporales de 10 de los operadores. Un correo de administrador
+del panel no puede ser anfitrión: una contraseña no debe dar acceso al panel.
+Con esto el registro público de Auth puede apagarse, lo que además cierra
+NS-05 (auditoría integral 2026-09-24).
+
+**Pendiente (fase 2):** MFA opcional con TOTP para anfitriones.

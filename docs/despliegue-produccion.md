@@ -488,6 +488,53 @@ Rama `feat/visitas-movil`. La regla vive en el núcleo
   sesión: hay que subir `_shared/reglas/`). Mientras tanto el trigger de la
   fila 13 cubre el alta igual.
 
+### 2.12 Web de visitas: correo y contraseña con código de activación (2026-10-06)
+
+Rama `feat/login-correo-web-visitas`. El cliente pidió quitar el ingreso con
+Google: los anfitriones usan el correo de su dominio. Sin SMTP ni correos: el
+panel da de alta y restablece con un código de activación (mismo modelo que la
+contraseña temporal de los usuarios de la portería). Análisis y amenazas:
+`docs/auditorias/investigacion-login-correo-web-visitas-2026-10-06.md`.
+
+- **Migración** `20261006130000_activacion_de_anfitriones_desde_el_panel.sql`:
+  `anfitriones.auth_user_id` (se enlaza solo con las cuentas existentes),
+  restricción de correo en minúsculas, `private.anfitriones_activacion` (hash
+  bcrypt, 72 h, 5 intentos), `private.bitacora_anfitriones`, funciones solo
+  para `service_role` y `panel_anfitriones()` para el panel. Antes de aplicarla
+  en producción, comprobar que ningún `anfitriones.correo` tenga mayúsculas o
+  espacios (el 2026-10-06 había 0 de 1).
+- **Edge Functions nuevas:** `admin-anfitriones` (`verify_jwt` activado) y
+  `anfitrion-activar` (`verify_jwt` **desactivado**, pública a propósito).
+  `admin-anfitriones` usa las reglas del núcleo (`_shared/reglas/`): conviene
+  la CLI, `supabase functions deploy admin-anfitriones`.
+- **Panel:** sección Anfitriones. **Web de visitas:** ingreso con contraseña y
+  «Primer ingreso: tengo un código de activación».
+- **Aplicado en staging** (2026-10-06): la migración (sin la línea de la
+  restricción, que ya existía ahí) y las dos funciones, versión 1, fijadas al
+  commit `038bd32` con la técnica de 2.6. Probado por HTTP contra staging:
+  sin sesión `admin-anfitriones` → 401; todo código rechazado (inexistente,
+  errado, ya usado, forma imposible, tras 5 fallos) → el mismo 400; contraseña
+  corta → 422 sin gastar intento; activación correcta → 200 e ingreso con la
+  contraseña nueva; la sesión del anfitrión no puede listar el panel (403) ni
+  administrar (401); la API pública no puede llamar a las funciones internas.
+- **Pendiente en staging (requiere confirmar sentencias destructivas en la
+  sesión):** quitar los restos del primer enfoque, que nunca llegó a
+  producción (`trigger anfitriones_sincronizar_cuentas`,
+  `private.sincronizar_cuentas_anfitriones*()`,
+  `public.secreto_cuentas_anfitriones_valido()` y la fila
+  `alta_de_anfitriones_por_sql` de `schema_migrations`), y los datos de prueba
+  (`prueba-activacion@example.invalid` en `anfitriones`, la bitácora y Auth).
+- **Orden en producción:** 1) migración; 2) las dos funciones; 3) publicar el
+  panel; 4) dashboard de Auth: apagar «Allow new users to sign up», activar
+  «Prevent use of leaked passwords» (plan Pro) y dejar vacíos los «password
+  requirements»; 5) publicar la web de visitas; 6) desde el panel, generar el
+  código de cada anfitrión existente (figuran como «Sin contraseña»).
+- **Administradores nuevos del panel con el registro apagado:** además del
+  `insert` en `administradores_panel`, crear su cuenta en Authentication →
+  Users → Add user → Create new user (con «Auto Confirm User»); después entra
+  con Google y Supabase vincula la identidad por el correo. **Verificar en
+  staging antes de apagar el registro en producción.**
+
 ### 2.6 Edge Function `admin-crear-contratista` (reglas compartidas, 2026-10-04)
 
 Rama `feat/reglas-compartidas`. Contexto completo en
