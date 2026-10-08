@@ -9,6 +9,7 @@ use rusqlite::{Transaction, TransactionBehavior};
 
 use crate::database::error::DatabaseError;
 use crate::database::repositories::encargado_ruta_repository::SqliteEncargadoRutaRepository;
+use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::prestamo_gafete_provisional_repository::SqlitePrestamoGafeteProvisionalRepository;
 use crate::models::prestamo_gafete_provisional::PrestamoGafeteProvisionalActivoResumen;
 use crate::services::autenticacion_service::UsuarioSesion;
@@ -32,7 +33,8 @@ impl AppCore {
             .ok_or(GafeteProvisionalServiceError::OperacionNoAutorizada)?;
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&transaction);
         let encargados = SqliteEncargadoRutaRepository::new(&transaction);
-        let id = GafeteProvisionalService::new(&prestamos, &encargados).entregar(
+        let gafetes = SqliteGafeteRepository::new(&transaction);
+        let id = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes).entregar(
             encargado_id,
             gafete_numero,
             actor_actual.id,
@@ -71,7 +73,8 @@ impl AppCore {
             .ok_or(GafeteProvisionalServiceError::OperacionNoAutorizada)?;
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&transaction);
         let encargados = SqliteEncargadoRutaRepository::new(&transaction);
-        GafeteProvisionalService::new(&prestamos, &encargados).registrar_devolucion(
+        let gafetes = SqliteGafeteRepository::new(&transaction);
+        GafeteProvisionalService::new(&prestamos, &encargados, &gafetes).registrar_devolucion(
             id,
             self.reloj.ahora_utc(),
             actor_actual.id,
@@ -89,7 +92,8 @@ impl AppCore {
     ) -> Result<Vec<PrestamoGafeteProvisionalActivoResumen>, GafeteProvisionalServiceError> {
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&self.connection);
         let encargados = SqliteEncargadoRutaRepository::new(&self.connection);
-        GafeteProvisionalService::new(&prestamos, &encargados).listar_activos()
+        let gafetes = SqliteGafeteRepository::new(&self.connection);
+        GafeteProvisionalService::new(&prestamos, &encargados, &gafetes).listar_activos()
     }
 }
 
@@ -97,6 +101,7 @@ impl AppCore {
 mod tests {
     use super::*;
     use crate::database::repositories::encargado_ruta_repository::EncargadoRutaRepository;
+    use crate::database::repositories::gafete_repository::GafeteRepository;
     use crate::database::schema::initialize_database;
     use crate::tiempo::RelojFijo;
     use chrono::{TimeZone, Utc};
@@ -120,6 +125,9 @@ mod tests {
                 cedula: None,
                 activo: true,
             })
+            .unwrap();
+        SqliteGafeteRepository::new(&connection)
+            .crear(12, crate::models::gafete::TipoGafete::ProvisionalKof)
             .unwrap();
         let reloj = Arc::new(RelojFijo::new(
             Utc.with_ymd_and_hms(2026, 9, 16, 12, 0, 0).unwrap(),

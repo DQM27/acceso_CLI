@@ -487,7 +487,8 @@ pub fn mensaje_ruta_catalogo(error: RutaCatalogoServiceError) -> String {
 pub fn mensaje_gafete_provisional(error: GafeteProvisionalServiceError) -> String {
     use GafeteProvisionalServiceError::{
         Database, EncargadoInactivo, EncargadoNoEncontrado, EncargadoYaTienePrestamoActivo,
-        GafeteYaPrestado, NumeroInvalido, OperacionNoAutorizada, PrestamoNoActivo,
+        GafeteNoDisponible, GafeteNoRegistrado, GafeteYaPrestado, NumeroInvalido,
+        OperacionNoAutorizada, PrestamoNoActivo,
     };
 
     match error {
@@ -498,6 +499,12 @@ pub fn mensaje_gafete_provisional(error: GafeteProvisionalServiceError) -> Strin
             "Este encargado ya tiene un gafete provisional prestado".into()
         }
         GafeteYaPrestado => "Ese número de gafete ya está prestado a otra persona".into(),
+        GafeteNoRegistrado => "El número de gafete provisional no existe en el catálogo".into(),
+        GafeteNoDisponible(EstadoGafete::Perdido) => "El gafete está marcado como perdido".into(),
+        GafeteNoDisponible(EstadoGafete::DeBaja) => "El gafete está dado de baja".into(),
+        GafeteNoDisponible(EstadoGafete::Disponible) => {
+            unreachable!("GafeteNoDisponible nunca se genera con estado Disponible")
+        }
         PrestamoNoActivo => "El préstamo no está activo".into(),
         OperacionNoAutorizada => {
             "La sesión actual no está autorizada para realizar esta operación".into()
@@ -566,7 +573,7 @@ pub fn mensaje_ingreso_correo(error: IngresoCorreoServiceError) -> String {
     use IngresoCorreoServiceError::{
         AccesoNegado, CedulaInvalida, CedulaVacia, GafeteNoDisponible, GafeteNoRegistrado,
         GafeteOcupado, IngresoActivo, MotivoVacio, NombreVacio, OperadorNoAutorizado,
-        RegistroNoActivo, SalidaAnteriorAIngreso,
+        RegistroNoActivo, RelojRetrocedido, SalidaAnteriorAIngreso,
     };
 
     match error {
@@ -582,6 +589,7 @@ pub fn mensaje_ingreso_correo(error: IngresoCorreoServiceError) -> String {
         GafeteNoDisponible(_) => "El gafete no está disponible".into(),
         RegistroNoActivo => "El ingreso por correo no está activo".into(),
         SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
+        RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
         OperadorNoAutorizado => {
             "La sesión que registra el movimiento no existe o está inactiva".into()
         }
