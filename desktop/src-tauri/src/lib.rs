@@ -37,8 +37,11 @@ const SENTRY_DSN: &str = match option_env!("SENTRY_DSN") {
 /// Cada cuánto reintenta la sincronización automática mientras la app sigue
 /// abierta. Realtime dispara sincronizaciones bajo demanda, pero este pulso
 /// queda como respaldo cuando el socket no está conectado o se pierde un
-/// evento.
-const INTERVALO_SINCRONIZACION_AUTOMATICA: Duration = Duration::from_secs(2 * 60);
+/// evento. Cada pulso son ~15 peticiones REST a Supabase aunque no haya
+/// cambios (cada una escribe una línea de log), así que no conviene bajarlo
+/// de acá sin necesidad: a 2 min el plan Free superó su cuota de Log
+/// Ingestion.
+const INTERVALO_SINCRONIZACION_AUTOMATICA: Duration = Duration::from_secs(5 * 60);
 /// Antes del primer intento, para no competir con el arranque de la ventana.
 const ESPERA_INICIAL_SINCRONIZACION: Duration = Duration::from_secs(10);
 

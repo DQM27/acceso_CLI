@@ -65,7 +65,7 @@ export function emitirActualizacion(
  * que la copia se vuelve a bajar. Por eso el eco propio de estas tablas no se
  * ignora: llega recién cuando la nube ya aceptó el cambio, y se baja esa
  * tabla. Sin esto, la salida recién hecha aparecía en el historial con la
- * sincronización de respaldo (hasta 2 minutos) o con "Sincronizar". */
+ * sincronización de respaldo (hasta 5 minutos) o con "Sincronizar". */
 const TABLAS_CON_HISTORIAL_SOLO_NUBE = new Set([
   "ingresos_correo",
   "ingresos_proveedor",
