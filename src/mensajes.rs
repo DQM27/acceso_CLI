@@ -573,7 +573,7 @@ pub fn mensaje_ingreso_correo(error: IngresoCorreoServiceError) -> String {
     use IngresoCorreoServiceError::{
         AccesoNegado, CedulaInvalida, CedulaVacia, GafeteNoDisponible, GafeteNoRegistrado,
         GafeteOcupado, IngresoActivo, MotivoVacio, NombreVacio, OperadorNoAutorizado,
-        RegistroNoActivo, SalidaAnteriorAIngreso,
+        RegistroNoActivo, RelojRetrocedido, SalidaAnteriorAIngreso,
     };
 
     match error {
@@ -589,6 +589,7 @@ pub fn mensaje_ingreso_correo(error: IngresoCorreoServiceError) -> String {
         GafeteNoDisponible(_) => "El gafete no está disponible".into(),
         RegistroNoActivo => "El ingreso por correo no está activo".into(),
         SalidaAnteriorAIngreso => "La salida no puede ser anterior al ingreso".into(),
+        RelojRetrocedido => "Revise la fecha y hora del equipo antes de continuar".into(),
         OperadorNoAutorizado => {
             "La sesión que registra el movimiento no existe o está inactiva".into()
         }

@@ -1,7 +1,8 @@
 //! Ingreso "por correo" (visita autorizada por correo, comodín previo al
 //! módulo de Visitas) -- mismo molde que el ingreso/salida de
-//! `proveedores.rs`: transacción `Immediate`, operador activo confirmado
-//! dentro de la misma transacción.
+//! `proveedores.rs`: transacción `Immediate`, reloj del equipo validado
+//! (`queries::reloj`) y operador activo confirmado dentro de la misma
+//! transacción.
 
 use rusqlite::{Transaction, TransactionBehavior};
 
@@ -15,6 +16,8 @@ use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::IngresoCorreoServiceError;
 use crate::services::ingreso_correo_service::{DatosIngresoCorreo, IngresoCorreoService};
 
+use crate::database::queries::reloj::reloj_retrocedido;
+
 use super::{AppCore, verificar_actor_activo};
 
 impl AppCore {
@@ -26,6 +29,10 @@ impl AppCore {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
+        let ahora = self.reloj.ahora_utc();
+        if reloj_retrocedido(&transaction, ahora).map_err(IngresoCorreoServiceError::Database)? {
+            return Err(IngresoCorreoServiceError::RelojRetrocedido);
+        }
         let actor_actual = verificar_actor_activo(&transaction, actor)
             .map_err(IngresoCorreoServiceError::Database)?
             .ok_or(IngresoCorreoServiceError::OperadorNoAutorizado)?;
@@ -34,7 +41,7 @@ impl AppCore {
         let id = IngresoCorreoService::new(&registros, &gafetes).registrar_ingreso(
             datos,
             actor_actual.id,
-            self.reloj.ahora_utc(),
+            ahora,
         )?;
         transaction
             .commit()
@@ -51,6 +58,10 @@ impl AppCore {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
+        let ahora = self.reloj.ahora_utc();
+        if reloj_retrocedido(&transaction, ahora).map_err(IngresoCorreoServiceError::Database)? {
+            return Err(IngresoCorreoServiceError::RelojRetrocedido);
+        }
         let actor_actual = verificar_actor_activo(&transaction, actor)
             .map_err(IngresoCorreoServiceError::Database)?
             .ok_or(IngresoCorreoServiceError::OperadorNoAutorizado)?;
@@ -58,7 +69,7 @@ impl AppCore {
         let gafetes = SqliteGafeteRepository::new(&transaction);
         IngresoCorreoService::new(&registros, &gafetes).registrar_salida(
             id,
-            self.reloj.ahora_utc(),
+            ahora,
             actor_actual.id,
         )?;
         transaction
@@ -208,6 +219,35 @@ mod tests {
         assert!(matches!(
             core.registrar_ingreso_correo(&actor, &datos("111111111")),
             Err(IngresoCorreoServiceError::OperadorNoAutorizado)
+        ));
+    }
+
+    /// El reloj del equipo quedó antes del último movimiento que este mismo
+    /// equipo selló: no se registra ni la entrada ni la salida.
+    #[test]
+    fn reloj_atrasado_rechaza_ingreso_y_salida_por_correo() {
+        let (core, actor) = nucleo();
+        let id = core
+            .registrar_ingreso_correo(&actor, &datos("111111111"))
+            .unwrap();
+        core.connection
+            .execute(
+                "INSERT INTO registro_ingresos_correo (cedula, nombre, motivo, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre,
+                    fecha_hora_salida, usuario_salida_id, usuario_salida_nombre, uuid)
+                 VALUES ('222222222', 'LUIS', 'Entrevista', 5, '2026-10-03T15:00:00Z', 1,
+                    'Operador', '2026-10-03T15:30:00Z', 1, 'Operador', 'uuid-futuro')",
+                [],
+            )
+            .unwrap();
+
+        assert!(matches!(
+            core.registrar_ingreso_correo(&actor, &datos("333333333")),
+            Err(IngresoCorreoServiceError::RelojRetrocedido)
+        ));
+        assert!(matches!(
+            core.registrar_salida_correo(&actor, id),
+            Err(IngresoCorreoServiceError::RelojRetrocedido)
         ));
     }
 }

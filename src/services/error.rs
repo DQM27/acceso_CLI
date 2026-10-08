@@ -519,6 +519,8 @@ pub enum IngresoCorreoServiceError {
     RegistroNoActivo,
     #[error("La salida no puede ser anterior al ingreso")]
     SalidaAnteriorAIngreso,
+    #[error("El reloj del equipo está atrasado respecto al último movimiento registrado")]
+    RelojRetrocedido,
     #[error("La sesión que registra el movimiento no existe o está inactiva")]
     OperadorNoAutorizado,
     #[error(transparent)]
