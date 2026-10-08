@@ -3,7 +3,9 @@
 //! empresas proveedoras con el molde simple de `catalogos.rs` (sólo actor
 //! activo, sin reloj), e ingreso/salida con el molde de `citas.rs`/
 //! `gafetes_provisionales.rs` (transacción `Immediate`, operador activo
-//! confirmado dentro de la misma transacción).
+//! confirmado dentro de la misma transacción), más la validación del reloj
+//! del equipo que ya hacen contratistas, visitas y rutas
+//! (`queries::reloj`).
 
 use rusqlite::{Transaction, TransactionBehavior};
 
@@ -19,6 +21,8 @@ use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::empresa_proveedor_service::EmpresaProveedorService;
 use crate::services::error::{EmpresaProveedorServiceError, IngresoProveedorServiceError};
 use crate::services::ingreso_proveedor_service::IngresoProveedorService;
+
+use crate::database::queries::reloj::reloj_retrocedido;
 
 use super::{AppCore, verificar_actor_activo};
 
@@ -146,6 +150,10 @@ impl AppCore {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
+        let ahora = self.reloj.ahora_utc();
+        if reloj_retrocedido(&transaction, ahora).map_err(IngresoProveedorServiceError::Database)? {
+            return Err(IngresoProveedorServiceError::RelojRetrocedido);
+        }
         let actor_actual = verificar_actor_activo(&transaction, actor)
             .map_err(IngresoProveedorServiceError::Database)?
             .ok_or(IngresoProveedorServiceError::OperadorNoAutorizado)?;
@@ -159,7 +167,7 @@ impl AppCore {
             placa,
             gafete_numero,
             actor_actual.id,
-            self.reloj.ahora_utc(),
+            ahora,
         )?;
         transaction
             .commit()
@@ -176,6 +184,10 @@ impl AppCore {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
+        let ahora = self.reloj.ahora_utc();
+        if reloj_retrocedido(&transaction, ahora).map_err(IngresoProveedorServiceError::Database)? {
+            return Err(IngresoProveedorServiceError::RelojRetrocedido);
+        }
         let actor_actual = verificar_actor_activo(&transaction, actor)
             .map_err(IngresoProveedorServiceError::Database)?
             .ok_or(IngresoProveedorServiceError::OperadorNoAutorizado)?;
@@ -184,7 +196,7 @@ impl AppCore {
         let gafetes = SqliteGafeteRepository::new(&transaction);
         IngresoProveedorService::new(&registros, &empresas, &gafetes).registrar_salida(
             id,
-            self.reloj.ahora_utc(),
+            ahora,
             actor_actual.id,
         )?;
         transaction
@@ -379,5 +391,35 @@ mod tests {
         assert_eq!(resultados.len(), 1);
         // Como todo nombre de empresa: en mayúscula.
         assert_eq!(resultados[0].nombre, "DOS PINOS");
+    }
+
+    /// El reloj del equipo quedó antes del último movimiento que este mismo
+    /// equipo selló: no se registra ni la entrada ni la salida.
+    #[test]
+    fn reloj_atrasado_rechaza_ingreso_y_salida_de_proveedor() {
+        let (core, actor, empresa_id) = nucleo_con_usuario_empresa_y_gafete();
+        let id = core
+            .registrar_ingreso_proveedor(&actor, "1-1111-1111", "Juan Perez", empresa_id, None, 7)
+            .unwrap();
+        core.connection
+            .execute(
+                "INSERT INTO registro_ingresos_proveedor (cedula, nombre, empresa_id,
+                    empresa_nombre, gafete_numero, fecha_hora_ingreso, usuario_ingreso_id,
+                    usuario_ingreso_nombre, fecha_hora_salida, usuario_salida_id,
+                    usuario_salida_nombre, uuid)
+                 VALUES ('222222222', 'LUIS', ?1, 'Maika', 7, '2026-09-16T13:00:00Z', 1,
+                    'Operador', '2026-09-16T13:30:00Z', 1, 'Operador', 'uuid-futuro')",
+                [empresa_id],
+            )
+            .unwrap();
+
+        assert!(matches!(
+            core.registrar_ingreso_proveedor(&actor, "333333333", "Ana Mora", empresa_id, None, 7),
+            Err(IngresoProveedorServiceError::RelojRetrocedido)
+        ));
+        assert!(matches!(
+            core.registrar_salida_proveedor(&actor, id),
+            Err(IngresoProveedorServiceError::RelojRetrocedido)
+        ));
     }
 }

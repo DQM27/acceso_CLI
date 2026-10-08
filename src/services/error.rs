@@ -408,6 +408,12 @@ pub enum GafeteProvisionalServiceError {
     EncargadoYaTienePrestamoActivo,
     #[error("Ese número de gafete ya está prestado a otra persona")]
     GafeteYaPrestado,
+    /// El número no existe en el inventario (`gafetes`, tipo
+    /// `PROVISIONAL_KOF`).
+    #[error("El gafete provisional no está registrado en el catálogo")]
+    GafeteNoRegistrado,
+    #[error("El gafete provisional no está disponible: {0:?}")]
+    GafeteNoDisponible(EstadoGafete),
     #[error("El préstamo no está activo")]
     PrestamoNoActivo,
     #[error("La sesión actual no está autorizada para realizar esta operación")]
@@ -513,6 +519,8 @@ pub enum IngresoCorreoServiceError {
     RegistroNoActivo,
     #[error("La salida no puede ser anterior al ingreso")]
     SalidaAnteriorAIngreso,
+    #[error("El reloj del equipo está atrasado respecto al último movimiento registrado")]
+    RelojRetrocedido,
     #[error("La sesión que registra el movimiento no existe o está inactiva")]
     OperadorNoAutorizado,
     #[error(transparent)]
