@@ -732,6 +732,9 @@ mod tests {
                 activo: true,
             })
             .unwrap();
+        SqliteGafeteRepository::new(&core.lock().unwrap().connection)
+            .crear(12, TipoGafete::ProvisionalKof)
+            .unwrap();
         let cache = CacheTokenDispositivo::new();
         let entregar = || {
             entregar_gafete_provisional_verificado(

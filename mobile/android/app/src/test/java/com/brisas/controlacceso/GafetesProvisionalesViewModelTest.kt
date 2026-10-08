@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -47,6 +48,7 @@ class GafetesProvisionalesViewModelTest {
             INSERT INTO encargados_ruta (codigo_empleado, nombre, activo, uuid)
             VALUES ('5040017', 'Michael Araya Retana', 1, 'encargado-araya');
             """.trimIndent(),
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (5, 'PROVISIONAL_KOF', 'DISPONIBLE')",
             NucleoDePrueba.sqlUsuarioRoot(),
         )
         nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
@@ -105,6 +107,22 @@ class GafetesProvisionalesViewModelTest {
         assertTrue(exito)
         assertNull(vm.error)
         assertEquals(1, nucleo.listarGafetesProvisionalesActivos().size)
+    }
+
+    @Test
+    fun `entregar un numero fuera del inventario se rechaza`() = runTest(dispatcher) {
+        abrir()
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.cambiarTextoEncargado("araya")
+        advanceUntilIdle()
+        vm.elegirEncargado(vm.resultadosEncargado.single())
+        var exito = false
+        vm.entregar(16) { exito = true }
+        advanceUntilIdle()
+        assertFalse(exito)
+        assertNotNull(vm.error)
+        assertTrue(nucleo.listarGafetesProvisionalesActivos().isEmpty())
     }
 
     @Test
