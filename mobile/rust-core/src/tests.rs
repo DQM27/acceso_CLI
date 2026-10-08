@@ -648,7 +648,8 @@ fn nucleo_con_actor_y_ruta_79() -> Nucleo {
              INSERT INTO rutas (numero, activo, uuid) VALUES (79, 1, 'uuid-ruta-79');
              INSERT INTO encargados_ruta (codigo_empleado, nombre, activo, uuid) VALUES (
                  '5040017', 'Michael Araya Retana', 1, 'uuid-encargado'
-             );",
+             );
+             INSERT INTO gafetes (numero, tipo, estado) VALUES (12, 'PROVISIONAL_KOF', 'DISPONIBLE');",
         )
         .unwrap();
     drop(conexion);
@@ -773,6 +774,25 @@ fn entregar_y_devolver_gafete_provisional_redondea_el_viaje() {
         .registrar_devolucion_gafete_provisional(prestamo_id)
         .unwrap();
 
+    assert_eq!(
+        nucleo.listar_gafetes_provisionales_activos().unwrap(),
+        Vec::new()
+    );
+}
+
+/// El número tiene que existir en el inventario de gafetes provisionales
+/// KOF: no se presta un gafete que físicamente no existe.
+#[test]
+fn entregar_gafete_provisional_con_numero_fuera_del_inventario_falla() {
+    let nucleo = nucleo_con_actor_y_ruta_79();
+    let encargado_id = nucleo
+        .buscar_encargados_ruta("5040017".to_string())
+        .unwrap()[0]
+        .id;
+
+    let resultado = nucleo.entregar_gafete_provisional(encargado_id, 16);
+
+    assert!(matches!(resultado, Err(NucleoError::Rechazado { .. })));
     assert_eq!(
         nucleo.listar_gafetes_provisionales_activos().unwrap(),
         Vec::new()

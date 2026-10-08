@@ -3,41 +3,53 @@
 //! simple que `RutaService`: sin PRAIND, sin bloqueo por documento, sin
 //! reloj cruzado entre dominios -- pedido explícito del usuario, no hay más
 //! verificación que la humana (cotejar la cédula física contra el nombre,
-//! algo que este sistema no captura ni valida).
+//! algo que este sistema no captura ni valida). Lo único que sí se cruza
+//! contra el sistema es el inventario físico: el número tiene que existir
+//! en `gafetes` como `PROVISIONAL_KOF` y estar disponible, igual que para
+//! contratistas, visitas y proveedores.
 
 use chrono::{DateTime, Utc};
 
 use crate::database::repositories::encargado_ruta_repository::EncargadoRutaRepository;
+use crate::database::repositories::gafete_repository::GafeteRepository;
 use crate::database::repositories::prestamo_gafete_provisional_repository::PrestamoGafeteProvisionalRepository;
+use crate::domain::gafete::{ValidacionAsignacion, validar_para_asignar};
+use crate::models::gafete::TipoGafete;
 use crate::models::prestamo_gafete_provisional::{
     NuevoPrestamoGafeteProvisional, PrestamoGafeteProvisional,
     PrestamoGafeteProvisionalActivoResumen,
 };
 use crate::services::error::GafeteProvisionalServiceError;
 
-pub struct GafeteProvisionalService<'a, P, E>
+pub struct GafeteProvisionalService<'a, P, E, G>
 where
     P: PrestamoGafeteProvisionalRepository + ?Sized,
     E: EncargadoRutaRepository + ?Sized,
+    G: GafeteRepository + ?Sized,
 {
     prestamos: &'a P,
     encargados: &'a E,
+    gafetes: &'a G,
 }
 
-impl<'a, P, E> GafeteProvisionalService<'a, P, E>
+impl<'a, P, E, G> GafeteProvisionalService<'a, P, E, G>
 where
     P: PrestamoGafeteProvisionalRepository + ?Sized,
     E: EncargadoRutaRepository + ?Sized,
+    G: GafeteRepository + ?Sized,
 {
-    pub fn new(prestamos: &'a P, encargados: &'a E) -> Self {
+    pub fn new(prestamos: &'a P, encargados: &'a E, gafetes: &'a G) -> Self {
         Self {
             prestamos,
             encargados,
+            gafetes,
         }
     }
 
-    /// Valida que el encargado exista y esté activo, y que ni él ni el
-    /// número de gafete tengan ya un préstamo abierto, antes de crear el
+    /// Valida que el encargado exista y esté activo, que el número exista
+    /// en el inventario de gafetes provisionales KOF y esté disponible, y
+    /// que ni el encargado ni el gafete tengan ya un préstamo abierto, antes
+    /// de crear el
     /// registro -- el `CHECK`/índices únicos del esquema son el resguardo
     /// final, esto es lo que deja mostrar un mensaje claro antes de chocar
     /// contra ellos (mismo criterio que `RutaService::registrar_salida`).
@@ -63,6 +75,18 @@ where
             .is_some()
         {
             return Err(GafeteProvisionalServiceError::EncargadoYaTienePrestamoActivo);
+        }
+        let gafete = self
+            .gafetes
+            .buscar_por_numero(gafete_numero, TipoGafete::ProvisionalKof)?;
+        match validar_para_asignar(gafete.as_ref()) {
+            ValidacionAsignacion::NoRegistrado => {
+                return Err(GafeteProvisionalServiceError::GafeteNoRegistrado);
+            }
+            ValidacionAsignacion::NoDisponible(estado) => {
+                return Err(GafeteProvisionalServiceError::GafeteNoDisponible(estado));
+            }
+            ValidacionAsignacion::Asignable => {}
         }
         if self
             .prestamos
@@ -117,8 +141,10 @@ where
 mod tests {
     use super::*;
     use crate::database::repositories::encargado_ruta_repository::SqliteEncargadoRutaRepository;
+    use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
     use crate::database::repositories::prestamo_gafete_provisional_repository::SqlitePrestamoGafeteProvisionalRepository;
     use crate::database::schema::initialize_database;
+    use crate::models::gafete::EstadoGafete;
     use chrono::Utc;
     use rusqlite::Connection;
 
@@ -135,6 +161,10 @@ mod tests {
                     VALUES (2, '77851', 'Ramon Rodriguez', 0, 'uuid-encargado-2');",
             )
             .unwrap();
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        for numero in [12, 13] {
+            gafetes.crear(numero, TipoGafete::ProvisionalKof).unwrap();
+        }
         (connection, 1)
     }
 
@@ -143,7 +173,8 @@ mod tests {
         let (connection, encargado_id) = conexion_con_encargado();
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
-        let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
 
         let id = servicio.entregar(encargado_id, 12, 1, Utc::now()).unwrap();
         assert_eq!(servicio.listar_activos().unwrap().len(), 1);
@@ -158,7 +189,8 @@ mod tests {
         let (connection, _) = conexion_con_encargado();
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
-        let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
 
         let error = servicio.entregar(999, 12, 1, Utc::now()).unwrap_err();
 
@@ -173,7 +205,8 @@ mod tests {
         let (connection, _) = conexion_con_encargado();
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
-        let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
 
         let error = servicio.entregar(2, 12, 1, Utc::now()).unwrap_err();
 
@@ -188,7 +221,8 @@ mod tests {
         let (connection, encargado_id) = conexion_con_encargado();
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
-        let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
         servicio.entregar(encargado_id, 12, 1, Utc::now()).unwrap();
 
         let error = servicio
@@ -209,7 +243,8 @@ mod tests {
             .unwrap();
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
-        let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
         servicio.entregar(encargado_id, 12, 1, Utc::now()).unwrap();
 
         let error = servicio.entregar(2, 12, 1, Utc::now()).unwrap_err();
@@ -225,7 +260,8 @@ mod tests {
         let (connection, encargado_id) = conexion_con_encargado();
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
-        let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
         let id = servicio.entregar(encargado_id, 12, 1, Utc::now()).unwrap();
         servicio.registrar_devolucion(id, Utc::now(), 1).unwrap();
 
@@ -244,7 +280,8 @@ mod tests {
         let (connection, encargado_id) = conexion_con_encargado();
         let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
         let encargados = SqliteEncargadoRutaRepository::new(&connection);
-        let servicio = GafeteProvisionalService::new(&prestamos, &encargados);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
 
         let error = servicio
             .entregar(encargado_id, 0, 1, Utc::now())
@@ -253,6 +290,68 @@ mod tests {
         assert!(matches!(
             error,
             GafeteProvisionalServiceError::NumeroInvalido
+        ));
+    }
+
+    #[test]
+    fn entregar_un_numero_que_no_existe_en_el_inventario_falla() {
+        let (connection, encargado_id) = conexion_con_encargado();
+        let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
+        let encargados = SqliteEncargadoRutaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
+
+        let error = servicio
+            .entregar(encargado_id, 16, 1, Utc::now())
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            GafeteProvisionalServiceError::GafeteNoRegistrado
+        ));
+        assert!(servicio.listar_activos().unwrap().is_empty());
+    }
+
+    #[test]
+    fn entregar_un_numero_que_solo_existe_en_otro_tipo_de_gafete_falla() {
+        let (connection, encargado_id) = conexion_con_encargado();
+        let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
+        let encargados = SqliteEncargadoRutaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        gafetes.crear(16, TipoGafete::Contratista).unwrap();
+        let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
+
+        let error = servicio
+            .entregar(encargado_id, 16, 1, Utc::now())
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            GafeteProvisionalServiceError::GafeteNoRegistrado
+        ));
+    }
+
+    #[test]
+    fn entregar_un_gafete_dado_de_baja_falla() {
+        let (connection, encargado_id) = conexion_con_encargado();
+        let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&connection);
+        let encargados = SqliteEncargadoRutaRepository::new(&connection);
+        let gafetes = SqliteGafeteRepository::new(&connection);
+        let id_gafete = gafetes
+            .buscar_por_numero(12, TipoGafete::ProvisionalKof)
+            .unwrap()
+            .unwrap()
+            .id;
+        gafetes.dar_de_baja(id_gafete).unwrap();
+        let servicio = GafeteProvisionalService::new(&prestamos, &encargados, &gafetes);
+
+        let error = servicio
+            .entregar(encargado_id, 12, 1, Utc::now())
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            GafeteProvisionalServiceError::GafeteNoDisponible(EstadoGafete::DeBaja)
         ));
     }
 }
