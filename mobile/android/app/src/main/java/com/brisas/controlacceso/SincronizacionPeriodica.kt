@@ -119,6 +119,9 @@ class SincronizacionPeriodica(
         const val ESPERA_INICIAL_MS = 10_000L
         /** Junta avisos que llegan casi a la vez en una sola corrida. */
         const val PAUSA_AGRUPACION_MS = 600L
-        const val INTERVALO_MS = 2 * 60_000L
+        /** Cada pulso son ~15 peticiones REST aunque nada cambie (cada una
+         *  escribe un log en Supabase); igual que en escritorio, a 2 min el plan
+         *  Free superó su cuota de Log Ingestion. */
+        const val INTERVALO_MS = 5 * 60_000L
     }
 }

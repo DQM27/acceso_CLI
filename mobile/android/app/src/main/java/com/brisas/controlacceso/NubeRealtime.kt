@@ -168,7 +168,7 @@ class NubeRealtime(
                         // con telemetría) y ocupaba la sincronización: un
                         // registro hecho justo después esperaba a que
                         // terminara para subirse. La red de seguridad es el
-                        // pulso periódico (completo, cada 2 minutos).
+                        // pulso periódico (completo, cada 5 minutos).
                         if (aviso["registro"] is JsonObject || aviso.texto("operation") == "DELETE") {
                             val inicioAplicar = System.nanoTime()
                             val aplicado = try {
