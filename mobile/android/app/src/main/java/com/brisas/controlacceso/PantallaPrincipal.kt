@@ -238,7 +238,7 @@ fun PantallaPrincipal(
     // El botón manual también refresca Activos/Historial al terminar --
     // mismo camino que ya usa el pulso periódico (`onSincronizado` más
     // arriba), para que tocar "Sincronizar" se sienta instantáneo en vez
-    // de esperar al próximo ciclo de 2 minutos.
+    // de esperar al próximo ciclo de 5 minutos.
     LaunchedEffect(nubeViewModel.ultimoResumen) {
         val resumen = nubeViewModel.ultimoResumen
         if (resumen != null) {
