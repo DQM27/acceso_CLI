@@ -1305,8 +1305,13 @@ pub(super) fn construir_cuerpo_empresa_proveedor(
         |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
 
+    // Con `sitio_id`: a diferencia de `empresas` (catálogo global de
+    // contratistas), `empresas_proveedor` sigue siendo por unidad, con
+    // `sitio_id NOT NULL` y una política de alta que lo compara con el del
+    // token. Sin él el alta daba 403 y el ingreso que la usa, 409 por la FK.
     Ok(json!({
         "id": uuid,
+        "sitio_id": contexto.sitio_id,
         "dispositivo_origen_id": contexto.dispositivo_id,
         "nombre": nombre,
         "activa": activo != 0,

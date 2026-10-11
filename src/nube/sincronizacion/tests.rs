@@ -750,6 +750,32 @@ fn envia_una_empresa_proveedor_pendiente_y_la_marca_enviada() {
     assert_eq!(estado, "enviado");
 }
 
+/// `empresas_proveedor` es por unidad (`sitio_id NOT NULL` y política de alta
+/// que lo compara con el del token): sin `sitio_id` en el cuerpo la nube
+/// responde 403 y el ingreso que la usa cae por la FK (409), en bucle.
+#[test]
+fn el_cuerpo_de_una_empresa_proveedor_lleva_el_sitio_del_equipo() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+        .execute(
+            "INSERT INTO empresas_proveedor (nombre, activo, uuid)
+             VALUES ('Maika', 1, 'uuid-empresa-proveedor')",
+            [],
+        )
+        .unwrap();
+
+    let cuerpo = construir_cuerpo_empresa_proveedor(
+        &connection,
+        &contexto("http://localhost"),
+        "uuid-empresa-proveedor",
+    )
+    .unwrap();
+
+    assert_eq!(cuerpo["sitio_id"], "sitio-1");
+    assert_eq!(cuerpo["nombre"], "Maika");
+}
+
 /// Ingreso de proveedor listo para encolar, mismo criterio que
 /// `conexion_con_movimiento_de_visita` -- `fecha_hora_salida` en `Some`
 /// simula un ingreso ya cerrado, listo para el cierre.
