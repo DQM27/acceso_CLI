@@ -798,8 +798,8 @@ mod tests {
         servicio.dar_de_baja(&salidas, ruta_id).unwrap();
 
         assert_eq!(servicio.listar().unwrap().len(), 1);
-        assert!(servicio.listar_seleccionables().unwrap().is_empty());
+        assert_eq!(servicio.listar_seleccionables().unwrap(), vec![]);
         assert_eq!(servicio.buscar("79").unwrap().len(), 1);
-        assert!(servicio.buscar_seleccionables("79").unwrap().is_empty());
+        assert_eq!(servicio.buscar_seleccionables("79").unwrap(), vec![]);
     }
 }

@@ -835,7 +835,7 @@ fn historial_pagina_en_sql_y_total_no_depende_de_limit_offset() {
     filtro.offset = 30;
     let vacia = query.buscar_historial(&filtro).unwrap();
     assert_eq!(vacia.total, 17);
-    assert!(vacia.items.is_empty());
+    assert_eq!(vacia.items, vec![]);
 }
 
 #[test]

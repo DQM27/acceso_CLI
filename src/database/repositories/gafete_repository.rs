@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(resuelto.estado, EstadoGafete::Disponible);
         assert_eq!(resuelto.contratista_portador_id, None);
         assert_eq!(resuelto.portador(), None);
-        assert!(repo.deuda_de_contratista(1).unwrap().is_empty());
+        assert_eq!(repo.deuda_de_contratista(1).unwrap(), Vec::<i64>::new());
     }
 
     #[test]

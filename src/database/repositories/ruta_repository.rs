@@ -192,7 +192,7 @@ mod tests {
         let repo = SqliteRutaRepository::new(&connection);
         repo.crear(79).unwrap();
 
-        assert!(repo.buscar("222", false).unwrap().is_empty());
+        assert_eq!(repo.buscar("222", false).unwrap(), vec![]);
     }
 
     #[test]
@@ -204,7 +204,7 @@ mod tests {
         ruta.activo = false;
         repo.actualizar(&ruta).unwrap();
 
-        assert!(repo.buscar("79", true).unwrap().is_empty());
+        assert_eq!(repo.buscar("79", true).unwrap(), vec![]);
         assert_eq!(repo.buscar("79", false).unwrap().len(), 1);
     }
 

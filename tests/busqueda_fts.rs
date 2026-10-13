@@ -113,7 +113,7 @@ fn activos_busca_persona_empresa_y_gafete_exacto() {
         texto: Some("2".to_owned()),
         ..Default::default()
     };
-    assert!(query.listar_activos(&filtro).unwrap().items.is_empty());
+    assert_eq!(query.listar_activos(&filtro).unwrap().items, vec![]);
 }
 
 #[test]
@@ -224,12 +224,12 @@ fn triggers_mantienen_indices_en_insert_update_delete() {
             .len(),
         1
     );
-    assert!(
+    assert_eq!(
         contratistas
             .buscar(&filtro_contratista("pena"))
             .unwrap()
-            .items
-            .is_empty()
+            .items,
+        vec![]
     );
     // El nombre de empresa se busca con `SqliteEmpresasQuery` (su propio
     // índice, `empresas_fts`) — el buscador de contratistas no lo indexa
@@ -241,12 +241,12 @@ fn triggers_mantienen_indices_en_insert_update_delete() {
         ..Default::default()
     };
     assert_eq!(empresas.buscar(&filtro_empresa).unwrap().len(), 1);
-    assert!(
+    assert_eq!(
         contratistas
             .buscar(&filtro_contratista("alvarez"))
             .unwrap()
-            .items
-            .is_empty()
+            .items,
+        vec![]
     );
     let filtro_usuario = FiltroUsuarios {
         texto: Some("munoz".to_owned()),
@@ -257,7 +257,7 @@ fn triggers_mantienen_indices_en_insert_update_delete() {
         texto: Some("hernandez".to_owned()),
         ..Default::default()
     };
-    assert!(usuarios.buscar(&filtro_anterior).unwrap().is_empty());
+    assert_eq!(usuarios.buscar(&filtro_anterior).unwrap(), vec![]);
 
     connection
         .execute("DELETE FROM contratistas WHERE id=1", [])

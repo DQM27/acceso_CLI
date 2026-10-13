@@ -213,7 +213,7 @@ fn no_busca_por_nombre_de_empresa() {
         false,
         true,
     );
-    assert!(buscar(&connection, Some("Electromecánicos")).is_empty());
+    assert_eq!(buscar(&connection, Some("Electromecánicos")), vec![]);
 }
 
 #[test]
@@ -234,7 +234,7 @@ fn busqueda_ascii_es_case_insensitive() {
     // El nombre de empresa no participa del buscador principal (DEC-055,
     // ver `no_busca_por_nombre_de_empresa`) — case-insensitive o no, nunca
     // matchea acá.
-    assert!(buscar(&connection, Some("constructora alfa")).is_empty());
+    assert_eq!(buscar(&connection, Some("constructora alfa")), vec![]);
 }
 
 /// Regresión de "Búsquedas de 1-2 caracteres no pliegan tildes ni Ñ"
@@ -720,7 +720,7 @@ fn foreign_key_impide_estado_con_empresa_inexistente() {
     let connection = preparar_base();
     let resultado = connection.execute("INSERT INTO contratistas (cedula, nombre, empresa_id, tipo_ingreso, fecha_vencimiento_praind, es_personal_ruta, tiene_acceso) VALUES (?1, ?2, 999, 'SWAT', NULL, 0, 1)", params!["1", "Inválido"]);
     assert!(resultado.is_err());
-    assert!(buscar(&connection, None).is_empty());
+    assert_eq!(buscar(&connection, None), vec![]);
 }
 
 #[test]
