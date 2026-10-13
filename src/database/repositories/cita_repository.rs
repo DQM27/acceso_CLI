@@ -189,7 +189,7 @@ mod tests {
         let connection = conexion();
         let repo = SqliteCitaRepository::new(&connection);
 
-        assert!(repo.buscar_por_cedula("1-2345").unwrap().is_empty());
+        assert_eq!(repo.buscar_por_cedula("1-2345").unwrap(), vec![]);
     }
 
     #[test]

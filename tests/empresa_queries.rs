@@ -108,10 +108,9 @@ fn renombrado_actualiza_fts_y_duplicado_conserva_sqlite() {
     let dos = core.crear_empresa(&actor, "Empresa Dos").unwrap();
     core.actualizar_empresa(&actor, uno, "Constructora Hernández")
         .unwrap();
-    assert!(
-        core.buscar_empresas(&filtro(Some("alvarez")))
-            .unwrap()
-            .is_empty()
+    assert_eq!(
+        core.buscar_empresas(&filtro(Some("alvarez"))).unwrap(),
+        vec![]
     );
     assert_eq!(
         core.buscar_empresas(&filtro(Some("hernandez"))).unwrap()[0].id,
