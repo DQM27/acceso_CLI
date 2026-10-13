@@ -579,7 +579,7 @@ mod tests {
 
         // La 79 ya existe (fixture).
         assert_eq!(core.buscar_rutas("79").unwrap().len(), 1);
-        assert!(core.buscar_rutas("222").unwrap().is_empty());
+        assert_eq!(core.buscar_rutas("222").unwrap(), vec![]);
     }
 
     #[test]

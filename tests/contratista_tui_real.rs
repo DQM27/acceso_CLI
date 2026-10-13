@@ -158,21 +158,21 @@ fn actualizar_refresca_fts_duplicado_y_empresa_inexistente_son_semanticos() {
         ),
     )
     .unwrap();
-    assert!(
+    assert_eq!(
         core.buscar_contratistas(&filtro("hernandez"))
             .unwrap()
-            .items
-            .is_empty()
+            .items,
+        vec![]
     );
     assert_eq!(
         core.buscar_contratistas(&filtro("alvarez")).unwrap().items[0].id,
         a
     );
-    assert!(
+    assert_eq!(
         core.buscar_contratistas(&filtro("997997997"))
             .unwrap()
-            .items
-            .is_empty()
+            .items,
+        vec![]
     );
     assert_eq!(
         core.buscar_contratistas(&filtro("998998998"))
