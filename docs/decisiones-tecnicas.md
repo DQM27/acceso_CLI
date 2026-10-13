@@ -751,3 +751,50 @@ Además, las marcas de agua se guardan con microsegundos
 del `updated_at` real y `updated_at=gt.<marca>` volvía a traer todas las
 filas de ese segundo, para siempre (los encargados de ruta se cargaron en
 lote, todos en el mismo segundo).
+
+---
+
+## 2026-10-13 — La portería no se bloquea por falta de red
+
+**Antes:** con la nube configurada, si la verificación en vivo no respondía
+(sin internet, nube caída o lenta), el ingreso no se registraba
+(`SinVerificarEnLaNube`, decisión del dueño de 2026-09). En la práctica, una
+caída de internet detenía la fila en la portería.
+
+**Decisión (del dueño, 2026-10-13):** sin conexión con la nube se registra
+con las reglas locales. Aplica a las seis operaciones verificadas de
+`application::con_nube`: vista previa e ingreso de contratista, proveedor,
+correo, entrada de visita y entrega de gafete provisional KOF.
+
+- **Qué cuenta como "sin conexión"** (`es_falta_de_conexion` en
+  `NubeError`, `SincronizacionError` y `GestionNubeError`): no se pudo
+  conectar, no hubo respuesta a tiempo o la nube respondió `5xx`.
+- **Qué sigue frenando, igual que antes:** que la nube **responda** que la
+  persona ya está adentro o que el gafete está en uso, y que rechace la
+  consulta (`4xx`: dispositivo retirado, token inválido; versión vieja;
+  sesión sin permiso). Eso no se arregla esperando a tener red. En esos
+  casos sigue apareciendo `SinVerificarEnLaNube`, con un mensaje nuevo que
+  ya no culpa a la conexión.
+- **Tope de 3 s para las consultas en vivo** (`TIMEOUT_VERIFICACION`, cliente
+  propio en `nube::cliente`): antes compartían el de 10 s de la
+  sincronización y quien operaba podía quedar esperando eso con la persona
+  enfrente. La sincronización conserva sus 10 s.
+
+**Por qué es seguro:** lo que la verificación no pudo ver lo atrapan los
+índices únicos de Supabase al sincronizar (`ingresos_contratista_activo_idx`,
+los de gafete activo por sitio y los demás de `indice_persona_activa_de`).
+La fila que choca queda fallida de inmediato, sin reintentos, y quien opera
+recibe el aviso (`ResumenSincronizacion::conflictos_*`). Es el mismo camino
+que ya existía para un registro hecho sin conexión.
+
+**Huecos conocidos, sin resolver en este cambio:**
+
+- Renovar el token del dispositivo (`device-auth`) sigue con el tope de
+  10 s por llamada. Sin red de verdad falla al instante; con una red mala
+  (señal débil, portal cautivo) puede demorar. El token en caché evita la
+  llamada mientras esté vigente.
+- El choque de "el encargado ya tiene otro gafete provisional sin devolver"
+  (`prestamos_gafete_provisional_encargado_activo_idx`) deja la fila fallida
+  al sincronizar pero no tiene aviso a quien opera; el de gafete en uso sí.
+- El registro no lleva una marca visible de "registrado sin verificar"; hoy
+  sólo queda en el registro técnico (`log::warn!`).

@@ -148,6 +148,19 @@ impl SincronizacionError {
     pub fn token_dispositivo_vencido(&self) -> bool {
         matches!(self, Self::RespuestaInesperada { status: 401, .. })
     }
+
+    /// La nube no se pudo alcanzar o no pudo atender: sin conexión, sin
+    /// respuesta a tiempo (ver [`NubeError::es_falta_de_conexion`]) o caída
+    /// (`5xx`: el receptor o su base no están disponibles). Un `4xx` no
+    /// cuenta: es la nube diciendo que no (token rechazado, consulta mal
+    /// armada), y eso no se arregla esperando a tener red.
+    pub fn es_falta_de_conexion(&self) -> bool {
+        match self {
+            Self::Red(error) => error.es_falta_de_conexion(),
+            Self::RespuestaInesperada { status, .. } => *status >= 500,
+            Self::BaseLocal(_) | Self::FechaInvalida(_) => false,
+        }
+    }
 }
 
 #[cfg(test)]

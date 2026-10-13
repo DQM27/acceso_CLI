@@ -99,6 +99,24 @@ pub enum GestionNubeError {
     Usuario(#[from] crate::services::error::UsuarioServiceError),
 }
 
+impl GestionNubeError {
+    /// La nube no se pudo alcanzar al autenticar o al consultar (ver
+    /// `NubeError::es_falta_de_conexion` y
+    /// `SincronizacionError::es_falta_de_conexion`). Una sesión sin permiso,
+    /// un dispositivo retirado o un error de la base local no cuentan.
+    pub fn es_falta_de_conexion(&self) -> bool {
+        match self {
+            Self::Autenticacion(error) => error.es_falta_de_conexion(),
+            Self::Sincronizacion(error) => error.es_falta_de_conexion(),
+            Self::OperacionNoAutorizada
+            | Self::UsoNoAutorizado
+            | Self::Sqlite(_)
+            | Self::YaConfigurado
+            | Self::Usuario(_) => false,
+        }
+    }
+}
+
 /// Resultado de una sincronización manual -- lo suficiente para que la
 /// pantalla muestre "sitio X, dispositivo Y: 12 enviados, 0 fallidos, 2
 /// abiertos del otro lado".

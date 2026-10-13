@@ -33,6 +33,16 @@ pub enum NubeError {
     Firmante(#[from] super::firmante::ErrorFirmante),
 }
 
+impl NubeError {
+    /// La nube no se pudo alcanzar: no hubo conexión o no respondió a
+    /// tiempo. No incluye que la nube conteste "no" (dispositivo retirado,
+    /// versión vieja, sin credencial) ni una respuesta que no se entendió:
+    /// esos son rechazos de verdad, no falta de red.
+    pub fn es_falta_de_conexion(&self) -> bool {
+        matches!(self, Self::Red(error) if error.is_connect() || error.is_timeout())
+    }
+}
+
 /// Tope por operación de red contra el receptor (conexión + respuesta
 /// completa). Sin esto, `reqwest::blocking::Client::new()` no tiene ningún
 /// límite -- una conexión que se queda colgada a mitad de camino (no
@@ -43,7 +53,7 @@ pub enum NubeError {
 /// "best effort".
 const TIMEOUT_HTTP: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// Único cliente HTTP bloqueante del crate -- construido una sola vez (ver
+/// Cliente HTTP bloqueante general del crate -- construido una sola vez (ver
 /// `TIMEOUT_HTTP`) y reutilizado desde entonces. Antes cada llamada a
 /// `cliente_http()` levantaba un `Client` nuevo, tirando el pool de
 /// conexiones/TLS de la llamada anterior; con `LazyLock` todas comparten el
@@ -65,6 +75,31 @@ static CLIENTE_HTTP: std::sync::LazyLock<reqwest::blocking::Client> =
 /// clonarlo no repite ninguno de los dos trabajos.
 pub(crate) fn cliente_http() -> reqwest::blocking::Client {
     CLIENTE_HTTP.clone()
+}
+
+/// Tope de las consultas en vivo que se hacen justo antes de registrar en
+/// la portería (`sincronizacion::consultas_en_vivo`): quien opera está
+/// esperando con la persona enfrente. Pasado este tiempo la consulta cuenta
+/// como "sin conexión" y el registro sigue con las reglas locales (ver
+/// `application::con_nube`); la sincronización, que no tiene a nadie
+/// esperando, conserva el tope general de [`TIMEOUT_HTTP`].
+const TIMEOUT_VERIFICACION: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Segundo cliente compartido, igual que [`CLIENTE_HTTP`] pero con
+/// [`TIMEOUT_VERIFICACION`]. Aparte para no acortar el tope de la
+/// sincronización, que sí puede tardar más sin estorbar a nadie.
+static CLIENTE_HTTP_VERIFICACION: std::sync::LazyLock<reqwest::blocking::Client> =
+    std::sync::LazyLock::new(|| {
+        reqwest::blocking::Client::builder()
+            .timeout(TIMEOUT_VERIFICACION)
+            .build()
+            .unwrap_or_else(|_| reqwest::blocking::Client::new())
+    });
+
+/// Clon barato del cliente de las consultas en vivo (ver
+/// [`TIMEOUT_VERIFICACION`]).
+pub(crate) fn cliente_http_verificacion() -> reqwest::blocking::Client {
+    CLIENTE_HTTP_VERIFICACION.clone()
 }
 
 /// Token que autoriza a este dispositivo a leer/escribir únicamente los

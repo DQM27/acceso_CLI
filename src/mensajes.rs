@@ -387,8 +387,8 @@ pub fn mensaje_bloqueo_ingreso(
             "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio.".into()
         }
         BloqueoIngreso::SinVerificarEnLaNube => {
-            "No se pudo verificar en la nube si el contratista ya tiene un ingreso activo. \
-             Revise la conexión e intente de nuevo."
+            "La nube rechazó la verificación de si el contratista ya tiene un ingreso activo. \
+             Intente de nuevo; si se repite, avise a un administrador para revisar este equipo."
                 .into()
         }
         BloqueoIngreso::ActivoEnOtroSitio { sitio } => {

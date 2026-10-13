@@ -1463,7 +1463,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() and 0xFFFF) != 48263) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_verificado() and 0xFFFF) != 47458) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_verificado() and 0xFFFF) != 39491) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida() and 0xFFFF) != 31419) {
@@ -3151,7 +3151,8 @@ public interface NucleoInterface {
     /**
      * Ingreso con TODAS sus reglas en una sola llamada: locales, y con nube
      * la persona sin ingreso activo en ningún sitio y el gafete libre en el
-     * otro dispositivo; si no se puede verificar, no se registra. Las
+     * otro dispositivo. Sin conexión con la nube se registra con las reglas
+     * locales; si la nube rechaza la consulta, no se registra. Las
      * decide `application::registrar_ingreso_verificado`, la misma que usa
      * escritorio. Sin vincular = nube sin configurar.
      */
@@ -4055,7 +4056,8 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     /**
      * Ingreso con TODAS sus reglas en una sola llamada: locales, y con nube
      * la persona sin ingreso activo en ningún sitio y el gafete libre en el
-     * otro dispositivo; si no se puede verificar, no se registra. Las
+     * otro dispositivo. Sin conexión con la nube se registra con las reglas
+     * locales; si la nube rechaza la consulta, no se registra. Las
      * decide `application::registrar_ingreso_verificado`, la misma que usa
      * escritorio. Sin vincular = nube sin configurar.
      */
