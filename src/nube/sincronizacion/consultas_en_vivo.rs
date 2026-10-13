@@ -1,5 +1,5 @@
 use super::{ContextoSincronizacion, SincronizacionError, llamar_rpc, obtener_json};
-use crate::nube::cliente::cliente_http;
+use crate::nube::cliente::{cliente_http, cliente_http_verificacion};
 
 #[derive(serde::Deserialize)]
 pub(super) struct FilaGafeteOcupado {
@@ -61,7 +61,7 @@ pub(super) fn gafete_ocupado_en_otro_dispositivo_en(
     columna_cierre: &str,
     numero: i64,
 ) -> Result<bool, SincronizacionError> {
-    let cliente = cliente_http();
+    let cliente = cliente_http_verificacion();
     let url = format!(
         "{}/rest/v1/{tabla}?sitio_id=eq.{}&{columna_dispositivo_apertura}=neq.{}\
          &{columna_cierre}=is.null&gafete_numero=eq.{numero}&select=id&limit=1",
@@ -216,8 +216,9 @@ pub fn visitante_activo_en_otro_sitio(
 
 /// Regla "un proveedor no puede estar adentro dos veces, ni en este sitio ni
 /// en otro": pregunta a la nube si esta cédula tiene un ingreso de proveedor
-/// abierto en CUALQUIER sitio. Quien llama propaga el error: si no se puede
-/// verificar, no se registra (mismo criterio que contratistas).
+/// abierto en CUALQUIER sitio. Quien llama decide qué hacer con el error:
+/// sin conexión se registra con las reglas locales y un rechazo de la nube
+/// frena (ver `application::con_nube`).
 ///
 /// Va por la función `ingreso_proveedor_activo` y no por
 /// `/rest/v1/ingresos_proveedor`: la RLS sólo deja leer a cada equipo lo de
@@ -269,7 +270,7 @@ fn activo_segun_funcion(
     funcion: &str,
     cuerpo: &serde_json::Value,
 ) -> Result<Option<IngresoActivoEnLaNube>, SincronizacionError> {
-    let cliente = cliente_http();
+    let cliente = cliente_http_verificacion();
     let filas: Vec<FilaIngresoActivoCualquierSitio> =
         llamar_rpc(&cliente, contexto, funcion, cuerpo)?;
     Ok(filas.into_iter().next().map(|fila| IngresoActivoEnLaNube {
@@ -300,8 +301,8 @@ struct FilaAdentroPorOtraVia {
 /// (contratista, proveedor, por correo): pregunta a la nube si esta cédula
 /// está adentro por una vía distinta de `via`, en cualquier unidad o equipo
 /// (función `persona_adentro_por_otra_via`, que compara la cédula
-/// normalizada). Quien llama propaga el error: si no se puede verificar, no
-/// se registra (mismo criterio que la regla de la misma vía).
+/// normalizada). Quien llama decide qué hacer con el error, con el mismo
+/// criterio que la regla de la misma vía (ver `application::con_nube`).
 pub fn persona_adentro_por_otra_via(
     contexto: &ContextoSincronizacion<'_>,
     cedula: &str,
@@ -315,7 +316,7 @@ pub fn persona_adentro_por_otra_via(
         ViaIngreso::PorCorreo => "POR_CORREO",
     };
     let filas: Vec<FilaAdentroPorOtraVia> = llamar_rpc(
-        &cliente_http(),
+        &cliente_http_verificacion(),
         contexto,
         "persona_adentro_por_otra_via",
         &serde_json::json!({ "p_cedula": cedula, "p_via": via_texto }),

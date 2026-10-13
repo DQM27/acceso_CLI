@@ -63,7 +63,8 @@ impl Nucleo {
 
     /// Ingreso con TODAS sus reglas en una sola llamada: locales, y con nube
     /// la persona sin ingreso activo en ningún sitio y el gafete libre en el
-    /// otro dispositivo; si no se puede verificar, no se registra. Las
+    /// otro dispositivo. Sin conexión con la nube se registra con las reglas
+    /// locales; si la nube rechaza la consulta, no se registra. Las
     /// decide `application::registrar_ingreso_verificado`, la misma que usa
     /// escritorio. Sin vincular = nube sin configurar.
     pub fn registrar_ingreso_verificado(

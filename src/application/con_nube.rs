@@ -3,6 +3,18 @@
 //! El orden de los chequeos y qué falla frena viven sólo acá; escritorio
 //! (Tauri) y móvil (`mobile/rust-core`) llaman a estas funciones tal cual.
 //!
+//! **La portería no se bloquea por falta de red.** Si la nube no se puede
+//! alcanzar (sin conexión, sin respuesta a tiempo o caída; ver
+//! `GestionNubeError::es_falta_de_conexion`), el registro sigue con las
+//! reglas locales y queda en el registro técnico. Lo que la verificación en
+//! vivo no pudo ver lo atrapan los índices únicos de Supabase al
+//! sincronizar: la fila que choca queda fallida y quien opera recibe el
+//! aviso (`ResumenSincronizacion::conflictos_*`). Lo que sí frena, igual
+//! que antes, es que la nube **responda** que no: la persona ya está
+//! adentro, el gafete ya está en uso, o la nube rechazó la consulta
+//! (dispositivo retirado, sesión sin permiso). Ver
+//! `docs/decisiones-tecnicas.md`, entrada 2026-10-13.
+//!
 //! Reciben una función que toma el candado del núcleo en vez de `&AppCore`:
 //! el candado se toma sólo para lo local (`SQLite`) y se suelta antes de
 //! cada llamada de red, para no colgar al resto de la app mientras tanto
@@ -12,7 +24,9 @@ use std::ops::Deref;
 
 use super::{AppCore, GestionNubeError};
 use crate::models::medio_ingreso::MedioIngreso;
-use crate::nube::{CacheTokenDispositivo, ContextoSincronizacion, TokenDispositivo};
+use crate::nube::{
+    CacheTokenDispositivo, ContextoSincronizacion, SincronizacionError, TokenDispositivo,
+};
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::{
     CitaServiceError, GafeteProvisionalServiceError, IngresoCorreoServiceError,
@@ -38,6 +52,48 @@ fn autenticar<G: Deref<Target = AppCore>>(
     Ok(token)
 }
 
+/// Token para verificar en la nube antes de registrar. `Ok(None)` si la
+/// nube no se pudo alcanzar: no hay contra qué verificar y se registra con
+/// las reglas locales (ver el doc-comment del módulo). Cualquier otra falla
+/// (sesión sin permiso, dispositivo retirado) se devuelve tal cual.
+fn token_para_verificar<G: Deref<Target = AppCore>>(
+    nucleo: &impl Fn() -> G,
+    nube: &CacheTokenDispositivo,
+    actor: &UsuarioSesion,
+    operacion: &str,
+) -> Result<Option<TokenDispositivo>, GestionNubeError> {
+    match autenticar(nucleo, nube, actor) {
+        Ok(token) => Ok(Some(token)),
+        Err(error) if error.es_falta_de_conexion() => {
+            log::warn!(
+                "{operacion}: sin conexión con la nube, se registra con las reglas locales: {error}"
+            );
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// Resultado de una consulta de verificación con la misma regla: si la nube
+/// no se pudo alcanzar, cuenta como `libre` (el valor que no frena) y queda
+/// en el registro técnico; cualquier otro error se devuelve, porque es la
+/// nube rechazando la consulta y eso no se arregla registrando igual.
+fn o_libre_sin_conexion<T>(
+    resultado: Result<T, SincronizacionError>,
+    libre: T,
+    consulta: &str,
+) -> Result<T, SincronizacionError> {
+    match resultado {
+        Err(error) if error.es_falta_de_conexion() => {
+            log::warn!(
+                "{consulta}: sin conexión con la nube, se registra con las reglas locales: {error}"
+            );
+            Ok(libre)
+        }
+        otro => otro,
+    }
+}
+
 fn contexto(token: &TokenDispositivo) -> ContextoSincronizacion<'_> {
     ContextoSincronizacion {
         base_url: crate::nube::base_url(),
@@ -59,11 +115,10 @@ fn unir_hilo<T>(hilo: std::thread::ScopedJoinHandle<'_, T>) -> T {
 
 /// Regla: un contratista no puede tener dos ingresos activos, ni en este
 /// sitio (este equipo o el otro) ni en otro sitio. Busca en la nube un
-/// ingreso abierto con esa cédula en cualquier sitio. `Ok(None)` = libre;
-/// sin nube configurada no hay con quién chocar (sólo cuentan los chequeos
-/// locales). Si la consulta falla, `SinVerificarEnLaNube`: con nube
-/// configurada no se registra sin verificar (decisión del dueño, igual que
-/// el gafete).
+/// ingreso abierto con esa cédula en cualquier sitio. `None` = libre; sin
+/// nube configurada no hay con quién chocar (sólo cuentan los chequeos
+/// locales). Sin conexión con la nube también es `None` (ver el doc-comment
+/// del módulo); si la nube rechaza la consulta, `SinVerificarEnLaNube`.
 ///
 /// Además, la persona no puede estar adentro por otra vía (como proveedor o
 /// por correo) en ninguna unidad (`persona_adentro_por_otra_via`, a la vez
@@ -83,12 +138,9 @@ fn bloqueo_en_la_nube(
             )
         });
         let misma_via = crate::nube::contratista_con_ingreso_activo(contexto, cedula);
-        let otra_via = consulta_otra_via
-            .join()
-            .unwrap_or_else(|panico| std::panic::resume_unwind(panico));
-        (misma_via, otra_via)
+        (misma_via, unir_hilo(consulta_otra_via))
     });
-    match misma_via {
+    match o_libre_sin_conexion(misma_via, None, "ingreso") {
         Ok(None) => {}
         Ok(Some(activo)) if activo.mismo_sitio => {
             return Some(BloqueoIngreso::IngresoActivoEnOtroDispositivo);
@@ -99,17 +151,17 @@ fn bloqueo_en_la_nube(
             });
         }
         Err(error) => {
-            log::warn!("ingreso: no se pudo verificar en la nube: {error}");
+            log::warn!("ingreso: la nube rechazó la verificación: {error}");
             return Some(BloqueoIngreso::SinVerificarEnLaNube);
         }
     }
-    match otra_via {
+    match o_libre_sin_conexion(otra_via, None, "ingreso (otra vía)") {
         Ok(None) => None,
         Ok(Some(adentro)) => Some(BloqueoIngreso::ActivoEnOtroSitio {
             sitio: format!("{} ({})", adentro.sitio_nombre, adentro.via.texto()),
         }),
         Err(error) => {
-            log::warn!("ingreso: no se pudo verificar la otra vía en la nube: {error}");
+            log::warn!("ingreso: la nube rechazó la verificación de la otra vía: {error}");
             Some(BloqueoIngreso::SinVerificarEnLaNube)
         }
     }
@@ -147,8 +199,9 @@ pub fn preparar_ingreso_verificado<G: Deref<Target = AppCore>>(
     }
     // Sin sesión no hay con qué autorizar la consulta: con nube
     // configurada eso cuenta como "no se pudo verificar".
-    let bloqueo = match actor.map(|actor| autenticar(&nucleo, nube, actor)) {
-        Some(Ok(token)) => bloqueo_en_la_nube(&contexto(&token), &preparacion.cedula),
+    let bloqueo = match actor.map(|actor| token_para_verificar(&nucleo, nube, actor, "ingreso")) {
+        Some(Ok(Some(token))) => bloqueo_en_la_nube(&contexto(&token), &preparacion.cedula),
+        Some(Ok(None)) => None,
         Some(Err(error)) => {
             log::warn!("ingreso: no se pudo autenticar para verificar: {error}");
             Some(BloqueoIngreso::SinVerificarEnLaNube)
@@ -172,12 +225,14 @@ pub enum IngresoVerificadoError {
 /// 1. reglas locales (este equipo y la caché del otro equipo del sitio);
 /// 2. con nube configurada, en vivo: la persona no tiene un ingreso activo
 ///    en ningún sitio, y el gafete no está en uso en el otro dispositivo.
-///    Si no se puede verificar, no se registra;
+///    Sin conexión con la nube se sigue con lo local (ver el doc-comment
+///    del módulo); si la nube rechaza la consulta, no se registra;
 /// 3. escribe (`AppCore::registrar_ingreso`, que repite lo local dentro de
 ///    su transacción).
 ///
-/// Si dos equipos pasan el paso 2 en el mismo instante, el índice único de
-/// Supabase decide: gana el primero en escribir.
+/// Si dos equipos pasan el paso 2 en el mismo instante, o uno registró sin
+/// conexión, el índice único de Supabase decide: gana el primero en
+/// escribir y el otro recibe el aviso al sincronizar.
 #[allow(clippy::too_many_arguments)]
 pub fn registrar_ingreso_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
@@ -194,44 +249,49 @@ pub fn registrar_ingreso_verificado<G: Deref<Target = AppCore>>(
     }
 
     if nube.vinculado() {
-        let token = autenticar(&nucleo, nube, actor).map_err(|error| {
+        let token = token_para_verificar(&nucleo, nube, actor, "ingreso").map_err(|error| {
             log::warn!("ingreso: no se pudo autenticar para verificar: {error}");
             IngresoVerificadoError::Bloqueado(BloqueoIngreso::SinVerificarEnLaNube)
         })?;
-        let contexto = contexto(&token);
-        // Las dos consultas son independientes: a la vez, un solo viaje de
-        // espera en vez de dos (telemetría de staging: ~80-100 ms menos al
-        // confirmar). Se evalúan en el mismo orden de siempre, así el
-        // mensaje que ve quien opera no cambia.
-        let (bloqueo, gafete_ocupado) = std::thread::scope(|hilos| {
-            let consulta_gafete = gafete.map(|numero| {
-                let contexto = &contexto;
-                hilos.spawn(move || {
-                    crate::nube::gafete_ocupado_en_otro_dispositivo(contexto, numero)
-                })
-            });
-            let bloqueo = bloqueo_en_la_nube(&contexto, &preparacion.cedula);
-            let gafete_ocupado = consulta_gafete.map(|hilo| {
-                hilo.join()
-                    .unwrap_or_else(|panico| std::panic::resume_unwind(panico))
-            });
-            (bloqueo, gafete_ocupado)
-        });
-        if let Some(bloqueo) = bloqueo {
-            return Err(IngresoVerificadoError::Bloqueado(bloqueo));
-        }
-        if let (Some(numero), Some(ocupado)) = (gafete, gafete_ocupado) {
-            let ocupado = ocupado.map_err(|error| {
-                log::warn!("ingreso: no se pudo verificar el gafete: {error}");
-                IngresoVerificadoError::Bloqueado(BloqueoIngreso::SinVerificarEnLaNube)
-            })?;
-            if ocupado {
-                return Err(IngresoVerificadoError::GafeteOcupadoEnSitio { numero });
-            }
+        if let Some(token) = token {
+            verificar_ingreso_en_la_nube(&contexto(&token), &preparacion.cedula, gafete)?;
         }
     }
 
     Ok(nucleo().registrar_ingreso(actor, contratista_id, medio, gafete, placa)?)
+}
+
+/// Paso 2 de [`registrar_ingreso_verificado`].
+fn verificar_ingreso_en_la_nube(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+    gafete: Option<i64>,
+) -> Result<(), IngresoVerificadoError> {
+    // Las dos consultas son independientes: a la vez, un solo viaje de
+    // espera en vez de dos (telemetría de staging: ~80-100 ms menos al
+    // confirmar). Se evalúan en el mismo orden de siempre, así el
+    // mensaje que ve quien opera no cambia.
+    let (bloqueo, gafete_ocupado) = std::thread::scope(|hilos| {
+        let consulta_gafete = gafete.map(|numero| {
+            hilos.spawn(move || crate::nube::gafete_ocupado_en_otro_dispositivo(contexto, numero))
+        });
+        let bloqueo = bloqueo_en_la_nube(contexto, cedula);
+        (bloqueo, consulta_gafete.map(unir_hilo))
+    });
+    if let Some(bloqueo) = bloqueo {
+        return Err(IngresoVerificadoError::Bloqueado(bloqueo));
+    }
+    if let (Some(numero), Some(ocupado)) = (gafete, gafete_ocupado) {
+        let ocupado =
+            o_libre_sin_conexion(ocupado, false, "ingreso (gafete)").map_err(|error| {
+                log::warn!("ingreso: la nube rechazó la verificación del gafete: {error}");
+                IngresoVerificadoError::Bloqueado(BloqueoIngreso::SinVerificarEnLaNube)
+            })?;
+        if ocupado {
+            return Err(IngresoVerificadoError::GafeteOcupadoEnSitio { numero });
+        }
+    }
+    Ok(())
 }
 
 // ---- Ingreso de proveedor ----
@@ -262,13 +322,14 @@ pub enum IngresoProveedorVerificadoError {
 ///    (`AppCore::proveedor_con_ingreso_activo_en_sitio`);
 /// 2. con nube configurada, en vivo: la cédula no tiene un ingreso abierto
 ///    en ningún sitio (`ingreso_proveedor_activo`) y el gafete no está en uso
-///    en el otro dispositivo del sitio. Si no se puede verificar, no se
-///    registra (mismo criterio que contratistas; antes el paso del sitio
-///    era "mejor esfuerzo" y dejaba pasar);
+///    en el otro dispositivo del sitio. Sin conexión con la nube se sigue
+///    con lo local (ver el doc-comment del módulo); si la nube rechaza la
+///    consulta, no se registra;
 /// 3. escribe (`AppCore::registrar_ingreso_proveedor`, reglas locales).
 ///
-/// Si dos equipos pasan el paso 2 en el mismo instante, decide el índice
-/// único `ingresos_proveedor_cedula_activa_idx`: gana el primero en escribir.
+/// Si dos equipos pasan el paso 2 en el mismo instante, o uno registró sin
+/// conexión, decide el índice único `ingresos_proveedor_cedula_activa_idx`:
+/// gana el primero en escribir.
 pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
     nube: &CacheTokenDispositivo,
@@ -285,53 +346,10 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
         return Err(IngresoProveedorServiceError::IngresoActivo.into());
     }
 
-    if nube.vinculado() {
-        let token = autenticar(&nucleo, nube, actor)?;
-        let contexto = contexto(&token);
-        // A la vez, como en `registrar_ingreso_verificado`; mismo orden al
-        // evaluar.
-        let (activo_en_otro_sitio, gafete_ocupado, otra_via) = std::thread::scope(|hilos| {
-            let consulta_gafete = hilos.spawn(|| {
-                crate::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(
-                    &contexto,
-                    datos.gafete_numero,
-                )
-            });
-            let consulta_otra_via = hilos.spawn(|| {
-                crate::nube::persona_adentro_por_otra_via(
-                    &contexto,
-                    &datos.cedula,
-                    crate::models::via_ingreso::ViaIngreso::Proveedor,
-                )
-            });
-            let activo = crate::nube::proveedor_con_ingreso_activo(&contexto, &datos.cedula);
-            (
-                activo,
-                unir_hilo(consulta_gafete),
-                unir_hilo(consulta_otra_via),
-            )
-        });
-        match activo_en_otro_sitio.map_err(GestionNubeError::from)? {
-            Some(activo) if activo.mismo_sitio => {
-                return Err(IngresoProveedorServiceError::IngresoActivo.into());
-            }
-            Some(activo) => {
-                return Err(IngresoProveedorVerificadoError::ActivoEnOtroSitio {
-                    sitio: activo.sitio_nombre,
-                });
-            }
-            None => {}
-        }
-        // Una persona no puede estar adentro por dos vías (como contratista o
-        // por correo, en cualquier unidad).
-        if let Some(adentro) = otra_via.map_err(GestionNubeError::from)? {
-            return Err(IngresoProveedorServiceError::AdentroPorOtraVia(adentro.via).into());
-        }
-        if gafete_ocupado.map_err(GestionNubeError::from)? {
-            return Err(IngresoProveedorVerificadoError::GafeteOcupadoEnSitio {
-                numero: datos.gafete_numero,
-            });
-        }
+    if nube.vinculado()
+        && let Some(token) = token_para_verificar(&nucleo, nube, actor, "ingreso de proveedor")?
+    {
+        verificar_proveedor_en_la_nube(&contexto(&token), &datos)?;
     }
 
     Ok(nucleo().registrar_ingreso_proveedor(
@@ -342,6 +360,64 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
         datos.placa,
         datos.gafete_numero,
     )?)
+}
+
+/// Paso 2 de [`registrar_ingreso_proveedor_verificado`].
+fn verificar_proveedor_en_la_nube(
+    contexto: &ContextoSincronizacion<'_>,
+    datos: &NuevoIngresoProveedor,
+) -> Result<(), IngresoProveedorVerificadoError> {
+    // A la vez, como en `verificar_ingreso_en_la_nube`; mismo orden al
+    // evaluar.
+    let (activo_en_otro_sitio, gafete_ocupado, otra_via) = std::thread::scope(|hilos| {
+        let consulta_gafete = hilos.spawn(|| {
+            crate::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(
+                contexto,
+                datos.gafete_numero,
+            )
+        });
+        let consulta_otra_via = hilos.spawn(|| {
+            crate::nube::persona_adentro_por_otra_via(
+                contexto,
+                &datos.cedula,
+                crate::models::via_ingreso::ViaIngreso::Proveedor,
+            )
+        });
+        let activo = crate::nube::proveedor_con_ingreso_activo(contexto, &datos.cedula);
+        (
+            activo,
+            unir_hilo(consulta_gafete),
+            unir_hilo(consulta_otra_via),
+        )
+    });
+    match o_libre_sin_conexion(activo_en_otro_sitio, None, "ingreso de proveedor")
+        .map_err(GestionNubeError::from)?
+    {
+        Some(activo) if activo.mismo_sitio => {
+            return Err(IngresoProveedorServiceError::IngresoActivo.into());
+        }
+        Some(activo) => {
+            return Err(IngresoProveedorVerificadoError::ActivoEnOtroSitio {
+                sitio: activo.sitio_nombre,
+            });
+        }
+        None => {}
+    }
+    // Una persona no puede estar adentro por dos vías (como contratista o
+    // por correo, en cualquier unidad).
+    if let Some(adentro) = o_libre_sin_conexion(otra_via, None, "ingreso de proveedor (otra vía)")
+        .map_err(GestionNubeError::from)?
+    {
+        return Err(IngresoProveedorServiceError::AdentroPorOtraVia(adentro.via).into());
+    }
+    if o_libre_sin_conexion(gafete_ocupado, false, "ingreso de proveedor (gafete)")
+        .map_err(GestionNubeError::from)?
+    {
+        return Err(IngresoProveedorVerificadoError::GafeteOcupadoEnSitio {
+            numero: datos.gafete_numero,
+        });
+    }
+    Ok(())
 }
 
 // ---- Ingreso por correo ----
@@ -374,12 +450,14 @@ pub enum IngresoCorreoVerificadoError {
 /// 2. con nube configurada, en vivo y a la vez: la cédula no está adentro
 ///    por correo en ninguna unidad (`ingreso_correo_activo`), y el gafete de
 ///    visita no está en uso en el otro dispositivo del sitio, ni por otro
-///    ingreso por correo ni por un movimiento de visita. Si no se puede
-///    verificar, no se registra;
+///    ingreso por correo ni por un movimiento de visita. Sin conexión con la
+///    nube se sigue con lo local (ver el doc-comment del módulo); si la
+///    nube rechaza la consulta, no se registra;
 /// 3. escribe (`AppCore::registrar_ingreso_correo`, reglas locales).
 ///
-/// Si dos equipos pasan el paso 2 en el mismo instante, deciden los índices
-/// únicos de `ingresos_correo`: gana el primero en escribir.
+/// Si dos equipos pasan el paso 2 en el mismo instante, o uno registró sin
+/// conexión, deciden los índices únicos de `ingresos_correo`: gana el
+/// primero en escribir.
 pub fn registrar_ingreso_correo_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
     nube: &CacheTokenDispositivo,
@@ -393,54 +471,10 @@ pub fn registrar_ingreso_correo_verificado<G: Deref<Target = AppCore>>(
         return Err(IngresoCorreoServiceError::IngresoActivo.into());
     }
 
-    if nube.vinculado() {
-        let token = autenticar(&nucleo, nube, actor)?;
-        let contexto = contexto(&token);
-        let numero = datos.gafete_numero;
-        let (activo_en_otro_sitio, gafete_en_correo, gafete_en_visita, otra_via) =
-            std::thread::scope(|hilos| {
-                let en_correo = hilos.spawn(|| {
-                    crate::nube::gafete_de_correo_ocupado_en_otro_dispositivo(&contexto, numero)
-                });
-                let en_visita = hilos.spawn(|| {
-                    crate::nube::gafete_de_visita_ocupado_en_otro_dispositivo(&contexto, numero)
-                });
-                let por_otra_via = hilos.spawn(|| {
-                    crate::nube::persona_adentro_por_otra_via(
-                        &contexto,
-                        &datos.cedula,
-                        crate::models::via_ingreso::ViaIngreso::PorCorreo,
-                    )
-                });
-                let activo = crate::nube::correo_con_ingreso_activo(&contexto, &datos.cedula);
-                (
-                    activo,
-                    unir_hilo(en_correo),
-                    unir_hilo(en_visita),
-                    unir_hilo(por_otra_via),
-                )
-            });
-        match activo_en_otro_sitio.map_err(GestionNubeError::from)? {
-            Some(activo) if activo.mismo_sitio => {
-                return Err(IngresoCorreoServiceError::IngresoActivo.into());
-            }
-            Some(activo) => {
-                return Err(IngresoCorreoVerificadoError::ActivoEnOtroSitio {
-                    sitio: activo.sitio_nombre,
-                });
-            }
-            None => {}
-        }
-        // Una persona no puede estar adentro por dos vías (como contratista o
-        // como proveedor, en cualquier unidad).
-        if let Some(adentro) = otra_via.map_err(GestionNubeError::from)? {
-            return Err(IngresoCorreoServiceError::AdentroPorOtraVia(adentro.via).into());
-        }
-        if gafete_en_correo.map_err(GestionNubeError::from)?
-            || gafete_en_visita.map_err(GestionNubeError::from)?
-        {
-            return Err(IngresoCorreoVerificadoError::GafeteOcupadoEnSitio { numero });
-        }
+    if nube.vinculado()
+        && let Some(token) = token_para_verificar(&nucleo, nube, actor, "ingreso por correo")?
+    {
+        verificar_correo_en_la_nube(&contexto(&token), &datos)?;
     }
 
     Ok(nucleo().registrar_ingreso_correo(
@@ -453,6 +487,65 @@ pub fn registrar_ingreso_correo_verificado<G: Deref<Target = AppCore>>(
             gafete_numero: datos.gafete_numero,
         },
     )?)
+}
+
+/// Paso 2 de [`registrar_ingreso_correo_verificado`].
+fn verificar_correo_en_la_nube(
+    contexto: &ContextoSincronizacion<'_>,
+    datos: &NuevoIngresoCorreo,
+) -> Result<(), IngresoCorreoVerificadoError> {
+    let numero = datos.gafete_numero;
+    let (activo_en_otro_sitio, gafete_en_correo, gafete_en_visita, otra_via) =
+        std::thread::scope(|hilos| {
+            let en_correo = hilos.spawn(|| {
+                crate::nube::gafete_de_correo_ocupado_en_otro_dispositivo(contexto, numero)
+            });
+            let en_visita = hilos.spawn(|| {
+                crate::nube::gafete_de_visita_ocupado_en_otro_dispositivo(contexto, numero)
+            });
+            let por_otra_via = hilos.spawn(|| {
+                crate::nube::persona_adentro_por_otra_via(
+                    contexto,
+                    &datos.cedula,
+                    crate::models::via_ingreso::ViaIngreso::PorCorreo,
+                )
+            });
+            let activo = crate::nube::correo_con_ingreso_activo(contexto, &datos.cedula);
+            (
+                activo,
+                unir_hilo(en_correo),
+                unir_hilo(en_visita),
+                unir_hilo(por_otra_via),
+            )
+        });
+    match o_libre_sin_conexion(activo_en_otro_sitio, None, "ingreso por correo")
+        .map_err(GestionNubeError::from)?
+    {
+        Some(activo) if activo.mismo_sitio => {
+            return Err(IngresoCorreoServiceError::IngresoActivo.into());
+        }
+        Some(activo) => {
+            return Err(IngresoCorreoVerificadoError::ActivoEnOtroSitio {
+                sitio: activo.sitio_nombre,
+            });
+        }
+        None => {}
+    }
+    // Una persona no puede estar adentro por dos vías (como contratista o
+    // como proveedor, en cualquier unidad).
+    if let Some(adentro) = o_libre_sin_conexion(otra_via, None, "ingreso por correo (otra vía)")
+        .map_err(GestionNubeError::from)?
+    {
+        return Err(IngresoCorreoServiceError::AdentroPorOtraVia(adentro.via).into());
+    }
+    if o_libre_sin_conexion(gafete_en_correo, false, "ingreso por correo (gafete)")
+        .map_err(GestionNubeError::from)?
+        || o_libre_sin_conexion(gafete_en_visita, false, "ingreso por correo (gafete)")
+            .map_err(GestionNubeError::from)?
+    {
+        return Err(IngresoCorreoVerificadoError::GafeteOcupadoEnSitio { numero });
+    }
+    Ok(())
 }
 
 // ---- Entrada de una visita agendada ----
@@ -475,11 +568,13 @@ pub enum EntradaVisitaVerificadaError {
 /// 1. con nube configurada, en vivo y a la vez:
 ///    - el gafete de visita (si lleva) no está en uso en el otro dispositivo
 ///      del sitio, ni por una visita ni por un ingreso por correo (los dos
-///      reparten el mismo catálogo). Si no se puede verificar, no se
-///      registra: un gafete físico no puede duplicarse;
+///      reparten el mismo catálogo). Sin conexión con la nube se sigue con
+///      lo local (ver el doc-comment del módulo); si la nube rechaza la
+///      consulta, no se registra;
 ///    - el visitante no está adentro en otra unidad ni con el otro equipo de
-///      esta. De **mejor esfuerzo**: sin red se registra, y si chocó lo frena
-///      la nube al sincronizar (`movimientos_visita_cedula_activa_idx`);
+///      esta. De **mejor esfuerzo**: si no se pudo verificar, se registra, y
+///      si chocó lo frena la nube al sincronizar
+///      (`movimientos_visita_cedula_activa_idx`);
 /// 2. escribe (`AppCore::registrar_entrada_visita`: vuelve a verificar la
 ///    cita, el gafete local y que no esté adentro en este equipo).
 pub fn registrar_entrada_visita_verificada<G: Deref<Target = AppCore>>(
@@ -491,28 +586,11 @@ pub fn registrar_entrada_visita_verificada<G: Deref<Target = AppCore>>(
     placa: Option<String>,
 ) -> Result<i64, EntradaVisitaVerificadaError> {
     if nube.vinculado() {
-        match autenticar(&nucleo, nube, actor) {
-            Ok(token) => {
-                let contexto = contexto(&token);
-                let (activo_en_otro_sitio, gafete_ocupado) = std::thread::scope(|hilos| {
-                    let consulta_gafete = hilos.spawn(|| {
-                        gafete_numero
-                            .map(|numero| gafete_de_visita_ocupado(&contexto, numero))
-                            .transpose()
-                    });
-                    let activo = crate::nube::visitante_activo_en_otro_sitio(&contexto, cedula);
-                    (activo, unir_hilo(consulta_gafete))
-                });
-                if let (Some(numero), Some(true)) = (
-                    gafete_numero,
-                    gafete_ocupado.map_err(GestionNubeError::from)?,
-                ) {
-                    return Err(EntradaVisitaVerificadaError::GafeteOcupadoEnSitio { numero });
-                }
-                if let Ok(Some(sitio)) = activo_en_otro_sitio {
-                    return Err(EntradaVisitaVerificadaError::ActivoEnOtroSitio { sitio });
-                }
+        match token_para_verificar(&nucleo, nube, actor, "entrada de visita") {
+            Ok(Some(token)) => {
+                verificar_visita_en_la_nube(&contexto(&token), cedula, gafete_numero)?;
             }
+            Ok(None) => {}
             // Sin gafete no hay nada que deba verificarse sí o sí.
             Err(error) if gafete_numero.is_some() => return Err(error.into()),
             Err(error) => log::info!("no se pudo verificar la visita en la nube: {error}"),
@@ -522,12 +600,40 @@ pub fn registrar_entrada_visita_verificada<G: Deref<Target = AppCore>>(
     Ok(nucleo().registrar_entrada_visita(actor, cedula, gafete_numero, placa)?)
 }
 
+/// Paso 1 de [`registrar_entrada_visita_verificada`].
+fn verificar_visita_en_la_nube(
+    contexto: &ContextoSincronizacion<'_>,
+    cedula: &str,
+    gafete_numero: Option<i64>,
+) -> Result<(), EntradaVisitaVerificadaError> {
+    let (activo_en_otro_sitio, gafete_ocupado) = std::thread::scope(|hilos| {
+        let consulta_gafete = hilos.spawn(|| {
+            gafete_numero
+                .map(|numero| gafete_de_visita_ocupado(contexto, numero))
+                .transpose()
+        });
+        let activo = crate::nube::visitante_activo_en_otro_sitio(contexto, cedula);
+        (activo, unir_hilo(consulta_gafete))
+    });
+    if let (Some(numero), Some(true)) = (
+        gafete_numero,
+        o_libre_sin_conexion(gafete_ocupado, None, "entrada de visita (gafete)")
+            .map_err(GestionNubeError::from)?,
+    ) {
+        return Err(EntradaVisitaVerificadaError::GafeteOcupadoEnSitio { numero });
+    }
+    if let Ok(Some(sitio)) = activo_en_otro_sitio {
+        return Err(EntradaVisitaVerificadaError::ActivoEnOtroSitio { sitio });
+    }
+    Ok(())
+}
+
 /// El gafete de visita está en manos de otro dispositivo del sitio, por una
 /// visita o por un ingreso por correo.
 fn gafete_de_visita_ocupado(
     contexto: &ContextoSincronizacion<'_>,
     numero: i64,
-) -> Result<bool, crate::nube::SincronizacionError> {
+) -> Result<bool, SincronizacionError> {
     Ok(
         crate::nube::gafete_de_visita_ocupado_en_otro_dispositivo(contexto, numero)?
             || crate::nube::gafete_de_correo_ocupado_en_otro_dispositivo(contexto, numero)?,
@@ -550,13 +656,16 @@ pub enum EntregaGafeteProvisionalVerificadaError {
 /// 1. con nube configurada, en vivo y a la vez: el gafete no está prestado
 ///    en el otro dispositivo del sitio, y el encargado (por su código de
 ///    empleado) no tiene otro gafete provisional sin devolver en ningún sitio
-///    (`prestamo_provisional_activo_de_encargado`). Si no se puede verificar,
-///    no se entrega (un gafete físico no puede duplicarse);
+///    (`prestamo_provisional_activo_de_encargado`). Sin conexión con la nube
+///    se sigue con lo local (ver el doc-comment del módulo); si la nube
+///    rechaza la consulta, no se entrega;
 /// 2. escribe (`AppCore::entregar_gafete_provisional`, reglas locales: el
 ///    encargado existe, está activo y no tiene otro préstamo en este equipo).
 ///
-/// Si dos equipos pasan el paso 1 en el mismo instante, decide el índice
-/// único `prestamos_gafete_provisional_encargado_activo_idx`.
+/// Si dos equipos pasan el paso 1 en el mismo instante, o uno entregó sin
+/// conexión, decide el índice único
+/// `prestamos_gafete_provisional_encargado_activo_idx` (y el de gafete
+/// activo del sitio, que además avisa a quien opera al sincronizar).
 pub fn entregar_gafete_provisional_verificado<G: Deref<Target = AppCore>>(
     nucleo: impl Fn() -> G,
     nube: &CacheTokenDispositivo,
@@ -568,40 +677,63 @@ pub fn entregar_gafete_provisional_verificado<G: Deref<Target = AppCore>>(
         // Sin encargado en el catálogo local no hay a quién buscar: la
         // escritura de abajo lo rechaza con su propio error.
         let codigo_empleado = nucleo().codigo_empleado_de_encargado(encargado_id)?;
-        let token = autenticar(&nucleo, nube, actor)?;
-        let contexto = contexto(&token);
-        let (gafete_ocupado, prestamo_del_encargado) = std::thread::scope(|hilos| {
-            let consulta_encargado = hilos.spawn(|| {
-                codigo_empleado.as_deref().map_or(Ok(None), |codigo| {
-                    crate::nube::encargado_con_prestamo_provisional_activo(&contexto, codigo)
-                })
-            });
-            let ocupado = crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(
-                &contexto,
+        if let Some(token) =
+            token_para_verificar(&nucleo, nube, actor, "entrega de gafete provisional")?
+        {
+            verificar_entrega_provisional_en_la_nube(
+                &contexto(&token),
+                codigo_empleado.as_deref(),
                 gafete_numero,
-            );
-            let prestamo = consulta_encargado
-                .join()
-                .unwrap_or_else(|panico| std::panic::resume_unwind(panico));
-            (ocupado, prestamo)
-        });
-        if gafete_ocupado.map_err(GestionNubeError::from)? {
-            return Err(
-                EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio {
-                    numero: gafete_numero,
-                },
-            );
-        }
-        if let Some(prestamo) = prestamo_del_encargado.map_err(GestionNubeError::from)? {
-            log::info!(
-                "gafete provisional: el encargado ya tiene un préstamo sin devolver en {}",
-                prestamo.sitio_nombre
-            );
-            return Err(GafeteProvisionalServiceError::EncargadoYaTienePrestamoActivo.into());
+            )?;
         }
     }
 
     Ok(nucleo().entregar_gafete_provisional(actor, encargado_id, gafete_numero)?)
+}
+
+/// Paso 1 de [`entregar_gafete_provisional_verificado`].
+fn verificar_entrega_provisional_en_la_nube(
+    contexto: &ContextoSincronizacion<'_>,
+    codigo_empleado: Option<&str>,
+    gafete_numero: i64,
+) -> Result<(), EntregaGafeteProvisionalVerificadaError> {
+    let (gafete_ocupado, prestamo_del_encargado) = std::thread::scope(|hilos| {
+        let consulta_encargado = hilos.spawn(|| {
+            codigo_empleado.map_or(Ok(None), |codigo| {
+                crate::nube::encargado_con_prestamo_provisional_activo(contexto, codigo)
+            })
+        });
+        let ocupado =
+            crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(contexto, gafete_numero);
+        (ocupado, unir_hilo(consulta_encargado))
+    });
+    if o_libre_sin_conexion(
+        gafete_ocupado,
+        false,
+        "entrega de gafete provisional (gafete)",
+    )
+    .map_err(GestionNubeError::from)?
+    {
+        return Err(
+            EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio {
+                numero: gafete_numero,
+            },
+        );
+    }
+    if let Some(prestamo) = o_libre_sin_conexion(
+        prestamo_del_encargado,
+        None,
+        "entrega de gafete provisional (encargado)",
+    )
+    .map_err(GestionNubeError::from)?
+    {
+        log::info!(
+            "gafete provisional: el encargado ya tiene un préstamo sin devolver en {}",
+            prestamo.sitio_nombre
+        );
+        return Err(GafeteProvisionalServiceError::EncargadoYaTienePrestamoActivo.into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -926,14 +1058,82 @@ mod tests {
         );
     }
 
+    /// La portería no se bloquea por falta de red: sin conexión con la
+    /// nube se registra con las reglas locales (el choque, si lo hubo, lo
+    /// atrapa el índice único al sincronizar).
     #[test]
-    fn sin_respuesta_de_la_nube_no_se_deja_pasar() {
+    fn sin_conexion_con_la_nube_se_deja_pasar() {
         let cerrado = {
             let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
             format!("http://{}", listener.local_addr().unwrap())
         };
+        assert_eq!(bloqueo_contra(&cerrado), None);
+    }
+
+    /// Una nube que acepta la conexión pero no contesta cuenta como sin
+    /// conexión pasado `TIMEOUT_VERIFICACION`: quien opera no queda
+    /// esperando el tope general de la sincronización.
+    #[test]
+    fn la_nube_que_no_contesta_a_tiempo_deja_pasar() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let mudo = std::thread::spawn(move || {
+            let conexiones: Vec<_> = listener.incoming().take(2).collect();
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            drop(conexiones);
+        });
+
+        let inicio = std::time::Instant::now();
+        assert_eq!(bloqueo_contra(&base), None);
+        assert!(
+            inicio.elapsed() < std::time::Duration::from_secs(5),
+            "la verificación debía rendirse antes que la nube muda"
+        );
+        mudo.join().unwrap();
+    }
+
+    /// Servidor HTTP falso que contesta `estado` (línea de estado completa,
+    /// sin cuerpo útil) a las dos consultas de `bloqueo_en_la_nube`.
+    fn nube_que_responde_estado(estado: &'static str) -> String {
+        use std::io::{BufRead, BufReader, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let direccion = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for _ in 0..2 {
+                let Ok((mut conexion, _)) = listener.accept() else {
+                    return;
+                };
+                let mut lector = BufReader::new(conexion.try_clone().unwrap());
+                loop {
+                    let mut linea = String::new();
+                    if lector.read_line(&mut linea).unwrap_or(0) == 0 || linea == "\r\n" {
+                        break;
+                    }
+                }
+                let respuesta = format!(
+                    "HTTP/1.1 {estado}\r\nContent-Type: application/json\r\n\
+                     Content-Length: 2\r\nConnection: close\r\n\r\n{{}}"
+                );
+                let _ = conexion.write_all(respuesta.as_bytes());
+            }
+        });
+        format!("http://{direccion}")
+    }
+
+    /// Nube caída (`5xx`): cuenta como sin conexión.
+    #[test]
+    fn la_nube_caida_deja_pasar() {
+        let base = nube_que_responde_estado("503 Service Unavailable");
+        assert_eq!(bloqueo_contra(&base), None);
+    }
+
+    /// La nube contestó que no (`4xx`: dispositivo retirado, token
+    /// rechazado): eso no es falta de red y sigue frenando.
+    #[test]
+    fn la_nube_que_rechaza_la_consulta_no_deja_pasar() {
+        let base = nube_que_responde_estado("403 Forbidden");
         assert_eq!(
-            bloqueo_contra(&cerrado),
+            bloqueo_contra(&base),
             Some(BloqueoIngreso::SinVerificarEnLaNube)
         );
     }

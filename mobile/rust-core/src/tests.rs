@@ -249,8 +249,8 @@ fn preparar_ingreso_verificado_no_toca_la_red_si_ya_hay_bloqueo_local() {
 }
 
 /// Sin vincular = nube sin configurar: se registra con las reglas
-/// locales sin tocar la red. Vinculado, la verificación en vivo es
-/// estricta (si no se puede verificar, no se registra); eso lo prueban
+/// locales sin tocar la red. Vinculado, la verificación en vivo frena
+/// cuando la nube responde que no y deja pasar sin conexión; eso lo prueban
 /// los tests de `application::con_nube` contra un servidor falso, nunca
 /// contra la nube real.
 #[test]

@@ -95,9 +95,11 @@ pub enum BloqueoIngreso {
     AccesoDenegado {
         motivo: crate::domain::resultado_acceso::MotivoDenegacion,
     },
-    /// Con la nube configurada no se pudo confirmar que la persona no tenga
-    /// un ingreso activo en otro lugar: no se registra (decisión del
-    /// dueño, igual que el gafete). Lo arma `con_nube`, nunca `bloqueo()`.
+    /// Con la nube configurada, la nube rechazó la verificación de que la
+    /// persona no tenga un ingreso activo en otro lugar (dispositivo
+    /// retirado, sesión sin permiso): no se registra. La falta de conexión
+    /// no llega acá: sin red se registra con las reglas locales (ver
+    /// `application::con_nube`). Lo arma `con_nube`, nunca `bloqueo()`.
     SinVerificarEnLaNube,
 }
 
