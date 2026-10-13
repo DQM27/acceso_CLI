@@ -34,12 +34,18 @@ pub enum NubeError {
 }
 
 impl NubeError {
-    /// La nube no se pudo alcanzar: no hubo conexión o no respondió a
-    /// tiempo. No incluye que la nube conteste "no" (dispositivo retirado,
+    /// La nube no se pudo alcanzar: no hubo conexión, no respondió a
+    /// tiempo o está caída (`5xx`, por ejemplo `device-auth` sin poder
+    /// atender). No incluye que la nube conteste "no" (dispositivo retirado,
     /// versión vieja, sin credencial) ni una respuesta que no se entendió:
     /// esos son rechazos de verdad, no falta de red.
     pub fn es_falta_de_conexion(&self) -> bool {
-        matches!(self, Self::Red(error) if error.is_connect() || error.is_timeout())
+        matches!(
+            self,
+            Self::Red(error) if error.is_connect()
+                || error.is_timeout()
+                || error.status().is_some_and(|status| status.is_server_error())
+        )
     }
 }
 
@@ -179,7 +185,12 @@ pub struct MetadatosDispositivo {
 /// Autenticación del equipo: pide un desafío al servidor, lo firma con la
 /// clave del equipo y lo canjea por un token. Dos idas y vueltas, a cambio
 /// de que ningún secreto viaje y de no depender del reloj del equipo.
+///
+/// `cliente` decide el tope de espera de cada ida y vuelta: el general
+/// ([`cliente_http`]) o el de la verificación en la portería
+/// ([`cliente_http_verificacion`]).
 pub(crate) fn autenticar_con_firmante(
+    cliente: &reqwest::blocking::Client,
     base_url: &str,
     firmante: &dyn super::firmante::FirmanteDispositivo,
     metadata: Option<&MetadatosDispositivo>,
@@ -190,7 +201,7 @@ pub(crate) fn autenticar_con_firmante(
     }
 
     let url = format!("{base_url}/functions/v1/device-auth");
-    let desafio = cliente_http()
+    let desafio = cliente
         .post(&url)
         .json(&serde_json::json!({ "desafio": true }))
         .send()?
@@ -201,7 +212,7 @@ pub(crate) fn autenticar_con_firmante(
     let asercion = super::firmante::construir_asercion(firmante, &desafio)?;
     let mut cuerpo = serde_json::json!({ "asercion": asercion });
     agregar_metadata(&mut cuerpo, metadata);
-    let respuesta = cliente_http().post(url).json(&cuerpo).send()?;
+    let respuesta = cliente.post(url).json(&cuerpo).send()?;
     token_de_respuesta(respuesta, NubeError::CredencialesInvalidas)
 }
 
@@ -331,6 +342,45 @@ mod tests {
             r#"{"crv":"P-256","kty":"EC","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"}"#,
             None,
         )
+    }
+
+    /// Una nube caída (`5xx`, por ejemplo `device-auth` sin poder atender)
+    /// cuenta como falta de conexión: la portería no espera por ella (ver
+    /// `application::con_nube`).
+    #[test]
+    fn un_5xx_cuenta_como_falta_de_conexion() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+
+        let error = canjear(&base_url).expect_err("un 503 no trae token");
+
+        assert!(error.es_falta_de_conexion(), "{error:?}");
+    }
+
+    /// Que la nube conteste que no (`401`: clave o código rechazado) es un
+    /// rechazo de verdad, no falta de red.
+    #[test]
+    fn un_rechazo_no_cuenta_como_falta_de_conexion() {
+        let base_url = servidor_de_una_respuesta(
+            "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+
+        let error = canjear(&base_url).expect_err("un 401 no trae token");
+
+        assert!(!error.es_falta_de_conexion(), "{error:?}");
+    }
+
+    #[test]
+    fn sin_servidor_cuenta_como_falta_de_conexion() {
+        let cerrado = {
+            let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
+            format!("http://{}", listener.local_addr().expect("dirección local"))
+        };
+
+        let error = canjear(&cerrado).expect_err("sin servidor no hay token");
+
+        assert!(error.es_falta_de_conexion(), "{error:?}");
     }
 
     #[test]

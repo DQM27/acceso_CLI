@@ -24,7 +24,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub use super::cliente::{MetadatosDispositivo, NubeError, TokenDispositivo};
-use super::cliente::{autenticar_con_firmante, vincular_con_codigo};
+use super::cliente::{
+    autenticar_con_firmante, cliente_http, cliente_http_verificacion, vincular_con_codigo,
+};
 use super::firmante::FirmanteDispositivo;
 
 /// Margen antes del vencimiento real del token en el que ya no se
@@ -223,6 +225,25 @@ impl CacheTokenDispositivo {
         &self,
         metadata: Option<&MetadatosDispositivo>,
     ) -> Result<TokenDispositivo, NubeError> {
+        self.autenticar_y_cachear_con(&cliente_http(), metadata)
+    }
+
+    /// Igual que [`Self::autenticar_con_cache`], pero si hace falta pedir un
+    /// token nuevo espera lo mismo que las consultas en vivo de la portería
+    /// (`TIMEOUT_VERIFICACION`) y no el tope general de 10 s: quien opera
+    /// está esperando con la persona enfrente, y si la nube no responde a
+    /// tiempo se registra con las reglas locales (ver
+    /// `application::con_nube`). Lo normal es que no haga falta: la
+    /// sincronización periódica ya deja un token vigente en esta caché.
+    pub fn autenticar_para_verificar(&self) -> Result<TokenDispositivo, NubeError> {
+        self.autenticar_y_cachear_con(&cliente_http_verificacion(), None)
+    }
+
+    fn autenticar_y_cachear_con(
+        &self,
+        cliente: &reqwest::blocking::Client,
+        metadata: Option<&MetadatosDispositivo>,
+    ) -> Result<TokenDispositivo, NubeError> {
         let firmante = self.firmante().ok_or(NubeError::SinCredencial)?;
         let dispositivo_id = firmante
             .dispositivo_vinculado()
@@ -241,7 +262,8 @@ impl CacheTokenDispositivo {
             }
         }
 
-        let token = autenticar_con_firmante(super::base_url(), firmante.as_ref(), metadata)?;
+        let token =
+            autenticar_con_firmante(cliente, super::base_url(), firmante.as_ref(), metadata)?;
         self.guardar(&token);
         Ok(token)
     }
