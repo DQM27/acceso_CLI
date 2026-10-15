@@ -13,6 +13,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Seccion } from "../App";
 import MenuContextualSecciones from "./MenuContextualSecciones";
+import UnidadOperativa from "./UnidadOperativa";
 import VersionFooter from "./VersionFooter";
 
 interface FilaSeccion {
@@ -81,6 +82,7 @@ export default function Sidebar({
   onReordenar,
   onCambiarVisibilidad,
   onRestablecer,
+  recargarUnidad,
 }: {
   /** Todas las secciones, en el orden guardado -- incluye las ocultas
    * (Sidebar filtra internamente qué renderiza; el menú contextual necesita
@@ -94,6 +96,8 @@ export default function Sidebar({
   onReordenar: (orden: Seccion[]) => void;
   onCambiarVisibilidad: (id: Seccion, visible: boolean) => void;
   onRestablecer: () => void;
+  /** Cuando cambia, se vuelve a leer la unidad (ver `useIdentidadEquipo`). */
+  recargarUnidad?: unknown;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -132,13 +136,16 @@ export default function Sidebar({
             nombre llega hasta el botón sin dejar espacio libre, sea cual
             sea el ancho del menú. */}
         {!colapsado && (
-          <span className="shell-marca" role="img" aria-label="Lattis">
-            {"LATTIS".split("").map((letra, indice) => (
-              <span key={indice} aria-hidden="true">
-                {letra}
-              </span>
-            ))}
-          </span>
+          <div className="shell-marca-bloque">
+            <span className="shell-marca" role="img" aria-label="Lattis">
+              {"LATTIS".split("").map((letra, indice) => (
+                <span key={indice} aria-hidden="true">
+                  {letra}
+                </span>
+              ))}
+            </span>
+            <UnidadOperativa recargar={recargarUnidad} />
+          </div>
         )}
         <button
           type="button"

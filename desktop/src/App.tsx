@@ -736,6 +736,7 @@ function Shell({
               onReordenar={reordenarSidebar}
               onCambiarVisibilidad={alternarVisibilidadSeccion}
               onRestablecer={restablecerSidebar}
+              recargarUnidad={sincronizandoManual}
             />
 
             <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { avisos } from "../avisos/avisos";
 import { RefreshCw } from "lucide-react";
 import { descripcion } from "./BarraNube.logica";
-import IdentidadEquipo from "./IdentidadEquipo";
 import type { EstadoConexionNube } from "./BarraNube.logica";
 
 /** `navigator.onLine` refleja si el sistema operativo tiene una interfaz
@@ -66,9 +65,6 @@ export default function BarraNube({
   const { texto, color, parpadea } = descripcion(estadoConexion, enLinea);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-      {/* Se relee al terminar cada sincronización: es cuando puede llegar
-          un token con la unidad o la etiqueta cambiadas. */}
-      <IdentidadEquipo recargar={sincronizando} className="barra-identidad-equipo" />
       <span
         title={`Avisos en vivo de la nube: ${texto}`}
         style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem", color }}
