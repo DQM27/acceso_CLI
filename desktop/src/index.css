@@ -706,8 +706,10 @@ input {
   display: grid;
   flex: none;
   place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
+  /* Del tamaño de los íconos de las secciones (18 px): el engranaje dibujado
+     ocupa casi todo su lienzo, por eso el lienzo es más chico que ellos. */
+  width: 1.4rem;
+  height: 1.4rem;
   color: var(--texto);
 }
 
@@ -718,13 +720,13 @@ input {
   height: 100%;
   fill: transparent;
   stroke: currentColor;
-  stroke-width: 4;
+  stroke-width: 6;
   stroke-linejoin: round;
 }
 
 .engranaje-centro {
   position: relative;
-  font-size: 0.85rem;
+  font-size: 0.65rem;
   font-weight: 700;
 }
 
