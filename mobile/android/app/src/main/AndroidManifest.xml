@@ -36,7 +36,7 @@
         android:dataExtractionRules="@xml/reglas_extraccion"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="Lattis"
+        android:label="${etiquetaApp}"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 

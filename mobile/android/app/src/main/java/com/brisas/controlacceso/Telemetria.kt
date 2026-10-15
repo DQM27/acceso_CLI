@@ -114,6 +114,10 @@ object Telemetria {
     /// `objeto` ya debería poder liberarse (su dueño lo soltó): si sigue
     /// vivo en unos segundos, se informa como posible fuga.
     fun vigilarRetencion(objeto: Any, descripcion: String) {
+        // En modo ligero (producción medida) no se vigila: el vigilante fuerza
+        // una recolección de basura para comprobar la fuga, y eso mismo puede
+        // causar un tirón en la app que se está midiendo.
+        if (BuildConfig.TELEMETRIA_LIGERA) return
         motor?.vigilante?.vigilar(objeto, descripcion)
     }
 }
@@ -165,7 +169,9 @@ private class MotorTelemetria(private val app: Application) {
         cargarPendientes()
         encolar("sesion_inicio", datosDispositivo())
         ejecutor.execute { informarSalidasAnteriores() }
-        activarStrictMode()
+        // StrictMode vigila disco y red en el hilo de la pantalla: es una
+        // herramienta de depuración que cuesta; en modo ligero se omite.
+        if (!BuildConfig.TELEMETRIA_LIGERA) activarStrictMode()
         app.registerComponentCallbacks(object : ComponentCallbacks2 {
             override fun onTrimMemory(nivel: Int) {
                 encolar("memoria_baja", mapOf("nivel" to nivel, "pantalla" to pantallas.actual()))
@@ -373,6 +379,11 @@ private class MotorTelemetria(private val app: Application) {
             "ram_total_mb" to mb(sistema.totalMem),
             "clase_memoria_mb" to activityManager.memoryClass,
             "build" to BuildConfig.BUILD_TYPE,
+            // Con qué ambiente y en qué modo corre esta instalación: separa en los
+            // datos la app de pruebas (`diagnostico`, staging, completa) de la de
+            // producción medida (`release`, producción, ligera).
+            "ambiente" to if (BuildConfig.AMBIENTE_STAGING) "staging" else "produccion",
+            "telemetria_ligera" to BuildConfig.TELEMETRIA_LIGERA,
         )
     }
 

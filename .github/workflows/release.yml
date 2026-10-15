@@ -238,9 +238,23 @@ jobs:
           printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
           python3 -c "import json; d=json.load(open('app/google-services.json')); assert any(c['client_info']['android_client_info']['package_name']=='com.dqm27.lattis' for c in d['client']), 'falta el paquete com.dqm27.lattis'"
 
+      # Con la variable del repositorio `TELEMETRIA_EN_PRODUCCION` en `true`, el
+      # APK sale con la telemetría de rendimiento en modo ligero: sigue siendo la
+      # app real (mismo paquete, misma firma, datos de producción) y sólo manda
+      # números de rendimiento al staging (ver `telemetriaEnProduccion` en
+      # app/build.gradle.kts y docs/telemetria-contrato.md). Con la variable en
+      # `false` o sin definir, el APK es el de siempre, sin telemetría: para
+      # terminar la medición basta cambiar la variable y sacar el siguiente release.
       - name: Compilar el APK de release
         working-directory: mobile/android
-        run: ./gradlew assembleRelease
+        env:
+          TELEMETRIA_EN_PRODUCCION: ${{ vars.TELEMETRIA_EN_PRODUCCION }}
+        run: |
+          if [ "$TELEMETRIA_EN_PRODUCCION" = "true" ]; then
+            ./gradlew assembleRelease -PtelemetriaEnProduccion=true
+          else
+            ./gradlew assembleRelease
+          fi
 
       # Confirma que el plugin de Google Services sí procesó el JSON (si no,
       # el APK habría salido sin push sin avisar).

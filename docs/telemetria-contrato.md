@@ -87,6 +87,31 @@ junto con las nuevas hay que normalizarlos (la vista de análisis lo hará).
 | `transicion_ingreso` (móvil, nuevo) | Por cada contratista elegido: `origen` (`ocr` o `manual`), `ms_busqueda`, `ms_nucleo` (la espera de la nube), `ms_total` hasta tener el formulario del gafete y `resultado` (`formulario`, `bloqueada` o `error`). |
 | `ocr_sesion` (móvil) | `ms_cierre_unbind`, `ms_cierre_modelos`, `ms_cierre_total`: lo que tarda cerrar la cámara en el hilo principal. |
 
+## Producción medida (sólo móvil)
+
+Para ver cómo anda la app **real** con carga real, un release puede salir con la
+telemetría encendida en modo ligero: la misma app (paquete `com.dqm27.lattis`,
+misma firma, datos de producción) que además manda los números de rendimiento
+al staging.
+
+- **Se activa** con la variable del repositorio `TELEMETRIA_EN_PRODUCCION` en
+  `true` al sacar el release (`release.yml` compila con
+  `-PtelemetriaEnProduccion=true`). Sin la variable, o en `false`, el APK sale
+  como siempre, sin telemetría: producción nunca la activa por su cuenta.
+- **Modo ligero:** sin StrictMode y sin el vigilante de fugas (que fuerza
+  recolecciones de basura y podría causar el tirón que se quiere medir). Siguen
+  todas las mediciones de rendimiento.
+- **Se distingue en los datos** por `sesion_inicio`: `ambiente` (`produccion` o
+  `staging`) y `telemetria_ligera` (`true` o `false`).
+- **Se instala encima** de la app que ya está (se actualiza, no se desinstala:
+  la base local, los registros pendientes de enviar y la vinculación se
+  conservan).
+- **Para terminar la medición:** poner la variable en `false` y sacar el
+  siguiente release.
+- **Escritorio:** hoy no tiene este modo. Su telemetría es una feature de Cargo
+  que además redirige la app a una base y claves de pruebas, así que sólo existe
+  en el build de diagnóstico.
+
 ## Lo que todavía no está resuelto
 
 - **Histogramas.** `p50`/`p90` se guardan por ventana de 30 s y no se pueden
