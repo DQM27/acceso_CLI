@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { avisos } from "../avisos/avisos";
 import { CircleOff, IdCard, LogIn, LogOut, Users } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import type { TablaHandle } from "../componentes/Tabla";
+import BarraSeleccion from "../componentes/BarraSeleccion";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
-import { useAccionBarraEstado, useBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   cerrarFilaActiva,
   claveFilaActiva,
@@ -16,34 +17,51 @@ import {
 } from "../api";
 import type { FilaActiva } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
-import { filtrarPorGafete, masDeDoceHoras } from "./Activos.logica";
-import type { FiltroGafete } from "./Activos.logica";
+import { contarPorGafete, filtrarPorGafete, filtrarPorNivel } from "./Activos.logica";
+import type { FiltroGafete, FiltroPermanencia } from "./Activos.logica";
 
-const ETIQUETAS_FILTRO_GAFETE: Record<FiltroGafete, string> = {
-  todos: "Todos",
-  con: "Con gafete",
-  sin: "S/G",
-};
-
-/** Ícono y nombre completo (al pasar el mouse) de cada opción -- el
- * control muestra sólo íconos (pedido del usuario 2026-09-23). */
-const OPCIONES_FILTRO_GAFETE: OpcionSegmentada<FiltroGafete>[] = [
-  { valor: "todos", Icono: Users, titulo: "Todos" },
-  { valor: "con", Icono: IdCard, titulo: "Con gafete" },
-  { valor: "sin", Icono: CircleOff, titulo: "Sin gafete (S/G)" },
-];
+/** Ícono, número y nombre completo (al pasar el mouse) de cada opción. Los
+ * números son el conteo de gente adentro: el total, y cuántos tienen gafete y
+ * cuántos no (S/G). Mientras carga no se muestran, para no enseñar ceros
+ * falsos. */
+function opcionesFiltroGafete(
+  conteo: { todos: number; con: number; sin: number } | null,
+): OpcionSegmentada<FiltroGafete>[] {
+  return [
+    {
+      valor: "todos",
+      Icono: Users,
+      titulo: conteo ? `${conteo.todos} adentro` : "Todos",
+      cantidad: conteo?.todos,
+    },
+    {
+      valor: "con",
+      Icono: IdCard,
+      titulo: conteo ? `${conteo.con} con gafete` : "Con gafete",
+      cantidad: conteo?.con,
+    },
+    {
+      valor: "sin",
+      Icono: CircleOff,
+      titulo: conteo ? `${conteo.sin} sin gafete (S/G)` : "Sin gafete (S/G)",
+      cantidad: conteo?.sin,
+    },
+  ];
+}
 
 /** Pieza única de íconos con el relleno deslizante (`SegmentadoOpciones`). */
 function ToggleGafete({
   filtro,
+  conteo,
   onCambiar,
 }: {
   filtro: FiltroGafete;
+  conteo: { todos: number; con: number; sin: number } | null;
   onCambiar: (filtro: FiltroGafete) => void;
 }) {
   return (
     <SegmentadoOpciones
-      opciones={OPCIONES_FILTRO_GAFETE}
+      opciones={opcionesFiltroGafete(conteo)}
       valor={filtro}
       onCambiar={onCambiar}
       etiqueta="Filtrar por gafete"
@@ -51,14 +69,18 @@ function ToggleGafete({
   );
 }
 
+/** El resaltado de la fila sale del nivel que calculó el núcleo. */
 function claseFilaActiva(fila: FilaActiva): string | undefined {
-  return masDeDoceHoras(fila) ? "fila-mas-de-12-horas" : undefined;
+  if (fila.nivel_permanencia === "Critico") return "fila-permanencia-critico";
+  if (fila.nivel_permanencia === "Aviso") return "fila-permanencia-aviso";
+  return undefined;
 }
 
 export default function Activos({
   refrescarSenal,
   onAbrirNuevoIngreso,
   onAbrirSalida,
+  filtroPermanencia,
 }: {
   /** Los modales de Nuevo Ingreso y Salida viven en el Shell (se disparan
    * desde cualquier pantalla vía Ctrl+N/S, no sólo desde acá) —
@@ -67,33 +89,37 @@ export default function Activos({
   refrescarSenal?: number;
   onAbrirNuevoIngreso: () => void;
   onAbrirSalida: () => void;
+  /** Si hay un aviso de permanencia pulsado en la barra de estado, la tabla
+   * se limita a esas personas (ver `Shell`). */
+  filtroPermanencia: FiltroPermanencia | null;
 }) {
   const [filas, setFilas] = useState<FilaActiva[]>([]);
   const [total, setTotal] = useState(0);
   const [cargando, setCargando] = useState(true);
+  // Los números del filtro sólo se ocultan en la PRIMERA carga: en las
+  // siguientes (cada ingreso o salida recarga) se quedan los anteriores hasta
+  // que llegan los nuevos, en vez de parpadear.
+  const [cargadoAlgunaVez, setCargadoAlgunaVez] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [seleccionadas, setSeleccionadas] = useState<FilaActiva[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [filtroGafete, setFiltroGafete] = useState<FiltroGafete>("todos");
-  const filasVisibles = useMemo(() => filtrarPorGafete(filas, filtroGafete), [filas, filtroGafete]);
-  const sinGafete = useMemo(() => filtrarPorGafete(filas, "sin").length, [filas]);
-
-  useBarraEstado(
-    cargando
-      ? "Cargando…"
-      : filtroGafete === "todos"
-        ? `${total} adentro · ${sinGafete} S/G`
-        : `${filasVisibles.length} de ${total} adentro (${ETIQUETAS_FILTRO_GAFETE[filtroGafete]})`,
+  const filasVisibles = useMemo(
+    () => filtrarPorNivel(filtrarPorGafete(filas, filtroGafete), filtroPermanencia),
+    [filas, filtroGafete, filtroPermanencia],
+  );
+  // Los números de los botones del filtro (ver `opcionesFiltroGafete`): son la
+  // única métrica de la pantalla, ya no hay texto en la barra de estado.
+  const conteo = useMemo(
+    () => (cargadoAlgunaVez ? { todos: total, ...contarPorGafete(filas) } : null),
+    [cargadoAlgunaVez, total, filas],
   );
 
-  // En la barra de estado, no sobre la grilla: antes una franja con
-  // "N seleccionado(s)" aparecía arriba y corría toda la pantalla hacia
-  // abajo (pedido del usuario 2026-09-23).
-  useAccionBarraEstado(
-    seleccionadas.length > 0 ? `Registrar salida (${seleccionadas.length})` : null,
-    () => setConfirmarSalidaMasiva(true),
-  );
+  // La acción para las filas seleccionadas flota sobre la tabla (`BarraSeleccion`):
+  // ni corre la pantalla -- antes una franja arriba lo hacía (pedido del usuario
+  // 2026-09-23) -- ni queda escondida en la barra de estado.
+  const tablaRef = useRef<TablaHandle<FilaActiva>>(null);
 
   const recargar = useCallback(() => {
     // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
@@ -108,6 +134,7 @@ export default function Activos({
       .then(({ filas, total }) => {
         setFilas(filas);
         setTotal(total);
+        setCargadoAlgunaVez(true);
         setSeleccionadas([]);
       })
       .finally(() => setCargando(false));
@@ -115,7 +142,7 @@ export default function Activos({
 
   useEffect(() => {
     let vigente = true;
-    recargar().catch((error) => vigente && toast.error(String(error)));
+    recargar().catch((error) => vigente && avisos.error(error));
     return () => {
       vigente = false;
     };
@@ -132,7 +159,7 @@ export default function Activos({
         await cerrarFilaActiva(fila);
         recargar();
       } catch (error) {
-        toast.error(String(error));
+        avisos.error(error);
       }
     },
     [recargar],
@@ -147,7 +174,7 @@ export default function Activos({
       setConfirmarSalidaMasiva(false);
       await recargar();
     } catch (error) {
-      toast.error(String(error));
+      avisos.error(error);
     } finally {
       setProcesando(false);
     }
@@ -277,8 +304,9 @@ export default function Activos({
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
           <Tabla<FilaActiva>
+            ref={tablaRef}
             cargando={cargando}
             filtrosPorColumna
             id="activos"
@@ -289,7 +317,7 @@ export default function Activos({
             busqueda={busqueda}
             seleccionMultiple
             onSeleccionCambia={setSeleccionadas}
-            accionesDerecha={<ToggleGafete filtro={filtroGafete} onCambiar={setFiltroGafete} />}
+            accionesDerecha={<ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />}
             controles={
               <>
                 {/* Ingreso y salida como íconos, en una sola pieza (pedido
@@ -321,6 +349,19 @@ export default function Activos({
                 </div>
               </>
             }
+          />
+          <BarraSeleccion
+            cantidad={seleccionadas.length}
+            etiqueta={{ singular: "seleccionado", plural: "seleccionados" }}
+            accion={
+              <>
+                <LogOut size={16} aria-hidden="true" />
+                Registrar salida
+              </>
+            }
+            critica
+            onAccion={() => setConfirmarSalidaMasiva(true)}
+            onLimpiar={() => tablaRef.current?.deseleccionarTodo()}
           />
         </div>
       </div>

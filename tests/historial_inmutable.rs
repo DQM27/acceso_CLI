@@ -12,6 +12,7 @@ use control_acceso::database::repositories::registro_ingreso_repository::{
     RegistroIngresoRepository, SqliteRegistroIngresoRepository,
 };
 use control_acceso::database::schema::initialize_database;
+use control_acceso::domain::permanencia::UmbralesPermanencia;
 use control_acceso::domain::resultado_acceso::{MotivoDenegacion, ResultadoAcceso};
 use control_acceso::models::contratista::Contratista;
 use control_acceso::models::medio_ingreso::MedioIngreso;
@@ -114,6 +115,8 @@ fn historial_reconstruye_el_estado_de_la_empresa_al_momento_del_ingreso() {
 }
 
 #[test]
+// Un solo recorrido de punta a punta; partirlo ocultaría que es una historia.
+#[allow(clippy::too_many_lines)]
 fn cambios_maestros_no_reescriben_el_movimiento_historico() {
     let (connection, contratista_id, usuario_entrada, usuario_salida) = preparar();
     let contratistas = SqliteContratistaRepository::new(&connection);
@@ -158,7 +161,8 @@ fn cambios_maestros_no_reescriben_el_movimiento_historico() {
     let activos = RegistroIngresoConsultaService::new(&consulta)
         .listar_activos(
             &FiltroIngresosActivos::default(),
-            NaiveDate::from_ymd_opt(2026, 8, 12).unwrap(),
+            "2026-08-12T18:00:00Z".parse::<DateTime<Utc>>().unwrap(),
+            UmbralesPermanencia::default(),
         )
         .unwrap();
     assert_eq!(activos.items[0].cedula, "1-1111-1111");

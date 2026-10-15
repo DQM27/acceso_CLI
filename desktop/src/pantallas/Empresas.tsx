@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { Plus } from "lucide-react";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
@@ -94,7 +94,7 @@ export default function Empresas() {
         await establecerEmpresaProveedorActiva(fila.id, fila.activo);
       }
     } catch (error) {
-      toast.error(String(error));
+      avisos.error(error);
       recargar();
     }
   }

@@ -1,5 +1,5 @@
 import { renderHook, waitFor } from "@testing-library/react";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useCargaAlCambiar } from "./useCargaAlCambiar";
 
@@ -14,17 +14,17 @@ describe("useCargaAlCambiar", () => {
     expect(recargar).toHaveBeenCalledTimes(1);
   });
 
-  it("si recargar() falla, avisa por toast.error", async () => {
-    const spy = vi.spyOn(toast, "error").mockImplementation(() => "");
+  it("si recargar() falla, avisa con avisos.error", async () => {
+    const spy = vi.spyOn(avisos, "error").mockImplementation(() => {});
     const recargar = vi.fn().mockRejectedValue(new Error("sin conexión"));
 
     renderHook(() => useCargaAlCambiar(recargar));
 
-    await waitFor(() => expect(spy).toHaveBeenCalledWith("Error: sin conexión"));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(new Error("sin conexión")));
   });
 
-  it("si la pantalla se desmontó antes de que falle, NO avisa por toast", async () => {
-    const spy = vi.spyOn(toast, "error").mockImplementation(() => "");
+  it("si la pantalla se desmontó antes de que falle, NO avisa", async () => {
+    const spy = vi.spyOn(avisos, "error").mockImplementation(() => {});
     let rechazar: (error: unknown) => void = () => {};
     const recargar = vi.fn(
       () =>

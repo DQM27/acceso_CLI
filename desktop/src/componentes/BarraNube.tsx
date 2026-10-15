@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import { RefreshCw } from "lucide-react";
 import { descripcion } from "./BarraNube.logica";
-import IdentidadEquipo from "./IdentidadEquipo";
 import type { EstadoConexionNube } from "./BarraNube.logica";
 
 /** `navigator.onLine` refleja si el sistema operativo tiene una interfaz
@@ -20,11 +19,11 @@ function useEnLinea(): boolean {
     // primer render.
     const marcarEnLinea = () => {
       setEnLinea(true);
-      toast.success("Conexión restablecida.");
+      avisos.exito("Conexión restablecida.");
     };
     const marcarSinConexion = () => {
       setEnLinea(false);
-      toast.warning("Sin conexión a internet — trabajando en modo offline.");
+      avisos.advertencia("Sin conexión a internet — trabajando en modo offline.");
     };
     window.addEventListener("online", marcarEnLinea);
     window.addEventListener("offline", marcarSinConexion);
@@ -63,18 +62,16 @@ export default function BarraNube({
   estadoConexion: EstadoConexionNube;
 }) {
   const enLinea = useEnLinea();
-  const { texto, color } = descripcion(estadoConexion, enLinea);
+  const { texto, color, parpadea } = descripcion(estadoConexion, enLinea);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-      {/* Se relee al terminar cada sincronización: es cuando puede llegar
-          un token con la unidad o la etiqueta cambiadas. */}
-      <IdentidadEquipo recargar={sincronizando} className="barra-identidad-equipo" />
       <span
         title={`Avisos en vivo de la nube: ${texto}`}
         style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem", color }}
       >
         <span
           aria-hidden="true"
+          className={parpadea ? "punto-conexion-parpadeo" : undefined}
           style={{
             width: "0.5rem",
             height: "0.5rem",

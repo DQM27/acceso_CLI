@@ -1,6 +1,6 @@
 import { invoke } from "./invocar";
 import { solicitarSincronizacionNube } from "../eventosNube";
-import type { MedioIngreso } from "./ingresos";
+import type { MedioIngreso, NivelPermanencia } from "./ingresos";
 import type { TipoIngreso } from "./contratistas";
 
 // Espejo de comandos/nube.rs. Este equipo se vincula a la nube una sola vez,
@@ -127,6 +127,7 @@ export interface IngresoRemoto {
   medio_ingreso: string | null;
   gafete_numero: number | null;
   placa: string | null;
+  nivel_permanencia: NivelPermanencia;
 }
 
 /** Espejo de `IngresoRemoto`, pero para el ciclo de proveedores -- ver

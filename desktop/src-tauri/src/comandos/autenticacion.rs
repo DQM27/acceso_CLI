@@ -45,7 +45,7 @@ impl From<AutenticacionError> for ErrorLogin {
 impl From<nube::AuthSupabaseError> for ErrorLogin {
     fn from(error: nube::AuthSupabaseError) -> Self {
         Self {
-            mensaje: error.to_string(),
+            mensaje: control_acceso::mensajes::mensaje_auth_supabase(error),
         }
     }
 }

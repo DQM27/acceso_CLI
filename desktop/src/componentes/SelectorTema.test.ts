@@ -25,57 +25,59 @@ afterEach(() => {
 describe("temaDelSistema", () => {
   it("refleja prefers-color-scheme: dark", () => {
     mockearSistema(true);
-    expect(temaDelSistema()).toBe("dark");
+    expect(temaDelSistema()).toBe("tokyo-night");
   });
 
   it("refleja prefers-color-scheme: light", () => {
     mockearSistema(false);
-    expect(temaDelSistema()).toBe("light");
+    expect(temaDelSistema()).toBe("tokyo-day");
   });
 
-  it("si matchMedia falla, cae a light en vez de romper", () => {
+  it("si matchMedia falla, cae a Tokyo Day en vez de romper", () => {
     romperMatchMedia();
-    expect(temaDelSistema()).toBe("light");
+    expect(temaDelSistema()).toBe("tokyo-day");
   });
 });
 
 describe("leerTema", () => {
   it("usa lo guardado en localStorage si es válido", () => {
-    localStorage.setItem(CLAVE_TEMA, "dark");
+    localStorage.setItem(CLAVE_TEMA, "tokyo-night");
     mockearSistema(false);
-    expect(leerTema()).toBe("dark");
+    expect(leerTema()).toBe("tokyo-night");
   });
 
   it("sin nada guardado, cae al tema del sistema", () => {
     mockearSistema(true);
-    expect(leerTema()).toBe("dark");
+    expect(leerTema()).toBe("tokyo-night");
   });
 
   it("un valor guardado inválido se ignora, cae al tema del sistema", () => {
     localStorage.setItem(CLAVE_TEMA, "basura");
     mockearSistema(false);
-    expect(leerTema()).toBe("light");
+    expect(leerTema()).toBe("tokyo-day");
   });
 
   it("lee el tema del usuario indicado", () => {
     localStorage.setItem(`u5:${CLAVE_TEMA}`, "tokyo-night");
-    localStorage.setItem(`u6:${CLAVE_TEMA}`, "light");
+    localStorage.setItem(`u6:${CLAVE_TEMA}`, "tokyo-day");
     mockearSistema(true);
     expect(leerTema(5)).toBe("tokyo-night");
-    expect(leerTema(6)).toBe("light");
+    expect(leerTema(6)).toBe("tokyo-day");
   });
 
-  it("reconoce Tokyo Night guardado", () => {
-    localStorage.setItem(CLAVE_TEMA, "tokyo-night");
+  it("las elecciones de antes (claro y oscuro) pasan a su Tokyo equivalente", () => {
+    mockearSistema(true);
+    localStorage.setItem(CLAVE_TEMA, "light");
+    expect(leerTema()).toBe("tokyo-day");
+    localStorage.setItem(CLAVE_TEMA, "dark");
     mockearSistema(false);
     expect(leerTema()).toBe("tokyo-night");
   });
 });
 
 describe("siguienteTema", () => {
-  it("recorre claro → oscuro → Tokyo Night → claro", () => {
-    expect(siguienteTema("light")).toBe("dark");
-    expect(siguienteTema("dark")).toBe("tokyo-night");
-    expect(siguienteTema("tokyo-night")).toBe("light");
+  it("alterna Tokyo Day ↔ Tokyo Night", () => {
+    expect(siguienteTema("tokyo-day")).toBe("tokyo-night");
+    expect(siguienteTema("tokyo-night")).toBe("tokyo-day");
   });
 });

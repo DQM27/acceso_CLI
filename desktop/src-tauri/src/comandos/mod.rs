@@ -27,15 +27,11 @@
 //!    "armar el DTO de entrada y llamar a `AppCore`", esa lógica va al
 //!    núcleo (`application`/`services`), no acá.
 
-/// Ver el punto 3 de la convención de arriba. Loguea antes de convertir a
-/// texto para el frontend -- mismo criterio que las variantes técnicas de
-/// `control_acceso::mensajes::mensaje_*`, sólo que acá el error entero es
-/// técnico (no hay variantes de negocio que filtrar).
-pub fn mensaje_generico<E: std::fmt::Display>(error: E) -> String {
-    let mensaje = error.to_string();
-    log::error!("{mensaje}");
-    mensaje
-}
+/// Ver el punto 3 de la convención de arriba. Los tres dejan el detalle en
+/// el registro técnico y devuelven un texto en claro (definidos en
+/// `control_acceso::mensajes`, compartidos con móvil): la interfaz nunca ve
+/// el texto crudo de un error técnico.
+pub use control_acceso::mensajes::{mensaje_archivo, mensaje_generico, mensaje_tarea_interrumpida};
 
 pub mod auditoria;
 pub mod autenticacion;

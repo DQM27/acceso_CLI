@@ -9,6 +9,7 @@ use crate::database::repositories::usuario_repository::{
     SqliteUsuarioRepository, UsuarioRepository,
 };
 use crate::database::schema::SchemaError;
+use crate::domain::permanencia::UmbralesPermanencia;
 use crate::models::usuario::Usuario;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::tiempo::{Reloj, RelojSistema};
@@ -30,6 +31,7 @@ mod nube;
 mod proveedores;
 mod rutas;
 
+pub use accesos::AvisosPermanencia;
 pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion};
 #[cfg(feature = "nube")]
 pub use con_nube::{
@@ -84,6 +86,10 @@ pub enum BootstrapError {
 pub struct AppCore {
     connection: Connection,
     reloj: Arc<dyn Reloj>,
+    /// Desde cuándo cada nivel de permanencia (ver `domain::permanencia`). La
+    /// regla por defecto es 12 h / 14 h; sólo se cambia para probar (ver
+    /// [`Self::establecer_umbrales_permanencia`]).
+    umbrales_permanencia: UmbralesPermanencia,
     /// Campo HERMANO de `connection`, nunca protegido por el mismo candado
     /// que envuelve a este `AppCore` entero (`core_lock()`/`GuiState::core()`
     /// del lado de quien lo sostiene) -- ver el doc-comment de
@@ -124,11 +130,19 @@ impl AppCore {
         Self {
             connection,
             reloj,
+            umbrales_permanencia: UmbralesPermanencia::default(),
             #[cfg(feature = "nube")]
             cache_token: crate::nube::CacheTokenDispositivo::new(),
             #[cfg(feature = "nube")]
             version_app: None,
         }
+    }
+
+    /// Acorta (o cambia) los umbrales de permanencia, para probar la regla sin
+    /// esperar horas. Quien arranca la app decide si lo usa (ver el comando de
+    /// escritorio); el núcleo no lee nada del entorno.
+    pub fn establecer_umbrales_permanencia(&mut self, umbrales: UmbralesPermanencia) {
+        self.umbrales_permanencia = umbrales;
     }
 
     /// El reloj de este núcleo, para quien necesite la misma hora fuera del

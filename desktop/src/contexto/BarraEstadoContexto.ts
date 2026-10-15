@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, useContext, useEffect } from "react";
+import type { ReactNode } from "react";
 
 /** Setter del mensaje visible en la barra de estado — la publica `Shell`
  * (App.tsx), que la renderiza de lado a lado en la parte inferior, debajo
@@ -8,7 +9,7 @@ import { createContext, useContext, useEffect, useRef } from "react";
  * antemano qué pantalla está montada. Valor por defecto no-op para que
  * llamar el hook fuera de `Shell` (ej. en un test que monta la pantalla
  * sola) no rompa nada. */
-const BarraEstadoContexto = createContext<(mensaje: string | null) => void>(() => {});
+const BarraEstadoContexto = createContext<(mensaje: ReactNode) => void>(() => {});
 
 export const BarraEstadoProvider = BarraEstadoContexto.Provider;
 
@@ -34,14 +35,16 @@ export function useSeccionActiva() {
   return useContext(SeccionActivaContexto);
 }
 
-/** Publica `mensaje` en la barra de estado mientras el componente que llama
- * esto está MONTADO Y ACTIVO (ver `SeccionActivaContexto`) -- lo limpia
+/** Publica `mensaje` (un texto o un elemento, ej. un aviso pulsable) en la barra
+ * de estado mientras el componente que llama esto está MONTADO Y ACTIVO (ver `SeccionActivaContexto`) -- lo limpia
  * (vuelve a `null`) al desmontar o al dejar de ser la sección visible, así
  * no queda pegado el mensaje de la sección anterior al cambiar. Al volver
  * a activarse, se vuelve a publicar solo (el efecto corre de nuevo porque
  * `activa` es una dependencia) -- la pantalla nunca se desmontó, así que
- * su propio `mensaje` ya tiene el valor correcto esperando. */
-export function useBarraEstado(mensaje: string | null) {
+ * su propio `mensaje` ya tiene el valor correcto esperando. Si `mensaje` es un
+ * elemento, quien llama lo memoiza: uno nuevo en cada render re-publicaría sin
+ * fin. */
+export function useBarraEstado(mensaje: ReactNode) {
   const establecer = useContext(BarraEstadoContexto);
   const activa = useContext(SeccionActivaContexto);
   useEffect(() => {
@@ -49,39 +52,4 @@ export function useBarraEstado(mensaje: string | null) {
     establecer(mensaje);
     return () => establecer(null);
   }, [mensaje, activa, establecer]);
-}
-
-/** Botón de acción en la barra de estado, junto al mensaje (ej. "Registrar
- * salida (2)" en Activos con filas seleccionadas). Vive ahí y no sobre la
- * grilla para que seleccionar filas no corra la pantalla -- pedido del
- * usuario 2026-09-23. */
-export interface AccionBarraEstado {
-  texto: string;
-  alPulsar: () => void;
-}
-
-const AccionBarraEstadoContexto = createContext<(accion: AccionBarraEstado | null) => void>(
-  () => {},
-);
-
-export const AccionBarraEstadoProvider = AccionBarraEstadoContexto.Provider;
-
-/** Mismo ciclo de vida que `useBarraEstado`: publica la acción mientras la
- * sección esté activa, y la saca al desmontar o al cambiar de sección.
- * `texto` en `null` = sin botón. `alPulsar` se guarda en una ref, así el
- * efecto sólo depende del texto -- si dependiera de la función (nueva en
- * cada render), publicarla re-renderizaría `Shell` y éste a la pantalla,
- * en un ciclo sin fin. */
-export function useAccionBarraEstado(texto: string | null, alPulsar: () => void) {
-  const establecer = useContext(AccionBarraEstadoContexto);
-  const activa = useContext(SeccionActivaContexto);
-  const alPulsarRef = useRef(alPulsar);
-  useEffect(() => {
-    alPulsarRef.current = alPulsar;
-  });
-  useEffect(() => {
-    if (!activa || texto === null) return;
-    establecer({ texto, alPulsar: () => alPulsarRef.current() });
-    return () => establecer(null);
-  }, [texto, activa, establecer]);
 }

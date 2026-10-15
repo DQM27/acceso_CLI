@@ -44,7 +44,7 @@ mod tipos;
 mod visitas;
 
 pub use error::NucleoError;
-use error::{FalloSincronizacion, convertir_fallo_sincronizacion, interno};
+use error::{FalloSincronizacion, apertura, convertir_fallo_sincronizacion, interno};
 pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
@@ -171,7 +171,7 @@ impl Nucleo {
             std::sync::Arc::new(RelojCorregido::nuevo()),
         )
         .map_err(|origen| NucleoError::Apertura {
-            mensaje: interno(origen),
+            mensaje: apertura(origen),
         })?;
         Ok(Self::desde_core(&ruta_base_datos, core, None))
     }
@@ -199,7 +199,7 @@ impl Nucleo {
         iniciar_log_android();
 
         let clave: [u8; 32] = clave.try_into().map_err(|_| NucleoError::Interno {
-            mensaje: "La clave de cifrado debe tener 32 bytes".to_string(),
+            mensaje: interno("La clave de cifrado debe tener 32 bytes"),
         })?;
 
         match Self::abrir_cifrado_intento(&ruta_base_datos, &clave) {
@@ -232,7 +232,7 @@ impl Nucleo {
             std::sync::Arc::new(RelojCorregido::nuevo()),
         )
         .map_err(|origen| NucleoError::Apertura {
-            mensaje: interno(origen),
+            mensaje: apertura(origen),
         })?;
         Ok(Self::desde_core(ruta_base_datos, core, Some(*clave)))
     }

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import InterruptorCelda from "../componentes/InterruptorCelda";
@@ -124,7 +124,7 @@ export default function CatalogoRutas() {
         activo: fila.activo,
       });
     } catch (error) {
-      toast.error(String(error));
+      avisos.error(error);
       recargar();
     }
   }
@@ -137,7 +137,7 @@ export default function CatalogoRutas() {
         activo: fila.activo,
       });
     } catch (error) {
-      toast.error(String(error));
+      avisos.error(error);
       recargar();
     }
   }
@@ -147,7 +147,7 @@ export default function CatalogoRutas() {
       if (fila.activo) await reactivarRuta(fila.id);
       else await darDeBajaRuta(fila.id);
     } catch (error) {
-      toast.error(String(error));
+      avisos.error(error);
       recargar();
     }
   }

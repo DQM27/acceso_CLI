@@ -33,22 +33,22 @@ import {
   useState,
   ViewTransition,
 } from "react";
+import type { ReactNode } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
-import { Toaster, toast } from "sonner";
+import AvisosPanel from "./avisos/AvisosPanel";
+import { avisos } from "./avisos/avisos";
 import {
   BadgeCheck,
   Boxes,
   Building2,
   ClipboardList,
   DoorOpen,
-  Download,
   HardHat,
   History,
   IdCard,
   Loader2,
-  LogOut,
   Route,
   Truck,
   UserCheck,
@@ -57,7 +57,10 @@ import type { LucideIcon } from "lucide-react";
 import marca from "./assets/marca.png";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
-import SelectorTema from "./componentes/SelectorTema";
+import AvisoPermanencia from "./componentes/AvisoPermanencia";
+import type { FiltroPermanencia } from "./pantallas/Activos.logica";
+import { useAvisosPermanencia } from "./componentes/useAvisosPermanencia";
+import { useTema } from "./componentes/useTema";
 import { guardarPreferencia, leerPreferencia } from "./preferencias";
 import BarraNube from "./componentes/BarraNube";
 import type { EstadoConexionNube } from "./componentes/BarraNube.logica";
@@ -82,11 +85,9 @@ import { mensajeConflictoGafete } from "./conflictoGafete";
 import { textoHora } from "./tiempo";
 import { SesionProvider } from "./contexto/SesionContexto";
 import {
-  AccionBarraEstadoProvider,
   BarraEstadoProvider,
   SeccionActivaProvider,
 } from "./contexto/BarraEstadoContexto";
-import type { AccionBarraEstado } from "./contexto/BarraEstadoContexto";
 
 /** Piso de cuánto se ve el splash (`splashscreen.html`), aunque la pantalla
  * real esté lista antes -- sin esto, en un arranque rápido el splash pasaba
@@ -382,6 +383,7 @@ function Shell({
   sesion: UsuarioSesion;
   onCerrarSesion: () => void;
 }) {
+  const { tema, alternarTema } = useTema(sesion.id);
   const [seccion, setSeccion] = useState<Seccion>("activos");
   // Cada sección visitada se queda MONTADA (oculta con CSS) en vez de
   // desmontarse al cambiar a otra -- antes, el `{seccion === "x" && <X/>}`
@@ -418,10 +420,7 @@ function Shell({
   // La pantalla montada publica acá su propio texto (ver `useBarraEstado`) —
   // `null` mientras ninguna lo hizo todavía (primer render) o entre una
   // pantalla y la siguiente.
-  const [mensajeEstado, setMensajeEstado] = useState<string | null>(null);
-  // Botón de acción de la pantalla activa junto al mensaje (ver
-  // `useAccionBarraEstado`) -- ej. "Registrar salida (2)" en Activos.
-  const [accionEstado, setAccionEstado] = useState<AccionBarraEstado | null>(null);
+  const [mensajeEstado, setMensajeEstado] = useState<ReactNode>(null);
 
   function alternarColapsado() {
     setColapsado((actual) => {
@@ -498,6 +497,21 @@ function Shell({
   // otra pantalla o de otro dispositivo (Realtime/pulso periódico).
   const [refrescarActivos, setRefrescarActivos] = useState(0);
   const [sincronizandoManual, setSincronizandoManual] = useState(false);
+  // Gente con demasiado tiempo adentro: lo calcula el núcleo (`domain::permanencia`),
+  // acá sólo se guarda lo que contesta y qué aviso está pulsado.
+  const avisosPermanencia = useAvisosPermanencia(`${refrescarActivos}-${sincronizandoManual}`);
+  const [filtroPermanencia, setFiltroPermanencia] = useState<FiltroPermanencia | null>(null);
+  // Si el aviso pulsado ya no tiene a nadie (salieron), el filtro se ignora para
+  // no dejar la tabla vacía sin un aviso que lo apague.
+  const filtroPermanenciaEfectivo =
+    (filtroPermanencia === "Aviso" && (avisosPermanencia?.en_aviso ?? 0) > 0) ||
+    (filtroPermanencia === "Critico" && (avisosPermanencia?.criticos ?? 0) > 0)
+      ? filtroPermanencia
+      : null;
+  function alternarFiltroPermanencia(nivel: FiltroPermanencia) {
+    cambiarSeccion("activos");
+    setFiltroPermanencia((actual) => (actual === nivel ? null : nivel));
+  }
   const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
   const [estadoConexionNube, setEstadoConexionNube] = useState<EstadoConexionNube>(null);
@@ -529,7 +543,7 @@ function Shell({
   // pantallas de una sesión que ya no existe.
   function manejarResumenSincronizacion(resumen: ResumenSincronizacion): boolean {
     if (resumen.sesion_expulsada) {
-      toast.error(
+      avisos.error(
         resumen.sesion_en_otra_unidad
           ? MENSAJE_SESION_EN_OTRA_UNIDAD
           : "Tu usuario fue desactivado — se cerró la sesión.",
@@ -547,26 +561,26 @@ function Shell({
     // cada sync mientras el conflicto no se resuelva (cerrando uno de los
     // dos ingresos) -- no es un error transitorio que convenga silenciar.
     for (const conflicto of resumen.conflictos_ingreso) {
-      toast.warning(
+      avisos.advertencia(
         `${conflicto.contratista_nombre} tiene un ingreso activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
     // Mismo criterio que `conflictos_ingreso`, pero para visitas (ver
     // `nube::visitantes_con_conflicto_activo`).
     for (const conflicto of resumen.conflictos_movimiento_visita) {
-      toast.warning(
+      avisos.advertencia(
         `${conflicto.visitante_nombre} tiene una visita activa acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
     // Mismo criterio que `conflictos_ingreso`, pero para proveedores (ver
     // `nube::proveedores_con_conflicto_activo`).
     for (const conflicto of resumen.conflictos_ingreso_proveedor) {
-      toast.warning(
+      avisos.advertencia(
         `${conflicto.nombre} tiene un ingreso de proveedor activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
     for (const conflicto of resumen.conflictos_ingreso_correo) {
-      toast.warning(
+      avisos.advertencia(
         `${conflicto.nombre} tiene un ingreso por correo activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
@@ -578,7 +592,7 @@ function Shell({
     // una vuelta aparte si hace falta, una vez visto el comportamiento
     // real.
     for (const conflicto of resumen.conflictos_gafete) {
-      toast.warning(mensajeConflictoGafete(conflicto, textoHora(conflicto.fecha_hora)));
+      avisos.advertencia(mensajeConflictoGafete(conflicto, textoHora(conflicto.fecha_hora)));
     }
     return false;
   }
@@ -610,7 +624,7 @@ function Shell({
       // aviso queda fijo hasta que alguien lo cierre.
       onExpulsado: () => {
         void descartarTokenNube();
-        toast.error(MENSAJE_EXPULSION, { duration: Infinity, closeButton: true });
+        avisos.error(MENSAJE_EXPULSION, { persistente: true });
       },
       usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
     });
@@ -643,31 +657,34 @@ function Shell({
       startTransition(() => setRefrescarActivos((n) => n + 1));
       emitirActualizacion(resumen, "manual");
       if (resumen.fallidos === 0) {
-        toast.success(`Sincronizado — ${resumen.enviados} enviados.`);
+        avisos.exito(`Sincronizado — ${resumen.enviados} enviados.`);
       } else {
-        toast.warning(
+        avisos.advertencia(
           `${resumen.enviados} enviados, ${resumen.fallidos} fallidos — reintenta más tarde.`,
         );
       }
     } catch (error) {
-      toast.error(String(error));
+      avisos.error(error);
     } finally {
       setSincronizandoManual(false);
     }
   }
 
   function ofrecerActualizacion(actualizacion: Update) {
-    toast(`Versión ${actualizacion.version} disponible`, {
+    avisos.info("Se descarga, se instala y la app se reinicia sola.", {
+      titulo: `Versión ${actualizacion.version} disponible`,
       id: "actualizacion-disponible",
-      description: "Se descarga, se instala y la app se reinicia sola.",
-      duration: Infinity,
-      action: {
-        label: "Actualizar",
-        onClick: () => {
-          toast.promise(instalarActualizacion(actualizacion), {
-            loading: "Descargando actualización…",
-            success: "Actualizado — reiniciando…",
-            error: (error) => `No se pudo actualizar: ${String(error)}`,
+      persistente: true,
+      accion: {
+        etiqueta: "Actualizar",
+        alAccionar: () => {
+          avisos.progreso(instalarActualizacion(actualizacion), {
+            cargando: "Descargando actualización…",
+            exito: "Actualizado — reiniciando…",
+            error: (causa) => {
+              console.error("actualización:", causa);
+              return "No se pudo actualizar, intentá de nuevo más tarde";
+            },
           });
         },
       },
@@ -704,12 +721,13 @@ function Shell({
         ofrecerActualizacion(actualizacion);
       } else {
         const version = await getVersion().catch(() => null);
-        toast.success(
+        avisos.exito(
           version ? `Ya tienes la última versión (${version}).` : "Ya tienes la última versión.",
         );
       }
     } catch (error) {
-      toast.error(`No se pudo buscar actualizaciones: ${String(error)}`);
+      console.error("buscar actualización:", error);
+      avisos.error("No se pudo buscar actualizaciones, revisá la conexión");
     } finally {
       setBuscandoActualizacion(false);
     }
@@ -718,7 +736,6 @@ function Shell({
   return (
     <SesionProvider value={sesion.id}>
       <BarraEstadoProvider value={setMensajeEstado}>
-      <AccionBarraEstadoProvider value={setAccionEstado}>
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
             <Sidebar
@@ -731,6 +748,18 @@ function Shell({
               onReordenar={reordenarSidebar}
               onCambiarVisibilidad={alternarVisibilidadSeccion}
               onRestablecer={restablecerSidebar}
+              recargarUnidad={sincronizandoManual}
+              onBuscarActualizacion={buscarActualizacionManual}
+              buscandoActualizacion={buscandoActualizacion}
+              pie={
+                <MenuUsuario
+                  sesion={sesion}
+                  colapsado={colapsado}
+                  tema={tema}
+                  onAlternarTema={alternarTema}
+                  onCerrarSesion={onCerrarSesion}
+                />
+              }
             />
 
             <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -773,6 +802,7 @@ function Shell({
                         {id === "activos" ? (
                           <Activos
                             refrescarSenal={refrescarActivos}
+                            filtroPermanencia={filtroPermanenciaEfectivo}
                             onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
                             onAbrirSalida={() => setModalSalida(true)}
                           />
@@ -812,20 +842,24 @@ function Shell({
               grilla; a la derecha, el usuario (antes fijo en el sidebar). */}
           <div className="barra-estado">
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <span>{mensajeEstado}</span>
-              {accionEstado && (
-                <button
-                  type="button"
-                  // Mismo botón que "Sincronizar" (BarraNube.tsx), para que
-                  // la barra se vea pareja.
-                  className="barra-estado-boton"
-                  onClick={accionEstado.alPulsar}
-                  style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
-                >
-                  <LogOut size={13} strokeWidth={2} aria-hidden="true" />
-                  {accionEstado.texto}
-                </button>
+              {/* Sólo existen si hay gente en ese nivel (el núcleo manda el texto o
+                  `null`); desde cualquier pantalla llevan a Activos con el filtro. */}
+              {avisosPermanencia?.texto_critico && (
+                <AvisoPermanencia
+                  texto={avisosPermanencia.texto_critico}
+                  activo={filtroPermanenciaEfectivo === "Critico"}
+                  critico
+                  onAlternar={() => alternarFiltroPermanencia("Critico")}
+                />
               )}
+              {avisosPermanencia?.texto_aviso && (
+                <AvisoPermanencia
+                  texto={avisosPermanencia.texto_aviso}
+                  activo={filtroPermanenciaEfectivo === "Aviso"}
+                  onAlternar={() => alternarFiltroPermanencia("Aviso")}
+                />
+              )}
+              <span>{mensajeEstado}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <BarraNube
@@ -833,22 +867,6 @@ function Shell({
                 onSincronizar={sincronizarManualmente}
                 estadoConexion={estadoConexionNube}
               />
-              <button
-                type="button"
-                className="barra-estado-boton boton-icono"
-                onClick={buscarActualizacionManual}
-                disabled={buscandoActualizacion}
-                title="Buscar actualización"
-                aria-label="Buscar actualización"
-              >
-                {buscandoActualizacion ? (
-                  <Loader2 size={15} strokeWidth={2} className="girando" aria-hidden="true" />
-                ) : (
-                  <Download size={15} strokeWidth={2} aria-hidden="true" />
-                )}
-              </button>
-              <SelectorTema />
-              <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
             </div>
           </div>
 
@@ -868,13 +886,10 @@ function Shell({
             )}
           </Suspense>
 
-          {/* theme="system": mismo criterio que el resto de la app (paleta
-              clara/oscura sigue `prefers-color-scheme`, sin toggle manual
-              todavía) — estilizado con las variables propias en index.css, no
-              los colores por defecto de sonner. */}
-          <Toaster theme="system" position="bottom-right" richColors={false} />
+          {/* Los avisos usan las variables de la app (tema Tokyo Day o
+              Night), ver `avisos/avisos.css`. */}
+          <AvisosPanel />
         </div>
-      </AccionBarraEstadoProvider>
       </BarraEstadoProvider>
     </SesionProvider>
   );

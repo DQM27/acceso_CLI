@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use rusqlite::{Connection, params};
 
 use control_acceso::database::error::DatabaseError;
@@ -8,6 +8,7 @@ use control_acceso::database::queries::ingresos::{
     ListaIngresosActivosLectura, PaginaHistorial, SqliteIngresosQuery,
 };
 use control_acceso::database::schema::initialize_database;
+use control_acceso::domain::permanencia::UmbralesPermanencia;
 use control_acceso::domain::resultado_acceso::ResultadoAcceso;
 use control_acceso::models::medio_ingreso::MedioIngreso;
 use control_acceso::models::tipo_ingreso::TipoIngreso;
@@ -478,7 +479,8 @@ fn service_calcula_advertencia_praind_actual_sin_sql_de_dominio() {
     let items = service
         .listar_activos(
             &FiltroIngresosActivos::default(),
-            NaiveDate::from_ymd_opt(2026, 8, 12).unwrap(),
+            "2026-08-12T18:00:00Z".parse::<DateTime<Utc>>().unwrap(),
+            UmbralesPermanencia::default(),
         )
         .unwrap();
     assert_eq!(
@@ -1058,7 +1060,8 @@ fn service_propaga_error_de_database() {
     let service = RegistroIngresoConsultaService::new(&QueryConError);
     let resultado = service.listar_activos(
         &FiltroIngresosActivos::default(),
-        NaiveDate::from_ymd_opt(2026, 8, 12).unwrap(),
+        "2026-08-12T18:00:00Z".parse::<DateTime<Utc>>().unwrap(),
+        UmbralesPermanencia::default(),
     );
     assert!(matches!(
         resultado,

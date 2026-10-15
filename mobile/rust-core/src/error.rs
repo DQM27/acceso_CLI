@@ -15,7 +15,7 @@ use control_acceso::services::error::UsuarioServiceError as UsuarioServiceErrorN
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum NucleoError {
-    #[error("no se pudo abrir la base de datos: {mensaje}")]
+    #[error("{mensaje}")]
     Apertura { mensaje: String },
     #[error("credenciales inválidas")]
     CredencialesInvalidas,
@@ -55,21 +55,29 @@ pub enum NucleoError {
     /// prefijo técnico -- sale de `control_acceso::mensajes`.
     #[error("{mensaje}")]
     Rechazado { mensaje: String },
-    #[error("error interno: {mensaje}")]
+    #[error("{mensaje}")]
     Interno { mensaje: String },
 }
 
 /// Punto de paso de casi todo `NucleoError::Interno` de este archivo --
-/// loguea el detalle técnico antes de convertirlo a texto para Kotlin
-/// (ver `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto
+/// loguea el detalle técnico y devuelve a Kotlin un texto en claro, nunca el
+/// detalle (ver `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto
 /// 5.1: mismo criterio que `mensaje_generico` del lado de escritorio y las
 /// variantes técnicas de `control_acceso::mensajes::mensaje_*`). Sin
 /// backend de logging instalado (`inicializar_logging`, más abajo, todavía
 /// no se llamó desde Kotlin) esto es no-op: no cambia nada por sí solo.
 pub fn interno<E: std::fmt::Display>(error: E) -> String {
-    let mensaje = error.to_string();
-    log::error!("{mensaje}");
-    mensaje
+    control_acceso::mensajes::mensaje_generico(error)
+}
+
+/// Texto de `NucleoError::Apertura`: la base no se pudo abrir (archivo
+/// dañado, clave que no corresponde). El detalle va al registro técnico;
+/// Kotlin muestra sólo qué hacer.
+pub fn apertura<E: std::fmt::Display>(error: E) -> String {
+    log::error!("apertura de la base de datos: {error}");
+    "No se pudo abrir la base de datos de este teléfono. Cerrá y volvé a abrir la app; si sigue \
+     pasando, avisá a un administrador"
+        .into()
 }
 
 impl From<AutenticacionErrorNucleo> for NucleoError {
@@ -92,7 +100,7 @@ impl From<control_acceso::nube::AuthSupabaseError> for NucleoError {
                 Self::CredencialesInvalidas
             }
             otro => Self::Interno {
-                mensaje: interno(otro),
+                mensaje: control_acceso::mensajes::mensaje_auth_supabase(otro),
             },
         }
     }
@@ -116,7 +124,7 @@ impl From<control_acceso::nube::SincronizacionError> for FalloSincronizacion {
             Self::TokenVencido
         } else {
             Self::Nucleo(NucleoError::Interno {
-                mensaje: interno(error),
+                mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
             })
         }
     }

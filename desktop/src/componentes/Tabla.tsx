@@ -5,7 +5,7 @@ import { AgGridReact } from "ag-grid-react";
 import { themeQuartz } from "ag-grid-community";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
 import { save } from "@tauri-apps/plugin-dialog";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import { Columns3, Funnel, RotateCcw, UnfoldHorizontal } from "lucide-react";
 import type {
   ColDef,
@@ -267,6 +267,8 @@ export interface TablaHandle<T> {
    * las filas filtradas y ordenadas con cada valor ya formateado
    * ("23/09/2026", "S/G"...). */
   datosVisibles: () => DatosTabla;
+  /** Quita la selección de todas las filas (ej. la ✕ de `BarraSeleccion`). */
+  deseleccionarTodo: () => void;
 }
 
 export interface DatosTabla {
@@ -373,7 +375,7 @@ function TablaBase<T>(
       .filter(columnaConDato)
       .map((columna) => columna.getColId());
     if (columnKeys.length === 0) {
-      toast.error("No hay columnas visibles para exportar.");
+      avisos.error("No hay columnas visibles para exportar.");
       return;
     }
     // Punto y coma: Excel en español (Costa Rica usa coma decimal) espera
@@ -383,7 +385,7 @@ function TablaBase<T>(
       columnSeparator: ";",
     });
     if (!contenido) {
-      toast.error("No hay filas para exportar.");
+      avisos.error("No hay filas para exportar.");
       return;
     }
     const destino = await save({
@@ -394,9 +396,9 @@ function TablaBase<T>(
     if (!destino) return;
     try {
       await guardarCsv(destino, contenido);
-      toast.success("CSV exportado.");
+      avisos.exito("CSV exportado.");
     } catch (error) {
-      toast.error(String(error));
+      avisos.error(error);
     }
   }
 
@@ -415,6 +417,7 @@ function TablaBase<T>(
         .filter((columna) => !columna.hide)
         .map((columna) => columna.colId),
     exportarCsv,
+    deseleccionarTodo: () => apiRef.current?.deselectAll(),
     datosVisibles: () => {
       const api = apiRef.current;
       if (!api) return { columnas: [], filas: [] };

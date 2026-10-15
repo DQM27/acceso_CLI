@@ -9,6 +9,7 @@ use crate::database::repositories::empresa_repository::EmpresaRepository;
 use crate::database::repositories::gafete_repository::GafeteRepository;
 use crate::database::repositories::registro_ingreso_repository::RegistroIngresoRepository;
 use crate::domain::acceso::verificar_acceso;
+use crate::domain::permanencia::{NivelPermanencia, UmbralesPermanencia, nivel_de_permanencia};
 use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
 use crate::domain::resultado_acceso::ResultadoAcceso;
 use crate::models::gafete::TipoGafete;
@@ -155,6 +156,9 @@ pub struct IngresoActivoResumen {
     pub resultado_registrado: ResultadoIngresoRegistrado,
     /// Evaluación con los datos y la fecha actuales.
     pub resultado_acceso: ResultadoAcceso,
+    /// Cuánto lleva adentro sin salida (regla de `domain::permanencia`),
+    /// medido con el reloj del núcleo: la interfaz sólo lo muestra.
+    pub nivel_permanencia: NivelPermanencia,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,14 +187,16 @@ where
     pub fn listar_activos(
         &self,
         filtro: &FiltroIngresosActivos,
-        hoy: NaiveDate,
+        ahora: DateTime<Utc>,
+        umbrales: UmbralesPermanencia,
     ) -> Result<ListaIngresosActivosResumen, RegistroIngresoServiceError> {
+        let hoy = fecha_costa_rica(ahora);
         let resultado = self.consultas.listar_activos(filtro)?;
         Ok(ListaIngresosActivosResumen {
             items: resultado
                 .items
                 .into_iter()
-                .map(|lectura| convertir_activo(lectura, hoy))
+                .map(|lectura| convertir_activo(lectura, hoy, ahora, umbrales))
                 .collect(),
             total: resultado.total,
         })
@@ -207,7 +213,12 @@ where
     }
 }
 
-fn convertir_activo(lectura: IngresoActivoLectura, hoy: NaiveDate) -> IngresoActivoResumen {
+fn convertir_activo(
+    lectura: IngresoActivoLectura,
+    hoy: NaiveDate,
+    ahora: DateTime<Utc>,
+    umbrales: UmbralesPermanencia,
+) -> IngresoActivoResumen {
     let contratista = crate::models::contratista::Contratista::reconstruir(
         lectura.contratista_id,
         lectura.cedula.clone(),
@@ -220,6 +231,7 @@ fn convertir_activo(lectura: IngresoActivoLectura, hoy: NaiveDate) -> IngresoAct
         lectura.empresa_activa,
     );
     let resultado_acceso = verificar_acceso(&contratista, hoy);
+    let nivel_permanencia = nivel_de_permanencia(lectura.fecha_hora_ingreso, ahora, umbrales);
 
     IngresoActivoResumen {
         registro_id: lectura.registro_id,
@@ -235,6 +247,7 @@ fn convertir_activo(lectura: IngresoActivoLectura, hoy: NaiveDate) -> IngresoAct
         usuario_ingreso_nombre: lectura.usuario_ingreso_nombre,
         resultado_registrado: lectura.resultado_registrado,
         resultado_acceso,
+        nivel_permanencia,
     }
 }
 

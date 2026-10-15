@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filtrarPorGafete, masDeDoceHoras } from "./Activos.logica";
+import { contarPorGafete, filtrarPorGafete, filtrarPorNivel } from "./Activos.logica";
 
 const filas = [
   { id: 1, gafete_numero: 10 },
@@ -7,6 +7,16 @@ const filas = [
   { id: 3, gafete_numero: 0 },
   { id: 4, gafete_numero: null },
 ];
+
+describe("contarPorGafete", () => {
+  it("cuenta con y sin gafete, y el gafete 0 cuenta como gafete", () => {
+    expect(contarPorGafete(filas)).toEqual({ con: 2, sin: 2 });
+  });
+
+  it("sin filas, todo en cero", () => {
+    expect(contarPorGafete([])).toEqual({ con: 0, sin: 0 });
+  });
+});
 
 describe("filtrarPorGafete", () => {
   it("todos devuelve todas las filas", () => {
@@ -23,15 +33,20 @@ describe("filtrarPorGafete", () => {
   });
 });
 
-describe("masDeDoceHoras", () => {
-  const ahora = new Date("2026-09-23T20:00:00Z").getTime();
+describe("filtrarPorNivel", () => {
+  const filas = [
+    { id: 1, nivel_permanencia: "Normal" },
+    { id: 2, nivel_permanencia: "Aviso" },
+    { id: 3, nivel_permanencia: "Critico" },
+    { id: 4, nivel_permanencia: "Aviso" },
+  ];
 
-  it("resalta a quien lleva mas de 12 horas adentro", () => {
-    expect(masDeDoceHoras({ fecha_hora_ingreso: "2026-09-23T07:59:00Z" }, ahora)).toBe(true);
+  it("sin nivel devuelve todas las filas", () => {
+    expect(filtrarPorNivel(filas, null).map((f) => f.id)).toEqual([1, 2, 3, 4]);
   });
 
-  it("12 horas justas o menos no se resalta", () => {
-    expect(masDeDoceHoras({ fecha_hora_ingreso: "2026-09-23T08:00:00Z" }, ahora)).toBe(false);
-    expect(masDeDoceHoras({ fecha_hora_ingreso: "2026-09-23T19:00:00Z" }, ahora)).toBe(false);
+  it("deja sólo las del nivel que marcó el núcleo", () => {
+    expect(filtrarPorNivel(filas, "Aviso").map((f) => f.id)).toEqual([2, 4]);
+    expect(filtrarPorNivel(filas, "Critico").map((f) => f.id)).toEqual([3]);
   });
 });

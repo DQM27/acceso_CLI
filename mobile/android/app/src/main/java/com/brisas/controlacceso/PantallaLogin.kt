@@ -17,9 +17,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -64,7 +66,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
     ) {
         // Logo más grande y sin el texto "Lattis" debajo -- redundante, el
         // logo ya dice la marca (pedido explícito del usuario, 2026-09-19).
-        // En su lugar, "Control de acceso móvil" con "móvil" en negrita
+        // En su lugar, "ACCESO MOVIL" con "MOVIL" en negrita
         // para resaltarlo -- distingue esta app de las otras plataformas
         // (desktop/web) que comparten la misma marca.
         Image(
@@ -78,10 +80,10 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
                 // `titleLarge` ya es bold (peso 700, `TipografiaBrisas` en
                 // DisenoMovil.kt) -- ponerle Bold también a "móvil" no
                 // resaltaba nada porque ya estaba igual de grueso que el
-                // resto. Se aligera "Control de acceso" a Normal para que
-                // "móvil" contraste y sea lo que el ojo agarra primero.
+                // resto. Se aligera "ACCESO" a Normal para que
+                // "MOVIL" contraste y sea lo que el ojo agarra primero.
                 withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
-                    append("Control de acceso ")
+                    append("ACCESO ")
                 }
                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
                     append("MOVIL")
@@ -93,7 +95,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
 
         // Unidad y etiqueta con que quedó registrado el teléfono: si lo
         // registraron en la unidad equivocada, se ve antes de entrar.
-        rememberTextoIdentidadEquipo(nucleo)?.let { texto ->
+        rememberTextoUnidadOperativa(nucleo)?.let { texto ->
             Text(
                 texto,
                 style = MaterialTheme.typography.bodySmall,
@@ -144,6 +146,22 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
                 mensajeError,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 16.dp),
+            )
+        }
+
+        // Versión instalada, discreta, abajo a la derecha del formulario.
+        val contexto = LocalContext.current
+        val version = remember {
+            runCatching {
+                contexto.packageManager.getPackageInfo(contexto.packageName, 0).versionName
+            }.getOrNull().orEmpty()
+        }
+        if (version.isNotEmpty()) {
+            Text(
+                "v$version",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.End).padding(top = 24.dp),
             )
         }
     }

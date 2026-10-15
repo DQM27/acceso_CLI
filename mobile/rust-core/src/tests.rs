@@ -1187,3 +1187,32 @@ fn visita_sin_cita_de_hoy_es_un_aviso_y_el_gafete_ocupado_se_rechaza() {
         .registrar_entrada_visita("300000003".to_string(), None, None)
         .unwrap();
 }
+
+// --- Mensajes sin detalle técnico para Kotlin ---
+
+#[test]
+fn un_error_interno_no_le_muestra_a_kotlin_el_detalle_tecnico() {
+    let error = NucleoError::Interno {
+        mensaje: error::interno("Error de SQLite: file is not a database"),
+    };
+
+    let texto = error.to_string();
+
+    assert!(!texto.contains("SQLite"), "se coló el detalle: {texto}");
+    assert!(
+        !texto.contains("error interno"),
+        "quedó el prefijo técnico: {texto}"
+    );
+}
+
+#[test]
+fn un_fallo_al_abrir_la_base_no_le_muestra_a_kotlin_el_detalle_tecnico() {
+    let error = NucleoError::Apertura {
+        mensaje: error::apertura("Error de SQLite: file is not a database"),
+    };
+
+    let texto = error.to_string();
+
+    assert!(!texto.contains("SQLite"), "se coló el detalle: {texto}");
+    assert!(texto.starts_with("No se pudo abrir la base de datos"));
+}

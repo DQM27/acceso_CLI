@@ -8,6 +8,9 @@ use crate::database::repositories::contratista_repository::SqliteContratistaRepo
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
 use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::registro_ingreso_repository::SqliteRegistroIngresoRepository;
+use crate::domain::permanencia::{
+    NivelPermanencia, ResumenPermanencia, nivel_de_permanencia, resumir_permanencia,
+};
 use crate::domain::resultado_acceso::ResultadoAcceso;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::RegistroIngresoServiceError;
@@ -15,9 +18,35 @@ use crate::services::registro_ingreso_service::{
     ListaIngresosActivosResumen, PreparacionIngreso, RegistroIngresoConsultaService,
     RegistroIngresoService, ResultadoRegistroEntrada,
 };
-use crate::tiempo::fecha_costa_rica;
+use crate::tiempo::{fecha_costa_rica, parsear_utc};
 
 use super::{AppCore, verificar_actor_activo};
+
+/// Lo que la barra de estado muestra sobre la gente que lleva demasiado
+/// adentro (ver `domain::permanencia`): los conteos y los textos ya redactados.
+/// Un texto en `None` significa que no hay nadie en ese nivel y no se muestra
+/// nada.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct AvisosPermanencia {
+    pub en_aviso: usize,
+    pub criticos: usize,
+    pub texto_aviso: Option<String>,
+    pub texto_critico: Option<String>,
+}
+
+impl AvisosPermanencia {
+    fn desde(resumen: ResumenPermanencia) -> Self {
+        Self {
+            en_aviso: resumen.en_aviso,
+            criticos: resumen.criticos,
+            texto_aviso: (resumen.en_aviso > 0)
+                .then(|| crate::mensajes::mensaje_permanencia_aviso(resumen.en_aviso)),
+            texto_critico: (resumen.criticos > 0)
+                .then(|| crate::mensajes::mensaje_permanencia_critica(resumen.criticos)),
+        }
+    }
+}
 
 impl AppCore {
     pub fn preparar_ingreso(
@@ -117,7 +146,49 @@ impl AppCore {
         filtro: &FiltroIngresosActivos,
     ) -> Result<ListaIngresosActivosResumen, RegistroIngresoServiceError> {
         RegistroIngresoConsultaService::new(&SqliteIngresosQuery::new(&self.connection))
-            .listar_activos(filtro, fecha_costa_rica(self.reloj.ahora_utc()))
+            .listar_activos(filtro, self.reloj.ahora_utc(), self.umbrales_permanencia)
+    }
+
+    /// Nivel de permanencia de un ingreso por su hora de entrada en texto (los
+    /// ingresos abiertos en otro dispositivo llegan así desde la caché de la
+    /// nube), con el reloj y los umbrales de este núcleo. Una hora que no se
+    /// puede leer cuenta como normal: mejor no alertar que alertar sin saber.
+    pub fn nivel_permanencia_de_entrada(&self, hora_entrada: &str) -> NivelPermanencia {
+        match parsear_utc(hora_entrada) {
+            Ok(ingreso) => {
+                nivel_de_permanencia(ingreso, self.reloj.ahora_utc(), self.umbrales_permanencia)
+            }
+            Err(error) => {
+                log::warn!("permanencia: hora de entrada ilegible ({hora_entrada}): {error}");
+                NivelPermanencia::Normal
+            }
+        }
+    }
+
+    /// Cuánta gente lleva más de 12 h (aviso) y más de 14 h (crítico) adentro,
+    /// sumando los ingresos de este dispositivo y, si la sesión puede usar la
+    /// nube, los abiertos por otros dispositivos del sitio.
+    pub fn avisos_permanencia(
+        &self,
+        actor: &UsuarioSesion,
+    ) -> Result<AvisosPermanencia, RegistroIngresoServiceError> {
+        let locales = self.listar_ingresos_activos(&FiltroIngresosActivos::default())?;
+        let mut niveles: Vec<NivelPermanencia> = locales
+            .items
+            .iter()
+            .map(|ingreso| ingreso.nivel_permanencia)
+            .collect();
+        #[cfg(feature = "nube")]
+        if let Ok(remotos) = self.listar_ingresos_remotos(actor) {
+            niveles.extend(
+                remotos
+                    .iter()
+                    .map(|remoto| self.nivel_permanencia_de_entrada(&remoto.hora_entrada)),
+            );
+        }
+        #[cfg(not(feature = "nube"))]
+        let _ = actor;
+        Ok(AvisosPermanencia::desde(resumir_permanencia(niveles)))
     }
 
     pub fn registrar_salida(

@@ -189,7 +189,7 @@ pub fn exportar_historial(
         &columnas,
         &destino,
     )
-    .map_err(super::mensaje_generico);
+    .map_err(super::mensaje_archivo);
     if resultado.is_ok() {
         respaldo.confirmar();
     }
@@ -222,7 +222,7 @@ impl RespaldoDestino {
                 std::process::id()
             );
             let ruta_respaldo = destino.with_file_name(nombre);
-            std::fs::rename(destino, &ruta_respaldo).map_err(super::mensaje_generico)?;
+            std::fs::rename(destino, &ruta_respaldo).map_err(super::mensaje_archivo)?;
             Some(ruta_respaldo)
         } else {
             None
@@ -307,7 +307,9 @@ pub async fn exportar_historial_pdf(
         pdf::html::generar_html(&movimientos, &columnas, &sesion.nombre, &filtro_descripcion);
     let destino = PathBuf::from(destino);
     let respaldo = RespaldoDestino::apartar(&destino)?;
-    let resultado = pdf::generador::generar_pdf(&app, html, destino).await;
+    let resultado = pdf::generador::generar_pdf(&app, html, destino)
+        .await
+        .map_err(|error| super::mensaje_tarea_interrumpida("No se pudo generar el PDF", error));
     if resultado.is_ok() {
         respaldo.confirmar();
     }

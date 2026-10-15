@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { RefObject } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
 import { exportarTablaPdf, exportarTablaXlsx } from "../api/exportacion";
 import type { TablaHandle } from "./Tabla";
@@ -34,11 +34,11 @@ export default function BotonesExportacion<T>({
   function datos() {
     const visibles = tablaRef.current?.datosVisibles();
     if (!visibles || visibles.columnas.length === 0) {
-      toast.error("No hay columnas visibles para exportar.");
+      avisos.error("No hay columnas visibles para exportar.");
       return null;
     }
     if (visibles.filas.length === 0) {
-      toast.error("No hay filas para exportar con el filtro actual.");
+      avisos.error("No hay filas para exportar con el filtro actual.");
       return null;
     }
     return visibles;
@@ -54,14 +54,13 @@ export default function BotonesExportacion<T>({
     });
     if (!destino) return;
     setExportando(true);
-    toast.promise(
+    avisos.progreso(
       exportarTablaXlsx(destino, visibles.columnas, visibles.filas).finally(() =>
         setExportando(false),
       ),
       {
-        loading: "Exportando…",
-        success: (cantidad) => `${cantidad} fila(s) exportadas.`,
-        error: (error) => String(error),
+        cargando: "Exportando…",
+        exito: (cantidad) => `${cantidad} fila(s) exportadas.`,
       },
     );
   }
@@ -76,14 +75,13 @@ export default function BotonesExportacion<T>({
     });
     if (!destino) return;
     setExportando(true);
-    toast.promise(
+    avisos.progreso(
       exportarTablaPdf(destino, titulo, filtroDescripcion, visibles.columnas, visibles.filas).finally(
         () => setExportando(false),
       ),
       {
-        loading: "Exportando…",
-        success: "PDF exportado.",
-        error: (error) => String(error),
+        cargando: "Exportando…",
+        exito: "PDF exportado.",
       },
     );
   }

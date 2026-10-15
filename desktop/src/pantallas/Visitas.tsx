@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import { CalendarClock, History, LogIn, Plus, UserCheck } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -144,7 +144,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
     let vigente = true;
     const recargar =
       vista === "esperadas" ? recargarEsperadas : vista === "adentro" ? recargarAdentro : recargarHistorial;
-    recargar().catch((error) => vigente && toast.error(String(error)));
+    recargar().catch((error) => vigente && avisos.error(error));
     return () => {
       vigente = false;
     };
@@ -160,7 +160,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
         else await cerrarFilaCorreoActiva(fila.fuente.fila);
         await recargarAdentro();
       } catch (error) {
-        toast.error(String(error));
+        avisos.error(error);
       }
     },
     [recargarAdentro],
@@ -467,7 +467,7 @@ export default function Visitas({ refrescarSenal }: { refrescarSenal?: number })
           <NuevaVisitaModal
             cedulaInicial={modal.cedula}
             onRegistrado={() => {
-              recargarVista().catch((error) => toast.error(String(error)));
+              recargarVista().catch((error) => avisos.error(error));
             }}
             onCerrar={() => setModal(null)}
           />

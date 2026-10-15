@@ -1,0 +1,151 @@
+/* Los avisos al estilo de las notificaciones de macOS: translúcidos, con
+   esquinas redondeadas y un cuadrito de color con el ícono. Sólo colores y
+   medidas de la paleta de la app (`diseno.css`); nada de colores propios.
+   El motor es `sonner` (ver `AvisosPanel.tsx`), que dibuja la entrada, la
+   salida, el apilado y el gesto de arrastrar para cerrar. */
+
+[data-sonner-toaster] {
+  font-family: inherit;
+  --width: 360px;
+}
+
+.aviso {
+  --color: var(--acento);
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: var(--width);
+  padding: 10px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 22%);
+  color: var(--texto);
+  animation: aviso-entrar 460ms cubic-bezier(0.2, 0.9, 0.25, 1.08) backwards;
+}
+
+.aviso[data-removed="true"] {
+  animation: aviso-salir 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.aviso[data-type="success"] {
+  --color: var(--exito);
+}
+
+.aviso[data-type="warning"] {
+  --color: var(--advertencia);
+}
+
+.aviso[data-type="error"] {
+  --color: var(--error);
+}
+
+/* El ícono, en un cuadrito redondeado teñido del color del tipo. */
+.aviso-insignia {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color) 20%, transparent);
+  color: var(--color);
+}
+
+.aviso-cuerpo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.aviso .aviso-titulo {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.aviso .aviso-mensaje {
+  overflow-wrap: anywhere;
+  color: var(--texto-atenuado);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.aviso-accion {
+  flex: none;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--color);
+  color: var(--panel);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* La cruz sólo se ve al pasar por encima o al llegar con el teclado. */
+.aviso-cerrar {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--borde);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--texto-atenuado);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.aviso:hover .aviso-cerrar,
+.aviso-cerrar:focus-visible {
+  opacity: 1;
+}
+
+.aviso-girando {
+  animation: aviso-giro 900ms linear infinite;
+}
+
+/* Como en macOS: entra deslizándose desde el borde derecho y sale hacia el
+   mismo lado (sonner, por defecto, los baja desde arriba). */
+@keyframes aviso-entrar {
+  from {
+    opacity: 0;
+    transform: translateX(calc(100% + 24px));
+  }
+}
+
+@keyframes aviso-salir {
+  to {
+    opacity: 0;
+    transform: translateX(calc(100% + 24px));
+  }
+}
+
+@keyframes aviso-giro {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Quien pide menos movimiento no ve girar el ícono de "cargando". */
+@media (prefers-reduced-motion: reduce) {
+  .aviso,
+  .aviso[data-removed="true"],
+  .aviso-girando {
+    animation: none;
+  }
+}
