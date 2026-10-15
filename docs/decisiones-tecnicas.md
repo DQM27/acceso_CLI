@@ -789,12 +789,20 @@ que ya existía para un registro hecho sin conexión.
 
 **Huecos conocidos, sin resolver en este cambio:**
 
-- Renovar el token del dispositivo (`device-auth`) sigue con el tope de
-  10 s por llamada. Sin red de verdad falla al instante; con una red mala
-  (señal débil, portal cautivo) puede demorar. El token en caché evita la
-  llamada mientras esté vigente.
+- ~~Renovar el token del dispositivo (`device-auth`) sigue con el tope de
+  10 s por llamada.~~ Resuelto el mismo día: ver la nota de abajo.
 - El choque de "el encargado ya tiene otro gafete provisional sin devolver"
   (`prestamos_gafete_provisional_encargado_activo_idx`) deja la fila fallida
   al sincronizar pero no tiene aviso a quien opera; el de gafete en uso sí.
 - El registro no lleva una marca visible de "registrado sin verificar"; hoy
   sólo queda en el registro técnico (`log::warn!`).
+
+**Nota (2026-10-13, después):** la verificación pide el token con
+`CacheTokenDispositivo::autenticar_para_verificar`, que si hace falta uno
+nuevo usa el mismo tope de 3 s de las consultas en vivo. La sincronización
+y el resto de la app siguen con `autenticar_con_cache` y sus 10 s; como la
+sincronización periódica deja un token vigente en la misma caché, lo normal
+es que la verificación ni llame a `device-auth`. Además, un `5xx` de
+`device-auth` (la Edge Function caída) ahora cuenta como falta de conexión
+(`NubeError::es_falta_de_conexion`); antes, por llegar como error de
+estado de `reqwest`, frenaba el registro.

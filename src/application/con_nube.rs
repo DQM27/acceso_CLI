@@ -47,7 +47,7 @@ fn autenticar<G: Deref<Target = AppCore>>(
     actor: &UsuarioSesion,
 ) -> Result<TokenDispositivo, GestionNubeError> {
     nucleo().autorizar_uso_nube(actor)?;
-    let token = nube.autenticar_con_cache()?;
+    let token = nube.autenticar_para_verificar()?;
     nucleo().aplicar_token(&token);
     Ok(token)
 }
