@@ -12,7 +12,10 @@ import "./avisos.css";
 export default function AvisosPanel() {
   return (
     <Toaster
-      theme="system"
+      // Siempre "light": el color lo ponen las variables de la app (claro, oscuro,
+      // Tokyo Night), no `sonner`. Con "system" seguía al sistema operativo y,
+      // con el sistema en oscuro y la app en claro, pintaba el texto de blanco.
+      theme="light"
       position="top-right"
       visibleToasts={MAXIMO_VISIBLES}
       gap={8}

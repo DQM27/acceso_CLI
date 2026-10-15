@@ -19,13 +19,18 @@
   box-sizing: border-box;
   width: var(--width);
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--borde) 70%, transparent);
+  border: 1px solid var(--borde);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
   -webkit-backdrop-filter: blur(24px) saturate(1.5);
   backdrop-filter: blur(24px) saturate(1.5);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 28%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 22%);
   color: var(--texto);
+  animation: aviso-entrar 460ms cubic-bezier(0.2, 0.9, 0.25, 1.08) backwards;
+}
+
+.aviso[data-removed="true"] {
+  animation: aviso-salir 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 .aviso[data-type="success"] {
@@ -61,13 +66,13 @@
   min-width: 0;
 }
 
-.aviso-titulo {
+.aviso .aviso-titulo {
   font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.3;
 }
 
-.aviso-mensaje {
+.aviso .aviso-mensaje {
   overflow-wrap: anywhere;
   color: var(--texto-atenuado);
   font-size: 0.75rem;
@@ -114,6 +119,22 @@
   animation: aviso-giro 900ms linear infinite;
 }
 
+/* Como en macOS: entra deslizándose desde el borde derecho y sale hacia el
+   mismo lado (sonner, por defecto, los baja desde arriba). */
+@keyframes aviso-entrar {
+  from {
+    opacity: 0;
+    transform: translateX(calc(100% + 24px));
+  }
+}
+
+@keyframes aviso-salir {
+  to {
+    opacity: 0;
+    transform: translateX(calc(100% + 24px));
+  }
+}
+
 @keyframes aviso-giro {
   to {
     transform: rotate(360deg);
@@ -122,6 +143,8 @@
 
 /* Quien pide menos movimiento no ve girar el ícono de "cargando". */
 @media (prefers-reduced-motion: reduce) {
+  .aviso,
+  .aviso[data-removed="true"],
   .aviso-girando {
     animation: none;
   }
