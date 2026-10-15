@@ -285,6 +285,37 @@ private class MotorTelemetria(private val app: Application) {
         ultimoRx = rx
         ultimoTx = tx
         datos.putAll(bateriaYTemperatura())
+        datos.putAll(recoleccionDeBasura())
+        datos["carga_sistema_1m"] = cargaDelSistema(runCatching { File("/proc/loadavg").readText() }.getOrNull())
+        return datos
+    }
+
+    private var ultimoGcConteo: Long? = null
+    private var ultimoGcMs: Long? = null
+    private var ultimoGcBloqueanteConteo: Long? = null
+    private var ultimoGcBloqueanteMs: Long? = null
+
+    private fun estadisticaArt(clave: String): Long? =
+        runCatching { Debug.getRuntimeStat(clave)?.toLongOrNull() }.getOrNull()
+
+    /// Pausas de la recolección de basura de ART desde la muestra anterior: cuántas
+    /// veces corrió y cuánto tiempo tomó, y cuántas veces el hilo de la app tuvo que
+    /// ESPERARla (las "bloqueantes", las que se notan como un tirón en la pantalla).
+    private fun recoleccionDeBasura(): Map<String, Any?> {
+        val conteo = estadisticaArt("art.gc.gc-count")
+        val ms = estadisticaArt("art.gc.gc-time")
+        val bloqueanteConteo = estadisticaArt("art.gc.blocking-gc-count")
+        val bloqueanteMs = estadisticaArt("art.gc.blocking-gc-time")
+        val datos = mapOf(
+            "gc_conteo" to diferenciaContador(conteo, ultimoGcConteo),
+            "gc_ms" to diferenciaContador(ms, ultimoGcMs),
+            "gc_bloqueante_conteo" to diferenciaContador(bloqueanteConteo, ultimoGcBloqueanteConteo),
+            "gc_bloqueante_ms" to diferenciaContador(bloqueanteMs, ultimoGcBloqueanteMs),
+        )
+        ultimoGcConteo = conteo
+        ultimoGcMs = ms
+        ultimoGcBloqueanteConteo = bloqueanteConteo
+        ultimoGcBloqueanteMs = bloqueanteMs
         return datos
     }
 

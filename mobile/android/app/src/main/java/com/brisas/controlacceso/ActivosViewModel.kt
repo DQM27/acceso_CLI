@@ -186,13 +186,14 @@ class ActivosViewModel(
         texto = valor
         mensaje = null
         trabajoBusqueda?.cancel()
+        val inicioBusqueda = System.nanoTime()
         trabajoBusqueda = viewModelScope.launch {
             try {
                 val resultados = withContext(dispatcherIO) { medirNucleo("buscarContratistas") { nucleo.buscarContratistas(valor) } }
                 resultadosBusqueda = resultados
                 val contratista = contratistaEscaneadoClaro(valor, resultados)
                 if (contratista != null) {
-                    elegir(contratista)
+                    elegir(contratista, origen = "ocr", msBusqueda = milisegundosDesde(inicioBusqueda))
                 }
                 error = null
             } catch (excepcion: NucleoException) {
@@ -316,8 +317,14 @@ class ActivosViewModel(
         CambiosNube.cambioLocal()
     }
 
-    fun elegir(contratista: ContratistaResumen) {
+    /// `origen` y `msBusqueda` sólo alimentan la telemetría de diagnóstico
+    /// (`transicion_ingreso`): de dónde vino la elección ("ocr" o "manual") y
+    /// cuánto tardó la búsqueda local previa.
+    fun elegir(contratista: ContratistaResumen, origen: String = "manual", msBusqueda: Double? = null) {
         viewModelScope.launch {
+            val inicioElegir = System.nanoTime()
+            var resultado = "error"
+            var msNucleo: Double? = null
             seleccionIngreso = SeleccionIngreso.Cargando(contratista)
             errorIngreso = null
             try {
@@ -333,13 +340,30 @@ class ActivosViewModel(
                 val preparacion = withContext(dispatcherIO) {
                     medirNucleo("prepararIngresoVerificado") { nucleo.prepararIngresoVerificado(contratista.id) }
                 }
+                msNucleo = milisegundosDesde(inicioElegir)
                 seleccionIngreso = preparacion.mensajeBloqueo?.let { mensaje ->
                     SeleccionIngreso.Bloqueada(preparacion, mensaje)
                 } ?: SeleccionIngreso.Formulario(preparacion)
+                resultado = if (preparacion.mensajeBloqueo != null) "bloqueada" else "formulario"
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
                 seleccionIngreso = SeleccionIngreso.Ninguna
             } finally {
+                // Diagnóstico: cuánto tardó cada fase entre elegir al contratista
+                // (por OCR o a mano) y tener el formulario del gafete listo. El
+                // primer frame de esa pantalla lo mide el evento `pantalla`.
+                if (Telemetria.activa) {
+                    Telemetria.evento(
+                        "transicion_ingreso",
+                        mapOf(
+                            "origen" to origen,
+                            "resultado" to resultado,
+                            "ms_busqueda" to msBusqueda,
+                            "ms_nucleo" to msNucleo,
+                            "ms_total" to milisegundosDesde(inicioElegir),
+                        ),
+                    )
+                }
                 // Red de seguridad: si algo inesperado escapó de los catch
                 // de arriba, no dejar la pantalla trabada en "Cargando"
                 // para siempre (parte del hallazgo MV-05).

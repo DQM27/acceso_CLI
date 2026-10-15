@@ -422,3 +422,22 @@ fun origenEnLaApp(pila: Array<StackTraceElement>, paquete: String = "com.brisas.
     val marco = pila.firstOrNull { it.className.startsWith(paquete) } ?: pila.firstOrNull() ?: return "(desconocido)"
     return "${marco.className.substringAfterLast('.')}.${marco.methodName}:${marco.lineNumber}"
 }
+
+/// Cuánto subió un contador acumulado (por ejemplo los de recolección de
+/// basura de ART) entre dos muestras. `null` si falta una de las dos o si el
+/// contador retrocedió (el proceso se reinició): mejor no medir que medir mal.
+fun diferenciaContador(actual: Long?, previo: Long?): Long? =
+    if (actual == null || previo == null || actual < previo) null else actual - previo
+
+/// Carga promedio del sistema del último minuto: el primer número de
+/// `/proc/loadavg` (por ejemplo "3.52 2.10 1.80 ..."). Un número alto frente a
+/// la cantidad de núcleos quiere decir que hay más trabajo que procesador,
+/// justo el caso de "muchos procesos abiertos". `null` si el sistema no deja
+/// leerlo o el texto no es el esperado.
+fun cargaDelSistema(linea: String?): Double? =
+    linea?.trim()?.split(Regex("\s+"))?.firstOrNull()?.toDoubleOrNull()
+        ?.takeIf { it.isFinite() && it >= 0.0 }
+
+/// Milisegundos entre dos lecturas de `System.nanoTime()`, con un decimal.
+fun milisegundosDesde(inicioNanos: Long, finNanos: Long = System.nanoTime()): Double =
+    Math.round((finNanos - inicioNanos) / 100_000.0) / 10.0

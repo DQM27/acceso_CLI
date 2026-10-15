@@ -234,4 +234,39 @@ class TelemetriaCalculosTest {
         assertEquals(-134L, r["desfase_reloj_ms"])
         assertNull(realtime.vaciar())
     }
+
+    // --- contadores, carga del sistema y tiempos ---
+
+    @Test
+    fun diferenciaDeContadorEsLoQueSubio() {
+        assertEquals(7L, diferenciaContador(actual = 12L, previo = 5L))
+        assertEquals(0L, diferenciaContador(actual = 5L, previo = 5L))
+    }
+
+    @Test
+    fun sinMuestraPreviaOSiElContadorRetrocedioNoSeMide() {
+        assertNull(diferenciaContador(actual = 12L, previo = null))
+        assertNull(diferenciaContador(actual = null, previo = 5L))
+        assertNull(diferenciaContador(actual = 3L, previo = 9L))
+    }
+
+    @Test
+    fun cargaDelSistemaEsElPrimerNumeroDeProcLoadavg() {
+        assertEquals(3.52, cargaDelSistema("3.52 2.10 1.80 2/1105 28490")!!, 0.0)
+        assertEquals(0.0, cargaDelSistema("0.00 0.01 0.05 1/300 99")!!, 0.0)
+    }
+
+    @Test
+    fun cargaDelSistemaSinTextoValidoEsNula() {
+        assertNull(cargaDelSistema(null))
+        assertNull(cargaDelSistema(""))
+        assertNull(cargaDelSistema("abc 1 2"))
+        assertNull(cargaDelSistema("-1.0 1 2"))
+    }
+
+    @Test
+    fun milisegundosDesdeRedondeaAUnDecimal() {
+        assertEquals(12.3, milisegundosDesde(inicioNanos = 0L, finNanos = 12_340_000L), 0.0)
+        assertEquals(0.0, milisegundosDesde(inicioNanos = 5L, finNanos = 5L), 0.0)
+    }
 }
