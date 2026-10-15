@@ -11,13 +11,15 @@ export type EstadoConexionNube =
 export function descripcion(
   estado: EstadoConexionNube,
   enLinea: boolean,
-): { texto: string; color: string } {
-  if (!enLinea) return { texto: "Sin conexión — modo offline", color: "var(--error)" };
+): { texto: string; color: string; parpadea: boolean } {
+  if (!enLinea) {
+    return { texto: "Sin conexión — modo offline", color: "var(--error)", parpadea: true };
+  }
   switch (estado) {
     case "SUBSCRIBED":
-      return { texto: "En línea", color: "var(--exito)" };
+      return { texto: "En línea", color: "var(--exito)", parpadea: false };
     case null:
-      return { texto: "Conectando…", color: "var(--muted)" };
+      return { texto: "Conectando…", color: "var(--muted)", parpadea: false };
     default:
       // CHANNEL_ERROR/TIMED_OUT/CLOSED con red del SO activa -- ej. la
       // nube está caída, o un firewall bloquea el WebSocket específicamente.
@@ -25,6 +27,6 @@ export function descripcion(
       // sólo informa que el aviso en vivo no está llegando ahora mismo. El
       // botón "Sincronizar" y el pulso automático (cada 5 min) siguen
       // funcionando igual sin Realtime.
-      return { texto: "Sin conexión en vivo", color: "var(--error)" };
+      return { texto: "Sin conexión en vivo", color: "var(--error)", parpadea: true };
   }
 }

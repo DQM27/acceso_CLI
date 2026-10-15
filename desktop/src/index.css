@@ -661,6 +661,25 @@ input {
   line-height: 1;
 }
 
+/* Punto de conexión (BarraNube.tsx) cuando algo está caído: late despacio entre
+   opaco y casi transparente -- se nota de reojo sin gritar. Quien pide menos
+   movimiento lo ve fijo. */
+@keyframes parpadeo-conexion {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.punto-conexion-parpadeo {
+  animation: parpadeo-conexion 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .punto-conexion-parpadeo {
+    animation: none;
+  }
+}
+
 /* Disparador de `MenuUsuario` — mismo lenguaje que los ítems de la status
    bar de VSC: texto plano hasta que se pasa el mouse, ahí aparece el fondo
    de botón (no se ve como un control de formulario en reposo). */

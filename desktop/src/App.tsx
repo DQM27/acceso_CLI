@@ -873,10 +873,8 @@ function Shell({
             )}
           </Suspense>
 
-          {/* theme="system": mismo criterio que el resto de la app (paleta
-              clara/oscura sigue `prefers-color-scheme`, sin toggle manual
-              todavía) — estilizado con las variables propias en index.css, no
-              los colores por defecto de sonner. */}
+          {/* Los avisos usan las variables de la app (tema Tokyo Night Day o
+              Night), ver `avisos/avisos.css`. */}
           <AvisosPanel />
         </div>
       </AccionBarraEstadoProvider>

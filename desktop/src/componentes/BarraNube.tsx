@@ -63,7 +63,7 @@ export default function BarraNube({
   estadoConexion: EstadoConexionNube;
 }) {
   const enLinea = useEnLinea();
-  const { texto, color } = descripcion(estadoConexion, enLinea);
+  const { texto, color, parpadea } = descripcion(estadoConexion, enLinea);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
       {/* Se relee al terminar cada sincronización: es cuando puede llegar
@@ -75,6 +75,7 @@ export default function BarraNube({
       >
         <span
           aria-hidden="true"
+          className={parpadea ? "punto-conexion-parpadeo" : undefined}
           style={{
             width: "0.5rem",
             height: "0.5rem",
