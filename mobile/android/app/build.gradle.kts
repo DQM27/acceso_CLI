@@ -48,8 +48,8 @@ android {
         // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
-        versionCode = 30
-        versionName = "1.4.8"
+        versionCode = 31
+        versionName = "1.4.9"
 
         // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
         // el default acá es "development" (debug); `release {}` abajo lo
