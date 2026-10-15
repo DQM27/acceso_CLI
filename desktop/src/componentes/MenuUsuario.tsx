@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { KeyRound, LogOut, Moon, Sun } from "lucide-react";
 import type { UsuarioSesion } from "../api";
 import CambiarPasswordModal from "./CambiarPasswordModal";
+import Engranaje from "./Engranaje";
 import { ListaFlotante } from "./ListaFlotante";
 import { useListaFlotante } from "./ListaFlotante.logica";
 import { NOMBRE_TEMA } from "./SelectorTema.logica";
@@ -18,7 +19,8 @@ function inicialDe(nombre: string): string {
 
 /**
  * La cuenta de quien tiene la sesión, al fondo del menú lateral: un círculo
- * con su inicial y, con el menú abierto, su nombre. Es el lugar donde se
+ * con su inicial dentro de un engranaje (que dice "ajustes de mi cuenta") y,
+ * con el menú abierto, su nombre. Es el lugar donde se
  * busca "mi cuenta", así que ahí viven todas las cosas de la persona: el tema
  * (que se guarda por usuario), cambiar la contraseña y cerrar sesión. Con el
  * menú colapsado queda sólo el círculo.
@@ -102,9 +104,7 @@ export default function MenuUsuario({
         title={`${sesion.nombre} — tema, contraseña y cerrar sesión`}
         aria-label={`Cuenta de ${sesion.nombre}`}
       >
-        <span className="usuario-inicial" aria-hidden="true">
-          {inicialDe(sesion.nombre)}
-        </span>
+        <Engranaje>{inicialDe(sesion.nombre)}</Engranaje>
         {!colapsado && <span className="usuario-nombre">{sesion.nombre}</span>}
       </button>
 
