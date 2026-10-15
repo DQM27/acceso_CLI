@@ -771,6 +771,24 @@ pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> Stri
     }
 }
 
+/// Aviso de gente con más de 12 horas adentro (ver `domain::permanencia`).
+pub fn mensaje_permanencia_aviso(cantidad: usize) -> String {
+    mensaje_permanencia(cantidad, 12)
+}
+
+/// Aviso crítico de gente con más de 14 horas adentro.
+pub fn mensaje_permanencia_critica(cantidad: usize) -> String {
+    mensaje_permanencia(cantidad, 14)
+}
+
+fn mensaje_permanencia(cantidad: usize, horas: i64) -> String {
+    if cantidad == 1 {
+        format!("1 lleva más de {horas} h adentro")
+    } else {
+        format!("{cantidad} llevan más de {horas} h adentro")
+    }
+}
+
 /// Lo que ve quien opera cuando algo falla por una causa técnica que no
 /// tiene una variante de negocio detrás (un error de disco, de formato, de
 /// tarea interrumpida). El detalle va al registro técnico, nunca a pantalla.
@@ -1116,6 +1134,20 @@ mod tests {
                 motivo: MotivoDenegacion::EmpresaInactiva
             }),
             "Acceso denegado · la empresa está inactiva"
+        );
+    }
+
+    #[test]
+    fn el_aviso_de_permanencia_va_en_singular_o_plural() {
+        assert_eq!(mensaje_permanencia_aviso(1), "1 lleva más de 12 h adentro");
+        assert_eq!(mensaje_permanencia_aviso(3), "3 llevan más de 12 h adentro");
+        assert_eq!(
+            mensaje_permanencia_critica(1),
+            "1 lleva más de 14 h adentro"
+        );
+        assert_eq!(
+            mensaje_permanencia_critica(2),
+            "2 llevan más de 14 h adentro"
         );
     }
 

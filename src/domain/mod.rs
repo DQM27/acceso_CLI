@@ -4,6 +4,7 @@ pub mod cedula;
 pub mod cita;
 pub mod contratista;
 pub mod gafete;
+pub mod permanencia;
 pub mod registro_ingreso;
 pub mod resultado_acceso;
 pub mod resultado_salida_ruta;
