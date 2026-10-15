@@ -195,8 +195,8 @@ input {
    sus propias esquinas cuadradas, no agrega fondo propio. */
 .marca-sello {
   display: grid;
-  width: 6rem;
-  height: 6rem;
+  width: 8rem;
+  height: 8rem;
   flex-shrink: 0;
   place-items: center;
   overflow: hidden;
@@ -245,7 +245,6 @@ input {
   margin-top: 0.25rem;
   color: var(--muted);
   font-size: 0.85rem;
-  font-weight: 700;
   text-transform: uppercase;
 }
 
