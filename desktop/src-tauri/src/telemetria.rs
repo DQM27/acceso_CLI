@@ -165,6 +165,24 @@ fn ahora() -> chrono::DateTime<chrono::Utc> {
         .map_or_else(chrono::Utc::now, |reloj| reloj.ahora_utc())
 }
 
+/// Versión del formato de las filas (`datos.esquema`), la misma que
+/// `ESQUEMA_TELEMETRIA` del teléfono. Ver `docs/telemetria-contrato.md`.
+const ESQUEMA_TELEMETRIA: u32 = 2;
+
+/// Agrega a `datos` la versión del formato y la plataforma, sin pisar lo que
+/// el evento ya traiga. Un `datos` que no es un objeto se deja como está.
+fn con_esquema_y_plataforma(mut datos: serde_json::Value) -> serde_json::Value {
+    if let Some(objeto) = datos.as_object_mut() {
+        objeto
+            .entry("esquema")
+            .or_insert_with(|| serde_json::json!(ESQUEMA_TELEMETRIA));
+        objeto
+            .entry("plataforma")
+            .or_insert_with(|| serde_json::json!("escritorio"));
+    }
+    datos
+}
+
 /// Una fila de `telemetria_diagnostico`, como la arma la app Android.
 fn fila(t: &Telemetria, tipo: &str, datos: serde_json::Value) -> String {
     serde_json::json!({
@@ -173,7 +191,7 @@ fn fila(t: &Telemetria, tipo: &str, datos: serde_json::Value) -> String {
         "sesion": t.sesion,
         "version_app": t.version,
         "tipo": tipo,
-        "datos": datos,
+        "datos": con_esquema_y_plataforma(datos),
     })
     .to_string()
 }
@@ -674,6 +692,34 @@ mod tests {
         assert!(!tipo_valido(""));
         assert!(!tipo_valido("Cedula 1-2345"));
         assert!(!tipo_valido(&"a".repeat(41)));
+    }
+
+    #[test]
+    fn todo_evento_lleva_el_esquema_y_la_plataforma() {
+        let datos = con_esquema_y_plataforma(serde_json::json!({ "nombre": "login" }));
+        assert_eq!(datos["esquema"], ESQUEMA_TELEMETRIA);
+        assert_eq!(datos["plataforma"], "escritorio");
+        assert_eq!(datos["nombre"], "login");
+    }
+
+    #[test]
+    fn lo_que_ya_trae_el_evento_manda_sobre_el_esquema_y_la_plataforma() {
+        let datos =
+            con_esquema_y_plataforma(serde_json::json!({ "plataforma": "otra", "esquema": 99 }));
+        assert_eq!(datos["plataforma"], "otra");
+        assert_eq!(datos["esquema"], 99);
+    }
+
+    #[test]
+    fn un_dato_que_no_es_objeto_se_deja_como_esta() {
+        assert_eq!(
+            con_esquema_y_plataforma(serde_json::json!(5)),
+            serde_json::json!(5)
+        );
+        assert_eq!(
+            con_esquema_y_plataforma(serde_json::json!(null)),
+            serde_json::json!(null)
+        );
     }
 
     #[test]

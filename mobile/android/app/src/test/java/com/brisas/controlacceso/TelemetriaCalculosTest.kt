@@ -234,4 +234,91 @@ class TelemetriaCalculosTest {
         assertEquals(-134L, r["desfase_reloj_ms"])
         assertNull(realtime.vaciar())
     }
+
+    // --- contadores, carga del sistema y tiempos ---
+
+    @Test
+    fun diferenciaDeContadorEsLoQueSubio() {
+        assertEquals(7L, diferenciaContador(actual = 12L, previo = 5L))
+        assertEquals(0L, diferenciaContador(actual = 5L, previo = 5L))
+    }
+
+    @Test
+    fun sinMuestraPreviaOSiElContadorRetrocedioNoSeMide() {
+        assertNull(diferenciaContador(actual = 12L, previo = null))
+        assertNull(diferenciaContador(actual = null, previo = 5L))
+        assertNull(diferenciaContador(actual = 3L, previo = 9L))
+    }
+
+    @Test
+    fun cargaDelSistemaEsElPrimerNumeroDeProcLoadavg() {
+        assertEquals(3.52, cargaDelSistema("3.52 2.10 1.80 2/1105 28490")!!, 0.0)
+        assertEquals(0.0, cargaDelSistema("0.00 0.01 0.05 1/300 99")!!, 0.0)
+    }
+
+    @Test
+    fun cargaDelSistemaSinTextoValidoEsNula() {
+        assertNull(cargaDelSistema(null))
+        assertNull(cargaDelSistema(""))
+        assertNull(cargaDelSistema("abc 1 2"))
+        assertNull(cargaDelSistema("-1.0 1 2"))
+    }
+
+    @Test
+    fun milisegundosDesdeRedondeaAUnDecimal() {
+        assertEquals(12.3, milisegundosDesde(inicioNanos = 0L, finNanos = 12_340_000L), 0.0)
+        assertEquals(0.0, milisegundosDesde(inicioNanos = 5L, finNanos = 5L), 0.0)
+    }
+
+    // --- nombre canónico de operación (mismos ejemplos que escritorio) ---
+
+    @Test
+    fun elNombreCanonicoPasaACamelCaseASnakeCase() {
+        assertEquals("buscar_contratistas", nombreCanonicoOperacion("buscarContratistas"))
+        assertEquals("vincular_dispositivo_inicial", nombreCanonicoOperacion("vincularDispositivoInicial"))
+        assertEquals("sincronizar_con_nube", nombreCanonicoOperacion("sincronizarConNube"))
+    }
+
+    @Test
+    fun elNombreCanonicoQuitaLosSufijosDeVersionesViejas() {
+        assertEquals("registrar_ingreso", nombreCanonicoOperacion("registrarIngresoVerificado"))
+        assertEquals("registrar_ingreso", nombreCanonicoOperacion("registrarIngresoConSecreto"))
+        assertEquals("preparar_ingreso", nombreCanonicoOperacion("prepararIngresoConSecreto"))
+        assertEquals("sincronizar_con_nube", nombreCanonicoOperacion("sincronizarConNubeConSecreto"))
+        assertEquals("autenticar", nombreCanonicoOperacion("autenticarConSecreto"))
+    }
+
+    @Test
+    fun elNombreCanonicoYaCanonicoNoCambia() {
+        assertEquals("registrar_ingreso", nombreCanonicoOperacion("registrar_ingreso"))
+        assertEquals("sincronizar_con_nube", nombreCanonicoOperacion("sincronizar_con_nube"))
+        assertEquals("login", nombreCanonicoOperacion("login"))
+    }
+
+    @Test
+    fun elNombreCanonicoEsIdempotenteYNoDejaElNombreVacio() {
+        for (nombre in listOf("registrarIngresoVerificado", "sincronizarConNubeConSecreto", "login")) {
+            val una = nombreCanonicoOperacion(nombre)
+            assertEquals(una, nombreCanonicoOperacion(una))
+        }
+        assertEquals("_verificado", nombreCanonicoOperacion("_verificado"))
+    }
+
+    @Test
+    fun elNombreCanonicoManejaSiglasSeguidas() {
+        assertEquals("leer_pdf417", nombreCanonicoOperacion("leerPDF417"))
+        assertEquals("abrir_xml_http", nombreCanonicoOperacion("abrirXMLHttp"))
+    }
+
+    // --- tipo de red ---
+
+    @Test
+    fun laRedSeClasificaEnPalabrasFijas() {
+        assertEquals("sin_red", clasificarRed(hayRed = false, validada = false, wifi = false, celular = false, ethernet = false))
+        assertEquals("sin_internet", clasificarRed(hayRed = true, validada = false, wifi = true, celular = false, ethernet = false))
+        assertEquals("wifi", clasificarRed(hayRed = true, validada = true, wifi = true, celular = false, ethernet = false))
+        assertEquals("datos", clasificarRed(hayRed = true, validada = true, wifi = false, celular = true, ethernet = false))
+        assertEquals("ethernet", clasificarRed(hayRed = true, validada = true, wifi = false, celular = false, ethernet = true))
+        assertEquals("otra", clasificarRed(hayRed = true, validada = true, wifi = false, celular = false, ethernet = false))
+    }
 }

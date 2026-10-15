@@ -38,6 +38,18 @@ val hashCortoDelCommit: String = try {
     "sinhash"
 }
 
+// Compilación PUNTUAL de producción CON telemetría de rendimiento
+// (`-PtelemetriaEnProduccion=true`, ver el workflow
+// `build-produccion-medicion.yml`): la app real, con el mismo paquete y la
+// misma firma, que opera contra la nube de producción (AMBIENTE_STAGING sigue
+// en `false`) y sólo manda los números de rendimiento a la tabla
+// `telemetria_diagnostico` del staging. Va en modo ligero (sin StrictMode ni
+// vigilante de fugas, que fuerza recolecciones de basura). Sin la propiedad, un
+// release es idéntico al de siempre: producción nunca activa la telemetría
+// por su cuenta.
+val telemetriaEnProduccion: Boolean =
+    providers.gradleProperty("telemetriaEnProduccion").orNull == "true"
+
 android {
     namespace = "com.brisas.controlacceso"
     compileSdk = 36
@@ -48,8 +60,8 @@ android {
         // docs/plan-app-movil.md. jniLibs trae sólo arm64-v8a.
         minSdk = 26
         targetSdk = 36
-        versionCode = 31
-        versionName = "1.4.9"
+        versionCode = 32
+        versionName = "1.4.10"
 
         // Referenciado desde AndroidManifest.xml (`${sentryEnvironment}`) --
         // el default acá es "development" (debug); `release {}` abajo lo
@@ -70,6 +82,13 @@ android {
         // dos en `false` para release: producción nunca los activa.
         buildConfigField("boolean", "AMBIENTE_STAGING", "false")
         buildConfigField("boolean", "TELEMETRIA", "false")
+        // Telemetría "ligera": sin StrictMode ni vigilante de fugas, para
+        // medir en producción sin cargar el teléfono (ver `telemetriaEnProduccion`).
+        buildConfigField("boolean", "TELEMETRIA_LIGERA", "false")
+
+        // Nombre que se ve bajo el icono. Los builds de prueba lo pisan para
+        // que junto a la app real no se confundan (ver `buildTypes`).
+        manifestPlaceholders["etiquetaApp"] = "Lattis"
     }
 
     signingConfigs {
@@ -93,6 +112,7 @@ android {
             // trata como dos apps distintas -- coexisten sin pisarse.
             applicationIdSuffix = ".debug"
             buildConfigField("boolean", "AMBIENTE_STAGING", "true")
+            manifestPlaceholders["etiquetaApp"] = "Lattis DEBUG"
         }
         release {
             isMinifyEnabled = true
@@ -101,6 +121,10 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             manifestPlaceholders["sentryEnvironment"] = "production"
+            if (telemetriaEnProduccion) {
+                buildConfigField("boolean", "TELEMETRIA", "true")
+                buildConfigField("boolean", "TELEMETRIA_LIGERA", "true")
+            }
         }
         // Build para MEDIR rendimiento en el teléfono: compilado igual que
         // release (R8, sin `debuggable`) porque un build de debug corre sin
@@ -123,7 +147,11 @@ android {
             matchingFallbacks += listOf("release")
             buildConfigField("boolean", "AMBIENTE_STAGING", "true")
             buildConfigField("boolean", "TELEMETRIA", "true")
+            // Completa (no ligera): este build es sólo para pruebas y sí puede
+            // cargar la medición pesada.
+            buildConfigField("boolean", "TELEMETRIA_LIGERA", "false")
             manifestPlaceholders["sentryEnvironment"] = "diagnostico"
+            manifestPlaceholders["etiquetaApp"] = "Lattis DIAG"
         }
     }
 

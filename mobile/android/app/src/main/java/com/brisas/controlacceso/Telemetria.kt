@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.TrafficStats
 import android.os.BatteryManager
 import android.os.Build
@@ -112,6 +114,10 @@ object Telemetria {
     /// `objeto` ya debería poder liberarse (su dueño lo soltó): si sigue
     /// vivo en unos segundos, se informa como posible fuga.
     fun vigilarRetencion(objeto: Any, descripcion: String) {
+        // En modo ligero (producción medida) no se vigila: el vigilante fuerza
+        // una recolección de basura para comprobar la fuga, y eso mismo puede
+        // causar un tirón en la app que se está midiendo.
+        if (BuildConfig.TELEMETRIA_LIGERA) return
         motor?.vigilante?.vigilar(objeto, descripcion)
     }
 }
@@ -163,7 +169,9 @@ private class MotorTelemetria(private val app: Application) {
         cargarPendientes()
         encolar("sesion_inicio", datosDispositivo())
         ejecutor.execute { informarSalidasAnteriores() }
-        activarStrictMode()
+        // StrictMode vigila disco y red en el hilo de la pantalla: es una
+        // herramienta de depuración que cuesta; en modo ligero se omite.
+        if (!BuildConfig.TELEMETRIA_LIGERA) activarStrictMode()
         app.registerComponentCallbacks(object : ComponentCallbacks2 {
             override fun onTrimMemory(nivel: Int) {
                 encolar("memoria_baja", mapOf("nivel" to nivel, "pantalla" to pantallas.actual()))
@@ -188,13 +196,33 @@ private class MotorTelemetria(private val app: Application) {
                     "sesion" to sesion,
                     "version_app" to versionApp,
                     "tipo" to tipo,
-                    "datos" to datos,
+                    // Todo evento lleva la versión del formato y la plataforma
+                    // (ver `docs/telemetria-contrato.md`); lo que ya traiga el
+                    // evento manda sobre estos valores.
+                    "datos" to (mapOf("esquema" to ESQUEMA_TELEMETRIA, "plataforma" to "movil") + datos),
                 ),
             ),
         )
     }
 
-    fun registrarLlamada(nombre: String, nanos: Long, ok: Boolean) = llamadas.registrar(nombre, nanos, ok)
+    /// El nombre se guarda en su forma canónica (`nombreCanonicoOperacion`),
+    /// igual en móvil y escritorio y entre versiones de la app.
+    fun registrarLlamada(nombre: String, nanos: Long, ok: Boolean) =
+        llamadas.registrar(nombreCanonicoOperacion(nombre), nanos, ok)
+
+    /// Tipo de red ahora (`clasificarRed`). Sin el permiso, o ante cualquier
+    /// fallo del sistema, `otra`: medir nunca puede tirar la app.
+    private fun redActual(): String = runCatching {
+        val gestor = app.getSystemService(ConnectivityManager::class.java)
+        val capacidades = gestor.getNetworkCapabilities(gestor.activeNetwork)
+        clasificarRed(
+            hayRed = capacidades != null,
+            validada = capacidades?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true,
+            wifi = capacidades?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true,
+            celular = capacidades?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true,
+            ethernet = capacidades?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true,
+        )
+    }.getOrDefault("otra")
 
     fun enPrimerPlano(visible: Boolean) {
         this.visible = visible
@@ -243,7 +271,8 @@ private class MotorTelemetria(private val app: Application) {
     }
 
     private fun volcarAgregados() {
-        llamadas.vaciar().forEach { encolar("llamada_nucleo", it) }
+        val red = redActual()
+        llamadas.vaciar().forEach { encolar("llamada_nucleo", it + mapOf("red_tipo" to red)) }
         frames?.vaciar()?.forEach { encolar("frames", it) }
         violaciones.vaciar().forEach { encolar("strictmode", it) }
         realtime.vaciar()?.let { encolar("realtime", it) }
@@ -278,6 +307,7 @@ private class MotorTelemetria(private val app: Application) {
             "cpu_un_nucleo_pct" to cpu?.porcentajeUnNucleo,
             "red_rx_kb" to if (rx >= 0 && ultimoRx >= 0) (rx - ultimoRx) / 1024 else null,
             "red_tx_kb" to if (tx >= 0 && ultimoTx >= 0) (tx - ultimoTx) / 1024 else null,
+            "red_tipo" to redActual(),
             "cola_telemetria" to cola.tamano(),
             "telemetria_descartada" to cola.descartadas,
             "vigilados_pendientes" to vigilante.pendientes(),
@@ -285,6 +315,37 @@ private class MotorTelemetria(private val app: Application) {
         ultimoRx = rx
         ultimoTx = tx
         datos.putAll(bateriaYTemperatura())
+        datos.putAll(recoleccionDeBasura())
+        datos["carga_sistema_1m"] = cargaDelSistema(runCatching { File("/proc/loadavg").readText() }.getOrNull())
+        return datos
+    }
+
+    private var ultimoGcConteo: Long? = null
+    private var ultimoGcMs: Long? = null
+    private var ultimoGcBloqueanteConteo: Long? = null
+    private var ultimoGcBloqueanteMs: Long? = null
+
+    private fun estadisticaArt(clave: String): Long? =
+        runCatching { Debug.getRuntimeStat(clave)?.toLongOrNull() }.getOrNull()
+
+    /// Pausas de la recolección de basura de ART desde la muestra anterior: cuántas
+    /// veces corrió y cuánto tiempo tomó, y cuántas veces el hilo de la app tuvo que
+    /// ESPERARla (las "bloqueantes", las que se notan como un tirón en la pantalla).
+    private fun recoleccionDeBasura(): Map<String, Any?> {
+        val conteo = estadisticaArt("art.gc.gc-count")
+        val ms = estadisticaArt("art.gc.gc-time")
+        val bloqueanteConteo = estadisticaArt("art.gc.blocking-gc-count")
+        val bloqueanteMs = estadisticaArt("art.gc.blocking-gc-time")
+        val datos = mapOf(
+            "gc_conteo" to diferenciaContador(conteo, ultimoGcConteo),
+            "gc_ms" to diferenciaContador(ms, ultimoGcMs),
+            "gc_bloqueante_conteo" to diferenciaContador(bloqueanteConteo, ultimoGcBloqueanteConteo),
+            "gc_bloqueante_ms" to diferenciaContador(bloqueanteMs, ultimoGcBloqueanteMs),
+        )
+        ultimoGcConteo = conteo
+        ultimoGcMs = ms
+        ultimoGcBloqueanteConteo = bloqueanteConteo
+        ultimoGcBloqueanteMs = bloqueanteMs
         return datos
     }
 
@@ -318,6 +379,11 @@ private class MotorTelemetria(private val app: Application) {
             "ram_total_mb" to mb(sistema.totalMem),
             "clase_memoria_mb" to activityManager.memoryClass,
             "build" to BuildConfig.BUILD_TYPE,
+            // Con qué ambiente y en qué modo corre esta instalación: separa en los
+            // datos la app de pruebas (`diagnostico`, staging, completa) de la de
+            // producción medida (`release`, producción, ligera).
+            "ambiente" to if (BuildConfig.AMBIENTE_STAGING) "staging" else "produccion",
+            "telemetria_ligera" to BuildConfig.TELEMETRIA_LIGERA,
         )
     }
 

@@ -233,6 +233,7 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
     /// después de salir de la composición, desata la cámara del ciclo de
     /// vida anterior, y libera hilo y modelos.
     fun liberar() {
+        val inicioCierre = System.nanoTime()
         sesionActiva.set(false)
         detectada.set(true)
         trabajoResultado?.cancel()
@@ -240,9 +241,11 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         analisisCodigo?.clearAnalyzer()
         val casos = listOfNotNull(vistaPreviaCamara, analisisCamara, analisisCodigo).toTypedArray()
         if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
+        val finUnbind = System.nanoTime()
         ejecutor.shutdown()
         recognizer.close()
         lectorCodigos?.close()
+        val finCierre = System.nanoTime()
         if (Telemetria.activa) {
             Telemetria.evento(
                 "ocr_sesion",
@@ -250,6 +253,12 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
                     "pantalla" to Telemetria.pantallaActual(),
                     "abierta_desde" to Telemetria.pantallaAnterior(),
                     "lector_pdf417" to (lectorCodigos != null),
+                    // Cuánto tardó cerrar la cámara en el hilo que la cierra (el
+                    // principal): `unbind` y luego los modelos de ML Kit. Si esto
+                    // es grande, la pantalla se traba justo al salir del escaneo.
+                    "ms_cierre_unbind" to milisegundosDesde(inicioCierre, finUnbind),
+                    "ms_cierre_modelos" to milisegundosDesde(finUnbind, finCierre),
+                    "ms_cierre_total" to milisegundosDesde(inicioCierre, finCierre),
                 ),
             )
             // La cámara y sus modelos retienen búferes grandes: si este
