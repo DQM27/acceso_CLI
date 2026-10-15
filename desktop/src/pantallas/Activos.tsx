@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import { CircleOff, IdCard, LogIn, LogOut, Users } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -115,7 +115,7 @@ export default function Activos({
 
   useEffect(() => {
     let vigente = true;
-    recargar().catch((error) => vigente && toast.error(String(error)));
+    recargar().catch((error) => vigente && avisos.error(error));
     return () => {
       vigente = false;
     };
@@ -132,7 +132,7 @@ export default function Activos({
         await cerrarFilaActiva(fila);
         recargar();
       } catch (error) {
-        toast.error(String(error));
+        avisos.error(error);
       }
     },
     [recargar],
@@ -147,7 +147,7 @@ export default function Activos({
       setConfirmarSalidaMasiva(false);
       await recargar();
     } catch (error) {
-      toast.error(String(error));
+      avisos.error(error);
     } finally {
       setProcesando(false);
     }

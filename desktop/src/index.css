@@ -838,30 +838,3 @@ input {
   flex-direction: column;
   gap: 0.9rem;
 }
-
-/* Toasts (sonner, ver App.tsx <Toaster theme="system" />) con la misma
-   paleta clara/oscura del resto de la app en vez de sus colores por
-   defecto. `!important`: sonner inyecta su propia hoja de estilos en
-   tiempo de ejecución (al montar <Toaster/>), después de que esta hoja ya
-   cargó — sin !important, su regla (mismo selector, mismas variables) gana
-   por orden de aparición sin importar qué esté antes acá. */
-[data-sonner-toaster] {
-  --normal-bg: var(--panel) !important;
-  --normal-border: var(--borde) !important;
-  --normal-text: var(--texto) !important;
-  --success-bg: var(--panel) !important;
-  --success-border: var(--exito) !important;
-  --success-text: var(--exito) !important;
-  --error-bg: var(--panel) !important;
-  --error-border: var(--error) !important;
-  --error-text: var(--error) !important;
-  --warning-bg: var(--panel) !important;
-  --warning-border: var(--advertencia) !important;
-  --warning-text: var(--advertencia) !important;
-  --info-bg: var(--panel) !important;
-  --info-border: var(--acento) !important;
-  --info-text: var(--acento) !important;
-  --border-radius: var(--radio-chico) !important;
-  font-family: inherit !important;
-}
-

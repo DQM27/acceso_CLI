@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
@@ -46,7 +46,7 @@ export default function Rutas({ refrescarSenal }: { refrescarSenal?: number }) {
 
   useEffect(() => {
     let vigente = true;
-    recargar().catch((error) => vigente && toast.error(String(error)));
+    recargar().catch((error) => vigente && avisos.error(error));
     return () => {
       vigente = false;
     };
@@ -58,7 +58,7 @@ export default function Rutas({ refrescarSenal }: { refrescarSenal?: number }) {
         await registrarRetornoRuta(fila.id);
         await recargar();
       } catch (error) {
-        toast.error(String(error));
+        avisos.error(error);
       }
     },
     [recargar],

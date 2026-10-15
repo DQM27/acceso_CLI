@@ -1,11 +1,11 @@
 import { useEffect } from "react";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import { EVENTO_CAMBIO_EN_VIVO, EVENTO_NUBE_ACTUALIZADA } from "../eventosNube";
 
 /**
  * Corre `recargar(estaVigente)` cada vez que cambia su identidad
  * (típicamente porque cambió alguna dependencia interna, ej. un filtro de
- * búsqueda) y avisa por toast si falla. `estaVigente()` le permite a
+ * búsqueda) y avisa si falla. `estaVigente()` le permite a
  * `recargar` descartar su propio resultado si para cuando llega ya se
  * disparó una recarga más nueva (o la pantalla se desmontó) — sin esto, una
  * respuesta vieja que tarda más que una nueva puede llegar después y pisar
@@ -21,7 +21,7 @@ export function useCargaAlCambiar(recargar: (estaVigente: () => boolean) => Prom
     const cargar = () => {
       const actual = ++revision;
       const estaVigente = () => vigente && actual === revision;
-      recargar(estaVigente).catch((error) => estaVigente() && toast.error(String(error)));
+      recargar(estaVigente).catch((error) => estaVigente() && avisos.error(error));
     };
     cargar();
     if (escucharNube) {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import Tabla from "../componentes/Tabla";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
@@ -32,7 +32,7 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
     // no perderla de vista ni reasignarla en silencio.
     listarEmpresasSeleccionables()
       .then(setEmpresas)
-      .catch((error) => toast.error(String(error)));
+      .catch((error) => avisos.error(error));
   }, []);
 
   const recargar = useCallback((estaVigente: () => boolean = () => true) => {
@@ -64,7 +64,7 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
       // La grilla ya muestra el valor nuevo (edición optimista de AG Grid) —
       // si el guardado falla, hay que volver a pedir los datos reales para
       // que la celda no quede mintiendo.
-      toast.error(String(error));
+      avisos.error(error);
       recargar();
     }
   }

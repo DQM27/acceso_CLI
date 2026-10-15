@@ -36,7 +36,8 @@ import {
 import { useHotkeys } from "react-hotkeys-hook";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
-import { Toaster, toast } from "sonner";
+import AvisosPanel from "./avisos/AvisosPanel";
+import { avisos } from "./avisos/avisos";
 import {
   BadgeCheck,
   Boxes,
@@ -529,7 +530,7 @@ function Shell({
   // pantallas de una sesión que ya no existe.
   function manejarResumenSincronizacion(resumen: ResumenSincronizacion): boolean {
     if (resumen.sesion_expulsada) {
-      toast.error(
+      avisos.error(
         resumen.sesion_en_otra_unidad
           ? MENSAJE_SESION_EN_OTRA_UNIDAD
           : "Tu usuario fue desactivado — se cerró la sesión.",
@@ -547,26 +548,26 @@ function Shell({
     // cada sync mientras el conflicto no se resuelva (cerrando uno de los
     // dos ingresos) -- no es un error transitorio que convenga silenciar.
     for (const conflicto of resumen.conflictos_ingreso) {
-      toast.warning(
+      avisos.advertencia(
         `${conflicto.contratista_nombre} tiene un ingreso activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
     // Mismo criterio que `conflictos_ingreso`, pero para visitas (ver
     // `nube::visitantes_con_conflicto_activo`).
     for (const conflicto of resumen.conflictos_movimiento_visita) {
-      toast.warning(
+      avisos.advertencia(
         `${conflicto.visitante_nombre} tiene una visita activa acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
     // Mismo criterio que `conflictos_ingreso`, pero para proveedores (ver
     // `nube::proveedores_con_conflicto_activo`).
     for (const conflicto of resumen.conflictos_ingreso_proveedor) {
-      toast.warning(
+      avisos.advertencia(
         `${conflicto.nombre} tiene un ingreso de proveedor activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
     for (const conflicto of resumen.conflictos_ingreso_correo) {
-      toast.warning(
+      avisos.advertencia(
         `${conflicto.nombre} tiene un ingreso por correo activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
@@ -578,7 +579,7 @@ function Shell({
     // una vuelta aparte si hace falta, una vez visto el comportamiento
     // real.
     for (const conflicto of resumen.conflictos_gafete) {
-      toast.warning(mensajeConflictoGafete(conflicto, textoHora(conflicto.fecha_hora)));
+      avisos.advertencia(mensajeConflictoGafete(conflicto, textoHora(conflicto.fecha_hora)));
     }
     return false;
   }
@@ -610,7 +611,7 @@ function Shell({
       // aviso queda fijo hasta que alguien lo cierre.
       onExpulsado: () => {
         void descartarTokenNube();
-        toast.error(MENSAJE_EXPULSION, { duration: Infinity, closeButton: true });
+        avisos.error(MENSAJE_EXPULSION, { persistente: true });
       },
       usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
     });
@@ -643,31 +644,31 @@ function Shell({
       startTransition(() => setRefrescarActivos((n) => n + 1));
       emitirActualizacion(resumen, "manual");
       if (resumen.fallidos === 0) {
-        toast.success(`Sincronizado — ${resumen.enviados} enviados.`);
+        avisos.exito(`Sincronizado — ${resumen.enviados} enviados.`);
       } else {
-        toast.warning(
+        avisos.advertencia(
           `${resumen.enviados} enviados, ${resumen.fallidos} fallidos — reintenta más tarde.`,
         );
       }
     } catch (error) {
-      toast.error(String(error));
+      avisos.error(error);
     } finally {
       setSincronizandoManual(false);
     }
   }
 
   function ofrecerActualizacion(actualizacion: Update) {
-    toast(`Versión ${actualizacion.version} disponible`, {
+    avisos.info("Se descarga, se instala y la app se reinicia sola.", {
+      titulo: `Versión ${actualizacion.version} disponible`,
       id: "actualizacion-disponible",
-      description: "Se descarga, se instala y la app se reinicia sola.",
-      duration: Infinity,
-      action: {
-        label: "Actualizar",
-        onClick: () => {
-          toast.promise(instalarActualizacion(actualizacion), {
-            loading: "Descargando actualización…",
-            success: "Actualizado — reiniciando…",
-            error: (error) => `No se pudo actualizar: ${String(error)}`,
+      persistente: true,
+      accion: {
+        etiqueta: "Actualizar",
+        alAccionar: () => {
+          avisos.progreso(instalarActualizacion(actualizacion), {
+            cargando: "Descargando actualización…",
+            exito: "Actualizado — reiniciando…",
+            error: (causa) => `No se pudo actualizar: ${String(causa)}`,
           });
         },
       },
@@ -704,12 +705,12 @@ function Shell({
         ofrecerActualizacion(actualizacion);
       } else {
         const version = await getVersion().catch(() => null);
-        toast.success(
+        avisos.exito(
           version ? `Ya tienes la última versión (${version}).` : "Ya tienes la última versión.",
         );
       }
     } catch (error) {
-      toast.error(`No se pudo buscar actualizaciones: ${String(error)}`);
+      avisos.error(`No se pudo buscar actualizaciones: ${String(error)}`);
     } finally {
       setBuscandoActualizacion(false);
     }
@@ -872,7 +873,7 @@ function Shell({
               clara/oscura sigue `prefers-color-scheme`, sin toggle manual
               todavía) — estilizado con las variables propias en index.css, no
               los colores por defecto de sonner. */}
-          <Toaster theme="system" position="bottom-right" richColors={false} />
+          <AvisosPanel />
         </div>
       </AccionBarraEstadoProvider>
       </BarraEstadoProvider>

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import { FileSpreadsheet, FileText, Sheet } from "lucide-react";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -119,14 +119,14 @@ export default function Historial() {
       .map((colId) => CLAVES_COLUMNA[colId])
       .filter((clave): clave is string => clave !== undefined);
     if (claves.length === 0) {
-      toast.error("No hay columnas visibles para exportar.");
+      avisos.error("No hay columnas visibles para exportar.");
       return null;
     }
     if (truncado) return { uuids: null, claves };
 
     const visibles = tablaRef.current?.filasFiltradas() ?? filas;
     if (visibles.length === 0) {
-      toast.error("No hay filas para exportar con el filtro actual.");
+      avisos.error("No hay filas para exportar con el filtro actual.");
       return null;
     }
     return { uuids: visibles.map((fila) => fila.uuid), claves };
@@ -144,7 +144,7 @@ export default function Historial() {
     if (!destino) return;
 
     setExportando(true);
-    toast.promise(
+    avisos.progreso(
       exportarHistorial(
         destino,
         seleccion.uuids,
@@ -153,9 +153,8 @@ export default function Historial() {
         hasta || undefined,
       ).finally(() => setExportando(false)),
       {
-        loading: "Exportando…",
-        success: (cantidad) => `${cantidad} fila(s) exportadas.`,
-        error: (error) => String(error),
+        cargando: "Exportando…",
+        exito: (cantidad) => `${cantidad} fila(s) exportadas.`,
       },
     );
   }
@@ -165,7 +164,7 @@ export default function Historial() {
   // se avisa que no es el total.
   async function exportarCsv() {
     if (truncado) {
-      toast.warning("El CSV sólo incluye lo cargado. Para todo el rango usá Excel o PDF.");
+      avisos.advertencia("El CSV sólo incluye lo cargado. Para todo el rango usá Excel o PDF.");
     }
     await tablaRef.current?.exportarCsv("historial");
   }
@@ -182,7 +181,7 @@ export default function Historial() {
     if (!destino) return;
 
     setExportando(true);
-    toast.promise(
+    avisos.progreso(
       exportarHistorialPdf(
         destino,
         seleccion.uuids,
@@ -192,9 +191,8 @@ export default function Historial() {
         hasta || undefined,
       ).finally(() => setExportando(false)),
       {
-        loading: "Exportando…",
-        success: "PDF exportado.",
-        error: (error) => String(error),
+        cargando: "Exportando…",
+        exito: "PDF exportado.",
       },
     );
   }

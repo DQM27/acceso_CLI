@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import { RefreshCw } from "lucide-react";
 import { descripcion } from "./BarraNube.logica";
 import IdentidadEquipo from "./IdentidadEquipo";
@@ -20,11 +20,11 @@ function useEnLinea(): boolean {
     // primer render.
     const marcarEnLinea = () => {
       setEnLinea(true);
-      toast.success("Conexión restablecida.");
+      avisos.exito("Conexión restablecida.");
     };
     const marcarSinConexion = () => {
       setEnLinea(false);
-      toast.warning("Sin conexión a internet — trabajando en modo offline.");
+      avisos.advertencia("Sin conexión a internet — trabajando en modo offline.");
     };
     window.addEventListener("online", marcarEnLinea);
     window.addEventListener("offline", marcarSinConexion);

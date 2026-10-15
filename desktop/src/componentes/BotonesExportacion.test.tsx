@@ -5,18 +5,18 @@ import type { TablaHandle } from "./Tabla";
 const save = vi.fn();
 const exportarTablaXlsx = vi.fn(() => Promise.resolve(2));
 const exportarTablaPdf = vi.fn(() => Promise.resolve());
-const toastError = vi.fn();
+const avisoError = vi.fn();
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save: (...args: unknown[]) => save(...args) }));
 vi.mock("../api/exportacion", () => ({
   exportarTablaXlsx: (...args: unknown[]) => exportarTablaXlsx(...(args as [])),
   exportarTablaPdf: (...args: unknown[]) => exportarTablaPdf(...(args as [])),
 }));
-vi.mock("sonner", () => ({
-  toast: Object.assign(vi.fn(), {
-    error: (...args: unknown[]) => toastError(...args),
-    promise: vi.fn(),
-  }),
+vi.mock("../avisos/avisos", () => ({
+  avisos: {
+    error: (...args: unknown[]) => avisoError(...args),
+    progreso: vi.fn(),
+  },
 }));
 
 import BotonesExportacion from "./BotonesExportacion";
@@ -87,7 +87,7 @@ describe("BotonesExportacion", () => {
 
     fireEvent.click(screen.getByTitle(/Exportar a Excel/));
 
-    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    await waitFor(() => expect(avisoError).toHaveBeenCalled());
     expect(save).not.toHaveBeenCalled();
     expect(exportarTablaXlsx).not.toHaveBeenCalled();
   });

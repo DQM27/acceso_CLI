@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import { History, Plus, UserCheck } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
@@ -128,7 +128,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
   useEffect(() => {
     let vigente = true;
     const recargar = vista === "activos" ? recargarActivos : recargarHistorial;
-    recargar().catch((error) => vigente && toast.error(String(error)));
+    recargar().catch((error) => vigente && avisos.error(error));
     return () => {
       vigente = false;
     };
@@ -144,7 +144,7 @@ export default function GafetesProvisionales({ refrescarSenal }: { refrescarSena
         await cerrarFilaGafeteProvisionalActiva(fila);
         await recargarActivos();
       } catch (error) {
-        toast.error(String(error));
+        avisos.error(error);
       }
     },
     [recargarActivos],

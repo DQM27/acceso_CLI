@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { avisos } from "../avisos/avisos";
 import Modal from "./Modal";
 import { cambiarPasswordSupabase } from "../api";
 import { esquemaCambioPassword } from "./CambiarPasswordModal.logica";
@@ -30,7 +30,7 @@ export default function CambiarPasswordModal({ onCerrar }: { onCerrar: () => voi
   async function alEnviar(valores: ValoresCambioPassword) {
     try {
       await cambiarPasswordSupabase(valores.passwordActual, valores.passwordNueva);
-      toast.success("Contraseña cambiada.");
+      avisos.exito("Contraseña cambiada.");
       onCerrar();
     } catch (error) {
       setError("root", { message: String(error) });
