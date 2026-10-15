@@ -5,6 +5,8 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
 import BarraSeleccion from "../componentes/BarraSeleccion";
+import AvisoPermanencia from "../componentes/AvisoPermanencia";
+import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
@@ -17,7 +19,13 @@ import {
 } from "../api";
 import type { FilaActiva } from "../api";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
-import { contarPorGafete, filtrarPorGafete, masDeDoceHoras } from "./Activos.logica";
+import {
+  contarMasDeDoceHoras,
+  contarPorGafete,
+  filtrarPorGafete,
+  masDeDoceHoras,
+  textoAvisoPermanencia,
+} from "./Activos.logica";
 import type { FiltroGafete } from "./Activos.logica";
 
 /** Ícono, número y nombre completo (al pasar el mouse) de cada opción. Los
@@ -98,13 +106,45 @@ export default function Activos({
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [filtroGafete, setFiltroGafete] = useState<FiltroGafete>("todos");
-  const filasVisibles = useMemo(() => filtrarPorGafete(filas, filtroGafete), [filas, filtroGafete]);
+  // Reloj de la pantalla: avanza cada minuto, así el aviso de larga permanencia
+  // aparece solo cuando alguien cruza el umbral, sin recargar la lista.
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => {
+    const reloj = setInterval(() => setAhora(Date.now()), 60_000);
+    return () => clearInterval(reloj);
+  }, []);
+  const [soloLargaPermanencia, setSoloLargaPermanencia] = useState(false);
+  const largaPermanencia = useMemo(() => contarMasDeDoceHoras(filas, ahora), [filas, ahora]);
+  // Sin nadie con larga permanencia el filtro no tiene sentido (y su aviso ya
+  // no se ve para apagarlo): se ignora aunque haya quedado puesto.
+  const filtrandoPermanencia = soloLargaPermanencia && largaPermanencia > 0;
+  const filasVisibles = useMemo(() => {
+    const porGafete = filtrarPorGafete(filas, filtroGafete);
+    return filtrandoPermanencia
+      ? porGafete.filter((fila) => masDeDoceHoras(fila, ahora))
+      : porGafete;
+  }, [filas, filtroGafete, filtrandoPermanencia, ahora]);
   // Los números de los botones del filtro (ver `opcionesFiltroGafete`): son la
   // única métrica de la pantalla, ya no hay texto en la barra de estado.
   const conteo = useMemo(
     () => (cargadoAlgunaVez ? { todos: total, ...contarPorGafete(filas) } : null),
     [cargadoAlgunaVez, total, filas],
   );
+
+  // Aviso en la barra de estado: sólo existe si hay gente con larga permanencia
+  // (probablemente una salida sin registrar); pulsarlo filtra a esas personas.
+  const avisoPermanencia = useMemo(
+    () =>
+      largaPermanencia > 0 ? (
+        <AvisoPermanencia
+          texto={textoAvisoPermanencia(largaPermanencia)}
+          activo={filtrandoPermanencia}
+          onAlternar={() => setSoloLargaPermanencia((actual) => !actual)}
+        />
+      ) : null,
+    [largaPermanencia, filtrandoPermanencia],
+  );
+  useBarraEstado(avisoPermanencia);
 
   // La acción para las filas seleccionadas flota sobre la tabla (`BarraSeleccion`):
   // ni corre la pantalla -- antes una franja arriba lo hacía (pedido del usuario

@@ -935,6 +935,28 @@ input {
   }
 }
 
+/* Aviso de larga permanencia en la barra de estado (AvisoPermanencia.tsx):
+   ámbar, como texto plano con ícono; pulsado (filtro puesto) se rellena. */
+.aviso-permanencia {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--advertencia);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.aviso-permanencia:hover,
+.aviso-permanencia[aria-pressed="true"] {
+  background: var(--advertencia-suave);
+}
+
 /* Disparador de `MenuUsuario` — mismo lenguaje que los ítems de la status
    bar de VSC: texto plano hasta que se pasa el mouse, ahí aparece el fondo
    de botón (no se ve como un control de formulario en reposo). */

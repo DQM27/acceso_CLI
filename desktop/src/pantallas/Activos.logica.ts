@@ -31,3 +31,19 @@ export function masDeDoceHoras(
 ): boolean {
   return ahora - new Date(fila.fecha_hora_ingreso).getTime() > DOCE_HORAS_MS;
 }
+
+/** Cuántas de las filas llevan más de 12 horas adentro (el aviso de la barra
+ * de estado). Misma regla que el resaltado de la tabla. */
+export function contarMasDeDoceHoras(
+  filas: readonly { fecha_hora_ingreso: string }[],
+  ahora: number = Date.now(),
+): number {
+  return filas.filter((fila) => masDeDoceHoras(fila, ahora)).length;
+}
+
+/** Texto del aviso de larga permanencia, en singular o plural. */
+export function textoAvisoPermanencia(cantidad: number): string {
+  return cantidad === 1
+    ? "1 lleva más de 12 h adentro"
+    : `${cantidad} llevan más de 12 h adentro`;
+}

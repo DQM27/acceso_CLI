@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { contarPorGafete, filtrarPorGafete, masDeDoceHoras } from "./Activos.logica";
+import {
+  contarMasDeDoceHoras,
+  contarPorGafete,
+  filtrarPorGafete,
+  masDeDoceHoras,
+  textoAvisoPermanencia,
+} from "./Activos.logica";
 
 const filas = [
   { id: 1, gafete_numero: 10 },
@@ -43,5 +49,26 @@ describe("masDeDoceHoras", () => {
   it("12 horas justas o menos no se resalta", () => {
     expect(masDeDoceHoras({ fecha_hora_ingreso: "2026-09-23T08:00:00Z" }, ahora)).toBe(false);
     expect(masDeDoceHoras({ fecha_hora_ingreso: "2026-09-23T19:00:00Z" }, ahora)).toBe(false);
+  });
+});
+
+describe("larga permanencia", () => {
+  const ahora = new Date("2026-10-15T12:00:00Z").getTime();
+  const hace = (horas: number) => ({
+    fecha_hora_ingreso: new Date(ahora - horas * 3600_000).toISOString(),
+  });
+
+  it("cuenta sólo a quienes pasan de 12 horas", () => {
+    expect(contarMasDeDoceHoras([hace(1), hace(11.9), hace(12.1), hace(30)], ahora)).toBe(2);
+  });
+
+  it("sin nadie con larga permanencia, cero", () => {
+    expect(contarMasDeDoceHoras([hace(1), hace(5)], ahora)).toBe(0);
+    expect(contarMasDeDoceHoras([], ahora)).toBe(0);
+  });
+
+  it("el texto va en singular o plural", () => {
+    expect(textoAvisoPermanencia(1)).toBe("1 lleva más de 12 h adentro");
+    expect(textoAvisoPermanencia(3)).toBe("3 llevan más de 12 h adentro");
   });
 });

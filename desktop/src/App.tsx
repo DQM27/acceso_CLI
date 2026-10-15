@@ -33,6 +33,7 @@ import {
   useState,
   ViewTransition,
 } from "react";
+import type { ReactNode } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
@@ -416,7 +417,7 @@ function Shell({
   // La pantalla montada publica acá su propio texto (ver `useBarraEstado`) —
   // `null` mientras ninguna lo hizo todavía (primer render) o entre una
   // pantalla y la siguiente.
-  const [mensajeEstado, setMensajeEstado] = useState<string | null>(null);
+  const [mensajeEstado, setMensajeEstado] = useState<ReactNode>(null);
 
   function alternarColapsado() {
     setColapsado((actual) => {
