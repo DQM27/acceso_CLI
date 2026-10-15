@@ -655,11 +655,18 @@ input {
   outline-offset: -2px;
 }
 
-/* Más de 12 horas adentro (Activos, `claseFilaActiva`): fondo suave de
-   advertencia y marca a la izquierda. Único resaltado de filas de la app. */
-.ag-row.fila-mas-de-12-horas {
+/* Larga permanencia (Activos, `claseFilaActiva`): el nivel lo calcula el núcleo.
+   Aviso (más de 12 h): fondo suave de advertencia y marca a la izquierda.
+   Crítico (más de 14 h): lo mismo en rojo. Únicos resaltados de filas de la
+   app. */
+.ag-row.fila-permanencia-aviso {
   background: var(--advertencia-suave);
   box-shadow: inset 3px 0 0 var(--advertencia);
+}
+
+.ag-row.fila-permanencia-critico {
+  background: var(--error-suave);
+  box-shadow: inset 3px 0 0 var(--error);
 }
 
 
@@ -952,9 +959,20 @@ input {
   transition: background-color 0.15s ease;
 }
 
+/* El nivel crítico (más de 14 h): rojo; el ícono late con la clase
+   `punto-conexion-parpadeo`, igual que la conexión caída. */
+.aviso-permanencia-critico {
+  color: var(--error);
+}
+
 .aviso-permanencia:hover,
 .aviso-permanencia[aria-pressed="true"] {
   background: var(--advertencia-suave);
+}
+
+.aviso-permanencia-critico:hover,
+.aviso-permanencia-critico[aria-pressed="true"] {
+  background: var(--error-suave);
 }
 
 /* Disparador de `MenuUsuario` — mismo lenguaje que los ítems de la status

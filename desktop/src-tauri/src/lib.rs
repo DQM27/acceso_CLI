@@ -581,6 +581,7 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::empresas::actualizar_empresa,
         comandos::empresas::establecer_empresa_activa,
         comandos::ingresos::listar_ingresos_activos,
+        comandos::ingresos::avisos_permanencia,
         comandos::ingresos::preparar_ingreso,
         comandos::ingresos::registrar_ingreso,
         comandos::ingresos::registrar_salida,
@@ -673,6 +674,30 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Inicia la aplicación de escritorio y registra todos los comandos Tauri.
 ///
+/// Umbrales de permanencia acortados, SÓLO en builds de desarrollo, para ver los
+/// avisos sin esperar 12 horas: `CONTROL_ACCESO_PERMANENCIA_MINUTOS=1,2` (aviso
+/// al minuto, crítico a los dos). En una build de producción se ignora siempre.
+fn umbrales_de_prueba() -> Option<control_acceso::domain::permanencia::UmbralesPermanencia> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    umbrales_desde_texto(&std::env::var("CONTROL_ACCESO_PERMANENCIA_MINUTOS").ok()?)
+}
+
+fn umbrales_desde_texto(
+    texto: &str,
+) -> Option<control_acceso::domain::permanencia::UmbralesPermanencia> {
+    let (aviso, critico) = texto.split_once(',')?;
+    let aviso: i64 = aviso.trim().parse().ok()?;
+    let critico: i64 = critico.trim().parse().ok()?;
+    (aviso > 0 && critico > aviso).then(|| {
+        control_acceso::domain::permanencia::UmbralesPermanencia {
+            aviso: chrono::Duration::minutes(aviso),
+            critico: chrono::Duration::minutes(critico),
+        }
+    })
+}
+
 /// # Panics
 ///
 /// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
@@ -680,7 +705,11 @@ pub fn run() {
     #[cfg(feature = "telemetria")]
     telemetria::aislar_build_de_diagnostico();
     let _guardia_sentry = inicializar_sentry();
-    let (ruta_base_datos, instancia, clave_base_datos, core, firmante) = preparar_nucleo();
+    let (ruta_base_datos, instancia, clave_base_datos, mut core, firmante) = preparar_nucleo();
+    if let Some(umbrales) = umbrales_de_prueba() {
+        log::warn!("umbrales de permanencia de PRUEBA activos: {umbrales:?}");
+        core.establecer_umbrales_permanencia(umbrales);
+    }
     telemetria::usar_reloj(core.reloj());
     if let Some(directorio) = ruta_base_datos.parent() {
         telemetria::iniciar(directorio);
@@ -701,4 +730,26 @@ pub fn run() {
                 telemetria::cerrar();
             }
         });
+}
+
+#[cfg(test)]
+mod pruebas_umbrales {
+    use super::umbrales_desde_texto;
+
+    #[test]
+    fn acepta_minutos_de_aviso_y_critico() {
+        let umbrales = umbrales_desde_texto("1, 2").unwrap();
+        assert_eq!(umbrales.aviso, chrono::Duration::minutes(1));
+        assert_eq!(umbrales.critico, chrono::Duration::minutes(2));
+    }
+
+    #[test]
+    fn rechaza_lo_que_no_es_un_par_valido() {
+        assert!(umbrales_desde_texto("").is_none());
+        assert!(umbrales_desde_texto("5").is_none());
+        assert!(umbrales_desde_texto("a,b").is_none());
+        assert!(umbrales_desde_texto("0,2").is_none());
+        assert!(umbrales_desde_texto("3,3").is_none());
+        assert!(umbrales_desde_texto("4,2").is_none());
+    }
 }

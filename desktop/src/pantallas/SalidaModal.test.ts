@@ -18,6 +18,7 @@ function activo(overrides: Partial<FilaLocal> = {}): FilaActiva {
     usuario_ingreso_nombre: "root",
     resultado_registrado: "Permitido",
     resultado_acceso: "Permitido",
+    nivel_permanencia: "Normal",
     ...overrides,
   };
 }
@@ -39,6 +40,7 @@ function remoto(overrides: Partial<FilaRemota> = {}): FilaActiva {
     usuario_ingreso_nombre: "Op PC",
     resultado_registrado: null,
     resultado_acceso: null,
+    nivel_permanencia: "Normal",
     ...overrides,
   };
 }

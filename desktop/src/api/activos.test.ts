@@ -24,6 +24,7 @@ describe("filaDesdeLocal / filaDesdeRemoto", () => {
       usuario_ingreso_nombre: "root",
       resultado_registrado: "Permitido",
       resultado_acceso: "Permitido",
+      nivel_permanencia: "Normal",
     };
 
     const resultado = filaDesdeLocal(item);
@@ -47,6 +48,7 @@ describe("filaDesdeLocal / filaDesdeRemoto", () => {
       medio_ingreso: "VEHICULO",
       gafete_numero: 42,
       placa: "ABC123",
+      nivel_permanencia: "Aviso",
     };
 
     const resultado = filaDesdeRemoto(remoto);
@@ -79,6 +81,7 @@ describe("filaDesdeLocal / filaDesdeRemoto", () => {
       medio_ingreso: null,
       gafete_numero: null,
       placa: null,
+      nivel_permanencia: "Normal",
     };
 
     expect(filaDesdeRemoto(remoto).usuario_ingreso_nombre).toBe("—");

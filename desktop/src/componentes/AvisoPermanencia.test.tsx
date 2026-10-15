@@ -21,4 +21,17 @@ describe("AvisoPermanencia", () => {
     rerender(<AvisoPermanencia texto="x" activo onAlternar={() => {}} />);
     expect(screen.getByRole("button").getAttribute("aria-pressed")).toBe("true");
   });
+
+  it("el nivel crítico va en rojo y con el ícono parpadeando; el aviso no", () => {
+    const { rerender, container } = render(
+      <AvisoPermanencia texto="1 lleva más de 14 h adentro" activo={false} critico onAlternar={() => {}} />,
+    );
+    expect(screen.getByRole("button").className).toContain("aviso-permanencia-critico");
+    expect(container.querySelector("svg")?.getAttribute("class")).toContain("punto-conexion-parpadeo");
+    rerender(<AvisoPermanencia texto="x" activo={false} onAlternar={() => {}} />);
+    expect(screen.getByRole("button").className).not.toContain("aviso-permanencia-critico");
+    expect(container.querySelector("svg")?.getAttribute("class") ?? "").not.toContain(
+      "punto-conexion-parpadeo",
+    );
+  });
 });

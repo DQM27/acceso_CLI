@@ -21,29 +21,14 @@ export function contarPorGafete<T extends { gafete_numero: number | null }>(
   return { con: filas.length - sin, sin };
 }
 
-export const DOCE_HORAS_MS = 12 * 60 * 60 * 1000;
+/** Nivel por el que se filtra la tabla al pulsar un aviso de la barra de estado. */
+export type FiltroPermanencia = "Aviso" | "Critico";
 
-/** Más de 12 horas adentro desde el ingreso -- único resaltado de filas
- * que pidió el usuario (2026-09-23). `ahora` inyectable para el test. */
-export function masDeDoceHoras(
-  fila: { fecha_hora_ingreso: string },
-  ahora: number = Date.now(),
-): boolean {
-  return ahora - new Date(fila.fecha_hora_ingreso).getTime() > DOCE_HORAS_MS;
-}
-
-/** Cuántas de las filas llevan más de 12 horas adentro (el aviso de la barra
- * de estado). Misma regla que el resaltado de la tabla. */
-export function contarMasDeDoceHoras(
-  filas: readonly { fecha_hora_ingreso: string }[],
-  ahora: number = Date.now(),
-): number {
-  return filas.filter((fila) => masDeDoceHoras(fila, ahora)).length;
-}
-
-/** Texto del aviso de larga permanencia, en singular o plural. */
-export function textoAvisoPermanencia(cantidad: number): string {
-  return cantidad === 1
-    ? "1 lleva más de 12 h adentro"
-    : `${cantidad} llevan más de 12 h adentro`;
+/** Deja sólo a quienes el núcleo marcó con ese nivel de permanencia. Qué
+ * significa cada nivel (12 h, 14 h) lo decide el núcleo, no esta función. */
+export function filtrarPorNivel<T extends { nivel_permanencia: string }>(
+  filas: readonly T[],
+  nivel: FiltroPermanencia | null,
+): T[] {
+  return nivel === null ? [...filas] : filas.filter((fila) => fila.nivel_permanencia === nivel);
 }

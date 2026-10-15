@@ -1,5 +1,10 @@
 import { listarIngresosActivos, registrarSalida } from "./ingresos";
-import type { IngresoActivoResumen, ListaIngresosActivosResumen, MedioIngreso } from "./ingresos";
+import type {
+  IngresoActivoResumen,
+  ListaIngresosActivosResumen,
+  MedioIngreso,
+  NivelPermanencia,
+} from "./ingresos";
 import {
   cerrarIngresoRemoto,
   listarIngresosRemotos,
@@ -36,6 +41,7 @@ export interface FilaRemota {
   usuario_ingreso_nombre: string;
   resultado_registrado: null;
   resultado_acceso: null;
+  nivel_permanencia: NivelPermanencia;
 }
 
 export type FilaActiva = FilaLocal | FilaRemota;
@@ -61,6 +67,7 @@ export function filaDesdeRemoto(remoto: IngresoRemoto): FilaActiva {
     usuario_ingreso_nombre: remoto.usuario_entrada_nombre ?? "—",
     resultado_registrado: null,
     resultado_acceso: null,
+    nivel_permanencia: remoto.nivel_permanencia,
   };
 }
 

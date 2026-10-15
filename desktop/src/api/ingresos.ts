@@ -83,6 +83,11 @@ export type ResultadoIngresoRegistrado =
   | "Migrado"
   | { PermitidoConAdvertencia: "PraindProximoVencer" | "DatosReconstruidos" };
 
+/** Qué tan grave es lo que lleva alguien adentro. Lo calcula el núcleo
+ * (`domain::permanencia`: más de 12 h es aviso, más de 14 h es crítico); la
+ * interfaz sólo lo muestra. */
+export type NivelPermanencia = "Normal" | "Aviso" | "Critico";
+
 export interface IngresoActivoResumen {
   registro_id: number;
   contratista_id: number;
@@ -100,6 +105,7 @@ export interface IngresoActivoResumen {
   usuario_ingreso_nombre: string;
   resultado_registrado: ResultadoIngresoRegistrado;
   resultado_acceso: ResultadoAcceso;
+  nivel_permanencia: NivelPermanencia;
 }
 
 export interface ListaIngresosActivosResumen {
@@ -133,6 +139,20 @@ export function gafetesDe(texto: string): number[] {
 
 export function listarIngresosActivos(): Promise<ListaIngresosActivosResumen> {
   return invoke("listar_ingresos_activos");
+}
+
+/** Gente con demasiado tiempo adentro, con los conteos y los textos ya
+ * redactados por el núcleo (`AvisosPermanencia`). Un texto en `null` = nadie
+ * en ese nivel: no se muestra nada. */
+export interface AvisosPermanencia {
+  en_aviso: number;
+  criticos: number;
+  texto_aviso: string | null;
+  texto_critico: string | null;
+}
+
+export function avisosPermanencia(): Promise<AvisosPermanencia> {
+  return invoke("avisos_permanencia");
 }
 
 export function prepararIngreso(contratistaId: number): Promise<PreparacionIngreso> {

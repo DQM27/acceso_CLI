@@ -27,6 +27,20 @@ pub fn listar_ingresos_activos(
         .map_err(mensaje_ingreso)
 }
 
+/// Cuánta gente lleva más de 12 h (aviso) y más de 14 h (crítico) adentro,
+/// con los textos ya redactados por el núcleo: la barra de estado sólo los
+/// muestra (ver `domain::permanencia`).
+#[tauri::command]
+pub fn avisos_permanencia(
+    state: tauri::State<GuiState>,
+) -> Result<control_acceso::application::AvisosPermanencia, String> {
+    let sesion = state.sesion_activa()?;
+    state
+        .core()
+        .avisos_permanencia(&sesion)
+        .map_err(mensaje_ingreso)
+}
+
 /// `PreparacionIngreso` más el motivo de bloqueo ya resuelto por el núcleo
 /// (`application::preparar_ingreso_verificado`: reglas locales y, con nube,
 /// la verificación en vivo), igual que recibe el móvil: el frontend no

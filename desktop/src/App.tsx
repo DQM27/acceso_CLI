@@ -57,6 +57,9 @@ import type { LucideIcon } from "lucide-react";
 import marca from "./assets/marca.png";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
+import AvisoPermanencia from "./componentes/AvisoPermanencia";
+import type { FiltroPermanencia } from "./pantallas/Activos.logica";
+import { useAvisosPermanencia } from "./componentes/useAvisosPermanencia";
 import { useTema } from "./componentes/useTema";
 import { guardarPreferencia, leerPreferencia } from "./preferencias";
 import BarraNube from "./componentes/BarraNube";
@@ -494,6 +497,21 @@ function Shell({
   // otra pantalla o de otro dispositivo (Realtime/pulso periódico).
   const [refrescarActivos, setRefrescarActivos] = useState(0);
   const [sincronizandoManual, setSincronizandoManual] = useState(false);
+  // Gente con demasiado tiempo adentro: lo calcula el núcleo (`domain::permanencia`),
+  // acá sólo se guarda lo que contesta y qué aviso está pulsado.
+  const avisosPermanencia = useAvisosPermanencia(`${refrescarActivos}-${sincronizandoManual}`);
+  const [filtroPermanencia, setFiltroPermanencia] = useState<FiltroPermanencia | null>(null);
+  // Si el aviso pulsado ya no tiene a nadie (salieron), el filtro se ignora para
+  // no dejar la tabla vacía sin un aviso que lo apague.
+  const filtroPermanenciaEfectivo =
+    (filtroPermanencia === "Aviso" && (avisosPermanencia?.en_aviso ?? 0) > 0) ||
+    (filtroPermanencia === "Critico" && (avisosPermanencia?.criticos ?? 0) > 0)
+      ? filtroPermanencia
+      : null;
+  function alternarFiltroPermanencia(nivel: FiltroPermanencia) {
+    cambiarSeccion("activos");
+    setFiltroPermanencia((actual) => (actual === nivel ? null : nivel));
+  }
   const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
   const [estadoConexionNube, setEstadoConexionNube] = useState<EstadoConexionNube>(null);
@@ -784,6 +802,7 @@ function Shell({
                         {id === "activos" ? (
                           <Activos
                             refrescarSenal={refrescarActivos}
+                            filtroPermanencia={filtroPermanenciaEfectivo}
                             onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
                             onAbrirSalida={() => setModalSalida(true)}
                           />
@@ -823,6 +842,23 @@ function Shell({
               grilla; a la derecha, el usuario (antes fijo en el sidebar). */}
           <div className="barra-estado">
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              {/* Sólo existen si hay gente en ese nivel (el núcleo manda el texto o
+                  `null`); desde cualquier pantalla llevan a Activos con el filtro. */}
+              {avisosPermanencia?.texto_critico && (
+                <AvisoPermanencia
+                  texto={avisosPermanencia.texto_critico}
+                  activo={filtroPermanenciaEfectivo === "Critico"}
+                  critico
+                  onAlternar={() => alternarFiltroPermanencia("Critico")}
+                />
+              )}
+              {avisosPermanencia?.texto_aviso && (
+                <AvisoPermanencia
+                  texto={avisosPermanencia.texto_aviso}
+                  activo={filtroPermanenciaEfectivo === "Aviso"}
+                  onAlternar={() => alternarFiltroPermanencia("Aviso")}
+                />
+              )}
               <span>{mensajeEstado}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>

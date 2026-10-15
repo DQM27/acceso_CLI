@@ -124,6 +124,9 @@ pub struct IngresoRemoto {
     pub tipo_ingreso: Option<String>,
     pub medio_ingreso: Option<String>,
     pub gafete_numero: Option<i64>,
+    /// Cuánto lleva adentro (regla de `domain::permanencia`, calculada por el
+    /// núcleo con su reloj corregido): la interfaz sólo lo muestra.
+    pub nivel_permanencia: control_acceso::domain::permanencia::NivelPermanencia,
 }
 
 /// Espejo de `nube::IngresoProveedorRemoto` -- mismo criterio que
@@ -561,12 +564,17 @@ pub fn listar_ingresos_remotos(
              FROM ingresos_remotos ORDER BY hora_entrada",
         )
         .map_err(super::mensaje_generico)?;
+    // El candado del núcleo sólo se toma el rato que dura este mapeo (sin red ni
+    // disco aparte de esta lectura de la caché local).
+    let core = state.core();
     let filas = statement
         .query_map([], |row| {
+            let hora_entrada: String = row.get(2)?;
             Ok(IngresoRemoto {
                 uuid: row.get(0)?,
                 contratista_nombre: row.get(1)?,
-                hora_entrada: row.get(2)?,
+                nivel_permanencia: core.nivel_permanencia_de_entrada(&hora_entrada),
+                hora_entrada,
                 usuario_entrada_nombre: row.get(3)?,
                 contratista_cedula: row.get(4)?,
                 empresa_nombre: row.get(5)?,
