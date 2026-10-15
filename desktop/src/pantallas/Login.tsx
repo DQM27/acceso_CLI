@@ -6,7 +6,8 @@ import marca from "../assets/marca.png";
 import { cambiarPasswordSupabase, esErrorLogin, login } from "../api";
 import type { UsuarioSesion } from "../api";
 import { esquemaLogin, esquemaCambioObligatorio } from "./Login.logica";
-import IdentidadEquipo from "../componentes/IdentidadEquipo";
+import UnidadOperativa from "../componentes/UnidadOperativa";
+import { useVersionApp } from "../componentes/useVersionApp";
 
 type ValoresLogin = z.infer<typeof esquemaLogin>;
 
@@ -122,6 +123,7 @@ export default function Login({
 }: {
   onAutenticado: (sesion: UsuarioSesion) => void;
 }) {
+  const version = useVersionApp();
   const [cambioObligatorio, setCambioObligatorio] = useState<{
     sesion: UsuarioSesion;
     passwordActual: string;
@@ -173,11 +175,11 @@ export default function Login({
           {/* Sin "Lattis" acá -- el PNG ya trae el wordmark horneado, un
               texto aparte sería literal duplicado (hallazgo del usuario,
               2026-09-19). Subtítulo real en su lugar. */}
-          <div>
-            <h1 className="text-2xl font-normal uppercase text-texto">
+          <div className="mt-3">
+            <h1 className="text-xl font-normal uppercase text-texto">
               Acceso <strong className="font-bold">Escritorio</strong>
             </h1>
-            <IdentidadEquipo className="login-identidad-equipo" />
+            <UnidadOperativa className="login-unidad" />
           </div>
         </div>
 
@@ -220,6 +222,7 @@ export default function Login({
         <button type="submit" className="boton boton-primario w-full" disabled={isSubmitting}>
           {isSubmitting ? "Verificando..." : "Ingresar"}
         </button>
+        {version && <span className="login-version">{`v${version}`}</span>}
       </form>
     </div>
   );

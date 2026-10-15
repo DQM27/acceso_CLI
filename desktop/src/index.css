@@ -183,6 +183,7 @@ input {
 }
 
 .login-card {
+  position: relative;
   backdrop-filter: blur(16px);
 }
 
@@ -238,14 +239,25 @@ input {
   font-size: 0.8rem;
 }
 
-/* Unidad y etiqueta del equipo bajo el título del login: sirve para notar
-   un equipo registrado en la unidad equivocada (ver IdentidadEquipo.tsx). */
-.login-identidad-equipo {
+/* Unidad operativa bajo el título del login: sirve para notar un equipo
+   registrado en la unidad equivocada (ver UnidadOperativa.tsx). */
+.login-unidad {
   display: block;
   margin-top: 0.25rem;
   color: var(--muted);
   font-size: 0.85rem;
-  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+/* Versión instalada en la esquina inferior derecha de la tarjeta, discreta:
+   cae en el margen de abajo (padding de la tarjeta), sin agrandarla. */
+.login-version {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.6rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  user-select: text;
 }
 
 /* Ítem del sidebar de navegación (App.tsx) — mismo lenguaje de hover/foco

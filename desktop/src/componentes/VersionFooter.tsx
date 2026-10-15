@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { getVersion } from "@tauri-apps/api/app";
+import { useVersionApp } from "./useVersionApp";
 
 /**
  * Versión instalada, visible en la esquina del sidebar -- para que quien
@@ -20,16 +19,7 @@ export default function VersionFooter({
   onBuscarActualizacion: () => void;
   buscando?: boolean;
 }) {
-  const [version, setVersion] = useState("");
-
-  useEffect(() => {
-    getVersion()
-      .then(setVersion)
-      .catch(() => {
-        // Sin Tauri detrás (no debería pasar en la app empaquetada) no hay
-        // versión que mostrar -- no es un error que el usuario deba ver.
-      });
-  }, []);
+  const version = useVersionApp();
 
   if (!version) return null;
 
