@@ -4,9 +4,55 @@ import {
   AgregadorLlamadas,
   AgregadorRealtime,
   latenciaDesde,
+  nombreCanonicoOperacion,
   percentil,
   tipoDeError,
+  tipoDeRed,
 } from "./telemetriaCalculos";
+
+// Los mismos ejemplos que `TelemetriaCalculosTest.kt` (móvil): si una de las
+// dos plataformas cambia la regla, la otra tiene que cambiar con ella.
+describe("nombreCanonicoOperacion", () => {
+  it("pasa camelCase a snake_case", () => {
+    expect(nombreCanonicoOperacion("buscarContratistas")).toBe("buscar_contratistas");
+    expect(nombreCanonicoOperacion("vincularDispositivoInicial")).toBe("vincular_dispositivo_inicial");
+    expect(nombreCanonicoOperacion("sincronizarConNube")).toBe("sincronizar_con_nube");
+  });
+
+  it("quita los sufijos de versiones viejas", () => {
+    expect(nombreCanonicoOperacion("registrarIngresoVerificado")).toBe("registrar_ingreso");
+    expect(nombreCanonicoOperacion("registrarIngresoConSecreto")).toBe("registrar_ingreso");
+    expect(nombreCanonicoOperacion("prepararIngresoConSecreto")).toBe("preparar_ingreso");
+    expect(nombreCanonicoOperacion("sincronizarConNubeConSecreto")).toBe("sincronizar_con_nube");
+    expect(nombreCanonicoOperacion("autenticarConSecreto")).toBe("autenticar");
+  });
+
+  it("un nombre ya canónico no cambia", () => {
+    expect(nombreCanonicoOperacion("registrar_ingreso")).toBe("registrar_ingreso");
+    expect(nombreCanonicoOperacion("sincronizar_con_nube")).toBe("sincronizar_con_nube");
+    expect(nombreCanonicoOperacion("login")).toBe("login");
+  });
+
+  it("es idempotente y no deja el nombre vacío", () => {
+    for (const nombre of ["registrarIngresoVerificado", "sincronizarConNubeConSecreto", "login"]) {
+      const una = nombreCanonicoOperacion(nombre);
+      expect(nombreCanonicoOperacion(una)).toBe(una);
+    }
+    expect(nombreCanonicoOperacion("_verificado")).toBe("_verificado");
+  });
+
+  it("maneja siglas seguidas", () => {
+    expect(nombreCanonicoOperacion("leerPDF417")).toBe("leer_pdf417");
+    expect(nombreCanonicoOperacion("abrirXMLHttp")).toBe("abrir_xml_http");
+  });
+});
+
+describe("tipoDeRed", () => {
+  it("el escritorio sólo distingue si hay red o no", () => {
+    expect(tipoDeRed(true)).toBe("con_red");
+    expect(tipoDeRed(false)).toBe("sin_red");
+  });
+});
 
 describe("percentil", () => {
   it("rango más cercano, igual que en el teléfono", () => {

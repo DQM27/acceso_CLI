@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.TrafficStats
 import android.os.BatteryManager
 import android.os.Build
@@ -188,13 +190,33 @@ private class MotorTelemetria(private val app: Application) {
                     "sesion" to sesion,
                     "version_app" to versionApp,
                     "tipo" to tipo,
-                    "datos" to datos,
+                    // Todo evento lleva la versión del formato y la plataforma
+                    // (ver `docs/telemetria-contrato.md`); lo que ya traiga el
+                    // evento manda sobre estos valores.
+                    "datos" to (mapOf("esquema" to ESQUEMA_TELEMETRIA, "plataforma" to "movil") + datos),
                 ),
             ),
         )
     }
 
-    fun registrarLlamada(nombre: String, nanos: Long, ok: Boolean) = llamadas.registrar(nombre, nanos, ok)
+    /// El nombre se guarda en su forma canónica (`nombreCanonicoOperacion`),
+    /// igual en móvil y escritorio y entre versiones de la app.
+    fun registrarLlamada(nombre: String, nanos: Long, ok: Boolean) =
+        llamadas.registrar(nombreCanonicoOperacion(nombre), nanos, ok)
+
+    /// Tipo de red ahora (`clasificarRed`). Sin el permiso, o ante cualquier
+    /// fallo del sistema, `otra`: medir nunca puede tirar la app.
+    private fun redActual(): String = runCatching {
+        val gestor = app.getSystemService(ConnectivityManager::class.java)
+        val capacidades = gestor.getNetworkCapabilities(gestor.activeNetwork)
+        clasificarRed(
+            hayRed = capacidades != null,
+            validada = capacidades?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true,
+            wifi = capacidades?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true,
+            celular = capacidades?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true,
+            ethernet = capacidades?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true,
+        )
+    }.getOrDefault("otra")
 
     fun enPrimerPlano(visible: Boolean) {
         this.visible = visible
@@ -243,7 +265,8 @@ private class MotorTelemetria(private val app: Application) {
     }
 
     private fun volcarAgregados() {
-        llamadas.vaciar().forEach { encolar("llamada_nucleo", it) }
+        val red = redActual()
+        llamadas.vaciar().forEach { encolar("llamada_nucleo", it + mapOf("red_tipo" to red)) }
         frames?.vaciar()?.forEach { encolar("frames", it) }
         violaciones.vaciar().forEach { encolar("strictmode", it) }
         realtime.vaciar()?.let { encolar("realtime", it) }
@@ -278,6 +301,7 @@ private class MotorTelemetria(private val app: Application) {
             "cpu_un_nucleo_pct" to cpu?.porcentajeUnNucleo,
             "red_rx_kb" to if (rx >= 0 && ultimoRx >= 0) (rx - ultimoRx) / 1024 else null,
             "red_tx_kb" to if (tx >= 0 && ultimoTx >= 0) (tx - ultimoTx) / 1024 else null,
+            "red_tipo" to redActual(),
             "cola_telemetria" to cola.tamano(),
             "telemetria_descartada" to cola.descartadas,
             "vigilados_pendientes" to vigilante.pendientes(),

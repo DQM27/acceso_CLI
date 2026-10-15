@@ -15,7 +15,9 @@ import {
   AgregadorBloqueos,
   AgregadorLlamadas,
   AgregadorRealtime,
+  nombreCanonicoOperacion,
   tipoDeError,
+  tipoDeRed,
 } from "./telemetriaCalculos";
 
 const INTERVALO_VOLCADO_MS = 30_000;
@@ -46,7 +48,7 @@ export function realtimeTelemetria(): AgregadorRealtime | null {
 
 /** Un comando de Tauri terminó (ver `api/invocar.ts`). */
 export function registrarLlamada(nombre: string, ms: number, ok: boolean) {
-  if (activa) llamadas.registrar(nombre, ms, ok);
+  if (activa) llamadas.registrar(nombreCanonicoOperacion(nombre), ms, ok);
 }
 
 /** Se mostró una pantalla o sección. `ms_hasta_primer_frame`: hasta que el
@@ -101,7 +103,8 @@ function muestraWebview(): Record<string, unknown> {
 }
 
 function volcar() {
-  llamadas.vaciar().forEach((fila) => evento("llamada_nucleo", fila));
+  const red = tipoDeRed(navigator.onLine);
+  llamadas.vaciar().forEach((fila) => evento("llamada_nucleo", { ...fila, red_tipo: red }));
   const realtime = agregadorRealtime.vaciar();
   if (realtime) evento("realtime", realtime);
   const trabas = bloqueos.vaciar();

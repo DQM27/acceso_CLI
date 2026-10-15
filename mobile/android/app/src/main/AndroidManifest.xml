@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Sólo para decir si hay red y de qué tipo en la telemetría de rendimiento
+         (wifi, datos o sin red); es un permiso normal, sin pregunta al usuario. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Normal (sin permiso en tiempo de ejecución): hace falta para
          controlar la intensidad de la vibración de confirmación/error del

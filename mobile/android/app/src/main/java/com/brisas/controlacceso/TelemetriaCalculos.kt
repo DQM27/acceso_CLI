@@ -441,3 +441,51 @@ fun cargaDelSistema(linea: String?): Double? =
 /// Milisegundos entre dos lecturas de `System.nanoTime()`, con un decimal.
 fun milisegundosDesde(inicioNanos: Long, finNanos: Long = System.nanoTime()): Double =
     Math.round((finNanos - inicioNanos) / 100_000.0) / 10.0
+
+/// Versión del formato de las filas de telemetría (`datos.esquema`). Sube cuando
+/// cambia el significado o el nombre de un campo existente, no cuando se agrega
+/// uno nuevo. Ver `docs/telemetria-contrato.md`.
+const val ESQUEMA_TELEMETRIA = 2
+
+/// Nombre canónico de una operación del núcleo, igual en móvil y escritorio:
+/// snake_case, sin los sufijos de versiones viejas (`_con_secreto`,
+/// `_verificado`), así `registrarIngresoVerificado`, `registrarIngresoConSecreto`
+/// y `registrar_ingreso` son la misma operación y se pueden comparar entre
+/// versiones y entre plataformas. Idempotente.
+fun nombreCanonicoOperacion(nombre: String): String {
+    val sufijosViejos = listOf("_con_secreto", "_verificado")
+    var canonico = nombre
+        .replace(Regex("([A-Z]+)([A-Z][a-z])"), "$1_$2")
+        .replace(Regex("([a-z0-9])([A-Z])"), "$1_$2")
+        .lowercase()
+    var quitoAlgo = true
+    while (quitoAlgo) {
+        quitoAlgo = false
+        for (sufijo in sufijosViejos) {
+            if (canonico.length > sufijo.length && canonico.endsWith(sufijo)) {
+                canonico = canonico.removeSuffix(sufijo)
+                quitoAlgo = true
+            }
+        }
+    }
+    return canonico
+}
+
+/// Tipo de red en palabras fijas (una lista cerrada, nunca texto libre):
+/// `sin_red`, `sin_internet` (hay red pero no sale a internet), `wifi`, `datos`,
+/// `ethernet` u `otra`. Para poder explicar un tiempo: 0,2 s con wifi y 2 s con
+/// datos no son lo mismo.
+fun clasificarRed(
+    hayRed: Boolean,
+    validada: Boolean,
+    wifi: Boolean,
+    celular: Boolean,
+    ethernet: Boolean,
+): String = when {
+    !hayRed -> "sin_red"
+    !validada -> "sin_internet"
+    wifi -> "wifi"
+    celular -> "datos"
+    ethernet -> "ethernet"
+    else -> "otra"
+}

@@ -5,6 +5,40 @@
 
 type Fila = Record<string, unknown>;
 
+/** Versión del formato de las filas de telemetría (`datos.esquema`); la misma
+ * que `ESQUEMA_TELEMETRIA` del teléfono. Ver `docs/telemetria-contrato.md`. */
+export const ESQUEMA_TELEMETRIA = 2;
+
+/** Nombre canónico de una operación, igual en escritorio y móvil
+ * (`nombreCanonicoOperacion` en `TelemetriaCalculos.kt`, mismos ejemplos en los
+ * tests de las dos): snake_case y sin los sufijos de versiones viejas
+ * (`_con_secreto`, `_verificado`), para poder comparar entre versiones y entre
+ * plataformas. Idempotente. */
+export function nombreCanonicoOperacion(nombre: string): string {
+  const sufijosViejos = ["_con_secreto", "_verificado"];
+  let canonico = nombre
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase();
+  let quitoAlgo = true;
+  while (quitoAlgo) {
+    quitoAlgo = false;
+    for (const sufijo of sufijosViejos) {
+      if (canonico.length > sufijo.length && canonico.endsWith(sufijo)) {
+        canonico = canonico.slice(0, canonico.length - sufijo.length);
+        quitoAlgo = true;
+      }
+    }
+  }
+  return canonico;
+}
+
+/** Tipo de red en palabras fijas (lista cerrada). En escritorio el navegador
+ * sólo dice si hay red; no distingue wifi de cable: `con_red`. */
+export function tipoDeRed(enLinea: boolean): "sin_red" | "con_red" {
+  return enLinea ? "con_red" : "sin_red";
+}
+
 /** Percentil por rango más cercano sobre valores ya ordenados. */
 export function percentil(ordenados: readonly number[], p: number): number | null {
   if (ordenados.length === 0) return null;
