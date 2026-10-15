@@ -44,7 +44,6 @@ import {
   Building2,
   ClipboardList,
   DoorOpen,
-  Download,
   HardHat,
   History,
   IdCard,
@@ -737,6 +736,8 @@ function Shell({
               onCambiarVisibilidad={alternarVisibilidadSeccion}
               onRestablecer={restablecerSidebar}
               recargarUnidad={sincronizandoManual}
+              onBuscarActualizacion={buscarActualizacionManual}
+              buscandoActualizacion={buscandoActualizacion}
             />
 
             <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -839,20 +840,6 @@ function Shell({
                 onSincronizar={sincronizarManualmente}
                 estadoConexion={estadoConexionNube}
               />
-              <button
-                type="button"
-                className="barra-estado-boton boton-icono"
-                onClick={buscarActualizacionManual}
-                disabled={buscandoActualizacion}
-                title="Buscar actualización"
-                aria-label="Buscar actualización"
-              >
-                {buscandoActualizacion ? (
-                  <Loader2 size={15} strokeWidth={2} className="girando" aria-hidden="true" />
-                ) : (
-                  <Download size={15} strokeWidth={2} aria-hidden="true" />
-                )}
-              </button>
               <SelectorTema />
               <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
             </div>

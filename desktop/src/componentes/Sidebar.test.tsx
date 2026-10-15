@@ -21,6 +21,8 @@ function renderSidebar(props: Partial<React.ComponentProps<typeof Sidebar>> = {}
       onReordenar={() => {}}
       onCambiarVisibilidad={() => {}}
       onRestablecer={() => {}}
+      onBuscarActualizacion={() => {}}
+      buscandoActualizacion={false}
       {...props}
     />,
   );
@@ -45,6 +47,8 @@ describe("Sidebar", () => {
         onReordenar={() => {}}
         onCambiarVisibilidad={() => {}}
         onRestablecer={() => {}}
+        onBuscarActualizacion={() => {}}
+        buscandoActualizacion={false}
       />,
     );
     fireEvent.click(screen.getByLabelText("Expandir menú"));

@@ -83,6 +83,8 @@ export default function Sidebar({
   onCambiarVisibilidad,
   onRestablecer,
   recargarUnidad,
+  onBuscarActualizacion,
+  buscandoActualizacion,
 }: {
   /** Todas las secciones, en el orden guardado -- incluye las ocultas
    * (Sidebar filtra internamente qué renderiza; el menú contextual necesita
@@ -98,6 +100,9 @@ export default function Sidebar({
   onRestablecer: () => void;
   /** Cuando cambia, se vuelve a leer la unidad (ver `useIdentidadEquipo`). */
   recargarUnidad?: unknown;
+  /** La versión de abajo es también el botón de buscar actualización. */
+  onBuscarActualizacion: () => void;
+  buscandoActualizacion: boolean;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -190,7 +195,10 @@ export default function Sidebar({
 
       <div style={{ flex: 1 }} title="Click derecho para mostrar/ocultar secciones" />
 
-      <VersionFooter />
+      <VersionFooter
+        onBuscarActualizacion={onBuscarActualizacion}
+        buscando={buscandoActualizacion}
+      />
 
       {menu && (
         <MenuContextualSecciones

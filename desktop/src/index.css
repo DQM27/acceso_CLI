@@ -245,6 +245,8 @@ input {
   margin-top: 0.25rem;
   color: var(--muted);
   font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 /* Ítem del sidebar de navegación (App.tsx) — mismo lenguaje de hover/foco
@@ -649,11 +651,27 @@ input {
    resto de texto secundario del sidebar, centrada, sin competir visualmente
    con las secciones de arriba. */
 .shell-sidebar-version {
-  padding: 0.5rem 0;
-  text-align: center;
+  align-self: center;
+  margin: 0.25rem 0;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  font: inherit;
   font-size: 0.7rem;
   color: var(--muted);
-  user-select: text;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+/* Mismo hover que `.barra-estado-boton`: en reposo es texto plano, al pasar el
+   ratón se tiñe y se nota que es un botón (buscar actualización). */
+.shell-sidebar-version:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--texto) 10%, transparent);
+}
+
+.shell-sidebar-version:disabled {
+  cursor: default;
 }
 
 /* Barra de estado — de lado a lado, debajo de sidebar + contenido, mismo
