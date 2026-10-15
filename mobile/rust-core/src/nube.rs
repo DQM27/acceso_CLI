@@ -139,7 +139,7 @@ impl Nucleo {
             control_acceso::nube::PerfilDispositivo::Movil,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
+            mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
         })?;
 
         Ok(ResumenSincronizacion {
@@ -195,7 +195,7 @@ impl Nucleo {
             control_acceso::nube::PerfilDispositivo::Movil,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
+            mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
         })
     }
 
@@ -234,7 +234,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache()
             .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
+                mensaje: control_acceso::mensajes::mensaje_nube(error),
             })?;
         let topic = format!("sitio:{}", token.sitio_id);
 
@@ -312,7 +312,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache()
             .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
+                mensaje: control_acceso::mensajes::mensaje_nube(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::base_url(),
@@ -331,7 +331,7 @@ impl Nucleo {
             hora,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
+            mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
         })?;
         Ok(())
     }
@@ -344,7 +344,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache()
             .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
+                mensaje: control_acceso::mensajes::mensaje_nube(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::base_url(),
@@ -363,7 +363,7 @@ impl Nucleo {
             hora,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
+            mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
         })?;
         Ok(())
     }
@@ -376,7 +376,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache()
             .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
+                mensaje: control_acceso::mensajes::mensaje_nube(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::base_url(),
@@ -395,7 +395,7 @@ impl Nucleo {
             hora,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
+            mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
         })?;
         Ok(())
     }
@@ -411,7 +411,7 @@ impl Nucleo {
         let token = self
             .autenticar_con_cache()
             .map_err(|error| NucleoError::Interno {
-                mensaje: interno(error),
+                mensaje: control_acceso::mensajes::mensaje_nube(error),
             })?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::base_url(),
@@ -430,7 +430,7 @@ impl Nucleo {
             hora,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
+            mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
         })?;
         Ok(())
     }
@@ -439,7 +439,7 @@ impl Nucleo {
 impl Nucleo {
     pub(super) fn refrescar_catalogo_sin_sesion(&self) -> Result<(), NucleoError> {
         let mapear_nube = |error: control_acceso::nube::NubeError| NucleoError::Interno {
-            mensaje: interno(error),
+            mensaje: control_acceso::mensajes::mensaje_nube(error),
         };
         let token = self.autenticar_con_cache().map_err(mapear_nube)?;
         let contexto = control_acceso::nube::ContextoSincronizacion {
@@ -457,7 +457,7 @@ impl Nucleo {
             control_acceso::nube::PerfilDispositivo::Movil,
         )
         .map_err(|error| NucleoError::Interno {
-            mensaje: interno(error),
+            mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
         })?;
         Ok(())
     }
@@ -500,7 +500,7 @@ impl Nucleo {
 
         let token = self.autenticar_con_cache().map_err(|error| {
             FalloSincronizacion::Nucleo(NucleoError::Interno {
-                mensaje: interno(error),
+                mensaje: control_acceso::mensajes::mensaje_nube(error),
             })
         })?;
 

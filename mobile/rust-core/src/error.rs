@@ -100,7 +100,7 @@ impl From<control_acceso::nube::AuthSupabaseError> for NucleoError {
                 Self::CredencialesInvalidas
             }
             otro => Self::Interno {
-                mensaje: interno(otro),
+                mensaje: control_acceso::mensajes::mensaje_auth_supabase(otro),
             },
         }
     }
@@ -124,7 +124,7 @@ impl From<control_acceso::nube::SincronizacionError> for FalloSincronizacion {
             Self::TokenVencido
         } else {
             Self::Nucleo(NucleoError::Interno {
-                mensaje: interno(error),
+                mensaje: control_acceso::mensajes::mensaje_sincronizacion(error),
             })
         }
     }
