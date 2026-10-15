@@ -174,7 +174,9 @@ export default function Login({
               texto aparte sería literal duplicado (hallazgo del usuario,
               2026-09-19). Subtítulo real en su lugar. */}
           <div>
-            <h1 className="text-2xl font-semibold uppercase text-texto">Control de acceso</h1>
+            <h1 className="text-2xl font-normal uppercase text-texto">
+              Acceso <strong className="font-bold">Escritorio</strong>
+            </h1>
             <IdentidadEquipo className="login-identidad-equipo" />
           </div>
         </div>

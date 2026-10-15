@@ -64,7 +64,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
     ) {
         // Logo más grande y sin el texto "Lattis" debajo -- redundante, el
         // logo ya dice la marca (pedido explícito del usuario, 2026-09-19).
-        // En su lugar, "Control de acceso móvil" con "móvil" en negrita
+        // En su lugar, "ACCESO MOVIL" con "MOVIL" en negrita
         // para resaltarlo -- distingue esta app de las otras plataformas
         // (desktop/web) que comparten la misma marca.
         Image(
@@ -78,10 +78,10 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
                 // `titleLarge` ya es bold (peso 700, `TipografiaBrisas` en
                 // DisenoMovil.kt) -- ponerle Bold también a "móvil" no
                 // resaltaba nada porque ya estaba igual de grueso que el
-                // resto. Se aligera "Control de acceso" a Normal para que
-                // "móvil" contraste y sea lo que el ojo agarra primero.
+                // resto. Se aligera "ACCESO" a Normal para que
+                // "MOVIL" contraste y sea lo que el ojo agarra primero.
                 withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
-                    append("Control de acceso ")
+                    append("ACCESO ")
                 }
                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
                     append("MOVIL")
