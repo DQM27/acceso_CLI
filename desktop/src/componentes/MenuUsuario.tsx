@@ -7,6 +7,10 @@ import { useListaFlotante } from "./ListaFlotante.logica";
 import { NOMBRE_TEMA } from "./SelectorTema.logica";
 import type { Tema } from "./SelectorTema.logica";
 
+/** Lo que dura la animación de salida del menú (ver `.lista-flotante-saliendo`
+ * en `index.css`): el menú se desmonta cuando termina. */
+const DURACION_SALIDA_MS = 120;
+
 /** La inicial del nombre, para el círculo (vacío si no hay nombre). */
 function inicialDe(nombre: string): string {
   return nombre.trim().charAt(0).toLocaleUpperCase("es");
@@ -21,8 +25,9 @@ function inicialDe(nombre: string): string {
  *
  * Al hacer click abre un popover con el nombre y el rol y las tres acciones
  * -- mismo mecanismo que "Columnas ▾" en `Tabla.tsx`
- * (`ListaFlotante`/`useListaFlotante`), con `direccion="arriba"` porque el
- * disparador vive pegado al borde inferior de la ventana.
+ * (`ListaFlotante`/`useListaFlotante`), pero hacia la derecha del disparador
+ * (el disparador vive al fondo del menú lateral, y el contenido está al
+ * costado), entrando y saliendo deslizado desde él.
  */
 export default function MenuUsuario({
   sesion,
@@ -37,20 +42,44 @@ export default function MenuUsuario({
   onAlternarTema: () => void;
   onCerrarSesion: () => void;
 }) {
+  // `abierto` es lo que quiere quien opera; `visible` lo mantiene en pantalla
+  // el rato que dura la animación de salida.
   const [abierto, setAbierto] = useState(false);
+  const [visible, setVisible] = useState(false);
   const [cambiandoPassword, setCambiandoPassword] = useState(false);
-  const { campoRef, posicion } = useListaFlotante(abierto);
+  const { campoRef, posicion } = useListaFlotante(visible);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const esperaSalida = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function abrir() {
+    if (esperaSalida.current) clearTimeout(esperaSalida.current);
+    setAbierto(true);
+    setVisible(true);
+  }
+
+  function cerrar() {
+    setAbierto(false);
+    if (esperaSalida.current) clearTimeout(esperaSalida.current);
+    esperaSalida.current = setTimeout(() => setVisible(false), DURACION_SALIDA_MS);
+  }
+
+  // Si el componente se desmonta con la salida en curso, no queda el temporizador.
+  useEffect(
+    () => () => {
+      if (esperaSalida.current) clearTimeout(esperaSalida.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!abierto) return;
     function alHacerClicAfuera(evento: MouseEvent) {
       const objetivo = evento.target as Node;
       if (campoRef.current?.contains(objetivo) || popoverRef.current?.contains(objetivo)) return;
-      setAbierto(false);
+      cerrar();
     }
     function alTeclear(evento: KeyboardEvent) {
-      if (evento.key === "Escape") setAbierto(false);
+      if (evento.key === "Escape") cerrar();
     }
     document.addEventListener("mousedown", alHacerClicAfuera);
     document.addEventListener("keydown", alTeclear);
@@ -67,7 +96,7 @@ export default function MenuUsuario({
       <button
         type="button"
         className="usuario-tarjeta"
-        onClick={() => setAbierto((a) => !a)}
+        onClick={abierto ? cerrar : abrir}
         aria-expanded={abierto}
         aria-haspopup="menu"
         title={`${sesion.nombre} — tema, contraseña y cerrar sesión`}
@@ -79,11 +108,13 @@ export default function MenuUsuario({
         {!colapsado && <span className="usuario-nombre">{sesion.nombre}</span>}
       </button>
 
-      {abierto && posicion && (
+      {visible && posicion && (
         <ListaFlotante
-          posicion={{ ...posicion, bottom: posicion.bottom + 4 }}
+          posicion={posicion}
           ancho={240}
-          direccion="arriba"
+          direccion="derecha"
+          animacion="lateral"
+          saliendo={!abierto}
         >
           <div ref={popoverRef} className="usuario-menu" role="menu">
             <div style={{ minWidth: 0 }}>
@@ -105,7 +136,7 @@ export default function MenuUsuario({
               role="menuitem"
               className="boton boton-icono boton-salir"
               onClick={() => {
-                setAbierto(false);
+                cerrar();
                 setCambiandoPassword(true);
               }}
             >

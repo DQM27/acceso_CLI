@@ -869,7 +869,7 @@ function Shell({
             )}
           </Suspense>
 
-          {/* Los avisos usan las variables de la app (tema Tokyo Night Day o
+          {/* Los avisos usan las variables de la app (tema Tokyo Day o
               Night), ver `avisos/avisos.css`. */}
           <AvisosPanel />
         </div>

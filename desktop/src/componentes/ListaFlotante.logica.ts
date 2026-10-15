@@ -27,6 +27,12 @@ export interface PosicionLista {
    * en `ListaFlotante`: el popover se abre al costado, a la misma altura. */
   topCampo: number;
   rightDesdeIzquierda: number;
+  /** Borde derecho del campo (+8 de separación) y distancia de su borde
+   * INFERIOR al borde inferior de la ventana -- para `direccion="derecha"`
+   * en `ListaFlotante`: el popover se abre al costado derecho, con su borde
+   * inferior a la misma altura (disparadores al fondo de un menú lateral). */
+  leftDesdeDerecha: number;
+  bottomCampo: number;
 }
 
 /** Posición de la lista para el rectángulo del campo -- aparte para poder
@@ -43,6 +49,8 @@ export function posicionParaCampo(
     width: rect.width,
     topCampo: rect.top,
     rightDesdeIzquierda: ventana.ancho - rect.left + 4,
+    leftDesdeDerecha: rect.right + 8,
+    bottomCampo: ventana.alto - rect.bottom,
   };
 }
 
@@ -53,6 +61,7 @@ export function mismaPosicion(a: PosicionLista | null, b: PosicionLista): boolea
     a.bottom === b.bottom &&
     a.left === b.left &&
     a.right === b.right &&
+    a.bottomCampo === b.bottomCampo &&
     a.width === b.width
   );
 }

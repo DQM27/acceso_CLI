@@ -717,6 +717,38 @@ input {
   white-space: nowrap;
 }
 
+/* Menú de cuenta (ListaFlotante con animacion="lateral"): sale del botón hacia
+   la derecha -- un desplazamiento corto y un fundido, como los menús de macOS,
+   sin rebote. La salida es más corta que la entrada. */
+.lista-flotante-lateral {
+  transform-origin: left bottom;
+  animation: lista-entrar-lateral 160ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.lista-flotante-lateral.lista-flotante-saliendo {
+  animation: lista-salir-lateral 120ms ease-in forwards;
+}
+
+@keyframes lista-entrar-lateral {
+  from {
+    opacity: 0;
+    transform: translateX(-10px) scale(0.98);
+  }
+}
+
+@keyframes lista-salir-lateral {
+  to {
+    opacity: 0;
+    transform: translateX(-10px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lista-flotante-lateral {
+    animation: none;
+  }
+}
+
 .usuario-menu {
   display: flex;
   flex-direction: column;

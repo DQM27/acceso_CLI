@@ -33,7 +33,7 @@ describe("temaDelSistema", () => {
     expect(temaDelSistema()).toBe("tokyo-day");
   });
 
-  it("si matchMedia falla, cae a Tokyo Night Day en vez de romper", () => {
+  it("si matchMedia falla, cae a Tokyo Day en vez de romper", () => {
     romperMatchMedia();
     expect(temaDelSistema()).toBe("tokyo-day");
   });
@@ -76,7 +76,7 @@ describe("leerTema", () => {
 });
 
 describe("siguienteTema", () => {
-  it("alterna Tokyo Night Day ↔ Tokyo Night", () => {
+  it("alterna Tokyo Day ↔ Tokyo Night", () => {
     expect(siguienteTema("tokyo-day")).toBe("tokyo-night");
     expect(siguienteTema("tokyo-night")).toBe("tokyo-day");
   });

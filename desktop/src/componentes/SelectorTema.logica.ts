@@ -1,6 +1,6 @@
 import { leerPreferencia } from "../preferencias";
 
-/** Los dos temas de la app: Tokyo Night Day (claro) y Tokyo Night (oscuro).
+/** Los dos temas de la app: Tokyo Day (claro) y Tokyo Night (oscuro).
  * Se definen en `tokyo-day.css` y `tokyo-night.css`. */
 export type Tema = "tokyo-day" | "tokyo-night";
 
@@ -16,7 +16,7 @@ export const CLAVE_TEMA = "escritorio:tema";
 
 /** Nombre con que se muestra cada tema en el menú de usuario. */
 export const NOMBRE_TEMA: Record<Tema, string> = {
-  "tokyo-day": "Tokyo Night Day",
+  "tokyo-day": "Tokyo Day",
   "tokyo-night": "Tokyo Night",
 };
 

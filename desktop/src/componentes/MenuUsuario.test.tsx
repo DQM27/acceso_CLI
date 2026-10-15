@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { UsuarioSesion } from "../api";
 import MenuUsuario from "./MenuUsuario";
@@ -36,7 +36,7 @@ describe("MenuUsuario", () => {
   it("al pulsarlo ofrece tema, cambiar contraseña y cerrar sesión", () => {
     montar();
     fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
-    expect(screen.getByText("Tema: Tokyo Night Day")).toBeTruthy();
+    expect(screen.getByText("Tema: Tokyo Day")).toBeTruthy();
     expect(screen.getByText("Cambiar contraseña")).toBeTruthy();
     expect(screen.getByText("Cerrar sesión")).toBeTruthy();
   });
@@ -57,10 +57,10 @@ describe("MenuUsuario", () => {
     expect(cerrar).toHaveBeenCalledTimes(1);
   });
 
-  it("Escape cierra el menú", () => {
+  it("Escape cierra el menú después de la animación de salida", async () => {
     montar();
     fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByText("Cerrar sesión")).toBeNull();
+    await waitFor(() => expect(screen.queryByText("Cerrar sesión")).toBeNull());
   });
 });
