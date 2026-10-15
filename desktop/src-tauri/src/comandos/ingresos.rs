@@ -60,7 +60,7 @@ pub async fn preparar_ingreso(
         })
     })
     .await
-    .map_err(|error| format!("No se pudo preparar el ingreso: {error}"))?
+    .map_err(|error| super::mensaje_tarea_interrumpida("No se pudo preparar el ingreso", error))?
 }
 
 #[tauri::command]

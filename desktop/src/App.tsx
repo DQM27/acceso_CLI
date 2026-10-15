@@ -668,7 +668,10 @@ function Shell({
           avisos.progreso(instalarActualizacion(actualizacion), {
             cargando: "Descargando actualización…",
             exito: "Actualizado — reiniciando…",
-            error: (causa) => `No se pudo actualizar: ${String(causa)}`,
+            error: (causa) => {
+              console.error("actualización:", causa);
+              return "No se pudo actualizar, intentá de nuevo más tarde";
+            },
           });
         },
       },
@@ -710,7 +713,8 @@ function Shell({
         );
       }
     } catch (error) {
-      avisos.error(`No se pudo buscar actualizaciones: ${String(error)}`);
+      console.error("buscar actualización:", error);
+      avisos.error("No se pudo buscar actualizaciones, revisá la conexión");
     } finally {
       setBuscandoActualizacion(false);
     }

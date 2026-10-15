@@ -33,7 +33,7 @@ pub fn guardar_csv(
     state: tauri::State<GuiState>,
 ) -> Result<(), String> {
     state.sesion_activa()?;
-    std::fs::write(&destino, con_bom(&contenido)).map_err(super::mensaje_generico)
+    std::fs::write(&destino, con_bom(&contenido)).map_err(super::mensaje_archivo)
 }
 
 /// Exporta a XLSX una tabla que armó la grilla (ver `datosVisibles` en
@@ -53,7 +53,7 @@ pub fn exportar_tabla_xlsx(
     let destino = PathBuf::from(destino);
     let respaldo = RespaldoDestino::apartar(&destino)?;
     let resultado =
-        exportar_tabla_xlsx_nucleo(&columnas, &filas, &destino).map_err(super::mensaje_generico);
+        exportar_tabla_xlsx_nucleo(&columnas, &filas, &destino).map_err(super::mensaje_archivo);
     if resultado.is_ok() {
         respaldo.confirmar();
     }
@@ -86,7 +86,9 @@ pub async fn exportar_tabla_pdf(
     );
     let destino = PathBuf::from(destino);
     let respaldo = RespaldoDestino::apartar(&destino)?;
-    let resultado = pdf::generador::generar_pdf(&app, html, destino).await;
+    let resultado = pdf::generador::generar_pdf(&app, html, destino)
+        .await
+        .map_err(|error| super::mensaje_tarea_interrumpida("No se pudo generar el PDF", error));
     if resultado.is_ok() {
         respaldo.confirmar();
     }

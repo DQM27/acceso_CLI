@@ -771,6 +771,54 @@ pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> Stri
     }
 }
 
+/// Lo que ve quien opera cuando algo falla por una causa técnica que no
+/// tiene una variante de negocio detrás (un error de disco, de formato, de
+/// tarea interrumpida). El detalle va al registro técnico, nunca a pantalla.
+pub const MENSAJE_ERROR_INESPERADO: &str =
+    "Ocurrió un error inesperado, intentá de nuevo. Si sigue pasando, avisá a un administrador";
+
+/// Red de seguridad para un error sin variante de negocio: deja el detalle
+/// en el registro técnico y devuelve un texto genérico. Lo que a la persona
+/// le sirve saber (qué hacer) se decide acá, no en la interfaz.
+pub fn mensaje_generico<E: std::fmt::Display>(error: E) -> String {
+    log::error!("{error}");
+    MENSAJE_ERROR_INESPERADO.into()
+}
+
+/// Falló guardar o mover un archivo que eligió quien opera (exportaciones).
+/// Las causas más comunes son accionables, así que se nombran.
+pub fn mensaje_archivo<E: std::fmt::Display>(error: E) -> String {
+    log::error!("archivo: {error}");
+    "No se pudo guardar el archivo. Revisá que la carpeta exista, que tengas permiso y que no      esté abierto en otro programa"
+        .into()
+}
+
+/// Una tarea en segundo plano no terminó (cayó o fue cancelada). `contexto`
+/// dice qué se intentaba, sin detalle técnico (`"No se pudo enviar a la nube"`).
+pub fn mensaje_tarea_interrumpida<E: std::fmt::Display>(contexto: &str, error: E) -> String {
+    log::error!("{contexto}: {error}");
+    format!("{contexto}, intentá de nuevo")
+}
+
+/// El inicio de sesión contra Supabase Auth. `Red` trae el texto crudo de la
+/// librería HTTP: va al registro técnico y a pantalla sólo la causa en claro.
+#[cfg(feature = "nube")]
+pub fn mensaje_auth_supabase(error: crate::nube::AuthSupabaseError) -> String {
+    use crate::nube::AuthSupabaseError;
+
+    match error {
+        AuthSupabaseError::CredencialesInvalidas => "Cédula o contraseña incorrecta".into(),
+        AuthSupabaseError::Red(detalle) => {
+            log::warn!("auth supabase: {detalle}");
+            "No se pudo conectar con el servidor, revisá la conexión a internet".into()
+        }
+        AuthSupabaseError::RespuestaInvalida => {
+            "El servidor devolvió una respuesta inesperada, intentá de nuevo".into()
+        }
+        AuthSupabaseError::TokenInvalido => "La sesión no es válida o venció".into(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1068,6 +1116,44 @@ mod tests {
                 motivo: MotivoDenegacion::EmpresaInactiva
             }),
             "Acceso denegado · la empresa está inactiva"
+        );
+    }
+
+    #[test]
+    fn un_error_generico_no_filtra_el_detalle_tecnico() {
+        let texto = mensaje_generico("Error de SQLite: file is not a database");
+        assert_eq!(texto, MENSAJE_ERROR_INESPERADO);
+        assert!(!texto.contains("SQLite"));
+    }
+
+    #[test]
+    fn un_error_de_archivo_dice_que_hacer_sin_el_detalle_del_sistema() {
+        let texto = mensaje_archivo("Acceso denegado. (os error 5)");
+        assert!(texto.starts_with("No se pudo guardar el archivo"));
+        assert!(!texto.contains("os error"));
+    }
+
+    #[test]
+    fn una_tarea_interrumpida_conserva_el_contexto_y_no_el_detalle() {
+        let texto =
+            mensaje_tarea_interrumpida("No se pudo enviar a la nube", "panicked at src/x.rs");
+        assert_eq!(texto, "No se pudo enviar a la nube, intentá de nuevo");
+    }
+
+    #[cfg(feature = "nube")]
+    #[test]
+    fn un_fallo_de_red_en_el_login_no_filtra_el_texto_de_la_libreria() {
+        use crate::nube::AuthSupabaseError;
+        let texto = mensaje_auth_supabase(AuthSupabaseError::Red(
+            "error sending request for url (https://x.supabase.co/auth/v1/token)".into(),
+        ));
+        assert_eq!(
+            texto,
+            "No se pudo conectar con el servidor, revisá la conexión a internet"
+        );
+        assert_eq!(
+            mensaje_auth_supabase(AuthSupabaseError::CredencialesInvalidas),
+            "Cédula o contraseña incorrecta"
         );
     }
 }

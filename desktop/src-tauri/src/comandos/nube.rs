@@ -424,7 +424,9 @@ pub async fn vincular_dispositivo_inicial(
         })
     })
     .await
-    .map_err(|error| format!("No se pudo completar el arranque inicial: {error}"))?
+    .map_err(|error| {
+        super::mensaje_tarea_interrumpida("No se pudo completar el arranque inicial", error)
+    })?
 }
 
 /// Aviso en vivo con los datos (`cambio_nube` con `registro`): guarda la
@@ -446,7 +448,9 @@ pub async fn aplicar_cambio_nube(
             .map_err(mensaje_sincronizacion)
     })
     .await
-    .map_err(|error| format!("No se pudo aplicar el cambio en vivo: {error}"))?
+    .map_err(|error| {
+        super::mensaje_tarea_interrumpida("No se pudo aplicar el cambio en vivo", error)
+    })?
 }
 
 /// Sincronización disparada por avisos en vivo (`cambio_nube`) -- corre
@@ -466,7 +470,9 @@ pub async fn sincronizar_cambios_nube(
         )
     })
     .await
-    .map_err(|error| format!("No se pudo completar la sincronización: {error}"))?
+    .map_err(|error| {
+        super::mensaje_tarea_interrumpida("No se pudo completar la sincronización", error)
+    })?
 }
 
 /// Un ingreso/salida registrado en este equipo: sólo se vacía la bandeja de
@@ -481,21 +487,25 @@ pub async fn enviar_cambios_nube(app: tauri::AppHandle) -> Result<ResumenSincron
         )
     })
     .await
-    .map_err(|error| format!("No se pudo enviar a la nube: {error}"))?
+    .map_err(|error| super::mensaje_tarea_interrumpida("No se pudo enviar a la nube", error))?
 }
 
 #[tauri::command]
 pub async fn sincronizar_con_nube(app: tauri::AppHandle) -> Result<ResumenSincronizacion, String> {
     tauri::async_runtime::spawn_blocking(move || ejecutar_sincronizacion(&app.state::<GuiState>()))
         .await
-        .map_err(|error| format!("No se pudo completar la sincronización: {error}"))?
+        .map_err(|error| {
+            super::mensaje_tarea_interrumpida("No se pudo completar la sincronización", error)
+        })?
 }
 
 #[tauri::command]
 pub async fn sesion_realtime_nube(app: tauri::AppHandle) -> Result<SesionRealtimeNube, String> {
     tauri::async_runtime::spawn_blocking(move || preparar_sesion_realtime(&app.state::<GuiState>()))
         .await
-        .map_err(|error| format!("No se pudo preparar la sesión de nube: {error}"))?
+        .map_err(|error| {
+            super::mensaje_tarea_interrumpida("No se pudo preparar la sesión de nube", error)
+        })?
 }
 
 fn preparar_sesion_realtime(state: &GuiState) -> Result<SesionRealtimeNube, String> {
