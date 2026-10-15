@@ -1,0 +1,57 @@
+/* Tema Tokyo Night Day: la paleta oficial de folke/tokyonight.nvim
+   (`extras/lua/tokyonight_day.lua`) sobre los mismos tokens de `diseno.css`,
+   igual que `tokyo-night.css` con la variante de noche.
+
+   Qué es oficial y qué se ajustó:
+   - Superficies y bordes salen tal cual de la paleta: fondo #d0d5e3
+     (`bg_dark`), panel #e1e2e7 (`bg`), resaltado #c4c8da (`bg_highlight`),
+     selección #b7c1e3 (`bg_visual`), borde fuerte #848cb5 (`comment`).
+   - El texto usa #343b58, el primer plano del Tokyo Night claro de VS Code
+     (misma familia): el #3760bf de la paleta de Neovim da 4,5:1 sobre el
+     panel y los textos secundarios se quedan en 2,5:1, poco para un puesto
+     de control que se mira todo el día. Con #343b58 el texto principal da
+     8,5:1.
+   - Los colores de estado (acento, éxito, advertencia, error, info) son los
+     oficiales (#2e7de9, #587539, #8c6c3e, #c64343, #07879d) oscurecidos lo
+     justo para llegar a 4,5:1 como texto sobre el panel; los fondos suaves
+     son ese mismo color al 10 % sobre el panel.
+
+   Vive aparte de `diseno.css` a propósito: ese archivo se genera desde
+   `design/brisas.json` (compartido con el panel web) y regenerarlo
+   borraría este bloque. `:root[data-theme=…]` por la misma razón de
+   especificidad que `tokyo-night.css`. */
+:root[data-theme="tokyo-day"] {
+  --fondo: #d0d5e3;
+  --panel: #e1e2e7;
+  --panel-suave: #d0d5e3;
+  --elevado: #e9e9ed;
+  --campo-fondo: #e9e9ed;
+  --borde: #a8aecb;
+  --borde-fuerte: #848cb5;
+  --texto: #343b58;
+  --muted: #565f89;
+  --texto-atenuado: #6172b0;
+  --acento: #2959aa;
+  --acento-hover: #234c91;
+  --acento-presionado: #1d3e77;
+  --acento-suave: #cfd4e1;
+  --sobre-acento: #ffffff;
+  --exito: #4a6330;
+  --exito-suave: #d2d5d5;
+  --sobre-exito: #ffffff;
+  --advertencia: #7a5c30;
+  --advertencia-suave: #d7d5d5;
+  --sobre-advertencia: #ffffff;
+  --error: #a93737;
+  --error-suave: #dbd1d5;
+  --sobre-error: #ffffff;
+  --info: #006d84;
+  --info-suave: #cbd6dd;
+  --sobre-info: #ffffff;
+  --sombra-panel: 0 8px 28px rgba(52, 59, 88, 0.18);
+  --velo: rgba(52, 59, 88, 0.45);
+  --panel-lateral: #d0d5e3;
+  --acento-relleno: #2959aa;
+  --sobre-acento-indicador: #ffffff;
+  color-scheme: light;
+}
