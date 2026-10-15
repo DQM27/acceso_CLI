@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import uniffi.control_acceso_mobile.Nucleo
+import java.util.Locale
 
 /// Login real contra `Nucleo.autenticar` (Rust) — todo el estado y la
 /// llamada viven en [LoginViewModel] (ver mobile/android/arquitectura.md), este
@@ -95,7 +96,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
         // registraron en la unidad equivocada, se ve antes de entrar.
         rememberTextoIdentidadEquipo(nucleo)?.let { texto ->
             Text(
-                texto,
+                texto.uppercase(Locale("es")),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),

@@ -24,4 +24,16 @@ class IdentidadEquipoTest {
         assertNull(textoIdentidadEquipo(null, null))
         assertNull(textoIdentidadEquipo("  ", ""))
     }
+
+    @Test
+    fun laUnidadOperativaVaSolaYEnMayusculas() {
+        assertEquals("BRISAS", textoUnidadOperativa("Brisas"))
+        assertEquals("BELÉN CARTAGO", textoUnidadOperativa(" Belén Cartago "))
+    }
+
+    @Test
+    fun sinUnidadNoMuestraNadaAunqueHayaEtiqueta() {
+        assertNull(textoUnidadOperativa(null))
+        assertNull(textoUnidadOperativa("  "))
+    }
 }
