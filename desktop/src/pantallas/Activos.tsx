@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { avisos } from "../avisos/avisos";
 import { CircleOff, IdCard, LogIn, LogOut, Users } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
+import type { TablaHandle } from "../componentes/Tabla";
+import BarraSeleccion from "../componentes/BarraSeleccion";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
-import { useAccionBarraEstado } from "../contexto/BarraEstadoContexto";
 import {
   cerrarFilaActiva,
   claveFilaActiva,
@@ -105,13 +106,10 @@ export default function Activos({
     [cargadoAlgunaVez, total, filas],
   );
 
-  // En la barra de estado, no sobre la grilla: antes una franja con
-  // "N seleccionado(s)" aparecía arriba y corría toda la pantalla hacia
-  // abajo (pedido del usuario 2026-09-23).
-  useAccionBarraEstado(
-    seleccionadas.length > 0 ? `Registrar salida (${seleccionadas.length})` : null,
-    () => setConfirmarSalidaMasiva(true),
-  );
+  // La acción para las filas seleccionadas flota sobre la tabla (`BarraSeleccion`):
+  // ni corre la pantalla -- antes una franja arriba lo hacía (pedido del usuario
+  // 2026-09-23) -- ni queda escondida en la barra de estado.
+  const tablaRef = useRef<TablaHandle<FilaActiva>>(null);
 
   const recargar = useCallback(() => {
     // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
@@ -296,8 +294,9 @@ export default function Activos({
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
           <Tabla<FilaActiva>
+            ref={tablaRef}
             cargando={cargando}
             filtrosPorColumna
             id="activos"
@@ -340,6 +339,19 @@ export default function Activos({
                 </div>
               </>
             }
+          />
+          <BarraSeleccion
+            cantidad={seleccionadas.length}
+            etiqueta={{ singular: "seleccionado", plural: "seleccionados" }}
+            accion={
+              <>
+                <LogOut size={16} aria-hidden="true" />
+                Registrar salida
+              </>
+            }
+            critica
+            onAccion={() => setConfirmarSalidaMasiva(true)}
+            onLimpiar={() => tablaRef.current?.deseleccionarTodo()}
           />
         </div>
       </div>

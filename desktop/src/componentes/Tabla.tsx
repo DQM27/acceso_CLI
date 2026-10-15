@@ -267,6 +267,8 @@ export interface TablaHandle<T> {
    * las filas filtradas y ordenadas con cada valor ya formateado
    * ("23/09/2026", "S/G"...). */
   datosVisibles: () => DatosTabla;
+  /** Quita la selección de todas las filas (ej. la ✕ de `BarraSeleccion`). */
+  deseleccionarTodo: () => void;
 }
 
 export interface DatosTabla {
@@ -415,6 +417,7 @@ function TablaBase<T>(
         .filter((columna) => !columna.hide)
         .map((columna) => columna.colId),
     exportarCsv,
+    deseleccionarTodo: () => apiRef.current?.deselectAll(),
     datosVisibles: () => {
       const api = apiRef.current;
       if (!api) return { columnas: [], filas: [] };

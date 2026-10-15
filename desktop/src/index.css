@@ -746,6 +746,79 @@ input {
   white-space: nowrap;
 }
 
+/* Barra de acciones de la selección (BarraSeleccion.tsx): flota abajo y al
+   centro de la tabla, sin ocupar lugar propio. Se centra con márgenes
+   automáticos y no con `translateX`, para dejar libre el `transform` de la
+   animación. */
+.barra-seleccion {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 1rem;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin: 0 auto;
+  padding: 0.45rem 0.5rem 0.45rem 1rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--elevado);
+  box-shadow: var(--sombra-panel);
+  animation: barra-seleccion-entrar 180ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.barra-seleccion-saliendo {
+  animation: barra-seleccion-salir 140ms ease-in forwards;
+}
+
+/* Botón de una acción determinante (ej. registrar salidas en la barra de la
+   selección): relleno rojo con el texto de contraste del tema. */
+.boton-peligro-solido {
+  background: var(--error);
+  border-color: var(--error);
+  color: var(--sobre-error);
+}
+
+.boton-peligro-solido:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 85%, var(--texto));
+  border-color: color-mix(in srgb, var(--error) 85%, var(--texto));
+}
+
+.boton-peligro-solido:active:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 70%, var(--texto));
+  border-color: color-mix(in srgb, var(--error) 70%, var(--texto));
+}
+
+.barra-seleccion-texto {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@keyframes barra-seleccion-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes barra-seleccion-salir {
+  to {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barra-seleccion,
+  .barra-seleccion-saliendo {
+    animation: none;
+  }
+}
+
 /* Menú de cuenta (ListaFlotante con animacion="lateral"): sale del botón hacia
    la derecha -- un desplazamiento corto y un fundido, como los menús de macOS,
    sin rebote. La salida es más corta que la entrada. */

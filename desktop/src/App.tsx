@@ -48,7 +48,6 @@ import {
   History,
   IdCard,
   Loader2,
-  LogOut,
   Route,
   Truck,
   UserCheck,
@@ -82,11 +81,9 @@ import { mensajeConflictoGafete } from "./conflictoGafete";
 import { textoHora } from "./tiempo";
 import { SesionProvider } from "./contexto/SesionContexto";
 import {
-  AccionBarraEstadoProvider,
   BarraEstadoProvider,
   SeccionActivaProvider,
 } from "./contexto/BarraEstadoContexto";
-import type { AccionBarraEstado } from "./contexto/BarraEstadoContexto";
 
 /** Piso de cuánto se ve el splash (`splashscreen.html`), aunque la pantalla
  * real esté lista antes -- sin esto, en un arranque rápido el splash pasaba
@@ -420,9 +417,6 @@ function Shell({
   // `null` mientras ninguna lo hizo todavía (primer render) o entre una
   // pantalla y la siguiente.
   const [mensajeEstado, setMensajeEstado] = useState<string | null>(null);
-  // Botón de acción de la pantalla activa junto al mensaje (ver
-  // `useAccionBarraEstado`) -- ej. "Registrar salida (2)" en Activos.
-  const [accionEstado, setAccionEstado] = useState<AccionBarraEstado | null>(null);
 
   function alternarColapsado() {
     setColapsado((actual) => {
@@ -723,7 +717,6 @@ function Shell({
   return (
     <SesionProvider value={sesion.id}>
       <BarraEstadoProvider value={setMensajeEstado}>
-      <AccionBarraEstadoProvider value={setAccionEstado}>
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
             <Sidebar
@@ -830,19 +823,6 @@ function Shell({
           <div className="barra-estado">
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <span>{mensajeEstado}</span>
-              {accionEstado && (
-                <button
-                  type="button"
-                  // Mismo botón que "Sincronizar" (BarraNube.tsx), para que
-                  // la barra se vea pareja.
-                  className="barra-estado-boton"
-                  onClick={accionEstado.alPulsar}
-                  style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
-                >
-                  <LogOut size={13} strokeWidth={2} aria-hidden="true" />
-                  {accionEstado.texto}
-                </button>
-              )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
               <BarraNube
@@ -873,7 +853,6 @@ function Shell({
               Night), ver `avisos/avisos.css`. */}
           <AvisosPanel />
         </div>
-      </AccionBarraEstadoProvider>
       </BarraEstadoProvider>
     </SesionProvider>
   );
