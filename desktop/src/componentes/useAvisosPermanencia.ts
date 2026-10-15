@@ -2,16 +2,16 @@ import { useEffect, useState } from "react";
 import { avisosPermanencia } from "../api";
 import type { AvisosPermanencia } from "../api";
 
-/** Cada cuánto se vuelve a preguntar al núcleo: alguien puede cruzar un
- * umbral con el tiempo sin que ocurra nada más en la app. */
+/** Cada cuÃ¡nto se vuelve a preguntar al nÃºcleo: alguien puede cruzar un
+ * umbral con el tiempo sin que ocurra nada mÃ¡s en la app. */
 const CADA_MS = 60_000;
 
 /**
- * Cuánta gente lleva demasiado adentro, según el núcleo
+ * CuÃ¡nta gente lleva demasiado adentro, segÃºn el nÃºcleo
  * (`domain::permanencia`): lo pregunta al abrir, cada vez que cambia
- * `recargar` (un ingreso o una salida, una sincronización) y cada minuto. La
- * interfaz no calcula nada: guarda lo que el núcleo contesta. Un error al
- * preguntar no se muestra (es un dato informativo): se queda lo último.
+ * `recargar` (un ingreso o una salida, una sincronizaciÃ³n) y cada minuto. La
+ * interfaz no calcula nada: guarda lo que el nÃºcleo contesta. Un error al
+ * preguntar no se muestra (es un dato informativo): se queda lo Ãºltimo.
  */
 export function useAvisosPermanencia(recargar: unknown): AvisosPermanencia | null {
   const [avisos, setAvisos] = useState<AvisosPermanencia | null>(null);
