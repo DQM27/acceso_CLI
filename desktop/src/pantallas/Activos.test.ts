@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filtrarPorGafete, masDeDoceHoras } from "./Activos.logica";
+import { contarPorGafete, filtrarPorGafete, masDeDoceHoras } from "./Activos.logica";
 
 const filas = [
   { id: 1, gafete_numero: 10 },
@@ -7,6 +7,16 @@ const filas = [
   { id: 3, gafete_numero: 0 },
   { id: 4, gafete_numero: null },
 ];
+
+describe("contarPorGafete", () => {
+  it("cuenta con y sin gafete, y el gafete 0 cuenta como gafete", () => {
+    expect(contarPorGafete(filas)).toEqual({ con: 2, sin: 2 });
+  });
+
+  it("sin filas, todo en cero", () => {
+    expect(contarPorGafete([])).toEqual({ con: 0, sin: 0 });
+  });
+});
 
 describe("filtrarPorGafete", () => {
   it("todos devuelve todas las filas", () => {

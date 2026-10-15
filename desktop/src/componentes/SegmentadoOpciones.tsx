@@ -7,6 +7,9 @@ export interface OpcionSegmentada<V extends string> {
   /** Nombre de la opción: se ve al pasar el mouse y lo lee el lector de
    * pantalla (el control sólo muestra íconos). */
   titulo: string;
+  /** Número que se muestra junto al ícono (ej. cuántas personas hay en cada
+   * filtro); sin él, la opción es sólo el ícono. */
+  cantidad?: number;
 }
 
 /**
@@ -38,7 +41,7 @@ export default function SegmentadoOpciones<V extends string>({
   return (
     <div className="segmentado segmentado-deslizante" role="group" aria-label={etiqueta} style={estilo}>
       <span className="segmentado-indicador" aria-hidden="true" />
-      {opciones.map(({ valor: opcion, Icono, titulo }) => (
+      {opciones.map(({ valor: opcion, Icono, titulo, cantidad }) => (
         <button
           key={opcion}
           type="button"
@@ -48,6 +51,7 @@ export default function SegmentadoOpciones<V extends string>({
           onClick={() => onCambiar(opcion)}
         >
           <Icono size={16} aria-hidden="true" />
+          {cantidad !== undefined && <span className="segmentado-cantidad">{cantidad}</span>}
         </button>
       ))}
     </div>

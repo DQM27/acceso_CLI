@@ -31,4 +31,34 @@ describe("SegmentadoOpciones", () => {
 
     expect(onCambiar).toHaveBeenCalledWith("historial");
   });
+
+  it("muestra el número junto al ícono cuando la opción lo trae", () => {
+    render(
+      <SegmentadoOpciones
+        opciones={[
+          { valor: "activos" as const, Icono: UserCheck, titulo: "12 adentro", cantidad: 12 },
+          { valor: "historial" as const, Icono: History, titulo: "Historial" },
+        ]}
+        valor="activos"
+        onCambiar={() => {}}
+        etiqueta="Vista"
+      />,
+    );
+
+    expect(screen.getByText("12")).toBeTruthy();
+    expect(screen.getByLabelText("Historial").textContent).toBe("");
+  });
+
+  it("un cero también se muestra (no se confunde con \"sin número\")", () => {
+    render(
+      <SegmentadoOpciones
+        opciones={[{ valor: "activos" as const, Icono: UserCheck, titulo: "0 adentro", cantidad: 0 }]}
+        valor="activos"
+        onCambiar={() => {}}
+        etiqueta="Vista"
+      />,
+    );
+
+    expect(screen.getByText("0")).toBeTruthy();
+  });
 });

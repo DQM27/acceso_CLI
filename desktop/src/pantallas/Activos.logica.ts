@@ -12,6 +12,15 @@ export function filtrarPorGafete<T extends { gafete_numero: number | null }>(
   return filas.filter((fila) => (fila.gafete_numero == null) === sinGafete);
 }
 
+/** Cuántos tienen gafete y cuántos no (S/G) -- los números de los botones del
+ * filtro. El total de "todos" no se calcula acá: lo da el listado. */
+export function contarPorGafete<T extends { gafete_numero: number | null }>(
+  filas: readonly T[],
+): { con: number; sin: number } {
+  const sin = filtrarPorGafete(filas, "sin").length;
+  return { con: filas.length - sin, sin };
+}
+
 export const DOCE_HORAS_MS = 12 * 60 * 60 * 1000;
 
 /** Más de 12 horas adentro desde el ingreso -- único resaltado de filas

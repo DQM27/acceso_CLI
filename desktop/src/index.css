@@ -530,6 +530,15 @@ input {
 .segmentado-deslizante button {
   position: relative;
   z-index: 1;
+  gap: 0.4rem;
+}
+
+/* Número de la opción (ej. cuántas personas hay en el filtro): cifras de ancho
+   fijo para que no baile al cambiar. */
+.segmentado-cantidad {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 /* El fondo lo pone el indicador; acá sólo el color del ícono. */
