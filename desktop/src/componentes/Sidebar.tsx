@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -85,6 +86,7 @@ export default function Sidebar({
   recargarUnidad,
   onBuscarActualizacion,
   buscandoActualizacion,
+  pie,
 }: {
   /** Todas las secciones, en el orden guardado -- incluye las ocultas
    * (Sidebar filtra internamente qué renderiza; el menú contextual necesita
@@ -103,6 +105,9 @@ export default function Sidebar({
   /** La versión de abajo es también el botón de buscar actualización. */
   onBuscarActualizacion: () => void;
   buscandoActualizacion: boolean;
+  /** Lo que va al fondo del menú, sobre la versión (la cuenta de quien tiene la
+   * sesión). El Sidebar sólo navega: no sabe qué es. */
+  pie?: ReactNode;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -194,6 +199,8 @@ export default function Sidebar({
       </DndContext>
 
       <div style={{ flex: 1 }} title="Click derecho para mostrar/ocultar secciones" />
+
+      {pie}
 
       <VersionFooter
         onBuscarActualizacion={onBuscarActualizacion}

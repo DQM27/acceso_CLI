@@ -14,7 +14,13 @@ export function temaDelSistema(): Tema {
 
 export const CLAVE_TEMA = "escritorio:tema";
 
-/** Orden en que el botón recorre los temas (día → noche → día). */
+/** Nombre con que se muestra cada tema en el menú de usuario. */
+export const NOMBRE_TEMA: Record<Tema, string> = {
+  "tokyo-day": "Tokyo Night Day",
+  "tokyo-night": "Tokyo Night",
+};
+
+/** Orden en que se recorren los temas (día → noche → día). */
 export const TEMAS: Tema[] = ["tokyo-day", "tokyo-night"];
 
 /** Lo que se guardaba antes de que los temas fueran estos dos: "claro" y

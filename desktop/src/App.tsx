@@ -57,7 +57,7 @@ import type { LucideIcon } from "lucide-react";
 import marca from "./assets/marca.png";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
-import SelectorTema from "./componentes/SelectorTema";
+import { useTema } from "./componentes/useTema";
 import { guardarPreferencia, leerPreferencia } from "./preferencias";
 import BarraNube from "./componentes/BarraNube";
 import type { EstadoConexionNube } from "./componentes/BarraNube.logica";
@@ -382,6 +382,7 @@ function Shell({
   sesion: UsuarioSesion;
   onCerrarSesion: () => void;
 }) {
+  const { tema, alternarTema } = useTema(sesion.id);
   const [seccion, setSeccion] = useState<Seccion>("activos");
   // Cada sección visitada se queda MONTADA (oculta con CSS) en vez de
   // desmontarse al cambiar a otra -- antes, el `{seccion === "x" && <X/>}`
@@ -738,6 +739,15 @@ function Shell({
               recargarUnidad={sincronizandoManual}
               onBuscarActualizacion={buscarActualizacionManual}
               buscandoActualizacion={buscandoActualizacion}
+              pie={
+                <MenuUsuario
+                  sesion={sesion}
+                  colapsado={colapsado}
+                  tema={tema}
+                  onAlternarTema={alternarTema}
+                  onCerrarSesion={onCerrarSesion}
+                />
+              }
             />
 
             <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
@@ -840,8 +850,6 @@ function Shell({
                 onSincronizar={sincronizarManualmente}
                 estadoConexion={estadoConexionNube}
               />
-              <SelectorTema />
-              <MenuUsuario sesion={sesion} onCerrarSesion={onCerrarSesion} />
             </div>
           </div>
 
