@@ -17,9 +17,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -31,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import uniffi.control_acceso_mobile.Nucleo
-import java.util.Locale
 
 /// Login real contra `Nucleo.autenticar` (Rust) — todo el estado y la
 /// llamada viven en [LoginViewModel] (ver mobile/android/arquitectura.md), este
@@ -94,9 +95,9 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
 
         // Unidad y etiqueta con que quedó registrado el teléfono: si lo
         // registraron en la unidad equivocada, se ve antes de entrar.
-        rememberTextoIdentidadEquipo(nucleo)?.let { texto ->
+        rememberTextoUnidadOperativa(nucleo)?.let { texto ->
             Text(
-                texto.uppercase(Locale("es")),
+                texto,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
@@ -145,6 +146,22 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
                 mensajeError,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 16.dp),
+            )
+        }
+
+        // Versión instalada, discreta, abajo a la derecha del formulario.
+        val contexto = LocalContext.current
+        val version = remember {
+            runCatching {
+                contexto.packageManager.getPackageInfo(contexto.packageName, 0).versionName
+            }.getOrNull().orEmpty()
+        }
+        if (version.isNotEmpty()) {
+            Text(
+                "v$version",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.End).padding(top = 24.dp),
             )
         }
     }
