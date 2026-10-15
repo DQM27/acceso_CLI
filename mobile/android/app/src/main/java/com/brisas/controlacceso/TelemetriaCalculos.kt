@@ -435,7 +435,7 @@ fun diferenciaContador(actual: Long?, previo: Long?): Long? =
 /// justo el caso de "muchos procesos abiertos". `null` si el sistema no deja
 /// leerlo o el texto no es el esperado.
 fun cargaDelSistema(linea: String?): Double? =
-    linea?.trim()?.split(Regex("\s+"))?.firstOrNull()?.toDoubleOrNull()
+    linea?.trim()?.split(Regex("\\s+"))?.firstOrNull()?.toDoubleOrNull()
         ?.takeIf { it.isFinite() && it >= 0.0 }
 
 /// Milisegundos entre dos lecturas de `System.nanoTime()`, con un decimal.
