@@ -1,7 +1,7 @@
 # Actualizaciones de la app Android
 
-La app se distribuye fuera de cualquier tienda. Desde la versión que trae
-`Actualizador.kt`, se actualiza sola desde el almacenamiento de descargas
+La app se distribuye fuera de cualquier tienda. Desde la versión que trae el
+actualizador, se actualiza sola desde el almacenamiento de descargas
 (Cloudflare R2 detrás de `descargas.megabrisas.com`), sin depender de GitHub
 Releases. Así sigue funcionando con el repositorio privado.
 
@@ -25,6 +25,17 @@ Releases. Así sigue funcionando con el repositorio privado.
      condiciones del sistema, no pide confirmación; si igual la pide, se
      muestra el diálogo del sistema. Al terminar, Android cierra Lattis y hay
      que volver a abrirla.
+
+### Quién decide qué
+
+Igual que en el resto de la app (ver `mobile/android/arquitectura.md`):
+
+| Capa | Archivo | Responsabilidad |
+|---|---|---|
+| Núcleo (Rust) | `mobile/rust-core/src/actualizacion.rs` | `evaluar_manifiesto_actualizacion`: valida el manifiesto y decide si hay versión nueva y si es obligatoria. |
+| Servicio Android | `ServicioActualizaciones.kt` | Sólo lo que es de Android: leer el manifiesto, descargar y verificar el APK, entregarlo a `PackageInstaller` y recibir el resultado. No decide nada. |
+| ViewModel | `ActualizacionViewModel.kt` | Dueño del estado: cuándo consultar (una vez por hora), descarga, instalación y errores. |
+| Pantalla | `AvisoActualizacion.kt` | Sólo dibuja la franja con el estado que recibe. |
 
 Las verificaciones de la app existen para fallar antes y con un mensaje claro.
 La garantía de fondo es de Android: no instala encima un APK firmado con otra
@@ -50,7 +61,7 @@ Los builds de prueba (`debug`, `diagnostico`) tienen el actualizador apagado:
 La app rechaza el manifiesto si el esquema no es 1, si el APK no se sirve por
 HTTPS **desde el mismo servidor que el manifiesto**, si el SHA-256 está mal
 formado, si el tamaño pasa de 300 MB o si `version_minima_code` es mayor que
-`version_code` (ver `ActualizacionCalculos.validar` y sus tests). Un campo
+`version_code` (ver `mobile/rust-core/src/actualizacion.rs` y sus tests). Un campo
 nuevo se puede agregar sin subir `esquema`; cambiar el significado de uno
 existente sí lo sube, y la app vieja deja de ofrecer actualizaciones hasta que
 se instale una nueva a mano.

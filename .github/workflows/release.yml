@@ -295,7 +295,7 @@ jobs:
         run: gh release upload "$RELEASE_VERSION" "Lattis-mobile-v${MOBILE_VERSION}.apk" --clobber
 
       # Actualizador de la app (ver docs/actualizaciones-android.md y
-      # Actualizador.kt): el APK y el manifiesto `android/latest.json` van al
+      # ServicioActualizaciones.kt): el APK y el manifiesto `android/latest.json` van al
       # almacenamiento de descargas (Cloudflare R2 detrás de
       # descargas.megabrisas.com), aparte de GitHub Releases, para que las
       # actualizaciones sigan funcionando con el repositorio privado.

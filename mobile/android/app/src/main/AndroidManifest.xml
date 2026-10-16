@@ -14,7 +14,7 @@
          notificaciones push (ver NotificacionesPush.kt). Se pide al entrar
          a la pantalla principal, no en el primer arranque. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Actualizador propio (ver Actualizador.kt y docs/actualizaciones-android.md).
+    <!-- Actualizador propio (ver ServicioActualizaciones.kt y docs/actualizaciones-android.md).
          REQUEST_INSTALL_PACKAGES es el "instalar apps desconocidas" que el
          usuario habilita una vez para Lattis. UPDATE_PACKAGES_WITHOUT_USER_ACTION
          es normal (sin pregunta): desde Android 12 deja que Lattis se actualice a
