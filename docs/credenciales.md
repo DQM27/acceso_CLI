@@ -22,6 +22,13 @@ reemplazarlo (`gh secret set NOMBRE`). Usados por `.github/workflows/release.yml
 | `ANDROID_KEY_PASSWORD` | Contraseña de esa llave | ídem |
 | `TAURI_SIGNING_PRIVATE_KEY` | Firma los instaladores de escritorio (`build-gui`) -- el updater verifica contra `plugins.updater.pubkey` en `desktop/src-tauri/tauri.conf.json` | `desktop/src-tauri/keystore/tauri-signing.key` (gitignored) |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Contraseña de esa llave | `desktop/src-tauri/keystore/keystore.properties` (gitignored) |
+| `R2_ACCOUNT_ID` | ID de la cuenta de Cloudflare: arma el endpoint de R2 donde `build-android` publica el APK y `android/latest.json` (ver `docs/actualizaciones-android.md`) | Panel de Cloudflare → R2 (no es secreto, va acá para no repartirlo) |
+| `R2_ACCESS_KEY_ID` | Token de R2 con escritura **sólo** sobre el bucket de descargas | Se regenera en Cloudflare → R2 → Administrar tokens de API |
+| `R2_SECRET_ACCESS_KEY` | Secreto de ese token (Cloudflare lo muestra una sola vez) | ídem |
+
+Variables (no secretas) de la misma pantalla: `R2_BUCKET` (nombre del bucket
+de descargas) y `ANDROID_VERSION_MINIMA_CODE` (por debajo de ese `versionCode`
+la actualización de la app es obligatoria; vacía = 0, nunca obligatoria).
 
 Verificado el 2026-09-12: la huella SHA-256 del certificado que firmó el
 APK de la release `v1.5.0` (`a2c5e4a4...`) coincide exactamente con

@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -125,15 +126,20 @@ class MainActivity : ComponentActivity() {
                             .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime)),
                         contentAlignment = Alignment.TopCenter,
                     ) {
-                        Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
-                            when (val actual = estado) {
-                                EstadoAplicacion.Cargando -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                                is EstadoAplicacion.Fallo -> Text(
-                                    actual.mensaje,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                                )
-                                is EstadoAplicacion.Lista -> ContenidoAplicacion(actual.entorno)
+                        Column(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
+                            // Encima de todo, incluido el login: una versión
+                            // nueva se puede instalar sin haber iniciado sesión.
+                            AvisoActualizacion()
+                            Box(modifier = Modifier.weight(1f)) {
+                                when (val actual = estado) {
+                                    EstadoAplicacion.Cargando -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                                    is EstadoAplicacion.Fallo -> Text(
+                                        actual.mensaje,
+                                        color = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                                    )
+                                    is EstadoAplicacion.Lista -> ContenidoAplicacion(actual.entorno)
+                                }
                             }
                         }
                     }
@@ -145,6 +151,9 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         Telemetria.enPrimerPlano(true)
+        // Como mucho una consulta por hora (ver Actualizador.kt); en los
+        // builds de prueba no hace nada.
+        Actualizador.revisar(this)
         // Para enterarse si deslizan la app fuera de las recientes (ver
         // CierreSesionAlSalir.kt). En primer plano Android lo permite; si
         // igual lo rechaza, sólo se pierde ese aviso.

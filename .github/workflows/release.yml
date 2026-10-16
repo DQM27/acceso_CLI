@@ -293,3 +293,66 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
           MOBILE_VERSION: ${{ steps.version_mobile.outputs.version }}
         run: gh release upload "$RELEASE_VERSION" "Lattis-mobile-v${MOBILE_VERSION}.apk" --clobber
+
+      # Actualizador de la app (ver docs/actualizaciones-android.md y
+      # Actualizador.kt): el APK y el manifiesto `android/latest.json` van al
+      # almacenamiento de descargas (Cloudflare R2 detrás de
+      # descargas.megabrisas.com), aparte de GitHub Releases, para que las
+      # actualizaciones sigan funcionando con el repositorio privado.
+      #
+      # - El nombre del APK lleva el inicio de su SHA-256: cada archivo es
+      #   inmutable y se puede cachear para siempre; re-correr un release con
+      #   la misma versión sube otro archivo en vez de pisar uno ya cacheado.
+      # - Primero el APK y al final el manifiesto: ningún teléfono ve una
+      #   versión cuyo archivo todavía no está.
+      # - Sin los secretos de R2 el paso se salta con un aviso en vez de tumbar
+      #   el release.
+      # - Las dos variables AWS_*_CHECKSUM_* evitan las sumas de verificación
+      #   que el AWS CLI agrega por defecto y que R2 no necesita.
+      - name: Publicar el APK en el almacenamiento de descargas
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+          VERSION_MINIMA_CODE: ${{ vars.ANDROID_VERSION_MINIMA_CODE }}
+          MOBILE_VERSION: ${{ steps.version_mobile.outputs.version }}
+          URL_DESCARGAS: https://descargas.megabrisas.com
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_BUCKET" ]; then
+            echo "::warning::R2 sin configurar: el APK no se publicó para el actualizador (ver docs/actualizaciones-android.md)."
+            exit 0
+          fi
+          apk="Lattis-mobile-v${MOBILE_VERSION}.apk"
+          version_code=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' mobile/android/app/build.gradle.kts)
+          sha256=$(sha256sum "$apk" | cut -d' ' -f1)
+          clave_apk="android/Lattis-mobile-v${MOBILE_VERSION}-${sha256:0:12}.apk"
+          export VERSION_CODE="$version_code" SHA256="$sha256" TAMANO_BYTES="$(stat -c %s "$apk")" URL_APK="${URL_DESCARGAS}/${clave_apk}"
+          python3 - <<'PY'
+          import json, os
+          version_code = int(os.environ["VERSION_CODE"])
+          minima = int(os.environ.get("VERSION_MINIMA_CODE") or 0)
+          if not 0 <= minima <= version_code:
+              raise SystemExit(f"ANDROID_VERSION_MINIMA_CODE={minima} fuera de rango (0..{version_code})")
+          manifiesto = {
+              "esquema": 1,
+              "version_code": version_code,
+              "version_name": os.environ["MOBILE_VERSION"],
+              "url": os.environ["URL_APK"],
+              "sha256": os.environ["SHA256"],
+              "tamano_bytes": int(os.environ["TAMANO_BYTES"]),
+              "version_minima_code": minima,
+          }
+          with open("latest-android.json", "w", encoding="utf-8") as f:
+              json.dump(manifiesto, f, ensure_ascii=False, indent=2)
+          PY
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp "$apk" "s3://${R2_BUCKET}/${clave_apk}" --endpoint-url "$endpoint" \
+            --content-type application/vnd.android.package-archive \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp latest-android.json "s3://${R2_BUCKET}/android/latest.json" --endpoint-url "$endpoint" \
+            --content-type application/json --cache-control "no-cache"
+          echo "Publicado: ${URL_DESCARGAS}/android/latest.json -> ${clave_apk} (versionCode ${version_code})"
