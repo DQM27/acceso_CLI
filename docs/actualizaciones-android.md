@@ -112,6 +112,12 @@ tiene que descargar un archivo cuyo `sha256sum` coincida con el del manifiesto.
 
 ## Pendiente
 
+La lista completa, en orden, está en `docs/pendientes.md` ("Distribución fuera de
+GitHub"). Lo que toca a este documento:
+
+- Página de descargas en `descargas.megabrisas.com`, con la versión vigente de
+  Android y de Windows. Es el link para instalar en un equipo nuevo cuando los de
+  GitHub Releases ya no sean públicos.
 - El escritorio todavía lee su `latest.json` de GitHub Releases
   (`desktop/src-tauri/tauri.conf.json`). Hay que moverlo a R2 antes de volver
   privado el repositorio.
