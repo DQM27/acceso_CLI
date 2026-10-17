@@ -962,7 +962,11 @@ mod tests {
             regla(Some(&["a"]), "2026-10-17T13:00:00Z"),
             regla(None, "2026-10-17T14:00:00Z"),
         ];
-        assert!(Reglas::combinar(&remotas, hora(AHORA)).unwrap().permite("x"));
+        assert!(
+            Reglas::combinar(&remotas, hora(AHORA))
+                .unwrap()
+                .permite("x")
+        );
     }
 
     #[test]
