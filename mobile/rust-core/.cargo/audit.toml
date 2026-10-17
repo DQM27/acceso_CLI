@@ -10,4 +10,15 @@ ignore = [
     # P-256), el crate `rsa` nunca se usa para descifrar nada acá. No hay
     # upgrade disponible que lo arregle (RustSec lo marca "no fixed upgrade").
     "RUSTSEC-2023-0071",
+    # RUSTSEC-2026-0367, -0368 y -0369 (`zip` 8.6.0) -- llegan por
+    # `rust_xlsxwriter` 0.99.1, que exige `zip ^8.3`; el arreglo está en
+    # `zip` >= 9.0.0 y no hay upgrade posible desde acá. Las tres alertas
+    # afectan la extracción de archivos (`ZipArchive::extract` y
+    # `ZipStreamReader`: enlaces simbólicos y bits SUID/SGID al
+    # desempaquetar). Este proyecto sólo ESCRIBE .xlsx para exportar
+    # reportes y nunca abre ni extrae un zip, así que no aplican. Quitar
+    # estas tres líneas cuando `rust_xlsxwriter` suba a `zip` 9.
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
 ]
