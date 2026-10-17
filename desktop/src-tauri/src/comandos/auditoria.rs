@@ -10,7 +10,7 @@ use crate::estado::GuiState;
 /// El núcleo exige sesión (valida `Operacion::VerAuditoria` contra el rol
 /// del actor); no hace falta un chequeo redundante acá salvo `sesion_activa`
 /// para no llamar al núcleo sin sesión.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_auditoria(
     state: tauri::State<GuiState>,
 ) -> Result<CargaCompleta<CambioAuditado>, String> {
@@ -26,7 +26,7 @@ pub fn listar_auditoria(
 
 /// Incidentes de gafetes (marcar perdido/resolver) para la misma pantalla —
 /// tabla aparte (`gafetes_incidentes`), mismo gate (`Operacion::VerAuditoria`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_auditoria_gafetes(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<IncidenteGafete>, String> {

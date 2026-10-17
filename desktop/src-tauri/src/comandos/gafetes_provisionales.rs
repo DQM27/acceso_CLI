@@ -15,7 +15,7 @@ use crate::estado::GuiState;
 /// pero acotado en el núcleo en vez de traer el universo completo: esta
 /// pantalla no es una grilla AG Grid con filtro del lado del cliente, es un
 /// campo de búsqueda como el del buscador de empresas proveedoras.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn buscar_encargados_ruta_provisional(
     texto: String,
     state: tauri::State<GuiState>,
@@ -30,7 +30,7 @@ pub fn buscar_encargados_ruta_provisional(
         .map_err(|_| "No se pudo buscar en el catálogo de encargados".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn entregar_gafete_provisional(
     encargado_id: i64,
     gafete_numero: i64,
@@ -47,7 +47,7 @@ pub fn entregar_gafete_provisional(
     .map_err(mensaje_entrega_gafete_provisional_verificada)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_devolucion_gafete_provisional(
     id: i64,
     state: tauri::State<GuiState>,
@@ -59,7 +59,7 @@ pub fn registrar_devolucion_gafete_provisional(
         .map_err(mensaje_gafete_provisional)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_gafetes_provisionales_activos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<PrestamoGafeteProvisionalActivoResumen>, String> {
@@ -90,7 +90,7 @@ pub struct PrestamoGafeteProvisionalHistorialSitio {
     pub usuario_devolucion_nombre: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_gafetes_provisionales_historial_sitio(
     desde: Option<NaiveDate>,
     hasta: Option<NaiveDate>,

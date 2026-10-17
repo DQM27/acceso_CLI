@@ -50,7 +50,7 @@ pub fn rango_utc(
 /// pedir páginas, a diferencia de Activos/Contratistas. `desde`/`hasta`
 /// ausentes traen el historial completo (ver `rango_utc`). Ver
 /// `AppCore::buscar_historial_completo`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_historial(
     desde: Option<NaiveDate>,
     hasta: Option<NaiveDate>,
@@ -93,7 +93,7 @@ pub struct MovimientoHistorialRemoto {
     pub dispositivo_entrada_tipo: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_historial_sitio(
     desde: Option<NaiveDate>,
     hasta: Option<NaiveDate>,
@@ -159,7 +159,7 @@ pub fn listar_historial_sitio(
 /// ya no tiene en memoria más que una porción del total. Una clave que no
 /// matchea ninguna columna se ignora en silencio (mismo criterio que
 /// `SelectorColumnas::aplicar_preferencia`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn exportar_historial(
     destino: String,
     uuids: Option<Vec<String>>,

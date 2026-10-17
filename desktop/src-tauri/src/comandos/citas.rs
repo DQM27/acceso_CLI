@@ -124,7 +124,7 @@ pub async fn verificar_check_in_visita(
 /// unidad, la cita misma) viven en
 /// `application::registrar_entrada_visita_verificada`, la misma que usa el
 /// teléfono.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_entrada_visita(
     cedula: String,
     gafete: Option<i64>,
@@ -144,7 +144,7 @@ pub fn registrar_entrada_visita(
     .map_err(mensaje_entrada_visita_verificada)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_salida_visita(
     movimiento_id: i64,
     state: tauri::State<GuiState>,
@@ -156,7 +156,7 @@ pub fn registrar_salida_visita(
         .map_err(mensaje_cita)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_visitas_activas(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<MovimientoVisitaActivoResumen>, String> {
@@ -195,7 +195,7 @@ pub struct MovimientoHistorialVisitaRemoto {
     pub usuario_salida_nombre: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_historial_visitas_sitio(
     desde: Option<NaiveDate>,
     hasta: Option<NaiveDate>,
@@ -266,7 +266,7 @@ pub struct AgendaVisitaResumen {
     pub estado: EstadoCita,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_agenda_visitas(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<AgendaVisitaResumen>, String> {

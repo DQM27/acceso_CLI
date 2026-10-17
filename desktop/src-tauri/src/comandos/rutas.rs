@@ -13,7 +13,7 @@ use crate::estado::GuiState;
 
 // ---- Catálogo: vehículos ----
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_vehiculos_ruta(state: tauri::State<GuiState>) -> Result<Vec<VehiculoRuta>, String> {
     state.sesion_activa()?;
     // Sin `mensaje_*` propio a propósito, mismo criterio que
@@ -27,7 +27,7 @@ pub fn listar_vehiculos_ruta(state: tauri::State<GuiState>) -> Result<Vec<Vehicu
 
 /// Para el selector de salida de ruta -- un vehículo desactivado nunca es
 /// una opción válida, ver `VehiculoRutaService::listar_seleccionables`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_vehiculos_ruta_seleccionables(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<VehiculoRuta>, String> {
@@ -38,7 +38,7 @@ pub fn listar_vehiculos_ruta_seleccionables(
         .map_err(|_| "No se pudo cargar la lista de vehículos".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn crear_vehiculo_ruta(
     datos: DatosVehiculoRutaEntrada,
     state: tauri::State<GuiState>,
@@ -50,7 +50,7 @@ pub fn crear_vehiculo_ruta(
         .map_err(mensaje_vehiculo_ruta)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn actualizar_vehiculo_ruta(
     id: i64,
     datos: DatosVehiculoRutaEntrada,
@@ -65,7 +65,7 @@ pub fn actualizar_vehiculo_ruta(
 
 // ---- Catálogo: encargados (personal KOF) ----
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_encargados_ruta(state: tauri::State<GuiState>) -> Result<Vec<EncargadoRuta>, String> {
     state.sesion_activa()?;
     state
@@ -77,7 +77,7 @@ pub fn listar_encargados_ruta(state: tauri::State<GuiState>) -> Result<Vec<Encar
 /// Para un selector de wizard (entrega de gafete provisional, salida de
 /// ruta) -- un encargado desactivado nunca es una opción válida, ver
 /// `EncargadoRutaService::listar_seleccionables`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_encargados_ruta_seleccionables(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<EncargadoRuta>, String> {
@@ -88,7 +88,7 @@ pub fn listar_encargados_ruta_seleccionables(
         .map_err(|_| "No se pudo cargar la lista de encargados".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn crear_encargado_ruta(
     datos: DatosEncargadoRutaEntrada,
     state: tauri::State<GuiState>,
@@ -100,7 +100,7 @@ pub fn crear_encargado_ruta(
         .map_err(mensaje_encargado_ruta)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn actualizar_encargado_ruta(
     id: i64,
     datos: DatosEncargadoRutaEntrada,
@@ -115,7 +115,7 @@ pub fn actualizar_encargado_ruta(
 
 // ---- Catálogo: números de ruta ----
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_rutas(state: tauri::State<GuiState>) -> Result<Vec<Ruta>, String> {
     state.sesion_activa()?;
     state
@@ -126,7 +126,7 @@ pub fn listar_rutas(state: tauri::State<GuiState>) -> Result<Vec<Ruta>, String> 
 
 /// Para el selector de salida de ruta -- una ruta dada de baja nunca es una
 /// opción válida, ver `RutaCatalogoService::listar_seleccionables`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_rutas_seleccionables(state: tauri::State<GuiState>) -> Result<Vec<Ruta>, String> {
     state.sesion_activa()?;
     state
@@ -135,7 +135,7 @@ pub fn listar_rutas_seleccionables(state: tauri::State<GuiState>) -> Result<Vec<
         .map_err(|_| "No se pudo cargar la lista de rutas".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn crear_ruta(numero: i64, state: tauri::State<GuiState>) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
     state
@@ -144,7 +144,7 @@ pub fn crear_ruta(numero: i64, state: tauri::State<GuiState>) -> Result<i64, Str
         .map_err(mensaje_ruta_catalogo)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn crear_rutas_rango(
     desde: i64,
     hasta: i64,
@@ -157,7 +157,7 @@ pub fn crear_rutas_rango(
         .map_err(mensaje_ruta_catalogo)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dar_de_baja_ruta(id: i64, state: tauri::State<GuiState>) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
@@ -166,7 +166,7 @@ pub fn dar_de_baja_ruta(id: i64, state: tauri::State<GuiState>) -> Result<(), St
         .map_err(mensaje_ruta_catalogo)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reactivar_ruta(id: i64, state: tauri::State<GuiState>) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
@@ -177,7 +177,7 @@ pub fn reactivar_ruta(id: i64, state: tauri::State<GuiState>) -> Result<(), Stri
 
 // ---- Operación: salida / retorno ----
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_salida_ruta(
     solicitud: SolicitudSalidaRutaEntrada,
     state: tauri::State<GuiState>,
@@ -190,7 +190,7 @@ pub fn registrar_salida_ruta(
         .map_err(mensaje_ruta)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_retorno_ruta(salida_id: i64, state: tauri::State<GuiState>) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
@@ -199,7 +199,7 @@ pub fn registrar_retorno_ruta(salida_id: i64, state: tauri::State<GuiState>) -> 
         .map_err(mensaje_ruta)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_rutas_activas(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<SalidaRutaActivaResumen>, String> {
@@ -207,7 +207,7 @@ pub fn listar_rutas_activas(
     state.core().listar_rutas_activas().map_err(mensaje_ruta)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn buscar_salida_ruta(
     id: i64,
     state: tauri::State<GuiState>,

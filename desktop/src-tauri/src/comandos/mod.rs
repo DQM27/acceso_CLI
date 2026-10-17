@@ -26,6 +26,13 @@
 //! 4. Sin lógica propia: si un comando empieza a necesitar algo más que
 //!    "armar el DTO de entrada y llamar a `AppCore`", esa lógica va al
 //!    núcleo (`application`/`services`), no acá.
+//! 5. Hilo: todo comando se declara `#[tauri::command(async)]` (o `async fn`).
+//!    Un comando síncrono normal corre en el hilo principal, el mismo que
+//!    dibuja la ventana: cualquier espera (el candado del núcleo, SQLite, una
+//!    consulta a la nube) congela la interfaz. Con `(async)` corre fuera de
+//!    ese hilo. Tauri exige que un comando asíncrono con `State<'_, _>` devuelva
+//!    `Result`; si no hay error posible, `Result<_, String>` con `Ok(..)`
+//!    (la interfaz recibe el mismo valor).
 
 /// Ver el punto 3 de la convención de arriba. Los tres dejan el detalle en
 /// el registro técnico y devuelven un texto en claro (definidos en

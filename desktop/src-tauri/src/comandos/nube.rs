@@ -530,15 +530,16 @@ fn preparar_sesion_realtime(state: &GuiState) -> Result<SesionRealtimeNube, Stri
 /// El aviso en vivo `dispositivo_expulsado` llegó para este equipo: el
 /// token cacheado ya no sirve (el servidor lo rechaza), así que se descarta
 /// para que la próxima operación de nube pida uno y muestre el motivo real.
-#[tauri::command]
-pub fn descartar_token_nube(state: tauri::State<'_, GuiState>) {
+#[tauri::command(async)]
+pub fn descartar_token_nube(state: tauri::State<'_, GuiState>) -> Result<(), String> {
     state.invalidar_token_cacheado();
+    Ok(())
 }
 
 /// Cuántas filas de `cola_salida` ya agotaron los reintentos automáticos
 /// (ver `INTENTOS_ANTES_DE_FALLO_PERMANENTE`) -- para avisar que algo
 /// necesita que alguien lo mire, en vez de fallar en silencio para siempre.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fallos_permanentes_nube(state: tauri::State<GuiState>) -> Result<i64, String> {
     state.sesion_activa()?;
     let conexion = state.conexion_secundaria()?;
@@ -551,7 +552,7 @@ pub fn fallos_permanentes_nube(state: tauri::State<GuiState>) -> Result<i64, Str
 /// para `rusqlite::Error` suelto (siempre viene envuelto en un tipo propio
 /// en el resto del núcleo), y este `SELECT` no debería fallar en la
 /// práctica.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_ingresos_remotos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<IngresoRemoto>, String> {
@@ -592,7 +593,7 @@ pub fn listar_ingresos_remotos(
 /// Cierra, contra la nube, un ingreso abierto por el otro dispositivo del
 /// mismo sitio -- ver `nube::cerrar_ingreso_remoto`: nunca toca el
 /// historial local, sólo la caché.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cerrar_ingreso_remoto(uuid: String, state: tauri::State<GuiState>) -> Result<(), String> {
     let actor = state.sesion_activa()?;
     let token = autenticar(&state)?;
@@ -611,7 +612,7 @@ pub fn cerrar_ingreso_remoto(uuid: String, state: tauri::State<GuiState>) -> Res
 
 /// Espejo de `listar_ingresos_remotos`, pero contra la caché
 /// `ingresos_proveedor_remotos`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_ingresos_proveedor_remotos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<IngresoProveedorRemoto>, String> {
@@ -644,7 +645,7 @@ pub fn listar_ingresos_proveedor_remotos(
 }
 
 /// Espejo de `cerrar_ingreso_remoto`, pero contra `ingresos_proveedor`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cerrar_ingreso_proveedor_remoto(
     uuid: String,
     state: tauri::State<GuiState>,
@@ -666,7 +667,7 @@ pub fn cerrar_ingreso_proveedor_remoto(
 
 /// Espejo de `listar_ingresos_proveedor_remotos`, contra la caché
 /// `ingresos_correo_remotos`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_ingresos_correo_remotos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<IngresoCorreoRemoto>, String> {
@@ -699,7 +700,7 @@ pub fn listar_ingresos_correo_remotos(
 }
 
 /// Espejo de `cerrar_ingreso_proveedor_remoto`, contra `ingresos_correo`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cerrar_ingreso_correo_remoto(
     uuid: String,
     state: tauri::State<GuiState>,
@@ -722,7 +723,7 @@ pub fn cerrar_ingreso_correo_remoto(
 /// Visitas agendadas abiertas por el otro equipo de la unidad (caché
 /// `movimientos_visita_remotos`). Sin permiso de nube, lista vacía: mismo
 /// criterio que el teléfono, para no romper la vista "Adentro".
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_visitas_remotas(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<nube::MovimientoVisitaRemoto>, String> {
@@ -735,7 +736,7 @@ pub fn listar_visitas_remotas(
 
 /// Salida de una visita que entró por el otro equipo: se cierra en la nube
 /// (mismo criterio que `cerrar_ingreso_correo_remoto`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cerrar_visita_remota(uuid: String, state: tauri::State<GuiState>) -> Result<(), String> {
     let actor = state.sesion_activa()?;
     let token = autenticar(&state)?;
@@ -754,7 +755,7 @@ pub fn cerrar_visita_remota(uuid: String, state: tauri::State<GuiState>) -> Resu
 
 /// Espejo de `listar_ingresos_proveedor_remotos`, pero contra la caché
 /// `prestamos_gafete_provisional_remotos`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_prestamos_gafete_provisional_remotos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<PrestamoGafeteProvisionalRemoto>, String> {
@@ -786,7 +787,7 @@ pub fn listar_prestamos_gafete_provisional_remotos(
 
 /// Espejo de `cerrar_ingreso_proveedor_remoto`, pero contra
 /// `prestamos_gafete_provisional`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cerrar_prestamo_gafete_provisional_remoto(
     uuid: String,
     state: tauri::State<GuiState>,
@@ -816,9 +817,9 @@ pub fn cerrar_prestamo_gafete_provisional_remoto(
 /// positivo si la PC va adelantada), o `None` si nunca se midió. Lo usa la
 /// telemetría de diagnóstico para corregir la latencia de los avisos en
 /// vivo (ver `desktop/src/telemetria.ts`).
-#[tauri::command]
-pub fn desfase_reloj_ms(state: tauri::State<GuiState>) -> Option<i64> {
-    state.core().desfase_reloj_ms()
+#[tauri::command(async)]
+pub fn desfase_reloj_ms(state: tauri::State<GuiState>) -> Result<Option<i64>, String> {
+    Ok(state.core().desfase_reloj_ms())
 }
 
 /// Unidad y etiqueta con que el panel registró esta PC, para el login y la
@@ -831,11 +832,11 @@ pub struct IdentidadEquipoGui {
     etiqueta: Option<String>,
 }
 
-#[tauri::command]
-pub fn identidad_equipo(state: tauri::State<GuiState>) -> IdentidadEquipoGui {
+#[tauri::command(async)]
+pub fn identidad_equipo(state: tauri::State<GuiState>) -> Result<IdentidadEquipoGui, String> {
     let identidad = state.core().identidad_equipo();
-    IdentidadEquipoGui {
+    Ok(IdentidadEquipoGui {
         unidad: identidad.unidad,
         etiqueta: identidad.etiqueta,
-    }
+    })
 }
