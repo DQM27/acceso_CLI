@@ -11,7 +11,8 @@ primera que responde:
 
 ## Cómo llega la versión a R2
 
-El job `build-gui` de `release.yml` (push de un tag `v*`):
+El job `build-gui` de `release.yml` (push de un tag `v*`; el móvil se publica
+aparte, con tags `movil-v*`, ver `docs/actualizaciones-android.md`):
 
 1. `tauri-action` compila, firma y publica el Release de GitHub con los
    instaladores, sus `.sig` y un `latest.json` que apunta a esos assets.
