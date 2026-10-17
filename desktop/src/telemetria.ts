@@ -1,7 +1,8 @@
-// Telemetría de diagnóstico del escritorio, lado frontend. Sólo mide si el
-// backend se compiló con la feature `telemetria` (ver
-// `src-tauri/src/telemetria.rs` y `docs/telemetria-diagnostico.md`): si no,
-// cada punto de medición es un chequeo de un booleano.
+// Telemetría del escritorio, lado frontend. Sólo mide mientras el backend
+// diga que está encendida (build de diagnóstico, o un release con una regla
+// vigente en staging; ver `src-tauri/src/telemetria.rs` y
+// `docs/telemetria-diagnostico.md`): si no, cada punto de medición es un
+// chequeo de un booleano.
 //
 // Qué junta acá: el tiempo de cada comando de Tauri (IPC incluido), el canal
 // de avisos en vivo, las pantallas, los errores de JavaScript (sólo su
@@ -21,6 +22,7 @@ import {
 } from "./telemetriaCalculos";
 
 const INTERVALO_VOLCADO_MS = 30_000;
+const PRIMERA_REVISION_MS = 5_000;
 
 interface Evento {
   tipo: string;
@@ -103,6 +105,7 @@ function muestraWebview(): Record<string, unknown> {
 }
 
 function volcar() {
+  if (!activa && pendientes.length === 0) return;
   const red = tipoDeRed(navigator.onLine);
   llamadas.vaciar().forEach((fila) => evento("llamada_nucleo", { ...fila, red_tipo: red }));
   const realtime = agregadorRealtime.vaciar();
@@ -121,21 +124,47 @@ function volcar() {
   });
 }
 
-/** Pregunta al backend si esta compilación mide y, si es así, arranca las
- * escuchas y el volcado periódico. Llamar una sola vez al arrancar. */
-export async function iniciarTelemetria(): Promise<void> {
+let escuchasListas = false;
+
+/** Las escuchas globales se instalan la primera vez que se enciende y se
+ * quedan: mientras `activa` sea falso, no anotan nada. */
+function instalarEscuchas() {
+  if (escuchasListas) return;
+  escuchasListas = true;
+  window.addEventListener("error", (e) => {
+    if (activa) registrarErrorJs("error", e.error);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    if (activa) registrarErrorJs("promesa", e.reason);
+  });
+  if (PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
+    new PerformanceObserver((lista) => {
+      if (activa) lista.getEntries().forEach((entrada) => bloqueos.registrar(entrada.duration));
+    }).observe({ type: "longtask", buffered: true });
+  }
+}
+
+/** Pregunta al backend si está midiendo (el build de diagnóstico siempre; un
+ * release, mientras haya una regla vigente en staging) y ajusta. */
+async function sincronizarEstado() {
   try {
     activa = await invoke<boolean>("telemetria_activa");
   } catch {
     activa = false;
   }
-  if (!activa) return;
-  window.addEventListener("error", (e) => registrarErrorJs("error", e.error));
-  window.addEventListener("unhandledrejection", (e) => registrarErrorJs("promesa", e.reason));
-  if (PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
-    new PerformanceObserver((lista) => {
-      lista.getEntries().forEach((entrada) => bloqueos.registrar(entrada.duration));
-    }).observe({ type: "longtask", buffered: true });
-  }
-  window.setInterval(volcar, INTERVALO_VOLCADO_MS);
+  if (activa) instalarEscuchas();
+}
+
+/** Arranca la telemetría del frontend: pregunta al backend si mide, y sigue
+ * preguntando cada vez que vuelca, porque una regla puede encenderla o
+ * apagarla con la app abierta. Sin regla no hace nada más que esa pregunta.
+ * Llamar una sola vez al arrancar. */
+export async function iniciarTelemetria(): Promise<void> {
+  await sincronizarEstado();
+  // La consulta de reglas del backend termina unos segundos después de abrir.
+  window.setTimeout(() => void sincronizarEstado(), PRIMERA_REVISION_MS);
+  window.setInterval(() => {
+    volcar();
+    void sincronizarEstado();
+  }, INTERVALO_VOLCADO_MS);
 }
