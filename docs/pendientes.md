@@ -820,7 +820,7 @@ estabilizador y clasificador.
 - [ ] **Distribución fuera de GitHub, para poder volver privado el repositorio
   (2026-10-16).** Detalle en `docs/actualizaciones-android.md`. En orden:
   - [ ] Activar R2 en Cloudflare, crear el bucket, conectar
-    `descargas.megabrisas.com` y cargar en GitHub los secretos `R2_*` y la variable
+    `lt.megabrisas.com` y cargar en GitHub los secretos `R2_*` y la variable
     `R2_BUCKET`.
   - [ ] Primer release con el actualizador de Android e instalarlo a mano en los
     teléfonos (la última vez que se instala a mano).
@@ -828,7 +828,7 @@ estabilizador y clasificador.
     updater de Tauri, con las direcciones reescritas, y poner R2 como primer
     `endpoints` en `desktop/src-tauri/tauri.conf.json` (GitHub como respaldo hasta
     volver privado el repo).
-  - [ ] **Página de descargas** en `descargas.megabrisas.com`: cada release publica
+  - [ ] **Página de descargas** en `lt.megabrisas.com`: cada release publica
     una página con la versión vigente de Android y de Windows y su botón de descarga,
     armada desde los mismos manifiestos que usan las apps. Es el link fijo para
     instalar en un equipo nuevo (WhatsApp, código QR en la portería), porque con el

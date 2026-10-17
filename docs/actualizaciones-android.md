@@ -2,7 +2,7 @@
 
 La app se distribuye fuera de cualquier tienda. Desde la versión que trae el
 actualizador, se actualiza sola desde el almacenamiento de descargas
-(Cloudflare R2 detrás de `descargas.megabrisas.com`), sin depender de GitHub
+(Cloudflare R2 detrás de `lt.megabrisas.com`), sin depender de GitHub
 Releases. Así sigue funcionando con el repositorio privado.
 
 ## Cómo funciona
@@ -51,7 +51,7 @@ Los builds de prueba (`debug`, `diagnostico`) tienen el actualizador apagado:
   "esquema": 1,
   "version_code": 33,
   "version_name": "1.4.11",
-  "url": "https://descargas.megabrisas.com/android/Lattis-mobile-v1.4.11-0123456789ab.apk",
+  "url": "https://lt.megabrisas.com/android/Lattis-mobile-v1.4.11-0123456789ab.apk",
   "sha256": "<64 caracteres hexadecimales en minúscula>",
   "tamano_bytes": 52428800,
   "version_minima_code": 0
@@ -82,8 +82,8 @@ compatible (`VersionDesactualizada`).
 ## Configuración inicial (una sola vez)
 
 1. **Cloudflare → R2:** activar R2 y crear el bucket (por ejemplo
-   `lattis-descargas`).
-2. **Bucket → Settings → Custom Domains:** conectar `descargas.megabrisas.com`.
+   `lattis-dist`).
+2. **Bucket → Settings → Custom Domains:** conectar `lt.megabrisas.com`.
    No usar el subdominio `r2.dev`: tiene límite de uso y Cloudflare indica que
    no es para producción. El dominio tiene que coincidir con el de
    `URL_MANIFIESTO_ACTUALIZACION` y con `URL_DESCARGAS` de `release.yml`.
@@ -104,7 +104,7 @@ configurar" en el log del paso.
 ## Comprobar una publicación
 
 ```sh
-curl -s https://descargas.megabrisas.com/android/latest.json
+curl -s https://lt.megabrisas.com/android/latest.json
 ```
 
 Tiene que mostrar el `version_code` recién publicado, y la dirección de `url`
@@ -115,7 +115,7 @@ tiene que descargar un archivo cuyo `sha256sum` coincida con el del manifiesto.
 La lista completa, en orden, está en `docs/pendientes.md` ("Distribución fuera de
 GitHub"). Lo que toca a este documento:
 
-- Página de descargas en `descargas.megabrisas.com`, con la versión vigente de
+- Página de descargas en `lt.megabrisas.com`, con la versión vigente de
   Android y de Windows. Es el link para instalar en un equipo nuevo cuando los de
   GitHub Releases ya no sean públicos.
 - El escritorio todavía lee su `latest.json` de GitHub Releases

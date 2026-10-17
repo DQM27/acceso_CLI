@@ -130,7 +130,7 @@ android {
             buildConfigField(
                 "String",
                 "URL_MANIFIESTO_ACTUALIZACION",
-                "\"https://descargas.megabrisas.com/android/latest.json\"",
+                "\"https://lt.megabrisas.com/android/latest.json\"",
             )
             if (telemetriaEnProduccion) {
                 buildConfigField("boolean", "TELEMETRIA", "true")

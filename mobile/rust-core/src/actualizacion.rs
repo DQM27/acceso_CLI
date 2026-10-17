@@ -177,14 +177,14 @@ fn texto(campos: &Map<String, Value>, nombre: &str) -> Result<String, String> {
 mod tests {
     use super::*;
 
-    const URL_MANIFIESTO: &str = "https://descargas.megabrisas.com/android/latest.json";
+    const URL_MANIFIESTO: &str = "https://lt.megabrisas.com/android/latest.json";
 
     fn manifiesto_json(cambios: &[(&str, Value)]) -> String {
         let mut valor = serde_json::json!({
             "esquema": 1,
             "version_code": 33,
             "version_name": "1.4.11",
-            "url": "https://descargas.megabrisas.com/android/Lattis-mobile-v1.4.11-0123456789ab.apk",
+            "url": "https://lt.megabrisas.com/android/Lattis-mobile-v1.4.11-0123456789ab.apk",
             "sha256": "a".repeat(64),
             "tamano_bytes": 50_000_000,
             "version_minima_code": 0,
@@ -314,26 +314,20 @@ mod tests {
 
     #[test]
     fn rechaza_apk_sin_https_o_en_otro_servidor() {
-        rechaza(&[(
-            "url",
-            Value::from("http://descargas.megabrisas.com/android/x.apk"),
-        )]);
+        rechaza(&[("url", Value::from("http://lt.megabrisas.com/android/x.apk"))]);
         rechaza(&[("url", Value::from("https://otro.example.com/x.apk"))]);
         rechaza(&[(
             "url",
-            Value::from("https://descargas.megabrisas.com.example.com/x.apk"),
+            Value::from("https://lt.megabrisas.com.example.com/x.apk"),
         )]);
-        rechaza(&[(
-            "url",
-            Value::from("https://descargas.megabrisas.com:8443/x.apk"),
-        )]);
+        rechaza(&[("url", Value::from("https://lt.megabrisas.com:8443/x.apk"))]);
     }
 
     #[test]
     fn rechaza_url_con_credenciales_o_mal_formada() {
         rechaza(&[(
             "url",
-            Value::from("https://usuario@descargas.megabrisas.com/x.apk"),
+            Value::from("https://usuario@lt.megabrisas.com/x.apk"),
         )]);
         rechaza(&[("url", Value::from("no es una url"))]);
     }
@@ -342,7 +336,7 @@ mod tests {
     fn acepta_host_con_otra_capitalizacion() {
         let json = manifiesto_json(&[(
             "url",
-            Value::from("https://Descargas.MegaBrisas.com/android/x.apk"),
+            Value::from("https://Lt.MegaBrisas.com/android/x.apk"),
         )]);
         assert!(evaluar(&json, 32).is_ok());
     }

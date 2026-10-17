@@ -167,11 +167,11 @@ class ActualizacionViewModelTest {
     }
 
     private companion object {
-        const val URL = "https://descargas.megabrisas.com/android/latest.json"
+        const val URL = "https://lt.megabrisas.com/android/latest.json"
 
         fun manifiestoJson(versionMinimaCode: Long = 0) = """
             {"esquema":1,"version_code":33,"version_name":"1.4.11",
-             "url":"https://descargas.megabrisas.com/android/Lattis-mobile-v1.4.11-0123456789ab.apk",
+             "url":"https://lt.megabrisas.com/android/Lattis-mobile-v1.4.11-0123456789ab.apk",
              "sha256":"${"a".repeat(64)}","tamano_bytes":50000000,"version_minima_code":$versionMinimaCode}
         """.trimIndent()
     }
