@@ -18,6 +18,7 @@ mod estado;
 mod pdf;
 #[cfg(windows)]
 mod recuperacion_local;
+mod sincronizacion_auto;
 mod telemetria;
 
 use estado::GuiState;
@@ -88,7 +89,17 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
         // `nube::AlcanceSincronizacion::arranque`). El pulso de después sólo
         // pide lo que cambió.
         let mut alcance = control_acceso::nube::AlcanceSincronizacion::arranque();
+        let mut reportes = sincronizacion_auto::ReportesLimitados::nuevo();
         loop {
+            // Sin sesión no hay nada que sincronizar (la nube se consulta con
+            // el usuario de la sesión): ni se intenta ni se reporta. Es el
+            // estado normal de la PC en el login antes del turno o entre
+            // turnos. `alcance` queda como estaba, así que si el arranque
+            // todavía no pudo correr, corre apenas haya sesión.
+            if app.state::<GuiState>().sesion_activa().is_err() {
+                tokio::time::sleep(INTERVALO_SINCRONIZACION_AUTOMATICA).await;
+                continue;
+            }
             let manejador = app.clone();
             let inicio = std::time::Instant::now();
             let es_arranque = alcance == control_acceso::nube::AlcanceSincronizacion::arranque();
@@ -149,10 +160,17 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
                 }
                 Ok(Err(error)) => {
                     log::warn!("sincronización automática falló: {error}");
-                    sentry::capture_message(
-                        &format!("sincronización automática falló: {error}"),
-                        sentry::Level::Warning,
-                    );
+                    // Sin red, sin vincular o suspendido quedan sólo en el
+                    // registro local; lo inesperado va a Sentry, una vez por
+                    // hora como máximo por mensaje (ver `sincronizacion_auto`).
+                    if !sincronizacion_auto::es_fallo_esperado(&error)
+                        && reportes.debe_reportar(&error, std::time::Instant::now())
+                    {
+                        sentry::capture_message(
+                            &format!("sincronización automática falló: {error}"),
+                            sentry::Level::Warning,
+                        );
+                    }
                 }
                 Err(error) => {
                     log::error!("tarea de sincronización automática no pudo ejecutarse: {error}");
