@@ -51,16 +51,25 @@
              Application/código propio. DSN del proyecto
              `control-acceso-mobile`, mismo criterio que el DSN de escritorio
              en desktop/src-tauri/src/lib.rs: no es secreto, va embebido en
-             el cliente. `sentryEnvironment` viene de los
-             `manifestPlaceholders` de app/build.gradle.kts
-             (debug="development", release="production"). El sample rate en
+             el cliente. `sentryDsn` y `sentryEnvironment` vienen de los
+             `manifestPlaceholders` de app/build.gradle.kts (el DSN, de la
+             variable de entorno `SENTRY_DSN_MOVIL` o el de siempre; el
+             entorno: debug="development", release="production"). El sample rate en
              0.0: sólo error-tracking, sin performance tracing (mismo motivo
              que `traces_sample_rate = 0.0` en desktop, para no gastar cuota
              del plan gratis en algo sin usar). -->
         <meta-data android:name="io.sentry.dsn"
-            android:value="https://5fb608eb8db4b9a18aca8d2901a4b894@o4512103124041728.ingest.us.sentry.io/4512104610463744" />
+            android:value="${sentryDsn}" />
         <meta-data android:name="io.sentry.environment"
             android:value="${sentryEnvironment}" />
+        <!-- Qué paquetes son código propio (`in_app`): el SDK sólo reconoce
+             por defecto el `applicationId` (com.dqm27.lattis), pero el código
+             vive en `com.brisas.controlacceso` y los bindings del núcleo en
+             `uniffi.control_acceso_mobile`. Sin esto ningún marco cuenta como
+             propio y la huella con que se agrupan los errores se calcularía
+             sobre marcos de librerías. -->
+        <meta-data android:name="io.sentry.in-app-includes"
+            android:value="com.brisas.controlacceso,uniffi.control_acceso_mobile" />
         <meta-data android:name="io.sentry.traces.sample-rate"
             android:value="0.0" />
 
