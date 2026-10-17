@@ -29,12 +29,22 @@ sealed interface EstadoActualizacion {
         val novedad: NovedadActualizacion.Disponible
     }
 
-    data class Disponible(override val novedad: NovedadActualizacion.Disponible) : ConNovedad
+    /// `pospuesta`: la persona tocó "Más tarde". La franja se oculta (sigue el
+    /// aviso discreto del menú de la cuenta) y no vuelve en cada revisión,
+    /// sólo si aparece una versión más nueva. Una obligatoria no se pospone.
+    data class Disponible(
+        override val novedad: NovedadActualizacion.Disponible,
+        val pospuesta: Boolean = false,
+    ) : ConNovedad
     data class FaltaPermiso(override val novedad: NovedadActualizacion.Disponible) : ConNovedad
     data class Descargando(override val novedad: NovedadActualizacion.Disponible, val porcentaje: Int) : ConNovedad
     data class Instalando(override val novedad: NovedadActualizacion.Disponible) : ConNovedad
     data class Fallo(override val novedad: NovedadActualizacion.Disponible, val mensaje: String) : ConNovedad
 }
+
+/// Resultado de "Buscar actualizaciones" en el menú de la cuenta: la
+/// respuesta a una consulta que pidió la persona (no la revisión automática).
+enum class EstadoBusqueda { INACTIVA, BUSCANDO, AL_DIA, SIN_RESPUESTA }
 
 /// Dueño del estado del actualizador (ver docs/actualizaciones-android.md).
 /// Si hay versión nueva y si es obligatoria lo decide el núcleo
@@ -47,6 +57,13 @@ class ActualizacionViewModel(
 ) : ViewModel() {
     private val _estado = MutableStateFlow<EstadoActualizacion>(EstadoActualizacion.SinAviso)
     val estado: StateFlow<EstadoActualizacion> = _estado.asStateFlow()
+
+    private val _busqueda = MutableStateFlow(EstadoBusqueda.INACTIVA)
+    val busqueda: StateFlow<EstadoBusqueda> = _busqueda.asStateFlow()
+
+    /// `false` en los builds de prueba (sin dirección del manifiesto): no hay
+    /// nada que buscar y el menú no ofrece el botón.
+    val activo: Boolean get() = fuente.urlManifiesto.isNotEmpty()
 
     private var ultimaRevisionMs: Long? = null
 
@@ -69,35 +86,90 @@ class ActualizacionViewModel(
     /// que avisar) y ante un manifiesto inválido (error de publicación, ya
     /// queda en el registro técnico del núcleo).
     fun revisar() {
-        if (fuente.urlManifiesto.isEmpty() || ocupado()) return
+        if (!activo || ocupado()) return
         val ahora = relojMs()
         val anterior = ultimaRevisionMs
         if (anterior != null && ahora - anterior < MS_ENTRE_REVISIONES) return
         ultimaRevisionMs = ahora
         viewModelScope.launch {
-            val novedad = try {
-                withContext(dispatcherIO) {
-                    evaluarManifiestoActualizacion(fuente.leerManifiesto(), fuente.urlManifiesto, fuente.versionCodeInstalada())
-                }
-            } catch (_: IOException) {
-                return@launch
-            } catch (_: NucleoException) {
+            val novedad = (consultar() as? Consulta.Respuesta)?.novedad ?: return@launch
+            if (ocupado()) return@launch
+            aplicar(novedad)
+        }
+    }
+
+    /// "Buscar actualizaciones" del menú: consulta ya, sin esperar la hora
+    /// entre revisiones, y deja dicho qué respondió (al día, o no se pudo).
+    /// Si hay versión nueva, queda disponible y a la vista (no pospuesta).
+    fun buscarAhora() {
+        if (!activo || ocupado() || _busqueda.value == EstadoBusqueda.BUSCANDO) return
+        ultimaRevisionMs = relojMs()
+        _busqueda.value = EstadoBusqueda.BUSCANDO
+        viewModelScope.launch {
+            val consulta = consultar()
+            if (ocupado()) {
+                _busqueda.value = EstadoBusqueda.INACTIVA
                 return@launch
             }
-            if (ocupado()) return@launch
-            _estado.value = when (novedad) {
-                is NovedadActualizacion.Disponible -> EstadoActualizacion.Disponible(novedad)
-                NovedadActualizacion.AlDia -> EstadoActualizacion.SinAviso
+            when (consulta) {
+                Consulta.SinRespuesta -> _busqueda.value = EstadoBusqueda.SIN_RESPUESTA
+                is Consulta.Respuesta -> {
+                    aplicar(consulta.novedad, repetirAviso = true)
+                    _busqueda.value = when (consulta.novedad) {
+                        is NovedadActualizacion.Disponible -> EstadoBusqueda.INACTIVA
+                        NovedadActualizacion.AlDia -> EstadoBusqueda.AL_DIA
+                    }
+                }
             }
         }
     }
 
-    /// Oculta el aviso hasta la próxima revisión. Una actualización
-    /// obligatoria no se puede posponer.
+    /// Al cerrar el menú: el "Estás al día" o "No se pudo revisar" era para
+    /// esa vez, la próxima apertura vuelve a ofrecer el botón.
+    fun olvidarBusqueda() {
+        if (_busqueda.value != EstadoBusqueda.BUSCANDO) _busqueda.value = EstadoBusqueda.INACTIVA
+    }
+
+    private sealed interface Consulta {
+        data class Respuesta(val novedad: NovedadActualizacion) : Consulta
+        data object SinRespuesta : Consulta
+    }
+
+    /// Sin red o con un manifiesto inválido no hay respuesta: lo primero no
+    /// es algo que haya que avisar en la portería, y lo segundo es un error de
+    /// publicación que ya queda en el registro técnico del núcleo.
+    private suspend fun consultar(): Consulta = try {
+        Consulta.Respuesta(
+            withContext(dispatcherIO) {
+                evaluarManifiestoActualizacion(fuente.leerManifiesto(), fuente.urlManifiesto, fuente.versionCodeInstalada())
+            },
+        )
+    } catch (_: IOException) {
+        Consulta.SinRespuesta
+    } catch (_: NucleoException) {
+        Consulta.SinRespuesta
+    }
+
+    /// `repetirAviso`: una búsqueda pedida a mano vuelve a mostrar la franja
+    /// aunque la persona haya dicho "Más tarde" antes.
+    private fun aplicar(novedad: NovedadActualizacion, repetirAviso: Boolean = false) {
+        _estado.value = when (novedad) {
+            is NovedadActualizacion.Disponible -> {
+                val actual = _estado.value as? EstadoActualizacion.Disponible
+                val yaPospuesta = !repetirAviso && !novedad.obligatoria && actual != null && actual.pospuesta &&
+                    actual.novedad.manifiesto.versionCode == novedad.manifiesto.versionCode
+                EstadoActualizacion.Disponible(novedad, pospuesta = yaPospuesta)
+            }
+            NovedadActualizacion.AlDia -> EstadoActualizacion.SinAviso
+        }
+    }
+
+    /// Oculta la franja pero deja la versión pendiente a la vista en el menú
+    /// de la cuenta. Una actualización obligatoria no se puede posponer.
     fun posponer() {
         val actual = _estado.value
         if (actual is EstadoActualizacion.Disponible && !actual.novedad.obligatoria) {
-            _estado.value = EstadoActualizacion.SinAviso
+            _estado.value = actual.copy(pospuesta = true)
         }
     }
 

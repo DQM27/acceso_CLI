@@ -137,18 +137,8 @@ class MainActivity : ComponentActivity() {
                             .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime)),
                         contentAlignment = Alignment.TopCenter,
                     ) {
-                        Column(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
-                            // Encima de todo, incluido el login: una versión
-                            // nueva se puede instalar sin haber iniciado sesión.
-                            AvisoActualizacion(
-                                estado = estadoActualizacion,
-                                onActualizar = actualizacion::actualizar,
-                                onPosponer = actualizacion::posponer,
-                                onAbrirAjustes = {
-                                    contexto.startActivity(ServicioActualizacionesAndroid.intentPermiso(contexto))
-                                },
-                            )
-                            Box(modifier = Modifier.weight(1f)) {
+                        Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
+                            Box(modifier = Modifier.fillMaxSize()) {
                                 when (val actual = estado) {
                                     EstadoAplicacion.Cargando -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                                     is EstadoAplicacion.Fallo -> Text(
@@ -159,6 +149,18 @@ class MainActivity : ComponentActivity() {
                                     is EstadoAplicacion.Lista -> ContenidoAplicacion(actual.entorno)
                                 }
                             }
+                            // Flotando sobre todo, incluido el login: una versión
+                            // nueva se puede instalar sin haber iniciado sesión, y
+                            // abajo no empuja el contenido como la franja de antes.
+                            AvisoActualizacion(
+                                estado = estadoActualizacion,
+                                onActualizar = actualizacion::actualizar,
+                                onPosponer = actualizacion::posponer,
+                                onAbrirAjustes = {
+                                    contexto.startActivity(ServicioActualizacionesAndroid.intentPermiso(contexto))
+                                },
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+                            )
                         }
                     }
                 }

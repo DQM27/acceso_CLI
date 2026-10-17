@@ -126,8 +126,92 @@ class ActualizacionViewModelTest {
         advanceUntilIdle()
         opcional.posponer()
         obligatoria.posponer()
-        assertEquals(EstadoActualizacion.SinAviso, opcional.estado.value)
-        assertTrue((obligatoria.estado.value as EstadoActualizacion.Disponible).novedad.obligatoria)
+        // Pospuesta: la franja se oculta pero la versión sigue pendiente.
+        assertTrue((opcional.estado.value as EstadoActualizacion.Disponible).pospuesta)
+        val sinPosponer = obligatoria.estado.value as EstadoActualizacion.Disponible
+        assertTrue(sinPosponer.novedad.obligatoria)
+        assertEquals(false, sinPosponer.pospuesta)
+    }
+
+    @Test
+    fun `lo pospuesto no vuelve en la siguiente revision de la misma version`() = runTest(dispatcher) {
+        val vm = viewModel(FuenteFalsa())
+        vm.revisar()
+        advanceUntilIdle()
+        vm.posponer()
+        ahoraMs += 2 * 60 * 60 * 1000L
+        vm.revisar()
+        advanceUntilIdle()
+        assertTrue((vm.estado.value as EstadoActualizacion.Disponible).pospuesta)
+    }
+
+    @Test
+    fun `una version mas nueva vuelve a mostrar la franja`() = runTest(dispatcher) {
+        val fuente = FuenteFalsa()
+        val vm = viewModel(fuente)
+        vm.revisar()
+        advanceUntilIdle()
+        vm.posponer()
+        fuente.manifiesto = manifiestoJson(versionCode = 34, versionName = "1.4.12")
+        ahoraMs += 2 * 60 * 60 * 1000L
+        vm.revisar()
+        advanceUntilIdle()
+        val estado = vm.estado.value as EstadoActualizacion.Disponible
+        assertEquals("1.4.12", estado.novedad.manifiesto.versionName)
+        assertEquals(false, estado.pospuesta)
+    }
+
+    @Test
+    fun `buscar ahora sin novedad deja al dia y se olvida al cerrar el menu`() = runTest(dispatcher) {
+        val vm = viewModel(FuenteFalsa(instalada = 33))
+        vm.buscarAhora()
+        advanceUntilIdle()
+        assertEquals(EstadoBusqueda.AL_DIA, vm.busqueda.value)
+        vm.olvidarBusqueda()
+        assertEquals(EstadoBusqueda.INACTIVA, vm.busqueda.value)
+    }
+
+    @Test
+    fun `buscar ahora con novedad la muestra aunque se hubiera pospuesto`() = runTest(dispatcher) {
+        val vm = viewModel(FuenteFalsa())
+        vm.revisar()
+        advanceUntilIdle()
+        vm.posponer()
+        vm.buscarAhora()
+        advanceUntilIdle()
+        assertEquals(false, (vm.estado.value as EstadoActualizacion.Disponible).pospuesta)
+        assertEquals(EstadoBusqueda.INACTIVA, vm.busqueda.value)
+    }
+
+    @Test
+    fun `buscar ahora sin red avisa que no se pudo revisar`() = runTest(dispatcher) {
+        val vm = viewModel(FuenteFalsa(falloRed = true))
+        vm.buscarAhora()
+        advanceUntilIdle()
+        assertEquals(EstadoBusqueda.SIN_RESPUESTA, vm.busqueda.value)
+        assertEquals(EstadoActualizacion.SinAviso, vm.estado.value)
+    }
+
+    @Test
+    fun `buscar ahora no espera la hora entre revisiones`() = runTest(dispatcher) {
+        val fuente = FuenteFalsa()
+        val vm = viewModel(fuente)
+        vm.revisar()
+        advanceUntilIdle()
+        vm.buscarAhora()
+        advanceUntilIdle()
+        assertEquals(2, fuente.lecturas)
+    }
+
+    @Test
+    fun `build sin actualizador no busca ni ofrece el boton`() = runTest(dispatcher) {
+        val fuente = FuenteFalsa(urlManifiesto = "")
+        val vm = viewModel(fuente)
+        vm.buscarAhora()
+        advanceUntilIdle()
+        assertEquals(false, vm.activo)
+        assertEquals(0, fuente.lecturas)
+        assertEquals(EstadoBusqueda.INACTIVA, vm.busqueda.value)
     }
 
     @Test
@@ -169,9 +253,9 @@ class ActualizacionViewModelTest {
     private companion object {
         const val URL = "https://lt.megabrisas.com/android/latest.json"
 
-        fun manifiestoJson(versionMinimaCode: Long = 0) = """
-            {"esquema":1,"version_code":33,"version_name":"1.4.11",
-             "url":"https://lt.megabrisas.com/android/Lattis-mobile-v1.4.11-0123456789ab.apk",
+        fun manifiestoJson(versionMinimaCode: Long = 0, versionCode: Long = 33, versionName: String = "1.4.11") = """
+            {"esquema":1,"version_code":$versionCode,"version_name":"$versionName",
+             "url":"https://lt.megabrisas.com/android/Lattis-mobile-v$versionName-0123456789ab.apk",
              "sha256":"${"a".repeat(64)}","tamano_bytes":50000000,"version_minima_code":$versionMinimaCode}
         """.trimIndent()
     }
