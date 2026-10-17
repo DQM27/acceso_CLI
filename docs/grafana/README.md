@@ -53,6 +53,22 @@ dejar el texto simple desapareció; no se aisló si fueron los paréntesis o el
 SQL, así que conviene no repetir ninguno de los dos. El `update` para marcar un
 error como resuelto está en la descripción del panel «Errores agrupados».
 
+### Conexiones a Supabase
+
+El usuario `grafana_lector` tiene un límite de **5 conexiones**
+(`supabase/scripts/telemetria_lector_grafana_staging.sql`). El origen de datos
+de Grafana tiene que quedar por debajo: **máximo de conexiones abiertas = 4**
+(Connections → Data sources → PostgreSQL → Connection limits). Con el valor por
+defecto (100), varios paneles y alertas a la vez pasaban el límite y la base
+respondía `too many connections for role "grafana_lector"` (SQLSTATE 53300).
+
+Ese error ya provocó una falsa alarma: la regla de seguridad «Equipo nuevo en la
+pantalla de vinculación» estaba configurada con `execErrState: Alerting`, así que
+una consulta fallida mandaba el mismo correo que un equipo nuevo real. Ahora esa
+regla usa `execErrState: Error` (un fallo de la base sale como `DatasourceError`,
+con su propio nombre) y `for: 2m` (un error de una sola evaluación no avisa; un
+equipo real sigue avisando, porque cuenta durante 15 minutos).
+
 ## Mantenerlos al día
 
 El tablero que manda es el de Grafana. Después de un cambio importante,
