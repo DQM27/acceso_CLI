@@ -163,6 +163,11 @@ del desarrollador.
   número uno de Sentry en escritorio (550 eventos en 27 días) y de los errores de
   cambio de turno en el móvil. Arreglo: que no corran ni reporten mientras no haya
   sesión.
+  **Escritorio: resuelto** (2026-10-17): el pulso se salta en silencio sin sesión y
+  solo llega a Sentry lo inesperado, una vez por hora por mensaje
+  (`desktop/src-tauri/src/sincronizacion_auto.rs`). Eran 552 avisos "No hay una
+  sesión activa" en 28 días (pico de 186 el 7 de octubre) y, con los otros cuatro
+  avisos de la misma ruta, más del 90 % del ruido del escritorio. **Falta el móvil.**
 - **La sincronización del móvil tarda siempre entre 2 y 3 s.** No hay datos por paso
   para explicarlo; habría que medir cada paso dentro de la sincronización.
 - **Destello verde en Activos del escritorio.** Es el destello de celdas cambiadas
