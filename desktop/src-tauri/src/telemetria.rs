@@ -28,7 +28,7 @@
 use std::cell::Cell;
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -100,23 +100,53 @@ const ARCHIVO_PENDIENTE: &str = "telemetria_pendiente.jsonl";
 /// tarea", apagón).
 const ARCHIVO_SESION_ABIERTA: &str = "telemetria_sesion_abierta";
 
-/// Cada cuánto se vuelven a pedir las reglas a staging.
-const SEGUNDOS_ENTRE_CONSULTAS_DE_REGLAS: u64 = 300;
+/// Mínimo entre dos consultas de reglas a staging, aunque se pida revisar
+/// varias veces (por ejemplo, varios logins seguidos). No hay sondeo: sólo se
+/// consulta al abrir la app y tras un login exitoso.
+const SEGUNDOS_MINIMOS_ENTRE_CONSULTAS: u64 = 300;
 /// Cuánto espera la consulta de reglas antes de darse por vencida.
 const SEGUNDOS_ESPERA_REGLAS: u64 = 10;
 
 /// El build de diagnóstico mide siempre, sin reglas.
 const SIEMPRE_ENCENDIDA: bool = cfg!(feature = "telemetria");
 
-/// Encendida por una regla vigente (ver `Reglas`).
-static ENCENDIDA: AtomicBool = AtomicBool::new(false);
-
 /// La regla vigente que está aplicando esta instalación, si hay.
 static REGLAS: Mutex<Option<Reglas>> = Mutex::new(None);
 
-/// ¿Está midiendo ahora mismo? Falso en un release sin regla vigente.
+/// Hasta cuándo rige la regla actual (segundos Unix); `0` = apagada. Es lo
+/// que vigila el vencimiento sin consultar a nadie: cuando pasa la hora,
+/// `activa()` da `false` sola.
+static VENCE_UNIX: AtomicI64 = AtomicI64::new(0);
+
+/// Dónde vive la base local (y los archivos de telemetría); lo fija
+/// `iniciar` para que `revisar_reglas` se pueda llamar desde cualquier lado.
+static DIRECTORIO: OnceLock<PathBuf> = OnceLock::new();
+
+/// Cuándo se hizo la última consulta de reglas (haya salido bien o no).
+static ULTIMA_CONSULTA: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// ¿Rige una regla que vence en `vence_unix` a las `ahora_unix`?
+const fn regla_rige(vence_unix: i64, ahora_unix: i64) -> bool {
+    vence_unix > ahora_unix
+}
+
+/// ¿Está midiendo ahora mismo? Falso en un release sin regla vigente, o con
+/// la regla ya vencida.
 pub fn activa() -> bool {
-    SIEMPRE_ENCENDIDA || ENCENDIDA.load(Ordering::Relaxed)
+    SIEMPRE_ENCENDIDA
+        || regla_rige(
+            VENCE_UNIX.load(Ordering::Relaxed),
+            chrono::Utc::now().timestamp(),
+        )
+}
+
+/// ¿Toca consultar las reglas? Sí si nunca se consultó, o si pasó el mínimo
+/// desde la última consulta.
+fn toca_consultar(ultima: Option<Instant>, ahora: Instant) -> bool {
+    ultima.is_none_or(|ultima| {
+        ahora.saturating_duration_since(ultima)
+            >= Duration::from_secs(SEGUNDOS_MINIMOS_ENTRE_CONSULTAS)
+    })
 }
 
 /// Una regla tal como la devuelve `reglas_telemetria_vigentes` en staging.
@@ -177,6 +207,20 @@ impl Reglas {
 
     fn vigente(&self, ahora: chrono::DateTime<chrono::Utc>) -> bool {
         self.vence > ahora
+    }
+
+    /// Lo que rige después de una consulta. `respuesta` es `None` si no hubo
+    /// respuesta (sin red, staging caído): queda como estaba, mientras no
+    /// haya vencido. Una respuesta sin reglas vigentes apaga de inmediato.
+    fn siguiente(
+        actual: Option<&Self>,
+        respuesta: Option<&[ReglaRemota]>,
+        ahora: chrono::DateTime<chrono::Utc>,
+    ) -> Option<Self> {
+        respuesta.map_or_else(
+            || actual.filter(|regla| regla.vigente(ahora)).cloned(),
+            |remotas| Self::combinar(remotas, ahora),
+        )
     }
 }
 
@@ -356,7 +400,8 @@ pub struct EventoFrontend {
 }
 
 /// ¿Está midiendo ahora? El frontend sólo mide mientras sea así y lo vuelve
-/// a preguntar cada tanto (una regla puede encenderla o apagarla).
+/// a preguntar cada tanto (la regla se consulta al abrir y tras el login, y
+/// puede vencer con la app abierta).
 #[tauri::command]
 pub fn telemetria_activa() -> bool {
     activa()
@@ -429,24 +474,48 @@ fn version_app() -> String {
 }
 
 /// Pone en marcha la telemetría. En el build de diagnóstico arranca ya. En
-/// un release arranca el hilo que pregunta a staging si hay una regla para
-/// esta instalación (al abrir y cada `SEGUNDOS_ENTRE_CONSULTAS_DE_REGLAS`):
-/// sin regla vigente, o sin red, no se mide ni se manda nada. `directorio`
-/// es donde vive la base de datos local.
+/// un release hace una consulta puntual a staging para saber si hay una regla
+/// para esta instalación (`revisar_reglas`); sin regla vigente, o sin red,
+/// no se mide ni se manda nada. `directorio` es donde vive la base de datos
+/// local.
 pub fn iniciar(directorio: &Path) {
     if SIEMPRE_ENCENDIDA {
         arrancar(directorio);
         return;
     }
-    let directorio = directorio.to_path_buf();
+    let _ = DIRECTORIO.set(directorio.to_path_buf());
+    revisar_reglas();
+}
+
+/// Pregunta a staging si hay una regla para esta instalación, en segundo
+/// plano: no bloquea quien llama (la ventana, el login) y el hilo termina
+/// con la respuesta, o a los `SEGUNDOS_ESPERA_REGLAS`. Se llama al abrir la
+/// app y tras cada login exitoso; no hay sondeo. Como mucho una consulta
+/// cada `SEGUNDOS_MINIMOS_ENTRE_CONSULTAS`, aunque se llame más seguido. El
+/// build de diagnóstico no consulta (mide siempre).
+pub fn revisar_reglas() {
+    if SIEMPRE_ENCENDIDA {
+        return;
+    }
+    let Some(directorio) = DIRECTORIO.get() else {
+        return;
+    };
+    {
+        let mut ultima = ULTIMA_CONSULTA
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ahora = Instant::now();
+        if !toca_consultar(*ultima, ahora) {
+            return;
+        }
+        *ultima = Some(ahora);
+    }
+    let directorio = directorio.clone();
     let _ = std::thread::Builder::new()
-        .name("telemetria-reglas".into())
+        .name("telemetria-consulta".into())
         .spawn(move || {
             let dispositivo = identificador_de_instalacion(&directorio);
-            loop {
-                aplicar_reglas(&directorio, consultar_reglas(&dispositivo).ok().as_deref());
-                std::thread::sleep(Duration::from_secs(SEGUNDOS_ENTRE_CONSULTAS_DE_REGLAS));
-            }
+            aplicar_reglas(&directorio, consultar_reglas(&dispositivo).ok().as_deref());
         });
 }
 
@@ -475,26 +544,22 @@ fn consultar_reglas(dispositivo: &str) -> Result<Vec<ReglaRemota>, ()> {
     respuesta.json::<Vec<ReglaRemota>>().map_err(|_| ())
 }
 
-/// Aplica lo que dicen las reglas: enciende (arrancando la telemetría la
-/// primera vez), cambia lo que se permite o apaga. `remotas` es `None` si no
-/// hubo respuesta (sin red): la regla que ya rige sigue hasta que venza. Una
-/// respuesta sin reglas vigentes apaga de inmediato.
-fn aplicar_reglas(directorio: &Path, remotas: Option<&[ReglaRemota]>) {
-    let ahora = chrono::Utc::now();
+/// Aplica lo que dicen las reglas (ver `Reglas::siguiente`): enciende
+/// (arrancando la telemetría la primera vez), cambia lo que se permite o
+/// apaga.
+fn aplicar_reglas(directorio: &Path, respuesta: Option<&[ReglaRemota]>) {
     let mut vigentes = REGLAS
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let nuevas = remotas.map_or_else(
-        || vigentes.clone().filter(|actual| actual.vigente(ahora)),
-        |remotas| Reglas::combinar(remotas, ahora),
+    let nuevas = Reglas::siguiente(vigentes.as_ref(), respuesta, chrono::Utc::now());
+    VENCE_UNIX.store(
+        nuevas.as_ref().map_or(0, |regla| regla.vence.timestamp()),
+        Ordering::Relaxed,
     );
     vigentes.clone_from(&nuevas);
     drop(vigentes);
     if nuevas.is_some() {
-        ENCENDIDA.store(true, Ordering::Relaxed);
         arrancar(directorio);
-    } else {
-        ENCENDIDA.store(false, Ordering::Relaxed);
     }
 }
 
@@ -597,6 +662,17 @@ fn guardar_pendientes(t: &Telemetria) {
     let _ = std::fs::write(t.directorio.join(ARCHIVO_PENDIENTE), todo);
 }
 
+/// ¿No hay filas esperando para mandarse?
+fn cola_vacia() -> bool {
+    TELEMETRIA.get().is_none_or(|t| {
+        t.cola
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .filas
+            .is_empty()
+    })
+}
+
 /// Cierre normal de la app: borra la marca de sesión abierta, guarda la
 /// cola y la intenta mandar (desde un hilo propio, nunca desde el de
 /// quien llama, y esperando como mucho `ESPERA_ENVIO_AL_CERRAR`).
@@ -609,6 +685,10 @@ pub fn cerrar() {
         serde_json::json!({ "minutos_abierta": t.inicio.elapsed().as_secs() / 60 }),
     );
     let _ = std::fs::remove_file(t.directorio.join(ARCHIVO_SESION_ABIERTA));
+    // Apagada y sin nada pendiente: ni archivo ni petición.
+    if !activa() && cola_vacia() {
+        return;
+    }
     guardar_pendientes(t);
     let (listo, esperar) = std::sync::mpsc::channel();
     let lanzado = std::thread::Builder::new()
@@ -634,7 +714,7 @@ mod envio {
 
     use super::{
         APIKEY_STAGING, FILAS_POR_LOTE, SEGUNDOS_ENVIO, SEGUNDOS_MUESTREO, TELEMETRIA, URL_STAGING,
-        activa, evento, guardar_pendientes, sistema,
+        activa, cola_vacia, evento, guardar_pendientes, sistema,
     };
 
     pub fn lanzar_hilos() {
@@ -643,7 +723,11 @@ mod envio {
             .spawn(|| {
                 loop {
                     std::thread::sleep(Duration::from_secs(SEGUNDOS_ENVIO));
-                    enviar_todo();
+                    // Apagada, sólo se vacía lo que quedó de antes: sin cola
+                    // no se arma ni el cliente HTTP.
+                    if activa() || !cola_vacia() {
+                        enviar_todo();
+                    }
                 }
             });
         let _ = std::thread::Builder::new()
@@ -979,6 +1063,73 @@ mod tests {
         let reglas = Reglas::combinar(&remotas, hora(AHORA)).unwrap();
         assert!(reglas.todos);
         assert!(reglas.eventos.contains("realtime"));
+    }
+
+    fn vigente_hasta(vence_en: &str) -> Reglas {
+        Reglas::combinar(&[regla(None, vence_en)], hora(AHORA)).unwrap()
+    }
+
+    #[test]
+    fn sin_respuesta_y_apagada_sigue_apagada() {
+        assert_eq!(Reglas::siguiente(None, None, hora(AHORA)), None);
+    }
+
+    #[test]
+    fn sin_respuesta_la_regla_que_rige_sigue_hasta_vencer() {
+        let actual = vigente_hasta("2026-10-17T13:00:00Z");
+        assert_eq!(
+            Reglas::siguiente(Some(&actual), None, hora("2026-10-17T12:59:59Z")),
+            Some(actual.clone()),
+        );
+        assert_eq!(
+            Reglas::siguiente(Some(&actual), None, hora("2026-10-17T13:00:00Z")),
+            None,
+            "vencida, se apaga sola sin consultar"
+        );
+    }
+
+    #[test]
+    fn una_respuesta_sin_reglas_apaga_de_inmediato() {
+        let actual = vigente_hasta("2026-10-18T12:00:00Z");
+        assert_eq!(
+            Reglas::siguiente(Some(&actual), Some(&[]), hora(AHORA)),
+            None
+        );
+    }
+
+    #[test]
+    fn una_respuesta_con_reglas_enciende_o_reemplaza() {
+        let nueva = [regla(Some(&["realtime"]), "2026-10-18T12:00:00Z")];
+        let encendida = Reglas::siguiente(None, Some(&nueva), hora(AHORA)).unwrap();
+        assert!(encendida.permite("realtime") && !encendida.permite("pantalla"));
+        let actual = vigente_hasta("2026-10-17T13:00:00Z");
+        let reemplazada = Reglas::siguiente(Some(&actual), Some(&nueva), hora(AHORA)).unwrap();
+        assert!(
+            !reemplazada.todos,
+            "manda la respuesta nueva, no la anterior"
+        );
+    }
+
+    #[test]
+    fn la_regla_rige_solo_antes_de_vencer() {
+        assert!(!regla_rige(0, 1_000), "0 = apagada");
+        assert!(regla_rige(1_001, 1_000));
+        assert!(!regla_rige(1_000, 1_000));
+        assert!(!regla_rige(999, 1_000));
+    }
+
+    #[test]
+    fn como_mucho_una_consulta_cada_cinco_minutos() {
+        let base = Instant::now();
+        let despues = |segundos| base + Duration::from_secs(segundos);
+        assert!(toca_consultar(None, base), "nunca se consultó");
+        assert!(!toca_consultar(Some(base), base));
+        assert!(!toca_consultar(Some(base), despues(299)));
+        assert!(toca_consultar(Some(base), despues(300)));
+        assert!(
+            !toca_consultar(Some(despues(10)), base),
+            "un reloj que retrocede no habilita otra consulta"
+        );
     }
 
     #[test]

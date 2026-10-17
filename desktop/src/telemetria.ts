@@ -156,8 +156,9 @@ async function sincronizarEstado() {
 }
 
 /** Arranca la telemetría del frontend: pregunta al backend si mide, y sigue
- * preguntando cada vez que vuelca, porque una regla puede encenderla o
- * apagarla con la app abierta. Sin regla no hace nada más que esa pregunta.
+ * preguntando cada vez que vuelca (es una llamada local, sin red): el
+ * backend consulta las reglas al abrir y tras el login, y una regla también
+ * puede vencer con la app abierta. Sin regla no hace nada más que esa pregunta.
  * Llamar una sola vez al arrancar. */
 export async function iniciarTelemetria(): Promise<void> {
   await sincronizarEstado();

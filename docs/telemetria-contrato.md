@@ -108,9 +108,35 @@ al staging.
   conservan).
 - **Para terminar la medición:** poner la variable en `false` y sacar el
   siguiente release.
-- **Escritorio:** hoy no tiene este modo. Su telemetría es una feature de Cargo
-  que además redirige la app a una base y claves de pruebas, así que sólo existe
-  en el build de diagnóstico.
+- **Escritorio:** no usa esta variable. Su release lleva el código de medición
+  siempre, apagado, y lo enciende una regla (ver la sección siguiente). El build
+  de diagnóstico (feature de Cargo `telemetria`) sigue siempre encendido y
+  además redirige la app a una base y claves de pruebas.
+
+## Interruptor por reglas (escritorio)
+
+La telemetría del escritorio está **apagada por defecto**. El interruptor es la
+tabla `telemetria_reglas` del staging, que se modifica por SQL
+(`supabase/scripts/telemetria_reglas_staging.sql`): sin compilar, sin pantalla
+y sin tocar el equipo.
+
+- **Cuándo se consulta:** al abrir la app y después de cada login exitoso. No
+  hay sondeo ni temporizador. Como mucho una consulta cada 5 minutos. Un
+  cambio de regla se nota en el siguiente arranque o login.
+- **Cómo:** la app llama a `reglas_telemetria_vigentes(dispositivo, plataforma,
+  version)` con la llave pública; la función devuelve sólo las reglas que le
+  tocan y la app no puede leer la tabla.
+- **Qué dice una regla:** a quién le toca (UUID de la instalación, plataforma,
+  prefijo de versión), qué tipos de evento (todos o una lista), el nivel y
+  cuándo vence (24 h por defecto).
+- **Si la consulta falla**, la telemetría queda como estaba. Una respuesta sin
+  reglas vigentes la apaga. Una regla vencida se apaga sola, sin consultar.
+- **Apagada, la app no arma eventos ni cola ni envía nada;** su única petición a
+  la nube es la consulta de reglas.
+- **Misma evaluación en las dos plataformas:** el móvil todavía no lee reglas
+  (pendiente); cuando lo haga debe cubrir los mismos casos de prueba que
+  `desktop/src-tauri/src/telemetria.rs` (sin reglas, vencida o ilegible, con y sin
+  lista de eventos, varias a la vez, sin respuesta, respuesta vacía).
 
 ## Lo que todavía no está resuelto
 
