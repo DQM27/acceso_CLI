@@ -27,82 +27,53 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
-internal val BrisasClaro = lightColorScheme(
-    primary = Color(0xFF0B7EB0),
+// Los dos temas de la app son los mismos que en el escritorio (pedido del
+// usuario 2026-10-17): Tokyo Day y Tokyo Night, con la paleta de
+// `desktop/src/tokyo-day.css` y `desktop/src/tokyo-night.css`. Cada color de
+// Material sale del token del escritorio equivalente: fondo -> `--fondo`,
+// superficie -> `--panel`, acento -> `--acento`, texto -> `--texto`,
+// atenuado -> `--muted`, bordes -> `--borde`/`--borde-fuerte`, y los
+// contenedores suaves -> `--acento-suave`/`--info-suave`/`--error-suave`.
+//
+// Tokyo Day: paleta oficial de folke/tokyonight.nvim (`tokyonight_day`) con
+// los textos y estados ajustados en el escritorio para llegar a 4,5:1.
+internal val TokyoDay = lightColorScheme(
+    primary = Color(0xFF2959AA),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFD9F0F2),
-    onPrimaryContainer = Color(0xFF0B7EB0),
-    inversePrimary = Color(0xFF6FC3E8),
-    secondary = Color(0xFF0B7EB0),
+    primaryContainer = Color(0xFFCFD4E1),
+    onPrimaryContainer = Color(0xFF2959AA),
+    inversePrimary = Color(0xFF7AA2F7),
+    secondary = Color(0xFF2959AA),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFD9F0F2),
-    onSecondaryContainer = Color(0xFF0B7EB0),
-    tertiary = Color(0xFF146C94),
+    secondaryContainer = Color(0xFFCFD4E1),
+    onSecondaryContainer = Color(0xFF2959AA),
+    tertiary = Color(0xFF006D84),
     onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFE1EEF5),
-    onTertiaryContainer = Color(0xFF146C94),
-    background = Color(0xFFF4F3FA),
-    onBackground = Color(0xFF1B1B23),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1B1B23),
-    surfaceVariant = Color(0xFFECEAF6),
-    onSurfaceVariant = Color(0xFF6B7280),
-    surfaceTint = Color(0xFF0B7EB0),
-    inverseSurface = Color(0xFF1B1B23),
-    inverseOnSurface = Color(0xFFF4F3FA),
-    error = Color(0xFFDC2626),
+    tertiaryContainer = Color(0xFFCBD6DD),
+    onTertiaryContainer = Color(0xFF006D84),
+    background = Color(0xFFD0D5E3),
+    onBackground = Color(0xFF343B58),
+    surface = Color(0xFFE1E2E7),
+    onSurface = Color(0xFF343B58),
+    surfaceVariant = Color(0xFFC4C8DA),
+    onSurfaceVariant = Color(0xFF565F89),
+    surfaceTint = Color(0xFF2959AA),
+    inverseSurface = Color(0xFF343B58),
+    inverseOnSurface = Color(0xFFE1E2E7),
+    error = Color(0xFFA93737),
     onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFBE7E7),
-    onErrorContainer = Color(0xFFDC2626),
-    outline = Color(0xFF9CA3AF),
-    outlineVariant = Color(0xFFE5E3F1),
-    scrim = Color(0xFFF4F3FA),
-    surfaceBright = Color(0xFFFFFFFF),
-    surfaceDim = Color(0xFFF4F3FA),
-    surfaceContainer = Color(0xFFFFFFFF),
-    surfaceContainerHigh = Color(0xFFECEAF6),
-    surfaceContainerHighest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFFFFFF),
-    surfaceContainerLowest = Color(0xFFF4F3FA),
-)
-
-internal val BrisasOscuro = darkColorScheme(
-    primary = Color(0xFF6FC3E8),
-    onPrimary = Color(0xFF06343A),
-    primaryContainer = Color(0xFF0B4E56),
-    onPrimaryContainer = Color(0xFF6FC3E8),
-    inversePrimary = Color(0xFF0B7EB0),
-    secondary = Color(0xFF6FC3E8),
-    onSecondary = Color(0xFF06343A),
-    secondaryContainer = Color(0xFF0B4E56),
-    onSecondaryContainer = Color(0xFF6FC3E8),
-    tertiary = Color(0xFF8FC2DC),
-    onTertiary = Color(0xFF0B2E3F),
-    tertiaryContainer = Color(0xFF17475F),
-    onTertiaryContainer = Color(0xFF8FC2DC),
-    background = Color(0xFF0F1115),
-    onBackground = Color(0xFFECEAF6),
-    surface = Color(0xFF1B1D24),
-    onSurface = Color(0xFFECEAF6),
-    surfaceVariant = Color(0xFF2A2D36),
-    onSurfaceVariant = Color(0xFFA9AEC0),
-    surfaceTint = Color(0xFF6FC3E8),
-    inverseSurface = Color(0xFFECEAF6),
-    inverseOnSurface = Color(0xFF0F1115),
-    error = Color(0xFFF2A29C),
-    onError = Color(0xFF3A0E0B),
-    errorContainer = Color(0xFF5C1A15),
-    onErrorContainer = Color(0xFFF2A29C),
-    outline = Color(0xFF6B7280),
-    outlineVariant = Color(0xFF3A3D48),
-    scrim = Color(0xFF0F1115),
-    surfaceBright = Color(0xFF2A2D36),
-    surfaceDim = Color(0xFF0F1115),
-    surfaceContainer = Color(0xFF1B1D24),
-    surfaceContainerHigh = Color(0xFF2A2D36),
-    surfaceContainerHighest = Color(0xFF343844),
-    surfaceContainerLow = Color(0xFF171920),
-    surfaceContainerLowest = Color(0xFF0F1115),
+    errorContainer = Color(0xFFDBD1D5),
+    onErrorContainer = Color(0xFFA93737),
+    outline = Color(0xFF848CB5),
+    outlineVariant = Color(0xFFA8AECB),
+    scrim = Color(0xFFD0D5E3),
+    surfaceBright = Color(0xFFE9E9ED),
+    surfaceDim = Color(0xFFD0D5E3),
+    surfaceContainer = Color(0xFFE1E2E7),
+    surfaceContainerHigh = Color(0xFFE9E9ED),
+    surfaceContainerHighest = Color(0xFFE9E9ED),
+    surfaceContainerLow = Color(0xFFE1E2E7),
+    surfaceContainerLowest = Color(0xFFD0D5E3),
 )
 
 // Tokyo Night (pedido del usuario 2026-09-24): la paleta del tema de VS Code
@@ -156,7 +127,7 @@ internal val FormasBrisas = Shapes(
 )
 // Siguen el tema elegido en la app ([temaActual]), no sólo el del sistema.
 internal val ColorRellenoBrisas: Color
-    @Composable get() = if (temaActual() == TemaApp.TOKYO_NIGHT) Color(0xFF3D59A1) else Color(0xFF0B7EB0)
+    @Composable get() = if (temaActual() == TemaApp.TOKYO_NIGHT) Color(0xFF3D59A1) else Color(0xFF2959AA)
 internal val ColorSobreRellenoBrisas: Color
     @Composable get() = Color(0xFFFFFFFF)
 internal val EspacioControlBrisas = 12.dp
@@ -165,8 +136,7 @@ internal val EspacioControlBrisas = 12.dp
 internal val AlturaControlBrisas = 38.dp
 internal val ColorExitoBrisas: Color
     @Composable get() = when (temaActual()) {
-        TemaApp.CLARO -> Color(0xFF35724F)
-        TemaApp.OSCURO -> Color(0xFF8BC49B)
+        TemaApp.TOKYO_DAY -> Color(0xFF4A6330)
         TemaApp.TOKYO_NIGHT -> Color(0xFF9ECE6A)
     }
 internal val TipografiaBrisas = Typography(

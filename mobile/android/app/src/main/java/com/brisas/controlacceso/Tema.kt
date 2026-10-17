@@ -10,8 +10,7 @@ import androidx.compose.runtime.Composable
 fun TemaBrisas(contenido: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = when (temaActual()) {
-            TemaApp.CLARO -> BrisasClaro
-            TemaApp.OSCURO -> BrisasOscuro
+            TemaApp.TOKYO_DAY -> TokyoDay
             TemaApp.TOKYO_NIGHT -> TokyoNight
         },
         shapes = FormasBrisas,

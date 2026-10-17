@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LightMode
@@ -96,8 +95,8 @@ fun MenuCuenta(
                 )
             }
             HorizontalDivider()
-            // Recorre claro → oscuro → Tokyo Night; el ítem nombra a cuál pasa
-            // con el próximo toque (corto, para no ensanchar el menú).
+            // Alterna Tokyo Day / Tokyo Night, como el escritorio; el ítem
+            // nombra a cuál pasa con el próximo toque.
             val siguiente = tema.siguiente()
             DropdownMenuItem(
                 text = { Text(textoCambioTema(siguiente)) },
@@ -242,13 +241,11 @@ internal fun etiquetaRol(rol: RolUsuario): String = when (rol) {
 }
 
 private fun textoCambioTema(tema: TemaApp): String = when (tema) {
-    TemaApp.CLARO -> "Modo claro"
-    TemaApp.OSCURO -> "Modo oscuro"
+    TemaApp.TOKYO_DAY -> "Tokyo Day"
     TemaApp.TOKYO_NIGHT -> "Tokyo Night"
 }
 
 private fun iconoTema(tema: TemaApp) = when (tema) {
-    TemaApp.CLARO -> Icons.Default.LightMode
-    TemaApp.OSCURO -> Icons.Default.DarkMode
-    TemaApp.TOKYO_NIGHT -> Icons.Default.AutoAwesome
+    TemaApp.TOKYO_DAY -> Icons.Default.LightMode
+    TemaApp.TOKYO_NIGHT -> Icons.Default.DarkMode
 }
