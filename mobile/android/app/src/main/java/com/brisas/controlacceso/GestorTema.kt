@@ -18,13 +18,29 @@ private const val CLAVE_OSCURO_VIEJA = "oscuro"
 /** Temas que recorre el botón de la barra superior, en este orden --
  * mismo recorrido que `desktop/src/componentes/SelectorTema.tsx`. */
 enum class TemaApp(val oscuro: Boolean) {
-    CLARO(oscuro = false),
-    OSCURO(oscuro = true),
+    TOKYO_DAY(oscuro = false),
     TOKYO_NIGHT(oscuro = true),
     ;
 
     fun siguiente(): TemaApp = entries[(ordinal + 1) % entries.size]
 }
+
+/// El tema que corresponde a lo que había guardado. Antes los temas eran
+/// "claro", "oscuro" y "Tokyo Night": los dos primeros pasan a su equivalente
+/// Tokyo (igual que en el escritorio), así nadie pierde su elección. Más
+/// atrás se guardaba sólo un booleano (`oscuroViejo`, `null` si no existía).
+/// `null`: nunca eligió, se sigue al sistema.
+internal fun temaGuardado(guardado: String?, oscuroViejo: Boolean?): TemaApp? =
+    TemaApp.entries.firstOrNull { it.name == guardado }
+        ?: when (guardado) {
+            "CLARO" -> TemaApp.TOKYO_DAY
+            "OSCURO" -> TemaApp.TOKYO_NIGHT
+            else -> when (oscuroViejo) {
+                null -> null
+                true -> TemaApp.TOKYO_NIGHT
+                false -> TemaApp.TOKYO_DAY
+            }
+        }
 
 /**
  * Preferencia de tema explícita (claro / oscuro / Tokyo Night), guardada en
@@ -46,13 +62,10 @@ object GestorTema {
 
     fun inicializar(context: Context) {
         prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val guardado = prefs.getString(CLAVE_TEMA, null)
-        temaForzado = TemaApp.entries.firstOrNull { it.name == guardado }
-            ?: when {
-                !prefs.contains(CLAVE_OSCURO_VIEJA) -> null
-                prefs.getBoolean(CLAVE_OSCURO_VIEJA, false) -> TemaApp.OSCURO
-                else -> TemaApp.CLARO
-            }
+        temaForzado = temaGuardado(
+            guardado = prefs.getString(CLAVE_TEMA, null),
+            oscuroViejo = if (prefs.contains(CLAVE_OSCURO_VIEJA)) prefs.getBoolean(CLAVE_OSCURO_VIEJA, false) else null,
+        )
     }
 
     fun alternar(actual: TemaApp) {
@@ -65,4 +78,4 @@ object GestorTema {
 /** Tema en uso: el elegido a mano o, si nunca se eligió, el del sistema. */
 @Composable
 fun temaActual(): TemaApp =
-    GestorTema.temaForzado ?: if (isSystemInDarkTheme()) TemaApp.OSCURO else TemaApp.CLARO
+    GestorTema.temaForzado ?: if (isSystemInDarkTheme()) TemaApp.TOKYO_NIGHT else TemaApp.TOKYO_DAY

@@ -14,8 +14,13 @@ Releases. Así sigue funcionando con el repositorio privado.
      APK.
 2. La app consulta el manifiesto al pasar a primer plano, como mucho una vez
    por hora (`MainActivity.onStart`).
-3. Si el `version_code` publicado es mayor que el instalado, aparece una franja
-   arriba de todas las pantallas, incluido el login.
+3. Si el `version_code` publicado es mayor que el instalado, aparece una tarjeta
+   flotante, semitransparente, abajo de todas las pantallas (incluido el login),
+   sin empujar el contenido. Tiene **Actualizar** y una **X**. La X la cierra
+   ("Más tarde"): la versión queda pendiente como un puntito que late unos segundos
+   sobre la inicial del operador (menú de la cuenta) y no vuelve en cada revisión
+   de la misma versión. Una versión más nueva, o una obligatoria (sin X, en rojo),
+   vuelve a mostrar la tarjeta.
 4. Al tocar **Actualizar**:
    - la primera vez, Android pide habilitar "Instalar apps desconocidas" para
      Lattis (sólo una vez por teléfono);
@@ -25,6 +30,17 @@ Releases. Así sigue funcionando con el repositorio privado.
      condiciones del sistema, no pide confirmación; si igual la pide, se
      muestra el diálogo del sistema. Al terminar, Android cierra Lattis y hay
      que volver a abrirla.
+
+### Desde el menú de la cuenta
+
+El ítem de actualización del menú (la inicial del operador, arriba a la derecha)
+es un solo botón que cambia: **Buscar actualizaciones** cuando no hay una versión
+confirmada y **Actualizar a X** cuando sí la hay. Al buscar, el menú se cierra, la
+inicial muestra un círculo girando y la respuesta sale como aviso corto: "Estás al
+día" o "No se pudo revisar" (si hay versión nueva no hay aviso: aparece la tarjeta
+y el puntito). La búsqueda no espera la hora entre revisiones. Los builds de
+prueba, sin dirección del manifiesto, no muestran el ítem. El menú también
+muestra la versión instalada.
 
 ### Quién decide qué
 
