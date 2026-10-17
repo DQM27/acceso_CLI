@@ -828,12 +828,12 @@ estabilizador y clasificador.
   - [ ] Mejoras del actualizador móvil: notas de versión cortas en el manifiesto
     (campo opcional `notas`, escritas en un archivo del repo y mostradas en la
     franja) y, opcional, notificación del sistema. Pulir la interfaz de la franja.
-  - [ ] Escritorio: publicar también en R2 los instaladores y el `latest.json` del
-    updater de Tauri, con las direcciones reescritas, y poner R2 como primer
-    `endpoints` en `desktop/src-tauri/tauri.conf.json` (GitHub como respaldo hasta
-    volver privado el repo). Hecho en código (ver `docs/actualizaciones-escritorio.md`);
-    falta sacar un release de escritorio con esos `endpoints` e instalarlo a mano en
-    cada equipo, y comprobar que el `latest.json` de R2 queda publicado.
+  - [x] Escritorio: publica también en R2 los instaladores y el `latest.json` del
+    updater de Tauri (direcciones reescritas) y tiene R2 como primer `endpoints`
+    en `desktop/src-tauri/tauri.conf.json`, con GitHub de respaldo hasta volver
+    privado el repo. Publicado y probado con la 1.8.11 (2026-10-17); ver
+    `docs/actualizaciones-escritorio.md`. Falta instalar esa versión a mano en las
+    demás PCs.
   - [ ] **Página de descargas** en `lt.megabrisas.com`: cada release publica
     una página con la versión vigente de Android y de Windows y su botón de descarga,
     armada desde los mismos manifiestos que usan las apps. Es el link fijo para
