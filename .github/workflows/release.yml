@@ -105,6 +105,72 @@ jobs:
           releaseDraft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: false
 
+      # Actualizador del escritorio (ver docs/actualizaciones-escritorio.md): los
+      # instaladores y un `latest.json` con las direcciones reescritas van al
+      # almacenamiento de descargas (Cloudflare R2 detrás de lt.megabrisas.com),
+      # aparte de GitHub Releases, para que las actualizaciones sigan funcionando
+      # con el repositorio privado. El `latest.json` que dejó tauri-action apunta
+      # a los assets de GitHub; acá se baja del Release, se sube cada instalador
+      # con el inicio de su SHA-256 en el nombre (inmutable, cacheable) y se
+      # reemplaza cada dirección encontrando el instalador por su firma.
+      #
+      # - Primero los instaladores y al final el manifiesto: ningún equipo ve una
+      #   versión cuyo archivo todavía no está.
+      # - Un disparo manual deja el Release en borrador: no se publica en R2 para
+      #   que un borrador nunca llegue a los equipos.
+      # - Sin los secretos de R2, o si este paso falla, el release sigue (el
+      #   escritorio todavía tiene GitHub como segundo `endpoints`): sólo deja un
+      #   aviso o un error visible en el log.
+      - name: Publicar el escritorio en el almacenamiento de descargas
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.R2_BUCKET }}
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
+          URL_DESCARGAS: https://lt.megabrisas.com
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          if (-not $env:R2_ACCOUNT_ID -or -not $env:AWS_ACCESS_KEY_ID -or -not $env:AWS_SECRET_ACCESS_KEY -or -not $env:R2_BUCKET) {
+            Write-Output "::warning::R2 sin configurar: el escritorio no se publicó para el actualizador (ver docs/actualizaciones-escritorio.md)."
+            exit 0
+          }
+          $dir = "release-escritorio"
+          New-Item -ItemType Directory -Path $dir | Out-Null
+          gh release download $env:RELEASE_VERSION --dir $dir --pattern "latest.json" --pattern "*.exe" --pattern "*.exe.sig" --pattern "*.msi" --pattern "*.msi.sig"
+          if ($LASTEXITCODE -ne 0) { throw "no se pudo bajar el Release $env:RELEASE_VERSION" }
+          $endpoint = "https://$($env:R2_ACCOUNT_ID).r2.cloudflarestorage.com"
+          $direcciones = @{}
+          foreach ($instalador in Get-ChildItem $dir -File | Where-Object { $_.Extension -in ".exe", ".msi" }) {
+            $firma = (Get-Content "$($instalador.FullName).sig" -Raw).Trim()
+            $huella = (Get-FileHash $instalador.FullName -Algorithm SHA256).Hash.ToLower().Substring(0, 12)
+            $clave = "escritorio/$($instalador.BaseName)-$huella$($instalador.Extension)"
+            aws s3 cp $instalador.FullName "s3://$($env:R2_BUCKET)/$clave" --endpoint-url $endpoint `
+              --content-type application/octet-stream `
+              --cache-control "public, max-age=31536000, immutable"
+            if ($LASTEXITCODE -ne 0) { throw "falló la subida de $($instalador.Name)" }
+            $direcciones[$firma] = "$($env:URL_DESCARGAS)/$clave"
+          }
+          $manifiesto = Get-Content "$dir/latest.json" -Raw | ConvertFrom-Json
+          foreach ($plataforma in $manifiesto.platforms.PSObject.Properties) {
+            $firma = $plataforma.Value.signature.Trim()
+            if (-not $direcciones.ContainsKey($firma)) {
+              throw "ningún instalador coincide con la firma de $($plataforma.Name)"
+            }
+            $plataforma.Value.url = $direcciones[$firma]
+          }
+          $manifiesto | ConvertTo-Json -Depth 10 | Set-Content "latest-escritorio.json" -Encoding utf8
+          aws s3 cp "latest-escritorio.json" "s3://$($env:R2_BUCKET)/escritorio/latest.json" --endpoint-url $endpoint `
+            --content-type application/json --cache-control "no-cache"
+          if ($LASTEXITCODE -ne 0) { throw "falló la subida del manifiesto" }
+          Write-Output "Publicado: $($env:URL_DESCARGAS)/escritorio/latest.json (versión $($manifiesto.version))"
+
   build-android:
     # Corre después de build-gui (que crea el Release real vía tauri-action)
     # en vez de en paralelo -- necesario para poder adjuntarle el APK con
