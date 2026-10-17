@@ -42,6 +42,17 @@ Antes tiene que existir la carpeta (`lattis-alertas`) y el punto de contacto
 (`correo-daniel`); los `uid` de la carpeta y del origen de datos son los de la
 cuenta actual.
 
+### Texto de las alertas
+
+Los avisos (`summary` y `description`) llevan sólo texto y plantillas simples
+(`{{ $labels.plataforma }}`). Una versión anterior de «Error nuevo en las apps»
+traía en la descripción paréntesis y una sentencia SQL (`update ... where huella
+= '{{ $labels.huella }}';`), y la pantalla de alertas de Grafana mostraba
+`1:1: parse error: unexpected "("` cada vez que se abría o se recargaba. Al
+dejar el texto simple desapareció; no se aisló si fueron los paréntesis o el
+SQL, así que conviene no repetir ninguno de los dos. El `update` para marcar un
+error como resuelto está en la descripción del panel «Errores agrupados».
+
 ## Mantenerlos al día
 
 El tablero que manda es el de Grafana. Después de un cambio importante,
