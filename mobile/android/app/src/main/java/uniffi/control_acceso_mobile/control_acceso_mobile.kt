@@ -721,6 +721,8 @@ internal object IntegrityCheckingUniffiLib {
     }
 
     internal fun ensureInitialized() = Unit
+    external fun uniffi_control_acceso_mobile_checksum_func_evaluar_manifiesto_actualizacion(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_es_carnet_kof(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_extraer_carnet_kof(
@@ -1144,6 +1146,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_votadorporposicion_reiniciar(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_func_evaluar_manifiesto_actualizacion(`json`: RustBuffer.ByValue,`urlManifiesto`: RustBuffer.ByValue,`versionCodeInstalada`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_es_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_func_extraer_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1319,6 +1323,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_evaluar_manifiesto_actualizacion() and 0xFFFF) != 54613) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_es_carnet_kof() and 0xFFFF) != 540) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -7019,6 +7026,65 @@ public object FfiConverterTypeLineaOcr: FfiConverterRustBuffer<LineaOcr> {
 
 
 
+data class ManifiestoActualizacion (
+    var `versionCode`: kotlin.Long
+    , 
+    var `versionName`: kotlin.String
+    , 
+    /**
+     * Dirección HTTPS del APK, en el mismo servidor que el manifiesto.
+     */
+    var `url`: kotlin.String
+    , 
+    /**
+     * SHA-256 del APK en hexadecimal, minúsculas.
+     */
+    var `sha256`: kotlin.String
+    , 
+    var `tamanoBytes`: kotlin.Long
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeManifiestoActualizacion: FfiConverterRustBuffer<ManifiestoActualizacion> {
+    override fun read(buf: ByteBuffer): ManifiestoActualizacion {
+        return ManifiestoActualizacion(
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ManifiestoActualizacion) = (
+            FfiConverterLong.allocationSize(value.`versionCode`) +
+            FfiConverterString.allocationSize(value.`versionName`) +
+            FfiConverterString.allocationSize(value.`url`) +
+            FfiConverterString.allocationSize(value.`sha256`) +
+            FfiConverterLong.allocationSize(value.`tamanoBytes`)
+    )
+
+    override fun write(value: ManifiestoActualizacion, buf: ByteBuffer) {
+            FfiConverterLong.write(value.`versionCode`, buf)
+            FfiConverterString.write(value.`versionName`, buf)
+            FfiConverterString.write(value.`url`, buf)
+            FfiConverterString.write(value.`sha256`, buf)
+            FfiConverterLong.write(value.`tamanoBytes`, buf)
+    }
+}
+
+
+
 /**
  * Una palabra (`Element` de ML Kit) con su caja en píxeles de la imagen
  * analizada y su confianza (0 si el modelo no la informa).
@@ -8999,6 +9065,87 @@ public object FfiConverterTypeMotivoResultadoIngreso: FfiConverterRustBuffer<Mot
 
     override fun write(value: MotivoResultadoIngreso, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+sealed class NovedadActualizacion {
+    
+    object AlDia : NovedadActualizacion()
+    
+    
+    /**
+     * `obligatoria`: la versión instalada quedó por debajo de
+     * `version_minima_code` del manifiesto (ya no es compatible).
+     */
+    data class Disponible(
+        val `manifiesto`: uniffi.control_acceso_mobile.ManifiestoActualizacion, 
+        val `obligatoria`: kotlin.Boolean) : NovedadActualizacion()
+        
+    {
+        
+
+        companion object
+    }
+    
+
+    
+
+    
+    
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeNovedadActualizacion : FfiConverterRustBuffer<NovedadActualizacion>{
+    override fun read(buf: ByteBuffer): NovedadActualizacion {
+        return when(buf.getInt()) {
+            1 -> NovedadActualizacion.AlDia
+            2 -> NovedadActualizacion.Disponible(
+                FfiConverterTypeManifiestoActualizacion.read(buf),
+                FfiConverterBoolean.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: NovedadActualizacion): ULong = when(value) {
+        is NovedadActualizacion.AlDia -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is NovedadActualizacion.Disponible -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeManifiestoActualizacion.allocationSize(value.`manifiesto`)
+                + FfiConverterBoolean.allocationSize(value.`obligatoria`)
+            )
+        }
+    }
+
+    override fun write(value: NovedadActualizacion, buf: ByteBuffer) {
+        when(value) {
+            is NovedadActualizacion.AlDia -> {
+                buf.putInt(1)
+                Unit
+            }
+            is NovedadActualizacion.Disponible -> {
+                buf.putInt(2)
+                FfiConverterTypeManifiestoActualizacion.write(value.`manifiesto`, buf)
+                FfiConverterBoolean.write(value.`obligatoria`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
 
@@ -11063,6 +11210,30 @@ public object FfiConverterSequenceTypeVisitaAdentro: FfiConverterRustBuffer<List
         }
     }
 }
+        /**
+         * Valida el manifiesto descargado de `url_manifiesto` y lo compara con el
+         * `versionCode` instalado.
+         *
+         * Rechaza un manifiesto que no se pueda usar con seguridad: el APK sólo se
+         * baja por HTTPS y del mismo servidor que publicó el manifiesto, así que uno
+         * alterado no puede mandar al teléfono a descargar de otro lado. Un
+         * manifiesto inválido es un error de publicación: llega como
+         * `NucleoError::Interno` con el detalle en el registro técnico.
+         */
+    @Throws(NucleoException::class) fun `evaluarManifiestoActualizacion`(`json`: kotlin.String, `urlManifiesto`: kotlin.String, `versionCodeInstalada`: kotlin.Long): NovedadActualizacion {
+            return FfiConverterTypeNovedadActualizacion.lift(
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_evaluar_manifiesto_actualizacion(
+    
+        
+        FfiConverterString.lower(`json`),
+        FfiConverterString.lower(`urlManifiesto`),
+        FfiConverterLong.lower(`versionCodeInstalada`),_status)
+}
+    )
+    }
+    
+
         /**
          * ¿El texto viene de un carnet KOF (frente o reverso)? Excluye el
          * comprobante de carga, que imprime la misma marca.

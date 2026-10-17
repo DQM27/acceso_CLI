@@ -62,6 +62,9 @@ serde_json = "1.0"
 # extracción por etiqueta. Ya venía dentro del `.so` de Android como
 # dependencia de `android_logger` (vía `env_filter`), así que no suma peso.
 regex = "1"
+# Validar el origen del APK en el manifiesto del actualizador
+# (`src/actualizacion.rs`). Ya viaja transitivo vía `reqwest` en el núcleo.
+url = "2"
 
 [target.'cfg(target_os = "android")'.dependencies]
 # Backend real de `log` en Android -- vuelca al mismo Logcat que ve

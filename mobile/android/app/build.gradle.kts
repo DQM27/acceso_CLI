@@ -86,6 +86,12 @@ android {
         // medir en producción sin cargar el teléfono (ver `telemetriaEnProduccion`).
         buildConfigField("boolean", "TELEMETRIA_LIGERA", "false")
 
+        // De dónde lee el actualizador el manifiesto de la última versión
+        // (ver Actualizador.kt y docs/actualizaciones-android.md). Vacío =
+        // actualizador apagado: sólo `release` lo enciende, porque los builds
+        // de prueba tienen otro paquete y no pueden instalar el APK real.
+        buildConfigField("String", "URL_MANIFIESTO_ACTUALIZACION", "\"\"")
+
         // Nombre que se ve bajo el icono. Los builds de prueba lo pisan para
         // que junto a la app real no se confundan (ver `buildTypes`).
         manifestPlaceholders["etiquetaApp"] = "Lattis"
@@ -121,6 +127,11 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             manifestPlaceholders["sentryEnvironment"] = "production"
+            buildConfigField(
+                "String",
+                "URL_MANIFIESTO_ACTUALIZACION",
+                "\"https://lt.megabrisas.com/android/latest.json\"",
+            )
             if (telemetriaEnProduccion) {
                 buildConfigField("boolean", "TELEMETRIA", "true")
                 buildConfigField("boolean", "TELEMETRIA_LIGERA", "true")
@@ -150,6 +161,9 @@ android {
             // Completa (no ligera): este build es sólo para pruebas y sí puede
             // cargar la medición pesada.
             buildConfigField("boolean", "TELEMETRIA_LIGERA", "false")
+            // Hereda la URL de `release` por `initWith`: se apaga, este build
+            // tiene otro paquete y otra firma.
+            buildConfigField("String", "URL_MANIFIESTO_ACTUALIZACION", "\"\"")
             manifestPlaceholders["sentryEnvironment"] = "diagnostico"
             manifestPlaceholders["etiquetaApp"] = "Lattis DIAG"
         }

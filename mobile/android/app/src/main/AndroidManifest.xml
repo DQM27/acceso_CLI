@@ -14,6 +14,13 @@
          notificaciones push (ver NotificacionesPush.kt). Se pide al entrar
          a la pantalla principal, no en el primer arranque. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Actualizador propio (ver ServicioActualizaciones.kt y docs/actualizaciones-android.md).
+         REQUEST_INSTALL_PACKAGES es el "instalar apps desconocidas" que el
+         usuario habilita una vez para Lattis. UPDATE_PACKAGES_WITHOUT_USER_ACTION
+         es normal (sin pregunta): desde Android 12 deja que Lattis se actualice a
+         sí misma sin pedir confirmación en cada versión. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!-- La base de datos local trae cédulas, hashes de contraseña e
@@ -81,6 +88,12 @@
             android:name=".ServicioCierreSesion"
             android:exported="false"
             android:stopWithTask="false" />
+
+        <!-- Resultado de la instalación de una actualización. No exportado:
+             sólo lo dispara el PendingIntent que Lattis entrega al instalador. -->
+        <receiver
+            android:name=".ReceptorInstalacion"
+            android:exported="false" />
 
         <activity
             android:name=".MainActivity"

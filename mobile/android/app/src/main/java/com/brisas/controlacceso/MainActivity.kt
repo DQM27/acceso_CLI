@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -30,9 +31,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 /// Tope de ancho para todo el contenido de la app — sin esto, en horizontal
@@ -79,6 +82,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             val aplicacion: AplicacionViewModel = viewModel()
             val estado by aplicacion.estado.collectAsState()
+            val contexto = LocalContext.current
+            val actualizacion: ActualizacionViewModel = viewModel(factory = ActualizacionViewModel.factory(contexto))
+            val estadoActualizacion by actualizacion.estado.collectAsState()
+            // Al pasar a primer plano; el ViewModel limita a una consulta por
+            // hora y en los builds de prueba no hace nada.
+            LifecycleStartEffect(actualizacion) {
+                actualizacion.revisar()
+                onStopOrDispose { }
+            }
             TemaBrisas {
                 // `enableEdgeToEdge()` deja la barra de estado/navegación
                 // transparentes -- sin sincronizar nada más, quedaban con el
@@ -125,15 +137,27 @@ class MainActivity : ComponentActivity() {
                             .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime)),
                         contentAlignment = Alignment.TopCenter,
                     ) {
-                        Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
-                            when (val actual = estado) {
-                                EstadoAplicacion.Cargando -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                                is EstadoAplicacion.Fallo -> Text(
-                                    actual.mensaje,
-                                    color = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                                )
-                                is EstadoAplicacion.Lista -> ContenidoAplicacion(actual.entorno)
+                        Column(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
+                            // Encima de todo, incluido el login: una versión
+                            // nueva se puede instalar sin haber iniciado sesión.
+                            AvisoActualizacion(
+                                estado = estadoActualizacion,
+                                onActualizar = actualizacion::actualizar,
+                                onPosponer = actualizacion::posponer,
+                                onAbrirAjustes = {
+                                    contexto.startActivity(ServicioActualizacionesAndroid.intentPermiso(contexto))
+                                },
+                            )
+                            Box(modifier = Modifier.weight(1f)) {
+                                when (val actual = estado) {
+                                    EstadoAplicacion.Cargando -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                                    is EstadoAplicacion.Fallo -> Text(
+                                        actual.mensaje,
+                                        color = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                                    )
+                                    is EstadoAplicacion.Lista -> ContenidoAplicacion(actual.entorno)
+                                }
                             }
                         }
                     }

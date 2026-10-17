@@ -27,6 +27,10 @@ mod votacion;
 pub use votacion::{ConsensoVotacion, VotadorPorPosicion};
 mod lectura_documentos;
 pub use lectura_documentos::*;
+mod actualizacion;
+pub use actualizacion::{
+    ManifiestoActualizacion, NovedadActualizacion, evaluar_manifiesto_actualizacion,
+};
 
 uniffi::setup_scaffolding!();
 
