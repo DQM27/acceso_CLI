@@ -318,6 +318,9 @@ jobs:
         working-directory: mobile/android
         env:
           TELEMETRIA_EN_PRODUCCION: ${{ vars.TELEMETRIA_EN_PRODUCCION }}
+          # Destino de los errores (ver `dsnErrores` en app/build.gradle.kts).
+          # Sin el secreto llega vacío y se usa el DSN de siempre.
+          SENTRY_DSN_MOVIL: ${{ secrets.SENTRY_DSN }}
         run: |
           if [ "$TELEMETRIA_EN_PRODUCCION" = "true" ]; then
             ./gradlew assembleRelease -PtelemetriaEnProduccion=true

@@ -50,6 +50,16 @@ val hashCortoDelCommit: String = try {
 val telemetriaEnProduccion: Boolean =
     providers.gradleProperty("telemetriaEnProduccion").orNull == "true"
 
+// A dónde van los errores de la app (ver `io.sentry.dsn` en
+// AndroidManifest.xml). Con la variable de entorno `SENTRY_DSN_MOVIL` (el CI
+// la toma del secreto `SENTRY_DSN`) apuntan al receptor propio
+// (supabase/functions-staging/receptor-errores); sin ella, o vacía, siguen
+// yendo al proyecto de Sentry de siempre. Es variable de entorno y no `-P`
+// para que el DSN no quede en la línea de comandos ni en el registro del CI.
+val dsnErrores: String =
+    providers.environmentVariable("SENTRY_DSN_MOVIL").orNull?.takeIf { it.isNotBlank() }
+        ?: "https://5fb608eb8db4b9a18aca8d2901a4b894@o4512103124041728.ingest.us.sentry.io/4512104610463744"
+
 android {
     namespace = "com.brisas.controlacceso"
     compileSdk = 36
@@ -68,6 +78,7 @@ android {
         // pisa a "production". Mismo criterio que `cfg!(debug_assertions)`
         // del lado de escritorio.
         manifestPlaceholders["sentryEnvironment"] = "development"
+        manifestPlaceholders["sentryDsn"] = dsnErrores
 
         // Sólo el procesador del dispositivo real (arm64-v8a, Samsung A25):
         // el APK no se usa en emuladores. Las librerías nativas de ML Kit y
