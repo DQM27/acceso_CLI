@@ -819,11 +819,15 @@ estabilizador y clasificador.
   por cómo `relaunch()` reinicia el proceso, pero falta una prueba real.
 - [ ] **Distribución fuera de GitHub, para poder volver privado el repositorio
   (2026-10-16).** Detalle en `docs/actualizaciones-android.md`. En orden:
-  - [ ] Activar R2 en Cloudflare, crear el bucket, conectar
+  - [x] Activar R2 en Cloudflare, crear el bucket, conectar
     `lt.megabrisas.com` y cargar en GitHub los secretos `R2_*` y la variable
-    `R2_BUCKET`.
-  - [ ] Primer release con el actualizador de Android e instalarlo a mano en los
-    teléfonos (la última vez que se instala a mano).
+    `R2_BUCKET` (2026-10-17).
+  - [x] Primer release con el actualizador de Android (1.4.11) instalado a mano en
+    el A25, y actualización automática a la 1.4.12 comprobada en el teléfono
+    (2026-10-17). Falta instalar la versión con actualizador en los demás teléfonos.
+  - [ ] Mejoras del actualizador móvil: notas de versión cortas en el manifiesto
+    (campo opcional `notas`, escritas en un archivo del repo y mostradas en la
+    franja) y, opcional, notificación del sistema. Pulir la interfaz de la franja.
   - [ ] Escritorio: publicar también en R2 los instaladores y el `latest.json` del
     updater de Tauri, con las direcciones reescritas, y poner R2 como primer
     `endpoints` en `desktop/src-tauri/tauri.conf.json` (GitHub como respaldo hasta
