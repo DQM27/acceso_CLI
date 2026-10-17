@@ -69,6 +69,7 @@ pesa como máximo 16 KB.
 | `panic` | Rust | Dónde ocurrió (`archivo:línea`) y en qué hilo, sin el mensaje. Se guarda en disco y sale en el próximo arranque |
 | `cierre` | Rust | Cierre normal: minutos que estuvo abierta |
 | `llamada_nucleo` | Frontend, cada 30 s | Por comando de Tauri, con el IPC incluido: llamadas, errores, p50/p90/máx y total en ms |
+| `transicion_ingreso` | Rust, en cada `preparar_ingreso` | Lo que tarda elegir a un contratista hasta tener el formulario del gafete, del lado del backend (sin el IPC, que sale en `llamada_nucleo`): `resultado` (`formulario`, `bloqueada` o `error`), `ms_cola` (esperando un hilo del pool), `ms_espera_candado` (esperando `state.core()`), `ms_nucleo` (`ms_total` sin la espera del candado: reglas locales y consulta a la nube) y `ms_total`. Mismos nombres que el del teléfono |
 | `realtime` | Frontend, cada 30 s | Canal de avisos en vivo, con los mismos campos que el teléfono: conexión, avisos por tabla, ecos propios, aplicados y latencia corregida por el desfase del reloj |
 | `pantalla` | Frontend | Pantalla o sección mostrada, la anterior y `ms_hasta_primer_frame` |
 | `ui_bloqueos` | Frontend, cada 30 s | Tareas largas (> 50 ms) que trabaron la ventana: cantidad, total, p50, máximo y cuántas pasaron de 200 ms |

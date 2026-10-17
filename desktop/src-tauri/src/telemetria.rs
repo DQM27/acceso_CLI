@@ -18,10 +18,11 @@
 //! en el próximo arranque. Un hilo más toma una muestra del proceso cada
 //! 30 s.
 
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// Proyecto de STAGING (sandbox): la telemetría nunca va a producción. La
 /// llave es la publicable (rol `anon`), que en esta tabla sólo puede
@@ -215,6 +216,41 @@ pub fn evento(tipo: &str, datos: serde_json::Value) {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .agregar(fila);
+}
+
+/// Toma el candado del núcleo (`tomar`) y suma a `acumulado` lo que esperó
+/// para conseguirlo. Sólo lo usan los comandos que se miden por dentro.
+pub fn medir_espera<T>(acumulado: &Cell<Duration>, tomar: impl FnOnce() -> T) -> T {
+    let inicio = Instant::now();
+    let tomado = tomar();
+    acumulado.set(acumulado.get() + inicio.elapsed());
+    tomado
+}
+
+/// Milisegundos con un decimal.
+fn ms(duracion: Duration) -> f64 {
+    (duracion.as_secs_f64() * 10_000.0).round() / 10.0
+}
+
+/// `transicion_ingreso` del escritorio, con los campos del teléfono
+/// (`resultado`, `ms_nucleo`, `ms_total`) más lo que el escritorio puede
+/// separar: `ms_cola` (esperando un hilo del pool) y `ms_espera_candado`
+/// (esperando `state.core()`). `ms_nucleo` es lo que queda de `ms_total`
+/// sin la espera del candado: reglas locales y consulta a la nube.
+/// `ms_total` no incluye el IPC: ese tiempo sale en `llamada_nucleo`.
+pub fn transicion_ingreso(
+    resultado: &str,
+    cola: Duration,
+    espera_candado: Duration,
+    total: Duration,
+) -> serde_json::Value {
+    serde_json::json!({
+        "resultado": resultado,
+        "ms_cola": ms(cola),
+        "ms_espera_candado": ms(espera_candado),
+        "ms_nucleo": ms(total.saturating_sub(espera_candado)),
+        "ms_total": ms(total),
+    })
 }
 
 /// Milisegundos desde que arrancó el proceso (desde `iniciar`).
@@ -683,6 +719,37 @@ mod tests {
         assert_eq!(lote, ["2", "3", "4"]);
         cola.devolver(lote);
         assert_eq!(cola.tomar(3), ["2", "3", "4"], "vuelve adelante y en orden");
+    }
+
+    #[test]
+    fn la_transicion_de_ingreso_separa_el_candado_del_resto() {
+        let datos = transicion_ingreso(
+            "formulario",
+            Duration::from_millis(3),
+            Duration::from_millis(40),
+            Duration::from_millis(1500),
+        );
+        assert_eq!(datos["resultado"], "formulario");
+        assert_eq!(datos["ms_cola"], 3.0);
+        assert_eq!(datos["ms_espera_candado"], 40.0);
+        assert_eq!(datos["ms_nucleo"], 1460.0);
+        assert_eq!(datos["ms_total"], 1500.0);
+    }
+
+    #[test]
+    fn medir_espera_acumula_lo_que_tardo_en_tomar_el_candado() {
+        let acumulado = Cell::new(Duration::ZERO);
+        let valor = medir_espera(&acumulado, || {
+            std::thread::sleep(Duration::from_millis(20));
+            7
+        });
+        assert_eq!(valor, 7);
+        assert!(acumulado.get() >= Duration::from_millis(20));
+        medir_espera(&acumulado, || ());
+        assert!(
+            acumulado.get() >= Duration::from_millis(20),
+            "acumula, no reemplaza"
+        );
     }
 
     #[test]
