@@ -7,7 +7,8 @@ Releases. Así sigue funcionando con el repositorio privado.
 
 ## Cómo funciona
 
-1. Cada release (`release.yml`, job `build-android`) sube a R2:
+1. Cada release del móvil (`release-movil.yml`, tag `movil-v<versionName>`)
+   sube a R2:
    - el APK, en `android/Lattis-mobile-v<versión>-<12 primeros del SHA-256>.apk`.
      Es inmutable y se cachea para siempre;
    - el manifiesto `android/latest.json`, sin caché. Se sube **después** del
@@ -95,6 +96,31 @@ no tenga señal para bajar la actualización. La sincronización la corta el
 núcleo por su cuenta cuando la nube responde que la versión ya no es
 compatible (`VersionDesactualizada`).
 
+## Cómo sacar una versión del móvil
+
+El móvil se publica aparte del escritorio. Un tag `v*` (escritorio) ya no compila
+ni publica el APK.
+
+1. Subir `versionCode` y `versionName` en `mobile/android/app/build.gradle.kts` y
+   fusionar.
+2. `git tag movil-v<versionName>` y `git push origin movil-v<versionName>`
+   (por ejemplo `movil-v1.4.14`).
+
+`release-movil.yml` hace el resto: prueba, compila, firma, crea el Release de
+GitHub `Lattis móvil v<versionName>` (nunca marcado como "Latest", para no pisar
+el `latest.json` del escritorio) y publica el APK y el manifiesto en R2.
+
+Protecciones:
+
+- El job falla si el tag no coincide con el `versionName` del código.
+- Una versión ya publicada no se sube otra vez: si el manifiesto de R2 ya tiene
+  ese `versionCode`, el paso de R2 no hace nada. Así no quedan dos APK distintos
+  con la misma versión. Para forzarlo, disparo manual (Actions → Release móvil →
+  Run workflow) con `republicar`.
+- Dos corridas no se ejecutan a la vez, para que no se pisen el manifiesto.
+
+---
+
 ## Configuración inicial (una sola vez)
 
 1. **Cloudflare → R2:** activar R2 y crear el bucket (por ejemplo
@@ -102,7 +128,7 @@ compatible (`VersionDesactualizada`).
 2. **Bucket → Settings → Custom Domains:** conectar `lt.megabrisas.com`.
    No usar el subdominio `r2.dev`: tiene límite de uso y Cloudflare indica que
    no es para producción. El dominio tiene que coincidir con el de
-   `URL_MANIFIESTO_ACTUALIZACION` y con `URL_DESCARGAS` de `release.yml`.
+   `URL_MANIFIESTO_ACTUALIZACION` y con `URL_DESCARGAS` de `release-movil.yml`.
 3. **R2 → Administrar tokens de API:** crear un token con permiso *Object Read
    & Write* **sólo sobre ese bucket**.
 4. **GitHub → Settings → Secrets and variables → Actions:**
