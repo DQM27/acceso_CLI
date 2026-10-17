@@ -27,6 +27,9 @@ fun AvisoActualizacion(
     modifier: Modifier = Modifier,
 ) {
     if (estado !is EstadoActualizacion.ConNovedad) return
+    // "Más tarde": la franja se oculta y el aviso sigue, discreto, en el menú
+    // de la cuenta (ver [MenuCuenta]). Una obligatoria nunca queda pospuesta.
+    if (estado is EstadoActualizacion.Disponible && estado.pospuesta) return
     val urgente = estado.novedad.obligatoria || estado is EstadoActualizacion.Fallo
     Surface(
         modifier = modifier.fillMaxWidth(),

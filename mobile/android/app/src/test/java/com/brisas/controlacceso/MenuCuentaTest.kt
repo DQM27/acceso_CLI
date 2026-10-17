@@ -23,4 +23,29 @@ class MenuCuentaTest {
         assertEquals("Administrador", etiquetaRol(RolUsuario.ADMINISTRADOR))
         assertEquals("Operador", etiquetaRol(RolUsuario.OPERADOR))
     }
+
+    @Test
+    fun `sin version confirmada el item busca`() {
+        val opcion = opcionActualizacion(EstadoActualizacion.SinAviso, EstadoBusqueda.INACTIVA)
+        assertEquals("Buscar actualizaciones", opcion.texto)
+        assertEquals(AccionActualizacion.BUSCAR, opcion.accion)
+        assertEquals(false, opcion.resaltada)
+    }
+
+    @Test
+    fun `mientras busca y cuando esta al dia no se puede tocar`() {
+        assertEquals(
+            AccionActualizacion.NINGUNA,
+            opcionActualizacion(EstadoActualizacion.SinAviso, EstadoBusqueda.BUSCANDO).accion,
+        )
+        val alDia = opcionActualizacion(EstadoActualizacion.SinAviso, EstadoBusqueda.AL_DIA)
+        assertEquals("Estás al día", alDia.texto)
+        assertEquals(AccionActualizacion.NINGUNA, alDia.accion)
+    }
+
+    @Test
+    fun `si no se pudo revisar deja reintentar`() {
+        val opcion = opcionActualizacion(EstadoActualizacion.SinAviso, EstadoBusqueda.SIN_RESPUESTA)
+        assertEquals(AccionActualizacion.BUSCAR, opcion.accion)
+    }
 }
