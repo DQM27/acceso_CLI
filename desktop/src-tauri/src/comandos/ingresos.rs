@@ -58,16 +58,38 @@ pub async fn preparar_ingreso(
     contratista_id: i64,
     app: tauri::AppHandle,
 ) -> Result<PreparacionIngresoConBloqueo, String> {
+    let encolado = std::time::Instant::now();
     tauri::async_runtime::spawn_blocking(move || {
+        let cola = encolado.elapsed();
+        let inicio = std::time::Instant::now();
+        let espera_candado = std::cell::Cell::new(std::time::Duration::ZERO);
         let state = app.state::<GuiState>();
-        let sesion = state.sesion_activa()?;
-        let (preparacion, bloqueo) = preparar_ingreso_verificado(
-            || state.core(),
-            state.nube_del_dispositivo(),
-            Some(&sesion),
-            contratista_id,
-        )
-        .map_err(mensaje_ingreso)?;
+        let resultado = state.sesion_activa().and_then(|sesion| {
+            preparar_ingreso_verificado(
+                || crate::telemetria::medir_espera(&espera_candado, || state.core()),
+                state.nube_del_dispositivo(),
+                Some(&sesion),
+                contratista_id,
+            )
+            .map_err(mensaje_ingreso)
+        });
+        if crate::telemetria::activa() {
+            let etiqueta = match &resultado {
+                Ok((_, None)) => "formulario",
+                Ok((_, Some(_))) => "bloqueada",
+                Err(_) => "error",
+            };
+            crate::telemetria::evento(
+                "transicion_ingreso",
+                crate::telemetria::transicion_ingreso(
+                    etiqueta,
+                    cola,
+                    espera_candado.get(),
+                    inicio.elapsed(),
+                ),
+            );
+        }
+        let (preparacion, bloqueo) = resultado?;
         Ok(PreparacionIngresoConBloqueo {
             preparacion,
             mensaje_bloqueo: bloqueo.as_ref().map(mensaje_bloqueo_ingreso),

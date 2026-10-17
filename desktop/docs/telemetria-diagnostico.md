@@ -6,10 +6,31 @@ mismos nombres de evento y de campo, así una consulta sirve para las dos
 plataformas. Las filas del escritorio se reconocen por `version_app`, que
 empieza con `desktop-` (por ejemplo `desktop-1.6.8-diag+abc1234`, con el hash corto del commit).
 
-## Qué build la tiene
+## Cuándo mide
 
-Solo el que se compila con la feature `telemetria` y la configuración de
-diagnóstico:
+El código de medición va en **todos** los builds, pero apagado. Se enciende de
+dos maneras:
+
+**1. En un release normal, con una regla en staging.** Al abrir (y cada 5
+minutos) la app pregunta a `reglas_telemetria_vigentes` con el UUID de la
+instalación (`telemetria_dispositivo`), la plataforma (`escritorio`) y su
+versión (`desktop-1.8.12+abc1234`). Si hay una regla vigente que le toca, mide
+lo que la regla pide (todos los tipos, o una lista); si no, o si no hay red, no
+mide ni manda nada. Toda regla vence (24 h por defecto) y se apaga con
+`activa = false`. Las reglas se crean desde el SQL Editor de staging; ver
+`supabase/scripts/telemetria_reglas_staging.sql`. La app no tiene ninguna
+opción para el operador.
+
+- Sin red, la regla que ya rige sigue hasta que venza; una respuesta sin reglas
+  apaga de inmediato.
+- Un release solo manda **telemetría** a staging, nunca datos de operación. Su
+  base y su nube siguen siendo las de producción.
+- El frontend vuelve a preguntar si está activa cada 30 s, así que encender o
+  apagar no exige reiniciar la app (puede tardar hasta unos 5 minutos en que la
+  app se entere de una regla nueva).
+
+**2. El build de diagnóstico**, siempre encendido, sin reglas. Se compila con
+la feature `telemetria` y la configuración de diagnóstico:
 
 ```
 cd desktop
@@ -19,8 +40,9 @@ npm run tauri build -- --features telemetria --config src-tauri/tauri.diagnostic
 O desde GitHub: workflow manual **Build de prueba (mobile y escritorio)**,
 variante `escritorio-diagnostico` (el instalador queda como artifact).
 
-- Sin la feature (el build que se publica), `telemetria_activa()` devuelve
-  `false`: el frontend no mide nada y el backend no arranca ningún hilo.
+- Sin la feature (el build que se publica), `telemetria_activa()` es `false`
+  mientras no haya una regla vigente: el frontend no mide nada y el backend
+  solo mantiene el hilo que consulta las reglas.
 - La dirección de staging está fija en `src-tauri/src/telemetria.rs`.
   Producción nunca recibe telemetría.
 - **Es un build de prueba, igual que el `diagnostico` de Android**
@@ -69,6 +91,7 @@ pesa como máximo 16 KB.
 | `panic` | Rust | Dónde ocurrió (`archivo:línea`) y en qué hilo, sin el mensaje. Se guarda en disco y sale en el próximo arranque |
 | `cierre` | Rust | Cierre normal: minutos que estuvo abierta |
 | `llamada_nucleo` | Frontend, cada 30 s | Por comando de Tauri, con el IPC incluido: llamadas, errores, p50/p90/máx y total en ms |
+| `transicion_ingreso` | Rust, en cada `preparar_ingreso` | Lo que tarda elegir a un contratista hasta tener el formulario del gafete, del lado del backend (sin el IPC, que sale en `llamada_nucleo`): `resultado` (`formulario`, `bloqueada` o `error`), `ms_cola` (esperando un hilo del pool), `ms_espera_candado` (esperando `state.core()`), `ms_nucleo` (`ms_total` sin la espera del candado: reglas locales y consulta a la nube) y `ms_total`. Mismos nombres que el del teléfono |
 | `realtime` | Frontend, cada 30 s | Canal de avisos en vivo, con los mismos campos que el teléfono: conexión, avisos por tabla, ecos propios, aplicados y latencia corregida por el desfase del reloj |
 | `pantalla` | Frontend | Pantalla o sección mostrada, la anterior y `ms_hasta_primer_frame` |
 | `ui_bloqueos` | Frontend, cada 30 s | Tareas largas (> 50 ms) que trabaron la ventana: cantidad, total, p50, máximo y cuántas pasaron de 200 ms |

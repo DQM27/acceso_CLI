@@ -1,13 +1,20 @@
-//! Telemetría técnica del build de diagnóstico del escritorio: el mismo
-//! esquema que la app Android (`Telemetria.kt`, ver
-//! `mobile/android/docs/telemetria-diagnostico.md`) y la misma tabla
-//! `telemetria_diagnostico` del proyecto de STAGING. Documentada en
-//! `desktop/docs/telemetria-diagnostico.md`.
+//! Telemetría técnica del escritorio: el mismo esquema que la app Android
+//! (`Telemetria.kt`, ver `mobile/android/docs/telemetria-diagnostico.md`) y
+//! la misma tabla `telemetria_diagnostico` del proyecto de STAGING.
+//! Documentada en `desktop/docs/telemetria-diagnostico.md`.
 //!
-//! Sólo existe con la feature `telemetria` (`cargo tauri build --features
-//! telemetria`): sin ella `activa()` es `false`, `iniciar` no hace nada y
-//! cada punto de medición es un chequeo de un booleano. Producción nunca
-//! recibe telemetría: la dirección de staging está fija acá.
+//! El código de medición va en todos los builds, pero APAGADO: `activa()` es
+//! `false` y cada punto de medición es un chequeo de un booleano. Se
+//! enciende de dos maneras:
+//! - el build de diagnóstico (`cargo tauri build --features telemetria`)
+//!   está siempre encendido y, además, se redirige a staging con base y
+//!   claves propias (`aislar_build_de_diagnostico`);
+//! - en un release normal, sólo mientras haya una regla vigente en staging
+//!   para esta instalación (`supabase/scripts/telemetria_reglas_staging.sql`).
+//!   Sin regla, o sin red, no se mide ni se manda nada.
+//!
+//! La app nunca manda datos de operación a staging, sólo telemetría: la
+//! dirección de staging está fija acá. Producción no recibe telemetría.
 //!
 //! Qué se manda: sólo números y nombres técnicos (comandos, pantallas,
 //! tipos de error, tiempos, memoria). Nunca cédulas, nombres, placas,
@@ -18,17 +25,17 @@
 //! en el próximo arranque. Un hilo más toma una muestra del proceso cada
 //! 30 s.
 
-use std::collections::VecDeque;
+use std::cell::Cell;
+use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// Proyecto de STAGING (sandbox): la telemetría nunca va a producción. La
 /// llave es la publicable (rol `anon`), que en esta tabla sólo puede
 /// insertar (ver `supabase/scripts/telemetria_diagnostico_staging.sql`).
-#[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
 const URL_STAGING: &str = "https://pmrytjktlyiuikxuuxpr.supabase.co";
-#[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
 const APIKEY_STAGING: &str = "sb_publishable_29DwMvfyj8Jq--LBcqxtBA_pTwWrDH4";
 
 /// El build de diagnóstico es un build de PRUEBA, igual que el
@@ -78,11 +85,8 @@ pub fn aislar_build_de_diagnostico() {
 /// Tope de la cola: sin red por mucho tiempo, lo más viejo se descarta
 /// (y se cuenta) en vez de crecer sin límite.
 const MAXIMO_EN_COLA: usize = 5_000;
-#[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
 const FILAS_POR_LOTE: usize = 200;
-#[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
 const SEGUNDOS_ENVIO: u64 = 60;
-#[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
 const SEGUNDOS_MUESTREO: u64 = 30;
 /// Cuánto puede demorar el cierre de la app por mandar la telemetría.
 const ESPERA_ENVIO_AL_CERRAR: std::time::Duration = std::time::Duration::from_secs(3);
@@ -96,9 +100,95 @@ const ARCHIVO_PENDIENTE: &str = "telemetria_pendiente.jsonl";
 /// tarea", apagón).
 const ARCHIVO_SESION_ABIERTA: &str = "telemetria_sesion_abierta";
 
-/// ¿Esta compilación tiene telemetría?
-pub const fn activa() -> bool {
-    cfg!(feature = "telemetria")
+/// Cada cuánto se vuelven a pedir las reglas a staging.
+const SEGUNDOS_ENTRE_CONSULTAS_DE_REGLAS: u64 = 300;
+/// Cuánto espera la consulta de reglas antes de darse por vencida.
+const SEGUNDOS_ESPERA_REGLAS: u64 = 10;
+
+/// El build de diagnóstico mide siempre, sin reglas.
+const SIEMPRE_ENCENDIDA: bool = cfg!(feature = "telemetria");
+
+/// Encendida por una regla vigente (ver `Reglas`).
+static ENCENDIDA: AtomicBool = AtomicBool::new(false);
+
+/// La regla vigente que está aplicando esta instalación, si hay.
+static REGLAS: Mutex<Option<Reglas>> = Mutex::new(None);
+
+/// ¿Está midiendo ahora mismo? Falso en un release sin regla vigente.
+pub fn activa() -> bool {
+    SIEMPRE_ENCENDIDA || ENCENDIDA.load(Ordering::Relaxed)
+}
+
+/// Una regla tal como la devuelve `reglas_telemetria_vigentes` en staging.
+#[derive(Debug, serde::Deserialize)]
+struct ReglaRemota {
+    /// `None` = todos los tipos de evento.
+    eventos: Option<Vec<String>>,
+    /// RFC 3339.
+    vence_en: String,
+}
+
+/// Lo que piden, juntas, todas las reglas vigentes que le tocan a esta
+/// instalación. El servidor ya filtró por equipo, plataforma y versión
+/// (`reglas_telemetria_vigentes`); acá se combinan y se vigila el
+/// vencimiento.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Reglas {
+    /// Alguna regla pide todos los tipos de evento.
+    todos: bool,
+    /// Si ninguna los pide todos, la unión de los tipos pedidos.
+    eventos: HashSet<String>,
+    /// Cuando vence la última de las reglas.
+    vence: chrono::DateTime<chrono::Utc>,
+}
+
+impl Reglas {
+    /// Combina las reglas que siguen vigentes en `ahora`. `None` si no hay
+    /// ninguna: la telemetría queda apagada. Una regla con fecha ilegible se
+    /// ignora (nunca se enciende por una regla que no se entiende).
+    fn combinar(remotas: &[ReglaRemota], ahora: chrono::DateTime<chrono::Utc>) -> Option<Self> {
+        let mut combinadas: Option<Self> = None;
+        for remota in remotas {
+            let Ok(vence) = chrono::DateTime::parse_from_rfc3339(&remota.vence_en) else {
+                continue;
+            };
+            let vence = vence.with_timezone(&chrono::Utc);
+            if vence <= ahora {
+                continue;
+            }
+            let actual = combinadas.get_or_insert_with(|| Self {
+                todos: false,
+                eventos: HashSet::new(),
+                vence,
+            });
+            match &remota.eventos {
+                None => actual.todos = true,
+                Some(tipos) => actual.eventos.extend(tipos.iter().cloned()),
+            }
+            actual.vence = actual.vence.max(vence);
+        }
+        combinadas
+    }
+
+    /// ¿Esta regla deja pasar este tipo de evento?
+    fn permite(&self, tipo: &str) -> bool {
+        self.todos || self.eventos.contains(tipo)
+    }
+
+    fn vigente(&self, ahora: chrono::DateTime<chrono::Utc>) -> bool {
+        self.vence > ahora
+    }
+}
+
+/// ¿Este tipo de evento está permitido? El build de diagnóstico deja pasar
+/// todo; en un release, sólo lo que pide la regla vigente.
+fn tipo_permitido(tipo: &str) -> bool {
+    SIEMPRE_ENCENDIDA
+        || REGLAS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .is_some_and(|reglas| reglas.permite(tipo))
 }
 
 /// Cola de filas JSON ya armadas, con tope.
@@ -117,14 +207,12 @@ impl Cola {
         self.filas.push_back(fila);
     }
 
-    #[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
     fn tomar(&mut self, cuantas: usize) -> Vec<String> {
         let cuantas = cuantas.min(self.filas.len());
         self.filas.drain(..cuantas).collect()
     }
 
     /// Devuelve un lote que no se pudo mandar, adelante y en orden.
-    #[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
     fn devolver(&mut self, lote: Vec<String>) {
         for fila in lote.into_iter().rev() {
             self.filas.push_front(fila);
@@ -207,6 +295,9 @@ fn tipo_valido(tipo: &str) -> bool {
 
 /// Encola un evento. Sin telemetría (o antes de `iniciar`) no hace nada.
 pub fn evento(tipo: &str, datos: serde_json::Value) {
+    if !activa() || !tipo_permitido(tipo) {
+        return;
+    }
     let Some(t) = TELEMETRIA.get() else {
         return;
     };
@@ -215,6 +306,41 @@ pub fn evento(tipo: &str, datos: serde_json::Value) {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .agregar(fila);
+}
+
+/// Toma el candado del núcleo (`tomar`) y suma a `acumulado` lo que esperó
+/// para conseguirlo. Sólo lo usan los comandos que se miden por dentro.
+pub fn medir_espera<T>(acumulado: &Cell<Duration>, tomar: impl FnOnce() -> T) -> T {
+    let inicio = Instant::now();
+    let tomado = tomar();
+    acumulado.set(acumulado.get() + inicio.elapsed());
+    tomado
+}
+
+/// Milisegundos con un decimal.
+fn ms(duracion: Duration) -> f64 {
+    (duracion.as_secs_f64() * 10_000.0).round() / 10.0
+}
+
+/// `transicion_ingreso` del escritorio, con los campos del teléfono
+/// (`resultado`, `ms_nucleo`, `ms_total`) más lo que el escritorio puede
+/// separar: `ms_cola` (esperando un hilo del pool) y `ms_espera_candado`
+/// (esperando `state.core()`). `ms_nucleo` es lo que queda de `ms_total`
+/// sin la espera del candado: reglas locales y consulta a la nube.
+/// `ms_total` no incluye el IPC: ese tiempo sale en `llamada_nucleo`.
+pub fn transicion_ingreso(
+    resultado: &str,
+    cola: Duration,
+    espera_candado: Duration,
+    total: Duration,
+) -> serde_json::Value {
+    serde_json::json!({
+        "resultado": resultado,
+        "ms_cola": ms(cola),
+        "ms_espera_candado": ms(espera_candado),
+        "ms_nucleo": ms(total.saturating_sub(espera_candado)),
+        "ms_total": ms(total),
+    })
 }
 
 /// Milisegundos desde que arrancó el proceso (desde `iniciar`).
@@ -229,9 +355,10 @@ pub struct EventoFrontend {
     datos: serde_json::Value,
 }
 
-/// ¿Esta compilación manda telemetría? El frontend sólo mide si es así.
+/// ¿Está midiendo ahora? El frontend sólo mide mientras sea así y lo vuelve
+/// a preguntar cada tanto (una regla puede encenderla o apagarla).
 #[tauri::command]
-pub const fn telemetria_activa() -> bool {
+pub fn telemetria_activa() -> bool {
     activa()
 }
 
@@ -290,23 +417,99 @@ fn cargar_pendientes(t: &Telemetria) {
     let _ = std::fs::remove_file(ruta);
 }
 
-/// Arranca la telemetría (sólo con la feature `telemetria`): identifica la
-/// instalación y la sesión, informa cómo terminó la vez anterior y lanza
-/// los hilos de envío y de muestreo. `directorio` es donde vive la base de
-/// datos local.
+/// Lo que `version_app` dice de este build: `desktop-1.8.12+abc1234`, y
+/// `desktop-1.8.12-diag+abc1234` en el de diagnóstico.
+fn version_app() -> String {
+    format!(
+        "desktop-{}{}+{}",
+        env!("CARGO_PKG_VERSION"),
+        if SIEMPRE_ENCENDIDA { "-diag" } else { "" },
+        env!("BUILD_COMMIT_HASH")
+    )
+}
+
+/// Pone en marcha la telemetría. En el build de diagnóstico arranca ya. En
+/// un release arranca el hilo que pregunta a staging si hay una regla para
+/// esta instalación (al abrir y cada `SEGUNDOS_ENTRE_CONSULTAS_DE_REGLAS`):
+/// sin regla vigente, o sin red, no se mide ni se manda nada. `directorio`
+/// es donde vive la base de datos local.
 pub fn iniciar(directorio: &Path) {
-    if !activa() || TELEMETRIA.get().is_some() {
+    if SIEMPRE_ENCENDIDA {
+        arrancar(directorio);
+        return;
+    }
+    let directorio = directorio.to_path_buf();
+    let _ = std::thread::Builder::new()
+        .name("telemetria-reglas".into())
+        .spawn(move || {
+            let dispositivo = identificador_de_instalacion(&directorio);
+            loop {
+                aplicar_reglas(&directorio, consultar_reglas(&dispositivo).ok().as_deref());
+                std::thread::sleep(Duration::from_secs(SEGUNDOS_ENTRE_CONSULTAS_DE_REGLAS));
+            }
+        });
+}
+
+/// Pregunta a staging qué reglas le tocan a esta instalación. Desde un hilo
+/// propio (fuera de tokio): usa el cliente HTTP bloqueante.
+fn consultar_reglas(dispositivo: &str) -> Result<Vec<ReglaRemota>, ()> {
+    let cliente = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(SEGUNDOS_ESPERA_REGLAS))
+        .build()
+        .map_err(|_| ())?;
+    let respuesta = cliente
+        .post(format!(
+            "{URL_STAGING}/rest/v1/rpc/reglas_telemetria_vigentes"
+        ))
+        .header("apikey", APIKEY_STAGING)
+        .json(&serde_json::json!({
+            "p_dispositivo": dispositivo,
+            "p_plataforma": "escritorio",
+            "p_version": version_app(),
+        }))
+        .send()
+        .map_err(|_| ())?;
+    if !respuesta.status().is_success() {
+        return Err(());
+    }
+    respuesta.json::<Vec<ReglaRemota>>().map_err(|_| ())
+}
+
+/// Aplica lo que dicen las reglas: enciende (arrancando la telemetría la
+/// primera vez), cambia lo que se permite o apaga. `remotas` es `None` si no
+/// hubo respuesta (sin red): la regla que ya rige sigue hasta que venza. Una
+/// respuesta sin reglas vigentes apaga de inmediato.
+fn aplicar_reglas(directorio: &Path, remotas: Option<&[ReglaRemota]>) {
+    let ahora = chrono::Utc::now();
+    let mut vigentes = REGLAS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let nuevas = remotas.map_or_else(
+        || vigentes.clone().filter(|actual| actual.vigente(ahora)),
+        |remotas| Reglas::combinar(remotas, ahora),
+    );
+    vigentes.clone_from(&nuevas);
+    drop(vigentes);
+    if nuevas.is_some() {
+        ENCENDIDA.store(true, Ordering::Relaxed);
+        arrancar(directorio);
+    } else {
+        ENCENDIDA.store(false, Ordering::Relaxed);
+    }
+}
+
+/// Arranca la telemetría una sola vez: identifica la instalación y la
+/// sesión, informa cómo terminó la vez anterior y lanza los hilos de envío
+/// y de muestreo.
+fn arrancar(directorio: &Path) {
+    if TELEMETRIA.get().is_some() {
         return;
     }
     let cierre_anterior_limpio = revisar_cierre_anterior(directorio);
     let t = Telemetria {
         dispositivo: identificador_de_instalacion(directorio),
         sesion: control_acceso::database::identificador::generar_uuid_v4(),
-        version: format!(
-            "desktop-{}-diag+{}",
-            env!("CARGO_PKG_VERSION"),
-            env!("BUILD_COMMIT_HASH")
-        ),
+        version: version_app(),
         directorio: directorio.to_path_buf(),
         inicio: Instant::now(),
         cola: Mutex::new(Cola::default()),
@@ -323,10 +526,21 @@ pub fn iniciar(directorio: &Path) {
             "arquitectura": std::env::consts::ARCH,
             "nucleos_cpu": std::thread::available_parallelism().map(std::num::NonZero::get).ok(),
             "ram_total_mb": sistema::ram_total_mb(),
-            "build": if cfg!(debug_assertions) { "debug" } else { "diagnostico" },
+            "build": if cfg!(debug_assertions) {
+                "debug"
+            } else if SIEMPRE_ENCENDIDA {
+                "diagnostico"
+            } else {
+                "release"
+            },
         }),
     );
-    if let Some(limpio) = cierre_anterior_limpio {
+    // En un release la telemetría no deja marca cuando está apagada, así que
+    // "no había marca" no prueba un cierre normal: sólo se informa el caso
+    // en que la marca sí quedó.
+    if let Some(limpio) = cierre_anterior_limpio
+        && (SIEMPRE_ENCENDIDA || !limpio)
+    {
         evento(
             "salida_anterior",
             serde_json::json!({
@@ -415,13 +629,12 @@ pub fn cerrar() {
     }
 }
 
-#[cfg(feature = "telemetria")]
 mod envio {
     use std::time::Duration;
 
     use super::{
         APIKEY_STAGING, FILAS_POR_LOTE, SEGUNDOS_ENVIO, SEGUNDOS_MUESTREO, TELEMETRIA, URL_STAGING,
-        evento, guardar_pendientes, sistema,
+        activa, evento, guardar_pendientes, sistema,
     };
 
     pub fn lanzar_hilos() {
@@ -439,7 +652,9 @@ mod envio {
                 let mut muestreo = sistema::Muestreo::default();
                 loop {
                     std::thread::sleep(Duration::from_secs(SEGUNDOS_MUESTREO));
-                    evento("muestra_sistema", muestreo.tomar());
+                    if activa() {
+                        evento("muestra_sistema", muestreo.tomar());
+                    }
                 }
             });
     }
@@ -504,23 +719,15 @@ mod envio {
     }
 }
 
-#[cfg(not(feature = "telemetria"))]
-mod envio {
-    pub const fn lanzar_hilos() {}
-    pub const fn enviar_todo() {}
-}
-
 /// Datos del proceso y del equipo.
 mod sistema {
     /// Muestra periódica: memoria y CPU del proceso (sin contar los procesos
     /// de `WebView2`, que son aparte) y memoria del equipo.
     #[derive(Default)]
-    #[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
     pub struct Muestreo {
         anterior: Option<(std::time::Instant, u64)>,
     }
 
-    #[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
     impl Muestreo {
         pub fn tomar(&mut self) -> serde_json::Value {
             let ahora = std::time::Instant::now();
@@ -646,12 +853,10 @@ mod sistema {
 
     // Fuera de Windows (desarrollo en Linux/macOS) no hay estas mediciones.
     #[cfg(not(windows))]
-    #[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
     pub const fn memoria_proceso() -> Option<(u64, u64, u64)> {
         None
     }
     #[cfg(not(windows))]
-    #[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
     pub const fn cpu_proceso_ms() -> Option<u64> {
         None
     }
@@ -660,7 +865,6 @@ mod sistema {
         None
     }
     #[cfg(not(windows))]
-    #[cfg_attr(not(feature = "telemetria"), allow(dead_code))]
     pub const fn ram_libre_mb() -> Option<u64> {
         None
     }
@@ -683,6 +887,129 @@ mod tests {
         assert_eq!(lote, ["2", "3", "4"]);
         cola.devolver(lote);
         assert_eq!(cola.tomar(3), ["2", "3", "4"], "vuelve adelante y en orden");
+    }
+
+    fn regla(eventos: Option<&[&str]>, vence_en: &str) -> ReglaRemota {
+        ReglaRemota {
+            eventos: eventos.map(|tipos| tipos.iter().map(|t| (*t).to_owned()).collect()),
+            vence_en: vence_en.to_owned(),
+        }
+    }
+
+    fn hora(texto: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339(texto)
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    }
+
+    const AHORA: &str = "2026-10-17T12:00:00Z";
+
+    #[test]
+    fn sin_reglas_no_se_mide() {
+        assert_eq!(Reglas::combinar(&[], hora(AHORA)), None);
+    }
+
+    #[test]
+    fn una_regla_vencida_o_ilegible_no_enciende() {
+        let remotas = [
+            regla(None, "2026-10-17T11:59:59Z"),
+            regla(None, "2026-10-17T12:00:00Z"),
+            regla(None, "no es una fecha"),
+        ];
+        assert_eq!(Reglas::combinar(&remotas, hora(AHORA)), None);
+    }
+
+    #[test]
+    fn una_regla_sin_lista_de_eventos_deja_pasar_todo() {
+        let reglas =
+            Reglas::combinar(&[regla(None, "2026-10-18T12:00:00+00:00")], hora(AHORA)).unwrap();
+        assert!(reglas.permite("llamada_nucleo"));
+        assert!(reglas.permite("cualquier_otro"));
+    }
+
+    #[test]
+    fn una_regla_con_lista_solo_deja_pasar_esos_tipos() {
+        let reglas = Reglas::combinar(
+            &[regla(
+                Some(&["transicion_ingreso", "llamada_nucleo"]),
+                "2026-10-18T12:00:00Z",
+            )],
+            hora(AHORA),
+        )
+        .unwrap();
+        assert!(reglas.permite("transicion_ingreso"));
+        assert!(reglas.permite("llamada_nucleo"));
+        assert!(!reglas.permite("realtime"));
+    }
+
+    #[test]
+    fn varias_reglas_se_suman_y_vence_la_ultima() {
+        let remotas = [
+            regla(Some(&["a"]), "2026-10-17T13:00:00Z"),
+            regla(Some(&["b"]), "2026-10-17T15:00:00Z"),
+            regla(Some(&["c"]), "2026-10-17T11:00:00Z"),
+        ];
+        let reglas = Reglas::combinar(&remotas, hora(AHORA)).unwrap();
+        assert!(reglas.permite("a") && reglas.permite("b"));
+        assert!(!reglas.permite("c"), "la vencida no suma");
+        assert!(reglas.vigente(hora("2026-10-17T14:59:59Z")));
+        assert!(!reglas.vigente(hora("2026-10-17T15:00:00Z")));
+    }
+
+    #[test]
+    fn si_una_regla_pide_todo_las_demas_no_lo_limitan() {
+        let remotas = [
+            regla(Some(&["a"]), "2026-10-17T13:00:00Z"),
+            regla(None, "2026-10-17T14:00:00Z"),
+        ];
+        assert!(
+            Reglas::combinar(&remotas, hora(AHORA))
+                .unwrap()
+                .permite("x")
+        );
+    }
+
+    #[test]
+    fn la_respuesta_del_servidor_se_lee_como_regla() {
+        let remotas: Vec<ReglaRemota> = serde_json::from_str(
+            r#"[{"id":7,"nivel":"ligero","eventos":null,"vence_en":"2026-10-18T12:00:00.123456+00:00"},
+                {"id":8,"nivel":"diagnostico","eventos":["realtime"],"vence_en":"2026-10-18T12:00:00+00:00"}]"#,
+        )
+        .unwrap();
+        let reglas = Reglas::combinar(&remotas, hora(AHORA)).unwrap();
+        assert!(reglas.todos);
+        assert!(reglas.eventos.contains("realtime"));
+    }
+
+    #[test]
+    fn la_transicion_de_ingreso_separa_el_candado_del_resto() {
+        let datos = transicion_ingreso(
+            "formulario",
+            Duration::from_millis(3),
+            Duration::from_millis(40),
+            Duration::from_millis(1500),
+        );
+        assert_eq!(datos["resultado"], "formulario");
+        assert_eq!(datos["ms_cola"], 3.0);
+        assert_eq!(datos["ms_espera_candado"], 40.0);
+        assert_eq!(datos["ms_nucleo"], 1460.0);
+        assert_eq!(datos["ms_total"], 1500.0);
+    }
+
+    #[test]
+    fn medir_espera_acumula_lo_que_tardo_en_tomar_el_candado() {
+        let acumulado = Cell::new(Duration::ZERO);
+        let valor = medir_espera(&acumulado, || {
+            std::thread::sleep(Duration::from_millis(20));
+            7
+        });
+        assert_eq!(valor, 7);
+        assert!(acumulado.get() >= Duration::from_millis(20));
+        medir_espera(&acumulado, || ());
+        assert!(
+            acumulado.get() >= Duration::from_millis(20),
+            "acumula, no reemplaza"
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
 [package]
 name = "control-acceso-desktop"
-version = "1.8.12"
+version = "1.8.13"
 description = "Interfaz gráfica de escritorio para Lattis"
 authors = ["Daniel Quintana — DQM27"]
 license = "MIT"
@@ -60,15 +60,17 @@ tauri-plugin-process = "2"
 sentry = "0.49"
 url = "=2.5.8"
 tokio = { version = "=1.53.1", features = ["sync", "time"] }
-# Sólo con la feature `telemetria` (build de diagnóstico, ver
-# src/telemetria.rs): manda los lotes a staging. Misma versión y features que
-# el crate raíz, así Cargo unifica una sola copia.
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"], optional = true }
+# Telemetría (src/telemetria.rs): consulta las reglas y manda los lotes a
+# staging. Misma versión y features que el crate raíz, así Cargo unifica una
+# sola copia.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 [features]
-# Telemetría técnica hacia el proyecto de STAGING (docs/telemetria-diagnostico.md).
-# Nunca en los builds que se publican: `cargo tauri build --features telemetria`.
-telemetria = ["dep:reqwest"]
+# Build de DIAGNÓSTICO (docs/telemetria-diagnostico.md): la telemetría queda
+# siempre encendida y la app se redirige a staging, con base y claves propias.
+# Los builds que se publican llevan el código de medición pero apagado: sólo
+# mide una regla vigente en staging. `cargo tauri build --features telemetria`.
+telemetria = []
 
 [dev-dependencies]
 # Sólo para los tests de recuperacion_local.rs -- misma versión que ya fija
