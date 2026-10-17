@@ -13,7 +13,7 @@ use crate::estado::GuiState;
 
 // ---- Catálogo: empresas proveedoras ----
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_empresas_proveedor(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<EmpresaProveedor>, String> {
@@ -27,7 +27,7 @@ pub fn listar_empresas_proveedor(
 /// Para un selector de wizard (elegir empresa para un ingreso nuevo) -- una
 /// empresa desactivada nunca es una opción válida, ver
 /// `EmpresaProveedorService::listar_seleccionables`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_empresas_proveedor_seleccionables(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<EmpresaProveedor>, String> {
@@ -38,7 +38,7 @@ pub fn listar_empresas_proveedor_seleccionables(
         .map_err(|_| "No se pudo cargar la lista de empresas".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn buscar_empresas_proveedor(
     texto: String,
     state: tauri::State<GuiState>,
@@ -50,7 +50,7 @@ pub fn buscar_empresas_proveedor(
         .map_err(|_| "No se pudo cargar la lista de empresas".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn crear_empresa_proveedor(
     nombre: String,
     state: tauri::State<GuiState>,
@@ -62,7 +62,7 @@ pub fn crear_empresa_proveedor(
         .map_err(mensaje_empresa_proveedor)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn establecer_empresa_proveedor_activa(
     id: i64,
     activa: bool,
@@ -80,7 +80,7 @@ pub fn establecer_empresa_proveedor_activa(
 
 // ---- Operación: ingreso / salida ----
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_ingreso_proveedor(
     solicitud: SolicitudIngresoProveedorEntrada,
     state: tauri::State<GuiState>,
@@ -95,7 +95,7 @@ pub fn registrar_ingreso_proveedor(
     .map_err(mensaje_ingreso_proveedor_verificado)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_salida_proveedor(id: i64, state: tauri::State<GuiState>) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
@@ -104,7 +104,7 @@ pub fn registrar_salida_proveedor(id: i64, state: tauri::State<GuiState>) -> Res
         .map_err(mensaje_ingreso_proveedor)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_proveedores_activos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<RegistroIngresoProveedorActivoResumen>, String> {
@@ -137,7 +137,7 @@ pub struct HistorialIngresoProveedorRemoto {
     pub usuario_salida_nombre: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_historial_ingresos_proveedor_sitio(
     desde: Option<NaiveDate>,
     hasta: Option<NaiveDate>,

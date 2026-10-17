@@ -11,7 +11,7 @@ use crate::comandos::historial::rango_utc;
 use crate::dto::correo::SolicitudIngresoCorreoEntrada;
 use crate::estado::GuiState;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_ingreso_correo(
     solicitud: SolicitudIngresoCorreoEntrada,
     state: tauri::State<GuiState>,
@@ -26,7 +26,7 @@ pub fn registrar_ingreso_correo(
     .map_err(mensaje_ingreso_correo_verificado)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_salida_correo(id: i64, state: tauri::State<GuiState>) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
@@ -35,7 +35,7 @@ pub fn registrar_salida_correo(id: i64, state: tauri::State<GuiState>) -> Result
         .map_err(mensaje_ingreso_correo)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_correos_activos(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<RegistroIngresoCorreoActivoResumen>, String> {
@@ -63,7 +63,7 @@ pub struct HistorialIngresoCorreoRemoto {
     pub usuario_salida_nombre: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_historial_ingresos_correo_sitio(
     desde: Option<NaiveDate>,
     hasta: Option<NaiveDate>,

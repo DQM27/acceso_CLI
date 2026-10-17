@@ -8,7 +8,7 @@ use crate::estado::GuiState;
 /// Catálogo completo de gafetes, sin restricción de rol a propósito (mismo
 /// criterio que el núcleo — cualquier operador con sesión gestiona
 /// alta/baja/perdido/resolver, a diferencia de Empresas/Usuarios).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn buscar_gafetes(
     filtro: FiltroGafetesEntrada,
     state: tauri::State<GuiState>,
@@ -23,7 +23,7 @@ pub fn buscar_gafetes(
 /// Historial de un gafete puntual — el núcleo no gatea esta lectura por
 /// actor (mismo criterio que `buscar_gafetes`), pero la GUI igual exige
 /// sesión activa, por convención (ver `comandos/mod.rs`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn historial_gafete(
     id: i64,
     state: tauri::State<GuiState>,
@@ -35,7 +35,7 @@ pub fn historial_gafete(
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn crear_gafete(
     numero: i64,
     tipo: TipoGafeteEntrada,
@@ -48,7 +48,7 @@ pub fn crear_gafete(
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn crear_gafetes_rango(
     desde: i64,
     hasta: i64,
@@ -62,7 +62,7 @@ pub fn crear_gafetes_rango(
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dar_de_baja_gafete(id: i64, state: tauri::State<GuiState>) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state
@@ -71,7 +71,7 @@ pub fn dar_de_baja_gafete(id: i64, state: tauri::State<GuiState>) -> Result<(), 
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn marcar_gafete_perdido_contratista(
     id: i64,
     contratista_id: i64,
@@ -84,7 +84,7 @@ pub fn marcar_gafete_perdido_contratista(
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn marcar_gafete_perdido_visita(
     id: i64,
     cita_visitante_id: i64,
@@ -97,7 +97,7 @@ pub fn marcar_gafete_perdido_visita(
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn marcar_gafete_perdido_provisional_kof(
     id: i64,
     encargado_ruta_id: i64,
@@ -110,7 +110,7 @@ pub fn marcar_gafete_perdido_provisional_kof(
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn resolver_gafete(
     id: i64,
     motivo: MotivoResolucionGafete,

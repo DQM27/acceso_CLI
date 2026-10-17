@@ -16,7 +16,7 @@ use crate::estado::GuiState;
 /// y filtra/ordena del lado del cliente (ver
 /// `desktop/src/pantallas/Contratistas.tsx`). Ninguno de los dos casos pagina
 /// — `FiltroContratistasEntrada::construir` siempre pide `limite: usize::MAX`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn buscar_contratistas(
     filtro: FiltroContratistasEntrada,
     state: tauri::State<GuiState>,
@@ -29,7 +29,7 @@ pub fn buscar_contratistas(
 }
 
 /// Formulario de alta — usa el mismo DTO que editar (ver dto/contratistas.rs).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn crear_contratista(
     datos: DatosContratistaEntrada,
     state: tauri::State<GuiState>,
@@ -44,7 +44,7 @@ pub fn crear_contratista(
 /// Cubre tanto el formulario completo (crear/editar) como el toggle rápido de
 /// "es de ruta"/"tiene acceso" desde la grilla. El core exige el registro
 /// completo (`DatosActualizacionContratista` reemplaza, no aplica un parche).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn actualizar_contratista(
     id: i64,
     datos: DatosContratistaEntrada,
@@ -75,7 +75,7 @@ pub struct ReglasFormularioContratista {
 /// Los tipos de ingreso que se pueden elegir para un contratista, en orden.
 /// Los decide el núcleo (`tipo_ingreso_seleccionable`): "Por correo" no está
 /// porque el núcleo lo retiró, no porque la pantalla lo filtre.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tipos_ingreso_seleccionables(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<control_acceso::models::tipo_ingreso::TipoIngreso>, String> {
@@ -88,7 +88,7 @@ pub fn tipos_ingreso_seleccionables(
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reglas_formulario_contratista(
     tipo_ingreso: control_acceso::models::tipo_ingreso::TipoIngreso,
     es_personal_ruta: bool,

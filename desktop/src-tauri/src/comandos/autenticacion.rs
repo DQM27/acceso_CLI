@@ -17,7 +17,7 @@ use crate::estado::GuiState;
 /// poder operar.
 const ESPERA_MAXIMA_SYNC_LOGIN: std::time::Duration = std::time::Duration::from_secs(5);
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn requiere_configuracion_inicial(state: tauri::State<GuiState>) -> Result<bool, String> {
     state
         .core()
@@ -413,7 +413,7 @@ pub async fn cambiar_password_supabase(
 /// sin red, la sesión de la nube queda abierta hasta que otro ingreso la
 /// reemplace, y en la bitácora aparece como "sin cierre" en el próximo
 /// ingreso de este equipo.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cerrar_sesion(app: tauri::AppHandle) {
     let state = app.state::<GuiState>();
     let cedula = state.sesion_activa().ok().map(|sesion| sesion.cedula);

@@ -26,7 +26,7 @@ fn con_bom(contenido: &str) -> String {
 /// archivos por su cuenta; la ruta ya la eligió la persona en el diálogo
 /// nativo de "Guardar como", que también preguntó si reemplazar un archivo
 /// existente, así que acá se escribe directo.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn guardar_csv(
     destino: String,
     contenido: String,
@@ -42,7 +42,7 @@ pub fn guardar_csv(
 /// proveedores y de KOF); mismo estilo que el Excel de Historial. El
 /// destino ya lo confirmó la persona en "Guardar como" -- se aparta el
 /// existente igual que en `exportar_historial`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn exportar_tabla_xlsx(
     destino: String,
     columnas: Vec<ColumnaTabla>,

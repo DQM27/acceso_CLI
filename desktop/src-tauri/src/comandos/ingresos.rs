@@ -16,7 +16,7 @@ use crate::estado::GuiState;
 /// consulta contra `SQLite` por cada tecla — a diferencia de Contratistas,
 /// que sí filtra en el servidor porque su universo no cabe entero en
 /// memoria del lado del webview.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_ingresos_activos(
     state: tauri::State<GuiState>,
 ) -> Result<ListaIngresosActivosResumen, String> {
@@ -30,7 +30,7 @@ pub fn listar_ingresos_activos(
 /// Cuánta gente lleva más de 12 h (aviso) y más de 14 h (crítico) adentro,
 /// con los textos ya redactados por el núcleo: la barra de estado sólo los
 /// muestra (ver `domain::permanencia`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn avisos_permanencia(
     state: tauri::State<GuiState>,
 ) -> Result<control_acceso::application::AvisosPermanencia, String> {
@@ -77,7 +77,7 @@ pub async fn preparar_ingreso(
     .map_err(|error| super::mensaje_tarea_interrumpida("No se pudo preparar el ingreso", error))?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_ingreso(
     contratista_id: i64,
     medio: MedioIngreso,
@@ -98,7 +98,7 @@ pub fn registrar_ingreso(
     .map_err(mensaje_ingreso_verificado)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn registrar_salida(id: i64, state: tauri::State<GuiState>) -> Result<(), String> {
     let sesion = state.sesion_activa()?;
     state

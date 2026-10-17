@@ -10,7 +10,7 @@ use crate::estado::GuiState;
 /// donde una empresa desactivada nunca es una opción válida. El núcleo no
 /// exige sesión para esta lectura, pero la GUI sí la exige acá — ver el
 /// comentario equivalente en `comandos::contratistas::buscar_contratistas`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_empresas(state: tauri::State<GuiState>) -> Result<Vec<Empresa>, String> {
     state.sesion_activa()?;
     state
@@ -22,7 +22,7 @@ pub fn listar_empresas(state: tauri::State<GuiState>) -> Result<Vec<Empresa>, St
 /// Para un selector (el desplegable de "Empresa" al crear/editar un
 /// contratista) -- una empresa desactivada nunca es una opción válida, ver
 /// `EmpresaService::listar_seleccionables`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn listar_empresas_seleccionables(
     state: tauri::State<GuiState>,
 ) -> Result<Vec<Empresa>, String> {
@@ -33,7 +33,7 @@ pub fn listar_empresas_seleccionables(
         .map_err(super::mensaje_generico)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn buscar_empresas(
     filtro: FiltroEmpresasEntrada,
     state: tauri::State<GuiState>,
@@ -45,7 +45,7 @@ pub fn buscar_empresas(
         .map_err(control_acceso::mensajes::mensaje_empresa)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn crear_empresa(nombre: String, state: tauri::State<GuiState>) -> Result<i64, String> {
     let sesion = state.sesion_activa()?;
     state
@@ -54,7 +54,7 @@ pub fn crear_empresa(nombre: String, state: tauri::State<GuiState>) -> Result<i6
         .map_err(control_acceso::mensajes::mensaje_empresa)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn actualizar_empresa(
     id: i64,
     nombre: String,
@@ -67,7 +67,7 @@ pub fn actualizar_empresa(
         .map_err(control_acceso::mensajes::mensaje_empresa)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn establecer_empresa_activa(
     id: i64,
     activa: bool,
