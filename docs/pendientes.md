@@ -827,7 +827,9 @@ estabilizador y clasificador.
   - [ ] Escritorio: publicar también en R2 los instaladores y el `latest.json` del
     updater de Tauri, con las direcciones reescritas, y poner R2 como primer
     `endpoints` en `desktop/src-tauri/tauri.conf.json` (GitHub como respaldo hasta
-    volver privado el repo).
+    volver privado el repo). Hecho en código (ver `docs/actualizaciones-escritorio.md`);
+    falta sacar un release de escritorio con esos `endpoints` e instalarlo a mano en
+    cada equipo, y comprobar que el `latest.json` de R2 queda publicado.
   - [ ] **Página de descargas** en `lt.megabrisas.com`: cada release publica
     una página con la versión vigente de Android y de Windows y su botón de descarga,
     armada desde los mismos manifiestos que usan las apps. Es el link fijo para
