@@ -1,0 +1,395 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Telemetría de rendimiento de las apps. Fuente: tabla telemetria_diagnostico del staging, con un usuario de sólo lectura. Sin datos personales por contrato (docs/telemetria-contrato.md).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "colorMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(distinct dispositivo) as equipos from public.telemetria_diagnostico where $__timeFilter(ocurrido_en) and version_app in (${version:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "title": "Equipos que reportaron",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select count(*) as ingresos from public.telemetria_diagnostico where tipo='transicion_ingreso' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "title": "Ingresos medidos",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Suma de fallos en llamadas al núcleo. Un 'no autenticado' al cambiar de turno es esperado: la sincronización corre justo cuando se cierra la sesión.",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green" }, { "color": "orange", "value": 1 }, { "color": "red", "value": 10 }]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select coalesce(sum((datos->>'errores')::int),0) as errores from public.telemetria_diagnostico where tipo='llamada_nucleo' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "title": "Errores del núcleo",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Frames de más de 700 ms. Debe ser 0.",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green" }, { "color": "red", "value": 1 }]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select coalesce(sum((datos->>'congelados')::int),0) as congelados from public.telemetria_diagnostico where tipo='frames' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote})",
+          "refId": "A"
+        }
+      ],
+      "title": "Frames congelados",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "PSS total y heap de Java por equipo. Una fuga se ve como una línea que sube sin volver a bajar. Hoy el A25 se mantiene plano alrededor de 130 MB.",
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 1, "showPoints": "auto", "spanNulls": true }, "unit": "none" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 5,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select ocurrido_en as time, left(dispositivo,6) as equipo, (datos->>'pss_total_mb')::numeric as pss_total_mb, (datos->>'heap_java_usada_mb')::numeric as heap_java_mb from public.telemetria_diagnostico where tipo='muestra_sistema' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) order by 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Memoria (MB)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "En la primera sesión larga (14 h) los dos subieron de forma sostenida (hilos 107 → 134, descriptores 225 → 272) mientras la memoria quedó plana. Señal débil, en vigilancia: si se repite en otra sesión larga, hay algo que no se cierra.",
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 1, "showPoints": "auto", "spanNulls": true } },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 6,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select ocurrido_en as time, left(dispositivo,6) as equipo, (datos->>'hilos')::int as hilos, (datos->>'descriptores_abiertos')::int as descriptores from public.telemetria_diagnostico where tipo='muestra_sistema' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) order by 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Hilos y descriptores de archivo abiertos",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Peor tiempo de cada operación en cada hora. sincronizar_con_nube ronda siempre 2–3 s en el móvil; las operaciones locales quedan por debajo de 15 ms.",
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 1, "showPoints": "auto", "spanNulls": true }, "unit": "ms" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 7,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select date_trunc('hour', ocurrido_en) as time, datos->>'nombre' as operacion, max((datos->>'max_ms')::numeric) as max_ms from public.telemetria_diagnostico where tipo='llamada_nucleo' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) group by 1,2 order by 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Llamadas al núcleo: máximo por hora (ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 8,
+      "options": { "legend": { "showLegend": false }, "xField": "hora" },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select to_char(date_trunc('hour', ocurrido_en at time zone 'America/Costa_Rica'),'DD HH24\"h\"') as hora, sum((datos->>'errores')::int) as errores from public.telemetria_diagnostico where tipo='llamada_nucleo' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) group by date_trunc('hour', ocurrido_en at time zone 'America/Costa_Rica') having sum((datos->>'errores')::int) > 0 order by date_trunc('hour', ocurrido_en at time zone 'America/Costa_Rica')",
+          "refId": "A"
+        }
+      ],
+      "title": "Errores del núcleo por hora",
+      "type": "barchart"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Mediana del tiempo hasta confirmar el documento (el promedio se distorsiona: una cédula tardó 14 minutos porque alguien dejó la cámara abierta). '(sin confirmar)' son escaneos que se cerraron sin leer el documento.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "id": 9,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select coalesce(datos->>'documento_confirmado_tipo','(sin confirmar)') as documento, count(*) as escaneos, round((percentile_cont(0.5) within group (order by (datos->>'ms_hasta_confirmar')::numeric))::numeric) as ms_confirmar_mediana, max((datos->>'ms_hasta_confirmar')::numeric) as ms_confirmar_max, round(avg((datos->>'fps')::numeric),1) as fps, sum((datos->>'descartados_calidad')::int) as descartados_por_calidad from public.telemetria_diagnostico where tipo='ocr_sesion' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) group by 1 order by escaneos desc",
+          "refId": "A"
+        }
+      ],
+      "title": "Escaneos por tipo de documento",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Atención: 'trabados' cuenta frames de más del doble del presupuesto de la pantalla. En un teléfono de 120 Hz el límite es 16,7 ms, muy estricto para la cámara, por eso escanear_cedula marca porcentajes altos aunque se vea fluida. Lo que importa de verdad es 'congelados' y 'max_ms'.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "id": 10,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select datos->>'pantalla' as pantalla, sum((datos->>'frames')::int) as frames, sum((datos->>'trabados')::int) as trabados, round(100.0*sum((datos->>'trabados')::int)/nullif(sum((datos->>'frames')::int),0),1) as pct_trabados, sum((datos->>'congelados')::int) as congelados, max((datos->>'max_ms')::numeric) as max_ms from public.telemetria_diagnostico where tipo='frames' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) group by 1 order by frames desc",
+          "refId": "A"
+        }
+      ],
+      "title": "Fluidez por pantalla",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
+      "id": 11,
+      "panels": [],
+      "title": "Móvil y escritorio, lado a lado (el escritorio aparece cuando empiece a reportar)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Tiempo desde que se elige a la persona hasta tener el formulario del gafete. 'nube' es la consulta a la nube previa al registro (en el escritorio, 'ms_nucleo' es el total sin la espera del candado). 'candado' y 'cola' solo los manda el escritorio: lo que esperó el comando por el núcleo y por un hilo libre. Referencia del móvil: mediana de unos 0,4 s. Las 'bloqueada' son rechazos por regla y salen en unos 8 ms.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
+      "id": 12,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select coalesce(datos->>'plataforma','movil') as plataforma, coalesce(datos->>'origen','-') as origen, datos->>'resultado' as resultado, count(*) as casos, round((percentile_cont(0.5) within group (order by (datos->>'ms_total')::numeric))::numeric) as p50_total_ms, round((percentile_cont(0.9) within group (order by (datos->>'ms_total')::numeric))::numeric) as p90_total_ms, max((datos->>'ms_total')::numeric) as max_total_ms, round((percentile_cont(0.5) within group (order by (datos->>'ms_nucleo')::numeric))::numeric) as p50_nube_ms, round((percentile_cont(0.5) within group (order by (datos->>'ms_espera_candado')::numeric))::numeric) as p50_candado_ms, round((percentile_cont(0.5) within group (order by (datos->>'ms_cola')::numeric))::numeric) as p50_cola_ms from public.telemetria_diagnostico where tipo='transicion_ingreso' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) group by 1,2,3 order by 1, casos desc",
+          "refId": "A"
+        }
+      ],
+      "title": "Registrar ingreso: tiempo hasta el formulario",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Cada operación del núcleo por plataforma: llamadas, errores, media y peor tiempo. Sirve para comparar la misma operación en el móvil y en el escritorio. Las filas viejas usan nombres anteriores al esquema 2 y pueden aparecer duplicadas.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
+      "id": 13,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select coalesce(datos->>'plataforma','movil') as plataforma, datos->>'nombre' as operacion, sum((datos->>'llamadas')::int) as llamadas, sum((datos->>'errores')::int) as errores, round(sum((datos->>'total_ms')::numeric)/nullif(sum((datos->>'llamadas')::int),0),1) as media_ms, max((datos->>'max_ms')::numeric) as max_ms from public.telemetria_diagnostico where tipo='llamada_nucleo' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) group by 1,2 order by media_ms desc nulls last limit 40",
+          "refId": "A"
+        }
+      ],
+      "title": "Operaciones del núcleo: móvil vs escritorio",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Media por hora de sincronizar_con_nube en cada plataforma. En el móvil ronda 1,5 a 2,3 s.",
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 1, "showPoints": "auto", "spanNulls": true }, "unit": "ms" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
+      "id": 14,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select date_trunc('hour', ocurrido_en) as time, coalesce(datos->>'plataforma','movil') as plataforma, round(sum((datos->>'total_ms')::numeric)/nullif(sum((datos->>'llamadas')::int),0)) as media_ms from public.telemetria_diagnostico where tipo='llamada_nucleo' and datos->>'nombre' in ('sincronizar_con_nube','sincronizarConNubeConSecreto') and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) group by 1,2 order by 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Sincronización con la nube (media por hora)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Lo que importa son 'congelados' (más de 700 ms; debe ser 0) y 'max_ms'. 'trabados' se omite a propósito: en pantallas de 120 Hz el límite es muy estricto y se infla.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 37 },
+      "id": 15,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select coalesce(datos->>'plataforma','movil') as plataforma, datos->>'pantalla' as pantalla, sum((datos->>'frames')::int) as frames, sum((datos->>'congelados')::int) as congelados, max((datos->>'max_ms')::numeric) as max_ms from public.telemetria_diagnostico where tipo='frames' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) group by 1,2 order by congelados desc, max_ms desc",
+          "refId": "A"
+        }
+      ],
+      "title": "Congelados y peor frame por pantalla y plataforma",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Qué plataformas y versiones están reportando y cuándo fue el último reporte (hora de Costa Rica). Sirve para ver si una actualización ya llegó a los equipos.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 45 },
+      "id": 16,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "select coalesce(datos->>'plataforma','movil') as plataforma, version_app as version, count(distinct dispositivo) as equipos, count(distinct sesion) as sesiones, count(*) as filas, to_char(max(ocurrido_en) at time zone 'America/Costa_Rica','DD HH24:MI') as ultimo_reporte_cr from public.telemetria_diagnostico where $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) group by 1,2 order by max(ocurrido_en) desc",
+          "refId": "A"
+        }
+      ],
+      "title": "Quién reporta y con qué versión",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "description": "Peor tiempo por hora de cada comando del escritorio. Vacío hasta que el escritorio mande llamada_nucleo. Sirve para ver qué comando es el que se pega.",
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 1, "showPoints": "auto", "spanNulls": true }, "unit": "ms" },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 45 },
+      "id": 17,
+      "targets": [
+        {
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "select date_trunc('hour', ocurrido_en) as time, datos->>'nombre' as comando, max((datos->>'max_ms')::numeric) as max_ms from public.telemetria_diagnostico where tipo='llamada_nucleo' and datos->>'plataforma'='escritorio' and $__timeFilter(ocurrido_en) and version_app in (${version:singlequote}) group by 1,2 order by 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Escritorio: peor tiempo por comando (por hora)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 42,
+  "tags": ["lattis", "telemetria"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+        "includeAll": true,
+        "label": "Versión",
+        "multi": true,
+        "name": "version",
+        "options": [],
+        "query": "select distinct version_app from public.telemetria_diagnostico order by 1",
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "America/Costa_Rica",
+  "title": "Lattis · Telemetría (staging)",
+  "uid": "lattis-telemetria",
+  "weekStart": ""
+}

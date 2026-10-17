@@ -196,8 +196,9 @@ De la sesión del 2026-10-17 (además de los del plan anterior):
   Cloudflare con permisos sobre todos los buckets.
 - **Respaldo nocturno de Supabase a R2** (`pg_dump` desde una acción programada).
 - **Alertas de Dependabot** que GitHub mostró al subir una rama: no se revisaron.
-- **Guardar el tablero y la alerta de Grafana como JSON en el repo**, ajustar las
-  tablas para teléfono y el color del gráfico de errores.
+- **Guardar la alerta de Grafana como JSON en el repo** (los tableros ya están en
+  `docs/grafana/`), ajustar las tablas para teléfono y el color del gráfico de
+  errores.
 - **Posible fuga de hilos y descriptores en el móvil** (hipótesis: la conexión en
   vivo se reabre al volver a primer plano y algo de la anterior no se cierra,
   `NubeRealtime.kt`).

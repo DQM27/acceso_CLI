@@ -182,9 +182,9 @@ del desarrollador.
 - **Los "trabados" de la cámara están inflados en pantallas de 120 Hz** (el límite
   es el doble del presupuesto del cuadro: 16,7 ms). Importan los congelados y el
   máximo.
-- **Guardar el tablero y la alerta de Grafana como JSON en el repo** para poder
-  reconstruirlos. Ajustar las tablas para teléfono (se cortan las columnas) y el
-  gráfico de errores por hora (sale verde).
+- **Guardar la alerta de Grafana como JSON en el repo** para poder reconstruirla
+  (los tableros ya están en `docs/grafana/`). Ajustar las tablas para teléfono
+  (se cortan las columnas) y el gráfico de errores por hora (sale verde).
 - **Regla de equipos nuevos:** confirmar que evalúa y que llega el correo. Agregar
   después la notificación a la app móvil de Grafana (por la documentación pasa por
   la integración Grafana IRM; no se confirmó cómo recibe las notificaciones la app).
