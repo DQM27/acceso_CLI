@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Sync
@@ -262,13 +264,22 @@ fun PantallaPrincipal(
             // etiqueta del equipo se ve en el login, acá saturaba). Quién
             // tiene la sesión vive en el menú de la cuenta.
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Lattis",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Lattis",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    PuntoConexion(
+                        estadoConexion(
+                            hayRed = rememberHayRed(),
+                            falloSincronizacion = nubeViewModel.error != null,
+                        ),
+                    )
+                }
                 if (textoUnidad != null) {
                     Text(
                         textoUnidad,
