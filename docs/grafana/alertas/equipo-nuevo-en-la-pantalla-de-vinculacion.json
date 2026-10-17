@@ -1,0 +1,53 @@
+{
+  "title": "Equipo nuevo en la pantalla de vinculación",
+  "ruleGroup": "seguridad-equipos",
+  "folderUID": "lattis-alertas",
+  "orgID": 1,
+  "condition": "B",
+  "for": "0s",
+  "noDataState": "OK",
+  "execErrState": "Alerting",
+  "isPaused": false,
+  "labels": { "origen": "telemetria", "severidad": "seguridad" },
+  "annotations": {
+    "summary": "Un equipo abrió la pantalla de primer arranque o el escáner del código de vinculación",
+    "description": "Un teléfono con la app instaló y llegó a la pantalla de vinculación en los últimos 15 minutos. Si no fuiste tú instalando un equipo nuevo, es un intento de usar la app sin credenciales. Ver el dispositivo en el tablero Lattis · Telemetría."
+  },
+  "notification_settings": {
+    "receiver": "correo-daniel",
+    "group_by": ["alertname"],
+    "group_wait": "30s",
+    "group_interval": "5m",
+    "repeat_interval": "12h"
+  },
+  "data": [
+    {
+      "refId": "A",
+      "datasourceUid": "eg1fe86yip534f",
+      "relativeTimeRange": { "from": 900, "to": 0 },
+      "model": {
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+        "editorMode": "code",
+        "format": "table",
+        "intervalMs": 1000,
+        "maxDataPoints": 43200,
+        "rawQuery": true,
+        "refId": "A",
+        "rawSql": "select count(distinct dispositivo) as equipos from public.telemetria_diagnostico where tipo = 'pantalla' and datos->>'pantalla' in ('primer_arranque','escanear_codigo_vinculacion') and ocurrido_en > now() - interval '15 minutes'"
+      }
+    },
+    {
+      "refId": "B",
+      "datasourceUid": "__expr__",
+      "relativeTimeRange": { "from": 0, "to": 0 },
+      "model": {
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [{ "evaluator": { "type": "gt", "params": [0] } }],
+        "intervalMs": 1000,
+        "maxDataPoints": 43200,
+        "refId": "B"
+      }
+    }
+  ]
+}
