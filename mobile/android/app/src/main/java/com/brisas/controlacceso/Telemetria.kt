@@ -74,8 +74,8 @@ object Telemetria {
         motor?.encolar(tipo, datos)
     }
 
-    fun registrarLlamada(nombre: String, nanos: Long, ok: Boolean) {
-        motor?.registrarLlamada(nombre, nanos, ok)
+    fun registrarLlamada(nombre: String, nanos: Long, ok: Boolean, tipoError: String? = null) {
+        motor?.registrarLlamada(nombre, nanos, ok, tipoError)
     }
 
     /// La ventana de la Activity, para medir la duración de cada frame.
@@ -128,12 +128,17 @@ inline fun <T> medirNucleo(nombre: String, bloque: () -> T): T {
     if (!Telemetria.activa) return bloque()
     val inicio = System.nanoTime()
     var ok = false
+    var tipoError: String? = null
     try {
         val resultado = bloque()
         ok = true
         return resultado
+    } catch (error: Throwable) {
+        // Sólo el tipo, de una lista fija: nunca el mensaje.
+        tipoError = tipoDeErrorNucleo(error)
+        throw error
     } finally {
-        Telemetria.registrarLlamada(nombre, System.nanoTime() - inicio, ok)
+        Telemetria.registrarLlamada(nombre, System.nanoTime() - inicio, ok, tipoError)
     }
 }
 
@@ -207,8 +212,14 @@ private class MotorTelemetria(private val app: Application) {
 
     /// El nombre se guarda en su forma canónica (`nombreCanonicoOperacion`),
     /// igual en móvil y escritorio y entre versiones de la app.
-    fun registrarLlamada(nombre: String, nanos: Long, ok: Boolean) =
-        llamadas.registrar(nombreCanonicoOperacion(nombre), nanos, ok)
+    fun registrarLlamada(nombre: String, nanos: Long, ok: Boolean, tipoError: String? = null) =
+        llamadas.registrar(
+            nombreCanonicoOperacion(nombre),
+            nanos,
+            ok,
+            // La red sólo se consulta si hubo un error que lo necesite.
+            if (ok || tipoError == null) tipoError else tipoDeErrorSegunRed(tipoError, redActual() == "sin_red"),
+        )
 
     /// Tipo de red ahora (`clasificarRed`). Sin el permiso, o ante cualquier
     /// fallo del sistema, `otra`: medir nunca puede tirar la app.
