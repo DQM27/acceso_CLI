@@ -85,6 +85,12 @@ Detalle completo en `plan-herramienta-diagnostico.md`. Lo esencial:
   propia al principio; Grafana puede mostrarlas, de solo lectura.
 - **La app lee solo las reglas que le tocan**, con la llave pública y de solo
   lectura. Escribir reglas exige las credenciales del desarrollador.
+- **Sin sondeo.** Se descartó consultar las reglas cada tantos minutos (gasta
+  recursos solo para tener un interruptor). La app las consulta **al abrir y
+  después de cada login exitoso**, con un hilo corto en segundo plano (tope de
+  10 s) y como mucho una vez cada 5 minutos. El cambio de una regla se nota en
+  el siguiente arranque o login. Si la consulta falla queda como estaba; una
+  respuesta sin reglas apaga; el vencimiento se vigila en la app, sin consultar.
 - **Niveles:** métricas ligeras siempre disponibles; **diagnóstico** con detalle
   solo cuando una regla lo enciende. Lo pesado (StrictMode, vigilante de fugas)
   sigue solo en el build de diagnóstico: no se puede encender en caliente sin
@@ -157,7 +163,7 @@ dos pequeñas), CI en verde, y se prueba en un equipo real.
 | # | Fase | Criterio de terminado |
 |---|---|---|
 | 0 | Medir el escritorio: tiempo por comando y espera del candado, con el build de diagnóstico, y verificar si se pega con la 1.8.12. | Hay filas de `llamada_nucleo` del escritorio en staging y el tablero muestra los tiempos por comando. |
-| 1 | **Tabla de reglas** en staging y la lectura desde la app (móvil y escritorio). Apagada por defecto. Separar en el escritorio el código de medición de la redirección a staging. | Sin regla no se manda nada; con una regla para un UUID, esa instalación manda y las demás no; al vencer, deja de mandar. Hay una prueba automática de la evaluación de reglas en cada plataforma, con los mismos casos. |
+| 1 | **Tabla de reglas** en staging y la lectura desde la app (móvil y escritorio), al abrir y tras el login, sin sondeo. Apagada por defecto. Separar en el escritorio el código de medición de la redirección a staging. **Estado:** tabla, función y escritorio hechos (falta probarlos en vivo); el móvil falta. | Sin regla no se manda nada; con una regla para un UUID, esa instalación manda y las demás no; al vencer, deja de mandar. Hay una prueba automática de la evaluación de reglas en cada plataforma, con los mismos casos. |
 | 2 | **Limpiador** de datos personales en el teléfono/PC y en el receptor, con pruebas. | Un mensaje con una cédula, un correo o una ruta con el usuario sale limpio; las pruebas lo cubren y fallan si se rompe. |
 | 3 | **Medición por comando en el escritorio** como eventos `llamada_nucleo` (mismo contrato que el móvil) y la espera del candado. | El tablero compara el tiempo por comando de móvil y escritorio. |
 | 4 | **Topes y entrada segura**: camino A con límites, o Worker (B1). Limpiador de retención (30 días de métricas). | Una inserción fuera de tamaño o de ritmo se rechaza; lo viejo se borra solo. |

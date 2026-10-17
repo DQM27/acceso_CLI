@@ -7,8 +7,9 @@
 -- contra staging. Es idempotente.
 --
 -- Cómo funciona: la telemetría está APAGADA por defecto en las apps. Al
--- arrancar (y cada tanto) la app pregunta a `reglas_telemetria_vigentes`
--- con su UUID de instalación, su plataforma y su versión. Si hay una regla
+-- abrir y después de cada login (sin sondeo) la app pregunta a
+-- `reglas_telemetria_vigentes` con su UUID de instalación, su plataforma y
+-- su versión. Un cambio se nota en el siguiente arranque o login. Si hay una regla
 -- vigente que le toca, mide con el detalle que pide; si no, no manda nada.
 -- Toda regla vence (por defecto en 24 horas): apagar es borrar la regla o
 -- poner `activa = false`, y si se olvida se apaga sola.

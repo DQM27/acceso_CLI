@@ -400,7 +400,8 @@ pub struct EventoFrontend {
 }
 
 /// ¿Está midiendo ahora? El frontend sólo mide mientras sea así y lo vuelve
-/// a preguntar cada tanto (una regla puede encenderla o apagarla).
+/// a preguntar cada tanto (la regla se consulta al abrir y tras el login, y
+/// puede vencer con la app abierta).
 #[tauri::command]
 pub fn telemetria_activa() -> bool {
     activa()
