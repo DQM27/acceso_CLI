@@ -1,6 +1,7 @@
 package com.brisas.controlacceso
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import uniffi.control_acceso_mobile.RolUsuario
 
@@ -33,19 +34,27 @@ class MenuCuentaTest {
     }
 
     @Test
-    fun `mientras busca y cuando esta al dia no se puede tocar`() {
-        assertEquals(
-            AccionActualizacion.NINGUNA,
-            opcionActualizacion(EstadoActualizacion.SinAviso, EstadoBusqueda.BUSCANDO).accion,
-        )
-        val alDia = opcionActualizacion(EstadoActualizacion.SinAviso, EstadoBusqueda.AL_DIA)
-        assertEquals("Estás al día", alDia.texto)
-        assertEquals(AccionActualizacion.NINGUNA, alDia.accion)
+    fun `mientras busca no se puede tocar`() {
+        val opcion = opcionActualizacion(EstadoActualizacion.SinAviso, EstadoBusqueda.BUSCANDO)
+        assertEquals("Buscando…", opcion.texto)
+        assertEquals(AccionActualizacion.NINGUNA, opcion.accion)
     }
 
     @Test
-    fun `si no se pudo revisar deja reintentar`() {
-        val opcion = opcionActualizacion(EstadoActualizacion.SinAviso, EstadoBusqueda.SIN_RESPUESTA)
-        assertEquals(AccionActualizacion.BUSCAR, opcion.accion)
+    fun `tras avisar el resultado el item vuelve a ofrecer buscar`() {
+        listOf(EstadoBusqueda.AL_DIA, EstadoBusqueda.SIN_RESPUESTA).forEach { busqueda ->
+            assertEquals(
+                AccionActualizacion.BUSCAR,
+                opcionActualizacion(EstadoActualizacion.SinAviso, busqueda).accion,
+            )
+        }
+    }
+
+    @Test
+    fun `cada resultado de la busqueda tiene su aviso corto`() {
+        assertEquals("Estás al día", avisoDeBusqueda(EstadoBusqueda.AL_DIA))
+        assertEquals("No se pudo revisar", avisoDeBusqueda(EstadoBusqueda.SIN_RESPUESTA))
+        assertNull(avisoDeBusqueda(EstadoBusqueda.INACTIVA))
+        assertNull(avisoDeBusqueda(EstadoBusqueda.BUSCANDO))
     }
 }

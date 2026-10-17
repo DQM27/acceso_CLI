@@ -2,6 +2,7 @@ package com.brisas.controlacceso
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -34,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,18 +68,35 @@ fun MenuCuenta(
     val busqueda by actualizador.busqueda.collectAsState()
     val hayPendiente = estadoActualizacion is EstadoActualizacion.ConNovedad
 
+    val contexto = LocalContext.current
+
     fun cerrar() {
         abierto = false
         actualizador.olvidarBusqueda()
     }
 
+    // La respuesta de "Buscar actualizaciones" sale como un aviso corto, sin
+    // dejar el menú abierto; si hay versión nueva no hay aviso: aparece la
+    // tarjeta flotante y el puntito en la inicial.
+    LaunchedEffect(busqueda) {
+        val aviso = avisoDeBusqueda(busqueda) ?: return@LaunchedEffect
+        Toast.makeText(contexto, aviso, Toast.LENGTH_SHORT).show()
+        actualizador.olvidarBusqueda()
+    }
+
     Box {
         BotonIconoCuadradoBrisas(onClick = { abierto = true }) {
-            Text(
-                inicialDe(sesion.nombre),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
+            // Mientras busca, el círculo girando (igual que el botón de
+            // sincronizar) dice que algo está pasando.
+            if (busqueda == EstadoBusqueda.BUSCANDO) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else {
+                Text(
+                    inicialDe(sesion.nombre),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
         if (hayPendiente) PuntoPendiente(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-3).dp))
         DropdownMenu(expanded = abierto, onDismissRequest = ::cerrar) {
@@ -126,8 +146,11 @@ fun MenuCuenta(
                     enabled = opcion.accion != AccionActualizacion.NINGUNA,
                     onClick = {
                         when (opcion.accion) {
-                            // La búsqueda deja el menú abierto para ver la respuesta.
-                            AccionActualizacion.BUSCAR -> actualizador.buscarAhora()
+                            // Cierra el menú: la respuesta llega como aviso corto.
+                            AccionActualizacion.BUSCAR -> {
+                                cerrar()
+                                actualizador.buscarAhora()
+                            }
                             AccionActualizacion.ACTUALIZAR -> {
                                 cerrar()
                                 actualizador.actualizar()
@@ -217,17 +240,23 @@ internal fun opcionActualizacion(estado: EstadoActualizacion, busqueda: EstadoBu
                 AccionActualizacion.ACTUALIZAR,
                 resaltada = true,
             )
-        EstadoActualizacion.SinAviso -> when (busqueda) {
-            EstadoBusqueda.INACTIVA ->
-                OpcionActualizacion("Buscar actualizaciones", AccionActualizacion.BUSCAR, resaltada = false)
-            EstadoBusqueda.BUSCANDO ->
+        // El "Estás al día" y el "No se pudo revisar" salen como aviso corto
+        // (ver [avisoDeBusqueda]); el ítem sólo vuelve a ofrecer buscar.
+        EstadoActualizacion.SinAviso ->
+            if (busqueda == EstadoBusqueda.BUSCANDO) {
                 OpcionActualizacion("Buscando…", AccionActualizacion.NINGUNA, resaltada = false)
-            EstadoBusqueda.AL_DIA ->
-                OpcionActualizacion("Estás al día", AccionActualizacion.NINGUNA, resaltada = false)
-            EstadoBusqueda.SIN_RESPUESTA ->
-                OpcionActualizacion("Sin respuesta, reintentar", AccionActualizacion.BUSCAR, resaltada = false)
-        }
+            } else {
+                OpcionActualizacion("Buscar actualizaciones", AccionActualizacion.BUSCAR, resaltada = false)
+            }
     }
+
+/// El aviso corto con la respuesta de una búsqueda, o `null` si no hay nada
+/// que decir (todavía buscando, o ya apareció la versión nueva).
+internal fun avisoDeBusqueda(busqueda: EstadoBusqueda): String? = when (busqueda) {
+    EstadoBusqueda.AL_DIA -> "Estás al día"
+    EstadoBusqueda.SIN_RESPUESTA -> "No se pudo revisar"
+    EstadoBusqueda.INACTIVA, EstadoBusqueda.BUSCANDO -> null
+}
 
 /// La inicial del nombre para el botón (vacío no se espera: toda cuenta tiene
 /// nombre; "?" evita un botón sin nada si alguna vez llegara vacío).
