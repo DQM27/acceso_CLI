@@ -18,10 +18,13 @@ import uniffi.control_acceso_mobile.Nucleo
 /// en el catálogo de contratistas. En vez de sumar una pestaña más a una
 /// fila ya apretada, la que era "Proveedores" se renombra y adentro un
 /// selector elige el tipo, igual que el selector de vista de la pantalla
-/// de ingreso: "Visita" ([PantallaVisitas], las agendadas en la web: el
-/// camino principal, por eso va primero), "Proveedor" ([PantallaProveedores])
-/// o "Por correo" ([PantallaPorCorreo], visitas sin agendar autorizadas por
-/// correo).
+/// de ingreso: "Visita" ([PantallaVisitas], las agendadas en la web),
+/// "Proveedor" ([PantallaProveedores]) o "Correo" ([PantallaPorCorreo],
+/// visitas sin agendar autorizadas por correo).
+///
+/// "Visita" está oculta del selector (pedido del usuario 2026-10-17):
+/// `PantallaVisitas` sigue intacta; para volver a mostrarla basta con sacarla
+/// de `enDesarrollo` en [TipoExterno].
 @Composable
 fun PantallaExternos(
     nucleo: Nucleo,
@@ -30,13 +33,13 @@ fun PantallaExternos(
     var tipo by rememberSaveable { mutableIntStateOf(0) }
     Column(modifier = Modifier.fillMaxSize()) {
         FilaPildoras(
-            opciones = TipoExterno.entries.map { it.etiqueta },
+            opciones = TIPOS_VISIBLES.map { it.etiqueta },
             seleccionado = tipo,
             onSeleccionar = { tipo = it },
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
         )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when (TipoExterno.entries.getOrElse(tipo) { TipoExterno.VISITA }) {
+            when (TIPOS_VISIBLES.getOrElse(tipo) { TipoExterno.PROVEEDOR }) {
                 TipoExterno.VISITA -> PantallaVisitas(nucleo, refrescarNube)
                 TipoExterno.PROVEEDOR -> PantallaProveedores(nucleo, refrescarNube)
                 TipoExterno.POR_CORREO -> PantallaPorCorreo(nucleo, refrescarNube)
@@ -45,8 +48,10 @@ fun PantallaExternos(
     }
 }
 
-enum class TipoExterno(val etiqueta: String) {
-    VISITA("Visita"),
+enum class TipoExterno(val etiqueta: String, val enDesarrollo: Boolean = false) {
+    VISITA("Visita", enDesarrollo = true),
     PROVEEDOR("Proveedor"),
-    POR_CORREO("Por correo"),
+    POR_CORREO("Correo"),
 }
+
+private val TIPOS_VISIBLES = TipoExterno.entries.filterNot { it.enDesarrollo }
