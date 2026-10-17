@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { avisos } from "../avisos/avisos";
-import { CircleOff, IdCard, LogIn, LogOut, Users } from "lucide-react";
+import { BadgeCheck, Boxes, CircleOff, HardHat, IdCard, Layers, LogIn, LogOut, Mail, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
 import type { TablaHandle } from "../componentes/Tabla";
@@ -8,17 +9,18 @@ import BarraSeleccion from "../componentes/BarraSeleccion";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
-import {
-  cerrarFilaActiva,
-  claveFilaActiva,
-  listarTodosLosActivos,
-  textoMedioConPlaca,
-  textoTipoIngreso,
-} from "../api";
-import type { FilaActiva } from "../api";
+import { cerrarActivo, listarActivosUnificados } from "../api/activosUnificados";
+import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
-import { contarPorGafete, filtrarPorGafete, filtrarPorNivel } from "./Activos.logica";
-import type { FiltroGafete, FiltroPermanencia } from "./Activos.logica";
+import {
+  contarPorClase,
+  contarPorGafete,
+  ETIQUETA_CLASE,
+  filtrarPorClase,
+  filtrarPorGafete,
+  filtrarPorNivel,
+} from "./Activos.logica";
+import type { FiltroClase, FiltroGafete, FiltroPermanencia } from "./Activos.logica";
 
 /** Ícono, número y nombre completo (al pasar el mouse) de cada opción. Los
  * números son el conteo de gente adentro: el total, y cuántos tienen gafete y
@@ -69,8 +71,40 @@ function ToggleGafete({
   );
 }
 
-/** El resaltado de la fila sale del nivel que calculó el núcleo. */
-function claseFilaActiva(fila: FilaActiva): string | undefined {
+const ICONO_CLASE: Record<ClaseActivo, LucideIcon> = {
+  contratista: HardHat,
+  proveedor: Boxes,
+  correo: Mail,
+  kof: BadgeCheck,
+};
+
+const CLASES: ClaseActivo[] = ["contratista", "proveedor", "correo", "kof"];
+
+/** Una opción por clase más "Todas", con la cantidad de cada una. Mientras
+ * carga no hay números, igual que el filtro de gafete. */
+function opcionesFiltroClase(
+  conteo: Record<ClaseActivo, number> | null,
+): OpcionSegmentada<FiltroClase>[] {
+  const todas = conteo ? CLASES.reduce((suma, clase) => suma + conteo[clase], 0) : undefined;
+  return [
+    {
+      valor: "todas",
+      Icono: Layers,
+      titulo: todas === undefined ? "Todas las clases" : `${todas} en total`,
+      cantidad: todas,
+    },
+    ...CLASES.map((clase) => ({
+      valor: clase,
+      Icono: ICONO_CLASE[clase],
+      titulo: conteo ? `${ETIQUETA_CLASE[clase]}: ${conteo[clase]}` : ETIQUETA_CLASE[clase],
+      cantidad: conteo?.[clase],
+    })),
+  ];
+}
+
+/** El resaltado de la fila sale del nivel que calculó el núcleo (sólo los
+ * contratistas lo tienen). */
+function claseFilaActiva(fila: ActivoUnificado): string | undefined {
   if (fila.nivel_permanencia === "Critico") return "fila-permanencia-critico";
   if (fila.nivel_permanencia === "Aviso") return "fila-permanencia-aviso";
   return undefined;
@@ -93,7 +127,7 @@ export default function Activos({
    * se limita a esas personas (ver `Shell`). */
   filtroPermanencia: FiltroPermanencia | null;
 }) {
-  const [filas, setFilas] = useState<FilaActiva[]>([]);
+  const [activos, setActivos] = useState<ActivoUnificado[]>([]);
   const [total, setTotal] = useState(0);
   const [cargando, setCargando] = useState(true);
   // Los números del filtro sólo se ocultan en la PRIMERA carga: en las
@@ -101,25 +135,44 @@ export default function Activos({
   // que llegan los nuevos, en vez de parpadear.
   const [cargadoAlgunaVez, setCargadoAlgunaVez] = useState(false);
   const [busqueda, setBusqueda] = useState("");
-  const [seleccionadas, setSeleccionadas] = useState<FilaActiva[]>([]);
+  const [seleccionadas, setSeleccionadas] = useState<ActivoUnificado[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [filtroGafete, setFiltroGafete] = useState<FiltroGafete>("todos");
-  const filasVisibles = useMemo(
-    () => filtrarPorNivel(filtrarPorGafete(filas, filtroGafete), filtroPermanencia),
-    [filas, filtroGafete, filtroPermanencia],
+  const [filtroClase, setFiltroClase] = useState<FiltroClase>("todas");
+  // Primero la clase, después el gafete y la permanencia: los botones de gafete
+  // cuentan dentro de la clase elegida.
+  const activosDeClase = useMemo(
+    () => filtrarPorClase(activos, filtroClase),
+    [activos, filtroClase],
   );
-  // Los números de los botones del filtro (ver `opcionesFiltroGafete`): son la
-  // única métrica de la pantalla, ya no hay texto en la barra de estado.
+  const filasVisibles = useMemo(
+    () => filtrarPorNivel(filtrarPorGafete(activosDeClase, filtroGafete), filtroPermanencia),
+    [activosDeClase, filtroGafete, filtroPermanencia],
+  );
+  // Los números de los botones de los filtros (ver `opcionesFiltroGafete` y
+  // `opcionesFiltroClase`): son la única métrica de la pantalla, ya no hay texto
+  // en la barra de estado. `total` sólo vale para "todas": es el de contratistas
+  // más las otras clases.
   const conteo = useMemo(
-    () => (cargadoAlgunaVez ? { todos: total, ...contarPorGafete(filas) } : null),
-    [cargadoAlgunaVez, total, filas],
+    () =>
+      cargadoAlgunaVez
+        ? {
+            todos: filtroClase === "todas" ? total : activosDeClase.length,
+            ...contarPorGafete(activosDeClase),
+          }
+        : null,
+    [cargadoAlgunaVez, total, filtroClase, activosDeClase],
+  );
+  const conteoClases = useMemo(
+    () => (cargadoAlgunaVez ? contarPorClase(activos) : null),
+    [cargadoAlgunaVez, activos],
   );
 
   // La acción para las filas seleccionadas flota sobre la tabla (`BarraSeleccion`):
   // ni corre la pantalla -- antes una franja arriba lo hacía (pedido del usuario
   // 2026-09-23) -- ni queda escondida en la barra de estado.
-  const tablaRef = useRef<TablaHandle<FilaActiva>>(null);
+  const tablaRef = useRef<TablaHandle<ActivoUnificado>>(null);
 
   const recargar = useCallback(() => {
     // `Promise.resolve().then(...)` en vez de llamar `setCargando(true)`
@@ -130,9 +183,9 @@ export default function Activos({
     // regla.
     return Promise.resolve()
       .then(() => setCargando(true))
-      .then(() => listarTodosLosActivos())
-      .then(({ filas, total }) => {
-        setFilas(filas);
+      .then(() => listarActivosUnificados())
+      .then(({ activos, total }) => {
+        setActivos(activos);
         setTotal(total);
         setCargadoAlgunaVez(true);
         setSeleccionadas([]);
@@ -154,9 +207,9 @@ export default function Activos({
   // orden/ancho originales del código encima de lo que el usuario acomodó
   // (ver el comentario junto a `columnas`).
   const salidaIndividual = useCallback(
-    async (fila: FilaActiva) => {
+    async (fila: ActivoUnificado) => {
       try {
-        await cerrarFilaActiva(fila);
+        await cerrarActivo(fila);
         recargar();
       } catch (error) {
         avisos.error(error);
@@ -169,7 +222,7 @@ export default function Activos({
     setProcesando(true);
     try {
       for (const fila of seleccionadas) {
-        await cerrarFilaActiva(fila);
+        await cerrarActivo(fila);
       }
       setConfirmarSalidaMasiva(false);
       await recargar();
@@ -185,25 +238,34 @@ export default function Activos({
   // "nuevo" y reaplica el orden/ancho literales de acá encima de lo que el
   // usuario ya había acomodado a mano — el layout persistido en
   // `Tabla`/localStorage quedaba pisado en el siguiente refresco.
-  const columnas: ColDef<FilaActiva>[] = useMemo(
+  const columnas: ColDef<ActivoUnificado>[] = useMemo(
     () => [
-      { field: "cedula", headerName: "Cédula", flex: 1.2, minWidth: 120, cellStyle: { textAlign: "left" } },
       {
-        field: "contratista_nombre",
+        field: "cedula",
+        headerName: "Cédula",
+        flex: 1.2,
+        minWidth: 120,
+        cellStyle: { textAlign: "left" },
+        // El préstamo KOF es de un encargado con código de empleado, sin cédula.
+        valueFormatter: (p) => p.value ?? "—",
+      },
+      {
+        field: "nombre",
         headerName: "Nombre",
         flex: 1.6,
         minWidth: 170,
         cellStyle: { textAlign: "left" },
       },
-      { field: "empresa_nombre", headerName: "Empresa", flex: 1.1, minWidth: 140 },
+      // Empresa (contratista, proveedor), motivo (por correo) o código de
+      // empleado (KOF): lo que acompaña al nombre.
+      { field: "detalle", headerName: "Empresa / motivo", flex: 1.3, minWidth: 150 },
       {
-        field: "tipo_ingreso",
+        field: "tipo",
         headerName: "Tipo",
         flex: 1,
         minWidth: 100,
-        // `valueGetter` (no `valueFormatter`): el filtro por columna, el
-        // orden y las exportaciones usan el mismo texto que se ve.
-        valueGetter: (p) => textoTipoIngreso(p.data?.tipo_ingreso ?? null),
+        // El texto ya viene armado en la fila (`ActivoUnificado.tipo`): el filtro
+        // por columna, el orden y las exportaciones usan el mismo que se ve.
         // Buscador de arriba (quickFilter) limitado a Cédula/Nombre/Empresa
         // -- las tres cosas que identifican a LA PERSONA que se busca.
         // `getQuickFilterText: () => ""` saca esta columna de esa búsqueda
@@ -215,14 +277,10 @@ export default function Activos({
         getQuickFilterText: () => "",
       },
       {
-        field: "medio_ingreso",
+        field: "medio",
         headerName: "Medio",
         flex: 1,
         minWidth: 100,
-        valueGetter: (p) =>
-          p.data?.medio_ingreso == null
-            ? "—"
-            : textoMedioConPlaca(p.data.medio_ingreso, p.data.placa ?? null),
         getQuickFilterText: () => "",
       },
       {
@@ -283,7 +341,7 @@ export default function Activos({
         // espacio en blanco justo antes de ella — con las 10 columnas ya
         // entrando sin scroll horizontal (ver el ajuste de anchos previo),
         // fijarla no aporta nada y sí ese espacio no deseado.
-        cellRenderer: (p: ICellRendererParams<FilaActiva>) => {
+        cellRenderer: (p: ICellRendererParams<ActivoUnificado>) => {
           const fila = p.data;
           return fila ? (
             <button
@@ -292,7 +350,8 @@ export default function Activos({
               style={{ padding: "0.15rem 0.55rem", fontSize: "0.78rem" }}
               onClick={() => salidaIndividual(fila)}
             >
-              Salida
+              {/* En KOF no sale una persona: se devuelve el gafete. */}
+              {fila.clase === "kof" ? "Devolver" : "Salida"}
             </button>
           ) : null;
         },
@@ -305,19 +364,29 @@ export default function Activos({
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="pantalla-cuerpo" style={{ minHeight: 0, flex: 1 }}>
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          <Tabla<FilaActiva>
+          <Tabla<ActivoUnificado>
             ref={tablaRef}
             cargando={cargando}
             filtrosPorColumna
             id="activos"
-            idFila={claveFilaActiva}
+            idFila={(fila) => fila.clave}
             claseFila={claseFilaActiva}
             columnas={columnas}
             filas={filasVisibles}
             busqueda={busqueda}
             seleccionMultiple
             onSeleccionCambia={setSeleccionadas}
-            accionesDerecha={<ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />}
+            accionesDerecha={
+              <>
+                <SegmentadoOpciones
+                  opciones={opcionesFiltroClase(conteoClases)}
+                  valor={filtroClase}
+                  onCambiar={setFiltroClase}
+                  etiqueta="Filtrar por clase"
+                />
+                <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
+              </>
+            }
             controles={
               <>
                 {/* Ingreso y salida como íconos, en una sola pieza (pedido
@@ -342,7 +411,7 @@ export default function Activos({
                 </div>
                 <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input
-                    placeholder="Cédula, nombre, empresa…"
+                    placeholder="Cédula, nombre, empresa o motivo…"
                     value={busqueda}
                     onChange={(evento) => setBusqueda(evento.target.value)}
                   />
@@ -369,12 +438,14 @@ export default function Activos({
       {confirmarSalidaMasiva && (
         <Modal titulo="Confirmar salida" onCerrar={() => setConfirmarSalidaMasiva(false)}>
           <p style={{ marginTop: 0 }}>
-            ¿Registrar la salida de {seleccionadas.length} persona(s)?
+            ¿Registrar la salida de {seleccionadas.length} registro(s)?
+            {seleccionadas.some((fila) => fila.clase === "kof") &&
+              " En KOF se registra la devolución del gafete."}
           </p>
           <ul style={{ margin: "0 0 1rem", paddingLeft: "1.2rem", color: "var(--muted)" }}>
             {seleccionadas.map((fila) => (
-              <li key={claveFilaActiva(fila)}>
-                {fila.contratista_nombre}
+              <li key={fila.clave}>
+                {fila.nombre} — {ETIQUETA_CLASE[fila.clase]}
               </li>
             ))}
           </ul>
