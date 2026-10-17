@@ -62,6 +62,14 @@
             android:value="${sentryDsn}" />
         <meta-data android:name="io.sentry.environment"
             android:value="${sentryEnvironment}" />
+        <!-- Qué paquetes son código propio (`in_app`): el SDK sólo reconoce
+             por defecto el `applicationId` (com.dqm27.lattis), pero el código
+             vive en `com.brisas.controlacceso` y los bindings del núcleo en
+             `uniffi.control_acceso_mobile`. Sin esto ningún marco cuenta como
+             propio y la huella con que se agrupan los errores se calcularía
+             sobre marcos de librerías. -->
+        <meta-data android:name="io.sentry.in-app-includes"
+            android:value="com.brisas.controlacceso,uniffi.control_acceso_mobile" />
         <meta-data android:name="io.sentry.traces.sample-rate"
             android:value="0.0" />
 

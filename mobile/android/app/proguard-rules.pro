@@ -1,3 +1,13 @@
+# Trazas de error legibles. R8 sigue quitando código muerto y optimizando,
+# pero no renombra clases ni métodos y conserva archivo y número de línea:
+# un error llega al Sentry propio (supabase/functions-staging/receptor-errores)
+# con la traza tal cual, sin tener que guardar el mapeo de cada versión y
+# aplicarlo después. El código es público, así que ofuscar no protege nada.
+# Si el repositorio pasa a privado y se quiere ofuscar otra vez, hay que subir
+# `mapping.txt` de cada release y aplicarlo con `retrace` antes de leer.
+-dontobfuscate
+-keepattributes SourceFile,LineNumberTable
+
 # JNA — usado por los bindings de uniffi para hablar con el núcleo de
 # Rust (mobile/rust-core) vía FFI. JNA mapea métodos Kotlin a símbolos
 # nativos por NOMBRE (Native.register) y usa reflexión sobre Structure —
