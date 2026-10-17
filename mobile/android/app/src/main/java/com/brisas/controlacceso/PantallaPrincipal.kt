@@ -16,10 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -261,34 +258,30 @@ fun PantallaPrincipal(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // El nombre de la app y, debajo, sólo la unidad operativa (la
+            // etiqueta del equipo se ve en el login, acá saturaba). Quién
+            // tiene la sesión vive en el menú de la cuenta.
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    sesion.nombre,
-                    style = MaterialTheme.typography.bodyMedium,
+                    "Lattis",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    textoUnidad ?: "Lattis",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (textoUnidad != null) {
+                    Text(
+                        textoUnidad,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BotonIconoCuadradoBrisas(onClick = { mostrarNuevoContratista = true }) {
                     Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
-                }
-                // Recorre claro → oscuro → Tokyo Night; el ícono muestra el
-                // tema al que se pasa con el próximo toque.
-                val tema = temaActual()
-                BotonIconoCuadradoBrisas(onClick = { GestorTema.alternar(tema) }) {
-                    when (tema.siguiente()) {
-                        TemaApp.CLARO -> Icon(Icons.Default.LightMode, contentDescription = "Cambiar a modo claro")
-                        TemaApp.OSCURO -> Icon(Icons.Default.DarkMode, contentDescription = "Cambiar a modo oscuro")
-                        TemaApp.TOKYO_NIGHT -> Icon(Icons.Default.AutoAwesome, contentDescription = "Cambiar a Tokyo Night")
-                    }
                 }
                 BotonIconoCuadradoBrisas(
                     onClick = { nubeViewModel.sincronizar() },
@@ -300,9 +293,13 @@ fun PantallaPrincipal(
                         Icon(Icons.Default.Sync, contentDescription = "Sincronizar")
                     }
                 }
-                BotonIconoCuadradoBrisas(onClick = onCerrarSesion) {
-                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Salir")
-                }
+                val tema = temaActual()
+                MenuCuenta(
+                    sesion = sesion,
+                    tema = tema,
+                    onAlternarTema = { GestorTema.alternar(tema) },
+                    onCerrarSesion = onCerrarSesion,
+                )
             }
         }
 
