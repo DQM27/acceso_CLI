@@ -93,6 +93,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Destino de los errores (ver `SENTRY_DSN` en desktop/src-tauri/src/lib.rs).
+          # Sin el secreto llega vacío y se usa el DSN por defecto.
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         with:
           projectPath: desktop
           tagName: ${{ inputs.version || github.ref_name }}

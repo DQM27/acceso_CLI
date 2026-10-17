@@ -29,8 +29,10 @@ use estado::GuiState;
 /// tiempo de compilación por si algún día se separa un proyecto de Sentry
 /// para QA/staging.
 const SENTRY_DSN: &str = match option_env!("SENTRY_DSN") {
-    Some(dsn) => dsn,
-    None => {
+    // Una variable definida pero vacía (un secreto de CI sin configurar)
+    // cuenta como ausente: un DSN vacío apagaría el reporte de errores.
+    Some(dsn) if !dsn.is_empty() => dsn,
+    _ => {
         "https://644be3689422e0fa65551a7f3f8a28ff@o4512103124041728.ingest.us.sentry.io/4512104588115968"
     }
 };
