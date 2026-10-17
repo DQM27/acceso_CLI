@@ -60,25 +60,95 @@ function ordenado(conteos: Map<string, number>): Record<string, number> {
   return Object.fromEntries([...conteos.entries()].sort(([a], [b]) => a.localeCompare(b)));
 }
 
+/** Tipos de error de un comando: lista FIJA, la misma que usa el teléfono
+ * (`docs/telemetria-contrato.md`). Es lo único que sale de la app de un error:
+ * nunca su mensaje, que puede traer nombres, cédulas o gafetes. */
+export const TIPOS_ERROR = [
+  "sin_red",
+  "no_autenticado",
+  "credenciales",
+  "sin_autorizacion",
+  "reloj",
+  "rechazado",
+  "conflicto",
+  "no_encontrado",
+  "validacion",
+  "base_de_datos",
+  "interno",
+  "cancelada",
+  "otro",
+] as const;
+export type TipoError = (typeof TIPOS_ERROR)[number];
+
+// Un comando de Tauri falla con el texto del error del núcleo (en español, ver
+// `src/services/error.rs`). Se lee sólo aquí, para elegir un tipo; el texto no
+// se guarda ni se envía. El orden importa: gana la primera coincidencia. Un
+// mensaje que no coincide con nada queda como "otro": si crece, hay un mensaje
+// nuevo que enseñarle a esta lista.
+const PATRONES_ERROR: ReadonlyArray<readonly [TipoError, RegExp]> = [
+  [
+    "sin_red",
+    /sin conexi[oó]n|no se pudo conectar|error sending request|timed out|tiempo de espera|dns error|connection (refused|reset|closed)|network|offline|sin red/i,
+  ],
+  ["no_autenticado", /no hay una sesi[oó]n activa|sesi[oó]n .*(expir|no existe|inactiva)|no autenticad/i],
+  ["sin_autorizacion", /no est[aá] autorizada/i],
+  ["reloj", /reloj del equipo/i],
+  ["credenciales", /credenciales|contrase[ñn]a (actual )?(es )?incorrecta|usuario inactivo|no tiene contrase[ñn]a/i],
+  ["rechazado", /acceso denegado|praind (est[aá] )?vencid|no hay ninguna visita|no admite|ya no se puede elegir/i],
+  [
+    "conflicto",
+    /ya tiene (un |una )|ya est[aá] adentro|ya est[aá] asignad|no est[aá] disponible|ya existe|movimiento activo/i,
+  ],
+  ["no_encontrado", /no encontrad[oa]|no est[aá] registrad|no est[aá] asignado actualmente|no est[aá] activo/i],
+  [
+    "validacion",
+    /es obligatori|inv[aá]lid|no es v[aá]lid|debe tener|no puede tener|s[oó]lo n[uú]meros|no se puede indicar|no puede indicar|falta la placa|anterior (al|a la) (ingreso|entrada)/i,
+  ],
+  ["base_de_datos", /base de datos|sqlite|database|disk i\/o|database is locked/i],
+  ["interno", /error interno|panic/i],
+];
+
+/** El tipo de un comando que falló. `enLinea` es `navigator.onLine`: si el
+ * mensaje no dice nada y no hay red, lo más probable es que fue la red. */
+export function clasificarErrorComando(error: unknown, enLinea = true): TipoError {
+  if (typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError") {
+    return "cancelada";
+  }
+  const texto = typeof error === "string" ? error : error instanceof Error ? error.message : "";
+  for (const [tipo, patron] of PATRONES_ERROR) {
+    if (patron.test(texto)) return tipo;
+  }
+  return enLinea ? "otro" : "sin_red";
+}
+
 /** Tiempos de cada comando de Tauri (IPC incluido), por nombre. Mismo
  * formato que `llamada_nucleo` del teléfono. */
-export class AgregadorLlamadas {
-  private readonly porNombre = new Map<string, { ms: number[]; errores: number }>();
+type AcumuladoLlamadas = { ms: number[]; errores: number; porTipo: Map<string, number> };
 
-  registrar(nombre: string, ms: number, ok: boolean) {
-    const entrada = this.porNombre.get(nombre) ?? { ms: [], errores: 0 };
+export class AgregadorLlamadas {
+  private readonly porNombre = new Map<string, AcumuladoLlamadas>();
+
+  /** `tipoError` sólo importa si `ok` es falso; sin él, el error cuenta como
+   * "otro". */
+  registrar(nombre: string, ms: number, ok: boolean, tipoError?: TipoError) {
+    const entrada: AcumuladoLlamadas = this.porNombre.get(nombre) ?? { ms: [], errores: 0, porTipo: new Map() };
     entrada.ms.push(ms);
-    if (!ok) entrada.errores += 1;
+    if (!ok) {
+      entrada.errores += 1;
+      sumar(entrada.porTipo, tipoError ?? "otro");
+    }
     this.porNombre.set(nombre, entrada);
   }
 
   vaciar(): Fila[] {
-    const filas = [...this.porNombre.entries()].map(([nombre, { ms, errores }]) => {
+    const filas = [...this.porNombre.entries()].map(([nombre, { ms, errores, porTipo }]) => {
       const ordenados = [...ms].sort((a, b) => a - b);
       return {
         nombre,
         llamadas: ms.length,
         errores,
+        // Sólo si hubo errores: la fila normal no cambia.
+        ...(errores > 0 ? { errores_por_tipo: ordenado(porTipo) } : {}),
         p50_ms: redondeado(percentil(ordenados, 0.5)),
         p90_ms: redondeado(percentil(ordenados, 0.9)),
         max_ms: redondeado(ordenados.at(-1)),

@@ -1,6 +1,8 @@
 package com.brisas.controlacceso
 
 import java.lang.ref.WeakReference
+import kotlinx.coroutines.CancellationException
+import uniffi.control_acceso_mobile.NucleoException
 
 // Parte PURA de la telemetría de diagnóstico (ver `Telemetria.kt`): nada de
 // Android, para probarla en la JVM. Sólo números y nombres técnicos: nunca
@@ -122,18 +124,54 @@ class ColaTelemetria(private val capacidad: Int = 5_000) {
     fun tamano(): Int = filas.size
 }
 
+/// El tipo de un error de una operación contra el núcleo: lista FIJA, la misma
+/// que usa el escritorio (`docs/telemetria-contrato.md`, `errores_por_tipo`).
+/// Sale de la variante de `NucleoException`, nunca de su mensaje: puede traer
+/// nombres, cédulas o gafetes.
+fun tipoDeErrorNucleo(error: Throwable): String = when (error) {
+    is NucleoException.Apertura -> "base_de_datos"
+    is NucleoException.CredencialesInvalidas,
+    is NucleoException.UsuarioInactivo,
+    is NucleoException.SinPasswordLocal,
+    -> "credenciales"
+    is NucleoException.NoAutenticado -> "no_autenticado"
+    is NucleoException.FechaInvalida -> "validacion"
+    is NucleoException.GafeteOcupadoEnSitio,
+    is NucleoException.ProveedorActivoEnOtroSitio,
+    -> "conflicto"
+    is NucleoException.Rechazado -> "rechazado"
+    is NucleoException.Interno -> "interno"
+    is NucleoException -> "otro"
+    is CancellationException -> "cancelada"
+    else -> "otro"
+}
+
+/// Un error sin nada que lo distinga (interno u otro) mientras no hay red fue,
+/// casi seguro, la red: las operaciones con la nube fallan así sin conexión.
+/// Un rechazo o un conflicto con una regla se queda como está.
+fun tipoDeErrorSegunRed(tipo: String, sinRed: Boolean): String =
+    if (sinRed && (tipo == "interno" || tipo == "otro")) "sin_red" else tipo
+
 /// Duración de las llamadas al núcleo Rust, agregada por nombre entre dos
 /// envíos (una fila por operación en vez de una por llamada).
 class AgregadorLlamadas {
-    private class Acumulado(val duracionesMs: MutableList<Double> = mutableListOf(), var errores: Int = 0)
+    private class Acumulado(
+        val duracionesMs: MutableList<Double> = mutableListOf(),
+        var errores: Int = 0,
+        val porTipo: MutableMap<String, Int> = sortedMapOf(),
+    )
 
     private val porNombre = LinkedHashMap<String, Acumulado>()
 
+    /// `tipoError` sólo importa si `ok` es falso; sin él, el error cuenta como `otro`.
     @Synchronized
-    fun registrar(nombre: String, nanos: Long, ok: Boolean) {
+    fun registrar(nombre: String, nanos: Long, ok: Boolean, tipoError: String? = null) {
         val acumulado = porNombre.getOrPut(nombre) { Acumulado() }
         acumulado.duracionesMs.add(nanos / 1e6)
-        if (!ok) acumulado.errores++
+        if (!ok) {
+            acumulado.errores++
+            acumulado.porTipo.merge(tipoError ?: "otro", 1, Int::plus)
+        }
     }
 
     /// Resumen por nombre y vacía lo acumulado.
@@ -149,7 +187,12 @@ class AgregadorLlamadas {
                 "p90_ms" to percentil(ordenadas, 0.9)?.redondeado(),
                 "max_ms" to ordenadas.lastOrNull()?.redondeado(),
                 "total_ms" to ordenadas.sum().redondeado(),
-            )
+            ) + if (acumulado.errores > 0) {
+                // Sólo si hubo errores: la fila normal no cambia.
+                mapOf("errores_por_tipo" to acumulado.porTipo.toMap())
+            } else {
+                emptyMap()
+            }
         }
         porNombre.clear()
         return resumen

@@ -16,12 +16,17 @@ import {
   AgregadorBloqueos,
   AgregadorLlamadas,
   AgregadorRealtime,
+  clasificarErrorComando,
   nombreCanonicoOperacion,
   tipoDeError,
   tipoDeRed,
 } from "./telemetriaCalculos";
 
 const INTERVALO_VOLCADO_MS = 30_000;
+/** La memoria del WebView cambia despacio: se anota una vez cada tantos
+ * volcados (cada 2 minutos), no en todos. Con 30 s eran la mitad de las filas
+ * de una PC en reposo. */
+const VOLCADOS_POR_MUESTRA_WEBVIEW = 4;
 const PRIMERA_REVISION_MS = 5_000;
 
 interface Evento {
@@ -36,6 +41,7 @@ const agregadorRealtime = new AgregadorRealtime();
 const erroresJs = new Map<string, number>();
 const pendientes: Evento[] = [];
 let pantallaActual = "(ninguna)";
+let volcados = 0;
 
 /** ¿Esta compilación mide? Falso hasta que `iniciarTelemetria` pregunte. */
 export function telemetriaActiva(): boolean {
@@ -48,9 +54,16 @@ export function realtimeTelemetria(): AgregadorRealtime | null {
   return activa ? agregadorRealtime : null;
 }
 
-/** Un comando de Tauri terminó (ver `api/invocar.ts`). */
-export function registrarLlamada(nombre: string, ms: number, ok: boolean) {
-  if (activa) llamadas.registrar(nombreCanonicoOperacion(nombre), ms, ok);
+/** Un comando de Tauri terminó (ver `api/invocar.ts`). Si falló, `error` es sólo
+ * para elegir su tipo de una lista fija: el mensaje nunca se guarda. */
+export function registrarLlamada(nombre: string, ms: number, ok: boolean, error?: unknown) {
+  if (!activa) return;
+  llamadas.registrar(
+    nombreCanonicoOperacion(nombre),
+    ms,
+    ok,
+    ok ? undefined : clasificarErrorComando(error, navigator.onLine),
+  );
 }
 
 /** Se mostró una pantalla o sección. `ms_hasta_primer_frame`: hasta que el
@@ -116,7 +129,8 @@ function volcar() {
     evento("error_js", { por_tipo: Object.fromEntries(erroresJs), pantalla: pantallaActual });
     erroresJs.clear();
   }
-  evento("muestra_webview", muestraWebview());
+  if (volcados % VOLCADOS_POR_MUESTRA_WEBVIEW === 0) evento("muestra_webview", muestraWebview());
+  volcados += 1;
   const eventos = pendientes.splice(0);
   // Directo a `invoke`, no por `api/invocar.ts`: no se mide a sí misma.
   void invoke("telemetria_eventos", { eventos }).catch(() => {

@@ -18,7 +18,7 @@ export async function invoke<T>(
     registrarLlamada(comando, performance.now() - inicio, true);
     return resultado;
   } catch (error) {
-    registrarLlamada(comando, performance.now() - inicio, false);
+    registrarLlamada(comando, performance.now() - inicio, false, error);
     throw error;
   }
 }
