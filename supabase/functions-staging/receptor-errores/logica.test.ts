@@ -29,7 +29,7 @@ const eventoRust = {
   level: "warning",
   release: "control-acceso-desktop@1.8.11",
   environment: "production",
-  server_name: "FEMS-LAS_BRISAS",
+  server_name: "PC-DE-PRUEBA",
   message: "sincronización automática falló: No hay una sesión activa",
   sdk: { name: "sentry.rust", version: "0.49.0" },
   user: { geo: { country_code: "CR", city: "San José" }, ip_address: "200.119.185.54" },
@@ -99,7 +99,7 @@ test("un mensaje de Rust queda sin servidor, usuario ni rastro de pasos", () => 
   assert.equal(evento.version_app, "control-acceso-desktop@1.8.11");
   assert.deepEqual(evento.contexto, { os: "windows", os_version: "10.0.26300", arquitectura: "x86_64" });
   const serializado = JSON.stringify(evento);
-  for (const dato of ["FEMS-LAS_BRISAS", "200.119.185.54", "San José", "1-0123-0456"]) {
+  for (const dato of ["PC-DE-PRUEBA", "200.119.185.54", "San José", "1-0123-0456"]) {
     assert.ok(!serializado.includes(dato), `no debe contener ${dato}`);
   }
 });
@@ -129,7 +129,7 @@ test("limpia datos personales", () => {
     ["DIMEX 155812345678", "DIMEX <num>"],
     ["llamar al 8888-8888", "llamar al <num>"],
     ["placa ABC123 y BCD-1234", "placa <placa> y <placa>"],
-    ["C:\\Users\\femprobrisas\\AppData\\Local\\x.db", "C:\\Users\\<usuario>\\AppData\\Local\\x.db"],
+    ["C:\\Users\\usuario-de-prueba\\AppData\\Local\\x.db", "C:\\Users\\<usuario>\\AppData\\Local\\x.db"],
     ["/home/maria/app/datos", "/home/<usuario>/app/datos"],
     ["token eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiIxIn0.abc123def", "token <token>"],
     ["id 123e4567-e89b-12d3-a456-426614174000", "id <token>"],
