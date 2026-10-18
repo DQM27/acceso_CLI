@@ -1,5 +1,19 @@
+import type { ReactNode } from "react";
 import { medioIngresoDesdeNube, tipoIngresoDesdeNube } from "../api";
 import type { MovimientoHistorialRemoto, MovimientoIngresoResumen } from "../api";
+
+/** Clases de ingreso que tienen historial propio (el selector de `Historial.tsx`). */
+export type ClaseHistorial = "contratistas" | "proveedores" | "correo" | "kof";
+
+/** Lo que `Historial.tsx` le pasa a la grilla de cada clase: el selector de
+ * clase (va al centro de la barra, dentro de la misma `Tabla`) y el rango de
+ * fechas, compartido entre las clases. */
+export interface PropsHistorialClase {
+  selector: ReactNode;
+  desde: string;
+  hasta: string;
+  onRango: (desde: string, hasta: string) => void;
+}
 
 /** "pc"/"mobile" (`dispositivos.tipo`) → sólo el ícono para la columna
  * "Dispositivo" -- ícono+palabra ("💻 PC"/"📱 Celular") quedaba desparejo
