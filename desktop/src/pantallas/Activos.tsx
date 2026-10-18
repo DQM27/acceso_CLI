@@ -376,16 +376,16 @@ export default function Activos({
             busqueda={busqueda}
             seleccionMultiple
             onSeleccionCambia={setSeleccionadas}
+            accionesCentro={
+              <SegmentadoOpciones
+                opciones={opcionesFiltroClase(conteoClases)}
+                valor={filtroClase}
+                onCambiar={setFiltroClase}
+                etiqueta="Filtrar por clase"
+              />
+            }
             accionesDerecha={
-              <>
-                <SegmentadoOpciones
-                  opciones={opcionesFiltroClase(conteoClases)}
-                  valor={filtroClase}
-                  onCambiar={setFiltroClase}
-                  etiqueta="Filtrar por clase"
-                />
-                <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
-              </>
+              <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
             }
             controles={
               <>

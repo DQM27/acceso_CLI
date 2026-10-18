@@ -101,8 +101,7 @@ export function activoDesdeProveedor(fila: FilaProveedorActiva): ActivoUnificado
     medio: medioDesdePlaca(fila.placa),
     gafete_numero: fila.gafete_numero,
     fecha_hora_ingreso: fila.fecha_hora_ingreso,
-    // El resumen de proveedores no trae quién dio el ingreso.
-    usuario_ingreso_nombre: SIN_DATO,
+    usuario_ingreso_nombre: fila.usuario_ingreso_nombre,
     nivel_permanencia: null,
     fuente: { clase: "proveedor", fila },
   };

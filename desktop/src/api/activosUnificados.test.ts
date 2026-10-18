@@ -64,6 +64,7 @@ const proveedorLocal: FilaProveedorActiva = {
   placa: null,
   gafete_numero: 21,
   fecha_hora_ingreso: "2027-03-08T13:00:00Z",
+  usuario_ingreso_nombre: "Guarda 3",
 };
 
 const proveedorRemoto: FilaProveedorActiva = {
@@ -76,6 +77,7 @@ const proveedorRemoto: FilaProveedorActiva = {
   placa: "XYZ789",
   gafete_numero: 22,
   fecha_hora_ingreso: "2027-03-08T13:30:00Z",
+  usuario_ingreso_nombre: "Guarda 4",
 };
 
 const correoLocal: FilaCorreoActiva = {
@@ -140,12 +142,12 @@ describe("activoDesdeContratista", () => {
 });
 
 describe("activoDesdeProveedor", () => {
-  it("es un PROVEEDOR con su empresa, sin nivel de permanencia ni usuario que dio el ingreso", () => {
+  it("es un PROVEEDOR con su empresa y quién dio el ingreso, sin nivel de permanencia", () => {
     expect(activoDesdeProveedor(proveedorLocal)).toMatchObject({
       clase: "proveedor",
       tipo: "PROVEEDOR",
       detalle: "Distribuidora Sol",
-      usuario_ingreso_nombre: "—",
+      usuario_ingreso_nombre: "Guarda 3",
       nivel_permanencia: null,
     });
   });
@@ -274,6 +276,7 @@ describe("listarActivosUnificados", () => {
           placa: null,
           gafete_numero: 21,
           fecha_hora_ingreso: "2027-03-08T13:00:00Z",
+          usuario_ingreso_nombre: "Guarda 3",
         },
       ],
       listar_ingresos_proveedor_remotos: [],
