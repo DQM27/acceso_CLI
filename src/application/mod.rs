@@ -31,6 +31,7 @@ mod nube;
 mod proveedores;
 mod rutas;
 mod tenedores_gafete;
+mod unidad_de_trabajo;
 
 pub use accesos::AvisosPermanencia;
 pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion};

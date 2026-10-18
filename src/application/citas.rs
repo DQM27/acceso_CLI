@@ -3,7 +3,7 @@
 //! contratistas (transacción `Immediate`, reloj validado, operador activo
 //! confirmado dentro de la misma transacción).
 
-use rusqlite::{Connection, Transaction, TransactionBehavior};
+use rusqlite::Connection;
 
 use crate::database::error::DatabaseError;
 use crate::database::repositories::cita_repository::{CitaRepository, SqliteCitaRepository};
@@ -19,7 +19,7 @@ use crate::services::cita_service::CitaService;
 use crate::services::error::CitaServiceError;
 use crate::tiempo::fecha_costa_rica;
 
-use super::{AppCore, verificar_actor_activo};
+use super::AppCore;
 
 impl AppCore {
     /// Sin `actor`, mismo criterio que `AppCore::preparar_ingreso`: es una
@@ -37,34 +37,6 @@ impl AppCore {
             .verificar_check_in(cedula, fecha_costa_rica(self.reloj.ahora_utc()))
     }
 
-    /// Mismo armazón que `AppCore::en_transaccion_con_reloj_validado`
-    /// (`accesos.rs`), duplicado en vez de generalizado a propósito: los dos
-    /// dominios devuelven tipos de error distintos
-    /// (`RegistroIngresoServiceError`/`CitaServiceError`) sin un motivo de
-    /// negocio para unificarlos, y esta función es chica -- generalizarla
-    /// hubiera significado tocar el camino de contratistas, que ya funciona,
-    /// sólo para que este dominio nuevo la reutilice. Sufijo `_visita`
-    /// porque un `impl AppCore` no admite dos métodos con el mismo nombre
-    /// aunque vivan en archivos distintos -- son el mismo tipo.
-    fn en_transaccion_con_reloj_validado_visita<T>(
-        &self,
-        actor: &UsuarioSesion,
-        operar: impl FnOnce(
-            &Transaction<'_>,
-            chrono::DateTime<chrono::Utc>,
-        ) -> Result<T, CitaServiceError>,
-    ) -> Result<T, CitaServiceError> {
-        let ahora = self.reloj.ahora_utc();
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        validar_reloj(&transaction, ahora)?;
-        verificar_operador_activo(&transaction, actor)?;
-        let resultado = operar(&transaction, ahora)?;
-        transaction.commit().map_err(DatabaseError::from)?;
-        Ok(resultado)
-    }
-
     /// `placa`: `None` si entró caminando, la placa si entró en vehículo.
     pub fn registrar_entrada_visita(
         &self,
@@ -73,7 +45,7 @@ impl AppCore {
         gafete_numero: Option<i64>,
         placa: Option<String>,
     ) -> Result<i64, CitaServiceError> {
-        self.en_transaccion_con_reloj_validado_visita(actor, |transaction, ahora| {
+        self.en_unidad_de_trabajo(actor, validar_reloj, |transaction, ahora| {
             let citas = SqliteCitaRepository::new(transaction);
             let movimientos = SqliteMovimientoVisitaRepository::new(transaction);
             let gafetes = SqliteGafeteRepository::new(transaction);
@@ -93,7 +65,7 @@ impl AppCore {
         actor: &UsuarioSesion,
         movimiento_id: i64,
     ) -> Result<(), CitaServiceError> {
-        self.en_transaccion_con_reloj_validado_visita(actor, |transaction, ahora| {
+        self.en_unidad_de_trabajo(actor, validar_reloj, |transaction, ahora| {
             let citas = SqliteCitaRepository::new(transaction);
             let movimientos = SqliteMovimientoVisitaRepository::new(transaction);
             let gafetes = SqliteGafeteRepository::new(transaction);
@@ -180,15 +152,4 @@ fn validar_reloj(
         return Err(CitaServiceError::RelojRetrocedido);
     }
     Ok(())
-}
-
-fn verificar_operador_activo(
-    connection: &Connection,
-    actor: &UsuarioSesion,
-) -> Result<(), CitaServiceError> {
-    if verificar_actor_activo(connection, actor)?.is_some() {
-        Ok(())
-    } else {
-        Err(CitaServiceError::OperadorNoAutorizado)
-    }
 }

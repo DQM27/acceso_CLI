@@ -4,8 +4,6 @@
 //! (`queries::reloj`) y operador activo confirmado dentro de la misma
 //! transacción.
 
-use rusqlite::{Transaction, TransactionBehavior};
-
 use crate::database::error::DatabaseError;
 use crate::database::repositories::gafete_repository::SqliteGafeteRepository;
 use crate::database::repositories::registro_ingreso_correo_repository::{
@@ -16,9 +14,8 @@ use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::IngresoCorreoServiceError;
 use crate::services::ingreso_correo_service::{DatosIngresoCorreo, IngresoCorreoService};
 
-use crate::database::queries::reloj::reloj_retrocedido;
-
-use super::{AppCore, verificar_actor_activo};
+use super::AppCore;
+use super::unidad_de_trabajo::validar_reloj_operativo;
 
 impl AppCore {
     pub fn registrar_ingreso_correo(
@@ -26,28 +23,12 @@ impl AppCore {
         actor: &UsuarioSesion,
         datos: &DatosIngresoCorreo<'_>,
     ) -> Result<i64, IngresoCorreoServiceError> {
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        let ahora = self.reloj.ahora_utc();
-        if reloj_retrocedido(&transaction, ahora).map_err(IngresoCorreoServiceError::Database)? {
-            return Err(IngresoCorreoServiceError::RelojRetrocedido);
-        }
-        let actor_actual = verificar_actor_activo(&transaction, actor)
-            .map_err(IngresoCorreoServiceError::Database)?
-            .ok_or(IngresoCorreoServiceError::OperadorNoAutorizado)?;
-        let registros = SqliteRegistroIngresoCorreoRepository::new(&transaction);
-        let gafetes = SqliteGafeteRepository::new(&transaction);
-        let id = IngresoCorreoService::new(&registros, &gafetes).registrar_ingreso(
-            datos,
-            actor_actual.id,
-            ahora,
-        )?;
-        transaction
-            .commit()
-            .map_err(DatabaseError::from)
-            .map_err(IngresoCorreoServiceError::Database)?;
-        Ok(id)
+        self.en_unidad_de_trabajo(actor, validar_reloj_operativo, |transaction, ahora| {
+            let registros = SqliteRegistroIngresoCorreoRepository::new(transaction);
+            let gafetes = SqliteGafeteRepository::new(transaction);
+            IngresoCorreoService::new(&registros, &gafetes)
+                .registrar_ingreso(datos, actor.id, ahora)
+        })
     }
 
     pub fn registrar_salida_correo(
@@ -55,27 +36,11 @@ impl AppCore {
         actor: &UsuarioSesion,
         id: i64,
     ) -> Result<(), IngresoCorreoServiceError> {
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        let ahora = self.reloj.ahora_utc();
-        if reloj_retrocedido(&transaction, ahora).map_err(IngresoCorreoServiceError::Database)? {
-            return Err(IngresoCorreoServiceError::RelojRetrocedido);
-        }
-        let actor_actual = verificar_actor_activo(&transaction, actor)
-            .map_err(IngresoCorreoServiceError::Database)?
-            .ok_or(IngresoCorreoServiceError::OperadorNoAutorizado)?;
-        let registros = SqliteRegistroIngresoCorreoRepository::new(&transaction);
-        let gafetes = SqliteGafeteRepository::new(&transaction);
-        IngresoCorreoService::new(&registros, &gafetes).registrar_salida(
-            id,
-            ahora,
-            actor_actual.id,
-        )?;
-        transaction
-            .commit()
-            .map_err(DatabaseError::from)
-            .map_err(IngresoCorreoServiceError::Database)
+        self.en_unidad_de_trabajo(actor, validar_reloj_operativo, |transaction, ahora| {
+            let registros = SqliteRegistroIngresoCorreoRepository::new(transaction);
+            let gafetes = SqliteGafeteRepository::new(transaction);
+            IngresoCorreoService::new(&registros, &gafetes).registrar_salida(id, ahora, actor.id)
+        })
     }
 
     /// Sin `actor`: es una lectura, no una operación que autorizar (mismo

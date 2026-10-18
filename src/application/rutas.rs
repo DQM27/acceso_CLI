@@ -297,29 +297,6 @@ impl AppCore {
 
     // ---- Operación: salida / retorno ----
 
-    /// Mismo armazón que `AppCore::en_transaccion_con_reloj_validado_visita`
-    /// (`citas.rs`), duplicado en vez de generalizado a propósito -- mismo
-    /// motivo que ese: los dominios devuelven tipos de error distintos, sin
-    /// un motivo de negocio real para unificarlos.
-    fn en_transaccion_con_reloj_validado_rutas<T>(
-        &self,
-        actor: &UsuarioSesion,
-        operar: impl FnOnce(
-            &Transaction<'_>,
-            chrono::DateTime<chrono::Utc>,
-        ) -> Result<T, RutaServiceError>,
-    ) -> Result<T, RutaServiceError> {
-        let ahora = self.reloj.ahora_utc();
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        validar_reloj(&transaction, ahora)?;
-        verificar_operador_activo(&transaction, actor)?;
-        let resultado = operar(&transaction, ahora)?;
-        transaction.commit().map_err(DatabaseError::from)?;
-        Ok(resultado)
-    }
-
     /// `solicitud.usuario_salida_id`/`solicitud.fecha_hora_salida` llegan
     /// ignorados -- se pisan acá con el actor y el reloj ya validados de
     /// esta transacción, nunca con lo que traiga el llamador (mismo
@@ -334,7 +311,7 @@ impl AppCore {
         actor: &UsuarioSesion,
         mut solicitud: SolicitudSalidaRuta,
     ) -> Result<ResultadoRegistroSalidaRuta, RutaServiceError> {
-        self.en_transaccion_con_reloj_validado_rutas(actor, |transaction, ahora| {
+        self.en_unidad_de_trabajo(actor, validar_reloj, |transaction, ahora| {
             solicitud.usuario_salida_id = actor.id;
             solicitud.fecha_hora_salida = ahora;
             let salidas = SqliteSalidaRutaRepository::new(transaction);
@@ -350,7 +327,7 @@ impl AppCore {
         actor: &UsuarioSesion,
         salida_id: i64,
     ) -> Result<(), RutaServiceError> {
-        self.en_transaccion_con_reloj_validado_rutas(actor, |transaction, ahora| {
+        self.en_unidad_de_trabajo(actor, validar_reloj, |transaction, ahora| {
             let salidas = SqliteSalidaRutaRepository::new(transaction);
             let vehiculos = SqliteVehiculoRutaRepository::new(transaction);
             let encargados = SqliteEncargadoRutaRepository::new(transaction);
@@ -405,17 +382,6 @@ fn validar_reloj(
         return Err(RutaServiceError::RelojRetrocedido);
     }
     Ok(())
-}
-
-fn verificar_operador_activo(
-    connection: &Connection,
-    actor: &UsuarioSesion,
-) -> Result<(), RutaServiceError> {
-    if verificar_actor_activo(connection, actor)?.is_some() {
-        Ok(())
-    } else {
-        Err(RutaServiceError::OperadorNoAutorizado)
-    }
 }
 
 /// Como todo nombre de persona o empresa: el del encargado en mayúscula.
