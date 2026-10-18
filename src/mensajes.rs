@@ -744,6 +744,60 @@ pub fn mensaje_sincronizacion(error: crate::nube::SincronizacionError) -> String
     }
 }
 
+/// Traduce un cierre remoto en lote a lo que muestran las interfaces: cada
+/// grupo que falló lleva el mensaje de su error (el mismo para todos los de
+/// ese grupo), y lo que no tenía forma de uuid, el mensaje genérico de una
+/// salida que no se pudo registrar. Los rechazados salen en el orden en que
+/// se informaron: primero los inválidos, luego cada grupo fallido.
+#[cfg(feature = "nube")]
+pub fn mensaje_cierres_remotos(
+    resultado: crate::nube::ResultadoCierresRemotos,
+) -> crate::nube::ResumenCierresRemotos {
+    use crate::nube::{CierreRemotoRechazado, ResumenCierresRemotos};
+
+    let mut rechazados: Vec<CierreRemotoRechazado> = resultado
+        .invalidos
+        .into_iter()
+        .map(|uuid| CierreRemotoRechazado {
+            uuid,
+            mensaje: "No se pudo registrar la salida".into(),
+        })
+        .collect();
+    for fallo in resultado.fallidos {
+        let mensaje = mensaje_sincronizacion(fallo.error);
+        rechazados.extend(fallo.uuids.into_iter().map(|uuid| CierreRemotoRechazado {
+            uuid,
+            mensaje: mensaje.clone(),
+        }));
+    }
+    ResumenCierresRemotos {
+        cerrados: resultado.cerrados,
+        rechazados,
+    }
+}
+
+/// Todos los `uuids` rechazados con el mismo `mensaje`: para cuando ni
+/// siquiera se pudo intentar el cierre (sin sesión de nube, sin conexión
+/// local).
+#[cfg(feature = "nube")]
+pub fn rechazar_cierres_remotos(
+    uuids: &[String],
+    mensaje: &str,
+) -> crate::nube::ResumenCierresRemotos {
+    use crate::nube::{CierreRemotoRechazado, ResumenCierresRemotos};
+
+    ResumenCierresRemotos {
+        cerrados: Vec::new(),
+        rechazados: uuids
+            .iter()
+            .map(|uuid| CierreRemotoRechazado {
+                uuid: uuid.clone(),
+                mensaje: mensaje.to_owned(),
+            })
+            .collect(),
+    }
+}
+
 #[cfg(feature = "nube")]
 pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> String {
     use crate::application::GestionNubeError;
@@ -1002,6 +1056,58 @@ mod tests {
             mensaje_ruta(RutaServiceError::OperadorNoAutorizado),
             "La sesión que registra el movimiento no existe o está inactiva"
         );
+    }
+
+    #[cfg(feature = "nube")]
+    #[test]
+    fn los_cierres_remotos_rechazados_llevan_su_motivo_y_los_cerrados_pasan_tal_cual() {
+        use crate::nube::{
+            CierreRemotoRechazado, FalloCierresRemotos, ResultadoCierresRemotos,
+            SincronizacionError,
+        };
+
+        let resumen = mensaje_cierres_remotos(ResultadoCierresRemotos {
+            cerrados: vec!["a".into(), "b".into()],
+            invalidos: vec!["no-es-uuid".into()],
+            fallidos: vec![FalloCierresRemotos {
+                uuids: vec!["c".into(), "d".into()],
+                error: SincronizacionError::RespuestaInesperada {
+                    status: 500,
+                    cuerpo: "boom".into(),
+                },
+            }],
+        });
+
+        assert_eq!(resumen.cerrados, ["a", "b"]);
+        let rechazo = |uuid: &str, mensaje: &str| CierreRemotoRechazado {
+            uuid: uuid.into(),
+            mensaje: mensaje.into(),
+        };
+        let del_receptor = "El receptor rechazó el pedido, intentá de nuevo más tarde";
+        assert_eq!(
+            resumen.rechazados,
+            [
+                rechazo("no-es-uuid", "No se pudo registrar la salida"),
+                rechazo("c", del_receptor),
+                rechazo("d", del_receptor),
+            ]
+        );
+    }
+
+    #[cfg(feature = "nube")]
+    #[test]
+    fn rechazar_cierres_remotos_marca_todos_con_el_mismo_mensaje() {
+        let resumen = rechazar_cierres_remotos(&["a".into(), "b".into()], "Sin conexión");
+
+        assert!(resumen.cerrados.is_empty());
+        assert_eq!(resumen.rechazados.len(), 2);
+        assert!(
+            resumen
+                .rechazados
+                .iter()
+                .all(|r| r.mensaje == "Sin conexión")
+        );
+        assert_eq!(resumen.rechazados[1].uuid, "b");
     }
 
     #[test]

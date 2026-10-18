@@ -333,6 +333,22 @@ pub struct ResultadoCierresRemotos {
     pub fallidos: Vec<FalloCierresRemotos>,
 }
 
+/// Un ingreso remoto del lote que no se pudo cerrar y el motivo, ya
+/// redactado para el operador (ver `mensajes::mensaje_cierres_remotos`).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct CierreRemotoRechazado {
+    pub uuid: String,
+    pub mensaje: String,
+}
+
+/// [`ResultadoCierresRemotos`] listo para mostrar: los cerrados y, por cada
+/// rechazado, su motivo. Es lo que cruza hacia las interfaces.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub struct ResumenCierresRemotos {
+    pub cerrados: Vec<String>,
+    pub rechazados: Vec<CierreRemotoRechazado>,
+}
+
 /// ¿Tiene la forma de un uuid (36 caracteres, hexadecimales y guiones)? No
 /// valida versión ni variante: sólo que sea seguro ponerlo en una URL.
 fn es_uuid(texto: &str) -> bool {

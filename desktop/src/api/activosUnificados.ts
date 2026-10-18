@@ -10,7 +10,7 @@ import {
 } from "./gafetesProvisionales";
 import type { TenedorGafete } from "./gafetes";
 import type { FilaGafeteProvisionalActiva } from "./gafetesProvisionales";
-import { textoMedioConPlaca } from "./ingresos";
+import { registrarSalidasContratistas, textoMedioConPlaca } from "./ingresos";
 import type { NivelPermanencia } from "./ingresos";
 import {
   cerrarFilaProveedorActiva,
@@ -191,6 +191,88 @@ export function activosDeTenedores(
     const activo = porClave.get(claveDeTenedor(tenedor));
     return activo ? [activo] : [];
   });
+}
+
+export interface RechazoDeActivo {
+  activo: ActivoUnificado;
+  mensaje: string;
+}
+
+export interface ResultadoCierreDeActivos {
+  /** En el orden en que llegaron. */
+  cerrados: ActivoUnificado[];
+  rechazados: RechazoDeActivo[];
+}
+
+/** Da la salida a varios activos de una vez y NUNCA lanza: lo que no se pudo
+ * cerrar vuelve en `rechazados` con su motivo, y lo demás se cierra igual.
+ *
+ * Los contratistas, locales y remotos, van todos en una sola llamada al núcleo
+ * (`registrarSalidasContratistas`: una transacción, un `PATCH` por cada 50 y un
+ * solo aviso de sincronización). Las demás clases siguen cerrándose de una en
+ * una, cada una por su camino, hasta que tengan su propio lote. */
+export async function cerrarActivos(
+  activos: readonly ActivoUnificado[],
+): Promise<ResultadoCierreDeActivos> {
+  const cerrados = new Set<string>();
+  const motivos = new Map<string, string>();
+
+  const locales = new Map<number, ActivoUnificado>();
+  const remotos = new Map<string, ActivoUnificado>();
+  for (const activo of activos) {
+    if (activo.fuente.clase !== "contratista") continue;
+    const { fila } = activo.fuente;
+    if (fila.origen === "local") locales.set(fila.registro_id, activo);
+    else remotos.set(fila.uuid_remoto, activo);
+  }
+
+  if (locales.size + remotos.size > 0) {
+    try {
+      const resultado = await registrarSalidasContratistas([...locales.keys()], [...remotos.keys()]);
+      for (const id of resultado.locales.cerrados) {
+        const activo = locales.get(id);
+        if (activo) cerrados.add(activo.clave);
+      }
+      for (const uuid of resultado.remotos.cerrados) {
+        const activo = remotos.get(uuid);
+        if (activo) cerrados.add(activo.clave);
+      }
+      for (const { id, mensaje } of resultado.locales.rechazados) {
+        const activo = locales.get(id);
+        if (activo) motivos.set(activo.clave, mensaje);
+      }
+      for (const { uuid, mensaje } of resultado.remotos.rechazados) {
+        const activo = remotos.get(uuid);
+        if (activo) motivos.set(activo.clave, mensaje);
+      }
+    } catch (error) {
+      for (const activo of [...locales.values(), ...remotos.values()]) {
+        motivos.set(activo.clave, String(error));
+      }
+    }
+  }
+
+  for (const activo of activos) {
+    if (activo.fuente.clase === "contratista") continue;
+    try {
+      await cerrarActivo(activo);
+      cerrados.add(activo.clave);
+    } catch (error) {
+      motivos.set(activo.clave, String(error));
+    }
+  }
+
+  return {
+    cerrados: activos.filter((activo) => cerrados.has(activo.clave)),
+    rechazados: activos
+      .filter((activo) => !cerrados.has(activo.clave))
+      .map((activo) => ({
+        activo,
+        // Un contratista que el núcleo no nombró ni como cerrado ni como
+        // rechazado no debería pasar; si pasa, no se da por cerrado.
+        mensaje: motivos.get(activo.clave) ?? "No se pudo registrar la salida",
+      })),
+  };
 }
 
 /** Da la salida de un contratista, proveedor o visita por correo, o registra la

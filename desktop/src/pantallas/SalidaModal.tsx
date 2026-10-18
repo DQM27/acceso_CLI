@@ -6,7 +6,12 @@ import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
 import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
 import { gafetesDe, sanearGafetes, tenedoresDelGafete } from "../api";
-import { activosDeTenedores, cerrarActivo, listarActivosUnificados } from "../api/activosUnificados";
+import {
+  activosDeTenedores,
+  cerrarActivo,
+  cerrarActivos,
+  listarActivosUnificados,
+} from "../api/activosUnificados";
 import type { ActivoUnificado } from "../api/activosUnificados";
 import { CLASE_SINGULAR } from "./Activos.logica";
 import { activoParaGafete, coincideTexto, textoGafete } from "./SalidaModal.logica";
@@ -159,20 +164,20 @@ export default function SalidaModal({
     if (gafetes.length === 0) return;
     setEnviando(true);
     setError(null);
-    const registrados: string[] = [];
     const fallidos: string[] = [];
+    const porCerrar: { numero: number; activo: ActivoUnificado }[] = [];
     for (const numero of gafetes) {
       const activo = activoParaGafete(porGafete.get(numero), elecciones[numero]);
-      if (!activo) {
-        fallidos.push(`gafete ${numero}: sin ingreso activo`);
-        continue;
-      }
-      try {
-        await cerrarActivo(activo);
-        registrados.push(activo.nombre);
-      } catch (error) {
-        fallidos.push(`gafete ${numero}: ${String(error)}`);
-      }
+      if (activo) porCerrar.push({ numero, activo });
+      else fallidos.push(`gafete ${numero}: sin ingreso activo`);
+    }
+    // Todos los gafetes en un solo pedido; los que no se pudieron cerrar
+    // vuelven con su motivo y no frenan a los demás.
+    const { cerrados, rechazados } = await cerrarActivos(porCerrar.map((par) => par.activo));
+    const registrados = cerrados.map((activo) => activo.nombre);
+    for (const { activo, mensaje } of rechazados) {
+      const numero = porCerrar.find((par) => par.activo.clave === activo.clave)?.numero;
+      fallidos.push(`gafete ${numero}: ${mensaje}`);
     }
 
     setTexto("");

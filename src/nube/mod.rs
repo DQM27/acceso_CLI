@@ -33,12 +33,12 @@ pub use sesion_unidad::{
     EstadoSesionUnidad, InicioSesion, cerrar_sesion_en_unidad, sesion_en_unidad,
 };
 pub use sincronizacion::{
-    AdentroPorOtraViaEnLaNube, ConflictoGafeteActivo, ConflictoIngresoActivo,
-    ConflictoIngresoProveedorActivo, ConflictoMovimientoVisitaActivo, ContextoSincronizacion,
-    FalloCierresRemotos, IngresoActivoEnLaNube, IngresoCorreoRemoto, IngresoProveedorRemoto,
-    IngresoRemoto, MovimientoVisitaRemoto, PrestamoGafeteProvisionalRemoto,
-    ResultadoCierresRemotos, ResumenCatalogo, ResumenCatalogoRutas, ResumenDrenado,
-    SincronizacionError, TipoMovimientoGafete, cerrar_ingreso_correo_remoto,
+    AdentroPorOtraViaEnLaNube, CierreRemotoRechazado, ConflictoGafeteActivo,
+    ConflictoIngresoActivo, ConflictoIngresoProveedorActivo, ConflictoMovimientoVisitaActivo,
+    ContextoSincronizacion, FalloCierresRemotos, IngresoActivoEnLaNube, IngresoCorreoRemoto,
+    IngresoProveedorRemoto, IngresoRemoto, MovimientoVisitaRemoto, PrestamoGafeteProvisionalRemoto,
+    ResultadoCierresRemotos, ResumenCatalogo, ResumenCatalogoRutas, ResumenCierresRemotos,
+    ResumenDrenado, SincronizacionError, TipoMovimientoGafete, cerrar_ingreso_correo_remoto,
     cerrar_ingreso_proveedor_remoto, cerrar_ingreso_remoto, cerrar_ingresos_remotos,
     cerrar_movimiento_visita_remoto, cerrar_prestamo_gafete_provisional_remoto,
     contar_fallos_permanentes, contratista_con_ingreso_activo, contratistas_con_conflicto_activo,
