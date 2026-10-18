@@ -30,8 +30,10 @@ mod historial;
 mod nube;
 mod proveedores;
 mod rutas;
+mod tenedores_gafete;
 
 pub use accesos::AvisosPermanencia;
+pub use tenedores_gafete::{ClaseTenedorGafete, OrigenTenedorGafete, TenedorGafete};
 pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion};
 #[cfg(feature = "nube")]
 pub use con_nube::{
