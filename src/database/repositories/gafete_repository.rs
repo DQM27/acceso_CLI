@@ -12,28 +12,10 @@ use crate::database::error::DatabaseError;
 use crate::database::identificador::generar_uuid_v4;
 use crate::models::gafete::{EstadoGafete, Gafete, PortadorGafete, TipoGafete};
 
-pub trait GafeteRepository {
-    fn crear(&self, numero: i64, tipo: TipoGafete) -> Result<i64, DatabaseError>;
-
-    fn buscar_por_id(&self, id: i64) -> Result<Option<Gafete>, DatabaseError>;
-
-    fn buscar_por_numero(
-        &self,
-        numero: i64,
-        tipo: TipoGafete,
-    ) -> Result<Option<Gafete>, DatabaseError>;
-
-    fn dar_de_baja(&self, id: i64) -> Result<(), DatabaseError>;
-
-    fn marcar_perdido(&self, id: i64, portador: PortadorGafete) -> Result<(), DatabaseError>;
-
-    fn resolver(&self, id: i64) -> Result<(), DatabaseError>;
-
-    /// Números de los gafetes que un contratista debe actualmente
-    /// (`estado = 'PERDIDO'` con `contratista_portador_id` apuntándolo). Un
-    /// `Vec` y no `Option<i64>`: nada impide más de una deuda simultánea.
-    fn deuda_de_contratista(&self, contratista_id: i64) -> Result<Vec<i64>, DatabaseError>;
-}
+// El trait es el puerto, y vive en la capa de aplicación; este archivo es el
+// adaptador `SQLite` que lo implementa. Se reexporta para que las rutas
+// históricas sigan funcionando.
+pub use crate::application::puertos::gafetes::GafeteRepository;
 
 pub struct SqliteGafeteRepository<'a> {
     connection: &'a Connection,

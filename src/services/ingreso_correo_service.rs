@@ -6,7 +6,7 @@
 
 use chrono::{DateTime, Utc};
 
-use crate::database::repositories::gafete_repository::GafeteRepository;
+use crate::application::puertos::gafetes::GafeteRepository;
 use crate::database::repositories::registro_ingreso_correo_repository::RegistroIngresoCorreoRepository;
 use crate::domain::cedula::{Cedula, CedulaInvalida};
 use crate::domain::gafete::{ValidacionAsignacion, validar_para_asignar};

@@ -1,13 +1,13 @@
 use chrono::{DateTime, NaiveDate, Utc};
 
+use crate::application::puertos::contratistas::ContratistaRepository;
+use crate::application::puertos::gafetes::GafeteRepository;
+use crate::application::puertos::registros_ingreso::RegistroIngresoRepository;
 use crate::database::error::DatabaseError;
 use crate::database::queries::ingresos::{
     FiltroHistorial, FiltroIngresosActivos, IngresoActivoLectura, IngresosQuery, PaginaHistorial,
 };
-use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
-use crate::database::repositories::gafete_repository::GafeteRepository;
-use crate::database::repositories::registro_ingreso_repository::RegistroIngresoRepository;
 use crate::domain::acceso::verificar_acceso;
 use crate::domain::permanencia::{NivelPermanencia, UmbralesPermanencia, nivel_de_permanencia};
 use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;

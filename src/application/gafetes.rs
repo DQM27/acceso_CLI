@@ -243,7 +243,7 @@ impl AppCore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::repositories::gafete_repository::GafeteRepository;
+    use crate::application::puertos::gafetes::GafeteRepository;
     use crate::database::schema::initialize_database;
     use crate::models::encargado_ruta::EncargadoRuta;
     use crate::models::gafete::TipoGafete;

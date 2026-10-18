@@ -7,17 +7,10 @@ use crate::database::identificador::generar_uuid_v4;
 use crate::models::contratista::Contratista;
 use crate::models::tipo_ingreso::TipoIngreso;
 
-pub trait ContratistaRepository {
-    fn crear(&self, contratista: &Contratista) -> Result<i64, DatabaseError>;
-
-    fn buscar_por_cedula(&self, cedula: &str) -> Result<Option<Contratista>, DatabaseError>;
-
-    fn buscar_por_id(&self, id: i64) -> Result<Option<Contratista>, DatabaseError>;
-
-    fn actualizar(&self, contratista: &Contratista) -> Result<(), DatabaseError>;
-
-    fn listar(&self) -> Result<Vec<Contratista>, DatabaseError>;
-}
+// El trait es el puerto, y vive en la capa de aplicación; este archivo es el
+// adaptador `SQLite` que lo implementa. Se reexporta para que las rutas
+// históricas sigan funcionando.
+pub use crate::application::puertos::contratistas::ContratistaRepository;
 
 pub struct SqliteContratistaRepository<'a> {
     connection: &'a Connection,

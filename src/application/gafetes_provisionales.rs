@@ -100,8 +100,8 @@ impl AppCore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::puertos::gafetes::GafeteRepository;
     use crate::database::repositories::encargado_ruta_repository::EncargadoRutaRepository;
-    use crate::database::repositories::gafete_repository::GafeteRepository;
     use crate::database::schema::initialize_database;
     use crate::tiempo::RelojFijo;
     use chrono::{TimeZone, Utc};
