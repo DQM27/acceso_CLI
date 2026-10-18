@@ -614,6 +614,24 @@ pub fn cerrar_ingreso_remoto(uuid: String, state: tauri::State<GuiState>) -> Res
         .map_err(mensaje_sincronizacion)
 }
 
+/// Abre de antemano las conexiones que usa la verificación de un ingreso
+/// (`nube::precalentar_conexiones_de_verificacion`). Los formularios de ingreso
+/// lo piden al abrirse: mientras se escribe el nombre, las conexiones se
+/// calientan y la primera verificación no paga conexión nueva más TLS.
+///
+/// Vuelve enseguida: el calentamiento corre en un hilo aparte, sin el candado
+/// del núcleo, y es de mejor esfuerzo (si no hay nube o falla, no pasa nada).
+#[tauri::command(async)]
+pub fn precalentar_nube(state: tauri::State<GuiState>) -> Result<(), String> {
+    state.sesion_activa()?;
+    if state.nube_del_dispositivo().vinculado() {
+        std::thread::spawn(|| {
+            nube::precalentar_conexiones_de_verificacion(nube::base_url(), nube::apikey());
+        });
+    }
+    Ok(())
+}
+
 /// Lo que devuelve [`registrar_salidas_contratistas`]: cómo salió cada grupo,
 /// con los motivos de los rechazos ya redactados por el núcleo.
 #[derive(Debug, serde::Serialize)]

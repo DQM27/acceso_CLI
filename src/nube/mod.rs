@@ -25,7 +25,9 @@ pub use auth_supabase::{
     verificar_token_offline,
 };
 pub use cache_token::CacheTokenDispositivo;
-pub use cliente::{MetadatosDispositivo, NubeError, TokenDispositivo};
+pub use cliente::{
+    MetadatosDispositivo, NubeError, TokenDispositivo, precalentar_conexiones_de_verificacion,
+};
 pub use en_vivo::aplicar_cambio_en_vivo;
 pub use firmante::{ErrorFirmante, FirmanteArchivo, FirmanteDispositivo};
 pub use orquestacion::{PerfilDispositivo, ResumenSincronizacionNube, recibir, sincronizar};

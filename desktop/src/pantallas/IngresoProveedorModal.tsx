@@ -11,6 +11,7 @@ import {
   registrarIngresoProveedor,
 } from "../api/proveedores";
 import type { EmpresaProveedor } from "../api/proveedores";
+import { precalentarNube } from "../api/nube";
 import { coincideBusqueda, plegar, textoGafete, validarNumeroGafete } from "../busqueda";
 import { proveedoresConocidos, datosNuevoDesdeBusqueda } from "./IngresoProveedorModal.logica";
 import type { ProveedorConocido } from "./IngresoProveedorModal.logica";
@@ -66,6 +67,12 @@ export default function IngresoProveedorModal({
   const nombreRef = useRef<HTMLInputElement>(null);
   const empresaRef = useRef<HTMLInputElement>(null);
   const gafeteRef = useRef<HTMLInputElement>(null);
+
+  // Mientras se escribe, las conexiones con la nube se calientan (ver
+  // `precalentarNube`).
+  useEffect(() => {
+    void precalentarNube();
+  }, []);
 
   useEffect(() => {
     listarEmpresasProveedorSeleccionables()

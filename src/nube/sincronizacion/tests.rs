@@ -3455,6 +3455,93 @@ fn si_falla_un_grupo_el_siguiente_se_intenta_igual() {
 }
 
 #[test]
+fn calentar_abre_tres_conexiones_a_la_raiz_de_la_api() {
+    let (base_url, pedidos) = servidor_que_anota(vec![String::new(); 3]);
+    let ultimo = Mutex::new(None);
+
+    let corrio = crate::nube::cliente::precalentar_si_corresponde(
+        &ultimo,
+        std::time::Instant::now(),
+        &base_url,
+        "clave-de-prueba",
+    );
+
+    assert!(corrio);
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 3, "una consulta por conexión: {pedidos:?}");
+    assert!(
+        pedidos
+            .iter()
+            .all(|pedido| pedido.starts_with("GET /rest/v1/ HTTP/1.1")),
+        "{pedidos:?}"
+    );
+}
+
+#[test]
+fn calentar_manda_la_clave_publica_y_ninguna_otra_credencial() {
+    let (base_url, pedido) = servidor_que_captura_el_cuerpo();
+    let ultimo = Mutex::new(None);
+
+    crate::nube::cliente::precalentar_si_corresponde(
+        &ultimo,
+        std::time::Instant::now(),
+        &base_url,
+        "clave-de-prueba",
+    );
+
+    let pedido = pedido
+        .recv_timeout(Duration::from_secs(3))
+        .expect("pedido capturado")
+        .to_ascii_lowercase();
+    assert!(pedido.contains("apikey: clave-de-prueba"), "{pedido}");
+    assert!(
+        !pedido.contains("authorization"),
+        "no hace falta token para calentar la conexión: {pedido}"
+    );
+}
+
+#[test]
+fn calentar_respeta_la_pausa_minima_entre_calentamientos() {
+    let (base_url, pedidos) = servidor_que_anota(vec![String::new(); 6]);
+    let ultimo = Mutex::new(None);
+    let inicio = std::time::Instant::now();
+    let calentar = |despues_de_segundos: u64| {
+        crate::nube::cliente::precalentar_si_corresponde(
+            &ultimo,
+            inicio + Duration::from_secs(despues_de_segundos),
+            &base_url,
+            "clave-de-prueba",
+        )
+    };
+
+    assert!(calentar(0), "la primera vez calienta");
+    assert!(!calentar(5), "a los 5 s siguen calientes: no repite");
+    assert!(!calentar(19), "tampoco a los 19 s");
+    assert_eq!(
+        pedidos.lock().unwrap().len(),
+        3,
+        "sólo salieron los de la primera"
+    );
+    assert!(calentar(25), "pasada la pausa vuelve a calentar");
+    assert_eq!(pedidos.lock().unwrap().len(), 6);
+}
+
+#[test]
+fn calentar_sin_nube_alcanzable_no_falla() {
+    // Mejor esfuerzo: sin red, el calentamiento simplemente no logra nada.
+    let ultimo = Mutex::new(None);
+
+    let corrio = crate::nube::cliente::precalentar_si_corresponde(
+        &ultimo,
+        std::time::Instant::now(),
+        "http://127.0.0.1:1",
+        "clave-de-prueba",
+    );
+
+    assert!(corrio, "lo intentó, aunque no haya podido");
+}
+
+#[test]
 fn cierra_un_ingreso_proveedor_remoto_y_lo_saca_de_la_cache() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();

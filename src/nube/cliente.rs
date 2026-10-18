@@ -108,6 +108,73 @@ pub(crate) fn cliente_http_verificacion() -> reqwest::blocking::Client {
     CLIENTE_HTTP_VERIFICACION.clone()
 }
 
+/// Cuántas conexiones se calientan: las consultas de la verificación de un
+/// ingreso salen a la vez (la persona, la otra vía, el gafete) y, como
+/// `reqwest` está compilado sin HTTP/2, cada una necesita su propia conexión.
+const CONEXIONES_A_CALENTAR: usize = 3;
+
+/// Mínimo entre dos calentamientos: si el modal de ingreso se abre varias
+/// veces seguidas, las conexiones del segundo todavía están calientes.
+const PAUSA_ENTRE_CALENTAMIENTOS: std::time::Duration = std::time::Duration::from_secs(20);
+
+static ULTIMO_CALENTAMIENTO: std::sync::Mutex<Option<std::time::Instant>> =
+    std::sync::Mutex::new(None);
+
+/// Abre de antemano las conexiones del cliente de verificación, para que la
+/// primera consulta de un ingreso no pague conexión nueva más TLS.
+///
+/// El grupo de conexiones se enfría tras ~1 minuto sin usarse, y en una
+/// portería los ingresos llegan con minutos de diferencia: medido contra
+/// staging (`tests/medir_conexion_nube.rs`), tres consultas en paralelo
+/// tardan ~135 ms con las conexiones calientes y 450-590 ms con el grupo
+/// frío, así que casi todo ingreso pagaba ese costo al elegir a la persona.
+/// Quien llama lo dispara al abrir el formulario de ingreso, cuando la persona
+/// todavía está escribiendo, y el costo queda escondido.
+///
+/// Mejor esfuerzo: pide la raíz de la API con la clave pública (contesta 401
+/// sin tocar la base) sólo para que las conexiones queden en el grupo, y los
+/// errores no importan. Bloquea hasta que terminan, así que quien llama lo
+/// corre en un hilo aparte. `false` si no corrió porque se calentó hace poco.
+pub fn precalentar_conexiones_de_verificacion(base_url: &str, apikey: &str) -> bool {
+    precalentar_si_corresponde(
+        &ULTIMO_CALENTAMIENTO,
+        std::time::Instant::now(),
+        base_url,
+        apikey,
+    )
+}
+
+/// La parte testeable de [`precalentar_conexiones_de_verificacion`]: el estado
+/// y el instante llegan como parámetro.
+pub(crate) fn precalentar_si_corresponde(
+    ultimo: &std::sync::Mutex<Option<std::time::Instant>>,
+    ahora: std::time::Instant,
+    base_url: &str,
+    apikey: &str,
+) -> bool {
+    {
+        let mut ultimo = ultimo
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if ultimo.is_some_and(|antes| {
+            ahora.saturating_duration_since(antes) < PAUSA_ENTRE_CALENTAMIENTOS
+        }) {
+            return false;
+        }
+        *ultimo = Some(ahora);
+    }
+    let cliente = cliente_http_verificacion();
+    let url = format!("{base_url}/rest/v1/");
+    std::thread::scope(|hilos| {
+        for _ in 0..CONEXIONES_A_CALENTAR {
+            hilos.spawn(|| {
+                let _ = cliente.get(&url).header("apikey", apikey).send();
+            });
+        }
+    });
+    true
+}
+
 /// Token que autoriza a este dispositivo a leer/escribir únicamente los
 /// datos de su propio sitio. Vence a los `expires_in` segundos — hay que
 /// volver a autenticarse para renovarlo (ver `CacheTokenDispositivo`), no se

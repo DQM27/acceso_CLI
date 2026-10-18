@@ -237,6 +237,20 @@ export async function cerrarIngresoRemoto(uuid: string): Promise<void> {
   solicitarSincronizacionNube();
 }
 
+/** Abre de antemano las conexiones con la nube que usa la verificación de un
+ * ingreso. Los formularios de ingreso lo piden al abrirse: mientras se escribe el
+ * nombre, el apretón de manos TLS ya se hizo, y la primera verificación no paga
+ * 450-590 ms de conexión nueva (medido contra staging con el grupo frío; en
+ * caliente son ~135 ms). Mejor esfuerzo: nunca lanza ni espera nada. */
+export async function precalentarNube(): Promise<void> {
+  try {
+    await invoke("precalentar_nube");
+  } catch {
+    // Sin nube, sin sesión o sin conexión no hay nada que calentar, y no vale
+    // la pena molestar a quien opera por eso.
+  }
+}
+
 export function listarIngresosProveedorRemotos(): Promise<IngresoProveedorRemoto[]> {
   return invoke("listar_ingresos_proveedor_remotos");
 }
