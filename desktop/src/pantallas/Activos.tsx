@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { avisos } from "../avisos/avisos";
 import { BadgeCheck, Boxes, CircleOff, HardHat, IdCard, Layers, LogIn, LogOut, Mail, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -9,6 +9,7 @@ import BarraSeleccion from "../componentes/BarraSeleccion";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
+import MenuAcciones from "../componentes/MenuAcciones";
 import { cerrarActivo, listarActivosUnificados } from "../api/activosUnificados";
 import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
@@ -70,6 +71,10 @@ function ToggleGafete({
     />
   );
 }
+
+const IngresoProveedorModal = lazy(() => import("./IngresoProveedorModal"));
+const EntregarGafeteProvisionalModal = lazy(() => import("./EntregarGafeteProvisionalModal"));
+const NuevaVisitaModal = lazy(() => import("./NuevaVisitaModal"));
 
 const ICONO_CLASE: Record<ClaseActivo, LucideIcon> = {
   contratista: HardHat,
@@ -137,6 +142,9 @@ export default function Activos({
   const [busqueda, setBusqueda] = useState("");
   const [seleccionadas, setSeleccionadas] = useState<ActivoUnificado[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
+  const [modalProveedor, setModalProveedor] = useState(false);
+  const [modalKof, setModalKof] = useState(false);
+  const [modalCorreo, setModalCorreo] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [filtroGafete, setFiltroGafete] = useState<FiltroGafete>("todos");
   const [filtroClase, setFiltroClase] = useState<FiltroClase>("todas");
@@ -391,24 +399,26 @@ export default function Activos({
               <>
                 {/* Ingreso y salida como íconos, en una sola pieza (pedido
                     del usuario 2026-09-23); el atajo va en el nombre. */}
-                <div className="segmentado" role="group" aria-label="Movimientos">
-                  <button
-                    type="button"
-                    title="Nuevo ingreso (Ctrl+N)"
-                    aria-label="Nuevo ingreso"
-                    onClick={onAbrirNuevoIngreso}
-                  >
-                    <LogIn size={16} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    title="Registrar salida (Ctrl+S)"
-                    aria-label="Registrar salida"
-                    onClick={onAbrirSalida}
-                  >
-                    <LogOut size={16} aria-hidden="true" />
-                  </button>
-                </div>
+                <MenuAcciones
+                  texto="Nuevo ingreso"
+                  Icono={LogIn}
+                  acciones={[
+                    { texto: "Contratista", Icono: HardHat, atajo: "Ctrl+N", onElegir: onAbrirNuevoIngreso },
+                    { texto: "Proveedor", Icono: Boxes, onElegir: () => setModalProveedor(true) },
+                    { texto: "Visita por correo", Icono: Mail, onElegir: () => setModalCorreo(true) },
+                    { texto: "Gafete KOF", Icono: BadgeCheck, onElegir: () => setModalKof(true) },
+                  ]}
+                />
+                <button
+                  type="button"
+                  className="boton boton-icono"
+                  title="Registrar salida (Ctrl+S)"
+                  onClick={onAbrirSalida}
+                >
+                  <LogOut size={16} aria-hidden="true" />
+                  Registrar salida
+                  <span style={{ opacity: 0.6, fontSize: "0.75rem" }}>Ctrl+S</span>
+                </button>
                 <div className="campo" style={{ flex: "0 1 16rem" }}>
                   <input
                     placeholder="Cédula, nombre, empresa o motivo…"
@@ -434,6 +444,36 @@ export default function Activos({
           />
         </div>
       </div>
+
+      {/* Proveedor y KOF se registran desde acá (menú "Nuevo ingreso"); sus
+          modales ya existían, antes colgaban de pantallas propias. */}
+      <Suspense fallback={null}>
+        {modalProveedor && (
+          <IngresoProveedorModal
+            onRegistrado={() => {
+              setModalProveedor(false);
+              recargar();
+            }}
+            onCerrar={() => setModalProveedor(false)}
+          />
+        )}
+        {modalCorreo && (
+          <NuevaVisitaModal
+            modoInicial="correo"
+            onRegistrado={recargar}
+            onCerrar={() => setModalCorreo(false)}
+          />
+        )}
+        {modalKof && (
+          <EntregarGafeteProvisionalModal
+            onRegistrado={() => {
+              setModalKof(false);
+              recargar();
+            }}
+            onCerrar={() => setModalKof(false)}
+          />
+        )}
+      </Suspense>
 
       {confirmarSalidaMasiva && (
         <Modal titulo="Confirmar salida" onCerrar={() => setConfirmarSalidaMasiva(false)}>

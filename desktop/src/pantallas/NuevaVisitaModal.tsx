@@ -28,15 +28,18 @@ const TEXTO_MODO: Record<Modo, string> = {
  */
 export default function NuevaVisitaModal({
   cedulaInicial,
+  modoInicial = "agendada",
   onRegistrado,
   onCerrar,
 }: {
   /** Desde "Esperadas": la cédula de la visita elegida. */
   cedulaInicial?: string;
+  /** Desde el menú "Nuevo ingreso" de Activos: abre directo en "Por correo". */
+  modoInicial?: Modo;
   onRegistrado: () => void;
   onCerrar: () => void;
 }) {
-  const [modo, setModo] = useState<Modo>("agendada");
+  const [modo, setModo] = useState<Modo>(modoInicial);
   const [cedulaCorreo, setCedulaCorreo] = useState("");
 
   return (
