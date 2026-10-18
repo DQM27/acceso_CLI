@@ -354,8 +354,11 @@ const TODAS_LAS_SECCIONES: {
  * KOF" se administran por SQL directo en Supabase (decisión del usuario) y
  * llegan igual por `recibir_catalogo_rutas_del_sitio`. */
 const SECCIONES_EN_DESARROLLO: ReadonlySet<Seccion> = new Set<Seccion>([
-  // "visitas" vuelve a verse desde el 2026-10-05: es donde la portería da
-  // entrada a las visitas que agendan los anfitriones en la web.
+  // "visitas" estuvo visible desde el 2026-10-05 (es donde la portería da
+  // entrada a las visitas que agendan los anfitriones en la web); se vuelve a
+  // ocultar por ahora, pedido del usuario. La visita por correo sigue
+  // registrándose desde el menú "Ingreso" de Activos.
+  "visitas",
   "rutas",
   "catalogoRutas",
 ]);
