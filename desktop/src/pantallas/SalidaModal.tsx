@@ -5,11 +5,11 @@ import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
 import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
-import { gafetesDe, sanearGafetes } from "../api";
-import { cerrarActivo, listarActivosUnificados } from "../api/activosUnificados";
+import { gafetesDe, sanearGafetes, tenedoresDelGafete } from "../api";
+import { activosDeTenedores, cerrarActivo, listarActivosUnificados } from "../api/activosUnificados";
 import type { ActivoUnificado } from "../api/activosUnificados";
 import { CLASE_SINGULAR } from "./Activos.logica";
-import { activoParaGafete, agruparPorGafete, coincideTexto, textoGafete } from "./SalidaModal.logica";
+import { activoParaGafete, coincideTexto, textoGafete } from "./SalidaModal.logica";
 
 const MAX_RESULTADOS = 4;
 
@@ -71,9 +71,29 @@ export default function SalidaModal({
     cargarActivos().catch((error) => setError(String(error)));
   }, []);
 
-  const porGafete = useMemo(() => agruparPorGafete(activos), [activos]);
-
   const gafetes = useMemo(() => (modoGafete ? gafetesDe(texto) : []), [modoGafete, texto]);
+
+  // Quién tiene cada gafete lo contesta el núcleo (un número puede tener varios
+  // dueños, de conjuntos distintos): acá sólo se cruza esa respuesta con las
+  // filas ya cargadas, que son las que `cerrarActivo` sabe cerrar. Un número sin
+  // entrada todavía es "buscando"; con una lista vacía es "nadie lo tiene".
+  const [porGafete, setPorGafete] = useState<Map<number, ActivoUnificado[]>>(new Map());
+  useEffect(() => {
+    if (gafetes.length === 0) return;
+    let vigente = true;
+    const numeros = [...new Set(gafetes)];
+    Promise.all(numeros.map((numero) => tenedoresDelGafete(numero)))
+      .then((respuestas) => {
+        if (!vigente) return;
+        setPorGafete(
+          new Map(numeros.map((numero, i) => [numero, activosDeTenedores(activos, respuestas[i])])),
+        );
+      })
+      .catch((error) => vigente && setError(String(error)));
+    return () => {
+      vigente = false;
+    };
+  }, [gafetes, activos]);
 
   const resultadosNombre = useMemo(() => {
     if (modoGafete || !texto.trim()) return [];
@@ -102,6 +122,8 @@ export default function SalidaModal({
 
   // Hay un número con varios dueños y todavía no se eligió a cuál: no se
   // puede confirmar, para no dar la salida a quien no era.
+  // Mientras el núcleo no contestó por algún número tampoco se confirma.
+  const buscandoGafetes = modoGafete && gafetes.some((numero) => !porGafete.has(numero));
   const faltaElegir = modoGafete && gafetes.some((numero) => {
     const coincidencias = porGafete.get(numero);
     return (coincidencias?.length ?? 0) > 1 && !activoParaGafete(coincidencias, elecciones[numero]);
@@ -275,7 +297,8 @@ export default function SalidaModal({
               }}
             >
               {gafetes.map((numero, indice) => {
-                const coincidencias = porGafete.get(numero) ?? [];
+                const buscado = porGafete.get(numero);
+                const coincidencias = buscado ?? [];
                 const activo = activoParaGafete(coincidencias, elecciones[numero]);
                 return (
                   <div
@@ -292,7 +315,9 @@ export default function SalidaModal({
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
                       {/* Primero quién (nombre y empresa), después el gafete
                           -- pedido del usuario 2026-09-23. */}
-                      {coincidencias.length === 0 ? (
+                      {buscado === undefined ? (
+                        <span style={{ color: "var(--muted)" }}>Buscando…</span>
+                      ) : coincidencias.length === 0 ? (
                         <span style={{ color: "var(--error)" }}>Sin ingreso activo</span>
                       ) : coincidencias.length === 1 ? (
                         <span style={{ color: "var(--texto)" }}>
@@ -343,7 +368,7 @@ export default function SalidaModal({
               <button
                 type="submit"
                 className="boton boton-primario"
-                disabled={enviando || faltaElegir}
+                disabled={enviando || faltaElegir || buscandoGafetes}
                 title={faltaElegir ? "Elegí a quién corresponde cada gafete repetido" : undefined}
               >
                 {enviando ? "Registrando…" : "Registrar salida"}

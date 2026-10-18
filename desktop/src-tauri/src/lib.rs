@@ -657,6 +657,7 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::auditoria::listar_auditoria,
         comandos::auditoria::listar_auditoria_gafetes,
         comandos::gafetes::buscar_gafetes,
+        comandos::gafetes::tenedores_del_gafete,
         comandos::gafetes::historial_gafete,
         comandos::gafetes::crear_gafete,
         comandos::gafetes::crear_gafetes_rango,

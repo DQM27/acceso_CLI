@@ -8,6 +8,7 @@ import {
   claveFilaGafeteProvisionalActiva,
   listarTodosLosGafetesProvisionalesActivos,
 } from "./gafetesProvisionales";
+import type { TenedorGafete } from "./gafetes";
 import type { FilaGafeteProvisionalActiva } from "./gafetesProvisionales";
 import { textoMedioConPlaca } from "./ingresos";
 import type { NivelPermanencia } from "./ingresos";
@@ -166,6 +167,30 @@ export async function listarActivosUnificados(): Promise<{
     ],
     total: contratistas.total + proveedores.length + correos.length + kof.length,
   };
+}
+
+/** La `clave` que tiene en la tabla el activo al que se refiere un tenedor del
+ * núcleo: la misma forma que arma cada `activoDesde*` (clase, y `local-<id>` o
+ * `remoto-<uuid>`). */
+export function claveDeTenedor(tenedor: TenedorGafete): string {
+  const origen =
+    tenedor.origen.tipo === "local" ? `local-${tenedor.origen.id}` : `remoto-${tenedor.origen.uuid}`;
+  return `${tenedor.clase}-${origen}`;
+}
+
+/** Los activos ya cargados a los que se refieren los tenedores que contestó el
+ * núcleo (los necesita `cerrarActivo` para saber cómo darles la salida). Un
+ * tenedor que ya no está en la lista cargada se descarta: la lista y el núcleo
+ * pueden estar desfasados un instante. */
+export function activosDeTenedores(
+  activos: readonly ActivoUnificado[],
+  tenedores: readonly TenedorGafete[],
+): ActivoUnificado[] {
+  const porClave = new Map(activos.map((activo) => [activo.clave, activo]));
+  return tenedores.flatMap((tenedor) => {
+    const activo = porClave.get(claveDeTenedor(tenedor));
+    return activo ? [activo] : [];
+  });
 }
 
 /** Da la salida de un contratista, proveedor o visita por correo, o registra la

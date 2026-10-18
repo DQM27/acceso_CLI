@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activoParaGafete, agruparPorGafete, coincideTexto, textoGafete } from "./SalidaModal.logica";
+import { activoParaGafete, coincideTexto, textoGafete } from "./SalidaModal.logica";
 import type { ActivoUnificado } from "../api/activosUnificados";
 
 function activo(overrides: Partial<ActivoUnificado> = {}): ActivoUnificado {
@@ -53,21 +53,6 @@ describe("textoGafete", () => {
   it("muestra el numero en mayusculas o S/G sin gafete", () => {
     expect(textoGafete(2)).toBe("GAFETE 2");
     expect(textoGafete(null)).toBe("S/G");
-  });
-});
-
-describe("agruparPorGafete", () => {
-  it("guarda juntos a los que comparten número, de clases distintas", () => {
-    const contratista = activo({ clave: "c-1", gafete_numero: 1 });
-    const proveedor = activo({ clase: "proveedor", clave: "p-1", gafete_numero: 1 });
-    const otro = activo({ clave: "c-2", gafete_numero: 2 });
-    const mapa = agruparPorGafete([contratista, proveedor, otro]);
-    expect(mapa.get(1)).toEqual([contratista, proveedor]);
-    expect(mapa.get(2)).toEqual([otro]);
-  });
-
-  it("ignora a los que no tienen gafete", () => {
-    expect(agruparPorGafete([activo({ gafete_numero: null })]).size).toBe(0);
   });
 });
 

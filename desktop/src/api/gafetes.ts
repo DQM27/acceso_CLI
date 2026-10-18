@@ -9,6 +9,32 @@ export type TipoGafete = "Contratista" | "Visita" | "ProvisionalKof" | "Proveedo
 
 export type MotivoResolucionGafete = "Pagado" | "Aparecido";
 
+/** Espejo de `application::ClaseTenedorGafete`. Los valores coinciden con los
+ * de `ClaseActivo` (`activosUnificados.ts`). */
+export type ClaseTenedorGafete = "contratista" | "proveedor" | "correo" | "kof";
+
+/** Dónde vive el registro: en este equipo (`id`) o en el otro dispositivo del
+ * sitio (`uuid`). Espejo de `application::OrigenTenedorGafete`. */
+export type OrigenTenedorGafete = { tipo: "local"; id: number } | { tipo: "remoto"; uuid: string };
+
+/** Espejo de `application::TenedorGafete`: uno de los que tienen abierto un
+ * gafete. `detalle` es la empresa (contratista, proveedor), el motivo (correo)
+ * o el código de empleado (KOF). */
+export interface TenedorGafete {
+  clase: ClaseTenedorGafete;
+  origen: OrigenTenedorGafete;
+  nombre: string;
+  detalle: string | null;
+}
+
+/** Quién tiene abierto el gafete `numero`, de todas las clases a la vez. Más de
+ * uno es normal: cada conjunto de gafetes numera por su cuenta, así que el 1 de
+ * un proveedor y el 1 de un contratista son dos gafetes distintos. La respuesta
+ * la da el núcleo; acá no se decide nada. */
+export function tenedoresDelGafete(numero: number): Promise<TenedorGafete[]> {
+  return invoke("tenedores_del_gafete", { numero });
+}
+
 export interface GafeteResumen {
   id: number;
   numero: number;
