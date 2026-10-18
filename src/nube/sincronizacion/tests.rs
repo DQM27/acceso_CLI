@@ -3192,6 +3192,268 @@ fn el_cierre_remoto_sella_la_hora_que_le_pasan_no_la_del_reloj_crudo() {
     assert!(pedido.contains(&esperado), "{pedido}");
 }
 
+fn uuid_de_prueba(n: u32) -> String {
+    format!("00000000-0000-0000-0000-{n:012}")
+}
+
+/// Una caché con `cuantos` ingresos abiertos por el otro dispositivo, con los
+/// uuid de `uuid_de_prueba(1..=cuantos)`.
+fn conexion_con_ingresos_remotos(cuantos: u32) -> Connection {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    for n in 1..=cuantos {
+        connection
+            .execute(
+                "INSERT INTO ingresos_remotos (
+                    uuid, sitio_id, contratista_nombre, hora_entrada,
+                    usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en
+                ) VALUES (?1, 'sitio-1', 'Persona', '2026-01-01T08:00:00Z',
+                    'Op PC', 'otro-dispositivo', '2026-01-01T08:00:00Z')",
+                [uuid_de_prueba(n)],
+            )
+            .unwrap();
+    }
+    connection
+}
+
+fn en_la_cache(connection: &Connection) -> i64 {
+    connection
+        .query_row("SELECT COUNT(*) FROM ingresos_remotos", [], |row| {
+            row.get(0)
+        })
+        .unwrap()
+}
+
+fn cantidad_de_lapidas(connection: &Connection) -> i64 {
+    connection
+        .query_row("SELECT COUNT(*) FROM remotos_cerrados_aca", [], |row| {
+            row.get(0)
+        })
+        .unwrap()
+}
+
+#[test]
+fn cierra_varios_ingresos_remotos_con_un_solo_patch() {
+    let connection = conexion_con_ingresos_remotos(3);
+    let (base_url, pedidos) = servidor_que_anota(vec![String::new()]);
+    let uuids: Vec<String> = (1..=3).map(uuid_de_prueba).collect();
+
+    let resultado = cerrar_ingresos_remotos(
+        &connection,
+        &contexto(&base_url),
+        &uuids,
+        "Op Celular",
+        chrono::Utc::now(),
+    );
+
+    assert_eq!(resultado.cerrados, uuids);
+    assert!(resultado.invalidos.is_empty());
+    assert!(resultado.fallidos.is_empty());
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(
+        pedidos.len(),
+        1,
+        "un solo pedido para los tres: {pedidos:?}"
+    );
+    let esperado = format!(
+        "PATCH /rest/v1/ingresos?id=in.({},{},{})&hora_salida=is.null",
+        uuid_de_prueba(1),
+        uuid_de_prueba(2),
+        uuid_de_prueba(3),
+    );
+    assert!(pedidos[0].starts_with(&esperado), "{}", pedidos[0]);
+    assert_eq!(en_la_cache(&connection), 0);
+    assert_eq!(cantidad_de_lapidas(&connection), 3);
+}
+
+#[test]
+fn el_cierre_remoto_en_lote_sella_la_hora_y_el_operador_que_le_pasan() {
+    let connection = conexion_con_ingresos_remotos(2);
+    let (base_url, pedido) = servidor_que_captura_el_cuerpo();
+    let hora = crate::tiempo::parsear_utc("2026-01-01T08:00:30Z").unwrap();
+    let uuids: Vec<String> = (1..=2).map(uuid_de_prueba).collect();
+
+    cerrar_ingresos_remotos(&connection, &contexto(&base_url), &uuids, "Op PC", hora);
+
+    let pedido = pedido
+        .recv_timeout(Duration::from_secs(3))
+        .expect("pedido capturado");
+    let hora_esperada = format!(
+        "\"hora_salida\":\"{}\"",
+        crate::tiempo::serializar_utc(hora)
+    );
+    assert!(pedido.contains(&hora_esperada), "{pedido}");
+    assert!(
+        pedido.contains("\"usuario_salida_nombre\":\"Op PC\""),
+        "{pedido}"
+    );
+    assert!(
+        pedido.contains("\"dispositivo_salida_id\":\"dispositivo-1\""),
+        "{pedido}"
+    );
+}
+
+#[test]
+fn un_texto_que_no_es_uuid_no_se_manda_a_la_nube() {
+    let connection = conexion_con_ingresos_remotos(1);
+    let (base_url, pedidos) = servidor_que_anota(vec![String::new()]);
+    let malicioso = "x),id=neq.0&select=*".to_string();
+    let uuids = vec![uuid_de_prueba(1), malicioso.clone(), "corto".to_string()];
+
+    let resultado = cerrar_ingresos_remotos(
+        &connection,
+        &contexto(&base_url),
+        &uuids,
+        "Op",
+        chrono::Utc::now(),
+    );
+
+    assert_eq!(resultado.cerrados, [uuid_de_prueba(1)]);
+    assert_eq!(resultado.invalidos, [malicioso, "corto".to_string()]);
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 1);
+    assert!(
+        pedidos[0].starts_with(&format!(
+            "PATCH /rest/v1/ingresos?id=in.({})&hora_salida=is.null",
+            uuid_de_prueba(1)
+        )),
+        "{}",
+        pedidos[0]
+    );
+}
+
+#[test]
+fn si_todos_son_invalidos_no_se_hace_ningun_pedido() {
+    let connection = conexion_con_ingresos_remotos(0);
+    // Sin servidor: cualquier pedido fallaría por falta de conexión y
+    // aparecería en `fallidos`.
+    let resultado = cerrar_ingresos_remotos(
+        &connection,
+        &contexto("http://127.0.0.1:1"),
+        &["no-es-uuid".to_string()],
+        "Op",
+        chrono::Utc::now(),
+    );
+
+    assert_eq!(resultado.invalidos.len(), 1);
+    assert!(resultado.cerrados.is_empty());
+    assert!(resultado.fallidos.is_empty());
+}
+
+#[test]
+fn los_repetidos_se_mandan_una_sola_vez() {
+    let connection = conexion_con_ingresos_remotos(1);
+    let (base_url, pedidos) = servidor_que_anota(vec![String::new()]);
+    let uuid = uuid_de_prueba(1);
+
+    let resultado = cerrar_ingresos_remotos(
+        &connection,
+        &contexto(&base_url),
+        &[uuid.clone(), uuid.clone()],
+        "Op",
+        chrono::Utc::now(),
+    );
+
+    assert_eq!(resultado.cerrados, std::slice::from_ref(&uuid));
+    assert!(
+        pedidos.lock().unwrap()[0].contains(&format!("id=in.({uuid})&")),
+        "el uuid aparece una vez"
+    );
+}
+
+#[test]
+fn si_el_patch_falla_ninguno_del_grupo_se_cierra_ni_sale_de_la_cache() {
+    let connection = conexion_con_ingresos_remotos(2);
+    let base_url = servidor_de_una_respuesta(
+        "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+    );
+    let uuids: Vec<String> = (1..=2).map(uuid_de_prueba).collect();
+
+    let resultado = cerrar_ingresos_remotos(
+        &connection,
+        &contexto(&base_url),
+        &uuids,
+        "Op",
+        chrono::Utc::now(),
+    );
+
+    assert!(resultado.cerrados.is_empty());
+    assert_eq!(resultado.fallidos.len(), 1);
+    assert_eq!(resultado.fallidos[0].uuids, uuids);
+    assert!(resultado.fallidos[0].error.es_falta_de_conexion());
+    assert_eq!(en_la_cache(&connection), 2, "siguen adentro en la caché");
+    assert_eq!(cantidad_de_lapidas(&connection), 0, "y sin lápida");
+}
+
+#[test]
+fn con_mas_de_cincuenta_se_parte_en_varios_pedidos() {
+    let connection = conexion_con_ingresos_remotos(60);
+    let (base_url, pedidos) = servidor_que_anota(vec![String::new(), String::new()]);
+    let uuids: Vec<String> = (1..=60).map(uuid_de_prueba).collect();
+
+    let resultado = cerrar_ingresos_remotos(
+        &connection,
+        &contexto(&base_url),
+        &uuids,
+        "Op",
+        chrono::Utc::now(),
+    );
+
+    assert_eq!(resultado.cerrados, uuids, "todos, en su orden");
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 2);
+    assert_eq!(pedidos[0].matches("0000-").count(), 50 * 4);
+    assert_eq!(pedidos[1].matches("0000-").count(), 10 * 4);
+    assert_eq!(en_la_cache(&connection), 0);
+}
+
+#[test]
+fn si_falla_un_grupo_el_siguiente_se_intenta_igual() {
+    let connection = conexion_con_ingresos_remotos(60);
+    // El primer grupo (50) recibe un 500; el segundo (10), un 200.
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
+    let direccion = listener.local_addr().expect("dirección local");
+    thread::spawn(move || {
+        for respuesta in [
+            "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+            "HTTP/1.1 204 No Content\r\nConnection: close\r\nContent-Length: 0\r\n\r\n",
+        ] {
+            let Ok((mut socket, _)) = listener.accept() else {
+                return;
+            };
+            socket
+                .set_read_timeout(Some(Duration::from_millis(300)))
+                .expect("set_read_timeout");
+            let mut buffer = [0_u8; 8192];
+            while let Ok(leidos) = socket.read(&mut buffer) {
+                if leidos == 0 {
+                    break;
+                }
+            }
+            let _ = socket.write_all(respuesta.as_bytes());
+        }
+    });
+    let base_url = format!("http://{direccion}");
+    let uuids: Vec<String> = (1..=60).map(uuid_de_prueba).collect();
+
+    let resultado = cerrar_ingresos_remotos(
+        &connection,
+        &contexto(&base_url),
+        &uuids,
+        "Op",
+        chrono::Utc::now(),
+    );
+
+    assert_eq!(resultado.fallidos.len(), 1);
+    assert_eq!(resultado.fallidos[0].uuids, uuids[..50]);
+    assert_eq!(resultado.cerrados, uuids[50..]);
+    assert_eq!(
+        en_la_cache(&connection),
+        50,
+        "sólo salieron los 10 del grupo bueno"
+    );
+}
+
 #[test]
 fn cierra_un_ingreso_proveedor_remoto_y_lo_saca_de_la_cache() {
     let connection = Connection::open_in_memory().unwrap();
