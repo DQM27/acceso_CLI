@@ -5,9 +5,11 @@ import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
 import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
-import { cerrarFilaActiva, claveFilaActiva, gafetesDe, listarTodosLosActivos, sanearGafetes } from "../api";
-import type { FilaActiva } from "../api";
-import { textoGafete, coincideTexto } from "./SalidaModal.logica";
+import { gafetesDe, sanearGafetes } from "../api";
+import { cerrarActivo, listarActivosUnificados } from "../api/activosUnificados";
+import type { ActivoUnificado } from "../api/activosUnificados";
+import { CLASE_SINGULAR } from "./Activos.logica";
+import { activoParaGafete, agruparPorGafete, coincideTexto, textoGafete } from "./SalidaModal.logica";
 
 const MAX_RESULTADOS = 4;
 
@@ -18,7 +20,7 @@ const OPCIONES_MODO: OpcionSegmentada<ModoBusqueda>[] = [
   { valor: "gafete", Icono: IdCard, titulo: "Gafete" },
 ];
 
-type Seleccion = { tipo: "ninguna" } | { tipo: "elegido"; activo: FilaActiva };
+type Seleccion = { tipo: "ninguna" } | { tipo: "elegido"; activo: ActivoUnificado };
 
 /**
  * Un solo modal para las dos formas de encontrar a quién dar salida — un
@@ -46,7 +48,10 @@ export default function SalidaModal({
   onRegistrado: () => void;
   onCerrar: () => void;
 }) {
-  const [activos, setActivos] = useState<FilaActiva[]>([]);
+  const [activos, setActivos] = useState<ActivoUnificado[]>([]);
+  // Un número de gafete puede tenerlo más de uno (conjuntos de gafetes
+  // distintos): a cuál se le da la salida, por número, cuando hay varios.
+  const [elecciones, setElecciones] = useState<Record<number, string>>({});
   const [modoGafete, setModoGafete] = useState(false);
   const [texto, setTexto] = useState("");
   const [seleccion, setSeleccion] = useState<Seleccion>({ tipo: "ninguna" });
@@ -57,23 +62,16 @@ export default function SalidaModal({
   const buscadorRef = useRef<HTMLInputElement>(null);
 
   // Incluye lo abierto por el otro dispositivo del mismo sitio, no sólo lo
-  // local -- antes este modal sólo buscaba entre locales, así que una
-  // persona activa en otro dispositivo se podía cerrar desde la grilla de
-  // Activos pero no aparecía acá al buscarla, inconsistencia real entre las
-  // dos vías de dar salida.
-  const cargarActivos = () => listarTodosLosActivos().then(({ filas }) => setActivos(filas));
+  // local, y de TODAS las clases (contratistas, proveedores, visitas por correo
+  // y KOF), la misma lista que la grilla de Activos: antes sólo buscaba
+  // contratistas y el resto sólo se podía sacar desde la grilla.
+  const cargarActivos = () => listarActivosUnificados().then(({ activos }) => setActivos(activos));
 
   useEffect(() => {
     cargarActivos().catch((error) => setError(String(error)));
   }, []);
 
-  const porGafete = useMemo(() => {
-    const mapa = new Map<number, FilaActiva>();
-    for (const activo of activos) {
-      if (activo.gafete_numero !== null) mapa.set(activo.gafete_numero, activo);
-    }
-    return mapa;
-  }, [activos]);
+  const porGafete = useMemo(() => agruparPorGafete(activos), [activos]);
 
   const gafetes = useMemo(() => (modoGafete ? gafetesDe(texto) : []), [modoGafete, texto]);
 
@@ -93,6 +91,7 @@ export default function SalidaModal({
   function cambiarModo(gafete: boolean) {
     setModoGafete(gafete);
     setTexto("");
+    setElecciones({});
     setSeleccion({ tipo: "ninguna" });
     setMensaje(null);
     setError(null);
@@ -100,6 +99,13 @@ export default function SalidaModal({
     // un segundo click aparte en el campo antes de poder escribir.
     buscadorRef.current?.focus();
   }
+
+  // Hay un número con varios dueños y todavía no se eligió a cuál: no se
+  // puede confirmar, para no dar la salida a quien no era.
+  const faltaElegir = modoGafete && gafetes.some((numero) => {
+    const coincidencias = porGafete.get(numero);
+    return (coincidencias?.length ?? 0) > 1 && !activoParaGafete(coincidencias, elecciones[numero]);
+  });
 
   function cambiarTexto(valor: string) {
     setTexto(modoGafete ? sanearGafetes(valor) : valor);
@@ -113,8 +119,8 @@ export default function SalidaModal({
     setError(null);
     setEnviando(true);
     try {
-      await cerrarFilaActiva(seleccion.activo);
-      setMensaje(`✓ Salida registrada — ${seleccion.activo.contratista_nombre}`);
+      await cerrarActivo(seleccion.activo);
+      setMensaje(`✓ Salida registrada — ${seleccion.activo.nombre}`);
       setSeleccion({ tipo: "ninguna" });
       setTexto("");
       buscadorRef.current?.focus();
@@ -134,20 +140,21 @@ export default function SalidaModal({
     const registrados: string[] = [];
     const fallidos: string[] = [];
     for (const numero of gafetes) {
-      const activo = porGafete.get(numero);
+      const activo = activoParaGafete(porGafete.get(numero), elecciones[numero]);
       if (!activo) {
         fallidos.push(`gafete ${numero}: sin ingreso activo`);
         continue;
       }
       try {
-        await cerrarFilaActiva(activo);
-        registrados.push(activo.contratista_nombre);
+        await cerrarActivo(activo);
+        registrados.push(activo.nombre);
       } catch (error) {
         fallidos.push(`gafete ${numero}: ${String(error)}`);
       }
     }
 
     setTexto("");
+    setElecciones({});
     setMensaje(registrados.length > 0 ? `✓ Salida registrada — ${registrados.join(", ")}` : null);
     setError(fallidos.length > 0 ? fallidos.join(" · ") : null);
     setEnviando(false);
@@ -198,17 +205,18 @@ export default function SalidaModal({
             {resultadosNombre.length === 0 && <SinResultados />}
             {resultadosNombre.map((activo, indice) => (
               <FilaListaFlotante
-                key={claveFilaActiva(activo)}
+                key={activo.clave}
                 resaltada={indice === resaltado}
                 onClick={() => setSeleccion({ tipo: "elegido", activo })}
                 onMouseEnter={() => setResaltado(indice)}
               >
                 <span>
-                  {activo.contratista_nombre}{" "}
+                  {activo.nombre}{" "}
                   <span style={{ color: "var(--muted)" }}>· {activo.cedula ?? "—"}</span>
                 </span>
+                {/* La clase va siempre: el buscador mezcla las cuatro. */}
                 <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                  {activo.empresa_nombre ?? "—"}
+                  {CLASE_SINGULAR[activo.clase]} · {activo.detalle ?? "—"}
                 </span>
               </FilaListaFlotante>
             ))}
@@ -238,11 +246,11 @@ export default function SalidaModal({
           >
             <div>
               <p style={{ margin: 0, fontWeight: 600, color: "var(--texto)" }}>
-                {seleccion.activo.contratista_nombre}
+                {seleccion.activo.nombre}
               </p>
               <p style={{ margin: "0.15rem 0 0", color: "var(--muted)", fontSize: "0.85rem" }}>
-                {seleccion.activo.cedula ?? "—"} · {seleccion.activo.empresa_nombre ?? "—"} ·{" "}
-                {textoGafete(seleccion.activo.gafete_numero)}
+                {CLASE_SINGULAR[seleccion.activo.clase]} · {seleccion.activo.cedula ?? "—"} ·{" "}
+                {seleccion.activo.detalle ?? "—"} · {textoGafete(seleccion.activo.gafete_numero)}
               </p>
             </div>
             <button type="submit" className="boton boton-primario" disabled={enviando}>
@@ -267,38 +275,77 @@ export default function SalidaModal({
               }}
             >
               {gafetes.map((numero, indice) => {
-                const activo = porGafete.get(numero);
+                const coincidencias = porGafete.get(numero) ?? [];
+                const activo = activoParaGafete(coincidencias, elecciones[numero]);
                 return (
                   <div
                     key={`${numero}-${indice}`}
                     style={{
                       display: "flex",
-                      justifyContent: "space-between",
-                      gap: "0.75rem",
+                      flexDirection: "column",
+                      gap: "0.4rem",
                       padding: "0.6rem 0.85rem",
                       borderTop: indice > 0 ? "1px solid var(--borde)" : undefined,
                       fontSize: "0.9rem",
                     }}
                   >
-                    {/* Primero quién (nombre y empresa), después el gafete
-                        -- pedido del usuario 2026-09-23. */}
-                    {activo ? (
-                      <span style={{ color: "var(--texto)", fontWeight: 600 }}>
-                        {activo.contratista_nombre} · {activo.empresa_nombre}
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem" }}>
+                      {/* Primero quién (nombre y empresa), después el gafete
+                          -- pedido del usuario 2026-09-23. */}
+                      {coincidencias.length === 0 ? (
+                        <span style={{ color: "var(--error)" }}>Sin ingreso activo</span>
+                      ) : coincidencias.length === 1 ? (
+                        <span style={{ color: "var(--texto)" }}>
+                          <span style={{ fontWeight: 500 }}>{CLASE_SINGULAR[coincidencias[0].clase]}</span>
+                          {` · ${coincidencias[0].nombre}`}
+                          {coincidencias[0].detalle ? ` · ${coincidencias[0].detalle}` : ""}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--advertencia)" }}>
+                          {coincidencias.length} personas tienen este gafete — elegí a quién:
+                        </span>
+                      )}
+                      <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>
+                        {textoGafete(numero)}
                       </span>
-                    ) : (
-                      <span style={{ color: "var(--error)" }}>Sin ingreso activo</span>
+                    </div>
+                    {/* Los gafetes de cada clase numeran por su cuenta: el 1 de
+                        un proveedor y el 1 de un contratista son dos gafetes
+                        distintos. No se adivina, se elige. */}
+                    {coincidencias.length > 1 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                        {coincidencias.map((opcion) => (
+                          <button
+                            key={opcion.clave}
+                            type="button"
+                            className={
+                              activo?.clave === opcion.clave ? "boton boton-primario" : "boton"
+                            }
+                            aria-pressed={activo?.clave === opcion.clave}
+                            onClick={() =>
+                              setElecciones((actuales) => ({ ...actuales, [numero]: opcion.clave }))
+                            }
+                          >
+                            {/* El tipo con más peso y el nombre normal: lo primero
+                                que se lee es de quién es el gafete. */}
+                            <span style={{ fontWeight: 500 }}>{CLASE_SINGULAR[opcion.clase]}</span>
+                            <span style={{ fontWeight: 400 }}> · {opcion.nombre}</span>
+                          </button>
+                        ))}
+                      </div>
                     )}
-                    <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>
-                      {textoGafete(numero)}
-                    </span>
                   </div>
                 );
               })}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button type="submit" className="boton boton-primario" disabled={enviando}>
+              <button
+                type="submit"
+                className="boton boton-primario"
+                disabled={enviando || faltaElegir}
+                title={faltaElegir ? "Elegí a quién corresponde cada gafete repetido" : undefined}
+              >
                 {enviando ? "Registrando…" : "Registrar salida"}
               </button>
             </div>

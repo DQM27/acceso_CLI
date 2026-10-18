@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { avisos } from "../avisos/avisos";
 import { BadgeCheck, Boxes, CircleOff, HardHat, IdCard, Layers, LogIn, LogOut, Mail, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -9,10 +9,13 @@ import BarraSeleccion from "../componentes/BarraSeleccion";
 import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
+import MenuAcciones from "../componentes/MenuAcciones";
+import { ESTILO_BOTON_COMPACTO } from "../componentes/MenuAcciones.logica";
 import { cerrarActivo, listarActivosUnificados } from "../api/activosUnificados";
 import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
+  CLASE_SINGULAR,
   contarPorClase,
   contarPorGafete,
   ETIQUETA_CLASE,
@@ -45,7 +48,11 @@ function opcionesFiltroGafete(
     {
       valor: "sin",
       Icono: CircleOff,
-      titulo: conteo ? `${conteo.sin} sin gafete (S/G)` : "Sin gafete (S/G)",
+      // Sólo los contratistas pueden entrar sin gafete: proveedores, visitas por
+      // correo y KOF lo llevan siempre.
+      titulo: conteo
+        ? `${conteo.sin} sin gafete (S/G) — sólo los contratistas pueden entrar sin gafete`
+        : "Sin gafete (S/G) — sólo los contratistas pueden entrar sin gafete",
       cantidad: conteo?.sin,
     },
   ];
@@ -70,6 +77,10 @@ function ToggleGafete({
     />
   );
 }
+
+const IngresoProveedorModal = lazy(() => import("./IngresoProveedorModal"));
+const EntregarGafeteProvisionalModal = lazy(() => import("./EntregarGafeteProvisionalModal"));
+const NuevaVisitaModal = lazy(() => import("./NuevaVisitaModal"));
 
 const ICONO_CLASE: Record<ClaseActivo, LucideIcon> = {
   contratista: HardHat,
@@ -137,6 +148,9 @@ export default function Activos({
   const [busqueda, setBusqueda] = useState("");
   const [seleccionadas, setSeleccionadas] = useState<ActivoUnificado[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
+  const [modalProveedor, setModalProveedor] = useState(false);
+  const [modalKof, setModalKof] = useState(false);
+  const [modalCorreo, setModalCorreo] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [filtroGafete, setFiltroGafete] = useState<FiltroGafete>("todos");
   const [filtroClase, setFiltroClase] = useState<FiltroClase>("todas");
@@ -146,9 +160,17 @@ export default function Activos({
     () => filtrarPorClase(activos, filtroClase),
     [activos, filtroClase],
   );
+  // El filtro de gafete es sólo de contratistas, los únicos que pueden entrar
+  // sin gafete: con "Todas" se ve todo sin filtrar, y en las demás clases
+  // siempre hay uno ("sin gafete" sería 0 y confunde). Al esconderse se
+  // ignora, para que un "sin gafete" elegido antes no deje la tabla vacía sin
+  // un botón que lo apague.
+  const mostrarFiltroGafete = filtroClase === "contratista";
+  const filtroGafeteEfectivo = mostrarFiltroGafete ? filtroGafete : "todos";
   const filasVisibles = useMemo(
-    () => filtrarPorNivel(filtrarPorGafete(activosDeClase, filtroGafete), filtroPermanencia),
-    [activosDeClase, filtroGafete, filtroPermanencia],
+    () =>
+      filtrarPorNivel(filtrarPorGafete(activosDeClase, filtroGafeteEfectivo), filtroPermanencia),
+    [activosDeClase, filtroGafeteEfectivo, filtroPermanencia],
   );
   // Los números de los botones de los filtros (ver `opcionesFiltroGafete` y
   // `opcionesFiltroClase`): son la única métrica de la pantalla, ya no hay texto
@@ -240,6 +262,16 @@ export default function Activos({
   // `Tabla`/localStorage quedaba pisado en el siguiente refresco.
   const columnas: ColDef<ActivoUnificado>[] = useMemo(
     () => [
+      // A qué grupo pertenece la fila de un vistazo (la columna "Tipo" de más
+      // abajo es otra cosa: PRAIND/IN_HOUSE de un contratista, etc.).
+      {
+        colId: "clase",
+        headerName: "Clase",
+        flex: 1.1,
+        minWidth: 120,
+        valueGetter: (p) => (p.data ? CLASE_SINGULAR[p.data.clase] : ""),
+        getQuickFilterText: () => "",
+      },
       {
         field: "cedula",
         headerName: "Cédula",
@@ -351,7 +383,7 @@ export default function Activos({
               onClick={() => salidaIndividual(fila)}
             >
               {/* En KOF no sale una persona: se devuelve el gafete. */}
-              {fila.clase === "kof" ? "Devolver" : "Salida"}
+              Salida
             </button>
           ) : null;
         },
@@ -376,45 +408,55 @@ export default function Activos({
             busqueda={busqueda}
             seleccionMultiple
             onSeleccionCambia={setSeleccionadas}
-            accionesCentro={
-              <SegmentadoOpciones
-                opciones={opcionesFiltroClase(conteoClases)}
-                valor={filtroClase}
-                onCambiar={setFiltroClase}
-                etiqueta="Filtrar por clase"
-              />
-            }
             accionesDerecha={
-              <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
+              <div className="campo" style={{ flex: "0 0 20rem" }}>
+                <input
+                  placeholder="Cédula, nombre, empresa o motivo…"
+                  value={busqueda}
+                  onChange={(evento) => setBusqueda(evento.target.value)}
+                />
+              </div>
             }
             controles={
               <>
-                {/* Ingreso y salida como íconos, en una sola pieza (pedido
-                    del usuario 2026-09-23); el atajo va en el nombre. */}
-                <div className="segmentado" role="group" aria-label="Movimientos">
+                {/* Tres bloques de izquierda a derecha: qué registrar, qué
+                    ver (clase y gafete juntos) y, al otro extremo, el
+                    buscador. "Ingreso" abre la lista de qué registrar; el
+                    atajo de cada uno se ve en la lista (Ctrl+N) y al lado
+                    de "Salida" (Ctrl+S). */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <MenuAcciones
+                    texto="Ingreso"
+                    Icono={LogIn}
+                    acciones={[
+                      { texto: "Contratista", Icono: HardHat, atajo: "Ctrl+N", onElegir: onAbrirNuevoIngreso },
+                      { texto: "Proveedor", Icono: Boxes, onElegir: () => setModalProveedor(true) },
+                      { texto: "Visita por correo", Icono: Mail, onElegir: () => setModalCorreo(true) },
+                      { texto: "Gafete KOF", Icono: BadgeCheck, onElegir: () => setModalKof(true) },
+                    ]}
+                  />
                   <button
                     type="button"
-                    title="Nuevo ingreso (Ctrl+N)"
-                    aria-label="Nuevo ingreso"
-                    onClick={onAbrirNuevoIngreso}
-                  >
-                    <LogIn size={16} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
+                    className="boton boton-icono"
+                    style={{ ...ESTILO_BOTON_COMPACTO, flexShrink: 0 }}
                     title="Registrar salida (Ctrl+S)"
-                    aria-label="Registrar salida"
                     onClick={onAbrirSalida}
                   >
-                    <LogOut size={16} aria-hidden="true" />
+                    <LogOut size={15} aria-hidden="true" />
+                    Salida
+                    <span style={{ opacity: 0.6, fontSize: "0.72rem" }}>Ctrl+S</span>
                   </button>
                 </div>
-                <div className="campo" style={{ flex: "0 1 16rem" }}>
-                  <input
-                    placeholder="Cédula, nombre, empresa o motivo…"
-                    value={busqueda}
-                    onChange={(evento) => setBusqueda(evento.target.value)}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginLeft: "0.5rem" }}>
+                  <SegmentadoOpciones
+                    opciones={opcionesFiltroClase(conteoClases)}
+                    valor={filtroClase}
+                    onCambiar={setFiltroClase}
+                    etiqueta="Filtrar por clase"
                   />
+                  {mostrarFiltroGafete && (
+                    <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
+                  )}
                 </div>
               </>
             }
@@ -434,6 +476,36 @@ export default function Activos({
           />
         </div>
       </div>
+
+      {/* Proveedor y KOF se registran desde acá (menú "Nuevo ingreso"); sus
+          modales ya existían, antes colgaban de pantallas propias. */}
+      <Suspense fallback={null}>
+        {modalProveedor && (
+          <IngresoProveedorModal
+            onRegistrado={() => {
+              setModalProveedor(false);
+              recargar();
+            }}
+            onCerrar={() => setModalProveedor(false)}
+          />
+        )}
+        {modalCorreo && (
+          <NuevaVisitaModal
+            modoInicial="correo"
+            onRegistrado={recargar}
+            onCerrar={() => setModalCorreo(false)}
+          />
+        )}
+        {modalKof && (
+          <EntregarGafeteProvisionalModal
+            onRegistrado={() => {
+              setModalKof(false);
+              recargar();
+            }}
+            onCerrar={() => setModalKof(false)}
+          />
+        )}
+      </Suspense>
 
       {confirmarSalidaMasiva && (
         <Modal titulo="Confirmar salida" onCerrar={() => setConfirmarSalidaMasiva(false)}>

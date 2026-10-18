@@ -569,19 +569,24 @@ function TablaBase<T>(
       <div
         style={{
           display: "flex",
-          alignItems: "flex-end",
+          alignItems: accionesCentro ? "center" : "flex-end",
           justifyContent: "space-between",
-          gap: "0.375rem",
+          // Con algo al centro los tres grupos respiran más: pegados, la
+          // barra se leía como una sola tira.
+          gap: accionesCentro ? "1rem" : "0.375rem",
           marginBottom: "0.375rem",
         }}
       >
         <div
           style={{
             display: "flex",
-            alignItems: "flex-end",
-            gap: "0.375rem",
-            flexWrap: "wrap",
+            alignItems: accionesCentro ? "center" : "flex-end",
+            gap: accionesCentro ? "0.5rem" : "0.375rem",
+            // Con selector al centro cada lado tiene un tercio de la barra: el
+            // izquierdo no se parte en dos filas, el buscador se encoge.
+            flexWrap: accionesCentro ? "nowrap" : "wrap",
             flex: accionesCentro ? "1 1 0" : 1,
+            minWidth: 0,
           }}
         >
           {controles}
@@ -598,7 +603,11 @@ function TablaBase<T>(
             display: "flex",
             alignItems: "center",
             justifyContent: "flex-end",
-            gap: "0.375rem",
+            gap: accionesCentro ? "0.5rem" : "0.375rem",
+            // Los botones de la derecha (filtros, anchos, columnas) nunca se
+            // recortan: si falta lugar, cede el lado izquierdo (que puede bajar
+            // de línea), no éste.
+            flexShrink: 0,
             ...(accionesCentro ? { flex: "1 1 0" } : {}),
           }}
         >

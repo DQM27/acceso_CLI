@@ -40,8 +40,6 @@ import { listen } from "@tauri-apps/api/event";
 import AvisosPanel from "./avisos/AvisosPanel";
 import { avisos } from "./avisos/avisos";
 import {
-  BadgeCheck,
-  Boxes,
   Building2,
   ClipboardList,
   DoorOpen,
@@ -116,8 +114,6 @@ const Auditoria = lazy(() => import("./pantallas/Auditoria"));
 const Gafetes = lazy(() => import("./pantallas/Gafetes"));
 const Rutas = lazy(() => import("./pantallas/Rutas"));
 const CatalogoRutas = lazy(() => import("./pantallas/CatalogoRutas"));
-const Proveedores = lazy(() => import("./pantallas/Proveedores"));
-const GafetesProvisionales = lazy(() => import("./pantallas/GafetesProvisionales"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 
@@ -308,9 +304,7 @@ export type Seccion =
   | "auditoria"
   | "empresas"
   | "gafetes"
-  | "catalogoRutas"
-  | "proveedores"
-  | "gafetesProvisionales";
+  | "catalogoRutas";
 
 /** Aplanado de autorización (ver docs/decisiones-tecnicas.md 2026-09-11):
  * ninguna sección se oculta por rol -- quien tiene una sesión válida puede
@@ -347,11 +341,10 @@ const TODAS_LAS_SECCIONES: {
   { id: "empresas", etiqueta: "Empresas", Icono: Building2 },
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
   { id: "catalogoRutas", etiqueta: "Catálogo KOF", Icono: Truck },
-  { id: "proveedores", etiqueta: "Proveedores", Icono: Boxes },
-  // "Por correo" ya no es una sección: vive dentro de Visitas (modo "Por
-  // correo" del modal Nueva visita), pedido del dueño 2026-10-05. Un orden
-  // guardado que todavía la nombre la ignora (ver `seccionesOrdenadas`).
-  { id: "gafetesProvisionales", etiqueta: "KOF", Icono: BadgeCheck },
+  // "Por correo", "Proveedores" y "KOF" ya no son secciones: se registran desde
+  // el menú "Ingreso" de Activos, están en su tabla y en Historial. "Por correo"
+  // se quitó el 2026-10-05, las otras dos con el Activos unificado. Un orden
+  // guardado que todavía las nombre las ignora (ver `seccionesOrdenadas`).
 ];
 
 /** Secciones sin terminar, ocultas de la interfaz (pedido del usuario
@@ -361,8 +354,11 @@ const TODAS_LAS_SECCIONES: {
  * KOF" se administran por SQL directo en Supabase (decisión del usuario) y
  * llegan igual por `recibir_catalogo_rutas_del_sitio`. */
 const SECCIONES_EN_DESARROLLO: ReadonlySet<Seccion> = new Set<Seccion>([
-  // "visitas" vuelve a verse desde el 2026-10-05: es donde la portería da
-  // entrada a las visitas que agendan los anfitriones en la web.
+  // "visitas" estuvo visible desde el 2026-10-05 (es donde la portería da
+  // entrada a las visitas que agendan los anfitriones en la web); se vuelve a
+  // ocultar por ahora, pedido del usuario. La visita por correo sigue
+  // registrándose desde el menú "Ingreso" de Activos.
+  "visitas",
   "rutas",
   "catalogoRutas",
 ]);
@@ -828,12 +824,8 @@ function Shell({
                           <Empresas />
                         ) : id === "gafetes" ? (
                           <Gafetes />
-                        ) : id === "catalogoRutas" ? (
-                          <CatalogoRutas />
-                        ) : id === "proveedores" ? (
-                          <Proveedores refrescarSenal={refrescarActivos} />
                         ) : (
-                          <GafetesProvisionales refrescarSenal={refrescarActivos} />
+                          <CatalogoRutas />
                         )}
                       </SeccionActivaProvider>
                     </Suspense>
