@@ -47,7 +47,11 @@ function opcionesFiltroGafete(
     {
       valor: "sin",
       Icono: CircleOff,
-      titulo: conteo ? `${conteo.sin} sin gafete (S/G)` : "Sin gafete (S/G)",
+      // Sólo los contratistas pueden entrar sin gafete: proveedores, visitas por
+      // correo y KOF lo llevan siempre.
+      titulo: conteo
+        ? `${conteo.sin} sin gafete (S/G) — sólo los contratistas pueden entrar sin gafete`
+        : "Sin gafete (S/G) — sólo los contratistas pueden entrar sin gafete",
       cantidad: conteo?.sin,
     },
   ];
@@ -155,9 +159,16 @@ export default function Activos({
     () => filtrarPorClase(activos, filtroClase),
     [activos, filtroClase],
   );
+  // El filtro de gafete sólo tiene sentido donde se puede entrar sin gafete
+  // (contratistas, o todas): en las demás clases siempre hay uno, "sin gafete"
+  // sería 0 y confunde. Al esconderse se ignora, para que un "sin gafete"
+  // elegido antes no deje la tabla vacía sin un botón que lo apague.
+  const mostrarFiltroGafete = filtroClase === "todas" || filtroClase === "contratista";
+  const filtroGafeteEfectivo = mostrarFiltroGafete ? filtroGafete : "todos";
   const filasVisibles = useMemo(
-    () => filtrarPorNivel(filtrarPorGafete(activosDeClase, filtroGafete), filtroPermanencia),
-    [activosDeClase, filtroGafete, filtroPermanencia],
+    () =>
+      filtrarPorNivel(filtrarPorGafete(activosDeClase, filtroGafeteEfectivo), filtroPermanencia),
+    [activosDeClase, filtroGafeteEfectivo, filtroPermanencia],
   );
   // Los números de los botones de los filtros (ver `opcionesFiltroGafete` y
   // `opcionesFiltroClase`): son la única métrica de la pantalla, ya no hay texto
@@ -431,7 +442,9 @@ export default function Activos({
                     onCambiar={setFiltroClase}
                     etiqueta="Filtrar por clase"
                   />
-                  <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
+                  {mostrarFiltroGafete && (
+                    <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
+                  )}
                 </div>
               </>
             }

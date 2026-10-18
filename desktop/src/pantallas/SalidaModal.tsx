@@ -300,8 +300,9 @@ export default function SalidaModal({
                       {coincidencias.length === 0 ? (
                         <span style={{ color: "var(--error)" }}>Sin ingreso activo</span>
                       ) : coincidencias.length === 1 ? (
-                        <span style={{ color: "var(--texto)", fontWeight: 600 }}>
-                          {coincidencias[0].nombre} · {CLASE_SINGULAR[coincidencias[0].clase]}
+                        <span style={{ color: "var(--texto)" }}>
+                          <span style={{ fontWeight: 500 }}>{CLASE_SINGULAR[coincidencias[0].clase]}</span>
+                          {` · ${coincidencias[0].nombre}`}
                           {coincidencias[0].detalle ? ` · ${coincidencias[0].detalle}` : ""}
                         </span>
                       ) : (
@@ -330,7 +331,10 @@ export default function SalidaModal({
                               setElecciones((actuales) => ({ ...actuales, [numero]: opcion.clave }))
                             }
                           >
-                            {CLASE_SINGULAR[opcion.clase]} · {opcion.nombre}
+                            {/* El tipo con más peso y el nombre normal: lo primero
+                                que se lee es de quién es el gafete. */}
+                            <span style={{ fontWeight: 500 }}>{CLASE_SINGULAR[opcion.clase]}</span>
+                            <span style={{ fontWeight: 400 }}> · {opcion.nombre}</span>
                           </button>
                         ))}
                       </div>
