@@ -158,11 +158,11 @@ fn preparar_y_registrar_ingreso_sin_gafete() {
     assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
 }
 
-/// Sin vincular, ninguno de los dos métodos `_verificado` debe tocar la
-/// red: el resultado tiene que ser idéntico al de las versiones sólo
-/// locales. Corre en CI (sin acceso a Internet) sin mockear HTTP.
+/// Sin vincular, `registrar_ingreso_verificado` no debe tocar la red: el
+/// resultado tiene que ser idéntico al de la versión sólo local. Corre en
+/// CI (sin acceso a Internet) sin mockear HTTP.
 #[test]
-fn sin_vincular_los_metodos_verificados_no_tocan_la_red() {
+fn sin_vincular_el_registro_verificado_no_toca_la_red() {
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();
 
@@ -187,7 +187,7 @@ fn sin_vincular_los_metodos_verificados_no_tocan_la_red() {
         .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
 
-    let preparacion = nucleo.preparar_ingreso_verificado(1).unwrap();
+    let preparacion = nucleo.preparar_ingreso(1).unwrap();
     assert_eq!(preparacion.mensaje_bloqueo, None);
     assert_eq!(preparacion.activo_en_otro_sitio, None);
 
@@ -197,14 +197,13 @@ fn sin_vincular_los_metodos_verificados_no_tocan_la_red() {
     assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
 }
 
-/// Cuando el bloqueo YA es local (ingreso activo) `preparar_ingreso_verificado`
-/// ni siquiera debe intentar el chequeo remoto -- de eso depende que
-/// este test pueda correr sin red: el teléfono está vinculado, así que si
-/// tocara `CacheTokenDispositivo` fallaría por falta de conexión en CI. El
-/// campo que le interesa a Kotlin es `mensaje_bloqueo`: antes tenía
-/// que recalcularlo con `puedeContinuar`/`mensajeBloqueo` propios.
+/// La vista previa es sólo local aunque el teléfono esté vinculado: deja
+/// continuar sin preguntarle nada a la nube, y un bloqueo local llega
+/// resuelto en `mensaje_bloqueo`. De eso depende que este test pueda correr
+/// sin red: si tocara `CacheTokenDispositivo` colgaría o fallaría por falta
+/// de conexión en CI. Lo que sólo sabe la nube se verifica al registrar.
 #[test]
-fn preparar_ingreso_verificado_no_toca_la_red_si_ya_hay_bloqueo_local() {
+fn preparar_ingreso_no_toca_la_red_aunque_este_vinculado() {
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();
 
@@ -228,18 +227,19 @@ fn preparar_ingreso_verificado_no_toca_la_red_si_ya_hay_bloqueo_local() {
     nucleo
         .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
         .unwrap();
-    nucleo
-        .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
-        .unwrap();
-
-    // Vinculado a propósito -- si el chequeo remoto se intentara igual,
-    // este test colgaría o fallaría por falta de red en vez de terminar en
+    // Vinculado a propósito -- si la vista previa consultara la nube, este
+    // test colgaría o fallaría por falta de red en vez de terminar en
     // microsegundos.
     nucleo.establecer_almacen_clave(std::sync::Arc::new(
         crate::firmante::pruebas::AlmacenComoKeystore::vinculado_a("disp-prueba"),
     ));
     assert!(nucleo.nube_configurada());
-    let preparacion = nucleo.preparar_ingreso_verificado(1).unwrap();
+    assert_eq!(nucleo.preparar_ingreso(1).unwrap().mensaje_bloqueo, None);
+
+    nucleo
+        .registrar_ingreso(1, MedioIngreso::Caminando, None, None)
+        .unwrap();
+    let preparacion = nucleo.preparar_ingreso(1).unwrap();
 
     assert!(preparacion.tiene_ingreso_activo);
     assert_eq!(

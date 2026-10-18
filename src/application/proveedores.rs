@@ -162,6 +162,32 @@ impl AppCore {
         })
     }
 
+    /// Las reglas de [`Self::registrar_ingreso_proveedor`] sin escribir ni
+    /// abrir transacción -- mismo criterio que `AppCore::validar_ingreso`.
+    pub fn validar_ingreso_proveedor(
+        &self,
+        actor: &UsuarioSesion,
+        cedula: &str,
+        nombre: &str,
+        empresa_id: i64,
+        placa: Option<String>,
+        gafete_numero: i64,
+    ) -> Result<(), IngresoProveedorServiceError> {
+        let registros = SqliteRegistroIngresoProveedorRepository::new(&self.connection);
+        let empresas = SqliteEmpresaProveedorRepository::new(&self.connection);
+        let gafetes = SqliteGafeteRepository::new(&self.connection);
+        IngresoProveedorService::new(&registros, &empresas, &gafetes).validar_ingreso(
+            cedula,
+            nombre,
+            empresa_id,
+            placa,
+            gafete_numero,
+            actor.id,
+            self.reloj.ahora_utc(),
+        )?;
+        Ok(())
+    }
+
     pub fn registrar_salida_proveedor(
         &self,
         actor: &UsuarioSesion,

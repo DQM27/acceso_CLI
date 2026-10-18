@@ -234,8 +234,8 @@ pub struct PreparacionIngreso {
     pub resultado_acceso: ResultadoAcceso,
     pub requiere_gafete: bool,
     pub tiene_ingreso_activo: bool,
-    /// Siempre `None`: el ingreso activo en otro sitio llega resuelto en
-    /// `mensaje_bloqueo` (ver `preparar_ingreso_verificado`).
+    /// Siempre `None`: la vista previa es sólo local y lo de otras unidades
+    /// se verifica al registrar (ver `registrar_ingreso_verificado`).
     pub activo_en_otro_sitio: Option<String>,
     pub gafetes_deuda: Vec<i64>,
     /// `None` si se puede continuar con este contratista; si no, el texto

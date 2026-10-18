@@ -62,7 +62,8 @@ export default function NuevoIngresoModal({
   );
 
   // Mientras se escribe el nombre, las conexiones con la nube se calientan: la
-  // verificación de la persona ya no paga conexión nueva (ver `precalentarNube`).
+  // vista previa al elegir a la persona es sólo local, y la única verificación
+  // en la nube, al registrar, ya no paga conexión nueva (ver `precalentarNube`).
   useEffect(() => {
     void precalentarNube();
   }, []);

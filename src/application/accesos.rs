@@ -113,6 +113,33 @@ impl AppCore {
         })
     }
 
+    /// Las reglas de [`Self::registrar_ingreso`] sin escribir ni abrir
+    /// transacción: lo que sabe este equipo (y su caché del otro equipo de
+    /// la unidad). `con_nube` lo corre antes de ir a la red, así lo que ya se
+    /// sabe acá no gasta ninguna consulta; la escritura lo vuelve a validar.
+    pub fn validar_ingreso(
+        &self,
+        actor: &UsuarioSesion,
+        contratista_id: i64,
+        medio: crate::models::medio_ingreso::MedioIngreso,
+        gafete: Option<i64>,
+        placa: Option<String>,
+    ) -> Result<(), RegistroIngresoServiceError> {
+        let placa = crate::domain::registro_ingreso::placa_segun_medio(medio, placa);
+        let contratistas = SqliteContratistaRepository::new(&self.connection);
+        let registros = SqliteRegistroIngresoRepository::new(&self.connection);
+        let gafetes = SqliteGafeteRepository::new(&self.connection);
+        RegistroIngresoService::new(&contratistas, &registros, &gafetes).validar_entrada(
+            contratista_id,
+            medio,
+            gafete,
+            placa,
+            actor.id,
+            self.reloj.ahora_utc(),
+        )?;
+        Ok(())
+    }
+
     pub fn listar_ingresos_activos(
         &self,
         filtro: &FiltroIngresosActivos,

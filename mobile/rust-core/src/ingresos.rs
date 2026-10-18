@@ -11,38 +11,14 @@ use crate::{
 
 #[uniffi::export]
 impl Nucleo {
-    /// Vista previa antes de confirmar — misma decisión que ya toma la GUI
-    /// de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
-    /// rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
-    /// (Kotlin) decide si deja continuar mirando los campos ya calculados.
+    /// Vista previa al elegir a la persona, sólo local y sin red: las
+    /// reglas de este equipo y de su caché del otro equipo del sitio, que
+    /// Realtime mantiene al día. `mensaje_bloqueo` llega ya resuelto por el
+    /// núcleo (`PreparacionIngreso::bloqueo`, lo mismo que usa escritorio);
+    /// Kotlin sólo lo muestra. Lo que sólo sabe la nube (otras unidades) se
+    /// verifica una sola vez, al registrar (`registrar_ingreso_verificado`).
     pub fn preparar_ingreso(&self, contratista_id: i64) -> Result<PreparacionIngreso, NucleoError> {
         Ok(self.core_lock().preparar_ingreso(contratista_id)?.into())
-    }
-
-    /// Vista previa con TODAS las reglas: las locales (este equipo y el
-    /// otro equipo del sitio) y, con nube, la verificación en vivo de que la
-    /// persona no tenga un ingreso activo en ningún sitio. Las decide
-    /// `application::preparar_ingreso_verificado`, la misma que usa
-    /// escritorio; Kotlin sólo muestra `mensaje_bloqueo`. Sin vincular =
-    /// nube sin configurar (sólo reglas locales). Nunca toca `core_lock()`
-    /// durante la red.
-    pub fn preparar_ingreso_verificado(
-        &self,
-        contratista_id: i64,
-    ) -> Result<PreparacionIngreso, NucleoError> {
-        let actor = self.actor_autenticado().ok();
-        let nube = &self.cache_token;
-        let (preparacion, bloqueo) = control_acceso::application::preparar_ingreso_verificado(
-            || self.core_lock(),
-            nube,
-            actor.as_ref(),
-            contratista_id,
-        )?;
-        let mut preparacion: PreparacionIngreso = preparacion.into();
-        preparacion.mensaje_bloqueo = bloqueo
-            .as_ref()
-            .map(control_acceso::mensajes::mensaje_bloqueo_ingreso);
-        Ok(preparacion)
     }
 
     pub fn registrar_ingreso(

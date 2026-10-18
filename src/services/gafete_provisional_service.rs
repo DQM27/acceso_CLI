@@ -60,6 +60,21 @@ where
         usuario_id: i64,
         ahora: DateTime<Utc>,
     ) -> Result<i64, GafeteProvisionalServiceError> {
+        let prestamo = self.validar_entrega(encargado_id, gafete_numero, usuario_id, ahora)?;
+        Ok(self.prestamos.crear(&prestamo)?)
+    }
+
+    /// Todas las reglas de [`Self::entregar`], sin escribir: el préstamo
+    /// que se guardaría. Sirve para revisar lo local antes de consultar la
+    /// nube (`application::con_nube`); `entregar` la vuelve a correr dentro
+    /// de su transacción.
+    pub fn validar_entrega(
+        &self,
+        encargado_id: i64,
+        gafete_numero: i64,
+        usuario_id: i64,
+        ahora: DateTime<Utc>,
+    ) -> Result<NuevoPrestamoGafeteProvisional, GafeteProvisionalServiceError> {
         if gafete_numero <= 0 {
             return Err(GafeteProvisionalServiceError::NumeroInvalido);
         }
@@ -96,14 +111,14 @@ where
             return Err(GafeteProvisionalServiceError::GafeteYaPrestado);
         }
 
-        Ok(self.prestamos.crear(&NuevoPrestamoGafeteProvisional {
+        Ok(NuevoPrestamoGafeteProvisional {
             encargado_id,
             encargado_nombre: encargado.nombre,
             encargado_codigo_empleado: encargado.codigo_empleado,
             gafete_numero,
             fecha_hora_entrega: ahora,
             usuario_entrega_id: usuario_id,
-        })?)
+        })
     }
 
     pub fn registrar_devolucion(

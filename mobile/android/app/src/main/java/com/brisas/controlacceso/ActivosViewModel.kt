@@ -328,17 +328,15 @@ class ActivosViewModel(
             seleccionIngreso = SeleccionIngreso.Cargando(contratista)
             errorIngreso = null
             try {
-                // Un solo cruce FFI: Rust decide localmente y, si los
-                // chequeos locales ya dejaron pasar, intenta además el
-                // chequeo cruzado entre sitios (`docs/pendientes.md`) si el
-                // teléfono está vinculado. `mensajeBloqueo` llega ya
-                // resuelto (o `null` si se puede continuar); acá no se
-                // evalúa ninguna condición propia, sólo se lee el resultado.
-                // La clave del teléfono la usa el núcleo a través de
-                // `AlmacenClaveKeystore`; un fallo del Keystore llega como
-                // `NucleoException` y se trata abajo (hallazgo MV-05).
+                // Un solo cruce FFI, sólo local y sin red: Rust decide con
+                // lo de este teléfono y su caché del otro equipo del sitio
+                // (al día por Realtime). `mensajeBloqueo` llega ya resuelto
+                // (o `null` si se puede continuar); acá no se evalúa ninguna
+                // condición propia, sólo se lee el resultado. Lo que sólo
+                // sabe la nube (otras unidades) se verifica una sola vez, al
+                // registrar (`registrarIngresoVerificado`).
                 val preparacion = withContext(dispatcherIO) {
-                    medirNucleo("prepararIngresoVerificado") { nucleo.prepararIngresoVerificado(contratista.id) }
+                    medirNucleo("prepararIngreso") { nucleo.prepararIngreso(contratista.id) }
                 }
                 msNucleo = milisegundosDesde(inicioElegir)
                 seleccionIngreso = preparacion.mensajeBloqueo?.let { mensaje ->

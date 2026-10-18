@@ -31,6 +31,23 @@ impl AppCore {
         })
     }
 
+    /// Las reglas de [`Self::registrar_ingreso_correo`] sin escribir ni
+    /// abrir transacción -- mismo criterio que `AppCore::validar_ingreso`.
+    pub fn validar_ingreso_correo(
+        &self,
+        actor: &UsuarioSesion,
+        datos: &DatosIngresoCorreo<'_>,
+    ) -> Result<(), IngresoCorreoServiceError> {
+        let registros = SqliteRegistroIngresoCorreoRepository::new(&self.connection);
+        let gafetes = SqliteGafeteRepository::new(&self.connection);
+        IngresoCorreoService::new(&registros, &gafetes).validar_ingreso(
+            datos,
+            actor.id,
+            self.reloj.ahora_utc(),
+        )?;
+        Ok(())
+    }
+
     pub fn registrar_salida_correo(
         &self,
         actor: &UsuarioSesion,

@@ -41,9 +41,8 @@ pub use con_nube::{
     EntradaVisitaVerificadaError, EntregaGafeteProvisionalVerificadaError,
     IngresoCorreoVerificadoError, IngresoProveedorVerificadoError, IngresoVerificadoError,
     NuevoIngresoCorreo, NuevoIngresoProveedor, entregar_gafete_provisional_verificado,
-    preparar_ingreso_verificado, registrar_entrada_visita_verificada,
-    registrar_ingreso_correo_verificado, registrar_ingreso_proveedor_verificado,
-    registrar_ingreso_verificado,
+    registrar_entrada_visita_verificada, registrar_ingreso_correo_verificado,
+    registrar_ingreso_proveedor_verificado, registrar_ingreso_verificado,
 };
 pub use historial::{
     ExportarHistorialError, buscar_historial_completo_con_conexion,
