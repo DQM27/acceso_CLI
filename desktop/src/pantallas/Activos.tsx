@@ -15,6 +15,7 @@ import { cerrarActivo, listarActivosUnificados } from "../api/activosUnificados"
 import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
+  CLASE_SINGULAR,
   contarPorClase,
   contarPorGafete,
   ETIQUETA_CLASE,
@@ -261,6 +262,16 @@ export default function Activos({
   // `Tabla`/localStorage quedaba pisado en el siguiente refresco.
   const columnas: ColDef<ActivoUnificado>[] = useMemo(
     () => [
+      // A qué grupo pertenece la fila de un vistazo (la columna "Tipo" de más
+      // abajo es otra cosa: PRAIND/IN_HOUSE de un contratista, etc.).
+      {
+        colId: "clase",
+        headerName: "Clase",
+        flex: 1.1,
+        minWidth: 120,
+        valueGetter: (p) => (p.data ? CLASE_SINGULAR[p.data.clase] : ""),
+        getQuickFilterText: () => "",
+      },
       {
         field: "cedula",
         headerName: "Cédula",
