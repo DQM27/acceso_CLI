@@ -83,6 +83,13 @@ fn informar(titulo: &str, (duracion, errores): (Duration, Vec<String>)) {
 fn mide_la_ronda_en_frio_en_caliente_y_tras_esperar() {
     let url = format!("{}/rest/v1/", variable("CONTROL_ACCESO_SUPABASE_URL"));
     let clave = variable("CONTROL_ACCESO_SUPABASE_APIKEY");
+    // Con otro cliente, para no calentar el grupo que se mide.
+    let protocolo = reqwest::blocking::Client::new()
+        .get(&url)
+        .header("apikey", &clave)
+        .send()
+        .map(|respuesta| format!("{:?}", respuesta.version()));
+    println!("\nProtocolo negociado con la nube: {protocolo:?}");
     // Misma configuración que `cliente_http_verificacion`.
     let cliente = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(3))

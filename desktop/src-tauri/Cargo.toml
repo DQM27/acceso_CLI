@@ -63,7 +63,7 @@ tokio = { version = "=1.53.1", features = ["sync", "time"] }
 # Telemetría (src/telemetria.rs): consulta las reglas y manda los lotes a
 # staging. Misma versión y features que el crate raíz, así Cargo unifica una
 # sola copia.
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "http2"] }
 
 [features]
 # Build de DIAGNÓSTICO (docs/telemetria-diagnostico.md): la telemetría queda
