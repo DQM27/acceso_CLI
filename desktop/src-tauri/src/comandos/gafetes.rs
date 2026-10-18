@@ -20,6 +20,24 @@ pub fn buscar_gafetes(
         .map_err(control_acceso::mensajes::mensaje_gafete)
 }
 
+/// Quién tiene abierto el gafete `numero`, de cualquier clase (contratista,
+/// proveedor, visita por correo o KOF), este equipo y el otro dispositivo del
+/// sitio. Un número puede tener varios: cada conjunto de gafetes numera por su
+/// cuenta. La interfaz sólo muestra la respuesta y, si hay más de uno, pide
+/// elegir (ver `SalidaModal`). `DatabaseError` directo, sin variante de
+/// negocio: el detalle va al registro técnico (`mensaje_generico`).
+#[tauri::command(async)]
+pub fn tenedores_del_gafete(
+    numero: i64,
+    state: tauri::State<GuiState>,
+) -> Result<Vec<control_acceso::application::TenedorGafete>, String> {
+    let actor = state.sesion_activa()?;
+    state
+        .core()
+        .tenedores_del_gafete(&actor, numero)
+        .map_err(control_acceso::mensajes::mensaje_generico)
+}
+
 /// Historial de un gafete puntual — el núcleo no gatea esta lectura por
 /// actor (mismo criterio que `buscar_gafetes`), pero la GUI igual exige
 /// sesión activa, por convención (ver `comandos/mod.rs`).
