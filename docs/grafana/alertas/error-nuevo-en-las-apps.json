@@ -1,0 +1,76 @@
+{
+  "title": "Error nuevo en las apps",
+  "ruleGroup": "errores-apps",
+  "folderUID": "lattis-alertas",
+  "orgID": 1,
+  "condition": "B",
+  "for": "0s",
+  "noDataState": "OK",
+  "execErrState": "OK",
+  "isPaused": false,
+  "labels": {
+    "origen": "errores",
+    "severidad": "aviso"
+  },
+  "annotations": {
+    "summary": "Error nuevo en {{ $labels.plataforma }}: {{ $labels.titulo }}",
+    "description": "Apareció por primera vez, en los últimos 15 minutos, un error que no se había visto antes. Plataforma: {{ $labels.plataforma }}. Huella: {{ $labels.huella }}. Detalle, versión y traza en el tablero Lattis · Errores: https://vibrantisland1455.grafana.net/d/lattis-errores"
+  },
+  "notification_settings": {
+    "receiver": "correo-daniel",
+    "group_by": [
+      "alertname"
+    ],
+    "group_wait": "30s",
+    "group_interval": "5m",
+    "repeat_interval": "12h"
+  },
+  "data": [
+    {
+      "refId": "A",
+      "datasourceUid": "eg1fe86yip534f",
+      "relativeTimeRange": {
+        "from": 900,
+        "to": 0
+      },
+      "model": {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "eg1fe86yip534f"
+        },
+        "editorMode": "code",
+        "format": "table",
+        "intervalMs": 1000,
+        "maxDataPoints": 43200,
+        "rawQuery": true,
+        "refId": "A",
+        "rawSql": "select huella, plataforma, (array_agg(titulo order by recibido_en asc))[1] as titulo, count(*)::float as eventos from public.errores_app group by huella, plataforma having min(recibido_en) > now() - interval '15 minutes'"
+      }
+    },
+    {
+      "refId": "B",
+      "datasourceUid": "__expr__",
+      "relativeTimeRange": {
+        "from": 0,
+        "to": 0
+      },
+      "model": {
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+          {
+            "evaluator": {
+              "type": "gt",
+              "params": [
+                0
+              ]
+            }
+          }
+        ],
+        "intervalMs": 1000,
+        "maxDataPoints": 43200,
+        "refId": "B"
+      }
+    }
+  ]
+}
