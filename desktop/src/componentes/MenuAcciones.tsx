@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ListaFlotante } from "./ListaFlotante";
 import { useListaFlotante } from "./ListaFlotante.logica";
+import { ESTILO_BOTON_COMPACTO } from "./MenuAcciones.logica";
 
 export interface AccionMenu {
   /** Texto de la fila: dice qué se va a registrar, no sólo "nuevo". */
@@ -51,10 +52,11 @@ export default function MenuAcciones({
   }, [abierto, campoRef]);
 
   return (
-    <div ref={campoRef}>
+    <div ref={campoRef} style={{ flexShrink: 0 }}>
       <button
         type="button"
         className="boton boton-icono"
+        style={ESTILO_BOTON_COMPACTO}
         aria-haspopup="menu"
         aria-expanded={abierto}
         onClick={() => setAbierto((actual) => !actual)}
