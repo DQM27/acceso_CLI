@@ -857,6 +857,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_nube_configurada(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_precalentar_nube(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_sesion_realtime_nube(
@@ -1048,6 +1050,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_nube_configurada(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_precalentar_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1521,6 +1525,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_nube_configurada() and 0xFFFF) != 6021) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_precalentar_nube() and 0xFFFF) != 50602) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial() and 0xFFFF) != 38622) {
@@ -3283,6 +3290,21 @@ public interface NucleoInterface {
     fun `nubeConfigurada`(): kotlin.Boolean
     
     /**
+     * Abre de antemano las conexiones que usa la verificación final de un
+     * ingreso (`nube::precalentar_conexiones_de_verificacion`, la misma que
+     * pide el escritorio al abrir sus formularios). Kotlin lo llama cuando
+     * aparece el formulario de un ingreso: mientras se escribe el gafete, el
+     * apretón de manos TLS ya se hizo y la verificación al registrar no paga
+     * conexión nueva.
+     *
+     * Vuelve enseguida: el calentamiento corre en un hilo aparte, sin el
+     * candado del núcleo, y es de mejor esfuerzo -- sin sesión, sin vincular
+     * o sin conexión no hace nada y nunca falla. Entre dos calentamientos
+     * hay una pausa mínima, así que llamarlo seguido no cuesta.
+     */
+    fun `precalentarNube`()
+    
+    /**
      * `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
      * usa para decidir si mostrar la pantalla de arranque (vincular con un
      * código) en vez del login (ver `MainActivity.kt`).
@@ -4398,6 +4420,31 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     }
     )
     }
+    
+
+    
+    /**
+     * Abre de antemano las conexiones que usa la verificación final de un
+     * ingreso (`nube::precalentar_conexiones_de_verificacion`, la misma que
+     * pide el escritorio al abrir sus formularios). Kotlin lo llama cuando
+     * aparece el formulario de un ingreso: mientras se escribe el gafete, el
+     * apretón de manos TLS ya se hizo y la verificación al registrar no paga
+     * conexión nueva.
+     *
+     * Vuelve enseguida: el calentamiento corre en un hilo aparte, sin el
+     * candado del núcleo, y es de mejor esfuerzo -- sin sesión, sin vincular
+     * o sin conexión no hace nada y nunca falla. Entre dos calentamientos
+     * hay una pausa mínima, así que llamarlo seguido no cuesta.
+     */override fun `precalentarNube`()
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_precalentar_nube(
+        it,
+        _status)
+}
+    }
+    
     
 
     

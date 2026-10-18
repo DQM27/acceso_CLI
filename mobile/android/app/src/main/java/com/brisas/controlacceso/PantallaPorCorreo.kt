@@ -216,6 +216,10 @@ private fun FormularioNuevoIngresoCorreo(
 
     BackHandler(onBack = onVolver)
 
+    // Mientras se llenan los datos, las conexiones con la nube se calientan
+    // (ver `CorreoViewModel.precalentarNube`).
+    LaunchedEffect(Unit) { viewModel.precalentarNube() }
+
     // `imePadding()` en un Column SIN `fillMaxSize`, mismo motivo que en
     // [FormularioNuevoIngresoProveedor].
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {

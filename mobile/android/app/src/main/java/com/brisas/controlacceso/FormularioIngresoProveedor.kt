@@ -30,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -83,6 +84,10 @@ internal fun FormularioNuevoIngresoProveedor(
     // lista (hallazgo 2026-09-19, mismo patrón ya usado en las pantallas de
     // escaneo/PantallaConfirmarIngreso).
     BackHandler(onBack = onVolver)
+
+    // Mientras se llenan los datos, las conexiones con la nube se calientan
+    // (ver `ProveedoresViewModel.precalentarNube`).
+    LaunchedEffect(Unit) { viewModel.precalentarNube() }
 
     // Mismo criterio que [PantallaRutas]: `imePadding()` va en un `Column`
     // SIN `fillMaxSize` -- combinarlo con `fillMaxSize` deja un hueco enorme

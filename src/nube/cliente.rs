@@ -109,8 +109,10 @@ pub(crate) fn cliente_http_verificacion() -> reqwest::blocking::Client {
 }
 
 /// Cuántas conexiones se calientan: las consultas de la verificación de un
-/// ingreso salen a la vez (la persona, la otra vía, el gafete) y, como
-/// `reqwest` está compilado sin HTTP/2, cada una necesita su propia conexión.
+/// ingreso salen a la vez (la persona, la otra vía, el gafete). Con HTTP/2
+/// comparten una sola conexión y las demás no abren nada nuevo; se dejan 3
+/// por si la conexión baja a HTTP/1.1 (un proxy que no lo negocia), donde
+/// cada consulta necesita la suya.
 const CONEXIONES_A_CALENTAR: usize = 3;
 
 /// Mínimo entre dos calentamientos: si el modal de ingreso se abre varias

@@ -343,6 +343,12 @@ class ActivosViewModel(
                     SeleccionIngreso.Bloqueada(preparacion, mensaje)
                 } ?: SeleccionIngreso.Formulario(preparacion)
                 resultado = if (preparacion.mensajeBloqueo != null) "bloqueada" else "formulario"
+                if (preparacion.mensajeBloqueo == null) {
+                    // Mientras se escribe el gafete, las conexiones con la
+                    // nube se calientan: la verificación al registrar ya no
+                    // paga conexión nueva. Vuelve enseguida y nunca falla.
+                    withContext(dispatcherIO) { nucleo.precalentarNube() }
+                }
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
                 seleccionIngreso = SeleccionIngreso.Ninguna

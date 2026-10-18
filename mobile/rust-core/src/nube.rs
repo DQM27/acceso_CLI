@@ -76,6 +76,29 @@ impl Nucleo {
         self.invalidar_token_cacheado();
     }
 
+    /// Abre de antemano las conexiones que usa la verificación final de un
+    /// ingreso (`nube::precalentar_conexiones_de_verificacion`, la misma que
+    /// pide el escritorio al abrir sus formularios). Kotlin lo llama cuando
+    /// aparece el formulario de un ingreso: mientras se escribe el gafete, el
+    /// apretón de manos TLS ya se hizo y la verificación al registrar no paga
+    /// conexión nueva.
+    ///
+    /// Vuelve enseguida: el calentamiento corre en un hilo aparte, sin el
+    /// candado del núcleo, y es de mejor esfuerzo -- sin sesión, sin vincular
+    /// o sin conexión no hace nada y nunca falla. Entre dos calentamientos
+    /// hay una pausa mínima, así que llamarlo seguido no cuesta.
+    pub fn precalentar_nube(&self) {
+        if self.actor_autenticado().is_err() || !self.cache_token.vinculado() {
+            return;
+        }
+        std::thread::spawn(|| {
+            control_acceso::nube::precalentar_conexiones_de_verificacion(
+                control_acceso::nube::base_url(),
+                control_acceso::nube::apikey(),
+            );
+        });
+    }
+
     /// `true` si este teléfono ya canjeó un código y tiene su clave en
     /// Android Keystore. Sin vincular no hay nube: Kotlin salta la
     /// sincronización de fondo y los chequeos en vivo no tocan la red.

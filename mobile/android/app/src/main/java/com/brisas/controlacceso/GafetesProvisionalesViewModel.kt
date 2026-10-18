@@ -110,6 +110,10 @@ class GafetesProvisionalesViewModel(
         textoEncargado = "${encargado.nombre} · ${encargado.codigoEmpleado}"
         encargadoSeleccionado = encargado
         resultadosEncargado = emptyList()
+        // Mientras se escribe el gafete, las conexiones con la nube se
+        // calientan: la verificación de la entrega ya no paga conexión nueva.
+        // Vuelve enseguida y nunca falla.
+        viewModelScope.launch(dispatcherIO) { nucleo.precalentarNube() }
     }
 
     fun entregar(gafeteNumero: Long, onExito: () -> Unit) {

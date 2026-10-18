@@ -1216,3 +1216,35 @@ fn un_fallo_al_abrir_la_base_no_le_muestra_a_kotlin_el_detalle_tecnico() {
     assert!(!texto.contains("SQLite"), "se coló el detalle: {texto}");
     assert!(texto.starts_with("No se pudo abrir la base de datos"));
 }
+
+/// El calentamiento es de mejor esfuerzo: sin sesión, o con sesión pero sin
+/// vincular, vuelve enseguida sin fallar y sin tocar la red (no hay nube con
+/// la que calentar nada). Que abra las conexiones contra una nube de verdad
+/// lo prueba `nube::precalentar_si_corresponde` en el crate raíz.
+#[test]
+fn precalentar_nube_sin_sesion_o_sin_vincular_no_hace_nada() {
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let ruta = archivo.path().to_str().unwrap().to_string();
+    let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
+    conexion
+        .execute_batch(
+            "INSERT INTO usuarios (cedula, nombre, password_hash, rol, activo) VALUES (
+                 '999999999', 'Actor Test',
+                 '$argon2id$v=19$m=19456,t=2,p=1$pO+/qvY8ieaUA97ME2LUPQ$OfE/070ufOj4TtL2SzVyW3sefnJjrMJq32APEHrM/wI',
+                 'ROOT', 1
+             );",
+        )
+        .unwrap();
+    drop(conexion);
+    let nucleo = Nucleo::abrir(ruta).unwrap();
+
+    let inicio = std::time::Instant::now();
+    nucleo.precalentar_nube();
+    nucleo
+        .autenticar("999999999".to_string(), "clave_prueba_123".to_string())
+        .unwrap();
+    assert!(!nucleo.nube_configurada());
+    nucleo.precalentar_nube();
+
+    assert!(inicio.elapsed() < std::time::Duration::from_secs(5));
+}
