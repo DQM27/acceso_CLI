@@ -523,15 +523,23 @@ function Shell({
   // un "crear/nuevo" local de cada pantalla) -- simplificado a un solo par
   // de atajos en toda la app (pedido explícito del usuario, 2026-09-21): los
   // Ctrl+N locales de Contratistas/Empresas/Gafetes se quitaron para no
-  // competir con este. Deshabilitados por defecto mientras se escribe en un
-  // campo de texto (comportamiento por defecto de la librería).
-  useHotkeys("ctrl+n", () => setModalNuevoIngreso(true), { preventDefault: true });
-  useHotkeys("ctrl+s", () => setModalSalida(true), { preventDefault: true });
+  // competir con este. `enableOnFormTags`: por defecto la librería los apaga
+  // con el foco en un campo de formulario, y eso incluye el buscador y el
+  // checkbox de una fila seleccionada -- justo cuando más se usan. Son
+  // combinaciones con Ctrl, no escriben nada. Con un modal de ingreso/salida
+  // abierto se apagan, para no apilar el otro encima mientras se escribe.
+  const atajosIngresoSalida = {
+    preventDefault: true,
+    enableOnFormTags: true,
+    enabled: !modalNuevoIngreso && !modalSalida,
+  };
+  useHotkeys("ctrl+n", () => setModalNuevoIngreso(true), atajosIngresoSalida);
+  useHotkeys("ctrl+s", () => setModalSalida(true), atajosIngresoSalida);
   // Mismo atajo que la TUI clásica y --cli (Ctrl+Q cierra sesión desde
   // cualquier pantalla) — acá sin tarjeta de confirmación porque el botón
   // "Cerrar sesión" del sidebar tampoco la pide, así el atajo y el botón se
   // comportan igual.
-  useHotkeys("ctrl+q", onCerrarSesion, { preventDefault: true });
+  useHotkeys("ctrl+q", onCerrarSesion, { preventDefault: true, enableOnFormTags: true });
 
   // Cualquier sincronización (Realtime, el pulso periódico, o "Sincronizar"
   // a mano) puede traer la baja/desactivación de quien tiene la sesión
