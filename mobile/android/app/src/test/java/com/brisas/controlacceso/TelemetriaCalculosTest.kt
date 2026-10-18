@@ -1,9 +1,11 @@
 package com.brisas.controlacceso
 
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import uniffi.control_acceso_mobile.NucleoException
 
 class TelemetriaCalculosTest {
 
@@ -104,6 +106,61 @@ class TelemetriaCalculosTest {
         assertEquals(6.0, login["total_ms"])
         assertEquals(1, resumen.getValue("buscar")["llamadas"])
         assertTrue(agregador.vaciar().isEmpty())
+    }
+
+    @Test
+    fun cadaVarianteDelNucleoTieneUnTipoDeLaListaFija() {
+        val esperados = mapOf(
+            NucleoException.Apertura("m") to "base_de_datos",
+            NucleoException.CredencialesInvalidas("m") to "credenciales",
+            NucleoException.UsuarioInactivo("m") to "credenciales",
+            NucleoException.SinPasswordLocal("m") to "credenciales",
+            NucleoException.NoAutenticado("m") to "no_autenticado",
+            NucleoException.FechaInvalida("m") to "validacion",
+            NucleoException.GafeteOcupadoEnSitio("m") to "conflicto",
+            NucleoException.ProveedorActivoEnOtroSitio("m") to "conflicto",
+            NucleoException.Rechazado("m") to "rechazado",
+            NucleoException.Interno("m") to "interno",
+        )
+        esperados.forEach { (error, tipo) -> assertEquals(error.javaClass.simpleName, tipo, tipoDeErrorNucleo(error)) }
+    }
+
+    @Test
+    fun laCancelacionYLoDemasTienenSuPropioTipo() {
+        assertEquals("cancelada", tipoDeErrorNucleo(CancellationException("c")))
+        assertEquals("otro", tipoDeErrorNucleo(IllegalStateException("x")))
+    }
+
+    // El mensaje puede traer cédulas o nombres: el tipo nunca lo contiene.
+    @Test
+    fun elTipoNuncaTraeElMensaje() {
+        val tipo = tipoDeErrorNucleo(NucleoException.Rechazado("Marlon Quesada 1-0847-0293 sin permiso"))
+        assertEquals("rechazado", tipo)
+        assertTrue(!tipo.contains("Marlon") && !tipo.contains("1-0847"))
+    }
+
+    @Test
+    fun sinRedUnErrorInternoOOtroFueLaRedPeroUnRechazoNo() {
+        assertEquals("sin_red", tipoDeErrorSegunRed("interno", sinRed = true))
+        assertEquals("sin_red", tipoDeErrorSegunRed("otro", sinRed = true))
+        assertEquals("rechazado", tipoDeErrorSegunRed("rechazado", sinRed = true))
+        assertEquals("conflicto", tipoDeErrorSegunRed("conflicto", sinRed = true))
+        assertEquals("interno", tipoDeErrorSegunRed("interno", sinRed = false))
+    }
+
+    @Test
+    fun laFilaTraeLosErroresPorTipoSoloSiHuboErrores() {
+        val agregador = AgregadorLlamadas()
+        agregador.registrar("registrar_ingreso", 1_000_000, ok = true)
+        agregador.registrar("registrar_ingreso", 1_000_000, ok = false, tipoError = "conflicto")
+        agregador.registrar("registrar_ingreso", 1_000_000, ok = false, tipoError = "conflicto")
+        agregador.registrar("registrar_ingreso", 1_000_000, ok = false, tipoError = "sin_red")
+        agregador.registrar("buscar", 1_000_000, ok = true)
+        agregador.registrar("login", 1_000_000, ok = false)
+        val resumen = agregador.vaciar().associateBy { it["nombre"] }
+        assertEquals(mapOf("conflicto" to 2, "sin_red" to 1), resumen.getValue("registrar_ingreso")["errores_por_tipo"])
+        assertEquals(mapOf("otro" to 1), resumen.getValue("login")["errores_por_tipo"])
+        assertTrue(!resumen.getValue("buscar").containsKey("errores_por_tipo"))
     }
 
     // --- AgregadorFrames ---

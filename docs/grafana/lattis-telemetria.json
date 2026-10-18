@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -19,16 +22,33 @@
   "links": [],
   "panels": [
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "options": {
         "colorMode": "none",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -40,16 +60,33 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
       "id": 2,
       "options": {
         "colorMode": "none",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -61,26 +98,55 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Suma de fallos en llamadas al núcleo. Un 'no autenticado' al cambiar de turno es esperado: la sincronización corre justo cuando se cierra la sesión.",
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "green" }, { "color": "orange", "value": 1 }, { "color": "red", "value": 10 }]
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
       "id": 3,
       "options": {
         "colorMode": "background",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -92,26 +158,51 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Frames de más de 700 ms. Debe ser 0.",
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "green" }, { "color": "red", "value": 1 }]
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
           }
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
       "id": 4,
       "options": {
         "colorMode": "background",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -123,17 +214,35 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "PSS total y heap de Java por equipo. Una fuga se ve como una línea que sube sin volver a bajar. Hoy el A25 se mantiene plano alrededor de 130 MB.",
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 1, "showPoints": "auto", "spanNulls": true }, "unit": "none" },
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "spanNulls": true
+          },
+          "unit": "none"
+        },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
       "id": 5,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
@@ -145,17 +254,34 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "En la primera sesión larga (14 h) los dos subieron de forma sostenida (hilos 107 → 134, descriptores 225 → 272) mientras la memoria quedó plana. Señal débil, en vigilancia: si se repite en otra sesión larga, hay algo que no se cierra.",
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 1, "showPoints": "auto", "spanNulls": true } },
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "spanNulls": true
+          }
+        },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
       "id": 6,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
@@ -167,17 +293,35 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Peor tiempo de cada operación en cada hora. sincronizar_con_nube ronda siempre 2–3 s en el móvil; las operaciones locales quedan por debajo de 15 ms.",
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 1, "showPoints": "auto", "spanNulls": true }, "unit": "ms" },
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "spanNulls": true
+          },
+          "unit": "ms"
+        },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
       "id": 7,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
@@ -189,13 +333,29 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
       "id": 8,
-      "options": { "legend": { "showLegend": false }, "xField": "hora" },
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "xField": "hora"
+      },
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -207,13 +367,24 @@
       "type": "barchart"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Mediana del tiempo hasta confirmar el documento (el promedio se distorsiona: una cédula tardó 14 minutos porque alguien dejó la cámara abierta). '(sin confirmar)' son escaneos que se cerraron sin leer el documento.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
       "id": 9,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -225,13 +396,24 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Atención: 'trabados' cuenta frames de más del doble del presupuesto de la pantalla. En un teléfono de 120 Hz el límite es 16,7 ms, muy estricto para la cámara, por eso escanear_cedula marca porcentajes altos aunque se vea fluida. Lo que importa de verdad es 'congelados' y 'max_ms'.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
       "id": 10,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -244,20 +426,36 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
       "id": 11,
       "panels": [],
       "title": "Móvil y escritorio, lado a lado (el escritorio aparece cuando empiece a reportar)",
       "type": "row"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Tiempo desde que se elige a la persona hasta tener el formulario del gafete. 'nube' es la consulta a la nube previa al registro (en el escritorio, 'ms_nucleo' es el total sin la espera del candado). 'candado' y 'cola' solo los manda el escritorio: lo que esperó el comando por el núcleo y por un hilo libre. Referencia del móvil: mediana de unos 0,4 s. Las 'bloqueada' son rechazos por regla y salen en unos 8 ms.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
       "id": 12,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -269,13 +467,24 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Cada operación del núcleo por plataforma: llamadas, errores, media y peor tiempo. Sirve para comparar la misma operación en el móvil y en el escritorio. Las filas viejas usan nombres anteriores al esquema 2 y pueden aparecer duplicadas.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 29
+      },
       "id": 13,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -287,17 +496,35 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Media por hora de sincronizar_con_nube en cada plataforma. En el móvil ronda 1,5 a 2,3 s.",
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 1, "showPoints": "auto", "spanNulls": true }, "unit": "ms" },
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "spanNulls": true
+          },
+          "unit": "ms"
+        },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 37
+      },
       "id": 14,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
@@ -309,13 +536,24 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Lo que importa son 'congelados' (más de 700 ms; debe ser 0) y 'max_ms'. 'trabados' se omite a propósito: en pantallas de 120 Hz el límite es muy estricto y se infla.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 37 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 37
+      },
       "id": 15,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -327,13 +565,24 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Qué plataformas y versiones están reportando y cuándo fue el último reporte (hora de Costa Rica). Sirve para ver si una actualización ya llegó a los equipos.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 45 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 45
+      },
       "id": 16,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
@@ -345,17 +594,35 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
       "description": "Peor tiempo por hora de cada comando del escritorio. Vacío hasta que el escritorio mande llamada_nucleo. Sirve para ver qué comando es el que se pega.",
       "fieldConfig": {
-        "defaults": { "custom": { "lineWidth": 1, "showPoints": "auto", "spanNulls": true }, "unit": "ms" },
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "spanNulls": true
+          },
+          "unit": "ms"
+        },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 45 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 45
+      },
       "id": 17,
       "targets": [
         {
-          "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
@@ -365,16 +632,59 @@
       ],
       "title": "Escritorio: peor tiempo por comando (por hora)",
       "type": "timeseries"
+    },
+    {
+      "id": 18,
+      "type": "table",
+      "title": "Errores del núcleo por tipo",
+      "description": "Por qué fallan las operaciones, con una lista fija de tipos (sin_red, conflicto, rechazado, validacion, no_autenticado, credenciales, interno, otro...). Solo llega de las versiones que ya lo envían (escritorio 1.8.15 y móvil 1.4.15 en adelante); antes no se guardaba. Un 'conflicto' o un 'rechazado' casi siempre es una regla funcionando, no un fallo; 'interno' y 'otro' sí merecen mirarse.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "eg1fe86yip534f"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "eg1fe86yip534f"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "refId": "A",
+          "rawSql": "select coalesce(t.datos->>'plataforma','movil') as plataforma, t.datos->>'nombre' as operacion, e.key as tipo_error, sum(e.value::int) as errores from public.telemetria_diagnostico t, lateral jsonb_each_text(t.datos->'errores_por_tipo') e where t.tipo = 'llamada_nucleo' and t.datos ? 'errores_por_tipo' and $__timeFilter(t.ocurrido_en) and t.version_app in (${version:singlequote}) group by 1,2,3 order by errores desc limit 40"
+        }
+      ]
     }
   ],
   "refresh": "5m",
   "schemaVersion": 42,
-  "tags": ["lattis", "telemetria"],
+  "tags": [
+    "lattis",
+    "telemetria"
+  ],
   "templating": {
     "list": [
       {
-        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
-        "datasource": { "type": "grafana-postgresql-datasource", "uid": "eg1fe86yip534f" },
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "eg1fe86yip534f"
+        },
         "includeAll": true,
         "label": "Versión",
         "multi": true,
@@ -386,7 +696,10 @@
       }
     ]
   },
-  "time": { "from": "now-24h", "to": "now" },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "America/Costa_Rica",
   "title": "Lattis · Telemetría (staging)",

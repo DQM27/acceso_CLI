@@ -103,19 +103,19 @@ pesa como máximo 16 KB.
 | `sesion_inicio` | Rust | SO, arquitectura, núcleos, RAM total |
 | `salida_anterior` | Rust | Cómo terminó la vez anterior: `CIERRE_NORMAL` o `SIN_CIERRE_NORMAL` (cuelgue, crash, "Finalizar tarea", apagón) |
 | `arranque` | Rust | `ms_hasta_ventana` desde que arrancó el proceso; `por`: `frontend` o `red_de_seguridad` (el splash se cerró por tiempo) |
-| `muestra_sistema` | Rust, cada 30 s | Memoria del proceso (en uso, privada y pico), CPU (`cpu_un_nucleo_pct`, `cpu_dispositivo_pct`), RAM libre del equipo y tamaño de la cola. No incluye los procesos de WebView2 |
+| `muestra_sistema` | Rust, cada 2 min | Memoria del proceso (en uso, privada y pico), CPU (`cpu_un_nucleo_pct`, `cpu_dispositivo_pct`), RAM libre del equipo y tamaño de la cola. No incluye los procesos de WebView2 |
 | `sincronizacion_auto` | Rust | Cada pulso automático: `ms`, si fue el de `arranque` y el `resultado` |
 | `reloj` | Rust, tras cada pulso automático | Reloj confiable (hora del servidor + contador de arranque): `confiable`, `margen_ms`, `diferencia_equipo_ms` (reloj de Windows menos la hora que usa la app; un salto grande sin conexión = alguien movió la hora) y `ancla_hace_ms` |
 | `sesion_unidad` | Rust, en cada sincronización con sesión | Qué respondió la nube a la sesión única (`vigente`, `desplazada`, `sin_usuario` o `error`) y `transcurrido_ms` desde el ingreso. Sin cédula ni nombre |
 | `panic` | Rust | Dónde ocurrió (`archivo:línea`) y en qué hilo, sin el mensaje. Se guarda en disco y sale en el próximo arranque |
 | `cierre` | Rust | Cierre normal: minutos que estuvo abierta |
-| `llamada_nucleo` | Frontend, cada 30 s | Por comando de Tauri, con el IPC incluido: llamadas, errores, p50/p90/máx y total en ms |
+| `llamada_nucleo` | Frontend, cada 30 s | Por comando de Tauri, con el IPC incluido: llamadas, errores, p50/p90/máx y total en ms. Si hubo errores, `errores_por_tipo` (lista fija, ver `docs/telemetria-contrato.md`) |
 | `transicion_ingreso` | Rust, en cada `preparar_ingreso` | Lo que tarda elegir a un contratista hasta tener el formulario del gafete, del lado del backend (sin el IPC, que sale en `llamada_nucleo`): `resultado` (`formulario`, `bloqueada` o `error`), `ms_cola` (esperando un hilo del pool), `ms_espera_candado` (esperando `state.core()`), `ms_nucleo` (`ms_total` sin la espera del candado: reglas locales y consulta a la nube) y `ms_total`. Mismos nombres que el del teléfono |
 | `realtime` | Frontend, cada 30 s | Canal de avisos en vivo, con los mismos campos que el teléfono: conexión, avisos por tabla, ecos propios, aplicados y latencia corregida por el desfase del reloj |
 | `pantalla` | Frontend | Pantalla o sección mostrada, la anterior y `ms_hasta_primer_frame` |
 | `ui_bloqueos` | Frontend, cada 30 s | Tareas largas (> 50 ms) que trabaron la ventana: cantidad, total, p50, máximo y cuántas pasaron de 200 ms |
 | `error_js` | Frontend, cada 30 s | Errores de JavaScript por origen y tipo (`error:TypeError`, `promesa:...`, `render:...`) |
-| `muestra_webview` | Frontend, cada 30 s | Memoria del motor de JavaScript y cantidad de nodos del DOM, con la pantalla actual |
+| `muestra_webview` | Frontend, cada 2 min | Memoria del motor de JavaScript y cantidad de nodos del DOM, con la pantalla actual |
 | `telemetria_descartada` | Rust | Filas que se descartaron porque la cola llegó a su tope (5 000) |
 
 ## Envío

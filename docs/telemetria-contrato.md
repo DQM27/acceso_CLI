@@ -78,12 +78,37 @@ junto con las nuevas hay que normalizarlos (la vista de análisis lo hará).
 
 `plataforma`: `movil` o `escritorio`.
 
+`errores_por_tipo` (en `llamada_nucleo`, sólo en las filas que tuvieron errores):
+cuántos errores hubo de cada tipo. **Lista fija**, la misma en las dos
+plataformas; nunca el mensaje del error, que puede traer nombres, cédulas o
+gafetes.
+
+| Tipo | Cuándo |
+|---|---|
+| `sin_red` | No había conexión o la nube no respondió. |
+| `no_autenticado` | No hay sesión activa o expiró. |
+| `credenciales` | Credenciales inválidas, usuario inactivo o sin contraseña en el equipo. |
+| `sin_autorizacion` | La sesión no está autorizada para esa operación. |
+| `reloj` | El reloj del equipo está atrasado respecto al último movimiento. |
+| `rechazado` | Una regla lo rechazó (acceso denegado, PRAIND vencido, sin visita vigente…). |
+| `conflicto` | Ya existía: gafete asignado o no disponible, ingreso activo, cédula repetida. |
+| `no_encontrado` | No existe o no está activo (contratista, gafete, registro). |
+| `validacion` | Un dato obligatorio, con formato inválido o incoherente. |
+| `base_de_datos` | Falla de la base de datos local. |
+| `interno` | Error interno del núcleo. |
+| `cancelada` | La operación se canceló. |
+| `otro` | No encaja en ninguno: si crece, hay un mensaje nuevo que enseñarle al clasificador. |
+
+En el teléfono el tipo sale de la variante de `NucleoException`
+(`tipoDeErrorNucleo`); en el escritorio el núcleo devuelve el error como texto y
+`clasificarErrorComando` (`telemetriaCalculos.ts`) lo lee sólo para elegir el tipo.
+
 ## Eventos nuevos o ampliados en el esquema 2
 
 | Evento | Qué se agrega |
 |---|---|
 | `muestra_sistema` (móvil) | `gc_conteo`, `gc_ms`, `gc_bloqueante_conteo`, `gc_bloqueante_ms` (pausas de la recolección de basura desde la muestra anterior; las bloqueantes son las que el hilo de la app tiene que esperar), `carga_sistema_1m` (carga del sistema a un minuto, de `/proc/loadavg`; puede venir vacío si Android no deja leerlo) y `red_tipo`. |
-| `llamada_nucleo` | `red_tipo` y el nombre canónico. |
+| `llamada_nucleo` | `red_tipo`, el nombre canónico y, si hubo errores, `errores_por_tipo`. |
 | `transicion_ingreso` (móvil, nuevo) | Por cada contratista elegido: `origen` (`ocr` o `manual`), `ms_busqueda`, `ms_nucleo` (la espera de la nube), `ms_total` hasta tener el formulario del gafete y `resultado` (`formulario`, `bloqueada` o `error`). |
 | `ocr_sesion` (móvil) | `ms_cierre_unbind`, `ms_cierre_modelos`, `ms_cierre_total`: lo que tarda cerrar la cámara en el hilo principal. |
 

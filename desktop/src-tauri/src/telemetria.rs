@@ -23,7 +23,7 @@
 //! Cómo: cola en memoria (con tope) que un hilo propio manda en lotes cada
 //! minuto; lo que no se pudo mandar se guarda en un archivo y se reintenta
 //! en el próximo arranque. Un hilo más toma una muestra del proceso cada
-//! 30 s.
+//! 2 minutos.
 
 use std::cell::Cell;
 use std::collections::{HashSet, VecDeque};
@@ -87,7 +87,9 @@ pub fn aislar_build_de_diagnostico() {
 const MAXIMO_EN_COLA: usize = 5_000;
 const FILAS_POR_LOTE: usize = 200;
 const SEGUNDOS_ENVIO: u64 = 60;
-const SEGUNDOS_MUESTREO: u64 = 30;
+/// La memoria y el CPU de una PC en reposo cambian despacio: con 30 s la muestra
+/// era más de la mitad de las filas de un equipo parado.
+const SEGUNDOS_MUESTREO: u64 = 120;
 /// Cuánto puede demorar el cierre de la app por mandar la telemetría.
 const ESPERA_ENVIO_AL_CERRAR: std::time::Duration = std::time::Duration::from_secs(3);
 /// Largo máximo de un evento del frontend, en bytes de JSON.
