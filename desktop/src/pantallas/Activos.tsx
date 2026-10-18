@@ -360,7 +360,7 @@ export default function Activos({
               onClick={() => salidaIndividual(fila)}
             >
               {/* En KOF no sale una persona: se devuelve el gafete. */}
-              {fila.clase === "kof" ? "Devolver" : "Salida"}
+              Salida
             </button>
           ) : null;
         },
