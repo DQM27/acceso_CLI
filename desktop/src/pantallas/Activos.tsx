@@ -10,6 +10,7 @@ import SegmentadoOpciones from "../componentes/SegmentadoOpciones";
 import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
 import MenuAcciones from "../componentes/MenuAcciones";
+import { ESTILO_BOTON_COMPACTO } from "../componentes/MenuAcciones.logica";
 import { cerrarActivo, listarActivosUnificados } from "../api/activosUnificados";
 import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
@@ -384,47 +385,53 @@ export default function Activos({
             busqueda={busqueda}
             seleccionMultiple
             onSeleccionCambia={setSeleccionadas}
-            accionesCentro={
-              <SegmentadoOpciones
-                opciones={opcionesFiltroClase(conteoClases)}
-                valor={filtroClase}
-                onCambiar={setFiltroClase}
-                etiqueta="Filtrar por clase"
-              />
-            }
             accionesDerecha={
-              <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
+              <div className="campo" style={{ flex: "0 0 20rem" }}>
+                <input
+                  placeholder="Cédula, nombre, empresa o motivo…"
+                  value={busqueda}
+                  onChange={(evento) => setBusqueda(evento.target.value)}
+                />
+              </div>
             }
             controles={
               <>
-                {/* Ingreso y salida como íconos, en una sola pieza (pedido
-                    del usuario 2026-09-23); el atajo va en el nombre. */}
-                <MenuAcciones
-                  texto="Nuevo ingreso"
-                  Icono={LogIn}
-                  acciones={[
-                    { texto: "Contratista", Icono: HardHat, atajo: "Ctrl+N", onElegir: onAbrirNuevoIngreso },
-                    { texto: "Proveedor", Icono: Boxes, onElegir: () => setModalProveedor(true) },
-                    { texto: "Visita por correo", Icono: Mail, onElegir: () => setModalCorreo(true) },
-                    { texto: "Gafete KOF", Icono: BadgeCheck, onElegir: () => setModalKof(true) },
-                  ]}
-                />
-                <button
-                  type="button"
-                  className="boton boton-icono"
-                  title="Registrar salida (Ctrl+S)"
-                  onClick={onAbrirSalida}
-                >
-                  <LogOut size={16} aria-hidden="true" />
-                  Registrar salida
-                  <span style={{ opacity: 0.6, fontSize: "0.75rem" }}>Ctrl+S</span>
-                </button>
-                <div className="campo" style={{ flex: "0 1 16rem" }}>
-                  <input
-                    placeholder="Cédula, nombre, empresa o motivo…"
-                    value={busqueda}
-                    onChange={(evento) => setBusqueda(evento.target.value)}
+                {/* Tres bloques de izquierda a derecha: qué registrar, qué
+                    ver (clase y gafete juntos) y, al otro extremo, el
+                    buscador. "Ingreso" abre la lista de qué registrar; el
+                    atajo de cada uno se ve en la lista (Ctrl+N) y al lado
+                    de "Salida" (Ctrl+S). */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <MenuAcciones
+                    texto="Ingreso"
+                    Icono={LogIn}
+                    acciones={[
+                      { texto: "Contratista", Icono: HardHat, atajo: "Ctrl+N", onElegir: onAbrirNuevoIngreso },
+                      { texto: "Proveedor", Icono: Boxes, onElegir: () => setModalProveedor(true) },
+                      { texto: "Visita por correo", Icono: Mail, onElegir: () => setModalCorreo(true) },
+                      { texto: "Gafete KOF", Icono: BadgeCheck, onElegir: () => setModalKof(true) },
+                    ]}
                   />
+                  <button
+                    type="button"
+                    className="boton boton-icono"
+                    style={{ ...ESTILO_BOTON_COMPACTO, flexShrink: 0 }}
+                    title="Registrar salida (Ctrl+S)"
+                    onClick={onAbrirSalida}
+                  >
+                    <LogOut size={15} aria-hidden="true" />
+                    Salida
+                    <span style={{ opacity: 0.6, fontSize: "0.72rem" }}>Ctrl+S</span>
+                  </button>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginLeft: "0.5rem" }}>
+                  <SegmentadoOpciones
+                    opciones={opcionesFiltroClase(conteoClases)}
+                    valor={filtroClase}
+                    onCambiar={setFiltroClase}
+                    etiqueta="Filtrar por clase"
+                  />
+                  <ToggleGafete filtro={filtroGafete} conteo={conteo} onCambiar={setFiltroGafete} />
                 </div>
               </>
             }
