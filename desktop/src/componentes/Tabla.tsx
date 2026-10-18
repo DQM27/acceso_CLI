@@ -199,6 +199,9 @@ export interface TablaProps<T> {
    * botón de acción que tiene más sentido cerca del selector que mezclado
    * con el buscador de la izquierda). */
   accionesDerecha?: ReactNode;
+  /** Al centro de la misma línea (ej. un selector de clase): los dos lados
+   * se reparten el ancho por igual, así queda centrado de verdad. */
+  accionesCentro?: ReactNode;
   /** Texto de búsqueda global (una sola caja, busca en todas las columnas)
    * — alternativa a `filtrosPorColumna` para listas donde un filtro por
    * columna es más de lo que hace falta. La pantalla es dueña del estado
@@ -282,6 +285,7 @@ function TablaBase<T>(
     filas,
     controles,
     accionesDerecha,
+    accionesCentro,
     busqueda,
     seleccionMultiple,
     onSeleccionCambia,
@@ -577,13 +581,27 @@ function TablaBase<T>(
             alignItems: "flex-end",
             gap: "0.375rem",
             flexWrap: "wrap",
-            flex: 1,
+            flex: accionesCentro ? "1 1 0" : 1,
           }}
         >
           {controles}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+        {accionesCentro && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+            {accionesCentro}
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: "0.375rem",
+            ...(accionesCentro ? { flex: "1 1 0" } : {}),
+          }}
+        >
           {accionesDerecha}
 
           {/* Filtros y anchos de columna en una sola pieza de íconos

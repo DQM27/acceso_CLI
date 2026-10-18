@@ -25,6 +25,7 @@ export interface ProveedorActivoResumen {
   gafete_numero: number;
   /** ISO 8601 (UTC) — convertir con `new Date(...)` antes de mostrar. */
   fecha_hora_ingreso: string;
+  usuario_ingreso_nombre: string;
 }
 
 /** Espejo de `SolicitudIngresoProveedorEntrada` (dto/proveedores.rs). */
@@ -105,6 +106,7 @@ export interface FilaProveedorRemota {
   placa: string | null;
   gafete_numero: number;
   fecha_hora_ingreso: string;
+  usuario_ingreso_nombre: string;
 }
 
 export type FilaProveedorActiva = FilaProveedorLocal | FilaProveedorRemota;
@@ -124,6 +126,7 @@ function filaProveedorDesdeRemoto(remoto: IngresoProveedorRemoto): FilaProveedor
     placa: remoto.placa,
     gafete_numero: remoto.gafete_numero,
     fecha_hora_ingreso: remoto.hora_entrada,
+    usuario_ingreso_nombre: remoto.usuario_entrada_nombre,
   };
 }
 
