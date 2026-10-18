@@ -56,7 +56,7 @@ import marca from "./assets/marca.png";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
 import AvisoPermanencia from "./componentes/AvisoPermanencia";
-import type { FiltroPermanencia } from "./pantallas/Activos.logica";
+import type { FiltroPermanencia, OtroIngreso } from "./pantallas/Activos.logica";
 import { useAvisosPermanencia } from "./componentes/useAvisosPermanencia";
 import { useTema } from "./componentes/useTema";
 import { guardarPreferencia, leerPreferencia } from "./preferencias";
@@ -116,6 +116,9 @@ const Rutas = lazy(() => import("./pantallas/Rutas"));
 const CatalogoRutas = lazy(() => import("./pantallas/CatalogoRutas"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
+const IngresoProveedorModal = lazy(() => import("./pantallas/IngresoProveedorModal"));
+const EntregarGafeteProvisionalModal = lazy(() => import("./pantallas/EntregarGafeteProvisionalModal"));
+const NuevaVisitaModal = lazy(() => import("./pantallas/NuevaVisitaModal"));
 
 type Pantalla =
   | { tipo: "cargando" }
@@ -488,6 +491,10 @@ function Shell({
 
   const [modalNuevoIngreso, setModalNuevoIngreso] = useState(false);
   const [modalSalida, setModalSalida] = useState(false);
+  // Los otros tres ingresos (proveedor, visita por correo y gafete KOF): se
+  // abren desde el menú "Ingreso" de Activos o con su atajo, desde cualquier
+  // pantalla, igual que el de contratista.
+  const [otroIngreso, setOtroIngreso] = useState<OtroIngreso | null>(null);
   // Sube en cada registro/salida/sincronización — Activos y Visitas lo usan
   // para refrescar su grilla/calendario aunque el cambio haya salido de
   // otra pantalla o de otro dispositivo (Realtime/pulso periódico).
@@ -527,10 +534,15 @@ function Shell({
   const atajosIngresoSalida = {
     preventDefault: true,
     enableOnFormTags: true,
-    enabled: !modalNuevoIngreso && !modalSalida,
+    enabled: !modalNuevoIngreso && !modalSalida && otroIngreso === null,
   };
   useHotkeys("ctrl+n", () => setModalNuevoIngreso(true), atajosIngresoSalida);
   useHotkeys("ctrl+s", () => setModalSalida(true), atajosIngresoSalida);
+  // Un atajo por clase de ingreso, con Alt + la inicial (Proveedor, Correo,
+  // KOF): se ven en el menú "Ingreso" de Activos, que es donde se aprenden.
+  useHotkeys("alt+p", () => setOtroIngreso("proveedor"), atajosIngresoSalida);
+  useHotkeys("alt+c", () => setOtroIngreso("correo"), atajosIngresoSalida);
+  useHotkeys("alt+k", () => setOtroIngreso("kof"), atajosIngresoSalida);
   // Mismo atajo que la TUI clásica y --cli (Ctrl+Q cierra sesión desde
   // cualquier pantalla) — acá sin tarjeta de confirmación porque el botón
   // "Cerrar sesión" del sidebar tampoco la pide, así el atajo y el botón se
@@ -808,6 +820,7 @@ function Shell({
                             refrescarSenal={refrescarActivos}
                             filtroPermanencia={filtroPermanenciaEfectivo}
                             onAbrirNuevoIngreso={() => setModalNuevoIngreso(true)}
+                            onAbrirOtroIngreso={setOtroIngreso}
                             onAbrirSalida={() => setModalSalida(true)}
                           />
                         ) : id === "visitas" ? (
@@ -882,6 +895,34 @@ function Shell({
               <SalidaModal
                 onRegistrado={() => setRefrescarActivos((n) => n + 1)}
                 onCerrar={() => setModalSalida(false)}
+              />
+            )}
+
+            {otroIngreso === "proveedor" && (
+              <IngresoProveedorModal
+                onRegistrado={() => {
+                  setOtroIngreso(null);
+                  setRefrescarActivos((n) => n + 1);
+                }}
+                onCerrar={() => setOtroIngreso(null)}
+              />
+            )}
+
+            {otroIngreso === "correo" && (
+              <NuevaVisitaModal
+                modoInicial="correo"
+                onRegistrado={() => setRefrescarActivos((n) => n + 1)}
+                onCerrar={() => setOtroIngreso(null)}
+              />
+            )}
+
+            {otroIngreso === "kof" && (
+              <EntregarGafeteProvisionalModal
+                onRegistrado={() => {
+                  setOtroIngreso(null);
+                  setRefrescarActivos((n) => n + 1);
+                }}
+                onCerrar={() => setOtroIngreso(null)}
               />
             )}
           </Suspense>
