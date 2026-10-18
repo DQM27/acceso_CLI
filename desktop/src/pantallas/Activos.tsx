@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { avisos } from "../avisos/avisos";
 import { BadgeCheck, Boxes, CircleOff, HardHat, IdCard, Layers, LogIn, LogOut, Mail, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -23,7 +23,7 @@ import {
   filtrarPorGafete,
   filtrarPorNivel,
 } from "./Activos.logica";
-import type { FiltroClase, FiltroGafete, FiltroPermanencia } from "./Activos.logica";
+import type { FiltroClase, FiltroGafete, FiltroPermanencia, OtroIngreso } from "./Activos.logica";
 
 /** Ícono, número y nombre completo (al pasar el mouse) de cada opción. Los
  * números son el conteo de gente adentro: el total, y cuántos tienen gafete y
@@ -78,10 +78,6 @@ function ToggleGafete({
   );
 }
 
-const IngresoProveedorModal = lazy(() => import("./IngresoProveedorModal"));
-const EntregarGafeteProvisionalModal = lazy(() => import("./EntregarGafeteProvisionalModal"));
-const NuevaVisitaModal = lazy(() => import("./NuevaVisitaModal"));
-
 const ICONO_CLASE: Record<ClaseActivo, LucideIcon> = {
   contratista: HardHat,
   proveedor: Boxes,
@@ -124,15 +120,17 @@ function claseFilaActiva(fila: ActivoUnificado): string | undefined {
 export default function Activos({
   refrescarSenal,
   onAbrirNuevoIngreso,
+  onAbrirOtroIngreso,
   onAbrirSalida,
   filtroPermanencia,
 }: {
-  /** Los modales de Nuevo Ingreso y Salida viven en el Shell (se disparan
-   * desde cualquier pantalla vía Ctrl+N/S, no sólo desde acá) —
-   * este número sube cada vez que registran algo, para que la grilla se
-   * refresque aunque ya estuviera montada. */
+  /** Los modales de ingreso (contratista, proveedor, visita por correo y KOF)
+   * y el de Salida viven en el Shell (se disparan desde cualquier pantalla con
+   * su atajo, no sólo desde acá) — este número sube cada vez que registran algo,
+   * para que la grilla se refresque aunque ya estuviera montada. */
   refrescarSenal?: number;
   onAbrirNuevoIngreso: () => void;
+  onAbrirOtroIngreso: (clase: OtroIngreso) => void;
   onAbrirSalida: () => void;
   /** Si hay un aviso de permanencia pulsado en la barra de estado, la tabla
    * se limita a esas personas (ver `Shell`). */
@@ -148,9 +146,6 @@ export default function Activos({
   const [busqueda, setBusqueda] = useState("");
   const [seleccionadas, setSeleccionadas] = useState<ActivoUnificado[]>([]);
   const [confirmarSalidaMasiva, setConfirmarSalidaMasiva] = useState(false);
-  const [modalProveedor, setModalProveedor] = useState(false);
-  const [modalKof, setModalKof] = useState(false);
-  const [modalCorreo, setModalCorreo] = useState(false);
   const [procesando, setProcesando] = useState(false);
   const [filtroGafete, setFiltroGafete] = useState<FiltroGafete>("todos");
   const [filtroClase, setFiltroClase] = useState<FiltroClase>("todas");
@@ -430,9 +425,9 @@ export default function Activos({
                     Icono={LogIn}
                     acciones={[
                       { texto: "Contratista", Icono: HardHat, atajo: "Ctrl+N", onElegir: onAbrirNuevoIngreso },
-                      { texto: "Proveedor", Icono: Boxes, onElegir: () => setModalProveedor(true) },
-                      { texto: "Visita por correo", Icono: Mail, onElegir: () => setModalCorreo(true) },
-                      { texto: "Gafete KOF", Icono: BadgeCheck, onElegir: () => setModalKof(true) },
+                      { texto: "Proveedor", Icono: Boxes, atajo: "Alt+P", onElegir: () => onAbrirOtroIngreso("proveedor") },
+                      { texto: "Visita por correo", Icono: Mail, atajo: "Alt+C", onElegir: () => onAbrirOtroIngreso("correo") },
+                      { texto: "Gafete KOF", Icono: BadgeCheck, atajo: "Alt+K", onElegir: () => onAbrirOtroIngreso("kof") },
                     ]}
                   />
                   <button
@@ -476,36 +471,6 @@ export default function Activos({
           />
         </div>
       </div>
-
-      {/* Proveedor y KOF se registran desde acá (menú "Nuevo ingreso"); sus
-          modales ya existían, antes colgaban de pantallas propias. */}
-      <Suspense fallback={null}>
-        {modalProveedor && (
-          <IngresoProveedorModal
-            onRegistrado={() => {
-              setModalProveedor(false);
-              recargar();
-            }}
-            onCerrar={() => setModalProveedor(false)}
-          />
-        )}
-        {modalCorreo && (
-          <NuevaVisitaModal
-            modoInicial="correo"
-            onRegistrado={recargar}
-            onCerrar={() => setModalCorreo(false)}
-          />
-        )}
-        {modalKof && (
-          <EntregarGafeteProvisionalModal
-            onRegistrado={() => {
-              setModalKof(false);
-              recargar();
-            }}
-            onCerrar={() => setModalKof(false)}
-          />
-        )}
-      </Suspense>
 
       {confirmarSalidaMasiva && (
         <Modal titulo="Confirmar salida" onCerrar={() => setConfirmarSalidaMasiva(false)}>
