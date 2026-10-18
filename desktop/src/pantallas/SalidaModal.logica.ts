@@ -1,19 +1,10 @@
-import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
+import type { ActivoUnificado } from "../api/activosUnificados";
 
 /** "GAFETE 2" / "S/G" (sin gafete), en mayúsculas como el resto de los
  * datos del contratista. */
 export function textoGafete(numero: number | null): string {
   return numero == null ? "S/G" : `GAFETE ${numero}`;
 }
-
-/** Nombre de la clase en singular, para decir de quién es cada resultado
- * ("Proveedor", "Gafete KOF"): el buscador mezcla las cuatro. */
-export const CLASE_SINGULAR: Record<ClaseActivo, string> = {
-  contratista: "Contratista",
-  proveedor: "Proveedor",
-  correo: "Visita por correo",
-  kof: "Gafete KOF",
-};
 
 /** Por nombre, cédula o lo que acompaña al nombre (empresa, motivo o código de
  * empleado en KOF, que no tiene cédula). */

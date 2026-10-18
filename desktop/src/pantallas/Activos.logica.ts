@@ -12,6 +12,15 @@ export const ETIQUETA_CLASE: Record<ClaseActivo, string> = {
   kof: "KOF",
 };
 
+/** Nombre de la clase en singular: la columna "Clase" de la tabla y de quién es
+ * cada resultado en el modal de salida, donde se mezclan las cuatro. */
+export const CLASE_SINGULAR: Record<ClaseActivo, string> = {
+  contratista: "Contratista",
+  proveedor: "Proveedor",
+  correo: "Visita por correo",
+  kof: "Gafete KOF",
+};
+
 export function filtrarPorClase<T extends { clase: ClaseActivo }>(
   filas: readonly T[],
   filtro: FiltroClase,

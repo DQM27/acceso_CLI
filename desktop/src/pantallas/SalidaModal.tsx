@@ -8,13 +8,8 @@ import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlot
 import { gafetesDe, sanearGafetes } from "../api";
 import { cerrarActivo, listarActivosUnificados } from "../api/activosUnificados";
 import type { ActivoUnificado } from "../api/activosUnificados";
-import {
-  CLASE_SINGULAR,
-  activoParaGafete,
-  agruparPorGafete,
-  coincideTexto,
-  textoGafete,
-} from "./SalidaModal.logica";
+import { CLASE_SINGULAR } from "./Activos.logica";
+import { activoParaGafete, agruparPorGafete, coincideTexto, textoGafete } from "./SalidaModal.logica";
 
 const MAX_RESULTADOS = 4;
 
