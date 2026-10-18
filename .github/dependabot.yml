@@ -1,11 +1,20 @@
+# Dependabot: una vez al mes, un PR por grupo, sin rebases automáticos.
+#
+# Pensado para no inundar el correo (los PR de dependencias llegaban a 11
+# abiertos a la vez, y cada cambio en `main` rebaseaba todos y mandaba un correo
+# por PR). Las actualizaciones de SEGURIDAD no dependen de este archivo: GitHub
+# las abre en cuanto sale el aviso, sin esperar al mes.
 version: 2
 
 updates:
   # Crate raiz (nucleo de dominio, compartido por desktop y mobile)
   - package-ecosystem: cargo
     directory: /
+    # Sin esto Dependabot rebasea todos sus PR abiertos cada vez que `main` cambia, y
+    # cada rebase manda un correo.
+    rebase-strategy: disabled
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     ignore:
       # p256 0.14 (ecdsa 0.17) cambia la API y pide otro rand_core: se migra
@@ -19,8 +28,11 @@ updates:
 
   - package-ecosystem: cargo
     directory: /desktop/src-tauri
+    # Sin esto Dependabot rebasea todos sus PR abiertos cada vez que `main` cambia, y
+    # cada rebase manda un correo.
+    rebase-strategy: disabled
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     ignore:
       # Fijadas a la versión que ya traen tauri/wry y tauri-plugin-dialog (ver
@@ -42,8 +54,11 @@ updates:
 
   - package-ecosystem: cargo
     directory: /mobile/rust-core
+    # Sin esto Dependabot rebasea todos sus PR abiertos cada vez que `main` cambia, y
+    # cada rebase manda un correo.
+    rebase-strategy: disabled
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     ignore:
       # p256 0.14 (ecdsa 0.17) cambia la API y pide otro rand_core: no
@@ -57,8 +72,11 @@ updates:
 
   - package-ecosystem: npm
     directory: /desktop
+    # Sin esto Dependabot rebasea todos sus PR abiertos cada vez que `main` cambia, y
+    # cada rebase manda un correo.
+    rebase-strategy: disabled
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     ignore:
       # Los paquetes npm de Tauri tienen que ir en la misma versión menor que
@@ -83,8 +101,11 @@ updates:
 
   - package-ecosystem: npm
     directory: /web
+    # Sin esto Dependabot rebasea todos sus PR abiertos cada vez que `main` cambia, y
+    # cada rebase manda un correo.
+    rebase-strategy: disabled
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     ignore:
       # eslint-plugin-react aún no soporta eslint 10 (ERESOLVE en npm ci).
@@ -102,8 +123,11 @@ updates:
 
   - package-ecosystem: npm
     directory: /web-visitas
+    # Sin esto Dependabot rebasea todos sus PR abiertos cada vez que `main` cambia, y
+    # cada rebase manda un correo.
+    rebase-strategy: disabled
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     ignore:
       # eslint-plugin-react aún no soporta eslint 10 (ERESOLVE en npm ci).
@@ -121,5 +145,13 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
+    # Sin esto Dependabot rebasea todos sus PR abiertos cada vez que `main` cambia, y
+    # cada rebase manda un correo.
+    rebase-strategy: disabled
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns:
+          - "*"
