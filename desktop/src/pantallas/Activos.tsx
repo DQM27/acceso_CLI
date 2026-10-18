@@ -159,11 +159,12 @@ export default function Activos({
     () => filtrarPorClase(activos, filtroClase),
     [activos, filtroClase],
   );
-  // El filtro de gafete sólo tiene sentido donde se puede entrar sin gafete
-  // (contratistas, o todas): en las demás clases siempre hay uno, "sin gafete"
-  // sería 0 y confunde. Al esconderse se ignora, para que un "sin gafete"
-  // elegido antes no deje la tabla vacía sin un botón que lo apague.
-  const mostrarFiltroGafete = filtroClase === "todas" || filtroClase === "contratista";
+  // El filtro de gafete es sólo de contratistas, los únicos que pueden entrar
+  // sin gafete: con "Todas" se ve todo sin filtrar, y en las demás clases
+  // siempre hay uno ("sin gafete" sería 0 y confunde). Al esconderse se
+  // ignora, para que un "sin gafete" elegido antes no deje la tabla vacía sin
+  // un botón que lo apague.
+  const mostrarFiltroGafete = filtroClase === "contratista";
   const filtroGafeteEfectivo = mostrarFiltroGafete ? filtroGafete : "todos";
   const filasVisibles = useMemo(
     () =>
