@@ -8,9 +8,13 @@ import {
   activoDesdeCorreo,
   activoDesdeKof,
   activoDesdeProveedor,
+  activosDeTenedores,
   cerrarActivo,
+  claveDeTenedor,
   listarActivosUnificados,
 } from "./activosUnificados";
+import { tenedoresDelGafete } from "./gafetes";
+import type { TenedorGafete } from "./gafetes";
 import type { FilaActiva } from "./activos";
 import type { FilaCorreoActiva } from "./correo";
 import type { FilaGafeteProvisionalActiva } from "./gafetesProvisionales";
@@ -321,5 +325,46 @@ describe("listarActivosUnificados", () => {
         : Promise.resolve(comando === "listar_ingresos_activos" ? { items: [], total: 0 } : [])) as typeof invoke);
 
     await expect(listarActivosUnificados()).rejects.toThrow("fallo de base");
+  });
+});
+
+describe("tenedores de un gafete (los contesta el núcleo)", () => {
+  const tenedorContratista: TenedorGafete = {
+    clase: "contratista",
+    origen: { tipo: "local", id: 7 },
+    nombre: "Marlon Quesada",
+    detalle: "Constructora del Valle",
+  };
+  const tenedorProveedorRemoto: TenedorGafete = {
+    clase: "proveedor",
+    origen: { tipo: "remoto", uuid: "uuid-p" },
+    nombre: "Luis Proveedor",
+    detalle: "Distribuidora Sol",
+  };
+
+  it("la clave de un tenedor es la que ya tiene el activo en la tabla", () => {
+    expect(claveDeTenedor(tenedorContratista)).toBe(activoDesdeContratista(contratistaLocal).clave);
+    expect(claveDeTenedor(tenedorProveedorRemoto)).toBe(activoDesdeProveedor(proveedorRemoto).clave);
+  });
+
+  it("cruza los tenedores con las filas cargadas, en el orden en que contestó el núcleo", () => {
+    const contratista = activoDesdeContratista(contratistaLocal);
+    const proveedor = activoDesdeProveedor(proveedorRemoto);
+    const otro = activoDesdeProveedor(proveedorLocal);
+
+    expect(
+      activosDeTenedores([otro, proveedor, contratista], [tenedorContratista, tenedorProveedorRemoto]),
+    ).toEqual([contratista, proveedor]);
+  });
+
+  it("descarta al tenedor que ya no está en la lista cargada", () => {
+    expect(activosDeTenedores([], [tenedorContratista])).toEqual([]);
+  });
+
+  it("pregunta por el número al comando del núcleo", async () => {
+    invocar.mockResolvedValueOnce([tenedorContratista] as never);
+
+    await expect(tenedoresDelGafete(1)).resolves.toEqual([tenedorContratista]);
+    expect(invocar).toHaveBeenCalledWith("tenedores_del_gafete", { numero: 1 });
   });
 });

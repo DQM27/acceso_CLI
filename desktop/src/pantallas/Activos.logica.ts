@@ -4,6 +4,10 @@ import type { ClaseActivo } from "../api/activosUnificados";
  * proveedores, visitas por correo o gafetes KOF). */
 export type FiltroClase = "todas" | ClaseActivo;
 
+/** Los ingresos que se registran con un modal propio además del de contratista
+ * (que tiene el suyo, Ctrl+N): el menú "Ingreso" de Activos y sus atajos. */
+export type OtroIngreso = "proveedor" | "correo" | "kof";
+
 /** Nombre de cada clase en los botones del filtro y en los mensajes. */
 export const ETIQUETA_CLASE: Record<ClaseActivo, string> = {
   contratista: "Contratistas",

@@ -30,6 +30,7 @@ mod historial;
 mod nube;
 mod proveedores;
 mod rutas;
+mod tenedores_gafete;
 
 pub use accesos::AvisosPermanencia;
 pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion};
@@ -49,6 +50,7 @@ pub use historial::{
 };
 #[cfg(feature = "nube")]
 pub use nube::{GestionNubeError, MovimientoHistorialSitio, ResumenSincronizacion};
+pub use tenedores_gafete::{ClaseTenedorGafete, OrigenTenedorGafete, TenedorGafete};
 
 /// Tope de seguridad para las cargas "todo en un `Vec`" que alimentan AG
 /// Grid (`buscar_historial_completo`, `buscar_auditoria_completo`) — la
