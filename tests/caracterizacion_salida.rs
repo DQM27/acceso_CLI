@@ -12,6 +12,10 @@
 //! existe falla; el gafete queda libre para otro y sólo cuando la salida se
 //! confirmó; y toda salida rechazada (reloj retrocedido, operador inactivo)
 //! no deja escritura alguna, ni siquiera en la cola de sincronización.
+//!
+//! Al final, las del lote (`AppCore::registrar_salidas`): cierra varias
+//! salidas en una transacción, una rechazada no frena a las demás, y los
+//! errores globales (reloj, operador) no cierran ninguna.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -85,7 +89,9 @@ impl Escenario {
                     es_personal_ruta,tiene_acceso
                  ) VALUES
                     (1,'C1','Persona Uno',1,'PRAIND','2027-01-01',0,1),
-                    (2,'C2','Persona Dos',1,'PRAIND','2027-01-01',0,1);
+                    (2,'C2','Persona Dos',1,'PRAIND','2027-01-01',0,1),
+                    (3,'C3','Persona Tres',1,'PRAIND','2027-01-01',0,1),
+                    (4,'C4','Persona Cuatro',1,'PRAIND','2027-01-01',0,1);
                  INSERT INTO gafetes(numero,tipo,estado) VALUES (25,'CONTRATISTA','DISPONIBLE');",
             )
             .unwrap();
@@ -105,6 +111,21 @@ impl Escenario {
         self.reloj.establecer(instante(hora, minuto));
         self.core
             .registrar_ingreso(actor, contratista, MedioIngreso::Caminando, Some(25), None)
+            .unwrap()
+            .registro_id
+    }
+
+    /// Entrada de `contratista` sin gafete (S/G) con el reloj en `hora:minuto`.
+    fn entrar_sin_gafete(
+        &self,
+        actor: &UsuarioSesion,
+        contratista: i64,
+        hora: u32,
+        minuto: u32,
+    ) -> i64 {
+        self.reloj.establecer(instante(hora, minuto));
+        self.core
+            .registrar_ingreso(actor, contratista, MedioIngreso::Caminando, None, None)
             .unwrap()
             .registro_id
     }
@@ -309,4 +330,197 @@ fn una_salida_rechazada_no_impide_la_siguiente_y_cada_una_se_confirma_sola() {
 
     assert!(escenario.salida_de(primero).0.is_some());
     assert_eq!(escenario.avisos_de_cierre(), 1);
+}
+
+// ---- Lote: `registrar_salidas` ----
+
+/// Tres contratistas adentro (el primero con el gafete 25) a las 14:00,
+/// 14:01 y 14:02.
+fn tres_adentro(escenario: &Escenario) -> [i64; 3] {
+    [
+        escenario.entrar(&operador(1), 1, 14, 0),
+        escenario.entrar_sin_gafete(&operador(1), 2, 14, 1),
+        escenario.entrar_sin_gafete(&operador(1), 3, 14, 2),
+    ]
+}
+
+#[test]
+fn el_lote_cierra_todas_con_la_misma_hora_y_el_mismo_operador() {
+    let escenario = Escenario::nuevo("lote_todas");
+    let ids = tres_adentro(&escenario);
+
+    escenario.reloj.establecer(instante(16, 0));
+    let resultado = escenario
+        .core
+        .registrar_salidas(&operador(2), &ids)
+        .unwrap();
+
+    assert_eq!(resultado.cerrados, ids, "en el orden en que llegaron");
+    assert!(resultado.rechazados.is_empty());
+    for id in ids {
+        let (hora, usuario) = escenario.salida_de(id);
+        assert!(hora.unwrap().starts_with("2026-10-17T16:00:00"));
+        assert_eq!(usuario, Some(2));
+    }
+    assert_eq!(escenario.avisos_de_cierre(), 3, "un aviso por salida");
+}
+
+#[test]
+fn el_lote_libera_el_gafete_de_quien_lo_tenia() {
+    let escenario = Escenario::nuevo("lote_gafete");
+    let ids = tres_adentro(&escenario);
+
+    escenario.reloj.establecer(instante(16, 0));
+    escenario
+        .core
+        .registrar_salidas(&operador(1), &ids)
+        .unwrap();
+
+    escenario.reloj.establecer(instante(16, 5));
+    escenario
+        .core
+        .registrar_ingreso(&operador(1), 4, MedioIngreso::Caminando, Some(25), None)
+        .expect("el gafete 25 quedó libre");
+}
+
+#[test]
+fn una_rechazada_no_frena_a_las_demas_y_trae_su_mensaje() {
+    let escenario = Escenario::nuevo("lote_rechazada");
+    let [primero, segundo, tercero] = tres_adentro(&escenario);
+
+    escenario.reloj.establecer(instante(16, 0));
+    let resultado = escenario
+        .core
+        .registrar_salidas(&operador(1), &[primero, 9_999, segundo])
+        .unwrap();
+
+    assert_eq!(resultado.cerrados, [primero, segundo]);
+    assert_eq!(resultado.rechazados.len(), 1);
+    assert_eq!(resultado.rechazados[0].id, 9_999);
+    assert_eq!(
+        resultado.rechazados[0].mensaje,
+        "El ingreso ya no está activo"
+    );
+    assert!(escenario.salida_de(primero).0.is_some());
+    assert!(escenario.salida_de(segundo).0.is_some());
+    assert_eq!(
+        escenario.salida_de(tercero),
+        (None, None),
+        "el que no iba en el lote sigue adentro"
+    );
+    assert_eq!(escenario.avisos_de_cierre(), 2);
+}
+
+#[test]
+fn en_el_lote_un_ingreso_ya_cerrado_se_rechaza_sin_pisar_su_salida() {
+    let escenario = Escenario::nuevo("lote_ya_cerrado");
+    let [primero, segundo, _] = tres_adentro(&escenario);
+    escenario.reloj.establecer(instante(15, 0));
+    escenario
+        .core
+        .registrar_salida(&operador(1), primero)
+        .unwrap();
+    let original = escenario.salida_de(primero);
+
+    escenario.reloj.establecer(instante(16, 0));
+    let resultado = escenario
+        .core
+        .registrar_salidas(&operador(2), &[primero, segundo])
+        .unwrap();
+
+    assert_eq!(resultado.cerrados, [segundo]);
+    assert_eq!(resultado.rechazados[0].id, primero);
+    assert_eq!(escenario.salida_de(primero), original);
+    assert_eq!(
+        escenario.avisos_de_cierre(),
+        2,
+        "la del primero y la del segundo"
+    );
+}
+
+#[test]
+fn en_el_lote_un_id_repetido_cierra_una_vez_y_rechaza_la_repetida() {
+    let escenario = Escenario::nuevo("lote_repetido");
+    let [primero, ..] = tres_adentro(&escenario);
+
+    escenario.reloj.establecer(instante(16, 0));
+    let resultado = escenario
+        .core
+        .registrar_salidas(&operador(1), &[primero, primero])
+        .unwrap();
+
+    assert_eq!(resultado.cerrados, [primero]);
+    assert_eq!(resultado.rechazados.len(), 1);
+    assert_eq!(escenario.avisos_de_cierre(), 1);
+}
+
+#[test]
+fn el_lote_con_el_reloj_retrocedido_no_cierra_ninguna() {
+    let escenario = Escenario::nuevo("lote_reloj");
+    let ids = tres_adentro(&escenario);
+
+    escenario.reloj.establecer(instante(13, 0));
+    let resultado = escenario.core.registrar_salidas(&operador(1), &ids);
+
+    assert!(matches!(
+        resultado,
+        Err(RegistroIngresoServiceError::RelojRetrocedido)
+    ));
+    for id in ids {
+        assert_eq!(escenario.salida_de(id), (None, None));
+    }
+    assert_eq!(escenario.avisos_de_cierre(), 0);
+}
+
+#[test]
+fn el_lote_con_un_operador_inactivo_no_cierra_ninguna() {
+    let escenario = Escenario::nuevo("lote_inactivo");
+    let ids = tres_adentro(&escenario);
+
+    escenario.reloj.establecer(instante(16, 0));
+    let resultado = escenario.core.registrar_salidas(&operador(3), &ids);
+
+    assert!(matches!(
+        resultado,
+        Err(RegistroIngresoServiceError::OperadorNoAutorizado)
+    ));
+    for id in ids {
+        assert_eq!(escenario.salida_de(id), (None, None));
+    }
+    assert_eq!(escenario.avisos_de_cierre(), 0);
+}
+
+#[test]
+fn un_lote_vacio_no_cierra_nada_y_no_falla() {
+    let escenario = Escenario::nuevo("lote_vacio");
+    tres_adentro(&escenario);
+
+    let resultado = escenario.core.registrar_salidas(&operador(1), &[]).unwrap();
+
+    assert!(resultado.cerrados.is_empty());
+    assert!(resultado.rechazados.is_empty());
+    assert_eq!(escenario.avisos_de_cierre(), 0);
+}
+
+#[test]
+fn el_lote_da_lo_mismo_que_cerrar_una_por_una() {
+    let en_lote = Escenario::nuevo("equivalencia_lote");
+    let una_por_una = Escenario::nuevo("equivalencia_una_por_una");
+    let ids_lote = tres_adentro(&en_lote);
+    let ids_una = tres_adentro(&una_por_una);
+
+    en_lote.reloj.establecer(instante(16, 0));
+    en_lote
+        .core
+        .registrar_salidas(&operador(2), &ids_lote)
+        .unwrap();
+    una_por_una.reloj.establecer(instante(16, 0));
+    for id in ids_una {
+        una_por_una.core.registrar_salida(&operador(2), id).unwrap();
+    }
+
+    for (lote, una) in ids_lote.into_iter().zip(ids_una) {
+        assert_eq!(en_lote.salida_de(lote), una_por_una.salida_de(una));
+    }
+    assert_eq!(en_lote.avisos_de_cierre(), una_por_una.avisos_de_cierre());
 }

@@ -69,6 +69,38 @@ pub(super) fn validar_reloj_operativo<E: ErrorDeUnidadDeTrabajo>(
     Ok(())
 }
 
+/// Un tramo de la unidad de trabajo que se confirma o se descarta solo,
+/// sin arrastrar al resto: si `operar` falla, se deshace lo que ese tramo
+/// escribió (también su aviso en la cola de sincronización) y la
+/// transacción sigue abierta para el siguiente. Es lo que permite cerrar
+/// varias salidas en una sola transacción y que una que falla no frene a
+/// las demás.
+///
+/// Si ni siquiera se puede deshacer el tramo, el error es de la base y
+/// corta todo: la transacción de afuera se revierte al soltarla.
+pub(super) fn en_savepoint<T, E: From<DatabaseError>>(
+    transaction: &Transaction<'_>,
+    operar: impl FnOnce() -> Result<T, E>,
+) -> Result<T, E> {
+    transaction
+        .execute_batch("SAVEPOINT tramo")
+        .map_err(DatabaseError::from)?;
+    match operar() {
+        Ok(valor) => {
+            transaction
+                .execute_batch("RELEASE tramo")
+                .map_err(DatabaseError::from)?;
+            Ok(valor)
+        }
+        Err(error) => {
+            transaction
+                .execute_batch("ROLLBACK TO tramo; RELEASE tramo")
+                .map_err(DatabaseError::from)?;
+            Err(error)
+        }
+    }
+}
+
 impl AppCore {
     /// Abre una transacción `Immediate` (el bloqueo se adquiere antes de la
     /// primera lectura definitiva, así los repositorios creados sobre ella
@@ -151,6 +183,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::unnecessary_wraps)] // Tiene la firma de `validar_reloj` que pide la unidad.
     fn reloj_sin_problema(_: &Connection, _: DateTime<Utc>) -> Result<(), Error> {
         Ok(())
     }
@@ -163,8 +196,53 @@ mod tests {
 
     fn insertar_empresa(transaction: &Transaction<'_>) {
         transaction
-            .execute("INSERT INTO empresas(nombre) VALUES ('Empresa')", [])
+            .execute(
+                "INSERT INTO empresas(nombre) SELECT 'Empresa ' || (COUNT(*) + 1) FROM empresas",
+                [],
+            )
             .unwrap();
+    }
+
+    #[test]
+    fn un_tramo_fallido_se_deshace_y_no_arrastra_a_los_demas() {
+        let core = nucleo();
+
+        core.en_unidad_de_trabajo(&actor(1), reloj_sin_problema, |tx, _| {
+            insertar_empresa(tx);
+            let fallido = en_savepoint(tx, || {
+                insertar_empresa(tx);
+                insertar_empresa(tx);
+                Err::<(), _>(Error::RegistroNoActivo)
+            });
+            assert!(matches!(fallido, Err(Error::RegistroNoActivo)));
+            en_savepoint(tx, || {
+                insertar_empresa(tx);
+                Ok::<_, Error>(())
+            })
+        })
+        .unwrap();
+
+        assert_eq!(empresas(&core), 2, "la de antes y la del tramo bueno");
+    }
+
+    #[test]
+    fn un_tramo_bueno_se_confirma_con_la_unidad_de_afuera() {
+        let core = nucleo();
+
+        let resultado = core.en_unidad_de_trabajo(&actor(1), reloj_sin_problema, |tx, _| {
+            en_savepoint(tx, || {
+                insertar_empresa(tx);
+                Ok::<_, Error>(())
+            })?;
+            Err::<(), _>(Error::RegistroNoActivo)
+        });
+
+        assert!(resultado.is_err());
+        assert_eq!(
+            empresas(&core),
+            0,
+            "si la unidad de afuera no se confirma, tampoco lo del tramo"
+        );
     }
 
     #[test]

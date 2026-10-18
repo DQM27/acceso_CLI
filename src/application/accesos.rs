@@ -20,6 +20,7 @@ use crate::services::registro_ingreso_service::{
 use crate::tiempo::{fecha_costa_rica, parsear_utc};
 
 use super::AppCore;
+use super::unidad_de_trabajo::en_savepoint;
 
 /// Lo que la barra de estado muestra sobre la gente que lleva demasiado
 /// adentro (ver `domain::permanencia`): los conteos y los textos ya redactados.
@@ -32,6 +33,25 @@ pub struct AvisosPermanencia {
     pub criticos: usize,
     pub texto_aviso: Option<String>,
     pub texto_critico: Option<String>,
+}
+
+/// Una salida de un lote que no se pudo cerrar y el motivo, ya redactado
+/// para el operador (el núcleo decide los textos; las interfaces sólo los
+/// muestran).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct SalidaRechazada {
+    pub id: i64,
+    pub mensaje: String,
+}
+
+/// Cómo terminó un lote de salidas: los ingresos cerrados, en el orden en
+/// que llegaron, y los rechazados con su motivo.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct ResultadoSalidas {
+    pub cerrados: Vec<i64>,
+    pub rechazados: Vec<SalidaRechazada>,
 }
 
 impl AvisosPermanencia {
@@ -154,6 +174,48 @@ impl AppCore {
             let gafetes = SqliteGafeteRepository::new(transaction);
             RegistroIngresoService::new(&contratistas, &registros, &gafetes)
                 .registrar_salida(id, ahora, actor.id)
+        })
+    }
+
+    /// Cierra varias salidas de contratistas en **una sola transacción**: el
+    /// reloj y el operador se validan una vez, las que se pueden cerrar se
+    /// confirman todas juntas, y una que falla (ya cerrada, inexistente) no
+    /// frena a las demás: queda en `rechazados` con su mensaje. Cada salida
+    /// va en su propio tramo (`en_savepoint`), así que una rechazada no deja
+    /// escrito nada a medias.
+    ///
+    /// Todas llevan la misma hora, la del reloj del núcleo al abrir la
+    /// transacción. Si el reloj retrocedió o el operador ya no es válido, no
+    /// se cierra ninguna y la respuesta es el error, igual que en
+    /// [`Self::registrar_salida`].
+    pub fn registrar_salidas(
+        &self,
+        actor: &UsuarioSesion,
+        ids: &[i64],
+    ) -> Result<ResultadoSalidas, RegistroIngresoServiceError> {
+        self.en_unidad_de_trabajo(actor, validar_reloj, |transaction, ahora| {
+            let contratistas = SqliteContratistaRepository::new(transaction);
+            let registros = SqliteRegistroIngresoRepository::new(transaction);
+            let gafetes = SqliteGafeteRepository::new(transaction);
+            let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
+            let mut resultado = ResultadoSalidas::default();
+            for &id in ids {
+                let salida = en_savepoint(transaction, || {
+                    servicio.registrar_salida(id, ahora, actor.id)
+                });
+                match salida {
+                    Ok(()) => resultado.cerrados.push(id),
+                    // Lo de la base corta el lote: no es culpa de esa salida.
+                    Err(RegistroIngresoServiceError::Database(error)) => {
+                        return Err(RegistroIngresoServiceError::Database(error));
+                    }
+                    Err(error) => resultado.rechazados.push(SalidaRechazada {
+                        id,
+                        mensaje: crate::mensajes::mensaje_salida(error),
+                    }),
+                }
+            }
+            Ok(resultado)
         })
     }
 }
