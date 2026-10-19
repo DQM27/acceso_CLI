@@ -172,6 +172,8 @@ impl AppCore {
         actor: &UsuarioSesion,
     ) -> Result<AvisosPermanencia, RegistroIngresoServiceError> {
         let locales = self.listar_ingresos_activos(&FiltroIngresosActivos::default())?;
+        // `mut` sólo hace falta con la nube (ahí se suman los remotos).
+        #[cfg_attr(not(feature = "nube"), allow(unused_mut))]
         let mut niveles: Vec<NivelPermanencia> = locales
             .items
             .iter()

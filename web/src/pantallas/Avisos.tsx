@@ -76,21 +76,21 @@ function HistorialAvisos({
   return (
     <section className="tarjeta flex flex-col gap-3 p-4">
       <h2 className="text-base font-semibold">Enviados</h2>
-      {cargando && <p className="text-sm text-[var(--muted)]">Cargando historial…</p>}
-      {avisos?.length === 0 && <p className="text-sm text-[var(--muted)]">Todavía no se envió ningún aviso.</p>}
+      {cargando && <p className="text-sm text-(--muted)">Cargando historial…</p>}
+      {avisos?.length === 0 && <p className="text-sm text-(--muted)">Todavía no se envió ningún aviso.</p>}
       {avisos && avisos.length > 0 && (
         <ul className="flex flex-col gap-2">
           {avisos.map((aviso) => (
-            <li key={aviso.id} className="flex flex-col gap-1 rounded border border-[var(--borde)] p-3">
+            <li key={aviso.id} className="flex flex-col gap-1 rounded border border-(--borde) p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="flex items-center gap-2 font-medium">
                   {aviso.tipo === "emergente" && <Siren size={16} className="text-error" aria-label="Emergente" />}
                   {aviso.titulo}
                 </span>
-                <span className="text-sm text-[var(--muted)]">{textoFechaAviso(aviso.enviado_en)}</span>
+                <span className="text-sm text-(--muted)">{textoFechaAviso(aviso.enviado_en)}</span>
               </div>
               <p className="line-clamp-2 whitespace-pre-wrap text-sm">{aviso.cuerpo}</p>
-              <p className="text-sm text-[var(--muted)]">
+              <p className="text-sm text-(--muted)">
                 {textoDestino(aviso.destino, nombresSitios, nombresEquipos)} · {textoEntrega(aviso)} ·{" "}
                 {aviso.enviado_por}
               </p>
@@ -98,7 +98,7 @@ function HistorialAvisos({
                 <p className="text-sm text-error">No llegó a: {aviso.no_recibieron.join(", ")}</p>
               )}
               {aviso.avisos_acciones.map((accion) => (
-                <p key={`${accion.accion}-${accion.dispositivo_etiqueta}-${accion.ocurrio_en}`} className="text-sm text-[var(--muted)]">
+                <p key={`${accion.accion}-${accion.dispositivo_etiqueta}-${accion.ocurrio_en}`} className="text-sm text-(--muted)">
                   {textoAccion(accion, textoFechaAviso(accion.ocurrio_en))}
                 </p>
               ))}
@@ -219,7 +219,7 @@ export default function Avisos() {
           </label>
 
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm text-[var(--muted)]">Tipo</legend>
+            <legend className="mb-1 text-sm text-(--muted)">Tipo</legend>
             <label className="flex items-center gap-2">
               <input
                 type="radio"
@@ -270,7 +270,7 @@ export default function Avisos() {
             </label>
           </div>
 
-          {cargando && <p className="text-sm text-[var(--muted)]">Cargando unidades…</p>}
+          {cargando && <p className="text-sm text-(--muted)">Cargando unidades…</p>}
 
           {!seleccion.todos && datos && (
             <div className="flex flex-col gap-3">
@@ -279,7 +279,7 @@ export default function Avisos() {
                 const conPush = delSitio.filter((equipo) => conNotificaciones.has(equipo.id)).length;
                 const unidadCompleta = seleccion.sitios.has(sitio.id);
                 return (
-                  <div key={sitio.id} className="flex flex-col gap-1 rounded border border-[var(--borde)] p-2">
+                  <div key={sitio.id} className="flex flex-col gap-1 rounded border border-(--borde) p-2">
                     <label className="flex items-center gap-2 font-medium">
                       <input
                         type="checkbox"
@@ -288,19 +288,19 @@ export default function Avisos() {
                         onChange={() => setSeleccion((actual) => ({ ...actual, sitios: alternar(actual.sitios, sitio.id) }))}
                       />
                       {sitio.nombre}
-                      <span className="text-sm font-normal text-[var(--muted)]">
+                      <span className="text-sm font-normal text-(--muted)">
                         (toda la unidad · {conPush} con notificaciones)
                       </span>
                     </label>
                     {delSitio.length === 0 && (
-                      <p className="ml-6 text-sm text-[var(--muted)]">Sin celulares vigentes.</p>
+                      <p className="ml-6 text-sm text-(--muted)">Sin celulares vigentes.</p>
                     )}
                     {delSitio.map((equipo) => {
                       const tienePush = conNotificaciones.has(equipo.id);
                       return (
                         <label
                           key={equipo.id}
-                          className={`ml-6 flex items-center gap-2 text-sm ${tienePush ? "" : "text-[var(--muted)]"}`}
+                          className={`ml-6 flex items-center gap-2 text-sm ${tienePush ? "" : "text-(--muted)"}`}
                           title={tienePush ? undefined : "Todavía no registró notificaciones: debe iniciar sesión con la app actualizada"}
                         >
                           <input
@@ -324,7 +324,7 @@ export default function Avisos() {
         </section>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm text-[var(--muted)]" aria-live="polite">
+          <span className="text-sm text-(--muted)" aria-live="polite">
             {textoAlcance(alcance)}
           </span>
           <button
