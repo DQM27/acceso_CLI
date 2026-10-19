@@ -299,14 +299,30 @@ fun vibrarConfirmacion(contexto: android.content.Context) {
 /// necesidad de mirar la pantalla (documento no reconocido/no soportado,
 /// o -- en el escaneo continuo de gafetes -- un gafete que ya tenía salida
 /// registrada u otro error real de la mutación).
-fun vibrarError(contexto: android.content.Context) {
+fun vibrarError(contexto: android.content.Context) = vibrarPatron(contexto, PATRON_ERROR)
+
+/// Vibración de advertencia -- tres toques, el último más largo, para el
+/// documento que se leyó bien pero está vencido: se tiene que sentir distinta
+/// del éxito (un solo toque) y del error (dos golpes) sin mirar la pantalla.
+fun vibrarAdvertencia(contexto: android.content.Context) = vibrarPatron(contexto, PATRON_ADVERTENCIA)
+
+/// Una vibración por patrón: `tiempos` alterna pausa y golpe (empieza por una
+/// pausa de 0) y `amplitudes` es la fuerza de cada tramo (0 en las pausas).
+internal class PatronVibracion(val tiempos: LongArray, val amplitudes: IntArray) {
+    init {
+        require(tiempos.size == amplitudes.size) { "Cada tramo necesita su amplitud" }
+    }
+}
+
+internal val PATRON_ERROR = PatronVibracion(longArrayOf(0, 90, 70, 90), intArrayOf(0, 255, 0, 255))
+internal val PATRON_ADVERTENCIA =
+    PatronVibracion(longArrayOf(0, 70, 60, 70, 60, 220), intArrayOf(0, 200, 0, 200, 0, 255))
+
+private fun vibrarPatron(contexto: android.content.Context, patron: PatronVibracion) {
     val vibrador = obtenerVibrador(contexto) ?: return
     if (!vibrador.hasVibrator()) return
     try {
-        vibrarComoAlarma(
-            vibrador,
-            android.os.VibrationEffect.createWaveform(longArrayOf(0, 90, 70, 90), intArrayOf(0, 255, 0, 255), -1),
-        )
+        vibrarComoAlarma(vibrador, android.os.VibrationEffect.createWaveform(patron.tiempos, patron.amplitudes, -1))
     } catch (e: RuntimeException) {
         // Idem.
     }

@@ -181,8 +181,15 @@ private fun VistaCamaraCedula(
                                     // decide qué hacer con el documento
                                     // después, fuera de esta pantalla.
                                     if (!continuo) {
-                                        vibrarConfirmacion(contexto)
-                                        reproducirSonidoConfirmacion()
+                                        if (resultado.vencido) {
+                                            // Leído bien pero vencido: advertencia
+                                            // propia y sin el tono de "listo", que
+                                            // le diría lo contrario.
+                                            vibrarAdvertencia(contexto)
+                                        } else {
+                                            vibrarConfirmacion(contexto)
+                                            reproducirSonidoConfirmacion()
+                                        }
                                     }
                                     camara.trabajoResultado?.cancel()
                                     camara.trabajoResultado = alcance.launch {
