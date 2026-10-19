@@ -119,11 +119,18 @@ fun PantallaActivos(
                 PantallaEscanearCedula(
                     modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
                     onDocumentoDetectado = { documento ->
-                        escanerAbierto = false
                         if (viewModel.modo != ModoBusqueda.ENTRADA) {
                             viewModel.cambiarModo(ModoBusqueda.ENTRADA)
                         }
-                        viewModel.usarDocumentoEscaneadoIngreso(documento)
+                        // La cámara se queda hasta que la confirmación está lista
+                        // y entonces pasa directo a ella: cerrarla antes dejaba
+                        // ver la lista un instante en medio. `finally`: si algo
+                        // cancela la espera, el escáner igual se cierra.
+                        try {
+                            viewModel.usarDocumentoEscaneadoIngreso(documento).join()
+                        } finally {
+                            escanerAbierto = false
+                        }
                     },
                     onCerrar = { escanerAbierto = false },
                 )
