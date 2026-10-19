@@ -1,0 +1,30 @@
+# Baseline Profile de la app: el código que Android compila por adelantado
+# (AOT) en vez de interpretarlo y compilarlo sobre la marcha (JIT) en los
+# primeros usos. Compose, CameraX, Lifecycle y compañía traen su propio perfil
+# en sus AAR; éste cubre lo que ninguna librería conoce: el código de la app,
+# los bindings de UniFFI y JNA (el puente con el núcleo Rust, que corre en
+# cada arranque, login y búsqueda).
+#
+# Escrito a mano con comodines en vez de generado con Macrobenchmark: generar
+# uno exige un teléfono conectado y un recorrido con sesión iniciada. La app
+# es chica (unas 15 000 líneas de Kotlin) y casi todo su código está en el
+# camino de uso diario, así que cubrirla entera cuesta poco espacio y no deja
+# afuera ninguna pantalla.
+#
+# AGP lo une con los perfiles de las librerías y R8 lo reescribe al
+# minificar. Lo instala `androidx.profileinstaller` en el primer arranque y
+# Android compila en su mantenimiento en segundo plano (con el teléfono
+# quieto y cargando). El evento `arranque` de la telemetría informa
+# `perfil_compilado` y `perfil_en_cola`.
+#
+# Formato: H = método caliente, S = de arranque, P = después del arranque;
+# las líneas que empiezan con L (sin método) precargan la clase.
+
+HSPLcom/brisas/controlacceso/**;->**(**)**
+Lcom/brisas/controlacceso/**;
+
+HSPLuniffi/control_acceso_mobile/**;->**(**)**
+Luniffi/control_acceso_mobile/**;
+
+HSPLcom/sun/jna/**;->**(**)**
+Lcom/sun/jna/**;
