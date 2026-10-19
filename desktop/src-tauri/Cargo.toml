@@ -1,6 +1,6 @@
 [package]
 name = "control-acceso-desktop"
-version = "1.8.14"
+version = "1.8.15"
 description = "Interfaz gráfica de escritorio para Lattis"
 authors = ["Daniel Quintana — DQM27"]
 license = "MIT"
