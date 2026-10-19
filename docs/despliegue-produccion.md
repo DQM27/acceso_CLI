@@ -554,6 +554,42 @@ Rama `feat/reglas-compartidas`. Contexto completo en
 - **Deshacer:** volver a crear la función con el cuerpo de
   `20260929075806_cambio_nube_lleva_la_fila_de_ingresos.sql`.
 
+### 2.13 Historial de avisos push y bandeja de avisos del móvil (`avisos_enviados`, 2026-10-18)
+
+- **Qué es:** tabla nueva `avisos_enviados` (migración
+  `20261018150000_avisos_enviados.sql`): quién mandó cada aviso del panel, a
+  qué destino, cuántos equipos lo recibieron y cuáles no. Sólo la escribe la
+  Edge Function `admin-enviar-push` (service_role) y sólo la lee el
+  administrador del panel. Tabla nueva, no toca nada existente.
+- **El orden importa**, porque mergear a `main` aplica la migración pero
+  **no despliega Edge Functions**:
+  1. Migración (al mergear, o a mano en staging antes de probar).
+  2. Desplegar `admin-enviar-push` (carpeta con `envio.ts` nuevo). Si se
+     despliega antes que la migración, **no manda nada** (responde
+     `historial_error`: un aviso sin registro no se envía a propósito).
+  3. Publicar el panel web (`Avisos` lee `id` y `no_recibieron` de la
+     respuesta; contra la función vieja el aviso se envía pero el panel
+     muestra un error al terminar).
+  4. Publicar la app móvil: la bandeja funciona sin lo anterior, pero con la
+     función vieja los avisos llegan sin `id` ni hora de envío (se les
+     inventa un id local y se usa la hora de llegada).
+- **Archivar y borrar en el celular:** segunda migración,
+  `20261018160000_avisos_acciones.sql`: tabla `avisos_acciones` (quién
+  archivó o borró cada aviso, desde qué celular y cuándo) y la función
+  `registrar_accion_aviso`, que la app llama con el JWT del equipo. Va en el
+  mismo PR y se aplica sola después de la primera. Si la app archiva o borra
+  antes de que exista la función, recibe 404 y la acción queda pendiente en
+  el teléfono (hasta 200) para reintentarla; igual conviene aplicar esta
+  migración **antes** de publicar la app.
+- **Verificación:** `supabase/tests/avisos_enviados.sql` y
+  `supabase/tests/avisos_acciones.sql` (se revierten solas); `deno check`,
+  `deno lint` y `deno test` en `supabase/functions`
+  (`admin-enviar-push/envio.test.ts`).
+- **Deshacer:** `drop table public.avisos_acciones;`,
+  `drop function public.registrar_accion_aviso(uuid, text, text, timestamptz);`,
+  `drop table public.avisos_enviados;` y volver a desplegar la versión
+  anterior de `admin-enviar-push`.
+
 ## 3. Cambios de la base local de los equipos (SQLite)
 
 No se aplican a mano: cada equipo migra su base sola al abrir la app nueva.

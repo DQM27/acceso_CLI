@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
         GestorTema.inicializar(this)
+        atenderIntent(intent)
         if (Telemetria.activa) {
             // Duración de cada frame y fin del arranque (primer dibujo
             // completo). Sólo en el build de diagnóstico.
@@ -167,6 +168,23 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /// Tocaron una notificación con la app ya abierta (`SINGLE_TOP`, ver
+    /// NotificacionesPush.mostrar).
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        atenderIntent(intent)
+    }
+
+    /// La notificación de un aviso abre la bandeja. El extra se borra para
+    /// no volver a abrirla si la Activity se recrea con el mismo intent.
+    private fun atenderIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(NotificacionesPush.EXTRA_ABRIR_AVISOS, false) == true) {
+            intent.removeExtra(NotificacionesPush.EXTRA_ABRIR_AVISOS)
+            AlmacenBandejaAvisos.solicitarApertura()
         }
     }
 
