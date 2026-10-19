@@ -14,8 +14,8 @@ import androidx.camera.core.Preview
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.Observer
 
-/// Qué puede dar la cámara, para saber si se puede pedir más resolución al
-/// análisis del PDF417 (evento `camara_info` de la telemetría de diagnóstico,
+/// Qué puede dar la cámara y con qué resoluciones quedaron la vista previa y
+/// el análisis (evento `camara_info` de la telemetría de diagnóstico,
 /// una vez por apertura de cámara). Sólo números y nombres de niveles; nada
 /// de la persona ni de lo que se escanea.
 
@@ -53,9 +53,6 @@ fun reportarCamaraInfo(
     analisis: ImageAnalysis,
     preview: Preview,
     lifecycleOwner: LifecycleOwner,
-    // Datos que se suman al evento (ej. `modo_codigo` al cambiar al análisis
-    // de alta resolución del PDF417).
-    extra: Map<String, Any?> = emptyMap(),
 ) {
     if (!Telemetria.activa) return
     val estado = camara.cameraInfo.cameraState
@@ -66,7 +63,7 @@ fun reportarCamaraInfo(
         reportado = true
         estado.removeObserver(observador)
         try {
-            Telemetria.evento("camara_info", datosCamaraInfo(camara, analisis, preview) + extra)
+            Telemetria.evento("camara_info", datosCamaraInfo(camara, analisis, preview))
         } catch (_: RuntimeException) {
             // Un dato que la cámara no da nunca debe romper el escaneo.
         }

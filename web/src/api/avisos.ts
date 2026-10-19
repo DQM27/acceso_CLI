@@ -17,20 +17,70 @@ export const LARGO_MAXIMO_CUERPO = 500;
 export type DestinoAviso = { todos: true } | { sitio_ids: string[]; dispositivo_ids: string[] };
 
 export interface ResultadoEnvioAviso {
+  /** Fila del aviso en el historial (`avisos_enviados`). */
+  id: string;
   destinatarios: number;
   enviados: number;
   fallidos: number;
   tokens_eliminados: number;
+  /** Etiquetas de los equipos a los que no llegó. */
+  no_recibieron: string[];
 }
 
 function esResultadoEnvio(valor: unknown): valor is ResultadoEnvioAviso {
   return (
     esObjeto(valor) &&
+    typeof valor.id === "string" &&
     typeof valor.destinatarios === "number" &&
     typeof valor.enviados === "number" &&
     typeof valor.fallidos === "number" &&
-    typeof valor.tokens_eliminados === "number"
+    typeof valor.tokens_eliminados === "number" &&
+    Array.isArray(valor.no_recibieron)
   );
+}
+
+/** Una fila del historial (`avisos_enviados`): la guarda la Edge Function en
+ * cada envío. */
+export interface AvisoEnviado {
+  id: string;
+  titulo: string;
+  cuerpo: string;
+  tipo: TipoAviso;
+  destino: DestinoAviso;
+  enviado_por: string;
+  enviado_en: string;
+  destinatarios: number;
+  enviados: number;
+  no_recibieron: string[];
+  /** Quién lo archivó o lo borró en el celular (`avisos_acciones`). */
+  avisos_acciones: AccionSobreAviso[];
+}
+
+/** Constancia de que alguien archivó o borró el aviso en la bandeja de un
+ * celular. La anota la app con `registrar_accion_aviso`. */
+export interface AccionSobreAviso {
+  accion: "archivado" | "borrado";
+  usuario: string;
+  dispositivo_etiqueta: string;
+  ocurrio_en: string;
+}
+
+/** Cuántos avisos muestra el historial: los últimos, no hace falta más. */
+export const AVISOS_EN_HISTORIAL = 50;
+
+/** Los últimos avisos enviados, del más nuevo al más viejo. Sólo los lee el
+ * administrador del panel (RLS "admin_global lee los avisos enviados"). */
+export async function listarAvisosEnviados(): Promise<AvisoEnviado[]> {
+  const { data, error } = await supabase
+    .from("avisos_enviados")
+    .select(
+      "id, titulo, cuerpo, tipo, destino, enviado_por, enviado_en, destinatarios, enviados, no_recibieron, avisos_acciones(accion, usuario, dispositivo_etiqueta, ocurrio_en)",
+    )
+    .order("enviado_en", { ascending: false })
+    .order("ocurrio_en", { referencedTable: "avisos_acciones", ascending: true })
+    .limit(AVISOS_EN_HISTORIAL);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as AvisoEnviado[];
 }
 
 export function enviarAviso(datos: {

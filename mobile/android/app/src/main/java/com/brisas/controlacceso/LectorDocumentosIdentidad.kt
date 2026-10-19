@@ -128,10 +128,5 @@ fun clasificarTipoDocumento(texto: String): TipoDocumento =
 fun leerDocumentoDeTexto(texto: String, tipo: TipoDocumento? = null): DocumentoDetectado? =
     uniffi.control_acceso_mobile.leerDocumentoDeTexto(texto, tipo)?.aDocumentoDetectado()
 
-/// Pista para el lector de códigos: el texto parece el reverso de la cédula
-/// anterior, la cara que trae el PDF417.
-fun pareceReversoCedulaAnterior(texto: String): Boolean =
-    uniffi.control_acceso_mobile.pareceReversoCedulaAnterior(texto)
-
 /// Número de cédula nacional (9 dígitos, sin separadores) en el texto.
 fun extraerCedulaDeTexto(texto: String): String? = uniffi.control_acceso_mobile.extraerCedulaDeTexto(texto)

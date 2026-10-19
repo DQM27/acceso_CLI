@@ -1,36 +1,50 @@
 package com.brisas.controlacceso
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import uniffi.control_acceso_mobile.ContratistaResumen
@@ -141,9 +155,19 @@ internal fun ContenidoModoEntrada(
     cargando: Boolean,
     onElegirActivo: (FilaActiva) -> Unit,
     onElegirContratista: (ContratistaResumen) -> Unit,
+    sincronizando: Boolean = false,
+    onSincronizar: () -> Unit = {},
 ) {
     if (texto.isBlank()) {
-        ListaActivos(activos, onClick = onElegirActivo)
+        ListaActivos(
+            activos = activos,
+            cargando = cargando,
+            tituloVacio = "Nadie adentro por ahora",
+            detalleVacio = "Cuando alguien ingrese, aparece acá.",
+            onClick = onElegirActivo,
+            sincronizando = sincronizando,
+            onSincronizar = onSincronizar,
+        )
         return
     }
     if (resultadosBusqueda.isEmpty() && !verificando && !cargando) {
@@ -169,8 +193,23 @@ internal fun ContenidoModoEntrada(
 /// buscador para acotar, no una lista para recorrer (esa es el modo
 /// Entrada). Ver el doc-comment de [PantallaActivos].
 @Composable
-internal fun ContenidoModoSalidaNombre(activos: List<FilaActiva>, onElegirActivo: (FilaActiva) -> Unit) {
-    ListaActivos(activos, onClick = onElegirActivo)
+internal fun ContenidoModoSalidaNombre(
+    texto: String,
+    activos: List<FilaActiva>,
+    cargando: Boolean,
+    onElegirActivo: (FilaActiva) -> Unit,
+    sincronizando: Boolean = false,
+    onSincronizar: () -> Unit = {},
+) {
+    ListaActivos(
+        activos = activos,
+        cargando = cargando,
+        tituloVacio = if (texto.isBlank()) "Busque a quien sale" else "Sin resultados",
+        detalleVacio = if (texto.isBlank()) "Escriba un nombre o una cédula." else "Pruebe con otro nombre o cédula.",
+        onClick = onElegirActivo,
+        sincronizando = sincronizando,
+        onSincronizar = onSincronizar,
+    )
 }
 
 /// Sólo para el tipeo manual -- uno o más números de gafete separados por
@@ -232,26 +271,28 @@ internal fun ContenidoModoSalidaGafete(
 
 /// Lista de activos compartida entre Entrada (campo vacío) y Salida:
 /// nombre — mismas filas, mismo comportamiento, sólo cambia qué hace
-/// `onClick` según quién la use.
+/// `onClick` según quién la use. El comportamiento de la lista (animación,
+/// estados vacíos, tirar para sincronizar) vive en [ListaConEstados].
 @Composable
-private fun ListaActivos(activos: List<FilaActiva>, onClick: (FilaActiva) -> Unit) {
-    ListaConDesvanecido {
-        LazyColumn(
-            contentPadding = PaddingValues(top = 5.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            items(
-                activos,
-                key = { fila ->
-                    when (fila) {
-                        is FilaActiva.Local -> "local-${fila.activo.registroId}"
-                        is FilaActiva.Remota -> "remota-${fila.remoto.uuid}"
-                    }
-                },
-            ) { fila ->
-                FilaActivo(fila, onClick = { onClick(fila) })
-            }
-        }
+private fun ListaActivos(
+    activos: List<FilaActiva>,
+    cargando: Boolean,
+    tituloVacio: String,
+    detalleVacio: String,
+    onClick: (FilaActiva) -> Unit,
+    sincronizando: Boolean,
+    onSincronizar: () -> Unit,
+) {
+    ListaConEstados(
+        filas = activos,
+        clave = { fila -> fila.clave },
+        cargando = cargando,
+        tituloVacio = tituloVacio,
+        detalleVacio = detalleVacio,
+        sincronizando = sincronizando,
+        onSincronizar = onSincronizar,
+    ) { fila ->
+        FilaActivo(fila, onClick = { onClick(fila) })
     }
 }
 

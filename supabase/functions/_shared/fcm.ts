@@ -76,6 +76,11 @@ export async function tokenAccesoGoogle(cuenta: CuentaServicio): Promise<string>
 export type TipoAviso = "normal" | "emergente";
 
 export interface Aviso {
+  /** Fila de `avisos_enviados`: el teléfono lo usa para no guardar dos veces
+   * el mismo aviso en su bandeja. */
+  id: string;
+  /** ISO 8601. La bandeja del teléfono muestra esta hora, no la de llegada. */
+  enviado_en: string;
   titulo: string;
   cuerpo: string;
   tipo: TipoAviso;
@@ -85,7 +90,8 @@ export interface Aviso {
  * Mensaje de **datos** (sin bloque `notification`): con prioridad alta llega
  * a `onMessageReceived` aunque la app esté cerrada, y la notificación la arma
  * la app (canal "avisos" o "emergencias" según `tipo`, ícono, toque). FCM
- * exige que todos los valores de `data` sean texto.
+ * exige que todos los valores de `data` sean texto. La app lo guarda además
+ * en su bandeja de avisos (mobile/android/.../BandejaAvisos.kt).
  *
  * `ttl`: si el teléfono está apagado, un aviso normal espera hasta un día;
  * uno emergente, una hora (pasado eso ya no sirve y confundiría).
@@ -94,7 +100,13 @@ export function mensajeFcm(token: string, aviso: Aviso) {
   return {
     message: {
       token,
-      data: { titulo: aviso.titulo, cuerpo: aviso.cuerpo, tipo: aviso.tipo },
+      data: {
+        id: aviso.id,
+        enviado_en: aviso.enviado_en,
+        titulo: aviso.titulo,
+        cuerpo: aviso.cuerpo,
+        tipo: aviso.tipo,
+      },
       android: { priority: "HIGH", ttl: aviso.tipo === "emergente" ? "3600s" : "86400s" },
     },
   };

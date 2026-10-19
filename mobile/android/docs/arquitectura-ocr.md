@@ -20,21 +20,15 @@ accidente a permitir una operación.
    claramente más borroso que los recientes no pasa a ML Kit.
 5. El `ImageProxy` se cierra APENAS se copia el recorte: la cámara prepara
    el frame siguiente mientras ML Kit procesa éste.
-6. Texto y, si `PlanificadorLectores` lo pide, PDF417 corren EN PARALELO
-   sobre el mismo recorte (sólo donde se acepta una cédula; en cada frame
-   si el texto parece el reverso de la cédula anterior, uno de cada 3 si
-   no, nunca con un MRZ en cuadro). Buscar el código no le quita frames al
-   texto (p. ej. al carnet PRAIND). En "modo código" (ver más abajo) el
-   lector de códigos recibe un recorte propio con todo lo visible.
-7. Cuando terminan los dos, el resultado se procesa EN EL HILO DEL
+6. El lector de texto de ML Kit procesa el recorte.
+7. Cuando termina, el resultado se procesa EN EL HILO DEL
    ANALIZADOR y se libera el lugar. Del texto de ML Kit se pasan al núcleo
    las líneas con sus cajas y las palabras con su confianza
    (`textosParaLectores`); el núcleo arma los **renglones visuales** y
    devuelve las versiones del texto que prueban los lectores (ver
    "Renglones visuales").
 8. `EstabilizadorLectura` (envoltorio de `EstabilizadorDocumento`, en
-   Rust) clasifica, extrae y vota por carácter entre frames (número, MRZ);
-   el PDF417 confirma en una lectura.
+   Rust) clasifica, extrae y vota por carácter entre frames (número, MRZ).
 9. Sólo el resultado se publica al hilo principal; la UI recibe el
    `DocumentoDetectado` completo, no únicamente un texto.
 10. En modo continuo, `ActivosViewModel` termina la mutación SQLite/UniFFI
@@ -142,71 +136,17 @@ ruido breve sin conservar indefinidamente lecturas antiguas.
 
 El MRZ se vota por líneas completas y el consenso se valida con sus
 dígitos verificadores (2 frames de respaldo, por la línea de nombres).
-El PDF417 de la cédula anterior confirma en una sola lectura: el código
-tiene corrección de errores y Rust valida la forma de los datos.
 
-## PDF417 de la cédula anterior
+## PDF417 de la cédula anterior (desconectado)
 
-Decisión del negocio (2026-09-28): se lee, tomando SÓLO cédula y nombre.
-Kotlin entrega a Rust únicamente los primeros 91 bytes (hasta el final del
-nombre) y pone en cero los bytes crudos, que incluyen las huellas; Rust
-descifra sólo ese prefijo, valida y pone en cero lo que recibió. Nunca se
-descifran fechas ni huellas, nada se guarda ni se registra. Ver
-`mobile/rust-core/src/pdf417_cedula.rs`.
-
-### Modo código
-
-Con el recorte del recuadro guía (~944 px de ancho) el PDF417 de la cédula
-anterior nunca se detectó: trae datos y huellas, cientos de barras de 1-2 px,
-bajo los ~2-3 px por barra que ML Kit necesita (el problema son los píxeles
-por barra, no el lector ni el decodificador). Una foto de alta resolución
-no funcionó (nunca pasó de 1080 px y bajaba el escáner a menos de 1 fps).
-
-`PlanificadorLectores` activa el "modo código" al verse el reverso de la
-cédula anterior: dura 60 frames, más que la pista (8), porque al acercar el
-código el texto deja de leerse. Termina al confirmar, al aparecer un MRZ o al
-vencerse. Durante el modo:
-
-- el código se busca en todos los frames;
-- `analizarFrameOcr` arma un SEGUNDO recorte, `TodoLoVisibleRecorte` (el
-  `cropRect` completo del `ViewPort`), sólo para el lector de códigos; el
-  texto sigue con su recorte de siempre. Es una copia NV21 propia: el ciclo
-  de vida del `ImageProxy` y de `liberarLugar()` no cambia;
-- la pantalla pide acercar el código hasta llenar la pantalla, y de lado: a
-  lo largo de los 1920 px del frame el código gana la mayor cantidad de
-  píxeles.
-- el análisis pasa a la mayor resolución del sensor
-  (`EstadoCamaraOcr.usarAnalisisDeCodigo`: otro `ImageAnalysis` con el mismo
-  analizador, reenlazado sin soltar el preview) y vuelve a 1080p al terminar.
-  Con 1920x1440 el lector veía ~1126 px (el preview recorta los costados) y
-  siguió sin detectar nada; a 4080x3060 son ~2,1 veces más. El preview se
-  congela un momento al entrar y al salir; si el equipo no admite la
-  combinación, sigue con la normal.
-
-Resultado en staging (2026-09-29, cédula real): 4 de 4 sesiones leídas por el
-PDF417 (700 bytes, código de 1476-1776 px, `ACEPTADO`, con nombre), confirmadas
-en 3,6-6,2 s. Con una foto de la cédula en la pantalla de otro teléfono se
-leyeron 706 bytes y se rechazó (`CEDULA_INVALIDA`): la pantalla deforma el
-código, no es un problema del decodificador.
-
-**Pendiente: modo "sólo código" (sin probar en el teléfono).** Durante el modo
-el escáner baja a 3-4 fps porque el texto también se procesa sobre el
-análisis de 12 MP (50-64 ms de recorte y hasta 490-750 ms de texto por frame).
-Idea: en modo código, 4 de cada 5 frames sólo corren el lector de códigos
-sobre todo lo visible (sin recorte del recuadro, sin medir calidad, sin texto);
-1 de cada 5 lee el texto como plan B, para salir del modo si aparece un MRZ u
-otro documento. Piezas: `PlanCodigo.leerTexto` y `periodoTextoModoCodigo = 5`
-en `PlanificadorLectores`; en `analizarFrameOcr`, armar primero el recorte de
-todo lo visible y, si el frame es "sólo código", cerrar el `ImageProxy` y leer
-sólo el código (sin `onFallo` si no hay código: es lo esperable); métricas
-aparte (`modo_codigo_frames_solo_codigo`, `modo_codigo_solo_codigo_ms_mediana`)
-para no mezclarlas con los tiempos del texto. También: no volver a 1080p al
-confirmar si la pantalla se va a cerrar (el reenlace congela el preview justo
-en la confirmación).
-
-La telemetría (`modo_codigo_*` en `ocr_sesion` y el evento `camara_info`,
-ver `telemetria-diagnostico.md`) dice si el modo gana píxeles y si la cámara
-permitiría pedir más resolución al análisis.
+Se leyó del 2026-09-28 al 2026-10-19 (sólo cédula y nombre; Kotlin entregaba
+a Rust el prefijo de 91 bytes y ponía en cero los bytes crudos, que incluyen
+las huellas). Exigía un "modo código" que pedía acercar el código, lo buscaba en todo
+lo visible y pasaba el análisis a 12 MP, con el escáner a 3-4 fps mientras
+duraba. En la práctica no se usaba, así que se desconectó de la app: no se
+carga el lector de códigos ni el análisis de alta resolución. El
+decodificador sigue en el núcleo Rust (`mobile/rust-core/src/pdf417_cedula.rs`)
+por si se retoma; el historial de la versión con lector está en git.
 
 ## Guía visual
 

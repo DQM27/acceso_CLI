@@ -31,6 +31,11 @@ mod actualizacion;
 pub use actualizacion::{
     ManifiestoActualizacion, NovedadActualizacion, evaluar_manifiesto_actualizacion,
 };
+mod avisos;
+pub use avisos::{
+    AccionAviso, AvisoBandeja, AvisoPush, BandejaAvisos, EstadoBandeja, GrupoAvisos, GrupoBandeja,
+    TipoAccionAviso, aviso_de_mensaje, cuerpo_registro_accion_aviso,
+};
 
 uniffi::setup_scaffolding!();
 

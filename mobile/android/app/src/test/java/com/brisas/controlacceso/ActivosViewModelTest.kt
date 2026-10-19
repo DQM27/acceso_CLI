@@ -133,6 +133,52 @@ class ActivosViewModelTest {
     }
 
     @Test
+    fun `el escaneo de ingreso termina recien cuando la seleccion esta lista`() = runTest(dispatcher) {
+        // La pantalla de escaneo se queda a la vista hasta que este trabajo
+        // termina: si terminara antes, la lista se vería un instante antes de
+        // la confirmación.
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('111111111', 'Contratista Escaneado', 1, 'SWAT', 0, 1);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val trabajo = viewModel.usarDocumentoEscaneadoIngreso(
+            DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "111111111"),
+        )
+
+        assertFalse(trabajo.isCompleted)
+        assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Ninguna)
+        advanceUntilIdle()
+        assertTrue(trabajo.isCompleted)
+        assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Formulario)
+    }
+
+    @Test
+    fun `el escaneo de ingreso termina tambien cuando no encuentra a nadie`() = runTest(dispatcher) {
+        // Sin coincidencia clara no hay confirmación a la que pasar: el trabajo
+        // termina igual para que el escáner se cierre y quede la lista.
+        nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        val trabajo = viewModel.usarDocumentoEscaneadoIngreso(
+            DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "999999999"),
+        )
+        advanceUntilIdle()
+
+        assertTrue(trabajo.isCompleted)
+        assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Ninguna)
+    }
+
+    @Test
     fun `salida por gafete escaneado registra y mantiene modo gafete`() = runTest(dispatcher) {
         nucleo = NucleoDePrueba.abrir(
             archivo,

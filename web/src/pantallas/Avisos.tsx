@@ -9,23 +9,36 @@ import {
   LARGO_MAXIMO_CUERPO,
   LARGO_MAXIMO_TITULO,
   enviarAviso,
+  listarAvisosEnviados,
   listarEquiposConNotificaciones,
 } from "../api/avisos";
-import type { TipoAviso } from "../api/avisos";
-import { contarDestinatarios, destinoDeSeleccion, textoAlcance, textoResultado } from "./Avisos.logica";
+import type { AvisoEnviado, TipoAviso } from "../api/avisos";
+import {
+  contarDestinatarios,
+  destinoDeSeleccion,
+  textoAccion,
+  textoAlcance,
+  textoDestino,
+  textoEntrega,
+  textoResultado,
+} from "./Avisos.logica";
 import type { SeleccionAviso } from "./Avisos.logica";
 import { mensajeError } from "../mensajeError";
-
-const TIPO_EQUIPO: Record<string, string> = { pc: "PC", mobile: "Celular", visor: "Visor" };
+import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 
 interface DatosAvisos {
   sitios: Sitio[];
   equipos: Dispositivo[];
   conNotificaciones: Set<string>;
+  /** Nombres de TODAS las unidades y equipos, retirados incluidos: el
+   * historial nombra a quién se mandó cada aviso aunque ya no esté. */
+  nombresSitios: Map<string, string>;
+  nombresEquipos: Map<string, string>;
 }
 
-/** Unidades y equipos vigentes (sin los retirados ni los ocultos del panel),
- * más quiénes ya registraron su token de notificaciones. */
+/** Unidades y celulares vigentes (sin los retirados ni los ocultos del
+ * panel), más quiénes ya registraron su token de notificaciones. Las PC y los
+ * visores no reciben notificaciones push: no se listan. */
 async function cargarDatos(): Promise<DatosAvisos> {
   const [estado, conNotificaciones] = await Promise.all([
     listarDispositivosYSitios(),
@@ -34,10 +47,67 @@ async function cargarDatos(): Promise<DatosAvisos> {
   return {
     sitios: [...estado.sitios].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")),
     equipos: estado.dispositivos
-      .filter((equipo) => !equipo.revoked_at && !equipo.oculto_en_panel)
+      .filter((equipo) => equipo.tipo === "mobile" && !equipo.revoked_at && !equipo.oculto_en_panel)
       .sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, "es")),
     conNotificaciones,
+    nombresSitios: new Map(estado.sitios.map((sitio) => [sitio.id, sitio.nombre])),
+    nombresEquipos: new Map(estado.dispositivos.map((equipo) => [equipo.id, equipo.etiqueta])),
   };
+}
+
+/** "18/10/2026 14:32", en la hora del navegador. */
+function textoFechaAviso(iso: string): string {
+  return `${textoFechaDDMMYYYY(fechaLocalYMD(iso))} ${textoHora(iso)}`;
+}
+
+/** Historial: lo último que se mandó, con quién lo mandó, a quién y a
+ * cuántos llegó. Los equipos a los que no llegó se nombran en rojo. */
+function HistorialAvisos({
+  avisos,
+  cargando,
+  nombresSitios,
+  nombresEquipos,
+}: {
+  avisos: AvisoEnviado[] | undefined;
+  cargando: boolean;
+  nombresSitios: ReadonlyMap<string, string>;
+  nombresEquipos: ReadonlyMap<string, string>;
+}) {
+  return (
+    <section className="tarjeta flex flex-col gap-3 p-4">
+      <h2 className="text-base font-semibold">Enviados</h2>
+      {cargando && <p className="text-sm text-(--muted)">Cargando historial…</p>}
+      {avisos?.length === 0 && <p className="text-sm text-(--muted)">Todavía no se envió ningún aviso.</p>}
+      {avisos && avisos.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {avisos.map((aviso) => (
+            <li key={aviso.id} className="flex flex-col gap-1 rounded border border-(--borde) p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="flex items-center gap-2 font-medium">
+                  {aviso.tipo === "emergente" && <Siren size={16} className="text-error" aria-label="Emergente" />}
+                  {aviso.titulo}
+                </span>
+                <span className="text-sm text-(--muted)">{textoFechaAviso(aviso.enviado_en)}</span>
+              </div>
+              <p className="line-clamp-2 whitespace-pre-wrap text-sm">{aviso.cuerpo}</p>
+              <p className="text-sm text-(--muted)">
+                {textoDestino(aviso.destino, nombresSitios, nombresEquipos)} · {textoEntrega(aviso)} ·{" "}
+                {aviso.enviado_por}
+              </p>
+              {aviso.no_recibieron.length > 0 && (
+                <p className="text-sm text-error">No llegó a: {aviso.no_recibieron.join(", ")}</p>
+              )}
+              {aviso.avisos_acciones.map((accion) => (
+                <p key={`${accion.accion}-${accion.dispositivo_etiqueta}-${accion.ocurrio_en}`} className="text-sm text-(--muted)">
+                  {textoAccion(accion, textoFechaAviso(accion.ocurrio_en))}
+                </p>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }
 
 function alternar(conjunto: ReadonlySet<string>, id: string): Set<string> {
@@ -62,6 +132,8 @@ export default function Avisos() {
     intervaloMs: 60_000,
     tablas: "dispositivos",
   });
+  // Sin Realtime: sólo lo escribe este panel, que lo recarga al enviar.
+  const historial = useLista(["avisos-enviados"], listarAvisosEnviados, { intervaloMs: 60_000, tablas: "" });
   const [titulo, setTitulo] = useState("");
   const [cuerpo, setCuerpo] = useState("");
   const [tipo, setTipo] = useState<TipoAviso>("normal");
@@ -93,10 +165,14 @@ export default function Avisos() {
     setEnviando(true);
     try {
       const resultado = await enviarAviso({ titulo: titulo.trim(), cuerpo: cuerpo.trim(), tipo, destino });
-      if (resultado.fallidos > 0 || resultado.enviados === 0) toast.warning(textoResultado(resultado));
-      else toast.success(textoResultado(resultado));
+      // Si no llegó a alguien, el aviso queda hasta que lo cierren: hay que
+      // leer a quién avisarle por otro medio.
+      if (resultado.fallidos > 0 || resultado.enviados === 0) {
+        toast.warning(textoResultado(resultado), { duration: Infinity, closeButton: true });
+      } else toast.success(textoResultado(resultado));
       setConfirmando(false);
       limpiar();
+      void historial.recargar();
       // Los tokens que FCM dio por muertos se borraron: refresca el conteo.
       if (resultado.tokens_eliminados > 0) void recargar();
     } catch (fallo) {
@@ -143,7 +219,7 @@ export default function Avisos() {
           </label>
 
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm text-[var(--muted)]">Tipo</legend>
+            <legend className="mb-1 text-sm text-(--muted)">Tipo</legend>
             <label className="flex items-center gap-2">
               <input
                 type="radio"
@@ -194,7 +270,7 @@ export default function Avisos() {
             </label>
           </div>
 
-          {cargando && <p className="text-sm text-[var(--muted)]">Cargando unidades…</p>}
+          {cargando && <p className="text-sm text-(--muted)">Cargando unidades…</p>}
 
           {!seleccion.todos && datos && (
             <div className="flex flex-col gap-3">
@@ -203,7 +279,7 @@ export default function Avisos() {
                 const conPush = delSitio.filter((equipo) => conNotificaciones.has(equipo.id)).length;
                 const unidadCompleta = seleccion.sitios.has(sitio.id);
                 return (
-                  <div key={sitio.id} className="flex flex-col gap-1 rounded border border-[var(--borde)] p-2">
+                  <div key={sitio.id} className="flex flex-col gap-1 rounded border border-(--borde) p-2">
                     <label className="flex items-center gap-2 font-medium">
                       <input
                         type="checkbox"
@@ -212,19 +288,19 @@ export default function Avisos() {
                         onChange={() => setSeleccion((actual) => ({ ...actual, sitios: alternar(actual.sitios, sitio.id) }))}
                       />
                       {sitio.nombre}
-                      <span className="text-sm font-normal text-[var(--muted)]">
+                      <span className="text-sm font-normal text-(--muted)">
                         (toda la unidad · {conPush} con notificaciones)
                       </span>
                     </label>
                     {delSitio.length === 0 && (
-                      <p className="ml-6 text-sm text-[var(--muted)]">Sin equipos vigentes.</p>
+                      <p className="ml-6 text-sm text-(--muted)">Sin celulares vigentes.</p>
                     )}
                     {delSitio.map((equipo) => {
                       const tienePush = conNotificaciones.has(equipo.id);
                       return (
                         <label
                           key={equipo.id}
-                          className={`ml-6 flex items-center gap-2 text-sm ${tienePush ? "" : "text-[var(--muted)]"}`}
+                          className={`ml-6 flex items-center gap-2 text-sm ${tienePush ? "" : "text-(--muted)"}`}
                           title={tienePush ? undefined : "Todavía no registró notificaciones: debe iniciar sesión con la app actualizada"}
                         >
                           <input
@@ -236,7 +312,6 @@ export default function Avisos() {
                             }
                           />
                           {equipo.etiqueta}
-                          <span className="text-[var(--muted)]">({TIPO_EQUIPO[equipo.tipo] ?? equipo.tipo})</span>
                           {!tienePush && <BellOff size={14} aria-label="Sin notificaciones" />}
                         </label>
                       );
@@ -249,7 +324,7 @@ export default function Avisos() {
         </section>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm text-[var(--muted)]" aria-live="polite">
+          <span className="text-sm text-(--muted)" aria-live="polite">
             {textoAlcance(alcance)}
           </span>
           <button
@@ -262,6 +337,13 @@ export default function Avisos() {
             Enviar aviso
           </button>
         </div>
+
+        <HistorialAvisos
+          avisos={historial.datos}
+          cargando={historial.cargando}
+          nombresSitios={datos?.nombresSitios ?? new Map()}
+          nombresEquipos={datos?.nombresEquipos ?? new Map()}
+        />
       </div>
 
       {confirmando && (

@@ -133,6 +133,10 @@ android {
         }
         release {
             isMinifyEnabled = true
+            // Quita del APK los recursos que el código ya no referencia
+            // (íconos de material-icons-extended, recursos de librerías). Corre
+            // después de R8, así que sólo saca lo que de verdad nadie usa.
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
@@ -235,6 +239,11 @@ dependencies {
     // dejarla despierta gastando batería sin nadie mirando la pantalla.
     // Misma versión que lifecycle-viewmodel-compose de arriba, mismo motivo.
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+    // Instala el Baseline Profile (`src/main/baseline-prof.txt`) en APKs
+    // instalados fuera de Play Store -- el caso de esta app, que se
+    // actualiza sola (ver docs/actualizaciones-android.md) -- y deja
+    // consultar si ya se compiló (`ProfileVerifier`, ver Telemetria.kt).
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     // Error-tracking (docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md,
     // punto 5.4 -- espejo mobile del que ya se conectó en desktop). Init
     // automático vía meta-data en AndroidManifest.xml, sin tocar código:

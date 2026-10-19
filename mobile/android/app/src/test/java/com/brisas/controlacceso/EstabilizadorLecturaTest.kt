@@ -3,7 +3,6 @@ package com.brisas.controlacceso
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import uniffi.control_acceso_mobile.DatosPdf417Cedula
 
 class EstabilizadorLecturaTest {
 
@@ -499,28 +498,6 @@ class EstabilizadorLecturaTest {
         assertEquals(OrientacionEncuadre.HORIZONTAL, r.orientacionSugerida)
         val mrz = EstabilizadorLectura().procesarFrame(td1Valido)
         assertEquals(true, mrz.hayMrz)
-    }
-
-    // --- PDF417 de la cédula anterior ---
-
-    private val datosPdf417 = DatosPdf417Cedula(cedula = "112340567", nombre = "JUAN CARLOS", apellidos = "PEREZ MORA")
-
-    @Test
-    fun pdf417ConfirmaEnUnaLecturaConCedulaYNombre() {
-        val r = EstabilizadorLectura().procesarPdf417(datosPdf417)
-        assertEquals(EstadoEscaneo.CONFIRMADO, r.estado)
-        assertEquals("112340567", r.documento?.numeroDocumento)
-        assertEquals("JUAN CARLOS", r.documento?.nombre)
-        assertEquals("PEREZ MORA", r.documento?.apellidos)
-        assertEquals(FuenteDatos.PDF417, r.documento?.fuenteDatos)
-        assertEquals("Listo: Cédula de identidad", r.mensaje)
-    }
-
-    @Test
-    fun pdf417EnModoGafeteNoConfirma() {
-        val r = EstabilizadorLectura(modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA).procesarPdf417(datosPdf417)
-        assertEquals(EstadoEscaneo.BUSCANDO, r.estado)
-        assertNull(r.documento)
     }
 
     @Test

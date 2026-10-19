@@ -2,6 +2,7 @@ package com.brisas.controlacceso
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -56,6 +57,7 @@ private val ANCHO_MAXIMO_CONTENIDO = 480.dp
 /// arranca la Activity.
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val inicioActividadMs = SystemClock.uptimeMillis()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Sólo en release -- en debug bloqueaba también las capturas de
@@ -68,13 +70,14 @@ class MainActivity : ComponentActivity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
         GestorTema.inicializar(this)
+        atenderIntent(intent)
         if (Telemetria.activa) {
             // Duración de cada frame y fin del arranque (primer dibujo
             // completo). Sólo en el build de diagnóstico.
             Telemetria.observarVentana(window)
             window.decorView.viewTreeObserver.addOnDrawListener(object : ViewTreeObserver.OnDrawListener {
                 override fun onDraw() {
-                    Telemetria.primerFrameDibujado()
+                    Telemetria.primerFrameDibujado(inicioActividadMs)
                     window.decorView.post { window.decorView.viewTreeObserver.removeOnDrawListener(this) }
                 }
             })
@@ -165,6 +168,23 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /// Tocaron una notificación con la app ya abierta (`SINGLE_TOP`, ver
+    /// NotificacionesPush.mostrar).
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        atenderIntent(intent)
+    }
+
+    /// La notificación de un aviso abre la bandeja. El extra se borra para
+    /// no volver a abrirla si la Activity se recrea con el mismo intent.
+    private fun atenderIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(NotificacionesPush.EXTRA_ABRIR_AVISOS, false) == true) {
+            intent.removeExtra(NotificacionesPush.EXTRA_ABRIR_AVISOS)
+            AlmacenBandejaAvisos.solicitarApertura()
         }
     }
 

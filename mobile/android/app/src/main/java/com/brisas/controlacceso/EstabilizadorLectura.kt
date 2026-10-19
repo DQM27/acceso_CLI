@@ -2,7 +2,6 @@ package com.brisas.controlacceso
 
 import uniffi.control_acceso_mobile.ConfiguracionEstabilizador
 import uniffi.control_acceso_mobile.ConsensoVotacion
-import uniffi.control_acceso_mobile.DatosPdf417Cedula
 import uniffi.control_acceso_mobile.EstabilizadorDocumento
 import uniffi.control_acceso_mobile.consensoAlcanza
 import uniffi.control_acceso_mobile.ResultadoEstabilizacion as ResultadoNucleo
@@ -81,11 +80,6 @@ class EstabilizadorLectura(
     /// (0, 1]. `calidad`: medición del recorte, para avisar de un reflejo.
     fun procesarTextos(textos: List<String>, peso: Float = 1f, calidad: CalidadFrame? = null): ResultadoEstabilizacion =
         nucleo.procesarFrame(textos, peso, calidad?.fraccionReflejo, obtenerFechaHoy().aFechaOcr()).aResultado()
-
-    /// Cédula anterior leída de su PDF417 (sólo cédula y nombre, ya
-    /// validados por Rust). Confirma en el acto.
-    fun procesarPdf417(datos: DatosPdf417Cedula): ResultadoEstabilizacion =
-        nucleo.procesarPdf417(datos, obtenerFechaHoy().aFechaOcr()).aResultado()
 
     fun reiniciar() = nucleo.reiniciar()
 }

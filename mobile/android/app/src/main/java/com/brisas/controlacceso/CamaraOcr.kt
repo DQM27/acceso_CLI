@@ -12,13 +12,9 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
-import com.google.android.gms.tasks.Tasks
-import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
-import uniffi.control_acceso_mobile.DatosPdf417Cedula
 import uniffi.control_acceso_mobile.LineaOcr
-import uniffi.control_acceso_mobile.MotivoPdf417
 import uniffi.control_acceso_mobile.PalabraOcr
 import uniffi.control_acceso_mobile.confianzaMinimaPalabra
 import uniffi.control_acceso_mobile.textosDeFrame
@@ -53,9 +49,6 @@ fun construirAnalizadorOcr(
     // `EstadoCamaraOcr.hayLugar`). Si no, el frame se descarta ANTES de
     // recortar: nunca se forma una cola atrasada.
     hayLugar: () -> Boolean = { true },
-    // La normal es 1080p (ver abajo). El "modo código" del PDF417 pide
-    // [RESOLUCION_ANALISIS_CODIGO] (ver `EstadoCamaraOcr.usarAnalisisDeCodigo`).
-    resolucion: Size = RESOLUCION_ANALISIS_NORMAL,
     onFrameActivo: (ImageProxy) -> Unit,
 ): ImageAnalysis {
     // Optimización #2 del relevamiento de rendimiento de cámara
@@ -89,13 +82,8 @@ fun construirAnalizadorOcr(
                         // pesa: se recorta sólo el recuadro sobre los planos
                         // crudos (ver `recortarParaOcr`), sin convertir el
                         // frame completo a ARGB.
-                        resolucion,
-                        if (resolucion == RESOLUCION_ANALISIS_NORMAL) {
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
-                        } else {
-                            // Lo más grande que dé el equipo sin pasarse.
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER
-                        },
+                        RESOLUCION_ANALISIS,
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
                     ),
                 )
                 .build(),
@@ -137,9 +125,6 @@ fun iniciarCamara(
     onFallo: (String) -> Unit,
     // La cámara ya conectada: la usa la linterna (`EstadoCamaraOcr`).
     onCamaraLista: (androidx.camera.core.Camera) -> Unit = {},
-    // Lo necesario para volver a enlazar otro análisis sin soltar el
-    // preview (ver `EstadoCamaraOcr.usarAnalisisDeCodigo`).
-    onEnlazado: (androidx.lifecycle.LifecycleOwner, androidx.camera.core.ViewPort?) -> Unit = { _, _ -> },
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
     cameraProviderFuture.addListener(
@@ -175,7 +160,6 @@ fun iniciarCamara(
                     grupoUseCases,
                 )
                 onCamaraLista(camara)
-                onEnlazado(lifecycleOwner, previewView.viewPort)
                 reportarCamaraInfo(camara, analisis, preview, lifecycleOwner)
             } catch (_: Exception) {
                 if (sesionActiva.get()) onFallo("No se pudo iniciar la cámara")
@@ -208,16 +192,8 @@ fun iniciarCamara(
 // (`adb logcat -s OcrMetricas`: fps y mediana de reconocimiento).
 private const val INTERVALO_MINIMO_ENTRE_FRAMES_MS = 80L
 
-/// Análisis de siempre: 1080p (CameraX da 1920x1440 en 4:3 en el A25).
-val RESOLUCION_ANALISIS_NORMAL = Size(1920, 1080)
-
-/// Análisis del "modo código" del PDF417: la mayor del sensor del A25
-/// (4080x3060, `camara_info` de staging 2026-09-29). Con 1920x1440 el
-/// lector veía la tarjeta en ~1126 px y las barras del PDF417 de la cédula
-/// anterior (datos + huellas) quedaban en 1-2 px: 0 detecciones. Con esto,
-/// ~2,1 veces más píxeles. En otro equipo CameraX elige lo más grande que
-/// no se pase.
-val RESOLUCION_ANALISIS_CODIGO = Size(4080, 3060)
+/// Análisis: 1080p (CameraX da 1920x1440 en 4:3 en el A25).
+private val RESOLUCION_ANALISIS = Size(1920, 1080)
 
 /// Compartido por las 4 pantallas de escaneo -- antes cada una tenía su
 /// propia copia textual idéntica (hallazgo 2026-09-19, riesgo de
@@ -226,9 +202,8 @@ val RESOLUCION_ANALISIS_CODIGO = Size(4080, 3060)
 /// compartido) también viven en este archivo.
 const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer. Acerque el documento y evite reflejos."
 
-/// Analiza un frame: recorta a `region`, mide su calidad y corre ML Kit
-/// -- texto siempre y, si `leerCodigo`, el PDF417 de la cédula anterior EN
-/// PARALELO sobre el mismo recorte. Entrega una [LecturaFrame]. No sabe
+/// Analiza un frame: recorta a `region`, mide su calidad y corre el lector
+/// de texto de ML Kit. Entrega una [LecturaFrame]. No sabe
 /// nada de cédulas ni de placas: clasificar y decidir vive en los
 /// estabilizadores.
 ///
@@ -238,9 +213,7 @@ const val MENSAJE_FALLO_LECTURA_OCR = "No se pudo leer. Acerque el documento y e
 ///   procesa éste. Sólo si no se pudo recortar se retiene hasta el final
 ///   (ML Kit lee entonces el frame original).
 /// - Hasta `MAXIMO_EN_PROCESO` frames a la vez; el lugar
-///   se reserva acá y se libera cuando terminan TODOS sus lectores.
-/// - Texto y código corren a la vez (dos modelos de ML Kit): buscar el
-///   PDF417 no le quita frames al texto.
+///   se reserva acá y se libera cuando ML Kit termina con el frame.
 ///
 /// `onLectura`/`onFallo` corren en el HILO DEL ANALIZADOR, uno por frame y
 /// nunca dos a la vez (es un solo hilo): clasificar, votar y cruzar a Rust
@@ -253,11 +226,6 @@ fun analizarFrameOcr(
     imagen: ImageProxy,
     camara: EstadoCamaraOcr,
     region: RegionRecorte?,
-    leerCodigo: Boolean = false,
-    // "Modo código" (ver `PlanificadorLectores`): el lector de códigos recibe
-    // un segundo recorte con TODO lo visible en vez del recuadro guía. El
-    // texto sigue con su recorte de siempre. Sólo cuenta si `leerCodigo`.
-    modoCodigo: Boolean = false,
     onLectura: (LecturaFrame) -> Unit,
     onFallo: () -> Unit,
 ) {
@@ -287,18 +255,7 @@ fun analizarFrameOcr(
             camara.metricas.registrarDescarte()
             return
         }
-        val lectorCodigos = camara.lectorCodigos
-        // Segundo recorte, sólo para el lector de códigos: es una copia
-        // propia (NV21), así que no retiene el `ImageProxy`. Si no se puede
-        // armar, el código se lee del recorte normal.
-        val recorteCodigo = if (leerCodigo && modoCodigo && lectorCodigos != null) {
-            recortarParaOcr(mediaImage, imagen.cropRect, rotacion, TodoLoVisibleRecorte)
-        } else {
-            null
-        }
         val finRecorte = System.nanoTime()
-        // Antes de cerrar la imagen: el ancho que ve ML Kit (ya rotado).
-        val anchoImagenPx = recorte?.anchoVertical ?: if (rotacion % 180 != 0) mediaImage.height else mediaImage.width
         // Sin recorte (formato inesperado, plano raro) se lee el frame
         // entero: un recorte fallido nunca debe romper el escaneo.
         val input = recorte?.input ?: InputImage.fromMediaImage(mediaImage, rotacion)
@@ -306,24 +263,18 @@ fun analizarFrameOcr(
         if (!retenerImagen) imagen.close()
         val regionLeida = if (recorte != null) region else null
         val tareaTexto = camara.recognizer.process(input)
-        val tareaCodigo = if (leerCodigo && lectorCodigos != null) lectorCodigos.process(recorteCodigo?.input ?: input) else null
-        val anchoCodigoPx = recorteCodigo?.anchoVertical ?: anchoImagenPx
-        val leyoEnModoCodigo = recorteCodigo != null
         pendienteDeCierre = false
-        Tasks.whenAllComplete(listOfNotNull(tareaTexto, tareaCodigo)).addOnCompleteListener(camara.ejecutorProcesamiento) {
+        tareaTexto.addOnCompleteListener(camara.ejecutorProcesamiento) {
             try {
                 if (!camara.sesionActiva.get()) return@addOnCompleteListener
-                camara.metricas.registrarFrame(tareaCodigo != null, finRecorte - inicio, System.nanoTime() - finRecorte, leyoEnModoCodigo)
+                camara.metricas.registrarFrame(finRecorte - inicio, System.nanoTime() - finRecorte)
                 val texto = tareaTexto.takeIf { it.isSuccessful }?.result
-                if (tareaCodigo != null && !tareaCodigo.isSuccessful) camara.metricas.registrarErrorLectorCodigo()
-                val datosPdf417 = tareaCodigo?.takeIf { it.isSuccessful }?.result
-                    ?.let { codigos -> leerCodigos(codigos, anchoCodigoPx, leyoEnModoCodigo, camara.metricas) }
-                if (texto == null && datosPdf417 == null) {
+                if (texto == null) {
                     camara.metricas.registrarFallo()
                     onFallo()
                     return@addOnCompleteListener
                 }
-                val lineasMrz = if (recorte == null || texto == null) {
+                val lineasMrz = if (recorte == null) {
                     emptyList()
                 } else {
                     texto.textBlocks.asSequence()
@@ -336,8 +287,8 @@ fun analizarFrameOcr(
                         }
                         .toList()
                 }
-                val textos = texto?.let { textosParaLectores(it, camara.metricas) }.orEmpty()
-                onLectura(LecturaFrame(texto?.text.orEmpty(), textos, datosPdf417, calidad, decision.peso, regionLeida, lineasMrz))
+                val textos = textosParaLectores(texto, camara.metricas)
+                onLectura(LecturaFrame(texto.text, textos, calidad, decision.peso, regionLeida, lineasMrz))
             } finally {
                 if (retenerImagen) imagen.close()
                 camara.liberarLugar()
@@ -392,41 +343,6 @@ private fun textosParaLectores(texto: Text, metricas: MetricasOcr): List<String>
 /// El mismo umbral con que el núcleo descarta palabras (ver
 /// `renglones_visuales.rs`), para contarlas en la telemetría.
 private val UMBRAL_CONFIANZA_PALABRA = confianzaMinimaPalabra()
-
-/// El primer PDF417 de la cédula anterior que el núcleo acepta, y el
-/// diagnóstico de todos los códigos del frame para la telemetría. Los
-/// bytes crudos se ponen en cero en todos los casos (ver
-/// [leerPdf417ConMotivo]).
-private fun leerCodigos(
-    codigos: List<Barcode>,
-    anchoImagenPx: Int,
-    enModoCodigo: Boolean,
-    metricas: MetricasOcr,
-): DatosPdf417Cedula? {
-    var datos: DatosPdf417Cedula? = null
-    var sinBytes = 0
-    val motivos = mutableListOf<MotivoPdf417>()
-    val largos = mutableListOf<Int>()
-    val anchos = mutableListOf<Int>()
-    for (codigo in codigos) {
-        codigo.boundingBox?.let { anchos += it.width() }
-        val crudo = codigo.rawBytes
-        if (crudo == null) {
-            sinBytes++
-            continue
-        }
-        largos += crudo.size
-        if (datos != null) {
-            crudo.fill(0)
-            continue
-        }
-        val lectura = leerPdf417ConMotivo(crudo)
-        motivos += lectura.motivo
-        datos = lectura.datos
-    }
-    metricas.registrarBusquedaCodigo(DiagnosticoCodigos(codigos.size, sinBytes, motivos, largos, anchos, anchoImagenPx, enModoCodigo))
-    return datos
-}
 
 /// Frame sin recorte (y por lo tanto sin medición): se procesa con peso 1.
 private val SIN_MEDICION = DecisionCalidad(procesar = true, peso = 1f)

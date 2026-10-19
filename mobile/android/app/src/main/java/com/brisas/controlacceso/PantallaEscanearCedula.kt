@@ -11,7 +11,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,10 +42,6 @@ fun PantallaEscanearCedula(
     resultadoUltimoEscaneo: () -> Pair<String, Boolean>? = { null },
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
-    // Buscar además el PDF417 de la cédula anterior. Sólo tiene sentido
-    // donde se acepta una cédula (ingreso de contratistas, proveedores);
-    // el alta de contratista sólo acepta el carnet PRAIND y lo apaga.
-    lectorPdf417: Boolean = modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
 ) {
     RegistrarPantalla("escanear_cedula")
     // Antes el mensaje de permiso era fijo ("...para escanear cédulas"),
@@ -63,7 +58,6 @@ fun PantallaEscanearCedula(
             resultadoUltimoEscaneo = resultadoUltimoEscaneo,
             onDocumentoDetectado = onDocumentoDetectado,
             onCerrar = onCerrar,
-            lectorPdf417 = lectorPdf417 && modo == ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
         )
     }
 }
@@ -75,7 +69,6 @@ private fun VistaCamaraCedula(
     resultadoUltimoEscaneo: () -> Pair<String, Boolean>?,
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
-    lectorPdf417: Boolean,
 ) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -91,9 +84,7 @@ private fun VistaCamaraCedula(
     // MV-10 (auditoría 2026-09-24): agrupa lo que antes eran 9
     // declaraciones + un DisposableEffect idénticos a las otras 3
     // pantallas de escaneo -- ver EstadoCamaraOcr.kt.
-    // El PDF417 sólo existe en la cédula anterior: donde no se busca, ni
-    // se carga el lector de códigos.
-    val camara = rememberEstadoCamaraOcr(contexto, conLectorPdf417 = lectorPdf417)
+    val camara = rememberEstadoCamaraOcr(contexto)
     var ultimoMensaje by remember { mutableStateOf(mensajeInicialEscaneo(modo)) }
     var estado by remember { mutableStateOf(EstadoEscaneo.BUSCANDO) }
     var vencido by remember { mutableStateOf(false) }
@@ -116,19 +107,9 @@ private fun VistaCamaraCedula(
     // consistentes del debounce (ver EstabilizadorLectura), no debe
     // compartirse entre sesiones de escaneo distintas.
     val estabilizador = remember(modo) { EstabilizadorLectura(modo = modo) }
-    // Acota el recorte a la banda del MRZ cuando ya se sabe dónde está, y
-    // reparte los frames entre el lector de texto y el de PDF417 (ver
-    // `LecturaFrame.kt`). Ambos los usa sólo el hilo del analizador.
+    // Acota el recorte a la banda del MRZ cuando ya se sabe dónde está
+    // (ver `LecturaFrame.kt`). Lo usa sólo el hilo del analizador.
     val seguidorMrz = remember { SeguidorBandaMrz() }
-    val planificador = remember(lectorPdf417) { PlanificadorLectores(habilitado = lectorPdf417) }
-    // Aviso mientras dura el "modo código" (ver `PlanificadorLectores`).
-    var modoCodigoVisible by remember { mutableStateOf(false) }
-    // Modo código: el análisis pasa a la mayor resolución mientras dura
-    // (las barras del PDF417 de la cédula anterior no alcanzan a verse a
-    // 1080p) y vuelve al normal al terminar. Corre en el hilo principal.
-    LaunchedEffect(modoCodigoVisible) {
-        camara.usarAnalisisDeCodigo(modoCodigoVisible)
-    }
     var ultimoValorContinuo by remember { mutableStateOf<String?>(null) }
     var framesSinUltimoValor by remember { mutableStateOf(0) }
     // Colores de estado compartidos por las 4 pantallas de escaneo (ver
@@ -170,10 +151,6 @@ private fun VistaCamaraCedula(
                         if (resultado.estado == EstadoEscaneo.INVALIDO && estado != EstadoEscaneo.INVALIDO) {
                             vibrarError(contexto)
                         }
-                        if (resultado.estado == EstadoEscaneo.CONFIRMADO) {
-                            planificador.terminarModoCodigo()
-                            modoCodigoVisible = false
-                        }
                         estado = resultado.estado
                         ultimoMensaje = resultado.mensaje
                         vencido = resultado.vencido
@@ -204,8 +181,15 @@ private fun VistaCamaraCedula(
                                     // decide qué hacer con el documento
                                     // después, fuera de esta pantalla.
                                     if (!continuo) {
-                                        vibrarConfirmacion(contexto)
-                                        reproducirSonidoConfirmacion()
+                                        if (resultado.vencido) {
+                                            // Leído bien pero vencido: advertencia
+                                            // propia y sin el tono de "listo", que
+                                            // le diría lo contrario.
+                                            vibrarAdvertencia(contexto)
+                                        } else {
+                                            vibrarConfirmacion(contexto)
+                                            reproducirSonidoConfirmacion()
+                                        }
                                     }
                                     camara.trabajoResultado?.cancel()
                                     camara.trabajoResultado = alcance.launch {
@@ -268,7 +252,6 @@ private fun VistaCamaraCedula(
                         estado = EstadoEscaneo.BUSCANDO
                         vencido = false
                         ultimoMensaje = MENSAJE_FALLO_LECTURA_OCR
-                        modoCodigoVisible = planificador.modoCodigo
                     }
                 }
                 // Encuadre que gira según el documento (ver
@@ -279,37 +262,18 @@ private fun VistaCamaraCedula(
                 val analizarFrame: (ImageProxy) -> Unit = { imagen ->
                     val (regionBase, leidoCon) = encuadre.regionParaFrame()
                     val region = if (leidoCon == OrientacionEncuadre.HORIZONTAL) seguidorMrz.region(regionBase) else regionBase
-                    val planCodigo = planificador.planCodigo()
                     analizarFrameOcr(
                         imagen = imagen,
                         camara = camara,
                         region = region,
-                        // Texto y PDF417 en paralelo; en modo código el
-                        // PDF417 lee todo lo visible, no el recuadro.
-                        leerCodigo = planCodigo.leer,
-                        modoCodigo = planCodigo.modoCodigo,
                         onLectura = { lectura ->
-                            val datosPdf417 = lectura.pdf417
-                            if (datosPdf417 != null) {
-                                // Corrección de errores propia del código:
-                                // gana sobre el texto del mismo frame.
-                                val resultado = estabilizador.procesarPdf417(datosPdf417)
-                                camara.metricas.registrarResultadoDocumento(resultado)
-                                camara.enPrincipal { onResultado(resultado) }
-                            } else {
-                                val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso, lectura.calidad)
-                                camara.metricas.registrarResultadoDocumento(resultado)
-                                if (planificador.registrarTexto(lectura.textos.any(::pareceReversoCedulaAnterior), resultado.hayMrz)) {
-                                    camara.metricas.registrarActivacionModoCodigo()
-                                }
-                                val enModoCodigo = planificador.modoCodigo
-                                seguidorMrz.registrar(lectura.regionLeida, lectura.lineasMrz)
-                                val giro = encuadre.registrarOrientacion(resultado.orientacionSugerida, leidoCon)
-                                camara.enPrincipal {
-                                    if (giro) orientacionEncuadre = encuadre.orientacion
-                                    modoCodigoVisible = enModoCodigo
-                                    onResultado(resultado)
-                                }
+                            val resultado = estabilizador.procesarTextos(lectura.textos, lectura.peso, lectura.calidad)
+                            camara.metricas.registrarResultadoDocumento(resultado)
+                            seguidorMrz.registrar(lectura.regionLeida, lectura.lineasMrz)
+                            val giro = encuadre.registrarOrientacion(resultado.orientacionSugerida, leidoCon)
+                            camara.enPrincipal {
+                                if (giro) orientacionEncuadre = encuadre.orientacion
+                                onResultado(resultado)
                             }
                         },
                         onFallo = { camara.enPrincipal(onFallo) },
@@ -323,18 +287,6 @@ private fun VistaCamaraCedula(
                     onFrameActivo = analizarFrame,
                 )
                 camara.analisisCamara = analisis
-                // El mismo análisis a la mayor resolución, para el modo código
-                // (ver el `LaunchedEffect` de `modoCodigoVisible`).
-                if (camara.lectorCodigos != null) {
-                    camara.analisisCodigo = construirAnalizadorOcr(
-                        ejecutorAnalisis = camara.ejecutor,
-                        detectada = camara.detectada,
-                        sesionActiva = camara.sesionActiva,
-                        hayLugar = camara::hayLugar,
-                        resolucion = RESOLUCION_ANALISIS_CODIGO,
-                        onFrameActivo = analizarFrame,
-                    )
-                }
                 iniciarCamara(
                     ctx = ctx,
                     previewView = previewView,
@@ -346,7 +298,6 @@ private fun VistaCamaraCedula(
                         camara.vistaPreviaCamara = preview
                     },
                     onCamaraLista = { camara.camaraFisica = it },
-                    onEnlazado = camara::alEnlazar,
                     onFallo = { mensaje ->
                         if (camara.sesionActiva.get()) {
                             estado = EstadoEscaneo.INVALIDO
@@ -372,11 +323,7 @@ private fun VistaCamaraCedula(
         // recuadro cambiando de color, fácil de no notar mientras se sigue
         // apuntando la cámara al siguiente gafete.
         val resultado = resultadoMostrado
-        val mensajeVisible = when {
-            resultado != null -> resultado.first
-            modoCodigoVisible && estado != EstadoEscaneo.CONFIRMADO -> MENSAJE_MODO_CODIGO
-            else -> ultimoMensaje
-        }
+        val mensajeVisible = resultado?.first ?: ultimoMensaje
         Text(
             mensajeVisible,
             color = Color.White,
@@ -421,11 +368,6 @@ private fun VistaCamaraCedula(
 // bastante más rápido que tener que confirmar a mano.
 private const val DEMORA_REARMAR_ESCANEO_CONTINUO_MS = 1600L
 private const val FRAMES_AUSENCIA_PARA_REPETIR = 3
-
-// Mientras dura el modo código (ver `PlanificadorLectores`): el PDF417 de la
-// cédula anterior necesita muchos más píxeles que el recuadro guía. De lado
-// queda a lo largo de los 1920 px del frame, la mayor ganancia.
-private const val MENSAJE_MODO_CODIGO = "Acerque el código de barras hasta que llene la pantalla (de lado funciona mejor)"
 
 // El reverso (con el MRZ -- las líneas de texto tipo código de barras) trae
 // nombre Y cédula en un solo escaneo con checksum verificado; el frente

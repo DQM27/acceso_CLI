@@ -1,6 +1,8 @@
 package com.brisas.controlacceso
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -60,6 +62,12 @@ fun MarcoGuiaCedula(
     // borde inferior del recuadro: "ya lo vi, falta poco, no lo mueva".
     progreso: Float = 0f,
 ) {
+    // El cambio de estado (buscando, confirmado, inválido, vencido) se funde en
+    // vez de saltar, y la barra de progreso avanza en vez de dar saltos. Los dos
+    // se leen dentro del `Canvas` (fase de dibujo): animarlos no recompone nada.
+    val colorMarco by animateColorAsState(color, tween(DURACION_CAMBIO_COLOR_MS), label = "colorMarcoOcr")
+    val progresoSuave by animateFloatAsState(progreso, tween(DURACION_AVANCE_PROGRESO_MS), label = "progresoMarcoOcr")
+
     val transicion = rememberInfiniteTransition(label = "marcoOcr")
     val pulso by transicion.animateFloat(
         initialValue = 0.55f,
@@ -110,7 +118,7 @@ fun MarcoGuiaCedula(
             size = Size(size.width - guia.right, guia.height),
         )
 
-        val colorConPulso = color.copy(alpha = 0.55f + pulso * 0.35f)
+        val colorConPulso = colorMarco.copy(alpha = 0.55f + pulso * 0.35f)
 
         // Borde completo tenue (ayuda a "cerrar" el recuadro visualmente)...
         drawRoundRect(
@@ -147,7 +155,7 @@ fun MarcoGuiaCedula(
         esquina(Offset(guia.left, guia.bottom), haciaX = 1f, haciaY = -1f)
         esquina(Offset(guia.right, guia.bottom), haciaX = -1f, haciaY = -1f)
 
-        if (progreso > 0f) {
+        if (progresoSuave > 0f) {
             val margen = 10.dp.toPx()
             val y = guia.bottom - 8.dp.toPx()
             val anchoUtil = guia.width - 2 * margen
@@ -159,9 +167,9 @@ fun MarcoGuiaCedula(
                 cap = StrokeCap.Round,
             )
             drawLine(
-                color = color,
+                color = colorMarco,
                 start = Offset(guia.left + margen, y),
-                end = Offset(guia.left + margen + anchoUtil * progreso.coerceIn(0f, 1f), y),
+                end = Offset(guia.left + margen + anchoUtil * progresoSuave.coerceIn(0f, 1f), y),
                 strokeWidth = 5.dp.toPx(),
                 cap = StrokeCap.Round,
             )
@@ -182,3 +190,6 @@ fun MarcoGuiaCedula(
         }
     }
 }
+
+private const val DURACION_CAMBIO_COLOR_MS = 250
+private const val DURACION_AVANCE_PROGRESO_MS = 150

@@ -181,7 +181,10 @@ del desarrollador.
   vinculó el equipo, no la actual.
 - **Los "trabados" de la cámara están inflados en pantallas de 120 Hz** (el límite
   es el doble del presupuesto del cuadro: 16,7 ms). Importan los congelados y el
-  máximo.
+  máximo. **Resuelto en el móvil** (2026-10-19): cada cuadro se compara contra su
+  propio plazo (`FrameMetrics.DEADLINE`) y la fila trae el desglose hilo de
+  pantalla / render para saber dónde se va el tiempo. Las filas de versiones
+  anteriores siguen infladas.
 - **Alertas y tableros de Grafana:** ya están como JSON en `docs/grafana/`. Ajustar las tablas para teléfono
   (se cortan las columnas) y el gráfico de errores por hora (sale verde).
 - **Regla de equipos nuevos:** confirmar que evalúa y que llega el correo. Agregar

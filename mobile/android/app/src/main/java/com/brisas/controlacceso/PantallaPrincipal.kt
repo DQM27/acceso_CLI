@@ -5,6 +5,7 @@ import android.app.Activity
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -18,16 +19,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.NotificationImportant
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -50,6 +57,7 @@ import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ConflictoGafeteActivo
 import uniffi.control_acceso_mobile.ConflictoIngresoActivo
 import uniffi.control_acceso_mobile.ConflictoIngresoProveedorActivo
+import uniffi.control_acceso_mobile.EstadoBandeja
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.UsuarioSesion
 
@@ -61,11 +69,12 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// nuevos siguen sin pantalla propia acá (escritorio/web/CLI), y tampoco
 /// volvió la pestaña de nube.
 ///
-/// `mostrarNuevoContratista` es toda la navegación que hace falta -- con
-/// una sola pantalla adicional posible (además de las dos pestañas) no
-/// se justifica un enum `Pantalla` como el que existió antes: cuando está
-/// en `true` reemplaza por completo la Column de pestañas, igual que hacía
-/// aquel enum, sin la indirección de más.
+/// `mostrarNuevoContratista` y `mostrarAvisos` (bandeja de la campanita,
+/// 2026-10-18) son toda la navegación que hace falta -- con dos pantallas
+/// adicionales que nunca se abren a la vez no se justifica un enum
+/// `Pantalla` como el que existió antes: la que está en `true` reemplaza por
+/// completo la Column de pestañas, igual que hacía aquel enum, sin la
+/// indirección de más.
 @Composable
 fun PantallaPrincipal(
     nucleo: Nucleo,
@@ -76,6 +85,9 @@ fun PantallaPrincipal(
     RegistrarPantalla("principal")
     var refrescarNube by remember { mutableIntStateOf(0) }
     var mostrarNuevoContratista by remember { mutableStateOf(false) }
+    // Bandeja de avisos (campanita): otra pantalla que reemplaza a las
+    // pestañas, igual que `mostrarNuevoContratista`.
+    var mostrarAvisos by remember { mutableStateOf(false) }
     // Sin esto, atrás del sistema en la raíz (pestañas) caía directo al
     // default de Android -- cerraba/minimizaba la app de un solo toque, sin
     // que hubiera ningún BackHandler compose que lo interceptara (hallazgo
@@ -85,7 +97,7 @@ fun PantallaPrincipal(
     // está abierta.
     val contexto = LocalContext.current
     var ultimoTapAtras by remember { mutableLongStateOf(0L) }
-    BackHandler(enabled = !mostrarNuevoContratista) {
+    BackHandler(enabled = !mostrarNuevoContratista && !mostrarAvisos) {
         val ahora = System.currentTimeMillis()
         if (ahora - ultimoTapAtras < 2000) {
             (contexto as? Activity)?.finish()
@@ -115,6 +127,26 @@ fun PantallaPrincipal(
             NotificacionesPush.registrarEnNube(contexto, nucleo)
         } else if (BuildConfig.DEBUG || BuildConfig.AMBIENTE_STAGING) {
             Toast.makeText(contexto, "Este APK no trae google-services.json: sin notificaciones push", Toast.LENGTH_LONG).show()
+        }
+    }
+    // Bandeja de avisos (campanita): el estado lo decide el núcleo y lo
+    // publica AvisosViewModel; se actualiza solo cuando llega un push.
+    val avisosViewModel: AvisosViewModel = viewModel(factory = AvisosViewModel.factory(contexto, nucleo))
+    val bandeja by avisosViewModel.estado.collectAsState()
+    // Tocaron la notificación de un aviso (MainActivity): abrir la bandeja.
+    val aperturaAvisos by avisosViewModel.aperturaSolicitada.collectAsState()
+    LaunchedEffect(aperturaAvisos) {
+        if (aperturaAvisos) {
+            mostrarNuevoContratista = false
+            mostrarAvisos = true
+            avisosViewModel.aperturaAtendida()
+        }
+    }
+    // Con la bandeja a la vista, que "hace 5 min" avance.
+    LaunchedEffect(mostrarAvisos) {
+        while (mostrarAvisos) {
+            delay(60_000)
+            avisosViewModel.refrescar()
         }
     }
     // `docs/pendientes.md`, "alertar luego al sincronizar" -- ver el mismo
@@ -291,9 +323,16 @@ fun PantallaPrincipal(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BotonIconoCuadradoBrisas(onClick = { mostrarNuevoContratista = true }) {
+                BotonIconoCuadradoBrisas(onClick = {
+                    mostrarAvisos = false
+                    mostrarNuevoContratista = true
+                }) {
                     Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
                 }
+                CampanitaAvisos(bandeja, onClick = {
+                    mostrarNuevoContratista = false
+                    mostrarAvisos = true
+                })
                 BotonIconoCuadradoBrisas(
                     onClick = { nubeViewModel.sincronizar() },
                     enabled = !nubeViewModel.sincronizando,
@@ -317,6 +356,20 @@ fun PantallaPrincipal(
                     actualizador = actualizador,
                 )
             }
+        }
+
+        // Arriba de todo lo demás: una emergencia sin leer es lo primero que
+        // tiene que ver quien opera.
+        val emergencia = bandeja?.emergenciaSinLeer
+        if (emergencia != null && !mostrarAvisos) {
+            FranjaEmergencia(
+                emergencia,
+                onAbrir = {
+                    mostrarNuevoContratista = false
+                    mostrarAvisos = true
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
         }
 
         val errorSincronizacion = nubeViewModel.error
@@ -380,49 +433,138 @@ fun PantallaPrincipal(
             )
         }
 
-        if (mostrarNuevoContratista) {
-            PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
-        } else {
-            var pestana by remember { mutableIntStateOf(0) }
-            // "Historial" se sacó de acá por espacio (pestañas apiñadas,
-            // 2026-09-17); su pantalla/ViewModel/wrappers Rust se eliminaron
-            // del todo el 2026-09-21 al confirmar que no había ningún otro
-            // punto de entrada que lo usara.
-            FilaPildoras(
-                // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
-                // usuario (2026-09-19) para descomprimir la fila de
-                // pestañas, ya apiñada (ver comentario arriba).
-                //
-                // "Rutas" oculta de la fila (pedido del usuario 2026-09-23:
-                // control de rutas sin terminar, que no se vea a medias en
-                // una demostración). `PantallaRutas` sigue intacta; para
-                // volver a mostrarla basta con sacarla de
-                // `enDesarrollo` en `SeccionPrincipal`.
-                opciones = SECCIONES_VISIBLES.map { it.etiqueta },
-                seleccionado = pestana,
-                onSeleccionar = { pestana = it },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            // `Box`, no `Column` -- un `Column` sin peso mide a sus hijos con
-            // altura MÁXIMA infinita (así reserva espacio a los que sí tienen
-            // `weight`), y un `LazyColumn` (como el de `PantallaActivos`)
-            // revienta con `IllegalStateException` si lo miden así. `Box` en
-            // cambio le pasa a su único hijo las restricciones ya acotadas
-            // que le tocaron acá (el resto de la pantalla, vía `weight(1f)`).
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                // `when` exhaustivo sobre el enum: agregar una sección sin
-                // su pantalla no compila (antes eran textos y un `else`
-                // que caía en Activos en silencio ante un error de tipeo).
-                when (SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }) {
-                    SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, refrescarNube)
-                    SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
-                    SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
-                    SeccionPrincipal.EXTERNOS -> PantallaExternos(nucleo, refrescarNube)
+        // La bandeja de avisos y "Nuevo contratista" suben encima de las
+        // pestañas; al volver, las pestañas reaparecen (ver
+        // `TransicionesPantalla.kt`).
+        val panel = when {
+            mostrarAvisos -> PanelPrincipal.AVISOS
+            mostrarNuevoContratista -> PanelPrincipal.NUEVO_CONTRATISTA
+            else -> PanelPrincipal.PESTANAS
+        }
+        AnimatedContent(
+            targetState = panel,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            transitionSpec = { transicionDePantalla(avanza = targetState != PanelPrincipal.PESTANAS) },
+            label = "panelPrincipal",
+        ) { mostrado ->
+            if (mostrado == PanelPrincipal.AVISOS) {
+                PantallaAvisos(
+                    estado = bandeja,
+                    onLeer = avisosViewModel::leer,
+                    onLeerTodos = avisosViewModel::leerTodos,
+                    onArchivar = { id -> avisosViewModel.archivar(id, sesion.nombre) },
+                    onBorrar = { id -> avisosViewModel.borrar(id, sesion.nombre) },
+                    onVolver = { mostrarAvisos = false },
+                )
+            } else if (mostrado == PanelPrincipal.NUEVO_CONTRATISTA) {
+                PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    var pestana by remember { mutableIntStateOf(0) }
+                    val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
+                    // El tipo elegido dentro de Externos (Proveedor o Correo) vive
+                    // acá y no en `PantallaExternos`: cambia el color de la sección
+                    // y de la pestaña de arriba (ver `AcentoSeccion.kt`).
+                    var indiceExterno by remember { mutableIntStateOf(0) }
+                    val externo = tipoExternoVisible(indiceExterno)
+                    // "Historial" se sacó de acá por espacio (pestañas apiñadas,
+                    // 2026-09-17); su pantalla/ViewModel/wrappers Rust se eliminaron
+                    // del todo el 2026-09-21 al confirmar que no había ningún otro
+                    // punto de entrada que lo usara.
+                    // Cada sección con su acento (ver `AcentoSeccion.kt`): las pestañas y
+                    // el contenido comparten el color de la sección activa.
+                    TemaSeccion(seccion, externo) {
+                        FilaPildoras(
+                            // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
+                            // usuario (2026-09-19) para descomprimir la fila de
+                            // pestañas, ya apiñada (ver comentario arriba).
+                            //
+                            // "Rutas" oculta de la fila (pedido del usuario 2026-09-23:
+                            // control de rutas sin terminar, que no se vea a medias en
+                            // una demostración). `PantallaRutas` sigue intacta; para
+                            // volver a mostrarla basta con sacarla de
+                            // `enDesarrollo` en `SeccionPrincipal`.
+                            opciones = SECCIONES_VISIBLES.map { it.etiqueta },
+                            seleccionado = pestana,
+                            onSeleccionar = { pestana = it },
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
+                    // `AnimatedContent` (que por dentro es un `Box`) y no un `Column`
+                    // -- un `Column` sin peso mide a sus hijos con altura MÁXIMA
+                    // infinita (así reserva espacio a los que sí tienen `weight`), y un
+                    // `LazyColumn` (como el de `PantallaActivos`) revienta con
+                    // `IllegalStateException` si lo miden así. Esto en cambio le pasa a
+                    // sus hijos las restricciones ya acotadas que le tocaron acá (el
+                    // resto de la pantalla, vía `weight(1f)`). Desliza y funde entre
+                    // pestañas (ver `TransicionesPantalla.kt`).
+                    AnimatedContent(
+                        targetState = seccion,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        transitionSpec = {
+                            transicionDePestana(SECCIONES_VISIBLES.indexOf(initialState), SECCIONES_VISIBLES.indexOf(targetState))
+                        },
+                        label = "seccion",
+                    ) { seccionMostrada ->
+                        // `when` exhaustivo sobre el enum: agregar una sección sin
+                        // su pantalla no compila (antes eran textos y un `else`
+                        // que caía en Activos en silencio ante un error de tipeo).
+                        // Con `seccionMostrada` y no `seccion`: durante la
+                        // transición la pantalla que se va sigue con su propio
+                        // acento y no salta al de la nueva.
+                        TemaSeccion(seccionMostrada, externo) {
+                            when (seccionMostrada) {
+                                SeccionPrincipal.ACTIVOS -> PantallaActivos(
+                                    nucleo,
+                                    refrescarNube,
+                                    sincronizando = nubeViewModel.sincronizando,
+                                    onSincronizar = nubeViewModel::sincronizar,
+                                )
+                                SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
+                                SeccionPrincipal.KOF -> PantallaGafetesProvisionales(
+                                    nucleo,
+                                    refrescarNube,
+                                    sincronizando = nubeViewModel.sincronizando,
+                                    onSincronizar = nubeViewModel::sincronizar,
+                                )
+                                SeccionPrincipal.EXTERNOS -> PantallaExternos(
+                                    nucleo,
+                                    refrescarNube,
+                                    tipo = indiceExterno,
+                                    onCambiarTipo = { indiceExterno = it },
+                                    sincronizando = nubeViewModel.sincronizando,
+                                    onSincronizar = nubeViewModel::sincronizar,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
+
+/// Campanita de la barra superior: el globito (qué número, si se ve) y si
+/// hay una emergencia pendiente lo decide el núcleo (`EstadoBandeja`). El
+/// globito va sobre la esquina del botón, no adentro: el cuadradito recorta
+/// su contenido.
+@Composable
+private fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
+    val contador = bandeja?.contador
+    val hayEmergencia = bandeja?.emergenciaSinLeer != null
+    BadgedBox(badge = { if (contador != null) Badge { Text(contador) } }) {
+        BotonIconoCuadradoBrisas(onClick = onClick) {
+            Icon(
+                if (hayEmergencia) Icons.Default.NotificationImportant else Icons.Default.Notifications,
+                contentDescription = if (contador == null) "Avisos" else "Avisos, ${bandeja?.noLeidos} sin leer",
+                tint = if (hayEmergencia) MaterialTheme.colorScheme.error else LocalContentColor.current,
+            )
+        }
+    }
+}
+
+/// Qué ocupa la pantalla principal debajo de la barra superior.
+private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, PESTANAS }
 
 /// Tiempo fuera de primer plano (app minimizada o teléfono bloqueado) tras
 /// el cual se cierra la sesión. Eran 2 minutos: en la portería el guardia

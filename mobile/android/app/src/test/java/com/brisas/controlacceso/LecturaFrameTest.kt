@@ -5,40 +5,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import uniffi.control_acceso_mobile.MotivoPdf417
 
 class LecturaFrameTest {
-
-    // --- PDF417: sólo el prefijo cruza a Rust y todo queda en cero ---
-
-    /// Clave pública del PDF417 de la cédula anterior (ver
-    /// mobile/rust-core/src/pdf417_cedula.rs). Datos SINTÉTICOS.
-    private val clave = intArrayOf(0x27, 0x30, 0x04, 0xA0, 0x00, 0x0F, 0x93, 0x12, 0xA0, 0xD1, 0x33, 0xE0, 0x03, 0xD0, 0x00, 0xDF, 0x00)
-
-    private fun pdf417Sintetico(): ByteArray {
-        fun campo(texto: String, largo: Int) = texto.toByteArray(Charsets.ISO_8859_1).copyOf(largo)
-        val claro = campo("112340567", 9) + campo("PEREZ", 26) + campo("MORA", 26) + campo("JUAN", 30) +
-            "M1990010120300101".toByteArray() + ByteArray(300) { 0x5A }
-        return ByteArray(claro.size) { i -> (claro[i].toInt() xor clave[i % clave.size]).toByte() }
-    }
-
-    @Test
-    fun extraeCedulaYNombreYPoneEnCeroLosBytesCrudos() {
-        val crudo = pdf417Sintetico()
-        val datos = extraerPdf417Cedula(crudo)
-        assertEquals("112340567", datos?.cedula)
-        assertEquals("JUAN", datos?.nombre)
-        assertEquals("PEREZ MORA", datos?.apellidos)
-        // Incluidas las "huellas" (la cola): nada queda en memoria.
-        assertTrue(crudo.all { it == 0.toByte() })
-    }
-
-    @Test
-    fun codigoCortoNoDaDatosYTambienSeBorra() {
-        val crudo = pdf417Sintetico().copyOf(50)
-        assertNull(extraerPdf417Cedula(crudo))
-        assertTrue(crudo.all { it == 0.toByte() })
-    }
 
     // --- Líneas con forma de MRZ ---
 
@@ -113,143 +81,6 @@ class LecturaFrameTest {
         assertEquals(completo.left, mitadInferior.left)
     }
 
-    // --- Planificador: cuándo buscar el PDF417 ADEMÁS del texto ---
-
-    @Test
-    fun sinPdf417HabilitadoNuncaSeBuscaCodigo() {
-        val planificador = PlanificadorLectores(habilitado = false)
-        assertTrue((1..10).none { planificador.leerCodigo() })
-    }
-
-    @Test
-    fun sinPistaBuscaCodigoCadaTantosFramesYConPistaEnTodos() {
-        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 3)
-        assertEquals(3, (1..9).count { planificador.leerCodigo() })
-        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
-        assertTrue((1..5).all { planificador.leerCodigo() })
-    }
-
-    @Test
-    fun laPistaSeOlvidaSiElReversoDejaDeVerse() {
-        // Sin modo código (0 frames): sólo la pista de memoria corta.
-        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesMemoria = 2, framesModoCodigo = 0)
-        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
-        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
-        assertTrue(planificador.leerCodigo())
-        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
-        assertFalse(planificador.leerCodigo())
-    }
-
-    // --- Modo código: el PDF417 se sigue buscando (en todo lo visible) aunque el texto se pierda ---
-
-    @Test
-    fun alVerElReversoSeActivaElModoCodigoYDuraMasQueLaPista() {
-        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesMemoria = 2, framesModoCodigo = 5)
-        assertFalse(planificador.modoCodigo)
-        assertTrue(planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false))
-        assertTrue(planificador.modoCodigo)
-        // La persona acerca el código: el texto ya no se lee y la pista se
-        // agota en 2 frames, pero el modo sigue.
-        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
-        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
-        val planes = (1..5).map { planificador.planCodigo() }
-        assertTrue(planes.all { it.leer && it.modoCodigo })
-    }
-
-    @Test
-    fun elModoCodigoSeVenceAlAgotarseSusFrames() {
-        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesMemoria = 1, framesModoCodigo = 3)
-        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
-        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
-        repeat(3) { assertTrue(planificador.planCodigo().modoCodigo) }
-        assertFalse(planificador.modoCodigo)
-        val despues = planificador.planCodigo()
-        assertFalse(despues.leer)
-        assertFalse(despues.modoCodigo)
-    }
-
-    @Test
-    fun activarElModoCodigoNoLoRenuevaMientrasDura() {
-        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesModoCodigo = 4)
-        assertTrue(planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false))
-        planificador.planCodigo()
-        planificador.planCodigo()
-        // Ver otra vez el reverso no reinicia el modo ni cuenta otra activación.
-        assertFalse(planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false))
-        planificador.planCodigo()
-        planificador.planCodigo()
-        assertFalse(planificador.modoCodigo)
-    }
-
-    @Test
-    fun unMrzTerminaElModoCodigo() {
-        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 1, framesModoCodigo = 50)
-        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
-        assertTrue(planificador.modoCodigo)
-        // Aparece un MRZ (la cédula nueva no trae PDF417): fin del modo y
-        // no se busca código.
-        assertFalse(planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = true))
-        assertFalse(planificador.modoCodigo)
-        assertTrue((1..5).none { planificador.planCodigo().leer })
-    }
-
-    @Test
-    fun confirmarUnDocumentoTerminaElModoCodigo() {
-        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 100, framesMemoria = 1, framesModoCodigo = 50)
-        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false)
-        planificador.registrarTexto(pareceReversoConCodigo = false, hayMrz = false)
-        assertTrue(planificador.modoCodigo)
-        planificador.terminarModoCodigo()
-        assertFalse(planificador.modoCodigo)
-        assertFalse(planificador.planCodigo().modoCodigo)
-    }
-
-    @Test
-    fun sinPdf417HabilitadoNuncaSeActivaElModoCodigo() {
-        val planificador = PlanificadorLectores(habilitado = false, framesModoCodigo = 50)
-        assertFalse(planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = false))
-        assertFalse(planificador.modoCodigo)
-        assertFalse(planificador.planCodigo().leer)
-    }
-
-    @Test
-    fun todoLoVisibleAbarcaLaImagenEntera() {
-        val r = TodoLoVisibleRecorte.rectanguloEnPixeles(1080, 1920)
-        assertEquals(RectanguloEntero(0, 0, 1080, 1920), r)
-        // Con rotación, el recorte en el sensor cubre todo el `cropRect` (a pares).
-        val sensor = rectanguloEnSensor(RectanguloEntero(0, 0, 1920, 1080), 90, TodoLoVisibleRecorte)
-        assertEquals(RectanguloEntero(0, 0, 1920, 1080), sensor)
-    }
-
-    @Test
-    fun lasMetricasDelModoCodigoSeSeparanDelRecorteNormal() {
-        val metricas = MetricasOcr(habilitadas = true, cadaCuantosFrames = 100)
-        metricas.registrarActivacionModoCodigo()
-        metricas.registrarFrame(conCodigo = true, nanosRecorte = 1, nanosReconocimiento = 1)
-        metricas.registrarFrame(conCodigo = true, nanosRecorte = 1, nanosReconocimiento = 1, enModoCodigo = true)
-        metricas.registrarFrame(conCodigo = true, nanosRecorte = 1, nanosReconocimiento = 1, enModoCodigo = true)
-        metricas.registrarBusquedaCodigo(DiagnosticoCodigos(0, 0, emptyList(), emptyList(), emptyList(), anchoImagenPx = 944))
-        metricas.registrarBusquedaCodigo(
-            DiagnosticoCodigos(0, 0, emptyList(), emptyList(), emptyList(), anchoImagenPx = 1080, enModoCodigo = true),
-        )
-        metricas.registrarBusquedaCodigo(
-            DiagnosticoCodigos(0, 0, emptyList(), emptyList(), emptyList(), anchoImagenPx = 1920, enModoCodigo = true),
-        )
-        val datos = metricas.datos()
-        assertEquals(2, datos["modo_codigo_frames"])
-        assertEquals(1, datos["modo_codigo_activaciones"])
-        assertEquals(1500f, datos["modo_codigo_imagen_ancho_px_mediana"])
-        // El ancho del recorte normal no se mezcla con el del modo.
-        assertEquals(944f, datos["imagen_ancho_px_mediana_con_codigo"])
-    }
-
-    @Test
-    fun conMrzEnCuadroNoSeBuscaPdf417() {
-        val planificador = PlanificadorLectores(habilitado = true, periodoSinPista = 1)
-        planificador.registrarTexto(pareceReversoConCodigo = true, hayMrz = true)
-        assertTrue((1..6).none { planificador.leerCodigo() })
-    }
-
     // --- Métricas (sin datos personales) ---
 
     @Test
@@ -257,9 +88,9 @@ class LecturaFrameTest {
         var ahora = 0L
         val registros = mutableListOf<String>()
         val metricas = MetricasOcr(habilitadas = true, reloj = { ahora }, registrar = { registros += it }, cadaCuantosFrames = 100)
-        metricas.registrarFrame(conCodigo = false, nanosRecorte = 2_000_000, nanosReconocimiento = 80_000_000)
+        metricas.registrarFrame(nanosRecorte = 2_000_000, nanosReconocimiento = 80_000_000)
         ahora = 500_000_000
-        metricas.registrarFrame(conCodigo = true, nanosRecorte = 4_000_000, nanosReconocimiento = 120_000_000)
+        metricas.registrarFrame(nanosRecorte = 4_000_000, nanosReconocimiento = 120_000_000)
         metricas.registrarDescarte()
         ahora = 1_500_000_000
         metricas.registrarConfirmacion()
@@ -269,16 +100,15 @@ class LecturaFrameTest {
         assertTrue(registros[0], "reconocimiento_mediana_ms=100.0" in registros[0])
         // 2 frames terminados en 0,5 s: 1 intervalo -> 2 fps.
         assertTrue(registros[0], "fps=2.0" in registros[0])
-        assertTrue(registros[0], "con_codigo=1" in registros[0])
     }
 
     @Test
     fun losDatosEstructuradosRepitenElResumen() {
         var ahora = 0L
         val metricas = MetricasOcr(habilitadas = true, reloj = { ahora }, cadaCuantosFrames = 100)
-        metricas.registrarFrame(conCodigo = false, nanosRecorte = 2_000_000, nanosReconocimiento = 80_000_000)
+        metricas.registrarFrame(nanosRecorte = 2_000_000, nanosReconocimiento = 80_000_000)
         ahora = 500_000_000
-        metricas.registrarFrame(conCodigo = true, nanosRecorte = 4_000_000, nanosReconocimiento = 120_000_000)
+        metricas.registrarFrame(nanosRecorte = 4_000_000, nanosReconocimiento = 120_000_000)
         metricas.registrarFallo()
         assertNull(metricas.datos()["ms_hasta_confirmar"])
         ahora = 1_500_000_000
@@ -286,7 +116,6 @@ class LecturaFrameTest {
         val datos = metricas.datos()
         assertEquals(1500L, datos["ms_hasta_confirmar"])
         assertEquals(2, datos["frames"])
-        assertEquals(1, datos["frames_con_codigo"])
         assertEquals(1, datos["fallos"])
         assertEquals(100f, datos["reconocimiento_mediana_ms"])
     }
@@ -295,37 +124,9 @@ class LecturaFrameTest {
     fun metricasDeshabilitadasNoRegistranNada() {
         val registros = mutableListOf<String>()
         val metricas = MetricasOcr(habilitadas = false, registrar = { registros += it }, cadaCuantosFrames = 1)
-        metricas.registrarFrame(conCodigo = false, nanosRecorte = 1, nanosReconocimiento = 1)
+        metricas.registrarFrame(nanosRecorte = 1, nanosReconocimiento = 1)
         metricas.registrarConfirmacion()
         assertTrue(registros.isEmpty())
-    }
-
-    @Test
-    fun elDiagnosticoDelPdf417CuentaDondeSePierdeLaLectura() {
-        val metricas = MetricasOcr(habilitadas = true, cadaCuantosFrames = 100)
-        // Frame sin códigos (lo esperable con poca resolución).
-        metricas.registrarBusquedaCodigo(DiagnosticoCodigos(0, 0, emptyList(), emptyList(), emptyList(), anchoImagenPx = 900))
-        // Frame con un código sin bytes y otro rechazado por el núcleo.
-        metricas.registrarBusquedaCodigo(
-            DiagnosticoCodigos(2, 1, listOf(MotivoPdf417.CEDULA_INVALIDA), listOf(512), listOf(410, 420), anchoImagenPx = 1100),
-        )
-        metricas.registrarErrorLectorCodigo()
-        val datos = metricas.datos()
-        assertEquals(1, datos["pdf417_frames_con_codigo_detectado"])
-        assertEquals(2, datos["pdf417_codigos_detectados"])
-        assertEquals(1, datos["pdf417_sin_bytes"])
-        assertEquals(1, datos["pdf417_errores_lector"])
-        assertEquals(mapOf("CEDULA_INVALIDA" to 1), datos["pdf417_motivos"])
-        assertEquals(512f, datos["pdf417_bytes_max"])
-        assertEquals(415f, datos["pdf417_ancho_codigo_px_mediana"])
-        assertEquals(1000f, datos["imagen_ancho_px_mediana_con_codigo"])
-    }
-
-    @Test
-    fun unPdf417CortoSeRechazaConMotivoYSeBorra() {
-        val crudo = ByteArray(10) { 7 }
-        assertEquals(MotivoPdf417.PREFIJO_CORTO, leerPdf417ConMotivo(crudo).motivo)
-        assertTrue(crudo.all { it == 0.toByte() })
     }
 
     @Test
