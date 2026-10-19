@@ -5,6 +5,7 @@ import android.app.Activity
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -380,50 +381,73 @@ fun PantallaPrincipal(
             )
         }
 
-        if (mostrarNuevoContratista) {
-            PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
-        } else {
-            var pestana by remember { mutableIntStateOf(0) }
-            val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
-            // "Historial" se sacó de acá por espacio (pestañas apiñadas,
-            // 2026-09-17); su pantalla/ViewModel/wrappers Rust se eliminaron
-            // del todo el 2026-09-21 al confirmar que no había ningún otro
-            // punto de entrada que lo usara.
-            // Cada sección con su acento (ver `AcentoSeccion.kt`): las pestañas y
-            // el contenido comparten el color de la sección activa.
-            TemaSeccion(seccion) {
-                FilaPildoras(
-                    // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
-                    // usuario (2026-09-19) para descomprimir la fila de
-                    // pestañas, ya apiñada (ver comentario arriba).
-                    //
-                    // "Rutas" oculta de la fila (pedido del usuario 2026-09-23:
-                    // control de rutas sin terminar, que no se vea a medias en
-                    // una demostración). `PantallaRutas` sigue intacta; para
-                    // volver a mostrarla basta con sacarla de
-                    // `enDesarrollo` en `SeccionPrincipal`.
-                    opciones = SECCIONES_VISIBLES.map { it.etiqueta },
-                    seleccionado = pestana,
-                    onSeleccionar = { pestana = it },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
-            // `Box`, no `Column` -- un `Column` sin peso mide a sus hijos con
-            // altura MÁXIMA infinita (así reserva espacio a los que sí tienen
-            // `weight`), y un `LazyColumn` (como el de `PantallaActivos`)
-            // revienta con `IllegalStateException` si lo miden así. `Box` en
-            // cambio le pasa a su único hijo las restricciones ya acotadas
-            // que le tocaron acá (el resto de la pantalla, vía `weight(1f)`).
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                // `when` exhaustivo sobre el enum: agregar una sección sin
-                // su pantalla no compila (antes eran textos y un `else`
-                // que caía en Activos en silencio ante un error de tipeo).
-                TemaSeccion(seccion) {
-                    when (seccion) {
-                        SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, refrescarNube)
-                        SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
-                        SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
-                        SeccionPrincipal.EXTERNOS -> PantallaExternos(nucleo, refrescarNube)
+        // Abrir "Nuevo contratista" sube la pantalla encima de las pestañas; al
+        // volver, las pestañas reaparecen (ver `TransicionesPantalla.kt`).
+        AnimatedContent(
+            targetState = mostrarNuevoContratista,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            transitionSpec = { transicionDePantalla(avanza = targetState) },
+            label = "nuevoContratista",
+        ) { nuevoContratista ->
+            if (nuevoContratista) {
+                PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    var pestana by remember { mutableIntStateOf(0) }
+                    val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
+                    // "Historial" se sacó de acá por espacio (pestañas apiñadas,
+                    // 2026-09-17); su pantalla/ViewModel/wrappers Rust se eliminaron
+                    // del todo el 2026-09-21 al confirmar que no había ningún otro
+                    // punto de entrada que lo usara.
+                    // Cada sección con su acento (ver `AcentoSeccion.kt`): las pestañas y
+                    // el contenido comparten el color de la sección activa.
+                    TemaSeccion(seccion) {
+                        FilaPildoras(
+                            // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
+                            // usuario (2026-09-19) para descomprimir la fila de
+                            // pestañas, ya apiñada (ver comentario arriba).
+                            //
+                            // "Rutas" oculta de la fila (pedido del usuario 2026-09-23:
+                            // control de rutas sin terminar, que no se vea a medias en
+                            // una demostración). `PantallaRutas` sigue intacta; para
+                            // volver a mostrarla basta con sacarla de
+                            // `enDesarrollo` en `SeccionPrincipal`.
+                            opciones = SECCIONES_VISIBLES.map { it.etiqueta },
+                            seleccionado = pestana,
+                            onSeleccionar = { pestana = it },
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
+                    // `AnimatedContent` (que por dentro es un `Box`) y no un `Column`
+                    // -- un `Column` sin peso mide a sus hijos con altura MÁXIMA
+                    // infinita (así reserva espacio a los que sí tienen `weight`), y un
+                    // `LazyColumn` (como el de `PantallaActivos`) revienta con
+                    // `IllegalStateException` si lo miden así. Esto en cambio le pasa a
+                    // sus hijos las restricciones ya acotadas que le tocaron acá (el
+                    // resto de la pantalla, vía `weight(1f)`). Desliza y funde entre
+                    // pestañas (ver `TransicionesPantalla.kt`).
+                    AnimatedContent(
+                        targetState = seccion,
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        transitionSpec = {
+                            transicionDePestana(SECCIONES_VISIBLES.indexOf(initialState), SECCIONES_VISIBLES.indexOf(targetState))
+                        },
+                        label = "seccion",
+                    ) { seccionMostrada ->
+                        // `when` exhaustivo sobre el enum: agregar una sección sin
+                        // su pantalla no compila (antes eran textos y un `else`
+                        // que caía en Activos en silencio ante un error de tipeo).
+                        // Con `seccionMostrada` y no `seccion`: durante la
+                        // transición la pantalla que se va sigue con su propio
+                        // acento y no salta al de la nueva.
+                        TemaSeccion(seccionMostrada) {
+                            when (seccionMostrada) {
+                                SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, refrescarNube)
+                                SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
+                                SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
+                                SeccionPrincipal.EXTERNOS -> PantallaExternos(nucleo, refrescarNube)
+                            }
+                        }
                     }
                 }
             }
