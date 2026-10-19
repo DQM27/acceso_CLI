@@ -725,6 +725,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_aviso_de_mensaje(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_cuerpo_registro_accion_aviso(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_es_carnet_kof(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_extraer_carnet_kof(
@@ -913,7 +915,15 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_verificar_visita(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_acciones_pendientes(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_agregar(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_archivar(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_borrar(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_confirmar_acciones(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_estado(
     ): Int
@@ -1124,7 +1134,15 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_constructor_bandejaavisos_desde_guardado(`guardado`: RustBuffer.ByValue,`ahoraMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_acciones_pendientes(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_agregar(`ptr`: Long,`aviso`: RustBuffer.ByValue,`recibidoEnMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_archivar(`ptr`: Long,`id`: RustBuffer.ByValue,`usuario`: RustBuffer.ByValue,`ahoraMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_borrar(`ptr`: Long,`id`: RustBuffer.ByValue,`usuario`: RustBuffer.ByValue,`ahoraMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_confirmar_acciones(`ptr`: Long,`enviadas`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_estado(`ptr`: Long,`ahoraMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1179,6 +1197,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_func_evaluar_manifiesto_actualizacion(`json`: RustBuffer.ByValue,`urlManifiesto`: RustBuffer.ByValue,`versionCodeInstalada`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_aviso_de_mensaje(`datos`: RustBuffer.ByValue,`tituloNotificacion`: RustBuffer.ByValue,`cuerpoNotificacion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_cuerpo_registro_accion_aviso(`accion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_es_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
@@ -1359,6 +1379,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_aviso_de_mensaje() and 0xFFFF) != 43224) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_cuerpo_registro_accion_aviso() and 0xFFFF) != 45442) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_es_carnet_kof() and 0xFFFF) != 540) {
@@ -1643,7 +1666,19 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_verificar_visita() and 0xFFFF) != 2750) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_acciones_pendientes() and 0xFFFF) != 35852) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_agregar() and 0xFFFF) != 6935) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_archivar() and 0xFFFF) != 9004) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_borrar() and 0xFFFF) != 21991) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_confirmar_acciones() and 0xFFFF) != 46355) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_estado() and 0xFFFF) != 26997) {
@@ -2732,12 +2767,38 @@ public object FfiConverterTypeAlmacenClaveDispositivo: FfiConverter<AlmacenClave
 public interface BandejaAvisosInterface {
     
     /**
+     * Lo que falta contarle al servidor, en el orden en que pasó.
+     */
+    fun `accionesPendientes`(): List<AccionAviso>
+    
+    /**
      * Agrega un aviso recién llegado. Sin hora de envío usa la de llegada.
      * FCM puede entregar el mismo mensaje dos veces: si el `id` ya está no
      * se agrega de nuevo (y no se pierde si ya se había leído). `true` si
      * la bandeja cambió y hay que guardarla.
      */
     fun `agregar`(`aviso`: AvisoPush, `recibidoEnMs`: kotlin.Long): kotlin.Boolean
+    
+    /**
+     * Saca el aviso de la bandeja principal y lo pasa a "Archivados"
+     * (también lo da por leído). `usuario` es quien tiene la sesión abierta.
+     * `false` si no existe, ya estaba archivado, o es una emergencia sin
+     * leer.
+     */
+    fun `archivar`(`id`: kotlin.String, `usuario`: kotlin.String, `ahoraMs`: kotlin.Long): kotlin.Boolean
+    
+    /**
+     * Quita el aviso de la bandeja (esté archivado o no). Para el servidor
+     * queda anotado quién lo borró. `false` si no existe o es una
+     * emergencia sin leer.
+     */
+    fun `borrar`(`id`: kotlin.String, `usuario`: kotlin.String, `ahoraMs`: kotlin.Long): kotlin.Boolean
+    
+    /**
+     * El servidor ya recibió estas acciones: dejan de estar pendientes.
+     * `true` si cambió algo.
+     */
+    fun `confirmarAcciones`(`enviadas`: List<AccionAviso>): kotlin.Boolean
     
     /**
      * El estado para dibujar a la hora `ahora_ms`: los grupos por día y el
@@ -2872,6 +2933,22 @@ open class BandejaAvisos: Disposable, AutoCloseable, BandejaAvisosInterface
 
     
     /**
+     * Lo que falta contarle al servidor, en el orden en que pasó.
+     */override fun `accionesPendientes`(): List<AccionAviso> {
+            return FfiConverterSequenceTypeAccionAviso.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_bandejaavisos_acciones_pendientes(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Agrega un aviso recién llegado. Sin hora de envío usa la de llegada.
      * FCM puede entregar el mismo mensaje dos veces: si el `id` ya está no
      * se agrega de nuevo (y no se pierde si ya se había leído). `true` si
@@ -2885,6 +2962,67 @@ open class BandejaAvisos: Disposable, AutoCloseable, BandejaAvisosInterface
         
         FfiConverterTypeAvisoPush.lower(`aviso`),
         FfiConverterLong.lower(`recibidoEnMs`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Saca el aviso de la bandeja principal y lo pasa a "Archivados"
+     * (también lo da por leído). `usuario` es quien tiene la sesión abierta.
+     * `false` si no existe, ya estaba archivado, o es una emergencia sin
+     * leer.
+     */override fun `archivar`(`id`: kotlin.String, `usuario`: kotlin.String, `ahoraMs`: kotlin.Long): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_bandejaavisos_archivar(
+        it,
+        
+        FfiConverterString.lower(`id`),
+        FfiConverterString.lower(`usuario`),
+        FfiConverterLong.lower(`ahoraMs`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Quita el aviso de la bandeja (esté archivado o no). Para el servidor
+     * queda anotado quién lo borró. `false` si no existe o es una
+     * emergencia sin leer.
+     */override fun `borrar`(`id`: kotlin.String, `usuario`: kotlin.String, `ahoraMs`: kotlin.Long): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_bandejaavisos_borrar(
+        it,
+        
+        FfiConverterString.lower(`id`),
+        FfiConverterString.lower(`usuario`),
+        FfiConverterLong.lower(`ahoraMs`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * El servidor ya recibió estas acciones: dejan de estar pendientes.
+     * `true` si cambió algo.
+     */override fun `confirmarAcciones`(`enviadas`: List<AccionAviso>): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_bandejaavisos_confirmar_acciones(
+        it,
+        
+        FfiConverterSequenceTypeAccionAviso.lower(`enviadas`),_status)
 }
     }
     )
@@ -5886,6 +6024,63 @@ public object FfiConverterTypeVotadorPorPosicion: FfiConverter<VotadorPorPosicio
 
 
 /**
+ * Algo que la persona hizo con un aviso y que falta contarle al servidor,
+ * para que el panel muestre quién lo archivó o lo borró. Queda pendiente en
+ * el teléfono hasta que [`BandejaAvisos::confirmar_acciones`] lo da por
+ * enviado: sin red, se reintenta en la próxima oportunidad.
+ */
+data class AccionAviso (
+    var `avisoId`: kotlin.String
+    , 
+    var `accion`: TipoAccionAviso
+    , 
+    /**
+     * Nombre de quien tenía la sesión abierta en el teléfono.
+     */
+    var `usuario`: kotlin.String
+    , 
+    var `ocurrioEnMs`: kotlin.Long
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAccionAviso: FfiConverterRustBuffer<AccionAviso> {
+    override fun read(buf: ByteBuffer): AccionAviso {
+        return AccionAviso(
+            FfiConverterString.read(buf),
+            FfiConverterTypeTipoAccionAviso.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: AccionAviso) = (
+            FfiConverterString.allocationSize(value.`avisoId`) +
+            FfiConverterTypeTipoAccionAviso.allocationSize(value.`accion`) +
+            FfiConverterString.allocationSize(value.`usuario`) +
+            FfiConverterLong.allocationSize(value.`ocurrioEnMs`)
+    )
+
+    override fun write(value: AccionAviso, buf: ByteBuffer) {
+            FfiConverterString.write(value.`avisoId`, buf)
+            FfiConverterTypeTipoAccionAviso.write(value.`accion`, buf)
+            FfiConverterString.write(value.`usuario`, buf)
+            FfiConverterLong.write(value.`ocurrioEnMs`, buf)
+    }
+}
+
+
+
+/**
  * Un aviso de la bandeja, listo para dibujar.
  */
 data class AvisoBandeja (
@@ -6907,9 +7102,15 @@ public object FfiConverterTypeEncargadoRuta: FfiConverterRustBuffer<EncargadoRut
  */
 data class EstadoBandeja (
     /**
-     * Hoy / Ayer / Anteriores, sin grupos vacíos.
+     * Hoy / Ayer / Anteriores, sin grupos vacíos. Sin los archivados.
      */
     var `grupos`: List<GrupoAvisos>
+    , 
+    /**
+     * Los que la persona archivó, el más nuevo primero. No cuentan en la
+     * campanita.
+     */
+    var `archivados`: List<AvisoBandeja>
     , 
     var `noLeidos`: kotlin.UInt
     , 
@@ -6941,6 +7142,7 @@ public object FfiConverterTypeEstadoBandeja: FfiConverterRustBuffer<EstadoBandej
     override fun read(buf: ByteBuffer): EstadoBandeja {
         return EstadoBandeja(
             FfiConverterSequenceTypeGrupoAvisos.read(buf),
+            FfiConverterSequenceTypeAvisoBandeja.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalTypeAvisoBandeja.read(buf),
@@ -6949,6 +7151,7 @@ public object FfiConverterTypeEstadoBandeja: FfiConverterRustBuffer<EstadoBandej
 
     override fun allocationSize(value: EstadoBandeja) = (
             FfiConverterSequenceTypeGrupoAvisos.allocationSize(value.`grupos`) +
+            FfiConverterSequenceTypeAvisoBandeja.allocationSize(value.`archivados`) +
             FfiConverterUInt.allocationSize(value.`noLeidos`) +
             FfiConverterOptionalString.allocationSize(value.`contador`) +
             FfiConverterOptionalTypeAvisoBandeja.allocationSize(value.`emergenciaSinLeer`)
@@ -6956,6 +7159,7 @@ public object FfiConverterTypeEstadoBandeja: FfiConverterRustBuffer<EstadoBandej
 
     override fun write(value: EstadoBandeja, buf: ByteBuffer) {
             FfiConverterSequenceTypeGrupoAvisos.write(value.`grupos`, buf)
+            FfiConverterSequenceTypeAvisoBandeja.write(value.`archivados`, buf)
             FfiConverterUInt.write(value.`noLeidos`, buf)
             FfiConverterOptionalString.write(value.`contador`, buf)
             FfiConverterOptionalTypeAvisoBandeja.write(value.`emergenciaSinLeer`, buf)
@@ -10387,6 +10591,44 @@ public object FfiConverterTypeRolUsuario: FfiConverterRustBuffer<RolUsuario> {
 
 
 /**
+ * Lo que la persona hizo con un aviso. Se escribe tal cual en
+ * `avisos_acciones.accion` (ver la migración `avisos_acciones`).
+ */
+
+enum class TipoAccionAviso {
+    
+    ARCHIVADO,
+    BORRADO;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTipoAccionAviso: FfiConverterRustBuffer<TipoAccionAviso> {
+    override fun read(buf: ByteBuffer) = try {
+        TipoAccionAviso.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: TipoAccionAviso) = 4UL
+
+    override fun write(value: TipoAccionAviso, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+/**
  * Tipos de documento que el lector sabe clasificar. `Desconocido` es el
  * resultado cuando el texto no calza ninguna señal conocida: la pantalla
  * de escaneo sigue buscando, no es un error.
@@ -11380,6 +11622,34 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeAccionAviso: FfiConverterRustBuffer<List<AccionAviso>> {
+    override fun read(buf: ByteBuffer): List<AccionAviso> {
+        val len = buf.getInt()
+        return List<AccionAviso>(len) {
+            FfiConverterTypeAccionAviso.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<AccionAviso>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeAccionAviso.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<AccionAviso>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeAccionAviso.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeAvisoBandeja: FfiConverterRustBuffer<List<AvisoBandeja>> {
     override fun read(buf: ByteBuffer): List<AvisoBandeja> {
         val len = buf.getInt()
@@ -12128,6 +12398,21 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
         FfiConverterMapStringString.lower(`datos`),
         FfiConverterOptionalString.lower(`tituloNotificacion`),
         FfiConverterOptionalString.lower(`cuerpoNotificacion`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Cuerpo JSON de `registrar_accion_aviso` (`PostgREST` RPC): lo arma el
+         * núcleo para que Kotlin no escriba JSON a mano.
+         */ fun `cuerpoRegistroAccionAviso`(`accion`: AccionAviso): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_cuerpo_registro_accion_aviso(
+    
+        
+        FfiConverterTypeAccionAviso.lower(`accion`),_status)
 }
     )
     }

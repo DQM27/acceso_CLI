@@ -573,10 +573,22 @@ Rama `feat/reglas-compartidas`. Contexto completo en
   4. Publicar la app móvil: la bandeja funciona sin lo anterior, pero con la
      función vieja los avisos llegan sin `id` ni hora de envío (se les
      inventa un id local y se usa la hora de llegada).
-- **Verificación:** `supabase/tests/avisos_enviados.sql` (se revierte sola);
-  `deno test` en `supabase/functions` (`admin-enviar-push/envio.test.ts`).
-- **Deshacer:** `drop table public.avisos_enviados;` y volver a desplegar la
-  versión anterior de `admin-enviar-push`.
+- **Archivar y borrar en el celular:** segunda migración,
+  `20261018160000_avisos_acciones.sql`: tabla `avisos_acciones` (quién
+  archivó o borró cada aviso, desde qué celular y cuándo) y la función
+  `registrar_accion_aviso`, que la app llama con el JWT del equipo. Va en el
+  mismo PR y se aplica sola después de la primera. Si la app archiva o borra
+  antes de que exista la función, recibe 404 y la acción queda pendiente en
+  el teléfono (hasta 200) para reintentarla; igual conviene aplicar esta
+  migración **antes** de publicar la app.
+- **Verificación:** `supabase/tests/avisos_enviados.sql` y
+  `supabase/tests/avisos_acciones.sql` (se revierten solas); `deno check`,
+  `deno lint` y `deno test` en `supabase/functions`
+  (`admin-enviar-push/envio.test.ts`).
+- **Deshacer:** `drop table public.avisos_acciones;`,
+  `drop function public.registrar_accion_aviso(uuid, text, text, timestamptz);`,
+  `drop table public.avisos_enviados;` y volver a desplegar la versión
+  anterior de `admin-enviar-push`.
 
 ## 3. Cambios de la base local de los equipos (SQLite)
 

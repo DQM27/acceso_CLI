@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import uniffi.control_acceso_mobile.AccionAviso
 import uniffi.control_acceso_mobile.AvisoPush
 import uniffi.control_acceso_mobile.BandejaAvisos
 import uniffi.control_acceso_mobile.EstadoBandeja
@@ -45,6 +46,20 @@ object AlmacenBandejaAvisos {
     fun leerAviso(context: Context, id: String) = cambiar(context) { it.leer(id) }
 
     fun leerTodos(context: Context) = cambiar(context) { it.leerTodos() }
+
+    /// `usuario`: quien tiene la sesión abierta; queda anotado en el servidor.
+    fun archivar(context: Context, id: String, usuario: String) =
+        cambiar(context) { it.archivar(id, usuario, System.currentTimeMillis()) }
+
+    fun borrar(context: Context, id: String, usuario: String) =
+        cambiar(context) { it.borrar(id, usuario, System.currentTimeMillis()) }
+
+    /// Lo archivado o borrado que falta contarle al servidor.
+    fun accionesPendientes(context: Context): List<AccionAviso> =
+        synchronized(this) { bandeja(context).accionesPendientes() }
+
+    fun confirmarAcciones(context: Context, enviadas: List<AccionAviso>) =
+        cambiar(context) { it.confirmarAcciones(enviadas) }
 
     /// Vuelve a calcular el estado a la hora actual ("hace 5 min", Hoy/Ayer,
     /// lo vencido) aunque no haya cambiado nada.

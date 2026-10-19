@@ -33,8 +33,8 @@ pub use actualizacion::{
 };
 mod avisos;
 pub use avisos::{
-    AvisoBandeja, AvisoPush, BandejaAvisos, EstadoBandeja, GrupoAvisos, GrupoBandeja,
-    aviso_de_mensaje,
+    AccionAviso, AvisoBandeja, AvisoPush, BandejaAvisos, EstadoBandeja, GrupoAvisos, GrupoBandeja,
+    TipoAccionAviso, aviso_de_mensaje, cuerpo_registro_accion_aviso,
 };
 
 uniffi::setup_scaffolding!();

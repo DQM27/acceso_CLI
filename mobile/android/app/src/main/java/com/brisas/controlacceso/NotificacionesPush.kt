@@ -16,14 +16,18 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import uniffi.control_acceso_mobile.AccionAviso
 import uniffi.control_acceso_mobile.AvisoPush
 import uniffi.control_acceso_mobile.Nucleo
+import uniffi.control_acceso_mobile.NucleoException
+import uniffi.control_acceso_mobile.cuerpoRegistroAccionAviso
 
 /// Notificaciones push (Firebase Cloud Messaging): avisos que llegan aunque
 /// la app esté cerrada. La conexión Realtime (NubeRealtime.kt) sólo vive con
@@ -146,9 +150,35 @@ object NotificacionesPush {
     /// no pasa nada: se reintenta la próxima vez.
     suspend fun registrarEnNube(context: Context, nucleo: Nucleo): Boolean = withContext(Dispatchers.IO) {
         val token = tokenGuardado(context) ?: return@withContext false
-        try {
+        llamarRpc(nucleo, "registrar_token_push", cuerpoRegistroTokenPush(token)) in 200..299
+    }
+
+    /// Cuenta al servidor qué se archivó o se borró en la bandeja
+    /// (`registrar_accion_aviso`, migración avisos_acciones) para que el panel
+    /// muestre quién fue. Devuelve las acciones que ya no hay que reintentar:
+    /// las que el servidor recibió y las que rechazó por no tener arreglo
+    /// (400, 409). Sin red, o con la sesión de la nube caída, no se da
+    /// ninguna por enviada y quedan pendientes en el núcleo.
+    suspend fun enviarAcciones(nucleo: Nucleo, acciones: List<AccionAviso>): List<AccionAviso> =
+        withContext(Dispatchers.IO) {
+            acciones.filter { accion ->
+                val codigo = llamarRpc(nucleo, "registrar_accion_aviso", cuerpoRegistroAccionAviso(accion))
+                codigo != null && (codigo in 200..299 || codigo in CODIGOS_SIN_ARREGLO)
+            }
+        }
+
+    /// 400: el servidor rechazó los datos y reenviar no cambia nada. Un 404 NO
+    /// va acá: significa que la función todavía no existe en ese servidor, y
+    /// la constancia se manda cuando exista.
+    private val CODIGOS_SIN_ARREGLO = setOf(400, 409)
+
+    /// POST a una función RPC de Supabase con el JWT del equipo (el mismo que
+    /// usa Realtime). Devuelve el código HTTP, o `null` si no hubo red o no
+    /// hay sesión de la nube.
+    private fun llamarRpc(nucleo: Nucleo, funcion: String, cuerpo: String): Int? {
+        return try {
             val sesion = nucleo.sesionRealtimeNube()
-            val conexion = URL(urlRegistroTokenPush(sesion.baseUrl)).openConnection() as HttpURLConnection
+            val conexion = URL(urlRpc(sesion.baseUrl, funcion)).openConnection() as HttpURLConnection
             try {
                 conexion.requestMethod = "POST"
                 conexion.connectTimeout = 15_000
@@ -157,18 +187,21 @@ object NotificacionesPush {
                 conexion.setRequestProperty("apikey", sesion.apikey)
                 conexion.setRequestProperty("Authorization", "Bearer ${sesion.accessToken}")
                 conexion.setRequestProperty("Content-Type", "application/json")
-                conexion.outputStream.use { it.write(cuerpoRegistroTokenPush(token).toByteArray()) }
+                conexion.outputStream.use { it.write(cuerpo.toByteArray()) }
                 val codigo = conexion.responseCode
                 if (codigo !in 200..299) {
-                    Log.w(ETIQUETA_LOG, "registrar_token_push respondió $codigo")
+                    Log.w(ETIQUETA_LOG, "$funcion respondió $codigo")
                 }
-                codigo in 200..299
+                codigo
             } finally {
                 conexion.disconnect()
             }
-        } catch (e: Exception) {
-            Log.w(ETIQUETA_LOG, "No se pudo registrar el token push", e)
-            false
+        } catch (e: IOException) {
+            Log.w(ETIQUETA_LOG, "No se pudo llamar a $funcion", e)
+            null
+        } catch (e: NucleoException) {
+            Log.w(ETIQUETA_LOG, "Sin sesión de la nube para llamar a $funcion", e)
+            null
         }
     }
 }

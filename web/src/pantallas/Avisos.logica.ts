@@ -102,6 +102,16 @@ export function textoDestino(
   return partes.join(", ");
 }
 
+/** "Borrado por ANA PÉREZ en Celular A1 (18/10/2026 14:32)". `momento` ya
+ * viene escrito en la hora del navegador. */
+export function textoAccion(
+  accion: { accion: "archivado" | "borrado"; usuario: string; dispositivo_etiqueta: string },
+  momento: string,
+): string {
+  const que = accion.accion === "borrado" ? "Borrado" : "Archivado";
+  return `${que} por ${accion.usuario} en ${accion.dispositivo_etiqueta} (${momento})`;
+}
+
 /** "Llegó a 3 de 3" / "No llegó a ninguno (0 de 2)" / "Sin destinatarios". */
 export function textoEntrega(aviso: { destinatarios: number; enviados: number }): string {
   if (aviso.destinatarios === 0) return "Sin destinatarios";

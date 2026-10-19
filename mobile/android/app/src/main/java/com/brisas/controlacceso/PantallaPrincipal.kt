@@ -130,7 +130,7 @@ fun PantallaPrincipal(
     }
     // Bandeja de avisos (campanita): el estado lo decide el núcleo y lo
     // publica AvisosViewModel; se actualiza solo cuando llega un push.
-    val avisosViewModel: AvisosViewModel = viewModel(factory = AvisosViewModel.factory(contexto))
+    val avisosViewModel: AvisosViewModel = viewModel(factory = AvisosViewModel.factory(contexto, nucleo))
     val bandeja by avisosViewModel.estado.collectAsState()
     // Tocaron la notificación de un aviso (MainActivity): abrir la bandeja.
     val aperturaAvisos by avisosViewModel.aperturaSolicitada.collectAsState()
@@ -437,6 +437,8 @@ fun PantallaPrincipal(
                 estado = bandeja,
                 onLeer = avisosViewModel::leer,
                 onLeerTodos = avisosViewModel::leerTodos,
+                onArchivar = { id -> avisosViewModel.archivar(id, sesion.nombre) },
+                onBorrar = { id -> avisosViewModel.borrar(id, sesion.nombre) },
                 onVolver = { mostrarAvisos = false },
             )
         } else if (mostrarNuevoContratista) {

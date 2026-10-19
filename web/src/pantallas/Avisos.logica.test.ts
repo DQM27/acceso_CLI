@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   contarDestinatarios,
   destinoDeSeleccion,
+  textoAccion,
   textoAlcance,
   textoDestino,
   textoEntrega,
@@ -92,6 +93,18 @@ describe("textos", () => {
     expect(textoEntrega({ destinatarios: 3, enviados: 3 })).toBe("Llegó a 3 de 3");
     expect(textoEntrega({ destinatarios: 2, enviados: 0 })).toBe("No llegó a ninguno (0 de 2)");
     expect(textoEntrega({ destinatarios: 0, enviados: 0 })).toBe("Sin destinatarios");
+  });
+});
+
+describe("textoAccion", () => {
+  it("quién lo archivó o borró, desde qué celular y cuándo", () => {
+    const base = { usuario: "ANA PÉREZ", dispositivo_etiqueta: "Celular A1" };
+    expect(textoAccion({ ...base, accion: "borrado" }, "18/10/2026 14:32")).toBe(
+      "Borrado por ANA PÉREZ en Celular A1 (18/10/2026 14:32)",
+    );
+    expect(textoAccion({ ...base, accion: "archivado" }, "18/10/2026 14:30")).toBe(
+      "Archivado por ANA PÉREZ en Celular A1 (18/10/2026 14:30)",
+    );
   });
 });
 

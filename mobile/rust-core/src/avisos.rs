@@ -109,8 +109,11 @@ pub struct GrupoAvisos {
 /// Todo lo que la campanita y la pantalla de avisos necesitan.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct EstadoBandeja {
-    /// Hoy / Ayer / Anteriores, sin grupos vacíos.
+    /// Hoy / Ayer / Anteriores, sin grupos vacíos. Sin los archivados.
     pub grupos: Vec<GrupoAvisos>,
+    /// Los que la persona archivó, el más nuevo primero. No cuentan en la
+    /// campanita.
+    pub archivados: Vec<AvisoBandeja>,
     pub no_leidos: u32,
     /// El globito de la campanita: `None` en 0 (un contador siempre prendido
     /// deja de mirarse) y "9+" de 10 en adelante (el botón es chico).
@@ -118,6 +121,50 @@ pub struct EstadoBandeja {
     /// La emergencia sin leer más reciente: mientras exista, la pantalla
     /// principal muestra la franja roja y la campanita cambia de ícono.
     pub emergencia_sin_leer: Option<AvisoBandeja>,
+}
+
+/// Lo que la persona hizo con un aviso. Se escribe tal cual en
+/// `avisos_acciones.accion` (ver la migración `avisos_acciones`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+#[serde(rename_all = "lowercase")]
+pub enum TipoAccionAviso {
+    Archivado,
+    Borrado,
+}
+
+impl TipoAccionAviso {
+    const fn texto(self) -> &'static str {
+        match self {
+            Self::Archivado => "archivado",
+            Self::Borrado => "borrado",
+        }
+    }
+}
+
+/// Algo que la persona hizo con un aviso y que falta contarle al servidor,
+/// para que el panel muestre quién lo archivó o lo borró. Queda pendiente en
+/// el teléfono hasta que [`BandejaAvisos::confirmar_acciones`] lo da por
+/// enviado: sin red, se reintenta en la próxima oportunidad.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+pub struct AccionAviso {
+    pub aviso_id: String,
+    pub accion: TipoAccionAviso,
+    /// Nombre de quien tenía la sesión abierta en el teléfono.
+    pub usuario: String,
+    pub ocurrio_en_ms: i64,
+}
+
+/// Cuerpo JSON de `registrar_accion_aviso` (`PostgREST` RPC): lo arma el
+/// núcleo para que Kotlin no escriba JSON a mano.
+#[uniffi::export]
+pub fn cuerpo_registro_accion_aviso(accion: &AccionAviso) -> String {
+    serde_json::json!({
+        "p_aviso_id": accion.aviso_id,
+        "p_accion": accion.accion.texto(),
+        "p_usuario": accion.usuario,
+        "p_ocurrio_en": instante(accion.ocurrio_en_ms).map(|momento| momento.to_rfc3339()),
+    })
+    .to_string()
 }
 
 /// Lo que se guarda en disco por cada aviso.
@@ -129,6 +176,30 @@ struct AvisoGuardado {
     emergente: bool,
     enviado_en_ms: i64,
     leido: bool,
+    /// `default`: lo guardado antes de que existiera archivar sigue leyéndose.
+    #[serde(default)]
+    archivado: bool,
+}
+
+impl AvisoGuardado {
+    /// Una emergencia sin leer no se archiva ni se borra: primero hay que
+    /// haberla leído.
+    const fn se_puede_quitar(&self) -> bool {
+        !self.emergente || self.leido
+    }
+
+    /// Los de la consola de Firebase no existen en el servidor (`local-…`):
+    /// no hay a qué atar la acción.
+    fn existe_en_servidor(&self) -> bool {
+        !self.id.starts_with(PREFIJO_ID_LOCAL)
+    }
+}
+
+/// Todo lo que vive en la bandeja.
+#[derive(Debug, Default)]
+struct Contenido {
+    avisos: Vec<AvisoGuardado>,
+    acciones: Vec<AccionAviso>,
 }
 
 /// Formato en disco, con versión por si algún día cambia.
@@ -136,8 +207,14 @@ struct AvisoGuardado {
 struct Guardado {
     version: u32,
     avisos: Vec<AvisoGuardado>,
+    /// `default`: lo guardado antes de que existieran las acciones.
+    #[serde(default)]
+    acciones: Vec<AccionAviso>,
 }
 const VERSION_GUARDADO: u32 = 1;
+const PREFIJO_ID_LOCAL: &str = "local-";
+/// Si el servidor no contesta por mucho tiempo, no se acumula sin límite.
+const MAXIMO_ACCIONES_PENDIENTES: usize = 200;
 
 /// Para el `id` de un aviso que no lo trae (prueba desde la consola de
 /// Firebase): sólo tiene que no chocar con otro del mismo proceso.
@@ -148,7 +225,7 @@ static SECUENCIA_LOCAL: AtomicU64 = AtomicU64::new(0);
 /// eso el `Mutex`.
 #[derive(uniffi::Object)]
 pub struct BandejaAvisos {
-    avisos: Mutex<Vec<AvisoGuardado>>,
+    contenido: Mutex<Contenido>,
 }
 
 #[uniffi::export]
@@ -159,13 +236,15 @@ impl BandejaAvisos {
     /// mejor que una app que no abre.
     #[uniffi::constructor]
     pub fn desde_guardado(guardado: Option<String>, ahora_ms: i64) -> Arc<Self> {
-        let avisos = guardado
+        let guardado = guardado
             .and_then(|texto| serde_json::from_str::<Guardado>(&texto).ok())
-            .filter(|guardado| guardado.version == VERSION_GUARDADO)
-            .map(|guardado| guardado.avisos)
-            .unwrap_or_default();
+            .filter(|guardado| guardado.version == VERSION_GUARDADO);
+        let contenido = guardado.map_or_else(Contenido::default, |guardado| Contenido {
+            avisos: depurar(guardado.avisos, ahora_ms),
+            acciones: guardado.acciones,
+        });
         Arc::new(Self {
-            avisos: Mutex::new(depurar(avisos, ahora_ms)),
+            contenido: Mutex::new(contenido),
         })
     }
 
@@ -174,21 +253,21 @@ impl BandejaAvisos {
     /// se agrega de nuevo (y no se pierde si ya se había leído). `true` si
     /// la bandeja cambió y hay que guardarla.
     pub fn agregar(&self, aviso: AvisoPush, recibido_en_ms: i64) -> bool {
-        let mut avisos = self.bloquear();
+        let mut contenido = self.bloquear();
         if aviso
             .id
             .as_ref()
-            .is_some_and(|id| avisos.iter().any(|guardado| &guardado.id == id))
+            .is_some_and(|id| contenido.avisos.iter().any(|guardado| &guardado.id == id))
         {
             return false;
         }
         let id = aviso.id.unwrap_or_else(|| {
             format!(
-                "local-{recibido_en_ms}-{}",
+                "{PREFIJO_ID_LOCAL}{recibido_en_ms}-{}",
                 SECUENCIA_LOCAL.fetch_add(1, Ordering::Relaxed)
             )
         });
-        let mut nuevos = std::mem::take(&mut *avisos);
+        let mut nuevos = std::mem::take(&mut contenido.avisos);
         nuevos.push(AvisoGuardado {
             id,
             titulo: aviso.titulo,
@@ -196,14 +275,16 @@ impl BandejaAvisos {
             emergente: aviso.emergente,
             enviado_en_ms: aviso.enviado_en_ms.unwrap_or(recibido_en_ms),
             leido: false,
+            archivado: false,
         });
-        *avisos = depurar(nuevos, recibido_en_ms);
+        contenido.avisos = depurar(nuevos, recibido_en_ms);
         true
     }
 
     /// `true` si cambió algo (el aviso existía y no estaba leído).
     pub fn leer(&self, id: String) -> bool {
         self.bloquear()
+            .avisos
             .iter_mut()
             .find(|aviso| aviso.id == id && !aviso.leido)
             .map(|aviso| aviso.leido = true)
@@ -213,21 +294,105 @@ impl BandejaAvisos {
     /// `true` si había alguno sin leer.
     pub fn leer_todos(&self) -> bool {
         let mut cambio = false;
-        for aviso in self.bloquear().iter_mut().filter(|aviso| !aviso.leido) {
+        for aviso in self
+            .bloquear()
+            .avisos
+            .iter_mut()
+            .filter(|aviso| !aviso.leido)
+        {
             aviso.leido = true;
             cambio = true;
         }
         cambio
     }
 
+    /// Saca el aviso de la bandeja principal y lo pasa a "Archivados"
+    /// (también lo da por leído). `usuario` es quien tiene la sesión abierta.
+    /// `false` si no existe, ya estaba archivado, o es una emergencia sin
+    /// leer.
+    pub fn archivar(&self, id: String, usuario: String, ahora_ms: i64) -> bool {
+        let mut contenido = self.bloquear();
+        let Some(aviso) = contenido
+            .avisos
+            .iter_mut()
+            .find(|aviso| aviso.id == id && !aviso.archivado && aviso.se_puede_quitar())
+        else {
+            return false;
+        };
+        aviso.archivado = true;
+        aviso.leido = true;
+        let anotar = aviso.existe_en_servidor();
+        if anotar {
+            anotar_accion(
+                &mut contenido,
+                id,
+                TipoAccionAviso::Archivado,
+                usuario,
+                ahora_ms,
+            );
+        }
+        drop(contenido);
+        true
+    }
+
+    /// Quita el aviso de la bandeja (esté archivado o no). Para el servidor
+    /// queda anotado quién lo borró. `false` si no existe o es una
+    /// emergencia sin leer.
+    pub fn borrar(&self, id: String, usuario: String, ahora_ms: i64) -> bool {
+        let mut contenido = self.bloquear();
+        let Some(posicion) = contenido
+            .avisos
+            .iter()
+            .position(|aviso| aviso.id == id && aviso.se_puede_quitar())
+        else {
+            return false;
+        };
+        let quitado = contenido.avisos.remove(posicion);
+        if quitado.existe_en_servidor() {
+            anotar_accion(
+                &mut contenido,
+                id,
+                TipoAccionAviso::Borrado,
+                usuario,
+                ahora_ms,
+            );
+        }
+        drop(contenido);
+        true
+    }
+
+    /// Lo que falta contarle al servidor, en el orden en que pasó.
+    pub fn acciones_pendientes(&self) -> Vec<AccionAviso> {
+        self.bloquear().acciones.clone()
+    }
+
+    /// El servidor ya recibió estas acciones: dejan de estar pendientes.
+    /// `true` si cambió algo.
+    pub fn confirmar_acciones(&self, enviadas: Vec<AccionAviso>) -> bool {
+        let mut contenido = self.bloquear();
+        let antes = contenido.acciones.len();
+        contenido.acciones.retain(|accion| {
+            !enviadas.iter().any(|enviada| {
+                enviada.aviso_id == accion.aviso_id && enviada.accion == accion.accion
+            })
+        });
+        contenido.acciones.len() != antes
+    }
+
     /// El estado para dibujar a la hora `ahora_ms`: los grupos por día y el
     /// texto "hace 5 min" dependen de la hora, por eso no se guardan.
     pub fn estado(&self, ahora_ms: i64) -> EstadoBandeja {
-        let avisos = depurar(self.bloquear().clone(), ahora_ms);
+        let todos = depurar(self.bloquear().avisos.clone(), ahora_ms);
+        let archivados: Vec<AvisoBandeja> = todos
+            .iter()
+            .filter(|aviso| aviso.archivado)
+            .map(|aviso| para_dibujar(aviso, ahora_ms))
+            .collect();
+        let avisos: Vec<&AvisoGuardado> = todos.iter().filter(|aviso| !aviso.archivado).collect();
         let hoy = fecha_de(ahora_ms);
         let ayer = hoy.and_then(|dia| dia.pred_opt());
         let mut grupos: Vec<GrupoAvisos> = Vec::new();
-        for aviso in &avisos {
+        for aviso in avisos.iter().copied() {
             let dia = fecha_de(aviso.enviado_en_ms);
             // Uno "del futuro" (reloj del teléfono atrasado) va a Hoy.
             let grupo = if aviso.enviado_en_ms > ahora_ms || (dia.is_some() && dia == hoy) {
@@ -252,6 +417,7 @@ impl BandejaAvisos {
             u32::try_from(avisos.iter().filter(|aviso| !aviso.leido).count()).unwrap_or(u32::MAX);
         EstadoBandeja {
             grupos,
+            archivados,
             no_leidos,
             contador: texto_contador(no_leidos),
             emergencia_sin_leer: avisos
@@ -264,9 +430,13 @@ impl BandejaAvisos {
     /// Texto para que Kotlin lo guarde en disco y se lo devuelva a
     /// [`Self::desde_guardado`] la próxima vez.
     pub fn serializar(&self) -> String {
-        let guardado = Guardado {
-            version: VERSION_GUARDADO,
-            avisos: self.bloquear().clone(),
+        let guardado = {
+            let contenido = self.bloquear();
+            Guardado {
+                version: VERSION_GUARDADO,
+                avisos: contenido.avisos.clone(),
+                acciones: contenido.acciones.clone(),
+            }
         };
         serde_json::to_string(&guardado).unwrap_or_default()
     }
@@ -275,11 +445,40 @@ impl BandejaAvisos {
 impl BandejaAvisos {
     /// Un pánico con el candado tomado no deja la bandeja a medias (cada
     /// cambio se arma completo antes de asignarse): se sigue usando.
-    fn bloquear(&self) -> MutexGuard<'_, Vec<AvisoGuardado>> {
-        self.avisos
+    fn bloquear(&self) -> MutexGuard<'_, Contenido> {
+        self.contenido
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
+}
+
+/// Anota la acción para contársela al servidor. Archivar y después borrar el
+/// mismo aviso son dos acciones distintas; repetir la misma no se duplica.
+fn anotar_accion(
+    contenido: &mut Contenido,
+    aviso_id: String,
+    accion: TipoAccionAviso,
+    usuario: String,
+    ocurrio_en_ms: i64,
+) {
+    if contenido
+        .acciones
+        .iter()
+        .any(|pendiente| pendiente.aviso_id == aviso_id && pendiente.accion == accion)
+    {
+        return;
+    }
+    contenido.acciones.push(AccionAviso {
+        aviso_id,
+        accion,
+        usuario,
+        ocurrio_en_ms,
+    });
+    let sobran = contenido
+        .acciones
+        .len()
+        .saturating_sub(MAXIMO_ACCIONES_PENDIENTES);
+    contenido.acciones.drain(..sobran);
 }
 
 /// Más nuevo primero, sin los vencidos ni los que pasan del tope.
@@ -703,7 +902,10 @@ mod tests {
         bandeja.agregar(push("a", ahora(), false), ahora());
         let mas_tarde = ahora() + (DIAS_EN_BANDEJA + 1) * MS_POR_DIA;
         let leida = BandejaAvisos::desde_guardado(Some(bandeja.serializar()), mas_tarde);
-        assert_eq!(leida.serializar(), r#"{"version":1,"avisos":[]}"#);
+        assert_eq!(
+            leida.serializar(),
+            r#"{"version":1,"avisos":[],"acciones":[]}"#
+        );
     }
 
     #[test]
@@ -717,5 +919,203 @@ mod tests {
             let bandeja = BandejaAvisos::desde_guardado(Some(roto.to_owned()), ahora());
             assert!(bandeja.estado(ahora()).grupos.is_empty(), "{roto:?}");
         }
+    }
+
+    // --- archivar y borrar ---
+
+    fn con_avisos(ids_normales: &[&str]) -> Arc<BandejaAvisos> {
+        let bandeja = BandejaAvisos::desde_guardado(None, ahora());
+        for (n, id) in ids_normales.iter().enumerate() {
+            let desfase = i64::try_from(n).unwrap() * 60_000;
+            bandeja.agregar(push(id, ahora() - desfase, false), ahora());
+        }
+        bandeja
+    }
+
+    fn ids_de(avisos: &[AvisoBandeja]) -> Vec<&str> {
+        avisos.iter().map(|aviso| aviso.id.as_str()).collect()
+    }
+
+    #[test]
+    fn archivar_lo_saca_de_la_bandeja_y_de_la_campanita() {
+        let bandeja = con_avisos(&["a", "b"]);
+        assert!(bandeja.archivar("a".to_owned(), "ANA".to_owned(), ahora()));
+
+        let estado = bandeja.estado(ahora());
+        assert_eq!(ids(&estado), vec![vec!["b"]]);
+        assert_eq!(ids_de(&estado.archivados), vec!["a"]);
+        // Archivarlo lo da por leído: sólo cuenta "b".
+        assert_eq!(estado.no_leidos, 1);
+        assert!(estado.archivados[0].leido);
+
+        assert!(
+            !bandeja.archivar("a".to_owned(), "ANA".to_owned(), ahora()),
+            "ya estaba archivado"
+        );
+        assert!(!bandeja.archivar("no-existe".to_owned(), "ANA".to_owned(), ahora()));
+    }
+
+    #[test]
+    fn borrar_lo_quita_este_archivado_o_no() {
+        let bandeja = con_avisos(&["a", "b", "c"]);
+        bandeja.archivar("b".to_owned(), "ANA".to_owned(), ahora());
+        assert!(bandeja.borrar("a".to_owned(), "ANA".to_owned(), ahora()));
+        assert!(bandeja.borrar("b".to_owned(), "ANA".to_owned(), ahora()));
+
+        let estado = bandeja.estado(ahora());
+        assert_eq!(ids(&estado), vec![vec!["c"]]);
+        assert!(estado.archivados.is_empty());
+        assert!(
+            !bandeja.borrar("a".to_owned(), "ANA".to_owned(), ahora()),
+            "ya no existe"
+        );
+    }
+
+    #[test]
+    fn una_emergencia_sin_leer_no_se_archiva_ni_se_borra() {
+        let bandeja = BandejaAvisos::desde_guardado(None, ahora());
+        bandeja.agregar(push("urgente", ahora() - 1_000, true), ahora());
+
+        assert!(!bandeja.archivar("urgente".to_owned(), "ANA".to_owned(), ahora()));
+        assert!(!bandeja.borrar("urgente".to_owned(), "ANA".to_owned(), ahora()));
+        assert_eq!(ids(&bandeja.estado(ahora())), vec![vec!["urgente"]]);
+        assert!(
+            bandeja.acciones_pendientes().is_empty(),
+            "lo rechazado no se anota"
+        );
+
+        // Ya leída, sí.
+        bandeja.leer("urgente".to_owned());
+        assert!(bandeja.archivar("urgente".to_owned(), "ANA".to_owned(), ahora()));
+        assert_eq!(bandeja.estado(ahora()).emergencia_sin_leer, None);
+    }
+
+    #[test]
+    fn cada_accion_queda_anotada_con_quien_la_hizo() {
+        let bandeja = con_avisos(&["a", "b"]);
+        bandeja.archivar("a".to_owned(), "ANA PÉREZ".to_owned(), 1_000);
+        bandeja.borrar("a".to_owned(), "LUIS SOTO".to_owned(), 2_000);
+        bandeja.borrar("b".to_owned(), "LUIS SOTO".to_owned(), 3_000);
+
+        assert_eq!(
+            bandeja.acciones_pendientes(),
+            vec![
+                AccionAviso {
+                    aviso_id: "a".to_owned(),
+                    accion: TipoAccionAviso::Archivado,
+                    usuario: "ANA PÉREZ".to_owned(),
+                    ocurrio_en_ms: 1_000
+                },
+                AccionAviso {
+                    aviso_id: "a".to_owned(),
+                    accion: TipoAccionAviso::Borrado,
+                    usuario: "LUIS SOTO".to_owned(),
+                    ocurrio_en_ms: 2_000
+                },
+                AccionAviso {
+                    aviso_id: "b".to_owned(),
+                    accion: TipoAccionAviso::Borrado,
+                    usuario: "LUIS SOTO".to_owned(),
+                    ocurrio_en_ms: 3_000
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn los_avisos_de_la_consola_no_se_anotan() {
+        let bandeja = BandejaAvisos::desde_guardado(None, ahora());
+        let de_consola = AvisoPush {
+            id: None,
+            enviado_en_ms: None,
+            ..push("x", 0, false)
+        };
+        bandeja.agregar(de_consola, ahora());
+        let id_local = bandeja.estado(ahora()).grupos[0].avisos[0].id.clone();
+
+        assert!(bandeja.archivar(id_local.clone(), "ANA".to_owned(), ahora()));
+        assert!(bandeja.borrar(id_local, "ANA".to_owned(), ahora()));
+        assert!(bandeja.acciones_pendientes().is_empty());
+    }
+
+    #[test]
+    fn confirmar_quita_solo_lo_enviado() {
+        let bandeja = con_avisos(&["a", "b"]);
+        bandeja.archivar("a".to_owned(), "ANA".to_owned(), 1_000);
+        bandeja.borrar("a".to_owned(), "ANA".to_owned(), 2_000);
+        bandeja.borrar("b".to_owned(), "ANA".to_owned(), 3_000);
+
+        let pendientes = bandeja.acciones_pendientes();
+        assert!(bandeja.confirmar_acciones(vec![pendientes[0].clone(), pendientes[2].clone()]));
+        assert_eq!(bandeja.acciones_pendientes(), vec![pendientes[1].clone()]);
+        assert!(
+            !bandeja.confirmar_acciones(vec![pendientes[0].clone()]),
+            "ya estaba confirmada"
+        );
+    }
+
+    #[test]
+    fn no_se_acumulan_acciones_sin_limite() {
+        let bandeja = BandejaAvisos::desde_guardado(None, ahora());
+        let cantidad = i64::try_from(MAXIMO_ACCIONES_PENDIENTES).unwrap() + 20;
+        for n in 0..cantidad {
+            bandeja.agregar(push(&format!("n{n}"), ahora() - n, false), ahora());
+            bandeja.borrar(format!("n{n}"), "ANA".to_owned(), ahora());
+        }
+        let pendientes = bandeja.acciones_pendientes();
+        assert_eq!(pendientes.len(), MAXIMO_ACCIONES_PENDIENTES);
+        assert_eq!(
+            pendientes.last().unwrap().aviso_id,
+            format!("n{}", cantidad - 1)
+        );
+    }
+
+    #[test]
+    fn archivados_y_pendientes_sobreviven_al_guardado() {
+        let bandeja = con_avisos(&["a", "b", "c"]);
+        bandeja.archivar("a".to_owned(), "ANA".to_owned(), 1_000);
+        bandeja.borrar("b".to_owned(), "ANA".to_owned(), 2_000);
+
+        let leida = BandejaAvisos::desde_guardado(Some(bandeja.serializar()), ahora());
+        assert_eq!(leida.estado(ahora()), bandeja.estado(ahora()));
+        assert_eq!(leida.acciones_pendientes(), bandeja.acciones_pendientes());
+    }
+
+    #[test]
+    fn lo_guardado_antes_de_archivar_sigue_leyendose() {
+        let viejo = r#"{"version":1,"avisos":[{"id":"a","titulo":"T","cuerpo":"C","emergente":false,"enviado_en_ms":1792335000000,"leido":false}]}"#;
+        let bandeja = BandejaAvisos::desde_guardado(Some(viejo.to_owned()), ahora());
+        let estado = bandeja.estado(ahora());
+        assert_eq!(ids(&estado), vec![vec!["a"]]);
+        assert!(estado.archivados.is_empty());
+        assert!(bandeja.acciones_pendientes().is_empty());
+    }
+
+    #[test]
+    fn los_archivados_tambien_vencen() {
+        let bandeja = con_avisos(&["a"]);
+        bandeja.archivar("a".to_owned(), "ANA".to_owned(), ahora());
+        let mas_tarde = ahora() + (DIAS_EN_BANDEJA + 1) * MS_POR_DIA;
+        assert!(bandeja.estado(mas_tarde).archivados.is_empty());
+    }
+
+    #[test]
+    fn cuerpo_del_registro_de_la_accion() {
+        let cuerpo = cuerpo_registro_accion_aviso(&AccionAviso {
+            aviso_id: "dddddddd-0000-0000-0000-00000000d501".to_owned(),
+            accion: TipoAccionAviso::Borrado,
+            usuario: "ANA \"LA JEFA\" PÉREZ".to_owned(),
+            ocurrio_en_ms: 1_792_335_600_000,
+        });
+        let json: serde_json::Value = serde_json::from_str(&cuerpo).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "p_aviso_id": "dddddddd-0000-0000-0000-00000000d501",
+                "p_accion": "borrado",
+                "p_usuario": "ANA \"LA JEFA\" PÉREZ",
+                "p_ocurrio_en": "2026-10-18T15:00:00+00:00",
+            })
+        );
     }
 }

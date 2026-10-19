@@ -14,6 +14,13 @@ class RegistroTokenPushTest {
     }
 
     @Test
+    fun `url de cualquier funcion rpc`() {
+        val esperado = "https://x.supabase.co/rest/v1/rpc/registrar_accion_aviso"
+        assertEquals(esperado, urlRpc("https://x.supabase.co", "registrar_accion_aviso"))
+        assertEquals(esperado, urlRpc("https://x.supabase.co/", "registrar_accion_aviso"))
+    }
+
+    @Test
     fun `cuerpo del registro de token`() {
         assertEquals("{\"p_token\":\"abc:DEF-123_x\"}", cuerpoRegistroTokenPush("abc:DEF-123_x"))
         assertEquals("{\"p_token\":\"a\\\"b\\\\c\"}", cuerpoRegistroTokenPush("a\"b\\c"))

@@ -5,8 +5,11 @@ package com.brisas.controlacceso
 /// emulador. Qué dice un aviso que llega lo decide el núcleo
 /// (`avisoDeMensaje`, mobile/rust-core/src/avisos.rs).
 
-/// URL de la función `registrar_token_push` de Supabase (PostgREST RPC).
-fun urlRegistroTokenPush(baseUrl: String): String = baseUrl.trimEnd('/') + "/rest/v1/rpc/registrar_token_push"
+/// URL de una función de Supabase (PostgREST RPC).
+fun urlRpc(baseUrl: String, funcion: String): String = baseUrl.trimEnd('/') + "/rest/v1/rpc/" + funcion
+
+/// URL de la función `registrar_token_push`.
+fun urlRegistroTokenPush(baseUrl: String): String = urlRpc(baseUrl, "registrar_token_push")
 
 /// Cuerpo JSON para `registrar_token_push`. Los tokens de FCM sólo traen
 /// letras, dígitos, `:`, `-` y `_`, pero igual se escapan comillas y barras

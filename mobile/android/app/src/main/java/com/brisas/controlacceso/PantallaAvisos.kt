@@ -23,12 +23,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -46,20 +48,28 @@ import uniffi.control_acceso_mobile.GrupoBandeja
 /// Bandeja de avisos (la campanita de PantallaPrincipal): lo que mandó la
 /// administración desde el panel web. Sólo dibuja [EstadoBandeja], que arma
 /// el núcleo (mobile/rust-core/src/avisos.rs): grupos, orden, "hace 5 min",
-/// leídos. Pantalla completa, no un panel desplegable: en un teléfono no hay
-/// lugar para otra cosa.
+/// leídos, archivados y qué se puede quitar. Pantalla completa, no un panel
+/// desplegable: en un teléfono no hay lugar para otra cosa.
 ///
-/// Tocar un aviso lo despliega entero y lo marca como leído. No se borran a
-/// mano: el núcleo los vence solo a los 30 días.
+/// Tocar un aviso lo despliega entero y lo marca como leído; ahí aparecen
+/// "Archivar" y "Borrar" (una emergencia sin leer todavía no los ofrece:
+/// el núcleo tampoco la deja quitar). Borrar pide confirmación porque queda
+/// anotado en el servidor quién lo hizo. Los avisos se van solos a los 30
+/// días.
 @Composable
 fun PantallaAvisos(
     estado: EstadoBandeja?,
     onLeer: (String) -> Unit,
     onLeerTodos: () -> Unit,
+    onArchivar: (String) -> Unit,
+    onBorrar: (String) -> Unit,
     onVolver: () -> Unit,
 ) {
     RegistrarPantalla("avisos")
     BackHandler(onBack = onVolver)
+    var pestana by rememberSaveable { mutableIntStateOf(0) }
+    var porBorrar by rememberSaveable { mutableStateOf<String?>(null) }
+
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -72,44 +82,101 @@ fun PantallaAvisos(
             }
         }
         if (estado == null) return@Column
-        if (estado.noLeidos > 0u) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "${estado.noLeidos} sin leer",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                BotonDiscretoBrisas(onClick = onLeerTodos) {
-                    Text("Marcar todo como leído")
+
+        FilaPildoras(
+            opciones = listOf("Avisos", "Archivados (${estado.archivados.size})"),
+            seleccionado = pestana,
+            onSeleccionar = { pestana = it },
+        )
+
+        if (pestana == 0) {
+            if (estado.noLeidos > 0u) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "${estado.noLeidos} sin leer",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    BotonDiscretoBrisas(onClick = onLeerTodos) {
+                        Text("Marcar todo como leído")
+                    }
                 }
             }
-        }
-
-        if (estado.grupos.isEmpty()) {
-            BandejaVacia(Modifier.weight(1f).fillMaxWidth())
+            if (estado.grupos.isEmpty()) {
+                MensajeVacio(
+                    "Sin avisos",
+                    "Acá vas a ver los avisos que mande la administración.",
+                    Modifier.weight(1f).fillMaxWidth(),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (grupo in estado.grupos) {
+                        item(key = "grupo-${grupo.grupo.name}") {
+                            Text(
+                                tituloGrupo(grupo.grupo),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                        items(grupo.avisos, key = { it.id }) { aviso ->
+                            FilaAviso(
+                                aviso = aviso,
+                                onLeer = onLeer,
+                                onArchivar = { onArchivar(aviso.id) },
+                                onBorrar = { porBorrar = aviso.id },
+                            )
+                        }
+                    }
+                }
+            }
+        } else if (estado.archivados.isEmpty()) {
+            MensajeVacio(
+                "Sin archivados",
+                "Los avisos que archives se guardan acá hasta que se borren solos.",
+                Modifier.weight(1f).fillMaxWidth(),
+            )
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                for (grupo in estado.grupos) {
-                    item(key = "grupo-${grupo.grupo.name}") {
-                        Text(
-                            tituloGrupo(grupo.grupo),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
-                    items(grupo.avisos, key = { it.id }) { aviso -> FilaAviso(aviso, onLeer) }
+                items(estado.archivados, key = { it.id }) { aviso ->
+                    FilaAviso(aviso = aviso, onLeer = onLeer, onArchivar = null, onBorrar = { porBorrar = aviso.id })
                 }
             }
         }
+    }
+
+    val idPorBorrar = porBorrar
+    if (idPorBorrar != null) {
+        AlertDialog(
+            onDismissRequest = { porBorrar = null },
+            title = { Text("¿Borrar este aviso?") },
+            text = { Text("Se quita de este teléfono y queda anotado quién lo borró.") },
+            confirmButton = {
+                BotonDiscretoBrisas(onClick = {
+                    onBorrar(idPorBorrar)
+                    porBorrar = null
+                }) {
+                    Text("Borrar")
+                }
+            },
+            dismissButton = {
+                BotonDiscretoBrisas(onClick = { porBorrar = null }) {
+                    Text("Cancelar")
+                }
+            },
+        )
     }
 }
 
@@ -119,8 +186,14 @@ private fun tituloGrupo(grupo: GrupoBandeja): String = when (grupo) {
     GrupoBandeja.ANTERIORES -> "ANTERIORES"
 }
 
+/// `onArchivar` es `null` en la pestaña de archivados (ya lo está).
 @Composable
-private fun FilaAviso(aviso: AvisoBandeja, onLeer: (String) -> Unit) {
+private fun FilaAviso(
+    aviso: AvisoBandeja,
+    onLeer: (String) -> Unit,
+    onArchivar: (() -> Unit)?,
+    onBorrar: () -> Unit,
+) {
     var desplegado by rememberSaveable(aviso.id) { mutableStateOf(false) }
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -174,13 +247,31 @@ private fun FilaAviso(aviso: AvisoBandeja, onLeer: (String) -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                // Una emergencia sin leer no se quita: el núcleo tampoco lo
+                // permite. Al desplegarla se da por leída y los botones
+                // aparecen.
+                if (desplegado && (!aviso.emergente || aviso.leido)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        if (onArchivar != null) {
+                            BotonDiscretoBrisas(onClick = onArchivar) {
+                                Text("Archivar")
+                            }
+                        }
+                        BotonDiscretoBrisas(onClick = onBorrar) {
+                            Text("Borrar", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun BandejaVacia(modifier: Modifier) {
+private fun MensajeVacio(titulo: String, detalle: String, modifier: Modifier) {
     Column(
         modifier = modifier.padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -193,9 +284,9 @@ private fun BandejaVacia(modifier: Modifier) {
             modifier = Modifier.size(48.dp),
         )
         Spacer(Modifier.size(12.dp))
-        Text("Sin avisos", style = MaterialTheme.typography.titleSmall)
+        Text(titulo, style = MaterialTheme.typography.titleSmall)
         Text(
-            "Acá vas a ver los avisos que mande la administración.",
+            detalle,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

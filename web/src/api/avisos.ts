@@ -52,6 +52,17 @@ export interface AvisoEnviado {
   destinatarios: number;
   enviados: number;
   no_recibieron: string[];
+  /** Quién lo archivó o lo borró en el celular (`avisos_acciones`). */
+  avisos_acciones: AccionSobreAviso[];
+}
+
+/** Constancia de que alguien archivó o borró el aviso en la bandeja de un
+ * celular. La anota la app con `registrar_accion_aviso`. */
+export interface AccionSobreAviso {
+  accion: "archivado" | "borrado";
+  usuario: string;
+  dispositivo_etiqueta: string;
+  ocurrio_en: string;
 }
 
 /** Cuántos avisos muestra el historial: los últimos, no hace falta más. */
@@ -62,8 +73,11 @@ export const AVISOS_EN_HISTORIAL = 50;
 export async function listarAvisosEnviados(): Promise<AvisoEnviado[]> {
   const { data, error } = await supabase
     .from("avisos_enviados")
-    .select("id, titulo, cuerpo, tipo, destino, enviado_por, enviado_en, destinatarios, enviados, no_recibieron")
+    .select(
+      "id, titulo, cuerpo, tipo, destino, enviado_por, enviado_en, destinatarios, enviados, no_recibieron, avisos_acciones(accion, usuario, dispositivo_etiqueta, ocurrio_en)",
+    )
     .order("enviado_en", { ascending: false })
+    .order("ocurrio_en", { referencedTable: "avisos_acciones", ascending: true })
     .limit(AVISOS_EN_HISTORIAL);
   if (error) throw new Error(error.message);
   return (data ?? []) as AvisoEnviado[];

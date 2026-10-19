@@ -16,6 +16,7 @@ import type { AvisoEnviado, TipoAviso } from "../api/avisos";
 import {
   contarDestinatarios,
   destinoDeSeleccion,
+  textoAccion,
   textoAlcance,
   textoDestino,
   textoEntrega,
@@ -96,6 +97,11 @@ function HistorialAvisos({
               {aviso.no_recibieron.length > 0 && (
                 <p className="text-sm text-error">No llegó a: {aviso.no_recibieron.join(", ")}</p>
               )}
+              {aviso.avisos_acciones.map((accion) => (
+                <p key={`${accion.accion}-${accion.dispositivo_etiqueta}-${accion.ocurrio_en}`} className="text-sm text-[var(--muted)]">
+                  {textoAccion(accion, textoFechaAviso(accion.ocurrio_en))}
+                </p>
+              ))}
             </li>
           ))}
         </ul>
