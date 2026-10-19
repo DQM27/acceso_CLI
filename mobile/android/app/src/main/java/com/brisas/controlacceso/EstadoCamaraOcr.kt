@@ -46,14 +46,23 @@ import kotlinx.coroutines.Job
 /// que la pantalla dibuja (linterna).
 class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
     val ejecutor: ExecutorService = Executors.newSingleThreadExecutor()
-    val recognizer: TextRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
+    /// Los clientes de ML Kit leen del disco al crearse: StrictMode lo marcaba
+    /// en el hilo principal al abrir la cámara (staging, 2026-10-19,
+    /// `EstadoCamaraOcr.<init>`). Se crean en el hilo del analizador -- el
+    /// único que los usa -- al precalentar, y ahí mismo se cierran.
+    val recognizer: TextRecognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+
+    val usaLectorCodigos: Boolean = conLectorPdf417
 
     /// Sólo PDF417: pedir un formato hace el escaneo más rápido que buscar
     /// los 13 que soporta ML Kit.
-    val lectorCodigos: BarcodeScanner? = if (conLectorPdf417) {
-        BarcodeScanning.getClient(BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_PDF417).build())
-    } else {
-        null
+    val lectorCodigos: BarcodeScanner? by lazy {
+        if (usaLectorCodigos) {
+            BarcodeScanning.getClient(BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_PDF417).build())
+        } else {
+            null
+        }
     }
     val ejecutorPrincipal: Executor = ContextCompat.getMainExecutor(contexto)
 
@@ -137,7 +146,7 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
     val tieneLinterna: Boolean get() = camaraFisica?.cameraInfo?.hasFlashUnit() == true
 
     init {
-        precalentar()
+        ejecutor.execute(::precalentar)
     }
 
     /// De noche en la portería, o con placas en sombra, la luz es lo que
@@ -242,9 +251,16 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
         val casos = listOfNotNull(vistaPreviaCamara, analisisCamara, analisisCodigo).toTypedArray()
         if (casos.isNotEmpty()) cameraProvider?.unbind(*casos)
         val finUnbind = System.nanoTime()
-        ejecutor.shutdown()
-        recognizer.close()
-        lectorCodigos?.close()
+        // Los modelos se cierran en el hilo del analizador, detrás de lo que
+        // quede en su cola: ningún frame usa un modelo ya cerrado, y si la
+        // pantalla se cerró antes de precalentar, igual se crean y se cierran.
+        if (!ejecutor.isShutdown) {
+            ejecutor.execute {
+                recognizer.close()
+                lectorCodigos?.close()
+            }
+            ejecutor.shutdown()
+        }
         val finCierre = System.nanoTime()
         if (Telemetria.activa) {
             Telemetria.evento(
@@ -252,10 +268,11 @@ class EstadoCamaraOcr(contexto: Context, conLectorPdf417: Boolean = false) {
                 metricas.datos() + mapOf(
                     "pantalla" to Telemetria.pantallaActual(),
                     "abierta_desde" to Telemetria.pantallaAnterior(),
-                    "lector_pdf417" to (lectorCodigos != null),
+                    "lector_pdf417" to usaLectorCodigos,
                     // Cuánto tardó cerrar la cámara en el hilo que la cierra (el
-                    // principal): `unbind` y luego los modelos de ML Kit. Si esto
-                    // es grande, la pantalla se traba justo al salir del escaneo.
+                    // principal): `unbind` y luego encargar el cierre de los
+                    // modelos de ML Kit al hilo del analizador. Si esto es
+                    // grande, la pantalla se traba justo al salir del escaneo.
                     "ms_cierre_unbind" to milisegundosDesde(inicioCierre, finUnbind),
                     "ms_cierre_modelos" to milisegundosDesde(finUnbind, finCierre),
                     "ms_cierre_total" to milisegundosDesde(inicioCierre, finCierre),

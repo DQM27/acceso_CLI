@@ -325,7 +325,7 @@ private fun VistaCamaraCedula(
                 camara.analisisCamara = analisis
                 // El mismo análisis a la mayor resolución, para el modo código
                 // (ver el `LaunchedEffect` de `modoCodigoVisible`).
-                if (camara.lectorCodigos != null) {
+                if (camara.usaLectorCodigos) {
                     camara.analisisCodigo = construirAnalizadorOcr(
                         ejecutorAnalisis = camara.ejecutor,
                         detectada = camara.detectada,
