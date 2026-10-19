@@ -72,14 +72,20 @@ sealed class FilaActiva {
     abstract val contratistaNombre: String
     abstract val empresaNombre: String?
 
+    /// Identifica la fila en la lista (clave de `LazyColumn`) y en el conjunto
+    /// de salidas que esperan (ver [ActivosViewModel.deslizarSalida]).
+    abstract val clave: String
+
     data class Local(val activo: IngresoActivoResumen) : FilaActiva() {
         override val contratistaNombre get() = activo.contratistaNombre
         override val empresaNombre get() = activo.empresaNombre
+        override val clave get() = "local-${activo.registroId}"
     }
 
     data class Remota(val remoto: IngresoRemoto) : FilaActiva() {
         override val contratistaNombre get() = remoto.contratistaNombre
         override val empresaNombre get() = remoto.empresaNombre
+        override val clave get() = "remota-${remoto.uuid}"
     }
 }
 
@@ -148,6 +154,22 @@ class ActivosViewModel(
         private set
     var seleccionSalida by mutableStateOf<FilaActiva?>(null)
         private set
+
+    /// La salida que se deslizó y todavía se puede deshacer (ver
+    /// [deslizarSalida]): la pantalla muestra "Deshacer" mientras no sea null.
+    var salidaPendiente by mutableStateOf<FilaActiva?>(null)
+        private set
+
+    // Filas que ya no se ven porque su salida se deslizó: la pendiente y las
+    // que se están registrando. Una fila sale de acá recién cuando la salida
+    // quedó escrita (y la lista ya no la trae) o se deshizo, para que no
+    // reaparezca un instante entre medio.
+    private var salidasOcultas by mutableStateOf<Set<String>>(emptySet())
+    private var trabajoSalidaPendiente: Job? = null
+
+    /// [activos] sin las filas cuya salida se deslizó. Es lo que se dibuja.
+    val activosVisibles: List<FilaActiva>
+        get() = activos.filterNot { it.clave in salidasOcultas }
     var seleccionIngreso by mutableStateOf<SeleccionIngreso>(SeleccionIngreso.Ninguna)
         private set
 
@@ -459,6 +481,60 @@ class ActivosViewModel(
         }
     }
 
+    /// Deslizar una fila registra la salida, pero con una salvedad de
+    /// [MS_PARA_DESHACER_SALIDA] para arrepentirse: la fila se oculta y la
+    /// salida recién se escribe cuando pasa ese tiempo sin que se toque
+    /// "Deshacer". Hasta entonces no hay nada escrito, así que deshacer no deja
+    /// rastro. Si ya había otra esperando, esa se registra en el acto: deslizar
+    /// una segunda nunca hace perder la primera.
+    ///
+    /// Si la app pasa a segundo plano o se sale de la pantalla se registra de
+    /// inmediato (ver [confirmarSalidaPendiente]): nada queda en el aire.
+    fun deslizarSalida(fila: FilaActiva) {
+        confirmarSalidaPendiente()
+        salidasOcultas = salidasOcultas + fila.clave
+        salidaPendiente = fila
+        trabajoSalidaPendiente = viewModelScope.launch {
+            delay(MS_PARA_DESHACER_SALIDA)
+            registrarSalidaPendiente()
+        }
+    }
+
+    /// El guardia se arrepintió: la fila vuelve y no se escribe nada.
+    fun deshacerSalida() {
+        val fila = salidaPendiente ?: return
+        trabajoSalidaPendiente?.cancel()
+        trabajoSalidaPendiente = null
+        salidaPendiente = null
+        salidasOcultas = salidasOcultas - fila.clave
+    }
+
+    /// Registra ya la salida que esperaba (si hay una), sin esperar el plazo.
+    fun confirmarSalidaPendiente() {
+        trabajoSalidaPendiente?.cancel()
+        trabajoSalidaPendiente = null
+        registrarSalidaPendiente()
+    }
+
+    private fun registrarSalidaPendiente() {
+        val fila = salidaPendiente ?: return
+        salidaPendiente = null
+        viewModelScope.launch {
+            try {
+                mutexMutaciones.withLock { cerrarFila(fila) }
+                // Sin esperar a la recarga: la fila ya no está.
+                activos = activos.filterNot { it.clave == fila.clave }
+                buscar()
+            } catch (excepcion: Exception) {
+                // No se pudo: la persona sigue adentro, la fila vuelve (en el
+                // `finally`) y se avisa.
+                error = excepcion.mensajeDeErrorEsperado()
+            } finally {
+                salidasOcultas = salidasOcultas - fila.clave
+            }
+        }
+    }
+
     fun registrarSalidaPorGafetes() {
         if (enviandoGafetes) return
         enviandoGafetes = true
@@ -551,6 +627,9 @@ class ActivosViewModel(
         // vez -- no encaja en la forma genérica sin exponer esos dos
         // conceptos también ahí.
         private const val DEBOUNCE_BUSQUEDA_MS = 150L
+
+        /// Tiempo para tocar "Deshacer" después de deslizar una salida.
+        const val MS_PARA_DESHACER_SALIDA = 6_000L
 
         fun factory(nucleo: Nucleo): ViewModelProvider.Factory = viewModelFactory {
             initializer { ActivosViewModel(nucleo) }

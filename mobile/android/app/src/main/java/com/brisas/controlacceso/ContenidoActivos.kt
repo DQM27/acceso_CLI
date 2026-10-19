@@ -141,9 +141,10 @@ internal fun ContenidoModoEntrada(
     cargando: Boolean,
     onElegirActivo: (FilaActiva) -> Unit,
     onElegirContratista: (ContratistaResumen) -> Unit,
+    onDeslizarSalida: (FilaActiva) -> Unit,
 ) {
     if (texto.isBlank()) {
-        ListaActivos(activos, onClick = onElegirActivo)
+        ListaActivos(activos, onClick = onElegirActivo, onSalida = onDeslizarSalida)
         return
     }
     if (resultadosBusqueda.isEmpty() && !verificando && !cargando) {
@@ -169,8 +170,12 @@ internal fun ContenidoModoEntrada(
 /// buscador para acotar, no una lista para recorrer (esa es el modo
 /// Entrada). Ver el doc-comment de [PantallaActivos].
 @Composable
-internal fun ContenidoModoSalidaNombre(activos: List<FilaActiva>, onElegirActivo: (FilaActiva) -> Unit) {
-    ListaActivos(activos, onClick = onElegirActivo)
+internal fun ContenidoModoSalidaNombre(
+    activos: List<FilaActiva>,
+    onElegirActivo: (FilaActiva) -> Unit,
+    onDeslizarSalida: (FilaActiva) -> Unit,
+) {
+    ListaActivos(activos, onClick = onElegirActivo, onSalida = onDeslizarSalida)
 }
 
 /// Sólo para el tipeo manual -- uno o más números de gafete separados por
@@ -234,22 +239,16 @@ internal fun ContenidoModoSalidaGafete(
 /// nombre — mismas filas, mismo comportamiento, sólo cambia qué hace
 /// `onClick` según quién la use.
 @Composable
-private fun ListaActivos(activos: List<FilaActiva>, onClick: (FilaActiva) -> Unit) {
+private fun ListaActivos(activos: List<FilaActiva>, onClick: (FilaActiva) -> Unit, onSalida: (FilaActiva) -> Unit) {
     ListaConDesvanecido {
         LazyColumn(
             contentPadding = PaddingValues(top = 5.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            items(
-                activos,
-                key = { fila ->
-                    when (fila) {
-                        is FilaActiva.Local -> "local-${fila.activo.registroId}"
-                        is FilaActiva.Remota -> "remota-${fila.remoto.uuid}"
-                    }
-                },
-            ) { fila ->
-                FilaActivo(fila, onClick = { onClick(fila) })
+            items(activos, key = { fila -> fila.clave }) { fila ->
+                FilaDeslizable(onSalida = { onSalida(fila) }) {
+                    FilaActivo(fila, onClick = { onClick(fila) })
+                }
             }
         }
     }

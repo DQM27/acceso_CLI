@@ -4,8 +4,10 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -324,5 +326,113 @@ class ActivosViewModelTest {
 
         assertNull(viewModel.errorIngreso)
         assertEquals(1, nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).size)
+    }
+
+    // --- Salida deslizada con "Deshacer" ---
+
+    /// Dos contratistas adentro, con los gafetes 7 y 8.
+    private fun abrirConDosAdentro() {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso,
+                fecha_vencimiento_praind
+            ) VALUES
+                ('111111117', 'Con Gafete Siete', 1, 'PRAIND', 0, 1, '2099-12-31'),
+                ('111111118', 'Con Gafete Ocho', 1, 'PRAIND', 0, 1, '2099-12-31');
+            """.trimIndent(),
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'CONTRATISTA', 'DISPONIBLE'), (8, 'CONTRATISTA', 'DISPONIBLE');",
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.registrarIngreso(1, MedioIngreso.CAMINANDO, 7L, null)
+        nucleo.registrarIngreso(2, MedioIngreso.CAMINANDO, 8L, null)
+    }
+
+    private fun adentro() = nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA)
+
+    @Test
+    fun `deslizar una salida oculta la fila pero no la registra hasta que pasa el plazo`() = runTest(dispatcher) {
+        abrirConDosAdentro()
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val fila = viewModel.activosVisibles.first { it.contratistaNombre == "Con Gafete Siete" }
+
+        viewModel.deslizarSalida(fila)
+        runCurrent()
+
+        // Oculta y esperando, pero todavía no hay nada escrito.
+        assertEquals(listOf("Con Gafete Ocho"), viewModel.activosVisibles.map { it.contratistaNombre })
+        assertEquals(fila, viewModel.salidaPendiente)
+        assertEquals(2, adentro().size)
+
+        advanceTimeBy(ActivosViewModel.MS_PARA_DESHACER_SALIDA - 1)
+        runCurrent()
+        assertEquals(2, adentro().size)
+
+        advanceUntilIdle()
+        assertEquals(listOf("Con Gafete Ocho"), adentro().map { it.contratistaNombre })
+        assertNull(viewModel.salidaPendiente)
+        assertEquals(listOf("Con Gafete Ocho"), viewModel.activosVisibles.map { it.contratistaNombre })
+    }
+
+    @Test
+    fun `deshacer una salida devuelve la fila y no escribe nada`() = runTest(dispatcher) {
+        abrirConDosAdentro()
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val fila = viewModel.activosVisibles.first()
+
+        viewModel.deslizarSalida(fila)
+        runCurrent()
+        viewModel.deshacerSalida()
+        advanceUntilIdle()
+
+        assertNull(viewModel.salidaPendiente)
+        assertEquals(2, viewModel.activosVisibles.size)
+        assertEquals(2, adentro().size)
+    }
+
+    @Test
+    fun `deslizar una segunda salida registra la primera en el acto`() = runTest(dispatcher) {
+        abrirConDosAdentro()
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val primera = viewModel.activosVisibles.first { it.contratistaNombre == "Con Gafete Siete" }
+        val segunda = viewModel.activosVisibles.first { it.contratistaNombre == "Con Gafete Ocho" }
+
+        viewModel.deslizarSalida(primera)
+        runCurrent()
+        viewModel.deslizarSalida(segunda)
+        runCurrent()
+
+        // Sin esperar el plazo: la primera ya salió y la segunda es la pendiente.
+        assertEquals(listOf("Con Gafete Ocho"), adentro().map { it.contratistaNombre })
+        assertEquals(segunda, viewModel.salidaPendiente)
+        assertTrue(viewModel.activosVisibles.isEmpty())
+
+        advanceUntilIdle()
+        assertTrue(adentro().isEmpty())
+    }
+
+    @Test
+    fun `confirmar la salida pendiente la registra sin esperar el plazo`() = runTest(dispatcher) {
+        abrirConDosAdentro()
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.deslizarSalida(viewModel.activosVisibles.first { it.contratistaNombre == "Con Gafete Siete" })
+        runCurrent()
+        viewModel.confirmarSalidaPendiente()
+        runCurrent()
+
+        assertNull(viewModel.salidaPendiente)
+        assertEquals(listOf("Con Gafete Ocho"), adentro().map { it.contratistaNombre })
+        // Sin nada pendiente, volver a llamarlo no hace nada.
+        viewModel.confirmarSalidaPendiente()
+        runCurrent()
+        assertEquals(1, adentro().size)
     }
 }
