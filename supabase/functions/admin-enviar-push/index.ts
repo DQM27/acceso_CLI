@@ -1,6 +1,12 @@
 import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { clienteServicio, correoAdminAutorizado } from "../_shared/admin.ts";
-import { type Aviso, enviarMensaje, leerCuentaServicio, tokenAccesoGoogle } from "../_shared/fcm.ts";
+import {
+  type Aviso,
+  enviarMensaje,
+  leerCuentaServicio,
+  type ResultadoEnvio,
+  tokenAccesoGoogle,
+} from "../_shared/fcm.ts";
 import { json, leerCuerpo, preflight } from "../_shared/http.ts";
 import { type Destinatario, resumirEnvio, validarPedido } from "./envio.ts";
 
@@ -91,7 +97,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const aviso: Aviso = { id: registro.id, enviado_en: registro.enviado_en, titulo, cuerpo, tipo };
-  const resultados = [];
+  const resultados: ResultadoEnvio[] = [];
   for (let i = 0; i < destinatarios.length; i += ENVIOS_EN_PARALELO) {
     const lote = destinatarios.slice(i, i + ENVIOS_EN_PARALELO);
     resultados.push(
