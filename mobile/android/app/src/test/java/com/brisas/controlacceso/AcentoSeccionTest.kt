@@ -12,6 +12,12 @@ class AcentoSeccionTest {
 
     private val seccionesConAcento = listOf(SeccionPrincipal.ACTIVOS, SeccionPrincipal.KOF, SeccionPrincipal.EXTERNOS)
 
+    /// Todos los acentos que puede haber en pantalla: los de cada sección y el
+    /// de "Por correo" dentro de Externos.
+    private fun acentos(oscuro: Boolean): List<Pair<String, AcentoSeccion>> =
+        seccionesConAcento.map { it.name to acentoDeSeccion(it, oscuro)!! } +
+            ("POR_CORREO" to acentoDeSeccion(SeccionPrincipal.EXTERNOS, oscuro, TipoExterno.POR_CORREO)!!)
+
     /// Razón de contraste WCAG entre dos colores opacos.
     private fun contraste(a: Color, b: Color): Double {
         val (claro, oscuro) = listOf(a.luminance(), b.luminance()).sortedDescending()
@@ -24,10 +30,9 @@ class AcentoSeccionTest {
     @Test
     fun elTextoSobreElAcentoSeLeeEnAmbosTemas() {
         for (oscuro in listOf(false, true)) {
-            for (seccion in seccionesConAcento) {
-                val acento = acentoDeSeccion(seccion, oscuro)!!
+            for ((nombre, acento) in acentos(oscuro)) {
                 val razon = contraste(acento.color, acento.sobreColor)
-                assertTrue("$seccion oscuro=$oscuro: texto sobre acento $razon", razon >= 4.5)
+                assertTrue("$nombre oscuro=$oscuro: texto sobre acento $razon", razon >= 4.5)
             }
         }
     }
@@ -35,11 +40,10 @@ class AcentoSeccionTest {
     @Test
     fun elAcentoSeDistingueDelFondoEnAmbosTemas() {
         for (oscuro in listOf(false, true)) {
-            for (seccion in seccionesConAcento) {
-                val acento = acentoDeSeccion(seccion, oscuro)!!
+            for ((nombre, acento) in acentos(oscuro)) {
                 for (fondo in fondos(oscuro)) {
                     val razon = contraste(acento.color, fondo)
-                    assertTrue("$seccion oscuro=$oscuro: acento contra fondo $razon", razon >= 3.0)
+                    assertTrue("$nombre oscuro=$oscuro: acento contra fondo $razon", razon >= 3.0)
                 }
             }
         }
@@ -48,7 +52,7 @@ class AcentoSeccionTest {
     @Test
     fun cadaSeccionTieneUnColorDistinto() {
         for (oscuro in listOf(false, true)) {
-            val colores = seccionesConAcento.map { acentoDeSeccion(it, oscuro)!!.color }
+            val colores = acentos(oscuro).map { it.second.color }
             assertEquals(colores.size, colores.toSet().size)
         }
     }
@@ -57,10 +61,25 @@ class AcentoSeccionTest {
     fun ningunAcentoCoincideConUnColorDeEstado() {
         val estados = listOf(ColorEscaneoConfirmado, ColorEscaneoInvalido, ColorEscaneoVencido)
         for (oscuro in listOf(false, true)) {
-            for (seccion in seccionesConAcento) {
-                val color = acentoDeSeccion(seccion, oscuro)!!.color
-                estados.forEach { assertNotEquals("$seccion oscuro=$oscuro", it, color) }
+            for ((nombre, acento) in acentos(oscuro)) {
+                estados.forEach { assertNotEquals("$nombre oscuro=$oscuro", it, acento.color) }
             }
+        }
+    }
+
+    @Test
+    fun porCorreoTieneSuPropioColorSoloDentroDeExternos() {
+        for (oscuro in listOf(false, true)) {
+            val proveedor = acentoDeSeccion(SeccionPrincipal.EXTERNOS, oscuro, TipoExterno.PROVEEDOR)!!.color
+            val correo = acentoDeSeccion(SeccionPrincipal.EXTERNOS, oscuro, TipoExterno.POR_CORREO)!!.color
+            assertNotEquals(proveedor, correo)
+            // Sin tipo, o con Proveedor, Externos sigue en mango.
+            assertEquals(proveedor, acentoDeSeccion(SeccionPrincipal.EXTERNOS, oscuro)!!.color)
+            // En otra sección, el tipo de Externos no cuenta.
+            assertEquals(
+                acentoDeSeccion(SeccionPrincipal.ACTIVOS, oscuro)!!.color,
+                acentoDeSeccion(SeccionPrincipal.ACTIVOS, oscuro, TipoExterno.POR_CORREO)!!.color,
+            )
         }
     }
 

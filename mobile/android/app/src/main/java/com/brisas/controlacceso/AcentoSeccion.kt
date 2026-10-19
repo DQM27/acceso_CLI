@@ -34,11 +34,21 @@ private val TextoSobreAcentoOscuro = Color(0xFF16161E)
 
 /// `null` = sin acento propio: la sección conserva el de la paleta base
 /// (Rutas, que está en desarrollo y no se ve en la fila de pestañas).
-fun acentoDeSeccion(seccion: SeccionPrincipal, oscuro: Boolean): AcentoSeccion? {
+///
+/// `externo`: dentro de Externos, "Por correo" tiene su propio color (violeta,
+/// pedido del usuario 2026-10-19: es una clase aparte de Proveedor, como en la
+/// columna "Clase" del escritorio) y con él cambia también la pestaña de
+/// arriba. En cualquier otra sección no cuenta.
+fun acentoDeSeccion(seccion: SeccionPrincipal, oscuro: Boolean, externo: TipoExterno? = null): AcentoSeccion? {
     val color = when (seccion) {
         SeccionPrincipal.ACTIVOS -> if (oscuro) Color(0xFF00E0B0) else Color(0xFF00806A)
         SeccionPrincipal.KOF -> if (oscuro) Color(0xFFFF4B3E) else Color(0xFFC4161C)
-        SeccionPrincipal.EXTERNOS -> if (oscuro) Color(0xFFFFA000) else Color(0xFFB85C00)
+        SeccionPrincipal.EXTERNOS ->
+            if (externo == TipoExterno.POR_CORREO) {
+                if (oscuro) Color(0xFFB794FF) else Color(0xFF6D32C9)
+            } else {
+                if (oscuro) Color(0xFFFFA000) else Color(0xFFB85C00)
+            }
         SeccionPrincipal.RUTAS -> return null
     }
     return AcentoSeccion(color, if (oscuro) TextoSobreAcentoOscuro else TextoSobreAcentoClaro)
@@ -48,11 +58,11 @@ fun acentoDeSeccion(seccion: SeccionPrincipal, oscuro: Boolean): AcentoSeccion? 
 /// principal de la paleta. Todo lo que lee `MaterialTheme.colorScheme.primary`
 /// lo toma solo; no hace falta tocar cada pantalla.
 @Composable
-fun TemaSeccion(seccion: SeccionPrincipal, contenido: @Composable () -> Unit) {
+fun TemaSeccion(seccion: SeccionPrincipal, externo: TipoExterno? = null, contenido: @Composable () -> Unit) {
     val base = MaterialTheme.colorScheme
     val oscuro = temaActual().oscuro
-    val esquema = remember(base, seccion, oscuro) {
-        val acento = acentoDeSeccion(seccion, oscuro) ?: return@remember base
+    val esquema = remember(base, seccion, externo, oscuro) {
+        val acento = acentoDeSeccion(seccion, oscuro, externo) ?: return@remember base
         base.copy(
             primary = acento.color,
             onPrimary = acento.sobreColor,

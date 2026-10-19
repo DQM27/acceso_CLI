@@ -395,13 +395,18 @@ fun PantallaPrincipal(
                 Column(modifier = Modifier.fillMaxSize()) {
                     var pestana by remember { mutableIntStateOf(0) }
                     val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
+                    // El tipo elegido dentro de Externos (Proveedor o Correo) vive
+                    // acá y no en `PantallaExternos`: cambia el color de la sección
+                    // y de la pestaña de arriba (ver `AcentoSeccion.kt`).
+                    var indiceExterno by remember { mutableIntStateOf(0) }
+                    val externo = tipoExternoVisible(indiceExterno)
                     // "Historial" se sacó de acá por espacio (pestañas apiñadas,
                     // 2026-09-17); su pantalla/ViewModel/wrappers Rust se eliminaron
                     // del todo el 2026-09-21 al confirmar que no había ningún otro
                     // punto de entrada que lo usara.
                     // Cada sección con su acento (ver `AcentoSeccion.kt`): las pestañas y
                     // el contenido comparten el color de la sección activa.
-                    TemaSeccion(seccion) {
+                    TemaSeccion(seccion, externo) {
                         FilaPildoras(
                             // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
                             // usuario (2026-09-19) para descomprimir la fila de
@@ -440,7 +445,7 @@ fun PantallaPrincipal(
                         // Con `seccionMostrada` y no `seccion`: durante la
                         // transición la pantalla que se va sigue con su propio
                         // acento y no salta al de la nueva.
-                        TemaSeccion(seccionMostrada) {
+                        TemaSeccion(seccionMostrada, externo) {
                             when (seccionMostrada) {
                                 SeccionPrincipal.ACTIVOS -> PantallaActivos(
                                     nucleo,
@@ -450,7 +455,12 @@ fun PantallaPrincipal(
                                 )
                                 SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
                                 SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
-                                SeccionPrincipal.EXTERNOS -> PantallaExternos(nucleo, refrescarNube)
+                                SeccionPrincipal.EXTERNOS -> PantallaExternos(
+                                    nucleo,
+                                    refrescarNube,
+                                    tipo = indiceExterno,
+                                    onCambiarTipo = { indiceExterno = it },
+                                )
                             }
                         }
                     }
