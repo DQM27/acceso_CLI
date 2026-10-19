@@ -1,5 +1,8 @@
 # Telemetría ajustable (versión definitiva): pendientes y orden de trabajo
 
+> **Reemplazado** el 2026-10-19 por `plan-telemetria-y-registro-de-errores.md`.
+> Se conserva como historia; no es la guía de trabajo.
+
 Estado al 2026-10-17. Este documento es la **guía de trabajo** para construir la
 telemetría que se enciende y se ajusta sin sacar un release, en las dos apps
 (móvil y escritorio). Completa a `docs/features-futuras/plan-herramienta-diagnostico.md`
