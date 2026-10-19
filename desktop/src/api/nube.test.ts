@@ -3,7 +3,8 @@ import { EVENTO_CAMBIO_LOCAL_NUBE } from "../eventosNube";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve()) }));
 
-import { cerrarIngresoProveedorRemoto, cerrarIngresoRemoto } from "./nube";
+import { invoke } from "@tauri-apps/api/core";
+import { cerrarIngresoProveedorRemoto, cerrarIngresoRemoto, precalentarNube } from "./nube";
 
 // Bug real 2026-09-23: cerrar desde la PC un ingreso abierto en el celular
 // no refrescaba el historial -- el aviso Realtime de ese cambio trae el id
@@ -27,5 +28,26 @@ describe("cierres remotos piden sincronizar", () => {
     window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, escuchar);
     await cerrarIngresoProveedorRemoto("uuid-2");
     expect(escuchar).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("precalentarNube", () => {
+  const invocar = vi.mocked(invoke);
+
+  afterEach(() => invocar.mockReset());
+
+  it("pide al nucleo que caliente las conexiones", async () => {
+    invocar.mockResolvedValue(undefined);
+
+    await precalentarNube();
+
+    expect(invocar).toHaveBeenCalledTimes(1);
+    expect(invocar).toHaveBeenCalledWith("precalentar_nube");
+  });
+
+  it("es de mejor esfuerzo: si el comando falla, no lanza", async () => {
+    invocar.mockRejectedValue("Sin sesion");
+
+    await expect(precalentarNube()).resolves.toBeUndefined();
   });
 });

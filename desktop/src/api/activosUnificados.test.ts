@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve()) }));
 
@@ -10,9 +10,11 @@ import {
   activoDesdeProveedor,
   activosDeTenedores,
   cerrarActivo,
+  cerrarActivos,
   claveDeTenedor,
   listarActivosUnificados,
 } from "./activosUnificados";
+import { EVENTO_CAMBIO_LOCAL_NUBE } from "../eventosNube";
 import { tenedoresDelGafete } from "./gafetes";
 import type { TenedorGafete } from "./gafetes";
 import type { FilaActiva } from "./activos";
@@ -240,6 +242,154 @@ describe("cerrarActivo", () => {
       ["cerrar_ingreso_correo_remoto", { uuid: "uuid-m" }],
       ["cerrar_prestamo_gafete_provisional_remoto", { uuid: "uuid-k" }],
     ]);
+  });
+});
+
+describe("cerrarActivos", () => {
+  const otroContratistaLocal: FilaActiva = { ...contratistaLocal, registro_id: 8 } as FilaActiva;
+
+  /** Cada comando contesta lo que diga `respuestas`; los demás, vacío. */
+  function responder(respuestas: Record<string, unknown | (() => never)>) {
+    invocar.mockImplementation((comando: string) => {
+      const respuesta = respuestas[comando];
+      if (typeof respuesta === "function") return Promise.resolve().then(respuesta as () => never);
+      return Promise.resolve(respuesta);
+    });
+  }
+
+  const sinRechazos = (locales: number[], remotos: string[]) => ({
+    locales: { cerrados: locales, rechazados: [] },
+    remotos: { cerrados: remotos, rechazados: [] },
+  });
+
+  let avisosDeSincronizacion = 0;
+  const contarAviso = () => {
+    avisosDeSincronizacion += 1;
+  };
+  beforeEach(() => {
+    invocar.mockReset();
+    avisosDeSincronizacion = 0;
+    window.addEventListener(EVENTO_CAMBIO_LOCAL_NUBE, contarAviso);
+  });
+  afterEach(() => window.removeEventListener(EVENTO_CAMBIO_LOCAL_NUBE, contarAviso));
+
+  it("los contratistas, locales y remotos, van en una sola llamada y un solo aviso", async () => {
+    responder({ registrar_salidas_contratistas: sinRechazos([7, 8], ["uuid-c"]) });
+    const activos = [
+      activoDesdeContratista(contratistaLocal),
+      activoDesdeContratista(contratistaRemoto),
+      activoDesdeContratista(otroContratistaLocal),
+    ];
+
+    const resultado = await cerrarActivos(activos);
+
+    expect(invocar.mock.calls).toEqual([
+      ["registrar_salidas_contratistas", { locales: [7, 8], remotos: ["uuid-c"] }],
+    ]);
+    expect(avisosDeSincronizacion).toBe(1);
+    expect(resultado.cerrados).toEqual(activos);
+    expect(resultado.rechazados).toEqual([]);
+  });
+
+  it("lo que el núcleo rechaza vuelve con su motivo y lo demás se cierra", async () => {
+    responder({
+      registrar_salidas_contratistas: {
+        locales: { cerrados: [7], rechazados: [{ id: 8, mensaje: "El ingreso ya no está activo" }] },
+        remotos: { cerrados: [], rechazados: [{ uuid: "uuid-c", mensaje: "Sin conexión" }] },
+      },
+    });
+    const a = activoDesdeContratista(contratistaLocal);
+    const b = activoDesdeContratista(otroContratistaLocal);
+    const c = activoDesdeContratista(contratistaRemoto);
+
+    const resultado = await cerrarActivos([a, b, c]);
+
+    expect(resultado.cerrados).toEqual([a]);
+    expect(resultado.rechazados).toEqual([
+      { activo: b, mensaje: "El ingreso ya no está activo" },
+      { activo: c, mensaje: "Sin conexión" },
+    ]);
+    expect(avisosDeSincronizacion).toBe(1);
+  });
+
+  it("si no se cerró ninguno no se avisa a la nube", async () => {
+    responder({
+      registrar_salidas_contratistas: {
+        locales: { cerrados: [], rechazados: [{ id: 7, mensaje: "ya no está activo" }] },
+        remotos: { cerrados: [], rechazados: [] },
+      },
+    });
+
+    await cerrarActivos([activoDesdeContratista(contratistaLocal)]);
+
+    expect(avisosDeSincronizacion).toBe(0);
+  });
+
+  it("si el comando falla entero (reloj, sesión) nada se da por cerrado y no lanza", async () => {
+    responder({
+      registrar_salidas_contratistas: () => {
+        throw "Revise la fecha y hora del equipo antes de continuar";
+      },
+    });
+    const a = activoDesdeContratista(contratistaLocal);
+    const c = activoDesdeContratista(contratistaRemoto);
+
+    const resultado = await cerrarActivos([a, c]);
+
+    expect(resultado.cerrados).toEqual([]);
+    expect(resultado.rechazados.map((r) => r.mensaje)).toEqual([
+      "Revise la fecha y hora del equipo antes de continuar",
+      "Revise la fecha y hora del equipo antes de continuar",
+    ]);
+    expect(avisosDeSincronizacion).toBe(0);
+  });
+
+  it("un contratista que el núcleo no nombró no se da por cerrado", async () => {
+    responder({ registrar_salidas_contratistas: sinRechazos([], []) });
+
+    const resultado = await cerrarActivos([activoDesdeContratista(contratistaLocal)]);
+
+    expect(resultado.cerrados).toEqual([]);
+    expect(resultado.rechazados[0].mensaje).toBe("No se pudo registrar la salida");
+  });
+
+  it("sin contratistas no se llama al comando del lote", async () => {
+    responder({});
+
+    await cerrarActivos([activoDesdeProveedor(proveedorLocal), activoDesdeCorreo(correoLocal)]);
+
+    expect(invocar.mock.calls.map(([comando]) => comando)).toEqual([
+      "registrar_salida_proveedor",
+      "registrar_salida_correo",
+    ]);
+  });
+
+  it("las otras clases siguen una por una y un fallo no frena a las demás", async () => {
+    responder({
+      registrar_salidas_contratistas: sinRechazos([7], []),
+      registrar_salida_proveedor: () => {
+        throw "El ingreso ya no está activo";
+      },
+    });
+    const contratista = activoDesdeContratista(contratistaLocal);
+    const proveedor = activoDesdeProveedor(proveedorLocal);
+    const correo = activoDesdeCorreo(correoLocal);
+
+    const resultado = await cerrarActivos([proveedor, contratista, correo]);
+
+    expect(resultado.cerrados).toEqual([contratista, correo]);
+    expect(resultado.rechazados).toEqual([
+      { activo: proveedor, mensaje: "El ingreso ya no está activo" },
+    ]);
+  });
+
+  it("una lista vacía no llama a nada", async () => {
+    responder({});
+
+    const resultado = await cerrarActivos([]);
+
+    expect(invocar).not.toHaveBeenCalled();
+    expect(resultado).toEqual({ cerrados: [], rechazados: [] });
   });
 });
 

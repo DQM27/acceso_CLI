@@ -265,18 +265,39 @@ pub fn cerrar_ingreso_remoto(
     usuario_salida_nombre: &str,
     hora: chrono::DateTime<chrono::Utc>,
 ) -> Result<(), SincronizacionError> {
-    let cliente = cliente_http();
+    patch_de_cierre(
+        contexto,
+        &format!("id=eq.{uuid}"),
+        usuario_salida_nombre,
+        hora,
+    )?;
+
+    // Borra de la caché y anota la lápida juntos: una recepción que leyó la
+    // nube antes del cierre no la vuelve a meter (ver `cierres_remotos`).
+    super::cierres_remotos::anotar_cierre_remoto(connection, "ingresos_remotos", uuid)
+}
+
+/// El `PATCH` condicional que cierra ingresos en la nube: sólo toca los que
+/// siguen abiertos (`hora_salida=is.null`), así que si el otro equipo cerró
+/// uno antes, éste no lo pisa ("primero en llegar gana") y la respuesta es
+/// 2xx igual. `filtro` es el filtro de `id` ya armado (`id=eq.<uuid>` o
+/// `id=in.(<uuid>,…)`); quien lo arma garantiza que los uuid son válidos.
+fn patch_de_cierre(
+    contexto: &ContextoSincronizacion<'_>,
+    filtro: &str,
+    usuario_salida_nombre: &str,
+    hora: chrono::DateTime<chrono::Utc>,
+) -> Result<(), SincronizacionError> {
     let cuerpo = json!({
         "hora_salida": crate::tiempo::serializar_utc(hora),
         "dispositivo_salida_id": contexto.dispositivo_id,
         "usuario_salida_nombre": usuario_salida_nombre,
     });
-
     let url = format!(
-        "{}/rest/v1/ingresos?id=eq.{uuid}&hora_salida=is.null",
+        "{}/rest/v1/ingresos?{filtro}&hora_salida=is.null",
         contexto.base_url
     );
-    let respuesta = cliente
+    let respuesta = cliente_http()
         .patch(url)
         .header("apikey", contexto.apikey)
         .header("Authorization", format!("Bearer {}", contexto.token))
@@ -284,10 +305,108 @@ pub fn cerrar_ingreso_remoto(
         .json(&cuerpo)
         .send()
         .map_err(NubeError::Red)?;
-
     exigir_2xx(respuesta)?;
+    Ok(())
+}
 
-    // Borra de la caché y anota la lápida juntos: una recepción que leyó la
-    // nube antes del cierre no la vuelve a meter (ver `cierres_remotos`).
-    super::cierres_remotos::anotar_cierre_remoto(connection, "ingresos_remotos", uuid)
+/// Cuántos ingresos como máximo viajan en un mismo `PATCH`: cada uno suma 37
+/// caracteres a la URL y una lista sin tope podría pasar el límite del
+/// servidor.
+const CIERRES_POR_PEDIDO: usize = 50;
+
+/// Qué grupo de ingresos remotos no se pudo cerrar y por qué: el `PATCH` de
+/// ese grupo falló, así que ninguno quedó cerrado y siguen en la caché.
+#[derive(Debug)]
+pub struct FalloCierresRemotos {
+    pub uuids: Vec<String>,
+    pub error: SincronizacionError,
+}
+
+/// Cómo terminó un cierre remoto en lote.
+#[derive(Debug, Default)]
+pub struct ResultadoCierresRemotos {
+    /// Cerrados en la nube y sacados de la caché, en el orden en que llegaron.
+    pub cerrados: Vec<String>,
+    /// No son un uuid: ni se mandaron a la nube. Nunca se arma una URL con
+    /// texto que no sea un uuid.
+    pub invalidos: Vec<String>,
+    pub fallidos: Vec<FalloCierresRemotos>,
+}
+
+/// Un ingreso remoto del lote que no se pudo cerrar y el motivo, ya
+/// redactado para el operador (ver `mensajes::mensaje_cierres_remotos`).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct CierreRemotoRechazado {
+    pub uuid: String,
+    pub mensaje: String,
+}
+
+/// [`ResultadoCierresRemotos`] listo para mostrar: los cerrados y, por cada
+/// rechazado, su motivo. Es lo que cruza hacia las interfaces.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub struct ResumenCierresRemotos {
+    pub cerrados: Vec<String>,
+    pub rechazados: Vec<CierreRemotoRechazado>,
+}
+
+/// ¿Tiene la forma de un uuid (36 caracteres, hexadecimales y guiones)? No
+/// valida versión ni variante: sólo que sea seguro ponerlo en una URL.
+fn es_uuid(texto: &str) -> bool {
+    texto.len() == 36
+        && texto
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
+}
+
+/// [`cerrar_ingreso_remoto`] para varios ingresos a la vez: **un `PATCH` por
+/// cada [`CIERRES_POR_PEDIDO`]** (`id=in.(…)`) en vez de uno por ingreso, con
+/// la misma hora, el mismo operador y la misma regla de "primero en llegar
+/// gana". Los que ya cerró el otro equipo cuentan como cerrados, igual que
+/// uno por uno (la nube contesta 2xx).
+///
+/// Si el `PATCH` de un grupo falla (sin red, token rechazado), ese grupo
+/// queda en `fallidos` con su error y se sigue con el siguiente; lo ya
+/// cerrado no se deshace. Los repetidos se mandan una sola vez.
+pub fn cerrar_ingresos_remotos(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    uuids: &[String],
+    usuario_salida_nombre: &str,
+    hora: chrono::DateTime<chrono::Utc>,
+) -> ResultadoCierresRemotos {
+    let mut resultado = ResultadoCierresRemotos::default();
+    let mut vistos = std::collections::HashSet::new();
+    let mut validos: Vec<String> = Vec::new();
+    for uuid in uuids {
+        if !vistos.insert(uuid.as_str()) {
+            continue;
+        }
+        if es_uuid(uuid) {
+            validos.push(uuid.clone());
+        } else {
+            resultado.invalidos.push(uuid.clone());
+        }
+    }
+
+    for grupo in validos.chunks(CIERRES_POR_PEDIDO) {
+        let filtro = format!("id=in.({})", grupo.join(","));
+        let cierre =
+            patch_de_cierre(contexto, &filtro, usuario_salida_nombre, hora).and_then(|()| {
+                // Mismo criterio que `cerrar_ingreso_remoto`: la caché y la
+                // lápida cambian juntas.
+                super::cierres_remotos::anotar_cierres_remotos(
+                    connection,
+                    "ingresos_remotos",
+                    grupo,
+                )
+            });
+        match cierre {
+            Ok(()) => resultado.cerrados.extend_from_slice(grupo),
+            Err(error) => resultado.fallidos.push(FalloCierresRemotos {
+                uuids: grupo.to_vec(),
+                error,
+            }),
+        }
+    }
+    resultado
 }

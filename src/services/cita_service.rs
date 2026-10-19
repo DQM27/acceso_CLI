@@ -7,8 +7,8 @@
 
 use chrono::{DateTime, NaiveDate, Utc};
 
+use crate::application::puertos::gafetes::GafeteRepository;
 use crate::database::repositories::cita_repository::CitaRepository;
-use crate::database::repositories::gafete_repository::GafeteRepository;
 use crate::database::repositories::movimiento_visita_repository::MovimientoVisitaRepository;
 use crate::domain::cedula::Cedula;
 use crate::domain::cita::{MotivoDenegacionVisita, ResultadoVisita, verificar_cita};

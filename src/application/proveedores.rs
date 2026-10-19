@@ -22,8 +22,7 @@ use crate::services::empresa_proveedor_service::EmpresaProveedorService;
 use crate::services::error::{EmpresaProveedorServiceError, IngresoProveedorServiceError};
 use crate::services::ingreso_proveedor_service::IngresoProveedorService;
 
-use crate::database::queries::reloj::reloj_retrocedido;
-
+use super::unidad_de_trabajo::validar_reloj_operativo;
 use super::{AppCore, verificar_actor_activo};
 
 impl AppCore {
@@ -147,33 +146,46 @@ impl AppCore {
         placa: Option<String>,
         gafete_numero: i64,
     ) -> Result<i64, IngresoProveedorServiceError> {
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        let ahora = self.reloj.ahora_utc();
-        if reloj_retrocedido(&transaction, ahora).map_err(IngresoProveedorServiceError::Database)? {
-            return Err(IngresoProveedorServiceError::RelojRetrocedido);
-        }
-        let actor_actual = verificar_actor_activo(&transaction, actor)
-            .map_err(IngresoProveedorServiceError::Database)?
-            .ok_or(IngresoProveedorServiceError::OperadorNoAutorizado)?;
-        let registros = SqliteRegistroIngresoProveedorRepository::new(&transaction);
-        let empresas = SqliteEmpresaProveedorRepository::new(&transaction);
-        let gafetes = SqliteGafeteRepository::new(&transaction);
-        let id = IngresoProveedorService::new(&registros, &empresas, &gafetes).registrar_ingreso(
+        self.en_unidad_de_trabajo(actor, validar_reloj_operativo, |transaction, ahora| {
+            let registros = SqliteRegistroIngresoProveedorRepository::new(transaction);
+            let empresas = SqliteEmpresaProveedorRepository::new(transaction);
+            let gafetes = SqliteGafeteRepository::new(transaction);
+            IngresoProveedorService::new(&registros, &empresas, &gafetes).registrar_ingreso(
+                cedula,
+                nombre,
+                empresa_id,
+                placa,
+                gafete_numero,
+                actor.id,
+                ahora,
+            )
+        })
+    }
+
+    /// Las reglas de [`Self::registrar_ingreso_proveedor`] sin escribir ni
+    /// abrir transacción -- mismo criterio que `AppCore::validar_ingreso`.
+    pub fn validar_ingreso_proveedor(
+        &self,
+        actor: &UsuarioSesion,
+        cedula: &str,
+        nombre: &str,
+        empresa_id: i64,
+        placa: Option<String>,
+        gafete_numero: i64,
+    ) -> Result<(), IngresoProveedorServiceError> {
+        let registros = SqliteRegistroIngresoProveedorRepository::new(&self.connection);
+        let empresas = SqliteEmpresaProveedorRepository::new(&self.connection);
+        let gafetes = SqliteGafeteRepository::new(&self.connection);
+        IngresoProveedorService::new(&registros, &empresas, &gafetes).validar_ingreso(
             cedula,
             nombre,
             empresa_id,
             placa,
             gafete_numero,
-            actor_actual.id,
-            ahora,
+            actor.id,
+            self.reloj.ahora_utc(),
         )?;
-        transaction
-            .commit()
-            .map_err(DatabaseError::from)
-            .map_err(IngresoProveedorServiceError::Database)?;
-        Ok(id)
+        Ok(())
     }
 
     pub fn registrar_salida_proveedor(
@@ -181,28 +193,13 @@ impl AppCore {
         actor: &UsuarioSesion,
         id: i64,
     ) -> Result<(), IngresoProveedorServiceError> {
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        let ahora = self.reloj.ahora_utc();
-        if reloj_retrocedido(&transaction, ahora).map_err(IngresoProveedorServiceError::Database)? {
-            return Err(IngresoProveedorServiceError::RelojRetrocedido);
-        }
-        let actor_actual = verificar_actor_activo(&transaction, actor)
-            .map_err(IngresoProveedorServiceError::Database)?
-            .ok_or(IngresoProveedorServiceError::OperadorNoAutorizado)?;
-        let registros = SqliteRegistroIngresoProveedorRepository::new(&transaction);
-        let empresas = SqliteEmpresaProveedorRepository::new(&transaction);
-        let gafetes = SqliteGafeteRepository::new(&transaction);
-        IngresoProveedorService::new(&registros, &empresas, &gafetes).registrar_salida(
-            id,
-            ahora,
-            actor_actual.id,
-        )?;
-        transaction
-            .commit()
-            .map_err(DatabaseError::from)
-            .map_err(IngresoProveedorServiceError::Database)
+        self.en_unidad_de_trabajo(actor, validar_reloj_operativo, |transaction, ahora| {
+            let registros = SqliteRegistroIngresoProveedorRepository::new(transaction);
+            let empresas = SqliteEmpresaProveedorRepository::new(transaction);
+            let gafetes = SqliteGafeteRepository::new(transaction);
+            IngresoProveedorService::new(&registros, &empresas, &gafetes)
+                .registrar_salida(id, ahora, actor.id)
+        })
     }
 
     /// Sin `actor`, mismo criterio que `listar_rutas_activas`/
@@ -254,8 +251,8 @@ impl AppCore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::puertos::gafetes::GafeteRepository;
     use crate::database::repositories::empresa_proveedor_repository::EmpresaProveedorRepository;
-    use crate::database::repositories::gafete_repository::GafeteRepository;
     use crate::database::schema::initialize_database;
     use crate::models::gafete::TipoGafete;
     use crate::tiempo::RelojFijo;

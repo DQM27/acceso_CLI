@@ -4,6 +4,7 @@ import Modal from "../componentes/Modal";
 import { FilaListaFlotante, ListaFlotante, SinResultados } from "../componentes/ListaFlotante";
 import { useListaFlotante, useNavegacionFlechas } from "../componentes/ListaFlotante.logica";
 import { buscarContratistas, prepararIngreso, registrarIngreso } from "../api";
+import { precalentarNube } from "../api/nube";
 import type { ContratistaResumen, MedioIngreso, PreparacionIngreso } from "../api";
 import { avisosContratista, gafeteParaRegistrar } from "./NuevoIngresoModal.logica";
 
@@ -59,6 +60,13 @@ export default function NuevoIngresoModal({
     listaVisible,
     elegirContratista,
   );
+
+  // Mientras se escribe el nombre, las conexiones con la nube se calientan: la
+  // vista previa al elegir a la persona es sólo local, y la única verificación
+  // en la nube, al registrar, ya no paga conexión nueva (ver `precalentarNube`).
+  useEffect(() => {
+    void precalentarNube();
+  }, []);
 
   // Sin gafete no hay ningún campo que se lleve el `autoFocus` del
   // formulario — sin esto el foco se queda en el buscador y Enter no llega

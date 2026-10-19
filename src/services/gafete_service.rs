@@ -4,10 +4,10 @@
 
 use chrono::{DateTime, Utc};
 
+use crate::application::puertos::gafetes::GafeteRepository;
+use crate::application::puertos::registros_ingreso::RegistroIngresoRepository;
 use crate::database::queries::gafetes::{FiltroGafetes, GafeteResumen, GafetesQuery};
 use crate::database::queries::gafetes_incidentes::GafetesIncidentesWriter;
-use crate::database::repositories::gafete_repository::GafeteRepository;
-use crate::database::repositories::registro_ingreso_repository::RegistroIngresoRepository;
 use crate::models::gafete::{MotivoResolucionGafete, PortadorGafete, TipoGafete};
 
 use super::error::GafeteServiceError;

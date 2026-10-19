@@ -1,11 +1,11 @@
 use chrono::{DateTime, NaiveDate, Utc};
 
+use crate::application::puertos::contratistas::ContratistaRepository;
 use crate::database::error::DatabaseError;
 use crate::database::queries::auditoria::{AuditoriaWriter, EntidadAuditada};
 use crate::database::queries::contratistas::{
     ContratistasQuery, FiltroContratistas, PaginaContratistas,
 };
-use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
 use crate::domain::cedula::Cedula;
 use crate::domain::contratista::{

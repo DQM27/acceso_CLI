@@ -1,13 +1,13 @@
 use chrono::{DateTime, NaiveDate, Utc};
 
+use crate::application::puertos::contratistas::ContratistaRepository;
+use crate::application::puertos::gafetes::GafeteRepository;
+use crate::application::puertos::registros_ingreso::RegistroIngresoRepository;
 use crate::database::error::DatabaseError;
 use crate::database::queries::ingresos::{
     FiltroHistorial, FiltroIngresosActivos, IngresoActivoLectura, IngresosQuery, PaginaHistorial,
 };
-use crate::database::repositories::contratista_repository::ContratistaRepository;
 use crate::database::repositories::empresa_repository::EmpresaRepository;
-use crate::database::repositories::gafete_repository::GafeteRepository;
-use crate::database::repositories::registro_ingreso_repository::RegistroIngresoRepository;
 use crate::domain::acceso::verificar_acceso;
 use crate::domain::permanencia::{NivelPermanencia, UmbralesPermanencia, nivel_de_permanencia};
 use crate::domain::registro_ingreso::salida_es_cronologicamente_valida;
@@ -19,6 +19,7 @@ use crate::models::registro_ingreso::{
     ResultadoIngresoRegistrado, VERSION_REGLAS_ACCESO,
 };
 use crate::models::tipo_ingreso::TipoIngreso;
+use crate::models::via_ingreso::ViaIngreso;
 use crate::tiempo::fecha_costa_rica;
 
 use super::error::RegistroIngresoServiceError;
@@ -58,14 +59,20 @@ pub struct PreparacionIngreso {
     /// quedar adentro dos veces: una por la PC y otra por el teléfono.
     pub ingreso_activo_en_otro_dispositivo: bool,
     /// Nombre del sitio donde este contratista tiene un ingreso abierto
-    /// AHORA MISMO, si es otro distinto de este (`docs/pendientes.md`,
-    /// "Chequeo cruzado de ingresos abiertos entre sitios"). Siempre `None`
-    /// acá -- este servicio no toca la red (ver el doc-comment de
-    /// `registrar_entrada`); lo completa la capa de aplicación
-    /// (`comandos/ingresos.rs` en desktop) con un chequeo remoto de mejor
-    /// esfuerzo, nunca bloqueante si no hay conexión: sin red, el registro
-    /// sigue local y el conflicto se detecta después, al sincronizar.
+    /// AHORA MISMO, si es otro distinto de este. Siempre `None`: la vista
+    /// previa es sólo local y lo de otras unidades sólo lo sabe la nube, que
+    /// se consulta una sola vez, al registrar
+    /// (`application::con_nube::registrar_ingreso_verificado`). Se conserva
+    /// porque viaja a las dos apps (`UniFFI` y Tauri).
     pub activo_en_otro_sitio: Option<String>,
+    /// La persona (misma cédula) ya está adentro por otra vía -- como
+    /// proveedor o por correo -- en este equipo o en el otro de la unidad
+    /// (cachés `*_remotos`). Es la misma consulta con la que
+    /// `registrar_entrada` lo rechaza (`AdentroPorOtraVia`), hecha antes
+    /// para avisar en la vista previa sin tocar la red. Las pantallas no la
+    /// leen: llega resuelta en [`PreparacionIngreso::bloqueo`].
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub adentro_por_otra_via: Option<ViaIngreso>,
     /// Números de gafete que este contratista debe actualmente
     /// (`docs/plan-gafetes.md`) — puramente informativo, no bloquea el
     /// ingreso. `Vec` y no `Option<i64>`: nada impide más de una deuda
@@ -128,6 +135,15 @@ impl PreparacionIngreso {
         if let ResultadoAcceso::Denegado(motivo) = &self.resultado_acceso {
             return Some(BloqueoIngreso::AccesoDenegado {
                 motivo: motivo.clone(),
+            });
+        }
+        // Después del acceso denegado, como cuando lo resolvía
+        // `application::con_nube`: se muestra con el bloqueo de "otro sitio"
+        // y la vía al lado ("esta unidad (como proveedor)"), sin una variante
+        // nueva de `BloqueoIngreso`, que viaja a las dos apps.
+        if let Some(via) = self.adentro_por_otra_via {
+            return Some(BloqueoIngreso::ActivoEnOtroSitio {
+                sitio: format!("esta unidad ({})", via.texto()),
             });
         }
         None
@@ -305,6 +321,7 @@ where
         let ingreso_activo_en_otro_dispositivo = self
             .registros
             .cedula_con_ingreso_abierto_en_otro_dispositivo(&contratista.cedula)?;
+        let adentro_por_otra_via = self.registros.adentro_por_otra_via(&contratista.cedula)?;
         let gafetes_deuda = self.gafetes.deuda_de_contratista(contratista.id)?;
 
         Ok(PreparacionIngreso {
@@ -319,6 +336,7 @@ where
             tiene_ingreso_activo,
             ingreso_activo_en_otro_dispositivo,
             activo_en_otro_sitio: None,
+            adentro_por_otra_via,
             gafetes_deuda,
             aviso_praind: None,
         })
@@ -338,6 +356,35 @@ where
         usuario_ingreso_id: i64,
         fecha_hora_ingreso: DateTime<Utc>,
     ) -> Result<ResultadoRegistroEntrada, RegistroIngresoServiceError> {
+        let (registro, resultado_acceso) = self.validar_entrada(
+            contratista_id,
+            medio_ingreso,
+            gafete_numero,
+            placa,
+            usuario_ingreso_id,
+            fecha_hora_ingreso,
+        )?;
+        let registro_id = self.registros.crear(&registro)?;
+
+        Ok(ResultadoRegistroEntrada {
+            registro_id,
+            resultado_acceso,
+        })
+    }
+
+    /// Todas las reglas de [`Self::registrar_entrada`], sin escribir: la
+    /// fila que se guardaría y el resultado del acceso. Sirve para revisar
+    /// lo local antes de consultar la nube (`application::con_nube`);
+    /// `registrar_entrada` la vuelve a correr dentro de su transacción.
+    pub fn validar_entrada(
+        &self,
+        contratista_id: i64,
+        medio_ingreso: MedioIngreso,
+        gafete_numero: Option<i64>,
+        placa: Option<String>,
+        usuario_ingreso_id: i64,
+        fecha_hora_ingreso: DateTime<Utc>,
+    ) -> Result<(NuevoRegistroIngreso, ResultadoAcceso), RegistroIngresoServiceError> {
         // La placa es obligatoria en Vehículo y no aplica en Caminando --
         // mismo criterio que el gafete, pero condicional al medio en vez de
         // al contratista. El `CHECK` de `registro_ingresos` (`MIGRACION_49`)
@@ -451,12 +498,7 @@ where
             },
         };
 
-        let registro_id = self.registros.crear(&registro)?;
-
-        Ok(ResultadoRegistroEntrada {
-            registro_id,
-            resultado_acceso,
-        })
+        Ok((registro, resultado_acceso))
     }
 
     pub fn registrar_salida(
@@ -505,7 +547,7 @@ where
 
 #[cfg(test)]
 mod tests_bloqueo {
-    use super::{BloqueoIngreso, PreparacionIngreso, ResultadoAcceso, TipoIngreso};
+    use super::{BloqueoIngreso, PreparacionIngreso, ResultadoAcceso, TipoIngreso, ViaIngreso};
     use crate::domain::resultado_acceso::MotivoDenegacion;
 
     /// Todo en su estado "puede continuar" -- ninguno de los tres campos
@@ -523,6 +565,7 @@ mod tests_bloqueo {
             tiene_ingreso_activo: false,
             ingreso_activo_en_otro_dispositivo: false,
             activo_en_otro_sitio: None,
+            adentro_por_otra_via: None,
             gafetes_deuda: Vec::new(),
             aviso_praind: None,
         }
@@ -595,6 +638,41 @@ mod tests_bloqueo {
             preparacion.bloqueo(),
             Some(BloqueoIngreso::AccesoDenegado {
                 motivo: MotivoDenegacion::EmpresaInactiva
+            })
+        );
+    }
+
+    /// Adentro como proveedor o por correo en esta unidad: bloquea nombrando
+    /// la vía, con el mismo texto que antes armaba `application::con_nube`.
+    #[test]
+    fn adentro_por_otra_via_bloquea_nombrando_la_via() {
+        let preparacion = PreparacionIngreso {
+            adentro_por_otra_via: Some(ViaIngreso::Proveedor),
+            ..preparacion_sin_bloqueo()
+        };
+
+        assert_eq!(
+            preparacion.bloqueo(),
+            Some(BloqueoIngreso::ActivoEnOtroSitio {
+                sitio: "esta unidad (como proveedor)".into()
+            })
+        );
+    }
+
+    /// El acceso denegado gana sobre la otra vía: es el orden que ya tenía
+    /// la vista previa cuando esa consulta vivía en `con_nube`.
+    #[test]
+    fn acceso_denegado_tiene_prioridad_sobre_la_otra_via() {
+        let preparacion = PreparacionIngreso {
+            adentro_por_otra_via: Some(ViaIngreso::PorCorreo),
+            resultado_acceso: ResultadoAcceso::Denegado(MotivoDenegacion::SinAcceso),
+            ..preparacion_sin_bloqueo()
+        };
+
+        assert_eq!(
+            preparacion.bloqueo(),
+            Some(BloqueoIngreso::AccesoDenegado {
+                motivo: MotivoDenegacion::SinAcceso
             })
         );
     }

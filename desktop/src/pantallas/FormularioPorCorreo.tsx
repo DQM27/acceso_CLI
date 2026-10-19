@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listarTodosLosCorreosActivos, registrarIngresoCorreo } from "../api/correo";
 import type { MedioIngreso } from "../api";
+import { precalentarNube } from "../api/nube";
 import { textoGafete, validarNumeroGafete } from "../busqueda";
 import { nombreMientrasSeEscribe } from "../nombres";
 
@@ -31,6 +32,12 @@ export function FormularioPorCorreo({
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+
+  // Mientras se escribe, las conexiones con la nube se calientan (ver
+  // `precalentarNube`).
+  useEffect(() => {
+    void precalentarNube();
+  }, []);
 
   useEffect(() => {
     // Sólo alimenta el aviso "ya está adentro": si falla, igual se registra

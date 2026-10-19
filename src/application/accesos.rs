@@ -1,8 +1,7 @@
 //! Preparar/registrar ingreso, registrar salida, y el listado de ingresos activos.
 
-use rusqlite::{Connection, Transaction, TransactionBehavior};
+use rusqlite::Connection;
 
-use crate::database::error::DatabaseError;
 use crate::database::queries::ingresos::{FiltroIngresosActivos, SqliteIngresosQuery};
 use crate::database::repositories::contratista_repository::SqliteContratistaRepository;
 use crate::database::repositories::empresa_repository::SqliteEmpresaRepository;
@@ -20,7 +19,8 @@ use crate::services::registro_ingreso_service::{
 };
 use crate::tiempo::{fecha_costa_rica, parsear_utc};
 
-use super::{AppCore, verificar_actor_activo};
+use super::AppCore;
+use super::unidad_de_trabajo::en_savepoint;
 
 /// Lo que la barra de estado muestra sobre la gente que lleva demasiado
 /// adentro (ver `domain::permanencia`): los conteos y los textos ya redactados.
@@ -33,6 +33,25 @@ pub struct AvisosPermanencia {
     pub criticos: usize,
     pub texto_aviso: Option<String>,
     pub texto_critico: Option<String>,
+}
+
+/// Una salida de un lote que no se pudo cerrar y el motivo, ya redactado
+/// para el operador (el núcleo decide los textos; las interfaces sólo los
+/// muestran).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct SalidaRechazada {
+    pub id: i64,
+    pub mensaje: String,
+}
+
+/// Cómo terminó un lote de salidas: los ingresos cerrados, en el orden en
+/// que llegaron, y los rechazados con su motivo.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct ResultadoSalidas {
+    pub cerrados: Vec<i64>,
+    pub rechazados: Vec<SalidaRechazada>,
 }
 
 impl AvisosPermanencia {
@@ -68,53 +87,6 @@ impl AppCore {
         Ok(preparacion)
     }
 
-    /// Abre una transacción `Immediate` (el bloqueo se adquiere antes de la
-    /// primera lectura definitiva, así los repositorios creados sobre ella
-    /// validan e insertan contra el mismo estado de `SQLite`), valida que el
-    /// reloj no haya retrocedido, confirma que `usuario_id` sigue siendo un
-    /// operador activo, corre `operar` y confirma. Compartido por
-    /// `registrar_ingreso` y `registrar_salida` — antes cada uno repetía este
-    /// mismo armazón letra por letra.
-    ///
-    /// La validación del reloj se queda aquí, en `AppCore`, y no en
-    /// `RegistroIngresoService` (que declara `RelojRetrocedido` pero no lo
-    /// genera) **a propósito**: es una comprobación de sanidad de todo el
-    /// sistema (¿el reloj de la máquina retrocedió respecto al último
-    /// movimiento conocido, sin importar de qué contratista?), no una regla
-    /// de negocio de una entrada/salida puntual. Moverla al servicio se
-    /// intentó y se revirtió — rompía tests de integración que llaman al
-    /// servicio directo con datos de prueba cuyos tiempos no representan un
-    /// reloj real avanzando (`tests/flujo_integracion.rs`).
-    ///
-    /// La verificación de operador activo vive aquí por el mismo motivo:
-    /// `registrar_entrada`/`registrar_salida` recibían el `usuario_id` como
-    /// un entero crudo, sin comprobar que existiera ni que siguiera activo —
-    /// la FK de `SQLite` sólo exige que exista, no que esté activo. Una
-    /// sesión de TUI ya iniciada podía seguir registrando movimientos
-    /// después de que un administrador desactivara esa cuenta
-    /// (`docs/auditoria-dominio-2026-08-20.md`, hallazgo #2). Se revisa
-    /// dentro de esta misma transacción `Immediate`, no antes, para que una
-    /// desactivación concurrente no pueda colarse entre el chequeo y la
-    /// escritura.
-    fn en_transaccion_con_reloj_validado<T>(
-        &self,
-        actor: &UsuarioSesion,
-        operar: impl FnOnce(
-            &Transaction<'_>,
-            chrono::DateTime<chrono::Utc>,
-        ) -> Result<T, RegistroIngresoServiceError>,
-    ) -> Result<T, RegistroIngresoServiceError> {
-        let ahora = self.reloj.ahora_utc();
-        let transaction =
-            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
-                .map_err(DatabaseError::from)?;
-        validar_reloj(&transaction, ahora)?;
-        verificar_operador_activo(&transaction, actor)?;
-        let resultado = operar(&transaction, ahora)?;
-        transaction.commit().map_err(DatabaseError::from)?;
-        Ok(resultado)
-    }
-
     pub fn registrar_ingreso(
         &self,
         actor: &UsuarioSesion,
@@ -126,7 +98,7 @@ impl AppCore {
         // Las interfaces mandan la placa tal cual se tipeó; qué placa
         // corresponde al medio lo decide el dominio (escritorio y móvil).
         let placa = crate::domain::registro_ingreso::placa_segun_medio(medio, placa);
-        self.en_transaccion_con_reloj_validado(actor, |transaction, ahora| {
+        self.en_unidad_de_trabajo(actor, validar_reloj, |transaction, ahora| {
             let contratistas = SqliteContratistaRepository::new(transaction);
             let registros = SqliteRegistroIngresoRepository::new(transaction);
             let gafetes = SqliteGafeteRepository::new(transaction);
@@ -139,6 +111,33 @@ impl AppCore {
                 ahora,
             )
         })
+    }
+
+    /// Las reglas de [`Self::registrar_ingreso`] sin escribir ni abrir
+    /// transacción: lo que sabe este equipo (y su caché del otro equipo de
+    /// la unidad). `con_nube` lo corre antes de ir a la red, así lo que ya se
+    /// sabe acá no gasta ninguna consulta; la escritura lo vuelve a validar.
+    pub fn validar_ingreso(
+        &self,
+        actor: &UsuarioSesion,
+        contratista_id: i64,
+        medio: crate::models::medio_ingreso::MedioIngreso,
+        gafete: Option<i64>,
+        placa: Option<String>,
+    ) -> Result<(), RegistroIngresoServiceError> {
+        let placa = crate::domain::registro_ingreso::placa_segun_medio(medio, placa);
+        let contratistas = SqliteContratistaRepository::new(&self.connection);
+        let registros = SqliteRegistroIngresoRepository::new(&self.connection);
+        let gafetes = SqliteGafeteRepository::new(&self.connection);
+        RegistroIngresoService::new(&contratistas, &registros, &gafetes).validar_entrada(
+            contratista_id,
+            medio,
+            gafete,
+            placa,
+            actor.id,
+            self.reloj.ahora_utc(),
+        )?;
+        Ok(())
     }
 
     pub fn listar_ingresos_activos(
@@ -196,7 +195,7 @@ impl AppCore {
         actor: &UsuarioSesion,
         id: i64,
     ) -> Result<(), RegistroIngresoServiceError> {
-        self.en_transaccion_con_reloj_validado(actor, |transaction, ahora| {
+        self.en_unidad_de_trabajo(actor, validar_reloj, |transaction, ahora| {
             let contratistas = SqliteContratistaRepository::new(transaction);
             let registros = SqliteRegistroIngresoRepository::new(transaction);
             let gafetes = SqliteGafeteRepository::new(transaction);
@@ -204,11 +203,53 @@ impl AppCore {
                 .registrar_salida(id, ahora, actor.id)
         })
     }
+
+    /// Cierra varias salidas de contratistas en **una sola transacción**: el
+    /// reloj y el operador se validan una vez, las que se pueden cerrar se
+    /// confirman todas juntas, y una que falla (ya cerrada, inexistente) no
+    /// frena a las demás: queda en `rechazados` con su mensaje. Cada salida
+    /// va en su propio tramo (`en_savepoint`), así que una rechazada no deja
+    /// escrito nada a medias.
+    ///
+    /// Todas llevan la misma hora, la del reloj del núcleo al abrir la
+    /// transacción. Si el reloj retrocedió o el operador ya no es válido, no
+    /// se cierra ninguna y la respuesta es el error, igual que en
+    /// [`Self::registrar_salida`].
+    pub fn registrar_salidas(
+        &self,
+        actor: &UsuarioSesion,
+        ids: &[i64],
+    ) -> Result<ResultadoSalidas, RegistroIngresoServiceError> {
+        self.en_unidad_de_trabajo(actor, validar_reloj, |transaction, ahora| {
+            let contratistas = SqliteContratistaRepository::new(transaction);
+            let registros = SqliteRegistroIngresoRepository::new(transaction);
+            let gafetes = SqliteGafeteRepository::new(transaction);
+            let servicio = RegistroIngresoService::new(&contratistas, &registros, &gafetes);
+            let mut resultado = ResultadoSalidas::default();
+            for &id in ids {
+                let salida = en_savepoint(transaction, || {
+                    servicio.registrar_salida(id, ahora, actor.id)
+                });
+                match salida {
+                    Ok(()) => resultado.cerrados.push(id),
+                    // Lo de la base corta el lote: no es culpa de esa salida.
+                    Err(RegistroIngresoServiceError::Database(error)) => {
+                        return Err(RegistroIngresoServiceError::Database(error));
+                    }
+                    Err(error) => resultado.rechazados.push(SalidaRechazada {
+                        id,
+                        mensaje: crate::mensajes::mensaje_salida(error),
+                    }),
+                }
+            }
+            Ok(resultado)
+        })
+    }
 }
 
 /// Comprobación de sanidad de todo el sistema, no una regla de negocio de
 /// `RegistroIngresoService` (ver el comentario de
-/// `en_transaccion_con_reloj_validado`). Sin SQL propio —
+/// `AppCore::en_unidad_de_trabajo`). Sin SQL propio —
 /// `ultimo_instante_movimiento` vive en `database::queries::ingresos`, junto
 /// al resto del acceso a `registro_ingresos`.
 fn validar_reloj(
@@ -223,20 +264,4 @@ fn validar_reloj(
         return Err(RegistroIngresoServiceError::RelojRetrocedido);
     }
     Ok(())
-}
-
-/// Comprobación de sanidad del actor, mismo criterio que `validar_reloj`: no
-/// es una regla de negocio de una entrada/salida puntual, es "¿quién dice
-/// que está registrando esto sigue siendo un operador real?". La FK de
-/// `usuario_ingreso_id`/`usuario_salida_id` en `SQLite` sólo exige que el ID
-/// exista — nunca que la cuenta siga activa.
-fn verificar_operador_activo(
-    connection: &Connection,
-    actor: &UsuarioSesion,
-) -> Result<(), RegistroIngresoServiceError> {
-    if verificar_actor_activo(connection, actor)?.is_some() {
-        Ok(())
-    } else {
-        Err(RegistroIngresoServiceError::OperadorNoAutorizado)
-    }
 }

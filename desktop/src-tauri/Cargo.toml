@@ -63,7 +63,7 @@ tokio = { version = "=1.53.1", features = ["sync", "time"] }
 # Telemetría (src/telemetria.rs): consulta las reglas y manda los lotes a
 # staging. Misma versión y features que el crate raíz, así Cargo unifica una
 # sola copia.
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "http2"] }
 
 [features]
 # Build de DIAGNÓSTICO (docs/telemetria-diagnostico.md): la telemetría queda
@@ -178,6 +178,17 @@ zeroize = "1"
 # sin AppHandle, porque estos dos diálogos corren ANTES de que exista
 # tauri::Builder (ver preparar_nucleo/mostrar_error_fatal_y_salir).
 rfd = "=0.16.0"
+
+# `reqwest::blocking` (con el que el núcleo habla con la nube) comprueba, SÓLO
+# con `debug-assertions`, que no se lo llame desde un hilo asíncrono: arma y
+# suelta un runtime de mentira, y eso entra en pánico ("Cannot drop a runtime
+# in a context where blocking is not allowed") en los hilos de tokio donde Tauri
+# corre los comandos `#[tauri::command(async)]`. En `tauri dev` cada llamada a
+# la nube dejaba el comando colgado y la pantalla en "Registrando…" para
+# siempre. Sin la comprobación se comporta igual que el release, que nunca la
+# tuvo (por eso en producción no se veía).
+[profile.dev.package.reqwest]
+debug-assertions = false
 
 [profile.release]
 opt-level = 3

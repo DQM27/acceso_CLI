@@ -22,7 +22,9 @@
 
 use std::ops::Deref;
 
+use super::tenedores_gafete::{ClaseTenedorGafete, OrigenTenedorGafete};
 use super::{AppCore, GestionNubeError};
+use crate::database::error::DatabaseError;
 use crate::models::medio_ingreso::MedioIngreso;
 use crate::nube::{
     CacheTokenDispositivo, ContextoSincronizacion, SincronizacionError, TokenDispositivo,
@@ -32,9 +34,7 @@ use crate::services::error::{
     CitaServiceError, GafeteProvisionalServiceError, IngresoCorreoServiceError,
     IngresoProveedorServiceError, RegistroIngresoServiceError,
 };
-use crate::services::registro_ingreso_service::{
-    BloqueoIngreso, PreparacionIngreso, ResultadoRegistroEntrada,
-};
+use crate::services::registro_ingreso_service::{BloqueoIngreso, ResultadoRegistroEntrada};
 
 /// Token vigente para consultar la nube. Autoriza al actor con el candado
 /// tomado (es `SQLite`, microsegundos) y lo suelta antes de autenticar.
@@ -111,6 +111,25 @@ fn unir_hilo<T>(hilo: std::thread::ScopedJoinHandle<'_, T>) -> T {
         .unwrap_or_else(|panico| std::panic::resume_unwind(panico))
 }
 
+/// El gafete `numero` de la clase `clase` ya lo tiene abierto el otro
+/// equipo de la unidad, según la caché local (`*_remotos`, que Realtime
+/// mantiene al día). Se mira antes de ir a la nube: si la caché ya lo sabe,
+/// no hace falta preguntar. Si dice que está libre igual se pregunta en vivo,
+/// por si la caché viene un instante atrasada.
+fn gafete_abierto_en_el_otro_equipo(
+    nucleo: &AppCore,
+    actor: &UsuarioSesion,
+    clase: ClaseTenedorGafete,
+    numero: i64,
+) -> Result<bool, DatabaseError> {
+    Ok(nucleo
+        .tenedores_del_gafete(actor, numero)?
+        .iter()
+        .any(|tenedor| {
+            tenedor.clase == clase && matches!(tenedor.origen, OrigenTenedorGafete::Remoto { .. })
+        }))
+}
+
 // ---- Ingreso de contratista ----
 
 /// Regla: un contratista no puede tener dos ingresos activos, ni en este
@@ -167,50 +186,6 @@ fn bloqueo_en_la_nube(
     }
 }
 
-/// Vista previa al elegir a la persona: reglas locales y, si pasan, la
-/// verificación en la nube. El bloqueo queda en la preparación (ver
-/// `bloqueo_en_la_nube`); las pantallas sólo lo muestran.
-pub fn preparar_ingreso_verificado<G: Deref<Target = AppCore>>(
-    nucleo: impl Fn() -> G,
-    nube: &CacheTokenDispositivo,
-    actor: Option<&UsuarioSesion>,
-    contratista_id: i64,
-) -> Result<(PreparacionIngreso, Option<BloqueoIngreso>), RegistroIngresoServiceError> {
-    let preparacion = nucleo().preparar_ingreso(contratista_id)?;
-    let local = preparacion.bloqueo();
-    if local.is_some() {
-        return Ok((preparacion, local));
-    }
-    // Adentro por otra vía en este equipo o en el otro de la unidad: se
-    // avisa ya en la vista previa (la escritura también lo rechaza, con
-    // `RegistroIngresoServiceError::AdentroPorOtraVia`).
-    if let Some(via) = crate::database::queries::persona_adentro::adentro_por_otra_via(
-        &nucleo().connection,
-        &preparacion.cedula,
-        crate::models::via_ingreso::ViaIngreso::Contratista,
-    )? {
-        let bloqueo = BloqueoIngreso::ActivoEnOtroSitio {
-            sitio: format!("esta unidad ({})", via.texto()),
-        };
-        return Ok((preparacion, Some(bloqueo)));
-    }
-    if !nube.vinculado() {
-        return Ok((preparacion, None));
-    }
-    // Sin sesión no hay con qué autorizar la consulta: con nube
-    // configurada eso cuenta como "no se pudo verificar".
-    let bloqueo = match actor.map(|actor| token_para_verificar(&nucleo, nube, actor, "ingreso")) {
-        Some(Ok(Some(token))) => bloqueo_en_la_nube(&contexto(&token), &preparacion.cedula),
-        Some(Ok(None)) => None,
-        Some(Err(error)) => {
-            log::warn!("ingreso: no se pudo autenticar para verificar: {error}");
-            Some(BloqueoIngreso::SinVerificarEnLaNube)
-        }
-        None => Some(BloqueoIngreso::SinVerificarEnLaNube),
-    };
-    Ok((preparacion, bloqueo))
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum IngresoVerificadoError {
     #[error(transparent)]
@@ -222,13 +197,22 @@ pub enum IngresoVerificadoError {
 }
 
 /// Ingreso de contratista con todas sus reglas, en este orden:
-/// 1. reglas locales (este equipo y la caché del otro equipo del sitio);
-/// 2. con nube configurada, en vivo: la persona no tiene un ingreso activo
-///    en ningún sitio, y el gafete no está en uso en el otro dispositivo.
-///    Sin conexión con la nube se sigue con lo local (ver el doc-comment
-///    del módulo); si la nube rechaza la consulta, no se registra;
+/// 1. TODAS las reglas locales, sin tocar la red: las de la vista previa
+///    (`AppCore::preparar_ingreso`, ver `PreparacionIngreso::bloqueo`), las
+///    de la escritura (`AppCore::validar_ingreso`: placa, gafete en este
+///    equipo...) y el gafete abierto en el otro equipo de la unidad según la
+///    caché. Lo que ya se sabe acá no gasta ninguna consulta;
+/// 2. con nube configurada, la verificación final en vivo: la persona no
+///    tiene un ingreso activo en ningún sitio (lo único que este equipo no
+///    puede saber: otras unidades), y el gafete no está en uso en el otro
+///    dispositivo. Sin conexión con la nube se sigue con lo local (ver el
+///    doc-comment del módulo); si la nube rechaza la consulta, no se
+///    registra;
 /// 3. escribe (`AppCore::registrar_ingreso`, que repite lo local dentro de
 ///    su transacción).
+///
+/// La vista previa al elegir a la persona es sólo local
+/// (`AppCore::preparar_ingreso`): la nube se consulta una sola vez, acá.
 ///
 /// Si dos equipos pasan el paso 2 en el mismo instante, o uno registró sin
 /// conexión, el índice único de Supabase decide: gana el primero en
@@ -243,10 +227,26 @@ pub fn registrar_ingreso_verificado<G: Deref<Target = AppCore>>(
     gafete: Option<i64>,
     placa: Option<String>,
 ) -> Result<ResultadoRegistroEntrada, IngresoVerificadoError> {
-    let preparacion = nucleo().preparar_ingreso(contratista_id)?;
-    if let Some(bloqueo) = preparacion.bloqueo() {
-        return Err(IngresoVerificadoError::Bloqueado(bloqueo));
-    }
+    let preparacion = {
+        let core = nucleo();
+        let preparacion = core.preparar_ingreso(contratista_id)?;
+        if let Some(bloqueo) = preparacion.bloqueo() {
+            return Err(IngresoVerificadoError::Bloqueado(bloqueo));
+        }
+        core.validar_ingreso(actor, contratista_id, medio, gafete, placa.clone())?;
+        if let Some(numero) = gafete
+            && gafete_abierto_en_el_otro_equipo(
+                &core,
+                actor,
+                ClaseTenedorGafete::Contratista,
+                numero,
+            )
+            .map_err(RegistroIngresoServiceError::Database)?
+        {
+            return Err(IngresoVerificadoError::GafeteOcupadoEnSitio { numero });
+        }
+        preparacion
+    };
 
     if nube.vinculado() {
         let token = token_para_verificar(&nucleo, nube, actor, "ingreso").map_err(|error| {
@@ -317,9 +317,12 @@ pub enum IngresoProveedorVerificadoError {
 }
 
 /// Ingreso de proveedor con todas sus reglas, en este orden:
-/// 1. la cédula no tiene otro ingreso abierto en este sitio, ni en este
-///    equipo ni en el otro dispositivo
-///    (`AppCore::proveedor_con_ingreso_activo_en_sitio`);
+/// 1. TODAS las reglas locales, sin tocar la red: la cédula no tiene otro
+///    ingreso abierto en este sitio, ni en este equipo ni en el otro
+///    dispositivo (`AppCore::proveedor_con_ingreso_activo_en_sitio`), las de
+///    la escritura (`AppCore::validar_ingreso_proveedor`: cédula, empresa,
+///    otra vía, gafete en este equipo...) y el gafete abierto en el otro
+///    equipo según la caché. Lo que ya se sabe acá no gasta ninguna consulta;
 /// 2. con nube configurada, en vivo: la cédula no tiene un ingreso abierto
 ///    en ningún sitio (`ingreso_proveedor_activo`) y el gafete no está en uso
 ///    en el otro dispositivo del sitio. Sin conexión con la nube se sigue
@@ -342,8 +345,31 @@ pub fn registrar_ingreso_proveedor_verificado<G: Deref<Target = AppCore>>(
     if let Ok(cedula) = crate::domain::cedula::Cedula::normalizar(&datos.cedula) {
         datos.cedula = cedula.into_string();
     }
-    if nucleo().proveedor_con_ingreso_activo_en_sitio(&datos.cedula)? {
-        return Err(IngresoProveedorServiceError::IngresoActivo.into());
+    {
+        let core = nucleo();
+        if core.proveedor_con_ingreso_activo_en_sitio(&datos.cedula)? {
+            return Err(IngresoProveedorServiceError::IngresoActivo.into());
+        }
+        core.validar_ingreso_proveedor(
+            actor,
+            &datos.cedula,
+            &datos.nombre,
+            datos.empresa_id,
+            datos.placa.clone(),
+            datos.gafete_numero,
+        )?;
+        if gafete_abierto_en_el_otro_equipo(
+            &core,
+            actor,
+            ClaseTenedorGafete::Proveedor,
+            datos.gafete_numero,
+        )
+        .map_err(IngresoProveedorServiceError::Database)?
+        {
+            return Err(IngresoProveedorVerificadoError::GafeteOcupadoEnSitio {
+                numero: datos.gafete_numero,
+            });
+        }
     }
 
     if nube.vinculado()
@@ -444,9 +470,11 @@ pub enum IngresoCorreoVerificadoError {
 
 /// Ingreso por correo con todas sus reglas -- mismo orden que
 /// [`registrar_ingreso_proveedor_verificado`]:
-/// 1. la cédula no tiene otro ingreso por correo abierto en este sitio, ni
-///    en este equipo ni en el otro dispositivo
-///    (`AppCore::correo_con_ingreso_activo_en_sitio`);
+/// 1. TODAS las reglas locales, sin tocar la red: la cédula no tiene otro
+///    ingreso por correo abierto en este sitio, ni en este equipo ni en el
+///    otro dispositivo (`AppCore::correo_con_ingreso_activo_en_sitio`), las
+///    de la escritura (`AppCore::validar_ingreso_correo`) y el gafete abierto
+///    por correo en el otro equipo según la caché;
 /// 2. con nube configurada, en vivo y a la vez: la cédula no está adentro
 ///    por correo en ninguna unidad (`ingreso_correo_activo`), y el gafete de
 ///    visita no está en uso en el otro dispositivo del sitio, ni por otro
@@ -467,8 +495,31 @@ pub fn registrar_ingreso_correo_verificado<G: Deref<Target = AppCore>>(
     if let Ok(cedula) = crate::domain::cedula::Cedula::normalizar(&datos.cedula) {
         datos.cedula = cedula.into_string();
     }
-    if nucleo().correo_con_ingreso_activo_en_sitio(&datos.cedula)? {
-        return Err(IngresoCorreoServiceError::IngresoActivo.into());
+    let datos_ingreso = crate::services::ingreso_correo_service::DatosIngresoCorreo {
+        cedula: &datos.cedula,
+        nombre: &datos.nombre,
+        motivo: &datos.motivo,
+        placa: datos.placa.clone(),
+        gafete_numero: datos.gafete_numero,
+    };
+    {
+        let core = nucleo();
+        if core.correo_con_ingreso_activo_en_sitio(&datos.cedula)? {
+            return Err(IngresoCorreoServiceError::IngresoActivo.into());
+        }
+        core.validar_ingreso_correo(actor, &datos_ingreso)?;
+        if gafete_abierto_en_el_otro_equipo(
+            &core,
+            actor,
+            ClaseTenedorGafete::Correo,
+            datos.gafete_numero,
+        )
+        .map_err(IngresoCorreoServiceError::Database)?
+        {
+            return Err(IngresoCorreoVerificadoError::GafeteOcupadoEnSitio {
+                numero: datos.gafete_numero,
+            });
+        }
     }
 
     if nube.vinculado()
@@ -477,16 +528,7 @@ pub fn registrar_ingreso_correo_verificado<G: Deref<Target = AppCore>>(
         verificar_correo_en_la_nube(&contexto(&token), &datos)?;
     }
 
-    Ok(nucleo().registrar_ingreso_correo(
-        actor,
-        &crate::services::ingreso_correo_service::DatosIngresoCorreo {
-            cedula: &datos.cedula,
-            nombre: &datos.nombre,
-            motivo: &datos.motivo,
-            placa: datos.placa,
-            gafete_numero: datos.gafete_numero,
-        },
-    )?)
+    Ok(nucleo().registrar_ingreso_correo(actor, &datos_ingreso)?)
 }
 
 /// Paso 2 de [`registrar_ingreso_correo_verificado`].
@@ -653,6 +695,11 @@ pub enum EntregaGafeteProvisionalVerificadaError {
 }
 
 /// Entrega de gafete provisional KOF con todas sus reglas:
+/// 0. TODAS las reglas locales, sin tocar la red: las de la escritura
+///    (`AppCore::validar_entrega_gafete_provisional`: el encargado existe,
+///    está activo y no tiene otro préstamo en este equipo; el gafete existe
+///    y está libre acá) y el gafete prestado en el otro equipo según la
+///    caché. Lo que ya se sabe acá no gasta ninguna consulta;
 /// 1. con nube configurada, en vivo y a la vez: el gafete no está prestado
 ///    en el otro dispositivo del sitio, y el encargado (por su código de
 ///    empleado) no tiene otro gafete provisional sin devolver en ningún sitio
@@ -673,19 +720,30 @@ pub fn entregar_gafete_provisional_verificado<G: Deref<Target = AppCore>>(
     encargado_id: i64,
     gafete_numero: i64,
 ) -> Result<i64, EntregaGafeteProvisionalVerificadaError> {
-    if nube.vinculado() {
-        // Sin encargado en el catálogo local no hay a quién buscar: la
-        // escritura de abajo lo rechaza con su propio error.
-        let codigo_empleado = nucleo().codigo_empleado_de_encargado(encargado_id)?;
-        if let Some(token) =
-            token_para_verificar(&nucleo, nube, actor, "entrega de gafete provisional")?
+    let codigo_empleado = {
+        let core = nucleo();
+        core.validar_entrega_gafete_provisional(actor, encargado_id, gafete_numero)?;
+        if gafete_abierto_en_el_otro_equipo(&core, actor, ClaseTenedorGafete::Kof, gafete_numero)
+            .map_err(GafeteProvisionalServiceError::Database)?
         {
-            verificar_entrega_provisional_en_la_nube(
-                &contexto(&token),
-                codigo_empleado.as_deref(),
-                gafete_numero,
-            )?;
+            return Err(
+                EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio {
+                    numero: gafete_numero,
+                },
+            );
         }
+        // La validación ya confirmó que el encargado está en el catálogo.
+        core.codigo_empleado_de_encargado(encargado_id)?
+    };
+    if nube.vinculado()
+        && let Some(token) =
+            token_para_verificar(&nucleo, nube, actor, "entrega de gafete provisional")?
+    {
+        verificar_entrega_provisional_en_la_nube(
+            &contexto(&token),
+            codigo_empleado.as_deref(),
+            gafete_numero,
+        )?;
     }
 
     Ok(nucleo().entregar_gafete_provisional(actor, encargado_id, gafete_numero)?)
@@ -1136,5 +1194,259 @@ mod tests {
             bloqueo_contra(&base),
             Some(BloqueoIngreso::SinVerificarEnLaNube)
         );
+    }
+    // ---- Lo local se revisa antes de la red ----
+
+    /// Firmante de un equipo vinculado que falla la prueba si alguien
+    /// intenta autenticarse: con él, cualquier consulta a la nube revienta
+    /// en vez de salir a la red. Sirve para comprobar que lo que este equipo
+    /// ya sabe se rechaza sin gastar ninguna consulta.
+    struct FirmanteQueNoDebeUsarse;
+
+    impl crate::nube::FirmanteDispositivo for FirmanteQueNoDebeUsarse {
+        fn clave_publica_jwk(&self) -> Result<String, crate::nube::ErrorFirmante> {
+            panic!("no debía consultar la nube: lo local ya decidía");
+        }
+        fn firmar(&self, _datos: &[u8]) -> Result<Vec<u8>, crate::nube::ErrorFirmante> {
+            panic!("no debía consultar la nube: lo local ya decidía");
+        }
+        fn regenerar(&self) -> Result<(), crate::nube::ErrorFirmante> {
+            panic!("no debía consultar la nube: lo local ya decidía");
+        }
+        fn dispositivo_vinculado(&self) -> Option<String> {
+            Some("este-equipo".to_string())
+        }
+        fn marcar_vinculada(
+            &self,
+            _dispositivo_id: &str,
+        ) -> Result<(), crate::nube::ErrorFirmante> {
+            panic!("no debía consultar la nube: lo local ya decidía");
+        }
+    }
+
+    fn nube_que_no_debe_usarse() -> CacheTokenDispositivo {
+        let cache = CacheTokenDispositivo::new();
+        cache.establecer_firmante(Arc::new(FirmanteQueNoDebeUsarse));
+        assert!(cache.vinculado());
+        cache
+    }
+
+    #[test]
+    fn proveedor_con_el_gafete_abierto_en_el_otro_equipo_se_rechaza_sin_tocar_la_red() {
+        let (core, actor, empresa_id) = nucleo_con_empresa_y_gafete();
+        core.lock()
+            .unwrap()
+            .connection
+            .execute(
+                "INSERT INTO ingresos_proveedor_remotos (uuid, sitio_id, cedula, nombre,
+                     empresa_nombre, placa, gafete_numero, hora_entrada,
+                     usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en)
+                 VALUES ('u1', 's1', '2-2222-2222', 'ANA', 'Maika', NULL, 5,
+                     '2026-09-16T11:00:00Z', 'Otro', 'd2', '2026-09-16T11:00:00Z')",
+                [],
+            )
+            .unwrap();
+
+        let error = registrar_ingreso_proveedor_verificado(
+            || core.lock().unwrap(),
+            &nube_que_no_debe_usarse(),
+            &actor,
+            datos("1-1111-1111", empresa_id),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            IngresoProveedorVerificadoError::GafeteOcupadoEnSitio { numero: 5 }
+        ));
+    }
+
+    #[test]
+    fn proveedor_con_un_gafete_inexistente_se_rechaza_sin_tocar_la_red() {
+        let (core, actor, empresa_id) = nucleo_con_empresa_y_gafete();
+
+        let error = registrar_ingreso_proveedor_verificado(
+            || core.lock().unwrap(),
+            &nube_que_no_debe_usarse(),
+            &actor,
+            NuevoIngresoProveedor {
+                gafete_numero: 99,
+                ..datos("1-1111-1111", empresa_id)
+            },
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            IngresoProveedorVerificadoError::Servicio(
+                IngresoProveedorServiceError::GafeteNoRegistrado
+            )
+        ));
+    }
+
+    #[test]
+    fn correo_con_el_gafete_abierto_en_el_otro_equipo_se_rechaza_sin_tocar_la_red() {
+        let (core, actor, _) = nucleo_con_empresa_y_gafete();
+        {
+            let core = core.lock().unwrap();
+            SqliteGafeteRepository::new(&core.connection)
+                .crear(3, TipoGafete::Visita)
+                .unwrap();
+            core.connection
+                .execute(
+                    "INSERT INTO ingresos_correo_remotos (uuid, sitio_id, cedula, nombre,
+                         motivo, placa, gafete_numero, hora_entrada,
+                         usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en)
+                     VALUES ('u1', 's1', '2-2222-2222', 'ANA', 'Reunión', NULL, 3,
+                         '2026-09-16T11:00:00Z', 'Otro', 'd2', '2026-09-16T11:00:00Z')",
+                    [],
+                )
+                .unwrap();
+        }
+
+        let error = registrar_ingreso_correo_verificado(
+            || core.lock().unwrap(),
+            &nube_que_no_debe_usarse(),
+            &actor,
+            NuevoIngresoCorreo {
+                cedula: "1-1111-1111".into(),
+                nombre: "JUAN PEREZ".into(),
+                motivo: "Entrega".into(),
+                placa: None,
+                gafete_numero: 3,
+            },
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            IngresoCorreoVerificadoError::GafeteOcupadoEnSitio { numero: 3 }
+        ));
+    }
+
+    #[test]
+    fn kof_con_el_gafete_prestado_en_el_otro_equipo_se_rechaza_sin_tocar_la_red() {
+        let (core, actor, _) = nucleo_con_empresa_y_gafete();
+        let encargado_id = {
+            let core = core.lock().unwrap();
+            SqliteGafeteRepository::new(&core.connection)
+                .crear(12, TipoGafete::ProvisionalKof)
+                .unwrap();
+            core.connection
+                .execute(
+                    "INSERT INTO prestamos_gafete_provisional_remotos (uuid, sitio_id,
+                         encargado_nombre, encargado_codigo_empleado, gafete_numero,
+                         hora_entrega, usuario_entrega_nombre, actualizado_en)
+                     VALUES ('u1', 's1', 'LUIS SOTO', '5040099', 12,
+                         '2026-09-16T11:00:00Z', 'Otro', '2026-09-16T11:00:00Z')",
+                    [],
+                )
+                .unwrap();
+            SqliteEncargadoRutaRepository::new(&core.connection)
+                .crear(&EncargadoRuta {
+                    id: 0,
+                    codigo_empleado: "5040017".to_string(),
+                    nombre: "ANA MORA".to_string(),
+                    cedula: None,
+                    activo: true,
+                })
+                .unwrap()
+        };
+
+        let error = entregar_gafete_provisional_verificado(
+            || core.lock().unwrap(),
+            &nube_que_no_debe_usarse(),
+            &actor,
+            encargado_id,
+            12,
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            EntregaGafeteProvisionalVerificadaError::GafeteOcupadoEnSitio { numero: 12 }
+        ));
+    }
+
+    #[test]
+    fn kof_a_un_encargado_inexistente_se_rechaza_sin_tocar_la_red() {
+        let (core, actor, _) = nucleo_con_empresa_y_gafete();
+
+        let error = entregar_gafete_provisional_verificado(
+            || core.lock().unwrap(),
+            &nube_que_no_debe_usarse(),
+            &actor,
+            9999,
+            12,
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            EntregaGafeteProvisionalVerificadaError::Servicio(
+                GafeteProvisionalServiceError::EncargadoNoEncontrado
+            )
+        ));
+    }
+
+    /// Adentro como proveedor en el otro equipo de la unidad: la vista
+    /// previa (sólo local) ya lo bloquea, y el registro lo rechaza con el
+    /// mismo motivo sin preguntarle nada a la nube.
+    #[test]
+    fn contratista_adentro_por_otra_via_se_bloquea_en_la_vista_previa_y_sin_tocar_la_red() {
+        let (core, actor) = nucleo_con_contratista();
+        core.lock()
+            .unwrap()
+            .connection
+            .execute(
+                "INSERT INTO ingresos_proveedor_remotos (uuid, sitio_id, cedula, nombre,
+                     empresa_nombre, placa, gafete_numero, hora_entrada,
+                     usuario_entrada_nombre, dispositivo_entrada_id, actualizado_en)
+                 VALUES ('u1', 's1', '101110111', 'PERSONA', 'Maika', NULL, 8,
+                     '2026-09-16T11:00:00Z', 'Otro', 'd2', '2026-09-16T11:00:00Z')",
+                [],
+            )
+            .unwrap();
+        let esperado = BloqueoIngreso::ActivoEnOtroSitio {
+            sitio: "esta unidad (como proveedor)".into(),
+        };
+
+        let vista_previa = core.lock().unwrap().preparar_ingreso(1).unwrap();
+        assert_eq!(vista_previa.bloqueo(), Some(esperado.clone()));
+
+        let error = registrar_ingreso_verificado(
+            || core.lock().unwrap(),
+            &nube_que_no_debe_usarse(),
+            &actor,
+            1,
+            MedioIngreso::Caminando,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(error, IngresoVerificadoError::Bloqueado(bloqueo) if bloqueo == esperado));
+    }
+
+    /// Una placa en un ingreso caminando no aplica: la regla de la escritura
+    /// se revisa antes de la red, no después de pagar el viaje.
+    #[test]
+    fn contratista_con_una_regla_de_la_escritura_rota_se_rechaza_sin_tocar_la_red() {
+        let (core, actor) = nucleo_con_contratista();
+
+        let error = registrar_ingreso_verificado(
+            || core.lock().unwrap(),
+            &nube_que_no_debe_usarse(),
+            &actor,
+            1,
+            MedioIngreso::Vehiculo,
+            None,
+            None,
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            IngresoVerificadoError::Servicio(RegistroIngresoServiceError::PlacaRequerida)
+        ));
     }
 }

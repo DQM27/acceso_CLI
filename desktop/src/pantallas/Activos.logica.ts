@@ -79,3 +79,21 @@ export function filtrarPorNivel<T extends { nivel_permanencia: string | null }>(
 ): T[] {
   return nivel === null ? [...filas] : filas.filter((fila) => fila.nivel_permanencia === nivel);
 }
+
+/** Aviso corto para cuando un cierre en lote deja salidas sin registrar. Los
+ * motivos ya vienen redactados por el núcleo; acá sólo se resumen: si todos son
+ * el mismo se dice una vez, y si no, los tres primeros con su nombre y cuántos
+ * más quedan. Con `rechazados` vacío no hay nada que avisar (texto vacío). */
+export function textoRechazos(
+  rechazados: readonly { activo: { nombre: string }; mensaje: string }[],
+  total: number,
+): string {
+  if (rechazados.length === 0) return "";
+  const encabezado = `No se registró la salida de ${rechazados.length} de ${total}`;
+  if (new Set(rechazados.map((r) => r.mensaje)).size === 1) {
+    return `${encabezado} — ${rechazados[0].mensaje}`;
+  }
+  const primeros = rechazados.slice(0, 3).map((r) => `${r.activo.nombre}: ${r.mensaje}`);
+  const resto = rechazados.length - primeros.length;
+  return `${encabezado}. ${primeros.join(" · ")}${resto > 0 ? ` · y ${resto} más` : ""}`;
+}

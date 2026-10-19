@@ -31,17 +31,18 @@ mod nube;
 mod proveedores;
 mod rutas;
 mod tenedores_gafete;
+mod unidad_de_trabajo;
 
-pub use accesos::AvisosPermanencia;
+pub mod puertos;
+pub use accesos::{AvisosPermanencia, ResultadoSalidas, SalidaRechazada};
 pub use catalogos::{buscar_auditoria_completo_con_conexion, buscar_auditoria_con_conexion};
 #[cfg(feature = "nube")]
 pub use con_nube::{
     EntradaVisitaVerificadaError, EntregaGafeteProvisionalVerificadaError,
     IngresoCorreoVerificadoError, IngresoProveedorVerificadoError, IngresoVerificadoError,
     NuevoIngresoCorreo, NuevoIngresoProveedor, entregar_gafete_provisional_verificado,
-    preparar_ingreso_verificado, registrar_entrada_visita_verificada,
-    registrar_ingreso_correo_verificado, registrar_ingreso_proveedor_verificado,
-    registrar_ingreso_verificado,
+    registrar_entrada_visita_verificada, registrar_ingreso_correo_verificado,
+    registrar_ingreso_proveedor_verificado, registrar_ingreso_verificado,
 };
 pub use historial::{
     ExportarHistorialError, buscar_historial_completo_con_conexion,

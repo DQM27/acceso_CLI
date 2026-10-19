@@ -126,6 +126,14 @@ class CorreoViewModel(
         if (nombreCompleto.isNotBlank()) cambiarNombre(nombreCompleto)
     }
 
+    /// Lo pide el formulario de ingreso al aparecer: mientras se escribe, las
+    /// conexiones con la nube se calientan y la verificación al registrar ya
+    /// no paga conexión nueva. Vuelve enseguida y nunca falla (sin nube o sin
+    /// conexión no hace nada).
+    fun precalentarNube() {
+        viewModelScope.launch(dispatcherIO) { nucleo.precalentarNube() }
+    }
+
     fun registrarIngreso(gafeteNumero: Long, onExito: () -> Unit) {
         if (registrando || cedula.isBlank() || nombre.isBlank() || motivo.isBlank() || cedulaConIngresoActivo) return
         registrando = true

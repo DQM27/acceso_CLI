@@ -11,7 +11,7 @@ import type { OpcionSegmentada } from "../componentes/SegmentadoOpciones";
 import Modal from "../componentes/Modal";
 import MenuAcciones from "../componentes/MenuAcciones";
 import { ESTILO_BOTON_COMPACTO } from "../componentes/MenuAcciones.logica";
-import { cerrarActivo, listarActivosUnificados } from "../api/activosUnificados";
+import { cerrarActivo, cerrarActivos, listarActivosUnificados } from "../api/activosUnificados";
 import type { ActivoUnificado, ClaseActivo } from "../api/activosUnificados";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import {
@@ -22,6 +22,7 @@ import {
   filtrarPorClase,
   filtrarPorGafete,
   filtrarPorNivel,
+  textoRechazos,
 } from "./Activos.logica";
 import type { FiltroClase, FiltroGafete, FiltroPermanencia, OtroIngreso } from "./Activos.logica";
 
@@ -238,10 +239,12 @@ export default function Activos({
   async function confirmarSalidasSeleccionadas() {
     setProcesando(true);
     try {
-      for (const fila of seleccionadas) {
-        await cerrarActivo(fila);
-      }
+      // Un solo pedido al núcleo para todos los contratistas (locales y del
+      // otro dispositivo) y un solo aviso de sincronización; lo que no se
+      // pudo cerrar vuelve con su motivo y no frena al resto.
+      const { rechazados } = await cerrarActivos(seleccionadas);
       setConfirmarSalidaMasiva(false);
+      if (rechazados.length > 0) avisos.error(textoRechazos(rechazados, seleccionadas.length));
       await recargar();
     } catch (error) {
       avisos.error(error);

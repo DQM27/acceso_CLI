@@ -179,3 +179,31 @@ export async function registrarSalida(id: number): Promise<void> {
   await invoke("registrar_salida", { id });
   solicitarSincronizacionNube();
 }
+
+/** Espejo de `ResultadoSalidasContratistas` (comandos/nube.rs). Cada rechazo
+ * trae su motivo ya redactado por el núcleo. */
+export interface ResultadoSalidasContratistas {
+  locales: { cerrados: number[]; rechazados: { id: number; mensaje: string }[] };
+  remotos: { cerrados: string[]; rechazados: { uuid: string; mensaje: string }[] };
+}
+
+/** Da la salida a varios contratistas en UNA llamada: los de este equipo
+ * (`locales`, ids de registro) y los abiertos por el otro dispositivo
+ * (`remotos`, uuid). En vez de un comando y un aviso de sincronización por
+ * persona, el núcleo los cierra en una transacción y un `PATCH` por cada 50, y
+ * acá se avisa UNA sola vez a la nube. Una salida rechazada no frena a las
+ * demás: vuelve en `rechazados`. Lanza sólo si no se pudo cerrar ninguna (el
+ * reloj del equipo retrocedió, la sesión ya no es válida). */
+export async function registrarSalidasContratistas(
+  locales: number[],
+  remotos: string[],
+): Promise<ResultadoSalidasContratistas> {
+  const resultado = await invoke<ResultadoSalidasContratistas>("registrar_salidas_contratistas", {
+    locales,
+    remotos,
+  });
+  if (resultado.locales.cerrados.length > 0 || resultado.remotos.cerrados.length > 0) {
+    solicitarSincronizacionNube();
+  }
+  return resultado;
+}

@@ -8,6 +8,7 @@ import {
   entregarGafeteProvisional,
   listarTodosLosGafetesProvisionalesActivos,
 } from "../api/gafetesProvisionales";
+import { precalentarNube } from "../api/nube";
 import { textoGafete, validarNumeroGafete } from "../busqueda";
 import { filtrarEncargados } from "./EntregarGafeteProvisionalModal.logica";
 
@@ -38,6 +39,13 @@ export default function EntregarGafeteProvisionalModal({
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const buscadorRef = useRef<HTMLInputElement>(null);
+
+  // Mientras se elige al encargado, las conexiones con la nube se calientan:
+  // la verificación de la entrega ya no paga conexión nueva (ver
+  // `precalentarNube`).
+  useEffect(() => {
+    void precalentarNube();
+  }, []);
 
   useEffect(() => {
     listarEncargadosRutaSeleccionables()

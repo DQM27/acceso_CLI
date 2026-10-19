@@ -42,6 +42,30 @@ pub(super) fn anotar_cierre_remoto(
     Ok(())
 }
 
+/// Como [`anotar_cierre_remoto`] para varios `uuids` de una vez, todos en la
+/// misma transacción: o quedan todos fuera de la caché con su lápida, o
+/// ninguno.
+pub(super) fn anotar_cierres_remotos(
+    connection: &Connection,
+    tabla: &'static str,
+    uuids: &[String],
+) -> Result<(), SincronizacionError> {
+    let transaction = connection.unchecked_transaction()?;
+    for uuid in uuids {
+        transaction.execute(
+            &format!("DELETE FROM {tabla} WHERE uuid = ?1"),
+            params![uuid],
+        )?;
+        transaction.execute(
+            "INSERT OR REPLACE INTO remotos_cerrados_aca (uuid, tabla, cerrado_en)
+             VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
+            params![uuid, tabla],
+        )?;
+    }
+    transaction.commit()?;
+    Ok(())
+}
+
 /// ¿Este equipo cerró a mano este registro remoto (y la nube todavía no lo
 /// confirmó)? Entonces no se vuelve a meter en la caché.
 pub(super) fn cerrado_aca(

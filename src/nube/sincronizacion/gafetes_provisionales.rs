@@ -19,7 +19,7 @@ pub struct PrestamoGafeteProvisionalRemoto {
 }
 
 #[derive(serde::Deserialize)]
-pub(super) struct FilaPrestamoGafeteProvisionalRemoto {
+pub(in crate::nube) struct FilaPrestamoGafeteProvisionalRemoto {
     pub(super) id: String,
     pub(super) encargado_nombre: String,
     pub(super) encargado_codigo_empleado: String,
@@ -57,48 +57,64 @@ pub fn recibir_prestamos_gafete_provisional_abiertos(
     )?;
     let mut remotos = Vec::with_capacity(filas.len());
     for fila in filas {
-        let existe_localmente: bool = transaction.query_row(
-            "SELECT EXISTS(SELECT 1 FROM prestamos_gafete_provisional WHERE uuid = ?1)",
-            params![fila.id],
-            |row| row.get(0),
-        )?;
-        // Lo propio no se duplica en la caché; lo que este equipo acaba de
-        // cerrar a mano tampoco vuelve (ver `cierres_remotos`).
-        if existe_localmente || super::cierres_remotos::cerrado_aca(&transaction, &fila.id)? {
-            continue;
+        if let Some(remoto) =
+            guardar_prestamo_gafete_provisional_remoto(&transaction, contexto.sitio_id, fila)?
+        {
+            remotos.push(remoto);
         }
-        let hora_entrega = crate::tiempo::parsear_utc(&fila.hora_entrega)
-            .map(crate::tiempo::serializar_utc)
-            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrega.clone()))?;
-        transaction.execute(
-            "
-            INSERT INTO prestamos_gafete_provisional_remotos (
-                uuid, sitio_id, encargado_nombre, encargado_codigo_empleado, gafete_numero,
-                hora_entrega, usuario_entrega_nombre, actualizado_en
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-            ",
-            params![
-                fila.id,
-                contexto.sitio_id,
-                fila.encargado_nombre,
-                fila.encargado_codigo_empleado,
-                fila.gafete_numero,
-                hora_entrega,
-                fila.usuario_entrega_nombre,
-            ],
-        )?;
-        remotos.push(PrestamoGafeteProvisionalRemoto {
-            uuid: fila.id,
-            encargado_nombre: fila.encargado_nombre,
-            encargado_codigo_empleado: fila.encargado_codigo_empleado,
-            gafete_numero: fila.gafete_numero,
-            hora_entrega,
-            usuario_entrega_nombre: fila.usuario_entrega_nombre,
-        });
     }
     transaction.commit()?;
 
     Ok(remotos)
+}
+
+/// Guarda en la caché `prestamos_gafete_provisional_remotos` un préstamo
+/// abierto por el otro dispositivo del sitio. `None` si ya vive en
+/// `prestamos_gafete_provisional` de este equipo o si este equipo acaba de
+/// devolverlo a mano (ver `cierres_remotos`). Reemplaza la fila si ya
+/// estaba. Compartida por la sincronización y el aviso en vivo
+/// (`nube::en_vivo`).
+pub(in crate::nube) fn guardar_prestamo_gafete_provisional_remoto(
+    connection: &Connection,
+    sitio_id: &str,
+    fila: FilaPrestamoGafeteProvisionalRemoto,
+) -> Result<Option<PrestamoGafeteProvisionalRemoto>, SincronizacionError> {
+    let existe_localmente: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM prestamos_gafete_provisional WHERE uuid = ?1)",
+        params![fila.id],
+        |row| row.get(0),
+    )?;
+    if existe_localmente || super::cierres_remotos::cerrado_aca(connection, &fila.id)? {
+        return Ok(None);
+    }
+    let hora_entrega = crate::tiempo::parsear_utc(&fila.hora_entrega)
+        .map(crate::tiempo::serializar_utc)
+        .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_entrega.clone()))?;
+    connection.execute(
+        "
+        INSERT OR REPLACE INTO prestamos_gafete_provisional_remotos (
+            uuid, sitio_id, encargado_nombre, encargado_codigo_empleado, gafete_numero,
+            hora_entrega, usuario_entrega_nombre, actualizado_en
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        ",
+        params![
+            fila.id,
+            sitio_id,
+            fila.encargado_nombre,
+            fila.encargado_codigo_empleado,
+            fila.gafete_numero,
+            hora_entrega,
+            fila.usuario_entrega_nombre,
+        ],
+    )?;
+    Ok(Some(PrestamoGafeteProvisionalRemoto {
+        uuid: fila.id,
+        encargado_nombre: fila.encargado_nombre,
+        encargado_codigo_empleado: fila.encargado_codigo_empleado,
+        gafete_numero: fila.gafete_numero,
+        hora_entrega,
+        usuario_entrega_nombre: fila.usuario_entrega_nombre,
+    }))
 }
 
 #[derive(serde::Deserialize)]
@@ -139,31 +155,46 @@ pub fn recibir_devoluciones_propias_gafete_provisional(
     let transaction = connection.unchecked_transaction()?;
     let mut aplicados = 0_u32;
     for fila in &filas {
-        let nombre_devolucion = fila
-            .usuario_devolucion_nombre
-            .as_deref()
-            .unwrap_or("Devolución registrada en nube");
-        let hora_devolucion = crate::tiempo::parsear_utc(&fila.hora_devolucion)
-            .map(crate::tiempo::serializar_utc)
-            .map_err(|_| SincronizacionError::FechaInvalida(fila.hora_devolucion.clone()))?;
-        let filas_afectadas = transaction.execute(
-            "
-            UPDATE prestamos_gafete_provisional
-            SET
-                fecha_hora_devolucion = ?1,
-                usuario_devolucion_id = NULL,
-                usuario_devolucion_nombre = ?2
-            WHERE uuid = ?3
-              AND fecha_hora_devolucion IS NULL
-            ",
-            params![hora_devolucion, nombre_devolucion, fila.id],
-        )?;
-        let filas_afectadas = u32::try_from(filas_afectadas).unwrap_or(u32::MAX);
-        aplicados = aplicados.saturating_add(filas_afectadas);
+        if aplicar_devolucion_de_prestamo_propio(
+            &transaction,
+            &fila.id,
+            &fila.hora_devolucion,
+            fila.usuario_devolucion_nombre.as_deref(),
+        )? {
+            aplicados = aplicados.saturating_add(1);
+        }
     }
     transaction.commit()?;
 
     Ok(aplicados)
+}
+
+/// Registra acá la devolución de un préstamo propio que devolvió OTRO
+/// dispositivo. `false` si no había nada que cerrar. Compartida por la
+/// sincronización y el aviso en vivo (`nube::en_vivo`).
+pub(in crate::nube) fn aplicar_devolucion_de_prestamo_propio(
+    connection: &Connection,
+    id: &str,
+    hora_devolucion: &str,
+    usuario_devolucion_nombre: Option<&str>,
+) -> Result<bool, SincronizacionError> {
+    let nombre_devolucion = usuario_devolucion_nombre.unwrap_or("Devolución registrada en nube");
+    let hora_devolucion = crate::tiempo::parsear_utc(hora_devolucion)
+        .map(crate::tiempo::serializar_utc)
+        .map_err(|_| SincronizacionError::FechaInvalida(hora_devolucion.to_string()))?;
+    let filas_afectadas = connection.execute(
+        "
+        UPDATE prestamos_gafete_provisional
+        SET
+            fecha_hora_devolucion = ?1,
+            usuario_devolucion_id = NULL,
+            usuario_devolucion_nombre = ?2
+        WHERE uuid = ?3
+          AND fecha_hora_devolucion IS NULL
+        ",
+        params![hora_devolucion, nombre_devolucion, id],
+    )?;
+    Ok(filas_afectadas > 0)
 }
 
 /// Espejo de [`cerrar_ingreso_proveedor_remoto`], pero para registrar la

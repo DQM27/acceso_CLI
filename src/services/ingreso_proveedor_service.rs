@@ -6,8 +6,8 @@
 
 use chrono::{DateTime, Utc};
 
+use crate::application::puertos::gafetes::GafeteRepository;
 use crate::database::repositories::empresa_proveedor_repository::EmpresaProveedorRepository;
-use crate::database::repositories::gafete_repository::GafeteRepository;
 use crate::database::repositories::registro_ingreso_proveedor_repository::RegistroIngresoProveedorRepository;
 use crate::domain::cedula::{Cedula, CedulaInvalida};
 use crate::domain::gafete::{ValidacionAsignacion, validar_para_asignar};
@@ -61,6 +61,33 @@ where
         usuario_id: i64,
         ahora: DateTime<Utc>,
     ) -> Result<i64, IngresoProveedorServiceError> {
+        let registro = self.validar_ingreso(
+            cedula,
+            nombre,
+            empresa_id,
+            placa,
+            gafete_numero,
+            usuario_id,
+            ahora,
+        )?;
+        Ok(self.registros.crear(&registro)?)
+    }
+
+    /// Todas las reglas de [`Self::registrar_ingreso`], sin escribir: la
+    /// fila que se guardaría. Sirve para revisar lo local antes de consultar
+    /// la nube (`application::con_nube`); `registrar_ingreso` la vuelve a
+    /// correr dentro de su transacción.
+    #[allow(clippy::too_many_arguments)]
+    pub fn validar_ingreso(
+        &self,
+        cedula: &str,
+        nombre: &str,
+        empresa_id: i64,
+        placa: Option<String>,
+        gafete_numero: i64,
+        usuario_id: i64,
+        ahora: DateTime<Utc>,
+    ) -> Result<NuevoRegistroIngresoProveedor, IngresoProveedorServiceError> {
         // Forma única de la cédula (ver `domain::cedula`): sin esto,
         // `1-1234-0567` y `112340567` contaban como dos personas y la regla
         // de "un ingreso activo por cédula" se esquivaba cambiando el
@@ -119,7 +146,7 @@ where
             return Err(IngresoProveedorServiceError::GafeteOcupado);
         }
 
-        Ok(self.registros.crear(&NuevoRegistroIngresoProveedor {
+        Ok(NuevoRegistroIngresoProveedor {
             cedula: cedula.to_string(),
             nombre,
             empresa_id,
@@ -128,7 +155,7 @@ where
             gafete_numero,
             fecha_hora_ingreso: ahora,
             usuario_ingreso_id: usuario_id,
-        })?)
+        })
     }
 
     pub fn registrar_salida(

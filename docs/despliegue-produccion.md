@@ -203,6 +203,7 @@ Los números son los de la tabla de 0.2.
 | 4 | `rediseno_visitas_rpcs_vista_busqueda` | `supabase/migrations/20260927150000_rediseno_visitas_rpcs_vista_busqueda.sql` | `claude/rediseno-web-visitas` | Revisar con esa rama |
 | 5 | `rutas_documento_tramo_viaje` (+ `_fix_search_path`, `_indices_fk`) | **No existe en el repo** | `feat/rutas-documento-tramo-viaje` (19 sep, sin unir) | Desconocido |
 | ~~6~~ | ~~`hora_servidor_ms`~~ **Aplicada en producción el 2026-09-29 (ver sección 5)** | `supabase/migrations/20260929075809_hora_servidor_ms.sql` | `claude/fusion-integral` (reloj en ms) | No |
+| 7 | `cambio_nube_lleva_la_fila_de_las_cuatro_clases` — **sin aplicar todavía, ni en staging ni en producción (ver 2.12)** | `supabase/migrations/20261018130000_cambio_nube_lleva_la_fila_de_las_cuatro_clases.sql` | `perf/ingreso-http2` | No |
 
 ### 2.1 Aviso en vivo con los datos (`cambio_nube_lleva_la_fila_de_ingresos`)
 
@@ -523,6 +524,35 @@ Rama `feat/reglas-compartidas`. Contexto completo en
 - **Orden en producción:** 1) desplegar la función; 2) publicar el panel web;
   3) aplicar la migración. La función nueva puede convivir con la SQL vieja
   sin problema; sólo la migración rompe el panel viejo.
+
+### 2.12 Aviso en vivo con la fila de las cuatro clases (`cambio_nube_lleva_la_fila_de_las_cuatro_clases`, 2026-10-18)
+
+- **Qué hace:** la misma `private.emitir_cambio_nube_sitio()` de 2.1, pero
+  el aviso `cambio_nube` lleva la fila completa (`registro`) también en
+  `ingresos_proveedor`, `ingresos_correo` y `prestamos_gafete_provisional`
+  (KOF). Los equipos guardan la fila al instante en su caché del otro
+  equipo (`*_remotos`), que es la que mira la verificación local de un
+  ingreso antes de ir a la nube (`nube::en_vivo`). Es el único cambio
+  respecto de 2.1: la lista de tablas del `case`.
+- **Compatibilidad:** las apps que no conocen `registro` en estas tablas lo
+  ignoran y siguen sincronizando la tabla como antes. Se puede aplicar
+  antes o después de actualizar las apps. La fila es la misma que el equipo
+  ya lee por REST (ninguna de las tres tablas tiene permisos por columna) y
+  viaja por el mismo canal privado del sitio.
+- **Ojo:** la integración de Supabase con GitHub aplica las migraciones en
+  producción al hacer merge a `main`. Aplicarla primero en staging.
+- **Verificar después de aplicar:** la batería
+  `supabase/tests/cambio_nube_lleva_la_fila.sql` (se revierte sola), y
+
+  ```sql
+  select pg_get_functiondef('private.emitir_cambio_nube_sitio'::regproc)
+         like '%prestamos_gafete_provisional%' as lleva_las_cuatro_clases;
+  ```
+
+  Y en la práctica: registrar un proveedor en un equipo y, en el otro, que
+  el mismo gafete de proveedor se rechace al instante sin consultar la nube.
+- **Deshacer:** volver a crear la función con el cuerpo de
+  `20260929075806_cambio_nube_lleva_la_fila_de_ingresos.sql`.
 
 ## 3. Cambios de la base local de los equipos (SQLite)
 

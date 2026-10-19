@@ -6,6 +6,7 @@ import {
   filtrarPorClase,
   filtrarPorGafete,
   filtrarPorNivel,
+  textoRechazos,
 } from "./Activos.logica";
 
 const filas = [
@@ -116,5 +117,33 @@ describe("filtrarPorNivel con filas sin nivel", () => {
 
   it("sin aviso pulsado se muestran todas, también las sin nivel", () => {
     expect(filtrarPorNivel(filas, null).map((f) => f.id)).toEqual([1, 2]);
+  });
+});
+
+describe("textoRechazos", () => {
+  const rechazo = (nombre: string, mensaje: string) => ({ activo: { nombre }, mensaje });
+
+  it("sin rechazos no hay nada que avisar", () => {
+    expect(textoRechazos([], 5)).toBe("");
+  });
+
+  it("con un mismo motivo para todos lo dice una sola vez, sin nombres", () => {
+    const todos = Array.from({ length: 20 }, (_, i) => rechazo(`P${i}`, "Sin conexión"));
+    expect(textoRechazos(todos, 20)).toBe("No se registró la salida de 20 de 20 — Sin conexión");
+  });
+
+  it("con motivos distintos nombra a quien falló y por qué", () => {
+    expect(
+      textoRechazos([rechazo("Ana", "Sin conexión"), rechazo("Luis", "El ingreso ya no está activo")], 5),
+    ).toBe(
+      "No se registró la salida de 2 de 5. Ana: Sin conexión · Luis: El ingreso ya no está activo",
+    );
+  });
+
+  it("nombra a los tres primeros y cuenta el resto", () => {
+    const cinco = ["A", "B", "C", "D", "E"].map((n, i) => rechazo(n, `motivo ${i}`));
+    expect(textoRechazos(cinco, 9)).toBe(
+      "No se registró la salida de 5 de 9. A: motivo 0 · B: motivo 1 · C: motivo 2 · y 2 más",
+    );
   });
 });

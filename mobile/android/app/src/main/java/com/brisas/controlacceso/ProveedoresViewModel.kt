@@ -213,6 +213,14 @@ class ProveedoresViewModel(
         if (nombreCompleto.isNotBlank()) cambiarNombre(nombreCompleto)
     }
 
+    /// Lo pide el formulario de ingreso al aparecer: mientras se escribe, las
+    /// conexiones con la nube se calientan y la verificación al registrar ya
+    /// no paga conexión nueva. Vuelve enseguida y nunca falla (sin nube o sin
+    /// conexión no hace nada).
+    fun precalentarNube() {
+        viewModelScope.launch(dispatcherIO) { nucleo.precalentarNube() }
+    }
+
     fun registrarIngreso(gafeteNumero: Long, onExito: () -> Unit) {
         val empresa = empresaSeleccionada ?: return
         if (registrando || cedula.isBlank() || nombre.isBlank() || cedulaConIngresoActivo) return

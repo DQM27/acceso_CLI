@@ -675,6 +675,8 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::nube::sesion_realtime_nube,
         comandos::nube::listar_ingresos_remotos,
         comandos::nube::cerrar_ingreso_remoto,
+        comandos::nube::registrar_salidas_contratistas,
+        comandos::nube::precalentar_nube,
         comandos::nube::listar_ingresos_proveedor_remotos,
         comandos::nube::cerrar_ingreso_proveedor_remoto,
         comandos::nube::listar_ingresos_correo_remotos,

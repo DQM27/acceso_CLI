@@ -6,7 +6,7 @@
 
 use chrono::{DateTime, Utc};
 
-use crate::database::repositories::gafete_repository::GafeteRepository;
+use crate::application::puertos::gafetes::GafeteRepository;
 use crate::database::repositories::registro_ingreso_correo_repository::RegistroIngresoCorreoRepository;
 use crate::domain::cedula::{Cedula, CedulaInvalida};
 use crate::domain::gafete::{ValidacionAsignacion, validar_para_asignar};
@@ -57,6 +57,20 @@ where
         usuario_id: i64,
         ahora: DateTime<Utc>,
     ) -> Result<i64, IngresoCorreoServiceError> {
+        let registro = self.validar_ingreso(datos, usuario_id, ahora)?;
+        Ok(self.registros.crear(&registro)?)
+    }
+
+    /// Todas las reglas de [`Self::registrar_ingreso`], sin escribir: la
+    /// fila que se guardaría. Sirve para revisar lo local antes de consultar
+    /// la nube (`application::con_nube`); `registrar_ingreso` la vuelve a
+    /// correr dentro de su transacción.
+    pub fn validar_ingreso(
+        &self,
+        datos: &DatosIngresoCorreo<'_>,
+        usuario_id: i64,
+        ahora: DateTime<Utc>,
+    ) -> Result<NuevoRegistroIngresoCorreo, IngresoCorreoServiceError> {
         let cedula = match Cedula::normalizar(datos.cedula) {
             Ok(cedula) if cedula.es_nacional_o_de_extranjero() => cedula,
             Err(CedulaInvalida::Vacia) => return Err(IngresoCorreoServiceError::CedulaVacia),
@@ -112,7 +126,7 @@ where
             return Err(IngresoCorreoServiceError::GafeteOcupado);
         }
 
-        Ok(self.registros.crear(&NuevoRegistroIngresoCorreo {
+        Ok(NuevoRegistroIngresoCorreo {
             cedula: cedula.to_string(),
             nombre,
             motivo: motivo.to_string(),
@@ -120,7 +134,7 @@ where
             gafete_numero: datos.gafete_numero,
             fecha_hora_ingreso: ahora,
             usuario_ingreso_id: usuario_id,
-        })?)
+        })
     }
 
     pub fn registrar_salida(

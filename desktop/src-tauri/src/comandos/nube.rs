@@ -1,4 +1,8 @@
-use control_acceso::mensajes::{mensaje_gestion_nube, mensaje_nube, mensaje_sincronizacion};
+use control_acceso::application::ResultadoSalidas;
+use control_acceso::mensajes::{
+    mensaje_cierres_remotos, mensaje_gestion_nube, mensaje_nube, mensaje_salida,
+    mensaje_sincronizacion, rechazar_cierres_remotos,
+};
 use control_acceso::nube;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -608,6 +612,97 @@ pub fn cerrar_ingreso_remoto(uuid: String, state: tauri::State<GuiState>) -> Res
     let hora = state.core().ahora_utc();
     nube::cerrar_ingreso_remoto(&conexion, &contexto, &uuid, &actor.nombre, hora)
         .map_err(mensaje_sincronizacion)
+}
+
+/// Abre de antemano las conexiones que usa la verificación de un ingreso
+/// (`nube::precalentar_conexiones_de_verificacion`). Los formularios de ingreso
+/// lo piden al abrirse: mientras se escribe el nombre, las conexiones se
+/// calientan y la primera verificación no paga conexión nueva más TLS.
+///
+/// Vuelve enseguida: el calentamiento corre en un hilo aparte, sin el candado
+/// del núcleo, y es de mejor esfuerzo (si no hay nube o falla, no pasa nada).
+#[tauri::command(async)]
+pub fn precalentar_nube(state: tauri::State<GuiState>) -> Result<(), String> {
+    state.sesion_activa()?;
+    if state.nube_del_dispositivo().vinculado() {
+        std::thread::spawn(|| {
+            nube::precalentar_conexiones_de_verificacion(nube::base_url(), nube::apikey());
+        });
+    }
+    Ok(())
+}
+
+/// Lo que devuelve [`registrar_salidas_contratistas`]: cómo salió cada grupo,
+/// con los motivos de los rechazos ya redactados por el núcleo.
+#[derive(Debug, serde::Serialize)]
+pub struct ResultadoSalidasContratistas {
+    pub locales: ResultadoSalidas,
+    pub remotos: nube::ResumenCierresRemotos,
+}
+
+/// Da la salida a varios contratistas de una vez: los de este equipo, en una
+/// sola transacción (`AppCore::registrar_salidas`), y los abiertos por el otro
+/// dispositivo del sitio, con un `PATCH` por cada 50 (`nube::cerrar_ingresos_remotos`)
+/// en vez de uno por persona. Una salida rechazada no frena a las demás: vuelve
+/// en `rechazados` con su motivo.
+///
+/// Si el reloj de este equipo retrocedió o la sesión ya no es válida, no se
+/// cierra ninguna (ni local ni remota) y la respuesta es ese error. En cambio,
+/// si los locales se cerraron pero la nube no se pudo alcanzar, los locales
+/// quedan cerrados y los remotos vuelven todos rechazados.
+///
+/// Nunca hay red con el candado del núcleo tomado: la parte local lo toma sólo
+/// mientras dura y la remota corre sobre una conexión secundaria.
+#[tauri::command(async)]
+pub fn registrar_salidas_contratistas(
+    locales: Vec<i64>,
+    remotos: Vec<String>,
+    state: tauri::State<GuiState>,
+) -> Result<ResultadoSalidasContratistas, String> {
+    let actor = state.sesion_activa()?;
+    let locales = if locales.is_empty() {
+        ResultadoSalidas::default()
+    } else {
+        state
+            .core()
+            .registrar_salidas(&actor, &locales)
+            .map_err(mensaje_salida)?
+    };
+    let remotos = cerrar_remotos_en_lote(&state, &actor.nombre, &remotos);
+    Ok(ResultadoSalidasContratistas { locales, remotos })
+}
+
+/// La parte remota de [`registrar_salidas_contratistas`]. Cualquier falla antes
+/// de poder intentar el cierre (sin sesión de nube, sin conexión local) rechaza
+/// a todos con ese mismo motivo en vez de cortar la respuesta: lo local ya se
+/// cerró y no se puede perder ese resultado.
+fn cerrar_remotos_en_lote(
+    state: &GuiState,
+    operador: &str,
+    uuids: &[String],
+) -> nube::ResumenCierresRemotos {
+    if uuids.is_empty() {
+        return nube::ResumenCierresRemotos::default();
+    }
+    let token = match autenticar(state) {
+        Ok(token) => token,
+        Err(mensaje) => return rechazar_cierres_remotos(uuids, &mensaje),
+    };
+    let conexion = match state.conexion_secundaria() {
+        Ok(conexion) => conexion,
+        Err(mensaje) => return rechazar_cierres_remotos(uuids, &mensaje),
+    };
+    let contexto = nube::ContextoSincronizacion {
+        base_url: nube::base_url(),
+        apikey: nube::apikey(),
+        token: &token.access_token,
+        dispositivo_id: &token.dispositivo_id,
+        sitio_id: &token.sitio_id,
+    };
+    let hora = state.core().ahora_utc();
+    mensaje_cierres_remotos(nube::cerrar_ingresos_remotos(
+        &conexion, &contexto, uuids, operador, hora,
+    ))
 }
 
 /// Espejo de `listar_ingresos_remotos`, pero contra la caché

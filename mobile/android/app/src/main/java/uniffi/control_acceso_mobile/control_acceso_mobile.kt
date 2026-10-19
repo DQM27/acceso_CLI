@@ -815,8 +815,6 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso(
     ): Int
-    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_verificado(
-    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso_verificado(
@@ -858,6 +856,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_listar_prestamos_gafete_provisional_remotos(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_nube_configurada(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_precalentar_nube(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial(
     ): Int
@@ -1008,8 +1008,6 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
-    external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso_verificado(`ptr`: Long,`contratistaId`: Long,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_ingreso_verificado(`ptr`: Long,`contratistaId`: Long,`medio`: RustBuffer.ByValue,`gafete`: RustBuffer.ByValue,`placa`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1052,6 +1050,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_nube_configurada(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_precalentar_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1461,10 +1461,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_ingresos_activos() and 0xFFFF) != 64102) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() and 0xFFFF) != 22177) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso_verificado() and 0xFFFF) != 64808) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_ingreso() and 0xFFFF) != 48326) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_ingreso() and 0xFFFF) != 48263) {
@@ -1528,6 +1525,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_nube_configurada() and 0xFFFF) != 6021) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_precalentar_nube() and 0xFFFF) != 50602) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial() and 0xFFFF) != 38622) {
@@ -3135,23 +3135,14 @@ public interface NucleoInterface {
     fun `listarIngresosActivos`(`texto`: kotlin.String, `modo`: ModoBusquedaActivos): List<IngresoActivoResumen>
     
     /**
-     * Vista previa antes de confirmar — misma decisión que ya toma la GUI
-     * de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
-     * rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
-     * (Kotlin) decide si deja continuar mirando los campos ya calculados.
+     * Vista previa al elegir a la persona, sólo local y sin red: las
+     * reglas de este equipo y de su caché del otro equipo del sitio, que
+     * Realtime mantiene al día. `mensaje_bloqueo` llega ya resuelto por el
+     * núcleo (`PreparacionIngreso::bloqueo`, lo mismo que usa escritorio);
+     * Kotlin sólo lo muestra. Lo que sólo sabe la nube (otras unidades) se
+     * verifica una sola vez, al registrar (`registrar_ingreso_verificado`).
      */
     fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso
-    
-    /**
-     * Vista previa con TODAS las reglas: las locales (este equipo y el
-     * otro equipo del sitio) y, con nube, la verificación en vivo de que la
-     * persona no tenga un ingreso activo en ningún sitio. Las decide
-     * `application::preparar_ingreso_verificado`, la misma que usa
-     * escritorio; Kotlin sólo muestra `mensaje_bloqueo`. Sin vincular =
-     * nube sin configurar (sólo reglas locales). Nunca toca `core_lock()`
-     * durante la red.
-     */
-    fun `prepararIngresoVerificado`(`contratistaId`: kotlin.Long): PreparacionIngreso
     
     fun `registrarIngreso`(`contratistaId`: kotlin.Long, `medio`: MedioIngreso, `gafete`: kotlin.Long?, `placa`: kotlin.String?): ResultadoRegistroEntrada
     
@@ -3297,6 +3288,21 @@ public interface NucleoInterface {
      * sincronización de fondo y los chequeos en vivo no tocan la red.
      */
     fun `nubeConfigurada`(): kotlin.Boolean
+    
+    /**
+     * Abre de antemano las conexiones que usa la verificación final de un
+     * ingreso (`nube::precalentar_conexiones_de_verificacion`, la misma que
+     * pide el escritorio al abrir sus formularios). Kotlin lo llama cuando
+     * aparece el formulario de un ingreso: mientras se escribe el gafete, el
+     * apretón de manos TLS ya se hizo y la verificación al registrar no paga
+     * conexión nueva.
+     *
+     * Vuelve enseguida: el calentamiento corre en un hilo aparte, sin el
+     * candado del núcleo, y es de mejor esfuerzo -- sin sesión, sin vincular
+     * o sin conexión no hace nada y nunca falla. Entre dos calentamientos
+     * hay una pausa mínima, así que llamarlo seguido no cuesta.
+     */
+    fun `precalentarNube`()
     
     /**
      * `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
@@ -3998,40 +4004,18 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Vista previa antes de confirmar — misma decisión que ya toma la GUI
-     * de escritorio (`desktop/src/pantallas/NuevoIngresoModal.tsx`): no
-     * rechaza PRAIND vencido/ingreso activo aquí, sólo informa; quien llama
-     * (Kotlin) decide si deja continuar mirando los campos ya calculados.
+     * Vista previa al elegir a la persona, sólo local y sin red: las
+     * reglas de este equipo y de su caché del otro equipo del sitio, que
+     * Realtime mantiene al día. `mensaje_bloqueo` llega ya resuelto por el
+     * núcleo (`PreparacionIngreso::bloqueo`, lo mismo que usa escritorio);
+     * Kotlin sólo lo muestra. Lo que sólo sabe la nube (otras unidades) se
+     * verifica una sola vez, al registrar (`registrar_ingreso_verificado`).
      */
     @Throws(NucleoException::class)override fun `prepararIngreso`(`contratistaId`: kotlin.Long): PreparacionIngreso {
             return FfiConverterTypePreparacionIngreso.lift(
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso(
-        it,
-        
-        FfiConverterLong.lower(`contratistaId`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    /**
-     * Vista previa con TODAS las reglas: las locales (este equipo y el
-     * otro equipo del sitio) y, con nube, la verificación en vivo de que la
-     * persona no tenga un ingreso activo en ningún sitio. Las decide
-     * `application::preparar_ingreso_verificado`, la misma que usa
-     * escritorio; Kotlin sólo muestra `mensaje_bloqueo`. Sin vincular =
-     * nube sin configurar (sólo reglas locales). Nunca toca `core_lock()`
-     * durante la red.
-     */
-    @Throws(NucleoException::class)override fun `prepararIngresoVerificado`(`contratistaId`: kotlin.Long): PreparacionIngreso {
-            return FfiConverterTypePreparacionIngreso.lift(
-    callWithHandle {
-    uniffiRustCallWithError(NucleoException) { _status ->
-    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_preparar_ingreso_verificado(
         it,
         
         FfiConverterLong.lower(`contratistaId`),_status)
@@ -4436,6 +4420,31 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     }
     )
     }
+    
+
+    
+    /**
+     * Abre de antemano las conexiones que usa la verificación final de un
+     * ingreso (`nube::precalentar_conexiones_de_verificacion`, la misma que
+     * pide el escritorio al abrir sus formularios). Kotlin lo llama cuando
+     * aparece el formulario de un ingreso: mientras se escribe el gafete, el
+     * apretón de manos TLS ya se hizo y la verificación al registrar no paga
+     * conexión nueva.
+     *
+     * Vuelve enseguida: el calentamiento corre en un hilo aparte, sin el
+     * candado del núcleo, y es de mejor esfuerzo -- sin sesión, sin vincular
+     * o sin conexión no hace nada y nunca falla. Entre dos calentamientos
+     * hay una pausa mínima, así que llamarlo seguido no cuesta.
+     */override fun `precalentarNube`()
+        = 
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_precalentar_nube(
+        it,
+        _status)
+}
+    }
+    
     
 
     
@@ -7176,8 +7185,8 @@ data class PreparacionIngreso (
     var `tieneIngresoActivo`: kotlin.Boolean
     , 
     /**
-     * Siempre `None`: el ingreso activo en otro sitio llega resuelto en
-     * `mensaje_bloqueo` (ver `preparar_ingreso_verificado`).
+     * Siempre `None`: la vista previa es sólo local y lo de otras unidades
+     * se verifica al registrar (ver `registrar_ingreso_verificado`).
      */
     var `activoEnOtroSitio`: kotlin.String?
     , 

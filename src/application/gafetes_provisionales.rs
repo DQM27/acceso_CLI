@@ -47,6 +47,26 @@ impl AppCore {
         Ok(id)
     }
 
+    /// Las reglas de [`Self::entregar_gafete_provisional`] sin escribir ni
+    /// abrir transacción -- mismo criterio que `AppCore::validar_ingreso`.
+    pub fn validar_entrega_gafete_provisional(
+        &self,
+        actor: &UsuarioSesion,
+        encargado_id: i64,
+        gafete_numero: i64,
+    ) -> Result<(), GafeteProvisionalServiceError> {
+        let prestamos = SqlitePrestamoGafeteProvisionalRepository::new(&self.connection);
+        let encargados = SqliteEncargadoRutaRepository::new(&self.connection);
+        let gafetes = SqliteGafeteRepository::new(&self.connection);
+        GafeteProvisionalService::new(&prestamos, &encargados, &gafetes).validar_entrega(
+            encargado_id,
+            gafete_numero,
+            actor.id,
+            self.reloj.ahora_utc(),
+        )?;
+        Ok(())
+    }
+
     /// Código de empleado del encargado (lo que lo identifica entre equipos
     /// y sitios, ver `entregar_gafete_provisional_verificado`). `None` si no
     /// está en el catálogo local.
@@ -100,8 +120,8 @@ impl AppCore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::puertos::gafetes::GafeteRepository;
     use crate::database::repositories::encargado_ruta_repository::EncargadoRutaRepository;
-    use crate::database::repositories::gafete_repository::GafeteRepository;
     use crate::database::schema::initialize_database;
     use crate::tiempo::RelojFijo;
     use chrono::{TimeZone, Utc};

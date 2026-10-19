@@ -150,3 +150,116 @@ fn el_crate_reglas_solo_depende_de_crates_puras() {
         );
     }
 }
+
+// ---- Puertos y adaptadores (arquitectura hexagonal) ----
+
+/// Lo que un puerto no puede nombrar: él lo define la aplicación y lo
+/// implementa el adaptador, nunca al revés.
+const PROHIBIDO_EN_PUERTOS: [&str; 3] = [
+    "rusqlite",
+    "crate::database::repositories",
+    "crate::database::queries",
+];
+
+#[test]
+fn los_puertos_no_conocen_a_sus_adaptadores() {
+    let carpeta = raiz().join("src/application/puertos");
+    assert!(
+        archivos_rust(&carpeta).len() >= 4,
+        "la revisión no pasa en vacío: tiene que haber puertos que revisar"
+    );
+    let encontradas = violaciones(&["src/application/puertos"], &PROHIBIDO_EN_PUERTOS);
+    assert!(
+        encontradas.is_empty(),
+        "un puerto lo define la aplicación y lo implementa el adaptador (`SQLite`); si nombra \
+         `rusqlite` o los repositorios, la dependencia va al revés:\n{}",
+        encontradas.join("\n")
+    );
+}
+
+/// Los archivos de `carpeta` (relativos a la raíz, con `/`) que usan
+/// `rusqlite` en código de producción.
+fn archivos_con_rusqlite(carpeta: &str) -> Vec<String> {
+    let mut archivos: Vec<String> = violaciones(&[carpeta], &["rusqlite"])
+        .into_iter()
+        .filter_map(|uso| uso.split(':').next().map(|ruta| ruta.replace('\\', "/")))
+        .collect();
+    archivos.sort();
+    archivos.dedup();
+    archivos
+}
+
+/// Trinquete: los archivos de la capa de aplicación que hoy todavía abren la
+/// transacción o consultan con `rusqlite` directamente. **La lista sólo se
+/// encoge.** Un archivo nuevo no puede usar `rusqlite` (la conexión se pide a
+/// la unidad de trabajo o a un puerto); y cuando uno de estos deja de usarlo,
+/// hay que sacarlo de la lista, para que no vuelva a hacerlo sin que nadie lo
+/// note.
+const APLICACION_CON_RUSQLITE: [&str; 12] = [
+    "src/application/accesos.rs",
+    "src/application/catalogos.rs",
+    "src/application/citas.rs",
+    "src/application/gafetes.rs",
+    "src/application/gafetes_provisionales.rs",
+    "src/application/historial.rs",
+    "src/application/mod.rs",
+    "src/application/nube.rs",
+    "src/application/proveedores.rs",
+    "src/application/rutas.rs",
+    "src/application/tenedores_gafete.rs",
+    "src/application/unidad_de_trabajo.rs",
+];
+
+/// Lo mismo para los servicios, que ya trabajan contra traits.
+const SERVICIOS_CON_RUSQLITE: [&str; 1] = ["src/services/registro_ingreso_service.rs"];
+
+fn verificar_trinquete(carpeta: &str, permitidos: &[&str]) {
+    let actuales = archivos_con_rusqlite(carpeta);
+    let nuevos: Vec<&String> = actuales
+        .iter()
+        .filter(|archivo| !permitidos.contains(&archivo.as_str()))
+        .collect();
+    assert!(
+        nuevos.is_empty(),
+        "estos archivos de `{carpeta}` usan `rusqlite` y no deberían: pídanle la conexión a la \
+         unidad de trabajo (`AppCore::en_unidad_de_trabajo`) o definan un puerto en \
+         `application/puertos`:\n{nuevos:#?}"
+    );
+    let ya_limpios: Vec<&&str> = permitidos
+        .iter()
+        .filter(|archivo| !actuales.iter().any(|actual| actual == **archivo))
+        .collect();
+    assert!(
+        ya_limpios.is_empty(),
+        "estos archivos de `{carpeta}` ya no usan `rusqlite`: sáquenlos de la lista de \
+         permitidos para que no vuelvan a hacerlo:\n{ya_limpios:#?}"
+    );
+}
+
+#[test]
+fn la_aplicacion_no_suma_archivos_que_usen_rusqlite() {
+    verificar_trinquete("src/application", &APLICACION_CON_RUSQLITE);
+}
+
+#[test]
+fn los_servicios_no_suman_archivos_que_usen_rusqlite() {
+    verificar_trinquete("src/services", &SERVICIOS_CON_RUSQLITE);
+}
+
+#[test]
+fn los_servicios_piden_los_puertos_a_la_aplicacion_no_al_adaptador() {
+    // Los tres traits ya mudados: se importan de `application::puertos`, no del
+    // archivo del adaptador `SQLite` (que los reexporta sólo por compatibilidad).
+    const TRAITS_MUDADOS: [&str; 3] = [
+        "contratista_repository::ContratistaRepository",
+        "gafete_repository::GafeteRepository",
+        "registro_ingreso_repository::RegistroIngresoRepository",
+    ];
+    let encontradas = violaciones(&["src/services", "src/application"], &TRAITS_MUDADOS);
+    assert!(
+        encontradas.is_empty(),
+        "estos traits son puertos de la aplicación: impórtenlos de \
+         `crate::application::puertos`:\n{}",
+        encontradas.join("\n")
+    );
+}

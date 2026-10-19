@@ -1,4 +1,4 @@
-use control_acceso::application::{preparar_ingreso_verificado, registrar_ingreso_verificado};
+use control_acceso::application::registrar_ingreso_verificado;
 use control_acceso::database::queries::ingresos::FiltroIngresosActivos;
 use control_acceso::mensajes::{
     mensaje_bloqueo_ingreso, mensaje_ingreso, mensaje_ingreso_verificado, mensaje_salida,
@@ -42,10 +42,10 @@ pub fn avisos_permanencia(
 }
 
 /// `PreparacionIngreso` más el motivo de bloqueo ya resuelto por el núcleo
-/// (`application::preparar_ingreso_verificado`: reglas locales y, con nube,
-/// la verificación en vivo), igual que recibe el móvil: el frontend no
+/// (`PreparacionIngreso::bloqueo`), igual que recibe el móvil: el frontend no
 /// decide si se puede continuar ni arma el texto. `None` = se puede
-/// continuar.
+/// continuar. Es sólo local, sin red: la nube se consulta una sola vez, al
+/// registrar (`application::registrar_ingreso_verificado`).
 #[derive(serde::Serialize)]
 pub struct PreparacionIngresoConBloqueo {
     #[serde(flatten)]
@@ -64,14 +64,14 @@ pub async fn preparar_ingreso(
         let inicio = std::time::Instant::now();
         let espera_candado = std::cell::Cell::new(std::time::Duration::ZERO);
         let state = app.state::<GuiState>();
-        let resultado = state.sesion_activa().and_then(|sesion| {
-            preparar_ingreso_verificado(
-                || crate::telemetria::medir_espera(&espera_candado, || state.core()),
-                state.nube_del_dispositivo(),
-                Some(&sesion),
-                contratista_id,
-            )
-            .map_err(mensaje_ingreso)
+        let resultado = state.sesion_activa().and_then(|_| {
+            crate::telemetria::medir_espera(&espera_candado, || state.core())
+                .preparar_ingreso(contratista_id)
+                .map(|preparacion| {
+                    let bloqueo = preparacion.bloqueo();
+                    (preparacion, bloqueo)
+                })
+                .map_err(mensaje_ingreso)
         });
         if crate::telemetria::activa() {
             let etiqueta = match &resultado {
