@@ -56,7 +56,7 @@ los motivos de salida del proceso se guarda sólo el resumen antes de `:`
 | `muestra_sistema` | cada 30 s en primer plano             | heap Java y nativo, PSS por tipo (Java, nativo, gráficos, código), memoria libre del sistema, hilos, descriptores abiertos, CPU (% de un núcleo y del total), red rx/tx, batería (%, corriente, temperatura, carga, ahorro), estado y margen térmico, pantalla visible |
 | `frames`          | cada 30 s, por pantalla               | frames, trabados (> 2× el presupuesto de ESE frame: `FrameMetrics.DEADLINE` en Android 12+, porque la pantalla cambia sola entre 120 y 60 Hz), congelados (> 700 ms), p50/p90/p99/máx, `presupuesto_ms` (mediana), y el desglose `hilo_ui_p50/p90_ms` (código de Compose) y `render_p50/p90_ms` (GPU y entrega del búfer) |
 | `llamada_nucleo`  | cada 30 s, por operación              | llamadas, errores, p50/p90/máx/total ms de cada llamada al núcleo Rust |
-| `ocr_sesion`      | al cerrar una cámara de escaneo       | fps, frames, frames con PDF417, descartes por calidad, fallos, medianas de recorte y reconocimiento, ms hasta confirmar, y el diagnóstico del PDF417 (ver abajo) |
+| `ocr_sesion`      | al cerrar una cámara de escaneo       | fps, frames, descartes por calidad, fallos, medianas de recorte y reconocimiento, ms hasta confirmar |
 | `camara_info`     | una vez por apertura de cámara, con la cámara ya abierta | qué puede dar la cámara: nivel de hardware, resolución real del análisis y del preview, tamaño YUV y JPEG máximos, tamaño del sensor, zoom máximo y distancia mínima de enfoque (ver abajo) |
 | `realtime`        | cada 30 s, si hubo actividad          | conexión (intentos, ms hasta suscribir, fin de cada conexión y minutos conectado, errores), avisos por tabla, ecos propios, KB recibidos, aplicados en la base local y su tiempo, y latencia (ver abajo) |
 | `strictmode`      | cada 30 s, agregado                   | disco/red en el hilo principal, recursos sin cerrar, Activities filtradas, con el punto del código de la app |
@@ -64,59 +64,19 @@ los motivos de salida del proceso se guarda sólo el resumen antes de `:`
 | `retencion`       | objeto vivo 10 s después de liberarlo | posible fuga: `MainActivity` destruida o `EstadoCamaraOcr` cerrado que siguen en memoria tras forzar el GC |
 | `error_telemetria`| si falla la propia telemetría         | dónde y tipo de excepción |
 
-## Diagnóstico del PDF417 (en `ocr_sesion`)
+## PDF417 (desconectado)
 
-Dónde se pierde la lectura del código de la cédula anterior, sólo con
-números y motivos (nunca bytes del código):
-
-| Campo | Qué dice |
-|---|---|
-| `frames_con_codigo` | Frames en que se buscó el código |
-| `pdf417_frames_con_codigo_detectado` / `pdf417_codigos_detectados` | Frames en que ML Kit decodificó algún PDF417, y cuántos |
-| `imagen_ancho_px_mediana_con_codigo` | Ancho (px) de la imagen que analizó ML Kit al buscar el código: la resolución disponible |
-| `pdf417_ancho_codigo_px_mediana` | Ancho (px) de los códigos detectados |
-| `pdf417_sin_bytes` | Códigos que llegaron sin bytes crudos |
-| `pdf417_bytes_min` / `pdf417_bytes_max` | Largo de los bytes recibidos |
-| `pdf417_motivos` | Resultado del núcleo por código: `ACEPTADO`, `PREFIJO_CORTO`, `CEDULA_INVALIDA` (clave o formato distintos), `PRIMER_APELLIDO_INVALIDO` / `SEGUNDO_APELLIDO_INVALIDO` / `NOMBRE_INVALIDO` (posiciones corridas), `NOMBRE_O_APELLIDO_VACIO` |
-| `pdf417_errores_lector` | Veces que el lector de códigos terminó con error |
-| `modo_codigo_activaciones` | Veces que se activó el "modo código" (ver abajo) |
-| `modo_codigo_frames` | Frames que corrieron en modo código |
-| `modo_codigo_imagen_ancho_px_mediana` | Ancho (px) de la imagen que analizó el lector de códigos EN modo código (todo lo visible). Aparte de `imagen_ancho_px_mediana_con_codigo`, que mide sólo el recorte normal del recuadro guía |
-| `modo_codigo_alta_resolucion_cambios` / `_fallos` / `_ms_max` | Veces que el análisis pasó a la mayor resolución al entrar al modo código, veces que el equipo no lo admitió (sigue con la normal) y lo que tardó el cambio más lento (ms) |
-
-Cómo leerlo: muchos frames con código y **0 detectados** = falta
-resolución (ML Kit ni lo encuentra); detectados pero **sin bytes** = ML
-Kit no entrega el binario; con **motivos de rechazo** = el formato del
-decodificador no calza con las tarjetas reales.
-
-### Modo código
-
-El PDF417 de la cédula anterior trae datos y huellas: cientos de barras de
-1-2 px en el recuadro guía, bajo los ~2-3 px por barra que ML Kit necesita
-(con el recorte de ~944 px de ancho nunca se detectó). Al verse el reverso
-se activa el modo código por 60 frames, más que la pista de texto (si la
-persona acerca el código el texto deja de leerse): el código se busca en
-todos los frames y en **todo lo visible**, no en el recuadro, y la pantalla
-pide "Acerque el código de barras hasta que llene la pantalla (de lado
-funciona mejor)". De lado el código queda a lo largo de los 1920 px del
-frame. Termina al confirmar, al aparecer un MRZ o al vencerse.
-
-Mientras dura, el análisis pasa a la mayor resolución del sensor
-(`RESOLUCION_ANALISIS_CODIGO`, 4080x3060 en el A25) y vuelve a 1080p al
-terminar; al cambiar sale otro `camara_info` con `modo_codigo = true` y la
-resolución que eligió CameraX. La primera versión del modo, a 1920x1440,
-sólo llevó la imagen del lector de 944 a 1126 px (el preview recorta los
-costados): 0 detecciones en 192 frames (staging, 2026-09-29).
-
-Cómo leerlo: con `modo_codigo_activaciones` > 0, compare
-`modo_codigo_imagen_ancho_px_mediana` con `imagen_ancho_px_mediana_con_codigo`
-(si no es mayor, el modo no gana píxeles) y mire si
-`pdf417_codigos_detectados` sube y `pdf417_ancho_codigo_px_mediana` crece.
-Sin activaciones, el texto nunca reconoció el reverso: no hay modo.
+El lector del PDF417 de la cédula anterior se desconectó de la app el
+2026-10-19 (en la práctica no se usaba). Las filas de `ocr_sesion` de
+versiones anteriores traen los campos `frames_con_codigo`, `pdf417_*`,
+`modo_codigo_*`, `imagen_ancho_px_mediana_con_codigo` y `lector_pdf417`; las
+nuevas ya no. El decodificador sigue en el núcleo Rust
+(`mobile/rust-core/src/pdf417_cedula.rs`).
 
 ## Qué puede dar la cámara (`camara_info`)
 
-Para decidir si se puede pedir más resolución al análisis, con sólo números:
+Con qué resolución quedaron el análisis y el preview, y cuánto más podría
+dar la cámara, con sólo números:
 
 | Campo | Qué dice |
 |---|---|
@@ -133,22 +93,12 @@ Para decidir si se puede pedir más resolución al análisis, con sólo números
 
 Cómo leerlo: si `analisis_*` es menor que `yuv_max_*`, se puede pedir más
 resolución al análisis (a costa de fps); si ya son iguales, ese es el techo.
-`enfoque_min_cm` dice a qué distancia deja de enfocar el código acercado.
+`enfoque_min_cm` dice a qué distancia deja de enfocar un documento acercado.
 
 ```sql
 select ocurrido_en, version_app, datos
 from public.telemetria_diagnostico
 where tipo = 'camara_info'
-order by ocurrido_en desc;
-```
-
-```sql
-select ocurrido_en, datos->>'pantalla', datos->>'frames_con_codigo',
-       datos->>'pdf417_codigos_detectados', datos->>'pdf417_sin_bytes',
-       datos->'pdf417_motivos', datos->>'imagen_ancho_px_mediana_con_codigo',
-       datos->>'pdf417_ancho_codigo_px_mediana'
-from public.telemetria_diagnostico
-where tipo = 'ocr_sesion' and (datos->>'lector_pdf417')::boolean
 order by ocurrido_en desc;
 ```
 
