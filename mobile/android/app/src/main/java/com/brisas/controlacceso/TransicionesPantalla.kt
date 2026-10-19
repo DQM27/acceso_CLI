@@ -77,3 +77,30 @@ internal fun transicionDePantalla(avanza: Boolean): ContentTransform =
             sizeTransform = null,
         )
     }
+
+/// Los paneles de una pantalla con lista, un formulario aparte y dos
+/// escáneres de cámara (Proveedores y Por correo).
+internal enum class PanelConFormulario(val conCamara: Boolean) {
+    LISTA(conCamara = false),
+    FORMULARIO(conCamara = false),
+    ESCANER_CEDULA(conCamara = true),
+    ESCANER_PLACA(conCamara = true),
+}
+
+/// Qué panel ocupa la pantalla. Mismo orden de prioridad de siempre: los
+/// escáneres tapan al formulario y éste a la lista.
+internal fun panelConFormulario(
+    mostrandoFormulario: Boolean,
+    escaneandoCedula: Boolean,
+    escaneandoPlaca: Boolean,
+): PanelConFormulario = when {
+    escaneandoCedula -> PanelConFormulario.ESCANER_CEDULA
+    escaneandoPlaca -> PanelConFormulario.ESCANER_PLACA
+    mostrandoFormulario -> PanelConFormulario.FORMULARIO
+    else -> PanelConFormulario.LISTA
+}
+
+/// El formulario se abre encima de la lista y se cierra de vuelta; si uno de
+/// los dos paneles es de cámara, el cambio es inmediato.
+internal fun transicionDePanel(desde: PanelConFormulario, hacia: PanelConFormulario): ContentTransform =
+    if (desde.conCamara || hacia.conCamara) SinTransicion else transicionDePantalla(avanza = hacia != PanelConFormulario.LISTA)

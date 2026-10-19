@@ -1,6 +1,7 @@
 package com.brisas.controlacceso
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -84,116 +85,129 @@ fun PantallaPorCorreo(
     var escaneandoPlaca by remember { mutableStateOf(false) }
     var filaParaSalida by remember { mutableStateOf<FilaCorreoActiva?>(null) }
 
-    if (escaneando) {
-        PantallaEscanearCedula(
-            modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
-            onDocumentoDetectado = { documento ->
-                escaneando = false
-                val numero = documento.numeroDocumento.filter(Char::isDigit)
-                    .ifBlank { documento.numeroDocumento }
-                viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
-            },
-            onCerrar = { escaneando = false },
-        )
-        return
-    }
-
-    if (escaneandoPlaca) {
-        PantallaEscanearVehiculoRuta(
-            onVehiculoDetectado = { detectado ->
-                escaneandoPlaca = false
-                viewModel.cambiarPlaca(placaComoSeImprime(detectado.valor))
-            },
-            onCerrar = { escaneandoPlaca = false },
-            mensajeInicial = "Apunte a la placa del vehículo",
-            mensajePermiso = "Se necesita permiso de cámara para escanear la placa.",
-        )
-        return
-    }
-
-    if (mostrandoFormulario) {
-        FormularioNuevoIngresoCorreo(
-            viewModel = viewModel,
-            gafeteTexto = gafeteTexto,
-            onCambiarGafeteTexto = { gafeteTexto = it },
-            onEscanear = { escaneando = true },
-            onEscanearPlaca = { escaneandoPlaca = true },
-            onVolver = {
-                viewModel.cancelarFormulario()
-                gafeteTexto = ""
-                mostrandoFormulario = false
-            },
-        )
-        return
-    }
-
-    val activosFiltrados = if (busqueda.isBlank()) {
-        viewModel.activos
-    } else {
-        viewModel.activos.filter { it.coincideCon(busqueda) }
-    }
-
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedTextField(
-                value = busqueda,
-                onValueChange = { busqueda = it },
-                placeholder = { Text("Cédula, nombre, motivo…") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.weight(1f),
-            )
-            Box(
-                modifier = Modifier
-                    .size(AlturaBusquedaBrisas)
-                    .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
-                    .clip(FormaCampoBrisas)
-                    .clickable(onClick = { mostrandoFormulario = true }),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Default.PersonAdd,
-                    contentDescription = "Nuevo ingreso por correo",
-                    tint = MaterialTheme.colorScheme.primary,
+    // Qué panel se ve ahora: la lista, el formulario o uno de los escáneres.
+    // La lista y el formulario se abren y cierran con una transición corta; los
+    // escáneres cambian al instante (ver `TransicionesPantalla.kt`).
+    val panel = panelConFormulario(
+        mostrandoFormulario = mostrandoFormulario,
+        escaneandoCedula = escaneando,
+        escaneandoPlaca = escaneandoPlaca,
+    )
+    AnimatedContent(
+        targetState = panel,
+        modifier = Modifier.fillMaxSize(),
+        transitionSpec = { transicionDePanel(initialState, targetState) },
+        label = "panelPorCorreo",
+    ) { mostrado ->
+        when (mostrado) {
+            PanelConFormulario.ESCANER_CEDULA -> {
+                PantallaEscanearCedula(
+                    modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
+                    onDocumentoDetectado = { documento ->
+                        escaneando = false
+                        val numero = documento.numeroDocumento.filter(Char::isDigit)
+                            .ifBlank { documento.numeroDocumento }
+                        viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
+                    },
+                    onCerrar = { escaneando = false },
                 )
             }
-        }
+            PanelConFormulario.ESCANER_PLACA -> {
+                PantallaEscanearVehiculoRuta(
+                    onVehiculoDetectado = { detectado ->
+                        escaneandoPlaca = false
+                        viewModel.cambiarPlaca(placaComoSeImprime(detectado.valor))
+                    },
+                    onCerrar = { escaneandoPlaca = false },
+                    mensajeInicial = "Apunte a la placa del vehículo",
+                    mensajePermiso = "Se necesita permiso de cámara para escanear la placa.",
+                )
+            }
+            PanelConFormulario.FORMULARIO -> {
+                FormularioNuevoIngresoCorreo(
+                    viewModel = viewModel,
+                    gafeteTexto = gafeteTexto,
+                    onCambiarGafeteTexto = { gafeteTexto = it },
+                    onEscanear = { escaneando = true },
+                    onEscanearPlaca = { escaneandoPlaca = true },
+                    onVolver = {
+                        viewModel.cancelarFormulario()
+                        gafeteTexto = ""
+                        mostrandoFormulario = false
+                    },
+                )
+            }
+            PanelConFormulario.LISTA -> Box(modifier = Modifier.fillMaxSize()) {
+                    val activosFiltrados = if (busqueda.isBlank()) {
+                        viewModel.activos
+                    } else {
+                        viewModel.activos.filter { it.coincideCon(busqueda) }
+                    }
 
-        viewModel.error?.let { mensaje ->
-            Text(
-                mensaje,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedTextField(
+                                value = busqueda,
+                                onValueChange = { busqueda = it },
+                                placeholder = { Text("Cédula, nombre, motivo…") },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                singleLine = true,
+                                shape = FormaCampoBrisas,
+                                colors = ColoresCampoBrisas(),
+                                modifier = Modifier.weight(1f),
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(AlturaBusquedaBrisas)
+                                    .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
+                                    .clip(FormaCampoBrisas)
+                                    .clickable(onClick = { mostrandoFormulario = true }),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Default.PersonAdd,
+                                    contentDescription = "Nuevo ingreso por correo",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
 
-        ListaConDesvanecido {
-            LazyColumn(
-                contentPadding = PaddingValues(top = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                items(activosFiltrados, key = { it.clave() }) { fila ->
-                    FilaCorreoActivo(fila = fila, onConfirmarSalida = { filaParaSalida = fila })
-                }
+                        viewModel.error?.let { mensaje ->
+                            Text(
+                                mensaje,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+
+                        ListaConDesvanecido {
+                            LazyColumn(
+                                contentPadding = PaddingValues(top = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp),
+                            ) {
+                                items(activosFiltrados, key = { it.clave() }) { fila ->
+                                    FilaCorreoActivo(fila = fila, onConfirmarSalida = { filaParaSalida = fila })
+                                }
+                            }
+                        }
+                    }
+
+                    DialogoConfirmarSalidaCorreo(
+                        fila = filaParaSalida,
+                        onDismiss = { filaParaSalida = null },
+                        onConfirmar = {
+                            viewModel.registrarSalida(it)
+                            filaParaSalida = null
+                        },
+                    )
             }
         }
     }
-
-    DialogoConfirmarSalidaCorreo(
-        fila = filaParaSalida,
-        onDismiss = { filaParaSalida = null },
-        onConfirmar = {
-            viewModel.registrarSalida(it)
-            filaParaSalida = null
-        },
-    )
 }
 
 /// Formulario en pantalla completa, con las mismas tarjetas numeradas que
