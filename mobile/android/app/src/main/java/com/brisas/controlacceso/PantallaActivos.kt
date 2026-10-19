@@ -5,22 +5,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
 /// Una sola vista para el ciclo completo — entrada, permanencia y salida —,
@@ -75,27 +67,6 @@ fun PantallaActivos(
             viewModel.refrescar()
         }
     }
-
-    // "Salida de X · Deshacer" mientras una salida deslizada espera (ver
-    // `ActivosViewModel.deslizarSalida`). El aviso dura lo que dura la espera:
-    // cuando la salida se registra, `salidaPendiente` vuelve a null, este efecto
-    // se cancela y el aviso desaparece solo.
-    val avisos = remember { SnackbarHostState() }
-    val salidaPendiente = viewModel.salidaPendiente
-    LaunchedEffect(salidaPendiente?.clave) {
-        if (salidaPendiente != null) {
-            val resultado = avisos.showSnackbar(
-                message = "Salida de ${salidaPendiente.contratistaNombre}",
-                actionLabel = "Deshacer",
-                duration = SnackbarDuration.Indefinite,
-            )
-            if (resultado == SnackbarResult.ActionPerformed) viewModel.deshacerSalida()
-        }
-    }
-    // Si la app pasa a segundo plano o se sale de la pantalla, la salida que
-    // esperaba se registra ya: no queda nada en el aire.
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.confirmarSalidaPendiente() }
-    DisposableEffect(viewModel) { onDispose { viewModel.confirmarSalidaPendiente() } }
 
     // Qué panel se ve ahora (mismo orden de prioridad de siempre: primero el
     // ingreso en curso, luego los escáneres, y si no la lista).
@@ -214,22 +185,20 @@ fun PantallaActivos(
                 when (viewModel.modo) {
                     ModoBusqueda.ENTRADA -> ContenidoModoEntrada(
                         texto = viewModel.texto,
-                        activos = viewModel.activosVisibles,
+                        activos = viewModel.activos,
                         resultadosBusqueda = viewModel.resultadosBusqueda,
                         verificando = verificando,
                         cargando = viewModel.cargando,
                         onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
                         onElegirContratista = { viewModel.elegir(it) },
-                        onDeslizarSalida = viewModel::deslizarSalida,
                         sincronizando = sincronizando,
                         onSincronizar = onSincronizar,
                     )
                     ModoBusqueda.SALIDA_NOMBRE -> ContenidoModoSalidaNombre(
                         texto = viewModel.texto,
-                        activos = viewModel.activosVisibles,
+                        activos = viewModel.activos,
                         cargando = viewModel.cargando,
                         onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
-                        onDeslizarSalida = viewModel::deslizarSalida,
                         sincronizando = sincronizando,
                         onSincronizar = onSincronizar,
                     )
@@ -248,10 +217,6 @@ fun PantallaActivos(
                 onConfirmar = { viewModel.confirmarSalida(it) },
             )
 
-            SnackbarHost(
-                hostState = avisos,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
-            )
             }
         }
     }

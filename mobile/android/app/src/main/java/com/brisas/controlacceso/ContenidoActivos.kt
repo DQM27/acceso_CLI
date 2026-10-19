@@ -155,7 +155,6 @@ internal fun ContenidoModoEntrada(
     cargando: Boolean,
     onElegirActivo: (FilaActiva) -> Unit,
     onElegirContratista: (ContratistaResumen) -> Unit,
-    onDeslizarSalida: (FilaActiva) -> Unit,
     sincronizando: Boolean = false,
     onSincronizar: () -> Unit = {},
 ) {
@@ -166,7 +165,6 @@ internal fun ContenidoModoEntrada(
             tituloVacio = "Nadie adentro por ahora",
             detalleVacio = "Cuando alguien ingrese, aparece acá.",
             onClick = onElegirActivo,
-            onSalida = onDeslizarSalida,
             sincronizando = sincronizando,
             onSincronizar = onSincronizar,
         )
@@ -200,7 +198,6 @@ internal fun ContenidoModoSalidaNombre(
     activos: List<FilaActiva>,
     cargando: Boolean,
     onElegirActivo: (FilaActiva) -> Unit,
-    onDeslizarSalida: (FilaActiva) -> Unit,
     sincronizando: Boolean = false,
     onSincronizar: () -> Unit = {},
 ) {
@@ -210,7 +207,6 @@ internal fun ContenidoModoSalidaNombre(
         tituloVacio = if (texto.isBlank()) "Busque a quien sale" else "Sin resultados",
         detalleVacio = if (texto.isBlank()) "Escriba un nombre o una cédula." else "Pruebe con otro nombre o cédula.",
         onClick = onElegirActivo,
-        onSalida = onDeslizarSalida,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
     )
@@ -283,8 +279,9 @@ private enum class EstadoLista { MARCADORES, VACIA, LISTA }
 ///
 /// - Las filas se acomodan con una animación cuando alguien entra o sale
 ///   (`animateItem`), en vez de saltar.
-/// - Cada fila se desliza a la izquierda para registrar la salida (ver
-///   [FilaDeslizable]).
+/// - Tocar una fila abre la confirmación de salida: registrar una salida no
+///   se hace con un gesto sin confirmar (se probó deslizar con "Deshacer" y
+///   se descartó, 2026-10-19).
 /// - Tirar hacia abajo sincroniza con la nube, igual que el botón de arriba.
 /// - Sin filas: marcadores mientras carga y un mensaje (no un hueco en
 ///   blanco) cuando de verdad no hay nadie. Los marcadores sólo salen si no
@@ -297,7 +294,6 @@ private fun ListaActivos(
     tituloVacio: String,
     detalleVacio: String,
     onClick: (FilaActiva) -> Unit,
-    onSalida: (FilaActiva) -> Unit,
     sincronizando: Boolean,
     onSincronizar: () -> Unit,
 ) {
@@ -326,7 +322,7 @@ private fun ListaActivos(
                         verticalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
                         items(activos, key = { fila -> fila.clave }) { fila ->
-                            FilaDeslizable(onSalida = { onSalida(fila) }, modifier = Modifier.animateItem()) {
+                            Box(modifier = Modifier.animateItem()) {
                                 FilaActivo(fila, onClick = { onClick(fila) })
                             }
                         }
