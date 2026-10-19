@@ -22,6 +22,7 @@ import android.os.StrictMode
 import android.os.SystemClock
 import android.view.FrameMetrics
 import android.view.Window
+import androidx.profileinstaller.ProfileVerifier
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -84,8 +85,10 @@ object Telemetria {
     }
 
     /// El primer frame de la app terminó de dibujarse (arranque completo).
-    fun primerFrameDibujado() {
-        motor?.primerFrameDibujado()
+    /// `inicioActividadMs`: `SystemClock.uptimeMillis()` al entrar a
+    /// `MainActivity.onCreate`.
+    fun primerFrameDibujado(inicioActividadMs: Long) {
+        motor?.primerFrameDibujado(inicioActividadMs)
     }
 
     fun enPrimerPlano(visible: Boolean) {
@@ -242,21 +245,61 @@ private class MotorTelemetria(private val app: Application) {
         if (!visible) ejecutor.execute { volcarAgregados(); enviar(); guardarPendientes() }
     }
 
-    fun primerFrameDibujado() {
+    /// El tiempo "desde el inicio del proceso" sólo vale en un arranque en
+    /// frío: si el proceso ya vivía (lo despertó una notificación push, por
+    /// ejemplo), contaba las horas que pasó en segundo plano -- en staging
+    /// llegaron arranques de 7 395 142 y 8 826 191 ms. Por eso se manda
+    /// siempre el tiempo desde que se creó la Activity, y el del proceso
+    /// sólo en frío.
+    fun primerFrameDibujado(inicioActividadMs: Long) {
         if (primerFrameInformado) return
         primerFrameInformado = true
-        val datos = mutableMapOf<String, Any?>(
-            "ms_desde_inicio_proceso" to SystemClock.uptimeMillis() - Process.getStartUptimeMillis(),
-        )
+        val ahora = SystemClock.uptimeMillis()
+        val inicioProcesoMs = Process.getStartUptimeMillis()
+        val datos = mutableMapOf<String, Any?>("ms_desde_creacion_actividad" to ahora - inicioActividadMs)
+        var tipoArranque: Int? = null
         if (Build.VERSION.SDK_INT >= 35) {
             activityManager.getHistoricalProcessStartReasons(1).firstOrNull()?.let { inicio ->
+                tipoArranque = inicio.startType
                 datos["tipo_arranque"] = inicio.startType
                 datos["motivo_arranque"] = inicio.reason
                 datos["estado_arranque"] = inicio.startupState
             }
         }
-        encolar("arranque", datos)
+        val enFrio = esArranqueEnFrio(tipoArranque, procesoHastaActividadMs = inicioActividadMs - inicioProcesoMs)
+        datos["en_frio"] = enFrio
+        if (enFrio) datos["ms_desde_inicio_proceso"] = ahora - inicioProcesoMs
+        datos["primero_de_la_version"] = primerArranqueDeLaVersion()
+        // El estado del perfil de compilación (Baseline Profile) se consulta
+        // fuera del hilo de la pantalla: lee archivos del sistema.
+        ejecutor.execute {
+            datos.putAll(estadoPerfilCompilacion())
+            encolar("arranque", datos)
+        }
     }
+
+    /// ¿Es el primer arranque con este `versionCode`? Después de instalar una
+    /// versión nueva Android todavía no compiló el código de la app: separa
+    /// ese arranque, el más lento, del resto.
+    private fun primerArranqueDeLaVersion(): Boolean {
+        val anterior = preferencias.getLong(CLAVE_ULTIMA_VERSION_ARRANCADA, -1)
+        val actual = BuildConfig.VERSION_CODE.toLong()
+        if (anterior == actual) return false
+        preferencias.edit().putLong(CLAVE_ULTIMA_VERSION_ARRANCADA, actual).apply()
+        return true
+    }
+
+    /// Si el código de la app ya está compilado con el Baseline Profile
+    /// (`app/src/main/baseline-prof.txt`). Medir nunca puede tirar la app:
+    /// ante cualquier fallo, sin estos campos.
+    private fun estadoPerfilCompilacion(): Map<String, Any?> = runCatching {
+        val estado = ProfileVerifier.getCompilationStatusAsync().get(TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+        mapOf(
+            "perfil_codigo" to estado.profileInstallResultCode,
+            "perfil_compilado" to estado.isCompiledWithProfile,
+            "perfil_en_cola" to estado.hasProfileEnqueuedForCompilation(),
+        )
+    }.getOrDefault(emptyMap())
 
     fun observarVentana(ventana: Window) {
         val refresco = app.getSystemService(android.hardware.display.DisplayManager::class.java)
@@ -265,7 +308,18 @@ private class MotorTelemetria(private val app: Application) {
         frames = agregador
         val hilo = hiloFrames ?: HandlerThread("telemetria-frames").also { it.start(); hiloFrames = it }
         ventana.addOnFrameMetricsAvailableListener({ _, metricas, _ ->
-            agregador.registrar(pantallas.actual(), metricas.getMetric(FrameMetrics.TOTAL_DURATION))
+            agregador.registrar(
+                pantallas.actual(),
+                duracionNanos = metricas.getMetric(FrameMetrics.TOTAL_DURATION),
+                presupuestoFrameNanos = if (Build.VERSION.SDK_INT >= 31) metricas.getMetric(FrameMetrics.DEADLINE) else null,
+                hiloUiNanos = metricas.getMetric(FrameMetrics.INPUT_HANDLING_DURATION) +
+                    metricas.getMetric(FrameMetrics.ANIMATION_DURATION) +
+                    metricas.getMetric(FrameMetrics.LAYOUT_MEASURE_DURATION) +
+                    metricas.getMetric(FrameMetrics.DRAW_DURATION),
+                renderNanos = metricas.getMetric(FrameMetrics.SYNC_DURATION) +
+                    metricas.getMetric(FrameMetrics.COMMAND_ISSUE_DURATION) +
+                    metricas.getMetric(FrameMetrics.SWAP_BUFFERS_DURATION),
+            )
         }, Handler(hilo.looper))
     }
 
@@ -526,6 +580,7 @@ private class MotorTelemetria(private val app: Application) {
     private companion object {
         const val CLAVE_DISPOSITIVO = "dispositivo"
         const val CLAVE_ULTIMA_SALIDA = "ultima_salida_informada"
+        const val CLAVE_ULTIMA_VERSION_ARRANCADA = "ultima_version_arrancada"
         const val SEGUNDOS_MUESTREO = 30L
         const val SEGUNDOS_ENVIO = 60L
         const val FILAS_POR_LOTE = 200

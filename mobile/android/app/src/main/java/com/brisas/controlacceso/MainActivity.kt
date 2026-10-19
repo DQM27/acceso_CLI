@@ -2,6 +2,7 @@ package com.brisas.controlacceso
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -56,6 +57,7 @@ private val ANCHO_MAXIMO_CONTENIDO = 480.dp
 /// arranca la Activity.
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val inicioActividadMs = SystemClock.uptimeMillis()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Sólo en release -- en debug bloqueaba también las capturas de
@@ -74,7 +76,7 @@ class MainActivity : ComponentActivity() {
             Telemetria.observarVentana(window)
             window.decorView.viewTreeObserver.addOnDrawListener(object : ViewTreeObserver.OnDrawListener {
                 override fun onDraw() {
-                    Telemetria.primerFrameDibujado()
+                    Telemetria.primerFrameDibujado(inicioActividadMs)
                     window.decorView.post { window.decorView.viewTreeObserver.removeOnDrawListener(this) }
                 }
             })

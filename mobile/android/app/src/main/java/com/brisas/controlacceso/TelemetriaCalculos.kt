@@ -199,37 +199,88 @@ class AgregadorLlamadas {
     }
 }
 
+/// ¿El arranque fue en frío (el proceso nació para abrir la app)? Con
+/// Android 15+ lo dice el sistema (`ApplicationStartInfo.startType`, 1 =
+/// frío). Sin ese dato: en frío si la Activity se creó poco después de que
+/// arrancó el proceso; un proceso que ya vivía (lo despertó una notificación
+/// push) llega a la Activity minutos u horas después.
+fun esArranqueEnFrio(tipoArranque: Int?, procesoHastaActividadMs: Long): Boolean =
+    if (tipoArranque != null) {
+        tipoArranque == TIPO_ARRANQUE_EN_FRIO
+    } else {
+        procesoHastaActividadMs in 0..MS_MAXIMO_PROCESO_HASTA_ACTIVIDAD_EN_FRIO
+    }
+
+/// `ApplicationStartInfo.START_TYPE_COLD` (API 35), copiado para poder
+/// probarlo en la JVM.
+const val TIPO_ARRANQUE_EN_FRIO = 1
+
+// Proceso -> `Activity.onCreate` en frío: en el A25 la creación de la
+// aplicación (núcleo Rust, Sentry, telemetría) tarda menos de 1 s; el
+// margen cubre un teléfono más lento sin confundir un proceso despertado
+// en segundo plano.
+private const val MS_MAXIMO_PROCESO_HASTA_ACTIVIDAD_EN_FRIO = 5_000L
+
 /// Duración de los frames dibujados, agregada por pantalla. Un frame es
-/// "trabado" si tardó más del doble del presupuesto de la pantalla (mismo
-/// criterio que JankStats de AndroidX) y "congelado" si pasó de 700 ms
-/// (criterio de Android vitals).
+/// "trabado" si tardó más del doble de SU presupuesto (mismo criterio que
+/// JankStats de AndroidX) y "congelado" si pasó de 700 ms (criterio de
+/// Android vitals).
+///
+/// El presupuesto es el de cada frame (`FrameMetrics.DEADLINE`, Android 12+):
+/// la pantalla del A25 cambia sola entre 120 y 60 Hz -- con la cámara abierta
+/// baja a 60 --, y comparar contra los 8,33 ms fijos del arranque inflaba los
+/// trabados de las pantallas de cámara. [presupuestoNanos] queda para los
+/// equipos sin ese dato y para frames que no lo traen.
+///
+/// `hiloUiNanos` (entrada, animación, medida y dibujo de Compose) y
+/// `renderNanos` (sincronizar, emitir comandos y entregar el búfer) separan
+/// dónde se fue el tiempo: lo primero se arregla en el código de la
+/// pantalla; lo segundo es GPU o competencia por el procesador.
 class AgregadorFrames(private val presupuestoNanos: Long) {
-    private val porPantalla = LinkedHashMap<String, MutableList<Double>>()
+    private class Muestra(val ms: Double, val presupuestoMs: Double, val hiloUiMs: Double?, val renderMs: Double?)
+
+    private val porPantalla = LinkedHashMap<String, MutableList<Muestra>>()
 
     init {
         require(presupuestoNanos > 0) { "El presupuesto por frame debe ser positivo" }
     }
 
     @Synchronized
-    fun registrar(pantalla: String, duracionNanos: Long) {
-        porPantalla.getOrPut(pantalla) { mutableListOf() }.add(duracionNanos / 1e6)
+    fun registrar(
+        pantalla: String,
+        duracionNanos: Long,
+        presupuestoFrameNanos: Long? = null,
+        hiloUiNanos: Long? = null,
+        renderNanos: Long? = null,
+    ) {
+        val presupuesto = presupuestoFrameNanos?.takeIf { it > 0 } ?: presupuestoNanos
+        porPantalla.getOrPut(pantalla) { mutableListOf() }.add(
+            Muestra(duracionNanos / 1e6, presupuesto / 1e6, hiloUiNanos?.let { it / 1e6 }, renderNanos?.let { it / 1e6 }),
+        )
     }
 
     @Synchronized
     fun vaciar(): List<Map<String, Any?>> {
-        val presupuestoMs = presupuestoNanos / 1e6
-        val resumen = porPantalla.filterValues { it.isNotEmpty() }.map { (pantalla, duraciones) ->
-            val ordenadas = duraciones.sorted()
+        val resumen = porPantalla.filterValues { it.isNotEmpty() }.map { (pantalla, muestras) ->
+            val ordenadas = muestras.map { it.ms }.sorted()
+            val presupuestos = muestras.map { it.presupuestoMs }.sorted()
+            val hiloUi = muestras.mapNotNull { it.hiloUiMs }.sorted()
+            val render = muestras.mapNotNull { it.renderMs }.sorted()
             mapOf(
                 "pantalla" to pantalla,
-                "frames" to ordenadas.size,
-                "trabados" to ordenadas.count { it > presupuestoMs * 2 },
+                "frames" to muestras.size,
+                "trabados" to muestras.count { it.ms > it.presupuestoMs * 2 },
                 "congelados" to ordenadas.count { it > MS_FRAME_CONGELADO },
-                "presupuesto_ms" to presupuestoMs.redondeado(2),
+                // La mediana: con la tasa variable puede haber de los dos.
+                "presupuesto_ms" to percentil(presupuestos, 0.5)?.redondeado(2),
                 "p50_ms" to percentil(ordenadas, 0.5)?.redondeado(),
                 "p90_ms" to percentil(ordenadas, 0.9)?.redondeado(),
                 "p99_ms" to percentil(ordenadas, 0.99)?.redondeado(),
                 "max_ms" to ordenadas.last().redondeado(),
+                "hilo_ui_p50_ms" to percentil(hiloUi, 0.5)?.redondeado(),
+                "hilo_ui_p90_ms" to percentil(hiloUi, 0.9)?.redondeado(),
+                "render_p50_ms" to percentil(render, 0.5)?.redondeado(),
+                "render_p90_ms" to percentil(render, 0.9)?.redondeado(),
             )
         }
         porPantalla.clear()

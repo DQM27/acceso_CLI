@@ -63,8 +63,12 @@ commit;
 --   select tipo, count(*), min(ocurrido_en), max(ocurrido_en)
 --   from public.telemetria_diagnostico group by tipo order by 2 desc;
 --
--- Arranques en frío (ms hasta el primer frame):
---   select ocurrido_en, datos->>'tipo_arranque', (datos->>'ms_desde_inicio_proceso')::numeric
+-- Arranques (ms hasta el primer frame). `ms_desde_inicio_proceso` sólo viene
+-- en frío; antes (hasta la 1.4.15) venía siempre y en arranques tibios contaba las
+-- horas que el proceso pasó vivo en segundo plano:
+--   select ocurrido_en, version_app, datos->>'en_frio', datos->>'primero_de_la_version',
+--          datos->>'perfil_compilado', (datos->>'ms_desde_creacion_actividad')::numeric,
+--          (datos->>'ms_desde_inicio_proceso')::numeric
 --   from public.telemetria_diagnostico where tipo = 'arranque' order by ocurrido_en desc;
 --
 -- Evolución de la memoria (PSS) por sesión, para ver si crece sin bajar:

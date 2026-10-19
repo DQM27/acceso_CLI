@@ -2,6 +2,7 @@ package com.brisas.controlacceso
 
 import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -178,6 +179,50 @@ class TelemetriaCalculosTest {
         assertEquals(800.0, rutas["max_ms"])
         assertEquals(0, resumen.getValue("login")["trabados"])
         assertTrue(agregador.vaciar().isEmpty())
+    }
+
+    @Test
+    fun cadaFrameSeComparaContraSuPropioPresupuesto() {
+        // Pantalla a 120 Hz que baja a 60 con la cámara: 25 ms no es trabado
+        // con un plazo de 16,7 ms, sí con uno de 8,33 ms.
+        val agregador = AgregadorFrames(presupuestoNanos = 8_333_333)
+        agregador.registrar("escanear_cedula", 25_000_000, presupuestoFrameNanos = 16_666_667)
+        agregador.registrar("escanear_cedula", 25_000_000, presupuestoFrameNanos = 8_333_333)
+        agregador.registrar("escanear_cedula", 25_000_000, presupuestoFrameNanos = 16_666_667)
+        val fila = agregador.vaciar().single()
+        assertEquals(1, fila["trabados"])
+        assertEquals(16.67, fila["presupuesto_ms"])
+    }
+
+    @Test
+    fun separaElTiempoDelHiloDePantallaDelDeRender() {
+        val agregador = AgregadorFrames(presupuestoNanos = 16_666_667)
+        agregador.registrar("activos", 20_000_000, hiloUiNanos = 4_000_000, renderNanos = 12_000_000)
+        agregador.registrar("activos", 10_000_000, hiloUiNanos = 2_000_000, renderNanos = 6_000_000)
+        val fila = agregador.vaciar().single()
+        assertEquals(2.0, fila["hilo_ui_p50_ms"])
+        assertEquals(4.0, fila["hilo_ui_p90_ms"])
+        assertEquals(12.0, fila["render_p90_ms"])
+        // Sin el dato (presupuesto fijo, sin desglose) los campos van vacíos.
+        agregador.registrar("login", 5_000_000)
+        assertNull(agregador.vaciar().single()["hilo_ui_p50_ms"])
+    }
+
+    // --- esArranqueEnFrio ---
+
+    @Test
+    fun conAndroid15ManaElTipoDeArranqueDelSistema() {
+        assertTrue(esArranqueEnFrio(TIPO_ARRANQUE_EN_FRIO, procesoHastaActividadMs = 9_000_000))
+        // Tibio (2): el proceso ya vivía, aunque la Activity se creara enseguida.
+        assertFalse(esArranqueEnFrio(2, procesoHastaActividadMs = 300))
+    }
+
+    @Test
+    fun sinElTipoUnProcesoDespertadoAntesNoCuentaComoFrio() {
+        assertTrue(esArranqueEnFrio(null, procesoHastaActividadMs = 450))
+        // Lo despertó una notificación push horas antes de abrir la app.
+        assertFalse(esArranqueEnFrio(null, procesoHastaActividadMs = 8_826_191))
+        assertFalse(esArranqueEnFrio(null, procesoHastaActividadMs = -1))
     }
 
     // --- PilaPantallas ---
