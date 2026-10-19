@@ -42,6 +42,11 @@ class CorreoViewModel(
     var registrando by mutableStateOf(false)
         private set
 
+    /// Cargando la lista de quién está adentro: la pantalla muestra marcadores
+    /// en vez de "nadie adentro" mientras no llega la primera respuesta.
+    var cargando by mutableStateOf(false)
+        private set
+
     var cedula by mutableStateOf("")
         private set
     var nombre by mutableStateOf("")
@@ -63,6 +68,7 @@ class CorreoViewModel(
 
     fun refrescarActivos() {
         viewModelScope.launch {
+            cargando = true
             try {
                 val (locales, remotos) = withContext(dispatcherIO) {
                     medirNucleo("listarCorreosActivos") { nucleo.listarCorreosActivos() } to
@@ -73,6 +79,8 @@ class CorreoViewModel(
                 error = null
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
+            } finally {
+                cargando = false
             }
         }
     }

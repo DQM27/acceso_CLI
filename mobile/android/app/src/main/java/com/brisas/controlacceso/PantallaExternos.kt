@@ -31,6 +31,8 @@ fun PantallaExternos(
     refrescarNube: Int = 0,
     tipo: Int = 0,
     onCambiarTipo: (Int) -> Unit = {},
+    sincronizando: Boolean = false,
+    onSincronizar: () -> Unit = {},
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         FilaPildoras(
@@ -42,8 +44,8 @@ fun PantallaExternos(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (tipoExternoVisible(tipo)) {
                 TipoExterno.VISITA -> PantallaVisitas(nucleo, refrescarNube)
-                TipoExterno.PROVEEDOR -> PantallaProveedores(nucleo, refrescarNube)
-                TipoExterno.POR_CORREO -> PantallaPorCorreo(nucleo, refrescarNube)
+                TipoExterno.PROVEEDOR -> PantallaProveedores(nucleo, refrescarNube, sincronizando, onSincronizar)
+                TipoExterno.POR_CORREO -> PantallaPorCorreo(nucleo, refrescarNube, sincronizando, onSincronizar)
             }
         }
     }

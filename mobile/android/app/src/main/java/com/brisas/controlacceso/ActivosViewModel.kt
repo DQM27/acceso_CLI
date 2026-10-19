@@ -185,7 +185,12 @@ class ActivosViewModel(
         buscar(debounce = true)
     }
 
-    fun usarDocumentoEscaneadoIngreso(documento: DocumentoDetectado) {
+    /// Devuelve el trabajo, que termina cuando ya hay una selección de ingreso
+    /// lista (o cuando la búsqueda no encontró a nadie con claridad): la pantalla
+    /// de escaneo se queda a la vista hasta entonces y pasa directo a la
+    /// confirmación, sin que la lista aparezca un instante en medio (~110 ms en
+    /// la telemetría de staging, 2026-10-19).
+    fun usarDocumentoEscaneadoIngreso(documento: DocumentoDetectado): Job {
         val valor = documento.textoBusqueda ?: documento.numeroDocumento
         modo = ModoBusqueda.ENTRADA
         texto = valor
@@ -198,13 +203,14 @@ class ActivosViewModel(
                 resultadosBusqueda = resultados
                 val contratista = contratistaEscaneadoClaro(valor, resultados)
                 if (contratista != null) {
-                    elegir(contratista, origen = "ocr", msBusqueda = milisegundosDesde(inicioBusqueda))
+                    elegir(contratista, origen = "ocr", msBusqueda = milisegundosDesde(inicioBusqueda)).join()
                 }
                 error = null
             } catch (excepcion: NucleoException) {
                 error = excepcion.message
             }
         }
+        return trabajoBusqueda!!
     }
 
     fun cambiarModo(nuevo: ModoBusqueda) {
@@ -325,7 +331,7 @@ class ActivosViewModel(
     /// `origen` y `msBusqueda` sólo alimentan la telemetría de diagnóstico
     /// (`transicion_ingreso`): de dónde vino la elección ("ocr" o "manual") y
     /// cuánto tardó la búsqueda local previa.
-    fun elegir(contratista: ContratistaResumen, origen: String = "manual", msBusqueda: Double? = null) {
+    fun elegir(contratista: ContratistaResumen, origen: String = "manual", msBusqueda: Double? = null): Job =
         viewModelScope.launch {
             val inicioElegir = System.nanoTime()
             var resultado = "error"
@@ -381,7 +387,6 @@ class ActivosViewModel(
                 }
             }
         }
-    }
 
     fun cancelarSeleccionIngreso() {
         seleccionIngreso = SeleccionIngreso.Ninguna

@@ -67,6 +67,10 @@ private fun FilaCorreoActiva.coincideCon(busqueda: String): Boolean {
 fun PantallaPorCorreo(
     nucleo: Nucleo,
     refrescarNube: Int = 0,
+    // Tirar de la lista hacia abajo sincroniza con la nube, igual que el botón
+    // del encabezado de la pantalla principal (que es quien sabe hacerlo).
+    sincronizando: Boolean = false,
+    onSincronizar: () -> Unit = {},
 ) {
     RegistrarPantalla("por_correo")
     val viewModel: CorreoViewModel = viewModel(factory = CorreoViewModel.factory(nucleo))
@@ -185,15 +189,21 @@ fun PantallaPorCorreo(
                             )
                         }
 
-                        ListaConDesvanecido {
-                            LazyColumn(
-                                contentPadding = PaddingValues(top = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(5.dp),
-                            ) {
-                                items(activosFiltrados, key = { it.clave() }) { fila ->
-                                    FilaCorreoActivo(fila = fila, onConfirmarSalida = { filaParaSalida = fila })
-                                }
-                            }
+                        ListaConEstados(
+                            filas = activosFiltrados,
+                            clave = { it.clave() },
+                            cargando = viewModel.cargando,
+                            tituloVacio = if (busqueda.isBlank()) "Nadie ingresó por correo" else "Sin resultados",
+                            detalleVacio = if (busqueda.isBlank()) {
+                                "Cuando alguien ingrese, aparece acá."
+                            } else {
+                                "Pruebe con otro dato de la persona."
+                            },
+                            sincronizando = sincronizando,
+                            onSincronizar = onSincronizar,
+                            contentPadding = PaddingValues(top = 10.dp),
+                        ) { fila ->
+                            FilaCorreoActivo(fila = fila, onConfirmarSalida = { filaParaSalida = fila })
                         }
                     }
 
