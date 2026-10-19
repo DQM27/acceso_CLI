@@ -1,36 +1,50 @@
 package com.brisas.controlacceso
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import uniffi.control_acceso_mobile.ContratistaResumen
@@ -142,9 +156,20 @@ internal fun ContenidoModoEntrada(
     onElegirActivo: (FilaActiva) -> Unit,
     onElegirContratista: (ContratistaResumen) -> Unit,
     onDeslizarSalida: (FilaActiva) -> Unit,
+    sincronizando: Boolean = false,
+    onSincronizar: () -> Unit = {},
 ) {
     if (texto.isBlank()) {
-        ListaActivos(activos, onClick = onElegirActivo, onSalida = onDeslizarSalida)
+        ListaActivos(
+            activos = activos,
+            cargando = cargando,
+            tituloVacio = "Nadie adentro por ahora",
+            detalleVacio = "Cuando alguien ingrese, aparece acá.",
+            onClick = onElegirActivo,
+            onSalida = onDeslizarSalida,
+            sincronizando = sincronizando,
+            onSincronizar = onSincronizar,
+        )
         return
     }
     if (resultadosBusqueda.isEmpty() && !verificando && !cargando) {
@@ -171,11 +196,24 @@ internal fun ContenidoModoEntrada(
 /// Entrada). Ver el doc-comment de [PantallaActivos].
 @Composable
 internal fun ContenidoModoSalidaNombre(
+    texto: String,
     activos: List<FilaActiva>,
+    cargando: Boolean,
     onElegirActivo: (FilaActiva) -> Unit,
     onDeslizarSalida: (FilaActiva) -> Unit,
+    sincronizando: Boolean = false,
+    onSincronizar: () -> Unit = {},
 ) {
-    ListaActivos(activos, onClick = onElegirActivo, onSalida = onDeslizarSalida)
+    ListaActivos(
+        activos = activos,
+        cargando = cargando,
+        tituloVacio = if (texto.isBlank()) "Busque a quien sale" else "Sin resultados",
+        detalleVacio = if (texto.isBlank()) "Escriba un nombre o una cédula." else "Pruebe con otro nombre o cédula.",
+        onClick = onElegirActivo,
+        onSalida = onDeslizarSalida,
+        sincronizando = sincronizando,
+        onSincronizar = onSincronizar,
+    )
 }
 
 /// Sólo para el tipeo manual -- uno o más números de gafete separados por
@@ -235,22 +273,140 @@ internal fun ContenidoModoSalidaGafete(
     }
 }
 
+/// Lo que muestra la lista de activos: la propia lista, marcadores de
+/// posición mientras carga por primera vez, o un mensaje si no hay nadie.
+private enum class EstadoLista { MARCADORES, VACIA, LISTA }
+
 /// Lista de activos compartida entre Entrada (campo vacío) y Salida:
 /// nombre — mismas filas, mismo comportamiento, sólo cambia qué hace
 /// `onClick` según quién la use.
+///
+/// - Las filas se acomodan con una animación cuando alguien entra o sale
+///   (`animateItem`), en vez de saltar.
+/// - Cada fila se desliza a la izquierda para registrar la salida (ver
+///   [FilaDeslizable]).
+/// - Tirar hacia abajo sincroniza con la nube, igual que el botón de arriba.
+/// - Sin filas: marcadores mientras carga y un mensaje (no un hueco en
+///   blanco) cuando de verdad no hay nadie. Los marcadores sólo salen si no
+///   hay nada que mostrar: recargar con la lista llena no la tapa.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ListaActivos(activos: List<FilaActiva>, onClick: (FilaActiva) -> Unit, onSalida: (FilaActiva) -> Unit) {
-    ListaConDesvanecido {
-        LazyColumn(
-            contentPadding = PaddingValues(top = 5.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            items(activos, key = { fila -> fila.clave }) { fila ->
-                FilaDeslizable(onSalida = { onSalida(fila) }) {
-                    FilaActivo(fila, onClick = { onClick(fila) })
+private fun ListaActivos(
+    activos: List<FilaActiva>,
+    cargando: Boolean,
+    tituloVacio: String,
+    detalleVacio: String,
+    onClick: (FilaActiva) -> Unit,
+    onSalida: (FilaActiva) -> Unit,
+    sincronizando: Boolean,
+    onSincronizar: () -> Unit,
+) {
+    val estado = when {
+        activos.isNotEmpty() -> EstadoLista.LISTA
+        cargando -> EstadoLista.MARCADORES
+        else -> EstadoLista.VACIA
+    }
+    PullToRefreshBox(
+        isRefreshing = sincronizando,
+        onRefresh = onSincronizar,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        AnimatedContent(
+            targetState = estado,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                (fadeIn(tween(MS_FUNDIDO_ENTRADA)) togetherWith fadeOut(tween(MS_SALIDA))) using null
+            },
+            label = "estadoListaActivos",
+        ) { mostrado ->
+            when (mostrado) {
+                EstadoLista.LISTA -> ListaConDesvanecido {
+                    LazyColumn(
+                        contentPadding = PaddingValues(top = 5.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        items(activos, key = { fila -> fila.clave }) { fila ->
+                            FilaDeslizable(onSalida = { onSalida(fila) }, modifier = Modifier.animateItem()) {
+                                FilaActivo(fila, onClick = { onClick(fila) })
+                            }
+                        }
+                    }
                 }
+                EstadoLista.MARCADORES -> FilasMarcadoras()
+                EstadoLista.VACIA -> EstadoVacioLista(tituloVacio, detalleVacio)
             }
         }
+    }
+}
+
+/// Cuatro tarjetas grises con la forma de una fila, quietas (sin brillo que
+/// recorra la pantalla: eso sería una animación infinita sólo para esperar).
+@Composable
+private fun FilasMarcadoras() {
+    val descripcion = "Cargando"
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 5.dp)
+            .semantics { contentDescription = descripcion },
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        repeat(4) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                BarraMarcadora(ancho = 0.5f, alto = 14.dp)
+                BarraMarcadora(ancho = 0.8f, alto = 10.dp)
+                BarraMarcadora(ancho = 0.6f, alto = 10.dp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BarraMarcadora(ancho: Float, alto: androidx.compose.ui.unit.Dp) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(ancho)
+            .height(alto)
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+    )
+}
+
+/// Con `verticalScroll` aunque no haya nada que desplazar: sin un hijo
+/// desplazable, tirar hacia abajo para sincronizar no responde.
+@Composable
+private fun EstadoVacioLista(titulo: String, detalle: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(top = 48.dp, start = 24.dp, end = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.Groups, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        }
+        Text(titulo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(
+            detalle,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

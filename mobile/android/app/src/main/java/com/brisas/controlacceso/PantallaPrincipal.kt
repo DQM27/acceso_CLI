@@ -442,7 +442,12 @@ fun PantallaPrincipal(
                         // acento y no salta al de la nueva.
                         TemaSeccion(seccionMostrada) {
                             when (seccionMostrada) {
-                                SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, refrescarNube)
+                                SeccionPrincipal.ACTIVOS -> PantallaActivos(
+                                    nucleo,
+                                    refrescarNube,
+                                    sincronizando = nubeViewModel.sincronizando,
+                                    onSincronizar = nubeViewModel::sincronizar,
+                                )
                                 SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
                                 SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
                                 SeccionPrincipal.EXTERNOS -> PantallaExternos(nucleo, refrescarNube)

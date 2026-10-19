@@ -60,6 +60,10 @@ import uniffi.control_acceso_mobile.Nucleo
 fun PantallaActivos(
     nucleo: Nucleo,
     refrescarNube: Int = 0,
+    // Tirar de la lista hacia abajo sincroniza con la nube, igual que el botón
+    // del encabezado de la pantalla principal (que es quien sabe hacerlo).
+    sincronizando: Boolean = false,
+    onSincronizar: () -> Unit = {},
 ) {
     RegistrarPantalla("activos")
     val viewModel: ActivosViewModel =
@@ -217,11 +221,17 @@ fun PantallaActivos(
                         onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
                         onElegirContratista = { viewModel.elegir(it) },
                         onDeslizarSalida = viewModel::deslizarSalida,
+                        sincronizando = sincronizando,
+                        onSincronizar = onSincronizar,
                     )
                     ModoBusqueda.SALIDA_NOMBRE -> ContenidoModoSalidaNombre(
+                        texto = viewModel.texto,
                         activos = viewModel.activosVisibles,
+                        cargando = viewModel.cargando,
                         onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
                         onDeslizarSalida = viewModel::deslizarSalida,
+                        sincronizando = sincronizando,
+                        onSincronizar = onSincronizar,
                     )
                     ModoBusqueda.SALIDA_GAFETE -> ContenidoModoSalidaGafete(
                         texto = viewModel.texto,
