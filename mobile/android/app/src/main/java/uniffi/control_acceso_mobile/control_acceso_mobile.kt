@@ -723,6 +723,8 @@ internal object IntegrityCheckingUniffiLib {
     internal fun ensureInitialized() = Unit
     external fun uniffi_control_acceso_mobile_checksum_func_evaluar_manifiesto_actualizacion(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_aviso_de_mensaje(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_es_carnet_kof(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_extraer_carnet_kof(
@@ -911,6 +913,16 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_verificar_visita(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_agregar(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_estado(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_leer(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_leer_todos(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_bandejaavisos_serializar(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_clave_publica_jwk(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_firmar_der(
@@ -938,6 +950,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir_cifrado(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_constructor_bandejaavisos_desde_guardado(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_constructor_estabilizadordocumento_new(
     ): Int
@@ -1104,6 +1118,22 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_verificar_visita(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_clone_bandejaavisos(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_free_bandejaavisos(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_control_acceso_mobile_fn_constructor_bandejaavisos_desde_guardado(`guardado`: RustBuffer.ByValue,`ahoraMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
+    external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_agregar(`ptr`: Long,`aviso`: RustBuffer.ByValue,`recibidoEnMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_estado(`ptr`: Long,`ahoraMs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_leer(`ptr`: Long,`id`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_leer_todos(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_bandejaavisos_serializar(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_clone_almacenclavedispositivo(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_control_acceso_mobile_fn_free_almacenclavedispositivo(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1147,6 +1177,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_votadorporposicion_reiniciar(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_func_evaluar_manifiesto_actualizacion(`json`: RustBuffer.ByValue,`urlManifiesto`: RustBuffer.ByValue,`versionCodeInstalada`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_aviso_de_mensaje(`datos`: RustBuffer.ByValue,`tituloNotificacion`: RustBuffer.ByValue,`cuerpoNotificacion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_es_carnet_kof(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
@@ -1324,6 +1356,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_func_evaluar_manifiesto_actualizacion() and 0xFFFF) != 54613) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_aviso_de_mensaje() and 0xFFFF) != 43224) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_es_carnet_kof() and 0xFFFF) != 540) {
@@ -1608,6 +1643,21 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_verificar_visita() and 0xFFFF) != 2750) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_agregar() and 0xFFFF) != 6935) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_estado() and 0xFFFF) != 26997) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_leer() and 0xFFFF) != 34777) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_leer_todos() and 0xFFFF) != 34346) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_bandejaavisos_serializar() and 0xFFFF) != 51461) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_almacenclavedispositivo_clave_publica_jwk() and 0xFFFF) != 37356) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1648,6 +1698,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_constructor_nucleo_abrir_cifrado() and 0xFFFF) != 1677) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_constructor_bandejaavisos_desde_guardado() and 0xFFFF) != 53442) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_constructor_estabilizadordocumento_new() and 0xFFFF) != 9435) {
@@ -2571,6 +2624,392 @@ public object FfiConverterTypeAlmacenClaveDispositivo: FfiConverter<AlmacenClave
     override fun allocationSize(value: AlmacenClaveDispositivo) = 8UL
 
     override fun write(value: AlmacenClaveDispositivo, buf: ByteBuffer) {
+        buf.putLong(lower(value))
+    }
+}
+
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+
+/**
+ * La bandeja de avisos de este teléfono. Kotlin guarda una sola instancia
+ * por proceso: la usan el servicio de Firebase y la interfaz a la vez, por
+ * eso el `Mutex`.
+ */
+public interface BandejaAvisosInterface {
+    
+    /**
+     * Agrega un aviso recién llegado. Sin hora de envío usa la de llegada.
+     * FCM puede entregar el mismo mensaje dos veces: si el `id` ya está no
+     * se agrega de nuevo (y no se pierde si ya se había leído). `true` si
+     * la bandeja cambió y hay que guardarla.
+     */
+    fun `agregar`(`aviso`: AvisoPush, `recibidoEnMs`: kotlin.Long): kotlin.Boolean
+    
+    /**
+     * El estado para dibujar a la hora `ahora_ms`: los grupos por día y el
+     * texto "hace 5 min" dependen de la hora, por eso no se guardan.
+     */
+    fun `estado`(`ahoraMs`: kotlin.Long): EstadoBandeja
+    
+    /**
+     * `true` si cambió algo (el aviso existía y no estaba leído).
+     */
+    fun `leer`(`id`: kotlin.String): kotlin.Boolean
+    
+    /**
+     * `true` si había alguno sin leer.
+     */
+    fun `leerTodos`(): kotlin.Boolean
+    
+    /**
+     * Texto para que Kotlin lo guarde en disco y se lo devuelva a
+     * [`Self::desde_guardado`] la próxima vez.
+     */
+    fun `serializar`(): kotlin.String
+    
+    companion object
+}
+
+/**
+ * La bandeja de avisos de este teléfono. Kotlin guarda una sola instancia
+ * por proceso: la usan el servicio de Firebase y la interfaz a la vez, por
+ * eso el `Mutex`.
+ */
+open class BandejaAvisos: Disposable, AutoCloseable, BandejaAvisosInterface
+{
+
+    @Suppress("UNUSED_PARAMETER")
+    /**
+     * @suppress
+     */
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(private val handle: Long) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return;
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_control_acceso_mobile_fn_free_bandejaavisos(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+        }
+        return uniffiRustCall() { status ->
+            UniffiLib.uniffi_control_acceso_mobile_fn_clone_bandejaavisos(handle, status)
+        }
+    }
+
+    
+    /**
+     * Agrega un aviso recién llegado. Sin hora de envío usa la de llegada.
+     * FCM puede entregar el mismo mensaje dos veces: si el `id` ya está no
+     * se agrega de nuevo (y no se pierde si ya se había leído). `true` si
+     * la bandeja cambió y hay que guardarla.
+     */override fun `agregar`(`aviso`: AvisoPush, `recibidoEnMs`: kotlin.Long): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_bandejaavisos_agregar(
+        it,
+        
+        FfiConverterTypeAvisoPush.lower(`aviso`),
+        FfiConverterLong.lower(`recibidoEnMs`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * El estado para dibujar a la hora `ahora_ms`: los grupos por día y el
+     * texto "hace 5 min" dependen de la hora, por eso no se guardan.
+     */override fun `estado`(`ahoraMs`: kotlin.Long): EstadoBandeja {
+            return FfiConverterTypeEstadoBandeja.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_bandejaavisos_estado(
+        it,
+        
+        FfiConverterLong.lower(`ahoraMs`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * `true` si cambió algo (el aviso existía y no estaba leído).
+     */override fun `leer`(`id`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_bandejaavisos_leer(
+        it,
+        
+        FfiConverterString.lower(`id`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * `true` si había alguno sin leer.
+     */override fun `leerTodos`(): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_bandejaavisos_leer_todos(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Texto para que Kotlin lo guarde en disco y se lo devuelva a
+     * [`Self::desde_guardado`] la próxima vez.
+     */override fun `serializar`(): kotlin.String {
+            return FfiConverterString.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_bandejaavisos_serializar(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+
+    
+
+
+    
+    companion object {
+        
+    /**
+     * Arma la bandeja desde lo que Kotlin guardó con [`Self::serializar`]
+     * (`None` la primera vez), sin lo vencido. Lo que no se entiende
+     * (archivo roto o de otra versión) se descarta: perder la bandeja es
+     * mejor que una app que no abre.
+     */ fun `desdeGuardado`(`guardado`: kotlin.String?, `ahoraMs`: kotlin.Long): BandejaAvisos {
+            return FfiConverterTypeBandejaAvisos.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_constructor_bandejaavisos_desde_guardado(
+    
+        
+        FfiConverterOptionalString.lower(`guardado`),
+        FfiConverterLong.lower(`ahoraMs`),_status)
+}
+    )
+    }
+    
+
+        
+    }
+    
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBandejaAvisos: FfiConverter<BandejaAvisos, Long> {
+    override fun lower(value: BandejaAvisos): Long {
+        return value.uniffiCloneHandle()
+    }
+
+    override fun lift(value: Long): BandejaAvisos {
+        return BandejaAvisos(UniffiWithHandle, value)
+    }
+
+    override fun read(buf: ByteBuffer): BandejaAvisos {
+        return lift(buf.getLong())
+    }
+
+    override fun allocationSize(value: BandejaAvisos) = 8UL
+
+    override fun write(value: BandejaAvisos, buf: ByteBuffer) {
         buf.putLong(lower(value))
     }
 }
@@ -5446,6 +5885,132 @@ public object FfiConverterTypeVotadorPorPosicion: FfiConverter<VotadorPorPosicio
 
 
 
+/**
+ * Un aviso de la bandeja, listo para dibujar.
+ */
+data class AvisoBandeja (
+    var `id`: kotlin.String
+    , 
+    var `titulo`: kotlin.String
+    , 
+    var `cuerpo`: kotlin.String
+    , 
+    var `emergente`: kotlin.Boolean
+    , 
+    var `leido`: kotlin.Boolean
+    , 
+    /**
+     * "Ahora", "hace 5 min", "14:32", "17/10 14:32" o "17/10/2025 14:32".
+     */
+    var `momento`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAvisoBandeja: FfiConverterRustBuffer<AvisoBandeja> {
+    override fun read(buf: ByteBuffer): AvisoBandeja {
+        return AvisoBandeja(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: AvisoBandeja) = (
+            FfiConverterString.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`titulo`) +
+            FfiConverterString.allocationSize(value.`cuerpo`) +
+            FfiConverterBoolean.allocationSize(value.`emergente`) +
+            FfiConverterBoolean.allocationSize(value.`leido`) +
+            FfiConverterString.allocationSize(value.`momento`)
+    )
+
+    override fun write(value: AvisoBandeja, buf: ByteBuffer) {
+            FfiConverterString.write(value.`id`, buf)
+            FfiConverterString.write(value.`titulo`, buf)
+            FfiConverterString.write(value.`cuerpo`, buf)
+            FfiConverterBoolean.write(value.`emergente`, buf)
+            FfiConverterBoolean.write(value.`leido`, buf)
+            FfiConverterString.write(value.`momento`, buf)
+    }
+}
+
+
+
+/**
+ * Un aviso recién llegado por Firebase Cloud Messaging.
+ *
+ * `emergente`: va por el canal "Emergencias" (sonido de alarma, vibración
+ * larga) en vez de "Avisos". `id` y `enviado_en_ms` los manda el servidor
+ * desde que existe el historial `avisos_enviados` (ver
+ * `supabase/functions/_shared/fcm.ts`); `None` en un mensaje de prueba de la
+ * consola de Firebase o de un servidor viejo.
+ */
+data class AvisoPush (
+    var `titulo`: kotlin.String
+    , 
+    var `cuerpo`: kotlin.String
+    , 
+    var `emergente`: kotlin.Boolean
+    , 
+    var `id`: kotlin.String?
+    , 
+    var `enviadoEnMs`: kotlin.Long?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAvisoPush: FfiConverterRustBuffer<AvisoPush> {
+    override fun read(buf: ByteBuffer): AvisoPush {
+        return AvisoPush(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalLong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: AvisoPush) = (
+            FfiConverterString.allocationSize(value.`titulo`) +
+            FfiConverterString.allocationSize(value.`cuerpo`) +
+            FfiConverterBoolean.allocationSize(value.`emergente`) +
+            FfiConverterOptionalString.allocationSize(value.`id`) +
+            FfiConverterOptionalLong.allocationSize(value.`enviadoEnMs`)
+    )
+
+    override fun write(value: AvisoPush, buf: ByteBuffer) {
+            FfiConverterString.write(value.`titulo`, buf)
+            FfiConverterString.write(value.`cuerpo`, buf)
+            FfiConverterBoolean.write(value.`emergente`, buf)
+            FfiConverterOptionalString.write(value.`id`, buf)
+            FfiConverterOptionalLong.write(value.`enviadoEnMs`, buf)
+    }
+}
+
+
+
 data class CarnetKofDetectado (
     var `nombre`: kotlin.String?
     , 
@@ -6338,6 +6903,68 @@ public object FfiConverterTypeEncargadoRuta: FfiConverterRustBuffer<EncargadoRut
 
 
 /**
+ * Todo lo que la campanita y la pantalla de avisos necesitan.
+ */
+data class EstadoBandeja (
+    /**
+     * Hoy / Ayer / Anteriores, sin grupos vacíos.
+     */
+    var `grupos`: List<GrupoAvisos>
+    , 
+    var `noLeidos`: kotlin.UInt
+    , 
+    /**
+     * El globito de la campanita: `None` en 0 (un contador siempre prendido
+     * deja de mirarse) y "9+" de 10 en adelante (el botón es chico).
+     */
+    var `contador`: kotlin.String?
+    , 
+    /**
+     * La emergencia sin leer más reciente: mientras exista, la pantalla
+     * principal muestra la franja roja y la campanita cambia de ícono.
+     */
+    var `emergenciaSinLeer`: AvisoBandeja?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeEstadoBandeja: FfiConverterRustBuffer<EstadoBandeja> {
+    override fun read(buf: ByteBuffer): EstadoBandeja {
+        return EstadoBandeja(
+            FfiConverterSequenceTypeGrupoAvisos.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalTypeAvisoBandeja.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: EstadoBandeja) = (
+            FfiConverterSequenceTypeGrupoAvisos.allocationSize(value.`grupos`) +
+            FfiConverterUInt.allocationSize(value.`noLeidos`) +
+            FfiConverterOptionalString.allocationSize(value.`contador`) +
+            FfiConverterOptionalTypeAvisoBandeja.allocationSize(value.`emergenciaSinLeer`)
+    )
+
+    override fun write(value: EstadoBandeja, buf: ByteBuffer) {
+            FfiConverterSequenceTypeGrupoAvisos.write(value.`grupos`, buf)
+            FfiConverterUInt.write(value.`noLeidos`, buf)
+            FfiConverterOptionalString.write(value.`contador`, buf)
+            FfiConverterOptionalTypeAvisoBandeja.write(value.`emergenciaSinLeer`, buf)
+    }
+}
+
+
+
+/**
  * Estado del reloj confiable del teléfono (ver
  * `control_acceso::tiempo::EstadoReloj`), para la telemetría de
  * diagnóstico. Sólo números.
@@ -6475,6 +7102,47 @@ public object FfiConverterTypeFechaOcr: FfiConverterRustBuffer<FechaOcr> {
             FfiConverterUByte.write(value.`dia`, buf)
             FfiConverterUByte.write(value.`mes`, buf)
             FfiConverterInt.write(value.`anio`, buf)
+    }
+}
+
+
+
+data class GrupoAvisos (
+    var `grupo`: GrupoBandeja
+    , 
+    /**
+     * Más nuevo primero.
+     */
+    var `avisos`: List<AvisoBandeja>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGrupoAvisos: FfiConverterRustBuffer<GrupoAvisos> {
+    override fun read(buf: ByteBuffer): GrupoAvisos {
+        return GrupoAvisos(
+            FfiConverterTypeGrupoBandeja.read(buf),
+            FfiConverterSequenceTypeAvisoBandeja.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: GrupoAvisos) = (
+            FfiConverterTypeGrupoBandeja.allocationSize(value.`grupo`) +
+            FfiConverterSequenceTypeAvisoBandeja.allocationSize(value.`avisos`)
+    )
+
+    override fun write(value: GrupoAvisos, buf: ByteBuffer) {
+            FfiConverterTypeGrupoBandeja.write(value.`grupo`, buf)
+            FfiConverterSequenceTypeAvisoBandeja.write(value.`avisos`, buf)
     }
 }
 
@@ -8853,6 +9521,44 @@ public object FfiConverterTypeFuenteDatos: FfiConverterRustBuffer<FuenteDatos> {
 
 
 
+/**
+ * Grupo por día, en la hora de Costa Rica. En el orden en que se muestran.
+ */
+
+enum class GrupoBandeja {
+    
+    HOY,
+    AYER,
+    ANTERIORES;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGrupoBandeja: FfiConverterRustBuffer<GrupoBandeja> {
+    override fun read(buf: ByteBuffer) = try {
+        GrupoBandeja.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: GrupoBandeja) = 4UL
+
+    override fun write(value: GrupoBandeja, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
 
 enum class MedioIngreso {
     
@@ -10138,6 +10844,70 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeAvisoBandeja: FfiConverterRustBuffer<AvisoBandeja?> {
+    override fun read(buf: ByteBuffer): AvisoBandeja? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeAvisoBandeja.read(buf)
+    }
+
+    override fun allocationSize(value: AvisoBandeja?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeAvisoBandeja.allocationSize(value)
+        }
+    }
+
+    override fun write(value: AvisoBandeja?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeAvisoBandeja.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeAvisoPush: FfiConverterRustBuffer<AvisoPush?> {
+    override fun read(buf: ByteBuffer): AvisoPush? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeAvisoPush.read(buf)
+    }
+
+    override fun allocationSize(value: AvisoPush?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeAvisoPush.allocationSize(value)
+        }
+    }
+
+    override fun write(value: AvisoPush?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeAvisoPush.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeCarnetKofDetectado: FfiConverterRustBuffer<CarnetKofDetectado?> {
     override fun read(buf: ByteBuffer): CarnetKofDetectado? {
         if (buf.get().toInt() == 0) {
@@ -10610,6 +11380,34 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeAvisoBandeja: FfiConverterRustBuffer<List<AvisoBandeja>> {
+    override fun read(buf: ByteBuffer): List<AvisoBandeja> {
+        val len = buf.getInt()
+        return List<AvisoBandeja>(len) {
+            FfiConverterTypeAvisoBandeja.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<AvisoBandeja>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeAvisoBandeja.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<AvisoBandeja>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeAvisoBandeja.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeConflictoGafeteActivo: FfiConverterRustBuffer<List<ConflictoGafeteActivo>> {
     override fun read(buf: ByteBuffer): List<ConflictoGafeteActivo> {
         val len = buf.getInt()
@@ -10824,6 +11622,34 @@ public object FfiConverterSequenceTypeEncargadoRuta: FfiConverterRustBuffer<List
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeEncargadoRuta.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeGrupoAvisos: FfiConverterRustBuffer<List<GrupoAvisos>> {
+    override fun read(buf: ByteBuffer): List<GrupoAvisos> {
+        val len = buf.getInt()
+        return List<GrupoAvisos>(len) {
+            FfiConverterTypeGrupoAvisos.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<GrupoAvisos>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeGrupoAvisos.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<GrupoAvisos>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeGrupoAvisos.write(it, buf)
         }
     }
 }
@@ -11219,6 +12045,45 @@ public object FfiConverterSequenceTypeVisitaAdentro: FfiConverterRustBuffer<List
         }
     }
 }
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.String, kotlin.String>> {
+    override fun read(buf: ByteBuffer): Map<kotlin.String, kotlin.String> {
+        val len = buf.getInt()
+        return buildMap<kotlin.String, kotlin.String>(len) {
+            repeat(len) {
+                val k = FfiConverterString.read(buf)
+                val v = FfiConverterString.read(buf)
+                this[k] = v
+            }
+        }
+    }
+
+    override fun allocationSize(value: Map<kotlin.String, kotlin.String>): ULong {
+        val spaceForMapSize = 4UL
+        val spaceForChildren = value.map { (k, v) ->
+            FfiConverterString.allocationSize(k) +
+            FfiConverterString.allocationSize(v)
+        }.sum()
+        return spaceForMapSize + spaceForChildren
+    }
+
+    override fun write(value: Map<kotlin.String, kotlin.String>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        // The parens on `(k, v)` here ensure we're calling the right method,
+        // which is important for compatibility with older android devices.
+        // Ref https://blog.danlew.net/2017/03/16/kotlin-puzzler-whose-line-is-it-anyways/
+        value.forEach { (k, v) ->
+            FfiConverterString.write(k, buf)
+            FfiConverterString.write(v, buf)
+        }
+    }
+}
         /**
          * Valida el manifiesto descargado de `url_manifiesto` y lo compara con el
          * `versionCode` instalado.
@@ -11238,6 +12103,31 @@ public object FfiConverterSequenceTypeVisitaAdentro: FfiConverterRustBuffer<List
         FfiConverterString.lower(`json`),
         FfiConverterString.lower(`urlManifiesto`),
         FfiConverterLong.lower(`versionCodeInstalada`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Arma el aviso a partir de un mensaje de FCM.
+         *
+         * El servidor manda mensajes de **datos** (`titulo`, `cuerpo`, `tipo`, `id`,
+         * `enviado_en`): con prioridad alta llegan aunque la app esté cerrada y la
+         * notificación la arma la app. Un mensaje con bloque `notification` (una
+         * prueba desde la consola de Firebase) también se acepta: su título y
+         * cuerpo son el respaldo.
+         *
+         * `None` si no hay nada que mostrar (mensaje silencioso, p. ej. sólo para
+         * despertar una sincronización).
+         */ fun `avisoDeMensaje`(`datos`: Map<kotlin.String, kotlin.String>, `tituloNotificacion`: kotlin.String?, `cuerpoNotificacion`: kotlin.String?): AvisoPush? {
+            return FfiConverterOptionalTypeAvisoPush.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_aviso_de_mensaje(
+    
+        
+        FfiConverterMapStringString.lower(`datos`),
+        FfiConverterOptionalString.lower(`tituloNotificacion`),
+        FfiConverterOptionalString.lower(`cuerpoNotificacion`),_status)
 }
     )
     }

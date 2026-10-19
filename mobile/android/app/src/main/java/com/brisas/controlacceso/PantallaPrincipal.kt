@@ -18,16 +18,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.NotificationImportant
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -50,6 +56,7 @@ import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ConflictoGafeteActivo
 import uniffi.control_acceso_mobile.ConflictoIngresoActivo
 import uniffi.control_acceso_mobile.ConflictoIngresoProveedorActivo
+import uniffi.control_acceso_mobile.EstadoBandeja
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.UsuarioSesion
 
@@ -61,11 +68,12 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// nuevos siguen sin pantalla propia acá (escritorio/web/CLI), y tampoco
 /// volvió la pestaña de nube.
 ///
-/// `mostrarNuevoContratista` es toda la navegación que hace falta -- con
-/// una sola pantalla adicional posible (además de las dos pestañas) no
-/// se justifica un enum `Pantalla` como el que existió antes: cuando está
-/// en `true` reemplaza por completo la Column de pestañas, igual que hacía
-/// aquel enum, sin la indirección de más.
+/// `mostrarNuevoContratista` y `mostrarAvisos` (bandeja de la campanita,
+/// 2026-10-18) son toda la navegación que hace falta -- con dos pantallas
+/// adicionales que nunca se abren a la vez no se justifica un enum
+/// `Pantalla` como el que existió antes: la que está en `true` reemplaza por
+/// completo la Column de pestañas, igual que hacía aquel enum, sin la
+/// indirección de más.
 @Composable
 fun PantallaPrincipal(
     nucleo: Nucleo,
@@ -76,6 +84,9 @@ fun PantallaPrincipal(
     RegistrarPantalla("principal")
     var refrescarNube by remember { mutableIntStateOf(0) }
     var mostrarNuevoContratista by remember { mutableStateOf(false) }
+    // Bandeja de avisos (campanita): otra pantalla que reemplaza a las
+    // pestañas, igual que `mostrarNuevoContratista`.
+    var mostrarAvisos by remember { mutableStateOf(false) }
     // Sin esto, atrás del sistema en la raíz (pestañas) caía directo al
     // default de Android -- cerraba/minimizaba la app de un solo toque, sin
     // que hubiera ningún BackHandler compose que lo interceptara (hallazgo
@@ -85,7 +96,7 @@ fun PantallaPrincipal(
     // está abierta.
     val contexto = LocalContext.current
     var ultimoTapAtras by remember { mutableLongStateOf(0L) }
-    BackHandler(enabled = !mostrarNuevoContratista) {
+    BackHandler(enabled = !mostrarNuevoContratista && !mostrarAvisos) {
         val ahora = System.currentTimeMillis()
         if (ahora - ultimoTapAtras < 2000) {
             (contexto as? Activity)?.finish()
@@ -115,6 +126,26 @@ fun PantallaPrincipal(
             NotificacionesPush.registrarEnNube(contexto, nucleo)
         } else if (BuildConfig.DEBUG || BuildConfig.AMBIENTE_STAGING) {
             Toast.makeText(contexto, "Este APK no trae google-services.json: sin notificaciones push", Toast.LENGTH_LONG).show()
+        }
+    }
+    // Bandeja de avisos (campanita): el estado lo decide el núcleo y lo
+    // publica AvisosViewModel; se actualiza solo cuando llega un push.
+    val avisosViewModel: AvisosViewModel = viewModel(factory = AvisosViewModel.factory(contexto))
+    val bandeja by avisosViewModel.estado.collectAsState()
+    // Tocaron la notificación de un aviso (MainActivity): abrir la bandeja.
+    val aperturaAvisos by avisosViewModel.aperturaSolicitada.collectAsState()
+    LaunchedEffect(aperturaAvisos) {
+        if (aperturaAvisos) {
+            mostrarNuevoContratista = false
+            mostrarAvisos = true
+            avisosViewModel.aperturaAtendida()
+        }
+    }
+    // Con la bandeja a la vista, que "hace 5 min" avance.
+    LaunchedEffect(mostrarAvisos) {
+        while (mostrarAvisos) {
+            delay(60_000)
+            avisosViewModel.refrescar()
         }
     }
     // `docs/pendientes.md`, "alertar luego al sincronizar" -- ver el mismo
@@ -291,9 +322,16 @@ fun PantallaPrincipal(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BotonIconoCuadradoBrisas(onClick = { mostrarNuevoContratista = true }) {
+                BotonIconoCuadradoBrisas(onClick = {
+                    mostrarAvisos = false
+                    mostrarNuevoContratista = true
+                }) {
                     Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
                 }
+                CampanitaAvisos(bandeja, onClick = {
+                    mostrarNuevoContratista = false
+                    mostrarAvisos = true
+                })
                 BotonIconoCuadradoBrisas(
                     onClick = { nubeViewModel.sincronizar() },
                     enabled = !nubeViewModel.sincronizando,
@@ -317,6 +355,20 @@ fun PantallaPrincipal(
                     actualizador = actualizador,
                 )
             }
+        }
+
+        // Arriba de todo lo demás: una emergencia sin leer es lo primero que
+        // tiene que ver quien opera.
+        val emergencia = bandeja?.emergenciaSinLeer
+        if (emergencia != null && !mostrarAvisos) {
+            FranjaEmergencia(
+                emergencia,
+                onAbrir = {
+                    mostrarNuevoContratista = false
+                    mostrarAvisos = true
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
         }
 
         val errorSincronizacion = nubeViewModel.error
@@ -380,7 +432,14 @@ fun PantallaPrincipal(
             )
         }
 
-        if (mostrarNuevoContratista) {
+        if (mostrarAvisos) {
+            PantallaAvisos(
+                estado = bandeja,
+                onLeer = avisosViewModel::leer,
+                onLeerTodos = avisosViewModel::leerTodos,
+                onVolver = { mostrarAvisos = false },
+            )
+        } else if (mostrarNuevoContratista) {
             PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
         } else {
             var pestana by remember { mutableIntStateOf(0) }
@@ -420,6 +479,25 @@ fun PantallaPrincipal(
                     SeccionPrincipal.EXTERNOS -> PantallaExternos(nucleo, refrescarNube)
                 }
             }
+        }
+    }
+}
+
+/// Campanita de la barra superior: el globito (qué número, si se ve) y si
+/// hay una emergencia pendiente lo decide el núcleo (`EstadoBandeja`). El
+/// globito va sobre la esquina del botón, no adentro: el cuadradito recorta
+/// su contenido.
+@Composable
+private fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
+    val contador = bandeja?.contador
+    val hayEmergencia = bandeja?.emergenciaSinLeer != null
+    BadgedBox(badge = { if (contador != null) Badge { Text(contador) } }) {
+        BotonIconoCuadradoBrisas(onClick = onClick) {
+            Icon(
+                if (hayEmergencia) Icons.Default.NotificationImportant else Icons.Default.Notifications,
+                contentDescription = if (contador == null) "Avisos" else "Avisos, ${bandeja?.noLeidos} sin leer",
+                tint = if (hayEmergencia) MaterialTheme.colorScheme.error else LocalContentColor.current,
+            )
         }
     }
 }

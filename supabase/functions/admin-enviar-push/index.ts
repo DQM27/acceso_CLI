@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import { clienteServicio, correoAdminAutorizado } from "../_shared/admin.ts";
 import { type Aviso, enviarMensaje, leerCuentaServicio, tokenAccesoGoogle } from "../_shared/fcm.ts";
-import { json, leerCuerpo, preflight, textoOpcional } from "../_shared/http.ts";
+import { json, leerCuerpo, preflight } from "../_shared/http.ts";
+import { type Destinatario, resumirEnvio, validarPedido } from "./envio.ts";
 
 // Notificación push desde el panel a los teléfonos que elija el
 // administrador: todos, una o varias unidades, y/o equipos concretos. Llega
@@ -19,6 +20,12 @@ import { json, leerCuerpo, preflight, textoOpcional } from "../_shared/http.ts";
 //     }
 //   }
 //
+// Cada envío queda en `avisos_enviados` (quién, qué, a quién y a cuántos
+// llegó). La fila se crea ANTES de mandar: su `id` viaja en el mensaje para
+// que el teléfono no guarde dos veces el mismo aviso, y si no se puede
+// guardar el historial no se manda nada (un aviso sin registro es justo lo
+// que esta tabla vino a evitar).
+//
 // Sólo a equipos vigentes (no retirados) que hayan registrado su token
 // (`tokens_push`, lo registra la app al iniciar sesión). Los tokens que FCM
 // da por muertos se borran -- por el TOKEN, no por el equipo: el envío
@@ -27,18 +34,8 @@ import { json, leerCuerpo, preflight, textoOpcional } from "../_shared/http.ts";
 // equipo). Borrar por `dispositivo_id` se llevaba ese token nuevo y válido,
 // y el equipo dejaba de recibir avisos hasta su próximo inicio de sesión.
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_IDS = 500;
 const ENVIOS_EN_PARALELO = 10;
 const TOKENS_POR_BORRADO = 50;
-
-/** Lista de UUID válidos, `[]` si no vino, o `null` si vino mal. */
-function listaDeIds(valor: unknown): string[] | null {
-  if (valor === undefined || valor === null) return [];
-  if (!Array.isArray(valor) || valor.length > MAX_IDS) return null;
-  if (!valor.every((id) => typeof id === "string" && UUID.test(id))) return null;
-  return [...new Set(valor as string[])];
-}
 
 Deno.serve(async (req: Request) => {
   const respuestaPreflight = preflight(req);
@@ -52,39 +49,28 @@ Deno.serve(async (req: Request) => {
   const cuenta = leerCuentaServicio();
   if (!cuenta) return json({ error: "fcm_no_configurado" }, 500);
 
-  const cuerpo = await leerCuerpo(req);
-  const titulo = textoOpcional(cuerpo?.titulo, 100);
-  const texto = textoOpcional(cuerpo?.cuerpo, 500);
-  const tipo = cuerpo?.tipo ?? "normal";
-  if (!titulo || !texto || (tipo !== "normal" && tipo !== "emergente")) {
-    return json({ error: "bad_request" }, 400);
-  }
-
-  const destino = cuerpo?.destino as Record<string, unknown> | undefined;
-  const todos = destino?.todos === true;
-  const sitioIds = listaDeIds(destino?.sitio_ids);
-  const dispositivoIds = listaDeIds(destino?.dispositivo_ids);
-  if (sitioIds === null || dispositivoIds === null) return json({ error: "bad_request" }, 400);
-  if (!todos && sitioIds.length === 0 && dispositivoIds.length === 0) {
-    return json({ error: "sin_destino" }, 400);
-  }
+  const pedido = validarPedido(await leerCuerpo(req));
+  if ("error" in pedido) return json({ error: pedido.error }, 400);
+  const { titulo, cuerpo, tipo, destino } = pedido;
 
   let consulta = supabase
     .from("tokens_push")
-    .select("dispositivo_id, token, dispositivos!inner(revoked_at)")
+    .select("token, dispositivos!inner(revoked_at, etiqueta)")
     .is("dispositivos.revoked_at", null);
-  if (!todos) {
+  if (!("todos" in destino)) {
     // Los ids ya se validaron como UUID: no hay nada que escapar.
     const condiciones = [];
-    if (sitioIds.length) condiciones.push(`sitio_id.in.(${sitioIds.join(",")})`);
-    if (dispositivoIds.length) condiciones.push(`dispositivo_id.in.(${dispositivoIds.join(",")})`);
+    if (destino.sitio_ids.length) condiciones.push(`sitio_id.in.(${destino.sitio_ids.join(",")})`);
+    if (destino.dispositivo_ids.length) condiciones.push(`dispositivo_id.in.(${destino.dispositivo_ids.join(",")})`);
     consulta = consulta.or(condiciones.join(","));
   }
   const { data: filas, error } = await consulta;
   if (error) return json({ error: "consulta_error", detail: error.message }, 500);
 
-  const destinatarios = (filas ?? []) as Array<{ dispositivo_id: string; token: string }>;
-  const aviso: Aviso = { titulo, cuerpo: texto, tipo };
+  const destinatarios: Destinatario[] = ((filas ?? []) as unknown as Array<{
+    token: string;
+    dispositivos: { etiqueta: string };
+  }>).map((fila) => ({ token: fila.token, etiqueta: fila.dispositivos.etiqueta }));
 
   let tokenAcceso: string;
   try {
@@ -94,37 +80,53 @@ Deno.serve(async (req: Request) => {
     return json({ error: "fcm_auth_error" }, 502);
   }
 
-  let enviados = 0;
-  let fallidos = 0;
-  const invalidos: string[] = [];
+  const { data: registro, error: registroError } = await supabase
+    .from("avisos_enviados")
+    .insert({ titulo, cuerpo, tipo, destino, enviado_por: correo, destinatarios: destinatarios.length })
+    .select("id, enviado_en")
+    .single();
+  if (registroError || !registro) {
+    console.error("no se pudo guardar el aviso en el historial:", registroError?.message);
+    return json({ error: "historial_error" }, 500);
+  }
+
+  const aviso: Aviso = { id: registro.id, enviado_en: registro.enviado_en, titulo, cuerpo, tipo };
+  const resultados = [];
   for (let i = 0; i < destinatarios.length; i += ENVIOS_EN_PARALELO) {
     const lote = destinatarios.slice(i, i + ENVIOS_EN_PARALELO);
-    const resultados = await Promise.all(
-      lote.map((d) => enviarMensaje(cuenta, tokenAcceso, d.token, aviso).catch(() => "error" as const)),
+    resultados.push(
+      ...await Promise.all(
+        lote.map((d) => enviarMensaje(cuenta, tokenAcceso, d.token, aviso).catch(() => "error" as const)),
+      ),
     );
-    resultados.forEach((resultado, j) => {
-      if (resultado === "enviado") enviados++;
-      else if (resultado === "token_invalido") invalidos.push(lote[j].token);
-      else fallidos++;
-    });
   }
+  const resumen = resumirEnvio(destinatarios, resultados);
+
+  const { error: actualizarError } = await supabase
+    .from("avisos_enviados")
+    .update({ enviados: resumen.enviados, no_recibieron: resumen.no_recibieron })
+    .eq("id", registro.id);
+  if (actualizarError) console.error("no se pudo completar el historial del aviso:", actualizarError.message);
 
   // Sólo si la fila sigue teniendo el token muerto (ver arriba). En lotes:
   // el filtro viaja en la URL y cada token de FCM ronda los 160 caracteres.
-  for (let i = 0; i < invalidos.length; i += TOKENS_POR_BORRADO) {
-    const lote = invalidos.slice(i, i + TOKENS_POR_BORRADO);
+  for (let i = 0; i < resumen.tokens_invalidos.length; i += TOKENS_POR_BORRADO) {
+    const lote = resumen.tokens_invalidos.slice(i, i + TOKENS_POR_BORRADO);
     const { error: borrarError } = await supabase.from("tokens_push").delete().in("token", lote);
     if (borrarError) console.error("no se pudieron borrar tokens inválidos:", borrarError.message);
   }
 
+  const fallidos = destinatarios.length - resumen.enviados;
   console.log(
-    `admin-enviar-push: ${correo} envió un aviso ${tipo} a ${destinatarios.length} equipos ` +
-      `(${enviados} enviados, ${fallidos} fallidos, ${invalidos.length} tokens inválidos)`,
+    `admin-enviar-push: ${correo} envió el aviso ${registro.id} (${tipo}) a ${destinatarios.length} equipos ` +
+      `(${resumen.enviados} enviados, ${fallidos} fallidos, ${resumen.tokens_invalidos.length} tokens inválidos)`,
   );
   return json({
+    id: registro.id,
     destinatarios: destinatarios.length,
-    enviados,
+    enviados: resumen.enviados,
     fallidos,
-    tokens_eliminados: invalidos.length,
+    tokens_eliminados: resumen.tokens_invalidos.length,
+    no_recibieron: resumen.no_recibieron,
   });
 });

@@ -22,6 +22,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import uniffi.control_acceso_mobile.AvisoPush
 import uniffi.control_acceso_mobile.Nucleo
 
 /// Notificaciones push (Firebase Cloud Messaging): avisos que llegan aunque
@@ -34,6 +35,8 @@ import uniffi.control_acceso_mobile.Nucleo
 object NotificacionesPush {
     const val CANAL_AVISOS = "avisos"
     const val CANAL_EMERGENCIAS = "emergencias"
+    /// Extra del intent de la notificación: MainActivity abre la bandeja.
+    const val EXTRA_ABRIR_AVISOS = "abrir_avisos"
     private val VIBRACION_EMERGENCIA = longArrayOf(0, 800, 300, 800, 300, 800)
     private const val ETIQUETA_LOG = "LattisPush"
     private const val PREFERENCIAS = "notificaciones_push"
@@ -76,10 +79,15 @@ object NotificacionesPush {
 
     fun mostrar(context: Context, aviso: AvisoPush) {
         if (!permisoConcedido(context)) return
+        // Abre la app directo en la bandeja de avisos. `SINGLE_TOP`: con la
+        // app ya abierta llega a `onNewIntent` de la misma Activity; sin él,
+        // `CLEAR_TOP` la destruía y la volvía a crear.
         val abrirApp = PendingIntent.getActivity(
             context,
             0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra(EXTRA_ABRIR_AVISOS, true),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val notificacion = NotificationCompat.Builder(context, if (aviso.emergente) CANAL_EMERGENCIAS else CANAL_AVISOS)

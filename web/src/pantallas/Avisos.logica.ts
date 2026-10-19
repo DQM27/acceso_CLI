@@ -57,11 +57,54 @@ export function textoAlcance(cantidad: number): string {
   return `Llegará a ${cantidad} ${cantidad === 1 ? "equipo" : "equipos"}`;
 }
 
-/** Resumen del envío para el aviso de resultado. */
-export function textoResultado(resultado: { destinatarios: number; enviados: number; fallidos: number }): string {
+/** Resumen del envío para el aviso de resultado. Nombra a los equipos a los
+ * que no llegó: en una emergencia hay que avisarles por otro medio. */
+export function textoResultado(resultado: {
+  destinatarios: number;
+  enviados: number;
+  fallidos: number;
+  no_recibieron: readonly string[];
+}): string {
   if (resultado.destinatarios === 0) return "No había equipos con notificaciones en ese destino.";
   const enviados = `${resultado.enviados} de ${resultado.destinatarios} ${resultado.destinatarios === 1 ? "equipo" : "equipos"}`;
   if (resultado.fallidos === 0) return `Aviso enviado a ${enviados}.`;
+  if (resultado.no_recibieron.length > 0) {
+    return `Aviso enviado a ${enviados}; no llegó a ${resultado.no_recibieron.join(", ")}.`;
+  }
   const fallidos = resultado.fallidos === 1 ? "1 no se pudo enviar" : `${resultado.fallidos} no se pudieron enviar`;
   return `Aviso enviado a ${enviados}; ${fallidos}.`;
+}
+
+/**
+ * A quién se mandó un aviso del historial, con nombres: "Todos los equipos",
+ * o las unidades y equipos sueltos. Lo que ya no existe (unidad borrada,
+ * equipo retirado) se cuenta aparte en vez de mostrar un id.
+ */
+export function textoDestino(
+  destino: DestinoAviso,
+  sitios: ReadonlyMap<string, string>,
+  equipos: ReadonlyMap<string, string>,
+): string {
+  if ("todos" in destino) return "Todos los equipos";
+  const partes: string[] = [];
+  let desconocidos = 0;
+  for (const id of destino.sitio_ids) {
+    const nombre = sitios.get(id);
+    if (nombre) partes.push(nombre);
+    else desconocidos++;
+  }
+  for (const id of destino.dispositivo_ids) {
+    const nombre = equipos.get(id);
+    if (nombre) partes.push(nombre);
+    else desconocidos++;
+  }
+  if (desconocidos > 0) partes.push(desconocidos === 1 ? "1 que ya no existe" : `${desconocidos} que ya no existen`);
+  return partes.join(", ");
+}
+
+/** "Llegó a 3 de 3" / "No llegó a ninguno (0 de 2)" / "Sin destinatarios". */
+export function textoEntrega(aviso: { destinatarios: number; enviados: number }): string {
+  if (aviso.destinatarios === 0) return "Sin destinatarios";
+  if (aviso.enviados === 0) return `No llegó a ninguno (0 de ${aviso.destinatarios})`;
+  return `Llegó a ${aviso.enviados} de ${aviso.destinatarios}`;
 }
