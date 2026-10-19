@@ -384,25 +384,30 @@ fun PantallaPrincipal(
             PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
         } else {
             var pestana by remember { mutableIntStateOf(0) }
+            val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
             // "Historial" se sacó de acá por espacio (pestañas apiñadas,
             // 2026-09-17); su pantalla/ViewModel/wrappers Rust se eliminaron
             // del todo el 2026-09-21 al confirmar que no había ningún otro
             // punto de entrada que lo usara.
-            FilaPildoras(
-                // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
-                // usuario (2026-09-19) para descomprimir la fila de
-                // pestañas, ya apiñada (ver comentario arriba).
-                //
-                // "Rutas" oculta de la fila (pedido del usuario 2026-09-23:
-                // control de rutas sin terminar, que no se vea a medias en
-                // una demostración). `PantallaRutas` sigue intacta; para
-                // volver a mostrarla basta con sacarla de
-                // `enDesarrollo` en `SeccionPrincipal`.
-                opciones = SECCIONES_VISIBLES.map { it.etiqueta },
-                seleccionado = pestana,
-                onSeleccionar = { pestana = it },
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+            // Cada sección con su acento (ver `AcentoSeccion.kt`): las pestañas y
+            // el contenido comparten el color de la sección activa.
+            TemaSeccion(seccion) {
+                FilaPildoras(
+                    // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
+                    // usuario (2026-09-19) para descomprimir la fila de
+                    // pestañas, ya apiñada (ver comentario arriba).
+                    //
+                    // "Rutas" oculta de la fila (pedido del usuario 2026-09-23:
+                    // control de rutas sin terminar, que no se vea a medias en
+                    // una demostración). `PantallaRutas` sigue intacta; para
+                    // volver a mostrarla basta con sacarla de
+                    // `enDesarrollo` en `SeccionPrincipal`.
+                    opciones = SECCIONES_VISIBLES.map { it.etiqueta },
+                    seleccionado = pestana,
+                    onSeleccionar = { pestana = it },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
             // `Box`, no `Column` -- un `Column` sin peso mide a sus hijos con
             // altura MÁXIMA infinita (así reserva espacio a los que sí tienen
             // `weight`), y un `LazyColumn` (como el de `PantallaActivos`)
@@ -413,11 +418,13 @@ fun PantallaPrincipal(
                 // `when` exhaustivo sobre el enum: agregar una sección sin
                 // su pantalla no compila (antes eran textos y un `else`
                 // que caía en Activos en silencio ante un error de tipeo).
-                when (SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }) {
-                    SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, refrescarNube)
-                    SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
-                    SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
-                    SeccionPrincipal.EXTERNOS -> PantallaExternos(nucleo, refrescarNube)
+                TemaSeccion(seccion) {
+                    when (seccion) {
+                        SeccionPrincipal.ACTIVOS -> PantallaActivos(nucleo, refrescarNube)
+                        SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
+                        SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
+                        SeccionPrincipal.EXTERNOS -> PantallaExternos(nucleo, refrescarNube)
+                    }
                 }
             }
         }

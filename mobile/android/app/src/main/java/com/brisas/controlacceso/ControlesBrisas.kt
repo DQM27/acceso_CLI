@@ -1,5 +1,7 @@
 package com.brisas.controlacceso
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,9 +31,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -133,18 +137,31 @@ fun FilaPildoras(
     ) {
         opciones.forEachIndexed { indice, etiqueta ->
             val activo = indice == seleccionado
+            // La píldora que se apaga y la que se enciende se funden en vez de
+            // saltar; al cambiar de sección también cambia el acento (ver
+            // `AcentoSeccion.kt`) y el color nuevo entra con el mismo fundido.
+            val colorPildora by animateColorAsState(
+                targetValue = if (activo) MaterialTheme.colorScheme.primary else Color.Transparent,
+                animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
+                label = "pildora",
+            )
+            val colorTexto by animateColorAsState(
+                targetValue = if (activo) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
+                label = "textoPildora",
+            )
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(FormaPildoraBrisas)
-                    .background(if (activo) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .drawBehind { drawRect(colorPildora) }
                     .clickable { onSeleccionar(indice) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     etiqueta,
-                    color = if (activo) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = colorTexto,
                     fontWeight = if (activo) FontWeight.SemiBold else FontWeight.Normal,
                     maxLines = 1,
                 )
@@ -152,6 +169,8 @@ fun FilaPildoras(
         }
     }
 }
+
+private const val DURACION_FUNDIDO_PILDORA_MS = 300
 
 /** Avatar circular con inicial, para el header de [PantallaPrincipal]. */
 @Composable
