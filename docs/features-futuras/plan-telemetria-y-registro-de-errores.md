@@ -4,8 +4,26 @@ Plan del 2026-10-19. **Reemplaza** a `plan-herramienta-diagnostico.md` y a
 `plan-telemetria-ajustable.md` (quedan como historia). Cuando se implemente,
 `docs/telemetria-contrato.md` se reescribe a partir de este documento.
 
-Sigue siendo una herramienta **del desarrollador**: nada de esto va al panel web
-ni a la base de producción del cliente.
+## Objetivo: datos reales de producción
+
+La telemetría y el registro de errores van en **los builds finales (release) de
+todos los equipos en uso**, para mejorar la app con lo que pasa de verdad en la
+operación, no con pruebas ni muestras.
+
+- **Producción primero.** El destino principal es el release. El build de
+  diagnóstico queda sólo para lo pesado (StrictMode, vigilante de fugas) que no
+  puede correr en producción.
+- **Sin muestreo.** Cada operación, cada flujo y cada error de cada equipo se
+  cuenta. Las métricas se **agregan** por ventana (histogramas), lo que mantiene
+  el volumen bajo sin descartar ninguna llamada: agregar no es muestrear.
+- **Siempre encendido en release.** No hace falta una variable de compilación ni
+  una regla para medir. Las reglas sólo sirven para subir un equipo a
+  diagnóstico o apagar todo en una emergencia.
+- **Por eso el costo y la privacidad son requisitos de entrada:** el limpiador de
+  datos personales, los topes y la cola con límite tienen que estar antes de
+  encender en la flota, no después.
+- Los datos son del desarrollador: nada de esto va al panel web ni a la base de
+  operación del cliente.
 
 ## Por qué hace falta
 
@@ -141,12 +159,16 @@ la agrupación sin sacar versiones.
 
 ### Entrada y almacenamiento
 
-- **Receptores:** Edge Functions de Supabase en staging. `receptor-errores` ya
+- **Dónde viven:** con la flota entera mandando, los datos dejan de ser de
+  pruebas. Recomendado: un **proyecto de Supabase propio de observabilidad**,
+  separado del staging (que se usa para pruebas y se puede restaurar) y de
+  producción (que es del cliente). Mientras se crea, sigue en staging.
+- **Receptores:** Edge Functions de Supabase en ese proyecto. `receptor-errores` ya
   existe; pasa a aceptar el formato propio (y sigue aceptando el de Sentry hasta
   que no queden versiones viejas en uso). Se agrega `receptor-telemetria`, con
   validación de forma, tamaño y ritmo. Después se **quita el INSERT público** de
   las tablas.
-- **Tablas** (staging): `metricas_operaciones` (cubos como `int[]`),
+- **Tablas:** `metricas_operaciones` (cubos como `int[]`),
   `estado_equipos`, `eventos_app` (arranque, salida anterior, vinculación),
   `errores_app` (ya existe; se le agregan `commit`, `build` y `migas`) y
   `telemetria_diagnostico` (sólo el nivel diagnóstico).
@@ -157,15 +179,15 @@ la agrupación sin sacar versiones.
 
 ### Encendido
 
-| Pieza | Por defecto | Cómo se cambia |
+| Pieza | En release (producción) | Cómo se cambia |
 |---|---|---|
-| Registro de errores | Encendido en todos los builds | Una regla lo puede apagar (interruptor de emergencia) |
-| Métricas base | Encendidas en todos los builds | Igual |
+| Registro de errores | **Siempre encendido**, todos los equipos | Una regla lo puede apagar (interruptor de emergencia) |
+| Métricas base | **Siempre encendidas**, todos los equipos, sin muestreo | Igual |
 | Diagnóstico | Apagado | Regla por equipo, con vencimiento |
 
 Las dos plataformas leen las reglas igual (al abrir y tras el login, sin sondeo),
 con la evaluación en el núcleo. Desaparecen `TELEMETRIA_EN_PRODUCCION` y
-`TELEMETRIA_LIGERA`.
+`TELEMETRIA_LIGERA`: medir deja de depender de cómo se compiló el release.
 
 ### Grafana (como código en `docs/grafana/`)
 
@@ -195,17 +217,19 @@ variable de compilación).
 
 ## Fases
 
-Una fase por PR (o dos pequeños), con CI en verde y probada en un equipo real.
+Una fase por PR (o dos pequeños), con CI en verde. **Cada fase termina cuando
+funciona en un release instalado en los equipos reales**, no en un build de
+prueba.
 
 | # | Fase | Terminada cuando |
 |---|---|---|
-| 0 | **Arreglo inmediato de errores.** Quitar el DSN de respaldo a sentry.io (sin URL, los errores quedan en el registro local) y pasar la URL del receptor también a `build-test-mobile.yml`. | Un pánico forzado en el escritorio de diagnóstico y una excepción forzada en el móvil de diagnóstico aparecen en `errores_app` y llega el correo de "Error nuevo". |
-| 1 | **Módulo `telemetria` del núcleo:** identidad, histograma, agregador, cola en disco con tope, envío con reintento, limpiador y evaluación de reglas. Sin tocar las apps. | Pruebas: la suma de histogramas es exacta; la cola sobrevive a un reinicio y respeta el tope; el limpiador quita cédula, correo, placa y rutas con usuario; las reglas cubren los casos de `telemetria.rs`. |
-| 2 | **Registro de errores propio** en las dos apps y fuera el SDK de Sentry. El receptor acepta el formato propio. | Un pánico, una excepción de Kotlin y un error de JS de prueba llegan agrupados, con mensaje, traza legible y migas. Sentry ya no está en `Cargo.toml` ni en Gradle. |
-| 3 | **Métricas de operaciones y flujos**, `receptor-telemetria`, tablas, vistas y tablero de Rendimiento. | El tablero compara dos versiones por commit sin SQL a mano, con tiempo de red separado y el porcentaje de HTTP/2. |
-| 4 | **Salud de sincronización**, tablero de Salud y alertas. | Dejar un equipo de prueba sin red 20 min con un registro pendiente dispara "sincronización atascada". |
-| 5 | **Encendido unificado:** el móvil lee reglas, los muestreos pasan a diagnóstico y se quitan las variables de compilación. | Sin regla, un equipo manda sólo base y errores; con regla, también diagnóstico, y al vencer deja de mandarlo. |
-| 6 | **Cierre:** quitar el INSERT público, programar la retención, reescribir el contrato, archivar los planes viejos y borrar el código duplicado. | El contrato describe lo que hace el código y no queda escritura pública en las tablas. |
+| 0 | **Errores de producción al receptor ya.** Confirmar que el secreto `SENTRY_DSN` de `release.yml` y `release-movil.yml` apunta al receptor propio; quitar el DSN de respaldo a sentry.io (sin URL, los errores quedan en el registro local); pasar la misma URL a `build-test-mobile.yml`. | Un error de prueba disparado desde el **release** de cada plataforma llega a `errores_app` y llega el correo de "Error nuevo". |
+| 1 | **Módulo `telemetria` del núcleo, listo para producción:** identidad, histograma, agregador, cola en disco con tope, envío con reintento, **limpiador**, topes y evaluación de reglas. Sin tocar las apps. | Pruebas: la suma de histogramas es exacta; la cola sobrevive a un reinicio y respeta el tope; el limpiador quita cédula, correo, placa y rutas con usuario; las reglas cubren los casos de `telemetria.rs`. |
+| 2 | **Registro de errores propio en el release** de las dos apps, y fuera el SDK de Sentry. El receptor acepta el formato propio. | En el release, un pánico, una excepción de Kotlin y un error de JS de prueba llegan agrupados, con mensaje, traza legible y migas. Sentry ya no está en `Cargo.toml` ni en Gradle. |
+| 3 | **Métricas de operaciones y flujos en el release**, `receptor-telemetria` con topes, tablas, vistas y tablero de Rendimiento. | Todos los equipos con el release nuevo reportan; el tablero compara dos versiones por commit sin SQL a mano, con tiempo de red separado y el porcentaje de HTTP/2. |
+| 4 | **Salud de sincronización**, tablero de Salud y alertas. | El tablero muestra la sincronización de cada equipo en operación; un equipo sin red 20 min con un registro pendiente dispara "sincronización atascada". |
+| 5 | **Encendido unificado:** el móvil lee reglas, los muestreos de recursos pasan a diagnóstico y se quitan las variables de compilación. | Un release sin variables mide solo; una regla sube un equipo a diagnóstico y, al vencer, vuelve a base. |
+| 6 | **Cierre:** proyecto de observabilidad propio, quitar el INSERT público, retención programada, contrato reescrito, planes viejos archivados y código duplicado borrado. | El contrato describe lo que hace el código y no queda escritura pública en las tablas. |
 
 La fase 0 se puede hacer ya y no depende de las demás.
 
@@ -215,20 +239,21 @@ Lección del HTTP/2:
 
 1. **Antes de cambiar**, escribir qué operación y qué cifra se espera mover
    (por ejemplo, el p90 del tiempo de red de `preparar_ingreso`).
-2. Separar antes y después **por commit**, no por fecha.
-3. Comparar el mismo tipo de red y, si se puede, el mismo equipo. Como mínimo
-   200 llamadas por lado.
-4. Si el cambio se puede apagar, ponerlo detrás de una regla y alternarlo en el
-   mismo equipo: es la única comparación sin ruido de la red del día.
-5. Para efectos de red, medir también en laboratorio
-   (`tests/medir_conexion_nube.rs`).
+2. Comparar con **la flota de producción**, antes y después, separando **por
+   commit** y no por fecha, y por tipo de red.
+3. Mejor todavía: si el cambio se puede apagar, ponerlo detrás de una regla y
+   encenderlo en **la mitad de los equipos** durante unos días. Las dos mitades
+   viven la misma operación, la misma red y las mismas horas: la diferencia es
+   el cambio.
+4. Para efectos de red, medir también en laboratorio
+   (`tests/medir_conexion_nube.rs`) antes de sacar el release.
 
 ## Decisiones abiertas
 
 | Decisión | Recomendación |
 |---|---|
-| Errores y métricas base encendidos en los equipos del cliente por defecto | Sí. Conversarlo con el cliente antes de la fase 5. |
-| Dónde viven los datos de producción medidos | En staging mientras el volumen sea chico; un proyecto propio si crece. |
+| Avisar al cliente que sus equipos mandan métricas técnicas y errores (sin datos personales) | Sí, antes de la fase 3. No bloquea la fase 0. |
+| Dónde viven los datos de la flota | Proyecto de Supabase propio de observabilidad; staging sólo mientras se crea. |
 | Entrada: Edge Function o Worker de Cloudflare | Edge Function: ya existe `receptor-errores`, es la misma pila y son menos piezas. |
 | Ventana de agregación | 5 minutos. |
 
