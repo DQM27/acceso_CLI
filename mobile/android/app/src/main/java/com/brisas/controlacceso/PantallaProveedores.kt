@@ -78,6 +78,10 @@ private fun FilaProveedorActiva.coincideCon(busqueda: String): Boolean = when (t
 fun PantallaProveedores(
     nucleo: Nucleo,
     refrescarNube: Int = 0,
+    // Tirar de la lista hacia abajo sincroniza con la nube, igual que el botón
+    // del encabezado de la pantalla principal (que es quien sabe hacerlo).
+    sincronizando: Boolean = false,
+    onSincronizar: () -> Unit = {},
 ) {
     RegistrarPantalla("proveedores")
     val viewModel: ProveedoresViewModel =
@@ -220,18 +224,24 @@ fun PantallaProveedores(
                             )
                         }
 
-                        ListaConDesvanecido {
-                            LazyColumn(
-                                contentPadding = PaddingValues(top = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(5.dp),
-                            ) {
-                                items(activosFiltrados, key = { it.clave() }) { fila ->
-                                    FilaProveedorActivo(
-                                        fila = fila,
-                                        onConfirmarSalida = { filaParaSalida = fila },
-                                    )
-                                }
-                            }
+                        ListaConEstados(
+                            filas = activosFiltrados,
+                            clave = { it.clave() },
+                            cargando = viewModel.cargando,
+                            tituloVacio = if (busqueda.isBlank()) "Ningún proveedor adentro" else "Sin resultados",
+                            detalleVacio = if (busqueda.isBlank()) {
+                                "Cuando entre uno, aparece acá."
+                            } else {
+                                "Pruebe con otra cédula, nombre o empresa."
+                            },
+                            sincronizando = sincronizando,
+                            onSincronizar = onSincronizar,
+                            contentPadding = PaddingValues(top = 10.dp),
+                        ) { fila ->
+                            FilaProveedorActivo(
+                                fila = fila,
+                                onConfirmarSalida = { filaParaSalida = fila },
+                            )
                         }
                     }
 

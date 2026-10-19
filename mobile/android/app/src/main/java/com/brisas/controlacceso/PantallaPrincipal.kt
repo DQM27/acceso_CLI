@@ -454,12 +454,19 @@ fun PantallaPrincipal(
                                     onSincronizar = nubeViewModel::sincronizar,
                                 )
                                 SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
-                                SeccionPrincipal.KOF -> PantallaGafetesProvisionales(nucleo, refrescarNube)
+                                SeccionPrincipal.KOF -> PantallaGafetesProvisionales(
+                                    nucleo,
+                                    refrescarNube,
+                                    sincronizando = nubeViewModel.sincronizando,
+                                    onSincronizar = nubeViewModel::sincronizar,
+                                )
                                 SeccionPrincipal.EXTERNOS -> PantallaExternos(
                                     nucleo,
                                     refrescarNube,
                                     tipo = indiceExterno,
                                     onCambiarTipo = { indiceExterno = it },
+                                    sincronizando = nubeViewModel.sincronizando,
+                                    onSincronizar = nubeViewModel::sincronizar,
                                 )
                             }
                         }

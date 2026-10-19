@@ -269,24 +269,10 @@ internal fun ContenidoModoSalidaGafete(
     }
 }
 
-/// Lo que muestra la lista de activos: la propia lista, marcadores de
-/// posición mientras carga por primera vez, o un mensaje si no hay nadie.
-private enum class EstadoLista { MARCADORES, VACIA, LISTA }
-
 /// Lista de activos compartida entre Entrada (campo vacío) y Salida:
 /// nombre — mismas filas, mismo comportamiento, sólo cambia qué hace
-/// `onClick` según quién la use.
-///
-/// - Las filas se acomodan con una animación cuando alguien entra o sale
-///   (`animateItem`), en vez de saltar.
-/// - Tocar una fila abre la confirmación de salida: registrar una salida no
-///   se hace con un gesto sin confirmar (se probó deslizar con "Deshacer" y
-///   se descartó, 2026-10-19).
-/// - Tirar hacia abajo sincroniza con la nube, igual que el botón de arriba.
-/// - Sin filas: marcadores mientras carga y un mensaje (no un hueco en
-///   blanco) cuando de verdad no hay nadie. Los marcadores sólo salen si no
-///   hay nada que mostrar: recargar con la lista llena no la tapa.
-@OptIn(ExperimentalMaterial3Api::class)
+/// `onClick` según quién la use. El comportamiento de la lista (animación,
+/// estados vacíos, tirar para sincronizar) vive en [ListaConEstados].
 @Composable
 private fun ListaActivos(
     activos: List<FilaActiva>,
@@ -297,112 +283,16 @@ private fun ListaActivos(
     sincronizando: Boolean,
     onSincronizar: () -> Unit,
 ) {
-    val estado = when {
-        activos.isNotEmpty() -> EstadoLista.LISTA
-        cargando -> EstadoLista.MARCADORES
-        else -> EstadoLista.VACIA
-    }
-    PullToRefreshBox(
-        isRefreshing = sincronizando,
-        onRefresh = onSincronizar,
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        AnimatedContent(
-            targetState = estado,
-            modifier = Modifier.fillMaxSize(),
-            transitionSpec = {
-                (fadeIn(tween(MS_FUNDIDO_ENTRADA)) togetherWith fadeOut(tween(MS_SALIDA))) using null
-            },
-            label = "estadoListaActivos",
-        ) { mostrado ->
-            when (mostrado) {
-                EstadoLista.LISTA -> ListaConDesvanecido {
-                    LazyColumn(
-                        contentPadding = PaddingValues(top = 5.dp),
-                        verticalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        items(activos, key = { fila -> fila.clave }) { fila ->
-                            Box(modifier = Modifier.animateItem()) {
-                                FilaActivo(fila, onClick = { onClick(fila) })
-                            }
-                        }
-                    }
-                }
-                EstadoLista.MARCADORES -> FilasMarcadoras()
-                EstadoLista.VACIA -> EstadoVacioLista(tituloVacio, detalleVacio)
-            }
-        }
-    }
-}
-
-/// Cuatro tarjetas grises con la forma de una fila, quietas (sin brillo que
-/// recorra la pantalla: eso sería una animación infinita sólo para esperar).
-@Composable
-private fun FilasMarcadoras() {
-    val descripcion = "Cargando"
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 5.dp)
-            .semantics { contentDescription = descripcion },
-        verticalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        repeat(4) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                BarraMarcadora(ancho = 0.5f, alto = 14.dp)
-                BarraMarcadora(ancho = 0.8f, alto = 10.dp)
-                BarraMarcadora(ancho = 0.6f, alto = 10.dp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun BarraMarcadora(ancho: Float, alto: androidx.compose.ui.unit.Dp) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth(ancho)
-            .height(alto)
-            .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-    )
-}
-
-/// Con `verticalScroll` aunque no haya nada que desplazar: sin un hijo
-/// desplazable, tirar hacia abajo para sincronizar no responde.
-@Composable
-private fun EstadoVacioLista(titulo: String, detalle: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(top = 48.dp, start = 24.dp, end = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.Groups, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        }
-        Text(titulo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text(
-            detalle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+    ListaConEstados(
+        filas = activos,
+        clave = { fila -> fila.clave },
+        cargando = cargando,
+        tituloVacio = tituloVacio,
+        detalleVacio = detalleVacio,
+        sincronizando = sincronizando,
+        onSincronizar = onSincronizar,
+    ) { fila ->
+        FilaActivo(fila, onClick = { onClick(fila) })
     }
 }
 

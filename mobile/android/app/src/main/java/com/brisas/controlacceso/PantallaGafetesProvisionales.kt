@@ -60,6 +60,10 @@ import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalRemoto
 fun PantallaGafetesProvisionales(
     nucleo: Nucleo,
     refrescarNube: Int = 0,
+    // Tirar de la lista hacia abajo sincroniza con la nube, igual que el botón
+    // del encabezado de la pantalla principal (que es quien sabe hacerlo).
+    sincronizando: Boolean = false,
+    onSincronizar: () -> Unit = {},
 ) {
     RegistrarPantalla("gafetes_provisionales")
     val viewModel: GafetesProvisionalesViewModel =
@@ -179,18 +183,20 @@ fun PantallaGafetesProvisionales(
         // Sin encabezado "Gafetes prestados" -- pedido explícito del usuario
         // en pruebas reales, 2026-09-17: dejarlo limpio, igual que la lista
         // de activos de Contratista (que tampoco tiene título propio).
-        ListaConDesvanecido {
-            LazyColumn(
-                contentPadding = PaddingValues(top = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                items(viewModel.activos, key = { it.clave() }) { fila ->
-                    FilaPrestamoGafeteProvisional(
-                        fila = fila,
-                        onConfirmarDevolucion = { filaParaDevolver = fila },
-                    )
-                }
-            }
+        ListaConEstados(
+            filas = viewModel.activos,
+            clave = { it.clave() },
+            cargando = viewModel.cargando,
+            tituloVacio = "Ningún gafete prestado",
+            detalleVacio = "Cuando se entregue uno, aparece acá.",
+            sincronizando = sincronizando,
+            onSincronizar = onSincronizar,
+            contentPadding = PaddingValues(top = 16.dp),
+        ) { fila ->
+            FilaPrestamoGafeteProvisional(
+                fila = fila,
+                onConfirmarDevolucion = { filaParaDevolver = fila },
+            )
         }
     }
 
