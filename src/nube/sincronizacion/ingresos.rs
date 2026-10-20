@@ -4,6 +4,11 @@ use serde_json::json;
 use super::{ContextoSincronizacion, SincronizacionError, exigir_2xx, obtener_json};
 use crate::nube::cliente::{NubeError, cliente_http};
 
+/// Lo que este equipo tiene abierto localmente: los ids que se le preguntan
+/// a la nube para traer sus cierres (la etapa y `estado_del_sitio`).
+pub(super) const ABIERTOS_LOCALES_INGRESOS: &str =
+    "SELECT uuid FROM registro_ingresos WHERE fecha_hora_salida IS NULL";
+
 /// Fila cacheada localmente de un ingreso todavía abierto, creado por el
 /// otro dispositivo de este mismo sitio -- ver `ingresos_remotos` en
 /// `database::schema` sobre por qué esto no es una fila de
@@ -38,7 +43,7 @@ pub(in crate::nube) struct FilaIngresoRemoto {
 }
 
 #[derive(serde::Deserialize)]
-pub(super) struct FilaCierrePropioRemoto {
+pub(in crate::nube) struct FilaCierrePropioRemoto {
     pub(super) id: String,
     pub(super) hora_salida: String,
     pub(super) usuario_salida_nombre: Option<String>,
@@ -62,9 +67,18 @@ pub fn recibir_cierres_de_ingresos_propios(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<u32, SincronizacionError> {
+    recibir_cierres_de_ingresos_propios_con(connection, contexto, None)
+}
+
+/// [`recibir_cierres_de_ingresos_propios`] con las filas ya recibidas en `estado_del_sitio`
+/// (`None`: las pide por GET, como siempre).
+pub(in crate::nube) fn recibir_cierres_de_ingresos_propios_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaCierrePropioRemoto>>,
+) -> Result<u32, SincronizacionError> {
     let abiertos_localmente: Vec<String> = {
-        let mut statement = connection
-            .prepare("SELECT uuid FROM registro_ingresos WHERE fecha_hora_salida IS NULL")?;
+        let mut statement = connection.prepare(ABIERTOS_LOCALES_INGRESOS)?;
         statement
             .query_map([], |row| row.get(0))?
             .collect::<Result<_, _>>()?
@@ -82,7 +96,10 @@ pub fn recibir_cierres_de_ingresos_propios(
          &select=id,hora_salida,usuario_salida_nombre",
         contexto.base_url,
     );
-    let filas: Vec<FilaCierrePropioRemoto> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaCierrePropioRemoto> = match recibidas {
+        Some(filas) => filas,
+        None => obtener_json(&cliente, contexto, &url)?,
+    };
 
     let transaction = connection.unchecked_transaction()?;
     let mut aplicados = 0_u32;
@@ -153,6 +170,16 @@ pub fn recibir_ingresos_abiertos(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<Vec<IngresoRemoto>, SincronizacionError> {
+    recibir_ingresos_abiertos_con(connection, contexto, None)
+}
+
+/// [`recibir_ingresos_abiertos`] con las filas ya recibidas en `estado_del_sitio`
+/// (`None`: las pide por GET, como siempre).
+pub(in crate::nube) fn recibir_ingresos_abiertos_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaIngresoRemoto>>,
+) -> Result<Vec<IngresoRemoto>, SincronizacionError> {
     let cliente = cliente_http();
     let url = format!(
         "{}/rest/v1/ingresos?sitio_id=eq.{}&hora_salida=is.null\
@@ -160,7 +187,10 @@ pub fn recibir_ingresos_abiertos(
          contratista_cedula,empresa_nombre,tipo_ingreso,medio_ingreso,gafete_numero,placa",
         contexto.base_url, contexto.sitio_id,
     );
-    let filas: Vec<FilaIngresoRemoto> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaIngresoRemoto> = match recibidas {
+        Some(filas) => filas,
+        None => obtener_json(&cliente, contexto, &url)?,
+    };
 
     let transaction = connection.unchecked_transaction()?;
     transaction.execute(

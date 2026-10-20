@@ -3,6 +3,15 @@ use rusqlite::Connection;
 use super::{ContextoSincronizacion, SincronizacionError, llamar_rpc};
 use crate::nube::cliente::cliente_http;
 
+/// Quién tiene adentro este equipo (cédula y nombre): la base de los
+/// conflictos con otras unidades (la etapa y `estado_del_sitio`).
+pub(super) const CEDULAS_ADENTRO_PROVEEDOR: &str =
+    "SELECT cedula, nombre FROM registro_ingresos_proveedor WHERE fecha_hora_salida IS NULL";
+
+/// Quién tiene adentro este equipo (cédula y nombre): la base de los
+/// conflictos con otras unidades (la etapa y `estado_del_sitio`).
+pub(super) const CEDULAS_ADENTRO_INGRESOS: &str = "SELECT contratista_cedula, contratista_nombre FROM registro_ingresos WHERE fecha_hora_salida IS NULL";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ConflictoIngresoActivo {
@@ -15,7 +24,7 @@ pub struct ConflictoIngresoActivo {
 }
 
 #[derive(serde::Deserialize)]
-pub(super) struct FilaConflictoActivo {
+pub(in crate::nube) struct FilaConflictoActivo {
     pub(super) contratista_cedula: Option<String>,
     pub(super) sitio_nombre: Option<String>,
 }
@@ -41,10 +50,18 @@ pub fn contratistas_con_conflicto_activo(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<Vec<ConflictoIngresoActivo>, SincronizacionError> {
-    let mut statement = connection.prepare(
-        "SELECT contratista_cedula, contratista_nombre FROM registro_ingresos
-         WHERE fecha_hora_salida IS NULL",
-    )?;
+    contratistas_con_conflicto_activo_con(connection, contexto, None)
+}
+
+/// [`contratistas_con_conflicto_activo`] con la respuesta ya recibida en `estado_del_sitio`
+/// (`None`: la pide aparte, como siempre). Se cruza igual contra lo que
+/// sigue adentro AHORA en este equipo.
+pub(in crate::nube) fn contratistas_con_conflicto_activo_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaConflictoActivo>>,
+) -> Result<Vec<ConflictoIngresoActivo>, SincronizacionError> {
+    let mut statement = connection.prepare(CEDULAS_ADENTRO_INGRESOS)?;
     let activos_locales: Vec<(String, String)> = statement
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
         .collect::<Result<_, _>>()?;
@@ -58,12 +75,15 @@ pub fn contratistas_con_conflicto_activo(
         .map(|(cedula, _)| cedula.as_str())
         .collect::<Vec<_>>();
     let cliente = cliente_http();
-    let filas: Vec<FilaConflictoActivo> = llamar_rpc(
-        &cliente,
-        contexto,
-        "contratistas_activos_en_otras_unidades",
-        &serde_json::json!({ "p_cedulas": cedulas }),
-    )?;
+    let filas: Vec<FilaConflictoActivo> = match recibidas {
+        Some(filas) => filas,
+        None => llamar_rpc(
+            &cliente,
+            contexto,
+            "contratistas_activos_en_otras_unidades",
+            &serde_json::json!({ "p_cedulas": cedulas }),
+        )?,
+    };
 
     Ok(filas
         .into_iter()
@@ -167,7 +187,7 @@ pub struct ConflictoIngresoProveedorActivo {
 }
 
 #[derive(serde::Deserialize)]
-pub(super) struct FilaConflictoProveedorActivo {
+pub(in crate::nube) struct FilaConflictoProveedorActivo {
     pub(super) cedula: Option<String>,
     pub(super) sitio_nombre: Option<String>,
 }
@@ -180,10 +200,18 @@ pub fn proveedores_con_conflicto_activo(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<Vec<ConflictoIngresoProveedorActivo>, SincronizacionError> {
-    let mut statement = connection.prepare(
-        "SELECT cedula, nombre FROM registro_ingresos_proveedor
-         WHERE fecha_hora_salida IS NULL",
-    )?;
+    proveedores_con_conflicto_activo_con(connection, contexto, None)
+}
+
+/// [`proveedores_con_conflicto_activo`] con la respuesta ya recibida en `estado_del_sitio`
+/// (`None`: la pide aparte, como siempre). Se cruza igual contra lo que
+/// sigue adentro AHORA en este equipo.
+pub(in crate::nube) fn proveedores_con_conflicto_activo_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaConflictoProveedorActivo>>,
+) -> Result<Vec<ConflictoIngresoProveedorActivo>, SincronizacionError> {
+    let mut statement = connection.prepare(CEDULAS_ADENTRO_PROVEEDOR)?;
     let activos_locales: Vec<(String, String)> = statement
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
         .collect::<Result<_, _>>()?;
@@ -197,12 +225,15 @@ pub fn proveedores_con_conflicto_activo(
         .map(|(cedula, _)| cedula.as_str())
         .collect::<Vec<_>>();
     let cliente = cliente_http();
-    let filas: Vec<FilaConflictoProveedorActivo> = llamar_rpc(
-        &cliente,
-        contexto,
-        "proveedores_activos_en_otras_unidades",
-        &serde_json::json!({ "p_cedulas": cedulas }),
-    )?;
+    let filas: Vec<FilaConflictoProveedorActivo> = match recibidas {
+        Some(filas) => filas,
+        None => llamar_rpc(
+            &cliente,
+            contexto,
+            "proveedores_activos_en_otras_unidades",
+            &serde_json::json!({ "p_cedulas": cedulas }),
+        )?,
+    };
 
     Ok(filas
         .into_iter()

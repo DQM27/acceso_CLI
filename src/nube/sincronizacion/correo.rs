@@ -11,6 +11,16 @@ use super::{
 };
 use crate::nube::cliente::{NubeError, cliente_http};
 
+/// Quién tiene adentro este equipo (cédula y nombre): la base de los
+/// conflictos con otras unidades (la etapa y `estado_del_sitio`).
+pub(super) const CEDULAS_ADENTRO_CORREO: &str =
+    "SELECT cedula, nombre FROM registro_ingresos_correo WHERE fecha_hora_salida IS NULL";
+
+/// Lo que este equipo tiene abierto localmente: los ids que se le preguntan
+/// a la nube para traer sus cierres (la etapa y `estado_del_sitio`).
+pub(super) const ABIERTOS_LOCALES_CORREO: &str =
+    "SELECT uuid FROM registro_ingresos_correo WHERE fecha_hora_salida IS NULL";
+
 /// Un ingreso por correo abierto en ESTE dispositivo y cerrado por OTRO: se
 /// cierra acá también (mismo motivo que
 /// `recibir_cierres_de_ingresos_propios_proveedor`).
@@ -18,9 +28,18 @@ pub fn recibir_cierres_de_ingresos_propios_correo(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<u32, SincronizacionError> {
+    recibir_cierres_de_ingresos_propios_correo_con(connection, contexto, None)
+}
+
+/// [`recibir_cierres_de_ingresos_propios_correo`] con las filas ya recibidas en `estado_del_sitio`
+/// (`None`: las pide por GET, como siempre).
+pub(in crate::nube) fn recibir_cierres_de_ingresos_propios_correo_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaCierrePropioRemoto>>,
+) -> Result<u32, SincronizacionError> {
     let abiertos_localmente: Vec<String> = {
-        let mut statement = connection
-            .prepare("SELECT uuid FROM registro_ingresos_correo WHERE fecha_hora_salida IS NULL")?;
+        let mut statement = connection.prepare(ABIERTOS_LOCALES_CORREO)?;
         statement
             .query_map([], |row| row.get(0))?
             .collect::<Result<_, _>>()?
@@ -36,7 +55,10 @@ pub fn recibir_cierres_de_ingresos_propios_correo(
         contexto.base_url,
         abiertos_localmente.join(","),
     );
-    let filas: Vec<FilaCierrePropioRemoto> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaCierrePropioRemoto> = match recibidas {
+        Some(filas) => filas,
+        None => obtener_json(&cliente, contexto, &url)?,
+    };
 
     let transaction = connection.unchecked_transaction()?;
     let mut aplicados = 0_u32;
@@ -117,6 +139,16 @@ pub fn recibir_ingresos_correo_abiertos(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<Vec<IngresoCorreoRemoto>, SincronizacionError> {
+    recibir_ingresos_correo_abiertos_con(connection, contexto, None)
+}
+
+/// [`recibir_ingresos_correo_abiertos`] con las filas ya recibidas en `estado_del_sitio`
+/// (`None`: las pide por GET, como siempre).
+pub(in crate::nube) fn recibir_ingresos_correo_abiertos_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaIngresoCorreoRemoto>>,
+) -> Result<Vec<IngresoCorreoRemoto>, SincronizacionError> {
     let cliente = cliente_http();
     let url = format!(
         "{}/rest/v1/ingresos_correo?sitio_id=eq.{}&hora_salida=is.null\
@@ -124,7 +156,10 @@ pub fn recibir_ingresos_correo_abiertos(
          usuario_entrada_nombre,dispositivo_entrada_id",
         contexto.base_url, contexto.sitio_id,
     );
-    let filas: Vec<FilaIngresoCorreoRemoto> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaIngresoCorreoRemoto> = match recibidas {
+        Some(filas) => filas,
+        None => obtener_json(&cliente, contexto, &url)?,
+    };
 
     let transaction = connection.unchecked_transaction()?;
     transaction.execute(
@@ -233,7 +268,7 @@ pub fn cerrar_ingreso_correo_remoto(
 }
 
 #[derive(serde::Deserialize)]
-struct FilaConflictoCorreoActivo {
+pub(in crate::nube) struct FilaConflictoCorreoActivo {
     cedula: Option<String>,
     sitio_nombre: Option<String>,
 }
@@ -246,10 +281,19 @@ pub fn correos_con_conflicto_activo(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<Vec<ConflictoIngresoProveedorActivo>, SincronizacionError> {
+    correos_con_conflicto_activo_con(connection, contexto, None)
+}
+
+/// [`correos_con_conflicto_activo`] con la respuesta ya recibida en `estado_del_sitio`
+/// (`None`: la pide aparte, como siempre). Se cruza igual contra lo que
+/// sigue adentro AHORA en este equipo.
+pub(in crate::nube) fn correos_con_conflicto_activo_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaConflictoCorreoActivo>>,
+) -> Result<Vec<ConflictoIngresoProveedorActivo>, SincronizacionError> {
     let activos_locales: Vec<(String, String)> = {
-        let mut statement = connection.prepare(
-            "SELECT cedula, nombre FROM registro_ingresos_correo WHERE fecha_hora_salida IS NULL",
-        )?;
+        let mut statement = connection.prepare(CEDULAS_ADENTRO_CORREO)?;
         statement
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
             .collect::<Result<_, _>>()?
@@ -262,12 +306,15 @@ pub fn correos_con_conflicto_activo(
         .iter()
         .map(|(cedula, _)| cedula.as_str())
         .collect::<Vec<_>>();
-    let filas: Vec<FilaConflictoCorreoActivo> = llamar_rpc(
-        &cliente_http(),
-        contexto,
-        "correos_activos_en_otras_unidades",
-        &serde_json::json!({ "p_cedulas": cedulas }),
-    )?;
+    let filas: Vec<FilaConflictoCorreoActivo> = match recibidas {
+        Some(filas) => filas,
+        None => llamar_rpc(
+            &cliente_http(),
+            contexto,
+            "correos_activos_en_otras_unidades",
+            &serde_json::json!({ "p_cedulas": cedulas }),
+        )?,
+    };
 
     Ok(filas
         .into_iter()

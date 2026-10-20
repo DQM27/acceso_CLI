@@ -111,6 +111,40 @@ fn unir_hilo<T>(hilo: std::thread::ScopedJoinHandle<'_, T>) -> T {
         .unwrap_or_else(|panico| std::panic::resume_unwind(panico))
 }
 
+/// Las tres respuestas de la verificación final de una entrada, cada una con
+/// el manejo de errores de siempre (`o_libre_sin_conexion`).
+struct RespuestasVerificacion {
+    misma_via: Result<Option<crate::nube::IngresoActivoEnLaNube>, SincronizacionError>,
+    otra_via: Result<Option<crate::nube::AdentroPorOtraViaEnLaNube>, SincronizacionError>,
+    gafete_ocupado: Result<bool, SincronizacionError>,
+}
+
+/// La verificación final en un solo llamado (`verificar_entrada`). `None` si
+/// la nube todavía no tiene la función: quien llama hace las consultas
+/// sueltas, como antes. Un error del llamado queda en la respuesta de la
+/// misma vía, así se maneja igual que siempre: sin conexión se sigue con lo
+/// local y un rechazo de la nube frena.
+fn verificar_en_un_llamado(
+    contexto: &ContextoSincronizacion<'_>,
+    entrada: crate::nube::EntradaAVerificar,
+    cedula: &str,
+    gafete: Option<i64>,
+) -> Option<RespuestasVerificacion> {
+    match crate::nube::verificar_entrada(contexto, entrada, cedula, gafete) {
+        Ok(None) => None,
+        Ok(Some(verificacion)) => Some(RespuestasVerificacion {
+            misma_via: Ok(verificacion.misma_via),
+            otra_via: Ok(verificacion.otra_via),
+            gafete_ocupado: Ok(verificacion.gafete_ocupado),
+        }),
+        Err(error) => Some(RespuestasVerificacion {
+            misma_via: Err(error),
+            otra_via: Ok(None),
+            gafete_ocupado: Ok(false),
+        }),
+    }
+}
+
 /// El gafete `numero` de la clase `clase` ya lo tiene abierto el otro
 /// equipo de la unidad, según la caché local (`*_remotos`, que Realtime
 /// mantiene al día). Se mira antes de ir a la nube: si la caché ya lo sabe,
@@ -159,6 +193,15 @@ fn bloqueo_en_la_nube(
         let misma_via = crate::nube::contratista_con_ingreso_activo(contexto, cedula);
         (misma_via, unir_hilo(consulta_otra_via))
     });
+    evaluar_bloqueo(misma_via, otra_via)
+}
+
+/// Las respuestas de la nube sobre la misma vía y la otra vía, vueltas el
+/// bloqueo que ve quien opera (ver [`bloqueo_en_la_nube`]).
+fn evaluar_bloqueo(
+    misma_via: Result<Option<crate::nube::IngresoActivoEnLaNube>, SincronizacionError>,
+    otra_via: Result<Option<crate::nube::AdentroPorOtraViaEnLaNube>, SincronizacionError>,
+) -> Option<BloqueoIngreso> {
     match o_libre_sin_conexion(misma_via, None, "ingreso") {
         Ok(None) => {}
         Ok(Some(activo)) if activo.mismo_sitio => {
@@ -267,17 +310,30 @@ fn verificar_ingreso_en_la_nube(
     cedula: &str,
     gafete: Option<i64>,
 ) -> Result<(), IngresoVerificadoError> {
-    // Las dos consultas son independientes: a la vez, un solo viaje de
-    // espera en vez de dos (telemetría de staging: ~80-100 ms menos al
-    // confirmar). Se evalúan en el mismo orden de siempre, así el
-    // mensaje que ve quien opera no cambia.
-    let (bloqueo, gafete_ocupado) = std::thread::scope(|hilos| {
-        let consulta_gafete = gafete.map(|numero| {
-            hilos.spawn(move || crate::nube::gafete_ocupado_en_otro_dispositivo(contexto, numero))
-        });
-        let bloqueo = bloqueo_en_la_nube(contexto, cedula);
-        (bloqueo, consulta_gafete.map(unir_hilo))
-    });
+    // Un solo llamado con las tres respuestas; sin la función en la nube, las
+    // consultas sueltas a la vez (un solo viaje de espera en vez de dos).
+    // Se evalúan en el mismo orden de siempre, así el mensaje que ve quien
+    // opera no cambia.
+    let (bloqueo, gafete_ocupado) = match verificar_en_un_llamado(
+        contexto,
+        crate::nube::EntradaAVerificar::Contratista,
+        cedula,
+        gafete,
+    ) {
+        Some(respuestas) => (
+            evaluar_bloqueo(respuestas.misma_via, respuestas.otra_via),
+            gafete.map(|_| respuestas.gafete_ocupado),
+        ),
+        None => std::thread::scope(|hilos| {
+            let consulta_gafete = gafete.map(|numero| {
+                hilos.spawn(move || {
+                    crate::nube::gafete_ocupado_en_otro_dispositivo(contexto, numero)
+                })
+            });
+            let bloqueo = bloqueo_en_la_nube(contexto, cedula);
+            (bloqueo, consulta_gafete.map(unir_hilo))
+        }),
+    };
     if let Some(bloqueo) = bloqueo {
         return Err(IngresoVerificadoError::Bloqueado(bloqueo));
     }
@@ -393,29 +449,37 @@ fn verificar_proveedor_en_la_nube(
     contexto: &ContextoSincronizacion<'_>,
     datos: &NuevoIngresoProveedor,
 ) -> Result<(), IngresoProveedorVerificadoError> {
-    // A la vez, como en `verificar_ingreso_en_la_nube`; mismo orden al
-    // evaluar.
-    let (activo_en_otro_sitio, gafete_ocupado, otra_via) = std::thread::scope(|hilos| {
-        let consulta_gafete = hilos.spawn(|| {
-            crate::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(
-                contexto,
-                datos.gafete_numero,
+    // Un solo llamado, o las consultas sueltas a la vez, como en
+    // `verificar_ingreso_en_la_nube`; mismo orden al evaluar.
+    let (activo_en_otro_sitio, gafete_ocupado, otra_via) = match verificar_en_un_llamado(
+        contexto,
+        crate::nube::EntradaAVerificar::Proveedor,
+        &datos.cedula,
+        Some(datos.gafete_numero),
+    ) {
+        Some(r) => (r.misma_via, r.gafete_ocupado, r.otra_via),
+        None => std::thread::scope(|hilos| {
+            let consulta_gafete = hilos.spawn(|| {
+                crate::nube::gafete_de_proveedor_ocupado_en_otro_dispositivo(
+                    contexto,
+                    datos.gafete_numero,
+                )
+            });
+            let consulta_otra_via = hilos.spawn(|| {
+                crate::nube::persona_adentro_por_otra_via(
+                    contexto,
+                    &datos.cedula,
+                    crate::models::via_ingreso::ViaIngreso::Proveedor,
+                )
+            });
+            let activo = crate::nube::proveedor_con_ingreso_activo(contexto, &datos.cedula);
+            (
+                activo,
+                unir_hilo(consulta_gafete),
+                unir_hilo(consulta_otra_via),
             )
-        });
-        let consulta_otra_via = hilos.spawn(|| {
-            crate::nube::persona_adentro_por_otra_via(
-                contexto,
-                &datos.cedula,
-                crate::models::via_ingreso::ViaIngreso::Proveedor,
-            )
-        });
-        let activo = crate::nube::proveedor_con_ingreso_activo(contexto, &datos.cedula);
-        (
-            activo,
-            unir_hilo(consulta_gafete),
-            unir_hilo(consulta_otra_via),
-        )
-    });
+        }),
+    };
     match o_libre_sin_conexion(activo_en_otro_sitio, None, "ingreso de proveedor")
         .map_err(GestionNubeError::from)?
     {
@@ -537,29 +601,39 @@ fn verificar_correo_en_la_nube(
     datos: &NuevoIngresoCorreo,
 ) -> Result<(), IngresoCorreoVerificadoError> {
     let numero = datos.gafete_numero;
+    // Un solo llamado (el gafete de visita lo busca también en las visitas),
+    // o las consultas sueltas a la vez.
     let (activo_en_otro_sitio, gafete_en_correo, gafete_en_visita, otra_via) =
-        std::thread::scope(|hilos| {
-            let en_correo = hilos.spawn(|| {
-                crate::nube::gafete_de_correo_ocupado_en_otro_dispositivo(contexto, numero)
-            });
-            let en_visita = hilos.spawn(|| {
-                crate::nube::gafete_de_visita_ocupado_en_otro_dispositivo(contexto, numero)
-            });
-            let por_otra_via = hilos.spawn(|| {
-                crate::nube::persona_adentro_por_otra_via(
-                    contexto,
-                    &datos.cedula,
-                    crate::models::via_ingreso::ViaIngreso::PorCorreo,
+        match verificar_en_un_llamado(
+            contexto,
+            crate::nube::EntradaAVerificar::PorCorreo,
+            &datos.cedula,
+            Some(numero),
+        ) {
+            Some(r) => (r.misma_via, r.gafete_ocupado, Ok(false), r.otra_via),
+            None => std::thread::scope(|hilos| {
+                let en_correo = hilos.spawn(|| {
+                    crate::nube::gafete_de_correo_ocupado_en_otro_dispositivo(contexto, numero)
+                });
+                let en_visita = hilos.spawn(|| {
+                    crate::nube::gafete_de_visita_ocupado_en_otro_dispositivo(contexto, numero)
+                });
+                let por_otra_via = hilos.spawn(|| {
+                    crate::nube::persona_adentro_por_otra_via(
+                        contexto,
+                        &datos.cedula,
+                        crate::models::via_ingreso::ViaIngreso::PorCorreo,
+                    )
+                });
+                let activo = crate::nube::correo_con_ingreso_activo(contexto, &datos.cedula);
+                (
+                    activo,
+                    unir_hilo(en_correo),
+                    unir_hilo(en_visita),
+                    unir_hilo(por_otra_via),
                 )
-            });
-            let activo = crate::nube::correo_con_ingreso_activo(contexto, &datos.cedula);
-            (
-                activo,
-                unir_hilo(en_correo),
-                unir_hilo(en_visita),
-                unir_hilo(por_otra_via),
-            )
-        });
+            }),
+        };
     match o_libre_sin_conexion(activo_en_otro_sitio, None, "ingreso por correo")
         .map_err(GestionNubeError::from)?
     {
@@ -755,16 +829,35 @@ fn verificar_entrega_provisional_en_la_nube(
     codigo_empleado: Option<&str>,
     gafete_numero: i64,
 ) -> Result<(), EntregaGafeteProvisionalVerificadaError> {
-    let (gafete_ocupado, prestamo_del_encargado) = std::thread::scope(|hilos| {
-        let consulta_encargado = hilos.spawn(|| {
-            codigo_empleado.map_or(Ok(None), |codigo| {
-                crate::nube::encargado_con_prestamo_provisional_activo(contexto, codigo)
-            })
-        });
-        let ocupado =
-            crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(contexto, gafete_numero);
-        (ocupado, unir_hilo(consulta_encargado))
-    });
+    // Un solo llamado, o las consultas sueltas a la vez. Sin código de
+    // empleado no hay encargado que buscar.
+    let (gafete_ocupado, prestamo_del_encargado) = match verificar_en_un_llamado(
+        contexto,
+        crate::nube::EntradaAVerificar::Kof,
+        codigo_empleado.unwrap_or_default(),
+        Some(gafete_numero),
+    ) {
+        Some(r) => (
+            r.gafete_ocupado,
+            if codigo_empleado.is_some() {
+                r.misma_via
+            } else {
+                Ok(None)
+            },
+        ),
+        None => std::thread::scope(|hilos| {
+            let consulta_encargado = hilos.spawn(|| {
+                codigo_empleado.map_or(Ok(None), |codigo| {
+                    crate::nube::encargado_con_prestamo_provisional_activo(contexto, codigo)
+                })
+            });
+            let ocupado = crate::nube::gafete_provisional_ocupado_en_otro_dispositivo(
+                contexto,
+                gafete_numero,
+            );
+            (ocupado, unir_hilo(consulta_encargado))
+        }),
+    };
     if o_libre_sin_conexion(
         gafete_ocupado,
         false,
@@ -1195,6 +1288,152 @@ mod tests {
             Some(BloqueoIngreso::SinVerificarEnLaNube)
         );
     }
+    // ---- Verificación en un solo llamado (`verificar_entrada`) ----
+
+    /// Nube de prueba que contesta `estado` y `cuerpo` a cada pedido, en
+    /// orden, y anota la primera línea de cada uno.
+    fn nube_que_contesta(
+        respuestas: Vec<(&'static str, &'static str)>,
+    ) -> (String, Arc<Mutex<Vec<String>>>) {
+        use std::io::{BufRead, BufReader, Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let direccion = listener.local_addr().unwrap();
+        let pedidos = Arc::new(Mutex::new(Vec::new()));
+        let anotados = Arc::clone(&pedidos);
+        std::thread::spawn(move || {
+            for (estado, cuerpo) in respuestas {
+                let Ok((mut conexion, _)) = listener.accept() else {
+                    return;
+                };
+                let mut lector = BufReader::new(conexion.try_clone().unwrap());
+                let mut primera = String::new();
+                let _ = lector.read_line(&mut primera);
+                let mut largo = 0;
+                loop {
+                    let mut linea = String::new();
+                    if lector.read_line(&mut linea).unwrap_or(0) == 0 || linea == "\r\n" {
+                        break;
+                    }
+                    if let Some(valor) = linea.to_lowercase().strip_prefix("content-length:") {
+                        largo = valor.trim().parse().unwrap_or(0);
+                    }
+                }
+                let mut resto = vec![0; largo];
+                let _ = lector.read_exact(&mut resto);
+                anotados.lock().unwrap().push(primera.trim().to_string());
+                let respuesta = format!(
+                    "HTTP/1.1 {estado}\r\nContent-Type: application/json\r\n\
+                     Content-Length: {}\r\nConnection: close\r\n\r\n{cuerpo}",
+                    cuerpo.len()
+                );
+                let _ = conexion.write_all(respuesta.as_bytes());
+            }
+        });
+        (format!("http://{direccion}"), pedidos)
+    }
+
+    fn verificar_contratista_contra(
+        base_url: &str,
+        gafete: Option<i64>,
+    ) -> Result<(), IngresoVerificadoError> {
+        let contexto = ContextoSincronizacion {
+            base_url,
+            apikey: "apikey",
+            token: "token",
+            dispositivo_id: "este-equipo",
+            sitio_id: "sitio-propio",
+        };
+        verificar_ingreso_en_la_nube(&contexto, "101110111", gafete)
+    }
+
+    #[test]
+    fn un_solo_llamado_libre_deja_pasar_sin_otras_consultas() {
+        let (base, pedidos) = nube_que_contesta(vec![(
+            "200 OK",
+            r#"{"misma_via":null,"otra_via":null,"gafete_ocupado":false}"#,
+        )]);
+        assert!(verificar_contratista_contra(&base, Some(7)).is_ok());
+        let pedidos = pedidos.lock().unwrap().clone();
+        assert_eq!(pedidos.len(), 1, "{pedidos:#?}");
+        assert!(pedidos[0].starts_with("POST /rest/v1/rpc/verificar_entrada "));
+    }
+
+    #[test]
+    fn un_solo_llamado_con_la_persona_en_otra_unidad_bloquea_con_su_nombre() {
+        let (base, _) = nube_que_contesta(vec![(
+            "200 OK",
+            r#"{"misma_via":{"sitio_id":"otro","sitio_nombre":"Cartago"},"otra_via":null,"gafete_ocupado":false}"#,
+        )]);
+        assert!(matches!(
+            verificar_contratista_contra(&base, None),
+            Err(IngresoVerificadoError::Bloqueado(BloqueoIngreso::ActivoEnOtroSitio { sitio })) if sitio == "Cartago"
+        ));
+    }
+
+    #[test]
+    fn un_solo_llamado_con_la_persona_adentro_como_proveedor_nombra_la_via() {
+        let (base, _) = nube_que_contesta(vec![(
+            "200 OK",
+            r#"{"misma_via":null,"otra_via":{"via":"PROVEEDOR","sitio_id":"otro","sitio_nombre":"Cartago"},"gafete_ocupado":false}"#,
+        )]);
+        assert!(matches!(
+            verificar_contratista_contra(&base, None),
+            Err(IngresoVerificadoError::Bloqueado(BloqueoIngreso::ActivoEnOtroSitio { sitio })) if sitio == "Cartago (como proveedor)"
+        ));
+    }
+
+    #[test]
+    fn un_solo_llamado_con_el_gafete_del_otro_equipo_lo_rechaza() {
+        let (base, _) = nube_que_contesta(vec![(
+            "200 OK",
+            r#"{"misma_via":null,"otra_via":null,"gafete_ocupado":true}"#,
+        )]);
+        assert!(matches!(
+            verificar_contratista_contra(&base, Some(7)),
+            Err(IngresoVerificadoError::GafeteOcupadoEnSitio { numero: 7 })
+        ));
+    }
+
+    /// Mismo manejo que con las consultas sueltas: nube caída deja pasar con
+    /// lo local, un rechazo frena.
+    #[test]
+    fn un_solo_llamado_caido_deja_pasar_y_rechazado_frena() {
+        let (caida, _) = nube_que_contesta(vec![("503 Service Unavailable", "{}")]);
+        assert!(verificar_contratista_contra(&caida, Some(7)).is_ok());
+        let (rechazo, _) = nube_que_contesta(vec![("403 Forbidden", "{}")]);
+        assert!(matches!(
+            verificar_contratista_contra(&rechazo, Some(7)),
+            Err(IngresoVerificadoError::Bloqueado(
+                BloqueoIngreso::SinVerificarEnLaNube
+            ))
+        ));
+    }
+
+    /// Una nube sin `verificar_entrada` (404): las consultas sueltas de
+    /// siempre.
+    #[test]
+    fn sin_verificar_entrada_en_la_nube_hace_las_consultas_sueltas() {
+        let (base, pedidos) = nube_que_contesta(vec![
+            ("404 Not Found", r#"{"code":"PGRST202"}"#),
+            ("200 OK", "[]"),
+            ("200 OK", "[]"),
+        ]);
+        assert!(verificar_contratista_contra(&base, None).is_ok());
+        let mut pedidos = pedidos.lock().unwrap().clone();
+        pedidos.sort();
+        assert_eq!(pedidos.len(), 3, "{pedidos:#?}");
+        assert!(
+            pedidos
+                .iter()
+                .any(|p| p.contains("/rpc/ingreso_activo_de_contratista"))
+        );
+        assert!(
+            pedidos
+                .iter()
+                .any(|p| p.contains("/rpc/persona_adentro_por_otra_via"))
+        );
+    }
+
     // ---- Lo local se revisa antes de la red ----
 
     /// Firmante de un equipo vinculado que falla la prueba si alguien

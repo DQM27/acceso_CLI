@@ -134,6 +134,95 @@ pub fn recibir(
     })
 }
 
+/// Lo abierto del sitio y las salidas que otro equipo dio sobre lo de este,
+/// para contratistas, proveedores, correo y préstamos KOF: un solo llamado
+/// (`estado_del_sitio`) y cada etapa toma sus filas, en el mismo orden de
+/// siempre (primero los cierres, después lo abierto). `None`: la nube no
+/// tiene la función y cada etapa pide lo suyo por GET. Devuelve el resto del
+/// estado (los conflictos con otras unidades, que se revisan al final).
+fn recibir_lo_abierto(
+    conexion: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    alcance: &AlcanceSincronizacion,
+    resumen: &mut ResumenSincronizacionNube,
+) -> Result<Option<sincronizacion::EstadoRemoto>, SincronizacionError> {
+    let mut estado = sincronizacion::pedir_estado_del_sitio(conexion, contexto, alcance)?;
+    if alcance.ingresos {
+        resumen.cierres_recibidos = sincronizacion::recibir_cierres_de_ingresos_propios_con(
+            conexion,
+            contexto,
+            estado
+                .as_mut()
+                .map(|e| std::mem::take(&mut e.cierres_ingresos)),
+        )?;
+    }
+    if alcance.ingresos_proveedor {
+        resumen.cierres_recibidos_proveedor =
+            sincronizacion::recibir_cierres_de_ingresos_propios_proveedor_con(
+                conexion,
+                contexto,
+                estado
+                    .as_mut()
+                    .map(|e| std::mem::take(&mut e.cierres_proveedor)),
+            )?;
+    }
+    if alcance.ingresos_correo {
+        resumen.cierres_recibidos_correo =
+            sincronizacion::recibir_cierres_de_ingresos_propios_correo_con(
+                conexion,
+                contexto,
+                estado
+                    .as_mut()
+                    .map(|e| std::mem::take(&mut e.cierres_correo)),
+            )?;
+    }
+    if alcance.ingresos {
+        let remotos = sincronizacion::recibir_ingresos_abiertos_con(
+            conexion,
+            contexto,
+            estado
+                .as_mut()
+                .map(|e| std::mem::take(&mut e.ingresos_abiertos)),
+        )?;
+        resumen.remotos_abiertos = u32::try_from(remotos.len()).unwrap_or(u32::MAX);
+    }
+    if alcance.ingresos_proveedor {
+        sincronizacion::recibir_ingresos_proveedor_abiertos_con(
+            conexion,
+            contexto,
+            estado
+                .as_mut()
+                .map(|e| std::mem::take(&mut e.proveedor_abiertos)),
+        )?;
+    }
+    if alcance.ingresos_correo {
+        sincronizacion::recibir_ingresos_correo_abiertos_con(
+            conexion,
+            contexto,
+            estado
+                .as_mut()
+                .map(|e| std::mem::take(&mut e.correo_abiertos)),
+        )?;
+    }
+    if alcance.gafetes_provisionales {
+        sincronizacion::recibir_prestamos_gafete_provisional_abiertos_con(
+            conexion,
+            contexto,
+            estado
+                .as_mut()
+                .map(|e| std::mem::take(&mut e.prestamos_abiertos)),
+        )?;
+        sincronizacion::recibir_devoluciones_propias_gafete_provisional_con(
+            conexion,
+            contexto,
+            estado
+                .as_mut()
+                .map(|e| std::mem::take(&mut e.devoluciones_prestamos)),
+        )?;
+    }
+    Ok(estado)
+}
+
 fn recibir_en_orden(
     conexion: &Connection,
     contexto: &ContextoSincronizacion<'_>,
@@ -144,40 +233,17 @@ fn recibir_en_orden(
     let reconciliar = alcance.reconciliar_historial;
     let mut resumen = ResumenSincronizacionNube::default();
 
-    if alcance.ingresos {
-        resumen.cierres_recibidos =
-            sincronizacion::recibir_cierres_de_ingresos_propios(conexion, contexto)?;
-    }
-    if alcance.ingresos_proveedor {
-        resumen.cierres_recibidos_proveedor =
-            sincronizacion::recibir_cierres_de_ingresos_propios_proveedor(conexion, contexto)?;
-    }
-    if alcance.ingresos_correo {
-        resumen.cierres_recibidos_correo =
-            sincronizacion::recibir_cierres_de_ingresos_propios_correo(conexion, contexto)?;
-    }
+    // Contratistas, proveedores, correo y KOF: lo abierto del sitio y los
+    // cierres, en un solo llamado (ver `recibir_lo_abierto`).
+    let mut estado = recibir_lo_abierto(conexion, contexto, &alcance, &mut resumen)?;
+    // Visitas no está en producción y sigue con sus GET. Sólo toca sus propias
+    // tablas, así que correr después de las otras clases no cambia nada.
     if alcance.visitas {
         resumen.cierres_recibidos_visita =
             sincronizacion::recibir_cierres_de_movimientos_visita_propios(conexion, contexto)?;
-    }
-    if alcance.ingresos {
-        let remotos = sincronizacion::recibir_ingresos_abiertos(conexion, contexto)?;
-        resumen.remotos_abiertos = u32::try_from(remotos.len()).unwrap_or(u32::MAX);
-    }
-    if alcance.ingresos_proveedor {
-        sincronizacion::recibir_ingresos_proveedor_abiertos(conexion, contexto)?;
-    }
-    if alcance.ingresos_correo {
-        sincronizacion::recibir_ingresos_correo_abiertos(conexion, contexto)?;
-    }
-    // En los dos perfiles: el teléfono también muestra las visitas que
-    // están adentro por la PC (el historial sigue siendo sólo de la PC).
-    if alcance.visitas {
+        // En los dos perfiles: el teléfono también muestra las visitas que
+        // están adentro por la PC (el historial sigue siendo sólo de la PC).
         sincronizacion::recibir_movimientos_visita_abiertos(conexion, contexto)?;
-    }
-    if alcance.gafetes_provisionales {
-        sincronizacion::recibir_prestamos_gafete_provisional_abiertos(conexion, contexto)?;
-        sincronizacion::recibir_devoluciones_propias_gafete_provisional(conexion, contexto)?;
     }
     if alcance.catalogo {
         resumen.catalogo = sincronizacion::recibir_catalogo_del_sitio(conexion, contexto)?;
@@ -218,10 +284,18 @@ fn recibir_en_orden(
             sincronizacion::recibir_historial_gafetes_provisionales_del_sitio(conexion, contexto)?;
     }
 
+    // Conflictos con otras unidades: la respuesta ya vino en
+    // `estado_del_sitio` y se cruza contra lo que sigue adentro AHORA (después
+    // de aplicar los cierres que mandó el otro equipo), como siempre.
     if alcance.ingresos {
-        resumen.conflictos_ingreso =
-            sincronizacion::contratistas_con_conflicto_activo(conexion, contexto)
-                .unwrap_or_default();
+        resumen.conflictos_ingreso = sincronizacion::contratistas_con_conflicto_activo_con(
+            conexion,
+            contexto,
+            estado
+                .as_mut()
+                .map(|e| std::mem::take(&mut e.conflictos_ingresos)),
+        )
+        .unwrap_or_default();
     }
     if alcance.visitas && historiales {
         resumen.conflictos_movimiento_visita =
@@ -229,12 +303,24 @@ fn recibir_en_orden(
     }
     if alcance.ingresos_proveedor {
         resumen.conflictos_ingreso_proveedor =
-            sincronizacion::proveedores_con_conflicto_activo(conexion, contexto)
-                .unwrap_or_default();
+            sincronizacion::proveedores_con_conflicto_activo_con(
+                conexion,
+                contexto,
+                estado
+                    .as_mut()
+                    .map(|e| std::mem::take(&mut e.conflictos_proveedor)),
+            )
+            .unwrap_or_default();
     }
     if alcance.ingresos_correo {
-        resumen.conflictos_ingreso_correo =
-            sincronizacion::correos_con_conflicto_activo(conexion, contexto).unwrap_or_default();
+        resumen.conflictos_ingreso_correo = sincronizacion::correos_con_conflicto_activo_con(
+            conexion,
+            contexto,
+            estado
+                .as_mut()
+                .map(|e| std::mem::take(&mut e.conflictos_correo)),
+        )
+        .unwrap_or_default();
     }
 
     Ok(resumen)
@@ -250,8 +336,9 @@ mod tests {
     use super::*;
     use crate::database::schema::initialize_database;
 
-    /// Servidor HTTP falso: contesta `[]` a todo y anota la línea de cada
-    /// pedido ("GET /rest/v1/tabla?..."), para saber qué etapas corrieron.
+    /// Servidor HTTP falso: contesta vacío a todo (`[]`, o `{}` a las
+    /// funciones que devuelven un objeto) y anota la línea de cada pedido
+    /// ("GET /rest/v1/tabla?..."), para saber qué etapas corrieron.
     fn servidor_que_anota() -> (String, Arc<Mutex<Vec<String>>>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
         let direccion = listener.local_addr().expect("dirección local");
@@ -280,10 +367,20 @@ mod tests {
                 }
                 let mut cuerpo = vec![0; largo_cuerpo];
                 let _ = lector.read_exact(&mut cuerpo);
+                let vacio = if primera.contains("/rpc/catalogo_del_sitio")
+                    || primera.contains("/rpc/estado_del_sitio")
+                {
+                    "{}"
+                } else {
+                    "[]"
+                };
                 anotados.lock().unwrap().push(primera.trim().to_string());
                 let _ = conexion.write_all(
-                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
-                      Content-Length: 2\r\nConnection: close\r\n\r\n[]",
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+                         Content-Length: 2\r\nConnection: close\r\n\r\n{vacio}"
+                    )
+                    .as_bytes(),
                 );
             }
         });
@@ -362,8 +459,7 @@ mod tests {
             "/ingresos_proveedor",
             "/ingresos_correo",
             "/prestamos_gafete_provisional",
-            "/empresas",
-            "/contratistas",
+            "/rpc/catalogo_del_sitio",
             "/vehiculos_ruta",
             "/encargados_ruta",
             "/citas",
@@ -404,7 +500,10 @@ mod tests {
         // `resultado_acceso`.
         assert!(pidio(&escritorio, "resultado_acceso"), "{escritorio:#?}");
         assert!(!pidio(&movil, "resultado_acceso"), "{movil:#?}");
-        assert!(pidio(&movil, "/ingresos") && pidio(&movil, "/citas"));
+        // Lo abierto llega por `estado_del_sitio`: el teléfono ya no pide
+        // `/ingresos` por GET.
+        assert!(pidio(&movil, "/rpc/estado_del_sitio") && pidio(&movil, "/citas"));
+        assert!(!pidio(&movil, "GET /rest/v1/ingresos"), "{movil:#?}");
     }
 
     #[test]
@@ -414,7 +513,12 @@ mod tests {
             PerfilDispositivo::Escritorio,
         );
 
-        assert!(pidio(&pedidos, "/empresas") && pidio(&pedidos, "/contratistas"));
+        assert!(pidio(&pedidos, "/rpc/catalogo_del_sitio"));
+        // El catálogo va en un solo llamado: ningún GET por tabla.
+        assert!(
+            !pidio(&pedidos, "GET /rest/v1/empresas")
+                && !pidio(&pedidos, "GET /rest/v1/contratistas")
+        );
         for recurso in [
             "/ingresos",
             "/citas",

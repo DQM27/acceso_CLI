@@ -76,6 +76,10 @@ struct RecepcionEnCurso {
 }
 
 thread_local! {
+    // El inicializador YA es `const { ... }`: clippy 1.97 lo marca igual
+    // (`missing_const_for_thread_local`, falso positivo). Quitar este allow
+    // cuando clippy deje de avisar.
+    #[allow(clippy::missing_const_for_thread_local)]
     static EN_CURSO: RefCell<Option<RecepcionEnCurso>> = const { RefCell::new(None) };
 }
 

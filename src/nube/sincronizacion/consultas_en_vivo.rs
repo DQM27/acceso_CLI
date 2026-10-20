@@ -1,5 +1,5 @@
 use super::{ContextoSincronizacion, SincronizacionError, llamar_rpc, obtener_json};
-use crate::nube::cliente::{cliente_http, cliente_http_verificacion};
+use crate::nube::cliente::{NubeError, cliente_http, cliente_http_verificacion};
 
 #[derive(serde::Deserialize)]
 pub(super) struct FilaGafeteOcupado {
@@ -273,12 +273,22 @@ fn activo_segun_funcion(
     let cliente = cliente_http_verificacion();
     let filas: Vec<FilaIngresoActivoCualquierSitio> =
         llamar_rpc(&cliente, contexto, funcion, cuerpo)?;
-    Ok(filas.into_iter().next().map(|fila| IngresoActivoEnLaNube {
+    Ok(filas
+        .into_iter()
+        .next()
+        .map(|fila| activo_desde_fila(contexto, fila)))
+}
+
+fn activo_desde_fila(
+    contexto: &ContextoSincronizacion<'_>,
+    fila: FilaIngresoActivoCualquierSitio,
+) -> IngresoActivoEnLaNube {
+    IngresoActivoEnLaNube {
         mismo_sitio: fila.sitio_id == contexto.sitio_id,
         sitio_nombre: fila
             .sitio_nombre
             .unwrap_or_else(|| "otro sitio".to_string()),
-    }))
+    }
 }
 
 /// Por qué otra vía (y dónde) está adentro una persona, según la nube (ver
@@ -321,19 +331,100 @@ pub fn persona_adentro_por_otra_via(
         "persona_adentro_por_otra_via",
         &serde_json::json!({ "p_cedula": cedula, "p_via": via_texto }),
     )?;
-    Ok(filas.into_iter().find_map(|fila| {
-        let via = match fila.via.as_str() {
-            "CONTRATISTA" => ViaIngreso::Contratista,
-            "PROVEEDOR" => ViaIngreso::Proveedor,
-            "POR_CORREO" => ViaIngreso::PorCorreo,
-            _ => return None,
-        };
-        Some(AdentroPorOtraViaEnLaNube {
-            via,
-            mismo_sitio: fila.sitio_id == contexto.sitio_id,
-            sitio_nombre: fila
-                .sitio_nombre
-                .unwrap_or_else(|| "otro sitio".to_string()),
-        })
+    Ok(filas
+        .into_iter()
+        .find_map(|fila| otra_via_desde_fila(contexto, fila)))
+}
+
+fn otra_via_desde_fila(
+    contexto: &ContextoSincronizacion<'_>,
+    fila: FilaAdentroPorOtraVia,
+) -> Option<AdentroPorOtraViaEnLaNube> {
+    use crate::models::via_ingreso::ViaIngreso;
+
+    let via = match fila.via.as_str() {
+        "CONTRATISTA" => ViaIngreso::Contratista,
+        "PROVEEDOR" => ViaIngreso::Proveedor,
+        "POR_CORREO" => ViaIngreso::PorCorreo,
+        _ => return None,
+    };
+    Some(AdentroPorOtraViaEnLaNube {
+        via,
+        mismo_sitio: fila.sitio_id == contexto.sitio_id,
+        sitio_nombre: fila
+            .sitio_nombre
+            .unwrap_or_else(|| "otro sitio".to_string()),
+    })
+}
+
+/// Qué entrada se verifica en [`verificar_entrada`].
+#[derive(Debug, Clone, Copy)]
+pub enum EntradaAVerificar {
+    Contratista,
+    Proveedor,
+    PorCorreo,
+    /// Préstamo de gafete provisional: la "cédula" es el código de empleado
+    /// del encargado, y no hay "otra vía".
+    Kof,
+}
+
+/// Las tres respuestas de la verificación final de una entrada (ver
+/// [`verificar_entrada`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificacionEntradaEnLaNube {
+    pub misma_via: Option<IngresoActivoEnLaNube>,
+    pub otra_via: Option<AdentroPorOtraViaEnLaNube>,
+    pub gafete_ocupado: bool,
+}
+
+#[derive(serde::Deserialize)]
+struct FilaVerificacionEntrada {
+    misma_via: Option<FilaIngresoActivoCualquierSitio>,
+    otra_via: Option<FilaAdentroPorOtraVia>,
+    gafete_ocupado: bool,
+}
+
+/// La verificación final de una entrada en un solo llamado (función
+/// `verificar_entrada`): adentro por la misma vía en cualquier unidad
+/// ([`contratista_con_ingreso_activo`] y sus pares), adentro por otra vía
+/// ([`persona_adentro_por_otra_via`]) y gafete en uso por el otro equipo
+/// ([`gafete_ocupado_en_otro_dispositivo`] y sus pares). La función de la nube
+/// llama a esas mismas reglas. `None` si la nube todavía no la tiene (404):
+/// quien llama hace las consultas sueltas, como antes.
+pub fn verificar_entrada(
+    contexto: &ContextoSincronizacion<'_>,
+    entrada: EntradaAVerificar,
+    cedula: &str,
+    gafete: Option<i64>,
+) -> Result<Option<VerificacionEntradaEnLaNube>, SincronizacionError> {
+    let via = match entrada {
+        EntradaAVerificar::Contratista => "CONTRATISTA",
+        EntradaAVerificar::Proveedor => "PROVEEDOR",
+        EntradaAVerificar::PorCorreo => "POR_CORREO",
+        EntradaAVerificar::Kof => "KOF",
+    };
+    let respuesta = cliente_http_verificacion()
+        .post(format!(
+            "{}/rest/v1/rpc/verificar_entrada",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .json(&serde_json::json!({ "p_via": via, "p_cedula": cedula, "p_gafete": gafete }))
+        .send()
+        .map_err(NubeError::Red)?;
+    let status = respuesta.status().as_u16();
+    if status == 404 {
+        return Ok(None);
+    }
+    if !respuesta.status().is_success() {
+        let cuerpo = respuesta.text().unwrap_or_default();
+        return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
+    }
+    let fila: FilaVerificacionEntrada = respuesta.json().map_err(NubeError::Red)?;
+    Ok(Some(VerificacionEntradaEnLaNube {
+        misma_via: fila.misma_via.map(|f| activo_desde_fila(contexto, f)),
+        otra_via: fila.otra_via.and_then(|f| otra_via_desde_fila(contexto, f)),
+        gafete_ocupado: fila.gafete_ocupado,
     }))
 }

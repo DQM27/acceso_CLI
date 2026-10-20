@@ -4,6 +4,11 @@ use serde_json::json;
 use super::{ContextoSincronizacion, SincronizacionError, exigir_2xx, obtener_json};
 use crate::nube::cliente::{NubeError, cliente_http};
 
+/// Lo que este equipo tiene abierto localmente: los ids que se le preguntan
+/// a la nube para traer sus cierres (la etapa y `estado_del_sitio`).
+pub(super) const ABIERTOS_LOCALES_PRESTAMOS: &str =
+    "SELECT uuid FROM prestamos_gafete_provisional WHERE fecha_hora_devolucion IS NULL";
+
 /// Fila cacheada localmente de un préstamo de gafete provisional todavía
 /// abierto, entregado por OTRO dispositivo de este mismo sitio -- mismo
 /// criterio que [`IngresoProveedorRemoto`], pero contra
@@ -36,6 +41,16 @@ pub fn recibir_prestamos_gafete_provisional_abiertos(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<Vec<PrestamoGafeteProvisionalRemoto>, SincronizacionError> {
+    recibir_prestamos_gafete_provisional_abiertos_con(connection, contexto, None)
+}
+
+/// [`recibir_prestamos_gafete_provisional_abiertos`] con las filas ya recibidas en `estado_del_sitio`
+/// (`None`: las pide por GET, como siempre).
+pub(in crate::nube) fn recibir_prestamos_gafete_provisional_abiertos_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaPrestamoGafeteProvisionalRemoto>>,
+) -> Result<Vec<PrestamoGafeteProvisionalRemoto>, SincronizacionError> {
     let cliente = cliente_http();
     let url = format!(
         "{}/rest/v1/prestamos_gafete_provisional?sitio_id=eq.{}&hora_devolucion=is.null\
@@ -43,7 +58,10 @@ pub fn recibir_prestamos_gafete_provisional_abiertos(
          usuario_entrega_nombre",
         contexto.base_url, contexto.sitio_id,
     );
-    let filas: Vec<FilaPrestamoGafeteProvisionalRemoto> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaPrestamoGafeteProvisionalRemoto> = match recibidas {
+        Some(filas) => filas,
+        None => obtener_json(&cliente, contexto, &url)?,
+    };
 
     let transaction = connection.unchecked_transaction()?;
     transaction.execute(
@@ -118,7 +136,7 @@ pub(in crate::nube) fn guardar_prestamo_gafete_provisional_remoto(
 }
 
 #[derive(serde::Deserialize)]
-pub(super) struct FilaDevolucionPropiaRemota {
+pub(in crate::nube) struct FilaDevolucionPropiaRemota {
     pub(super) id: String,
     pub(super) hora_devolucion: String,
     pub(super) usuario_devolucion_nombre: Option<String>,
@@ -131,10 +149,18 @@ pub fn recibir_devoluciones_propias_gafete_provisional(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<u32, SincronizacionError> {
+    recibir_devoluciones_propias_gafete_provisional_con(connection, contexto, None)
+}
+
+/// [`recibir_devoluciones_propias_gafete_provisional`] con las filas ya recibidas en `estado_del_sitio`
+/// (`None`: las pide por GET, como siempre).
+pub(in crate::nube) fn recibir_devoluciones_propias_gafete_provisional_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaDevolucionPropiaRemota>>,
+) -> Result<u32, SincronizacionError> {
     let abiertos_localmente: Vec<String> = {
-        let mut statement = connection.prepare(
-            "SELECT uuid FROM prestamos_gafete_provisional WHERE fecha_hora_devolucion IS NULL",
-        )?;
+        let mut statement = connection.prepare(ABIERTOS_LOCALES_PRESTAMOS)?;
         statement
             .query_map([], |row| row.get(0))?
             .collect::<Result<_, _>>()?
@@ -150,7 +176,10 @@ pub fn recibir_devoluciones_propias_gafete_provisional(
          &select=id,hora_devolucion,usuario_devolucion_nombre",
         contexto.base_url,
     );
-    let filas: Vec<FilaDevolucionPropiaRemota> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaDevolucionPropiaRemota> = match recibidas {
+        Some(filas) => filas,
+        None => obtener_json(&cliente, contexto, &url)?,
+    };
 
     let transaction = connection.unchecked_transaction()?;
     let mut aplicados = 0_u32;

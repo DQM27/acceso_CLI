@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use rusqlite::{Connection, params};
 
-use super::{ContextoSincronizacion, SincronizacionError, avanzar_marca, guardar_por_pagina};
-use crate::nube::cliente::cliente_http;
+use super::paginado::TAMANO_PAGINA_REMOTA;
+use super::{ContextoSincronizacion, SincronizacionError, avanzar_marca, guardar_por_pagina_desde};
+use crate::nube::cliente::{NubeError, cliente_http};
 
 /// Cuántas filas se aplicaron localmente al traer el catálogo del sitio --
 /// para que la pantalla pueda avisar "3 contratistas nuevos" sin devolver
@@ -95,6 +96,57 @@ pub(super) struct FilaEmpresaProveedorRemota {
     pub(super) nombre: String,
     pub(super) activa: bool,
     pub(super) updated_at: String,
+}
+
+/// Respuesta de `catalogo_del_sitio` (migración
+/// `20261020140000_catalogo_del_sitio`): la primera página de cada tabla, con
+/// los mismos filtros, orden y columnas que los GET de cada una. Un grupo que
+/// llegó lleno (`TAMANO_PAGINA_REMOTA` filas) sigue por GET desde la segunda
+/// página.
+#[derive(serde::Deserialize, Default)]
+#[serde(default)]
+struct CatalogoRemoto {
+    empresas: Vec<FilaEmpresaRemota>,
+    contratistas: Vec<FilaContratistaRemota>,
+    usuarios: Vec<FilaUsuarioRemota>,
+    gafetes: Vec<FilaGafeteRemota>,
+    rutas: Vec<FilaRutaRemota>,
+    empresas_proveedor: Vec<FilaEmpresaProveedorRemota>,
+}
+
+/// Pide el catálogo del sitio en un solo llamado. `None` si la nube todavía
+/// no tiene la función (404: una app nueva contra una base sin la migración):
+/// entonces cada tabla se pide con su GET, como antes.
+fn pedir_catalogo(
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    marca: Option<&str>,
+    marca_gafetes: Option<&str>,
+) -> Result<Option<CatalogoRemoto>, SincronizacionError> {
+    let respuesta = cliente
+        .post(format!(
+            "{}/rest/v1/rpc/catalogo_del_sitio",
+            contexto.base_url
+        ))
+        .header("apikey", contexto.apikey)
+        .header("Authorization", format!("Bearer {}", contexto.token))
+        .json(&serde_json::json!({
+            "p_desde": marca,
+            "p_desde_gafetes": marca_gafetes,
+            "p_limite": TAMANO_PAGINA_REMOTA,
+        }))
+        .send()
+        .map_err(NubeError::Red)?;
+    let status = respuesta.status().as_u16();
+    if status == 404 {
+        log::info!("catalogo_del_sitio no existe en la nube: se pide tabla por tabla");
+        return Ok(None);
+    }
+    if !respuesta.status().is_success() {
+        let cuerpo = respuesta.text().unwrap_or_default();
+        return Err(SincronizacionError::RespuestaInesperada { status, cuerpo });
+    }
+    Ok(Some(respuesta.json().map_err(NubeError::Red)?))
 }
 
 pub(super) fn guardar_rutas(
@@ -450,6 +502,10 @@ pub(super) fn guardar_gafetes(
 /// equipo nuevo trae el catálogo completo, y antes se juntaba entero en
 /// memoria antes de guardar nada. Las marcas de agua se guardan recién al
 /// final, cuando llegaron todas las tablas.
+///
+/// La primera página de las seis tablas llega en un solo llamado
+/// (`catalogo_del_sitio`, ver [`CatalogoRemoto`]); sólo una tabla con más de
+/// una página, o una nube sin esa función, usa los GET de cada tabla.
 pub fn recibir_catalogo_del_sitio(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
@@ -478,6 +534,14 @@ pub fn recibir_catalogo_del_sitio(
     )?;
 
     let cliente = cliente_http();
+    // Un solo llamado con la primera página de cada tabla (ver
+    // `CatalogoRemoto`); sin la función en la nube, cada tabla va por su GET.
+    let mut primeras = pedir_catalogo(
+        &cliente,
+        contexto,
+        marca_anterior.as_deref(),
+        marca_gafetes_anterior.as_deref(),
+    )?;
     let mut resumen = ResumenCatalogo::default();
     // Máximo `updated_at` real entre empresas/contratistas/usuarios/rutas/
     // empresas_proveedor -- gafetes lleva su propia marca por separado. Sin
@@ -503,6 +567,7 @@ pub fn recibir_catalogo_del_sitio(
         &cliente,
         contexto,
         &filtro_incremental,
+        &mut primeras,
         &mut resumen,
         &mut marca_mas_nueva,
     )?;
@@ -511,6 +576,7 @@ pub fn recibir_catalogo_del_sitio(
         &cliente,
         contexto,
         marca_gafetes_anterior.as_deref(),
+        primeras.as_mut().map(|c| std::mem::take(&mut c.gafetes)),
         &mut resumen,
     )?;
     recibir_catalogo_propio_del_sitio(
@@ -518,6 +584,7 @@ pub fn recibir_catalogo_del_sitio(
         &cliente,
         contexto,
         &filtro_incremental,
+        &mut primeras,
         &mut resumen,
         &mut marca_mas_nueva,
     )?;
@@ -548,10 +615,11 @@ fn recibir_catalogo_global(
     cliente: &reqwest::blocking::Client,
     contexto: &ContextoSincronizacion<'_>,
     filtro_incremental: &str,
+    primeras: &mut Option<CatalogoRemoto>,
     resumen: &mut ResumenCatalogo,
     marca_mas_nueva: &mut Option<chrono::DateTime<chrono::Utc>>,
 ) -> Result<(), SincronizacionError> {
-    guardar_por_pagina(
+    guardar_por_pagina_desde(
         connection,
         cliente,
         contexto,
@@ -559,13 +627,14 @@ fn recibir_catalogo_global(
             "{}/rest/v1/empresas?select=id,nombre,activa,updated_at{filtro_incremental}",
             contexto.base_url
         ),
+        primeras.as_mut().map(|c| std::mem::take(&mut c.empresas)),
         |transaction, pagina: &[FilaEmpresaRemota]| {
             avanzar_marca(marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
             resumen.empresas_recibidas += guardar_empresas(transaction, pagina)?;
             Ok(())
         },
     )?;
-    guardar_por_pagina(
+    guardar_por_pagina_desde(
         connection,
         cliente,
         contexto,
@@ -574,13 +643,16 @@ fn recibir_catalogo_global(
              activo,tipo_ingreso,fecha_vencimiento_praind,es_personal_ruta,updated_at{filtro_incremental}",
             contexto.base_url
         ),
+        primeras
+            .as_mut()
+            .map(|c| std::mem::take(&mut c.contratistas)),
         |transaction, pagina: &[FilaContratistaRemota]| {
             avanzar_marca(marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
             resumen.contratistas_recibidos += guardar_contratistas(transaction, pagina)?;
             Ok(())
         },
     )?;
-    guardar_por_pagina(
+    guardar_por_pagina_desde(
         connection,
         cliente,
         contexto,
@@ -588,6 +660,7 @@ fn recibir_catalogo_global(
             "{}/rest/v1/usuarios?select=id,cedula,nombre,rol,activo,updated_at{filtro_incremental}",
             contexto.base_url
         ),
+        primeras.as_mut().map(|c| std::mem::take(&mut c.usuarios)),
         |transaction, pagina: &[FilaUsuarioRemota]| {
             avanzar_marca(marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
             resumen.usuarios_recibidos += guardar_usuarios(transaction, pagina)?;
@@ -610,6 +683,7 @@ fn recibir_gafetes(
     cliente: &reqwest::blocking::Client,
     contexto: &ContextoSincronizacion<'_>,
     marca_gafetes_anterior: Option<&str>,
+    primera: Option<Vec<FilaGafeteRemota>>,
     resumen: &mut ResumenCatalogo,
 ) -> Result<Option<chrono::DateTime<chrono::Utc>>, SincronizacionError> {
     let filtro_incremental_gafetes = marca_gafetes_anterior
@@ -617,7 +691,7 @@ fn recibir_gafetes(
         .unwrap_or_default();
     let mut marca_maxima: Option<chrono::DateTime<chrono::Utc>> = None;
     let mut quedo_pendiente = false;
-    guardar_por_pagina(
+    guardar_por_pagina_desde(
         connection,
         cliente,
         contexto,
@@ -627,6 +701,7 @@ fn recibir_gafetes(
              visita_portador_id,updated_at{filtro_incremental_gafetes}",
             contexto.base_url, contexto.sitio_id
         ),
+        primera,
         |transaction, pagina: &[FilaGafeteRemota]| {
             let (recibidos, marca_segura) = guardar_gafetes(transaction, pagina)?;
             resumen.gafetes_recibidos += recibidos;
@@ -658,10 +733,11 @@ fn recibir_catalogo_propio_del_sitio(
     cliente: &reqwest::blocking::Client,
     contexto: &ContextoSincronizacion<'_>,
     filtro_incremental: &str,
+    primeras: &mut Option<CatalogoRemoto>,
     resumen: &mut ResumenCatalogo,
     marca_mas_nueva: &mut Option<chrono::DateTime<chrono::Utc>>,
 ) -> Result<(), SincronizacionError> {
-    guardar_por_pagina(
+    guardar_por_pagina_desde(
         connection,
         cliente,
         contexto,
@@ -669,13 +745,14 @@ fn recibir_catalogo_propio_del_sitio(
             "{}/rest/v1/rutas?sitio_id=eq.{}&select=id,numero,activo,updated_at{filtro_incremental}",
             contexto.base_url, contexto.sitio_id
         ),
+        primeras.as_mut().map(|c| std::mem::take(&mut c.rutas)),
         |transaction, pagina: &[FilaRutaRemota]| {
             avanzar_marca(marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
             resumen.rutas_recibidas += guardar_rutas(transaction, pagina)?;
             Ok(())
         },
     )?;
-    guardar_por_pagina(
+    guardar_por_pagina_desde(
         connection,
         cliente,
         contexto,
@@ -683,6 +760,9 @@ fn recibir_catalogo_propio_del_sitio(
             "{}/rest/v1/empresas_proveedor?sitio_id=eq.{}&select=id,nombre,activa,updated_at{filtro_incremental}",
             contexto.base_url, contexto.sitio_id
         ),
+        primeras
+            .as_mut()
+            .map(|c| std::mem::take(&mut c.empresas_proveedor)),
         |transaction, pagina: &[FilaEmpresaProveedorRemota]| {
             avanzar_marca(marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
             resumen.empresas_proveedor_recibidas +=
