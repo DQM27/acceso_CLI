@@ -166,6 +166,27 @@ begin
   end if;
 end $$;
 
+-- 4b. Conflictos: una cédula que este equipo tiene adentro (p. ej. registrada
+--     sin red) y que la nube tiene abierta en la unidad B. Igual a la función
+--     de la regla, que sigue siendo la fuente.
+do $$
+declare
+  e jsonb := public.estado_del_sitio(array['ingresos'], null, null, null, null,
+    array['9-0801-0003', '9-0801-0099']);
+begin
+  if e -> 'conflictos_ingresos' <> '[{"contratista_cedula": "9-0801-0003", "sitio_nombre": "Unidad estado B"}]'::jsonb then
+    raise exception '4b: conflictos_ingresos %', e -> 'conflictos_ingresos';
+  end if;
+  if e -> 'conflictos_ingresos' <> (select jsonb_agg(f)
+       from public.contratistas_activos_en_otras_unidades(array['9-0801-0003', '9-0801-0099']) f) then
+    raise exception '4b: distinto a contratistas_activos_en_otras_unidades';
+  end if;
+  -- Sin cédulas no hay conflictos que buscar.
+  if public.estado_del_sitio(array['ingresos']) ? 'conflictos_ingresos' then
+    raise exception '4b: sin cédulas trajo conflictos';
+  end if;
+end $$;
+
 -- 5. Un equipo retirado no ve nada.
 select pg_temp.como_equipo('cccccccc-0000-0000-0000-00000000c803', 'aaaaaaaa-0000-0000-0000-00000000a801', 'huella-est-a3');
 do $$

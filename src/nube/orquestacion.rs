@@ -138,13 +138,14 @@ pub fn recibir(
 /// para contratistas, proveedores, correo y préstamos KOF: un solo llamado
 /// (`estado_del_sitio`) y cada etapa toma sus filas, en el mismo orden de
 /// siempre (primero los cierres, después lo abierto). `None`: la nube no
-/// tiene la función y cada etapa pide lo suyo por GET.
+/// tiene la función y cada etapa pide lo suyo por GET. Devuelve el resto del
+/// estado (los conflictos con otras unidades, que se revisan al final).
 fn recibir_lo_abierto(
     conexion: &Connection,
     contexto: &ContextoSincronizacion<'_>,
     alcance: &AlcanceSincronizacion,
     resumen: &mut ResumenSincronizacionNube,
-) -> Result<(), SincronizacionError> {
+) -> Result<Option<sincronizacion::EstadoRemoto>, SincronizacionError> {
     let mut estado = sincronizacion::pedir_estado_del_sitio(conexion, contexto, alcance)?;
     if alcance.ingresos {
         resumen.cierres_recibidos = sincronizacion::recibir_cierres_de_ingresos_propios_con(
@@ -219,7 +220,7 @@ fn recibir_lo_abierto(
                 .map(|e| std::mem::take(&mut e.devoluciones_prestamos)),
         )?;
     }
-    Ok(())
+    Ok(estado)
 }
 
 fn recibir_en_orden(
@@ -234,7 +235,7 @@ fn recibir_en_orden(
 
     // Contratistas, proveedores, correo y KOF: lo abierto del sitio y los
     // cierres, en un solo llamado (ver `recibir_lo_abierto`).
-    recibir_lo_abierto(conexion, contexto, &alcance, &mut resumen)?;
+    let mut estado = recibir_lo_abierto(conexion, contexto, &alcance, &mut resumen)?;
     // Visitas no está en producción y sigue con sus GET. Sólo toca sus propias
     // tablas, así que correr después de las otras clases no cambia nada.
     if alcance.visitas {
@@ -283,10 +284,18 @@ fn recibir_en_orden(
             sincronizacion::recibir_historial_gafetes_provisionales_del_sitio(conexion, contexto)?;
     }
 
+    // Conflictos con otras unidades: la respuesta ya vino en
+    // `estado_del_sitio` y se cruza contra lo que sigue adentro AHORA (después
+    // de aplicar los cierres que mandó el otro equipo), como siempre.
     if alcance.ingresos {
-        resumen.conflictos_ingreso =
-            sincronizacion::contratistas_con_conflicto_activo(conexion, contexto)
-                .unwrap_or_default();
+        resumen.conflictos_ingreso = sincronizacion::contratistas_con_conflicto_activo_con(
+            conexion,
+            contexto,
+            estado
+                .as_mut()
+                .map(|e| std::mem::take(&mut e.conflictos_ingresos)),
+        )
+        .unwrap_or_default();
     }
     if alcance.visitas && historiales {
         resumen.conflictos_movimiento_visita =
@@ -294,12 +303,24 @@ fn recibir_en_orden(
     }
     if alcance.ingresos_proveedor {
         resumen.conflictos_ingreso_proveedor =
-            sincronizacion::proveedores_con_conflicto_activo(conexion, contexto)
-                .unwrap_or_default();
+            sincronizacion::proveedores_con_conflicto_activo_con(
+                conexion,
+                contexto,
+                estado
+                    .as_mut()
+                    .map(|e| std::mem::take(&mut e.conflictos_proveedor)),
+            )
+            .unwrap_or_default();
     }
     if alcance.ingresos_correo {
-        resumen.conflictos_ingreso_correo =
-            sincronizacion::correos_con_conflicto_activo(conexion, contexto).unwrap_or_default();
+        resumen.conflictos_ingreso_correo = sincronizacion::correos_con_conflicto_activo_con(
+            conexion,
+            contexto,
+            estado
+                .as_mut()
+                .map(|e| std::mem::take(&mut e.conflictos_correo)),
+        )
+        .unwrap_or_default();
     }
 
     Ok(resumen)

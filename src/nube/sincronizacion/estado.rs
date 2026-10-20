@@ -10,7 +10,14 @@
 
 use rusqlite::Connection;
 
-use super::correo::{ABIERTOS_LOCALES_CORREO, FilaIngresoCorreoRemoto};
+use super::conflictos::{
+    CEDULAS_ADENTRO_INGRESOS, CEDULAS_ADENTRO_PROVEEDOR, FilaConflictoActivo,
+    FilaConflictoProveedorActivo,
+};
+use super::correo::{
+    ABIERTOS_LOCALES_CORREO, CEDULAS_ADENTRO_CORREO, FilaConflictoCorreoActivo,
+    FilaIngresoCorreoRemoto,
+};
 use super::gafetes_provisionales::{
     ABIERTOS_LOCALES_PRESTAMOS, FilaDevolucionPropiaRemota, FilaPrestamoGafeteProvisionalRemoto,
 };
@@ -34,6 +41,12 @@ pub(in crate::nube) struct EstadoRemoto {
     pub(in crate::nube) correo_abiertos: Vec<FilaIngresoCorreoRemoto>,
     pub(in crate::nube) devoluciones_prestamos: Vec<FilaDevolucionPropiaRemota>,
     pub(in crate::nube) prestamos_abiertos: Vec<FilaPrestamoGafeteProvisionalRemoto>,
+    /// Cédulas que este equipo tiene adentro y que también están adentro en
+    /// otra unidad; se usan al final de la sincronización (ver
+    /// `contratistas_con_conflicto_activo_con` y sus pares).
+    pub(in crate::nube) conflictos_ingresos: Vec<FilaConflictoActivo>,
+    pub(in crate::nube) conflictos_proveedor: Vec<FilaConflictoProveedorActivo>,
+    pub(in crate::nube) conflictos_correo: Vec<FilaConflictoCorreoActivo>,
 }
 
 fn abiertos_localmente(
@@ -92,6 +105,32 @@ pub(in crate::nube) fn pedir_estado_del_sitio(
     }
     if nombres.is_empty() {
         return Ok(None);
+    }
+    // Las cédulas que este equipo tiene adentro, para los conflictos con
+    // otras unidades (misma consulta que la etapa; primera columna).
+    for (pedido, parametro, consulta) in [
+        (
+            alcance.ingresos,
+            "p_cedulas_ingresos",
+            CEDULAS_ADENTRO_INGRESOS,
+        ),
+        (
+            alcance.ingresos_proveedor,
+            "p_cedulas_proveedor",
+            CEDULAS_ADENTRO_PROVEEDOR,
+        ),
+        (
+            alcance.ingresos_correo,
+            "p_cedulas_correo",
+            CEDULAS_ADENTRO_CORREO,
+        ),
+    ] {
+        if pedido {
+            cuerpo.insert(
+                parametro.to_owned(),
+                serde_json::json!(abiertos_localmente(connection, consulta)?),
+            );
+        }
     }
     cuerpo.insert("p_grupos".to_owned(), serde_json::json!(nombres));
 

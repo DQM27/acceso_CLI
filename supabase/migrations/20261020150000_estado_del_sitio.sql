@@ -14,6 +14,13 @@
 -- - `<grupo>_abiertos`: todo lo que sigue adentro en el sitio, la lista chica
 --   de "quién está adentro ahora" que reemplaza la caché local; entre ciclos
 --   la mantiene al día Realtime.
+-- - `conflictos_<grupo>`: de las cédulas que este equipo tiene adentro
+--   (`p_cedulas_<grupo>`), las que además están adentro en otra unidad (o
+--   abiertas por el otro equipo de esta). Llama a las funciones que ya tienen
+--   esa regla (`contratistas_activos_en_otras_unidades`,
+--   `proveedores_activos_en_otras_unidades`, `correos_activos_en_otras_unidades`).
+--   El núcleo filtra la respuesta contra lo que sigue abierto al terminar la
+--   sincronización, como antes.
 -- Un grupo que no se pidió no aparece (un aviso en vivo pide sólo lo suyo).
 --
 -- `security invoker`: corre con la RLS de quien llama, igual que un GET; lo
@@ -24,7 +31,10 @@ create or replace function public.estado_del_sitio(
   p_ingresos text[] default null,
   p_proveedor text[] default null,
   p_correo text[] default null,
-  p_prestamos text[] default null
+  p_prestamos text[] default null,
+  p_cedulas_ingresos text[] default null,
+  p_cedulas_proveedor text[] default null,
+  p_cedulas_correo text[] default null
 )
 returns jsonb
 language sql
@@ -92,13 +102,26 @@ as $$
                g.hora_entrega, g.usuario_entrega_nombre
           from public.prestamos_gafete_provisional g
          where g.sitio_id = (select sitio_id from parametros) and g.hora_devolucion is null
-      ) f), '[]'::jsonb)) else '{}'::jsonb end;
+      ) f), '[]'::jsonb)) else '{}'::jsonb end
+    -- Conflictos: adentro también en otra unidad.
+    || case when 'ingresos' = any(p_grupos) and pg_catalog.cardinality(p_cedulas_ingresos) > 0 then
+      pg_catalog.jsonb_build_object('conflictos_ingresos', coalesce((select pg_catalog.jsonb_agg(f)
+        from public.contratistas_activos_en_otras_unidades(p_cedulas_ingresos) f), '[]'::jsonb))
+      else '{}'::jsonb end
+    || case when 'proveedor' = any(p_grupos) and pg_catalog.cardinality(p_cedulas_proveedor) > 0 then
+      pg_catalog.jsonb_build_object('conflictos_proveedor', coalesce((select pg_catalog.jsonb_agg(f)
+        from public.proveedores_activos_en_otras_unidades(p_cedulas_proveedor) f), '[]'::jsonb))
+      else '{}'::jsonb end
+    || case when 'correo' = any(p_grupos) and pg_catalog.cardinality(p_cedulas_correo) > 0 then
+      pg_catalog.jsonb_build_object('conflictos_correo', coalesce((select pg_catalog.jsonb_agg(f)
+        from public.correos_activos_en_otras_unidades(p_cedulas_correo) f), '[]'::jsonb))
+      else '{}'::jsonb end;
 $$;
 
-comment on function public.estado_del_sitio(text[], text[], text[], text[], text[]) is
+comment on function public.estado_del_sitio(text[], text[], text[], text[], text[], text[], text[], text[]) is
   'Lo abierto del sitio y las salidas dadas por otro equipo sobre lo de este, en un solo llamado. Corre con la RLS de quien llama. Ver 20261020150000_estado_del_sitio.sql.';
 
 -- Permisos explícitos (ver AGENTS.md, "Supabase").
-revoke all on function public.estado_del_sitio(text[], text[], text[], text[], text[]) from public, anon;
-grant execute on function public.estado_del_sitio(text[], text[], text[], text[], text[])
+revoke all on function public.estado_del_sitio(text[], text[], text[], text[], text[], text[], text[], text[]) from public, anon;
+grant execute on function public.estado_del_sitio(text[], text[], text[], text[], text[], text[], text[], text[])
   to authenticated, service_role;

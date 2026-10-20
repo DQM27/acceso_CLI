@@ -2387,6 +2387,62 @@ fn contratistas_con_conflicto_activo_solo_incluye_a_quien_de_verdad_choca() {
     );
 }
 
+/// `estado_del_sitio` manda las cédulas que el equipo tiene adentro y trae
+/// los conflictos en el mismo llamado. Al final se cruzan contra lo que
+/// sigue adentro AHORA: si mientras tanto llegó el cierre de alguien (lo
+/// cerró el otro equipo), su conflicto ya no se avisa.
+#[test]
+fn los_conflictos_llegan_en_el_estado_y_se_cruzan_con_lo_que_sigue_adentro() {
+    let connection = conexion_con_dos_ingresos_activos();
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![respuesta_json(
+        r#"{"ingresos_abiertos":[],
+            "conflictos_ingresos":[{"contratista_cedula":"2001","sitio_nombre":"Cartago"},
+                                   {"contratista_cedula":"2002","sitio_nombre":"Cartago"}]}"#,
+    )]);
+    let contexto = contexto(&base_url);
+    let alcance = crate::nube::alcance::AlcanceSincronizacion {
+        ingresos: true,
+        ..crate::nube::alcance::AlcanceSincronizacion::solo_envio()
+    };
+
+    let mut estado = pedir_estado_del_sitio(&connection, &contexto, &alcance)
+        .unwrap()
+        .expect("la nube tiene la función");
+    // Mientras tanto llegó el cierre de "Persona Dos" (salida que dio el otro
+    // equipo), por el mismo camino que usa la sincronización.
+    assert!(
+        aplicar_cierre_de_ingreso_propio(
+            &connection,
+            "uuid-i2",
+            "2026-01-01T09:00:00Z",
+            Some("OPERADOR A2")
+        )
+        .unwrap()
+    );
+    let conflictos = contratistas_con_conflicto_activo_con(
+        &connection,
+        &contexto,
+        Some(std::mem::take(&mut estado.conflictos_ingresos)),
+    )
+    .unwrap();
+
+    assert_eq!(
+        conflictos,
+        vec![ConflictoIngresoActivo {
+            cedula: "2001".to_string(),
+            contratista_nombre: "Persona Uno".to_string(),
+            sitio_conflicto: "Cartago".to_string(),
+        }]
+    );
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 1, "ninguna consulta aparte: {pedidos:#?}");
+    assert!(
+        pedidos[0].contains(r#""p_cedulas_ingresos":["2001","2002"]"#),
+        "{}",
+        pedidos[0]
+    );
+}
+
 #[test]
 fn contratistas_con_conflicto_activo_sin_nada_local_no_llama_a_la_nube() {
     let connection = Connection::open_in_memory().unwrap();
