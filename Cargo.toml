@@ -51,11 +51,13 @@ thiserror = "2"
 log = "0.4"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
-# `gzip`: pide las respuestas comprimidas y las descomprime solo. Casi todas
-# las del ciclo vienen vacías, pero el primer sync de un equipo (catálogo
-# completo) y el historial del escritorio son JSON que se comprime 5-10x:
-# menos datos móviles y menos espera.
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "http2", "gzip"], optional = true }
+# `brotli` y `gzip`: pide las respuestas comprimidas (`Accept-Encoding: gzip,
+# br`) y las descomprime solo; Supabase elige Brotli, que comprime algo mejor
+# (medido: 261 contra 277 bytes en la configuración de Auth), y gzip queda de
+# respaldo. Casi todas las respuestas del ciclo vienen vacías, pero el primer
+# sync de un equipo (catálogo completo) y el historial del escritorio son JSON
+# que se comprime 5-10x: menos datos móviles y menos espera.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls", "http2", "gzip", "brotli"], optional = true }
 # Verificación offline de los JWT que emite Supabase Auth (ES256, claves
 # asimétricas -- ya confirmado que el proyecto las tiene:
 # /auth/v1/.well-known/jwks.json devuelve 3 claves públicas EC).
