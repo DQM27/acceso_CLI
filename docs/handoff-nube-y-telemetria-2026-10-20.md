@@ -26,7 +26,7 @@ Para retomar en una sesión nueva sin el contexto de la anterior.
 | Permisos explícitos, sin `anon` | #197 | Mergeado, en producción |
 | Telemetría fase 1 (`telemetria_ordenes`) | #196 | Mergeado, en producción |
 | Sincronización en pocos llamados: `catalogo_del_sitio`, `estado_del_sitio` (incluye conflictos por unidad), `verificar_entrada`, gzip | #199 | Mergeado, en producción (las tres funciones verificadas allí) |
-| Rutas sin `vehiculos_ruta`, Brotli, precalentamiento con `OPTIONS` (sin 401), log del 401 del reloj, conexiones vivas en escritorio | #203, rama `perf/conexion-y-limpieza` | **Abierto**, esperando merge del dueño. Sin migraciones |
+| Rutas sin `vehiculos_ruta`, Brotli, precalentamiento con `OPTIONS` (sin 401), log del 401 del reloj, conexiones vivas en escritorio | #203, rama `perf/conexion-y-limpieza` | **Abierto**, esperando merge del dueño. Sin migraciones. Su CI falló por avisos de seguridad publicados ese día (`rustls-webpki`, `webpki-roots`); arreglado con `cargo update -p` en los tres `Cargo.lock` (commit `fix(deps)`, también en la rama del lote) |
 | #203 + telemetría fase 2 (8 commits cherry-pickeados de `feat/telemetria-config-unidad`) + este traspaso | rama local `lote/telemetria-y-limpieza` | **Local, sin push.** Es la base del PR del final del día |
 
 Verificado en `lote/telemetria-y-limpieza`: `cargo test --features
