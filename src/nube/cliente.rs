@@ -148,6 +148,50 @@ pub fn precalentar_conexiones_de_verificacion(base_url: &str, apikey: &str) -> b
     )
 }
 
+/// Cada cuánto [`mantener_conexiones_vivas`] toca la nube. Menos que lo que el
+/// grupo de conexiones aguanta una sin usar (90 s por defecto en reqwest),
+/// así nunca llega a enfriarse.
+const INTERVALO_CONEXIONES_VIVAS: std::time::Duration = std::time::Duration::from_secs(45);
+
+/// Mantiene abiertas, mientras viva el proceso, las conexiones de los dos
+/// clientes (la sincronización y las salidas que cierran en la nube, y las
+/// verificaciones de un ingreso): un `OPTIONS` sin token cada
+/// [`INTERVALO_CONEXIONES_VIVAS`], el mismo que usa el precalentamiento (200
+/// sin cuerpo, sin tocar la base). Sin esto, la primera operación después de
+/// un rato quieto pagaba conexión nueva más TLS.
+///
+/// Sólo para el escritorio: en el teléfono despertaría la radio cada 45 s y
+/// gastaría batería (ahí sigue el precalentamiento al abrir un formulario).
+/// Corre en un hilo propio; llamarla de nuevo no abre otro.
+pub fn mantener_conexiones_vivas(base_url: &'static str, apikey: &'static str) {
+    static INICIADO: std::sync::Once = std::sync::Once::new();
+    INICIADO.call_once(|| {
+        let lanzado = std::thread::Builder::new()
+            .name("conexiones-vivas".to_string())
+            .spawn(move || {
+                loop {
+                    tocar_conexiones(base_url, apikey);
+                    std::thread::sleep(INTERVALO_CONEXIONES_VIVAS);
+                }
+            });
+        if let Err(error) = lanzado {
+            log::warn!("no se pudo lanzar el hilo que mantiene las conexiones: {error}");
+        }
+    });
+}
+
+/// Una vuelta de [`mantener_conexiones_vivas`]: un `OPTIONS` por cliente. Los
+/// errores no importan (sin red, la próxima vuelta lo intenta de nuevo).
+pub(crate) fn tocar_conexiones(base_url: &str, apikey: &str) {
+    let url = format!("{base_url}/rest/v1/");
+    for cliente in [cliente_http(), cliente_http_verificacion()] {
+        let _ = cliente
+            .request(reqwest::Method::OPTIONS, &url)
+            .header("apikey", apikey)
+            .send();
+    }
+}
+
 /// La parte testeable de [`precalentar_conexiones_de_verificacion`]: el estado
 /// y el instante llegan como parámetro.
 pub(crate) fn precalentar_si_corresponde(

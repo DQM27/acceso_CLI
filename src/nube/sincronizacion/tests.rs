@@ -3597,6 +3597,23 @@ fn calentar_abre_tres_conexiones_a_la_raiz_de_la_api() {
     );
 }
 
+/// Una vuelta de `mantener_conexiones_vivas`: un `OPTIONS` por cada cliente
+/// (sincronización y verificación), sin token.
+#[test]
+fn mantener_vivas_toca_los_dos_clientes_con_options() {
+    let (base_url, pedidos) =
+        servidor_que_anota_pedidos(vec![respuesta_json(""), respuesta_json("")]);
+
+    crate::nube::cliente::tocar_conexiones(&base_url, "clave-de-prueba");
+
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 2, "uno por cliente: {pedidos:#?}");
+    for pedido in &pedidos {
+        assert!(pedido.starts_with("OPTIONS /rest/v1/ HTTP/1.1"), "{pedido}");
+        assert!(!pedido.to_lowercase().contains("authorization"), "{pedido}");
+    }
+}
+
 #[test]
 fn calentar_manda_la_clave_publica_y_ninguna_otra_credencial() {
     let (base_url, pedido) = servidor_que_captura_el_cuerpo();

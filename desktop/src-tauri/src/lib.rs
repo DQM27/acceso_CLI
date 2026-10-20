@@ -574,6 +574,12 @@ fn configurar_arranque(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
     configurar_plugins_condicionales(app.handle())?;
     precargar_catalogo_durante_splash(app.handle().clone());
     iniciar_sincronizacion_automatica(app.handle().clone());
+    // Conexiones con la nube siempre calientes: la primera salida o ingreso
+    // después de un rato quieto ya no paga conexión nueva + TLS.
+    control_acceso::nube::mantener_conexiones_vivas(
+        control_acceso::nube::base_url(),
+        control_acceso::nube::apikey(),
+    );
     configurar_cierre_de_splash(app);
     Ok(())
 }
