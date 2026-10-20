@@ -259,4 +259,31 @@ begin
 exception when insufficient_privilege then null;
 end $$;
 
+-- 12. Nadie de la API avanza la secuencia de versiones (sólo el trigger).
+do $$
+declare
+  rol text;
+begin
+  foreach rol in array array['anon', 'authenticated', 'service_role'] loop
+    if pg_catalog.has_sequence_privilege(rol, 'public.telemetria_ordenes_version_seq', 'usage')
+       or pg_catalog.has_sequence_privilege(rol, 'public.telemetria_ordenes_version_seq', 'update') then
+      raise exception '12: % puede avanzar la secuencia de versiones', rol;
+    end if;
+  end loop;
+end $$;
+
+-- 13. El rol de servicio (Edge Functions de administración) tiene sus GRANT
+--     explícitos, sin depender de los permisos automáticos de `public`.
+reset role;
+do $$
+begin
+  -- Uno por uno: con varios a la vez, has_table_privilege responde si tiene CUALQUIERA.
+  if not pg_catalog.has_table_privilege('service_role', 'public.telemetria_ordenes', 'select')
+     or not pg_catalog.has_table_privilege('service_role', 'public.telemetria_ordenes', 'insert')
+     or not pg_catalog.has_table_privilege('service_role', 'public.telemetria_ordenes', 'update')
+     or not pg_catalog.has_table_privilege('service_role', 'public.telemetria_ordenes_historial', 'select') then
+    raise exception '13: al rol de servicio le faltan permisos sobre la telemetría';
+  end if;
+end $$;
+
 rollback;

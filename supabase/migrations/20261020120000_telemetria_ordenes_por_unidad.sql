@@ -28,6 +28,11 @@
 
 create sequence if not exists public.telemetria_ordenes_version_seq;
 
+-- Sólo la usa el trigger (`security definer`, corre como dueño). Sin esto la
+-- secuencia hereda los permisos automáticos de `public` y cualquier rol de la
+-- API podría avanzarla y saltar versiones.
+revoke all on sequence public.telemetria_ordenes_version_seq from public, anon, authenticated, service_role;
+
 create table public.telemetria_ordenes (
   dispositivo_id uuid primary key references public.dispositivos (id) on delete cascade,
   -- Lista fija; cambiarla es una migración, igual que agregar un grupo a la app.
@@ -144,6 +149,11 @@ revoke all on public.telemetria_ordenes_historial from anon, authenticated;
 -- Sin DELETE: para volver al estado por defecto se actualiza la fila.
 grant select, insert, update on public.telemetria_ordenes to authenticated;
 grant select on public.telemetria_ordenes_historial to authenticated;
+-- Explícito y no heredado de los permisos automáticos de `public`, que
+-- Supabase deja de dar a las tablas nuevas: las Edge Functions de
+-- administración usan el rol de servicio (salta RLS, pero no los GRANT).
+grant select, insert, update on public.telemetria_ordenes to service_role;
+grant select on public.telemetria_ordenes_historial to service_role;
 
 -- Lee el administrador del panel, o el equipo dueño de la fila. Una sola
 -- política para no sumar políticas permisivas del mismo comando. Para un JWT
