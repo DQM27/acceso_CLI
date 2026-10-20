@@ -110,7 +110,7 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
                 let resultado =
                     comandos::nube::ejecutar_sincronizacion_con_alcance(&estado, alcance);
                 // Después de sincronizar, que es cuando se renueva el ancla.
-                let reloj = telemetria::activa().then(|| estado.core().estado_reloj());
+                let reloj = telemetria::permite("reloj").then(|| estado.core().estado_reloj());
                 (resultado, reloj)
             })
             .await;
@@ -118,7 +118,7 @@ fn iniciar_sincronizacion_automatica(app: tauri::AppHandle) {
                 Ok((resultado, reloj)) => (Ok(resultado), reloj),
                 Err(error) => (Err(error), None),
             };
-            if telemetria::activa() {
+            if telemetria::permite("sincronizacion_auto") {
                 telemetria::evento(
                     "sincronizacion_auto",
                     serde_json::json!({
@@ -518,11 +518,7 @@ fn configurar_plugins_condicionales(app: &tauri::AppHandle) -> tauri::Result<()>
     // El updater no existe en móvil — esta app es 100% escritorio (ver
     // el comentario de crate-type arriba), pero se guarda el gate
     // igual, mismo criterio que el ejemplo oficial de Tauri.
-    //
-    // El build de diagnóstico no lo registra: es de prueba y apunta a
-    // staging, y "actualizarlo" lo reemplazaría por la versión de producción
-    // publicada en Releases. Sin el plugin, la búsqueda falla en silencio.
-    #[cfg(all(desktop, not(feature = "telemetria")))]
+    #[cfg(desktop)]
     app.plugin(tauri_plugin_updater::Builder::new().build())?;
 
     // Antes solo corría en debug -- en producción no quedaba ningún rastro
@@ -695,7 +691,7 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::nube::fallos_permanentes_nube,
         comandos::nube::desfase_reloj_ms,
         comandos::nube::identidad_equipo,
-        telemetria::telemetria_activa,
+        telemetria::telemetria_grupos,
         telemetria::telemetria_eventos,
         mostrar_ventana_principal,
     ]
@@ -732,8 +728,6 @@ fn umbrales_desde_texto(
 ///
 /// Tauri finaliza el arranque si no puede construir o ejecutar su runtime.
 pub fn run() {
-    #[cfg(feature = "telemetria")]
-    telemetria::aislar_build_de_diagnostico();
     let _guardia_sentry = inicializar_sentry();
     let (ruta_base_datos, instancia, clave_base_datos, mut core, firmante) = preparar_nucleo();
     if let Some(umbrales) = umbrales_de_prueba() {

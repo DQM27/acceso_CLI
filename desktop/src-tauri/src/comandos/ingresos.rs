@@ -73,7 +73,7 @@ pub async fn preparar_ingreso(
                 })
                 .map_err(mensaje_ingreso)
         });
-        if crate::telemetria::activa() {
+        if crate::telemetria::permite("transicion_ingreso") {
             let etiqueta = match &resultado {
                 Ok((_, None)) => "formulario",
                 Ok((_, Some(_))) => "bloqueada",

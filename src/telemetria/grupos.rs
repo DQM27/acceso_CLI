@@ -112,7 +112,7 @@ impl Grupos {
 pub fn grupo_de_evento(tipo: &str) -> Option<Grupo> {
     match tipo {
         "sesion_inicio" | "arranque" | "salida_anterior" | "cierre" | "panic" | "error_js"
-        | "error_telemetria" => Some(Grupo::Base),
+        | "error_telemetria" | "telemetria_descartada" => Some(Grupo::Base),
         "llamada_nucleo" | "transicion_ingreso" | "pantalla" => Some(Grupo::Rendimiento),
         "frames" | "ui_bloqueos" => Some(Grupo::Fluidez),
         "realtime" | "sincronizacion_auto" | "sesion_unidad" | "reloj" => {
@@ -176,6 +176,7 @@ mod tests {
     fn el_catalogo_asigna_cada_evento_conocido() {
         assert_eq!(grupo_de_evento("llamada_nucleo"), Some(Grupo::Rendimiento));
         assert_eq!(grupo_de_evento("panic"), Some(Grupo::Base));
+        assert_eq!(grupo_de_evento("telemetria_descartada"), Some(Grupo::Base));
         assert_eq!(grupo_de_evento("frames"), Some(Grupo::Fluidez));
         assert_eq!(grupo_de_evento("reloj"), Some(Grupo::Sincronizacion));
         assert_eq!(grupo_de_evento("muestra_sistema"), Some(Grupo::Recursos));

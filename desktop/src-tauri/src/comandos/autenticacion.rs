@@ -225,9 +225,6 @@ pub async fn login(
     }
 
     state.iniciar_sesion(sesion.clone());
-    // Consulta puntual de las reglas de telemetría, en segundo plano (ver
-    // `telemetria::revisar_reglas`): no espera ni puede fallar el login.
-    crate::telemetria::revisar_reglas();
 
     // Sincronización completa en segundo plano, sin bloquear la respuesta
     // de este comando -- `ejecutar_sincronizacion` ya cierra la sesión
@@ -309,8 +306,6 @@ async fn login_supabase(
     };
 
     state.iniciar_sesion(identidad.clone());
-    // Ver `telemetria::revisar_reglas`: consulta puntual y en segundo plano.
-    crate::telemetria::revisar_reglas();
 
     // Best-effort a propósito (ver el doc-comment de `cachear_password_local`):
     // un fallo acá (disco lleno, lo que sea) no debe tumbar un login que ya
