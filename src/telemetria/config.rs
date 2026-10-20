@@ -72,6 +72,21 @@ impl ConfigTelemetria {
         self.version.load(Ordering::Relaxed)
     }
 
+    /// Vuelve al estado sin orden (`base` y `rendimiento`, versión `0`). Se usa
+    /// cuando el equipo se vinculó de nuevo con otra identidad y la orden en
+    /// memoria era de la anterior.
+    pub fn reiniciar(&self) {
+        let _escribiendo = self
+            .escritura
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        self.estado.store(
+            empaquetar(Grupos::POR_DEFECTO, SIN_VENCIMIENTO),
+            Ordering::Relaxed,
+        );
+        self.version.store(0, Ordering::Relaxed);
+    }
+
     /// Aplica la orden si es más nueva que la que ya rige. Devuelve si cambió
     /// algo; una orden igual o más vieja (un aviso repetido o fuera de orden) no
     /// hace nada.
