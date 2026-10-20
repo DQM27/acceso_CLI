@@ -55,7 +55,8 @@ pub(in crate::nube) use ingresos::{
 };
 pub use paginado::traslape_historial;
 use paginado::{
-    avanzar_marca, guardar_por_pagina, llamar_rpc, obtener_json, obtener_json_paginado_con,
+    avanzar_marca, guardar_por_pagina, guardar_por_pagina_desde, llamar_rpc, obtener_json,
+    obtener_json_paginado_con,
 };
 pub use proveedores::*;
 pub use visitas::*;

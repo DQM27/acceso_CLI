@@ -118,6 +118,25 @@ pub(super) fn obtener_json_paginado_con<T, F>(
     cliente: &reqwest::blocking::Client,
     contexto: &ContextoSincronizacion<'_>,
     url_base: &str,
+    por_pagina: F,
+) -> Result<(), SincronizacionError>
+where
+    T: serde::de::DeserializeOwned,
+    F: FnMut(Vec<T>) -> Result<(), SincronizacionError>,
+{
+    paginar(cliente, contexto, url_base, None, por_pagina)
+}
+
+/// Como [`obtener_json_paginado_con`], pero si llega `primera` (la primera
+/// página ya recibida por otro camino, p. ej. `catalogo_del_sitio`) se usa
+/// en vez de pedirla, y sólo se piden las siguientes si esa vino llena.
+/// Tiene que ser la misma consulta: mismo filtro, orden por `id` y tamaño
+/// `TAMANO_PAGINA_REMOTA`.
+fn paginar<T, F>(
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    url_base: &str,
+    mut primera: Option<Vec<T>>,
     mut por_pagina: F,
 ) -> Result<(), SincronizacionError>
 where
@@ -130,8 +149,10 @@ where
     let mut desde = 0_usize;
     loop {
         let anticipada: Option<Vec<T>> = if desde == 0 {
-            anticipados::tomar(Pedido::primera_pagina(&url))
-                .and_then(|cuerpo| serde_json::from_str(&cuerpo).ok())
+            primera.take().or_else(|| {
+                anticipados::tomar(Pedido::primera_pagina(&url))
+                    .and_then(|cuerpo| serde_json::from_str(&cuerpo).ok())
+            })
         } else {
             None
         };
@@ -200,13 +221,30 @@ pub(super) fn guardar_por_pagina<T, F>(
     cliente: &reqwest::blocking::Client,
     contexto: &ContextoSincronizacion<'_>,
     url: &str,
+    guardar: F,
+) -> Result<(), SincronizacionError>
+where
+    T: serde::de::DeserializeOwned,
+    F: FnMut(&rusqlite::Transaction<'_>, &[T]) -> Result<(), SincronizacionError>,
+{
+    guardar_por_pagina_desde(connection, cliente, contexto, url, None, guardar)
+}
+
+/// [`guardar_por_pagina`] arrancando por una primera página ya recibida (ver
+/// [`paginar`]); con `None` es exactamente [`guardar_por_pagina`].
+pub(super) fn guardar_por_pagina_desde<T, F>(
+    connection: &rusqlite::Connection,
+    cliente: &reqwest::blocking::Client,
+    contexto: &ContextoSincronizacion<'_>,
+    url: &str,
+    primera: Option<Vec<T>>,
     mut guardar: F,
 ) -> Result<(), SincronizacionError>
 where
     T: serde::de::DeserializeOwned,
     F: FnMut(&rusqlite::Transaction<'_>, &[T]) -> Result<(), SincronizacionError>,
 {
-    obtener_json_paginado_con(cliente, contexto, url, |pagina: Vec<T>| {
+    paginar(cliente, contexto, url, primera, |pagina: Vec<T>| {
         let transaction = connection.unchecked_transaction()?;
         guardar(&transaction, &pagina)?;
         transaction.commit()?;
