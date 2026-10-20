@@ -1,8 +1,8 @@
-// Telemetría del escritorio, lado frontend. Sólo mide mientras el backend
-// diga que está encendida (build de diagnóstico, o un release con una regla
-// vigente en staging; ver `src-tauri/src/telemetria.rs` y
-// `docs/telemetria-diagnostico.md`): si no, cada punto de medición es un
-// chequeo de un booleano.
+// Telemetría del escritorio, lado frontend. Un solo código para todos los
+// builds: sólo mide los grupos que el backend diga que rigen ahora (la orden
+// del panel para este equipo; ver `src-tauri/src/telemetria.rs`). Lo que no
+// rige cuesta un chequeo de un conjunto. El backend vuelve a filtrar por
+// grupo, así que acá es sólo para no gastar en lo que no se manda.
 //
 // Qué junta acá: el tiempo de cada comando de Tauri (IPC incluido), el canal
 // de avisos en vivo, las pantallas, los errores de JavaScript (sólo su
@@ -34,7 +34,9 @@ interface Evento {
   datos: Record<string, unknown>;
 }
 
-let activa = false;
+/** Los grupos que rigen ahora (`base` siempre). Vacío hasta que
+ * `iniciarTelemetria` pregunte. */
+let grupos: ReadonlySet<string> = new Set();
 const llamadas = new AgregadorLlamadas();
 const bloqueos = new AgregadorBloqueos();
 const agregadorRealtime = new AgregadorRealtime();
@@ -43,21 +45,22 @@ const pendientes: Evento[] = [];
 let pantallaActual = "(ninguna)";
 let volcados = 0;
 
-/** ¿Esta compilación mide? Falso hasta que `iniciarTelemetria` pregunte. */
-export function telemetriaActiva(): boolean {
-  return activa;
+/** ¿Rige este grupo de telemetría ahora? Falso hasta que `iniciarTelemetria`
+ * pregunte. */
+export function mide(grupo: string): boolean {
+  return grupos.has(grupo);
 }
 
-/** El agregador del canal en vivo, o `null` sin telemetría (mismo patrón
- * que `Telemetria.realtime?` en Kotlin). */
+/** El agregador del canal en vivo, o `null` si no rige `sincronizacion`
+ * (mismo patrón que `Telemetria.realtime?` en Kotlin). */
 export function realtimeTelemetria(): AgregadorRealtime | null {
-  return activa ? agregadorRealtime : null;
+  return mide("sincronizacion") ? agregadorRealtime : null;
 }
 
 /** Un comando de Tauri terminó (ver `api/invocar.ts`). Si falló, `error` es sólo
  * para elegir su tipo de una lista fija: el mensaje nunca se guarda. */
 export function registrarLlamada(nombre: string, ms: number, ok: boolean, error?: unknown) {
-  if (!activa) return;
+  if (!mide("rendimiento")) return;
   llamadas.registrar(
     nombreCanonicoOperacion(nombre),
     ms,
@@ -74,7 +77,7 @@ export function registrarPantalla(nombre: string) {
   // Se anota aunque todavía no se sepa si mide (`iniciarTelemetria` es
   // asíncrona): las muestras siguientes dicen en qué pantalla ocurrieron.
   pantallaActual = nombre;
-  if (!activa) return;
+  if (!mide("rendimiento")) return;
   const inicio = performance.now();
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
@@ -94,7 +97,7 @@ function evento(tipo: string, datos: Record<string, unknown>) {
 /** Un error que atrapó un `ErrorBoundary` de React (no llega a
  * `window.onerror`). */
 export function registrarErrorRender(error: unknown) {
-  if (activa) registrarErrorJs("render", error);
+  registrarErrorJs("render", error);
 }
 
 function registrarErrorJs(origen: string, error: unknown) {
@@ -118,8 +121,9 @@ function muestraWebview(): Record<string, unknown> {
 }
 
 function volcar() {
-  if (!activa && pendientes.length === 0) return;
   const red = tipoDeRed(navigator.onLine);
+  // Los agregadores se vacían siempre (lo que quedó de un grupo que ya no
+  // rige no debe acumularse); el backend descarta lo que no corresponde.
   llamadas.vaciar().forEach((fila) => evento("llamada_nucleo", { ...fila, red_tipo: red }));
   const realtime = agregadorRealtime.vaciar();
   if (realtime) evento("realtime", realtime);
@@ -129,9 +133,12 @@ function volcar() {
     evento("error_js", { por_tipo: Object.fromEntries(erroresJs), pantalla: pantallaActual });
     erroresJs.clear();
   }
-  if (volcados % VOLCADOS_POR_MUESTRA_WEBVIEW === 0) evento("muestra_webview", muestraWebview());
+  if (mide("recursos") && volcados % VOLCADOS_POR_MUESTRA_WEBVIEW === 0) {
+    evento("muestra_webview", muestraWebview());
+  }
   volcados += 1;
   const eventos = pendientes.splice(0);
+  if (eventos.length === 0) return;
   // Directo a `invoke`, no por `api/invocar.ts`: no se mide a sí misma.
   void invoke("telemetria_eventos", { eventos }).catch(() => {
     // Sólo diagnóstico: si el backend no la recibe, se pierde.
@@ -140,43 +147,43 @@ function volcar() {
 
 let escuchasListas = false;
 
-/** Las escuchas globales se instalan la primera vez que se enciende y se
- * quedan: mientras `activa` sea falso, no anotan nada. */
+/** Las escuchas globales se instalan una vez y se quedan: cada una anota
+ * sólo mientras rige su grupo. */
 function instalarEscuchas() {
   if (escuchasListas) return;
   escuchasListas = true;
   window.addEventListener("error", (e) => {
-    if (activa) registrarErrorJs("error", e.error);
+    registrarErrorJs("error", e.error);
   });
   window.addEventListener("unhandledrejection", (e) => {
-    if (activa) registrarErrorJs("promesa", e.reason);
+    registrarErrorJs("promesa", e.reason);
   });
   if (PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
     new PerformanceObserver((lista) => {
-      if (activa) lista.getEntries().forEach((entrada) => bloqueos.registrar(entrada.duration));
+      if (mide("fluidez")) lista.getEntries().forEach((entrada) => bloqueos.registrar(entrada.duration));
     }).observe({ type: "longtask", buffered: true });
   }
 }
 
-/** Pregunta al backend si está midiendo (el build de diagnóstico siempre; un
- * release, mientras haya una regla vigente en staging) y ajusta. */
+/** Pregunta al backend qué grupos rigen ahora. Sin respuesta queda sólo
+ * `base`: nunca se mide de más por no poder preguntar. */
 async function sincronizarEstado() {
   try {
-    activa = await invoke<boolean>("telemetria_activa");
+    grupos = new Set(await invoke<string[]>("telemetria_grupos"));
   } catch {
-    activa = false;
+    grupos = new Set(["base"]);
   }
-  if (activa) instalarEscuchas();
+  instalarEscuchas();
 }
 
-/** Arranca la telemetría del frontend: pregunta al backend si mide, y sigue
- * preguntando cada vez que vuelca (es una llamada local, sin red): el
- * backend consulta las reglas al abrir y tras el login, y una regla también
- * puede vencer con la app abierta. Sin regla no hace nada más que esa pregunta.
- * Llamar una sola vez al arrancar. */
+/** Arranca la telemetría del frontend: pregunta al backend qué grupos rigen, y
+ * sigue preguntando cada vez que vuelca (es una llamada local, sin red): la
+ * orden del panel puede llegar o vencer con la app abierta. Llamar una sola
+ * vez al arrancar. */
 export async function iniciarTelemetria(): Promise<void> {
   await sincronizarEstado();
-  // La consulta de reglas del backend termina unos segundos después de abrir.
+  // La primera sincronización de la nube puede traer una orden nueva unos
+  // segundos después de abrir.
   window.setTimeout(() => void sincronizarEstado(), PRIMERA_REVISION_MS);
   window.setInterval(() => {
     volcar();

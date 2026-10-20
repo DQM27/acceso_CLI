@@ -318,7 +318,7 @@ fn intentar_sincronizacion(
         );
         // Build de diagnóstico: qué decidió la nube y con qué duración de
         // sesión. Sin cédula ni nombre.
-        if crate::telemetria::activa() {
+        if crate::telemetria::permite("sesion_unidad") {
             crate::telemetria::evento(
                 "sesion_unidad",
                 serde_json::json!({

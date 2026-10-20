@@ -13,7 +13,7 @@ import type { ResumenSincronizacion } from "./api/nube";
 import { esCierreDeEstaSesion, esExpulsionDeEsteEquipo } from "./expulsionNube";
 import { esOrdenDeEsteEquipo } from "./ordenTelemetria";
 import { EVENTO_CAMBIO_EN_VIVO, EVENTO_CAMBIO_LOCAL_NUBE, EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
-import { realtimeTelemetria, telemetriaActiva } from "./telemetria";
+import { mide, realtimeTelemetria } from "./telemetria";
 import { latenciaDesde, tipoDeError } from "./telemetriaCalculos";
 
 export { EVENTO_NUBE_ACTUALIZADA } from "./eventosNube";
@@ -121,7 +121,7 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
    * puede ser todavía la del header `Date` (±1 s). No espera: el aviso en
    * curso usa el valor anterior. */
   function refrescarDesfase() {
-    if (!telemetriaActiva()) return;
+    if (!mide("sincronizacion")) return;
     const ahora = performance.now();
     if (ahora - desfaseLeidoEn < INTERVALO_DESFASE_MS) return;
     desfaseLeidoEn = ahora;
@@ -231,7 +231,7 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
     try {
       const sesion = await sesionRealtimeNube();
       if (cancelado) return;
-      if (telemetriaActiva()) {
+      if (mide("sincronizacion")) {
         desfaseReloj = await desfaseRelojMs().catch(() => null);
         desfaseLeidoEn = performance.now();
         realtimeTelemetria()?.desfaseReloj(desfaseReloj);
