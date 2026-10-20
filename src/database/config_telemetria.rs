@@ -84,20 +84,17 @@ pub fn leer(connection: &Connection) -> rusqlite::Result<Option<OrdenGuardada>> 
     )
 }
 
-/// Carga en memoria la orden guardada, si iba a este equipo. Se llama al abrir
-/// el núcleo, para que el equipo mida desde el primer segundo aunque no tenga
+/// Carga en memoria la orden guardada sin comprobar a qué equipo iba: al abrir
+/// el núcleo todavía no se conoce el `dispositivo_id`. Si el equipo se vinculó
+/// de nuevo con otra identidad, la primera orden que llegue de la nube la
+/// reemplaza (ver `nube::sincronizacion::telemetria`). Se llama al abrir el
+/// núcleo, para que el equipo mida desde el primer segundo aunque no tenga
 /// red. Devuelve si aplicó una orden.
-pub fn cargar_en(
+pub fn cargar_guardada(
     connection: &Connection,
-    dispositivo_id: &str,
     config: &ConfigTelemetria,
 ) -> rusqlite::Result<bool> {
-    Ok(match leer(connection)? {
-        Some(guardada) if guardada.dispositivo_id == dispositivo_id => {
-            config.aplicar(&guardada.orden)
-        }
-        _ => false,
-    })
+    Ok(leer(connection)?.is_some_and(|guardada| config.aplicar(&guardada.orden)))
 }
 
 #[cfg(test)]
@@ -214,19 +211,14 @@ mod tests {
     }
 
     #[test]
-    fn al_abrir_se_carga_la_orden_si_iba_a_este_equipo() {
+    fn al_abrir_se_carga_la_orden_guardada() {
         let c = base();
         guardar(&c, "equipo-1", &orden(4, &["recursos"], None), hora(AHORA)).unwrap();
 
-        let ajeno = ConfigTelemetria::nueva();
-        assert!(!cargar_en(&c, "equipo-2", &ajeno).unwrap());
-        assert!(!ajeno.permite(Grupo::Recursos, AHORA));
-        assert_eq!(ajeno.version(), 0);
-
-        let propio = ConfigTelemetria::nueva();
-        assert!(cargar_en(&c, "equipo-1", &propio).unwrap());
-        assert!(propio.permite(Grupo::Recursos, AHORA));
-        assert_eq!(propio.version(), 4);
+        let config = ConfigTelemetria::nueva();
+        assert!(cargar_guardada(&c, &config).unwrap());
+        assert!(config.permite(Grupo::Recursos, AHORA));
+        assert_eq!(config.version(), 4);
     }
 
     #[test]
@@ -240,7 +232,7 @@ mod tests {
         )
         .unwrap();
         let config = ConfigTelemetria::nueva();
-        cargar_en(&c, "equipo-1", &config).unwrap();
+        cargar_guardada(&c, &config).unwrap();
         assert!(!config.permite(Grupo::Recursos, AHORA));
         assert!(config.permite(Grupo::Rendimiento, AHORA));
     }
@@ -248,7 +240,7 @@ mod tests {
     #[test]
     fn sin_orden_guardada_no_se_carga_nada() {
         let config = ConfigTelemetria::nueva();
-        assert!(!cargar_en(&base(), "equipo-1", &config).unwrap());
+        assert!(!cargar_guardada(&base(), &config).unwrap());
         assert_eq!(config.version(), 0);
     }
 }

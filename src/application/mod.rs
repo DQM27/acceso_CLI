@@ -130,6 +130,14 @@ impl AppCore {
             None
         });
         reloj.restaurar(desfase, ancla);
+        // Que el equipo mida lo que le ordenó el panel desde el primer segundo,
+        // aunque no tenga red.
+        if let Err(error) = crate::database::config_telemetria::cargar_guardada(
+            &connection,
+            crate::telemetria::config(),
+        ) {
+            log::warn!("no se pudo leer la orden de telemetría guardada: {error}");
+        }
         Self {
             connection,
             reloj,

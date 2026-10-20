@@ -62,6 +62,15 @@ fn aplicar_orden(
     if dispositivo_id != dispositivo_propio {
         return false;
     }
+    // Al abrir se cargó la orden guardada sin saber de qué equipo era; si era de
+    // otra identidad, su versión no debe bloquear a la de este equipo.
+    if config_telemetria::leer(conexion)
+        .ok()
+        .flatten()
+        .is_some_and(|guardada| guardada.dispositivo_id != dispositivo_id)
+    {
+        configuracion.reiniciar();
+    }
     if let Err(error) = config_telemetria::guardar(conexion, &dispositivo_id, &orden, ahora) {
         log::warn!("no se pudo guardar la orden de telemetría: {error}");
     }
@@ -167,6 +176,28 @@ mod tests {
         assert!(!config.permite(Grupo::Fluidez, AHORA));
         assert_eq!(config.version(), 0);
         assert_eq!(config_telemetria::leer(&c).unwrap(), None);
+    }
+
+    #[test]
+    fn la_orden_cargada_de_otra_identidad_no_bloquea_a_la_de_este_equipo() {
+        let c = base();
+        let anterior = Orden {
+            version: 900,
+            grupos: Grupos::desde_nombres(["fluidez"]),
+            vence_en: None,
+        };
+        config_telemetria::guardar(&c, "identidad-anterior", &anterior, Utc::now()).unwrap();
+        let config = ConfigTelemetria::nueva();
+        config_telemetria::cargar_guardada(&c, &config).unwrap();
+        assert!(config.permite(Grupo::Fluidez, AHORA));
+
+        let aviso = json!({
+            "dispositivo_id": PROPIO, "version": 3, "grupos": ["escaneo"], "vence_en": null,
+        });
+        assert!(aplicar(&c, &config, &aviso));
+        assert!(!config.permite(Grupo::Fluidez, AHORA));
+        assert!(config.permite(Grupo::Escaneo, AHORA));
+        assert_eq!(config.version(), 3);
     }
 
     #[test]
