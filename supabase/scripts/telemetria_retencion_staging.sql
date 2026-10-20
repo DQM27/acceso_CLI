@@ -12,9 +12,9 @@
 --
 -- Cómo se usa:
 --   select public.limpiar_telemetria_diagnostico();   -- devuelve cuántas borró
--- Si pg_cron está instalado, el final de este script la programa cada noche; si
--- no, hay que correrla a mano de vez en cuando (por ejemplo, junto con
--- `limpiar_errores_app()`).
+-- El final de este script instala pg_cron y la programa cada noche. (Antes sólo
+-- la programaba si pg_cron ya estaba, y en staging no estaba: hasta el
+-- 2026-10-20 la limpieza nunca corrió.)
 begin;
 
 -- Borrar por fecha de recepción sin recorrer toda la tabla.
@@ -42,17 +42,13 @@ $$;
 revoke all on function public.limpiar_telemetria_diagnostico() from public, anon, authenticated;
 grant execute on function public.limpiar_telemetria_diagnostico() to service_role;
 
--- Cada noche a las 03:23 (hora del servidor), si pg_cron está instalado.
-do $$
-begin
-    if exists (select 1 from pg_extension where extname = 'pg_cron') then
-        perform cron.schedule(
-            'limpiar-telemetria-diagnostico',
-            '23 3 * * *',
-            'select public.limpiar_telemetria_diagnostico()'
-        );
-    end if;
-end
-$$;
+-- Cada noche a las 03:23 (hora del servidor). `cron.schedule` con el mismo
+-- nombre reemplaza el trabajo, así que el script sigue siendo idempotente.
+create extension if not exists pg_cron with schema pg_catalog;
+select cron.schedule(
+    'limpiar-telemetria-diagnostico',
+    '23 3 * * *',
+    'select public.limpiar_telemetria_diagnostico()'
+);
 
 commit;
