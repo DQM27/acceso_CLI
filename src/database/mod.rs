@@ -1,4 +1,5 @@
 pub mod cola_salida;
+pub mod config_telemetria;
 pub mod connection;
 pub mod error;
 pub mod identificador;
