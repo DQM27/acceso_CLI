@@ -3592,7 +3592,7 @@ fn calentar_abre_tres_conexiones_a_la_raiz_de_la_api() {
     assert!(
         pedidos
             .iter()
-            .all(|pedido| pedido.starts_with("GET /rest/v1/ HTTP/1.1")),
+            .all(|pedido| pedido.starts_with("OPTIONS /rest/v1/ HTTP/1.1")),
         "{pedidos:?}"
     );
 }

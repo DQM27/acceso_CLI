@@ -133,9 +133,11 @@ static ULTIMO_CALENTAMIENTO: std::sync::Mutex<Option<std::time::Instant>> =
 /// Quien llama lo dispara al abrir el formulario de ingreso, cuando la persona
 /// todavía está escribiendo, y el costo queda escondido.
 ///
-/// Mejor esfuerzo: pide la raíz de la API con la clave pública (contesta 401
-/// sin tocar la base) sólo para que las conexiones queden en el grupo, y los
-/// errores no importan. Bloquea hasta que terminan, así que quien llama lo
+/// Mejor esfuerzo: un `OPTIONS` a la raíz de la API, que la puerta de entrada
+/// de Supabase contesta 200 sin cuerpo, sin token y sin tocar la base, sólo
+/// para que las conexiones queden en el grupo; los errores no importan. (Antes
+/// era un `GET` con la clave pública, que contestaba 401 y ensuciaba los logs
+/// con cientos de "no autorizado" por día.) Bloquea hasta que terminan, así que quien llama lo
 /// corre en un hilo aparte. `false` si no corrió porque se calentó hace poco.
 pub fn precalentar_conexiones_de_verificacion(base_url: &str, apikey: &str) -> bool {
     precalentar_si_corresponde(
@@ -170,7 +172,10 @@ pub(crate) fn precalentar_si_corresponde(
     std::thread::scope(|hilos| {
         for _ in 0..CONEXIONES_A_CALENTAR {
             hilos.spawn(|| {
-                let _ = cliente.get(&url).header("apikey", apikey).send();
+                let _ = cliente
+                    .request(reqwest::Method::OPTIONS, &url)
+                    .header("apikey", apikey)
+                    .send();
             });
         }
     });
