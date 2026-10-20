@@ -67,3 +67,6 @@ packaging/msix/*.msix
 *.pfx
 # Cloudflare Wrangler -- cache local, incluye el ID de cuenta
 .wrangler/
+
+# Configuración local de Claude Code (permisos y lanzadores personales)
+.claude/
