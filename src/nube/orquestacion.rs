@@ -250,8 +250,9 @@ mod tests {
     use super::*;
     use crate::database::schema::initialize_database;
 
-    /// Servidor HTTP falso: contesta `[]` a todo y anota la línea de cada
-    /// pedido ("GET /rest/v1/tabla?..."), para saber qué etapas corrieron.
+    /// Servidor HTTP falso: contesta vacío a todo (`[]`, o `{}` a las
+    /// funciones que devuelven un objeto) y anota la línea de cada pedido
+    /// ("GET /rest/v1/tabla?..."), para saber qué etapas corrieron.
     fn servidor_que_anota() -> (String, Arc<Mutex<Vec<String>>>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
         let direccion = listener.local_addr().expect("dirección local");
@@ -280,10 +281,18 @@ mod tests {
                 }
                 let mut cuerpo = vec![0; largo_cuerpo];
                 let _ = lector.read_exact(&mut cuerpo);
+                let vacio = if primera.contains("/rpc/catalogo_del_sitio") {
+                    "{}"
+                } else {
+                    "[]"
+                };
                 anotados.lock().unwrap().push(primera.trim().to_string());
                 let _ = conexion.write_all(
-                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
-                      Content-Length: 2\r\nConnection: close\r\n\r\n[]",
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+                         Content-Length: 2\r\nConnection: close\r\n\r\n{vacio}"
+                    )
+                    .as_bytes(),
                 );
             }
         });
@@ -362,8 +371,7 @@ mod tests {
             "/ingresos_proveedor",
             "/ingresos_correo",
             "/prestamos_gafete_provisional",
-            "/empresas",
-            "/contratistas",
+            "/rpc/catalogo_del_sitio",
             "/vehiculos_ruta",
             "/encargados_ruta",
             "/citas",
@@ -414,7 +422,12 @@ mod tests {
             PerfilDispositivo::Escritorio,
         );
 
-        assert!(pidio(&pedidos, "/empresas") && pidio(&pedidos, "/contratistas"));
+        assert!(pidio(&pedidos, "/rpc/catalogo_del_sitio"));
+        // El catálogo va en un solo llamado: ningún GET por tabla.
+        assert!(
+            !pidio(&pedidos, "GET /rest/v1/empresas")
+                && !pidio(&pedidos, "GET /rest/v1/contratistas")
+        );
         for recurso in [
             "/ingresos",
             "/citas",
