@@ -13,8 +13,8 @@
 -- Estado de un error: se cambia desde el SQL Editor, por huella:
 --   update public.errores_app set estado = 'resuelto' where huella = '<huella>';
 --
--- Retención: `limpiar_errores_app()` borra lo que tiene más de 90 días; si
--- pg_cron está instalado, queda programada cada noche.
+-- Retención: `limpiar_errores_app()` borra lo que tiene más de 90 días; queda
+-- programada cada noche con pg_cron (el script lo instala).
 begin;
 
 create table if not exists public.errores_app (
@@ -135,13 +135,10 @@ begin
 end
 $$;
 
--- Cada noche a las 03:17 (hora del servidor), si pg_cron está instalado.
-do $$
-begin
-    if exists (select 1 from pg_extension where extname = 'pg_cron') then
-        perform cron.schedule('limpiar-errores-app', '17 3 * * *', 'select public.limpiar_errores_app()');
-    end if;
-end
-$$;
+-- Cada noche a las 03:17 (hora del servidor). Antes la programación dependía de
+-- que pg_cron ya estuviera instalado, y en staging no lo estaba: la limpieza
+-- nunca corrió (se notó el 2026-10-20). Ahora el script lo instala.
+create extension if not exists pg_cron with schema pg_catalog;
+select cron.schedule('limpiar-errores-app', '17 3 * * *', 'select public.limpiar_errores_app()');
 
 commit;
