@@ -149,7 +149,7 @@ panel web.
   aunque no tenga red: al vencer vuelve a `base` y `rendimiento`.
 - **Confirmación.** El equipo manda `orden_telemetria` (grupo `base`) al
   arrancar y cada vez que cambia la orden, con `version` (`0` = sin orden) y
-  `grupos` (los vigentes, sin `base`). Es la forma de saber si la orden llegó.
+  `grupos` (los vigentes, con `base`: sin orden llega `["base", "rendimiento"]`). Es la forma de saber si la orden llegó.
 - **Ambiente.** `sesion_inicio` del móvil lleva `ambiente` (`produccion` o
   `staging`) para separar en los datos la app de pruebas de la real.
 
