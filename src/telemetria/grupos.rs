@@ -107,22 +107,40 @@ impl Grupos {
     }
 }
 
+/// El grupo de cada tipo de evento. Un evento nuevo se asigna a un grupo acá
+/// antes de usarse.
+pub const CATALOGO: &[(&str, Grupo)] = &[
+    ("sesion_inicio", Grupo::Base),
+    ("arranque", Grupo::Base),
+    ("salida_anterior", Grupo::Base),
+    ("cierre", Grupo::Base),
+    ("panic", Grupo::Base),
+    ("error_js", Grupo::Base),
+    ("error_telemetria", Grupo::Base),
+    ("telemetria_descartada", Grupo::Base),
+    ("llamada_nucleo", Grupo::Rendimiento),
+    ("transicion_ingreso", Grupo::Rendimiento),
+    ("pantalla", Grupo::Rendimiento),
+    ("frames", Grupo::Fluidez),
+    ("ui_bloqueos", Grupo::Fluidez),
+    ("realtime", Grupo::Sincronizacion),
+    ("sincronizacion_auto", Grupo::Sincronizacion),
+    ("sesion_unidad", Grupo::Sincronizacion),
+    ("reloj", Grupo::Sincronizacion),
+    ("muestra_sistema", Grupo::Recursos),
+    ("muestra_webview", Grupo::Recursos),
+    ("memoria_baja", Grupo::Recursos),
+    ("ocr_sesion", Grupo::Escaneo),
+    ("camara_info", Grupo::Escaneo),
+    ("strictmode", Grupo::Depuracion),
+    ("retencion", Grupo::Depuracion),
+];
+
 /// A qué grupo pertenece un tipo de evento, o `None` si no está en el catálogo.
-/// Un evento nuevo se asigna a un grupo acá antes de usarse.
 pub fn grupo_de_evento(tipo: &str) -> Option<Grupo> {
-    match tipo {
-        "sesion_inicio" | "arranque" | "salida_anterior" | "cierre" | "panic" | "error_js"
-        | "error_telemetria" | "telemetria_descartada" => Some(Grupo::Base),
-        "llamada_nucleo" | "transicion_ingreso" | "pantalla" => Some(Grupo::Rendimiento),
-        "frames" | "ui_bloqueos" => Some(Grupo::Fluidez),
-        "realtime" | "sincronizacion_auto" | "sesion_unidad" | "reloj" => {
-            Some(Grupo::Sincronizacion)
-        }
-        "muestra_sistema" | "muestra_webview" | "memoria_baja" => Some(Grupo::Recursos),
-        "ocr_sesion" | "camara_info" => Some(Grupo::Escaneo),
-        "strictmode" | "retencion" => Some(Grupo::Depuracion),
-        _ => None,
-    }
+    CATALOGO
+        .iter()
+        .find_map(|(nombre, grupo)| (*nombre == tipo).then_some(*grupo))
 }
 
 #[cfg(test)]
@@ -183,5 +201,15 @@ mod tests {
         assert_eq!(grupo_de_evento("ocr_sesion"), Some(Grupo::Escaneo));
         assert_eq!(grupo_de_evento("strictmode"), Some(Grupo::Depuracion));
         assert_eq!(grupo_de_evento("desconocido"), None);
+    }
+
+    #[test]
+    fn el_catalogo_no_repite_tipos() {
+        for (i, (tipo, _)) in CATALOGO.iter().enumerate() {
+            assert!(
+                CATALOGO[i + 1..].iter().all(|(otro, _)| otro != tipo),
+                "{tipo} está dos veces"
+            );
+        }
     }
 }

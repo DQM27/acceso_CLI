@@ -179,6 +179,18 @@ fn borrar_archivo_y_sidecars(ruta_base_datos: &str) {
     }
 }
 
+/// El grupo de telemetría de cada tipo de evento (`tipo` -> nombre del grupo),
+/// el mismo catálogo del escritorio: una sola definición en
+/// `control_acceso::telemetria`. Kotlin lo pide una vez y decide con él si un
+/// evento se mide (ver `Nucleo::telemetria_grupos_vigentes`).
+#[uniffi::export]
+pub fn telemetria_catalogo() -> std::collections::HashMap<String, String> {
+    control_acceso::telemetria::CATALOGO
+        .iter()
+        .map(|(tipo, grupo)| ((*tipo).to_owned(), grupo.nombre().to_owned()))
+        .collect()
+}
+
 #[uniffi::export]
 impl Nucleo {
     #[uniffi::constructor]
