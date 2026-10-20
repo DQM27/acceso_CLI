@@ -59,6 +59,7 @@ pesa como máximo 16 KB.
 | Tipo | Origen | Qué dice |
 |---|---|---|
 | `sesion_inicio` | Rust | SO, arquitectura, núcleos, RAM total |
+| `orden_telemetria` | Rust, al arrancar y cada vez que cambia la orden | Confirmación de que la orden del panel llegó: `version` (`0` = sin orden) y `grupos` vigentes. Grupo `base` |
 | `salida_anterior` | Rust | Cómo terminó la vez anterior: `CIERRE_NORMAL` o `SIN_CIERRE_NORMAL` (cuelgue, crash, "Finalizar tarea", apagón) |
 | `arranque` | Rust | `ms_hasta_ventana` desde que arrancó el proceso; `por`: `frontend` o `red_de_seguridad` (el splash se cerró por tiempo) |
 | `muestra_sistema` | Rust, cada 2 min | Memoria del proceso (en uso, privada y pico), CPU (`cpu_un_nucleo_pct`, `cpu_dispositivo_pct`), RAM libre del equipo y tamaño de la cola. No incluye los procesos de WebView2 |

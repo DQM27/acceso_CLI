@@ -312,20 +312,15 @@ fn aplicar_orden_telemetria_sin_vincular_no_hace_nada() {
 fn telemetria_catalogo_y_grupos_vigentes() {
     let catalogo = telemetria_catalogo();
     assert_eq!(catalogo.get("panic").map(String::as_str), Some("base"));
-    assert_eq!(
-        catalogo.get("frames").map(String::as_str),
-        Some("fluidez")
-    );
+    assert_eq!(catalogo.get("frames").map(String::as_str), Some("fluidez"));
     assert_eq!(catalogo.get("inventado"), None);
 
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();
     let nucleo = Nucleo::abrir(ruta).unwrap();
-    assert!(
-        nucleo
-            .telemetria_grupos_vigentes()
-            .contains(&"base".to_string())
-    );
+    let estado = nucleo.telemetria_estado();
+    assert!(estado.grupos.contains(&"base".to_string()));
+    assert!(estado.version >= 0);
 }
 
 /// El aviso en vivo con la fila deja al contratista adentro "por el

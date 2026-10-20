@@ -52,7 +52,23 @@ código en todos los builds** (sin flags ni variantes de compilación).
 - **Móvil** (`0061159`): `Nucleo.aplicar_orden_telemetria`, bindings Kotlin
   regenerados, `OrdenTelemetriaNube.kt` y el handler en `NubeRealtime.kt`.
 
-## Fase 2: lo que falta
+## Fase 2: cerrada (2026-10-20, rama `feat/telemetria-config-unidad`)
+
+Los tres puntos de abajo ya se hicieron, en tres commits: el núcleo carga la
+orden guardada al abrir (sin comprobar el equipo; `aplicar_orden` reinicia la
+copia en memoria si la guardada era de otra identidad), el escritorio y el
+móvil miden por grupo sin flags (`telemetria::permite` / `Telemetria.permite`),
+y ambos informan la versión en el evento `orden_telemetria` (base). Se
+verificó en esta PC: tests y clippy del núcleo, del núcleo móvil y de
+`tsc`/`eslint`/`vitest` del escritorio, `cargo check`/`clippy` del escritorio y
+Gradle `compileDebugKotlin`/`compileReleaseKotlin`/`testDebugUnitTest`. Sin
+verificar: `cargo test --lib` del escritorio (el ejecutable falla en esta PC con
+`STATUS_ENTRYPOINT_NOT_FOUND`, también sin estos cambios), el CI y un equipo
+real. Pendiente de la fase 6: `docs/telemetria-contrato.md` aún describe
+`TELEMETRIA_EN_PRODUCCION` y `telemetria_ligera`, y falta el evento
+`orden_telemetria` en el contrato.
+
+Lo que se pedía (historial):
 
 1. **Cargar la orden guardada al abrir el núcleo** (`database::config_telemetria`
    ya tiene `cargar_en` con comprobación de equipo; al abrir aún no se conoce el

@@ -23,6 +23,7 @@ import android.os.SystemClock
 import android.view.FrameMetrics
 import android.view.Window
 import androidx.profileinstaller.ProfileVerifier
+import uniffi.control_acceso_mobile.EstadoTelemetria
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.telemetriaCatalogo
 import java.io.File
@@ -74,7 +75,11 @@ object Telemetria {
     private var catalogo: Map<String, String> = emptyMap()
 
     @Volatile
-    private var fuenteGrupos: (() -> List<String>)? = null
+    private var fuenteGrupos: (() -> EstadoTelemetria)? = null
+
+    /// La versión de la orden que ya se informó en `orden_telemetria` (`-1` =
+    /// ninguna todavía).
+    private var versionInformada = -1L
 
     fun iniciar(app: Application) {
         if (activa) return
@@ -92,16 +97,24 @@ object Telemetria {
     /// El núcleo ya está abierto: de acá en más los grupos que rigen son los de
     /// su orden vigente.
     fun usarNucleo(nucleo: Nucleo) {
-        fuenteGrupos = { nucleo.telemetriaGruposVigentes() }
+        fuenteGrupos = { nucleo.telemetriaEstado() }
         refrescarGrupos()
     }
 
     /// Vuelve a leer qué grupos rigen. Se llama al llegar una orden, tras cada
     /// sincronización y en cada muestra (así un vencimiento se nota solo).
-    /// Barato: el núcleo sólo lee su copia en memoria. Nunca lanza.
+    /// Barato: el núcleo sólo lee su copia en memoria. Nunca lanza. Informa la
+    /// versión de la orden la primera vez y cada vez que cambia, para que el
+    /// panel confirme que la orden llegó.
+    @Synchronized
     fun refrescarGrupos() {
         val fuente = fuenteGrupos ?: return
-        runCatching { fuente().toSet() }.getOrNull()?.let { grupos = it }
+        val estado = runCatching { fuente() }.getOrNull() ?: return
+        grupos = estado.grupos.toSet()
+        if (estado.version != versionInformada) {
+            versionInformada = estado.version
+            evento("orden_telemetria", mapOf("version" to estado.version, "grupos" to estado.grupos))
+        }
         motor?.gruposCambiaron()
     }
 
