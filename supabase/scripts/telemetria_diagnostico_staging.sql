@@ -41,6 +41,17 @@ create index if not exists telemetria_diagnostico_tipo_ocurrido_idx
 create index if not exists telemetria_diagnostico_sesion_idx
     on public.telemetria_diagnostico (sesion);
 
+-- Tope por fila: la llave publicable va dentro de los binarios, así que
+-- cualquiera puede insertar. Sin tope, unas pocas filas gigantes llenan el plan
+-- gratis. La fila real más grande ronda los 2 KB (2026-10-20); 8 KB deja margen.
+alter table public.telemetria_diagnostico
+    drop constraint if exists telemetria_diagnostico_datos_tamano;
+alter table public.telemetria_diagnostico
+    add constraint telemetria_diagnostico_datos_tamano
+    check (pg_column_size(datos) <= 8192
+           and length(tipo) <= 60 and length(dispositivo) <= 80
+           and length(sesion) <= 80 and length(version_app) <= 80);
+
 alter table public.telemetria_diagnostico enable row level security;
 
 -- Sólo insertar. Ni `anon` ni `authenticated` pueden leer, actualizar ni
