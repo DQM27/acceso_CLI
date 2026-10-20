@@ -25,6 +25,7 @@
 use std::cell::Cell;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -61,6 +62,22 @@ const ARCHIVO_SESION_ABIERTA: &str = "telemetria_sesion_abierta";
 /// en `control_acceso::telemetria::grupos` antes de usarse).
 pub fn permite(tipo: &str) -> bool {
     grupo_de_evento(tipo).is_some_and(|grupo| config().permite(grupo, ahora().timestamp()))
+}
+
+/// La versión de la orden que ya se informó en `orden_telemetria` (`-1` =
+/// ninguna todavía).
+static VERSION_INFORMADA: AtomicI64 = AtomicI64::new(-1);
+
+/// Informa la versión de la orden aplicada y los grupos vigentes, la primera
+/// vez y cada vez que cambia, para que el panel confirme que la orden llegó.
+fn informar_orden_si_cambio() {
+    let version = config().version();
+    if VERSION_INFORMADA.swap(version, Ordering::Relaxed) != version {
+        evento(
+            "orden_telemetria",
+            serde_json::json!({ "version": version, "grupos": grupos_vigentes() }),
+        );
+    }
 }
 
 /// Los nombres de los grupos que rigen ahora, `base` incluido.
@@ -356,6 +373,7 @@ fn arrancar(directorio: &Path) {
             }),
         );
     }
+    informar_orden_si_cambio();
     instalar_gancho_de_panic();
     envio::lanzar_hilos();
 }
@@ -457,7 +475,7 @@ mod envio {
 
     use super::{
         APIKEY_STAGING, FILAS_POR_LOTE, SEGUNDOS_ENVIO, SEGUNDOS_MUESTREO, TELEMETRIA, URL_STAGING,
-        cola_vacia, evento, guardar_pendientes, permite, sistema,
+        cola_vacia, evento, guardar_pendientes, informar_orden_si_cambio, permite, sistema,
     };
 
     pub fn lanzar_hilos() {
@@ -466,6 +484,9 @@ mod envio {
             .spawn(|| {
                 loop {
                     std::thread::sleep(Duration::from_secs(SEGUNDOS_ENVIO));
+                    // Una orden nueva pudo llegar por el aviso en vivo o la
+                    // sincronización.
+                    informar_orden_si_cambio();
                     // Sin cola no se arma ni el cliente HTTP.
                     if !cola_vacia() {
                         enviar_todo();

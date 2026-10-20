@@ -218,6 +218,16 @@ impl From<ResultadoAccesoNucleo> for ResultadoAcceso {
     }
 }
 
+/// Qué rige de telemetría en este teléfono: la versión de la orden aplicada
+/// (`0` = ninguna, el equipo mide lo de siempre) y los grupos vigentes (`base`
+/// incluido). El teléfono informa la versión en el evento `orden_telemetria`
+/// para que el panel confirme que la orden llegó.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct EstadoTelemetria {
+    pub version: i64,
+    pub grupos: Vec<String>,
+}
+
 /// Espejo de `PreparacionIngreso` — vista previa antes de confirmar; no es
 /// una autorización cacheada, `registrar_ingreso` vuelve a validar todo.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
