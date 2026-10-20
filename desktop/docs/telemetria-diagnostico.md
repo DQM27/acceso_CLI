@@ -4,79 +4,37 @@ Es la contraparte de la del teléfono (`mobile/android/docs/telemetria-diagnosti
 Usa la misma tabla `telemetria_diagnostico` del proyecto de **staging** y los
 mismos nombres de evento y de campo, así una consulta sirve para las dos
 plataformas. Las filas del escritorio se reconocen por `version_app`, que
-empieza con `desktop-` (por ejemplo `desktop-1.6.8-diag+abc1234`, con el hash corto del commit).
+empieza con `desktop-` (por ejemplo `desktop-1.8.15+abc1234`, con el hash corto del commit).
 
 ## Cuándo mide
 
-El código de medición va en **todos** los builds, pero apagado. Se enciende de
-dos maneras:
+Un solo código para **todos** los builds, sin flags ni variantes. Cada evento
+pertenece a un grupo (`control_acceso::telemetria::grupo_de_evento`) y sólo se
+mide si la orden vigente de este equipo lo permite:
 
-**1. En un release normal, con una regla en staging.** El interruptor es la
-tabla `telemetria_reglas` de staging, que se modifica por SQL (SQL Editor de
-Supabase): no hace falta compilar, ni una pantalla, ni acceso al equipo. La app
-la consulta **dos veces**, sin sondeo:
+- `base` (arranque, cierre, caídas, errores) va **siempre**;
+- `rendimiento` va **por defecto**;
+- `fluidez`, `sincronizacion`, `recursos`, `escaneo` y `depuracion` los enciende
+  el administrador **por equipo** desde el panel, con vencimiento.
 
-1. al abrir la app;
-2. después de cada login exitoso (el local y el de Supabase Auth).
+La orden viaja panel → nube (`telemetria_ordenes`) → equipo. El equipo la recibe
+por el aviso en vivo `telemetria_config` o en la sincronización, la guarda en su
+SQLite (`config_telemetria`) y el núcleo la tiene en memoria; al abrir la app se
+carga la guardada, así que rige aunque no haya red. Al vencer, el equipo vuelve
+a `base` y `rendimiento` sin consultar a nadie. Diseño completo en
+`docs/features-futuras/plan-telemetria-y-registro-de-errores.md`.
 
-Cada consulta llama a `reglas_telemetria_vigentes` con el UUID de la
-instalación (`telemetria_dispositivo`), la plataforma (`escritorio`) y su
-versión (`desktop-1.8.13+abc1234`). Corre en un hilo corto en segundo plano
-(con tope de 10 s) que termina con la respuesta: no bloquea la ventana ni el
-login, y no queda ningún hilo vivo esperando. Como mucho una consulta cada 5
-minutos, aunque se pida más seguido. **Un cambio de regla se nota en el
-siguiente arranque o login** (con el tope de 5 minutos entre consultas).
-
-Si hay una regla vigente que le toca, mide lo que la regla pide (todos los tipos,
-o una lista). Toda regla vence (24 h por defecto) y se apaga con
-`activa = false`. Las reglas se crean desde el SQL Editor de staging; ver
-`supabase/scripts/telemetria_reglas_staging.sql`. La app no tiene ninguna
-opción para el operador.
-
-- **Si la consulta falla** (sin red, staging caído) todo queda como estaba:
-  apagada si estaba apagada, y una regla que ya rige sigue hasta vencer.
-- **Una respuesta sin reglas vigentes apaga** de inmediato.
-- **El vencimiento se vigila en la propia app, sin consultar:** pasada la hora
-  de vencimiento la telemetría se apaga sola.
-- **Apagada no hay cola ni envío.** No se arma ningún evento, no corre el
-  muestreo, el hilo de envío no hace peticiones y el cierre no escribe nada. La
-  única petición a la nube de una app apagada es la consulta de reglas. Lo que
-  ya estaba en cola cuando rigió una regla se termina de enviar.
-- Un release solo manda **telemetría** a staging, nunca datos de operación. Su
-  base y su nube siguen siendo las de producción.
-- El frontend vuelve a preguntar al backend si está activa cada 30 s (una
-  llamada local, sin red), para enterarse de que la regla se encendió o se
-  apagó.
-
-**2. El build de diagnóstico**, siempre encendido, sin reglas. Se compila con
-la feature `telemetria` y la configuración de diagnóstico:
-
-```
-cd desktop
-npm run tauri build -- --features telemetria --config src-tauri/tauri.diagnostico.conf.json
-```
-
-O desde GitHub: workflow manual **Build de prueba (mobile y escritorio)**,
-variante `escritorio-diagnostico` (el instalador queda como artifact).
-
-- Sin la feature (el build que se publica), `telemetria_activa()` es `false`
-  mientras no haya una regla vigente: el frontend no mide nada y el backend
-  solo hace la consulta puntual de reglas (al abrir y tras el login).
-- La dirección de staging está fija en `src-tauri/src/telemetria.rs`.
-  Producción nunca recibe telemetría.
-- **Es un build de prueba, igual que el `diagnostico` de Android**
-  (`telemetria::aislar_build_de_diagnostico`, desde 2026-09-30):
-  - sus datos van a **staging**, no a producción;
-  - usa su propia base (`%LOCALAPPDATA%\ControlAccesoDiagnostico\`) y su
-    propia carpeta de claves (`%LOCALAPPDATA%\ControlAccesoDiagnosticoRoaming\`),
-    así que no toca la base ni la clave de la app real;
-  - se instala como "Lattis Diagnostico" (`com.dqm27.lattis.desktop.diag`),
-    al lado de la app real sin reemplazarla;
-  - no trae el actualizador (lo cambiaría por la versión publicada).
-  Si ya se exportaron a mano las variables de `scripts/activar_sandbox.ps1`,
-  se respetan.
-- La llave es la publicable. En esta tabla solo puede insertar (ver
+- El frontend pregunta al backend qué grupos rigen (`telemetria_grupos`, una
+  llamada local, sin red) al abrir y cada 30 s, y sólo arma lo que rige. El
+  backend vuelve a filtrar por grupo y descarta los tipos que no están en el
+  catálogo.
+- Sólo se manda **telemetría** a staging, nunca datos de operación. La base y la
+  nube de la app siguen siendo las de producción. La dirección de staging está
+  fija en `src-tauri/src/telemetria.rs`; producción nunca recibe telemetría. La
+  llave es la publicable y en esa tabla sólo puede insertar (ver
   `supabase/scripts/telemetria_diagnostico_staging.sql`).
+- Ya no hay build de diagnóstico, ni la feature `telemetria`, ni
+  `telemetria_reglas` / `reglas_telemetria_vigentes`.
 
 ## Privacidad
 
