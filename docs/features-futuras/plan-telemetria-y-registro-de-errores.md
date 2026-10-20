@@ -13,8 +13,13 @@ de todos los equipos en uso, sin muestreo. Dos piezas:
    ya está en las dos apps, mandando a nuestro receptor (`receptor-errores`), no
    a sentry.io.
 2. **Telemetría por estudios:** los eventos se agrupan por tipo de estudio, y
-   cada estudio se **enciende y se apaga con una regla** según lo que se quiera
-   verificar, sin sacar un release.
+   cada estudio se **enciende y se apaga por unidad desde un panel web**, según
+   lo que se quiera verificar, sin sacar un release.
+
+**El mismo código en todos los builds.** Telemetría y errores no dependen de un
+flag ni de un tipo de compilación: desaparecen la feature de Cargo `telemetria`,
+`BuildConfig.TELEMETRIA`, `TELEMETRIA_LIGERA`, `-PtelemetriaEnProduccion` y la
+variante `diagnostico`. Lo único que decide qué se mide es la orden del panel.
 
 Los datos son del desarrollador: nada va al panel web ni a la base de operación
 del cliente.
@@ -58,61 +63,118 @@ Basado en los datos de staging del 13 al 19‑oct (filas por semana).
 | `muestra_sistema`, `muestra_webview` | ambas | 11 360 | **El mayor volumen** (35 % de las filas) y lo menos consultado. Sólo para estudiar memoria, CPU o batería. |
 | `memoria_baja` | móvil | 430 | Mayormente ruido del paso a segundo plano. Sólo en el estudio de recursos, y filtrar niveles. |
 | `ocr_sesion`, `camara_info` | móvil | 380 | Sirve para calibrar el escáner. `camara_info` repite datos fijos: basta una vez por versión y equipo. |
-| `strictmode`, `retencion` | móvil | ~20 | Sólo en el build de diagnóstico (son pesados). Sin cambio. |
+| `strictmode`, `retencion` | móvil | ~20 | Sirven para cazar fugas, pero cuestan (el vigilante fuerza recolecciones de basura). Grupo propio, sólo por poco tiempo y en una unidad. |
 
 ### Los grupos
 
 | Grupo | Eventos | Para qué estudio | Por defecto |
 |---|---|---|---|
-| `base` | `sesion_inicio`, `arranque`, `salida_anterior`, `cierre`, `panic`, `error_js`, `error_telemetria` | Estado de la flota: equipos, versiones, caídas | **Siempre encendido** |
-| `rendimiento` | `llamada_nucleo`, `transicion_ingreso`, `pantalla` | ¿Cuánto espera el guarda? ¿Un cambio mejoró? | Por regla |
-| `fluidez` | `frames`, `ui_bloqueos` | ¿Se traba la interfaz? | Por regla |
-| `sincronizacion` | `realtime`, `sincronizacion_auto`, `sesion_unidad`, `reloj` | ¿Llegan los datos? ¿Latencia entre equipos? ¿Reloj? | Por regla |
-| `recursos` | `muestra_sistema`, `muestra_webview`, `memoria_baja` | Memoria, CPU, batería, fugas | Por regla |
-| `escaneo` | `ocr_sesion`, `camara_info` | Calibrar OCR y cámara | Por regla |
+| `base` | `sesion_inicio`, `arranque`, `salida_anterior`, `cierre`, `panic`, `error_js`, `error_telemetria` | Estado de la flota: equipos, versiones, caídas | **Siempre** (no se apaga) |
+| `rendimiento` | `llamada_nucleo`, `transicion_ingreso`, `pantalla` | ¿Cuánto espera el guarda? ¿Un cambio mejoró? | **Encendido** (recomendado: es la línea base) |
+| `fluidez` | `frames`, `ui_bloqueos` | ¿Se traba la interfaz? | Desde el panel |
+| `sincronizacion` | `realtime`, `sincronizacion_auto`, `sesion_unidad`, `reloj` | ¿Llegan los datos? ¿Latencia entre equipos? ¿Reloj? | Desde el panel |
+| `recursos` | `muestra_sistema`, `muestra_webview`, `memoria_baja` | Memoria, CPU, batería, fugas | Desde el panel |
+| `escaneo` | `ocr_sesion`, `camara_info` | Calibrar OCR y cámara | Desde el panel |
+| `depuracion` | `strictmode`, `retencion` | Cazar fugas (cuesta: avisarlo en el panel) | Desde el panel, con vencimiento corto |
+
+**Por qué `rendimiento` encendido siempre:** para contrastar con datos
+anteriores o con otra unidad, esos datos tienen que existir **antes** de que el
+cliente diga "está lenta". Agregado por ventanas es barato (decenas de filas por
+hora por unidad activa). Los estudios detallados se encienden cuando hacen falta.
 
 Un evento nuevo se asigna a un grupo antes de usarse.
 
-### Cómo se encienden (reusando las reglas)
+### Cómo se encienden: panel → nube → unidad → núcleo
 
-Ya existe en staging: tabla `telemetria_reglas` y función
-`reglas_telemetria_vigentes` (`supabase/scripts/telemetria_reglas_staging.sql`).
-Una regla dice a quién le toca (equipo, plataforma, prefijo de versión), qué
-eventos (`eventos text[]`) y cuándo vence. El escritorio **ya la consulta en sus
-release** (al abrir y tras el login, sin sondeo) y filtra por tipo de evento,
-con pruebas.
+Los errores **no** pasan por aquí: están siempre encendidos y no se pueden
+apagar desde internet (sería un riesgo y sólo actúan cuando hay un error).
 
-Lo que se agrega:
+#### 1. En la nube (producción, por migración)
 
-1. **Grupos en la base, no en las apps:** una tabla `telemetria_grupos (grupo,
-   tipo)`, y la función expande los nombres de grupo de `eventos` a tipos. El
-   escritorio no cambia: sigue recibiendo una lista de tipos. Mover un evento de
-   grupo es un `update`, sin release.
-2. **`base` siempre:** una regla permanente (`vence_en` lejano) para todos con
-   `eventos = '{base}'`. Es la única regla que no vence.
-3. **El móvil lee las reglas** igual que el escritorio (portar `Reglas::combinar`
-   y `Reglas::siguiente` con los mismos casos de prueba). Con eso desaparecen
-   `TELEMETRIA_EN_PRODUCCION` y `TELEMETRIA_LIGERA`: el release del móvil lleva
-   la medición siempre, encendida por regla.
-4. **Porcentaje de la flota** en la regla (opcional, después): encender un
-   estudio en la mitad de los equipos para comparar un cambio con la otra mitad.
+Tabla `telemetria_unidades`, una fila por unidad:
 
-Ejemplos de uso:
+| Columna | Qué es |
+|---|---|
+| `dispositivo_id` | La unidad (`public.dispositivos`). |
+| `grupos text[]` | Estudios encendidos, de la lista fija (`check`). `base` no se guarda: va siempre. |
+| `vence_en` | Hasta cuándo (nulo = sin vencimiento). La unidad lo hace cumplir sola, aunque no tenga red. |
+| `version bigint` | Sube en cada cambio. La unidad aplica sólo una versión más nueva que la que tiene. |
+| `nota`, `actualizado_en`, `actualizado_por` | Por qué y quién. |
 
-```sql
--- Estudio de rendimiento en toda la flota de escritorio 1.8.x por 7 días
-insert into public.telemetria_reglas (plataforma, version_desde, eventos, vence_en, nota)
-values ('escritorio', 'desktop-1.8.', '{rendimiento}', now() + interval '7 days',
-        'efecto del HTTP/2');
+Y `telemetria_unidades_historial` (quién encendió qué y cuándo), para cruzar un
+cambio en los datos con la orden que lo causó.
 
--- Recursos y fluidez en un solo teléfono por 24 h
-insert into public.telemetria_reglas (dispositivo, eventos, nota)
-values ('<uuid>', '{recursos,fluidez}', 'posible fuga de descriptores');
+Seguridad, con RLS:
 
--- Apagar todos los estudios (base sigue)
-update public.telemetria_reglas set activa = false
-where activa and eventos <> '{base}';
+- **Escribe sólo el rol de desarrollador** del panel. Ni las unidades ni los
+  administradores del cliente.
+- **Cada unidad lee sólo su propia fila**, con la misma autenticación con la que
+  ya sincroniza.
+- Lo peor que puede hacer una orden es encender mediciones: no toca datos de
+  operación ni apaga los errores.
+
+#### 2. El panel
+
+Una página "Telemetría" con la lista de unidades (la misma de `Dispositivos`):
+casillas por grupo, vencimiento, nota y el estado aplicado. Muestra también
+**qué versión de la orden confirmó cada unidad** y cuándo (lo dice la propia
+unidad en su evento `base`), para saber si ya le llegó.
+
+#### 3. Cómo le llega a la unidad (sin consultas extra)
+
+Dos vías, las dos ya existen:
+
+1. **Tiempo real (al instante).** Un trigger en `telemetria_unidades` hace
+   `realtime.send('telemetria_config', 'sitio:<sitio_id>')` con
+   `dispositivo_id`, `grupos`, `vence_en` y `version`, igual que hoy
+   `avisar_dispositivo_expulsado`. La unidad ya escucha ese canal privado; sólo
+   atiende el aviso si `dispositivo_id` es el suyo.
+2. **Sincronización (respaldo).** En la sincronización que ya corre, el núcleo
+   lee su fila (una consulta pequeña). Cubre la unidad que estaba apagada o sin
+   red cuando se dio la orden, o que perdió el aviso.
+
+No hay sondeo propio: si el aviso llega, se aplica en segundos; si no, en la
+siguiente sincronización.
+
+#### 4. En la unidad
+
 ```
+aviso o sincronización
+        │  (sólo si version > la guardada)
+        ▼
+SQLite local: tabla config_telemetria (una fila)
+        │
+        ▼
+memoria del núcleo: grupos encendidos + vence_en
+        │
+        ├─► cada punto de medición del núcleo pregunta
+        │   "¿está encendido rendimiento?" → lectura en memoria
+        │
+        └─► aviso a la plataforma (callback en el móvil,
+            evento de Tauri en el escritorio) para encender o
+            apagar lo que mide ella (frames, webview)
+```
+
+- **La base local no se consulta en cada medición.** Se lee al abrir el núcleo
+  y se escribe sólo cuando llega una orden nueva. Cada punto de medición lee un
+  valor en memoria (una lectura atómica y una comparación de hora): no cuesta
+  nada medible.
+- **Al arrancar**, el núcleo carga la última orden guardada: la unidad mide desde
+  el primer segundo, aunque no tenga red.
+- **Al vencer**, el núcleo apaga el grupo solo y avisa a la plataforma.
+- **Kotlin y TypeScript no guardan nada:** preguntan al núcleo al arrancar
+  (`config_telemetria()`) y escuchan el aviso de cambio.
+- **La unidad confirma** la versión aplicada en el siguiente evento `base`; el
+  panel lo muestra.
+
+#### Ejemplo: "el cliente dice que la app está lenta"
+
+1. En el panel, a esa unidad: `fluidez` y `sincronizacion` por 48 h, con nota
+   "lentitud reportada por el cliente".
+2. La unidad lo recibe en segundos y lo confirma.
+3. En Grafana: su `rendimiento` de hoy contra el de la semana pasada (que existe
+   porque está siempre encendido) y contra otra unidad del mismo sitio.
+4. A las 48 h se apaga sola.
 
 ### Ajustes del grupo `rendimiento`
 
@@ -127,13 +189,23 @@ Lo que impidió saber si el HTTP/2 mejoró algo:
 
 ## Grafana
 
-- Una vista de **reglas vigentes** (qué estudios están encendidos, dónde y hasta
-  cuándo).
-- Una sección por grupo en el tablero de telemetría, y el tablero de errores
-  sobre `errores_agrupados`.
+- Una sección por grupo en el tablero de telemetría, con selector de unidad y de
+  periodo para comparar una unidad contra sí misma (semana anterior) o contra
+  otra.
+- El tablero de errores sobre `errores_agrupados`.
 - Alertas que siguen: error nuevo y equipo nuevo en vinculación. Esta última
-  depende de que `base` esté encendido siempre, lo que deja de depender de cómo se
-  compiló el release.
+  queda firme porque `base` va siempre en todos los builds.
+
+## Lo que se retira
+
+- La feature de Cargo `telemetria` y el build de diagnóstico del escritorio.
+- `BuildConfig.TELEMETRIA`, `TELEMETRIA_LIGERA`, `-PtelemetriaEnProduccion`, la
+  variable `TELEMETRIA_EN_PRODUCCION` y la variante `diagnostico` del móvil.
+- `telemetria_reglas` y `reglas_telemetria_vigentes` de staging (las reemplaza
+  `telemetria_unidades` en producción). La evaluación de vencimiento y la
+  combinación de grupos, con sus pruebas, pasan de `desktop/src-tauri/src/telemetria.rs`
+  al núcleo compartido, para que el móvil y el escritorio usen la misma.
+- El DSN de respaldo a sentry.io.
 
 ## Fases
 
@@ -142,11 +214,12 @@ Cada fase termina con **el release instalado en los equipos reales**.
 | # | Fase | Terminada cuando |
 |---|---|---|
 | 0 | **Errores al receptor:** quitar el DSN de respaldo a sentry.io; secreto en todos los workflows; confirmar el de los release. | Un error de prueba del release de cada plataforma llega a `errores_app` y llega el correo. |
-| 1 | **Grupos en la base:** tabla `telemetria_grupos`, función que expande grupos, regla permanente de `base`. | En el escritorio, una regla `{rendimiento}` manda sólo esos eventos, y sin ella sólo llega `base`. |
-| 2 | **Reglas en el móvil** y fuera las variables de compilación. | Lo mismo que la fase 1, en el teléfono, con los mismos casos de prueba que el escritorio. |
-| 3 | **Huecos de errores:** SDK en el frontend del escritorio y `captureException` de los errores inesperados del núcleo en el móvil. | Un error de JS y un error interno del núcleo de prueba llegan con traza. |
-| 4 | **Ajustes de `rendimiento`:** commit en el móvil, cubos de histograma, red frente a local y HTTP/2. | El tablero compara dos versiones por commit. |
-| 5 | **Recortes:** `camara_info` una vez por versión, niveles de `memoria_baja`, motivo 16 con nombre, retención programada, tablero por grupos, contrato reescrito. | `docs/telemetria-contrato.md` describe los grupos y lo que hace el código. |
+| 1 | **Orden en la nube:** migración con `telemetria_unidades`, su historial, RLS (escribe sólo el desarrollador, cada unidad lee la suya) y el trigger que avisa por tiempo real. | Pruebas de RLS: una unidad no lee la fila de otra ni puede escribir; un cambio emite `telemetria_config` en el canal del sitio. |
+| 2 | **Orden en la unidad:** tabla local `config_telemetria` (migración del esquema), estado en memoria del núcleo, lectura en la sincronización, atención del aviso en las dos plataformas y confirmación en `base`. Todos los puntos de medición preguntan al núcleo; fuera los flags y las variantes de compilación. | En un release: encender `fluidez` en una unidad empieza a mandar `frames` en segundos; apagarlo los detiene; una unidad sin red al momento de la orden la aplica en la siguiente sincronización; al vencer se apaga sola. |
+| 3 | **Panel:** página "Telemetría" para el rol de desarrollador, con el estado confirmado por cada unidad. | Encender y apagar desde el panel sin SQL, y ver la confirmación. |
+| 4 | **Huecos de errores:** SDK en el frontend del escritorio y `captureException` de los errores inesperados del núcleo en el móvil. | Un error de JS y un error interno del núcleo de prueba llegan con traza. |
+| 5 | **Ajustes de `rendimiento`:** commit en la versión del móvil, cubos de histograma, red frente a local y HTTP/2. | El tablero compara una unidad contra su semana anterior y contra otra unidad. |
+| 6 | **Recortes:** `camara_info` una vez por versión, niveles de `memoria_baja`, motivo 16 con nombre, retención programada, tablero por grupos, contrato reescrito. | `docs/telemetria-contrato.md` describe los grupos y lo que hace el código. |
 
 La fase 0 se puede hacer ya y no depende de las demás.
 
@@ -154,9 +227,10 @@ La fase 0 se puede hacer ya y no depende de las demás.
 
 | Decisión | Recomendación |
 |---|---|
+| Dónde vive el panel | Una página del panel web existente, visible sólo para un rol de desarrollador: reutiliza el inicio de sesión y la lista de unidades. La seguridad la da RLS, no esconder la página. Alternativa: una web aparte si no se quiere nada de esto junto al panel del cliente. |
+| `rendimiento` encendido siempre | Sí (es la línea base para comparar). |
 | Avisar al cliente que sus equipos mandan métricas técnicas y errores (sin datos personales) | Sí, antes de encender estudios en toda la flota. |
-| Dónde viven los datos de la flota | Staging por ahora; un proyecto de Supabase propio de observabilidad si el volumen crece. |
-| Porcentaje de la flota en las reglas | Después de la fase 2, cuando haga falta el primer experimento. |
+| Dónde viven los datos medidos | Staging por ahora; un proyecto de Supabase propio de observabilidad si el volumen crece. La orden (`telemetria_unidades`) va en producción porque ahí se autentican las unidades. |
 
 ## Reglas del proyecto que aplican
 
