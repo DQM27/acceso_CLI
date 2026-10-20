@@ -175,9 +175,13 @@ jobs:
         working-directory: mobile/android
         env:
           # Destino de los errores (ver `dsnErrores` en app/build.gradle.kts).
-          # Sin el secreto llega vacío y se usa el DSN de siempre.
+          # Sin el secreto llega vacío y la app no reporta errores.
           SENTRY_DSN_MOVIL: ${{ secrets.SENTRY_DSN }}
-        run: ./gradlew assembleRelease
+        run: |
+          if [ -z "$SENTRY_DSN_MOVIL" ]; then
+            echo "::warning::Falta el secreto SENTRY_DSN: este APK saldrá sin reporte de errores."
+          fi
+          ./gradlew assembleRelease
 
       # Confirma que el plugin de Google Services sí procesó el JSON (si no,
       # el APK habría salido sin push sin avisar).

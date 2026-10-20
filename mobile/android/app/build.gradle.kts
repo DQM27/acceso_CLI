@@ -28,14 +28,16 @@ val keystoreProperties = Properties().apply {
 }
 
 // A dónde van los errores de la app (ver `io.sentry.dsn` en
-// AndroidManifest.xml). Con la variable de entorno `SENTRY_DSN_MOVIL` (el CI
-// la toma del secreto `SENTRY_DSN`) apuntan al receptor propio
-// (supabase/functions-staging/receptor-errores); sin ella, o vacía, siguen
-// yendo al proyecto de Sentry de siempre. Es variable de entorno y no `-P`
-// para que el DSN no quede en la línea de comandos ni en el registro del CI.
+// AndroidManifest.xml): al receptor propio
+// (supabase/functions-staging/receptor-errores), con la variable de entorno
+// `SENTRY_DSN_MOVIL` (el CI la toma del secreto `SENTRY_DSN`). Sin ella, o
+// vacía, el SDK queda desactivado y no envía nada. Antes había un DSN de
+// respaldo del proyecto de sentry.io, y un build sin el secreto mandaba allá
+// los errores sin que nadie los viera. Es variable de entorno y no `-P` para
+// que el DSN no quede en la línea de comandos ni en el registro del CI.
 val dsnErrores: String =
     providers.environmentVariable("SENTRY_DSN_MOVIL").orNull?.takeIf { it.isNotBlank() }
-        ?: "https://5fb608eb8db4b9a18aca8d2901a4b894@o4512103124041728.ingest.us.sentry.io/4512104610463744"
+        ?: ""
 
 android {
     namespace = "com.brisas.controlacceso"

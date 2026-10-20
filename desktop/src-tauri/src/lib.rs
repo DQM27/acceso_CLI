@@ -23,18 +23,19 @@ mod telemetria;
 
 use estado::GuiState;
 
-/// DSN del proyecto `control-acceso-desktop` en Sentry -- no es un secreto
-/// (está pensado para ir embebido en el cliente, misma lógica que la
-/// publishable key de Supabase en `web/`), pero se deja overrideable en
-/// tiempo de compilación por si algún día se separa un proyecto de Sentry
-/// para QA/staging.
+/// A dónde van los errores: el receptor propio
+/// (`supabase/functions-staging/receptor-errores`). El DSN no es un secreto
+/// (va embebido en el cliente, misma lógica que la publishable key de Supabase
+/// en `web/`) y llega por la variable `SENTRY_DSN` al compilar (el CI la toma
+/// del secreto del mismo nombre).
+///
+/// Sin variable, o vacía, queda vacío y el SDK no envía nada: los errores
+/// quedan sólo en el registro local. Antes había un DSN de respaldo del
+/// proyecto de sentry.io, y un build sin el secreto mandaba allá los errores
+/// sin que nadie los viera.
 const SENTRY_DSN: &str = match option_env!("SENTRY_DSN") {
-    // Una variable definida pero vacía (un secreto de CI sin configurar)
-    // cuenta como ausente: un DSN vacío apagaría el reporte de errores.
-    Some(dsn) if !dsn.is_empty() => dsn,
-    _ => {
-        "https://644be3689422e0fa65551a7f3f8a28ff@o4512103124041728.ingest.us.sentry.io/4512104588115968"
-    }
+    Some(dsn) => dsn,
+    None => "",
 };
 
 /// Cada cuánto reintenta la sincronización automática mientras la app sigue

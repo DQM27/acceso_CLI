@@ -78,7 +78,14 @@ jobs:
 
       - name: Compilar el APK
         working-directory: mobile/android
-        run: ./gradlew assembleDebug
+        env:
+          # Destino de los errores (ver `dsnErrores` en app/build.gradle.kts).
+          SENTRY_DSN_MOVIL: ${{ secrets.SENTRY_DSN }}
+        run: |
+          if [ -z "$SENTRY_DSN_MOVIL" ]; then
+            echo "::warning::Falta el secreto SENTRY_DSN: el APK de prueba saldrá sin reporte de errores."
+          fi
+          ./gradlew assembleDebug
 
       - name: Subir el APK como artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
