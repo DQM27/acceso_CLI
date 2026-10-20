@@ -198,7 +198,7 @@ impl CacheTokenDispositivo {
             .ultimo_codigo_canjeado
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(codigo_normalizado);
-        self.guardar(&token);
+        self.guardar(base_url, &token);
         Ok(token)
     }
 
@@ -264,11 +264,13 @@ impl CacheTokenDispositivo {
 
         let token =
             autenticar_con_firmante(cliente, super::base_url(), firmante.as_ref(), metadata)?;
-        self.guardar(&token);
+        self.guardar(super::base_url(), &token);
         Ok(token)
     }
 
-    fn guardar(&self, token: &TokenDispositivo) {
+    /// `base_url` es la nube con la que se obtuvo `token`: contra esa misma se
+    /// mide el reloj, para que un token de prueba no viaje a producción.
+    fn guardar(&self, base_url: &str, token: &TokenDispositivo) {
         // El token sale ya con el desfase del header `Date` (segundos). La
         // medición en milisegundos (4 consultas, ~0,3-0,6 s en 4G) corre
         // aparte: antes se hacía en línea y la pagaba el login del teléfono
@@ -280,7 +282,11 @@ impl CacheTokenDispositivo {
             .desfase_pendiente
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-        medir_en_segundo_plano(&token.access_token, Arc::clone(&self.desfase_pendiente));
+        medir_en_segundo_plano(
+            base_url,
+            &token.access_token,
+            Arc::clone(&self.desfase_pendiente),
+        );
         *self
             .entrada
             .lock()
@@ -338,16 +344,15 @@ fn tomar(pendiente: &Mutex<Option<i64>>) -> Option<i64> {
 /// Mide el desfase en milisegundos en un hilo propio y lo deja en
 /// `destino`. Si no se puede medir (sin la función en el servidor, red
 /// lenta) no deja nada y queda el del header `Date`.
-fn medir_en_segundo_plano(access_token: &str, destino: Arc<Mutex<Option<i64>>>) {
+fn medir_en_segundo_plano(base_url: &str, access_token: &str, destino: Arc<Mutex<Option<i64>>>) {
+    let base_url = base_url.to_string();
     let access_token = access_token.to_string();
     let lanzado = std::thread::Builder::new()
         .name("reloj-preciso".to_string())
         .spawn(move || {
-            if let Some(preciso) = super::reloj_preciso::medir_desfase_ms(
-                super::base_url(),
-                super::apikey(),
-                &access_token,
-            ) {
+            if let Some(preciso) =
+                super::reloj_preciso::medir_desfase_ms(&base_url, super::apikey(), &access_token)
+            {
                 *destino
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(preciso);
@@ -596,6 +601,43 @@ mod pruebas_vincular {
             "primero con la clave vigente"
         );
         assert!(pedidos[1].contains("clave-2"), "después con la nueva");
+    }
+
+    const HORA_DEL_SERVIDOR: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+        Content-Length: 1\r\nConnection: close\r\n\r\n1";
+
+    #[test]
+    fn el_reloj_se_mide_contra_la_nube_con_la_que_se_vinculo() {
+        let firmante = Arc::new(FirmanteDePrueba::default());
+        // Canje y, en segundo plano, las 4 consultas de la hora.
+        let (url, pedidos) = servidor(vec![
+            TOKEN_D2,
+            HORA_DEL_SERVIDOR,
+            HORA_DEL_SERVIDOR,
+            HORA_DEL_SERVIDOR,
+            HORA_DEL_SERVIDOR,
+        ]);
+
+        cache_con(&firmante)
+            .vincular_en(&url, "K7QMR4XT2P", None)
+            .expect("canje");
+
+        let inicio = std::time::Instant::now();
+        loop {
+            let pidieron_la_hora = pedidos
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|p| p.contains("/rest/v1/rpc/hora_servidor_ms"));
+            if pidieron_la_hora {
+                break;
+            }
+            assert!(
+                inicio.elapsed() < Duration::from_secs(5),
+                "la medición del reloj no llegó a la nube con la que se vinculó"
+            );
+            thread::sleep(Duration::from_millis(20));
+        }
     }
 
     #[test]
