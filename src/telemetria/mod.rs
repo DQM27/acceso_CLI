@@ -15,4 +15,4 @@ pub mod config;
 pub mod grupos;
 
 pub use config::{ConfigTelemetria, Orden, config};
-pub use grupos::{Grupo, Grupos, grupo_de_evento};
+pub use grupos::{CATALOGO, Grupo, Grupos, grupo_de_evento};

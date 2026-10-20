@@ -27,29 +27,6 @@ val keystoreProperties = Properties().apply {
     }
 }
 
-// Hash corto del commit para identificar el build `diagnostico`; "sinhash"
-// si git no está disponible o el árbol no es un repositorio.
-val hashCortoDelCommit: String = try {
-    providers.exec {
-        commandLine("git", "rev-parse", "--short", "HEAD")
-        isIgnoreExitValue = true
-    }.standardOutput.asText.get().trim().ifEmpty { "sinhash" }
-} catch (e: Exception) {
-    "sinhash"
-}
-
-// Compilación PUNTUAL de producción CON telemetría de rendimiento
-// (`-PtelemetriaEnProduccion=true`, ver el workflow
-// `build-produccion-medicion.yml`): la app real, con el mismo paquete y la
-// misma firma, que opera contra la nube de producción (AMBIENTE_STAGING sigue
-// en `false`) y sólo manda los números de rendimiento a la tabla
-// `telemetria_diagnostico` del staging. Va en modo ligero (sin StrictMode ni
-// vigilante de fugas, que fuerza recolecciones de basura). Sin la propiedad, un
-// release es idéntico al de siempre: producción nunca activa la telemetría
-// por su cuenta.
-val telemetriaEnProduccion: Boolean =
-    providers.gradleProperty("telemetriaEnProduccion").orNull == "true"
-
 // A dónde van los errores de la app (ver `io.sentry.dsn` en
 // AndroidManifest.xml). Con la variable de entorno `SENTRY_DSN_MOVIL` (el CI
 // la toma del secreto `SENTRY_DSN`) apuntan al receptor propio
@@ -88,14 +65,11 @@ android {
             abiFilters += listOf("arm64-v8a")
         }
 
-        // A qué Supabase apunta el núcleo (ver AplicacionControlAcceso.kt) y
-        // si se recolecta telemetría de rendimiento (ver Telemetria.kt). Los
-        // dos en `false` para release: producción nunca los activa.
+        // A qué Supabase apunta el núcleo (ver AplicacionControlAcceso.kt): en
+        // `false` para release, producción nunca apunta a staging. Qué se mide
+        // de telemetría no depende del build sino de la orden del panel (ver
+        // Telemetria.kt).
         buildConfigField("boolean", "AMBIENTE_STAGING", "false")
-        buildConfigField("boolean", "TELEMETRIA", "false")
-        // Telemetría "ligera": sin StrictMode ni vigilante de fugas, para
-        // medir en producción sin cargar el teléfono (ver `telemetriaEnProduccion`).
-        buildConfigField("boolean", "TELEMETRIA_LIGERA", "false")
 
         // De dónde lee el actualizador el manifiesto de la última versión
         // (ver Actualizador.kt y docs/actualizaciones-android.md). Vacío =
@@ -147,49 +121,14 @@ android {
                 "URL_MANIFIESTO_ACTUALIZACION",
                 "\"https://lt.megabrisas.com/android/latest.json\"",
             )
-            if (telemetriaEnProduccion) {
-                buildConfigField("boolean", "TELEMETRIA", "true")
-                buildConfigField("boolean", "TELEMETRIA_LIGERA", "true")
-            }
-        }
-        // Build para MEDIR rendimiento en el teléfono: compilado igual que
-        // release (R8, sin `debuggable`) porque un build de debug corre sin
-        // optimizaciones y daría tiempos peores que los reales. Firmado con
-        // la llave de debug (no requiere la de producción), apunta al
-        // sandbox (staging) y manda telemetría a su tabla
-        // `telemetria_diagnostico`. Sufijo propio: convive con la app real y
-        // con el build de debug sin pisarlos. `./gradlew assembleDiagnostico`.
-        create("diagnostico") {
-            initWith(getByName("release"))
-            applicationIdSuffix = ".diag"
-            // Con el hash corto del commit al final, `version_app` de cada
-            // fila de telemetría dice de qué código salió ("1.3.0-diag+abc1234").
-            versionNameSuffix = "-diag+$hashCortoDelCommit"
-            signingConfig = signingConfigs.getByName("debug")
-            isDebuggable = false
-            // Permite adjuntar el profiler de Android Studio si algún día hay
-            // una PC a mano, sin volver la app `debuggable`.
-            isProfileable = true
-            matchingFallbacks += listOf("release")
-            buildConfigField("boolean", "AMBIENTE_STAGING", "true")
-            buildConfigField("boolean", "TELEMETRIA", "true")
-            // Completa (no ligera): este build es sólo para pruebas y sí puede
-            // cargar la medición pesada.
-            buildConfigField("boolean", "TELEMETRIA_LIGERA", "false")
-            // Hereda la URL de `release` por `initWith`: se apaga, este build
-            // tiene otro paquete y otra firma.
-            buildConfigField("String", "URL_MANIFIESTO_ACTUALIZACION", "\"\"")
-            manifestPlaceholders["sentryEnvironment"] = "diagnostico"
-            manifestPlaceholders["etiquetaApp"] = "Lattis DIAG"
         }
     }
 
-    // Los builds de prueba (debug y diagnostico) llevan el icono con la cinta
-    // TEST (`src/beta/res`, generado por `scripts/generar_iconos_beta.py`):
+    // El build de prueba (debug) lleva el icono con la cinta TEST
+    // (`src/beta/res`, generado por `scripts/generar_iconos_beta.py`):
     // junto a la app real en el mismo teléfono se distinguen a simple vista.
     sourceSets {
         getByName("debug").res.srcDir("src/beta/res")
-        getByName("diagnostico").res.srcDir("src/beta/res")
     }
 
     compileOptions {

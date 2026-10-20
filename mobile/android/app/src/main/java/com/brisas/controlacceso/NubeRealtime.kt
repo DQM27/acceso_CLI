@@ -109,7 +109,7 @@ class NubeRealtime(
         // siguiente, así que la lectura de acá suele ser todavía la del
         // header `Date` (±1 s; en staging dio latencias de -950 ms).
         val desfaseRelojMs = java.util.concurrent.atomic.AtomicReference(
-            if (Telemetria.activa) withContext(dispatcherIO) { nucleo.desfaseRelojMs() } else null,
+            if (Telemetria.permite("realtime")) withContext(dispatcherIO) { nucleo.desfaseRelojMs() } else null,
         )
         Telemetria.realtime?.desfaseReloj(desfaseRelojMs.get())
         var desfaseLeidoEn = SystemClock.elapsedRealtime()
@@ -129,7 +129,7 @@ class NubeRealtime(
         try {
             coroutineScope {
                 fun refrescarDesfase() {
-                    if (!Telemetria.activa) return
+                    if (!Telemetria.permite("realtime")) return
                     val ahora = SystemClock.elapsedRealtime()
                     if (ahora - desfaseLeidoEn < INTERVALO_DESFASE_MS) return
                     desfaseLeidoEn = ahora
@@ -208,7 +208,8 @@ class NubeRealtime(
                             return@onEach
                         }
                         try {
-                            withContext(dispatcherIO) { nucleo.aplicarOrdenTelemetria(aviso.toString()) }
+                            val cambio = withContext(dispatcherIO) { nucleo.aplicarOrdenTelemetria(aviso.toString()) }
+                            if (cambio) Telemetria.refrescarGrupos()
                         } catch (excepcion: NucleoException) {
                             Log.w("SincronizacionNube", "No se pudo aplicar la orden de telemetría", excepcion)
                         }

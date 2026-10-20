@@ -8,8 +8,8 @@ import androidx.compose.runtime.withFrameNanos
 
 /// Marca `nombre` como la pantalla visible mientras esté en la composición
 /// (a ella se atribuyen los frames trabados y las muestras de memoria) y
-/// mide cuánto tarda en dibujar su primer frame. Sólo en el build de
-/// diagnóstico: con la telemetría apagada no hace nada.
+/// mide cuánto tarda en dibujar su primer frame (este último sólo con el grupo
+/// `rendimiento`).
 @Composable
 fun RegistrarPantalla(nombre: String) {
     if (!Telemetria.activa) return
@@ -18,8 +18,10 @@ fun RegistrarPantalla(nombre: String) {
         Telemetria.entrarPantalla(nombre)
         onDispose { Telemetria.salirPantalla(nombre) }
     }
-    LaunchedEffect(nombre) {
-        withFrameNanos { }
-        Telemetria.pantallaDibujada(nombre, System.nanoTime() - inicio)
+    if (Telemetria.permite("pantalla")) {
+        LaunchedEffect(nombre) {
+            withFrameNanos { }
+            Telemetria.pantallaDibujada(nombre, System.nanoTime() - inicio)
+        }
     }
 }

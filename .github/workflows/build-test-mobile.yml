@@ -7,22 +7,8 @@ name: Build de prueba (mobile)
 # reemplazar uno). El resultado se baja desde la pestaña Actions -> este
 # run -> Artifacts (se borran solos a los 14 días, no hace falta limpiarlos
 # a mano).
-#
-# Variante `diagnostico`: compilada como release (R8, sin debuggable) pero
-# firmada con la llave de debug, apunta a staging y manda telemetría de
-# rendimiento a `telemetria_diagnostico` (ver
-# mobile/android/docs/telemetria-diagnostico.md). Se instala junto a la app
-# real y al build de debug sin pisarlos (paquete con sufijo `.diag`).
 on:
   workflow_dispatch:
-    inputs:
-      variante:
-        description: "Variante del APK"
-        type: choice
-        options:
-          - debug
-          - diagnostico
-        default: debug
 
 permissions:
   contents: read
@@ -90,23 +76,14 @@ jobs:
           printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
           python3 -c "import json; d=json.load(open('app/google-services.json')); assert any(c['client_info']['android_client_info']['package_name'].startswith('com.dqm27.lattis') for c in d['client']), 'no trae paquetes com.dqm27.lattis'"
 
-      # La variante llega por variable de entorno (no interpolada en el
-      # script) y se valida contra la lista cerrada antes de usarla.
       - name: Compilar el APK
         working-directory: mobile/android
-        env:
-          VARIANTE: ${{ inputs.variante }}
-        run: |
-          case "$VARIANTE" in
-            debug) ./gradlew assembleDebug ;;
-            diagnostico) ./gradlew assembleDiagnostico ;;
-            *) echo "Variante desconocida: $VARIANTE" >&2; exit 1 ;;
-          esac
+        run: ./gradlew assembleDebug
 
       - name: Subir el APK como artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ControlAcceso-Brisas-${{ inputs.variante }}-${{ github.sha }}
-          path: mobile/android/app/build/outputs/apk/${{ inputs.variante }}/app-${{ inputs.variante }}.apk
+          name: ControlAcceso-Brisas-debug-${{ github.sha }}
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
