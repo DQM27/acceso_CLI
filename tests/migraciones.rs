@@ -424,6 +424,8 @@ fn migracion_10_procesa_auditoria_vieja_sin_perder_el_resto_del_esquema() {
              DROP TABLE remotos_cerrados_aca;
              -- MIGRACION_58 (visitas abiertas del otro equipo) también.
              DROP TABLE movimientos_visita_remotos;
+             -- MIGRACION_59 (orden de telemetría del equipo) también.
+             DROP TABLE config_telemetria;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo con MIGRACION_17/18, que crean `cola_salida` e
              -- `ingresos_remotos` desde cero -- ya existen por el
@@ -569,6 +571,8 @@ fn migracion_11_crea_indice_parcial_sin_perder_movimientos() {
              DROP TABLE remotos_cerrados_aca;
              -- MIGRACION_58 (visitas abiertas del otro equipo) también.
              DROP TABLE movimientos_visita_remotos;
+             -- MIGRACION_59 (orden de telemetría del equipo) también.
+             DROP TABLE config_telemetria;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v10.
@@ -719,6 +723,8 @@ fn migracion_12_habilita_cambio_de_cedula() {
              DROP TABLE remotos_cerrados_aca;
              -- MIGRACION_58 (visitas abiertas del otro equipo) también.
              DROP TABLE movimientos_visita_remotos;
+             -- MIGRACION_59 (orden de telemetría del equipo) también.
+             DROP TABLE config_telemetria;
              DROP TABLE historial_ingresos_proveedor_sitio;
              -- Mismo motivo que en `migracion_10_...`: soltar lo que
              -- MIGRACION_17/18 ya crearon antes de simular v11.
@@ -1929,4 +1935,48 @@ fn check_de_placa_rechaza_caminando_con_placa_y_acepta_el_resto() {
         insertar_ingreso_base(&connection, 4, "VEHICULO", None).is_ok(),
         "VEHICULO sin placa (dato viejo pre-migración) sigue siendo válido"
     );
+}
+
+// --- Orden de telemetría del equipo (MIGRACION_59) ---
+
+fn base_con_orden_de_telemetria() -> Connection {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    connection
+}
+
+#[test]
+fn migracion_59_crea_la_tabla_de_la_orden_de_telemetria() {
+    let connection = base_con_orden_de_telemetria();
+    assert_eq!(version(&connection), SCHEMA_VERSION);
+    let columnas: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM pragma_table_info('config_telemetria')",
+            [],
+            |fila| fila.get(0),
+        )
+        .unwrap();
+    assert_eq!(columnas, 6);
+}
+
+#[test]
+fn config_telemetria_solo_admite_una_fila_y_valores_validos() {
+    let connection = base_con_orden_de_telemetria();
+    let insertar = |id: i64, dispositivo: &str, version: i64, vence: Option<&str>| {
+        connection.execute(
+            "INSERT INTO config_telemetria (id, dispositivo_id, version, grupos, vence_en, recibida_en)
+             VALUES (?1, ?2, ?3, 'fluidez', ?4, '2026-10-20T12:00:00Z')",
+            rusqlite::params![id, dispositivo, version, vence],
+        )
+    };
+    // Una sola fila (`id = 1`).
+    assert!(insertar(2, "d1", 1, None).is_err());
+    // La versión empieza en 1 (0 es "ninguna orden").
+    assert!(insertar(1, "d1", 0, None).is_err());
+    // El equipo no puede quedar vacío.
+    assert!(insertar(1, "", 1, None).is_err());
+    // El vencimiento se guarda en UTC al segundo.
+    assert!(insertar(1, "d1", 1, Some("2026-10-22 12:00")).is_err());
+    assert!(insertar(1, "d1", 1, Some("2026-10-22T12:00:00.123456Z")).is_err());
+    assert!(insertar(1, "d1", 1, Some("2026-10-22T12:00:00Z")).is_ok());
 }

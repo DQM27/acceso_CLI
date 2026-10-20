@@ -14,5 +14,6 @@ pub mod models;
 pub mod nube;
 pub mod reloj_arranque;
 pub mod services;
+pub mod telemetria;
 pub mod texto;
 pub mod tiempo;
