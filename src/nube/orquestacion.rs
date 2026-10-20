@@ -454,13 +454,13 @@ mod tests {
         );
 
         assert_eq!(resumen, ResumenSincronizacionNube::default());
+        assert!(!pidio(&pedidos, "/vehiculos_ruta"), "{pedidos:#?}");
         for recurso in [
             "/ingresos",
             "/ingresos_proveedor",
             "/ingresos_correo",
             "/prestamos_gafete_provisional",
             "/rpc/catalogo_del_sitio",
-            "/vehiculos_ruta",
             "/encargados_ruta",
             "/citas",
             "/movimientos_visita",
@@ -522,7 +522,7 @@ mod tests {
         for recurso in [
             "/ingresos",
             "/citas",
-            "/vehiculos_ruta",
+            "/encargados_ruta",
             "/movimientos_visita",
         ] {
             assert!(!pidio(&pedidos, recurso), "pidió {recurso}: {pedidos:#?}");
@@ -536,7 +536,8 @@ mod tests {
             PerfilDispositivo::Movil,
         );
 
-        assert!(pidio(&pedidos, "/vehiculos_ruta") && pidio(&pedidos, "/encargados_ruta"));
+        assert!(pidio(&pedidos, "/encargados_ruta"));
+        assert!(!pidio(&pedidos, "/vehiculos_ruta"), "{pedidos:#?}");
         assert!(!pidio(&pedidos, "/ingresos") && !pidio(&pedidos, "/citas"));
     }
 }

@@ -4172,36 +4172,34 @@ fn recibe_empresa_proveedor_con_grafia_distinta_a_una_fila_local_se_fusiona_por_
     );
 }
 
+/// El catálogo de rutas ya sólo trae el personal KOF (`encargados_ruta`): los
+/// vehículos de ruta no se piden (función retirada, su tabla se va a borrar).
 #[test]
 fn recibe_catalogo_rutas_del_sitio_y_lo_guarda_local() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-vehiculo-remoto\",\"numero_unidad\":\"22906\",\"placa\":\"C12345\",\
-         \"activo\":true,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-encargado-remoto\",\"codigo_empleado\":\"5040017\",\
-         \"nombre\":\"Michael Araya Retana\",\"activo\":true,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-    ]);
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![respuesta_json(
+        r#"[{"id":"uuid-encargado-remoto","codigo_empleado":"5040017",
+             "nombre":"Michael Araya Retana","activo":true,
+             "updated_at":"2026-01-01T00:00:00Z"}]"#,
+    )]);
 
     let resumen = recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
     assert_eq!(
         resumen,
         ResumenCatalogoRutas {
-            vehiculos_recibidos: 1,
+            vehiculos_recibidos: 0,
             encargados_recibidos: 1,
         }
     );
-    let (placa, uuid_vehiculo): (String, Option<String>) = connection
-        .query_row("SELECT placa, uuid FROM vehiculos_ruta", [], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })
-        .unwrap();
-    assert_eq!(placa, "C12345");
-    assert_eq!(uuid_vehiculo.as_deref(), Some("uuid-vehiculo-remoto"));
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 1, "{pedidos:#?}");
+    assert!(
+        pedidos[0].starts_with("GET /rest/v1/encargados_ruta?"),
+        "{}",
+        pedidos[0]
+    );
     let (codigo, nombre, cedula): (String, String, Option<String>) = connection
         .query_row(
             "SELECT codigo_empleado, nombre, cedula FROM encargados_ruta",
@@ -4226,107 +4224,31 @@ fn recibe_catalogo_rutas_del_sitio_y_lo_guarda_local() {
 }
 
 #[test]
-fn recibir_catalogo_rutas_fusiona_un_vehiculo_local_existente_por_placa_sin_duplicarlo() {
-    let connection = Connection::open_in_memory().unwrap();
-    initialize_database(&connection).unwrap();
-    connection
-        .execute(
-            "INSERT INTO vehiculos_ruta (numero_unidad, placa, uuid)
-             VALUES (NULL, 'C12345', 'uuid-local-viejo')",
-            [],
-        )
-        .unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-vehiculo-remoto\",\"numero_unidad\":\"22906\",\"placa\":\"C12345\",\
-         \"activo\":true,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-    ]);
-
-    recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
-
-    let total: i64 = connection
-        .query_row("SELECT COUNT(*) FROM vehiculos_ruta", [], |row| row.get(0))
-        .unwrap();
-    assert_eq!(total, 1, "no duplica el vehículo que ya tenía por placa");
-    let (numero_unidad, uuid): (Option<String>, Option<String>) = connection
-        .query_row(
-            "SELECT numero_unidad, uuid FROM vehiculos_ruta",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .unwrap();
-    assert_eq!(
-        numero_unidad.as_deref(),
-        Some("22906"),
-        "la fila local se actualiza con lo remoto"
-    );
-    assert_eq!(
-        uuid.as_deref(),
-        Some("uuid-local-viejo"),
-        "un uuid local ya existente nunca se pisa"
-    );
-}
-
-#[test]
 fn segundo_sync_de_catalogo_rutas_pide_solo_lo_nuevo_con_la_marca_guardada() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let base_url = format!("http://{}", listener.local_addr().unwrap());
-    let servidor = thread::spawn(move || {
-        // Primer sync = 2 pedidos (vehículos/encargados) sin marca;
-        // segundo sync = 2 más, ya con `updated_at=gt.` de la marca que
-        // dejó el primero.
-        for paso in 0..4 {
-            let (mut socket, _) = listener.accept().unwrap();
-            socket
-                .set_read_timeout(Some(Duration::from_secs(3)))
-                .unwrap();
-            let mut pedido = Vec::new();
-            let mut buffer = [0; 4096];
-            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
-                let leidos = socket.read(&mut buffer).unwrap();
-                assert!(leidos > 0);
-                pedido.extend_from_slice(&buffer[..leidos]);
-            }
-            let cuerpo = if paso == 0 {
-                let pedido = String::from_utf8(pedido).unwrap();
-                assert!(
-                    !pedido.contains("updated_at=gt."),
-                    "primer sync: sin marca todavía, tiene que pedir todo"
-                );
-                r#"[{"id":"uuid-vehiculo-remoto","numero_unidad":"22906","placa":"C12345","activo":true,"updated_at":"2026-01-05T00:00:00Z"}]"#
-            } else if paso == 2 {
-                let pedido = String::from_utf8(pedido).unwrap();
-                assert!(
-                    pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00")
-                        || pedido.contains("updated_at=gt.2026-01-05T00:00:00"),
-                    "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {pedido}"
-                );
-                "[]"
-            } else {
-                "[]"
-            };
-            write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}", cuerpo.len()).unwrap();
-        }
-    });
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![
+        respuesta_json(
+            r#"[{"id":"uuid-encargado-remoto","codigo_empleado":"5040017","nombre":"Michael Araya Retana","activo":true,"updated_at":"2026-01-05T00:00:00Z"}]"#,
+        ),
+        respuesta_json("[]"),
+    ]);
 
     recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
-    let marca_guardada: Option<String> = connection
-        .query_row(
-            "SELECT catalogo_rutas_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(
-        marca_guardada.as_deref(),
-        Some("2026-01-05T00:00:00.000000Z")
+    recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 2, "{pedidos:#?}");
+    assert!(
+        !pedidos[0].contains("updated_at=gt."),
+        "primer sync: sin marca todavía, tiene que pedir todo"
     );
-
-    recibir_catalogo_rutas_del_sitio(&connection, &contexto(&base_url)).unwrap();
-    servidor.join().unwrap();
+    assert!(
+        pedidos[1].contains("updated_at=gt.2026-01-05T00%3A00%3A00")
+            || pedidos[1].contains("updated_at=gt.2026-01-05T00:00:00"),
+        "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {}",
+        pedidos[1]
+    );
 }
 
 #[test]
@@ -4618,8 +4540,8 @@ fn catalogo_cortado_a_mitad_conserva_lo_bajado_y_no_avanza_la_marca() {
         }
         write!(
             filas,
-            "{{\"id\":\"uuid-vehiculo-{i}\",\"numero_unidad\":\"{i}\",\"placa\":\"P{i:05}\",\
-             \"activo\":true,\"updated_at\":\"2026-01-01T00:00:00Z\"}}"
+            "{{\"id\":\"uuid-encargado-{i}\",\"codigo_empleado\":\"E{i:05}\",\
+             \"nombre\":\"Encargado {i}\",\"activo\":true,\"updated_at\":\"2026-01-01T00:00:00Z\"}}"
         )
         .unwrap();
     }
@@ -4640,7 +4562,7 @@ fn catalogo_cortado_a_mitad_conserva_lo_bajado_y_no_avanza_la_marca() {
 
     assert!(resultado.is_err(), "la segunda página falló: {resultado:?}");
     let guardados: i64 = connection
-        .query_row("SELECT COUNT(*) FROM vehiculos_ruta", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM encargados_ruta", [], |row| row.get(0))
         .unwrap();
     assert_eq!(
         guardados,

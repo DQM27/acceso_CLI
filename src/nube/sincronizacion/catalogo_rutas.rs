@@ -5,17 +5,10 @@ use crate::nube::cliente::cliente_http;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ResumenCatalogoRutas {
+    /// Siempre 0: los vehículos de ruta ya no se descargan (función de rutas
+    /// retirada). Se mantiene para no cambiar lo que leen las apps.
     pub vehiculos_recibidos: u32,
     pub encargados_recibidos: u32,
-}
-
-#[derive(serde::Deserialize)]
-pub(super) struct FilaVehiculoRutaRemota {
-    pub(super) id: String,
-    pub(super) numero_unidad: Option<String>,
-    pub(super) placa: String,
-    pub(super) activo: bool,
-    pub(super) updated_at: String,
 }
 
 /// Sin `cedula` en el `SELECT` a propósito -- el catálogo remoto la trae
@@ -30,33 +23,6 @@ pub(super) struct FilaEncargadoRutaRemota {
     pub(super) nombre: String,
     pub(super) activo: bool,
     pub(super) updated_at: String,
-}
-
-pub(super) fn guardar_vehiculos_ruta(
-    transaction: &rusqlite::Transaction<'_>,
-    vehiculos: &[FilaVehiculoRutaRemota],
-) -> Result<u32, SincronizacionError> {
-    let mut recibidos = 0;
-    for vehiculo in vehiculos {
-        transaction.execute(
-            "
-            INSERT INTO vehiculos_ruta (numero_unidad, placa, activo, uuid)
-            VALUES (?1, ?2, ?3, ?4)
-            ON CONFLICT(placa) DO UPDATE SET
-                numero_unidad = excluded.numero_unidad,
-                activo = excluded.activo,
-                uuid = COALESCE(vehiculos_ruta.uuid, excluded.uuid)
-            ",
-            params![
-                vehiculo.numero_unidad,
-                vehiculo.placa,
-                vehiculo.activo,
-                vehiculo.id,
-            ],
-        )?;
-        recibidos += 1;
-    }
-    Ok(recibidos)
 }
 
 pub(super) fn guardar_encargados_ruta(
@@ -111,27 +77,15 @@ pub fn recibir_catalogo_rutas_del_sitio(
     let mut resumen = ResumenCatalogoRutas::default();
     let cliente = cliente_http();
 
-    // Trae vehículos/encargados de ruta que este dispositivo todavía no
-    // tiene localmente. Sin `sitio_id=eq...` a propósito -- ambas tablas son
-    // globales (ver `docs/planes-implementados/plan-control-rutas.md`,
+    // Trae el personal KOF (`encargados_ruta`, lo usan los gafetes
+    // provisionales) que este dispositivo todavía no tiene localmente. Los
+    // vehículos de ruta ya no se piden: la función de rutas está retirada y su
+    // tabla se va a borrar. Sin `sitio_id=eq...` a propósito -- la tabla es
+    // global (ver `docs/planes-implementados/plan-control-rutas.md`,
     // "Alcance de RLS por tabla"), mismo criterio que empresas/contratistas.
     // Página por página, cada una en su propia transacción corta, y la
     // marca de agua recién al final -- mismo criterio que
     // `recibir_catalogo_del_sitio` (N6).
-    guardar_por_pagina(
-        connection,
-        &cliente,
-        contexto,
-        &format!(
-            "{}/rest/v1/vehiculos_ruta?select=id,numero_unidad,placa,activo,updated_at{filtro_incremental}",
-            contexto.base_url
-        ),
-        |transaction, pagina: &[FilaVehiculoRutaRemota]| {
-            avanzar_marca(&mut marca_mas_nueva, pagina.iter().map(|f| &f.updated_at))?;
-            resumen.vehiculos_recibidos += guardar_vehiculos_ruta(transaction, pagina)?;
-            Ok(())
-        },
-    )?;
     guardar_por_pagina(
         connection,
         &cliente,
