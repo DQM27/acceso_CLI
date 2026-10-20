@@ -54,8 +54,8 @@
              en desktop/src-tauri/src/lib.rs: no es secreto, va embebido en
              el cliente. `sentryDsn` y `sentryEnvironment` vienen de los
              `manifestPlaceholders` de app/build.gradle.kts (el DSN, de la
-             variable de entorno `SENTRY_DSN_MOVIL` o el de siempre; el
-             entorno: debug="development", release="production"). El sample rate en
+             variable de entorno `SENTRY_DSN_MOVIL`; vacío desactiva el SDK;
+             el entorno: debug="development", release="production"). El sample rate en
              0.0: sólo error-tracking, sin performance tracing (mismo motivo
              que `traces_sample_rate = 0.0` en desktop, para no gastar cuota
              del plan gratis en algo sin usar). -->

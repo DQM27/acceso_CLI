@@ -105,7 +105,12 @@ jobs:
         working-directory: mobile/android
         env:
           VARIANTE: ${{ inputs.variante }}
+          # Destino de los errores (ver `dsnErrores` en app/build.gradle.kts).
+          SENTRY_DSN_MOVIL: ${{ secrets.SENTRY_DSN }}
         run: |
+          if [ -z "$SENTRY_DSN_MOVIL" ]; then
+            echo "::warning::Falta el secreto SENTRY_DSN: el APK de prueba saldrá sin reporte de errores."
+          fi
           case "$VARIANTE" in
             debug) ./gradlew assembleDebug ;;
             diagnostico) ./gradlew assembleDiagnostico ;;
@@ -156,7 +161,14 @@ jobs:
       # `createUpdaterArtifacts` y el build no registra el plugin.
       - name: Compilar el instalador de diagnóstico
         working-directory: desktop
-        run: npm run tauri build -- --features telemetria --config src-tauri/tauri.diagnostico.conf.json --bundles nsis
+        env:
+          # Destino de los errores (ver `SENTRY_DSN` en desktop/src-tauri/src/lib.rs).
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: |
+          if [ -z "$SENTRY_DSN" ]; then
+            echo "::warning::Falta el secreto SENTRY_DSN: el instalador de prueba saldrá sin reporte de errores."
+          fi
+          npm run tauri build -- --features telemetria --config src-tauri/tauri.diagnostico.conf.json --bundles nsis
 
       - name: Subir el instalador como artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
