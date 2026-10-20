@@ -28,6 +28,9 @@ language sql as $$
   select set_config('request.jwt.claims', json_build_object(
     'role', 'authenticated', 'sub', p_id, 'sitio_id', p_sitio, 'huella', p_huella, 'tipo', p_tipo)::text, true)
 $$;
+-- Desde 20261020130000_permisos_api_explicitos ninguna función nueva es
+-- ejecutable por `public`, tampoco estas auxiliares de la prueba.
+grant execute on all functions in schema pg_temp to authenticated;
 
 set local role authenticated;
 
