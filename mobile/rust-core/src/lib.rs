@@ -58,13 +58,14 @@ pub use firmante::{AlmacenClaveDispositivo, AlmacenClaveError};
 pub use tipos::{
     ConflictoGafeteActivo, ConflictoIngresoActivo, ConflictoIngresoProveedorActivo,
     ContratistaResumen, DatosContratista, Empresa, EmpresaProveedor, EncargadoRuta, EstadoReloj,
-    IdentidadEquipo, IngresoActivoResumen, IngresoCorreoRemoto, IngresoProveedorRemoto,
-    IngresoRemoto, MedioIngreso, ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso,
-    PreparacionIngreso, PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
-    RegistroIngresoCorreoActivoResumen, RegistroIngresoProveedorActivoResumen, ResultadoAcceso,
-    ResultadoIngresoRegistrado, ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta,
-    ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen,
-    SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
+    EstadoTelemetria, IdentidadEquipo, IngresoActivoResumen, IngresoCorreoRemoto,
+    IngresoProveedorRemoto, IngresoRemoto, MedioIngreso, ModoBusquedaActivos, MotivoDenegacion,
+    MotivoResultadoIngreso, PreparacionIngreso, PrestamoGafeteProvisionalActivoResumen,
+    PrestamoGafeteProvisionalRemoto, RegistroIngresoCorreoActivoResumen,
+    RegistroIngresoProveedorActivoResumen, ResultadoAcceso, ResultadoIngresoRegistrado,
+    ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta, ResultadoSalidaRuta,
+    ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen, SesionRealtimeNube,
+    SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
 };
 pub use visitas::{OrigenVisita, VerificacionVisita, VisitaAdentro, VisitaParaEntrar};
 

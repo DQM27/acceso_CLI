@@ -118,6 +118,7 @@ pub const CATALOGO: &[(&str, Grupo)] = &[
     ("error_js", Grupo::Base),
     ("error_telemetria", Grupo::Base),
     ("telemetria_descartada", Grupo::Base),
+    ("orden_telemetria", Grupo::Base),
     ("llamada_nucleo", Grupo::Rendimiento),
     ("transicion_ingreso", Grupo::Rendimiento),
     ("pantalla", Grupo::Rendimiento),
