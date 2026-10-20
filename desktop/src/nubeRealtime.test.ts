@@ -8,10 +8,12 @@ const mocks = vi.hoisted(() => ({
   sincronizarCambios: vi.fn(),
   enviar: vi.fn(),
   aplicarCambio: vi.fn(),
+  aplicarOrden: vi.fn(),
   crear: vi.fn(),
 }));
 vi.mock("./api/nube", () => ({
   aplicarCambioNube: mocks.aplicarCambio,
+  aplicarOrdenTelemetria: mocks.aplicarOrden,
   enviarCambiosNube: mocks.enviar,
   sesionRealtimeNube: mocks.sesion,
   sincronizarConNube: mocks.sincronizar,
@@ -26,6 +28,7 @@ interface CanalPrueba {
   }) => void;
   expulsion: (mensaje: { payload: unknown }) => void;
   cierreSesion: (mensaje: { payload: unknown }) => void;
+  ordenTelemetria: (mensaje: { payload: unknown }) => void;
   accessToken: () => Promise<string>;
 }
 const canales: CanalPrueba[] = [];
@@ -46,9 +49,11 @@ beforeEach(() => {
   mocks.sincronizarCambios.mockResolvedValue(resumen);
   mocks.enviar.mockResolvedValue(resumen);
   mocks.aplicarCambio.mockResolvedValue(true);
+  mocks.aplicarOrden.mockResolvedValue(true);
   mocks.crear.mockImplementation((_url, _key, opciones) => {
     const control: CanalPrueba = {
       estado: () => {}, aviso: () => {}, expulsion: () => {}, cierreSesion: () => {},
+      ordenTelemetria: () => {},
       accessToken: opciones.accessToken,
     };
     const canal = {
@@ -56,6 +61,7 @@ beforeEach(() => {
         if (filtro.event === "dispositivo_expulsado") control.expulsion = callback;
         else if (filtro.event === "sesion_cerrada") control.cierreSesion = callback;
         else if (filtro.event === "cambio_nube") control.aviso = callback;
+        else if (filtro.event === "telemetria_config") control.ordenTelemetria = callback;
         return canal;
       }),
       subscribe: vi.fn((callback) => { control.estado = callback; return canal; }),
@@ -129,6 +135,40 @@ describe("sincronización por Realtime", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(onExpulsado).not.toHaveBeenCalled();
+  });
+
+  it("aplica la orden de telemetría sólo si es para este equipo, sin sincronizar", async () => {
+    const canal = await iniciar();
+    const orden = { dispositivo_id: "equipo-a", version: 7, grupos: ["fluidez"], vence_en: null };
+
+    canal.ordenTelemetria({ payload: { ...orden, dispositivo_id: "equipo-b" } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.aplicarOrden).not.toHaveBeenCalled();
+
+    canal.ordenTelemetria({ payload: orden });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.aplicarOrden).toHaveBeenCalledTimes(1);
+    expect(mocks.aplicarOrden).toHaveBeenCalledWith("equipo-a", orden);
+    expect(mocks.sincronizar).not.toHaveBeenCalled();
+    expect(mocks.sincronizarCambios).not.toHaveBeenCalled();
+  });
+
+  it("una orden de telemetría que no se pudo aplicar no tumba el canal", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    mocks.aplicarOrden.mockRejectedValue(new Error("base ocupada"));
+    const onEstado = vi.fn();
+    const canal = await iniciar({ onEstado });
+
+    canal.ordenTelemetria({ payload: { dispositivo_id: "equipo-a", version: 1, grupos: [] } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(info).toHaveBeenCalled();
+
+    // El canal sigue vivo y atiende el aviso siguiente.
+    mocks.aplicarOrden.mockResolvedValue(true);
+    canal.ordenTelemetria({ payload: { dispositivo_id: "equipo-a", version: 2, grupos: [] } });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.aplicarOrden).toHaveBeenCalledTimes(2);
+    info.mockRestore();
   });
 
   it("el cierre de sesión por otra unidad sólo sincroniza si es del usuario de este equipo", async () => {

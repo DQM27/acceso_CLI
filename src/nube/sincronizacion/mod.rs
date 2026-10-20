@@ -35,6 +35,7 @@ mod historial;
 mod ingresos;
 mod paginado;
 mod proveedores;
+mod telemetria;
 mod visitas;
 
 pub use catalogo::*;
@@ -80,6 +81,7 @@ pub use proveedores::*;
 pub(in crate::nube) use proveedores::{
     recibir_cierres_de_ingresos_propios_proveedor_con, recibir_ingresos_proveedor_abiertos_con,
 };
+pub use telemetria::{aplicar_aviso_telemetria, recibir_orden_telemetria_propia};
 pub use visitas::*;
 
 /// Todo lo que hace falta para hablar con el receptor en nombre de este

@@ -557,6 +557,33 @@ pub async fn aplicar_cambio_nube(
     })?
 }
 
+/// Aviso en vivo `telemetria_config`: la orden del panel sobre qué medir en
+/// este equipo. El núcleo la guarda en la base local y la aplica a la copia en
+/// memoria, sólo si es para `dispositivo_id` y más nueva que la vigente -- ver
+/// `nube::aplicar_aviso_telemetria`. `true` si cambió lo que se mide. No pide
+/// sesión de usuario: la orden es del equipo, no de quien lo usa. Sobre la
+/// conexión secundaria: nunca toma el candado del núcleo.
+#[tauri::command]
+pub async fn aplicar_orden_telemetria(
+    app: tauri::AppHandle,
+    dispositivo_id: String,
+    aviso: serde_json::Value,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<GuiState>();
+        let conexion = state.conexion_secundaria()?;
+        Ok(nube::aplicar_aviso_telemetria(
+            &conexion,
+            &dispositivo_id,
+            &aviso,
+        ))
+    })
+    .await
+    .map_err(|error| {
+        super::mensaje_tarea_interrumpida("No se pudo aplicar la orden de telemetría", error)
+    })?
+}
+
 /// Sincronización disparada por avisos en vivo (`cambio_nube`) -- corre
 /// sólo las etapas de las tablas que cambiaron (`tablas`, tal cual las
 /// manda el aviso en `payload.table`), ver `nube::AlcanceSincronizacion`.

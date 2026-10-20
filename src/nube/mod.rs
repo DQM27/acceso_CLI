@@ -67,6 +67,7 @@ pub use sincronizacion::{
     recibir_prestamos_gafete_provisional_abiertos, usuario_sigue_activo_remoto, verificar_entrada,
     visitante_activo_en_otro_sitio, visitantes_con_conflicto_activo,
 };
+pub use sincronizacion::{aplicar_aviso_telemetria, recibir_orden_telemetria_propia};
 
 const BASE_URL_ENV: &str = "CONTROL_ACCESO_SUPABASE_URL";
 const APIKEY_ENV: &str = "CONTROL_ACCESO_SUPABASE_APIKEY";
