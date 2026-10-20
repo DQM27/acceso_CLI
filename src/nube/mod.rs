@@ -37,10 +37,11 @@ pub use sesion_unidad::{
 pub use sincronizacion::{
     AdentroPorOtraViaEnLaNube, CierreRemotoRechazado, ConflictoGafeteActivo,
     ConflictoIngresoActivo, ConflictoIngresoProveedorActivo, ConflictoMovimientoVisitaActivo,
-    ContextoSincronizacion, FalloCierresRemotos, IngresoActivoEnLaNube, IngresoCorreoRemoto,
-    IngresoProveedorRemoto, IngresoRemoto, MovimientoVisitaRemoto, PrestamoGafeteProvisionalRemoto,
-    ResultadoCierresRemotos, ResumenCatalogo, ResumenCatalogoRutas, ResumenCierresRemotos,
-    ResumenDrenado, SincronizacionError, TipoMovimientoGafete, cerrar_ingreso_correo_remoto,
+    ContextoSincronizacion, EntradaAVerificar, FalloCierresRemotos, IngresoActivoEnLaNube,
+    IngresoCorreoRemoto, IngresoProveedorRemoto, IngresoRemoto, MovimientoVisitaRemoto,
+    PrestamoGafeteProvisionalRemoto, ResultadoCierresRemotos, ResumenCatalogo,
+    ResumenCatalogoRutas, ResumenCierresRemotos, ResumenDrenado, SincronizacionError,
+    TipoMovimientoGafete, VerificacionEntradaEnLaNube, cerrar_ingreso_correo_remoto,
     cerrar_ingreso_proveedor_remoto, cerrar_ingreso_remoto, cerrar_ingresos_remotos,
     cerrar_movimiento_visita_remoto, cerrar_prestamo_gafete_provisional_remoto,
     contar_fallos_permanentes, contratista_con_ingreso_activo, contratistas_con_conflicto_activo,
@@ -57,7 +58,8 @@ pub use sincronizacion::{
     recibir_historial_ingresos_proveedor_del_sitio, recibir_historial_visitas_del_sitio,
     recibir_ingresos_abiertos, recibir_ingresos_correo_abiertos,
     recibir_ingresos_proveedor_abiertos, recibir_prestamos_gafete_provisional_abiertos,
-    usuario_sigue_activo_remoto, visitante_activo_en_otro_sitio, visitantes_con_conflicto_activo,
+    usuario_sigue_activo_remoto, verificar_entrada, visitante_activo_en_otro_sitio,
+    visitantes_con_conflicto_activo,
 };
 
 const BASE_URL_ENV: &str = "CONTROL_ACCESO_SUPABASE_URL";
