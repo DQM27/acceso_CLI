@@ -222,6 +222,30 @@ impl Nucleo {
         })
     }
 
+    /// Aviso en vivo `telemetria_config`, tal cual llega por el canal, en JSON:
+    /// la orden del panel sobre qué medir en este teléfono. El núcleo la guarda
+    /// en la base local y la aplica a la copia en memoria, sólo si es para el
+    /// dispositivo al que está vinculada la clave de este teléfono y más nueva
+    /// que la vigente -- ver `control_acceso::nube::aplicar_aviso_telemetria`.
+    /// `true` si cambió lo que se mide; `false` si no es para este teléfono, no
+    /// es más nueva o el teléfono no está vinculado. Sobre la conexión
+    /// secundaria: nunca toma el candado del núcleo.
+    pub fn aplicar_orden_telemetria(&self, aviso_json: String) -> Result<bool, NucleoError> {
+        let Some(dispositivo_id) = self.cache_token.dispositivo_vinculado() else {
+            return Ok(false);
+        };
+        let aviso: serde_json::Value =
+            serde_json::from_str(&aviso_json).map_err(|error| NucleoError::Interno {
+                mensaje: interno(error),
+            })?;
+        let conexion = self.conexion_secundaria()?;
+        Ok(control_acceso::nube::aplicar_aviso_telemetria(
+            &conexion,
+            &dispositivo_id,
+            &aviso,
+        ))
+    }
+
     /// Sincronización disparada por avisos en vivo (`cambio_nube`, ver
     /// `NubeRealtime.kt`): corre sólo las etapas de las tablas que
     /// cambiaron (`payload.table`), ver
