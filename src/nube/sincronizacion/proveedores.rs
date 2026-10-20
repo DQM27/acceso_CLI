@@ -6,6 +6,11 @@ use super::{
 };
 use crate::nube::cliente::{NubeError, cliente_http};
 
+/// Lo que este equipo tiene abierto localmente: los ids que se le preguntan
+/// a la nube para traer sus cierres (la etapa y `estado_del_sitio`).
+pub(super) const ABIERTOS_LOCALES_PROVEEDOR: &str =
+    "SELECT uuid FROM registro_ingresos_proveedor WHERE fecha_hora_salida IS NULL";
+
 /// Espejo de [`recibir_cierres_de_ingresos_propios`], pero contra
 /// `registro_ingresos_proveedor`/`ingresos_proveedor` -- faltaba (bug
 /// reportado en pruebas reales, 2026-09-17): sin esto, un ingreso de
@@ -19,10 +24,18 @@ pub fn recibir_cierres_de_ingresos_propios_proveedor(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<u32, SincronizacionError> {
+    recibir_cierres_de_ingresos_propios_proveedor_con(connection, contexto, None)
+}
+
+/// [`recibir_cierres_de_ingresos_propios_proveedor`] con las filas ya recibidas en `estado_del_sitio`
+/// (`None`: las pide por GET, como siempre).
+pub(in crate::nube) fn recibir_cierres_de_ingresos_propios_proveedor_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaCierrePropioRemoto>>,
+) -> Result<u32, SincronizacionError> {
     let abiertos_localmente: Vec<String> = {
-        let mut statement = connection.prepare(
-            "SELECT uuid FROM registro_ingresos_proveedor WHERE fecha_hora_salida IS NULL",
-        )?;
+        let mut statement = connection.prepare(ABIERTOS_LOCALES_PROVEEDOR)?;
         statement
             .query_map([], |row| row.get(0))?
             .collect::<Result<_, _>>()?
@@ -38,7 +51,10 @@ pub fn recibir_cierres_de_ingresos_propios_proveedor(
          &select=id,hora_salida,usuario_salida_nombre",
         contexto.base_url,
     );
-    let filas: Vec<FilaCierrePropioRemoto> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaCierrePropioRemoto> = match recibidas {
+        Some(filas) => filas,
+        None => obtener_json(&cliente, contexto, &url)?,
+    };
 
     let transaction = connection.unchecked_transaction()?;
     let mut aplicados = 0_u32;
@@ -124,6 +140,16 @@ pub fn recibir_ingresos_proveedor_abiertos(
     connection: &Connection,
     contexto: &ContextoSincronizacion<'_>,
 ) -> Result<Vec<IngresoProveedorRemoto>, SincronizacionError> {
+    recibir_ingresos_proveedor_abiertos_con(connection, contexto, None)
+}
+
+/// [`recibir_ingresos_proveedor_abiertos`] con las filas ya recibidas en `estado_del_sitio`
+/// (`None`: las pide por GET, como siempre).
+pub(in crate::nube) fn recibir_ingresos_proveedor_abiertos_con(
+    connection: &Connection,
+    contexto: &ContextoSincronizacion<'_>,
+    recibidas: Option<Vec<FilaIngresoProveedorRemoto>>,
+) -> Result<Vec<IngresoProveedorRemoto>, SincronizacionError> {
     let cliente = cliente_http();
     let url = format!(
         "{}/rest/v1/ingresos_proveedor?sitio_id=eq.{}&hora_salida=is.null\
@@ -131,7 +157,10 @@ pub fn recibir_ingresos_proveedor_abiertos(
          usuario_entrada_nombre,dispositivo_entrada_id",
         contexto.base_url, contexto.sitio_id,
     );
-    let filas: Vec<FilaIngresoProveedorRemoto> = obtener_json(&cliente, contexto, &url)?;
+    let filas: Vec<FilaIngresoProveedorRemoto> = match recibidas {
+        Some(filas) => filas,
+        None => obtener_json(&cliente, contexto, &url)?,
+    };
 
     let transaction = connection.unchecked_transaction()?;
     transaction.execute(

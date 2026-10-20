@@ -29,6 +29,7 @@ mod cola;
 mod conflictos;
 mod consultas_en_vivo;
 mod correo;
+mod estado;
 mod gafetes_provisionales;
 mod historial;
 mod ingresos;
@@ -49,9 +50,22 @@ pub use ingresos::*;
 // Para el aviso en vivo (`nube::en_vivo`), que aplica la misma fila sin
 // pasar por la sincronización.
 pub(in crate::nube) use anticipados::con_descargas_anticipadas;
+// `estado_del_sitio`: la orquestación pide el estado una vez y le pasa a cada
+// etapa sus filas (ver `estado`).
+pub(in crate::nube) use correo::{
+    recibir_cierres_de_ingresos_propios_correo_con, recibir_ingresos_correo_abiertos_con,
+};
+pub(in crate::nube) use estado::pedir_estado_del_sitio;
+pub(in crate::nube) use gafetes_provisionales::{
+    recibir_devoluciones_propias_gafete_provisional_con,
+    recibir_prestamos_gafete_provisional_abiertos_con,
+};
 pub(in crate::nube) use historial::guardar_historial_en_vivo;
 pub(in crate::nube) use ingresos::{
     FilaIngresoRemoto, aplicar_cierre_de_ingreso_propio, guardar_ingreso_remoto,
+};
+pub(in crate::nube) use ingresos::{
+    recibir_cierres_de_ingresos_propios_con, recibir_ingresos_abiertos_con,
 };
 pub use paginado::traslape_historial;
 use paginado::{
@@ -59,6 +73,9 @@ use paginado::{
     obtener_json_paginado_con,
 };
 pub use proveedores::*;
+pub(in crate::nube) use proveedores::{
+    recibir_cierres_de_ingresos_propios_proveedor_con, recibir_ingresos_proveedor_abiertos_con,
+};
 pub use visitas::*;
 
 /// Todo lo que hace falta para hablar con el receptor en nombre de este

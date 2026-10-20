@@ -4390,6 +4390,65 @@ fn recibir_catalogo_salta_un_contratista_remoto_sin_identificacion_o_tipo_ingres
     );
 }
 
+/// `estado_del_sitio` pide sólo los grupos del alcance, con los ids que este
+/// equipo tiene abiertos, y la etapa aplica el cierre que llegó sin pedir
+/// nada por GET.
+#[test]
+fn estado_del_sitio_pide_los_ids_abiertos_y_la_etapa_aplica_el_cierre() {
+    let connection = conexion_con_un_ingreso_proveedor_activo();
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![respuesta_json(
+        r#"{"cierres_proveedor":[{"id":"uuid-ingreso-proveedor","hora_salida":"2026-08-01T10:00:00+00:00","usuario_salida_nombre":"OPERADOR A2"}],
+            "proveedor_abiertos":[]}"#,
+    )]);
+    let contexto = contexto(&base_url);
+    let alcance = crate::nube::alcance::AlcanceSincronizacion {
+        ingresos_proveedor: true,
+        ..crate::nube::alcance::AlcanceSincronizacion::solo_envio()
+    };
+
+    let mut estado = pedir_estado_del_sitio(&connection, &contexto, &alcance)
+        .unwrap()
+        .expect("la nube tiene la función");
+    let aplicados = recibir_cierres_de_ingresos_propios_proveedor_con(
+        &connection,
+        &contexto,
+        Some(std::mem::take(&mut estado.cierres_proveedor)),
+    )
+    .unwrap();
+
+    assert_eq!(aplicados, 1);
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 1, "ningún GET aparte: {pedidos:#?}");
+    assert!(pedidos[0].starts_with("POST /rest/v1/rpc/estado_del_sitio "));
+    assert!(
+        pedidos[0].contains(r#""p_grupos":["proveedor"]"#),
+        "{}",
+        pedidos[0]
+    );
+    assert!(
+        pedidos[0].contains(r#""p_proveedor":["uuid-ingreso-proveedor"]"#),
+        "{}",
+        pedidos[0]
+    );
+    assert!(!pedidos[0].contains("p_ingresos"), "{}", pedidos[0]);
+}
+
+/// Sin `estado_del_sitio` en la nube (404) no hay estado: cada etapa pide lo
+/// suyo por GET, como antes.
+#[test]
+fn sin_estado_del_sitio_en_la_nube_cada_etapa_pide_lo_suyo() {
+    let connection = conexion_con_un_ingreso_proveedor_activo();
+    let base_url = servidor_de_respuestas(vec![
+        "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nConnection: close\r\n\
+         Content-Length: 19\r\n\r\n{\"code\":\"PGRST202\"}",
+    ]);
+    let alcance = crate::nube::alcance::AlcanceSincronizacion::completo();
+
+    let estado = pedir_estado_del_sitio(&connection, &contexto(&base_url), &alcance).unwrap();
+
+    assert!(estado.is_none());
+}
+
 /// Una app nueva contra una nube sin `catalogo_del_sitio` (404): el
 /// catálogo se pide tabla por tabla, como antes, y se guarda igual.
 #[test]
