@@ -34,7 +34,7 @@ código en todos los builds** (sin flags ni variantes de compilación).
 | 0 | Errores al receptor | Código hecho; falta confirmar el secreto |
 | 1 | Orden en la nube | Hecha |
 | 2 | Orden en la unidad | **En curso** |
-| 3 | Panel (página "Telemetría" para el administrador) | Pendiente |
+| 3 | Panel (página "Telemetría" para el administrador) | Hecha en `web/` (2026-10-20); falta probar una orden de punta a punta hasta un equipo |
 | 4 | Captura propia de errores (la más grande) | Pendiente |
 | 5 | Ajustes de rendimiento (commit en la versión del móvil, histogramas, red vs local, HTTP/2) | Pendiente |
 | 6 | Recortes y contrato | Pendiente |
@@ -64,9 +64,9 @@ verificó en esta PC: tests y clippy del núcleo, del núcleo móvil y de
 Gradle `compileDebugKotlin`/`compileReleaseKotlin`/`testDebugUnitTest`. Sin
 verificar: `cargo test --lib` del escritorio (el ejecutable falla en esta PC con
 `STATUS_ENTRYPOINT_NOT_FOUND`, también sin estos cambios), el CI y un equipo
-real. Pendiente de la fase 6: `docs/telemetria-contrato.md` aún describe
-`TELEMETRIA_EN_PRODUCCION` y `telemetria_ligera`, y falta el evento
-`orden_telemetria` en el contrato.
+real. `docs/telemetria-contrato.md` ya describe los estudios por equipo y el
+evento `orden_telemetria` (2026-10-20), en vez de `TELEMETRIA_EN_PRODUCCION` y
+las reglas del escritorio.
 
 Lo que se pedía (historial):
 

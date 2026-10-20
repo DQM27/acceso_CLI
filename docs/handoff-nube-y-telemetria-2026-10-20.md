@@ -41,7 +41,11 @@ nuevos (telemetría + traspaso) encima de `main`.
 
 ## Lo que sigue (plan del dueño: un PR al final del día con versión nueva)
 
-1. **Telemetría fase 3: página "Telemetría" en el panel web** (`web/`). El
+1. **Hecho (2026-10-20):** la página ya está en el lote, con buscador de
+   equipos, y se vio contra el sandbox. Las versiones 1.9.0 (escritorio) y
+   1.6.0 (móvil) salen sólo con lo de #203 (PR #204); la telemetría va en una
+   versión posterior. Lo que se pedía:
+   **Telemetría fase 3: página "Telemetría" en el panel web** (`web/`). El
    administrador enciende y apaga estudios (grupos `rendimiento`, `fluidez`,
    `sincronizacion`, `recursos`, `escaneo`, `depuracion`) por equipo, con
    vencimiento y nota, sobre `telemetria_ordenes` (RLS ya permite escribir

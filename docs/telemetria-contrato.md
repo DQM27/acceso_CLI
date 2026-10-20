@@ -17,7 +17,8 @@ limpiarlos antes.
    dice "qué tipo de algo", sus valores posibles están en este documento.
 4. **La unidad va en el nombre** (`_ms`, `_mb`, `_kb`, `_pct`).
 5. **Medir no puede costar más que lo que se mide.** Todo punto de medición
-   tiene que ser barato, y lo pesado se apaga en producción.
+   tiene que ser barato, y lo pesado va en un estudio que se enciende sólo en
+   el equipo que se quiere estudiar (ver "Qué mide cada equipo").
 
 ## Columnas de la tabla y campos comunes
 
@@ -33,8 +34,9 @@ Todo evento, de cualquiera de las dos plataformas, lleva en `datos`:
 | `esquema` | Versión de este contrato (hoy **2**). Sube cuando cambia el significado o el nombre de un campo existente, no cuando se agrega uno nuevo. |
 | `plataforma` | `movil` o `escritorio`. |
 
-`version_app` conserva su formato (`1.4.9-diag+<hash> (<código>)` en el móvil,
-`desktop-1.8.9-diag+<hash>` en escritorio). `dispositivo` es un UUID aleatorio
+`version_app` es `<versión> (<versionCode>)` en el móvil y
+`desktop-<versión>+<hash>` en escritorio. Las filas de antes de la fase 2 traen
+el formato viejo, con `-diag`. `dispositivo` es un UUID aleatorio
 por instalación (reinstalar la app genera uno nuevo).
 
 ## Nombre canónico de las operaciones (`llamada_nucleo`)
@@ -112,56 +114,44 @@ En el teléfono el tipo sale de la variante de `NucleoException`
 | `transicion_ingreso` (móvil, nuevo) | Por cada contratista elegido: `origen` (`ocr` o `manual`), `ms_busqueda`, `ms_nucleo` (la espera de la nube), `ms_total` hasta tener el formulario del gafete y `resultado` (`formulario`, `bloqueada` o `error`). |
 | `ocr_sesion` (móvil) | `ms_cierre_unbind`, `ms_cierre_modelos`, `ms_cierre_total`: lo que tarda cerrar la cámara en el hilo principal. |
 
-## Producción medida (sólo móvil)
+## Qué mide cada equipo: estudios por equipo
 
-Para ver cómo anda la app **real** con carga real, un release puede salir con la
-telemetría encendida en modo ligero: la misma app (paquete `com.dqm27.lattis`,
-misma firma, datos de producción) que además manda los números de rendimiento
-al staging.
+Todos los builds llevan el mismo código de medición, sin flags ni variantes de
+compilación. Qué eventos manda cada equipo lo decide su **orden de
+telemetría**, que el administrador cambia desde la página "Telemetría" del
+panel web.
 
-- **Se activa** con la variable del repositorio `TELEMETRIA_EN_PRODUCCION` en
-  `true` al sacar el release (`release.yml` compila con
-  `-PtelemetriaEnProduccion=true`). Sin la variable, o en `false`, el APK sale
-  como siempre, sin telemetría: producción nunca la activa por su cuenta.
-- **Modo ligero:** sin StrictMode y sin el vigilante de fugas (que fuerza
-  recolecciones de basura y podría causar el tirón que se quiere medir). Siguen
-  todas las mediciones de rendimiento.
-- **Se distingue en los datos** por `sesion_inicio`: `ambiente` (`produccion` o
-  `staging`) y `telemetria_ligera` (`true` o `false`).
-- **Se instala encima** de la app que ya está (se actualiza, no se desinstala:
-  la base local, los registros pendientes de enviar y la vinculación se
-  conservan).
-- **Para terminar la medición:** poner la variable en `false` y sacar el
-  siguiente release.
-- **Escritorio:** no usa esta variable. Su release lleva el código de medición
-  siempre, apagado, y lo enciende una regla (ver la sección siguiente). El build
-  de diagnóstico (feature de Cargo `telemetria`) sigue siempre encendido y
-  además redirige la app a una base y claves de pruebas.
+- **Grupos.** Cada evento pertenece a un grupo. El catálogo único está en
+  `src/telemetria/grupos.rs` (`CATALOGO`) y lo usan las dos plataformas. Un
+  evento que no está en el catálogo **no se manda**: se asigna a un grupo ahí
+  antes de usarse.
 
-## Interruptor por reglas (escritorio)
+  | Grupo | Eventos | Cuándo va |
+  |---|---|---|
+  | `base` | `sesion_inicio`, `arranque`, `salida_anterior`, `cierre`, `panic`, `error_js`, `error_telemetria`, `telemetria_descartada`, `orden_telemetria` | Siempre; no se puede apagar |
+  | `rendimiento` | `llamada_nucleo`, `transicion_ingreso`, `pantalla` | Por defecto (sin orden) |
+  | `fluidez` | `frames`, `ui_bloqueos` | Desde el panel |
+  | `sincronizacion` | `realtime`, `sincronizacion_auto`, `sesion_unidad`, `reloj` | Desde el panel |
+  | `recursos` | `muestra_sistema`, `muestra_webview`, `memoria_baja` | Desde el panel |
+  | `escaneo` | `ocr_sesion`, `camara_info` | Desde el panel |
+  | `depuracion` | `strictmode`, `retencion` | Desde el panel, por poco tiempo |
 
-La telemetría del escritorio está **apagada por defecto**. El interruptor es la
-tabla `telemetria_reglas` del staging, que se modifica por SQL
-(`supabase/scripts/telemetria_reglas_staging.sql`): sin compilar, sin pantalla
-y sin tocar el equipo.
-
-- **Cuándo se consulta:** al abrir la app y después de cada login exitoso. No
-  hay sondeo ni temporizador. Como mucho una consulta cada 5 minutos. Un
-  cambio de regla se nota en el siguiente arranque o login.
-- **Cómo:** la app llama a `reglas_telemetria_vigentes(dispositivo, plataforma,
-  version)` con la llave pública; la función devuelve sólo las reglas que le
-  tocan y la app no puede leer la tabla.
-- **Qué dice una regla:** a quién le toca (UUID de la instalación, plataforma,
-  prefijo de versión), qué tipos de evento (todos o una lista), el nivel y
-  cuándo vence (24 h por defecto).
-- **Si la consulta falla**, la telemetría queda como estaba. Una respuesta sin
-  reglas vigentes la apaga. Una regla vencida se apaga sola, sin consultar.
-- **Apagada, la app no arma eventos ni cola ni envía nada;** su única petición a
-  la nube es la consulta de reglas.
-- **Misma evaluación en las dos plataformas:** el móvil todavía no lee reglas
-  (pendiente); cuando lo haga debe cubrir los mismos casos de prueba que
-  `desktop/src-tauri/src/telemetria.rs` (sin reglas, vencida o ilegible, con y sin
-  lista de eventos, varias a la vez, sin respuesta, respuesta vacía).
+- **La orden.** Una fila por equipo en `telemetria_ordenes` (producción, por
+  migración): los grupos además de `base`, el vencimiento, una nota y una
+  versión que pone la nube. Sin fila, el equipo mide `base` y `rendimiento`.
+  Escribe sólo el administrador del panel; cada equipo lee sólo la suya. Quién
+  cambió qué queda en `telemetria_ordenes_historial`.
+- **Cómo le llega.** Al instante por Realtime (evento `telemetria_config` en
+  el canal `sitio:<id>`) y, de respaldo, en cada sincronización. El equipo
+  aplica sólo una versión más nueva que la que tiene y la guarda en su base
+  local, así que la conserva al reiniciar.
+- **Vencimiento.** Lo hace cumplir el propio equipo con su hora confiable,
+  aunque no tenga red: al vencer vuelve a `base` y `rendimiento`.
+- **Confirmación.** El equipo manda `orden_telemetria` (grupo `base`) al
+  arrancar y cada vez que cambia la orden, con `version` (`0` = sin orden) y
+  `grupos` (los vigentes, sin `base`). Es la forma de saber si la orden llegó.
+- **Ambiente.** `sesion_inicio` del móvil lleva `ambiente` (`produccion` o
+  `staging`) para separar en los datos la app de pruebas de la real.
 
 ## Lo que todavía no está resuelto
 
@@ -173,6 +163,15 @@ y sin tocar el equipo.
 - **Retención.** No hay una tarea que borre lo viejo. Pendiente: conservar 30
   días.
 - **Vistas de análisis** en el staging para consultar sin escribir consultas largas.
+- **Restos del interruptor viejo.** La tabla `telemetria_reglas` y la función
+  `reglas_telemetria_vigentes` del staging (`supabase/scripts/telemetria_reglas_staging.sql`)
+  ya no las consulta ninguna app desde la fase 2. Se pueden borrar cuando todos
+  los escritorios tengan instalada la primera versión con la fase 2 (la 1.9.0
+  todavía no la trae).
+- **Confirmación en el panel.** El panel no muestra qué versión aplicó cada
+  equipo: `orden_telemetria` va a `telemetria_diagnostico` del staging, y ahí
+  `dispositivo` es el UUID de la instalación, no `dispositivos.id`. Por ahora
+  se consulta en Grafana.
 
 ## Cómo cambiar el contrato
 
