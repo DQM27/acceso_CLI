@@ -85,6 +85,70 @@ fn servidor_de_respuestas(respuestas: Vec<&'static str>) -> String {
     format!("http://{direccion}")
 }
 
+/// Respuesta `200` con `cuerpo` JSON y su `Content-Length` (`'static` como
+/// pide `servidor_de_respuestas`).
+fn respuesta_json(cuerpo: &str) -> &'static str {
+    Box::leak(
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\
+             Content-Length: {}\r\n\r\n{cuerpo}",
+            cuerpo.len()
+        )
+        .into_boxed_str(),
+    )
+}
+
+/// Como `servidor_de_respuestas`, pero además anota cada pedido completo
+/// (línea, cabeceras y cuerpo) para que la prueba revise qué se pidió.
+fn servidor_que_anota_pedidos(respuestas: Vec<&'static str>) -> (String, Arc<Mutex<Vec<String>>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
+    let direccion = listener.local_addr().expect("dirección local");
+    let pedidos = Arc::new(Mutex::new(Vec::new()));
+    let anotados = Arc::clone(&pedidos);
+    thread::spawn(move || {
+        for respuesta in respuestas {
+            let Ok((mut conexion, _)) = listener.accept() else {
+                return;
+            };
+            conexion
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .expect("set_read_timeout");
+            let mut pedido = Vec::new();
+            let mut buffer = [0_u8; 8192];
+            let fin_cabeceras = loop {
+                let leidos = conexion.read(&mut buffer).unwrap_or(0);
+                if leidos == 0 {
+                    break pedido.len();
+                }
+                pedido.extend_from_slice(&buffer[..leidos]);
+                if let Some(posicion) = pedido.windows(4).position(|w| w == b"\r\n\r\n") {
+                    break posicion + 4;
+                }
+            };
+            let cabeceras = String::from_utf8_lossy(&pedido[..fin_cabeceras]).to_lowercase();
+            let largo: usize = cabeceras
+                .lines()
+                .find_map(|linea| linea.strip_prefix("content-length:"))
+                .and_then(|valor| valor.trim().parse().ok())
+                .unwrap_or(0);
+            while pedido.len() < fin_cabeceras + largo {
+                let leidos = conexion.read(&mut buffer).unwrap_or(0);
+                if leidos == 0 {
+                    break;
+                }
+                pedido.extend_from_slice(&buffer[..leidos]);
+            }
+            anotados
+                .lock()
+                .unwrap()
+                .push(String::from_utf8_lossy(&pedido).into_owned());
+            let _ = conexion.write_all(respuesta.as_bytes());
+            let _ = conexion.flush();
+        }
+    });
+    (format!("http://{direccion}"), pedidos)
+}
+
 /// Prueba directa del hallazgo R-06: antes, `pendientes()` filtraba con
 /// una expresión (`datetime(actualizado_en, ...)`) que `SQLite` no podía
 /// resolver con ningún índice -- cada `drenar_cola` escaneaba toda
@@ -3764,45 +3828,27 @@ fn recibe_estado_de_gafete_desde_nube_aunque_el_cursor_local_ya_exista() {
             [],
         )
         .unwrap();
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let base_url = format!("http://{}", listener.local_addr().unwrap());
-    let servidor = thread::spawn(move || {
-        // 6 pedidos por sync: empresas/contratistas/usuarios/gafetes/
-        // rutas/empresas_proveedor.
-        for paso in 0..6 {
-            let (mut socket, _) = listener.accept().unwrap();
-            socket
-                .set_read_timeout(Some(Duration::from_secs(3)))
-                .unwrap();
-            let mut pedido = Vec::new();
-            let mut buffer = [0; 4096];
-            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
-                let leidos = socket.read(&mut buffer).unwrap();
-                assert!(leidos > 0);
-                pedido.extend_from_slice(&buffer[..leidos]);
-            }
-            let cuerpo = if paso == 3 {
-                let pedido = String::from_utf8(pedido).unwrap();
-                assert!(pedido.contains("/gafetes?sitio_id=eq.sitio-1"));
-                // `updated_at` viaja en el `select=` (se necesita para la
-                // marca propia de gafetes), pero acá lo que importa es
-                // que NO haya filtro `updated_at=gt.` -- `gafetes_actualizado_hasta`
-                // nunca se tocó en este test (sólo `catalogo_actualizado_hasta`,
-                // la de arriba), así que su propio cursor sigue en NULL y
-                // pide todo, sin importar qué tan adelantado esté el otro.
-                assert!(
-                    !pedido.contains("updated_at=gt."),
-                    "el cursor de gafetes no debe heredar el de catálogo"
-                );
-                r#"[{"id":"gafete-remoto","numero":26,"tipo":"CONTRATISTA","estado":"PERDIDO","contratista_portador_id":"uuid-contratista","contratista_portador_nombre":null,"visita_portador_id":null,"visita_portador_nombre":null,"updated_at":"2026-01-01T00:00:00Z"}]"#
-            } else {
-                "[]"
-            };
-            write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}", cuerpo.len()).unwrap();
-        }
-    });
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![respuesta_json(
+        r#"{"gafetes":[{"id":"gafete-remoto","numero":26,"tipo":"CONTRATISTA","estado":"PERDIDO","contratista_portador_id":"uuid-contratista","contratista_portador_nombre":null,"visita_portador_id":null,"updated_at":"2026-01-01T00:00:00Z"}]}"#,
+    )]);
     let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
-    servidor.join().unwrap();
+    // Un solo llamado. `gafetes_actualizado_hasta` nunca se tocó en este test
+    // (sólo `catalogo_actualizado_hasta`, la de arriba), así que su propio
+    // cursor sigue en NULL y pide todo, sin importar qué tan adelantado esté
+    // el otro.
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 1, "{pedidos:#?}");
+    assert!(pedidos[0].starts_with("POST /rest/v1/rpc/catalogo_del_sitio "));
+    assert!(
+        pedidos[0].contains(r#""p_desde":"2099-01-01T00:00:00Z""#),
+        "{}",
+        pedidos[0]
+    );
+    assert!(
+        pedidos[0].contains(r#""p_desde_gafetes":null"#),
+        "el cursor de gafetes no debe heredar el de catálogo: {}",
+        pedidos[0]
+    );
     assert_eq!(resumen.gafetes_recibidos, 1);
     let estado: (String, i64) = connection
         .query_row(
@@ -3817,46 +3863,14 @@ fn recibe_estado_de_gafete_desde_nube_aunque_el_cursor_local_ya_exista() {
 #[test]
 fn segundo_sync_de_catalogo_pide_gafetes_con_su_propia_marca_guardada() {
     let (connection, _) = conexion_con_contratista();
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let base_url = format!("http://{}", listener.local_addr().unwrap());
-    let servidor = thread::spawn(move || {
-        // Dos syncs completos = 12 pedidos (empresas/contratistas/
-        // usuarios/gafetes/rutas/empresas_proveedor, dos veces). Sólo el
-        // de gafetes trae algo, para que la marca de agua realmente
-        // tenga algo que guardar.
-        for paso in 0..12 {
-            let (mut socket, _) = listener.accept().unwrap();
-            socket
-                .set_read_timeout(Some(Duration::from_secs(3)))
-                .unwrap();
-            let mut pedido = Vec::new();
-            let mut buffer = [0; 4096];
-            while !pedido.windows(4).any(|w| w == b"\r\n\r\n") {
-                let leidos = socket.read(&mut buffer).unwrap();
-                assert!(leidos > 0);
-                pedido.extend_from_slice(&buffer[..leidos]);
-            }
-            let cuerpo = if paso == 3 {
-                let pedido = String::from_utf8(pedido).unwrap();
-                assert!(
-                    !pedido.contains("updated_at=gt."),
-                    "primer sync: sin marca todavía, tiene que pedir todo"
-                );
-                r#"[{"id":"gafete-remoto","numero":26,"tipo":"CONTRATISTA","estado":"DISPONIBLE","contratista_portador_id":null,"contratista_portador_nombre":null,"visita_portador_id":null,"visita_portador_nombre":null,"updated_at":"2026-01-05T00:00:00Z"}]"#
-            } else if paso == 9 {
-                let pedido = String::from_utf8(pedido).unwrap();
-                assert!(
-                    pedido.contains("updated_at=gt.2026-01-05T00%3A00%3A00")
-                        || pedido.contains("updated_at=gt.2026-01-05T00:00:00"),
-                    "segundo sync: tiene que arrastrar la marca que dejó el primero -- pedido real: {pedido}"
-                );
-                "[]"
-            } else {
-                "[]"
-            };
-            write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{cuerpo}", cuerpo.len()).unwrap();
-        }
-    });
+    // Dos syncs = dos llamados. Sólo gafetes trae algo en el primero, para
+    // que la marca de agua realmente tenga algo que guardar.
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![
+        respuesta_json(
+            r#"{"gafetes":[{"id":"gafete-remoto","numero":26,"tipo":"CONTRATISTA","estado":"DISPONIBLE","contratista_portador_id":null,"contratista_portador_nombre":null,"visita_portador_id":null,"updated_at":"2026-01-05T00:00:00Z"}]}"#,
+        ),
+        respuesta_json("{}"),
+    ]);
 
     recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
     let marca_guardada: Option<String> = connection
@@ -3872,28 +3886,34 @@ fn segundo_sync_de_catalogo_pide_gafetes_con_su_propia_marca_guardada() {
     );
 
     recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
-    servidor.join().unwrap();
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 2, "{pedidos:#?}");
+    assert!(
+        pedidos[0].contains(r#""p_desde_gafetes":null"#),
+        "primer sync: sin marca todavía, tiene que pedir todo: {}",
+        pedidos[0]
+    );
+    assert!(
+        pedidos[1].contains(r#""p_desde_gafetes":"2026-01-05T00:00:00.000000Z""#),
+        "segundo sync: tiene que arrastrar la marca que dejó el primero: {}",
+        pedidos[1]
+    );
 }
 
 #[test]
 fn recibe_catalogo_del_sitio_y_lo_guarda_local() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-empresa-remota\",\"nombre\":\"Empresa Remota\",\"activa\":true,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-contratista-remoto\",\"nombre\":\"Persona Remota\",\
-         \"identificacion\":\"1-1111\",\"empresa_id\":\"uuid-empresa-remota\",\
-         \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
-         \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-    ]);
+    let base_url = servidor_de_respuestas(vec![respuesta_json(
+        r#"{"empresas":[{"id":"uuid-empresa-remota","nombre":"Empresa Remota","activa":true,
+            "updated_at":"2026-01-01T00:00:00Z"}],
+           "contratistas":[{"id":"uuid-contratista-remoto","nombre":"Persona Remota",
+            "identificacion":"1-1111","empresa_id":"uuid-empresa-remota",
+            "empresa_nombre":"Empresa Remota","activo":true,"tipo_ingreso":"SWAT",
+            "fecha_vencimiento_praind":null,"es_personal_ruta":false,
+            "updated_at":"2026-01-01T00:00:00Z"}],
+           "usuarios":[],"gafetes":[],"rutas":[],"empresas_proveedor":[]}"#,
+    )]);
 
     let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
@@ -3932,16 +3952,10 @@ fn recibe_catalogo_del_sitio_y_lo_guarda_local() {
 fn recibe_numeros_de_ruta_del_sitio_dentro_del_catalogo_general() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-ruta-remota\",\"numero\":79,\"activo\":true,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-    ]);
+    let base_url = servidor_de_respuestas(vec![respuesta_json(
+        r#"{"rutas":[{"id":"uuid-ruta-remota","numero":79,"activo":true,
+            "updated_at":"2026-01-01T00:00:00Z"}]}"#,
+    )]);
 
     let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
@@ -3964,16 +3978,10 @@ fn recibe_numeros_de_ruta_del_sitio_dentro_del_catalogo_general() {
 fn recibe_empresas_proveedor_del_sitio_dentro_del_catalogo_general() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-empresa-proveedor-remota\",\"nombre\":\"MayCorp\",\"activa\":true,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-    ]);
+    let base_url = servidor_de_respuestas(vec![respuesta_json(
+        r#"{"empresas_proveedor":[{"id":"uuid-empresa-proveedor-remota","nombre":"MayCorp",
+            "activa":true,"updated_at":"2026-01-01T00:00:00Z"}]}"#,
+    )]);
 
     let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
@@ -4004,16 +4012,10 @@ fn recibe_empresa_proveedor_fusiona_con_una_fila_local_existente_sin_duplicarla(
             [],
         )
         .unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-empresa-proveedor-remota\",\"nombre\":\"MayCorp\",\"activa\":true,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-    ]);
+    let base_url = servidor_de_respuestas(vec![respuesta_json(
+        r#"{"empresas_proveedor":[{"id":"uuid-empresa-proveedor-remota","nombre":"MayCorp",
+            "activa":true,"updated_at":"2026-01-01T00:00:00Z"}]}"#,
+    )]);
 
     recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
@@ -4048,16 +4050,10 @@ fn recibe_empresa_proveedor_renombrada_en_la_nube_actualiza_la_fila_ya_sincroniz
             [],
         )
         .unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-dos-pinos\",\"nombre\":\"DOS PINOS\",\"activa\":true,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-    ]);
+    let base_url = servidor_de_respuestas(vec![respuesta_json(
+        r#"{"empresas_proveedor":[{"id":"uuid-dos-pinos","nombre":"DOS PINOS","activa":true,
+            "updated_at":"2026-01-01T00:00:00Z"}]}"#,
+    )]);
 
     recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
@@ -4095,16 +4091,10 @@ fn recibe_empresa_proveedor_con_grafia_distinta_a_una_fila_local_se_fusiona_por_
             [],
         )
         .unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-mayca-real\",\"nombre\":\"MAYCA\",\"activa\":true,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-    ]);
+    let base_url = servidor_de_respuestas(vec![respuesta_json(
+        r#"{"empresas_proveedor":[{"id":"uuid-mayca-real","nombre":"MAYCA","activa":true,
+            "updated_at":"2026-01-01T00:00:00Z"}]}"#,
+    )]);
 
     recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
@@ -4301,21 +4291,15 @@ fn recibir_catalogo_fusiona_con_una_fila_local_existente_sin_duplicarla() {
             [],
         )
         .unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-empresa-remota\",\"nombre\":\"Empresa Remota\",\"activa\":true,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-contratista-remoto\",\"nombre\":\"Persona Remota\",\
-         \"identificacion\":\"1-1111\",\"empresa_id\":\"uuid-empresa-remota\",\
-         \"empresa_nombre\":\"Empresa Remota\",\"activo\":true,\"tipo_ingreso\":\"SWAT\",\
-         \"fecha_vencimiento_praind\":null,\"es_personal_ruta\":false,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-    ]);
+    let base_url = servidor_de_respuestas(vec![respuesta_json(
+        r#"{"empresas":[{"id":"uuid-empresa-remota","nombre":"Empresa Remota","activa":true,
+            "updated_at":"2026-01-01T00:00:00Z"}],
+           "contratistas":[{"id":"uuid-contratista-remoto","nombre":"Persona Remota",
+            "identificacion":"1-1111","empresa_id":"uuid-empresa-remota",
+            "empresa_nombre":"Empresa Remota","activo":true,"tipo_ingreso":"SWAT",
+            "fecha_vencimiento_praind":null,"es_personal_ruta":false,
+            "updated_at":"2026-01-01T00:00:00Z"}]}"#,
+    )]);
 
     recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
@@ -4362,16 +4346,10 @@ fn recibe_empresa_de_contratistas_renombrada_en_la_nube_actualiza_la_fila_ya_sin
             [],
         )
         .unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-mi-empresa\",\"nombre\":\"MI EMPRESA\",\"activa\":true,\
-         \"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-    ]);
+    let base_url = servidor_de_respuestas(vec![respuesta_json(
+        r#"{"empresas":[{"id":"uuid-mi-empresa","nombre":"MI EMPRESA","activa":true,
+            "updated_at":"2026-01-01T00:00:00Z"}]}"#,
+    )]);
 
     recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
@@ -4393,18 +4371,12 @@ fn recibe_empresa_de_contratistas_renombrada_en_la_nube_actualiza_la_fila_ya_sin
 fn recibir_catalogo_salta_un_contratista_remoto_sin_identificacion_o_tipo_ingreso() {
     let connection = Connection::open_in_memory().unwrap();
     initialize_database(&connection).unwrap();
-    let base_url = servidor_de_respuestas(vec![
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
-         [{\"id\":\"uuid-incompleto\",\"nombre\":\"Persona Incompleta\",\
-         \"identificacion\":null,\"empresa_id\":null,\"empresa_nombre\":null,\
-         \"activo\":true,\"tipo_ingreso\":null,\"fecha_vencimiento_praind\":null,\
-         \"es_personal_ruta\":null,\"updated_at\":\"2026-01-01T00:00:00Z\"}]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]",
-    ]);
+    let base_url = servidor_de_respuestas(vec![respuesta_json(
+        r#"{"contratistas":[{"id":"uuid-incompleto","nombre":"Persona Incompleta",
+            "identificacion":null,"empresa_id":null,"empresa_nombre":null,
+            "activo":true,"tipo_ingreso":null,"fecha_vencimiento_praind":null,
+            "es_personal_ruta":null,"updated_at":"2026-01-01T00:00:00Z"}]}"#,
+    )]);
 
     let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
 
@@ -4416,6 +4388,101 @@ fn recibir_catalogo_salta_un_contratista_remoto_sin_identificacion_o_tipo_ingres
         total, 0,
         "una fila sin datos suficientes para las reglas de acceso no se inventa"
     );
+}
+
+/// Una app nueva contra una nube sin `catalogo_del_sitio` (404): el
+/// catálogo se pide tabla por tabla, como antes, y se guarda igual.
+#[test]
+fn sin_catalogo_del_sitio_en_la_nube_pide_tabla_por_tabla() {
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    let vacia = respuesta_json("[]");
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![
+        "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nConnection: close\r\n\
+         Content-Length: 19\r\n\r\n{\"code\":\"PGRST202\"}",
+        respuesta_json(
+            r#"[{"id":"uuid-empresa-remota","nombre":"Empresa Remota","activa":true,"updated_at":"2026-01-01T00:00:00Z"}]"#,
+        ),
+        vacia,
+        vacia,
+        vacia,
+        vacia,
+        vacia,
+    ]);
+
+    let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+    assert_eq!(resumen.empresas_recibidas, 1);
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(pedidos.len(), 7, "{pedidos:#?}");
+    assert!(pedidos[0].starts_with("POST /rest/v1/rpc/catalogo_del_sitio "));
+    assert!(
+        pedidos[1].starts_with("GET /rest/v1/empresas?"),
+        "{}",
+        pedidos[1]
+    );
+    assert!(
+        pedidos[6].starts_with("GET /rest/v1/empresas_proveedor?"),
+        "{}",
+        pedidos[6]
+    );
+}
+
+/// Una tabla que llena la primera página (primer sync de un equipo nuevo con
+/// un catálogo grande) sigue con los GET desde la segunda página: no se
+/// pierde nada de lo que no entró en el llamado único.
+#[test]
+fn catalogo_con_la_primera_pagina_llena_sigue_por_get_desde_la_segunda() {
+    use std::fmt::Write as _;
+
+    let connection = Connection::open_in_memory().unwrap();
+    initialize_database(&connection).unwrap();
+    let mut empresas = String::new();
+    for i in 0..TAMANO_PAGINA_REMOTA {
+        if i > 0 {
+            empresas.push(',');
+        }
+        write!(
+            empresas,
+            "{{\"id\":\"uuid-empresa-{i:04}\",\"nombre\":\"Empresa {i:04}\",\"activa\":true,\
+             \"updated_at\":\"2026-01-01T00:00:00Z\"}}"
+        )
+        .unwrap();
+    }
+    let (base_url, pedidos) = servidor_que_anota_pedidos(vec![
+        respuesta_json(&format!("{{\"empresas\":[{empresas}]}}")),
+        respuesta_json(
+            r#"[{"id":"uuid-empresa-ultima","nombre":"Empresa ultima","activa":true,"updated_at":"2026-01-02T00:00:00Z"}]"#,
+        ),
+    ]);
+
+    let resumen = recibir_catalogo_del_sitio(&connection, &contexto(&base_url)).unwrap();
+
+    assert_eq!(
+        resumen.empresas_recibidas,
+        u32::try_from(TAMANO_PAGINA_REMOTA).unwrap() + 1
+    );
+    let pedidos = pedidos.lock().unwrap().clone();
+    assert_eq!(
+        pedidos.len(),
+        2,
+        "sólo empresas sigue por GET: {pedidos:#?}"
+    );
+    let segunda = pedidos[1].to_lowercase();
+    assert!(segunda.starts_with("get /rest/v1/empresas?"), "{segunda}");
+    assert!(segunda.contains("order=id.asc"), "{segunda}");
+    assert!(
+        segunda.contains(&format!("range: {TAMANO_PAGINA_REMOTA}-")),
+        "pide desde la segunda página: {segunda}"
+    );
+    let marca: Option<String> = connection
+        .query_row(
+            "SELECT catalogo_actualizado_hasta FROM sincronizacion_estado WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(marca.as_deref(), Some("2026-01-02T00:00:00.000000Z"));
 }
 
 /// N6: el catálogo baja página por página y cada página se guarda en su
