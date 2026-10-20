@@ -1,261 +1,162 @@
-# Plan: telemetría que importa y registro de errores propio
+# Plan: telemetría por estudios y registro de errores
 
-Plan del 2026-10-19. **Reemplaza** a `plan-herramienta-diagnostico.md` y a
-`plan-telemetria-ajustable.md` (quedan como historia). Cuando se implemente,
-`docs/telemetria-contrato.md` se reescribe a partir de este documento.
+Plan del 2026-10-20. **Reemplaza** a `plan-herramienta-diagnostico.md` y a
+`plan-telemetria-ajustable.md` (quedan como historia). Parte de **lo que ya
+existe** y lo ordena; no se reescribe desde cero.
 
-## Objetivo: datos reales de producción
+## Objetivo
 
-La telemetría y el registro de errores van en **los builds finales (release) de
-todos los equipos en uso**, para mejorar la app con lo que pasa de verdad en la
-operación, no con pruebas ni muestras.
+Mejorar la app con **datos reales de producción**: los builds finales (release)
+de todos los equipos en uso, sin muestreo. Dos piezas:
 
-- **Producción primero.** El destino principal es el release. El build de
-  diagnóstico queda sólo para lo pesado (StrictMode, vigilante de fugas) que no
-  puede correr en producción.
-- **Sin muestreo.** Cada operación, cada flujo y cada error de cada equipo se
-  cuenta. Las métricas se **agregan** por ventana (histogramas), lo que mantiene
-  el volumen bajo sin descartar ninguna llamada: agregar no es muestrear.
-- **Siempre encendido en release.** No hace falta una variable de compilación ni
-  una regla para medir. Las reglas sólo sirven para subir un equipo a
-  diagnóstico o apagar todo en una emergencia.
-- **Por eso el costo y la privacidad son requisitos de entrada:** el limpiador de
-  datos personales, los topes y la cola con límite tienen que estar antes de
-  encender en la flota, no después.
-- Los datos son del desarrollador: nada de esto va al panel web ni a la base de
-  operación del cliente.
+1. **Registro de errores:** siempre encendido. Lo hace el **SDK de Sentry**, que
+   ya está en las dos apps, mandando a nuestro receptor (`receptor-errores`), no
+   a sentry.io.
+2. **Telemetría por estudios:** los eventos se agrupan por tipo de estudio, y
+   cada estudio se **enciende y se apaga con una regla** según lo que se quiera
+   verificar, sin sacar un release.
 
-## Por qué hace falta
+Los datos son del desarrollador: nada va al panel web ni a la base de operación
+del cliente.
 
-Lo que existe creció por partes y hoy no contesta las preguntas que importan.
-Evidencia revisada el 2026-10-19 contra los datos de staging:
+## 1. Registro de errores: el SDK de Sentry, apuntado al receptor propio
 
-- **No se pudo saber si el HTTP/2 mejoró algo.** Los p50/p90 se guardan por
-  ventana de 30 s y no se pueden combinar; el release móvil no lleva el commit
-  en `version_app` (`1.5.0 (38)`); no se separa el tiempo de red del tiempo
-  local, ni se sabe qué versión de HTTP usó cada petición.
-- **Los errores reales no llegan al registro propio.** `errores_app` sólo tiene
-  los 3 eventos de prueba del 17‑oct. Los 8 pánicos del escritorio
-  (`tokio .../blocking/shutdown.rs:51`) y los 3 `ReferenceError` del 18‑oct se
-  ven en la telemetría, sin mensaje ni traza. Causa: el SDK de Sentry sigue en
-  las dos apps y, si el build no recibe el secreto `SENTRY_DSN` (los builds de
-  prueba y de diagnóstico de `build-test-mobile.yml` no lo reciben), cae al DSN
-  de respaldo de **sentry.io** (`desktop/src-tauri/src/lib.rs`,
-  `mobile/android/app/build.gradle.kts`).
-- **El volumen se va en lo que menos se consulta.** En 7 días, el escritorio
-  mandó 10 838 filas de `muestra_sistema` y `muestra_webview` (memoria, CPU,
-  heap del webview) contra 213 de `transicion_ingreso`, que es el flujo que el
-  guarda sufre.
-- **Dos formas de encender, una por plataforma.** El móvil se enciende al
-  compilar (`TELEMETRIA_EN_PRODUCCION`, `TELEMETRIA_LIGERA`); el escritorio, con
-  reglas remotas. La alerta de "equipo nuevo en vinculación" queda ciega si se
-  apaga la del móvil.
-- **Lógica duplicada en tres lenguajes** (`TelemetriaCalculos.kt`,
-  `telemetriaCalculos.ts`, `telemetria.rs`) que tiene que mantenerse igual a mano.
-- **Cinco documentos que se contradicen** (por ejemplo, el del móvil dice que el
-  release no tiene telemetría).
+### Lo que ya captura
 
-## Las preguntas que tiene que contestar
-
-Una métrica entra al nivel base **sólo si contesta una de estas preguntas**. Lo
-demás es diagnóstico y se enciende con una regla.
-
-| # | Pregunta | Con qué se contesta |
+| Plataforma | Qué captura hoy | Dónde |
 |---|---|---|
-| P1 | ¿Cuánto espera el guarda en las operaciones clave? | Tiempo de cada operación del núcleo y de cada flujo de pantalla (ingreso, salida, salida en lote), separando red y local. |
-| P2 | ¿Un cambio mejoró o empeoró? | Lo mismo de P1, agrupable por versión **y commit**, con histogramas que se combinan sin error. |
-| P3 | ¿La app está fallando? | Registro de errores: pánicos, excepciones, ANR, errores de JS y errores inesperados del núcleo, con traza y agrupados. |
-| P4 | ¿Los datos llegan a la nube? | Salud de la sincronización: pendientes por enviar, antigüedad del más viejo, último envío correcto, conexión en vivo. |
-| P5 | ¿Alguien intenta usar la app sin permiso? | Evento de vinculación (ya existe la alerta). |
+| Escritorio (Rust) | Pánicos (automático) y errores inesperados marcados a mano (sincronización, apertura del núcleo, arranque) | crate `sentry` 0.49, `desktop/src-tauri/src/lib.rs` |
+| Móvil (Kotlin) | Excepciones no atrapadas, ANR y fallos nativos (automático); trazas legibles (R8 no ofusca) | `io.sentry:sentry-android` 8.9.0, `AndroidManifest.xml` |
+| Receptor | Limpia datos personales, agrupa por huella, limita el ritmo, guarda 90 días | `supabase/functions-staging/receptor-errores`, tabla `errores_app` |
+| Aviso | Correo "Error nuevo en las apps" | Grafana |
 
-## Diseño
+### Lo que falla o falta
 
-### Dos piezas, un solo canal
-
-1. **Métricas** (P1, P2, P4, P5): números agregados, catálogo cerrado.
-2. **Registro de errores** (P3): un evento por error, con traza y contexto.
-
-Las dos usan el mismo transporte: cola en disco, envío por lotes y reintento.
-
-### Todo en el núcleo Rust compartido
-
-`control_acceso` ya lo usan el escritorio y el móvil (`mobile/rust-core`). La
-telemetría vive ahí, en un módulo `telemetria` del núcleo, y cada plataforma sólo
-aporta lo que el núcleo no puede ver (frames, ANR, errores de JS):
-
-| En el núcleo (una sola vez) | En cada plataforma (adaptador delgado) |
-|---|---|
-| Identidad del equipo y la sesión | Ciclo de vida (primer plano, cierre) |
-| Medición de cada operación del núcleo, incluido el tiempo de red | Flujos de pantalla (ingreso, salida) |
-| Histogramas y agregación por ventana | Fluidez (frames congelados, bloqueos de la UI) |
-| Gancho de pánicos y registro de errores | Excepciones de Kotlin, ANR, errores de JS |
-| Limpiador de datos personales | |
-| Cola en disco, envío, reintento y topes | |
-| Evaluación de reglas | |
-
-Así se elimina la duplicación Kotlin/TS/Rust, y las pruebas se escriben una sola
-vez.
-
-### Identidad: en todo evento
-
-`dispositivo` (UUID por instalación), `sesion` (UUID por arranque),
-`plataforma`, `version` (semver), **`commit`** (hash corto, también en
-release), `build` (`release`, `diagnostico`, `debug`), `ambiente`
-(`produccion`, `staging`) y `esquema`. Con el commit, el antes y el después de un
-cambio se separan con `git merge-base`, sin adivinar por fechas.
-
-### Histogramas con cubos fijos
-
-Cada operación se agrega en una ventana de **5 minutos** como
-`conteo`, `total_ms` y cubos fijos en ms:
-`5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, +inf`.
-Los cubos se suman entre ventanas, equipos y versiones, así que cualquier
-percentil que se calcule después es consistente. Reemplaza a los p50/p90 por
-ventana, que no se pueden combinar.
-
-### Catálogo del nivel base
-
-| Métrica | Dimensiones | Contesta |
+| Problema | Efecto | Arreglo |
 |---|---|---|
-| `operacion`: histograma del tiempo total y del tiempo **de red** | nombre canónico, resultado (`ok` o tipo de error de la lista fija), `red_tipo` | P1, P2 |
-| Peticiones HTTP de la operación y cuántas fueron HTTP/2 | nombre canónico | P2 |
-| `flujo`: tiempo percibido (ingreso hasta el formulario, ingreso hasta guardado, salida, salida en lote) | flujo, origen (`ocr`/`manual`), resultado | P1, P2 |
-| Fluidez: frames congelados (móvil) y bloqueos de la UI (escritorio) | pantalla | P1 |
-| Arranque: ms hasta el primer frame, frío o tibio | — | P1 |
-| `estado_sincronizacion` (cada 5 min con la app activa y al cambiar) | pendientes, antigüedad del más viejo, último envío correcto, conexión en vivo y reconexiones | P4 |
-| `salida_anterior` (por qué murió el proceso) | motivo con nombre (incluido `PACKAGE_UPDATED`, hoy `DESCONOCIDO_16`) | P3 |
-| `vinculacion` (pantalla abierta, código enviado) | — | P5 |
+| Si el build no recibe el secreto `SENTRY_DSN`, el código cae a un DSN de respaldo de **sentry.io** (`lib.rs`, `build.gradle.kts`). `build-test-mobile.yml` no lo pasa. | Los errores de esos builds se van al Sentry viejo. `errores_app` sólo tiene los 3 de prueba; los 8 pánicos del escritorio del 18‑oct no llegaron. | Quitar el respaldo (sin URL no se envía) y pasar el secreto en todos los workflows. Confirmar que el secreto de los release apunta al receptor. |
+| El frontend del escritorio (React en el webview) no tiene SDK. | Los errores de JS sólo se cuentan en la telemetría (`error_js`), sin mensaje ni traza. | Agregar el SDK de navegador de Sentry al frontend, al mismo receptor. |
+| En el móvil, los errores inesperados del núcleo (`interno`, base de datos) se atrapan y no se reportan. Sólo `MrzParser` llama a `Sentry.captureMessage`. | Un pánico de Rust en el móvil llega como excepción atrapada y no se registra. | `Sentry.captureException` en `medirNucleo` para los tipos inesperados, igual que hace el escritorio. |
+| La telemetría del pánico guarda sólo el lugar, sin mensaje. | No se sabe qué pasó. | Nada que hacer: el detalle viene por el SDK una vez arreglado lo de arriba. |
 
-Volumen esperado: decenas a pocos cientos de filas por hora por equipo activo,
-sólo de las operaciones que ocurrieron.
+## 2. Telemetría por estudios
 
-### Nivel diagnóstico (sólo con regla)
+### Qué sirve y qué no
 
-Memoria, CPU, hilos, descriptores, GC, heap del webview, cámara, detalle del
-OCR, latencia de la conexión en vivo: lo que hoy se muestrea cada 30 s o 2 min.
-Se enciende por equipo con una regla que vence (24 h por defecto) y sigue yendo a
-`telemetria_diagnostico`. StrictMode y el vigilante de fugas siguen siendo
-exclusivos del build de diagnóstico: encenderlos en caliente causaría el tirón que
-se quiere medir.
+Basado en los datos de staging del 13 al 19‑oct (filas por semana).
 
-### Registro de errores propio (reemplaza al SDK de Sentry)
+| Evento | Plataforma | Filas/sem | Veredicto |
+|---|---|---|---|
+| `sesion_inicio`, `arranque`, `salida_anterior`, `cierre` | ambas | ~120 | **Sirve.** Cuántos equipos, qué versión, si murió el proceso. Barato. Ajuste: el motivo 16 del móvil es `PACKAGE_UPDATED` (hoy `DESCONOCIDO_16`). |
+| `panic`, `error_js`, `error_telemetria` | ambas | ~20 | **Sirve como conteo** (detecta errores aunque falle el SDK). El detalle viene del SDK. |
+| `llamada_nucleo` | ambas | 9 700 | **Sirve, es el centro del rendimiento.** Ajustes abajo. |
+| `transicion_ingreso` | ambas | 213 | **Sirve mucho:** es la espera que vive el guarda al registrar un ingreso. |
+| `pantalla` | ambas | 800 | Sirve: tiempo hasta dibujar cada pantalla. |
+| `frames` (móvil), `ui_bloqueos` (escritorio) | — | 1 300 | Sirve cuando se persiguen trabas de la interfaz. |
+| `realtime`, `sincronizacion_auto` | ambas | 1 770 | Sirve cuando se estudia la sincronización. |
+| `reloj`, `sesion_unidad` | ambas | 2 790 | Sirve sólo para auditar el reloj confiable o la sesión única; se manda en **cada** sincronización. No va siempre. |
+| `muestra_sistema`, `muestra_webview` | ambas | 11 360 | **El mayor volumen** (35 % de las filas) y lo menos consultado. Sólo para estudiar memoria, CPU o batería. |
+| `memoria_baja` | móvil | 430 | Mayormente ruido del paso a segundo plano. Sólo en el estudio de recursos, y filtrar niveles. |
+| `ocr_sesion`, `camara_info` | móvil | 380 | Sirve para calibrar el escáner. `camara_info` repite datos fijos: basta una vez por versión y equipo. |
+| `strictmode`, `retencion` | móvil | ~20 | Sólo en el build de diagnóstico (son pesados). Sin cambio. |
 
-Qué se captura:
+### Los grupos
 
-| Origen | Cómo |
-|---|---|
-| Pánicos de Rust (escritorio y núcleo del móvil) | `std::panic::set_hook` encadenado al anterior: mensaje limpio, lugar y traza. Se escribe **a disco en el momento** (el proceso puede morir) y se envía después. |
-| Excepciones de Kotlin | `Thread.setDefaultUncaughtExceptionHandler` encadenado al del sistema, y un manejador para corrutinas. |
-| ANR, fallo nativo, falta de memoria (móvil) | `ApplicationExitInfo` al arrancar, con el volcado de hilos del ANR. |
-| Errores de JS (escritorio) | `window.onerror`, `unhandledrejection` y el `ErrorBoundary`, hacia un comando del núcleo. |
-| Errores inesperados del núcleo | Tipos `interno`, `base_de_datos` y de apertura. Los esperados (`sin_red`, `rechazado`, `validacion`…) sólo se cuentan en las métricas. |
+| Grupo | Eventos | Para qué estudio | Por defecto |
+|---|---|---|---|
+| `base` | `sesion_inicio`, `arranque`, `salida_anterior`, `cierre`, `panic`, `error_js`, `error_telemetria` | Estado de la flota: equipos, versiones, caídas | **Siempre encendido** |
+| `rendimiento` | `llamada_nucleo`, `transicion_ingreso`, `pantalla` | ¿Cuánto espera el guarda? ¿Un cambio mejoró? | Por regla |
+| `fluidez` | `frames`, `ui_bloqueos` | ¿Se traba la interfaz? | Por regla |
+| `sincronizacion` | `realtime`, `sincronizacion_auto`, `sesion_unidad`, `reloj` | ¿Llegan los datos? ¿Latencia entre equipos? ¿Reloj? | Por regla |
+| `recursos` | `muestra_sistema`, `muestra_webview`, `memoria_baja` | Memoria, CPU, batería, fugas | Por regla |
+| `escaneo` | `ocr_sesion`, `camara_info` | Calibrar OCR y cámara | Por regla |
 
-Cada evento lleva identidad, título limpio, traza (marcando lo propio:
-`control_acceso`, `com.brisas.controlacceso`, `uniffi.control_acceso_mobile`),
-pantalla actual y **migas**: las últimas 20 operaciones (nombre, resultado,
-hora), nunca datos. En el equipo, como mucho N eventos por huella y hora. La
-**huella** la sigue calculando el receptor (`calcularHuella`), para poder cambiar
-la agrupación sin sacar versiones.
+Un evento nuevo se asigna a un grupo antes de usarse.
 
-### Entrada y almacenamiento
+### Cómo se encienden (reusando las reglas)
 
-- **Dónde viven:** con la flota entera mandando, los datos dejan de ser de
-  pruebas. Recomendado: un **proyecto de Supabase propio de observabilidad**,
-  separado del staging (que se usa para pruebas y se puede restaurar) y de
-  producción (que es del cliente). Mientras se crea, sigue en staging.
-- **Receptores:** Edge Functions de Supabase en ese proyecto. `receptor-errores` ya
-  existe; pasa a aceptar el formato propio (y sigue aceptando el de Sentry hasta
-  que no queden versiones viejas en uso). Se agrega `receptor-telemetria`, con
-  validación de forma, tamaño y ritmo. Después se **quita el INSERT público** de
-  las tablas.
-- **Tablas:** `metricas_operaciones` (cubos como `int[]`),
-  `estado_equipos`, `eventos_app` (arranque, salida anterior, vinculación),
-  `errores_app` (ya existe; se le agregan `commit`, `build` y `migas`) y
-  `telemetria_diagnostico` (sólo el nivel diagnóstico).
-- **Vistas** para no escribir consultas largas: percentiles por versión y
-  commit a partir de los cubos, y comparación entre dos versiones.
-- **Retención:** métricas agregadas y errores, 90 días; diagnóstico, 30 días.
-  Con `pg_cron`.
+Ya existe en staging: tabla `telemetria_reglas` y función
+`reglas_telemetria_vigentes` (`supabase/scripts/telemetria_reglas_staging.sql`).
+Una regla dice a quién le toca (equipo, plataforma, prefijo de versión), qué
+eventos (`eventos text[]`) y cuándo vence. El escritorio **ya la consulta en sus
+release** (al abrir y tras el login, sin sondeo) y filtra por tipo de evento,
+con pruebas.
 
-### Encendido
+Lo que se agrega:
 
-| Pieza | En release (producción) | Cómo se cambia |
-|---|---|---|
-| Registro de errores | **Siempre encendido**, todos los equipos | Una regla lo puede apagar (interruptor de emergencia) |
-| Métricas base | **Siempre encendidas**, todos los equipos, sin muestreo | Igual |
-| Diagnóstico | Apagado | Regla por equipo, con vencimiento |
+1. **Grupos en la base, no en las apps:** una tabla `telemetria_grupos (grupo,
+   tipo)`, y la función expande los nombres de grupo de `eventos` a tipos. El
+   escritorio no cambia: sigue recibiendo una lista de tipos. Mover un evento de
+   grupo es un `update`, sin release.
+2. **`base` siempre:** una regla permanente (`vence_en` lejano) para todos con
+   `eventos = '{base}'`. Es la única regla que no vence.
+3. **El móvil lee las reglas** igual que el escritorio (portar `Reglas::combinar`
+   y `Reglas::siguiente` con los mismos casos de prueba). Con eso desaparecen
+   `TELEMETRIA_EN_PRODUCCION` y `TELEMETRIA_LIGERA`: el release del móvil lleva
+   la medición siempre, encendida por regla.
+4. **Porcentaje de la flota** en la regla (opcional, después): encender un
+   estudio en la mitad de los equipos para comparar un cambio con la otra mitad.
 
-Las dos plataformas leen las reglas igual (al abrir y tras el login, sin sondeo),
-con la evaluación en el núcleo. Desaparecen `TELEMETRIA_EN_PRODUCCION` y
-`TELEMETRIA_LIGERA`: medir deja de depender de cómo se compiló el release.
+Ejemplos de uso:
 
-### Grafana (como código en `docs/grafana/`)
+```sql
+-- Estudio de rendimiento en toda la flota de escritorio 1.8.x por 7 días
+insert into public.telemetria_reglas (plataforma, version_desde, eventos, vence_en, nota)
+values ('escritorio', 'desktop-1.8.', '{rendimiento}', now() + interval '7 days',
+        'efecto del HTTP/2');
 
-- **Lattis · Salud** (el de todos los días): errores nuevos y abiertos;
-  pánicos, ANR y fallos por versión; equipos con sincronización atrasada; último
-  reporte de cada equipo.
-- **Lattis · Rendimiento:** operaciones y flujos clave (p50, p90 y p99) por
-  versión y commit, red frente a local, porcentaje de HTTP/2, y una comparación de
-  dos versiones lado a lado.
-- **Lattis · Diagnóstico:** el detalle de las sesiones con regla.
+-- Recursos y fluidez en un solo teléfono por 24 h
+insert into public.telemetria_reglas (dispositivo, eventos, nota)
+values ('<uuid>', '{recursos,fluidez}', 'posible fuga de descriptores');
 
-Alertas: error nuevo (ya existe), pánico/ANR/fallo, sincronización atascada
-(pendiente más viejo de más de 15 min en un equipo que reportó en los últimos
-10 min) y equipo nuevo en vinculación (ya existe; deja de depender de una
-variable de compilación).
+-- Apagar todos los estudios (base sigue)
+update public.telemetria_reglas set activa = false
+where activa and eventos <> '{base}';
+```
 
-## Qué se quita
+### Ajustes del grupo `rendimiento`
 
-- SDK de Sentry: crate `sentry`, `io.sentry:sentry-android`, `meta-data` del
-  manifiesto, reglas de ProGuard, los DSN de respaldo a sentry.io y el secreto
-  `SENTRY_DSN` (se reemplaza por la URL del receptor).
-- Los muestreos de recursos del nivel base (pasan a diagnóstico).
-- Los cálculos duplicados en Kotlin y TypeScript.
-- `TELEMETRIA_EN_PRODUCCION` y `TELEMETRIA_LIGERA`.
-- Los planes viejos (se archivan) y lo que sobre de los documentos por
-  plataforma (quedan sólo cómo compilar el build de diagnóstico).
+Lo que impidió saber si el HTTP/2 mejoró algo:
+
+- El release del móvil no lleva el commit en `version_app` (`1.5.0 (38)`); el
+  escritorio sí (`desktop-1.8.15+15c0346`). Agregarlo.
+- `p50`/`p90` por ventana de 30 s no se pueden combinar. Agregar cubos fijos de
+  histograma (`5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000` ms) a
+  `llamada_nucleo`; los p50/p90 se quedan para no romper los tableros.
+- Separar el tiempo de red del local y contar cuántas peticiones fueron HTTP/2.
+
+## Grafana
+
+- Una vista de **reglas vigentes** (qué estudios están encendidos, dónde y hasta
+  cuándo).
+- Una sección por grupo en el tablero de telemetría, y el tablero de errores
+  sobre `errores_agrupados`.
+- Alertas que siguen: error nuevo y equipo nuevo en vinculación. Esta última
+  depende de que `base` esté encendido siempre, lo que deja de depender de cómo se
+  compiló el release.
 
 ## Fases
 
-Una fase por PR (o dos pequeños), con CI en verde. **Cada fase termina cuando
-funciona en un release instalado en los equipos reales**, no en un build de
-prueba.
+Cada fase termina con **el release instalado en los equipos reales**.
 
 | # | Fase | Terminada cuando |
 |---|---|---|
-| 0 | **Errores de producción al receptor ya.** Confirmar que el secreto `SENTRY_DSN` de `release.yml` y `release-movil.yml` apunta al receptor propio; quitar el DSN de respaldo a sentry.io (sin URL, los errores quedan en el registro local); pasar la misma URL a `build-test-mobile.yml`. | Un error de prueba disparado desde el **release** de cada plataforma llega a `errores_app` y llega el correo de "Error nuevo". |
-| 1 | **Módulo `telemetria` del núcleo, listo para producción:** identidad, histograma, agregador, cola en disco con tope, envío con reintento, **limpiador**, topes y evaluación de reglas. Sin tocar las apps. | Pruebas: la suma de histogramas es exacta; la cola sobrevive a un reinicio y respeta el tope; el limpiador quita cédula, correo, placa y rutas con usuario; las reglas cubren los casos de `telemetria.rs`. |
-| 2 | **Registro de errores propio en el release** de las dos apps, y fuera el SDK de Sentry. El receptor acepta el formato propio. | En el release, un pánico, una excepción de Kotlin y un error de JS de prueba llegan agrupados, con mensaje, traza legible y migas. Sentry ya no está en `Cargo.toml` ni en Gradle. |
-| 3 | **Métricas de operaciones y flujos en el release**, `receptor-telemetria` con topes, tablas, vistas y tablero de Rendimiento. | Todos los equipos con el release nuevo reportan; el tablero compara dos versiones por commit sin SQL a mano, con tiempo de red separado y el porcentaje de HTTP/2. |
-| 4 | **Salud de sincronización**, tablero de Salud y alertas. | El tablero muestra la sincronización de cada equipo en operación; un equipo sin red 20 min con un registro pendiente dispara "sincronización atascada". |
-| 5 | **Encendido unificado:** el móvil lee reglas, los muestreos de recursos pasan a diagnóstico y se quitan las variables de compilación. | Un release sin variables mide solo; una regla sube un equipo a diagnóstico y, al vencer, vuelve a base. |
-| 6 | **Cierre:** proyecto de observabilidad propio, quitar el INSERT público, retención programada, contrato reescrito, planes viejos archivados y código duplicado borrado. | El contrato describe lo que hace el código y no queda escritura pública en las tablas. |
+| 0 | **Errores al receptor:** quitar el DSN de respaldo a sentry.io; secreto en todos los workflows; confirmar el de los release. | Un error de prueba del release de cada plataforma llega a `errores_app` y llega el correo. |
+| 1 | **Grupos en la base:** tabla `telemetria_grupos`, función que expande grupos, regla permanente de `base`. | En el escritorio, una regla `{rendimiento}` manda sólo esos eventos, y sin ella sólo llega `base`. |
+| 2 | **Reglas en el móvil** y fuera las variables de compilación. | Lo mismo que la fase 1, en el teléfono, con los mismos casos de prueba que el escritorio. |
+| 3 | **Huecos de errores:** SDK en el frontend del escritorio y `captureException` de los errores inesperados del núcleo en el móvil. | Un error de JS y un error interno del núcleo de prueba llegan con traza. |
+| 4 | **Ajustes de `rendimiento`:** commit en el móvil, cubos de histograma, red frente a local y HTTP/2. | El tablero compara dos versiones por commit. |
+| 5 | **Recortes:** `camara_info` una vez por versión, niveles de `memoria_baja`, motivo 16 con nombre, retención programada, tablero por grupos, contrato reescrito. | `docs/telemetria-contrato.md` describe los grupos y lo que hace el código. |
 
 La fase 0 se puede hacer ya y no depende de las demás.
-
-## Cómo evaluar un cambio de rendimiento
-
-Lección del HTTP/2:
-
-1. **Antes de cambiar**, escribir qué operación y qué cifra se espera mover
-   (por ejemplo, el p90 del tiempo de red de `preparar_ingreso`).
-2. Comparar con **la flota de producción**, antes y después, separando **por
-   commit** y no por fecha, y por tipo de red.
-3. Mejor todavía: si el cambio se puede apagar, ponerlo detrás de una regla y
-   encenderlo en **la mitad de los equipos** durante unos días. Las dos mitades
-   viven la misma operación, la misma red y las mismas horas: la diferencia es
-   el cambio.
-4. Para efectos de red, medir también en laboratorio
-   (`tests/medir_conexion_nube.rs`) antes de sacar el release.
 
 ## Decisiones abiertas
 
 | Decisión | Recomendación |
 |---|---|
-| Avisar al cliente que sus equipos mandan métricas técnicas y errores (sin datos personales) | Sí, antes de la fase 3. No bloquea la fase 0. |
-| Dónde viven los datos de la flota | Proyecto de Supabase propio de observabilidad; staging sólo mientras se crea. |
-| Entrada: Edge Function o Worker de Cloudflare | Edge Function: ya existe `receptor-errores`, es la misma pila y son menos piezas. |
-| Ventana de agregación | 5 minutos. |
+| Avisar al cliente que sus equipos mandan métricas técnicas y errores (sin datos personales) | Sí, antes de encender estudios en toda la flota. |
+| Dónde viven los datos de la flota | Staging por ahora; un proyecto de Supabase propio de observabilidad si el volumen crece. |
+| Porcentaje de la flota en las reglas | Después de la fase 2, cuando haga falta el primer experimento. |
 
 ## Reglas del proyecto que aplican
 
