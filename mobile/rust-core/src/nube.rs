@@ -246,6 +246,20 @@ impl Nucleo {
         ))
     }
 
+    /// Los grupos de telemetría que rigen ahora en este teléfono (`base`
+    /// siempre; los demás según la orden del panel, que vuelve a
+    /// `rendimiento` al vencer). Sólo lee la copia en memoria (sin tocar la
+    /// base ni el candado del núcleo), así que Kotlin puede pedirla seguido.
+    pub fn telemetria_grupos_vigentes(&self) -> Vec<String> {
+        use control_acceso::telemetria::{Grupo, config};
+        let vigentes = config().grupos_vigentes(self.reloj.ahora_utc().timestamp());
+        Grupo::TODOS
+            .into_iter()
+            .filter(|grupo| vigentes.contiene(*grupo))
+            .map(|grupo| grupo.nombre().to_owned())
+            .collect()
+    }
+
     /// Sincronización disparada por avisos en vivo (`cambio_nube`, ver
     /// `NubeRealtime.kt`): corre sólo las etapas de las tablas que
     /// cambiaron (`payload.table`), ver

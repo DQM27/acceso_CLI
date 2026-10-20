@@ -367,7 +367,7 @@ class ActivosViewModel(
                 // Diagnóstico: cuánto tardó cada fase entre elegir al contratista
                 // (por OCR o a mano) y tener el formulario del gafete listo. El
                 // primer frame de esa pantalla lo mide el evento `pantalla`.
-                if (Telemetria.activa) {
+                if (Telemetria.permite("transicion_ingreso")) {
                     Telemetria.evento(
                         "transicion_ingreso",
                         mapOf(
