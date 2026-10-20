@@ -47,8 +47,18 @@ pub fn medir_desfase_ms(base_url: &str, apikey: &str, access_token: &str) -> Opt
             .send()
             .ok()?;
         let viaje = inicio.elapsed();
-        // Sin la función (404) o sin permiso: no tiene sentido insistir.
+        // Sin la función (404) o sin permiso: no tiene sentido insistir. Se
+        // anota el motivo: en producción aparecían 401 `PGRST301` (JWT que la
+        // nube no pudo validar) sin pista de por qué.
         if !respuesta.status().is_success() {
+            let status = respuesta.status().as_u16();
+            let cuerpo: String = respuesta
+                .text()
+                .unwrap_or_default()
+                .chars()
+                .take(200)
+                .collect();
+            log::warn!("reloj preciso: la nube respondió {status}: {cuerpo}");
             return None;
         }
         let Ok(hora_servidor_ms) = respuesta.text().ok()?.trim().parse::<i64>() else {

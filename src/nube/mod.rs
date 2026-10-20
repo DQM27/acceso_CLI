@@ -26,7 +26,8 @@ pub use auth_supabase::{
 };
 pub use cache_token::CacheTokenDispositivo;
 pub use cliente::{
-    MetadatosDispositivo, NubeError, TokenDispositivo, precalentar_conexiones_de_verificacion,
+    MetadatosDispositivo, NubeError, TokenDispositivo, mantener_conexiones_vivas,
+    precalentar_conexiones_de_verificacion,
 };
 pub use en_vivo::aplicar_cambio_en_vivo;
 pub use firmante::{ErrorFirmante, FirmanteArchivo, FirmanteDispositivo};
