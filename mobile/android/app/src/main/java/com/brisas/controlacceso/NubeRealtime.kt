@@ -197,6 +197,23 @@ class NubeRealtime(
                         }
                     }
                     .launchIn(this)
+                // La orden del panel sobre qué medir en este teléfono. El núcleo
+                // la guarda y la aplica (sólo si es de este equipo y más nueva);
+                // no hace falta sincronizar ni refrescar nada. Si falla, la
+                // sincronización completa la vuelve a pedir. Mismo criterio que
+                // `nubeRealtime.ts` en escritorio.
+                canal.broadcastFlow<JsonObject>("telemetria_config")
+                    .onEach { aviso ->
+                        if (!OrdenTelemetriaNube.esParaEsteEquipo(aviso.texto("dispositivo_id"), sesion.dispositivoId)) {
+                            return@onEach
+                        }
+                        try {
+                            withContext(dispatcherIO) { nucleo.aplicarOrdenTelemetria(aviso.toString()) }
+                        } catch (excepcion: NucleoException) {
+                            Log.w("SincronizacionNube", "No se pudo aplicar la orden de telemetría", excepcion)
+                        }
+                    }
+                    .launchIn(this)
                 canal.broadcastFlow<JsonObject>("dispositivo_expulsado")
                     .onEach { aviso ->
                         if (!ExpulsionNube.esParaEsteEquipo(aviso.texto("dispositivo_id"), sesion.dispositivoId)) {

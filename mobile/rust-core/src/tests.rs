@@ -286,6 +286,26 @@ fn registrar_ingreso_verificado_sin_vincular_no_toca_la_red() {
     assert_eq!(resultado.resultado_acceso, ResultadoAcceso::Permitido);
 }
 
+/// Un teléfono sin vincular no tiene a qué dispositivo corresponderle una
+/// orden de telemetría: la descarta sin tocar nada y sin fallar. Con el aviso
+/// ilegible sí avisa del error (Kotlin lo anota y sigue).
+#[test]
+fn aplicar_orden_telemetria_sin_vincular_no_hace_nada() {
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let ruta = archivo.path().to_str().unwrap().to_string();
+    let nucleo = Nucleo::abrir(ruta).unwrap();
+
+    let aviso = r#"{"dispositivo_id":"cualquiera","version":3,
+        "grupos":["fluidez"],"vence_en":null}"#;
+    assert!(!nucleo.aplicar_orden_telemetria(aviso.to_string()).unwrap());
+    // Sin vincular se descarta antes de leer el JSON.
+    assert!(
+        !nucleo
+            .aplicar_orden_telemetria("no es json".to_string())
+            .unwrap()
+    );
+}
+
 /// El aviso en vivo con la fila deja al contratista adentro "por el
 /// otro equipo" al instante, sin consultar a la nube.
 #[test]

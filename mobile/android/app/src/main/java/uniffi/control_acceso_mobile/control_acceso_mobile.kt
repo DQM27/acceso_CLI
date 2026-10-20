@@ -827,6 +827,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_cambio_nube(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_orden_telemetria(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_correo_remoto(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_proveedor_remoto(
@@ -1039,6 +1041,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_cambio_nube(`ptr`: Long,`avisoJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_orden_telemetria(`ptr`: Long,`avisoJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_ingreso_correo_remoto(`ptr`: Long,`uuid`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -1532,6 +1536,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_cambio_nube() and 0xFFFF) != 17317) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aplicar_orden_telemetria() and 0xFFFF) != 16781) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_ingreso_correo_remoto() and 0xFFFF) != 32071) {
@@ -3747,6 +3754,18 @@ public interface NucleoInterface {
     fun `aplicarCambioNube`(`avisoJson`: kotlin.String): kotlin.Boolean
     
     /**
+     * Aviso en vivo `telemetria_config`, tal cual llega por el canal, en JSON:
+     * la orden del panel sobre qué medir en este teléfono. El núcleo la guarda
+     * en la base local y la aplica a la copia en memoria, sólo si es para el
+     * dispositivo al que está vinculada la clave de este teléfono y más nueva
+     * que la vigente -- ver `control_acceso::nube::aplicar_aviso_telemetria`.
+     * `true` si cambió lo que se mide; `false` si no es para este teléfono, no
+     * es más nueva o el teléfono no está vinculado. Sobre la conexión
+     * secundaria: nunca toma el candado del núcleo.
+     */
+    fun `aplicarOrdenTelemetria`(`avisoJson`: kotlin.String): kotlin.Boolean
+    
+    /**
      * Espejo de [`Self::cerrar_ingreso_proveedor_remoto`], contra
      * `ingresos_correo`.
      */
@@ -4675,6 +4694,31 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
     callWithHandle {
     uniffiRustCallWithError(NucleoException) { _status ->
     UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_cambio_nube(
+        it,
+        
+        FfiConverterString.lower(`avisoJson`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Aviso en vivo `telemetria_config`, tal cual llega por el canal, en JSON:
+     * la orden del panel sobre qué medir en este teléfono. El núcleo la guarda
+     * en la base local y la aplica a la copia en memoria, sólo si es para el
+     * dispositivo al que está vinculada la clave de este teléfono y más nueva
+     * que la vigente -- ver `control_acceso::nube::aplicar_aviso_telemetria`.
+     * `true` si cambió lo que se mide; `false` si no es para este teléfono, no
+     * es más nueva o el teléfono no está vinculado. Sobre la conexión
+     * secundaria: nunca toma el candado del núcleo.
+     */
+    @Throws(NucleoException::class)override fun `aplicarOrdenTelemetria`(`avisoJson`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_aplicar_orden_telemetria(
         it,
         
         FfiConverterString.lower(`avisoJson`),_status)
