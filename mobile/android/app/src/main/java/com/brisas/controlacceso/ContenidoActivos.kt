@@ -88,7 +88,7 @@ internal fun BotonEscanearActivos(
 ) {
     BotonFlotanteBrisas(
         icono = Icons.Default.PhotoCamera,
-        texto = if (modo == ModoBusqueda.SALIDA_GAFETE) "Escanear gafete" else "Escanear",
+        descripcion = if (modo == ModoBusqueda.SALIDA_GAFETE) "Escanear gafete" else "Escanear documento",
         onClick = if (modo == ModoBusqueda.SALIDA_GAFETE) onEscanearGafete else onEscanearCedula,
         visible = modo != ModoBusqueda.SALIDA_NOMBRE,
     )

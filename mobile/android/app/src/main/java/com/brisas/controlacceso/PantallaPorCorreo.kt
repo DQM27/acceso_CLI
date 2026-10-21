@@ -180,7 +180,7 @@ fun PantallaPorCorreo(
                     PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter)) {
                         BotonFlotanteBrisas(
                             icono = Icons.Default.PersonAdd,
-                            texto = "Nuevo ingreso",
+                            descripcion = "Nuevo ingreso",
                             onClick = { mostrandoFormulario = true },
                         )
                     }

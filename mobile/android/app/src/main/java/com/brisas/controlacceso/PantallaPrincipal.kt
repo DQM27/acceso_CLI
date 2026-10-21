@@ -19,9 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Badge
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.NotificationImportant
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -645,7 +642,7 @@ private fun BarraSecciones(
                 verticalArrangement = Arrangement.Center,
             ) {
                 BadgedBox(badge = { if (cantidad > 0) Badge { Text("$cantidad") } }) {
-                    Icon(iconoSeccion(seccion), contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+                    Icon(iconoSeccion(seccion, externo), contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
                 }
                 Text(
                     seccion.etiqueta,
@@ -667,11 +664,14 @@ private val MARGEN_INFERIOR_BARRA = 6.dp
 /// [LocalMargenBarraInferior].
 private val MARGEN_BARRA_SECCIONES = ALTO_BARRA_SECCIONES + MARGEN_INFERIOR_BARRA + 6.dp
 
-private fun iconoSeccion(seccion: SeccionPrincipal): ImageVector = when (seccion) {
-    SeccionPrincipal.ACTIVOS -> Icons.Default.Groups
+/// Los mismos íconos que el escritorio (ver [IconosLucide]). Externos cambia
+/// con el tipo elegido, igual que su color: Proveedor o Correo.
+private fun iconoSeccion(seccion: SeccionPrincipal, externo: TipoExterno): ImageVector = when (seccion) {
+    SeccionPrincipal.ACTIVOS -> IconosLucide.UsuarioConCheck
+    // Oculta de la barra (en desarrollo).
     SeccionPrincipal.RUTAS -> Icons.Default.Route
-    SeccionPrincipal.KOF -> Icons.Default.Badge
-    SeccionPrincipal.EXTERNOS -> Icons.Default.LocalShipping
+    SeccionPrincipal.KOF -> IconosLucide.InsigniaConCheck
+    SeccionPrincipal.EXTERNOS -> if (externo == TipoExterno.POR_CORREO) IconosLucide.Sobre else IconosLucide.Cajas
 }
 
 /// Qué ocupa la pantalla principal debajo de la barra superior.

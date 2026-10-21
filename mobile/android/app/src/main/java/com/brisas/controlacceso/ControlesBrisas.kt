@@ -9,7 +9,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -196,7 +196,9 @@ internal fun PieFlotante(
 @Composable
 internal fun BotonFlotanteBrisas(
     icono: ImageVector,
-    texto: String,
+    // Sin texto a la vista (más compacto, pedido del usuario 2026-10-21):
+    // lo lee el lector de pantalla.
+    descripcion: String,
     onClick: () -> Unit,
     visible: Boolean = true,
 ) {
@@ -206,14 +208,14 @@ internal fun BotonFlotanteBrisas(
         exit = fadeOut(tween(MS_SALIDA)) + scaleOut(tween(MS_SALIDA), targetScale = 0.8f),
         label = "botonFlotante",
     ) {
-        ExtendedFloatingActionButton(
+        FloatingActionButton(
             onClick = onClick,
-            icon = { Icon(icono, contentDescription = null) },
-            text = { Text(texto, fontWeight = FontWeight.SemiBold) },
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             shape = FormaCampoBrisas,
-        )
+        ) {
+            Icon(icono, contentDescription = descripcion)
+        }
     }
 }
 
