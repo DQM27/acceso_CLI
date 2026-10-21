@@ -5,17 +5,20 @@ import androidx.compose.animation.core.tween
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -37,20 +40,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import uniffi.control_acceso_mobile.RolUsuario
 import uniffi.control_acceso_mobile.UsuarioSesion
 
-/// Menú de la cuenta de quien tiene la sesión, mismo lugar que el menú de
-/// usuario del escritorio (`desktop/src/componentes/MenuUsuario.tsx`): un
-/// botón con la inicial del nombre que abre quién es, el tema, la
-/// actualización de la app, la versión instalada y cerrar sesión. Todo lo que
-/// es de la persona y no del trabajo del puesto vive acá, para que la barra
-/// superior quede con lo operativo (nuevo contratista y sincronizar).
+/// Menú de la cuenta de quien tiene la sesión, mismo lugar y misma marca que el
+/// menú de usuario del escritorio (`desktop/src/componentes/MenuUsuario.tsx`):
+/// la inicial dentro de un engranaje ([EngranajeConInicial]) arriba a la
+/// derecha. Queda arriba y no en la barra de secciones a propósito: abajo es lo
+/// operativo y rápido, y ahí se tocaría por error (decisión del usuario
+/// 2026-10-21).
 ///
-/// Si hay una versión nueva, un puntito late unos segundos sobre la inicial y
+/// Al tocarlo se despliega un panel (rediseño 2026-10-21; antes era una lista
+/// suelta): quién es (nombre, rol, unidad), el estado de la conexión, el tema
+/// en dos píldoras Claro/Oscuro, la actualización de la app y la versión, y
+/// "Cerrar sesión" en rojo, separado del resto para no tocarlo por error.
+///
+/// Si hay una versión nueva, un puntito late unos segundos sobre el engranaje y
 /// luego queda fijo; el ítem de actualización cambia de "Buscar" a "Actualizar".
 ///
 /// Sólo UI: el tema lo guarda [GestorTema], el estado de la actualización es de
@@ -62,6 +72,8 @@ fun MenuCuenta(
     onAlternarTema: () -> Unit,
     onCerrarSesion: () -> Unit,
     actualizador: ActualizacionViewModel,
+    textoUnidad: String?,
+    conexion: EstadoConexion,
 ) {
     var abierto by remember { mutableStateOf(false) }
     val estadoActualizacion by actualizador.estado.collectAsState()
@@ -77,7 +89,7 @@ fun MenuCuenta(
 
     // La respuesta de "Buscar actualizaciones" sale como un aviso corto, sin
     // dejar el menú abierto; si hay versión nueva no hay aviso: aparece la
-    // tarjeta flotante y el puntito en la inicial.
+    // tarjeta flotante y el puntito en el engranaje.
     LaunchedEffect(busqueda) {
         val aviso = avisoDeBusqueda(busqueda) ?: return@LaunchedEffect
         Toast.makeText(contexto, aviso, Toast.LENGTH_SHORT).show()
@@ -86,46 +98,44 @@ fun MenuCuenta(
 
     Box {
         BotonIconoCuadradoBrisas(onClick = { abierto = true }) {
-            // Mientras busca, el círculo girando (igual que el botón de
-            // sincronizar) dice que algo está pasando.
+            // Mientras busca, el círculo girando dice que algo está pasando.
             if (busqueda == EstadoBusqueda.BUSCANDO) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             } else {
-                Text(
+                EngranajeConInicial(
                     inicialDe(sesion.nombre),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    tamano = 28.dp,
+                    modifier = Modifier.semanticaCuenta(sesion.nombre),
                 )
             }
         }
         if (hayPendiente) PuntoPendiente(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-3).dp))
-        DropdownMenu(expanded = abierto, onDismissRequest = ::cerrar) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Text(
-                    sesion.nombre,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    etiquetaRol(sesion.rol),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            HorizontalDivider()
-            // Alterna Tokyo Day / Tokyo Night, como el escritorio; el ítem
-            // nombra a cuál pasa con el próximo toque.
-            val siguiente = tema.siguiente()
-            DropdownMenuItem(
-                text = { Text(textoCambioTema(siguiente)) },
-                leadingIcon = { Icon(iconoTema(siguiente), contentDescription = null) },
-                onClick = {
-                    cerrar()
-                    onAlternarTema()
-                },
+        DropdownMenu(
+            expanded = abierto,
+            onDismissRequest = ::cerrar,
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.width(280.dp),
+        ) {
+            EncabezadoCuenta(sesion, textoUnidad, conexion)
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+            // Las dos píldoras dicen cuál está puesto; tocar la otra cambia.
+            Text(
+                "Tema",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
             )
+            val actual = if (tema == TemaApp.TOKYO_NIGHT) 1 else 0
+            FilaPildoras(
+                opciones = listOf("Claro", "Oscuro"),
+                seleccionado = actual,
+                onSeleccionar = { if (it != actual) onAlternarTema() },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+
             if (actualizador.activo) {
                 val opcion = opcionActualizacion(estadoActualizacion, busqueda)
                 DropdownMenuItem(
@@ -160,21 +170,23 @@ fun MenuCuenta(
                     },
                 )
             }
+            Text(
+                "Versión ${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
             DropdownMenuItem(
-                text = {
-                    Text(
-                        "Versión ${BuildConfig.VERSION_NAME}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = { Text("Cerrar sesión", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium) },
+                leadingIcon = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ExitToApp,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
                     )
                 },
-                enabled = false,
-                onClick = {},
-            )
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text("Cerrar sesión") },
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null) },
                 onClick = {
                     cerrar()
                     onCerrarSesion()
@@ -184,7 +196,64 @@ fun MenuCuenta(
     }
 }
 
-/// Puntito sobre la inicial: late unas veces al aparecer (llama la atención
+/// Arriba del panel: el engranaje grande, el nombre, el rol en una etiqueta y
+/// la unidad operativa; debajo, en palabras, lo que dice el puntito de
+/// conexión del encabezado.
+@Composable
+private fun EncabezadoCuenta(sesion: UsuarioSesion, textoUnidad: String?, conexion: EstadoConexion) {
+    Column(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            EngranajeConInicial(inicialDe(sesion.nombre), color = MaterialTheme.colorScheme.primary, tamano = 44.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    sesion.nombre,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        etiquetaRol(sesion.rol),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                    if (textoUnidad != null) {
+                        Text(
+                            "  $textoUnidad",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PuntoConexion(conexion)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                conexion.descripcion,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/// Para el lector de pantalla, como el `aria-label` del escritorio.
+private fun Modifier.semanticaCuenta(nombre: String): Modifier =
+    this.semantics { contentDescription = "Cuenta de $nombre" }
+
+/// Puntito sobre el engranaje: late unas veces al aparecer (llama la atención
 /// una vez) y queda fijo. Si el sistema tiene las animaciones apagadas, las
 /// animaciones de Compose terminan al instante y sólo queda el punto.
 @Composable
@@ -267,14 +336,4 @@ internal fun etiquetaRol(rol: RolUsuario): String = when (rol) {
     RolUsuario.ROOT -> "Root"
     RolUsuario.ADMINISTRADOR -> "Administrador"
     RolUsuario.OPERADOR -> "Operador"
-}
-
-private fun textoCambioTema(tema: TemaApp): String = when (tema) {
-    TemaApp.TOKYO_DAY -> "Tokyo Day"
-    TemaApp.TOKYO_NIGHT -> "Tokyo Night"
-}
-
-private fun iconoTema(tema: TemaApp) = when (tema) {
-    TemaApp.TOKYO_DAY -> Icons.Default.LightMode
-    TemaApp.TOKYO_NIGHT -> Icons.Default.DarkMode
 }

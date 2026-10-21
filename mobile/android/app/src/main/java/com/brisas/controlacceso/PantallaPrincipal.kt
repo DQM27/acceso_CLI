@@ -350,6 +350,12 @@ fun PantallaPrincipal(
         if (!(enExternos && externo == TipoExterno.POR_CORREO)) correoViewModel.refrescarActivos()
     }
 
+    // El puntito del encabezado y el panel de la cuenta dicen lo mismo.
+    val conexion = estadoConexion(
+        hayRed = rememberHayRed(),
+        falloSincronizacion = nubeViewModel.error != null,
+    )
+
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
@@ -369,12 +375,7 @@ fun PantallaPrincipal(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.width(8.dp))
-                    PuntoConexion(
-                        estadoConexion(
-                            hayRed = rememberHayRed(),
-                            falloSincronizacion = nubeViewModel.error != null,
-                        ),
-                    )
+                    PuntoConexion(conexion)
                 }
                 if (textoUnidad != null) {
                     Text(
@@ -412,6 +413,8 @@ fun PantallaPrincipal(
                     onAlternarTema = { GestorTema.alternar(tema) },
                     onCerrarSesion = onCerrarSesion,
                     actualizador = actualizador,
+                    textoUnidad = textoUnidad,
+                    conexion = conexion,
                 )
             }
         }
