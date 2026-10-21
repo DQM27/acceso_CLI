@@ -48,13 +48,14 @@ vencer)"**. Registre el ingreso y recuérdele que debe renovarlo.
 
 ### Actualizar la fecha del PRAIND
 
+El operador puede hacerlo él mismo cuando la persona presenta el carnet
+renovado.
+
 1. Vaya a **Contratistas**.
 2. Busque a la persona y haga **doble clic** en su fila.
 3. Cambie **Fecha de vencimiento PRAIND** con la fecha del carnet renovado.
 4. Pulse **Guardar**.
-
-⚠ Por confirmar: si el operador del puesto de control puede actualizar esta
-fecha él mismo o si debe pedirlo a un administrador.
+5. Vuelva a **Nuevo ingreso** (Ctrl+N) y registre la entrada.
 
 ## Relacionado
 
