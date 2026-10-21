@@ -43,16 +43,29 @@ object AlmacenBandejaAvisos {
 
     fun guardar(context: Context, aviso: AvisoPush) = cambiar(context) { it.agregar(aviso, System.currentTimeMillis()) }
 
-    fun leerAviso(context: Context, id: String) = cambiar(context) { it.leer(id) }
+    /// Leer, archivar o borrar un aviso en la app también quita su
+    /// notificación de la barra de Android: antes seguía ahí y la campanita
+    /// ya decía que estaba leído.
+    fun leerAviso(context: Context, id: String) {
+        cambiar(context) { it.leer(id) }
+        NotificacionesPush.quitar(context, id)
+    }
 
-    fun leerTodos(context: Context) = cambiar(context) { it.leerTodos() }
+    fun leerTodos(context: Context) {
+        cambiar(context) { it.leerTodos() }
+        NotificacionesPush.quitarTodas(context)
+    }
 
     /// `usuario`: quien tiene la sesión abierta; queda anotado en el servidor.
-    fun archivar(context: Context, id: String, usuario: String) =
+    fun archivar(context: Context, id: String, usuario: String) {
         cambiar(context) { it.archivar(id, usuario, System.currentTimeMillis()) }
+        NotificacionesPush.quitar(context, id)
+    }
 
-    fun borrar(context: Context, id: String, usuario: String) =
+    fun borrar(context: Context, id: String, usuario: String) {
         cambiar(context) { it.borrar(id, usuario, System.currentTimeMillis()) }
+        NotificacionesPush.quitar(context, id)
+    }
 
     /// Lo archivado o borrado que falta contarle al servidor.
     fun accionesPendientes(context: Context): List<AccionAviso> =
