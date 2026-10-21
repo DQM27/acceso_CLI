@@ -350,7 +350,7 @@ fun PantallaPrincipal(
         if (!(enExternos && externo == TipoExterno.POR_CORREO)) correoViewModel.refrescarActivos()
     }
 
-    // El puntito del encabezado y el panel de la cuenta dicen lo mismo.
+    // El puntito de conexión junto al nombre de la app.
     val conexion = estadoConexion(
         hayRed = rememberHayRed(),
         falloSincronizacion = nubeViewModel.error != null,
@@ -413,8 +413,6 @@ fun PantallaPrincipal(
                     onAlternarTema = { GestorTema.alternar(tema) },
                     onCerrarSesion = onCerrarSesion,
                     actualizador = actualizador,
-                    textoUnidad = textoUnidad,
-                    conexion = conexion,
                 )
             }
         }

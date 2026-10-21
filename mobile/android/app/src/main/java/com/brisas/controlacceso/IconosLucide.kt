@@ -63,6 +63,31 @@ internal object IconosLucide {
         )
     }
 
+    /// Tema claro (`Sun`, el del menú de usuario del escritorio).
+    val Sol: ImageVector by lazy {
+        icono(
+            "Sun",
+            // circle cx=12 cy=12 r=4
+            "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
+            "M12 2v2",
+            "M12 20v2",
+            "m4.93 4.93 1.41 1.41",
+            "m17.66 17.66 1.41 1.41",
+            "M2 12h2",
+            "M20 12h2",
+            "m6.34 17.66-1.41 1.41",
+            "m19.07 4.93-1.41 1.41",
+        )
+    }
+
+    /// Tema oscuro (`Moon`, el del menú de usuario del escritorio).
+    val Luna: ImageVector by lazy {
+        icono(
+            "Moon",
+            "M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401",
+        )
+    }
+
     private fun icono(nombre: String, vararg trazos: String): ImageVector =
         ImageVector.Builder(
             name = "Lucide.$nombre",
