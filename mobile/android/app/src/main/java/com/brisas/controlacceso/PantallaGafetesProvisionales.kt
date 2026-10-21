@@ -11,14 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
@@ -39,7 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
 import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalActivoResumen
@@ -87,110 +81,114 @@ fun PantallaGafetesProvisionales(
     val puedeEntregar =
         viewModel.encargadoSeleccionado != null && gafeteTexto.isNotBlank() && !viewModel.registrando
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Text(
-            "Gafete provisional KOF",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 10.dp),
-        )
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+            Text(
+                "Gafete provisional KOF",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 10.dp),
+            )
 
-        // El mismo buscador que el resto de las pantallas, sin el botón de
-        // cámara -- acá no hay documento que escanear, sólo nombre/código
-        // escrito. Los resultados salen como tarjetas tocables abajo (igual que
-        // `FilaContratista` en modo Ingreso), no en un menú desplegable --
-        // pedido explícito del usuario en pruebas reales, 2026-09-17:
-        // unificar el look de esta pantalla con el de Contratista.
-        CampoBusquedaBrisas(
-            valor = viewModel.textoEncargado,
-            onCambiar = viewModel::cambiarTextoEncargado,
-            ayuda = "Nombre o código de empleado",
-            modifier = Modifier.fillMaxWidth(),
-        )
+            // El mismo buscador que el resto de las pantallas, sin el botón de
+            // cámara -- acá no hay documento que escanear, sólo nombre/código
+            // escrito. Los resultados salen como tarjetas tocables abajo (igual que
+            // `FilaContratista` en modo Ingreso), no en un menú desplegable --
+            // pedido explícito del usuario en pruebas reales, 2026-09-17:
+            // unificar el look de esta pantalla con el de Contratista.
+            CampoBusquedaBrisas(
+                valor = viewModel.textoEncargado,
+                onCambiar = viewModel::cambiarTextoEncargado,
+                ayuda = "Nombre o código de empleado",
+                modifier = Modifier.fillMaxWidth(),
+            )
 
-        if (viewModel.encargadoSeleccionado == null && viewModel.resultadosEncargado.isNotEmpty()) {
-            // Tope de 6 -- mismo criterio que el buscador de Contratista: esta
-            // lista vive dentro de un `Column` sin scroll propio (a
-            // diferencia de `ContenidoModoEntrada`, que reemplaza toda la
-            // pantalla), así que sin un tope el `LazyColumn` crecía sin
-            // límite y empujaba el campo de número de gafete fuera de la
-            // pantalla -- bug reportado en pruebas reales, 2026-09-17.
-            ListaConDesvanecido {
-                LazyColumn(
-                    contentPadding = PaddingValues(top = 5.dp),
-                    verticalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    items(viewModel.resultadosEncargado.take(6), key = { it.id }) { encargado ->
-                        FilaEncargadoRuta(encargado, onClick = { viewModel.elegirEncargado(encargado) })
+            if (viewModel.encargadoSeleccionado == null && viewModel.resultadosEncargado.isNotEmpty()) {
+                // Tope de 6 -- mismo criterio que el buscador de Contratista: esta
+                // lista vive dentro de un `Column` sin scroll propio (a
+                // diferencia de `ContenidoModoEntrada`, que reemplaza toda la
+                // pantalla), así que sin un tope el `LazyColumn` crecía sin
+                // límite y empujaba el campo de número de gafete fuera de la
+                // pantalla -- bug reportado en pruebas reales, 2026-09-17.
+                ListaConDesvanecido {
+                    LazyColumn(
+                        contentPadding = PaddingValues(top = 5.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        items(viewModel.resultadosEncargado.take(6), key = { it.id }) { encargado ->
+                            FilaEncargadoRuta(encargado, onClick = { viewModel.elegirEncargado(encargado) })
+                        }
                     }
                 }
             }
-        }
 
-        viewModel.encargadoSeleccionado?.let { encargado ->
-            Text(
-                "Código de empleado: ${encargado.codigoEmpleado} -- corroborar contra lo que dice la persona",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-
-            // Sin `.height(AlturaBusquedaBrisas)` a propósito -- ese alto
-            // (50.dp, ver ControlesBrisas.kt) queda por debajo del mínimo
-            // cómodo de `OutlinedTextField`: el placeholder terminaba
-            // recortado contra el borde superior del campo en vez de
-            // centrado -- bug reportado en pruebas reales, 2026-09-17 ("el
-            // input... sale cortado").
-            OutlinedTextField(
-                value = gafeteTexto,
-                onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
-                placeholder = { Text("Número de gafete") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp).focusRequester(focoGafete),
-            )
-
-            viewModel.error?.let { mensaje ->
+            viewModel.encargadoSeleccionado?.let { encargado ->
                 Text(
-                    mensaje,
+                    "Código de empleado: ${encargado.codigoEmpleado} -- corroborar contra lo que dice la persona",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 8.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+
+                // Sin `.height(AlturaBusquedaBrisas)` a propósito -- ese alto
+                // (50.dp, ver ControlesBrisas.kt) queda por debajo del mínimo
+                // cómodo de `OutlinedTextField`: el placeholder terminaba
+                // recortado contra el borde superior del campo en vez de
+                // centrado -- bug reportado en pruebas reales, 2026-09-17 ("el
+                // input... sale cortado").
+                OutlinedTextField(
+                    value = gafeteTexto,
+                    onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
+                    placeholder = { Text("Número de gafete") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = FormaCampoBrisas,
+                    colors = ColoresCampoBrisas(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).focusRequester(focoGafete),
+                )
+
+                viewModel.error?.let { mensaje ->
+                    Text(
+                        mensaje,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+
+                BotonBrisas(
+                    onClick = {
+                        val numero = gafeteTexto.toLongOrNull() ?: return@BotonBrisas
+                        viewModel.entregar(numero) { gafeteTexto = "" }
+                    },
+                    enabled = puedeEntregar,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                ) {
+                    Text("Entregar")
+                }
+            }
+
+            // Sin encabezado "Gafetes prestados" -- pedido explícito del usuario
+            // en pruebas reales, 2026-09-17: dejarlo limpio, igual que la lista
+            // de activos de Contratista (que tampoco tiene título propio).
+            ListaConEstados(
+                filas = viewModel.activos,
+                clave = { it.clave() },
+                cargando = viewModel.cargando,
+                tituloVacio = "Ningún gafete prestado",
+                detalleVacio = "Cuando se entregue uno, aparece acá.",
+                sincronizando = sincronizando,
+                onSincronizar = onSincronizar,
+                contentPadding = PaddingValues(top = 16.dp, bottom = EspacioPieLista),
+            ) { fila ->
+                FilaPrestamoGafeteProvisional(
+                    fila = fila,
+                    onConfirmarDevolucion = { filaParaDevolver = fila },
                 )
             }
-
-            BotonBrisas(
-                onClick = {
-                    val numero = gafeteTexto.toLongOrNull() ?: return@BotonBrisas
-                    viewModel.entregar(numero) { gafeteTexto = "" }
-                },
-                enabled = puedeEntregar,
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-            ) {
-                Text("Entregar")
-            }
         }
-
-        // Sin encabezado "Gafetes prestados" -- pedido explícito del usuario
-        // en pruebas reales, 2026-09-17: dejarlo limpio, igual que la lista
-        // de activos de Contratista (que tampoco tiene título propio).
-        ListaConEstados(
-            filas = viewModel.activos,
-            clave = { it.clave() },
-            cargando = viewModel.cargando,
-            tituloVacio = "Ningún gafete prestado",
-            detalleVacio = "Cuando se entregue uno, aparece acá.",
-            sincronizando = sincronizando,
-            onSincronizar = onSincronizar,
-            contentPadding = PaddingValues(top = 16.dp),
-        ) { fila ->
-            FilaPrestamoGafeteProvisional(
-                fila = fila,
-                onConfirmarDevolucion = { filaParaDevolver = fila },
-            )
-        }
+        // Sin botón flotante: acá el formulario de entrega ya está arriba.
+        PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
     }
 
     DialogoConfirmarDevolucionGafeteProvisional(
@@ -312,9 +310,9 @@ private fun FilaPrestamoGafeteProvisionalRemota(
     }
 }
 
-/// Mismo layout que `DialogoConfirmarSalida`/`DialogoConfirmarSalidaProveedor`
-/// -- ícono circular, título "Registrar devolución", info completa en vez de
-/// sólo "Gafete N · nombre".
+/// El mismo panel que la salida de contratistas ([DialogoRegistrarSalida]),
+/// con título "Registrar devolución" e info completa en vez de sólo
+/// "Gafete N · nombre".
 @Composable
 private fun DialogoConfirmarDevolucionGafeteProvisional(
     fila: FilaGafeteProvisionalActiva?,
@@ -322,49 +320,15 @@ private fun DialogoConfirmarDevolucionGafeteProvisional(
     onConfirmar: (FilaGafeteProvisionalActiva) -> Unit,
 ) {
     if (fila == null) return
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            }
-            Text(
-                "Registrar devolución",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 16.dp),
-            )
-            Text(
-                when (fila) {
-                    is FilaGafeteProvisionalActiva.Local ->
-                        "${fila.prestamo.encargadoNombre} · ${fila.prestamo.encargadoCodigoEmpleado} · Gafete ${fila.prestamo.gafeteNumero}"
-                    is FilaGafeteProvisionalActiva.Remota ->
-                        "${fila.remoto.encargadoNombre} · registrado en otro dispositivo de la unidad operativa"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            BotonBrisas(
-                onClick = { onConfirmar(fila) },
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-            ) {
-                Text("Confirmar")
-            }
-            BotonDiscretoBrisas(onClick = onDismiss, modifier = Modifier.padding(top = 4.dp)) {
-                Text("Cancelar")
-            }
-        }
-    }
+    DialogoRegistrarSalida(
+        titulo = "Registrar devolución",
+        detalle = when (fila) {
+            is FilaGafeteProvisionalActiva.Local ->
+                "${fila.prestamo.encargadoNombre} · ${fila.prestamo.encargadoCodigoEmpleado} · Gafete ${fila.prestamo.gafeteNumero}"
+            is FilaGafeteProvisionalActiva.Remota ->
+                "${fila.remoto.encargadoNombre} · $TEXTO_OTRO_DISPOSITIVO"
+        },
+        onDismiss = onDismiss,
+        onConfirmar = { onConfirmar(fila) },
+    )
 }

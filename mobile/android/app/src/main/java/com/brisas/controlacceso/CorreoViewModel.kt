@@ -35,6 +35,10 @@ class CorreoViewModel(
 ) : ViewModel() {
     var activos by mutableStateOf<List<FilaCorreoActiva>>(emptyList())
         private set
+
+    /// "Ingreso registrado · …" / "Salida registrada · …" (ver
+    /// [FranjaConfirmacion]).
+    val confirmacion = ConfirmacionReciente()
     var error by mutableStateOf<String?>(null)
         private set
     var mensaje by mutableStateOf<String?>(null)
@@ -163,6 +167,7 @@ class CorreoViewModel(
                 }
                 CambiosNube.cambioLocal()
                 mensaje = "Ingreso registrado"
+                confirmacion.mostrar("Ingreso registrado · $nombre")
                 limpiarFormulario()
                 refrescarActivos()
                 onExito()
@@ -204,6 +209,11 @@ class CorreoViewModel(
                     }
                 }
                 CambiosNube.cambioLocal()
+                val nombreSalida = when (fila) {
+                    is FilaCorreoActiva.Local -> fila.registro.nombre
+                    is FilaCorreoActiva.Remota -> fila.remoto.nombre
+                }
+                confirmacion.mostrar("Salida registrada · $nombreSalida")
                 refrescarActivos()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()

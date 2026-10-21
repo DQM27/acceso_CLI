@@ -141,6 +141,17 @@ class ActivosViewModel(
     var cargando by mutableStateOf(false)
         private set
 
+    /// Cuántos contratistas hay adentro (de este equipo y de los otros de la
+    /// unidad), para el globito de la pestaña Activos. Aparte de [activos]:
+    /// esa lista cambia con el modo y el texto (en Salida, vacío no trae a
+    /// nadie). `null` hasta la primera carga.
+    var totalAdentro by mutableStateOf<Int?>(null)
+        private set
+
+    /// "Ingreso registrado · …" / "Salida registrada · …" (ver
+    /// [FranjaConfirmacion]).
+    val confirmacion = ConfirmacionReciente()
+
     // Aparte de `error` (fallas de consulta) — lo pone únicamente la
     // confirmación masiva de gafetes, así que no hay riesgo de que la
     // recarga de la lista tras confirmar (dispara la misma búsqueda) lo
@@ -225,6 +236,22 @@ class ActivosViewModel(
 
     fun refrescar() {
         buscar()
+        if (modo != ModoBusqueda.ENTRADA || texto.isNotBlank()) actualizarTotalAdentro()
+    }
+
+    /// Recuenta [totalAdentro] cuando la búsqueda en curso no trae la lista
+    /// completa (en modo Ingreso con el campo vacío ya lo cuenta [buscar]).
+    private fun actualizarTotalAdentro() {
+        viewModelScope.launch {
+            try {
+                val locales = withContext(dispatcherIO) {
+                    medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA) }
+                }
+                totalAdentro = locales.size + remotosSeguro().size
+            } catch (_: NucleoException) {
+                // El globito queda como estaba; la lista ya muestra el error.
+            }
+        }
     }
 
     /// `listarIngresosRemotos` no hace red -- lee la caché local que ya
@@ -257,6 +284,7 @@ class ActivosViewModel(
                             }
                             val remotos = remotosSeguro()
                             activos = locales.map { FilaActiva.Local(it) } + remotos.map { FilaActiva.Remota(it) }
+                            totalAdentro = activos.size
                         } else {
                             resultadosBusqueda =
                                 withContext(dispatcherIO) { medirNucleo("buscarContratistas") { nucleo.buscarContratistas(texto) } }
@@ -435,6 +463,7 @@ class ActivosViewModel(
                 withContext(dispatcherIO) {
                     medirNucleo("registrarIngresoVerificado") { nucleo.registrarIngresoVerificado(preparacion.contratistaId, medio, gafete, placaTexto) }
                 }
+                confirmacion.mostrar("Ingreso registrado · ${preparacion.nombre}")
                 onIngresoRegistrado()
             } catch (excepcion: Exception) {
                 errorIngreso = excepcion.mensajeDeErrorEsperado()
@@ -462,7 +491,8 @@ class ActivosViewModel(
         viewModelScope.launch {
             try {
                 mutexMutaciones.withLock { cerrarFila(fila) }
-                buscar()
+                confirmacion.mostrar("Salida registrada · ${fila.contratistaNombre}")
+                refrescar()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             }
@@ -501,7 +531,7 @@ class ActivosViewModel(
                     mensajeEsError = registrados.isEmpty() && fallidos.isNotEmpty()
                     texto = ""
                 }
-                buscar()
+                refrescar()
             } finally {
                 enviandoGafetes = false
             }
@@ -538,6 +568,7 @@ class ActivosViewModel(
                         mensajeEsError = false
                         texto = ""
                         coincidenciasGafete = emptyList()
+                        actualizarTotalAdentro()
                     }
                 } catch (excepcion: Exception) {
                     mensaje = "Gafete $numero: ${excepcion.mensajeDeErrorEsperado()}"

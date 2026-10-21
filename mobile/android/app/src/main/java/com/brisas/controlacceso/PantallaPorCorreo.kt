@@ -141,23 +141,14 @@ fun PantallaPorCorreo(
                     }
 
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                        Row(
+                        // "Nuevo ingreso" es el botón flotante de abajo (ver
+                        // [PieFlotante]).
+                        CampoBusquedaBrisas(
+                            valor = busqueda,
+                            onCambiar = { busqueda = it },
+                            ayuda = "Cédula, nombre, motivo…",
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            CampoBusquedaBrisas(
-                                valor = busqueda,
-                                onCambiar = { busqueda = it },
-                                ayuda = "Cédula, nombre, motivo…",
-                                modifier = Modifier.weight(1f),
-                            )
-                            BotonCuadradoBordeBrisas(
-                                icono = Icons.Default.PersonAdd,
-                                descripcion = "Nuevo ingreso por correo",
-                                onClick = { mostrandoFormulario = true },
-                            )
-                        }
+                        )
 
                         viewModel.error?.let { mensaje ->
                             Text(
@@ -180,10 +171,18 @@ fun PantallaPorCorreo(
                             },
                             sincronizando = sincronizando,
                             onSincronizar = onSincronizar,
-                            contentPadding = PaddingValues(top = 10.dp),
+                            contentPadding = PaddingValues(top = 10.dp, bottom = EspacioPieLista),
                         ) { fila ->
                             FilaCorreoActivo(fila = fila, onConfirmarSalida = { filaParaSalida = fila })
                         }
+                    }
+
+                    PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter)) {
+                        BotonFlotanteBrisas(
+                            icono = Icons.Default.PersonAdd,
+                            texto = "Nuevo ingreso",
+                            onClick = { mostrandoFormulario = true },
+                        )
                     }
 
                     DialogoConfirmarSalidaCorreo(

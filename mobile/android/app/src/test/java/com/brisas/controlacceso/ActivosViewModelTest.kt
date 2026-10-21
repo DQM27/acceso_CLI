@@ -321,6 +321,35 @@ class ActivosViewModelTest {
     }
 
     @Test
+    fun `registrar ingreso lo confirma con el nombre y suma uno adentro`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+        assertEquals(0, viewModel.totalAdentro)
+
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")
+        advanceUntilIdle()
+
+        assertEquals("Ingreso registrado · Contratista Test", viewModel.confirmacion.actual?.texto)
+        assertEquals(1, viewModel.totalAdentro)
+    }
+
+    @Test
+    fun `la salida desde el modo Salida la confirma y descuenta del total`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")
+        advanceUntilIdle()
+        // En Salida la lista sólo trae lo buscado: el total se cuenta aparte.
+        viewModel.cambiarModo(ModoBusqueda.SALIDA_NOMBRE)
+        viewModel.cambiarTexto("Contratista")
+        advanceUntilIdle()
+
+        viewModel.confirmarSalida(viewModel.activos.single())
+        advanceUntilIdle()
+
+        assertEquals("Salida registrada · Contratista Test", viewModel.confirmacion.actual?.texto)
+        assertEquals(0, viewModel.totalAdentro)
+    }
+
+    @Test
     fun `gafete requerido y vacio se registra como sin gafete`() = runTest(dispatcher) {
         // El núcleo ya no rechaza el gafete vacío: queda S/G. Que sólo pueda
         // llegar vacío con el check "Sin gafete" marcado lo garantiza la pantalla.

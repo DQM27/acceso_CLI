@@ -1,6 +1,18 @@
 package com.brisas.controlacceso
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,6 +54,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -66,10 +81,14 @@ internal val FormaCampoBrisas = RoundedCornerShape(16.dp)
  * todas luzcan igual (2026-09-15). */
 internal val AlturaBusquedaBrisas = 50.dp
 
+// Antes que [FormaPildoraBrisas]: las propiedades de un archivo se inicializan
+// en orden.
+private val RADIO_PILDORA = 12.dp
+
 /** Forma de las píldoras de selector ([FilaPildoras]) -- antes cápsula
  * completa (percent=50), se veía más redondeada que el mockup, que usa
  * esquinas bien marcadas pero no un óvalo. */
-internal val FormaPildoraBrisas = RoundedCornerShape(12.dp)
+internal val FormaPildoraBrisas = RoundedCornerShape(RADIO_PILDORA)
 
 /** Colores compartidos para todo campo de texto de la app -- borde visible
  * (`outline` sin foco, `primary` con foco) sobre fondo transparente, mismo
@@ -134,6 +153,59 @@ internal fun CampoBusquedaBrisas(
     }
 }
 
+/** Espacio libre al final de las listas para que la última fila no quede
+ * debajo del botón flotante ni de [FranjaConfirmacion]. */
+internal val EspacioPieLista = 88.dp
+
+/** Lo que flota abajo de una pantalla con lista: la confirmación del último
+ * registro ([FranjaConfirmacion]) y, si la pantalla tiene una acción
+ * principal, su botón flotante debajo, a la derecha, al alcance del pulgar.
+ * Va dentro de un `Box` a pantalla completa, alineado abajo. */
+@Composable
+internal fun PieFlotante(
+    confirmacion: ConfirmacionReciente,
+    modifier: Modifier = Modifier,
+    botonFlotante: (@Composable () -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth().padding(16.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        FranjaConfirmacion(confirmacion)
+        botonFlotante?.invoke()
+    }
+}
+
+/** Botón flotante de la acción principal de una pantalla ("Escanear",
+ * "Nuevo ingreso"), en el color de la sección. Se esconde mientras el
+ * teclado está abierto: ahí taparía la lista que se está filtrando. Aparece
+ * y desaparece con un fundido y un leve cambio de tamaño. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun BotonFlotanteBrisas(
+    icono: ImageVector,
+    texto: String,
+    onClick: () -> Unit,
+    visible: Boolean = true,
+) {
+    AnimatedVisibility(
+        visible = visible && !WindowInsets.isImeVisible,
+        enter = fadeIn(tween(MS_FUNDIDO_ENTRADA)) + scaleIn(tween(MS_ENTRADA), initialScale = 0.8f),
+        exit = fadeOut(tween(MS_SALIDA)) + scaleOut(tween(MS_SALIDA), targetScale = 0.8f),
+        label = "botonFlotante",
+    ) {
+        ExtendedFloatingActionButton(
+            onClick = onClick,
+            icon = { Icon(icono, contentDescription = null) },
+            text = { Text(texto, fontWeight = FontWeight.SemiBold) },
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            shape = FormaCampoBrisas,
+        )
+    }
+}
+
 /** Acciones principales: forma y área táctil comunes en todas las pantallas. */
 @Composable
 fun BotonBrisas(
@@ -179,7 +251,7 @@ fun BotonDiscretoBrisas(
  * de fondo, la opción activa se pinta como una píldora sólida en el color
  * primario -- reemplaza el look de `SegmentedButton` de Material3 (gris,
  * rectangular) en las pantallas que ya lo usaban (`SelectorModoBusqueda` en
- * [PantallaActivos], las pestañas de [PantallaPrincipal]). No reemplaza a
+ * [PantallaActivos], el tipo en [PantallaExternos]). No reemplaza a
  * `SegmentedButton` en todos lados a propósito -- sólo donde el mockup lo pide. */
 @Composable
 fun FilaPildoras(
@@ -188,23 +260,42 @@ fun FilaPildoras(
     onSeleccionar: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Una sola píldora sólida que se desliza hasta la opción elegida (en vez de
+    // apagarse en una y prenderse en otra). Se dibuja detrás de la fila, en la
+    // fase de dibujo: animar la posición no vuelve a medir ni a componer nada.
+    // Si cambia el acento (ver `AcentoSeccion.kt`), el color nuevo entra con
+    // un fundido.
+    val posicion by animateFloatAsState(
+        targetValue = seleccionado.toFloat(),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
+        label = "posicionPildora",
+    )
+    val colorPildora by animateColorAsState(
+        targetValue = MaterialTheme.colorScheme.primary,
+        animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
+        label = "pildora",
+    )
+    val separacion = 4.dp
     Row(
         modifier = modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant, FormaPildoraBrisas)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(4.dp)
+            .drawBehind {
+                if (opciones.isEmpty() || seleccionado !in opciones.indices) return@drawBehind
+                val hueco = separacion.toPx()
+                val ancho = (size.width - hueco * (opciones.size - 1)) / opciones.size
+                drawRoundRect(
+                    color = colorPildora,
+                    topLeft = Offset(posicion * (ancho + hueco), 0f),
+                    size = Size(ancho, size.height),
+                    cornerRadius = CornerRadius(RADIO_PILDORA.toPx()),
+                )
+            },
+        horizontalArrangement = Arrangement.spacedBy(separacion),
     ) {
         opciones.forEachIndexed { indice, etiqueta ->
             val activo = indice == seleccionado
-            // La píldora que se apaga y la que se enciende se funden en vez de
-            // saltar; al cambiar de sección también cambia el acento (ver
-            // `AcentoSeccion.kt`) y el color nuevo entra con el mismo fundido.
-            val colorPildora by animateColorAsState(
-                targetValue = if (activo) MaterialTheme.colorScheme.primary else Color.Transparent,
-                animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
-                label = "pildora",
-            )
             val colorTexto by animateColorAsState(
                 targetValue = if (activo) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
@@ -214,7 +305,6 @@ fun FilaPildoras(
                 modifier = Modifier
                     .weight(1f)
                     .clip(FormaPildoraBrisas)
-                    .drawBehind { drawRect(colorPildora) }
                     .clickable { onSeleccionar(indice) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,

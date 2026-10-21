@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -178,8 +179,6 @@ fun PantallaActivos(
                     modo = viewModel.modo,
                     texto = viewModel.texto,
                     onCambiarTexto = { viewModel.cambiarTexto(it) },
-                    onEscanearCedula = { escanerAbierto = true },
-                    onEscanearGafete = { escanerGafeteSalidaAbierto = true },
                 )
 
                 MensajesEstado(
@@ -216,6 +215,14 @@ fun PantallaActivos(
                         onRegistrarSalidaGafetes = { viewModel.registrarSalidaPorGafetes() },
                     )
                 }
+            }
+
+            PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter)) {
+                BotonEscanearActivos(
+                    modo = viewModel.modo,
+                    onEscanearCedula = { escanerAbierto = true },
+                    onEscanearGafete = { escanerGafeteSalidaAbierto = true },
+                )
             }
 
             DialogoConfirmarSalida(

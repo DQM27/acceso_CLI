@@ -18,8 +18,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.NotificationImportant
+import androidx.compose.material.icons.filled.Route
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Sync
@@ -294,6 +306,33 @@ fun PantallaPrincipal(
     // la etiqueta del equipo se ve en el login, acá saturaba.
     val textoUnidad = rememberTextoUnidadOperativa(nucleo, recargar = nubeViewModel.sincronizando)
 
+    // Cuántos hay adentro en cada sección, para los globitos de la barra de
+    // abajo. Son los mismos ViewModels que usan las pantallas (los guarda la
+    // Activity), así que los números se mueven solos con cada registro.
+    val activosViewModel: ActivosViewModel = viewModel(factory = ActivosViewModel.factory(nucleo))
+    val gafetesViewModel: GafetesProvisionalesViewModel =
+        viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo))
+    val proveedoresViewModel: ProveedoresViewModel = viewModel(factory = ProveedoresViewModel.factory(nucleo))
+    val correoViewModel: CorreoViewModel = viewModel(factory = CorreoViewModel.factory(nucleo))
+    val adentro = mapOf(
+        SeccionPrincipal.ACTIVOS to (activosViewModel.totalAdentro ?: 0),
+        SeccionPrincipal.KOF to gafetesViewModel.activos.size,
+        SeccionPrincipal.EXTERNOS to proveedoresViewModel.activos.size + correoViewModel.activos.size,
+    )
+    // Cada pantalla se refresca sola tras una sincronización mientras está a la
+    // vista; las que no se ven se refrescan acá para que su globito no quede
+    // atrasado.
+    LaunchedEffect(refrescarNube) {
+        if (refrescarNube == 0) return@LaunchedEffect
+        val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
+        val externo = tipoExternoVisible(indiceExterno)
+        val enExternos = seccion == SeccionPrincipal.EXTERNOS && !mostrarAvisos && !mostrarNuevoContratista
+        if (seccion != SeccionPrincipal.ACTIVOS || mostrarAvisos || mostrarNuevoContratista) activosViewModel.refrescar()
+        if (seccion != SeccionPrincipal.KOF || mostrarAvisos || mostrarNuevoContratista) gafetesViewModel.refrescarActivos()
+        if (!(enExternos && externo == TipoExterno.PROVEEDOR)) proveedoresViewModel.refrescarActivos()
+        if (!(enExternos && externo == TipoExterno.POR_CORREO)) correoViewModel.refrescarActivos()
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
@@ -427,29 +466,7 @@ fun PantallaPrincipal(
                 Column(modifier = Modifier.fillMaxSize()) {
                     val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
                     val externo = tipoExternoVisible(indiceExterno)
-                    // "Historial" se sacó de acá por espacio (pestañas apiñadas,
-                    // 2026-09-17); su pantalla/ViewModel/wrappers Rust se eliminaron
-                    // del todo el 2026-09-21 al confirmar que no había ningún otro
-                    // punto de entrada que lo usara.
-                    // Cada sección con su acento (ver `AcentoSeccion.kt`): las pestañas y
-                    // el contenido comparten el color de la sección activa.
-                    TemaSeccion(seccion, externo) {
-                        FilaPildoras(
-                            // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
-                            // usuario (2026-09-19) para descomprimir la fila de
-                            // pestañas, ya apiñada (ver comentario arriba).
-                            //
-                            // "Rutas" oculta de la fila (pedido del usuario 2026-09-23:
-                            // control de rutas sin terminar, que no se vea a medias en
-                            // una demostración). `PantallaRutas` sigue intacta; para
-                            // volver a mostrarla basta con sacarla de
-                            // `enDesarrollo` en `SeccionPrincipal`.
-                            opciones = SECCIONES_VISIBLES.map { it.etiqueta },
-                            seleccionado = pestana,
-                            onSeleccionar = { pestana = it },
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
+                    // Las secciones van en la barra de abajo (ver [BarraSecciones]).
                     // `AnimatedContent` (que por dentro es un `Box`) y no un `Column`
                     // -- un `Column` sin peso mide a sus hijos con altura MÁXIMA
                     // infinita (así reserva espacio a los que sí tienen `weight`), y un
@@ -498,6 +515,12 @@ fun PantallaPrincipal(
                             }
                         }
                     }
+                    BarraSecciones(
+                        seleccionada = seccion,
+                        externo = externo,
+                        adentro = adentro,
+                        onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
+                    )
                 }
             }
         }
@@ -523,6 +546,72 @@ private fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
     }
 }
 
+/// Las secciones en una barra abajo (estilo de las pestañas de iPhone, que
+/// en Android es la `NavigationBar` de Material 3), en vez de la fila de
+/// píldoras arriba: se cambia de sección con el pulgar y arriba queda una
+/// sola fila de opciones. Cada sección se pinta con su propio acento (ver
+/// `AcentoSeccion.kt`) y lleva un globito con cuántos hay adentro.
+///
+/// "KOF" a secas, no "Gafetes KOF" (pedido explícito del usuario
+/// 2026-09-19). "Rutas" no aparece (pedido del usuario 2026-09-23: control de
+/// rutas sin terminar); `PantallaRutas` sigue intacta y para volver a
+/// mostrarla basta con sacarla de `enDesarrollo` en [SeccionPrincipal].
+///
+/// Sin márgenes del sistema propios (`windowInsets` en cero): la raíz de
+/// `MainActivity` ya deja el espacio de la barra de navegación de Android.
+@Composable
+private fun BarraSecciones(
+    seleccionada: SeccionPrincipal,
+    externo: TipoExterno,
+    adentro: Map<SeccionPrincipal, Int>,
+    onSeleccionar: (SeccionPrincipal) -> Unit,
+) {
+    val oscuro = temaActual().oscuro
+    val superficie = MaterialTheme.colorScheme.surface
+    NavigationBar(
+        containerColor = superficie,
+        tonalElevation = 0.dp,
+        windowInsets = WindowInsets(0, 0, 0, 0),
+    ) {
+        SECCIONES_VISIBLES.forEach { seccion ->
+            val acento = acentoDeSeccion(seccion, oscuro, externo)?.color ?: MaterialTheme.colorScheme.primary
+            val cantidad = adentro[seccion] ?: 0
+            NavigationBarItem(
+                selected = seccion == seleccionada,
+                onClick = { onSeleccionar(seccion) },
+                icon = {
+                    BadgedBox(badge = { if (cantidad > 0) Badge { Text("$cantidad") } }) {
+                        Icon(iconoSeccion(seccion), contentDescription = null)
+                    }
+                },
+                label = {
+                    Text(
+                        seccion.etiqueta,
+                        fontWeight = if (seccion == seleccionada) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                },
+                modifier = Modifier.semantics {
+                    if (cantidad > 0) stateDescription = "$cantidad adentro"
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = acento,
+                    selectedTextColor = acento,
+                    indicatorColor = lerp(superficie, acento, if (oscuro) 0.22f else 0.16f),
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+        }
+    }
+}
+
+private fun iconoSeccion(seccion: SeccionPrincipal): ImageVector = when (seccion) {
+    SeccionPrincipal.ACTIVOS -> Icons.Default.Groups
+    SeccionPrincipal.RUTAS -> Icons.Default.Route
+    SeccionPrincipal.KOF -> Icons.Default.Badge
+    SeccionPrincipal.EXTERNOS -> Icons.Default.LocalShipping
+}
+
 /// Qué ocupa la pantalla principal debajo de la barra superior.
 private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, PESTANAS }
 
@@ -533,10 +622,10 @@ private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, PESTANAS }
 /// un teléfono olvidado.
 private const val DEMORA_BLOQUEO_SESION_MS = 25 * 60_000L
 
-/// Secciones de la pantalla principal, en el orden de la fila de pestañas
+/// Secciones de la pantalla principal, en el orden de la barra de abajo
 /// (punto M5 de la auditoría móvil: antes eran textos sueltos).
-/// `enDesarrollo` las oculta de la fila sin borrar su pantalla (ver el
-/// comentario junto a `FilaPildoras`).
+/// `enDesarrollo` las oculta de la barra sin borrar su pantalla (ver
+/// [BarraSecciones]).
 enum class SeccionPrincipal(val etiqueta: String, val enDesarrollo: Boolean = false) {
     ACTIVOS("Activos"),
     RUTAS("Rutas", enDesarrollo = true),

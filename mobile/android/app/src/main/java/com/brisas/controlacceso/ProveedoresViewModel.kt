@@ -51,6 +51,10 @@ class ProveedoresViewModel(
 ) : ViewModel() {
     var activos by mutableStateOf<List<FilaProveedorActiva>>(emptyList())
         private set
+
+    /// "Ingreso registrado · …" / "Salida registrada · …" (ver
+    /// [FranjaConfirmacion]).
+    val confirmacion = ConfirmacionReciente()
     var cargando by mutableStateOf(false)
         private set
     var error by mutableStateOf<String?>(null)
@@ -241,6 +245,7 @@ class ProveedoresViewModel(
                 }
                 CambiosNube.cambioLocal()
                 mensaje = "Ingreso registrado"
+                confirmacion.mostrar("Ingreso registrado · $nombre")
                 error = null
                 cedula = ""
                 nombre = ""
@@ -291,6 +296,11 @@ class ProveedoresViewModel(
                     }
                 }
                 CambiosNube.cambioLocal()
+                val nombreSalida = when (fila) {
+                    is FilaProveedorActiva.Local -> fila.registro.nombre
+                    is FilaProveedorActiva.Remota -> fila.remoto.nombre
+                }
+                confirmacion.mostrar("Salida registrada · $nombreSalida")
                 refrescarActivos()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
