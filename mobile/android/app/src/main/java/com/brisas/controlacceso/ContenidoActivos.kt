@@ -1,8 +1,6 @@
 package com.brisas.controlacceso
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,15 +51,11 @@ internal fun CampoBusquedaActivos(
     onEscanearCedula: () -> Unit,
     onEscanearGafete: () -> Unit,
 ) {
-    // Color propio para "estoy buscando a quién SACAR" — evita confundir el
-    // modo entrada (color normal de la app) con el de salida, que es la
-    // acción de mayor consecuencia.
-    val colorModo = if (modo == ModoBusqueda.ENTRADA) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.secondary
-    }
-
+    // El botón de cámara va en el color de la sección en los dos modos. Antes
+    // salida usaba `secondary` (azul fijo, de cuando toda la app era azul) y
+    // con los colores por sección quedaba un botón azul al lado de la
+    // píldora "Salida" verde azulado; el modo ya lo dicen la píldora y el
+    // texto de ayuda del buscador.
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -85,20 +79,11 @@ internal fun CampoBusquedaActivos(
             modifier = Modifier.weight(1f),
         )
         if (modo == ModoBusqueda.ENTRADA || modo == ModoBusqueda.SALIDA_GAFETE) {
-            Box(
-                modifier = Modifier
-                    .size(AlturaBusquedaBrisas)
-                    .border(1.dp, colorModo, FormaCampoBrisas)
-                    .clip(FormaCampoBrisas)
-                    .clickable(onClick = if (modo == ModoBusqueda.ENTRADA) onEscanearCedula else onEscanearGafete),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Default.PhotoCamera,
-                    contentDescription = if (modo == ModoBusqueda.ENTRADA) "Escanear documento" else "Escanear gafete",
-                    tint = colorModo,
-                )
-            }
+            BotonCuadradoBordeBrisas(
+                icono = Icons.Default.PhotoCamera,
+                descripcion = if (modo == ModoBusqueda.ENTRADA) "Escanear documento" else "Escanear gafete",
+                onClick = if (modo == ModoBusqueda.ENTRADA) onEscanearCedula else onEscanearGafete,
+            )
         }
     }
 }

@@ -1,10 +1,7 @@
 package com.brisas.controlacceso
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ColumnScope
@@ -14,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -302,15 +298,5 @@ private fun Dato(texto: String) {
 }
 
 @Composable
-private fun BotonCuadrado(icono: ImageVector, descripcion: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(AlturaBusquedaBrisas + 6.dp)
-            .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
-            .clip(FormaCampoBrisas)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icono, contentDescription = descripcion, tint = MaterialTheme.colorScheme.primary)
-    }
-}
+private fun BotonCuadrado(icono: ImageVector, descripcion: String, onClick: () -> Unit) =
+    BotonCuadradoBordeBrisas(icono, descripcion, onClick, tamano = AlturaBusquedaBrisas + 6.dp)

@@ -3,6 +3,7 @@ package com.brisas.controlacceso
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.text.BasicTextField
@@ -44,6 +45,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -266,16 +268,32 @@ fun BotonIconoCuadradoBrisas(
     }
 }
 
-/** Envuelve una lista con un degradé del color de fondo a transparente en
- * el borde superior -- el contenido se "desvanece" suave debajo del
- * buscador al hacer scroll, en vez de cortar en seco. Un `Modifier.blur()`
- * real sólo pinta en Android 12+ (API 31) -- con `minSdk 26` de esta app,
- * en un dispositivo más viejo simplemente no haría nada; el degradé sí
- * funciona en cualquier versión, y da el mismo efecto visual acá. Usa
- * `contentPadding` (no un `Modifier.padding` externo) en el `LazyColumn`
- * de adentro para que el degradé, no el primer ítem, ocupe ese espacio --
- * si no, el scroll dejaría un hueco sin nada que desvanecer. Compartido
- * entre [PantallaActivos] y [PantallaHistorial] (2026-09-15). */
+/** Botón cuadrado con borde e ícono en el color de la sección, al lado de un
+ * buscador o de un campo: cámara, "nuevo ingreso", etc. Mide lo mismo que
+ * [CampoBusquedaBrisas] para quedar parejo con él. Deshabilitado, borde e
+ * ícono pasan a `outline`. */
+@Composable
+internal fun BotonCuadradoBordeBrisas(
+    icono: ImageVector,
+    descripcion: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tamano: Dp = AlturaBusquedaBrisas,
+) {
+    val color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+    Box(
+        modifier = modifier
+            .size(tamano)
+            .border(1.dp, color, FormaCampoBrisas)
+            .clip(FormaCampoBrisas)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icono, contentDescription = descripcion, tint = color)
+    }
+}
+
 /** Botón circular de cerrar/cancelar para las 4 pantallas de escaneo OCR
  * (Cédula, Carnet KOF, Vehículo/Ruta, Comprobante) -- fondo oscuro
  * semitransparente porque flota directo sobre el preview de cámara, no
@@ -319,6 +337,16 @@ fun BotonLinterna(encendida: Boolean, onClick: () -> Unit, modifier: Modifier = 
     }
 }
 
+/** Envuelve una lista con un degradé del color de fondo a transparente en
+ * el borde superior -- el contenido se "desvanece" suave debajo del
+ * buscador al hacer scroll, en vez de cortar en seco. Un `Modifier.blur()`
+ * real sólo pinta en Android 12+ (API 31) -- con `minSdk 26` de esta app,
+ * en un dispositivo más viejo simplemente no haría nada; el degradé sí
+ * funciona en cualquier versión, y da el mismo efecto visual acá. Usa
+ * `contentPadding` (no un `Modifier.padding` externo) en el `LazyColumn`
+ * de adentro para que el degradé, no el primer ítem, ocupe ese espacio --
+ * si no, el scroll dejaría un hueco sin nada que desvanecer. Compartido
+ * entre [PantallaActivos] y [PantallaHistorial] (2026-09-15). */
 @Composable
 fun ListaConDesvanecido(contenido: @Composable () -> Unit) {
     Box {

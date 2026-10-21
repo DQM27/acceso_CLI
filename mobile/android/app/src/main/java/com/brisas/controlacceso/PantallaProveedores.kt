@@ -1,8 +1,6 @@
 package com.brisas.controlacceso
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,9 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
@@ -30,8 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
@@ -194,25 +188,15 @@ fun PantallaProveedores(
                                 colors = ColoresCampoBrisas(),
                                 modifier = Modifier.weight(1f),
                             )
-                            // Mismo look que `BotonCamaraCuadrado` de [PantallaRutas]
-                            // (cuadrado, borde y ícono en el color primario) -- pedido
-                            // explícito del usuario en vez del botón "+ Nuevo ingreso"
-                            // ancho de antes, para que quede al lado del buscador como el
-                            // botón de cámara junto al buscador de [PantallaActivos].
-                            Box(
-                                modifier = Modifier
-                                    .size(AlturaBusquedaBrisas)
-                                    .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
-                                    .clip(FormaCampoBrisas)
-                                    .clickable(onClick = { mostrandoFormulario = true }),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Icons.Default.PersonAdd,
-                                    contentDescription = "Nuevo ingreso de proveedor",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
+                            // Botón cuadrado en vez del "+ Nuevo ingreso" ancho de antes
+                            // (pedido explícito del usuario), para que quede al lado del
+                            // buscador como el botón de cámara junto al buscador de
+                            // [PantallaActivos].
+                            BotonCuadradoBordeBrisas(
+                                icono = Icons.Default.PersonAdd,
+                                descripcion = "Nuevo ingreso de proveedor",
+                                onClick = { mostrandoFormulario = true },
+                            )
                         }
 
                         viewModel.error?.let { mensaje ->
