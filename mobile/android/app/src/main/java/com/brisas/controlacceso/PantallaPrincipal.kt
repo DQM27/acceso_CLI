@@ -705,8 +705,8 @@ private fun BarraSecciones(
 private val ALTO_BARRA_SECCIONES = 58.dp
 private val MARGEN_LATERAL_BARRA = 12.dp
 /// Despegada del borde (pedido del usuario 2026-10-21): pegada abajo quedaba
-/// incómoda para el pulgar.
-private val MARGEN_INFERIOR_BARRA = 18.dp
+/// incómoda para el pulgar. 18dp todavía se sentía bajo; 28dp.
+private val MARGEN_INFERIOR_BARRA = 28.dp
 private val MARGEN_SUPERIOR_BARRA = 6.dp
 
 /// Lo que tapa la barra flotante (alto + margen de abajo + un respiro), para
