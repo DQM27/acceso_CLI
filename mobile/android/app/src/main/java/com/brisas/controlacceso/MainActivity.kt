@@ -1,6 +1,7 @@
 package com.brisas.controlacceso
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.ViewTreeObserver
@@ -60,6 +61,14 @@ class MainActivity : ComponentActivity() {
         val inicioActividadMs = SystemClock.uptimeMillis()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Sin el velo blanco que Android pone detrás de los tres botones de
+        // navegación para asegurar contraste: se veía como una franja más
+        // clara entre la barra de secciones flotante y los botones. El fondo
+        // de la app ya llega hasta ahí (ver el `Surface` de abajo) y los
+        // íconos del sistema se ajustan al tema (`isAppearanceLightNavigationBars`).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
         // Sólo en release -- en debug bloqueaba también las capturas de
         // pantalla/grabación usadas para revisar diseño en el emulador
         // (adb screencap/screenrecord devuelven negro contra una ventana

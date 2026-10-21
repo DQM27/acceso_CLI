@@ -1,11 +1,9 @@
 package com.brisas.controlacceso
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -142,6 +140,8 @@ fun PantallaProveedores(
                 )
             }
             PanelConFormulario.FORMULARIO -> {
+                // Pantalla completa: sin barra de secciones encima.
+                OcultarBarraSecciones()
                 FormularioNuevoIngresoProveedor(
                     viewModel = viewModel,
                     gafeteTexto = gafeteTexto,
@@ -165,27 +165,13 @@ fun PantallaProveedores(
                     // Sin título propio: el selector de [PantallaExternos] ya dice dónde se
                     // está.
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                        Row(
+                        // "Nuevo ingreso" es el botón redondo de abajo.
+                        CampoBusquedaBrisas(
+                            valor = busqueda,
+                            onCambiar = { busqueda = it },
+                            ayuda = "Cédula, nombre, empresa…",
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            CampoBusquedaBrisas(
-                                valor = busqueda,
-                                onCambiar = { busqueda = it },
-                                ayuda = "Cédula, nombre, empresa…",
-                                modifier = Modifier.weight(1f),
-                            )
-                            // Botón cuadrado en vez del "+ Nuevo ingreso" ancho de antes
-                            // (pedido explícito del usuario), para que quede al lado del
-                            // buscador como el botón de cámara junto al buscador de
-                            // [PantallaActivos].
-                            BotonCuadradoBordeBrisas(
-                                icono = Icons.Default.PersonAdd,
-                                descripcion = "Nuevo ingreso de proveedor",
-                                onClick = { mostrandoFormulario = true },
-                            )
-                        }
+                        )
 
                         viewModel.error?.let { mensaje ->
                             Text(
@@ -208,7 +194,7 @@ fun PantallaProveedores(
                             },
                             sincronizando = sincronizando,
                             onSincronizar = onSincronizar,
-                            contentPadding = PaddingValues(top = 10.dp),
+                            contentPadding = PaddingValues(top = 10.dp, bottom = EspacioPieLista),
                         ) { fila ->
                             FilaProveedorActivo(
                                 fila = fila,
@@ -216,6 +202,11 @@ fun PantallaProveedores(
                             )
                         }
                     }
+
+                    PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
+                    // "Nuevo ingreso" va en el botón redondo de abajo (ver
+                    // `AccionInferior.kt`).
+                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso de proveedor", onClick = { mostrandoFormulario = true })
 
                     DialogoConfirmarSalidaProveedor(
                         fila = filaParaSalida,

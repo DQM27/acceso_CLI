@@ -6,6 +6,10 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -20,12 +24,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.NotificationImportant
+import androidx.compose.material.icons.filled.Route
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +51,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -274,10 +303,10 @@ fun PantallaPrincipal(
         }
     }
 
-    // El botón manual también refresca Activos/Historial al terminar --
-    // mismo camino que ya usa el pulso periódico (`onSincronizado` más
-    // arriba), para que tocar "Sincronizar" se sienta instantáneo en vez
-    // de esperar al próximo ciclo de 5 minutos.
+    // Tirar de una lista hacia abajo (sincronización manual) también
+    // refresca las pantallas al terminar -- mismo camino que ya usa el pulso
+    // periódico (`onSincronizado` más arriba), para que se sienta instantáneo
+    // en vez de esperar al próximo ciclo de 5 minutos.
     LaunchedEffect(nubeViewModel.ultimoResumen) {
         val resumen = nubeViewModel.ultimoResumen
         if (resumen != null) {
@@ -293,6 +322,39 @@ fun PantallaPrincipal(
     // token con la unidad cambiada. Sólo el nombre de la unidad, en mayúsculas:
     // la etiqueta del equipo se ve en el login, acá saturaba.
     val textoUnidad = rememberTextoUnidadOperativa(nucleo, recargar = nubeViewModel.sincronizando)
+
+    // Cuántos hay adentro en cada sección, para los globitos de la barra de
+    // abajo. Son los mismos ViewModels que usan las pantallas (los guarda la
+    // Activity), así que los números se mueven solos con cada registro.
+    val activosViewModel: ActivosViewModel = viewModel(factory = ActivosViewModel.factory(nucleo))
+    val gafetesViewModel: GafetesProvisionalesViewModel =
+        viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo))
+    val proveedoresViewModel: ProveedoresViewModel = viewModel(factory = ProveedoresViewModel.factory(nucleo))
+    val correoViewModel: CorreoViewModel = viewModel(factory = CorreoViewModel.factory(nucleo))
+    val adentro = mapOf(
+        SeccionPrincipal.ACTIVOS to (activosViewModel.totalAdentro ?: 0),
+        SeccionPrincipal.KOF to gafetesViewModel.activos.size,
+        SeccionPrincipal.EXTERNOS to proveedoresViewModel.activos.size + correoViewModel.activos.size,
+    )
+    // Cada pantalla se refresca sola tras una sincronización mientras está a la
+    // vista; las que no se ven se refrescan acá para que su globito no quede
+    // atrasado.
+    LaunchedEffect(refrescarNube) {
+        if (refrescarNube == 0) return@LaunchedEffect
+        val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
+        val externo = tipoExternoVisible(indiceExterno)
+        val enExternos = seccion == SeccionPrincipal.EXTERNOS && !mostrarAvisos && !mostrarNuevoContratista
+        if (seccion != SeccionPrincipal.ACTIVOS || mostrarAvisos || mostrarNuevoContratista) activosViewModel.refrescar()
+        if (seccion != SeccionPrincipal.KOF || mostrarAvisos || mostrarNuevoContratista) gafetesViewModel.refrescarActivos()
+        if (!(enExternos && externo == TipoExterno.PROVEEDOR)) proveedoresViewModel.refrescarActivos()
+        if (!(enExternos && externo == TipoExterno.POR_CORREO)) correoViewModel.refrescarActivos()
+    }
+
+    // El puntito de conexión junto al nombre de la app.
+    val conexion = estadoConexion(
+        hayRed = rememberHayRed(),
+        falloSincronizacion = nubeViewModel.error != null,
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -313,12 +375,7 @@ fun PantallaPrincipal(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.width(8.dp))
-                    PuntoConexion(
-                        estadoConexion(
-                            hayRed = rememberHayRed(),
-                            falloSincronizacion = nubeViewModel.error != null,
-                        ),
-                    )
+                    PuntoConexion(conexion)
                 }
                 if (textoUnidad != null) {
                     Text(
@@ -341,16 +398,10 @@ fun PantallaPrincipal(
                     mostrarNuevoContratista = false
                     mostrarAvisos = true
                 })
-                BotonIconoCuadradoBrisas(
-                    onClick = { nubeViewModel.sincronizar() },
-                    enabled = !nubeViewModel.sincronizando,
-                ) {
-                    if (nubeViewModel.sincronizando) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.Sync, contentDescription = "Sincronizar")
-                    }
-                }
+                // Sin botón "Sincronizar": cada lista sincroniza tirando hacia
+                // abajo (ver `ListaConEstados`), y además está el pulso
+                // periódico y Realtime. El punto de conexión junto al nombre
+                // sigue diciendo si la nube responde.
                 val tema = temaActual()
                 // La misma instancia que ya creó `MainActivity` para la franja
                 // (mismo dueño: la Activity).
@@ -424,77 +475,102 @@ fun PantallaPrincipal(
             } else if (mostrado == PanelPrincipal.NUEVO_CONTRATISTA) {
                 PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
             } else {
-                Column(modifier = Modifier.fillMaxSize()) {
+                // Las secciones van en una barra flotante abajo (ver
+                // [BarraSecciones]) y el contenido pasa por detrás: se ve
+                // desenfocado a través del vidrio. Cada pantalla deja libre lo
+                // que tapa la barra con `LocalMargenBarraInferior`.
+                val vidrio = remember { HazeState() }
+                // Cámaras y formularios la esconden mientras están a la vista
+                // (ver [OcultarBarraSecciones]).
+                val pantallasCompletas = remember { PantallasCompletas() }
+                // La acción del botón redondo la pone la pantalla a la vista.
+                val accionesInferiores = remember { AccionesInferiores() }
+                Box(modifier = Modifier.fillMaxSize()) {
                     val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
                     val externo = tipoExternoVisible(indiceExterno)
-                    // "Historial" se sacó de acá por espacio (pestañas apiñadas,
-                    // 2026-09-17); su pantalla/ViewModel/wrappers Rust se eliminaron
-                    // del todo el 2026-09-21 al confirmar que no había ningún otro
-                    // punto de entrada que lo usara.
-                    // Cada sección con su acento (ver `AcentoSeccion.kt`): las pestañas y
-                    // el contenido comparten el color de la sección activa.
-                    TemaSeccion(seccion, externo) {
-                        FilaPildoras(
-                            // "KOF" a secas, no "Gafetes KOF" -- pedido explícito del
-                            // usuario (2026-09-19) para descomprimir la fila de
-                            // pestañas, ya apiñada (ver comentario arriba).
-                            //
-                            // "Rutas" oculta de la fila (pedido del usuario 2026-09-23:
-                            // control de rutas sin terminar, que no se vea a medias en
-                            // una demostración). `PantallaRutas` sigue intacta; para
-                            // volver a mostrarla basta con sacarla de
-                            // `enDesarrollo` en `SeccionPrincipal`.
-                            opciones = SECCIONES_VISIBLES.map { it.etiqueta },
-                            seleccionado = pestana,
-                            onSeleccionar = { pestana = it },
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
+                    // `AnimatedContent` (que por dentro es un `Box`) le pasa a sus
+                    // hijos restricciones acotadas: un `LazyColumn` (como el de
+                    // `PantallaActivos`) revienta con `IllegalStateException` si lo
+                    // miden con altura infinita, como hace un `Column` sin peso.
+                    // Desliza y funde entre pestañas (ver `TransicionesPantalla.kt`).
+                    CompositionLocalProvider(
+                        LocalMargenBarraInferior provides MARGEN_BARRA_SECCIONES,
+                        LocalPantallasCompletas provides pantallasCompletas,
+                        LocalAccionesInferiores provides accionesInferiores,
+                    ) {
+                        AnimatedContent(
+                            targetState = seccion,
+                            modifier = Modifier.fillMaxSize().hazeSource(vidrio),
+                            transitionSpec = {
+                                transicionDePestana(SECCIONES_VISIBLES.indexOf(initialState), SECCIONES_VISIBLES.indexOf(targetState))
+                            },
+                            label = "seccion",
+                        ) { seccionMostrada ->
+                            // `when` exhaustivo sobre el enum: agregar una sección sin
+                            // su pantalla no compila (antes eran textos y un `else`
+                            // que caía en Activos en silencio ante un error de tipeo).
+                            // Con `seccionMostrada` y no `seccion`: durante la
+                            // transición la pantalla que se va sigue con su propio
+                            // acento y no salta al de la nueva.
+                            TemaSeccion(seccionMostrada, externo) {
+                                when (seccionMostrada) {
+                                    SeccionPrincipal.ACTIVOS -> PantallaActivos(
+                                        nucleo,
+                                        refrescarNube,
+                                        sincronizando = nubeViewModel.sincronizando,
+                                        onSincronizar = nubeViewModel::sincronizar,
+                                    )
+                                    SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
+                                    SeccionPrincipal.KOF -> PantallaGafetesProvisionales(
+                                        nucleo,
+                                        refrescarNube,
+                                        sincronizando = nubeViewModel.sincronizando,
+                                        onSincronizar = nubeViewModel::sincronizar,
+                                    )
+                                    SeccionPrincipal.EXTERNOS -> PantallaExternos(
+                                        nucleo,
+                                        refrescarNube,
+                                        tipo = indiceExterno,
+                                        onCambiarTipo = { indiceExterno = it },
+                                        sincronizando = nubeViewModel.sincronizando,
+                                        onSincronizar = nubeViewModel::sincronizar,
+                                    )
+                                }
+                            }
+                        }
                     }
-                    // `AnimatedContent` (que por dentro es un `Box`) y no un `Column`
-                    // -- un `Column` sin peso mide a sus hijos con altura MÁXIMA
-                    // infinita (así reserva espacio a los que sí tienen `weight`), y un
-                    // `LazyColumn` (como el de `PantallaActivos`) revienta con
-                    // `IllegalStateException` si lo miden así. Esto en cambio le pasa a
-                    // sus hijos las restricciones ya acotadas que le tocaron acá (el
-                    // resto de la pantalla, vía `weight(1f)`). Desliza y funde entre
-                    // pestañas (ver `TransicionesPantalla.kt`).
-                    AnimatedContent(
-                        targetState = seccion,
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        transitionSpec = {
-                            transicionDePestana(SECCIONES_VISIBLES.indexOf(initialState), SECCIONES_VISIBLES.indexOf(targetState))
-                        },
-                        label = "seccion",
-                    ) { seccionMostrada ->
-                        // `when` exhaustivo sobre el enum: agregar una sección sin
-                        // su pantalla no compila (antes eran textos y un `else`
-                        // que caía en Activos en silencio ante un error de tipeo).
-                        // Con `seccionMostrada` y no `seccion`: durante la
-                        // transición la pantalla que se va sigue con su propio
-                        // acento y no salta al de la nueva.
-                        TemaSeccion(seccionMostrada, externo) {
-                            when (seccionMostrada) {
-                                SeccionPrincipal.ACTIVOS -> PantallaActivos(
-                                    nucleo,
-                                    refrescarNube,
-                                    sincronizando = nubeViewModel.sincronizando,
-                                    onSincronizar = nubeViewModel::sincronizar,
-                                )
-                                SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
-                                SeccionPrincipal.KOF -> PantallaGafetesProvisionales(
-                                    nucleo,
-                                    refrescarNube,
-                                    sincronizando = nubeViewModel.sincronizando,
-                                    onSincronizar = nubeViewModel::sincronizar,
-                                )
-                                SeccionPrincipal.EXTERNOS -> PantallaExternos(
-                                    nucleo,
-                                    refrescarNube,
-                                    tipo = indiceExterno,
-                                    onCambiarTipo = { indiceExterno = it },
-                                    sincronizando = nubeViewModel.sincronizando,
-                                    onSincronizar = nubeViewModel::sincronizar,
-                                )
+                    // Baja y se funde al esconderse; vuelve a subir al cerrar la
+                    // cámara o el formulario. Escondida no se puede tocar. Con
+                    // el nombre completo: dentro de la `Column` de afuera, el
+                    // `AnimatedVisibility` a secas es el de `ColumnScope`.
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = pantallasCompletas.cantidad == 0,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                        enter = fadeIn(tween(MS_FUNDIDO_ENTRADA)) + slideInVertically(tween(MS_ENTRADA)) { alto -> alto },
+                        exit = fadeOut(tween(MS_SALIDA)) + slideOutVertically(tween(MS_SALIDA)) { alto -> alto },
+                        label = "barraSecciones",
+                    ) {
+                        // La cápsula de secciones y, a su derecha, el botón
+                        // redondo con la acción de la pantalla a la vista (ver
+                        // `AccionInferior.kt`), como la app Teléfono de iOS.
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = MARGEN_LATERAL_BARRA, vertical = MARGEN_INFERIOR_BARRA),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            BarraSecciones(
+                                seleccionada = seccion,
+                                externo = externo,
+                                adentro = adentro,
+                                onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
+                                vidrio = vidrio,
+                                modifier = Modifier.weight(1f),
+                            )
+                            val accion = accionesInferiores.actual
+                            if (accion != null) {
+                                BotonRedondoAccion(accion, vidrio, tamano = ALTO_BARRA_SECCIONES)
                             }
                         }
                     }
@@ -523,6 +599,122 @@ private fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
     }
 }
 
+/// Las secciones en una cápsula flotante abajo, de vidrio esmerilado (como la
+/// barra nueva de WhatsApp, pedido del usuario 2026-10-21), en vez de la fila
+/// de píldoras arriba: se cambia de sección con el pulgar y arriba queda una
+/// sola fila de opciones. Más baja que la `NavigationBar` de Material 3 (80dp)
+/// y separada de los bordes.
+///
+/// - El vidrio: lo que pasa por detrás se desenfoca (Haze) bajo un velo del
+///   color de la superficie, translúcido pero sin saturar; en Android < 12,
+///   sin desenfoque, el velo es casi opaco para que se siga leyendo.
+/// - La pestaña elegida: una píldora gris suave que se desliza hasta ella
+///   (como [FilaPildoras]); su ícono y su nombre van en el acento de la
+///   sección (ver `AcentoSeccion.kt`).
+/// - Cada sección lleva un globito con cuántos hay adentro.
+///
+/// "KOF" a secas, no "Gafetes KOF" (pedido explícito del usuario
+/// 2026-09-19). "Rutas" no aparece (pedido del usuario 2026-09-23: control de
+/// rutas sin terminar); `PantallaRutas` sigue intacta y para volver a
+/// mostrarla basta con sacarla de `enDesarrollo` en [SeccionPrincipal].
+@Composable
+private fun BarraSecciones(
+    seleccionada: SeccionPrincipal,
+    externo: TipoExterno,
+    adentro: Map<SeccionPrincipal, Int>,
+    onSeleccionar: (SeccionPrincipal) -> Unit,
+    vidrio: HazeState,
+    modifier: Modifier = Modifier,
+) {
+    val oscuro = temaActual().oscuro
+    val superficie = MaterialTheme.colorScheme.surface
+    val colorPildora = MaterialTheme.colorScheme.onSurface.copy(alpha = if (oscuro) 0.12f else 0.07f)
+    val posicion by animateFloatAsState(
+        targetValue = SECCIONES_VISIBLES.indexOf(seleccionada).toFloat(),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
+        label = "posicionSeccion",
+    )
+    val forma = RoundedCornerShape(percent = 50)
+    Row(
+        modifier = modifier
+            .height(ALTO_BARRA_SECCIONES)
+            .shadow(10.dp, forma, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
+            .clip(forma)
+            .hazeEffect(vidrio) {
+                backgroundColor = superficie
+                // Más transparente tras verlo en el teléfono (pedido del
+                // usuario 2026-10-21); el desenfoque mantiene legible el texto.
+                tints = listOf(HazeTint(superficie.copy(alpha = if (oscuro) 0.45f else 0.50f)))
+                blurRadius = 24.dp
+                noiseFactor = 0f
+                fallbackTint = HazeTint(superficie.copy(alpha = 0.94f))
+            }
+            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), forma)
+            .padding(5.dp)
+            .drawBehind {
+                val cantidad = SECCIONES_VISIBLES.size
+                val ancho = size.width / cantidad
+                drawRoundRect(
+                    color = colorPildora,
+                    topLeft = Offset(posicion * ancho, 0f),
+                    size = Size(ancho, size.height),
+                    cornerRadius = CornerRadius(size.height / 2),
+                )
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SECCIONES_VISIBLES.forEach { seccion ->
+            val elegida = seccion == seleccionada
+            val acento = acentoDeSeccion(seccion, oscuro, externo)?.color ?: MaterialTheme.colorScheme.primary
+            val color by animateColorAsState(
+                targetValue = if (elegida) acento else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = tween(MS_FUNDIDO_ENTRADA),
+                label = "colorSeccion",
+            )
+            val cantidad = adentro[seccion] ?: 0
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(forma)
+                    .selectable(selected = elegida, role = Role.Tab, onClick = { onSeleccionar(seccion) })
+                    .semantics { if (cantidad > 0) stateDescription = "$cantidad adentro" },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                BadgedBox(badge = { if (cantidad > 0) Badge { Text("$cantidad") } }) {
+                    Icon(iconoSeccion(seccion, externo), contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+                }
+                Text(
+                    seccion.etiqueta,
+                    color = color,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = if (elegida) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+private val ALTO_BARRA_SECCIONES = 58.dp
+private val MARGEN_LATERAL_BARRA = 12.dp
+private val MARGEN_INFERIOR_BARRA = 6.dp
+
+/// Lo que tapa la barra flotante (alto + margen de abajo + un respiro), para
+/// [LocalMargenBarraInferior].
+private val MARGEN_BARRA_SECCIONES = ALTO_BARRA_SECCIONES + MARGEN_INFERIOR_BARRA + 6.dp
+
+/// Los mismos íconos que el escritorio (ver [IconosLucide]). Externos cambia
+/// con el tipo elegido, igual que su color: Proveedor o Correo.
+private fun iconoSeccion(seccion: SeccionPrincipal, externo: TipoExterno): ImageVector = when (seccion) {
+    SeccionPrincipal.ACTIVOS -> IconosLucide.UsuarioConCheck
+    // Oculta de la barra (en desarrollo).
+    SeccionPrincipal.RUTAS -> Icons.Default.Route
+    SeccionPrincipal.KOF -> IconosLucide.InsigniaConCheck
+    SeccionPrincipal.EXTERNOS -> if (externo == TipoExterno.POR_CORREO) IconosLucide.Sobre else IconosLucide.Cajas
+}
+
 /// Qué ocupa la pantalla principal debajo de la barra superior.
 private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, PESTANAS }
 
@@ -533,10 +725,10 @@ private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, PESTANAS }
 /// un teléfono olvidado.
 private const val DEMORA_BLOQUEO_SESION_MS = 25 * 60_000L
 
-/// Secciones de la pantalla principal, en el orden de la fila de pestañas
+/// Secciones de la pantalla principal, en el orden de la barra de abajo
 /// (punto M5 de la auditoría móvil: antes eran textos sueltos).
-/// `enDesarrollo` las oculta de la fila sin borrar su pantalla (ver el
-/// comentario junto a `FilaPildoras`).
+/// `enDesarrollo` las oculta de la barra sin borrar su pantalla (ver
+/// [BarraSecciones]).
 enum class SeccionPrincipal(val etiqueta: String, val enDesarrollo: Boolean = false) {
     ACTIVOS("Activos"),
     RUTAS("Rutas", enDesarrollo = true),

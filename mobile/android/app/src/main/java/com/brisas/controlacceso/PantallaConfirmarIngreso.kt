@@ -15,9 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Icon
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
@@ -31,6 +29,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -66,9 +75,28 @@ fun PantallaConfirmarIngreso(
     // puede registrar sin gafete, sin motivo, igual que el personal de ruta.
     var sinGafete by rememberSaveable { mutableStateOf(false) }
     var placaTexto by rememberSaveable { mutableStateOf("") }
-    var escanerGafeteAbierto by remember { mutableStateOf(false) }
-    BackHandler(enabled = !escanerGafeteAbierto, onBack = onCambiar)
+    var escanerPlacaAbierto by remember { mutableStateOf(false) }
+    BackHandler(enabled = !escanerPlacaAbierto, onBack = onCambiar)
     val alcance = rememberCoroutineScope()
+
+    // La misma cámara que lee placas en Proveedores y Rutas
+    // (`LectorVehiculoRuta.kt`), pedido del usuario 2026-10-21. Si lee un
+    // número de unidad (calcomanía de flota) en vez de una placa, igual se usa
+    // el texto leído, mismo criterio que Proveedores.
+    if (escanerPlacaAbierto) {
+        PantallaEscanearVehiculoRuta(
+            onVehiculoDetectado = { detectado ->
+                // Como va impresa en la placa (`CL 371931`, `BPH-485`).
+                placaTexto = placaComoSeImprime(detectado.valor)
+                onLimpiarError()
+                escanerPlacaAbierto = false
+            },
+            onCerrar = { escanerPlacaAbierto = false },
+            mensajeInicial = "Apunte a la placa del vehículo",
+            mensajePermiso = "Se necesita permiso de cámara para escanear la placa.",
+        )
+        return
+    }
 
     val focoGafete = remember { FocusRequester() }
     val focoConfirmar = remember { FocusRequester() }
@@ -82,34 +110,6 @@ fun PantallaConfirmarIngreso(
         } else {
             focoConfirmar.requestFocus()
         }
-    }
-
-    if (escanerGafeteAbierto) {
-        PantallaEscanearCedula(
-            modo = ModoEscaneoDocumento.GAFETE_CONTRATISTA,
-            onDocumentoDetectado = { documento ->
-                val limpio = documento.numeroDocumento.filter(Char::isDigit)
-                gafeteTexto = limpio
-                onLimpiarError()
-                escanerGafeteAbierto = false
-                // Escanear ya es una acción deliberada -- a diferencia de
-                // tipear a mano, no hace falta un check "Automático" aparte
-                // para decidir si dispara el ingreso solo (pedido explícito
-                // del usuario 2026-09-20: quitar esa lógica y ese espacio en
-                // pantalla). Tipeado a mano sigue requiriendo el botón.
-                val gafete = limpio.toLongOrNull()
-                // Con Vehículo, sólo dispara el ingreso solo si la placa ya
-                // se había completado antes de escanear -- de lo contrario
-                // el operador todavía tiene que llenarla, mismo criterio que
-                // "Tipeado a mano sigue requiriendo el botón" arriba.
-                val placaLista = medio == MedioIngreso.CAMINANDO || placaTexto.isNotBlank()
-                if (gafete != null && placaLista) {
-                    onRegistrar(medio, limpio, placaTexto)
-                }
-            },
-            onCerrar = { escanerGafeteAbierto = false },
-        )
-        return
     }
 
     // Mismo criterio que [PantallaRutas]/[PantallaProveedores]/
@@ -180,15 +180,29 @@ fun PantallaConfirmarIngreso(
         }
 
         if (medio == MedioIngreso.VEHICULO) {
-            OutlinedTextField(
-                value = placaTexto,
-                onValueChange = { placaTexto = it },
-                label = { Text("Placa del vehículo") },
-                singleLine = true,
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
+            Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = placaTexto,
+                    onValueChange = { placaTexto = it },
+                    label = { Text("Placa del vehículo") },
+                    singleLine = true,
+                    shape = FormaCampoBrisas,
+                    colors = ColoresCampoBrisas(),
+                    modifier = Modifier.weight(1f),
+                )
+                // `top` por la etiqueta flotante del campo, que corre su
+                // marco hacia abajo: así el botón queda a la par del marco.
+                BotonCuadradoBordeBrisas(
+                    icono = Icons.Default.PhotoCamera,
+                    descripcion = "Escanear placa",
+                    onClick = { escanerPlacaAbierto = true },
+                    tamano = 56.dp,
+                    modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+                )
+            }
         }
 
         if (preparacion.requiereGafete) {
@@ -227,33 +241,20 @@ fun PantallaConfirmarIngreso(
                             }
                         },
                 )
-                BotonDiscretoBrisas(
-                    onClick = { escanerGafeteAbierto = true },
-                    modifier = Modifier.padding(start = 8.dp),
-                    enabled = !sinGafete,
-                ) {
-                    Icon(
-                        Icons.Default.PhotoCamera,
-                        contentDescription = "Escanear gafete",
-                        modifier = Modifier.size(32.dp),
-                    )
-                }
-            }
-            // Marcarlo borra el número tipeado: sin número el núcleo
-            // registra el ingreso S/G.
-            val alternarSinGafete = {
-                sinGafete = !sinGafete
-                if (sinGafete) gafeteTexto = ""
-                onLimpiarError()
-            }
-            Row(
-                modifier = Modifier
-                    .selectable(selected = sinGafete, onClick = alternarSinGafete)
-                    .padding(bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = sinGafete, onCheckedChange = { alternarSinGafete() })
-                Text("Sin gafete")
+                // "S/G" de dos estados en lugar de la cámara (escanear el
+                // número del gafete casi no se usaba y estorbaba) y de la
+                // casilla "Sin gafete" que iba debajo (pedido del usuario
+                // 2026-10-21). Encenderlo borra el número tipeado: sin número
+                // el núcleo registra el ingreso S/G.
+                BotonSinGafete(
+                    activo = sinGafete,
+                    onAlternar = {
+                        sinGafete = !sinGafete
+                        if (sinGafete) gafeteTexto = ""
+                        onLimpiarError()
+                    },
+                    modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+                )
             }
         }
 
@@ -269,7 +270,7 @@ fun PantallaConfirmarIngreso(
         // Cuando el contratista no requiere gafete no hay nada más que
         // completar (el medio de ingreso ya arranca con un valor elegido),
         // así que el botón queda habilitado de entrada. Si lo requiere, hace
-        // falta el número o marcar "Sin gafete": nunca queda S/G por olvido.
+        // falta el número o encender "S/G": nunca queda S/G por olvido.
         val gafeteListo = !preparacion.requiereGafete || sinGafete || gafeteTexto.trim().toLongOrNull() != null
         val placaLista = medio != MedioIngreso.VEHICULO || placaTexto.isNotBlank()
         BotonBrisas(
@@ -311,5 +312,31 @@ fun PantallaIngresoBloqueado(preparacion: PreparacionIngreso, mensaje: String, o
         // Negrita -- pedido explícito del usuario 2026-09-20: que el motivo
         // de la denegación se lea con más fuerza que el resto del texto.
         Text(mensaje, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+    }
+}
+
+/// Botón de dos estados "S/G" (sin gafete), del mismo alto que el campo del
+/// número: apagado, con borde y letras en el color de la sección; encendido,
+/// relleno. El cambio de un estado al otro se funde.
+@Composable
+private fun BotonSinGafete(activo: Boolean, onAlternar: () -> Unit, modifier: Modifier = Modifier) {
+    val acento = MaterialTheme.colorScheme.primary
+    val fondo by animateColorAsState(if (activo) acento else Color.Transparent, tween(MS_FUNDIDO_ENTRADA), label = "fondoSinGafete")
+    val texto by animateColorAsState(
+        if (activo) MaterialTheme.colorScheme.onPrimary else acento,
+        tween(MS_FUNDIDO_ENTRADA),
+        label = "textoSinGafete",
+    )
+    Box(
+        modifier = modifier
+            .size(width = 64.dp, height = 56.dp)
+            .clip(FormaCampoBrisas)
+            .background(fondo)
+            .border(1.dp, acento, FormaCampoBrisas)
+            .toggleable(value = activo, role = Role.Switch, onValueChange = { onAlternar() })
+            .semantics { contentDescription = "Sin gafete" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("S/G", color = texto, fontWeight = FontWeight.Bold)
     }
 }

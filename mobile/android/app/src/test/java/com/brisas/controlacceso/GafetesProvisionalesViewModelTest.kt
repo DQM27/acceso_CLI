@@ -126,6 +126,43 @@ class GafetesProvisionalesViewModelTest {
     }
 
     @Test
+    fun `cancelar la entrega suelta al encargado y borra el error`() = runTest(dispatcher) {
+        abrir()
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.cambiarTextoEncargado("araya")
+        advanceUntilIdle()
+        vm.elegirEncargado(vm.resultadosEncargado.single())
+        vm.entregar(16) {}
+        advanceUntilIdle()
+        assertNotNull(vm.error)
+
+        vm.cancelarEntrega()
+
+        assertNull(vm.encargadoSeleccionado)
+        assertNull(vm.error)
+        assertEquals("", vm.textoEncargado)
+        assertTrue(vm.resultadosEncargado.isEmpty())
+    }
+
+    @Test
+    fun `entregar bien suelta al encargado y lo confirma`() = runTest(dispatcher) {
+        abrir()
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.cambiarTextoEncargado("araya")
+        advanceUntilIdle()
+        vm.elegirEncargado(vm.resultadosEncargado.single())
+
+        vm.entregar(5) {}
+        advanceUntilIdle()
+
+        // Con el encargado suelto, el panel de entrega se cierra solo.
+        assertNull(vm.encargadoSeleccionado)
+        assertEquals("Gafete 5 entregado · Michael Araya Retana", vm.confirmacion.actual?.texto)
+    }
+
+    @Test
     fun `devolucion local cierra el prestamo`() = runTest(dispatcher) {
         abrir()
         nucleo.entregarGafeteProvisional(1, 5)

@@ -120,6 +120,8 @@ fun PantallaPorCorreo(
                 )
             }
             PanelConFormulario.FORMULARIO -> {
+                // Pantalla completa: sin barra de secciones encima.
+                OcultarBarraSecciones()
                 FormularioNuevoIngresoCorreo(
                     viewModel = viewModel,
                     gafeteTexto = gafeteTexto,
@@ -141,23 +143,13 @@ fun PantallaPorCorreo(
                     }
 
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                        Row(
+                        // "Nuevo ingreso" es el botón redondo de abajo.
+                        CampoBusquedaBrisas(
+                            valor = busqueda,
+                            onCambiar = { busqueda = it },
+                            ayuda = "Cédula, nombre, motivo…",
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            CampoBusquedaBrisas(
-                                valor = busqueda,
-                                onCambiar = { busqueda = it },
-                                ayuda = "Cédula, nombre, motivo…",
-                                modifier = Modifier.weight(1f),
-                            )
-                            BotonCuadradoBordeBrisas(
-                                icono = Icons.Default.PersonAdd,
-                                descripcion = "Nuevo ingreso por correo",
-                                onClick = { mostrandoFormulario = true },
-                            )
-                        }
+                        )
 
                         viewModel.error?.let { mensaje ->
                             Text(
@@ -180,11 +172,16 @@ fun PantallaPorCorreo(
                             },
                             sincronizando = sincronizando,
                             onSincronizar = onSincronizar,
-                            contentPadding = PaddingValues(top = 10.dp),
+                            contentPadding = PaddingValues(top = 10.dp, bottom = EspacioPieLista),
                         ) { fila ->
                             FilaCorreoActivo(fila = fila, onConfirmarSalida = { filaParaSalida = fila })
                         }
                     }
+
+                    PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
+                    // "Nuevo ingreso" va en el botón redondo de abajo (ver
+                    // `AccionInferior.kt`).
+                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso por correo", onClick = { mostrandoFormulario = true })
 
                     DialogoConfirmarSalidaCorreo(
                         fila = filaParaSalida,

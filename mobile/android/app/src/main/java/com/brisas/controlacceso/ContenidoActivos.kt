@@ -1,10 +1,9 @@
 package com.brisas.controlacceso
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -13,17 +12,27 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ContratistaResumen
 
 // Bloques de la pantalla de Activos: selector de modo, buscador, mensajes,
@@ -43,48 +52,48 @@ internal fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) 
     )
 }
 
+/// El escáner ya no va en un botón chico al lado del campo: es el botón
+/// flotante de abajo ([BotonEscanearActivos]), al alcance del pulgar.
 @Composable
 internal fun CampoBusquedaActivos(
     modo: ModoBusqueda,
     texto: String,
     onCambiarTexto: (String) -> Unit,
+) {
+    // El mismo campo cambia de sentido según el modo: el texto de ayuda dice
+    // qué se busca en cada uno.
+    CampoBusquedaBrisas(
+        valor = texto,
+        onCambiar = onCambiarTexto,
+        ayuda = when (modo) {
+            ModoBusqueda.ENTRADA -> "Nombre o cédula para ingresar"
+            ModoBusqueda.SALIDA_NOMBRE -> "Nombre o cédula de quien sale"
+            ModoBusqueda.SALIDA_GAFETE -> "Gafetes: 2, 25, 85"
+        },
+        keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {
+            KeyboardOptions(keyboardType = KeyboardType.Number)
+        } else {
+            KeyboardOptions.Default
+        },
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+    )
+}
+
+/// Lo que hace el botón redondo de abajo en Activos (ver `AccionInferior.kt`):
+/// en Ingreso escanea el documento para entrar (lo que más se hace en la
+/// portería); en Gafete, el gafete que sale; en Salida por nombre es la lupa
+/// que abre el buscador de abajo.
+@Composable
+internal fun AccionActivos(
+    modo: ModoBusqueda,
     onEscanearCedula: () -> Unit,
     onEscanearGafete: () -> Unit,
+    onBuscarSalida: () -> Unit,
 ) {
-    // El botón de cámara va en el color de la sección en los dos modos. Antes
-    // salida usaba `secondary` (azul fijo, de cuando toda la app era azul) y
-    // con los colores por sección quedaba un botón azul al lado de la
-    // píldora "Salida" verde azulado; el modo ya lo dicen la píldora y el
-    // texto de ayuda del buscador.
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // El mismo campo cambia de sentido según el modo: el texto de ayuda dice
-        // qué se busca en cada uno.
-        CampoBusquedaBrisas(
-            valor = texto,
-            onCambiar = onCambiarTexto,
-            ayuda = when (modo) {
-                ModoBusqueda.ENTRADA -> "Nombre o cédula para ingresar"
-                ModoBusqueda.SALIDA_NOMBRE -> "Nombre o cédula de quien sale"
-                ModoBusqueda.SALIDA_GAFETE -> "Gafetes: 2, 25, 85"
-            },
-            keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {
-                KeyboardOptions(keyboardType = KeyboardType.Number)
-            } else {
-                KeyboardOptions.Default
-            },
-            modifier = Modifier.weight(1f),
-        )
-        if (modo == ModoBusqueda.ENTRADA || modo == ModoBusqueda.SALIDA_GAFETE) {
-            BotonCuadradoBordeBrisas(
-                icono = Icons.Default.PhotoCamera,
-                descripcion = if (modo == ModoBusqueda.ENTRADA) "Escanear documento" else "Escanear gafete",
-                onClick = if (modo == ModoBusqueda.ENTRADA) onEscanearCedula else onEscanearGafete,
-            )
-        }
+    when (modo) {
+        ModoBusqueda.ENTRADA -> AccionPrincipal(Icons.Default.PhotoCamera, "Escanear documento", onEscanearCedula)
+        ModoBusqueda.SALIDA_GAFETE -> AccionPrincipal(Icons.Default.PhotoCamera, "Escanear gafete", onEscanearGafete)
+        ModoBusqueda.SALIDA_NOMBRE -> AccionPrincipal(Icons.Default.Search, "Buscar a quien sale", onBuscarSalida)
     }
 }
 
@@ -163,15 +172,23 @@ internal fun ContenidoModoSalidaNombre(
     onElegirActivo: (FilaActiva) -> Unit,
     sincronizando: Boolean = false,
     onSincronizar: () -> Unit = {},
+    // Dentro de [BuscadorInferior]: el campo está abajo y no hay barra ni
+    // botón que esquivar, así que la lista no deja espacio al final.
+    enBuscador: Boolean = false,
 ) {
     ListaActivos(
         activos = activos,
         cargando = cargando,
         tituloVacio = if (texto.isBlank()) "Busque a quien sale" else "Sin resultados",
-        detalleVacio = if (texto.isBlank()) "Escriba un nombre o una cédula." else "Pruebe con otro nombre o cédula.",
+        detalleVacio = when {
+            texto.isNotBlank() -> "Pruebe con otro nombre o cédula."
+            enBuscador -> "Escriba un nombre o una cédula."
+            else -> "Toque la lupa de abajo para buscar."
+        },
         onClick = onElegirActivo,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
+        contentPadding = if (enBuscador) PaddingValues(top = 5.dp, bottom = 8.dp) else null,
     )
 }
 
@@ -245,6 +262,8 @@ private fun ListaActivos(
     onClick: (FilaActiva) -> Unit,
     sincronizando: Boolean,
     onSincronizar: () -> Unit,
+    // `null` = el de siempre de [ListaConEstados].
+    contentPadding: PaddingValues? = null,
 ) {
     ListaConEstados(
         filas = activos,
@@ -254,6 +273,7 @@ private fun ListaActivos(
         detalleVacio = detalleVacio,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
+        contentPadding = contentPadding ?: PaddingValues(top = 5.dp, bottom = EspacioPieLista),
     ) { fila ->
         FilaActivo(fila, onClick = { onClick(fila) })
     }
@@ -278,23 +298,38 @@ internal fun DialogoConfirmarSalida(
 
 internal const val TEXTO_OTRO_DISPOSITIVO = "registrado en otro dispositivo de la unidad operativa"
 
-/// Modal "Registrar salida" a mano en vez de `AlertDialog` -- el mockup pide
-/// un layout que `AlertDialog` no ofrece (icono circular arriba, botón
-/// principal de ancho completo, "Cancelar" como link chico debajo, todo
-/// centrado) en vez de los dos botones lado a lado de siempre. Lo comparten
-/// contratistas y visitas.
+/// "Registrar salida" (o "Registrar devolución" en KOF) como panel que sube
+/// desde abajo, en vez del cuadro centrado de antes: "Confirmar" queda al
+/// alcance del pulgar. Mismo contenido de siempre (ícono circular arriba,
+/// botón principal de ancho completo, "Cancelar" chico debajo, todo
+/// centrado). Lo comparten contratistas, proveedores, correo, visitas y KOF.
+///
+/// Al confirmar, el panel baja primero y recién entonces avisa: si el que
+/// llama lo quitara de la composición en el acto, desaparecería de golpe.
+/// `confirmado` evita que un segundo toque registre dos veces mientras baja.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DialogoRegistrarSalida(
     detalle: String,
     onDismiss: () -> Unit,
     onConfirmar: () -> Unit,
+    titulo: String = "Registrar salida",
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val alcance = rememberCoroutineScope()
+    var confirmado by remember { mutableStateOf(false) }
+    fun cerrarY(accion: () -> Unit) {
+        alcance.launch { estado.hide() }.invokeOnCompletion { accion() }
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = estado,
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium)
-                .padding(24.dp),
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
@@ -307,7 +342,7 @@ internal fun DialogoRegistrarSalida(
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }
             Text(
-                "Registrar salida",
+                titulo,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 16.dp),
@@ -316,15 +351,21 @@ internal fun DialogoRegistrarSalida(
                 detalle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp),
             )
             BotonBrisas(
-                onClick = onConfirmar,
+                onClick = {
+                    if (!confirmado) {
+                        confirmado = true
+                        cerrarY(onConfirmar)
+                    }
+                },
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             ) {
                 Text("Confirmar")
             }
-            BotonDiscretoBrisas(onClick = onDismiss, modifier = Modifier.padding(top = 4.dp)) {
+            BotonDiscretoBrisas(onClick = { cerrarY(onDismiss) }, modifier = Modifier.padding(top = 4.dp)) {
                 Text("Cancelar")
             }
         }

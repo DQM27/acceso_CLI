@@ -11,7 +11,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.background
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
@@ -62,10 +66,21 @@ fun PantallaActivos(
         viewModel(factory = ActivosViewModel.factory(nucleo))
     var escanerAbierto by remember { mutableStateOf(false) }
     var escanerGafeteSalidaAbierto by remember { mutableStateOf(false) }
+    // El buscador de abajo de Salida por nombre (lupa del botón redondo).
+    var buscandoSalida by remember { mutableStateOf(false) }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescar()
         }
+    }
+    // Tras escanear un documento: denegado, advertencia o no encontrado
+    // suenan y vibran (ver `AlertaEscaneo.kt`).
+    val contexto = LocalContext.current
+    LaunchedEffect(viewModel.alertaEscaneo?.id) {
+        val aviso = viewModel.alertaEscaneo ?: return@LaunchedEffect
+        sonarAlertaEscaneo(contexto, aviso.alerta)
+        // Sonada una vez: volver a la pestaña no la repite.
+        viewModel.alertaSonada(aviso.id)
     }
 
     // Qué panel se ve ahora (mismo orden de prioridad de siempre: primero el
@@ -99,6 +114,9 @@ fun PantallaActivos(
     ) { mostrado ->
         when (mostrado) {
             is PanelActivos.Confirmar -> {
+                // Los formularios ocupan toda la pantalla: sin barra de
+                // secciones encima (las cámaras la esconden solas).
+                OcultarBarraSecciones()
                 PantallaConfirmarIngreso(
                     preparacion = mostrado.seleccion.preparacion,
                     error = viewModel.errorIngreso,
@@ -109,6 +127,7 @@ fun PantallaActivos(
                 )
             }
             is PanelActivos.Bloqueado -> {
+                OcultarBarraSecciones()
                 PantallaIngresoBloqueado(
                     preparacion = mostrado.seleccion.preparacion,
                     mensaje = mostrado.seleccion.mensaje,
@@ -174,13 +193,15 @@ fun PantallaActivos(
             Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
                 SelectorModoBusqueda(modo = viewModel.modo, onCambiar = { viewModel.cambiarModo(it) })
 
-                CampoBusquedaActivos(
-                    modo = viewModel.modo,
-                    texto = viewModel.texto,
-                    onCambiarTexto = { viewModel.cambiarTexto(it) },
-                    onEscanearCedula = { escanerAbierto = true },
-                    onEscanearGafete = { escanerGafeteSalidaAbierto = true },
-                )
+                // En Salida por nombre no hay campo arriba: se busca con la
+                // lupa de abajo (ver [BuscadorInferior] más abajo).
+                if (viewModel.modo != ModoBusqueda.SALIDA_NOMBRE) {
+                    CampoBusquedaActivos(
+                        modo = viewModel.modo,
+                        texto = viewModel.texto,
+                        onCambiarTexto = { viewModel.cambiarTexto(it) },
+                    )
+                }
 
                 MensajesEstado(
                     error = viewModel.error,
@@ -214,6 +235,43 @@ fun PantallaActivos(
                         coincidencias = viewModel.coincidenciasGafete,
                         enviando = viewModel.enviandoGafetes,
                         onRegistrarSalidaGafetes = { viewModel.registrarSalidaPorGafetes() },
+                    )
+                }
+            }
+
+            PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
+            AccionActivos(
+                modo = viewModel.modo,
+                onEscanearCedula = { escanerAbierto = true },
+                onEscanearGafete = { escanerGafeteSalidaAbierto = true },
+                onBuscarSalida = { buscandoSalida = true },
+            )
+
+            // Buscar a quién sale, desde abajo como en iOS: elegir a alguien
+            // abre el panel de salida y cierra la búsqueda.
+            if (buscandoSalida && viewModel.modo == ModoBusqueda.SALIDA_NOMBRE) {
+                val cerrarBusqueda = {
+                    buscandoSalida = false
+                    viewModel.cambiarTexto("")
+                }
+                BuscadorInferior(
+                    texto = viewModel.texto,
+                    onCambiar = { viewModel.cambiarTexto(it) },
+                    ayuda = "Nombre o cédula de quien sale",
+                    onCerrar = cerrarBusqueda,
+                    modifier = Modifier.background(MaterialTheme.colorScheme.background),
+                ) {
+                    ContenidoModoSalidaNombre(
+                        texto = viewModel.texto,
+                        activos = viewModel.activos,
+                        cargando = viewModel.cargando,
+                        onElegirActivo = { fila ->
+                            viewModel.elegirSeleccionSalida(fila)
+                            cerrarBusqueda()
+                        },
+                        sincronizando = sincronizando,
+                        onSincronizar = onSincronizar,
+                        enBuscador = true,
                     )
                 }
             }

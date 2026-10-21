@@ -199,6 +199,9 @@ fun EscanerConPermisoCamara(
     contenido: @Composable () -> Unit,
 ) {
     BackHandler(onBack = onCerrar)
+    // La cámara ocupa toda la pantalla: la barra de secciones no debe quedar
+    // encima ni dejarse tocar (ver [OcultarBarraSecciones]).
+    OcultarBarraSecciones()
     val contexto = LocalContext.current
     var permisoConcedido by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)

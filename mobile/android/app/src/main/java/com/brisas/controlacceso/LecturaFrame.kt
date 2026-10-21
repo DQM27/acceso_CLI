@@ -138,7 +138,6 @@ class MetricasOcr(
     private val luminancias = ArrayDeque<Float>()
     private val reflejos = ArrayDeque<Float>()
     private var framesMedidos = 0
-    private var framesConLinterna = 0
 
     // Confianza de las palabras de ML Kit: para calibrar el umbral con que
     // los renglones visuales descartan palabras (`CONFIANZA_MINIMA`, 0,25).
@@ -182,13 +181,11 @@ class MetricasOcr(
         if (frames % cadaCuantosFrames == 0) registrar(resumen())
     }
 
-    /// Calidad medida de un frame (procesado o descartado) y si la linterna
-    /// estaba encendida.
+    /// Calidad medida de un frame (procesado o descartado).
     @Synchronized
-    fun registrarCalidad(calidad: CalidadFrame, linternaEncendida: Boolean) {
+    fun registrarCalidad(calidad: CalidadFrame) {
         if (!habilitadas) return
         framesMedidos++
-        if (linternaEncendida) framesConLinterna++
         agregar(nitideces, calidad.nitidez, MUESTRAS_CONDICIONES)
         agregar(luminancias, calidad.luminancia, MUESTRAS_CONDICIONES)
         agregar(reflejos, calidad.fraccionReflejo, MUESTRAS_CONDICIONES)
@@ -295,7 +292,6 @@ class MetricasOcr(
         "reconocimiento_mediana_ms" to mediana(msReconocimiento),
         // Condiciones de captura: con qué nitidez, luz y reflejo se trabajó.
         "frames_medidos" to framesMedidos,
-        "frames_con_linterna" to framesConLinterna,
         "nitidez_p10" to cuantil(nitideces, 0.1),
         "nitidez_p50" to cuantil(nitideces, 0.5),
         "nitidez_p90" to cuantil(nitideces, 0.9),

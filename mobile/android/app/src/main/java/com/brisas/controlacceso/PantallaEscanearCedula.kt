@@ -2,13 +2,9 @@ package com.brisas.controlacceso
 
 import androidx.camera.core.ImageProxy
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -19,7 +15,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -297,7 +292,6 @@ private fun VistaCamaraCedula(
                         camara.cameraProvider = proveedor
                         camara.vistaPreviaCamara = preview
                     },
-                    onCamaraLista = { camara.camaraFisica = it },
                     onFallo = { mensaje ->
                         if (camara.sesionActiva.get()) {
                             estado = EstadoEscaneo.INVALIDO
@@ -324,23 +318,14 @@ private fun VistaCamaraCedula(
         // apuntando la cámara al siguiente gafete.
         val resultado = resultadoMostrado
         val mensajeVisible = resultado?.first ?: ultimoMensaje
-        Text(
+        MensajeEscaneo(
             mensajeVisible,
-            color = Color.White,
-            style = MaterialTheme.typography.bodyLarge,
+            tono = tonoEscaneo(estado, vencido, resultadoEsError = resultado?.second),
             modifier = Modifier
-                .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .padding(top = 16.dp, start = 16.dp, end = 72.dp)
-                .background(
-                    when {
-                        resultado == null -> Color.Black.copy(alpha = 0.78f)
-                        resultado.second -> ColorEscaneoInvalido.copy(alpha = 0.85f)
-                        else -> ColorEscaneoConfirmado.copy(alpha = 0.85f)
-                    },
-                    FormaCampoBrisas,
-                )
-                .padding(12.dp),
+                // Centrado entre los bordes, dejando a la derecha el lugar de
+                // la X de cerrar.
+                .padding(top = 16.dp, start = 72.dp, end = 72.dp),
         )
         // Círculo flotante en vez del texto "Cancelar" que vivía debajo del
         // mensaje -- pedido explícito del usuario (2026-09-19): la posición
@@ -350,13 +335,6 @@ private fun VistaCamaraCedula(
         // Compartido (`ControlesBrisas.kt`) -- mismo botón en las 4 pantallas
         // de escaneo (Cédula, Carnet KOF, Vehículo/Ruta, Comprobante).
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
-        if (camara.tieneLinterna) {
-            BotonLinterna(
-                encendida = camara.linternaEncendida,
-                onClick = camara::alternarLinterna,
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 72.dp, end = 16.dp),
-            )
-        }
     }
 }
 
