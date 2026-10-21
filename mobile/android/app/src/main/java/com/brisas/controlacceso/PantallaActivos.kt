@@ -100,6 +100,9 @@ fun PantallaActivos(
     ) { mostrado ->
         when (mostrado) {
             is PanelActivos.Confirmar -> {
+                // Los formularios ocupan toda la pantalla: sin barra de
+                // secciones encima (las cámaras la esconden solas).
+                OcultarBarraSecciones()
                 PantallaConfirmarIngreso(
                     preparacion = mostrado.seleccion.preparacion,
                     error = viewModel.errorIngreso,
@@ -110,6 +113,7 @@ fun PantallaActivos(
                 )
             }
             is PanelActivos.Bloqueado -> {
+                OcultarBarraSecciones()
                 PantallaIngresoBloqueado(
                     preparacion = mostrado.seleccion.preparacion,
                     mensaje = mostrado.seleccion.mensaje,

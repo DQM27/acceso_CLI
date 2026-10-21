@@ -140,6 +140,8 @@ fun PantallaProveedores(
                 )
             }
             PanelConFormulario.FORMULARIO -> {
+                // Pantalla completa: sin barra de secciones encima.
+                OcultarBarraSecciones()
                 FormularioNuevoIngresoProveedor(
                     viewModel = viewModel,
                     gafeteTexto = gafeteTexto,

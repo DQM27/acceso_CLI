@@ -120,6 +120,8 @@ fun PantallaPorCorreo(
                 )
             }
             PanelConFormulario.FORMULARIO -> {
+                // Pantalla completa: sin barra de secciones encima.
+                OcultarBarraSecciones()
                 FormularioNuevoIngresoCorreo(
                     viewModel = viewModel,
                     gafeteTexto = gafeteTexto,

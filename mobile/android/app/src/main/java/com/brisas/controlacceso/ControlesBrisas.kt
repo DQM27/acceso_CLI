@@ -48,7 +48,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -159,6 +163,38 @@ internal fun CampoBusquedaBrisas(
  * lo que tiene que quedar a la vista debe dejar ese espacio. Cero fuera de
  * las pestañas (la bandeja de avisos o "Nuevo contratista" no la tienen). */
 internal val LocalMargenBarraInferior = compositionLocalOf { 0.dp }
+
+/** Cuántas pantallas a pantalla completa (cámaras, formularios de ingreso)
+ * hay a la vista ahora mismo: mientras haya alguna, [PantallaPrincipal]
+ * esconde la barra de secciones. Es un contador y no un sí/no porque durante
+ * una transición la pantalla que entra y la que sale conviven un instante. */
+internal class PantallasCompletas {
+    var cantidad by mutableIntStateOf(0)
+        private set
+
+    fun abrir() {
+        cantidad++
+    }
+
+    fun cerrar() {
+        cantidad--
+    }
+}
+
+internal val LocalPantallasCompletas = staticCompositionLocalOf<PantallasCompletas?> { null }
+
+/** Se llama dentro de una pantalla que ocupa todo el lugar (cámara, formulario)
+ * para que la barra de secciones flotante se esconda mientras esté a la vista:
+ * si no, quedaba encima de la cámara y se podía tocar (bug visto en el
+ * teléfono, 2026-10-21). Fuera de las pestañas no hace nada. */
+@Composable
+internal fun OcultarBarraSecciones() {
+    val pantallas = LocalPantallasCompletas.current ?: return
+    DisposableEffect(pantallas) {
+        pantallas.abrir()
+        onDispose { pantallas.cerrar() }
+    }
+}
 
 /** Espacio libre al final de las listas para que la última fila no quede
  * debajo del botón flotante, de [FranjaConfirmacion] ni de la barra de

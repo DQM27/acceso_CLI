@@ -6,6 +6,10 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -475,6 +479,9 @@ fun PantallaPrincipal(
                 // desenfocado a través del vidrio. Cada pantalla deja libre lo
                 // que tapa la barra con `LocalMargenBarraInferior`.
                 val vidrio = remember { HazeState() }
+                // Cámaras y formularios la esconden mientras están a la vista
+                // (ver [OcultarBarraSecciones]).
+                val pantallasCompletas = remember { PantallasCompletas() }
                 Box(modifier = Modifier.fillMaxSize()) {
                     val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
                     val externo = tipoExternoVisible(indiceExterno)
@@ -483,7 +490,10 @@ fun PantallaPrincipal(
                     // `PantallaActivos`) revienta con `IllegalStateException` si lo
                     // miden con altura infinita, como hace un `Column` sin peso.
                     // Desliza y funde entre pestañas (ver `TransicionesPantalla.kt`).
-                    CompositionLocalProvider(LocalMargenBarraInferior provides MARGEN_BARRA_SECCIONES) {
+                    CompositionLocalProvider(
+                        LocalMargenBarraInferior provides MARGEN_BARRA_SECCIONES,
+                        LocalPantallasCompletas provides pantallasCompletas,
+                    ) {
                         AnimatedContent(
                             targetState = seccion,
                             modifier = Modifier.fillMaxSize().hazeSource(vidrio),
@@ -525,14 +535,25 @@ fun PantallaPrincipal(
                             }
                         }
                     }
-                    BarraSecciones(
-                        seleccionada = seccion,
-                        externo = externo,
-                        adentro = adentro,
-                        onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
-                        vidrio = vidrio,
+                    // Baja y se funde al esconderse; vuelve a subir al cerrar la
+                    // cámara o el formulario. Escondida no se puede tocar. Con
+                    // el nombre completo: dentro de la `Column` de afuera, el
+                    // `AnimatedVisibility` a secas es el de `ColumnScope`.
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = pantallasCompletas.cantidad == 0,
                         modifier = Modifier.align(Alignment.BottomCenter),
-                    )
+                        enter = fadeIn(tween(MS_FUNDIDO_ENTRADA)) + slideInVertically(tween(MS_ENTRADA)) { alto -> alto },
+                        exit = fadeOut(tween(MS_SALIDA)) + slideOutVertically(tween(MS_SALIDA)) { alto -> alto },
+                        label = "barraSecciones",
+                    ) {
+                        BarraSecciones(
+                            seleccionada = seccion,
+                            externo = externo,
+                            adentro = adentro,
+                            onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
+                            vidrio = vidrio,
+                        )
+                    }
                 }
             }
         }
