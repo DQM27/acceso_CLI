@@ -265,6 +265,68 @@ class ActivosViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Bloqueada)
+        // Elegido a mano: no suena nada (sólo el escaneo avisa con sonido).
+        assertNull(viewModel.alertaEscaneo)
+    }
+
+    // --- Sonido tras escanear para ingresar ---
+
+    @Test
+    fun `escanear a alguien sin acceso avisa que fue denegado`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('222222222', 'Sin Acceso', 1, 'SWAT', 0, 0);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.usarDocumentoEscaneadoIngreso(DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "222222222"))
+        advanceUntilIdle()
+
+        assertEquals(AlertaEscaneo.DENEGADO, viewModel.alertaEscaneo?.alerta)
+    }
+
+    @Test
+    fun `escanear a alguien que no esta avisa no encontrado y sonada no se repite`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.usarDocumentoEscaneadoIngreso(DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "999999999"))
+        advanceUntilIdle()
+        val aviso = viewModel.alertaEscaneo
+        assertEquals(AlertaEscaneo.NO_ENCONTRADO, aviso?.alerta)
+
+        viewModel.alertaSonada(aviso!!.id)
+        assertNull(viewModel.alertaEscaneo)
+    }
+
+    @Test
+    fun `escanear a alguien habilitado no suena`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('111111111', 'Contratista Escaneado', 1, 'SWAT', 0, 1);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.usarDocumentoEscaneadoIngreso(DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "111111111"))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Formulario)
+        assertNull(viewModel.alertaEscaneo)
     }
 
     @Test

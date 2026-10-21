@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
@@ -71,6 +72,15 @@ fun PantallaActivos(
         if (refrescarNube > 0) {
             viewModel.refrescar()
         }
+    }
+    // Tras escanear un documento: denegado, advertencia o no encontrado
+    // suenan y vibran (ver `AlertaEscaneo.kt`).
+    val contexto = LocalContext.current
+    LaunchedEffect(viewModel.alertaEscaneo?.id) {
+        val aviso = viewModel.alertaEscaneo ?: return@LaunchedEffect
+        sonarAlertaEscaneo(contexto, aviso.alerta)
+        // Sonada una vez: volver a la pestaña no la repite.
+        viewModel.alertaSonada(aviso.id)
     }
 
     // Qué panel se ve ahora (mismo orden de prioridad de siempre: primero el

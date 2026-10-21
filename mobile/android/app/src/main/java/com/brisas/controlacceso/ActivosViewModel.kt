@@ -152,6 +152,19 @@ class ActivosViewModel(
     /// [FranjaConfirmacion]).
     val confirmacion = ConfirmacionReciente()
 
+    /// Lo que hay que hacer sonar tras escanear un documento para ingresar
+    /// (ver [alertaTrasEscaneo]). `id` distingue dos alertas iguales seguidas:
+    /// cada una suena. Sólo lo pone el escaneo; la pantalla lo hace sonar.
+    var alertaEscaneo by mutableStateOf<AvisoEscaneo?>(null)
+        private set
+    private var siguienteAlerta = 0L
+
+    /// La pantalla ya la hizo sonar. Sólo si sigue siendo la misma: una nueva
+    /// que llegó mientras tanto no se pierde.
+    fun alertaSonada(id: Long) {
+        if (alertaEscaneo?.id == id) alertaEscaneo = null
+    }
+
     // Aparte de `error` (fallas de consulta) — lo pone únicamente la
     // confirmación masiva de gafetes, así que no hay riesgo de que la
     // recarga de la lista tras confirmar (dispara la misma búsqueda) lo
@@ -215,6 +228,9 @@ class ActivosViewModel(
                 val contratista = contratistaEscaneadoClaro(valor, resultados)
                 if (contratista != null) {
                     elegir(contratista, origen = "ocr", msBusqueda = milisegundosDesde(inicioBusqueda)).join()
+                }
+                alertaTrasEscaneo(resultados, seleccionIngreso)?.let { alerta ->
+                    alertaEscaneo = AvisoEscaneo(alerta, ++siguienteAlerta)
                 }
                 error = null
             } catch (excepcion: NucleoException) {

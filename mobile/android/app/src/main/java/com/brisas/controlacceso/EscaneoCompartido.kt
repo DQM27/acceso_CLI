@@ -309,6 +309,10 @@ fun vibrarError(contexto: android.content.Context) = vibrarPatron(contexto, PATR
 /// del éxito (un solo toque) y del error (dos golpes) sin mirar la pantalla.
 fun vibrarAdvertencia(contexto: android.content.Context) = vibrarPatron(contexto, PATRON_ADVERTENCIA)
 
+/// Un golpe corto y fuerte: la persona escaneada no está en el catálogo
+/// (distinto del doble golpe de error y del triple de advertencia).
+fun vibrarNoEncontrado(contexto: android.content.Context) = vibrarPatron(contexto, PATRON_NO_ENCONTRADO)
+
 /// Una vibración por patrón: `tiempos` alterna pausa y golpe (empieza por una
 /// pausa de 0) y `amplitudes` es la fuerza de cada tramo (0 en las pausas).
 internal class PatronVibracion(val tiempos: LongArray, val amplitudes: IntArray) {
@@ -320,6 +324,7 @@ internal class PatronVibracion(val tiempos: LongArray, val amplitudes: IntArray)
 internal val PATRON_ERROR = PatronVibracion(longArrayOf(0, 90, 70, 90), intArrayOf(0, 255, 0, 255))
 internal val PATRON_ADVERTENCIA =
     PatronVibracion(longArrayOf(0, 70, 60, 70, 60, 220), intArrayOf(0, 200, 0, 200, 0, 255))
+internal val PATRON_NO_ENCONTRADO = PatronVibracion(longArrayOf(0, 160), intArrayOf(0, 255))
 
 private fun vibrarPatron(contexto: android.content.Context, patron: PatronVibracion) {
     val vibrador = obtenerVibrador(contexto) ?: return
