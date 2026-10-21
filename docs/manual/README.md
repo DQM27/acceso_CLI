@@ -44,9 +44,9 @@ Estado: ✅ redactado · ⬜ pendiente.
 ### Ingresos
 
 - ✅ [Registrar el ingreso de un contratista (Ctrl+N)](escritorio/registrar-ingreso-contratista.md)
-- ⬜ Registrar el ingreso de un proveedor (Alt+P)
-- ⬜ Registrar una visita autorizada por correo (Alt+C)
-- ⬜ Entregar un gafete provisional KOF (Alt+K)
+- ✅ [Registrar el ingreso de un proveedor (Alt+P)](escritorio/registrar-ingreso-proveedor.md)
+- ✅ [Registrar una visita autorizada por correo (Alt+C)](escritorio/registrar-visita-por-correo.md)
+- ✅ [Entregar un gafete provisional KOF (Alt+K)](escritorio/entregar-gafete-kof.md)
 
 ### Salidas
 

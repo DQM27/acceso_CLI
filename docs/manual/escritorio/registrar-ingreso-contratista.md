@@ -55,6 +55,7 @@ Para elegir a otra persona antes de registrar, pulse **Cambiar**.
 | "Ingrese el número de gafete o marque «Sin gafete»" | Este contratista requiere gafete y el campo está vacío. | Escriba el número del gafete que le entrega o marque **Sin gafete**. |
 | "Ingrese un número de gafete válido" | El número escrito no es válido. | Escriba sólo el número del gafete. |
 | "El contratista ya tiene un ingreso activo." | Ya figura adentro. | Si realmente había salido, registre primero su salida (Ctrl+S) y luego el ingreso. |
+| "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Figura adentro por otra vía. | Registre primero esa salida (Ctrl+S) y luego este ingreso. |
 | "El contratista ya tiene un ingreso activo en (sitio)." | Figura adentro en otro sitio. | No registre el ingreso. Avise a un administrador para que lo revise con el otro sitio. |
 | "La nube rechazó la verificación de si el contratista ya tiene un ingreso activo. Intente de nuevo; si se repite, avise a un administrador para revisar este equipo." | No se pudo confirmar con la nube si ya está adentro en otro lugar. | Intente otra vez. Si se repite, avise a un administrador. |
 | Mensajes que empiezan con "Acceso denegado ·" | No puede entrar. | Ver [PRAIND vencido, acceso denegado y otros bloqueos](praind-y-bloqueos-de-acceso.md). |
