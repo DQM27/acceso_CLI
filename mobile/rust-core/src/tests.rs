@@ -587,11 +587,11 @@ fn crear_empresa_y_cerrar_sesion() {
     assert!(matches!(resultado, Err(NucleoError::NoAutenticado)));
 }
 
-/// El celular no cambia contraseñas: una cuenta con la contraseña temporal
-/// del alta todavía sin cambiar no entra, y el mensaje manda a cambiarla en
-/// una computadora del puesto de seguridad.
+/// Una cuenta con la contraseña temporal del alta todavía sin cambiar no
+/// abre sesión: el núcleo avisa con `PasswordTemporal` para que el teléfono
+/// pase al paso de elegir una nueva.
 #[test]
-fn autenticar_con_contrasena_temporal_se_rechaza() {
+fn autenticar_con_contrasena_temporal_pide_cambiarla() {
     let archivo = tempfile::NamedTempFile::new().unwrap();
     let ruta = archivo.path().to_str().unwrap().to_string();
     let conexion = control_acceso::database::connection::open_database(&ruta).unwrap();
@@ -612,10 +612,70 @@ fn autenticar_con_contrasena_temporal_se_rechaza() {
     let nucleo = Nucleo::abrir(ruta).unwrap();
     let resultado = nucleo.autenticar("777777777".to_string(), "clave_prueba_123".to_string());
 
-    match resultado {
-        Err(NucleoError::Rechazado { mensaje }) => assert!(mensaje.contains("puesto de seguridad")),
-        otro => panic!("se esperaba el rechazo por contraseña temporal, llegó {otro:?}"),
-    }
+    assert!(matches!(resultado, Err(NucleoError::PasswordTemporal)));
+    assert!(matches!(
+        nucleo.crear_empresa("Empresa".to_string()),
+        Err(NucleoError::NoAutenticado)
+    ));
+}
+
+#[test]
+fn revisar_password_nueva_marca_cada_requisito() {
+    use crate::sesion::revisar_password_nueva;
+
+    let vacia = revisar_password_nueva("temporal1".into(), String::new(), String::new());
+    assert!(!vacia.largo_suficiente && !vacia.distinta_de_la_temporal && !vacia.coinciden);
+    assert!(!vacia.valida());
+
+    let corta = revisar_password_nueva("temporal1".into(), "abc".into(), "abc".into());
+    assert!(!corta.largo_suficiente);
+    assert!(corta.distinta_de_la_temporal && corta.coinciden);
+    assert!(!corta.valida());
+
+    let igual = revisar_password_nueva("temporal1".into(), "temporal1".into(), "temporal1".into());
+    assert!(igual.largo_suficiente && igual.coinciden);
+    assert!(!igual.distinta_de_la_temporal);
+    assert!(!igual.valida());
+
+    let distintas = revisar_password_nueva(
+        "temporal1".into(),
+        "nueva-segura".into(),
+        "nueva-segur".into(),
+    );
+    assert!(!distintas.coinciden);
+    assert!(!distintas.valida());
+
+    let buena = revisar_password_nueva(
+        "temporal1".into(),
+        "nueva-segura".into(),
+        "nueva-segura".into(),
+    );
+    assert!(buena.valida());
+}
+
+/// El largo cuenta caracteres, no bytes: "ñññññññ" son 7 aunque ocupe 14 bytes.
+#[test]
+fn revisar_password_nueva_cuenta_caracteres_no_bytes() {
+    let revision =
+        crate::sesion::revisar_password_nueva("x".into(), "ñññññññ".into(), "ñññññññ".into());
+    assert!(!revision.largo_suficiente);
+}
+
+/// Las reglas se revisan antes de tocar la red: una nueva inválida se
+/// rechaza sin intentar el cambio en Supabase ni abrir sesión.
+#[test]
+fn cambiar_password_temporal_invalida_no_toca_la_red() {
+    let archivo = tempfile::NamedTempFile::new().unwrap();
+    let nucleo = Nucleo::abrir(archivo.path().to_str().unwrap().to_string()).unwrap();
+
+    let resultado = nucleo.cambiar_password_temporal(
+        "777777777".into(),
+        "temporal1".into(),
+        "corta".into(),
+        "corta".into(),
+    );
+
+    assert!(matches!(resultado, Err(NucleoError::Rechazado { .. })));
     assert!(matches!(
         nucleo.crear_empresa("Empresa".to_string()),
         Err(NucleoError::NoAutenticado)

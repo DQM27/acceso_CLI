@@ -210,7 +210,7 @@ private fun PanelCuenta(
         shape = RoundedCornerShape(26.dp),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 16.dp,
-        // Angosto a propósito: a 260dp tapaba media pantalla.
+        // Angosto a propÃ³sito: a 260dp tapaba media pantalla.
         modifier = Modifier.width(IntrinsicSize.Max).widthIn(min = 180.dp, max = 230.dp),
     ) {
         Column(modifier = Modifier.padding(vertical = 6.dp)) {
@@ -352,7 +352,7 @@ private fun FilaEscalonada(indice: Int, contenido: @Composable () -> Unit) {
 /// creciendo y girando, se pasa un poco y vuelve; el que se va se encoge con
 /// el mismo resorte.
 @Composable
-private fun IconoTema(tema: TemaApp) {
+internal fun IconoTema(tema: TemaApp) {
     AnimatedContent(
         targetState = tema == TemaApp.TOKYO_NIGHT,
         transitionSpec = {

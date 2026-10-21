@@ -1,44 +1,64 @@
 package com.brisas.controlacceso
 
-import androidx.compose.foundation.Image
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Badge
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
 
 /// Login real contra `Nucleo.autenticar` (Rust) — todo el estado y la
 /// llamada viven en [LoginViewModel] (ver mobile/android/arquitectura.md), este
-/// Composable sólo dibuja el formulario. Una vez hay sesión, delega a
-/// [PantallaPrincipal] en vez de dibujar nada propio — mismo `Nucleo` para
-/// toda la app, no se reabre la base al loguear.
+/// Composable sólo dibuja. Una vez hay sesión, delega a [PantallaPrincipal]
+/// en vez de dibujar nada propio — mismo `Nucleo` para toda la app, no se
+/// reabre la base al loguear.
+///
+/// Dos pasos sobre la misma [HojaPorteria]: cédula y contraseña, y, si la
+/// contraseña era la temporal del alta, elegir una nueva antes de entrar
+/// (antes eso sólo se podía en el escritorio).
 @Composable
 fun PantallaLogin(nucleo: Nucleo, directorio: String) {
     RegistrarPantalla("login")
@@ -59,110 +79,208 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
         return
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        // Logo más grande y sin el texto "Lattis" debajo -- redundante, el
-        // logo ya dice la marca (pedido explícito del usuario, 2026-09-19).
-        // En su lugar, "ACCESO MOVIL" con "MOVIL" en negrita
-        // para resaltarlo -- distingue esta app de las otras plataformas
-        // (desktop/web) que comparten la misma marca.
-        Image(
-            painter = painterResource(id = R.drawable.marca),
-            contentDescription = null,
-            modifier = Modifier.size(128.dp).clip(RoundedCornerShape(26.dp)),
-        )
+    val textoUnidad = rememberTextoUnidadOperativa(nucleo)
+    val estadoRed = estadoConexion(hayRed = rememberHayRed(), falloSincronizacion = false)
+    val tema = temaActual()
 
-        Text(
-            buildAnnotatedString {
-                // `titleLarge` ya es bold (peso 700, `TipografiaBrisas` en
-                // DisenoMovil.kt) -- ponerle Bold también a "móvil" no
-                // resaltaba nada porque ya estaba igual de grueso que el
-                // resto. Se aligera "ACCESO" a Normal para que
-                // "MOVIL" contraste y sea lo que el ojo agarra primero.
-                withStyle(SpanStyle(fontWeight = FontWeight.Normal)) {
-                    append("ACCESO ")
-                }
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                    append("MOVIL")
-                }
-            },
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(top = 16.dp),
-        )
+    // Vibración de "rechazado" con cada intento fallido, junto con la
+    // sacudida del formulario.
+    val haptica = LocalHapticFeedback.current
+    LaunchedEffect(viewModel.intentosFallidos) {
+        if (viewModel.intentosFallidos > 0) haptica.performHapticFeedback(HapticFeedbackType.Reject)
+    }
 
-        // Unidad y etiqueta con que quedó registrado el teléfono: si lo
-        // registraron en la unidad equivocada, se ve antes de entrar.
-        rememberTextoUnidadOperativa(nucleo)?.let { texto ->
+    HojaPorteria(
+        encabezado = { compacto ->
+            MarcaPorteria(compacto)
+            // "ACCESO" liviano y "MÓVIL" en negrita: distingue esta app de
+            // las otras plataformas (desktop/web) que comparten la marca.
             Text(
-                texto,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Normal)) { append("ACCESO ") }
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("MÓVIL") }
+                },
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(top = if (compacto) 8.dp else 16.dp),
             )
+            // Unidad y etiqueta con que quedó registrado el teléfono: si lo
+            // registraron en la unidad equivocada, se ve antes de entrar.
+            if (textoUnidad != null) {
+                ChipUnidad(textoUnidad, estadoRed, modifier = Modifier.padding(top = 10.dp))
+            }
+        },
+        arriba = {
+            BotonIconoCuadradoBrisas(
+                onClick = { GestorTema.alternar(tema) },
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+            ) {
+                IconoTema(tema)
+            }
+        },
+    ) {
+        AnimatedContent(
+            targetState = viewModel.cambiandoTemporal,
+            transitionSpec = {
+                val haciaAdelante = targetState
+                (fadeIn() + slideInHorizontally { ancho -> if (haciaAdelante) ancho / 4 else -ancho / 4 }) togetherWith
+                    (fadeOut() + slideOutHorizontally { ancho -> if (haciaAdelante) -ancho / 4 else ancho / 4 })
+            },
+            label = "pasoLogin",
+        ) { cambiando ->
+            Column {
+                if (cambiando) PasoPasswordTemporal(viewModel) else PasoCredenciales(viewModel)
+            }
         }
+    }
+}
 
+@Composable
+private fun ColumnScope.PasoCredenciales(viewModel: LoginViewModel) {
+    var mostrarAyuda by rememberSaveable { mutableStateOf(false) }
+    val focoPassword = remember { FocusRequester() }
+    val foco = LocalFocusManager.current
+    val puedeEnviar = !viewModel.autenticando && viewModel.cedula.isNotBlank() && viewModel.password.isNotBlank()
+    val enviar = {
+        if (puedeEnviar) {
+            foco.clearFocus()
+            viewModel.autenticar()
+        }
+    }
+
+    AvisoPorteria(viewModel.error)
+    TituloHoja("Iniciar sesión", "Ingrese con su cédula y contraseña.")
+
+    Column(modifier = Modifier.padding(top = 16.dp).sacudirAl(viewModel.intentosFallidos)) {
         OutlinedTextField(
             value = viewModel.cedula,
             onValueChange = { viewModel.cambiarCedula(it) },
             label = { Text("Cédula") },
+            leadingIcon = { Icon(Icons.Outlined.Badge, contentDescription = null) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            enabled = !viewModel.autenticando,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions(onNext = { focoPassword.requestFocus() }),
             shape = FormaCampoBrisas,
             colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
+            modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedTextField(
-            value = viewModel.password,
-            onValueChange = { viewModel.cambiarPassword(it) },
-            label = { Text("Contraseña") },
-            singleLine = true,
-            // `visualTransformation` sólo oculta el texto EN PANTALLA (los
-            // puntos) -- sin `KeyboardType.Password` el teclado del sistema
-            // no sabe que es un campo sensible y sigue armando su predictivo
-            // con lo tipeado (hallazgo real del usuario 2026-09-21: la barra
-            // de sugerencias mostraba "daniel"/"daniel27" mientras escribía
-            // la contraseña). Este flag es lo que de verdad apaga
-            // predicción/autocorrección/diccionario personal para el campo.
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            visualTransformation = PasswordVisualTransformation(),
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        // `KeyboardType.Password` (adentro de [CampoClavePorteria]) es lo que
+        // de verdad apaga predicción/autocorrección/diccionario personal: sin
+        // él la barra de sugerencias mostraba lo tipeado en la contraseña
+        // (hallazgo real del usuario 2026-09-21).
+        CampoClavePorteria(
+            valor = viewModel.password,
+            onCambiar = { viewModel.cambiarPassword(it) },
+            etiqueta = "Contraseña",
+            icono = Icons.Outlined.Lock,
+            error = viewModel.errorCredenciales,
+            habilitado = !viewModel.autenticando,
+            onAccionTeclado = enviar,
+            modifier = Modifier.padding(top = 8.dp).focusRequester(focoPassword),
         )
-        BotonBrisas(
-            onClick = { viewModel.autenticar() },
-            enabled = !viewModel.autenticando && viewModel.cedula.isNotBlank() && viewModel.password.isNotBlank(),
-            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-        ) {
-            Text(if (viewModel.autenticando) "Verificando…" else "Ingresar")
-        }
+    }
 
-        val mensajeError = viewModel.error
-        if (mensajeError != null) {
-            Text(
-                mensajeError,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 16.dp),
-            )
-        }
+    BotonPorteria(
+        texto = if (viewModel.autenticando) "Verificando…" else "Ingresar",
+        onClick = enviar,
+        enabled = puedeEnviar,
+        trabajando = viewModel.autenticando,
+        modifier = Modifier.padding(top = 16.dp),
+    )
 
-        // Versión instalada, discreta, abajo a la derecha del formulario.
-        val contexto = LocalContext.current
-        val version = remember {
-            runCatching {
-                contexto.packageManager.getPackageInfo(contexto.packageName, 0).versionName
-            }.getOrNull().orEmpty()
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = { mostrarAyuda = true }) { Text("¿No puede entrar?") }
+        // Versión instalada, discreta.
+        Text(
+            "v${BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 8.dp),
+        )
+    }
+
+    if (mostrarAyuda) {
+        AlertDialog(
+            onDismissRequest = { mostrarAyuda = false },
+            confirmButton = { TextButton(onClick = { mostrarAyuda = false }) { Text("Entendido") } },
+            title = { Text("¿No puede entrar?") },
+            text = {
+                Text(
+                    "Si olvidó su contraseña, pida a un administrador que la restablezca desde el " +
+                        "panel. Le dará una contraseña temporal: al ingresar con ella, la app le " +
+                        "pedirá elegir una nueva.\n\nSi la app dice que su usuario está inactivo, " +
+                        "el administrador tiene que reactivarlo.",
+                )
+            },
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.PasoPasswordTemporal(viewModel: LoginViewModel) {
+    BackHandler(onBack = viewModel::cancelarCambioTemporal)
+    val focoConfirmacion = remember { FocusRequester() }
+    val foco = LocalFocusManager.current
+    val revision = viewModel.revision
+    val enviar = {
+        if (revision.valida && !viewModel.guardandoNueva) {
+            foco.clearFocus()
+            viewModel.guardarPasswordNueva()
         }
-        if (version.isNotEmpty()) {
-            Text(
-                "v$version",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.End).padding(top = 24.dp),
-            )
-        }
+    }
+
+    AvisoPorteria(
+        "Su contraseña es temporal. Elija una nueva para entrar: desde ahora será la que use " +
+            "en el teléfono y en la computadora.",
+        TipoAvisoPorteria.INFORMACION,
+    )
+    TituloHoja("Contraseña nueva", "Cédula ${viewModel.cedula}")
+
+    CampoClavePorteria(
+        valor = viewModel.passwordNueva,
+        onCambiar = { viewModel.cambiarPasswordNueva(it) },
+        etiqueta = "Contraseña nueva",
+        icono = Icons.Outlined.Lock,
+        imeAction = ImeAction.Next,
+        onAccionTeclado = { focoConfirmacion.requestFocus() },
+        habilitado = !viewModel.guardandoNueva,
+        modifier = Modifier.padding(top = 16.dp),
+    )
+    CampoClavePorteria(
+        valor = viewModel.confirmacion,
+        onCambiar = { viewModel.cambiarConfirmacion(it) },
+        etiqueta = "Repetir contraseña",
+        icono = Icons.Outlined.Lock,
+        onAccionTeclado = enviar,
+        habilitado = !viewModel.guardandoNueva,
+        modifier = Modifier.padding(top = 8.dp).focusRequester(focoConfirmacion),
+    )
+
+    Column(modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) {
+        RequisitoPorteria("Al menos 8 caracteres", revision.largoSuficiente)
+        RequisitoPorteria("Distinta de la temporal", revision.distintaDeLaTemporal)
+        RequisitoPorteria("Las dos coinciden", revision.coinciden)
+    }
+
+    Column(modifier = Modifier.padding(top = 12.dp)) {
+        AvisoPorteria(viewModel.errorCambio)
+    }
+
+    BotonPorteria(
+        texto = if (viewModel.guardandoNueva) "Guardando…" else "Guardar y entrar",
+        onClick = enviar,
+        enabled = revision.valida,
+        trabajando = viewModel.guardandoNueva,
+    )
+    TextButton(
+        onClick = viewModel::cancelarCambioTemporal,
+        enabled = !viewModel.guardandoNueva,
+        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp),
+    ) {
+        Text("Volver")
     }
 }

@@ -145,11 +145,10 @@ class MainActivity : ComponentActivity() {
                         Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 when (val actual = estado) {
-                                    EstadoAplicacion.Cargando -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                                    is EstadoAplicacion.Fallo -> Text(
-                                        actual.mensaje,
-                                        color = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                                    EstadoAplicacion.Cargando -> PantallaCargandoArranque()
+                                    is EstadoAplicacion.Fallo -> PantallaFalloArranque(
+                                        mensaje = actual.mensaje,
+                                        onReintentar = aplicacion::reintentar,
                                     )
                                     is EstadoAplicacion.Lista -> ContenidoAplicacion(actual.entorno)
                                 }
