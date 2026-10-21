@@ -89,10 +89,13 @@ Estado: ✅ redactado · ⬜ pendiente.
 - ⬜ "El contratista ya tiene un ingreso activo"
 - ⬜ "Revise la fecha y hora del equipo"
 
-### Fuera del manual por ahora
+### Fuera del manual
 
-Visitas agendadas en la web, Rutas y Catálogo KOF están ocultas en el
-escritorio mientras se terminan; se documentan cuando se vuelvan a mostrar.
+- **Visitas** (las agendadas en la web) y **Rutas**: no se documentan
+  (decisión del dueño, 2026-10-21). La visita **por correo** (Alt+C) sí,
+  porque se registra desde Activos.
+- **Catálogo KOF**: oculto en el escritorio; se documenta si se vuelve a
+  mostrar.
 
 ## Índice — Móvil y panel web
 
