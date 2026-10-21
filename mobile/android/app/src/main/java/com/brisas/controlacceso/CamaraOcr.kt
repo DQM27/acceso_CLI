@@ -226,6 +226,9 @@ fun analizarFrameOcr(
     onLectura: (LecturaFrame) -> Unit,
     onFallo: () -> Unit,
 ) {
+    // El primer frame que deja pasar el analizador es la primera imagen de la
+    // cámara (el límite de frames empieza en cero).
+    camara.metricas.registrarImagenCamara()
     val mediaImage = imagen.image
     // Se repite el chequeo de sesión justo antes del trabajo pesado: si la
     // pantalla se cerró entre medio, no se gasta CPU en un frame que nadie

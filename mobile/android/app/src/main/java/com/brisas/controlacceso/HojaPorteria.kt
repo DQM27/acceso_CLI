@@ -94,7 +94,6 @@ internal fun HojaPorteria(
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 1.dp,
-            shadowElevation = 2.dp,
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
         ) {
             Column(

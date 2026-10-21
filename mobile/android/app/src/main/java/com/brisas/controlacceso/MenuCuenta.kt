@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -209,7 +210,7 @@ private fun PanelCuenta(
     Surface(
         shape = RoundedCornerShape(26.dp),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 16.dp,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
         // Angosto a propósito: a 260dp tapaba media pantalla.
         modifier = Modifier.width(IntrinsicSize.Max).widthIn(min = 180.dp, max = 230.dp),
     ) {

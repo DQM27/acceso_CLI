@@ -56,6 +56,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -64,16 +65,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -476,10 +472,11 @@ fun PantallaPrincipal(
                 PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
             } else {
                 // Las secciones van en una barra flotante abajo (ver
-                // [BarraSecciones]) y el contenido pasa por detrás: se ve
-                // desenfocado a través del vidrio. Cada pantalla deja libre lo
-                // que tapa la barra con `LocalMargenBarraInferior`.
-                val vidrio = remember { HazeState() }
+                // [BarraSecciones]) y el contenido pasa por detrás, apenas
+                // visible a través de su velo (sin desenfoque: redibujarlo en
+                // cada frame duplicó el costo de dibujo de Activos). Cada
+                // pantalla deja libre lo que tapa la barra con
+                // `LocalMargenBarraInferior`.
                 // Cámaras y formularios la esconden mientras están a la vista
                 // (ver [OcultarBarraSecciones]).
                 val pantallasCompletas = remember { PantallasCompletas() }
@@ -500,7 +497,7 @@ fun PantallaPrincipal(
                     ) {
                         AnimatedContent(
                             targetState = seccion,
-                            modifier = Modifier.fillMaxSize().hazeSource(vidrio),
+                            modifier = Modifier.fillMaxSize(),
                             transitionSpec = {
                                 transicionDePestana(SECCIONES_VISIBLES.indexOf(initialState), SECCIONES_VISIBLES.indexOf(targetState))
                             },
@@ -570,12 +567,11 @@ fun PantallaPrincipal(
                                 externo = externo,
                                 adentro = adentro,
                                 onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
-                                vidrio = vidrio,
                                 modifier = Modifier.weight(1f),
                             )
                             val accion = accionesInferiores.actual
                             if (accion != null) {
-                                BotonRedondoAccion(accion, vidrio, tamano = ALTO_BARRA_SECCIONES)
+                                BotonRedondoAccion(accion, tamano = ALTO_BARRA_SECCIONES)
                             }
                         }
                     }
@@ -604,15 +600,16 @@ private fun CampanitaAvisos(bandeja: EstadoBandeja?, onClick: () -> Unit) {
     }
 }
 
-/// Las secciones en una cápsula flotante abajo, de vidrio esmerilado (como la
-/// barra nueva de WhatsApp, pedido del usuario 2026-10-21), en vez de la fila
-/// de píldoras arriba: se cambia de sección con el pulgar y arriba queda una
-/// sola fila de opciones. Más baja que la `NavigationBar` de Material 3 (80dp)
-/// y separada de los bordes.
+/// Las secciones en una cápsula flotante abajo (como la barra nueva de
+/// WhatsApp, pedido del usuario 2026-10-21), en vez de la fila de píldoras
+/// arriba: se cambia de sección con el pulgar y arriba queda una sola fila de
+/// opciones. Más baja que la `NavigationBar` de Material 3 (80dp) y separada
+/// de los bordes.
 ///
-/// - El vidrio: lo que pasa por detrás se desenfoca (Haze) bajo un velo del
-///   color de la superficie, translúcido pero sin saturar; en Android < 12,
-///   sin desenfoque, el velo es casi opaco para que se siga leyendo.
+/// - El fondo: un velo casi opaco del color de la superficie ([ALFA_VELO]).
+///   Sin desenfoque a propósito (Haze, 2026-10-22): redibujar el contenido
+///   desenfocado detrás de la barra en cada frame duplicó el render de
+///   Activos (p90 de 5,5 a 10,1 ms) y subió los frames trabados.
 /// - La pestaña elegida: una píldora gris suave que se desliza hasta ella
 ///   (como [FilaPildoras]); su ícono y su nombre van en el acento de la
 ///   sección (ver `AcentoSeccion.kt`).
@@ -628,7 +625,6 @@ private fun BarraSecciones(
     externo: TipoExterno,
     adentro: Map<SeccionPrincipal, Int>,
     onSeleccionar: (SeccionPrincipal) -> Unit,
-    vidrio: HazeState,
     modifier: Modifier = Modifier,
 ) {
     val oscuro = temaActual().oscuro
@@ -643,17 +639,8 @@ private fun BarraSecciones(
     Row(
         modifier = modifier
             .height(ALTO_BARRA_SECCIONES)
-            .shadow(10.dp, forma, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
             .clip(forma)
-            .hazeEffect(vidrio) {
-                backgroundColor = superficie
-                // Más transparente tras verlo en el teléfono (pedido del
-                // usuario 2026-10-21); el desenfoque mantiene legible el texto.
-                tints = listOf(HazeTint(superficie.copy(alpha = if (oscuro) 0.45f else 0.50f)))
-                blurRadius = 24.dp
-                noiseFactor = 0f
-                fallbackTint = HazeTint(superficie.copy(alpha = 0.94f))
-            }
+            .background(superficie.copy(alpha = ALFA_VELO))
             .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), forma)
             .padding(5.dp)
             .drawBehind {

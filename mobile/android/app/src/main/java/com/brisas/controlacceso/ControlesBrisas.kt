@@ -148,7 +148,7 @@ internal fun CampoBusquedaBrisas(
 }
 
 /** Cuánto tapa abajo la barra de secciones flotante de [PantallaPrincipal]:
- * el contenido pasa por detrás de ella (se ve a través del vidrio), así que
+ * el contenido pasa por detrás de ella (apenas se ve a través de su velo), así que
  * lo que tiene que quedar a la vista debe dejar ese espacio. Cero fuera de
  * las pestañas (la bandeja de avisos o "Nuevo contratista" no la tienen). */
 internal val LocalMargenBarraInferior = compositionLocalOf { 0.dp }
