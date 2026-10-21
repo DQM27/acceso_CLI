@@ -1,50 +1,29 @@
 package com.brisas.controlacceso
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import uniffi.control_acceso_mobile.ContratistaResumen
@@ -88,20 +67,22 @@ internal fun CampoBusquedaActivos(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedTextField(
-            value = texto,
-            onValueChange = onCambiarTexto,
-            label = null,
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
+        // El mismo campo cambia de sentido según el modo: el texto de ayuda dice
+        // qué se busca en cada uno.
+        CampoBusquedaBrisas(
+            valor = texto,
+            onCambiar = onCambiarTexto,
+            ayuda = when (modo) {
+                ModoBusqueda.ENTRADA -> "Nombre o cédula para ingresar"
+                ModoBusqueda.SALIDA_NOMBRE -> "Nombre o cédula de quien sale"
+                ModoBusqueda.SALIDA_GAFETE -> "Gafetes: 2, 25, 85"
+            },
             keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {
                 KeyboardOptions(keyboardType = KeyboardType.Number)
             } else {
                 KeyboardOptions.Default
             },
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
+            modifier = Modifier.weight(1f),
         )
         if (modo == ModoBusqueda.ENTRADA || modo == ModoBusqueda.SALIDA_GAFETE) {
             Box(
@@ -170,22 +151,19 @@ internal fun ContenidoModoEntrada(
         )
         return
     }
-    if (resultadosBusqueda.isEmpty() && !verificando && !cargando) {
-        Text(
-            "Sin resultados",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-    }
-    ListaConDesvanecido {
-        LazyColumn(
-            contentPadding = PaddingValues(top = 5.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            items(resultadosBusqueda, key = { it.id }) { contratista ->
-                FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
-            }
-        }
+    // Misma lista que la de activos (animación, estados vacíos, tirar para
+    // sincronizar): mientras busca la primera vez muestra marcadores, y si no
+    // encuentra a nadie lo dice con el mismo mensaje que las demás listas.
+    ListaConEstados(
+        filas = resultadosBusqueda,
+        clave = { it.id },
+        cargando = cargando || verificando,
+        tituloVacio = "Sin resultados",
+        detalleVacio = "Pruebe con otro nombre o cédula.",
+        sincronizando = sincronizando,
+        onSincronizar = onSincronizar,
+    ) { contratista ->
+        FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
     }
 }
 

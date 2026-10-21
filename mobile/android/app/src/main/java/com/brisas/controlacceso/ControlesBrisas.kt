@@ -4,6 +4,9 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashlightOff
 import androidx.compose.material.icons.filled.FlashlightOn
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
@@ -32,13 +36,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import uniffi.control_acceso_mobile.EmpresaProveedor
@@ -73,6 +81,55 @@ internal fun ColoresCampoBrisas(): TextFieldColors = OutlinedTextFieldDefaults.c
     focusedBorderColor = MaterialTheme.colorScheme.primary,
     focusedLabelColor = MaterialTheme.colorScheme.primary,
 )
+
+/** Buscador de [AlturaBusquedaBrisas] con ícono de lupa y texto de ayuda.
+ * Un `OutlinedTextField` a ese alto recorta el texto de ayuda (deja 16dp de
+ * relleno arriba y abajo, pensado para 56dp; ver el comentario del buscador
+ * de [PantallaProveedores]): acá es el mismo marco y los mismos colores
+ * ([ColoresCampoBrisas]) con menos relleno vertical. */
+@Composable
+internal fun CampoBusquedaBrisas(
+    valor: String,
+    onCambiar: (String) -> Unit,
+    ayuda: String,
+    modifier: Modifier = Modifier,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+) {
+    val interaccion = remember { MutableInteractionSource() }
+    val colores = ColoresCampoBrisas()
+    BasicTextField(
+        value = valor,
+        onValueChange = onCambiar,
+        modifier = modifier.height(AlturaBusquedaBrisas),
+        singleLine = true,
+        keyboardOptions = keyboardOptions,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        interactionSource = interaccion,
+    ) { campo ->
+        OutlinedTextFieldDefaults.DecorationBox(
+            value = valor,
+            innerTextField = campo,
+            enabled = true,
+            singleLine = true,
+            visualTransformation = VisualTransformation.None,
+            interactionSource = interaccion,
+            placeholder = { Text(ayuda, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            colors = colores,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            container = {
+                OutlinedTextFieldDefaults.Container(
+                    enabled = true,
+                    isError = false,
+                    interactionSource = interaccion,
+                    colors = colores,
+                    shape = FormaCampoBrisas,
+                )
+            },
+        )
+    }
+}
 
 /** Acciones principales: forma y área táctil comunes en todas las pantallas. */
 @Composable

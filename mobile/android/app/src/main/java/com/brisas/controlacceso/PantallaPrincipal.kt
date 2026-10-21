@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -88,6 +89,13 @@ fun PantallaPrincipal(
     // Bandeja de avisos (campanita): otra pantalla que reemplaza a las
     // pestañas, igual que `mostrarNuevoContratista`.
     var mostrarAvisos by remember { mutableStateOf(false) }
+    // La pestaña elegida y, dentro de Externos, el tipo (Proveedor o Correo,
+    // que cambia el color de la sección y de la pestaña de arriba: ver
+    // `AcentoSeccion.kt`). Viven acá y no junto a las pestañas: al abrir la
+    // bandeja o "Nuevo contratista" las pestañas salen de la composición, y
+    // al volver se caía siempre en Activos.
+    var pestana by rememberSaveable { mutableIntStateOf(0) }
+    var indiceExterno by rememberSaveable { mutableIntStateOf(0) }
     // Sin esto, atrás del sistema en la raíz (pestañas) caía directo al
     // default de Android -- cerraba/minimizaba la app de un solo toque, sin
     // que hubiera ningún BackHandler compose que lo interceptara (hallazgo
@@ -460,12 +468,7 @@ fun PantallaPrincipal(
                 PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
             } else {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    var pestana by remember { mutableIntStateOf(0) }
                     val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
-                    // El tipo elegido dentro de Externos (Proveedor o Correo) vive
-                    // acá y no en `PantallaExternos`: cambia el color de la sección
-                    // y de la pestaña de arriba (ver `AcentoSeccion.kt`).
-                    var indiceExterno by remember { mutableIntStateOf(0) }
                     val externo = tipoExternoVisible(indiceExterno)
                     // "Historial" se sacó de acá por espacio (pestañas apiñadas,
                     // 2026-09-17); su pantalla/ViewModel/wrappers Rust se eliminaron
