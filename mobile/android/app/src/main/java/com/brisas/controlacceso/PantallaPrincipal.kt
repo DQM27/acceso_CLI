@@ -624,7 +624,9 @@ private fun BarraSecciones(
             .clip(forma)
             .hazeEffect(vidrio) {
                 backgroundColor = superficie
-                tints = listOf(HazeTint(superficie.copy(alpha = if (oscuro) 0.70f else 0.72f)))
+                // Más transparente tras verlo en el teléfono (pedido del
+                // usuario 2026-10-21); el desenfoque mantiene legible el texto.
+                tints = listOf(HazeTint(superficie.copy(alpha = if (oscuro) 0.45f else 0.50f)))
                 blurRadius = 24.dp
                 noiseFactor = 0f
                 fallbackTint = HazeTint(superficie.copy(alpha = 0.94f))
