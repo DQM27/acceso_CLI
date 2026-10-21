@@ -556,7 +556,12 @@ fun PantallaPrincipal(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = MARGEN_LATERAL_BARRA, vertical = MARGEN_INFERIOR_BARRA),
+                                .padding(
+                                    start = MARGEN_LATERAL_BARRA,
+                                    end = MARGEN_LATERAL_BARRA,
+                                    top = MARGEN_SUPERIOR_BARRA,
+                                    bottom = MARGEN_INFERIOR_BARRA,
+                                ),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -699,7 +704,10 @@ private fun BarraSecciones(
 
 private val ALTO_BARRA_SECCIONES = 58.dp
 private val MARGEN_LATERAL_BARRA = 12.dp
-private val MARGEN_INFERIOR_BARRA = 6.dp
+/// Despegada del borde (pedido del usuario 2026-10-21): pegada abajo quedaba
+/// incómoda para el pulgar.
+private val MARGEN_INFERIOR_BARRA = 18.dp
+private val MARGEN_SUPERIOR_BARRA = 6.dp
 
 /// Lo que tapa la barra flotante (alto + margen de abajo + un respiro), para
 /// [LocalMargenBarraInferior].

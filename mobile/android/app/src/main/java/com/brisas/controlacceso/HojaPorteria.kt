@@ -32,7 +32,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -157,13 +156,10 @@ internal fun ChipUnidad(texto: String, estado: EstadoConexion, modifier: Modifie
     }
 }
 
-enum class TipoAvisoPorteria { ERROR, INFORMACION }
-
-/// Aviso con ícono arriba del formulario: errores que no son de un campo
-/// (sin red, cuenta inactiva) o información (contraseña temporal). Aparece
-/// y se va con un despliegue suave.
+/// Aviso de error con ícono: errores que no son de un campo (sin red,
+/// cuenta inactiva). Aparece y se va con un despliegue suave.
 @Composable
-internal fun AvisoPorteria(texto: String?, tipo: TipoAvisoPorteria = TipoAvisoPorteria.ERROR) {
+internal fun AvisoPorteria(texto: String?) {
     // Retiene el último texto mientras se oculta, si no la animación de
     // salida dibujaría una caja vacía.
     var ultimo by remember { mutableStateOf(texto.orEmpty()) }
@@ -173,28 +169,17 @@ internal fun AvisoPorteria(texto: String?, tipo: TipoAvisoPorteria = TipoAvisoPo
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
     ) {
-        val (fondo, tinte, icono) = when (tipo) {
-            TipoAvisoPorteria.ERROR -> Triple(
-                MaterialTheme.colorScheme.errorContainer,
-                MaterialTheme.colorScheme.onErrorContainer,
-                Icons.Outlined.ErrorOutline,
-            )
-            TipoAvisoPorteria.INFORMACION -> Triple(
-                MaterialTheme.colorScheme.primaryContainer,
-                MaterialTheme.colorScheme.onPrimaryContainer,
-                Icons.Outlined.Info,
-            )
-        }
+        val tinte = MaterialTheme.colorScheme.onErrorContainer
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(fondo)
+                .background(MaterialTheme.colorScheme.errorContainer)
                 .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Icon(icono, contentDescription = null, tint = tinte, modifier = Modifier.size(20.dp))
+            Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = tinte, modifier = Modifier.size(20.dp))
             Text(ultimo, color = tinte, style = MaterialTheme.typography.bodyMedium)
         }
     }

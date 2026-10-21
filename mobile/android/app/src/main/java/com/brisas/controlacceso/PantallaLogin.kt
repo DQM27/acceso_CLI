@@ -233,12 +233,10 @@ private fun ColumnScope.PasoPasswordTemporal(viewModel: LoginViewModel) {
         }
     }
 
-    AvisoPorteria(
-        "Su contraseña es temporal. Elija una nueva para entrar: desde ahora será la que use " +
-            "en el teléfono y en la computadora.",
-        TipoAvisoPorteria.INFORMACION,
-    )
-    TituloHoja("Contraseña nueva", "Cédula ${viewModel.cedula}")
+    // Texto corto a propósito: con el teclado abierto, cada renglón de más
+    // empujaba "Guardar y entrar" debajo del teclado (visto en el teléfono
+    // 2026-10-21).
+    TituloHoja("Contraseña nueva", "La suya es temporal: elija una nueva para entrar.")
 
     CampoClavePorteria(
         valor = viewModel.passwordNueva,
@@ -248,7 +246,7 @@ private fun ColumnScope.PasoPasswordTemporal(viewModel: LoginViewModel) {
         imeAction = ImeAction.Next,
         onAccionTeclado = { focoConfirmacion.requestFocus() },
         habilitado = !viewModel.guardandoNueva,
-        modifier = Modifier.padding(top = 16.dp),
+        modifier = Modifier.padding(top = 12.dp),
     )
     CampoClavePorteria(
         valor = viewModel.confirmacion,
@@ -260,15 +258,13 @@ private fun ColumnScope.PasoPasswordTemporal(viewModel: LoginViewModel) {
         modifier = Modifier.padding(top = 8.dp).focusRequester(focoConfirmacion),
     )
 
-    Column(modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) {
+    Column(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)) {
         RequisitoPorteria("Al menos 8 caracteres", revision.largoSuficiente)
         RequisitoPorteria("Distinta de la temporal", revision.distintaDeLaTemporal)
         RequisitoPorteria("Las dos coinciden", revision.coinciden)
     }
 
-    Column(modifier = Modifier.padding(top = 12.dp)) {
-        AvisoPorteria(viewModel.errorCambio)
-    }
+    AvisoPorteria(viewModel.errorCambio)
 
     BotonPorteria(
         texto = if (viewModel.guardandoNueva) "Guardando…" else "Guardar y entrar",

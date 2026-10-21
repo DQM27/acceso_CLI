@@ -1,6 +1,5 @@
 package com.brisas.controlacceso
 
-import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -9,19 +8,11 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FlashlightOff
-import androidx.compose.material.icons.outlined.FlashlightOn
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,7 +26,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -109,8 +99,6 @@ private fun VistaCamaraQr(onCodigoLeido: (String) -> Unit, onEscribirCodigo: () 
     // Un solo aviso aunque lleguen varios frames con el mismo QR.
     val leido = remember { AtomicBoolean(false) }
     val previewView = remember { PreviewView(contexto) }
-    var camara by remember { mutableStateOf<Camera?>(null) }
-    var linterna by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val proveedorFuturo = ProcessCameraProvider.getInstance(contexto)
@@ -132,7 +120,7 @@ private fun VistaCamaraQr(onCodigoLeido: (String) -> Unit, onEscribirCodigo: () 
                     }
                 runCatching {
                     listo.unbindAll()
-                    camara = listo.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analisis)
+                    listo.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analisis)
                 }
             },
             ContextCompat.getMainExecutor(contexto),
@@ -148,18 +136,6 @@ private fun VistaCamaraQr(onCodigoLeido: (String) -> Unit, onEscribirCodigo: () 
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
         VisorQr(leido = codigoLeido != null, modifier = Modifier.fillMaxSize())
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
-        // Sólo si la cámara tiene flash: con poca luz el QR de una pantalla
-        // igual se lee, pero uno impreso puede necesitarla.
-        if (camara?.cameraInfo?.hasFlashUnit() == true) {
-            BotonLinterna(
-                encendida = linterna,
-                onClick = {
-                    linterna = !linterna
-                    camara?.cameraControl?.enableTorch(linterna)
-                },
-                modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
-            )
-        }
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -197,24 +173,6 @@ private fun VisorQr(leido: Boolean, modifier: Modifier = Modifier) {
             Size(lado, lado),
             radio,
             style = Stroke(width = 4.dp.toPx()),
-        )
-    }
-}
-
-@Composable
-private fun BotonLinterna(encendida: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(if (encendida) Color.White else Color.Black.copy(alpha = 0.55f))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            if (encendida) Icons.Outlined.FlashlightOff else Icons.Outlined.FlashlightOn,
-            contentDescription = if (encendida) "Apagar linterna" else "Encender linterna",
-            tint = if (encendida) Color.Black else Color.White,
         )
     }
 }
