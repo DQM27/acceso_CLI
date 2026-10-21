@@ -5,7 +5,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.ViewTreeObserver
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -69,15 +68,9 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
-        // Sólo en release -- en debug bloqueaba también las capturas de
-        // pantalla/grabación usadas para revisar diseño en el emulador
-        // (adb screencap/screenrecord devuelven negro contra una ventana
-        // FLAG_SECURE, sea cual sea el backend de GPU). La protección real
-        // contra shoulder-surfing/grabación sigue intacta en cualquier APK
-        // de release o instalado desde un Release real de GitHub.
-        if (!BuildConfig.DEBUG) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
+        // Sin FLAG_SECURE (pedido del usuario 2026-10-21): las capturas de
+        // pantalla del operador sirven para reportar problemas y documentar,
+        // y bloquearlas estorbaba más de lo que protegía.
         GestorTema.inicializar(this)
         atenderIntent(intent)
         if (Telemetria.activa) {
