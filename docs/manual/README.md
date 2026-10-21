@@ -59,10 +59,9 @@ Estado: ✅ redactado · ⬜ pendiente.
 
 ### Contratistas y empresas
 
-- ⬜ Buscar un contratista y entender su estado
-- ⬜ Dar de alta un contratista
-- ⬜ Editar un contratista (datos, tipo, fecha de PRAIND, personal de ruta)
-- ⬜ Empresas de contratistas y empresas proveedoras
+- ✅ [Buscar un contratista y entender su estado](escritorio/buscar-contratista.md)
+- ✅ [Dar de alta o editar un contratista (datos, tipo, fecha de PRAIND, personal de ruta)](escritorio/contratista-alta-y-edicion.md)
+- ✅ [Empresas de contratistas y empresas proveedoras](escritorio/empresas.md)
 
 ### Gafetes
 
@@ -96,6 +95,22 @@ Estado: ✅ redactado · ⬜ pendiente.
   porque se registra desde Activos.
 - **Catálogo KOF**: oculto en el escritorio; se documenta si se vuelve a
   mostrar.
+
+## Mejoras de pantalla detectadas al documentar
+
+Cosas que el manual explica pero que conviene corregir en el programa.
+Cuando se corrija una, se actualiza su proceso.
+
+1. **Gafete KOF**: el aviso "Ya tiene prestado el gafete… sin devolver" se
+   ve como informativo (amarillo), pero el programa bloquea la entrega. O se
+   vuelve un bloqueo claro, o se permite (decisión pendiente del dueño).
+2. **Activos**: el botón **Salida** de cada fila registra sin confirmar. Un
+   clic en la fila equivocada saca a la persona equivocada.
+3. **Contratistas**: la columna **Acceso** se oculta al Operador, pero la
+   casilla **Con acceso** sí aparece en el formulario de edición.
+4. **Empresas**: cualquier usuario puede desactivar una empresa, lo que deja
+   sin entrada a todos sus contratistas. Revisar si debe quedar sólo para
+   administradores.
 
 ## Índice — Móvil y panel web
 
