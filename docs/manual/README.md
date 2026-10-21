@@ -65,10 +65,8 @@ Estado: ✅ redactado · ⬜ pendiente.
 
 ### Gafetes
 
-- ⬜ Dar de alta un gafete
-- ⬜ Gafete perdido, pagado o aparecido
-- ⬜ "Este contratista debe el gafete…"
-- ⬜ Ver el historial de un gafete
+- ✅ [Dar de alta y consultar gafetes, e historial de un gafete](escritorio/gafetes-alta-y-consulta.md)
+- ✅ [Gafete perdido, pagado o aparecido, y "Este contratista debe el gafete…"](escritorio/gafete-perdido.md)
 
 ### Consultas
 
@@ -111,6 +109,10 @@ Cuando se corrija una, se actualiza su proceso.
 4. **Empresas**: cualquier usuario puede desactivar una empresa, lo que deja
    sin entrada a todos sus contratistas. Revisar si debe quedar sólo para
    administradores.
+5. **Gafetes**: **Dar de baja** se aplica sin confirmar y es definitivo.
+6. **Gafetes**: marcar perdido un gafete de **visita** busca la cédula entre
+   las visitas agendadas en la web; con una visita **por correo** puede no
+   encontrarla. Verificar.
 
 ## Índice — Móvil y panel web
 

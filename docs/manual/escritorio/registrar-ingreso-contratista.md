@@ -51,7 +51,7 @@ Para elegir a otra persona antes de registrar, pulse **Cambiar**.
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
 | "⚠ PRAIND vence en N días (fecha)" (o "vence hoy", "vence mañana") | Puede entrar, pero su PRAIND está por vencer (30 días o menos). | Registre el ingreso y avísele que debe renovarlo. |
-| "⚠ Este contratista debe el gafete #05" | Tiene un gafete pendiente de una visita anterior (perdido o no devuelto). | Puede entrar. Registre el ingreso y recuérdele que debe ese gafete. |
+| "⚠ Este contratista debe el gafete #05" | Tiene un gafete marcado como perdido a su nombre. | Puede entrar. Registre el ingreso y recuérdele que debe ese gafete. Si lo paga o aparece, ver [Gafete perdido](gafete-perdido.md). |
 | "Ingrese el número de gafete o marque «Sin gafete»" | Este contratista requiere gafete y el campo está vacío. | Escriba el número del gafete que le entrega o marque **Sin gafete**. |
 | "Ingrese un número de gafete válido" | El número escrito no es válido. | Escriba sólo el número del gafete. |
 | "El contratista ya tiene un ingreso activo." | Ya figura adentro. | Si realmente había salido, registre primero su salida (Ctrl+S) y luego el ingreso. |
