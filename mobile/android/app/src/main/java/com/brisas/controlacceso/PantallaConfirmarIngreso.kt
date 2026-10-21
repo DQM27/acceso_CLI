@@ -13,6 +13,8 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -73,8 +75,28 @@ fun PantallaConfirmarIngreso(
     // puede registrar sin gafete, sin motivo, igual que el personal de ruta.
     var sinGafete by rememberSaveable { mutableStateOf(false) }
     var placaTexto by rememberSaveable { mutableStateOf("") }
-    BackHandler(onBack = onCambiar)
+    var escanerPlacaAbierto by remember { mutableStateOf(false) }
+    BackHandler(enabled = !escanerPlacaAbierto, onBack = onCambiar)
     val alcance = rememberCoroutineScope()
+
+    // La misma cámara que lee placas en Proveedores y Rutas
+    // (`LectorVehiculoRuta.kt`), pedido del usuario 2026-10-21. Si lee un
+    // número de unidad (calcomanía de flota) en vez de una placa, igual se usa
+    // el texto leído, mismo criterio que Proveedores.
+    if (escanerPlacaAbierto) {
+        PantallaEscanearVehiculoRuta(
+            onVehiculoDetectado = { detectado ->
+                // Como va impresa en la placa (`CL 371931`, `BPH-485`).
+                placaTexto = placaComoSeImprime(detectado.valor)
+                onLimpiarError()
+                escanerPlacaAbierto = false
+            },
+            onCerrar = { escanerPlacaAbierto = false },
+            mensajeInicial = "Apunte a la placa del vehículo",
+            mensajePermiso = "Se necesita permiso de cámara para escanear la placa.",
+        )
+        return
+    }
 
     val focoGafete = remember { FocusRequester() }
     val focoConfirmar = remember { FocusRequester() }
@@ -158,15 +180,29 @@ fun PantallaConfirmarIngreso(
         }
 
         if (medio == MedioIngreso.VEHICULO) {
-            OutlinedTextField(
-                value = placaTexto,
-                onValueChange = { placaTexto = it },
-                label = { Text("Placa del vehículo") },
-                singleLine = true,
-                shape = FormaCampoBrisas,
-                colors = ColoresCampoBrisas(),
+            Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = placaTexto,
+                    onValueChange = { placaTexto = it },
+                    label = { Text("Placa del vehículo") },
+                    singleLine = true,
+                    shape = FormaCampoBrisas,
+                    colors = ColoresCampoBrisas(),
+                    modifier = Modifier.weight(1f),
+                )
+                // `top` por la etiqueta flotante del campo, que corre su
+                // marco hacia abajo: así el botón queda a la par del marco.
+                BotonCuadradoBordeBrisas(
+                    icono = Icons.Default.PhotoCamera,
+                    descripcion = "Escanear placa",
+                    onClick = { escanerPlacaAbierto = true },
+                    tamano = 56.dp,
+                    modifier = Modifier.padding(start = 8.dp, top = 8.dp),
+                )
+            }
         }
 
         if (preparacion.requiereGafete) {
