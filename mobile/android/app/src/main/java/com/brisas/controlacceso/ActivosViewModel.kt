@@ -229,7 +229,7 @@ class ActivosViewModel(
                 if (contratista != null) {
                     elegir(contratista, origen = "ocr", msBusqueda = milisegundosDesde(inicioBusqueda)).join()
                 }
-                alertaTrasEscaneo(resultados, seleccionIngreso)?.let { alerta ->
+                alertaTrasEscaneo(seleccionIngreso)?.let { alerta ->
                     alertaEscaneo = AvisoEscaneo(alerta, ++siguienteAlerta)
                 }
                 error = null
