@@ -8,16 +8,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -174,18 +170,10 @@ fun PantallaProveedores(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            // Sin `.height(AlturaBusquedaBrisas)` a propósito -- combinado
-                            // con `leadingIcon` (a diferencia del buscador de
-                            // `PantallaActivos`, que no tiene `placeholder`) ese alto
-                            // dejaba el texto del placeholder recortado, casi invisible.
-                            OutlinedTextField(
-                                value = busqueda,
-                                onValueChange = { busqueda = it },
-                                placeholder = { Text("Cédula, nombre, empresa…") },
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                singleLine = true,
-                                shape = FormaCampoBrisas,
-                                colors = ColoresCampoBrisas(),
+                            CampoBusquedaBrisas(
+                                valor = busqueda,
+                                onCambiar = { busqueda = it },
+                                ayuda = "Cédula, nombre, empresa…",
                                 modifier = Modifier.weight(1f),
                             )
                             // Botón cuadrado en vez del "+ Nuevo ingreso" ancho de antes

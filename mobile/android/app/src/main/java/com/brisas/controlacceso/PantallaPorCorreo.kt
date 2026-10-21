@@ -16,8 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -148,14 +146,10 @@ fun PantallaPorCorreo(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            OutlinedTextField(
-                                value = busqueda,
-                                onValueChange = { busqueda = it },
-                                placeholder = { Text("Cédula, nombre, motivo…") },
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                singleLine = true,
-                                shape = FormaCampoBrisas,
-                                colors = ColoresCampoBrisas(),
+                            CampoBusquedaBrisas(
+                                valor = busqueda,
+                                onCambiar = { busqueda = it },
+                                ayuda = "Cédula, nombre, motivo…",
                                 modifier = Modifier.weight(1f),
                             )
                             BotonCuadradoBordeBrisas(

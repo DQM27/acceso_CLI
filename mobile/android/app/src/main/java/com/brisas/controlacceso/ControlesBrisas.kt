@@ -84,11 +84,12 @@ internal fun ColoresCampoBrisas(): TextFieldColors = OutlinedTextFieldDefaults.c
     focusedLabelColor = MaterialTheme.colorScheme.primary,
 )
 
-/** Buscador de [AlturaBusquedaBrisas] con ícono de lupa y texto de ayuda.
+/** El buscador de todas las pantallas (Activos, Proveedores, Por correo,
+ * KOF): [AlturaBusquedaBrisas] de alto, ícono de lupa y texto de ayuda.
  * Un `OutlinedTextField` a ese alto recorta el texto de ayuda (deja 16dp de
- * relleno arriba y abajo, pensado para 56dp; ver el comentario del buscador
- * de [PantallaProveedores]): acá es el mismo marco y los mismos colores
- * ([ColoresCampoBrisas]) con menos relleno vertical. */
+ * relleno arriba y abajo, pensado para 56dp; por eso Proveedores llegó a
+ * quedar más alto que su botón de al lado): acá es el mismo marco y los
+ * mismos colores ([ColoresCampoBrisas]) con menos relleno vertical. */
 @Composable
 internal fun CampoBusquedaBrisas(
     valor: String,

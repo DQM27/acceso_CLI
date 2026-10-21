@@ -390,56 +390,13 @@ fun PantallaPrincipal(
             )
         }
 
-        // `docs/pendientes.md`, "alertar luego al sincronizar" -- sigue
-        // mostrándose en cada sync mientras el conflicto no se resuelva
-        // (cerrando uno de los dos ingresos), no es un error transitorio
-        // que convenga ocultar solo.
-        for (conflicto in conflictosIngreso) {
-            Text(
-                "${conflicto.contratistaNombre} tiene un ingreso activo acá Y en ${conflicto.sitioConflicto} — hay que resolverlo.",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            )
-        }
-
-        // MV-04: mismo criterio que el bucle de arriba, pero para
-        // proveedores -- mismo texto que ya usa desktop (`App.tsx`), para
-        // no dar un aviso distinto según qué interfaz lo muestre.
-        for (conflicto in conflictosIngresoProveedor) {
-            Text(
-                "${conflicto.nombre} tiene un ingreso de proveedor activo acá Y en ${conflicto.sitioConflicto} — hay que resolverlo.",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            )
-        }
-        // Mismo texto que escritorio para los ingresos por correo.
-        for (conflicto in conflictosIngresoCorreo) {
-            Text(
-                "${conflicto.nombre} tiene un ingreso por correo activo acá Y en ${conflicto.sitioConflicto} — hay que resolverlo.",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            )
-        }
-
-        // A diferencia del de arriba (simétrico: ambos lados "tienen
-        // razón" hasta que alguien decide), acá Postgres ya decidió -- el
-        // movimiento local de ESTE dispositivo (ingreso de contratista o
-        // de proveedor, o préstamo KOF) es el que no quedó válido en la
-        // nube, así que el aviso lo dice con esa certeza. Sólo informativo
-        // por ahora (fase 3, PR #62): sin botón de acción directa -- se
-        // deja para una vuelta aparte si hace falta, una vez visto el
-        // comportamiento real.
-        for (conflicto in conflictosGafete) {
-            Text(
-                mensajeConflictoGafete(conflicto, textoFechaHora(conflicto.fechaHora)),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            )
-        }
+        // `docs/pendientes.md`, "alertar luego al sincronizar": todos los
+        // conflictos en una sola franja (ver `FranjaConflictos.kt`). Sólo
+        // informativa por ahora (fase 3, PR #62): sin botón de acción directa.
+        FranjaConflictos(
+            mensajesConflictos(conflictosIngreso, conflictosIngresoProveedor, conflictosIngresoCorreo, conflictosGafete),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
 
         // La bandeja de avisos y "Nuevo contratista" suben encima de las
         // pestañas; al volver, las pestañas reaparecen (ver

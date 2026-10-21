@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -96,22 +95,17 @@ fun PantallaGafetesProvisionales(
             modifier = Modifier.padding(bottom = 10.dp),
         )
 
-        // Mismo look que el buscador de `PantallaActivos`/`PantallaProveedores`
-        // (ícono de lupa, mismo campo/alto) pero sin el botón de cámara -- acá
-        // no hay documento que escanear, sólo nombre/código escrito. Los
-        // resultados salen como tarjetas tocables abajo (igual que
+        // El mismo buscador que el resto de las pantallas, sin el botón de
+        // cámara -- acá no hay documento que escanear, sólo nombre/código
+        // escrito. Los resultados salen como tarjetas tocables abajo (igual que
         // `FilaContratista` en modo Ingreso), no en un menú desplegable --
         // pedido explícito del usuario en pruebas reales, 2026-09-17:
         // unificar el look de esta pantalla con el de Contratista.
-        OutlinedTextField(
-            value = viewModel.textoEncargado,
-            onValueChange = viewModel::cambiarTextoEncargado,
-            placeholder = { Text("Nombre o código de empleado") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
+        CampoBusquedaBrisas(
+            valor = viewModel.textoEncargado,
+            onCambiar = viewModel::cambiarTextoEncargado,
+            ayuda = "Nombre o código de empleado",
+            modifier = Modifier.fillMaxWidth(),
         )
 
         if (viewModel.encargadoSeleccionado == null && viewModel.resultadosEncargado.isNotEmpty()) {
@@ -143,11 +137,10 @@ fun PantallaGafetesProvisionales(
 
             // Sin `.height(AlturaBusquedaBrisas)` a propósito -- ese alto
             // (50.dp, ver ControlesBrisas.kt) queda por debajo del mínimo
-            // cómodo de `TextField` de Material3 cuando el campo no tiene
-            // `leadingIcon` (a diferencia del buscador de arriba, que sí
-            // tiene uno): el placeholder terminaba recortado contra el borde
-            // superior del campo en vez de centrado -- bug reportado en
-            // pruebas reales, 2026-09-17 ("el input... sale cortado").
+            // cómodo de `OutlinedTextField`: el placeholder terminaba
+            // recortado contra el borde superior del campo en vez de
+            // centrado -- bug reportado en pruebas reales, 2026-09-17 ("el
+            // input... sale cortado").
             OutlinedTextField(
                 value = gafeteTexto,
                 onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
