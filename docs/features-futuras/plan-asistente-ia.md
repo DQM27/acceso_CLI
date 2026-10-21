@@ -1,29 +1,38 @@
-# Asistente con IA en el panel web — plan
+# Asistentes con IA — plan
 
 Estado: **propuesta, sin código todavía** (2026-10-21).
 
-Un chat dentro del panel web con un **lienzo interactivo al lado**: el
+Son **dos productos separados**, con usuarios, alcance y riesgos distintos
+(decisión del dueño, 2026-10-21):
+
+| | Lienzo de datos | Ayuda de uso |
+|---|---|---|
+| Para quién | Administradores | **Operadores** (y quizá el panel web) |
+| Dónde | Panel web (`web/`) | Escritorio y móvil del puesto de control; quizá el panel web |
+| Qué hace | Consulta y reacomoda datos en un lienzo | Explica cómo hacer un proceso de la app |
+| Datos del sitio | Sí, sólo lectura | **No**: sólo lee el manual |
+
+**Lienzo de datos**: un chat con un **lienzo interactivo al lado**; el
 administrador pregunta en lenguaje natural ("¿cuántos contratistas tienen
 el PRAIND por vencer el próximo mes?", "quita las empresas A y B",
-"agrúpalo por empresa") y el lienzo reacomoda los datos. El mismo chat
-**explica cómo usar la app** cuando alguien no sabe hacer un proceso.
+"agrúpalo por empresa") y el lienzo reacomoda los datos.
 
-## Alcance (decisiones del dueño)
+**Ayuda de uso**: el operador pregunta "¿cómo registro un proveedor?" o
+"¿qué hago si sale PRAIND vencido?" y el asistente responde con los pasos
+del manual.
 
-- **Sólo panel web** (`web/`). Es una herramienta administrativa: no llega
-  a los equipos de los puestos de control (escritorio, móvil) ni a los
-  operadores, salvo que un cliente lo pida y lo pague aparte.
-- **La IA sólo produce JSON, HTML, SVG y un poco de JS** para
+## Alcance común
+
+- **La IA sólo produce texto, JSON, HTML, SVG y un poco de JS** para
   interactividad. Sin comandos, sin acceso al sistema, sin escribir en la
   base de datos.
-- **Sólo lectura** sobre los datos: nunca `INSERT`, `UPDATE`, `DELETE` ni
-  DDL.
-- **Conocimiento acotado a la app**: responde sobre los datos del sitio y
-  sobre cómo usar acceso_CLI; lo demás lo declina.
+- **Sólo lectura**: nunca `INSERT`, `UPDATE`, `DELETE` ni DDL.
+- **Conocimiento acotado a la app**: lo que no sea acceso_CLI lo declina.
 
-## Las cuatro capacidades
+# Parte A — Lienzo de datos (panel web)
 
-Se construyen por etapas; cada una sirve sola.
+Sólo panel web; no llega a los operadores salvo que un cliente lo pida y
+lo pague aparte. Tres capacidades, por etapas; cada una sirve sola.
 
 ### 1. Lienzo declarativo (base)
 
@@ -105,32 +114,13 @@ línea de tiempo con colores por empresa, un mapa de calor por semana…).
   (una vista guardada se reutiliza sin volver a pagar al modelo).
 - Se usa a demanda (botón explícito) y con tope diario por usuario.
 
-### 4. Ayuda de uso de la app
-
-El mismo chat responde "¿cómo doy de alta un contratista?", "¿cómo
-desvinculo un equipo?", "¿por qué a alguien le sale PRAIND vencido?".
-
-- **Fuente de verdad: un manual de usuario** escrito para eso
-  (`docs/manual/`, un archivo por proceso: pasos, pantalla, quién puede
-  hacerlo, errores frecuentes). **Hoy no existe**: es requisito de esta
-  etapa y además sirve sola, sin IA.
-- El manual entra completo en el prompt (es corto) con *prompt caching*;
-  si crece, se busca la sección relevante antes de preguntar al modelo.
-- Instrucción de sistema: responder **sólo** con lo que dice el manual y
-  citar la sección; si no está, decir que no lo sabe y sugerir a quién
-  preguntar. Nada de inventar pasos.
-- Respeta el rol: a un `OPERADOR` no le explica procesos que sólo puede
-  hacer un `ADMINISTRADOR`.
-- Puede añadir un enlace "llévame ahí" a la pantalla del panel
-  correspondiente.
-
-## Arquitectura
+### Arquitectura del lienzo
 
 ```
 Panel web (chat + lienzo)
    │  JWT del usuario
    ▼
-Edge Function `asistente-ia`
+Edge Function `lienzo-ia`
    ├─ valida sesión, rol y tope de uso
    ├─ llama a la API de Claude (clave en secreto de la función)
    │    herramientas: editar_lienzo, consultar_catalogo,
@@ -144,6 +134,57 @@ Edge Function `asistente-ia`
 - El contenido de los datos (nombres, observaciones) se trata como dato,
   nunca como instrucción (defensa contra inyección indirecta).
 - El JSON del lienzo guarda su historial: deshacer y rehacer.
+
+# Parte B — Ayuda de uso para operadores
+
+Responde "¿cómo registro la salida de una ruta?", "¿cómo entrego un gafete
+provisional?", "¿qué significa PRAIND vencido y qué hago?". Vive en el
+escritorio y el móvil del puesto de control; si conviene, también en el
+panel web, donde hay procesos administrativos distintos.
+
+- **Fuente de verdad: un manual de usuario** (`docs/manual/`, un archivo
+  por proceso). **Hoy no existe**: es el primer entregable y sirve solo,
+  sin IA. Formato de cada proceso:
+  - para qué sirve;
+  - quién puede hacerlo (rol);
+  - dónde (app y pantalla);
+  - pasos numerados;
+  - errores frecuentes: el **mensaje exacto** que ve el usuario, qué
+    significa y cómo resolverlo;
+  - procesos relacionados.
+- El inventario de procesos se saca del código (pantallas, validaciones,
+  roles, mensajes de error); el dueño revisa que refleje la práctica real.
+- **Sin acceso a datos**: el asistente sólo lee el manual. Ni consultas, ni
+  SQL, ni lienzo. Es la parte de menor riesgo.
+- El manual entra completo en el prompt con *prompt caching*; si crece, se
+  busca la sección relevante antes de preguntar al modelo.
+- Instrucción de sistema: responder **sólo** con lo que dice el manual,
+  con pasos cortos y lenguaje sencillo, y citar la sección; si no está,
+  decirlo y ofrecer un ticket de soporte. Nada de inventar pasos.
+- Respeta el rol y la app: en el puesto de control no explica procesos del
+  panel de administración.
+- **Sin internet** (el escritorio funciona sin conexión): el chat se
+  desactiva con aviso y queda el **manual navegable con buscador local**,
+  empaquetado con la app. La ayuda nunca depende sólo de la IA.
+- **Autenticación**: el equipo usa su JWT de dispositivo (rol
+  `authenticated`) contra una Edge Function `ayuda-ia`; tope de uso por
+  equipo y por día.
+- Puede añadir un enlace "llévame ahí" a la pantalla correspondiente.
+
+```
+Escritorio / móvil / panel (chat de ayuda)
+   │  JWT del equipo o del usuario
+   ▼
+Edge Function `ayuda-ia`
+   ├─ valida sesión y tope de uso
+   ├─ llama a la API de Claude con el manual (cacheado)
+   └─ registra pregunta y consumo (sirve para mejorar el manual)
+```
+
+Las preguntas registradas que el manual no supo responder señalan qué
+procesos faltan documentar.
+
+# Común a las dos partes
 
 ## Modelos y costo estimado
 
@@ -163,22 +204,32 @@ usuario en la Edge Function y registro de tokens por interacción.
 
 ## Etapas
 
+Dos líneas de trabajo independientes. **Prioridad: la ayuda.**
+
+Ayuda de uso (Parte B):
+
+1. **Manual de usuario** del escritorio (puesto de control), revisado por
+   el dueño; luego móvil y panel web.
+2. **Manual navegable sin IA** dentro de las apps, con buscador local.
+3. **Chat de ayuda**: Edge Function `ayuda-ia` con Haiku 5.5 y tope de uso.
+4. **Tickets de soporte** desde la ayuda.
+
+Lienzo de datos (Parte A):
+
 1. **Lienzo sin IA**: esquema JSON, catálogo de contratistas/PRAIND,
    consultas parametrizadas (migración con grants y pruebas) y renderizador.
    Se prueba que el JSON dibuja bien antes de meter el modelo.
-2. **Chat + lienzo**: Edge Function `asistente-ia` con Haiku 5.5, salida
+2. **Chat + lienzo**: Edge Function `lienzo-ia` con Haiku 5.5, salida
    estructurada, validación, deshacer y tope de uso.
-3. **Manual de usuario + ayuda de uso.**
-4. **Consultas SQL de solo lectura** (esquema `ia`, parser, auditoría).
-5. **Vista libre generativa** en iframe aislado, guardar vistas, exportar.
+3. **Consultas SQL de solo lectura** (esquema `ia`, parser, auditoría).
+4. **Vista libre generativa** en iframe aislado, guardar vistas, exportar.
 
 ## Pendiente de decidir
 
 - Cuenta y límite de gasto en la consola de Anthropic (dueño).
-- Qué columnas sensibles (cédula, por ejemplo) pueden salir hacia el modelo
-  y cuáles se enmascaran.
-- Qué roles ven el asistente (¿`ADMINISTRADOR` y superiores?) y si se
-  ofrece como módulo pagado a clientes.
+- Lienzo: qué columnas sensibles (cédula, por ejemplo) pueden salir hacia
+  el modelo y cuáles se enmascaran; si se ofrece como módulo pagado.
+- Ayuda: si también va en el panel web y en el móvil desde el principio.
 
 ## Uso indebido y manipulación
 
