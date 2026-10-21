@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,9 +50,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 
 // El botón redondo junto a la barra de secciones y el buscador que se abre
 // desde abajo, como la app Teléfono de iOS 26 (pedido del usuario 2026-10-21).
@@ -102,8 +100,8 @@ internal fun AccionPrincipal(icono: ImageVector, descripcion: String, onClick: (
 /// mismo vidrio que ella. Al cambiar de acción, el ícono nuevo entra con
 /// rebote.
 @Composable
-internal fun BotonRedondoAccion(accion: AccionInferior, vidrio: HazeState, tamano: Dp, modifier: Modifier = Modifier) {
-    BotonRedondoVidrio(vidrio = vidrio, tamano = tamano, descripcion = accion.descripcion, onClick = accion::tocar, modifier = modifier) {
+internal fun BotonRedondoAccion(accion: AccionInferior, tamano: Dp, modifier: Modifier = Modifier) {
+    BotonRedondoVidrio(tamano = tamano, descripcion = accion.descripcion, onClick = accion::tocar, modifier = modifier) {
         AnimatedContent(
             targetState = accion.icono,
             transitionSpec = {
@@ -117,10 +115,14 @@ internal fun BotonRedondoAccion(accion: AccionInferior, vidrio: HazeState, taman
     }
 }
 
-/// Círculo de vidrio esmerilado (mismo velo que la barra de secciones).
+/// Opacidad del fondo de la barra de secciones y del botón redondo: casi
+/// opaco, para que el texto se lea sin desenfocar lo de atrás (ver
+/// `BarraSecciones`).
+internal const val ALFA_VELO = 0.94f
+
+/// Círculo con el mismo velo que la barra de secciones ([ALFA_VELO]).
 @Composable
 internal fun BotonRedondoVidrio(
-    vidrio: HazeState,
     tamano: Dp,
     descripcion: String,
     onClick: () -> Unit,
@@ -128,19 +130,12 @@ internal fun BotonRedondoVidrio(
     contenido: @Composable () -> Unit,
 ) {
     val superficie = MaterialTheme.colorScheme.surface
-    val oscuro = temaActual().oscuro
     Box(
         modifier = modifier
             .size(tamano)
             .shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
             .clip(CircleShape)
-            .hazeEffect(vidrio) {
-                backgroundColor = superficie
-                tints = listOf(HazeTint(superficie.copy(alpha = if (oscuro) 0.45f else 0.50f)))
-                blurRadius = 24.dp
-                noiseFactor = 0f
-                fallbackTint = HazeTint(superficie.copy(alpha = 0.94f))
-            }
+            .background(superficie.copy(alpha = ALFA_VELO))
             .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), CircleShape)
             .clickable(onClick = onClick)
             .semantics {
