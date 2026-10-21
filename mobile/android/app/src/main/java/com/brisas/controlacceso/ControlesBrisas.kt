@@ -48,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -153,9 +154,17 @@ internal fun CampoBusquedaBrisas(
     }
 }
 
+/** Cuánto tapa abajo la barra de secciones flotante de [PantallaPrincipal]:
+ * el contenido pasa por detrás de ella (se ve a través del vidrio), así que
+ * lo que tiene que quedar a la vista debe dejar ese espacio. Cero fuera de
+ * las pestañas (la bandeja de avisos o "Nuevo contratista" no la tienen). */
+internal val LocalMargenBarraInferior = compositionLocalOf { 0.dp }
+
 /** Espacio libre al final de las listas para que la última fila no quede
- * debajo del botón flotante ni de [FranjaConfirmacion]. */
-internal val EspacioPieLista = 88.dp
+ * debajo del botón flotante, de [FranjaConfirmacion] ni de la barra de
+ * secciones. */
+internal val EspacioPieLista: Dp
+    @Composable get() = 88.dp + LocalMargenBarraInferior.current
 
 /** Lo que flota abajo de una pantalla con lista: la confirmación del último
  * registro ([FranjaConfirmacion]) y, si la pantalla tiene una acción
@@ -168,7 +177,9 @@ internal fun PieFlotante(
     botonFlotante: (@Composable () -> Unit)? = null,
 ) {
     Column(
-        modifier = modifier.fillMaxWidth().padding(16.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + LocalMargenBarraInferior.current),
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

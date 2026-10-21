@@ -212,6 +212,12 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    // Vidrio esmerilado de la barra de secciones flotante (BarraSecciones en
+    // PantallaPrincipal.kt): desenfoca lo que pasa por detrás. Desenfoque real
+    // en Android 12+ (API 31); en los más viejos queda un fondo translúcido.
+    // 1.7.2 y no 1.7.3: ésa arrastra Compose 1.12, que pide compileSdk 37
+    // (1.7.2 usa Compose 1.10, el del BOM de arriba).
+    implementation("dev.chrisbanes.haze:haze:1.7.2")
     implementation("androidx.camera:camera-camera2:1.5.0")
     implementation("androidx.camera:camera-lifecycle:1.5.0")
     implementation("androidx.camera:camera-view:1.5.0")
