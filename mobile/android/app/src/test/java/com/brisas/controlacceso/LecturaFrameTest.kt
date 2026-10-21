@@ -132,8 +132,8 @@ class LecturaFrameTest {
     @Test
     fun registraCondicionesConfianzaYPlacasSinValores() {
         val metricas = MetricasOcr(habilitadas = true, cadaCuantosFrames = 100)
-        metricas.registrarCalidad(CalidadFrame(nitidez = 10f, fraccionReflejo = 0.01f, luminancia = 40f), linternaEncendida = true)
-        metricas.registrarCalidad(CalidadFrame(nitidez = 30f, fraccionReflejo = 0.05f, luminancia = 60f), linternaEncendida = false)
+        metricas.registrarCalidad(CalidadFrame(nitidez = 10f, fraccionReflejo = 0.01f, luminancia = 40f))
+        metricas.registrarCalidad(CalidadFrame(nitidez = 30f, fraccionReflejo = 0.05f, luminancia = 60f))
         metricas.registrarTexto(listOf(0.9f, 0.1f, 0.8f), umbralBajo = 0.25f, versionesTexto = 2)
         metricas.registrarTexto(listOf(0f, 0f), umbralBajo = 0.25f, versionesTexto = 1)
         val placa = extraerVehiculoConDetalle("E37 1931")
@@ -142,7 +142,6 @@ class LecturaFrameTest {
         metricas.registrarReinicioVotacion()
         val datos = metricas.datos()
         assertEquals(2, datos["frames_medidos"])
-        assertEquals(1, datos["frames_con_linterna"])
         assertEquals(40f, datos["luminancia_p10"])
         assertEquals(1, datos["frames_textos_distintos"])
         assertEquals(5, datos["palabras"])

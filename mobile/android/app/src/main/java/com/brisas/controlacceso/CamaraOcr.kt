@@ -123,8 +123,6 @@ fun iniciarCamara(
     sesionActiva: AtomicBoolean,
     onCameraProviderListo: (ProcessCameraProvider, Preview) -> Unit,
     onFallo: (String) -> Unit,
-    // La cámara ya conectada: la usa la linterna (`EstadoCamaraOcr`).
-    onCamaraLista: (androidx.camera.core.Camera) -> Unit = {},
 ) {
     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
     cameraProviderFuture.addListener(
@@ -159,7 +157,6 @@ fun iniciarCamara(
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     grupoUseCases,
                 )
-                onCamaraLista(camara)
                 reportarCamaraInfo(camara, analisis, preview, lifecycleOwner)
             } catch (_: Exception) {
                 if (sesionActiva.get()) onFallo("No se pudo iniciar la cámara")
@@ -249,7 +246,7 @@ fun analizarFrameOcr(
         val recorte = region?.let { recortarParaOcr(mediaImage, imagen.cropRect, rotacion, it) }
         val calidad = recorte?.let { medirCalidad(it.nv21, it.anchoSensor, it.altoSensor) }
         // Sin región no hay recorte ni medición: se procesa con peso 1.
-        calidad?.let { camara.metricas.registrarCalidad(it, camara.linternaEncendida) }
+        calidad?.let { camara.metricas.registrarCalidad(it) }
         val decision = if (region != null && calidad != null) camara.filtroCalidad(region).evaluar(calidad) else SIN_MEDICION
         if (!decision.procesar) {
             camara.metricas.registrarDescarte()

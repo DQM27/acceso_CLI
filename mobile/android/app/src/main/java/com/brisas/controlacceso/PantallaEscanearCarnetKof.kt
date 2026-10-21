@@ -2,15 +2,10 @@ package com.brisas.controlacceso
 
 import android.util.Log
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,7 +14,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -144,7 +138,6 @@ private fun VistaCamaraCarnetKof(
                         camara.cameraProvider = proveedor
                         camara.vistaPreviaCamara = preview
                     },
-                    onCamaraLista = { camara.camaraFisica = it },
                     onFallo = { mensaje -> if (camara.sesionActiva.get()) ultimoMensaje = mensaje },
                 )
                 previewView
@@ -152,28 +145,19 @@ private fun VistaCamaraCarnetKof(
             modifier = Modifier.fillMaxSize(),
         )
         MarcoGuiaCedula(color = colorMarco, estado = estado, modifier = Modifier.fillMaxSize())
-        Text(
+        MensajeEscaneo(
             ultimoMensaje,
-            color = Color.White,
-            style = MaterialTheme.typography.bodyLarge,
+            tono = tonoEscaneo(estado),
             modifier = Modifier
-                .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .padding(top = 16.dp, start = 16.dp, end = 72.dp)
-                .background(Color.Black.copy(alpha = 0.78f), FormaCampoBrisas)
-                .padding(12.dp),
+                // Centrado entre los bordes, dejando a la derecha el lugar de
+                // la X de cerrar.
+                .padding(top = 16.dp, start = 72.dp, end = 72.dp),
         )
         // Mismo botón compartido que las otras 3 pantallas de escaneo
         // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
         // 2026-09-19).
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
-        if (camara.tieneLinterna) {
-            BotonLinterna(
-                encendida = camara.linternaEncendida,
-                onClick = camara::alternarLinterna,
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 72.dp, end = 16.dp),
-            )
-        }
     }
 }
 
