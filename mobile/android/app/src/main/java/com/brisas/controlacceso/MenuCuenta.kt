@@ -34,6 +34,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +84,8 @@ fun MenuCuenta(
     actualizador: ActualizacionViewModel,
 ) {
     var abierto by remember { mutableStateOf(false) }
+    val giro = remember { Animatable(0f) }
+    val alcance = rememberCoroutineScope()
     val estadoActualizacion by actualizador.estado.collectAsState()
     val busqueda by actualizador.busqueda.collectAsState()
     val hayPendiente = estadoActualizacion is EstadoActualizacion.ConNovedad
@@ -103,7 +107,12 @@ fun MenuCuenta(
     }
 
     Box {
-        BotonIconoCuadradoBrisas(onClick = { abierto = true }) {
+        BotonIconoCuadradoBrisas(onClick = {
+            abierto = true
+            // La rueda da media vuelta con rebote al tocarla (pedido del
+            // usuario 2026-10-21); cada toque suma otra media vuelta.
+            alcance.launch { giro.animateTo(giro.targetValue + 180f, ResorteRebote) }
+        }) {
             // Mientras busca, el círculo girando dice que algo está pasando.
             if (busqueda == EstadoBusqueda.BUSCANDO) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -113,6 +122,7 @@ fun MenuCuenta(
                     color = MaterialTheme.colorScheme.onSurface,
                     tamano = 28.dp,
                     modifier = Modifier.semantics { contentDescription = "Cuenta de ${sesion.nombre}" },
+                    giro = { giro.value },
                 )
             }
         }

@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
@@ -67,11 +68,23 @@ private val VectorEngranaje: ImageVector by lazy {
 
 /// La cuenta de quien tiene la sesión, como en el escritorio: su inicial dentro
 /// de un engranaje ("ajustes de mi cuenta"). Dibujado con [color]; la inicial
-/// escala con el tamaño.
+/// escala con el tamaño. [giro] (grados) rota sólo la rueda, no la letra.
 @Composable
-internal fun EngranajeConInicial(inicial: String, color: Color, tamano: Dp, modifier: Modifier = Modifier) {
+internal fun EngranajeConInicial(
+    inicial: String,
+    color: Color,
+    tamano: Dp,
+    modifier: Modifier = Modifier,
+    giro: () -> Float = { 0f },
+) {
     Box(modifier = modifier.size(tamano), contentAlignment = Alignment.Center) {
-        Icon(VectorEngranaje, contentDescription = null, tint = color, modifier = Modifier.size(tamano))
+        Icon(
+            VectorEngranaje,
+            contentDescription = null,
+            tint = color,
+            // Leído en la fase de dibujo: girar no recompone nada.
+            modifier = Modifier.size(tamano).graphicsLayer { rotationZ = giro() },
+        )
         Text(
             inicial,
             color = color,

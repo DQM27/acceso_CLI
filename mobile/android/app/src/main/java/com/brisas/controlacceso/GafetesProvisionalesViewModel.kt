@@ -109,6 +109,13 @@ class GafetesProvisionalesViewModel(
         }
     }
 
+    /// Se cierra el panel de entrega sin entregar: suelta al encargado elegido
+    /// y el error de la entrega, para que el próximo arranque de cero.
+    fun cancelarEntrega() {
+        cambiarTextoEncargado("")
+        error = null
+    }
+
     fun elegirEncargado(encargado: EncargadoRuta) {
         buscadorEncargado.cancelar()
         textoEncargado = "${encargado.nombre} · ${encargado.codigoEmpleado}"

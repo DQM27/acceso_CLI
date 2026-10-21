@@ -25,6 +25,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import uniffi.control_acceso_mobile.EncargadoRuta
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -46,9 +55,14 @@ import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalRemoto
 /// importado para rutas (`encargados_ruta`), se coteja el código contra lo
 /// que la persona dice de palabra (el guardia mira su cédula física para
 /// el nombre -- el sistema no captura ese dato), y se le presta un número
-/// de gafete de la categoría física aparte. Mucho más simple que
-/// [PantallaRutas]: un solo campo bloqueante (encargado), sin OCR, sin
-/// wizard de pasos -- un formulario y una lista.
+/// de gafete de la categoría física aparte.
+///
+/// Rediseño 2026-10-21 (como la app Teléfono de iOS 26, pedido del usuario):
+/// la pantalla es sólo la lista de gafetes prestados. La lupa del botón
+/// redondo de abajo abre el buscador de encargado pegado al teclado
+/// ([BuscadorInferior]); elegir a alguien cierra la búsqueda y sube el panel
+/// "Entregar gafete" con el número. Antes el buscador y el formulario vivían
+/// arriba y había que subir a buscarlos.
 @Composable
 fun PantallaGafetesProvisionales(
     nucleo: Nucleo,
@@ -61,25 +75,15 @@ fun PantallaGafetesProvisionales(
     RegistrarPantalla("gafetes_provisionales")
     val viewModel: GafetesProvisionalesViewModel =
         viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo))
-    var gafeteTexto by remember { mutableStateOf("") }
     var filaParaDevolver by remember { mutableStateOf<FilaGafeteProvisionalActiva?>(null) }
-    val focoGafete = remember { FocusRequester() }
+    var buscando by remember { mutableStateOf(false) }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescarActivos()
         }
     }
-    // Salta directo al número de gafete al elegir encargado -- guardia no
-    // tiene que tocar la pantalla para seguir con el flujo. Pedido explícito
-    // del usuario en pruebas reales, 2026-09-17.
-    LaunchedEffect(viewModel.encargadoSeleccionado) {
-        if (viewModel.encargadoSeleccionado != null) {
-            focoGafete.requestFocus()
-        }
-    }
 
-    val puedeEntregar =
-        viewModel.encargadoSeleccionado != null && gafeteTexto.isNotBlank() && !viewModel.registrando
+    AccionPrincipal(Icons.Default.Search, "Buscar encargado para entregar un gafete", onClick = { buscando = true })
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -87,66 +91,10 @@ fun PantallaGafetesProvisionales(
                 "Gafete provisional KOF",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(bottom = 10.dp),
             )
 
-            // El mismo buscador que el resto de las pantallas, sin el botón de
-            // cámara -- acá no hay documento que escanear, sólo nombre/código
-            // escrito. Los resultados salen como tarjetas tocables abajo (igual que
-            // `FilaContratista` en modo Ingreso), no en un menú desplegable --
-            // pedido explícito del usuario en pruebas reales, 2026-09-17:
-            // unificar el look de esta pantalla con el de Contratista.
-            CampoBusquedaBrisas(
-                valor = viewModel.textoEncargado,
-                onCambiar = viewModel::cambiarTextoEncargado,
-                ayuda = "Nombre o código de empleado",
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            if (viewModel.encargadoSeleccionado == null && viewModel.resultadosEncargado.isNotEmpty()) {
-                // Tope de 6 -- mismo criterio que el buscador de Contratista: esta
-                // lista vive dentro de un `Column` sin scroll propio (a
-                // diferencia de `ContenidoModoEntrada`, que reemplaza toda la
-                // pantalla), así que sin un tope el `LazyColumn` crecía sin
-                // límite y empujaba el campo de número de gafete fuera de la
-                // pantalla -- bug reportado en pruebas reales, 2026-09-17.
-                ListaConDesvanecido {
-                    LazyColumn(
-                        contentPadding = PaddingValues(top = 5.dp),
-                        verticalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        items(viewModel.resultadosEncargado.take(6), key = { it.id }) { encargado ->
-                            FilaEncargadoRuta(encargado, onClick = { viewModel.elegirEncargado(encargado) })
-                        }
-                    }
-                }
-            }
-
-            viewModel.encargadoSeleccionado?.let { encargado ->
-                Text(
-                    "Código de empleado: ${encargado.codigoEmpleado} -- corroborar contra lo que dice la persona",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-
-                // Sin `.height(AlturaBusquedaBrisas)` a propósito -- ese alto
-                // (50.dp, ver ControlesBrisas.kt) queda por debajo del mínimo
-                // cómodo de `OutlinedTextField`: el placeholder terminaba
-                // recortado contra el borde superior del campo en vez de
-                // centrado -- bug reportado en pruebas reales, 2026-09-17 ("el
-                // input... sale cortado").
-                OutlinedTextField(
-                    value = gafeteTexto,
-                    onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
-                    placeholder = { Text("Número de gafete") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = FormaCampoBrisas,
-                    colors = ColoresCampoBrisas(),
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).focusRequester(focoGafete),
-                )
-
+            // Fallas de la lista (la entrega muestra las suyas en su panel).
+            if (viewModel.encargadoSeleccionado == null) {
                 viewModel.error?.let { mensaje ->
                     Text(
                         mensaje,
@@ -154,17 +102,6 @@ fun PantallaGafetesProvisionales(
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 8.dp),
                     )
-                }
-
-                BotonBrisas(
-                    onClick = {
-                        val numero = gafeteTexto.toLongOrNull() ?: return@BotonBrisas
-                        viewModel.entregar(numero) { gafeteTexto = "" }
-                    },
-                    enabled = puedeEntregar,
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                ) {
-                    Text("Entregar")
                 }
             }
 
@@ -176,10 +113,10 @@ fun PantallaGafetesProvisionales(
                 clave = { it.clave() },
                 cargando = viewModel.cargando,
                 tituloVacio = "Ningún gafete prestado",
-                detalleVacio = "Cuando se entregue uno, aparece acá.",
+                detalleVacio = "Para entregar uno, toque la lupa de abajo.",
                 sincronizando = sincronizando,
                 onSincronizar = onSincronizar,
-                contentPadding = PaddingValues(top = 16.dp, bottom = EspacioPieLista),
+                contentPadding = PaddingValues(top = 10.dp, bottom = EspacioPieLista),
             ) { fila ->
                 FilaPrestamoGafeteProvisional(
                     fila = fila,
@@ -187,8 +124,36 @@ fun PantallaGafetesProvisionales(
                 )
             }
         }
-        // Sin botón flotante: acá el formulario de entrega ya está arriba.
         PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
+
+        if (buscando) {
+            BuscadorInferior(
+                texto = viewModel.textoEncargado,
+                onCambiar = viewModel::cambiarTextoEncargado,
+                ayuda = "Nombre o código de empleado",
+                onCerrar = {
+                    buscando = false
+                    viewModel.cambiarTextoEncargado("")
+                },
+                modifier = Modifier.background(MaterialTheme.colorScheme.background),
+            ) {
+                ResultadosEncargado(viewModel.textoEncargado, viewModel.resultadosEncargado) { encargado ->
+                    viewModel.elegirEncargado(encargado)
+                    buscando = false
+                }
+            }
+        }
+    }
+
+    viewModel.encargadoSeleccionado?.let { encargado ->
+        HojaEntregaGafete(
+            encargado = encargado,
+            error = viewModel.error,
+            registrando = viewModel.registrando,
+            // Al entregar bien, el ViewModel suelta al encargado y el panel se va.
+            onEntregar = { numero -> viewModel.entregar(numero) {} },
+            onCancelar = viewModel::cancelarEntrega,
+        )
     }
 
     DialogoConfirmarDevolucionGafeteProvisional(
@@ -199,6 +164,123 @@ fun PantallaGafetesProvisionales(
             filaParaDevolver = null
         },
     )
+}
+
+/// Los encargados que coinciden con lo escrito, como tarjetas tocables (igual
+/// que `FilaContratista` en modo Ingreso). Sin texto, una indicación.
+@Composable
+private fun ResultadosEncargado(texto: String, resultados: List<EncargadoRuta>, onElegir: (EncargadoRuta) -> Unit) {
+    if (resultados.isEmpty()) {
+        Text(
+            if (texto.isBlank()) "Escriba el nombre o el código de empleado." else "Sin resultados",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(24.dp),
+        )
+        return
+    }
+    LazyColumn(
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        items(resultados, key = { it.id }) { encargado ->
+            FilaEncargadoRuta(encargado, onClick = { onElegir(encargado) })
+        }
+    }
+}
+
+/// "Entregar gafete" en un panel que sube desde abajo, con el encargado ya
+/// elegido: el código para cotejar con lo que dice la persona, el número de
+/// gafete (con el teclado numérico ya abierto) y "Entregar". Al entregar,
+/// el panel se va y queda la confirmación verde; cerrarlo cancela la entrega.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HojaEntregaGafete(
+    encargado: EncargadoRuta,
+    error: String?,
+    registrando: Boolean,
+    onEntregar: (numero: Long) -> Unit,
+    onCancelar: () -> Unit,
+) {
+    val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val alcance = rememberCoroutineScope()
+    var gafeteTexto by remember { mutableStateOf("") }
+    val foco = remember { FocusRequester() }
+    LaunchedEffect(Unit) { foco.requestFocus() }
+    fun cerrarY(accion: () -> Unit) {
+        alcance.launch { estado.hide() }.invokeOnCompletion { accion() }
+    }
+    val numero = gafeteTexto.toLongOrNull()
+    ModalBottomSheet(
+        onDismissRequest = onCancelar,
+        sheetState = estado,
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
+                .imePadding(),
+        ) {
+            Text("Entregar gafete", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                encargado.nombre,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            Text(
+                buildAnnotatedString {
+                    append("Código de empleado: ")
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)) {
+                        append(encargado.codigoEmpleado)
+                    }
+                    append(" · corroborar contra lo que dice la persona")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            // Sin `.height(AlturaBusquedaBrisas)` a propósito -- a ese alto el
+            // placeholder de un `OutlinedTextField` queda recortado (bug
+            // reportado en pruebas reales, 2026-09-17).
+            OutlinedTextField(
+                value = gafeteTexto,
+                onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
+                placeholder = { Text("Número de gafete") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = FormaCampoBrisas,
+                colors = ColoresCampoBrisas(),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp).focusRequester(foco),
+            )
+            if (error != null) {
+                Text(
+                    error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            BotonBrisas(
+                onClick = {
+                    // Si el núcleo rechaza la entrega, el panel queda abierto
+                    // con el error.
+                    onEntregar(numero ?: return@BotonBrisas)
+                },
+                enabled = numero != null && !registrando,
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            ) {
+                Text(if (registrando) "Entregando…" else "Entregar")
+            }
+            BotonDiscretoBrisas(
+                onClick = { cerrarY(onCancelar) },
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp),
+            ) {
+                Text("Cancelar")
+            }
+        }
+    }
 }
 
 private fun FilaGafeteProvisionalActiva.clave(): String = when (this) {

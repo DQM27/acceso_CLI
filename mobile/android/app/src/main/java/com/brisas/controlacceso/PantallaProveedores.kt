@@ -165,8 +165,7 @@ fun PantallaProveedores(
                     // Sin título propio: el selector de [PantallaExternos] ya dice dónde se
                     // está.
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                        // "Nuevo ingreso" es el botón flotante de abajo (ver
-                        // [PieFlotante]).
+                        // "Nuevo ingreso" es el botón redondo de abajo.
                         CampoBusquedaBrisas(
                             valor = busqueda,
                             onCambiar = { busqueda = it },
@@ -204,13 +203,10 @@ fun PantallaProveedores(
                         }
                     }
 
-                    PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter)) {
-                        BotonFlotanteBrisas(
-                            icono = Icons.Default.PersonAdd,
-                            descripcion = "Nuevo ingreso",
-                            onClick = { mostrandoFormulario = true },
-                        )
-                    }
+                    PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
+                    // "Nuevo ingreso" va en el botón redondo de abajo (ver
+                    // `AccionInferior.kt`).
+                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso de proveedor", onClick = { mostrandoFormulario = true })
 
                     DialogoConfirmarSalidaProveedor(
                         fila = filaParaSalida,

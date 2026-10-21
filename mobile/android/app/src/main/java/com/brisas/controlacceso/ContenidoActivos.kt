@@ -3,6 +3,7 @@ package com.brisas.controlacceso
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -11,6 +12,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -77,21 +79,22 @@ internal fun CampoBusquedaActivos(
     )
 }
 
-/// Escanear es lo que más se hace en la portería: botón flotante grande, en
-/// el color de la sección. En Ingreso lee el documento para entrar; en
-/// Gafete, el gafete que sale. En Salida por nombre no hay nada que escanear.
+/// Lo que hace el botón redondo de abajo en Activos (ver `AccionInferior.kt`):
+/// en Ingreso escanea el documento para entrar (lo que más se hace en la
+/// portería); en Gafete, el gafete que sale; en Salida por nombre es la lupa
+/// que abre el buscador de abajo.
 @Composable
-internal fun BotonEscanearActivos(
+internal fun AccionActivos(
     modo: ModoBusqueda,
     onEscanearCedula: () -> Unit,
     onEscanearGafete: () -> Unit,
+    onBuscarSalida: () -> Unit,
 ) {
-    BotonFlotanteBrisas(
-        icono = Icons.Default.PhotoCamera,
-        descripcion = if (modo == ModoBusqueda.SALIDA_GAFETE) "Escanear gafete" else "Escanear documento",
-        onClick = if (modo == ModoBusqueda.SALIDA_GAFETE) onEscanearGafete else onEscanearCedula,
-        visible = modo != ModoBusqueda.SALIDA_NOMBRE,
-    )
+    when (modo) {
+        ModoBusqueda.ENTRADA -> AccionPrincipal(Icons.Default.PhotoCamera, "Escanear documento", onEscanearCedula)
+        ModoBusqueda.SALIDA_GAFETE -> AccionPrincipal(Icons.Default.PhotoCamera, "Escanear gafete", onEscanearGafete)
+        ModoBusqueda.SALIDA_NOMBRE -> AccionPrincipal(Icons.Default.Search, "Buscar a quien sale", onBuscarSalida)
+    }
 }
 
 @Composable
@@ -169,15 +172,23 @@ internal fun ContenidoModoSalidaNombre(
     onElegirActivo: (FilaActiva) -> Unit,
     sincronizando: Boolean = false,
     onSincronizar: () -> Unit = {},
+    // Dentro de [BuscadorInferior]: el campo está abajo y no hay barra ni
+    // botón que esquivar, así que la lista no deja espacio al final.
+    enBuscador: Boolean = false,
 ) {
     ListaActivos(
         activos = activos,
         cargando = cargando,
         tituloVacio = if (texto.isBlank()) "Busque a quien sale" else "Sin resultados",
-        detalleVacio = if (texto.isBlank()) "Escriba un nombre o una cédula." else "Pruebe con otro nombre o cédula.",
+        detalleVacio = when {
+            texto.isNotBlank() -> "Pruebe con otro nombre o cédula."
+            enBuscador -> "Escriba un nombre o una cédula."
+            else -> "Toque la lupa de abajo para buscar."
+        },
         onClick = onElegirActivo,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
+        contentPadding = if (enBuscador) PaddingValues(top = 5.dp, bottom = 8.dp) else null,
     )
 }
 
@@ -251,6 +262,8 @@ private fun ListaActivos(
     onClick: (FilaActiva) -> Unit,
     sincronizando: Boolean,
     onSincronizar: () -> Unit,
+    // `null` = el de siempre de [ListaConEstados].
+    contentPadding: PaddingValues? = null,
 ) {
     ListaConEstados(
         filas = activos,
@@ -260,6 +273,7 @@ private fun ListaActivos(
         detalleVacio = detalleVacio,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
+        contentPadding = contentPadding ?: PaddingValues(top = 5.dp, bottom = EspacioPieLista),
     ) { fila ->
         FilaActivo(fila, onClick = { onClick(fila) })
     }

@@ -1,15 +1,6 @@
 package com.brisas.controlacceso
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.isImeVisible
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -197,62 +188,23 @@ internal fun OcultarBarraSecciones() {
 }
 
 /** Espacio libre al final de las listas para que la última fila no quede
- * debajo del botón flotante, de [FranjaConfirmacion] ni de la barra de
- * secciones. */
+ * debajo de [FranjaConfirmacion] ni de la barra de secciones. */
 internal val EspacioPieLista: Dp
-    @Composable get() = 88.dp + LocalMargenBarraInferior.current
+    @Composable get() = 72.dp + LocalMargenBarraInferior.current
 
 /** Lo que flota abajo de una pantalla con lista: la confirmación del último
- * registro ([FranjaConfirmacion]) y, si la pantalla tiene una acción
- * principal, su botón flotante debajo, a la derecha, al alcance del pulgar.
- * Va dentro de un `Box` a pantalla completa, alineado abajo. */
+ * registro ([FranjaConfirmacion]), justo encima de la barra de secciones. La
+ * acción principal de la pantalla ya no flota acá: va en el botón redondo junto
+ * a la barra (ver `AccionInferior.kt`). Va dentro de un `Box` a pantalla
+ * completa, alineado abajo. */
 @Composable
-internal fun PieFlotante(
-    confirmacion: ConfirmacionReciente,
-    modifier: Modifier = Modifier,
-    botonFlotante: (@Composable () -> Unit)? = null,
-) {
-    Column(
+internal fun PieFlotante(confirmacion: ConfirmacionReciente, modifier: Modifier = Modifier) {
+    FranjaConfirmacion(
+        confirmacion,
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + LocalMargenBarraInferior.current),
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        FranjaConfirmacion(confirmacion)
-        botonFlotante?.invoke()
-    }
-}
-
-/** Botón flotante de la acción principal de una pantalla ("Escanear",
- * "Nuevo ingreso"), en el color de la sección. Se esconde mientras el
- * teclado está abierto: ahí taparía la lista que se está filtrando. Aparece
- * y desaparece con un fundido y un leve cambio de tamaño. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun BotonFlotanteBrisas(
-    icono: ImageVector,
-    // Sin texto a la vista (más compacto, pedido del usuario 2026-10-21):
-    // lo lee el lector de pantalla.
-    descripcion: String,
-    onClick: () -> Unit,
-    visible: Boolean = true,
-) {
-    AnimatedVisibility(
-        visible = visible && !WindowInsets.isImeVisible,
-        enter = fadeIn(tween(MS_FUNDIDO_ENTRADA)) + scaleIn(tween(MS_ENTRADA), initialScale = 0.8f),
-        exit = fadeOut(tween(MS_SALIDA)) + scaleOut(tween(MS_SALIDA), targetScale = 0.8f),
-        label = "botonFlotante",
-    ) {
-        FloatingActionButton(
-            onClick = onClick,
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            shape = FormaCampoBrisas,
-        ) {
-            Icon(icono, contentDescription = descripcion)
-        }
-    }
+    )
 }
 
 /** Acciones principales: forma y área táctil comunes en todas las pantallas. */

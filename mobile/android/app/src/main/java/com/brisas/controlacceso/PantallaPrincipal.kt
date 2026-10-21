@@ -483,6 +483,8 @@ fun PantallaPrincipal(
                 // Cámaras y formularios la esconden mientras están a la vista
                 // (ver [OcultarBarraSecciones]).
                 val pantallasCompletas = remember { PantallasCompletas() }
+                // La acción del botón redondo la pone la pantalla a la vista.
+                val accionesInferiores = remember { AccionesInferiores() }
                 Box(modifier = Modifier.fillMaxSize()) {
                     val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
                     val externo = tipoExternoVisible(indiceExterno)
@@ -494,6 +496,7 @@ fun PantallaPrincipal(
                     CompositionLocalProvider(
                         LocalMargenBarraInferior provides MARGEN_BARRA_SECCIONES,
                         LocalPantallasCompletas provides pantallasCompletas,
+                        LocalAccionesInferiores provides accionesInferiores,
                     ) {
                         AnimatedContent(
                             targetState = seccion,
@@ -547,13 +550,29 @@ fun PantallaPrincipal(
                         exit = fadeOut(tween(MS_SALIDA)) + slideOutVertically(tween(MS_SALIDA)) { alto -> alto },
                         label = "barraSecciones",
                     ) {
-                        BarraSecciones(
-                            seleccionada = seccion,
-                            externo = externo,
-                            adentro = adentro,
-                            onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
-                            vidrio = vidrio,
-                        )
+                        // La cápsula de secciones y, a su derecha, el botón
+                        // redondo con la acción de la pantalla a la vista (ver
+                        // `AccionInferior.kt`), como la app Teléfono de iOS.
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = MARGEN_LATERAL_BARRA, vertical = MARGEN_INFERIOR_BARRA),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            BarraSecciones(
+                                seleccionada = seccion,
+                                externo = externo,
+                                adentro = adentro,
+                                onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
+                                vidrio = vidrio,
+                                modifier = Modifier.weight(1f),
+                            )
+                            val accion = accionesInferiores.actual
+                            if (accion != null) {
+                                BotonRedondoAccion(accion, vidrio, tamano = ALTO_BARRA_SECCIONES)
+                            }
+                        }
                     }
                 }
             }
@@ -618,8 +637,6 @@ private fun BarraSecciones(
     val forma = RoundedCornerShape(percent = 50)
     Row(
         modifier = modifier
-            .padding(horizontal = MARGEN_LATERAL_BARRA, vertical = MARGEN_INFERIOR_BARRA)
-            .fillMaxWidth()
             .height(ALTO_BARRA_SECCIONES)
             .shadow(10.dp, forma, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
             .clip(forma)
