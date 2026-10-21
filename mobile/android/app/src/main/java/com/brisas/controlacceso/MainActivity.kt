@@ -8,6 +8,7 @@ import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -73,6 +74,12 @@ class MainActivity : ComponentActivity() {
         // y bloquearlas estorbaba más de lo que protegía.
         GestorTema.inicializar(this)
         atenderIntent(intent)
+        // CameraX tarda en inicializarse la primera vez (enumera las cámaras
+        // y lee sus características): adelantarlo acá le quita ese tiempo a
+        // la primera apertura del escáner, que sólo tiene que abrir el sensor.
+        // Después del primer dibujo, para no competir con el arranque; la
+        // instancia queda cacheada en el proceso (`getInstance` no bloquea).
+        window.decorView.post { ProcessCameraProvider.getInstance(applicationContext) }
         if (Telemetria.activa) {
             // Duración de cada frame y fin del arranque (primer dibujo
             // completo). Sólo en el build de diagnóstico.

@@ -1,6 +1,7 @@
 package com.brisas.controlacceso
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -352,7 +353,7 @@ private fun PasoEmpresaProveedora(
                             .onSizeChanged { altoListaPx = it.height },
                         shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surface,
-                        shadowElevation = 6.dp,
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             resultados.take(6).forEach { empresa ->

@@ -124,6 +124,7 @@ class MetricasOcr(
     private val cadaCuantosFrames: Int = 30,
 ) {
     private val inicio = reloj()
+    private var msHastaImagenCamara: Long? = null
     private var primerFrame = 0L
     private var ultimoFrame = 0L
     private var frames = 0
@@ -167,6 +168,13 @@ class MetricasOcr(
     private var confirmadoVencido: Boolean? = null
     private val msRecorte = ArrayDeque<Float>()
     private val msReconocimiento = ArrayDeque<Float>()
+
+    /// Llegó una imagen de la cámara (procesada o no): la primera marca
+    /// cuánto tardó en arrancar la cámara, aparte de lo que tarda el OCR.
+    @Synchronized
+    fun registrarImagenCamara() {
+        if (habilitadas && msHastaImagenCamara == null) msHastaImagenCamara = (reloj() - inicio) / 1_000_000
+    }
 
     /// Un frame que terminó de pasar por ML Kit.
     @Synchronized
@@ -283,6 +291,7 @@ class MetricasOcr(
     @Synchronized
     fun datos(): Map<String, Any?> = mapOf(
         "ms_sesion" to (reloj() - inicio) / 1_000_000,
+        "ms_hasta_imagen_camara" to msHastaImagenCamara,
         "ms_hasta_confirmar" to msHastaConfirmar,
         "frames" to frames,
         "fps" to framesPorSegundo(),

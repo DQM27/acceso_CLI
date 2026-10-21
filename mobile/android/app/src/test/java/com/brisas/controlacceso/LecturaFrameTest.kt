@@ -121,6 +121,18 @@ class LecturaFrameTest {
     }
 
     @Test
+    fun soloLaPrimeraImagenDeCamaraMarcaElArranque() {
+        var ahora = 0L
+        val metricas = MetricasOcr(habilitadas = true, reloj = { ahora }, cadaCuantosFrames = 100)
+        assertNull(metricas.datos()["ms_hasta_imagen_camara"])
+        ahora = 650_000_000
+        metricas.registrarImagenCamara()
+        ahora = 900_000_000
+        metricas.registrarImagenCamara()
+        assertEquals(650L, metricas.datos()["ms_hasta_imagen_camara"])
+    }
+
+    @Test
     fun metricasDeshabilitadasNoRegistranNada() {
         val registros = mutableListOf<String>()
         val metricas = MetricasOcr(habilitadas = false, registrar = { registros += it }, cadaCuantosFrames = 1)

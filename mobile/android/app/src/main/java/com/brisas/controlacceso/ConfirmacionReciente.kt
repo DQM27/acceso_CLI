@@ -84,7 +84,6 @@ fun FranjaConfirmacion(confirmacion: ConfirmacionReciente, modifier: Modifier = 
             color = ColorExitoBrisas,
             // El verde de Tokyo Night es claro: ahí el texto va oscuro.
             contentColor = if (temaActual().oscuro) Color(0xFF16161E) else Color.White,
-            shadowElevation = 4.dp,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {

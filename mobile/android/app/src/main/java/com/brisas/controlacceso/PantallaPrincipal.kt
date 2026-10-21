@@ -65,7 +65,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -640,7 +639,6 @@ private fun BarraSecciones(
     Row(
         modifier = modifier
             .height(ALTO_BARRA_SECCIONES)
-            .shadow(10.dp, forma, ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
             .clip(forma)
             .background(superficie.copy(alpha = ALFA_VELO))
             .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), forma)
