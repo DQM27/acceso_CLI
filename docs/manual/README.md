@@ -54,8 +54,8 @@ Estado: ✅ redactado · ⬜ pendiente.
 
 ### Quién está adentro (Activos)
 
-- ⬜ Ver y filtrar a las personas que están adentro
-- ⬜ Avisos de permanencia ("lleva más de 12 h adentro", "más de 14 h")
+- ✅ [Ver y filtrar a las personas que están adentro](escritorio/ver-quien-esta-adentro.md)
+- ✅ [Avisos de permanencia ("lleva más de 12 h adentro", "más de 14 h")](escritorio/avisos-de-permanencia.md)
 
 ### Contratistas y empresas
 

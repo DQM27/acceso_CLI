@@ -41,6 +41,19 @@ La ventana **Salida** tiene dos formas de buscar, con los botones de
 5. Pulse **Registrar salida** (o **Enter**). Salen todos de una vez.
 6. Verá **"✓ Salida registrada — (nombres)"**.
 
+## Desde la tabla de Activos
+
+- **Una persona**: pulse el botón **Salida** de su fila. La salida se
+  registra **al instante, sin pedir confirmación**; revise que sea la fila
+  correcta antes de pulsar.
+- **Varias personas**: marque la casilla de cada fila. Abajo aparece una
+  barra con "N seleccionados" y el botón **Registrar salida**. Púlselo,
+  revise la lista en **Confirmar salida** y pulse **Confirmar**. Si hay un
+  gafete KOF en la lista, se registra como devolución del gafete.
+
+En KOF no sale una persona: la "salida" es la **devolución del gafete
+provisional**.
+
 ## Mensajes que pueden aparecer
 
 | Mensaje | Qué significa | Qué hacer |
@@ -48,6 +61,7 @@ La ventana **Salida** tiene dos formas de buscar, con los botones de
 | "Sin ingreso activo" (al lado de un gafete) | Nadie que esté adentro tiene ese número. | Revise el número del gafete. Si la persona salió sin gafete, búsquela por **Nombre o cédula**. |
 | "gafete 7: sin ingreso activo" | Al registrar, ese gafete no correspondía a nadie adentro. Los demás sí se registraron. | Revise ese número y repítalo si hace falta. |
 | "Elegí a quién corresponde cada gafete repetido" (al pasar sobre el botón) | Hay un gafete repetido sin elegir. | Pulse el nombre correcto debajo de ese gafete. |
+| "No se registró la salida de N de M — (motivo)" | Al sacar a varios desde la tabla, algunos no se pudieron cerrar. Los demás sí. | Lea el motivo; revise esas filas y repita su salida. |
 
 ## Relacionado
 
