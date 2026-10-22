@@ -228,6 +228,13 @@ proveedores lista para sumar más después.
   Haiku 5.5 en cierto tipo de preguntas, reintentar sólo esas con Sonnet
   5.5 (máximo un escalado por consulta). Antes de eso, probar el mismo
   modelo con más esfuerzo.
+- **Fable 5.1 como último escalón**, sólo si Sonnet 5.5 también falla y con
+  tope mensual. Cuesta unas 5 veces Sonnet ($10 / $50 por millón), piensa
+  siempre (respuestas más lentas) y exige retención de datos de 30 días en
+  Anthropic. Para estas consultas se espera usarlo casi nunca.
+- **Quien decide el escalado es el código**, con reglas sobre fallos
+  comprobables (JSON inválido, herramienta o parámetros inexistentes,
+  error de la consulta), nunca el modelo.
 - Se revisa la decisión con datos de la evaluación (abajo), no antes.
 
 Otras diferencias con el plan externo, por cómo es este proyecto:
@@ -337,3 +344,36 @@ Cuando el manual no resuelve algo, el asistente ofrece enviarlo a soporte.
 - Requiere una dirección de soporte (idealmente con dominio propio) y un
   servicio de envío desde la Edge Function (Resend, Postmark o similar;
   confirmar límites del plan gratuito al elegir). Clave como secreto.
+
+### Reporte de errores con diagnóstico automático
+
+Cuando el usuario reporta un error ("dile a soporte que al exportar el
+historial no me sale nada"), el asistente adjunta un diagnóstico:
+
+1. **Contexto del panel**: quién reporta, sitio, rol, pantalla, hora,
+   versión y la conversación previa.
+2. **Errores y telemetría relacionados**: lo registrado por los equipos de
+   ese sitio en las últimas horas (`errores_app`, `errores_agrupados`,
+   `telemetria_diagnostico`). Por contrato no tienen datos personales
+   (`docs/telemetria-contrato.md`).
+3. **Análisis y borrador** del reporte; el usuario lo revisa y pulsa
+   "Enviar". Se guarda el ticket y llega el correo con resumen y enlace.
+
+Decisiones y requisitos:
+
+- **El análisis de un reporte de error lo hace Opus 5.5** (decisión del
+  dueño, 2026-10-22): son pocos y piden minuciosidad. Esfuerzo `high`.
+  Estimado: unos $0,10 por reporte (≈15.000 tokens de entrada y 1.500 de
+  salida a $4 / $20 por millón); con el volumen esperado, centavos al mes.
+  El chat y las consultas siguen con Haiku 5.5.
+- **Los errores viven en el proyecto de staging**, no en producción (los
+  lee Grafana, `docs/grafana/README.md`). La Edge Function necesita un
+  acceso de **sólo lectura limitado a esas tablas**, con su clave como
+  secreto; nada más del staging.
+- **Sólo los equipos del sitio de quien reporta** (relación con
+  `dispositivos` en producción).
+- **El panel web no registra hoy sus propios errores**: sumarlo con las
+  mismas reglas del contrato (sin datos personales), o un reporte sobre
+  el panel no tendría qué adjuntar.
+- El análisis se presenta como **hipótesis** ("posible causa"), nunca como
+  causa confirmada.
