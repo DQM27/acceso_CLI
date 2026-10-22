@@ -31,6 +31,10 @@ del manual.
 
 # Parte A — Lienzo de datos (panel web)
 
+**Permisos (decisión del dueño, 2026-10-22): sólo los administradores con
+acceso al panel**, sin más niveles. Incluye consultas sobre una persona
+(por ejemplo, horas por semana de un contratista).
+
 Sólo panel web; no llega a los operadores salvo que un cliente lo pida y
 lo pague aparte. Tres capacidades, por etapas; cada una sirve sola.
 
