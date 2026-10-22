@@ -206,6 +206,44 @@ Estimaciones propias, a confirmar midiendo `usage` en la etapa 1:
 Controles: límite de gasto en la consola de Anthropic, tope diario por
 usuario en la Edge Function y registro de tokens por interacción.
 
+## Un modelo o varios (revisión del plan externo, 2026-10-22)
+
+Se revisó una propuesta externa con un enrutador (Jev, de TypeSafe AI)
+que elige entre tres modelos generativos. Decisión: **en la primera
+versión, un solo modelo con herramientas** (Haiku 5.5) y la interfaz de
+proveedores lista para sumar más después.
+
+- **El enrutador no se paga solo con este volumen.** A 1.000 consultas al
+  mes y unos $0,002 por consulta, el asistente cuesta unos $2 al mes; un
+  enrutador no puede ahorrar algo que importe y suma latencia, otro
+  proveedor que recibe datos y otro punto de falla. (El plan externo citaba
+  $0,42 por millón de entrada; las fuentes publicadas dan $0,042.)
+- **Lo que más baja el costo es darle menos trabajo al modelo**: funciones
+  SQL del catálogo que ya calculan (semanas, promedios, anomalías). Con
+  eso, un modelo económico acierta como uno grande.
+- **Pedir aclaración y negarse no necesitan un enrutador**: el modelo
+  pregunta cuando falta un dato, y lo no autorizado lo bloquean los
+  permisos del backend, no una decisión de la IA.
+- **Escalado simple si hace falta**: si la evaluación muestra fallos de
+  Haiku 5.5 en cierto tipo de preguntas, reintentar sólo esas con Sonnet
+  5.5 (máximo un escalado por consulta). Antes de eso, probar el mismo
+  modelo con más esfuerzo.
+- Se revisa la decisión con datos de la evaluación (abajo), no antes.
+
+Otras diferencias con el plan externo, por cómo es este proyecto:
+
+- **Backend**: no hay servidor en Rust; el del panel son Edge Functions en
+  TypeScript, que ya comparten las reglas con escritorio y móvil
+  (`supabase/functions/_shared/reglas`). El asistente vive ahí.
+- **Herramientas de dominio, no genéricas**: en vez de `query_records` o
+  `count_records`, funciones con nombre de negocio
+  (`historial_persona`, `contratistas_praind`, `ingresos_por_dia`…), con
+  sus `grant` explícitos según `AGENTS.md` y su batería en
+  `supabase/tests/`.
+- **Permisos**: sólo administradores del panel (ver Parte A).
+- **El lienzo es el centro**, no una fase final: la respuesta es una vista
+  (JSON validado → componentes), con el texto como complemento.
+
 ## Etapas
 
 Dos líneas de trabajo independientes. **Prioridad: la ayuda.**
@@ -227,6 +265,29 @@ Lienzo de datos (Parte A):
    estructurada, validación, deshacer y tope de uso.
 3. **Consultas SQL de solo lectura** (esquema `ia`, parser, auditoría).
 4. **Vista libre generativa** en iframe aislado, guardar vistas, exportar.
+
+## Evaluación, piloto y criterios de aceptación
+
+Tomado del plan externo, que acierta en esto:
+
+- **Conjunto de al menos 50 preguntas reales** con su respuesta verificada
+  contra la base: conteos, fechas, comparaciones, preguntas ambiguas, datos
+  vacíos, intentos de ver otro sitio, inyección de instrucciones y fallos
+  del proveedor. Se corre con un script (Python, fuera del producto).
+- **Métricas**: exactitud, costo por **respuesta correcta** (no por
+  llamada), latencia mediana y percentil 95, tasa de reintentos y de
+  rechazos correctos.
+- **Registro por consulta**: modelo, tokens de entrada y salida, costo,
+  consultas SQL, reintentos, escalados y duración.
+- **Reintentos acotados**: nunca en bucle; si no hay un resultado fiable,
+  se pide aclaración o se informa el error. Nada no verificado se presenta
+  como confirmado.
+- **Piloto controlado**: primero con pocos administradores, con límite de
+  gasto y un **interruptor para apagar el asistente** sin desplegar.
+- **Listo para el piloto** cuando: los permisos actuales siguen intactos,
+  todo es de sólo lectura y con límites, los números se verifican contra
+  la base, las claves sólo viven en el servidor, el costo se mide por
+  consulta y hay pruebas de seguridad, exactitud y fallos.
 
 ## Pendiente de decidir
 
