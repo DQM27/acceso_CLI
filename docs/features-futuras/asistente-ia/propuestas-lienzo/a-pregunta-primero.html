@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Propuesta A</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .lienzo { position: relative; display: grid; place-items: center; overflow: hidden;
+    background-color: var(--fondo);
+    background-image: radial-gradient(var(--borde) 1px, transparent 1px); background-size: 22px 22px; }
+  .centro { width: 760px; display: grid; gap: 22px; text-align: center; }
+  .saludo h1 { font-size: 28px; margin: 0; letter-spacing: -.01em; }
+  .saludo p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+  .entrada { padding: 14px 14px 14px 20px; border-radius: 16px; text-align: left; }
+  .entrada span { font-size: 15px; }
+  .contexto { display: flex; gap: 8px; justify-content: center; color: var(--muted); font-size: 12.5px; }
+  .contexto .chip { padding: 3px 10px; font-size: 12px; }
+  .grupos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; text-align: left; }
+  .grupo { padding: 14px 16px; }
+  .grupo h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .grupo div { padding: 7px 0; border-top: 1px solid var(--panel-suave); color: var(--texto); }
+  .grupo div:first-of-type { border-top: 0; }
+  .grupo div::before { content: "↗"; color: var(--acento); margin-right: 8px; font-weight: 700; }
+  .fantasma { position: absolute; inset: 40px; border: 2px dashed var(--borde); border-radius: 18px; pointer-events: none; }
+  .fantasma span { position: absolute; top: -11px; left: 22px; background: var(--fondo); padding: 0 8px; color: var(--atenuado); font-size: 12px; font-weight: 600; }
+</style></head>
+<body><div class="app">
+  <nav class="nav">
+    <div class="marca"><i></i>Acceso · Panel</div>
+    <a class="activo"><span class="ico"></span>Asistente<span class="nuevo">NUEVO</span></a>
+    <a><span class="ico"></span>Adentro ahora</a><a><span class="ico"></span>Historial</a>
+    <a><span class="ico"></span>Contratistas</a><a><span class="ico"></span>Dispositivos</a>
+    <a><span class="ico"></span>Usuarios</a><a><span class="ico"></span>Avisos</a>
+    <div class="pie">Daniel Quintana<br>Administrador</div>
+  </nav>
+  <main class="lienzo">
+    <div class="fantasma"><span>Lienzo · aquí aparecerá lo que pida</span></div>
+    <div class="centro">
+      <div class="saludo">
+        <h1>¿Qué quiere ver hoy?</h1>
+        <p>Pregunte con sus palabras. Armo tablas, gráficos e indicadores con los datos de sus sitios.</p>
+      </div>
+      <div class="entrada"><span>Ej.: contratistas con el PRAIND por vencer el próximo mes, agrupados por empresa</span><div class="enviar">↑</div></div>
+      <div class="contexto">Consultando: <span class="chip">Todos los sitios ▾</span><span class="chip">Últimos 30 días ▾</span></div>
+      <div class="grupos">
+        <div class="tarjeta grupo"><h3>PRAIND</h3>
+          <div>¿Quiénes tienen el PRAIND vencido?</div><div>PRAIND por vencer en 30 días, por empresa</div></div>
+        <div class="tarjeta grupo"><h3>Ingresos</h3>
+          <div>Ingresos por día de las últimas 2 semanas</div><div>¿Quién lleva más de 12 h adentro?</div></div>
+        <div class="tarjeta grupo"><h3>Personas</h3>
+          <div>Horas por semana de un contratista</div><div>Contratistas que no vienen hace 60 días</div></div>
+        <div class="tarjeta grupo"><h3>Empresas</h3>
+          <div>Empresas con más ingresos este mes</div><div>Comparar dos empresas por horas trabajadas</div></div>
+      </div>
+    </div>
+  </main>
+</div><div class="etiqueta-propuesta">Propuesta A · Pregunta primero</div></body></html>

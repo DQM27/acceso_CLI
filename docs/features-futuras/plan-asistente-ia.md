@@ -377,3 +377,34 @@ Decisiones y requisitos:
   el panel no tendría qué adjuntar.
 - El análisis se presenta como **hipótesis** ("posible causa"), nunca como
   causa confirmada.
+
+# Estado y pendientes (para retomar en otra sesión)
+
+Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
+
+## Hecho
+
+- Este plan, con las decisiones del dueño fechadas.
+- `docs/features-futuras/plan-importador-excel.md` (proyecto aparte).
+- Manual de uso del escritorio (`docs/manual/`): ingresos (los cuatro),
+  salidas, Activos, permanencia, contratistas, empresas y gafetes, más la
+  lista de mejoras de pantalla detectadas.
+- Propuestas de la pantalla inicial del lienzo, con imágenes:
+  `docs/features-futuras/asistente-ia/propuestas-lienzo/` (A: pregunta
+  primero; B: resumen vivo + chat lateral, **la recomendada**; C: galería
+  de vistas). Los números son reales de producción del 2026-10-22.
+
+## Pendiente
+
+- Manual: Historial (con exportar), Auditoría, inicio y sesión, conexión
+  y actualizaciones, problemas frecuentes; después móvil y panel web.
+- Dueño: elegir propuesta del lienzo; decir si el operador puede
+  activar/desactivar empresas; regla del gafete KOF con préstamo sin
+  devolver.
+- Registros de prueba en producción: hay 8 ingresos de contratistas casi
+  seguro de prueba (menos de 2 minutos, registrados por Daniel Quintana o
+  Pedro Molina, varios de madrugada) y 4 dudosos. El dueño lo dejó para
+  después; no es crítico. Los ingresos cortos de proveedores (2 a 10 min)
+  son reales y no se tocan.
+- Nada del asistente está implementado: la primera etapa es el manual
+  navegable sin IA y, en paralelo, el lienzo sin IA (Parte A, etapa 1).

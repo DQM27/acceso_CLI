@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Propuesta C</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .area { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+  .lienzo { padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; overflow: hidden; }
+  .lienzo h2 { margin: 0; font-size: 20px; }
+  .seccion { display: flex; align-items: baseline; justify-content: space-between; }
+  .seccion h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .rejilla { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .vista { overflow: hidden; }
+  .mini { height: 118px; background: var(--campo-fondo); border-bottom: 1px solid var(--borde); padding: 12px; display: flex; align-items: flex-end; gap: 6px; }
+  .mini.tabla { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 7px; }
+  .mini.tabla i { height: 9px; border-radius: 3px; background: var(--panel-suave); }
+  .mini.tabla i.r { background: var(--error-suave); } .mini.tabla i.a { background: var(--advertencia-suave); }
+  .mini.kpis { align-items: stretch; }
+  .mini.kpis i { flex: 1; border-radius: 8px; background: var(--panel); border: 1px solid var(--borde); }
+  .mini b { flex: 1; background: var(--acento); border-radius: 3px 3px 0 0; opacity: .85; }
+  .mini b.c { background: var(--advertencia); }
+  .mini.linea svg { width: 100%; height: 100%; }
+  .info { padding: 12px 14px; }
+  .info strong { display: block; }
+  .info span { color: var(--muted); font-size: 12.5px; }
+  .guardadas { display: flex; gap: 10px; }
+  .guardadas .chip { border-style: dashed; }
+  .chat { background: var(--panel); border-left: 1px solid var(--borde); display: flex; flex-direction: column; }
+  .chat header { padding: 16px 18px; border-bottom: 1px solid var(--borde); font-weight: 700; }
+  .mensajes { flex: 1; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .fila { display: flex; gap: 10px; }
+  .pasos { margin: 0; padding-left: 18px; color: var(--muted); }
+  .pasos li { margin: 4px 0; }
+  .chat footer { padding: 14px; border-top: 1px solid var(--borde); }
+  .chat .entrada { box-shadow: none; }
+</style></head>
+<body><div class="app">
+  <nav class="nav">
+    <div class="marca"><i></i>Acceso · Panel</div>
+    <a class="activo"><span class="ico"></span>Asistente<span class="nuevo">NUEVO</span></a>
+    <a><span class="ico"></span>Adentro ahora</a><a><span class="ico"></span>Historial</a>
+    <a><span class="ico"></span>Contratistas</a><a><span class="ico"></span>Dispositivos</a>
+    <a><span class="ico"></span>Usuarios</a><a><span class="ico"></span>Avisos</a>
+    <div class="pie">Daniel Quintana<br>Administrador</div>
+  </nav>
+  <div class="area">
+    <main class="lienzo">
+      <h2>Empiece con una vista</h2>
+      <div class="seccion"><h3>Vistas listas</h3><span class="muted" style="font-size:12.5px">Ábrala y ajústela conversando</span></div>
+      <div class="rejilla">
+        <div class="tarjeta vista"><div class="mini tabla"><i class="r"></i><i class="r"></i><i class="a"></i><i></i><i></i><i></i></div>
+          <div class="info"><strong>Estado del PRAIND</strong><span>13 vencidos · 2 por vencer</span></div></div>
+        <div class="tarjeta vista"><div class="mini kpis"><i></i><i></i><i></i></div>
+          <div class="info"><strong>Quién está adentro</strong><span>19 contratistas ahora</span></div></div>
+        <div class="tarjeta vista"><div class="mini"><b style="height:62%"></b><b style="height:70%"></b><b style="height:8%"></b><b style="height:76%"></b><b style="height:40%"></b><b style="height:78%"></b><b style="height:84%"></b><b style="height:74%"></b><b style="height:71%"></b><b style="height:8%"></b><b style="height:86%"></b><b style="height:69%"></b><b style="height:81%"></b></div>
+          <div class="info"><strong>Ingresos por día</strong><span>Últimas 2 semanas</span></div></div>
+        <div class="tarjeta vista"><div class="mini"><b style="height:55%"></b><b style="height:72%"></b><b style="height:48%"></b><b style="height:78%"></b><b class="c" style="height:92%"></b><b style="height:60%"></b></div>
+          <div class="info"><strong>Horas por persona</strong><span>Por semana, con turnos a revisar</span></div></div>
+        <div class="tarjeta vista"><div class="mini linea"><svg viewBox="0 0 200 90" preserveAspectRatio="none"><polyline points="0,70 30,60 60,64 90,40 120,46 150,30 200,22" fill="none" stroke="#203C63" stroke-width="3"/><polyline points="0,80 30,76 60,70 90,72 120,60 150,62 200,55" fill="none" stroke="#89621D" stroke-width="3"/></svg></div>
+          <div class="info"><strong>Comparar sitios</strong><span>CDI Cartago vs. Brisas</span></div></div>
+        <div class="tarjeta vista"><div class="mini" style="align-items:center;justify-content:center;font-size:30px;color:var(--atenuado)">+</div>
+          <div class="info"><strong>Vista en blanco</strong><span>Descríbala en el chat</span></div></div>
+      </div>
+      <div class="seccion"><h3>Mis vistas guardadas</h3></div>
+      <div class="guardadas"><span class="chip">Todavía no hay vistas guardadas. Al guardar una, aparecerá aquí.</span></div>
+    </main>
+    <aside class="chat">
+      <header>Asistente</header>
+      <div class="mensajes">
+        <div class="fila"><div class="avatar">IA</div>
+          <div class="burbuja">Elija una vista de la izquierda o escríbame lo que necesita. Después puede pedirme cosas como:
+            <ul class="pasos"><li>"quita la empresa BROOMDAY"</li><li>"agrúpalo por semana"</li><li>"ponlo en barras"</li><li>"guárdalo como Reporte mensual"</li></ul></div></div>
+      </div>
+      <footer><div class="entrada"><span>¿Qué quiere ver?</span><div class="enviar">↑</div></div></footer>
+    </aside>
+  </div>
+</div><div class="etiqueta-propuesta">Propuesta C · Galería de vistas</div></body></html>
