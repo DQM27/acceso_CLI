@@ -2,7 +2,6 @@ import "jsr:@supabase/functions-js@2/edge-runtime.d.ts";
 import Anthropic from "npm:@anthropic-ai/sdk@0.132.1";
 import { clienteServicio, correoAdminAutorizado } from "../_shared/admin.ts";
 import { json, leerCuerpo, preflight } from "../_shared/http.ts";
-import { hoyCostaRica } from "../_shared/reglas.ts";
 import { procesarPedido } from "./conversacion.ts";
 
 // Asistente del lienzo de datos del panel (plan del asistente, Parte A, etapa 2).
@@ -23,6 +22,11 @@ const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY"), max
 function entero(nombre: string, porOmision: number): number {
   const valor = Number(Deno.env.get(nombre));
   return Number.isInteger(valor) && valor >= 0 ? valor : porOmision;
+}
+
+/** Día de hoy en Costa Rica (AAAA-MM-DD). Sin `_shared/reglas.ts`: no hace falta cargar el WebAssembly del núcleo. */
+function hoyCostaRica(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(new Date());
 }
 
 /** Inicio del día de hoy en Costa Rica (UTC-6, sin horario de verano), en UTC. */
