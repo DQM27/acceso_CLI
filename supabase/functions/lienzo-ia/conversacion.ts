@@ -18,7 +18,8 @@ import { herramientaEditarLienzo, herramientaReportarIntento, instrucciones } fr
 export const MODELO = "claude-haiku-5-5";
 /** Precio de Claude Haiku 5.5 por millón de tokens (pedidos de hasta 100K tokens). */
 const PRECIO = { entrada: 0.1, salida: 0.5, lecturaCache: 0.01, escrituraCache: 0.125 };
-const MAXIMO_TOKENS = 4000;
+/** Alcanza para un documento con el código de un panel libre (unos 3000 tokens) y su mensaje. */
+const MAXIMO_TOKENS = 8000;
 const LARGO_PREGUNTA = 2000;
 const TURNOS_HISTORIAL = 6;
 
@@ -170,6 +171,24 @@ function sumarUso(a: Anthropic.Usage | null, b: Anthropic.Usage): Anthropic.Usag
  * que llegue al panel ya se sepa que corre y devuelve las columnas declaradas.
  * Un error se le devuelve al modelo para el único reintento.
  */
+/**
+ * Errores de sintaxis del código de los paneles libres, sin ejecutarlo: `new
+ * Function` sólo compila. Si el entorno no deja compilar (EvalError), no se
+ * revisa acá: igual lo atrapa el sandbox y se ve el aviso en el panel.
+ */
+export function erroresDeCodigoLibre(lienzo: Lienzo): string[] {
+  const errores: string[] = [];
+  lienzo.widgets.forEach((w, i) => {
+    if (w.tipo !== "libre") return;
+    try {
+      new Function("datos", "columnas", "h", "ancho", "tema", `"use strict";\n${w.codigo}`);
+    } catch (error) {
+      if (error instanceof SyntaxError) errores.push(`widgets.${i}.codigo: error de sintaxis de JavaScript: ${error.message}`);
+    }
+  });
+  return errores;
+}
+
 async function verificarConsulta(
   interpretacion: Interpretacion,
   respuesta: Anthropic.Message,
@@ -177,12 +196,16 @@ async function verificarConsulta(
   pregunta: string,
   puertos: Puertos,
 ): Promise<Interpretacion> {
-  if (interpretacion.tipo !== "editado" || interpretacion.lienzo.fuente !== "consulta") return interpretacion;
-  const { sql, columnas } = interpretacion.lienzo.consulta ?? { sql: "", columnas: [] };
+  if (interpretacion.tipo !== "editado") return interpretacion;
   // El reintento tiene que responder a esa llamada de herramienta (la API lo exige).
   const idHerramienta =
     respuesta.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "editar_lienzo")?.id ?? null;
   const invalido = (error: string): Interpretacion => ({ tipo: "invalido", errores: [error], idHerramienta });
+
+  const deSintaxis = erroresDeCodigoLibre(interpretacion.lienzo);
+  if (deSintaxis.length > 0) return { tipo: "invalido", errores: deSintaxis, idHerramienta };
+  if (interpretacion.lienzo.fuente !== "consulta") return interpretacion;
+  const { sql, columnas } = interpretacion.lienzo.consulta ?? { sql: "", columnas: [] };
 
   const revision = revisarSql(sql);
   if (!revision.ok) {

@@ -123,12 +123,31 @@ const tablaEsquema = z
   })
   .strict();
 
+/**
+ * Panel "libre": un dibujo a medida para lo que los demás paneles no cubren.
+ * `codigo` es el cuerpo de una función JavaScript que corre en el sandbox
+ * (lienzo.megabrisas.com, Web Worker sin red ni DOM) con las filas del lienzo y
+ * devuelve SVG/HTML. El modelo no ve los datos: escribe el código conociendo
+ * sólo las columnas.
+ */
+const libreEsquema = z
+  .object({
+    tipo: z.literal("libre"),
+    titulo,
+    /** Qué muestra, en una frase (accesibilidad y tooltip del marco). */
+    descripcion: z.string().min(1).max(200).optional(),
+    codigo: z.string().min(1).max(12000),
+    ...panel,
+  })
+  .strict();
+
 const widgetEsquema = z.discriminatedUnion("tipo", [
   kpiEsquema,
   barrasEsquema,
   lineaEsquema,
   tortaEsquema,
   tablaEsquema,
+  libreEsquema,
 ]);
 
 /** Una columna que devuelve la consulta: el nombre exacto del SELECT y su tipo. */
@@ -171,6 +190,7 @@ export type WidgetBarras = z.infer<typeof barrasEsquema>;
 export type WidgetLinea = z.infer<typeof lineaEsquema>;
 export type WidgetTorta = z.infer<typeof tortaEsquema>;
 export type WidgetTabla = z.infer<typeof tablaEsquema>;
+export type WidgetLibre = z.infer<typeof libreEsquema>;
 export type Lienzo = z.infer<typeof lienzoBase>;
 export type Consulta = z.infer<typeof consultaEsquema>;
 

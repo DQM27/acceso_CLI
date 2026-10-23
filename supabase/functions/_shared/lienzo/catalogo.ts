@@ -79,7 +79,7 @@ export const OPERADORES_POR_TIPO: Record<TipoCampo, readonly Operador[]> = {
 export const MEDIDAS = ["contar", "contar_distintos", "minimo", "maximo"] as const;
 export type Medida = (typeof MEDIDAS)[number];
 
-export const WIDGETS = ["kpi", "tabla", "barras", "linea", "torta"] as const;
+export const WIDGETS = ["kpi", "tabla", "barras", "linea", "torta", "libre"] as const;
 
 /** Cómo se reparten los paneles: en cuadrícula, o uno solo grande al centro. */
 export const DISPOSICIONES = ["cuadricula", "enfoque"] as const;

@@ -1,6 +1,14 @@
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import type Anthropic from "npm:@anthropic-ai/sdk@0.132.1";
-import { type Configuracion, costoEnDolares, MODELO, procesarPedido, type Puertos, type Registro } from "./conversacion.ts";
+import {
+  type Configuracion,
+  costoEnDolares,
+  erroresDeCodigoLibre,
+  MODELO,
+  procesarPedido,
+  type Puertos,
+  type Registro,
+} from "./conversacion.ts";
 import { formatearEsquemaIa, herramientaEditarLienzo, instrucciones } from "./instrucciones.ts";
 import type { Alerta } from "../_shared/lienzo/alertas.ts";
 import type { Lienzo } from "../_shared/lienzo/esquema.ts";
@@ -95,7 +103,8 @@ Deno.test("pide barato: esfuerzo bajo, sin muestreo y con instrucciones y herram
   const pedido = pedidos[0];
   assertEquals(pedido.output_config, { effort: "low" });
   assertEquals("temperature" in pedido, false);
-  assertEquals(pedido.max_tokens, 4000);
+  // Tope de salida: alcanza para el código de un panel libre; se cobra sólo lo que se genera.
+  assertEquals(pedido.max_tokens, 8000);
   const sistema = pedido.system as Anthropic.TextBlockParam[];
   assertEquals(sistema[0].cache_control, { type: "ephemeral" });
   // Nada que cambie entre pedidos en las instrucciones (rompería la caché).
@@ -340,6 +349,34 @@ Deno.test("si las columnas declaradas no son las que devuelve el SELECT, se corr
   assertStringIncludes(String((pedidos[1].messages.at(-1)!.content as Anthropic.ToolResultBlockParam[])[0].content), "Devuelve: proveedor, total");
   assertEquals((r.cuerpo as { tipo?: string }).tipo, "respondido");
   assertEquals(registros[0].resultado, "rechazado");
+});
+
+const LIBRE_VALIDO: Lienzo = {
+  fuente: "ingresos",
+  filtros: [],
+  widgets: [{ tipo: "libre", titulo: "Mapa de calor", descripcion: "Ingresos por empresa y día", codigo: "return h.svg(ancho, 10, '')" }],
+};
+
+Deno.test("panel libre: un código con error de sintaxis vuelve al modelo en el reintento", async () => {
+  const roto: Lienzo = { ...LIBRE_VALIDO, widgets: [{ ...LIBRE_VALIDO.widgets[0], codigo: "return h.svg(ancho, 10, [" } as Lienzo["widgets"][number]] };
+  const { p, pedidos } = puertos([
+    mensaje([herramienta({ mensaje: "x", lienzo: roto }, "toolu_a")], "tool_use"),
+    mensaje([herramienta({ mensaje: "Mapa de calor.", lienzo: LIBRE_VALIDO }, "toolu_b")], "tool_use"),
+  ]);
+  const r = await procesarPedido({ pregunta: "mapa de calor de ingresos por empresa y día" }, CONFIG, p);
+  assertEquals(r.cuerpo, { tipo: "editado", lienzo: LIBRE_VALIDO, mensaje: "Mapa de calor." });
+  const resultado = (pedidos[1].messages.at(-1)!.content as Anthropic.ToolResultBlockParam[])[0];
+  assertEquals(resultado.tool_use_id, "toolu_a");
+  assertStringIncludes(String(resultado.content), "error de sintaxis de JavaScript");
+});
+
+Deno.test("panel libre: se compila pero NO se ejecuta en el servidor", () => {
+  const conEfecto: Lienzo = {
+    ...LIBRE_VALIDO,
+    widgets: [{ ...LIBRE_VALIDO.widgets[0], codigo: "globalThis.__ejecutado = true; return ''" } as Lienzo["widgets"][number]],
+  };
+  assertEquals(erroresDeCodigoLibre(conEfecto), []);
+  assertEquals((globalThis as { __ejecutado?: boolean }).__ejecutado, undefined);
 });
 
 Deno.test("si no se puede leer el esquema de ia, 502 sin llamar al modelo", async () => {

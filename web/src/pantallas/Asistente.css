@@ -796,6 +796,29 @@
   50% { opacity: 0.35; }
 }
 
+/* Panel "libre": el dibujo a medida vive en un iframe aislado (sandbox-lienzo/). */
+.lienzo-libre-marco {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color-scheme: normal;
+  transition: height 220ms ease;
+}
+.lienzo-libre-marca {
+  margin-left: auto;
+  padding: 1px 8px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-capsula);
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.lienzo-libre-descripcion {
+  margin: 0 0 var(--espacio-2);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 /* Consulta del asistente: aviso de filas recortadas y el SQL a la vista (auditable). */
 .asistente-aviso {
   margin: 0 0 var(--espacio-3);

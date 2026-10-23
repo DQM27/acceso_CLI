@@ -19,13 +19,15 @@ import GraficoBarras from "./graficos/Barras";
 import { Leyenda, MarcoGrafico, type TablaDeDatos } from "./graficos/comun";
 import GraficoLinea from "./graficos/Linea";
 import GraficoTorta from "./graficos/Torta";
+import PanelLibre from "./PanelLibre";
 import type { Seleccion } from "./graficos/utiles";
 import { TablaLienzo, TarjetaKpi } from "./widgets";
 
 /**
  * Renderizador del lienzo: dibuja un documento ya validado (`validarLienzo`)
  * con componentes propios. No ejecuta nada que venga en el documento: cada
- * widget es un dato que se lee, no código.
+ * widget es un dato que se lee, no código. La única excepción es el panel
+ * "libre", cuyo código corre fuera del panel, en el sandbox (ver PanelLibre).
  *
  * Disposición: "cuadricula" (12 columnas; cada panel con su `ancho`) o
  * "enfoque" (un panel debajo del otro, grandes y al centro). Con `onEditar`,
@@ -37,6 +39,7 @@ const ANCHO_POR_OMISION: Record<Widget["tipo"], Ancho> = {
   linea: "mitad",
   torta: "tercio",
   tabla: "completo",
+  libre: "completo",
 };
 
 const TEXTO_AGRUPACION: Record<AgrupacionFecha, string> = { dia: "por día", semana: "por semana", mes: "por mes" };
@@ -207,6 +210,8 @@ function WidgetLienzo({ ctx, widget }: { ctx: Contexto; widget: Widget }): React
           <TablaLienzo tabla={calcularTabla(origenDe(lienzo), widget, filas, lienzo.formato?.fecha)} />
         </section>
       );
+    case "libre":
+      return <PanelLibre widget={widget} filas={filas} origen={origenDe(lienzo)} />;
   }
 }
 
