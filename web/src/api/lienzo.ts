@@ -181,6 +181,26 @@ export async function listarAlertas(): Promise<AlertaIa[]> {
   return z.array(alertaEsquema).parse(data);
 }
 
+/**
+ * Tope diario de consultas al asistente por persona. Refleja el valor por omisión
+ * de LIENZO_IA_TOPE_PERSONA en la Edge Function `lienzo-ia` (si se cambia allá,
+ * cambiarlo acá): sólo sirve para mostrar el contador; el tope lo hace cumplir la función.
+ */
+export const TOPE_DIARIO_ASISTENTE = 30;
+
+/** Consultas de hoy (hora de Costa Rica) de esta cuenta al asistente, como las cuenta el tope. */
+export async function contarConsultasDeHoy(ahora: Date = new Date()): Promise<number> {
+  // Costa Rica es UTC-6 todo el año: el día empieza a las 06:00 UTC.
+  const desde = `${hoyCostaRica(ahora)}T06:00:00.000Z`;
+  const { count, error } = await supabase
+    .from("lienzo_ia_uso")
+    .select("id", { count: "exact", head: true })
+    .gte("creado_en", desde)
+    .neq("resultado", "tope");
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 const vistaGuardadaEsquema = z.object({
   id: z.string(),
   nombre: z.string(),

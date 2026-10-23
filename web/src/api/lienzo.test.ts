@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Lienzo } from "../lienzo/esquema";
-import { consultarLienzo, hoyCostaRica } from "./lienzo";
+import { consultarLienzo, contarConsultasDeHoy, hoyCostaRica } from "./lienzo";
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), invoke: vi.fn() }));
-vi.mock("../lib/supabase", () => ({ supabase: { rpc: mocks.rpc, functions: { invoke: mocks.invoke } } }));
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), invoke: vi.fn(), from: vi.fn() }));
+vi.mock("../lib/supabase", () => ({ supabase: { rpc: mocks.rpc, functions: { invoke: mocks.invoke }, from: mocks.from } }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -102,6 +102,23 @@ describe("consultarLienzo", () => {
       mocks.invoke.mockResolvedValue({ data: { columnas: ["nombre"], filas: [{ nombre: "Ana" }], truncado: false }, error: null });
       await expect(consultarLienzo(lienzo())).rejects.toThrow("no devolvió: dia, datos");
     });
+  });
+});
+
+describe("contarConsultasDeHoy", () => {
+  it("cuenta desde el inicio del día en Costa Rica y sin las frenadas por el tope", async () => {
+    const consulta = { select: vi.fn(), gte: vi.fn(), neq: vi.fn() };
+    consulta.select.mockReturnValue(consulta);
+    consulta.gte.mockReturnValue(consulta);
+    consulta.neq.mockResolvedValue({ count: 7, error: null });
+    mocks.from.mockReturnValue(consulta);
+
+    // 03:00 UTC del 23 = todavía 22 en Costa Rica.
+    expect(await contarConsultasDeHoy(new Date("2026-10-23T03:00:00Z"))).toBe(7);
+    expect(mocks.from).toHaveBeenCalledWith("lienzo_ia_uso");
+    expect(consulta.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
+    expect(consulta.gte).toHaveBeenCalledWith("creado_en", "2026-10-22T06:00:00.000Z");
+    expect(consulta.neq).toHaveBeenCalledWith("resultado", "tope");
   });
 });
 

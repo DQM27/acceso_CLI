@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   guardarVista: vi.fn(),
   borrarVista: vi.fn(),
   exportarFilas: vi.fn(),
+  contarConsultasDeHoy: vi.fn(),
 }));
 vi.mock("../api/lienzo", () => ({
   obtenerResumenHoy: mocks.obtenerResumenHoy,
@@ -27,6 +28,8 @@ vi.mock("../api/lienzo", () => ({
   listarVistasGuardadas: mocks.listarVistasGuardadas,
   guardarVista: mocks.guardarVista,
   borrarVista: mocks.borrarVista,
+  contarConsultasDeHoy: mocks.contarConsultasDeHoy,
+  TOPE_DIARIO_ASISTENTE: 30,
 }));
 vi.mock("../lib/supabase", () => ({
   supabase: { auth: { getUser: () => Promise.resolve({ data: { user: { email: "admin@example.com" } } }) } },
@@ -74,6 +77,8 @@ beforeEach(() => {
   mocks.guardarVista.mockResolvedValue("v1");
   mocks.borrarVista.mockResolvedValue(undefined);
   mocks.exportarFilas.mockResolvedValue(undefined);
+  mocks.contarConsultasDeHoy.mockResolvedValue(3);
+  sessionStorage.clear();
 });
 
 const ALERTA = {
@@ -155,6 +160,69 @@ describe("Asistente", () => {
     ]);
   });
 
+  it("chat: muestra las consultas de hoy contra el tope y se actualiza después de cada pedido", async () => {
+    mocks.preguntarAlAsistente.mockResolvedValue({ tipo: "respondido", mensaje: "ok" });
+    montar();
+    expect(await screen.findByText("3 de 30 hoy")).toBeTruthy();
+    mocks.contarConsultasDeHoy.mockResolvedValue(4);
+    fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "hola" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    expect(await screen.findByText("4 de 30 hoy")).toBeTruthy();
+    expect(screen.queryByText("Beta")).toBeNull();
+  });
+
+  it("chat: Nueva conversación borra el chat y el próximo pedido va sin historial", async () => {
+    mocks.preguntarAlAsistente.mockResolvedValue({ tipo: "respondido", mensaje: "Respuesta vieja" });
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    const nueva = screen.getByRole("button", { name: "Nueva conversación" }) as HTMLButtonElement;
+    expect(nueva.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "primero" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    expect(await screen.findByText("Respuesta vieja")).toBeTruthy();
+
+    fireEvent.click(nueva);
+    expect(screen.queryByText("Respuesta vieja")).toBeNull();
+    // Vuelven las sugerencias del principio.
+    expect(screen.getByRole("button", { name: "Ver los PRAIND vencidos por empresa" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "segundo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    await waitFor(() => expect(mocks.preguntarAlAsistente).toHaveBeenCalledTimes(2));
+    expect(mocks.preguntarAlAsistente.mock.calls[1][0].historial).toEqual([]);
+  });
+
+  it("chat: la conversación sigue ahí al volver a la pantalla (misma pestaña)", async () => {
+    mocks.preguntarAlAsistente.mockResolvedValue({ tipo: "respondido", mensaje: "Me acuerdo de esto" });
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "algo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    expect(await screen.findByText("Me acuerdo de esto")).toBeTruthy();
+
+    cleanup();
+    montar();
+    expect(await screen.findByText("Me acuerdo de esto")).toBeTruthy();
+    expect(screen.getByText("algo")).toBeTruthy();
+  });
+
+  it("chat: si falla la red o el modelo, Reintentar vuelve a pedir lo mismo sin reescribirlo", async () => {
+    mocks.preguntarAlAsistente
+      .mockRejectedValueOnce(new Error("El asistente no respondió. Intente de nuevo en un momento."))
+      .mockResolvedValueOnce({ tipo: "respondido", mensaje: "Ahora sí" });
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "ingresos de hoy" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Reintentar/ }));
+
+    expect(await screen.findByText("Ahora sí")).toBeTruthy();
+    expect(mocks.preguntarAlAsistente.mock.calls[1][0].pregunta).toBe("ingresos de hoy");
+    expect(mocks.preguntarAlAsistente.mock.calls[1][0].historial).toEqual([]);
+    // El aviso del error se fue y el pedido no se duplicó.
+    expect(screen.queryByText(/no respondió/)).toBeNull();
+    expect(screen.getAllByText("ingresos de hoy")).toHaveLength(1);
+  });
+
   it("chat: Enter envía y Shift+Enter no (es salto de línea)", async () => {
     mocks.preguntarAlAsistente.mockResolvedValue({ tipo: "respondido", mensaje: "ok" });
     montar();
@@ -177,6 +245,8 @@ describe("Asistente", () => {
     fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "hola" } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
     expect(await screen.findByText(/tope de 30 consultas/)).toBeTruthy();
+    // Con el tope no tiene sentido reintentar.
+    expect(screen.queryByRole("button", { name: /Reintentar/ })).toBeNull();
   });
 
   it("chat: sobre una vista abierta, la edición del asistente se aplica ahí y se puede deshacer", async () => {

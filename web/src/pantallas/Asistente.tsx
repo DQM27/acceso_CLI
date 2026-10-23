@@ -1,9 +1,24 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, Download, FileSpreadsheet, FileText, Printer, Redo2, Save, Trash2, Undo2, X } from "lucide-react";
 import {
+  ArrowUp,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  MessageSquarePlus,
+  Printer,
+  Redo2,
+  RotateCcw,
+  Save,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
+import {
+  TOPE_DIARIO_ASISTENTE,
   borrarVista,
   consultarLienzo,
+  contarConsultasDeHoy,
   guardarVista,
   listarAlertas,
   listarVistasGuardadas,
@@ -50,16 +65,43 @@ interface MensajeChat extends TurnoChat {
   id: number;
   /** Un aviso (tope, error) en vez de una respuesta del asistente. */
   aviso?: boolean;
+  /** En un aviso de error: el pedido que falló, para reintentarlo sin reescribirlo. */
+  reintentar?: string;
+}
+
+/** La conversación se guarda en esta pestaña: sobrevive a cambiar de pantalla, se borra al cerrarla. */
+const CLAVE_CONVERSACION = "lienzo-conversacion";
+
+function conversacionGuardada(): MensajeChat[] {
+  try {
+    const crudo = sessionStorage.getItem(CLAVE_CONVERSACION);
+    const lista: unknown = crudo ? JSON.parse(crudo) : [];
+    if (!Array.isArray(lista)) return [];
+    return lista.filter(
+      (m): m is MensajeChat =>
+        typeof m === "object" && m !== null && typeof m.id === "number" && typeof m.texto === "string" &&
+        (m.rol === "usuario" || m.rol === "asistente"),
+    );
+  } catch {
+    return [];
+  }
 }
 
 function PanelChat({
   mensajes,
   pensando,
+  consultasHoy,
   onEnviar,
+  onNueva,
+  onReintentar,
 }: {
   mensajes: MensajeChat[];
   pensando: boolean;
+  /** Consultas de hoy de esta cuenta (null mientras no se sabe). */
+  consultasHoy: number | null;
   onEnviar: (texto: string) => void;
+  onNueva: () => void;
+  onReintentar: (mensaje: MensajeChat) => void;
 }) {
   const [texto, setTexto] = useState("");
   const fin = useRef<HTMLDivElement>(null);
@@ -87,7 +129,24 @@ function PanelChat({
     <aside className="asistente-chat" aria-label="Chat del asistente">
       <header>
         <span>Asistente</span>
-        <span className="asistente-beta">Beta</span>
+        {consultasHoy !== null && (
+          <span
+            className={`asistente-contador${consultasHoy >= TOPE_DIARIO_ASISTENTE * 0.8 ? " asistente-contador-alto" : ""}`}
+            title="Consultas al asistente que usó hoy; el tope se renueva cada día"
+          >
+            {Math.min(consultasHoy, TOPE_DIARIO_ASISTENTE)} de {TOPE_DIARIO_ASISTENTE} hoy
+          </span>
+        )}
+        <button
+          type="button"
+          className="asistente-nueva"
+          onClick={onNueva}
+          disabled={pensando || mensajes.length === 0}
+          title="Nueva conversación"
+          aria-label="Nueva conversación"
+        >
+          <MessageSquarePlus size={16} aria-hidden="true" />
+        </button>
       </header>
       <div className="asistente-mensajes" aria-live="polite">
         <div className="asistente-fila">
@@ -114,7 +173,14 @@ function PanelChat({
           ) : (
             <div key={m.id} className="asistente-fila">
               <Avatar />
-              <div className={`asistente-burbuja${m.aviso ? " asistente-burbuja-aviso" : ""}`}>{m.texto}</div>
+              <div className={`asistente-burbuja${m.aviso ? " asistente-burbuja-aviso" : ""}`}>
+                {m.texto}
+                {m.reintentar && (
+                  <button type="button" className="asistente-reintentar" onClick={() => onReintentar(m)} disabled={pensando}>
+                    <RotateCcw size={13} aria-hidden="true" /> Reintentar
+                  </button>
+                )}
+              </div>
             </div>
           ),
         )}
@@ -395,8 +461,8 @@ export default function Asistente() {
   const [historiales, setHistoriales] = useState<Record<string, Lienzo[]>>({});
   const [rehechos, setRehechos] = useState<Record<string, Lienzo[]>>({});
   const [rechazo, setRechazo] = useState<string | null>(null);
-  const [mensajes, setMensajes] = useState<MensajeChat[]>([]);
-  const siguienteId = useRef(0);
+  const [mensajes, setMensajes] = useState<MensajeChat[]>(conversacionGuardada);
+  const siguienteId = useRef(mensajes.reduce((max, m) => Math.max(max, m.id + 1), 0));
   const cliente = useQueryClient();
 
   const { data: guardadas } = useQuery({ queryKey: ["lienzo-guardadas"], queryFn: listarVistasGuardadas });
@@ -474,14 +540,51 @@ export default function Asistente() {
         aplicar(vista, respuesta.lienzo);
       }
     },
-    onError: (error) => agregarMensaje({ rol: "asistente", texto: mensajeError(error), aviso: true }),
+    onError: (error, pedido) => {
+      const texto = mensajeError(error);
+      // Reintentar sirve si falló la red o el modelo; no si se llegó al tope del día.
+      const reintentar = /tope/i.test(texto) ? undefined : pedido.pregunta;
+      agregarMensaje({ rol: "asistente", texto, aviso: true, reintentar });
+    },
+    onSettled: () => void cliente.invalidateQueries({ queryKey: ["lienzo-uso-hoy"] }),
   });
 
-  const enviar = (texto: string) => {
-    const historialChat = mensajes.filter((m) => !m.aviso).slice(-TURNOS_A_ENVIAR).map(({ rol, texto: t }) => ({ rol, texto: t }));
-    agregarMensaje({ rol: "usuario", texto });
+  const pedir = (texto: string, previos: MensajeChat[]) => {
+    const historialChat = previos.filter((m) => !m.aviso).slice(-TURNOS_A_ENVIAR).map(({ rol, texto: t }) => ({ rol, texto: t }));
     pregunta.mutate({ pregunta: texto, lienzo: vista === RESUMEN || vista === ALERTAS ? null : lienzo, historial: historialChat });
   };
+
+  const enviar = (texto: string) => {
+    pedir(texto, mensajes);
+    agregarMensaje({ rol: "usuario", texto });
+  };
+
+  // El aviso de error se va y se vuelve a pedir lo mismo (el pedido ya está en pantalla).
+  const reintentar = (aviso: MensajeChat) => {
+    if (!aviso.reintentar) return;
+    const previos = mensajes.filter((m) => m.id !== aviso.id);
+    setMensajes(previos);
+    // El historial no incluye el propio pedido que se reintenta (va como pregunta).
+    const hastaElPedido = previos.slice(0, previos.findLastIndex((m) => m.rol === "usuario" && m.texto === aviso.reintentar));
+    pedir(aviso.reintentar, hastaElPedido);
+  };
+
+  const nuevaConversacion = () => {
+    setMensajes([]);
+    siguienteId.current = 0;
+  };
+
+  // La conversación se guarda en la pestaña (se borra al cerrarla).
+  useEffect(() => {
+    try {
+      if (mensajes.length) sessionStorage.setItem(CLAVE_CONVERSACION, JSON.stringify(mensajes));
+      else sessionStorage.removeItem(CLAVE_CONVERSACION);
+    } catch {
+      // Sin almacenamiento (modo privado estricto): la conversación vive sólo en pantalla.
+    }
+  }, [mensajes]);
+
+  const { data: consultasHoy } = useQuery({ queryKey: ["lienzo-uso-hoy"], queryFn: () => contarConsultasDeHoy(), staleTime: 30_000 });
 
   const hayDelAsistente = (historiales[DEL_ASISTENTE] ?? []).length > 0;
   const esResumen = vista === RESUMEN;
@@ -498,7 +601,14 @@ export default function Asistente() {
 
   return (
     <div className="asistente">
-      <PanelChat mensajes={mensajes} pensando={pregunta.isPending} onEnviar={enviar} />
+      <PanelChat
+        mensajes={mensajes}
+        pensando={pregunta.isPending}
+        consultasHoy={consultasHoy ?? null}
+        onEnviar={enviar}
+        onNueva={nuevaConversacion}
+        onReintentar={reintentar}
+      />
       <main className="asistente-lienzo">
         <div className="asistente-barra">
           <div className="campo asistente-selector">

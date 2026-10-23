@@ -17,19 +17,71 @@
 }
 .asistente-chat header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: var(--espacio-2);
   padding: var(--espacio-4);
   border-bottom: 1px solid var(--borde);
   font-weight: 700;
 }
-.asistente-beta {
-  font-size: 0.75rem;
+.asistente-chat header > span:first-child {
+  margin-right: auto;
+}
+/* Consultas de hoy contra el tope diario; se pone en advertencia al acercarse. */
+.asistente-contador {
+  font-size: 0.72rem;
   font-weight: 600;
-  color: var(--info);
-  background: var(--info-suave);
-  padding: 2px 10px;
+  color: var(--muted);
+  background: var(--panel-suave);
+  padding: 2px 9px;
   border-radius: var(--radio-capsula);
+  white-space: nowrap;
+}
+.asistente-contador-alto {
+  color: var(--advertencia);
+  background: var(--advertencia-suave);
+}
+.asistente-nueva {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--duracion), color var(--duracion);
+}
+.asistente-nueva:hover:not(:disabled) {
+  background: var(--panel-suave);
+  color: var(--texto);
+}
+.asistente-nueva:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.asistente-nueva:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+.asistente-reintentar {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--espacio-2);
+  padding: 3px 10px;
+  border: 1px solid currentColor;
+  border-radius: var(--radio-capsula);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.asistente-reintentar:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .asistente-fila-usuario {
   justify-content: flex-end;
