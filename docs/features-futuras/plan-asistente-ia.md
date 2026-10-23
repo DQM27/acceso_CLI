@@ -525,7 +525,29 @@ saltándose el parser.
   producción: desplegar a mano las dos funciones (la migración entra al
   mergear).
 
-Pendiente: rehacer, guardar vista y exportar (en la maqueta B, no
-construidos); etapa 4, modo libre en sandbox de dominio aparte (con
-Python/Pyodide adentro); alertas por correo (SMTP); presupuesto: tope
-mensual de USD 5 en el espacio de trabajo de Anthropic.
+## Etapa 4 (modo libre, guardar, exportar) — implementada (2026-10-23, sin PR todavía)
+
+- Panel "libre": el modelo escribe el código de un dibujo a medida (mapa de
+  calor, línea de tiempo, dispersión…) sin ver los datos. Corre en el
+  sandbox `lienzo.megabrisas.com` (carpeta `sandbox-lienzo/`, Worker
+  `lienzo-sandbox`, **ya publicado**: sirve a staging y a producción porque
+  no guarda nada). Iframe con `sandbox="allow-scripts"` (origen anónimo) +
+  otro dominio + CSP sin red; el código va a un Web Worker armado en
+  memoria, sin red y con 4 s de tope; lo que devuelve pasa por un limpiador
+  de lista blanca. Probado en Chromium real: dibujo, HTML malicioso, bucle
+  infinito, sin fetch, PNG.
+- `lienzo-ia`: instrucciones y ejemplo del panel libre, revisión de
+  sintaxis sin ejecutar, tope de salida 8000 tokens (**v4 en staging**).
+- Vistas guardadas (`20261025120000_lienzo_vistas_guardadas`, **aplicada en
+  staging**; cada admin ve sólo las suyas), Rehacer, exportar los datos a
+  Excel/CSV/PDF, imprimir la vista y PNG de cada gráfico (también del panel
+  libre, que lo arma el sandbox).
+- Pendiente de la batería de vistas guardadas: los casos de DELETE se
+  corren a mano en el editor SQL de staging (la herramienta pide confirmar
+  sentencias destructivas y en la sesión no llegaba la confirmación).
+
+Pendiente: Python (Pyodide) en el sandbox para análisis (pronósticos,
+estadística), no para exportar: PNG y PDF ya salen del navegador; alertas
+por correo (SMTP); presupuesto: tope mensual de USD 5 en el espacio de
+trabajo de Anthropic. Para producción, además del merge: desplegar a mano
+`lienzo-ia` y `lienzo-consulta` y cargar `ANTHROPIC_API_KEY` allá.

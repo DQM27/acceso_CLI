@@ -23,7 +23,8 @@ import { formatearEsquemaIa } from "./instrucciones.ts";
 // Responde { tipo: "editado", lienzo, mensaje } o { tipo: "respondido", mensaje },
 // o { error, detail }.
 
-const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY"), maxRetries: 1, timeout: 60_000 });
+// 90 s: un documento con el código de un panel libre puede llevar varios miles de tokens de salida.
+const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY"), maxRetries: 1, timeout: 90_000 });
 
 function entero(nombre: string, porOmision: number): number {
   const valor = Number(Deno.env.get(nombre));
