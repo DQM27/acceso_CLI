@@ -1,5 +1,13 @@
 import { OPERADORES_POR_TIPO, definicionCampo, type AgrupacionFecha, type Origen } from "./catalogo";
-import { OTROS, SIN_DATO, formatearFecha, sumarDias } from "./calculo";
+import {
+  OTROS,
+  SIN_DATO,
+  esDiasParaVencer,
+  formatearFecha,
+  sumarDias,
+  textoDiasParaVencer,
+  textoRangoDiasParaVencer,
+} from "./calculo";
 import type { Filtro, Lienzo } from "./esquema";
 
 /**
@@ -66,6 +74,12 @@ export function describirFiltro(fuente: Origen, filtro: Filtro, formato?: Parame
           : "No"
         : String(v);
   const lista = Array.isArray(filtro.valor) ? filtro.valor : [filtro.valor];
+  // Días para vencer en palabras ("vencidos hace entre 1 y 30 días"), nunca "-30 a -1".
+  if (esDiasParaVencer(filtro.campo) && lista.every((v) => typeof v === "number")) {
+    const [a, b] = lista as number[];
+    if (filtro.op === "entre") return `PRAIND: ${textoRangoDiasParaVencer(a, b)}`;
+    if (filtro.op === "igual") return `PRAIND: ${textoDiasParaVencer(a).toLowerCase()}`;
+  }
   const valores =
     filtro.op === "entre"
       ? `${texto(lista[0])} a ${texto(lista[1])}`

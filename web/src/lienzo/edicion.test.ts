@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { OTROS, SIN_DATO, calcularTendencia, diasEntre, sumarDias, variacion } from "./calculo";
 import { conFiltro, describirFiltro, filtroParaCategoria, sinFiltro } from "./edicion";
+import { textoComparacion } from "./comparacion";
 import { validarLienzo, type Lienzo } from "./esquema";
 
 describe("filtroParaCategoria (clic para profundizar)", () => {
@@ -89,6 +90,33 @@ describe("describirFiltro", () => {
     expect(describirFiltro("ingresos", { campo: "dia", op: "entre", valor: ["2026-10-01", "2026-10-31"] })).toBe(
       "Día: 01/10/2026 a 31/10/2026",
     );
+  });
+
+  it("días para vencer en palabras, nunca con signo menos", () => {
+    expect(describirFiltro("contratistas", { campo: "dias_para_vencer", op: "entre", valor: [-30, -1] })).toBe(
+      "PRAIND: vencidos hace entre 1 y 30 días",
+    );
+    expect(describirFiltro("contratistas", { campo: "dias_para_vencer", op: "entre", valor: [0, 365] })).toBe(
+      "PRAIND: vencen en los próximos 365 días",
+    );
+    expect(describirFiltro("contratistas", { campo: "dias_para_vencer", op: "igual", valor: -3 })).toBe(
+      "PRAIND: vencido hace 3 días",
+    );
+  });
+});
+
+describe("texto de la comparación de un KPI", () => {
+  it("en cantidades: más, menos o igual, sin porcentajes engañosos", () => {
+    const c = { anterior: 12, contra: "que el jueves pasado a esta hora", modo: "diferencia" as const };
+    expect(textoComparacion(7, c)).toBe("5 menos que el jueves pasado a esta hora (12)");
+    expect(textoComparacion(15, c)).toBe("3 más que el jueves pasado a esta hora (12)");
+    expect(textoComparacion(12, c)).toBe("Igual que el jueves pasado a esta hora (12)");
+    expect(textoComparacion(0, c)).not.toMatch(/%|-/);
+  });
+
+  it("en porcentaje, y sin base no hay porcentaje", () => {
+    expect(textoComparacion(112, { anterior: 100, contra: "vs. antes" })).toBe("+12% vs. antes (100)");
+    expect(textoComparacion(5, { anterior: 0, contra: "vs. antes" })).toBe("0 vs. antes");
   });
 });
 

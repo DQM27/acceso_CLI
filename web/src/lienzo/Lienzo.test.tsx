@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { ResumenHoy } from "../api/lienzo";
-import type { Fila } from "./calculo";
+import { hoyCostaRica, sumarDias, type Fila } from "./calculo";
 import LienzoVista from "./Lienzo";
 import ResumenDeHoy from "./ResumenHoy";
 import { validarLienzo } from "./esquema";
@@ -202,5 +202,62 @@ describe("ResumenDeHoy", () => {
     render(<ResumenDeHoy resumen={{ ...resumen, praind_vencidos: 1, praind_por_vencer: 1 }} />);
     expect(screen.getByText("1 contratista")).toBeTruthy();
     expect(screen.getByText("vence en 30 días")).toBeTruthy();
+  });
+
+  it("ingresos de hoy contra la semana pasada A ESTA HORA, en cantidades (nunca -100 %)", () => {
+    // 22/10/2026 es jueves. Hoy van 7; el jueves pasado a esta hora iban 12.
+    const { container } = render(<ResumenDeHoy resumen={{ ...resumen, ingresos_hoy: 7, ingresos_semana_pasada_a_esta_hora: 12 }} />);
+    expect(screen.getByText("5 menos que el jueves pasado a esta hora (12)")).toBeTruthy();
+    // Al arrancar el día (0 contra 0) no aparece ningún porcentaje ni signo menos.
+    render(<ResumenDeHoy resumen={{ ...resumen, ingresos_hoy: 0, ingresos_semana_pasada_a_esta_hora: 0 }} />);
+    expect(screen.getByText("Igual que el jueves pasado a esta hora (0)")).toBeTruthy();
+    expect(container.textContent).not.toMatch(/-\d+\s?%/);
+  });
+
+  it("sin el dato de la semana pasada a esta hora (función vieja), no compara contra el día completo", () => {
+    render(<ResumenDeHoy resumen={{ ...resumen, ingresos_hoy: 0 }} />);
+    expect(screen.queryByText(/%/)).toBeNull();
+    expect(screen.queryByText(/semana pasada/)).toBeNull();
+  });
+});
+
+describe("KPI que compara contra el período anterior", () => {
+  it("si el rango termina hoy, compara sólo días completos (hoy va a medias) y lo dice", () => {
+    const hoy = hoyCostaRica();
+    const ayer = sumarDias(hoy, -1);
+    // Rango de 2 días (ayer y hoy): ayer 3 ingresos, hoy 1 (a medias). Antes: el día previo con 3.
+    const filas = [{ dia: ayer }, { dia: ayer }, { dia: ayer }, { dia: hoy }];
+    const anteriores = [{ dia: sumarDias(hoy, -3) }, { dia: sumarDias(hoy, -2) }, { dia: sumarDias(hoy, -2) }, { dia: sumarDias(hoy, -2) }];
+    render(
+      <LienzoVista
+        lienzo={lienzo([{ tipo: "kpi", titulo: "Ingresos", medida: "contar", comparar: true }], {}, "ingresos")}
+        filas={filas}
+        anteriores={anteriores}
+        rango={{ desde: ayer, hasta: hoy }}
+      />,
+    );
+    // Ayer (3) contra el día justo anterior (antier: 3): sin cambio. No se mezcla el día de hace 3 (1)
+    // ni el de hoy a medias (que con el período completo daría una caída que no existe).
+    const texto = screen.getByText(/sin contar hoy, que va a medias/).textContent ?? "";
+    expect(texto).toMatch(/^0% vs\. los 1 días anteriores/);
+    expect(texto).toContain("(3)");
+  });
+
+  it("si el rango es sólo hoy, no compara (un día a medias contra uno completo no dice nada)", () => {
+    const hoy = hoyCostaRica();
+    render(
+      <LienzoVista
+        lienzo={lienzo([{ tipo: "kpi", titulo: "Hoy", medida: "contar", comparar: true }], {}, "ingresos")}
+        filas={[{ dia: hoy }]}
+        anteriores={[{ dia: sumarDias(hoy, -1) }, { dia: sumarDias(hoy, -1) }]}
+        rango={{ desde: hoy, hasta: hoy }}
+      />,
+    );
+    expect(screen.queryByText(/vs\./)).toBeNull();
+  });
+
+  it("un KPI de días para vencer se escribe en palabras", () => {
+    render(<LienzoVista lienzo={lienzo([{ tipo: "kpi", titulo: "Más vencido", medida: "minimo", campo: "dias_para_vencer" }])} filas={contratistas} />);
+    expect(screen.getByText("Vencido hace 40 días")).toBeTruthy();
   });
 });

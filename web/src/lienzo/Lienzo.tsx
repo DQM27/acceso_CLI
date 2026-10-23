@@ -7,8 +7,12 @@ import {
   calcularTabla,
   calcularTendencia,
   diasEntre,
+  esDiasParaVencer,
   etiquetaFecha,
   formatearFecha,
+  hoyCostaRica,
+  sumarDias,
+  textoDiasParaVencer,
   type DatosGrafico,
   type Fila,
 } from "./calculo";
@@ -103,7 +107,12 @@ function GraficoDeSeries({ ctx, widget }: { ctx: Contexto; widget: WidgetBarras 
   const medida = textoMedida(origenDe(lienzo), widget.medida, widget.campo);
   const datos = calcularSeries(origenDe(lienzo), widget, filas, medida);
   const eje = etiquetaCampo(origenDe(lienzo), widget.eje_x);
-  const etiquetar = (c: string) => (datos.agrupacion ? etiquetaFecha(c, datos.agrupacion, lienzo.formato?.fecha) : c);
+  const etiquetar = (c: string) =>
+    datos.agrupacion
+      ? etiquetaFecha(c, datos.agrupacion, lienzo.formato?.fecha)
+      : esDiasParaVencer(widget.eje_x) && c.trim() !== "" && Number.isFinite(Number(c))
+        ? textoDiasParaVencer(Number(c))
+        : c;
   const unica = !widget.serie;
   const paleta = unica ? [COLOR_UNICO] : ctx.colores(widget.serie ?? "", datos.series.map((s) => s.nombre));
   const titulo = widget.titulo ?? `${medida} por ${eje.toLowerCase()}`;
@@ -140,20 +149,49 @@ function GraficoDeSeries({ ctx, widget }: { ctx: Contexto; widget: WidgetBarras 
   );
 }
 
+/**
+ * Comparación justa contra el período anterior. Si el rango termina hoy, el día
+ * de hoy va a medias: se comparan sólo los días completos (sin hoy) contra la
+ * misma cantidad de días antes. Si el rango es sólo hoy, no se compara: un día a
+ * medias contra uno completo siempre "cae" y no dice nada.
+ */
+function comparacionKpi(widget: WidgetKpi, filas: Fila[], anteriores: Fila[] | undefined, rango: Contexto["rango"]) {
+  if (!widget.comparar || !anteriores || !rango) return undefined;
+  const dias = diasEntre(rango.desde, rango.hasta) + 1;
+  const terminaHoy = rango.hasta === hoyCostaRica();
+  if (!terminaHoy) {
+    const anterior = calcularKpi(widget, anteriores);
+    return typeof anterior === "number"
+      ? { anterior, contra: `vs. ${dias === 1 ? "el día" : `los ${dias} días`} anteriores` }
+      : undefined;
+  }
+  if (dias < 2) return undefined;
+  const dia = (f: Fila) => (typeof f.dia === "string" ? f.dia : "");
+  const actual = calcularKpi(widget, filas.filter((f) => dia(f) !== "" && dia(f) < rango.hasta));
+  // Los días completos actuales van de `desde` a ayer (dias - 1). Se comparan con los mismos días
+  // justo antes de `desde`: el período anterior sin su PRIMER día.
+  const desdeAnterior = sumarDias(rango.desde, -(dias - 1));
+  const anterior = calcularKpi(widget, anteriores.filter((f) => dia(f) !== "" && dia(f) >= desdeAnterior && dia(f) < rango.desde));
+  if (typeof actual !== "number" || typeof anterior !== "number") return undefined;
+  return { actual, anterior, contra: `vs. los ${dias - 1} días anteriores (sin contar hoy, que va a medias)` };
+}
+
 function Kpi({ ctx, widget }: { ctx: Contexto; widget: WidgetKpi }) {
   const { lienzo, filas, anteriores, rango } = ctx;
   const valor = calcularKpi(widget, filas);
   const esFecha = widget.campo && definicionCampo(origenDe(lienzo), widget.campo)?.tipo === "fecha";
-  const dias = rango ? diasEntre(rango.desde, rango.hasta) + 1 : 0;
-  const anterior = widget.comparar && anteriores ? calcularKpi(widget, anteriores) : null;
+  const mostrado =
+    esFecha && typeof valor === "string"
+      ? formatearFecha(valor, lienzo.formato?.fecha)
+      : widget.campo && esDiasParaVencer(widget.campo) && typeof valor === "number"
+        ? textoDiasParaVencer(valor)
+        : valor;
   return (
     <TarjetaKpi
-      valor={esFecha && typeof valor === "string" ? formatearFecha(valor, lienzo.formato?.fecha) : valor}
+      valor={mostrado}
       titulo={widget.titulo}
       tono={widget.tono}
-      comparacion={
-        typeof anterior === "number" ? { anterior, contra: `vs. ${dias === 1 ? "el día" : `los ${dias} días`} anteriores` } : undefined
-      }
+      comparacion={comparacionKpi(widget, filas, anteriores, rango)}
       tendencia={widget.tendencia && rango ? calcularTendencia(widget, filas, rango.desde, rango.hasta) : undefined}
     />
   );

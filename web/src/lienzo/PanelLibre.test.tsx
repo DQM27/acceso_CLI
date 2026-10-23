@@ -1,6 +1,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import PanelLibre, { URL_SANDBOX } from "./PanelLibre";
+import PanelLibre from "./PanelLibre";
+import { URL_SANDBOX } from "./sandbox";
 import type { WidgetLibre } from "./esquema";
 
 const WIDGET: WidgetLibre = {

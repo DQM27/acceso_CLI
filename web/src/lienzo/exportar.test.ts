@@ -10,6 +10,8 @@ describe("columnasParaExportar", () => {
     const valor = (id: string) => columnas.find((c) => c.colId === id)?.valor(fila);
     expect(valor("vencimiento")).toBe("08/11/2026");
     expect(valor("acceso_activo")).toBe("Sí");
+    // Los días para vencer salen en palabras también en Excel, CSV y PDF.
+    expect(columnas.find((c) => c.colId === "dias_para_vencer")?.valor({ dias_para_vencer: -3 })).toBe("Vencido hace 3 días");
     expect(valor("empresa")).toBe("");
     expect(columnas.find((c) => c.colId === "nombre")?.izquierda).toBe(true);
   });

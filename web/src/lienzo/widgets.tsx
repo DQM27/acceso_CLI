@@ -1,5 +1,6 @@
 import { CircleAlert, CircleCheck, Minus, TrendingDown, TrendingUp, TriangleAlert } from "lucide-react";
 import { textoValor, type TablaCalculada } from "./calculo";
+import { textoComparacion, type Comparacion } from "./comparacion";
 import { formatoNumero, useNumeroAnimado } from "./graficos/utiles";
 
 /** Tono de estado de una tarjeta: el color siempre va con su ícono y su texto, nunca solo. */
@@ -11,8 +12,6 @@ function ValorAnimado({ valor }: { valor: number }) {
   const actual = useNumeroAnimado(valor);
   return <>{formatoNumero(Math.round(actual))}</>;
 }
-
-const PORCENTAJE = new Intl.NumberFormat("es-CR", { style: "percent", maximumFractionDigits: 0, signDisplay: "exceptZero" });
 
 /** Mini línea de tendencia: el recorrido en gris, el último valor resaltado. */
 function Tendencia({ valores, titulo }: { valores: number[]; titulo: string }) {
@@ -32,12 +31,6 @@ function Tendencia({ valores, titulo }: { valores: number[]; titulo: string }) {
   );
 }
 
-export interface Comparacion {
-  /** Valor del período anterior. */
-  anterior: number;
-  /** Contra qué se compara: "vs. las 2 semanas anteriores". */
-  contra: string;
-}
 
 export function TarjetaKpi({
   valor,
@@ -55,12 +48,10 @@ export function TarjetaKpi({
   tendencia?: number[];
 }) {
   const Icono = tono === "neutro" ? null : ICONO_TONO[tono];
-  const cambio =
-    comparacion && typeof valor === "number" && comparacion.anterior !== 0
-      ? (valor - comparacion.anterior) / comparacion.anterior
-      : null;
+  const comparado = comparacion?.actual ?? (typeof valor === "number" ? valor : null);
+  const diferencia = comparacion && comparado !== null ? comparado - comparacion.anterior : null;
   // Subir no es bueno ni malo en sí (más ingresos no es una alerta): flecha y texto, sin color de estado.
-  const Flecha = cambio === null || cambio === 0 ? Minus : cambio > 0 ? TrendingUp : TrendingDown;
+  const Flecha = diferencia === null || diferencia === 0 ? Minus : diferencia > 0 ? TrendingUp : TrendingDown;
   return (
     <div className={`tarjeta lienzo-kpi lienzo-kpi-${tono}`}>
       <div className="lienzo-kpi-cabeza">
@@ -71,12 +62,10 @@ export function TarjetaKpi({
         {tendencia && <Tendencia valores={tendencia} titulo={titulo} />}
       </div>
       <div className="lienzo-kpi-titulo">{titulo}</div>
-      {comparacion && typeof valor === "number" && (
+      {comparacion && comparado !== null && (
         <small className="lienzo-kpi-cambio">
           <Flecha size={14} aria-hidden="true" />
-          {cambio === null
-            ? `${formatoNumero(comparacion.anterior)} ${comparacion.contra}`
-            : `${PORCENTAJE.format(cambio)} ${comparacion.contra} (${formatoNumero(comparacion.anterior)})`}
+          {textoComparacion(comparado, comparacion)}
         </small>
       )}
       {detalle && <small>{detalle}</small>}

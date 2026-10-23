@@ -53,8 +53,9 @@
   transition: background var(--duracion), color var(--duracion);
 }
 .asistente-nueva:hover:not(:disabled) {
-  background: var(--panel-suave);
-  color: var(--texto);
+  background: var(--acento-suave);
+  border-color: var(--acento);
+  color: var(--acento);
 }
 .asistente-nueva:disabled {
   opacity: 0.35;

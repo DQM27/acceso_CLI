@@ -1,6 +1,6 @@
 import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
-import { diasEntre, sumarDias, type Fila } from "../lienzo/calculo";
+import { diasEntre, hoyCostaRica, sumarDias, type Fila } from "../lienzo/calculo";
 import { parametrosContratistas, parametrosIngresos } from "../lienzo/consulta";
 import { aplicarFiltros } from "../lienzo/filtrar";
 import { origenDe, validarLienzo, type Lienzo } from "../lienzo/esquema";
@@ -19,6 +19,8 @@ const resumenEsquema = z.object({
   praind_vencidos: z.number(),
   praind_por_vencer: z.number(),
   ingresos_por_dia: z.array(z.object({ dia: z.string(), cantidad: z.number() })),
+  /** El mismo día de la semana pasada, hasta esta misma hora (migración lienzo_resumen_a_esta_hora). */
+  ingresos_semana_pasada_a_esta_hora: z.number().optional(),
 });
 
 export type ResumenHoy = z.infer<typeof resumenEsquema>;
@@ -31,10 +33,8 @@ export async function obtenerResumenHoy(sitioId?: string): Promise<ResumenHoy> {
 
 const filasEsquema = z.array(z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])));
 
-/** Día de hoy en Costa Rica (YYYY-MM-DD), el mismo que usan las funciones SQL. */
-export function hoyCostaRica(ahora: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(ahora);
-}
+// Vive en lienzo/calculo.ts (lo usa también el lienzo); se re-exporta para quien ya lo importaba de acá.
+export { hoyCostaRica };
 
 export interface TurnoChat {
   rol: "usuario" | "asistente";

@@ -7,7 +7,7 @@ import {
   type DefinicionColumnaExport,
 } from "../exportacion";
 import { CATALOGO, type FormatoFecha, type Origen } from "./catalogo";
-import { formatearFecha, type Fila } from "./calculo";
+import { esDiasParaVencer, formatearFecha, textoDiasParaVencer, type Fila } from "./calculo";
 import { nombreDeArchivo } from "./imagen";
 
 /**
@@ -32,6 +32,7 @@ export function columnasParaExportar(origen: Origen, formatoFecha?: FormatoFecha
       const v = fila[c.nombre];
       if (v === null || v === undefined) return "";
       if (typeof v === "boolean") return v ? "Sí" : "No";
+      if (esDiasParaVencer(c.nombre) && typeof v === "number") return textoDiasParaVencer(v);
       if (c.tipo === "fecha" && typeof v === "string") return formatearFecha(v.slice(0, 10), formatoFecha);
       return String(v);
     },

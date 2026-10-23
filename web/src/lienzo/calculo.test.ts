@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  textoDiasParaVencer,
+  textoRangoDiasParaVencer,
   OTROS,
   calcularKpi,
   calcularPorciones,
@@ -166,7 +168,44 @@ describe("calcularTabla", () => {
       { id: "nombre", etiqueta: "Nombre" },
       { id: "dias_para_vencer", etiqueta: "Días para vencer" },
     ]);
-    expect(t.filas.map((f) => f.dias_para_vencer)).toEqual([3, 18, 30, null]);
+    // Ordenado por el número (3, 18, 30, vacío), escrito en palabras.
+    expect(t.filas.map((f) => f.dias_para_vencer)).toEqual(["Faltan 3 días", "Faltan 18 días", "Faltan 30 días", null]);
+  });
+
+  it("los días para vencer negativos se muestran como vencidos, nunca con signo menos", () => {
+    const vencidos = [
+      { nombre: "A", dias_para_vencer: -40 },
+      { nombre: "B", dias_para_vencer: -1 },
+      { nombre: "C", dias_para_vencer: 0 },
+      { nombre: "D", dias_para_vencer: 1 },
+    ];
+    const t = calcularTabla(
+      "contratistas",
+      { tipo: "tabla", columnas: ["nombre", "dias_para_vencer"], orden: { campo: "dias_para_vencer", dir: "asc" } },
+      vencidos,
+    );
+    expect(t.filas.map((f) => f.dias_para_vencer)).toEqual(["Vencido hace 40 días", "Vencido hace 1 día", "Vence hoy", "Falta 1 día"]);
+    expect(t.filas.some((f) => String(f.dias_para_vencer).includes("-"))).toBe(false);
+  });
+});
+
+describe("días para vencer en palabras", () => {
+  it("un valor", () => {
+    expect(textoDiasParaVencer(-40)).toBe("Vencido hace 40 días");
+    expect(textoDiasParaVencer(0)).toBe("Vence hoy");
+    expect(textoDiasParaVencer(17)).toBe("Faltan 17 días");
+    expect(textoDiasParaVencer(Number.NaN)).toBe("—");
+  });
+
+  it("un rango (filtro entre), sin signos menos", () => {
+    expect(textoRangoDiasParaVencer(-30, -1)).toBe("vencidos hace entre 1 y 30 días");
+    expect(textoRangoDiasParaVencer(-30, 0)).toBe("vencidos en los últimos 30 días o que vencen hoy");
+    expect(textoRangoDiasParaVencer(0, 30)).toBe("vencen en los próximos 30 días");
+    expect(textoRangoDiasParaVencer(31, 60)).toBe("vencen dentro de 31 a 60 días");
+    expect(textoRangoDiasParaVencer(-10, 10)).toBe("desde vencidos hace 10 días hasta los que vencen en 10 días");
+    for (const [a, b] of [[-30, -1], [-30, 0], [0, 30], [-10, 10], [5, 5], [-5, -5]]) {
+      expect(textoRangoDiasParaVencer(a, b)).not.toMatch(/-\d/);
+    }
   });
 
   it("orden descendente deja los vacíos igualmente al final", () => {

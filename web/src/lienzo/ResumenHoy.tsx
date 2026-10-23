@@ -31,6 +31,13 @@ function Atencion({
 
 const panel = (i: number) => ({ "--i": i }) as CSSProperties;
 
+const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+/** "2026-10-22" → "jueves". */
+function diaDeLaSemana(ymd: string): string {
+  const [a, m, d] = ymd.split("-").map(Number);
+  return DIAS[new Date(Date.UTC(a, m - 1, d)).getUTCDay()] ?? "día";
+}
+
 /** Pantalla inicial del lienzo (propuesta B): los números de hoy, en vivo. */
 export default function ResumenDeHoy({ resumen }: { resumen: ResumenHoy }) {
   const datos: DatosGrafico = {
@@ -59,10 +66,15 @@ export default function ResumenDeHoy({ resumen }: { resumen: ResumenHoy }) {
           valor={resumen.ingresos_hoy}
           titulo="Ingresos hoy"
           detalle="Día en curso"
-          // Contra el mismo día de la semana pasada (los lunes no se parecen a los domingos).
+          // Contra el mismo día de la semana pasada HASTA ESTA HORA (los lunes no se parecen a los
+          // domingos, y un día a medias contra uno completo siempre "cae"), en cantidades.
           comparacion={
-            resumen.ingresos_por_dia.length >= 8
-              ? { anterior: resumen.ingresos_por_dia[resumen.ingresos_por_dia.length - 8].cantidad, contra: "vs. el mismo día la semana pasada" }
+            resumen.ingresos_semana_pasada_a_esta_hora !== undefined
+              ? {
+                  anterior: resumen.ingresos_semana_pasada_a_esta_hora,
+                  contra: `que el ${diaDeLaSemana(resumen.hoy)} pasado a esta hora`,
+                  modo: "diferencia",
+                }
               : undefined
           }
           tendencia={resumen.ingresos_por_dia.map((d) => d.cantidad)}

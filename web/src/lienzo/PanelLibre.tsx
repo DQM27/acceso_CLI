@@ -3,6 +3,7 @@ import { ImageDown } from "lucide-react";
 import { descargarArchivo } from "../exportacion";
 import { CATALOGO, type Origen } from "./catalogo";
 import { nombreDeArchivo, pngDesdeDataUrl } from "./imagen";
+import { URL_SANDBOX } from "./sandbox";
 import type { Fila } from "./calculo";
 import type { WidgetLibre } from "./esquema";
 
@@ -16,7 +17,6 @@ import type { WidgetLibre } from "./esquema";
  * devuelve se limpia antes de mostrarse. De vuelta sólo llegan el alto del
  * dibujo y, si falló, un mensaje.
  */
-export const URL_SANDBOX: string = import.meta.env.VITE_LIENZO_SANDBOX_URL || "https://lienzo.megabrisas.com/";
 
 /** Si el sandbox no avisa que cargó en este tiempo, se muestra el problema en vez de un hueco. */
 const ESPERA_CARGA_MS = 10_000;

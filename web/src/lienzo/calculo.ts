@@ -22,6 +22,41 @@ const PORCIONES_POR_OMISION = 6;
 /** Más puntos que esto no se rellenan día por día (un eje de varios años). */
 const MAXIMO_RELLENO = 400;
 
+/** Día de hoy en Costa Rica (YYYY-MM-DD), el mismo que usan las funciones SQL. */
+export function hoyCostaRica(ahora: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(ahora);
+}
+
+/**
+ * Campos que cuentan los días que faltan para un vencimiento: negativo quiere
+ * decir que ya venció. Así guardados sirven para ordenar y filtrar, pero un
+ * "-40" en pantalla no se entiende: se muestran en palabras.
+ */
+export function esDiasParaVencer(campo: string): boolean {
+  return campo === "dias_para_vencer";
+}
+
+const dias = (n: number) => `${n} ${n === 1 ? "día" : "días"}`;
+
+/** -40 → "Vencido hace 40 días"; 0 → "Vence hoy"; 17 → "Faltan 17 días". */
+export function textoDiasParaVencer(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  if (n < 0) return `Vencido hace ${dias(-n)}`;
+  if (n === 0) return "Vence hoy";
+  return `${n === 1 ? "Falta" : "Faltan"} ${dias(n)}`;
+}
+
+/** Un rango de días para vencer (filtro "entre"), en palabras. */
+export function textoRangoDiasParaVencer(desde: number, hasta: number): string {
+  const [a, b] = desde <= hasta ? [desde, hasta] : [hasta, desde];
+  if (a === b) return textoDiasParaVencer(a);
+  if (b < 0) return `vencidos hace entre ${-b} y ${dias(-a)}`;
+  if (b === 0) return `vencidos en los últimos ${dias(-a)} o que vencen hoy`;
+  if (a === 0) return `vencen en los próximos ${dias(b)}`;
+  if (a > 0) return `vencen dentro de ${a} a ${dias(b)}`;
+  return `desde vencidos hace ${dias(-a)} hasta los que vencen en ${dias(b)}`;
+}
+
 export function textoValor(valor: Valor | undefined): string {
   if (valor === null || valor === undefined) return "—";
   if (typeof valor === "boolean") return valor ? "Sí" : "No";
@@ -315,13 +350,15 @@ export function calcularTabla(
     resultado = [...resultado].sort((a, b) => comparar(a[campo], b[campo], signo));
   }
 
-  // Las fechas se escriben según el formato recién al final: ordenar va sobre el valor ISO.
+  // Fechas y días para vencer se escriben recién al final: ordenar va sobre el valor real (ISO, número).
   const deFecha = columnas.filter((id) => definicionCampo(fuente, id)?.tipo === "fecha");
+  const deDias = columnas.filter(esDiasParaVencer);
   const limite = widget.limite ?? LIMITE_TABLA;
   const visibles = resultado.slice(0, limite).map((fila) => {
-    if (deFecha.length === 0) return fila;
+    if (deFecha.length === 0 && deDias.length === 0) return fila;
     const copia = { ...fila };
     for (const id of deFecha) if (typeof copia[id] === "string") copia[id] = formatearFecha(copia[id], formatoFecha);
+    for (const id of deDias) if (typeof copia[id] === "number") copia[id] = textoDiasParaVencer(copia[id]);
     return copia;
   });
   return {
