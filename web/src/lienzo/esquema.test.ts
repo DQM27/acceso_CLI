@@ -126,4 +126,51 @@ describe("validarLienzo", () => {
     });
     expect(r.ok).toBe(true);
   });
+
+  describe('fuente "consulta"', () => {
+    const consulta = {
+      sql: "select empresa_nombre, count(*) as n from ia.ingresos group by 1",
+      columnas: [
+        { nombre: "empresa_nombre", tipo: "texto", etiqueta: "Empresa" },
+        { nombre: "n", tipo: "numero" },
+      ],
+    };
+    const doc = (extra: Doc = {}): Doc => ({
+      fuente: "consulta",
+      consulta,
+      filtros: [],
+      widgets: [{ tipo: "barras", eje_x: "empresa_nombre", medida: "contar" }],
+      ...extra,
+    });
+
+    it("acepta un lienzo cuyos campos son las columnas de su consulta", () => {
+      expect(validarLienzo(doc()).ok).toBe(true);
+      const conFiltro = doc({ filtros: [{ campo: "n", op: "entre", valor: [1, 10] }] });
+      expect(validarLienzo(conFiltro).ok).toBe(true);
+    });
+
+    it("rechaza campos que la consulta no devuelve", () => {
+      const r = validarLienzo(doc({ widgets: [{ tipo: "barras", eje_x: "empresa", medida: "contar" }] }));
+      expect(errores(r)).toContain("fuera del catálogo");
+    });
+
+    it("la consulta es obligatoria y sólo va con esta fuente", () => {
+      expect(errores(validarLienzo(doc({ consulta: undefined })))).toContain("necesita su consulta");
+      expect(errores(conCambio((d) => (d.consulta = consulta)))).toContain("Sólo la fuente");
+    });
+
+    it("rechaza columnas repetidas, nombres raros y tipos inventados", () => {
+      const repetidas = { ...consulta, columnas: [consulta.columnas[0], consulta.columnas[0]] };
+      expect(errores(validarLienzo(doc({ consulta: repetidas })))).toContain("repetidas");
+      const rara = { ...consulta, columnas: [{ nombre: "Empresa; drop", tipo: "texto" }] };
+      expect(validarLienzo(doc({ consulta: rara })).ok).toBe(false);
+      const tipo = { ...consulta, columnas: [{ nombre: "x", tipo: "json" }] };
+      expect(validarLienzo(doc({ consulta: tipo })).ok).toBe(false);
+    });
+
+    it("comparar y tendencia siguen siendo sólo de la fuente de ingresos", () => {
+      const kpi = { tipo: "kpi", titulo: "t", medida: "contar", comparar: true };
+      expect(validarLienzo(doc({ widgets: [kpi] })).ok).toBe(false);
+    });
+  });
 });

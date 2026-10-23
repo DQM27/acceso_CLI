@@ -13,10 +13,11 @@ import {
   MEDIDAS,
   OPERADORES,
   OPERADORES_POR_TIPO,
+  TIPOS_COLUMNA,
   TONOS,
   definicionCampo,
   type DefinicionCampo,
-  type Fuente,
+  type Origen,
 } from "./catalogo.ts";
 
 // Sin compilación dinámica: la CSP estricta del panel la bloquea (igual que en
@@ -130,9 +131,30 @@ const widgetEsquema = z.discriminatedUnion("tipo", [
   tablaEsquema,
 ]);
 
+/** Una columna que devuelve la consulta: el nombre exacto del SELECT y su tipo. */
+const columnaEsquema = z
+  .object({
+    nombre: z.string().regex(/^[a-z_][a-z0-9_]{0,39}$/),
+    tipo: z.enum(TIPOS_COLUMNA),
+    etiqueta: z.string().min(1).max(40).optional(),
+  })
+  .strict();
+
+/**
+ * Un SELECT sobre el esquema `ia` (fuente "consulta"). Acá sólo se valida la
+ * forma; el SQL lo revisa el parser de las Edge Functions antes de ejecutarlo.
+ */
+const consultaEsquema = z
+  .object({
+    sql: z.string().min(1).max(4000),
+    columnas: z.array(columnaEsquema).min(1).max(30),
+  })
+  .strict();
+
 const lienzoBase = z
   .object({
-    fuente: z.enum(FUENTES),
+    fuente: z.enum([...FUENTES, "consulta"]),
+    consulta: consultaEsquema.optional(),
     titulo: titulo.optional(),
     disposicion: z.enum(DISPOSICIONES).optional(),
     /** Presentación de los valores; no cambia los datos. */
@@ -150,6 +172,13 @@ export type WidgetLinea = z.infer<typeof lineaEsquema>;
 export type WidgetTorta = z.infer<typeof tortaEsquema>;
 export type WidgetTabla = z.infer<typeof tablaEsquema>;
 export type Lienzo = z.infer<typeof lienzoBase>;
+export type Consulta = z.infer<typeof consultaEsquema>;
+
+/** De dónde salen los campos del lienzo: su fuente del catálogo o las columnas de su consulta. */
+export function origenDe(lienzo: Pick<Lienzo, "fuente" | "consulta">): Origen {
+  if (lienzo.fuente !== "consulta") return lienzo.fuente;
+  return { columnas: lienzo.consulta?.columnas ?? [] };
+}
 
 type Ruta = (string | number)[];
 
@@ -174,7 +203,7 @@ function problema(ctx: z.RefinementCtx, path: Ruta, message: string) {
   ctx.addIssue({ code: "custom", path, message });
 }
 
-function revisarFiltro(fuente: Fuente, filtro: Filtro, ruta: Ruta, ctx: z.RefinementCtx) {
+function revisarFiltro(fuente: Origen, filtro: Filtro, ruta: Ruta, ctx: z.RefinementCtx) {
   const def = definicionCampo(fuente, filtro.campo);
   if (!def) return problema(ctx, [...ruta, "campo"], `Campo "${filtro.campo}" fuera del catálogo`);
   if (!(def.operadores ?? OPERADORES_POR_TIPO[def.tipo]).includes(filtro.op)) {
@@ -191,14 +220,14 @@ function revisarFiltro(fuente: Fuente, filtro: Filtro, ruta: Ruta, ctx: z.Refine
 }
 
 /** Devuelve la definición del campo, o anota el problema si no existe. */
-function exigirCampo(fuente: Fuente, nombre: string, ruta: Ruta, ctx: z.RefinementCtx) {
+function exigirCampo(fuente: Origen, nombre: string, ruta: Ruta, ctx: z.RefinementCtx) {
   const def = definicionCampo(fuente, nombre);
   if (!def) problema(ctx, ruta, `Campo "${nombre}" fuera del catálogo`);
   return def;
 }
 
 function revisarMedida(
-  fuente: Fuente,
+  fuente: Origen,
   w: { medida: string; campo?: string },
   ruta: Ruta,
   ctx: z.RefinementCtx,
@@ -215,7 +244,7 @@ function revisarMedida(
 }
 
 /** Eje y serie de un gráfico de barras o de línea. */
-function revisarEjes(fuente: Fuente, w: WidgetBarras | WidgetLinea, ruta: Ruta, ctx: z.RefinementCtx) {
+function revisarEjes(fuente: Origen, w: WidgetBarras | WidgetLinea, ruta: Ruta, ctx: z.RefinementCtx) {
   const eje = exigirCampo(fuente, w.eje_x, [...ruta, "eje_x"], ctx);
   if (eje && w.tipo === "linea" && eje.tipo !== "fecha") {
     problema(ctx, [...ruta, "eje_x"], "Una línea necesita un eje de fecha");
@@ -233,13 +262,13 @@ function revisarEjes(fuente: Fuente, w: WidgetBarras | WidgetLinea, ruta: Ruta, 
   }
 }
 
-function revisarWidget(fuente: Fuente, w: Widget, i: number, ctx: z.RefinementCtx) {
+function revisarWidget(fuente: Origen, w: Widget, i: number, ctx: z.RefinementCtx) {
   const ruta = ["widgets", i];
   switch (w.tipo) {
     case "kpi":
       revisarMedida(fuente, w, ruta, ctx);
-      // Comparar y la tendencia necesitan un día por fila: hoy sólo los ingresos lo tienen.
-      if ((w.comparar || w.tendencia) && definicionCampo(fuente, "dia")?.tipo !== "fecha") {
+      // Comparar y la tendencia piden el período anterior por día: sólo la fuente de ingresos lo trae.
+      if ((w.comparar || w.tendencia) && fuente !== "ingresos") {
         problema(ctx, ruta, "Comparar y la tendencia sólo sirven con datos por día (ingresos)");
       }
       if ((w.comparar || w.tendencia) && (w.medida === "minimo" || w.medida === "maximo")) {
@@ -267,8 +296,16 @@ function revisarWidget(fuente: Fuente, w: Widget, i: number, ctx: z.RefinementCt
 }
 
 export const lienzoEsquema = lienzoBase.superRefine((lienzo, ctx) => {
-  lienzo.filtros.forEach((f, i) => revisarFiltro(lienzo.fuente, f, ["filtros", i], ctx));
-  lienzo.widgets.forEach((w, i) => revisarWidget(lienzo.fuente, w, i, ctx));
+  if (lienzo.fuente === "consulta") {
+    if (!lienzo.consulta) return problema(ctx, ["consulta"], 'La fuente "consulta" necesita su consulta');
+    const nombres = lienzo.consulta.columnas.map((c) => c.nombre);
+    if (new Set(nombres).size !== nombres.length) problema(ctx, ["consulta", "columnas"], "Columnas repetidas");
+  } else if (lienzo.consulta) {
+    problema(ctx, ["consulta"], 'Sólo la fuente "consulta" lleva consulta');
+  }
+  const origen = origenDe(lienzo);
+  lienzo.filtros.forEach((f, i) => revisarFiltro(origen, f, ["filtros", i], ctx));
+  lienzo.widgets.forEach((w, i) => revisarWidget(origen, w, i, ctx));
 });
 
 /**

@@ -4,7 +4,7 @@ import {
   definicionCampo,
   type AgrupacionFecha,
   type FormatoFecha,
-  type Fuente,
+  type Origen,
 } from "./catalogo";
 import type { WidgetBarras, WidgetKpi, WidgetLinea, WidgetTabla, WidgetTorta } from "./esquema";
 
@@ -190,7 +190,7 @@ function claveTexto(valor: Valor | undefined): string {
 }
 
 export function calcularSeries(
-  fuente: Fuente,
+  fuente: Origen,
   widget: WidgetBarras | WidgetLinea,
   filas: Fila[],
   nombreSerieUnica = "Cantidad",
@@ -289,7 +289,7 @@ function comparar(a: Valor | undefined, b: Valor | undefined, signo = 1): number
 }
 
 export function calcularTabla(
-  fuente: Fuente,
+  fuente: Origen,
   widget: WidgetTabla,
   filas: Fila[],
   formatoFecha: FormatoFecha = "dia_mes_anio",

@@ -48,6 +48,24 @@ export const CATALOGO = {
 
 export type Fuente = keyof typeof CATALOGO;
 export const FUENTES = Object.keys(CATALOGO) as [Fuente, ...Fuente[]];
+/** Fuente de un lienzo: una del catálogo, o "consulta" (un SELECT del asistente sobre el esquema `ia`). */
+export type FuenteLienzo = Fuente | "consulta";
+
+/** Tipos que puede declarar una columna de consulta (las enumeraciones son texto). */
+export const TIPOS_COLUMNA = ["texto", "numero", "fecha", "booleano"] as const;
+export type TipoColumna = (typeof TIPOS_COLUMNA)[number];
+
+export interface ColumnaConsulta {
+  nombre: string;
+  tipo: TipoColumna;
+  etiqueta?: string;
+}
+
+/**
+ * De dónde salen los campos de un lienzo: una fuente del catálogo, o las
+ * columnas que declara su consulta.
+ */
+export type Origen = Fuente | { readonly columnas: readonly ColumnaConsulta[] };
 
 /** Operadores que admite cada tipo de campo. */
 export const OPERADORES_POR_TIPO: Record<TipoCampo, readonly Operador[]> = {
@@ -82,7 +100,16 @@ export const MAXIMO_CATEGORIAS = 30;
 /** Tope de series (colores) en un gráfico: el resto se junta en "Otros". */
 export const MAXIMO_SERIES = 7;
 
-export function definicionCampo(fuente: Fuente, campo: string): DefinicionCampo | undefined {
-  const campos: Record<string, DefinicionCampo> = CATALOGO[fuente].campos;
+export function definicionCampo(origen: Origen, campo: string): DefinicionCampo | undefined {
+  if (typeof origen !== "string") {
+    const columna = origen.columnas.find((c) => c.nombre === campo);
+    return columna && { tipo: columna.tipo, etiqueta: columna.etiqueta ?? columna.nombre };
+  }
+  const campos: Record<string, DefinicionCampo> = CATALOGO[origen].campos;
   return Object.hasOwn(campos, campo) ? campos[campo] : undefined;
+}
+
+/** Etiqueta de la fuente de datos, para el subtítulo del lienzo. */
+export function etiquetaOrigen(origen: Origen): string {
+  return typeof origen === "string" ? CATALOGO[origen].etiqueta : "Consulta del asistente";
 }

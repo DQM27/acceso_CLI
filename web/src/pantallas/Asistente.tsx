@@ -6,7 +6,7 @@ import { listarUnidadesOperativas } from "../api/historial";
 import LienzoVista from "../lienzo/Lienzo";
 import ResumenDeHoy from "../lienzo/ResumenHoy";
 import { describirFiltro, sinFiltro } from "../lienzo/edicion";
-import { validarLienzo, type Lienzo } from "../lienzo/esquema";
+import { origenDe, validarLienzo, type Lienzo } from "../lienzo/esquema";
 import { VISTAS_PREDEFINIDAS } from "../lienzo/vistas";
 import { mensajeError } from "../mensajeError";
 import "./Asistente.css";
@@ -165,10 +165,10 @@ function VistaDocumento({
       <div className="asistente-filtros" aria-label="Filtros del lienzo">
         {lienzo.filtros.map((f, i) => (
           <span key={`${f.campo}-${i}`} className="asistente-filtro">
-            {describirFiltro(lienzo.fuente, f, lienzo.formato?.fecha)}
+            {describirFiltro(origenDe(lienzo), f, lienzo.formato?.fecha)}
             <button
               type="button"
-              aria-label={`Quitar filtro ${describirFiltro(lienzo.fuente, f, lienzo.formato?.fecha)}`}
+              aria-label={`Quitar filtro ${describirFiltro(origenDe(lienzo), f, lienzo.formato?.fecha)}`}
               onClick={() => onEditar(sinFiltro(lienzo, i))}
             >
               <X size={12} aria-hidden="true" />

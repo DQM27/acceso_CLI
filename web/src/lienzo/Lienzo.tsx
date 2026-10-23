@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { CATALOGO, definicionCampo, type AgrupacionFecha, type Ancho, type Fuente } from "./catalogo";
+import { definicionCampo, etiquetaOrigen, type AgrupacionFecha, type Ancho, type Origen } from "./catalogo";
 import {
   calcularKpi,
   calcularPorciones,
@@ -14,7 +14,7 @@ import {
 } from "./calculo";
 import { COLOR_UNICO, RegistroColores } from "./colores";
 import { conFiltro, filtroParaCategoria } from "./edicion";
-import type { Lienzo, Widget, WidgetBarras, WidgetKpi, WidgetLinea } from "./esquema";
+import { origenDe, type Lienzo, type Widget, type WidgetBarras, type WidgetKpi, type WidgetLinea } from "./esquema";
 import GraficoBarras from "./graficos/Barras";
 import { Leyenda, MarcoGrafico, type TablaDeDatos } from "./graficos/comun";
 import GraficoLinea from "./graficos/Linea";
@@ -41,15 +41,15 @@ const ANCHO_POR_OMISION: Record<Widget["tipo"], Ancho> = {
 
 const TEXTO_AGRUPACION: Record<AgrupacionFecha, string> = { dia: "por día", semana: "por semana", mes: "por mes" };
 
-function etiquetaCampo(fuente: Fuente, campo: string): string {
+function etiquetaCampo(fuente: Origen, campo: string): string {
   return definicionCampo(fuente, campo)?.etiqueta ?? campo;
 }
 
 /** "Contratistas", "Empresas (distintos)"… lo que mide un gráfico, dicho en palabras. */
-function textoMedida(fuente: Fuente, medida: string, campo?: string): string {
+function textoMedida(fuente: Origen, medida: string, campo?: string): string {
   return medida === "contar_distintos" && campo
     ? `${etiquetaCampo(fuente, campo)} (distintos)`
-    : CATALOGO[fuente].etiqueta;
+    : etiquetaOrigen(fuente);
 }
 
 /** Colores estables por entidad, uno por cada campo (empresa, sitio…). */
@@ -87,9 +87,9 @@ function profundizar(ctx: Contexto, campo: string, agrupacion: AgrupacionFecha |
   const { lienzo, onEditar } = ctx;
   if (!onEditar) return undefined;
   return {
-    puede: (clave) => filtroParaCategoria(lienzo.fuente, campo, crudo(clave), agrupacion) !== null,
+    puede: (clave) => filtroParaCategoria(origenDe(lienzo), campo, crudo(clave), agrupacion) !== null,
     alSeleccionar: (clave) => {
-      const filtro = filtroParaCategoria(lienzo.fuente, campo, crudo(clave), agrupacion);
+      const filtro = filtroParaCategoria(origenDe(lienzo), campo, crudo(clave), agrupacion);
       if (filtro) onEditar(conFiltro(lienzo, filtro));
     },
   };
@@ -97,16 +97,16 @@ function profundizar(ctx: Contexto, campo: string, agrupacion: AgrupacionFecha |
 
 function GraficoDeSeries({ ctx, widget }: { ctx: Contexto; widget: WidgetBarras | WidgetLinea }) {
   const { lienzo, filas, enfoque } = ctx;
-  const medida = textoMedida(lienzo.fuente, widget.medida, widget.campo);
-  const datos = calcularSeries(lienzo.fuente, widget, filas, medida);
-  const eje = etiquetaCampo(lienzo.fuente, widget.eje_x);
+  const medida = textoMedida(origenDe(lienzo), widget.medida, widget.campo);
+  const datos = calcularSeries(origenDe(lienzo), widget, filas, medida);
+  const eje = etiquetaCampo(origenDe(lienzo), widget.eje_x);
   const etiquetar = (c: string) => (datos.agrupacion ? etiquetaFecha(c, datos.agrupacion, lienzo.formato?.fecha) : c);
   const unica = !widget.serie;
   const paleta = unica ? [COLOR_UNICO] : ctx.colores(widget.serie ?? "", datos.series.map((s) => s.nombre));
   const titulo = widget.titulo ?? `${medida} por ${eje.toLowerCase()}`;
   const subtitulo = [
     datos.agrupacion ? TEXTO_AGRUPACION[datos.agrupacion] : null,
-    widget.serie ? `por ${etiquetaCampo(lienzo.fuente, widget.serie).toLowerCase()}` : null,
+    widget.serie ? `por ${etiquetaCampo(origenDe(lienzo), widget.serie).toLowerCase()}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -140,7 +140,7 @@ function GraficoDeSeries({ ctx, widget }: { ctx: Contexto; widget: WidgetBarras 
 function Kpi({ ctx, widget }: { ctx: Contexto; widget: WidgetKpi }) {
   const { lienzo, filas, anteriores, rango } = ctx;
   const valor = calcularKpi(widget, filas);
-  const esFecha = widget.campo && definicionCampo(lienzo.fuente, widget.campo)?.tipo === "fecha";
+  const esFecha = widget.campo && definicionCampo(origenDe(lienzo), widget.campo)?.tipo === "fecha";
   const dias = rango ? diasEntre(rango.desde, rango.hasta) + 1 : 0;
   const anterior = widget.comparar && anteriores ? calcularKpi(widget, anteriores) : null;
   return (
@@ -167,12 +167,12 @@ function WidgetLienzo({ ctx, widget }: { ctx: Contexto; widget: Widget }): React
     case "torta": {
       const calculadas = calcularPorciones(widget, filas);
       // Una categoría de fecha se muestra en el formato del lienzo; el filtro usa la fecha real.
-      const esFecha = definicionCampo(lienzo.fuente, widget.categoria)?.tipo === "fecha";
+      const esFecha = definicionCampo(origenDe(lienzo), widget.categoria)?.tipo === "fecha";
       const mostrar = (nombre: string) => (esFecha ? formatearFecha(nombre, lienzo.formato?.fecha) : nombre);
       const crudo = new Map(calculadas.porciones.map((p) => [mostrar(p.nombre), p.nombre]));
       const porciones = calculadas.porciones.map((p) => ({ ...p, nombre: mostrar(p.nombre) }));
-      const categoria = etiquetaCampo(lienzo.fuente, widget.categoria);
-      const medida = textoMedida(lienzo.fuente, widget.medida, widget.campo);
+      const categoria = etiquetaCampo(origenDe(lienzo), widget.categoria);
+      const medida = textoMedida(origenDe(lienzo), widget.medida, widget.campo);
       const titulo = widget.titulo ?? `${medida} por ${categoria.toLowerCase()}`;
       const paleta = ctx.colores(widget.categoria, porciones.map((p) => p.nombre));
       const suma = porciones.reduce((s, p) => s + p.valor, 0) || 1;
@@ -204,7 +204,7 @@ function WidgetLienzo({ ctx, widget }: { ctx: Contexto; widget: Widget }): React
               <h3>{widget.titulo}</h3>
             </header>
           )}
-          <TablaLienzo tabla={calcularTabla(lienzo.fuente, widget, filas, lienzo.formato?.fecha)} />
+          <TablaLienzo tabla={calcularTabla(origenDe(lienzo), widget, filas, lienzo.formato?.fecha)} />
         </section>
       );
   }

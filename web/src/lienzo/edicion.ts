@@ -1,4 +1,4 @@
-import { OPERADORES_POR_TIPO, definicionCampo, type AgrupacionFecha, type Fuente } from "./catalogo";
+import { OPERADORES_POR_TIPO, definicionCampo, type AgrupacionFecha, type Origen } from "./catalogo";
 import { OTROS, SIN_DATO, formatearFecha, sumarDias } from "./calculo";
 import type { Filtro, Lienzo } from "./esquema";
 
@@ -20,7 +20,7 @@ function ultimoDiaDelMes(mes: string): string {
  * función SQL no acepta "igual" (como el nombre, que sólo busca por texto).
  */
 export function filtroParaCategoria(
-  fuente: Fuente,
+  fuente: Origen,
   campo: string,
   clave: string,
   agrupacion: AgrupacionFecha | null = null,
@@ -55,7 +55,7 @@ export function sinFiltro(lienzo: Lienzo, indice: number): Lienzo {
 }
 
 /** "Empresa: ACME", "Estado PRAIND: sin VIGENTE", "Día: 01/10/2026 a 31/10/2026"… para los chips. */
-export function describirFiltro(fuente: Fuente, filtro: Filtro, formato?: Parameters<typeof formatearFecha>[1]): string {
+export function describirFiltro(fuente: Origen, filtro: Filtro, formato?: Parameters<typeof formatearFecha>[1]): string {
   const def = definicionCampo(fuente, filtro.campo);
   const texto = (v: unknown) =>
     def?.tipo === "fecha" && typeof v === "string"
