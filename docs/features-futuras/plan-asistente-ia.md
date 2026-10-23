@@ -399,12 +399,16 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
 ## Pendiente
 
 - Manual: móvil y panel web.
-- Dueño: revisar los **⚠ Por confirmar** del manual del escritorio (quién
-  da el código de vinculación, cómo se avisa a otro sitio, cómo se corrige
-  un gafete en conflicto o la hora de un equipo, si la Auditoría debe
-  mostrar los cambios del otro equipo); decir si el operador puede
-  activar/desactivar empresas; regla del gafete KOF con préstamo sin
-  devolver.
+- Respuestas del dueño (2026-10-23), ya en el manual: el código de
+  vinculación lo da sólo un administrador en el panel; al otro sitio se
+  avisa por el medio acordado (p. ej., WhatsApp); la hora se corrige sola
+  (hora neutra del servidor). Quedan por hacer, más adelante: resolver
+  conflictos desde la pantalla (en construcción), revincular un equipo
+  retirado (por definir) y una tabla de auditoría en Supabase que reúna
+  los cambios de todos los equipos.
+- Dueño: decir si el operador puede activar/desactivar empresas; regla
+  del gafete KOF con préstamo sin devolver; si el sitio pide anotar algo
+  al encontrar un ingreso viejo sin salida o un aviso de permanencia.
 - Registros de prueba en producción: hay 8 ingresos de contratistas casi
   seguro de prueba (menos de 2 minutos, registrados por Daniel Quintana o
   Pedro Molina, varios de madrugada) y 4 dudosos. El dueño lo dejó para

@@ -38,8 +38,8 @@ repite en cada sincronización **hasta que se resuelva**.
    con **Ctrl+S**.
 5. Cuando uno de los dos ingresos se cierre, el aviso deja de aparecer.
 
-**⚠ Por confirmar**: cómo se contacta al otro sitio en la práctica
-(teléfono, radio, administrador).
+Para avisar al otro sitio use el medio que tengan acordado (por ejemplo,
+**WhatsApp**); si no tiene cómo contactarlo, avise a un administrador.
 
 ## Mensajes que pueden aparecer
 
@@ -64,10 +64,12 @@ de este sitio ya lo tiene asignado." Existe la misma forma para
 proveedores, visitas por correo, visitas agendadas y gafetes provisionales
 KOF.
 
-**Qué hacer**: revise con el otro equipo quién tiene realmente ese gafete.
+**Qué hacer**: revise con el otro equipo quién tiene realmente ese gafete
+y avise a un administrador.
 
-**⚠ Por confirmar**: el procedimiento para corregirlo (registrar la salida
-aquí y volver a dar el ingreso con otro gafete, o al revés).
+El manejo de estos conflictos **todavía está en construcción**: por ahora
+el aviso sólo informa, y el programa no ofrece una forma de corregirlo.
+Este apartado se completa cuando esté listo.
 
 ## Relacionado
 

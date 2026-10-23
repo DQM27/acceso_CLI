@@ -117,13 +117,18 @@ Cuando se corrija una, se actualiza su proceso.
    Un Ctrl+Q por error saca a la persona en pleno registro.
 8. **Equipo retirado**: el aviso dice "registrarlo como dispositivo nuevo",
    pero la pantalla **Vincular este equipo** sólo aparece en un equipo sin
-   datos. Falta un camino claro para volver a vincular un equipo usado.
+   datos. Falta un camino claro para volver a vincular un equipo usado
+   (por definir, dueño 2026-10-23).
 9. **Mensajes**: varios textos mezclan "usted" con voseo ("pedí",
    "intentá", "Revisá") y otros usan "tú" ("Ya tienes la última versión").
    Unificar en "usted", como el resto de la app. El de archivo no guardado
    ("No se pudo guardar el archivo…") trae espacios de más en el código.
 10. **Auditoría**: muestra sólo los cambios hechos desde este equipo; no
-    los del otro equipo del sitio ni los del panel.
+    los del otro equipo del sitio ni los del panel. Para reunirlos hace
+    falta una tabla en Supabase (para después, dueño 2026-10-23).
+11. **Conflictos** (ingreso acá y en otro sitio, gafete en conflicto): hoy
+    sólo avisan, sin forma de resolverlos desde la pantalla. En
+    construcción.
 
 ## Índice — Móvil y panel web
 

@@ -9,10 +9,8 @@ usuarios del sitio, y con eso ya se puede iniciar sesión.
 ## Quién puede hacerlo
 
 Cualquier persona frente al equipo, pero necesita un **código de
-vinculación** que genera un administrador en el panel web para este equipo.
-
-**⚠ Por confirmar**: quién genera el código en la práctica y a quién se le
-pide.
+vinculación**. El código **sólo lo genera un administrador, en el panel
+web**: pídaselo a él. Desde el escritorio no se puede sacar.
 
 ## Dónde
 
@@ -43,7 +41,7 @@ Tenga en cuenta:
 
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
-| "El código no es válido o ya venció -- pedí uno nuevo en el panel" | El código está mal escrito, ya se usó o pasaron demasiados minutos. | Revise el código. Si está bien, pida uno nuevo al administrador. |
+| "El código no es válido o ya venció -- pedí uno nuevo en el panel" | El código está mal escrito, ya se usó o pasaron demasiados minutos. | Revise el código. Si está bien, pida uno nuevo al administrador (lo genera en el panel). |
 | "No se pudo conectar con la nube, intentá de nuevo" | El equipo no tiene internet o el servidor no respondió. | Revise la conexión y vuelva a pulsar **Vincular y sincronizar**. Si el código venció mientras tanto, pida otro. |
 | "La clave de este equipo ya está vinculada a otro dispositivo -- pedí ayuda a un administrador" | El panel ya tiene registrado este equipo como otro dispositivo. | Avise a un administrador. |
 | "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando" | El programa instalado es demasiado viejo. | Instale la versión nueva (pida el instalador a un administrador) y vuelva a intentar. |
