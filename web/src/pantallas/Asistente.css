@@ -350,7 +350,9 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: calc(0.375rem * 2 + 1px) var(--espacio-4) var(--espacio-4);
+  /* Abajo y a la derecha, el mismo margen que el menú lateral (0.375rem): el lienzo
+     termina a la misma altura que él, sin un corte desparejo. */
+  padding: calc(0.375rem * 2 + 1px) 0.375rem 0.375rem var(--espacio-4);
   gap: var(--espacio-4);
 }
 .asistente-barra {
