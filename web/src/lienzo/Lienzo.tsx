@@ -4,7 +4,6 @@ import {
   calcularKpi,
   calcularPorciones,
   calcularSeries,
-  calcularTabla,
   calcularTendencia,
   diasEntre,
   esDiasParaVencer,
@@ -25,7 +24,8 @@ import GraficoLinea from "./graficos/Linea";
 import GraficoTorta from "./graficos/Torta";
 import PanelLibre from "./PanelLibre";
 import type { Seleccion } from "./graficos/utiles";
-import { TablaLienzo, TarjetaKpi } from "./widgets";
+import TablaRica from "./TablaRica";
+import { TarjetaKpi } from "./widgets";
 
 /**
  * Renderizador del lienzo: dibuja un documento ya validado (`validarLienzo`)
@@ -244,7 +244,7 @@ function WidgetLienzo({ ctx, widget }: { ctx: Contexto; widget: Widget }): React
               <h3>{widget.titulo}</h3>
             </header>
           )}
-          <TablaLienzo tabla={calcularTabla(origenDe(lienzo), widget, filas, lienzo.formato?.fecha)} />
+          <TablaRica origen={origenDe(lienzo)} widget={widget} filas={filas} formatoFecha={lienzo.formato?.fecha} />
         </section>
       );
     case "libre":

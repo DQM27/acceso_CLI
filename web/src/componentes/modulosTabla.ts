@@ -15,6 +15,7 @@ import {
   QuickFilterModule,
   RowApiModule,
   RowSelectionModule,
+  RowStyleModule,
   TextFilterModule,
   TooltipModule,
 } from "ag-grid-community";
@@ -26,6 +27,7 @@ import {
 // servidor (Historial): la grilla pide cada página con su filtro y su orden.
 // `HighlightChangesModule` es el destello de las celdas que cambian
 // (`enableCellChangeFlash` en Tabla.tsx, tablas que se refrescan en vivo).
+// `RowStyleModule` es `getRowClass` (filas de grupo en la tabla del lienzo).
 ModuleRegistry.registerModules([
   CellStyleModule,
   ClientSideRowModelApiModule,
@@ -42,6 +44,7 @@ ModuleRegistry.registerModules([
   QuickFilterModule,
   RowApiModule,
   RowSelectionModule,
+  RowStyleModule,
   TextFilterModule,
   TooltipModule,
 ]);

@@ -6,7 +6,7 @@ import {
   type FormatoFecha,
   type Origen,
 } from "./catalogo";
-import type { WidgetBarras, WidgetKpi, WidgetLinea, WidgetTabla, WidgetTorta } from "./esquema";
+import type { WidgetBarras, WidgetKpi, WidgetLinea, WidgetTorta } from "./esquema";
 
 /**
  * Cálculo de los widgets sobre las filas que devolvió la función SQL. Puro y
@@ -17,7 +17,6 @@ export type Fila = Record<string, Valor>;
 
 export const SIN_DATO = "(sin dato)";
 export const OTROS = "Otros";
-const LIMITE_TABLA = 200;
 const PORCIONES_POR_OMISION = 6;
 /** Más puntos que esto no se rellenan día por día (un eje de varios años). */
 const MAXIMO_RELLENO = 400;
@@ -304,66 +303,4 @@ export function calcularPorciones(widget: WidgetTorta, filas: Fila[]): { porcion
   }
   // Con "contar distintos" las porciones pueden compartir valores: el total es el de todas las filas.
   return { porciones, total: Number(medir(widget.medida, widget.campo, filas)) };
-}
-
-// --- Tabla ------------------------------------------------------------------
-
-export interface TablaCalculada {
-  columnas: { id: string; etiqueta: string }[];
-  filas: Fila[];
-  /** Filas que hubo antes de recortar por el límite. */
-  total: number;
-}
-
-/** Compara dos valores; con `signo` -1 invierte el orden pero los vacíos siguen al final. */
-function comparar(a: Valor | undefined, b: Valor | undefined, signo = 1): number {
-  if (a == null && b == null) return 0;
-  if (a == null) return 1;
-  if (b == null) return -1;
-  return signo * (a < b ? -1 : a > b ? 1 : 0);
-}
-
-export function calcularTabla(
-  fuente: Origen,
-  widget: WidgetTabla,
-  filas: Fila[],
-  formatoFecha: FormatoFecha = "dia_mes_anio",
-): TablaCalculada {
-  const etiqueta = (id: string) => (id === "cantidad" ? "Cantidad" : (definicionCampo(fuente, id)?.etiqueta ?? id));
-  let columnas = widget.columnas;
-  let resultado = filas;
-
-  if (widget.agrupar_por) {
-    const campo = widget.agrupar_por;
-    const cuentas = new Map<Valor, number>();
-    for (const fila of filas) cuentas.set(fila[campo], (cuentas.get(fila[campo]) ?? 0) + 1);
-    resultado = [...cuentas].map(([valor, cantidad]) => ({ [campo]: valor, cantidad }));
-    columnas = [campo, "cantidad"];
-    // Agrupada y sin orden pedido: los grupos más grandes primero.
-    resultado.sort((a, b) => Number(b.cantidad) - Number(a.cantidad) || comparar(a[campo], b[campo]));
-  }
-
-  if (widget.orden) {
-    const { campo, dir } = widget.orden;
-    const signo = dir === "asc" ? 1 : -1;
-    // `sort` es estable: los empates conservan el orden anterior.
-    resultado = [...resultado].sort((a, b) => comparar(a[campo], b[campo], signo));
-  }
-
-  // Fechas y días para vencer se escriben recién al final: ordenar va sobre el valor real (ISO, número).
-  const deFecha = columnas.filter((id) => definicionCampo(fuente, id)?.tipo === "fecha");
-  const deDias = columnas.filter(esDiasParaVencer);
-  const limite = widget.limite ?? LIMITE_TABLA;
-  const visibles = resultado.slice(0, limite).map((fila) => {
-    if (deFecha.length === 0 && deDias.length === 0) return fila;
-    const copia = { ...fila };
-    for (const id of deFecha) if (typeof copia[id] === "string") copia[id] = formatearFecha(copia[id], formatoFecha);
-    for (const id of deDias) if (typeof copia[id] === "number") copia[id] = textoDiasParaVencer(copia[id]);
-    return copia;
-  });
-  return {
-    columnas: columnas.map((id) => ({ id, etiqueta: etiqueta(id) })),
-    filas: visibles,
-    total: resultado.length,
-  };
 }

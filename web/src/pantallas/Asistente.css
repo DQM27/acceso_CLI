@@ -764,6 +764,137 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Tabla del lienzo (AG Grid) ------------------------------------------------ */
+.lienzo-tabla-rica {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+}
+.lienzo-tabla-buscar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(100%, 280px);
+  padding: 4px 10px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+  color: var(--muted);
+}
+.lienzo-tabla-buscar:focus-within {
+  border-color: var(--acento);
+}
+.lienzo-tabla-buscar input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--texto);
+  font: inherit;
+  font-size: 0.85rem;
+}
+/* La grilla dibuja todas sus filas (para imprimirla completa): en pantalla, la caja se desplaza. */
+.lienzo-tabla-grilla {
+  max-height: 460px;
+  overflow: auto;
+  border-radius: var(--radio);
+}
+.lienzo-enfoque .lienzo-tabla-grilla {
+  max-height: 70vh;
+}
+.lienzo-tabla-grilla .ag-cell {
+  display: flex;
+  align-items: center;
+}
+.lienzo-fila-grupo {
+  font-weight: 600;
+}
+.lienzo-fila-mas .ag-cell {
+  color: var(--muted);
+}
+.lienzo-nota-celda {
+  font-size: 0.8rem;
+  font-style: italic;
+  white-space: nowrap;
+}
+.lienzo-grupo-boton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lienzo-grupo-boton:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.lienzo-grupo-flecha {
+  flex: none;
+  color: var(--muted);
+  transition: transform var(--duracion);
+}
+.lienzo-grupo-boton[aria-expanded="true"] .lienzo-grupo-flecha {
+  transform: rotate(90deg);
+}
+/* Estado con ícono y texto (nunca sólo el color). */
+.lienzo-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
+  background: var(--campo-fondo);
+  color: var(--muted);
+}
+.lienzo-estado-exito {
+  background: color-mix(in srgb, var(--exito) 14%, transparent);
+  color: var(--exito);
+}
+.lienzo-estado-advertencia {
+  background: color-mix(in srgb, var(--advertencia) 16%, transparent);
+  color: var(--advertencia);
+}
+.lienzo-estado-error {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error);
+}
+/* Número con su barra: la barra al fondo, el número a la derecha. */
+.lienzo-celda-barra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.lienzo-celda-barra-fondo {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--panel-suave);
+  overflow: hidden;
+}
+.lienzo-celda-barra-fondo span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--acento);
+}
+.lienzo-celda-barra .lienzo-numero {
+  min-width: 3ch;
+}
+
 /* --- Gráficos ------------------------------------------------------------------ */
 .lienzo-grafico {
   position: relative;
@@ -1140,8 +1271,13 @@
   .asistente-guardar,
   .asistente-sql,
   .lienzo-alternar,
-  .lienzo-tooltip {
+  .lienzo-tooltip,
+  .lienzo-tabla-buscar {
     display: none !important;
+  }
+  .lienzo-tabla-grilla {
+    max-height: none !important;
+    overflow: visible !important;
   }
   .lienzo-panel,
   .lienzo-bloque {

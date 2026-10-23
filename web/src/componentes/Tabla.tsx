@@ -2,7 +2,7 @@ import "./modulosTabla";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { themeQuartz } from "ag-grid-community";
+import { temaBrisas } from "./temaTabla";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
 import { Columns3, Funnel, RotateCcw, UnfoldHorizontal } from "lucide-react";
 import type {
@@ -36,20 +36,8 @@ import { useDebounced } from "./useDebounced";
  * Deliberadamente NO expone cualquier prop de AgGridReact. Mostrar/ocultar
  * columnas es capacidad permanente (no un flag opcional). Selección múltiple
  * sí es opt-in (`seleccionMultiple`), porque no toda pantalla la necesita.
+ * El tema vive en `temaTabla.ts` (lo comparte la tabla del lienzo).
  */
-const temaBrisas = themeQuartz.withParams({
-  backgroundColor: "var(--panel)",
-  foregroundColor: "var(--texto)",
-  headerBackgroundColor: "var(--panel-suave)",
-  headerTextColor: "var(--muted)",
-  borderColor: "var(--borde)",
-  fontFamily: "var(--fuente)",
-  accentColor: "var(--acento)",
-  selectedRowBackgroundColor: "var(--acento-suave)",
-  oddRowBackgroundColor: "var(--campo-fondo)",
-  borderRadius: "var(--radio-chico)",
-  wrapperBorderRadius: "var(--radio)",
-});
 
 /** Sin tildes y en mayúsculas -- mismo criterio de "sin tildes/mayúsculas no
  * importa" que el buscador del núcleo. El `quickFilterText` propio de AG Grid

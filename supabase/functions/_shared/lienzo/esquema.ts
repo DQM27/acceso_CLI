@@ -116,9 +116,14 @@ const tablaEsquema = z
     tipo: z.literal("tabla"),
     titulo: titulo.optional(),
     columnas: z.array(campo).min(1).max(12),
+    /** Agrupada: una fila por grupo con su cantidad, que se abre para ver sus filas (con `columnas`). */
     agrupar_por: campo.optional(),
     orden: ordenEsquema.optional(),
     limite: z.number().int().min(1).max(500).optional(),
+    /** Columnas de número que llevan una barra dentro de la celda (en una agrupada, "cantidad" ya la lleva). */
+    barras: z.array(campo).min(1).max(4).optional(),
+    /** Agrupada: mini línea por grupo, cuántas filas hubo día por día según este campo de fecha. */
+    tendencia: campo.optional(),
     ...panel,
   })
   .strict();
@@ -310,6 +315,19 @@ function revisarWidget(fuente: Origen, w: Widget, i: number, ctx: z.RefinementCt
       // Agrupada, la tabla sólo ordena por el campo de grupo o por la cantidad.
       if (w.orden && !(w.agrupar_por && w.orden.campo === "cantidad")) {
         exigirCampo(fuente, w.orden.campo, [...ruta, "orden", "campo"], ctx);
+      }
+      w.barras?.forEach((b, j) => {
+        const r = [...ruta, "barras", j];
+        if (w.agrupar_por && b === "cantidad") return;
+        const def = exigirCampo(fuente, b, r, ctx);
+        if (def && def.tipo !== "numero") problema(ctx, r, `"${b}" no es un número: no lleva barra`);
+        else if (def && !w.columnas.includes(b)) problema(ctx, r, `"${b}" tiene que estar en las columnas`);
+      });
+      if (w.tendencia) {
+        const r = [...ruta, "tendencia"];
+        const def = exigirCampo(fuente, w.tendencia, r, ctx);
+        if (!w.agrupar_por) problema(ctx, r, "La tendencia por fila sólo va en una tabla agrupada");
+        else if (def && def.tipo !== "fecha") problema(ctx, r, "La tendencia necesita un campo de fecha");
       }
       break;
   }

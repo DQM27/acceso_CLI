@@ -1,5 +1,4 @@
 import { CircleAlert, CircleCheck, Minus, TrendingDown, TrendingUp, TriangleAlert } from "lucide-react";
-import { textoValor, type TablaCalculada } from "./calculo";
 import { textoComparacion, type Comparacion } from "./comparacion";
 import { formatoNumero, useNumeroAnimado } from "./graficos/utiles";
 
@@ -13,11 +12,19 @@ function ValorAnimado({ valor }: { valor: number }) {
   return <>{formatoNumero(Math.round(actual))}</>;
 }
 
-/** Mini línea de tendencia: el recorrido en gris, el último valor resaltado. */
-function Tendencia({ valores, titulo }: { valores: number[]; titulo: string }) {
+/** Mini línea de tendencia: el recorrido en gris, el último valor resaltado (tarjetas KPI y filas de tabla). */
+export function Tendencia({
+  valores,
+  titulo,
+  ancho = 120,
+  alto = 30,
+}: {
+  valores: number[];
+  titulo: string;
+  ancho?: number;
+  alto?: number;
+}) {
   if (valores.length < 2) return null;
-  const ancho = 120;
-  const alto = 30;
   const maximo = Math.max(...valores, 1);
   const x = (i: number) => 2 + ((ancho - 4) * i) / (valores.length - 1);
   const y = (v: number) => alto - 3 - (v / maximo) * (alto - 6);
@@ -69,41 +76,6 @@ export function TarjetaKpi({
         </small>
       )}
       {detalle && <small>{detalle}</small>}
-    </div>
-  );
-}
-
-export function TablaLienzo({ tabla }: { tabla: TablaCalculada }) {
-  if (tabla.total === 0) return <p className="lienzo-vacio">Sin datos para mostrar.</p>;
-  return (
-    <div className="lienzo-tabla-caja">
-      <table className="lienzo-tabla">
-        <thead>
-          <tr>
-            {tabla.columnas.map((c) => (
-              <th key={c.id} scope="col">
-                {c.etiqueta}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {tabla.filas.map((fila, i) => (
-            <tr key={i}>
-              {tabla.columnas.map((c) => (
-                <td key={c.id} className={typeof fila[c.id] === "number" ? "lienzo-numero" : undefined}>
-                  {textoValor(fila[c.id])}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {tabla.total > tabla.filas.length && (
-        <p className="lienzo-nota">
-          Se muestran {tabla.filas.length.toLocaleString("es-CR")} de {tabla.total.toLocaleString("es-CR")} filas.
-        </p>
-      )}
     </div>
   );
 }

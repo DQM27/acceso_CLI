@@ -6,7 +6,6 @@ import {
   calcularKpi,
   calcularPorciones,
   calcularSeries,
-  calcularTabla,
   etiquetaFecha,
   formatearFecha,
   grupoFecha,
@@ -157,38 +156,6 @@ describe("fechas", () => {
   });
 });
 
-describe("calcularTabla", () => {
-  it("elige columnas, ordena (vacíos al final) y pone etiquetas del catálogo", () => {
-    const t = calcularTabla(
-      "contratistas",
-      { tipo: "tabla", columnas: ["nombre", "dias_para_vencer"], orden: { campo: "dias_para_vencer", dir: "asc" } },
-      filas,
-    );
-    expect(t.columnas).toEqual([
-      { id: "nombre", etiqueta: "Nombre" },
-      { id: "dias_para_vencer", etiqueta: "Días para vencer" },
-    ]);
-    // Ordenado por el número (3, 18, 30, vacío), escrito en palabras.
-    expect(t.filas.map((f) => f.dias_para_vencer)).toEqual(["Faltan 3 días", "Faltan 18 días", "Faltan 30 días", null]);
-  });
-
-  it("los días para vencer negativos se muestran como vencidos, nunca con signo menos", () => {
-    const vencidos = [
-      { nombre: "A", dias_para_vencer: -40 },
-      { nombre: "B", dias_para_vencer: -1 },
-      { nombre: "C", dias_para_vencer: 0 },
-      { nombre: "D", dias_para_vencer: 1 },
-    ];
-    const t = calcularTabla(
-      "contratistas",
-      { tipo: "tabla", columnas: ["nombre", "dias_para_vencer"], orden: { campo: "dias_para_vencer", dir: "asc" } },
-      vencidos,
-    );
-    expect(t.filas.map((f) => f.dias_para_vencer)).toEqual(["Vencido hace 40 días", "Vencido hace 1 día", "Vence hoy", "Falta 1 día"]);
-    expect(t.filas.some((f) => String(f.dias_para_vencer).includes("-"))).toBe(false);
-  });
-});
-
 describe("días para vencer en palabras", () => {
   it("un valor", () => {
     expect(textoDiasParaVencer(-40)).toBe("Vencido hace 40 días");
@@ -208,46 +175,6 @@ describe("días para vencer en palabras", () => {
     }
   });
 
-  it("orden descendente deja los vacíos igualmente al final", () => {
-    const t = calcularTabla(
-      "contratistas",
-      { tipo: "tabla", columnas: ["nombre"], orden: { campo: "dias_para_vencer", dir: "desc" } },
-      filas,
-    );
-    expect(t.filas.map((f) => f.dias_para_vencer)).toEqual([30, 18, 3, null]);
-  });
-
-  it("ordena por la fecha real y después la escribe en el formato pedido", () => {
-    const t = calcularTabla(
-      "contratistas",
-      { tipo: "tabla", columnas: ["vencimiento"], orden: { campo: "vencimiento", dir: "desc" } },
-      filas,
-      "dia_mes_anio",
-    );
-    expect(t.filas.map((f) => f.vencimiento)).toEqual(["01/11/2026", "20/10/2026", "05/10/2026", null]);
-  });
-
-  it("agrupada: una fila por grupo con su cantidad, los grupos grandes primero", () => {
-    const t = calcularTabla("contratistas", { tipo: "tabla", columnas: ["empresa"], agrupar_por: "empresa" }, filas);
-    expect(t.columnas.map((c) => c.etiqueta)).toEqual(["Empresa", "Cantidad"]);
-    expect(t.filas[0]).toEqual({ empresa: "A", cantidad: 2 });
-    expect(t.total).toBe(3);
-  });
-
-  it("agrupada y ordenada por 'cantidad' ascendente", () => {
-    const t = calcularTabla(
-      "contratistas",
-      { tipo: "tabla", columnas: ["empresa"], agrupar_por: "empresa", orden: { campo: "cantidad", dir: "asc" } },
-      filas,
-    );
-    expect(t.filas.at(-1)).toEqual({ empresa: "A", cantidad: 2 });
-  });
-
-  it("recorta por el límite y avisa cuántas había", () => {
-    const t = calcularTabla("contratistas", { tipo: "tabla", columnas: ["nombre"], limite: 2 }, filas);
-    expect(t.filas).toHaveLength(2);
-    expect(t.total).toBe(4);
-  });
 });
 
 describe("textoValor", () => {

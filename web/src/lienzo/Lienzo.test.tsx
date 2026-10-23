@@ -134,7 +134,7 @@ describe("LienzoVista", () => {
     expect(screen.getByText("Sin datos para mostrar.")).toBeTruthy();
   });
 
-  it("el texto de los datos se muestra como texto, nunca como HTML", () => {
+  it("el texto de los datos se muestra como texto, nunca como HTML", async () => {
     const peligrosa: Fila[] = [{ nombre: "<img src=x onerror=alert(1)>", empresa: "<b>X</b>" }];
     const { container } = render(
       <LienzoVista
@@ -145,9 +145,10 @@ describe("LienzoVista", () => {
         filas={peligrosa}
       />,
     );
+    // La grilla de la tabla dibuja sus filas un momento después.
+    expect(await screen.findByText("<img src=x onerror=alert(1)>")).toBeTruthy();
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector("b")).toBeNull();
-    expect(screen.getByText("<img src=x onerror=alert(1)>")).toBeTruthy();
   });
 
   it("todas las vistas de ejemplo se dibujan con datos", () => {

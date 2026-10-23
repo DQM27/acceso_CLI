@@ -108,6 +108,25 @@ describe("validarLienzo", () => {
     expect(orden("cantidad", false)).toBe(false);
   });
 
+  it("tabla: barras sólo en columnas de número que estén en la tabla (o la cantidad de una agrupada)", () => {
+    const tabla = (resto: Record<string, unknown>) =>
+      validarLienzo({ fuente: "contratistas", filtros: [], widgets: [{ tipo: "tabla", columnas: ["nombre", "dias_para_vencer"], ...resto }] }).ok;
+    expect(tabla({ barras: ["dias_para_vencer"] })).toBe(true);
+    expect(tabla({ barras: ["nombre"] })).toBe(false);
+    expect(tabla({ barras: ["acceso_activo"] })).toBe(false);
+    expect(tabla({ barras: ["cantidad"] })).toBe(false);
+    expect(tabla({ barras: ["cantidad"], agrupar_por: "empresa" })).toBe(true);
+    expect(tabla({ barras: [] })).toBe(false);
+  });
+
+  it("tabla: la tendencia por fila va en una agrupada y con un campo de fecha", () => {
+    const tabla = (resto: Record<string, unknown>) =>
+      validarLienzo({ fuente: "ingresos", filtros: [], widgets: [{ tipo: "tabla", columnas: ["empresa"], ...resto }] }).ok;
+    expect(tabla({ agrupar_por: "empresa", tendencia: "dia" })).toBe(true);
+    expect(tabla({ tendencia: "dia" })).toBe(false);
+    expect(tabla({ agrupar_por: "empresa", tendencia: "sitio" })).toBe(false);
+  });
+
   it("limita el tamaño: sin widgets o con demasiados filas no pasa", () => {
     expect(conCambio((d) => (d.widgets = [])).ok).toBe(false);
     expect(conCambio((d) => (d.widgets[2].limite = 501)).ok).toBe(false);
