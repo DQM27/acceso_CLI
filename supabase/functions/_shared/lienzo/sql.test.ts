@@ -26,6 +26,9 @@ Deno.test("acepta consultas de lectura sobre ia con lo que hace falta para anali
     "and i.hora_entrada > now() - interval '60 days' where i.id is null and c.estado_praind = 'POR_VENCER'",
     "select extract(dow from hora_entrada) as dia_semana, count(*) as n from ia.ingresos group by 1",
     "select nombre from ia.contratistas union all select nombre from ia.ingresos_proveedor",
+    // NOT EXISTS: el parser lo lee como función; antes daba una alerta falsa.
+    "select c.nombre from ia.contratistas c where c.estado_praind = 'POR_VENCER' and not exists " +
+    "(select 1 from ia.ingresos i where i.contratista_id = c.id and i.hora_entrada >= now() - interval '60 days')",
     "select coalesce(empresa_nombre, 'Sin empresa') as empresa, case when count(*) > 5 then 'muchos' else 'pocos' end as c " +
     "from ia.contratistas group by 1",
   ];
@@ -61,6 +64,8 @@ Deno.test("rechaza tablas fuera de ia y funciones prohibidas como peligrosas", (
   rechazada("select set_config('role', 'service_role', true) as r, nombre from ia.contratistas", true);
   rechazada("select current_setting('request.jwt.claims') as c from ia.sitios", true);
   rechazada("select pg_sleep(10) as s from ia.sitios", true);
+  // Lo que va adentro de un EXISTS también se revisa.
+  rechazada("select nombre from ia.sitios where exists (select 1 from public.tokens_push)", true);
   rechazada("select pg_catalog.lower(nombre) as n from ia.sitios", true);
   rechazada("select nombre from ia.sitios where id in (select id from public.sitios)", true);
   rechazada("select * from ia.sitios, lateral set_config('role', 'service_role', true) as x", true);

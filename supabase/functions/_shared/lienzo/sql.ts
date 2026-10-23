@@ -18,8 +18,8 @@ const FUNCIONES = new Set([
   "stddev", "stddev_samp", "stddev_pop", "variance", "var_samp", "var_pop",
   "row_number", "rank", "dense_rank", "percent_rank", "cume_dist", "ntile", "lag", "lead",
   "first_value", "last_value", "nth_value",
-  // Condicionales.
-  "coalesce", "nullif", "greatest", "least",
+  // Condicionales. `exists` no es una función pero el parser lo lee como una ("NOT EXISTS (SELECT …)").
+  "coalesce", "nullif", "greatest", "least", "exists",
   // Fechas.
   "now", "date_trunc", "date_part", "age", "make_date", "make_time", "make_timestamp", "make_interval",
   "to_char", "to_date", "to_timestamp", "timezone", "date", "isfinite", "justify_days", "justify_hours",

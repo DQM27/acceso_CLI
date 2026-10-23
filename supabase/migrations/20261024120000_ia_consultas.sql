@@ -106,13 +106,17 @@ comment on view ia.ingresos is
 
 create view ia.empresas_proveedor as
   select id, sitio_id, nombre, activa, created_at, updated_at from public.empresas_proveedor;
-comment on view ia.empresas_proveedor is 'Empresas proveedoras, por sitio.';
+comment on view ia.empresas_proveedor is
+  'Empresas proveedoras, por sitio. Sólo para preguntas por EMPRESAS; "proveedores" a secas son personas (ia.ingresos_proveedor).';
 
 create view ia.ingresos_proveedor as
   select id, sitio_id, cedula, nombre, empresa_id, empresa_nombre, placa, gafete_numero, hora_entrada, hora_salida,
          usuario_entrada_nombre, usuario_salida_nombre, dispositivo_entrada_id, dispositivo_salida_id
     from public.ingresos_proveedor;
-comment on view ia.ingresos_proveedor is 'Ingresos de proveedores. hora_salida nula = sigue adentro.';
+comment on view ia.ingresos_proveedor is
+  'Ingresos de proveedores. Cada fila es una PERSONA (nombre, cedula) que vino de una empresa proveedora '
+  '(empresa_nombre). Cuando piden "proveedores" se refieren a esas personas: mostrá nombre (y su empresa al lado); '
+  'agrupá por empresa sólo si piden empresas. hora_salida nula = sigue adentro.';
 
 create view ia.ingresos_correo as
   select id, sitio_id, cedula, nombre, motivo, placa, gafete_numero, hora_entrada, hora_salida,
