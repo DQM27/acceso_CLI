@@ -154,12 +154,15 @@ function VistaDocumento({
   lienzo,
   puedeDeshacer,
   rechazo,
+  verSql,
   onEditar,
   onDeshacer,
 }: {
   lienzo: Lienzo;
   puedeDeshacer: boolean;
   rechazo: string | null;
+  /** El SQL de una consulta sólo lo ve la cuenta que audita el asistente (alcance "alertas"). */
+  verSql: boolean;
   onEditar: (nuevo: Lienzo) => void;
   onDeshacer: () => void;
 }) {
@@ -203,7 +206,7 @@ function VistaDocumento({
             </p>
           )}
           <LienzoVista lienzo={lienzo} filas={data.filas} anteriores={data.anteriores} rango={data.rango} onEditar={onEditar} />
-          {lienzo.consulta && (
+          {verSql && lienzo.consulta && (
             <details className="asistente-sql">
               <summary>Ver la consulta</summary>
               <pre>{lienzo.consulta.sql}</pre>
@@ -343,6 +346,7 @@ export default function Asistente() {
           ) : lienzo ? (
             <VistaDocumento
               lienzo={lienzo}
+              verSql={recibeAlertas === true}
               puedeDeshacer={historial.length > (vista === DEL_ASISTENTE ? 1 : 0)}
               rechazo={rechazo}
               onEditar={(nuevo) => aplicar(vista, nuevo)}

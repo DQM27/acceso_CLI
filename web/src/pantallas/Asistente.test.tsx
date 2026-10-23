@@ -203,18 +203,29 @@ describe("Asistente", () => {
     expect(mocks.consultarLienzo.mock.calls[1][0].filtros).toEqual([]);
   });
 
-  it("una vista con consulta del asistente muestra los datos, el SQL y el aviso de filas recortadas", async () => {
+  async function pedirConsulta() {
     mocks.preguntarAlAsistente.mockResolvedValue({ tipo: "editado", lienzo: LIENZO_CONSULTA, mensaje: "Proveedores." });
     mocks.consultarLienzo.mockResolvedValue({ filas: [{ empresa: "DISTRIBUIDORA", n: 12 }], truncado: true });
     montar();
     await screen.findByText("Contratistas adentro ahora");
     fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "proveedores con más ingresos" } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
-
     expect(await screen.findByText("DISTRIBUIDORA")).toBeTruthy();
-    expect(screen.getByText("Ver la consulta")).toBeTruthy();
-    expect(screen.getByText(/from ia\.ingresos_proveedor/)).toBeTruthy();
+  }
+
+  it("una vista con consulta del asistente muestra los datos y el aviso de filas recortadas, sin el SQL", async () => {
+    await pedirConsulta();
     expect(screen.getByText(/se ven sólo las primeras/)).toBeTruthy();
+    // Otro administrador del panel no ve el SQL.
+    expect(screen.queryByText("Ver la consulta")).toBeNull();
+    expect(screen.queryByText(/ia\.ingresos_proveedor/)).toBeNull();
+  });
+
+  it("la cuenta que audita el asistente (alcance alertas) sí ve el SQL", async () => {
+    mocks.puedeVerAlertas.mockResolvedValue(true);
+    await pedirConsulta();
+    expect(await screen.findByText("Ver la consulta")).toBeTruthy();
+    expect(screen.getByText(/from ia\.ingresos_proveedor/)).toBeTruthy();
   });
 
   it("las alertas no aparecen para una cuenta que no las recibe", async () => {
