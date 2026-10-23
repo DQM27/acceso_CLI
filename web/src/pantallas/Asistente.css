@@ -364,25 +364,6 @@
 .asistente-espacio {
   flex: 1;
 }
-.asistente-vivo {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--exito);
-  background: var(--exito-suave);
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: var(--radio-capsula);
-}
-.asistente-vivo::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--exito);
-  animation: lienzo-latir 2s ease-in-out infinite;
-}
 .asistente-contenido {
   flex: 1;
   min-height: 0;

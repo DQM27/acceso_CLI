@@ -745,7 +745,6 @@ export default function Asistente() {
               )}
             </select>
           </div>
-          {esResumen && <span className="asistente-vivo">En vivo</span>}
           <span className="asistente-espacio" />
           {esResumen && (
             <div className="campo asistente-selector">
