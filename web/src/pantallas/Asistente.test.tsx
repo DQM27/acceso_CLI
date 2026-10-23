@@ -5,12 +5,12 @@ import Asistente from "./Asistente";
 
 const mocks = vi.hoisted(() => ({
   obtenerResumenHoy: vi.fn(),
-  consultarFuente: vi.fn(),
+  consultarLienzo: vi.fn(),
   listarUnidadesOperativas: vi.fn(),
 }));
 vi.mock("../api/lienzo", () => ({
   obtenerResumenHoy: mocks.obtenerResumenHoy,
-  consultarFuente: mocks.consultarFuente,
+  consultarLienzo: mocks.consultarLienzo,
 }));
 vi.mock("../api/historial", () => ({ listarUnidadesOperativas: mocks.listarUnidadesOperativas }));
 
@@ -23,6 +23,12 @@ function montar() {
   );
 }
 
+const vencidos = [
+  { nombre: "Ana", empresa: "ACME", vencimiento: "2026-10-01", dias_para_vencer: -3, tipo_ingreso: "PRAIND" },
+  { nombre: "Beto", empresa: "ACME", vencimiento: "2026-10-02", dias_para_vencer: -2, tipo_ingreso: "PRAIND" },
+  { nombre: "Cris", empresa: "OTRA", vencimiento: "2026-09-01", dias_para_vencer: -40, tipo_ingreso: "SWAT" },
+];
+
 beforeEach(() => {
   mocks.obtenerResumenHoy.mockResolvedValue({
     hoy: "2026-10-22",
@@ -33,13 +39,20 @@ beforeEach(() => {
     praind_por_vencer: 2,
     ingresos_por_dia: [{ dia: "2026-10-22", cantidad: 7 }],
   });
-  mocks.consultarFuente.mockResolvedValue([{ nombre: "Ana", empresa: "ACME", vencimiento: "2026-10-01", dias_para_vencer: -3 }]);
+  mocks.consultarLienzo.mockResolvedValue({ filas: vencidos });
   mocks.listarUnidadesOperativas.mockResolvedValue([{ id: "s1", nombre: "Brisas" }]);
 });
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
+
+async function abrirVencidos() {
+  montar();
+  await screen.findByText("Contratistas adentro ahora");
+  fireEvent.change(screen.getByLabelText("Vista del lienzo"), { target: { value: "praind-vencidos" } });
+  await screen.findByText("Empresas afectadas");
+}
 
 describe("Asistente", () => {
   it("muestra el resumen de hoy por omisión, sin pedir un sitio", async () => {
@@ -64,13 +77,33 @@ describe("Asistente", () => {
     await waitFor(() => expect(mocks.obtenerResumenHoy).toHaveBeenCalledWith("s1"));
   });
 
-  it("una vista del catálogo se valida, se consulta y se dibuja", async () => {
-    montar();
-    await screen.findByText("Contratistas adentro ahora");
-    fireEvent.change(screen.getByLabelText("Vista del lienzo"), { target: { value: "praind-vencidos" } });
-    expect(await screen.findByText("Empresas afectadas")).toBeTruthy();
-    expect(mocks.consultarFuente).toHaveBeenCalledTimes(1);
-    expect(mocks.consultarFuente.mock.calls[0][0]).toMatchObject({ fuente: "contratistas" });
+  it("una vista del catálogo se valida, se consulta y se dibuja con sus filtros como chips", async () => {
+    await abrirVencidos();
+    expect(mocks.consultarLienzo).toHaveBeenCalledTimes(1);
+    expect(mocks.consultarLienzo.mock.calls[0][0]).toMatchObject({ fuente: "contratistas" });
+    expect(screen.getByText("Estado PRAIND: VENCIDA")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /Deshacer/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("tocar una barra filtra el lienzo por ella, y Deshacer lo devuelve", async () => {
+    await abrirVencidos();
+    const zona = document.querySelector("rect.lienzo-zona-seleccionable");
+    if (!zona) throw new Error("Ninguna barra acepta clic");
+    fireEvent.click(zona);
+
+    await waitFor(() => expect(mocks.consultarLienzo).toHaveBeenCalledTimes(2));
+    expect(mocks.consultarLienzo.mock.calls[1][0].filtros).toContainEqual({ campo: "empresa", op: "igual", valor: "ACME" });
+    expect(await screen.findByText("Empresa: ACME")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Deshacer/ }));
+    await waitFor(() => expect(screen.queryByText("Empresa: ACME")).toBeNull());
+  });
+
+  it("quitar un filtro desde su chip vuelve a consultar sin él", async () => {
+    await abrirVencidos();
+    fireEvent.click(screen.getByRole("button", { name: "Quitar filtro Estado PRAIND: VENCIDA" }));
+    await waitFor(() => expect(mocks.consultarLienzo).toHaveBeenCalledTimes(2));
+    expect(mocks.consultarLienzo.mock.calls[1][0].filtros).toEqual([]);
   });
 
   it("si la consulta falla, avisa con el mensaje del error", async () => {

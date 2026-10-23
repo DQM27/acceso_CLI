@@ -48,6 +48,10 @@ const kpiEsquema = z
     medida: z.enum(MEDIDAS),
     campo: campo.optional(),
     tono: z.enum(TONOS).optional(),
+    /** Contra el período anterior del mismo largo ("+12 % vs. las 2 semanas anteriores"). */
+    comparar: z.boolean().optional(),
+    /** Mini línea con el valor día por día. */
+    tendencia: z.boolean().optional(),
     ...panel,
   })
   .strict();
@@ -227,6 +231,13 @@ function revisarWidget(fuente: Fuente, w: Widget, i: number, ctx: z.RefinementCt
   switch (w.tipo) {
     case "kpi":
       revisarMedida(fuente, w, ruta, ctx);
+      // Comparar y la tendencia necesitan un día por fila: hoy sólo los ingresos lo tienen.
+      if ((w.comparar || w.tendencia) && definicionCampo(fuente, "dia")?.tipo !== "fecha") {
+        problema(ctx, ruta, "Comparar y la tendencia sólo sirven con datos por día (ingresos)");
+      }
+      if ((w.comparar || w.tendencia) && (w.medida === "minimo" || w.medida === "maximo")) {
+        problema(ctx, [...ruta, "medida"], "Comparar y la tendencia sólo sirven al contar");
+      }
       break;
     case "barras":
     case "linea":

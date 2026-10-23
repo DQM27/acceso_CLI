@@ -1,7 +1,7 @@
 import { useId } from "react";
 import type { Porcion } from "../calculo";
 import { Leyenda, Tooltip } from "./comun";
-import { firmaDatos, formatoNumero, idSvg, useAncho, useIndiceActivo } from "./utiles";
+import { formatoNumero, idSvg, useAncho, useIndiceActivo, useInterpolado, type Seleccion } from "./utiles";
 
 /**
  * Torta o dona en SVG propio. Las porciones van de mayor a menor desde las 12
@@ -39,14 +39,34 @@ export interface PropsTorta {
   dona?: boolean;
   /** Diámetro máximo. */
   tamano?: number;
+  /** Clic (o Enter) sobre una porción: profundizar en ella. */
+  seleccion?: Seleccion;
 }
 
-export default function GraficoTorta({ porciones, total, colores, titulo, dona = true, tamano = 260 }: PropsTorta) {
+export default function GraficoTorta({
+  porciones,
+  total,
+  colores,
+  titulo,
+  dona = true,
+  tamano = 260,
+  seleccion,
+}: PropsTorta) {
   const idTitulo = useId();
   const idMascara = idSvg(useId());
   const { ref, ancho } = useAncho<HTMLDivElement>();
-  const activo = useIndiceActivo(porciones.length);
+  const seleccionar = (k: number) => {
+    const nombre = porciones[k]?.nombre;
+    if (nombre !== undefined && seleccion?.puede(nombre)) seleccion.alSeleccionar(nombre);
+  };
+  const activo = useIndiceActivo(porciones.length, seleccionar);
   const suma = porciones.reduce((s, p) => s + p.valor, 0);
+  // Las porciones crecen o se achican hasta su tamaño nuevo cuando cambian los datos.
+  const dibujo = useInterpolado(
+    porciones.map((p) => p.nombre),
+    porciones.map((p) => p.valor),
+  );
+  const sumaDibujo = dibujo.reduce((s, v) => s + v, 0) || suma;
 
   if (porciones.length === 0 || suma <= 0) return <p className="lienzo-vacio">Sin datos para mostrar.</p>;
 
@@ -58,9 +78,9 @@ export default function GraficoTorta({ porciones, total, colores, titulo, dona =
 
   // Ángulos acumulados desde las 12, en sentido horario.
   const sectores = porciones.map((_, k) => {
-    const antes = porciones.slice(0, k).reduce((s, p) => s + p.valor, 0);
-    const a0 = -Math.PI / 2 + (antes / suma) * Math.PI * 2;
-    const a1 = a0 + (porciones[k].valor / suma) * Math.PI * 2;
+    const antes = dibujo.slice(0, k).reduce((s, v) => s + v, 0);
+    const a0 = -Math.PI / 2 + (antes / sumaDibujo) * Math.PI * 2;
+    const a1 = a0 + ((dibujo[k] ?? 0) / sumaDibujo) * Math.PI * 2;
     return { a0, a1, medio: (a0 + a1) / 2 };
   });
 
@@ -82,6 +102,7 @@ export default function GraficoTorta({ porciones, total, colores, titulo, dona =
                 marca: "barra" as const,
               },
             ],
+            pista: seleccion?.puede(porciones[i].nombre) ? "Clic para filtrar por esto" : undefined,
           };
         })();
 
@@ -102,7 +123,6 @@ export default function GraficoTorta({ porciones, total, colores, titulo, dona =
             <mask id={idMascara}>
               {/* Barrido: un trazo tan ancho como la torta que se va completando. */}
               <circle
-                key={firmaDatos(porciones)}
                 className="lienzo-barrido"
                 cx={centro}
                 cy={centro}
@@ -125,9 +145,12 @@ export default function GraficoTorta({ porciones, total, colores, titulo, dona =
                   key={p.nombre}
                   d={sector(centro, centro, externo, interno, a0, a1)}
                   fill={colores[k]}
-                  className={`lienzo-porcion${i !== null && i !== k ? " lienzo-atenuada" : ""}`}
+                  className={`lienzo-porcion${i !== null && i !== k ? " lienzo-atenuada" : ""}${
+                    seleccion?.puede(p.nombre) ? " lienzo-zona-seleccionable" : ""
+                  }`}
                   transform={`translate(${dx} ${dy})`}
                   onPointerEnter={() => activo.alPuntero(k)}
+                  onClick={() => seleccionar(k)}
                 />
               );
             })}

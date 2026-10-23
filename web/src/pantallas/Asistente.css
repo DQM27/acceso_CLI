@@ -159,6 +159,56 @@
   color: var(--error);
 }
 
+/* Filtros activos (chips) y Deshacer. */
+.asistente-documento {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+.asistente-filtros {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+  min-height: 32px;
+}
+.asistente-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-capsula);
+  background: var(--panel);
+  font-size: 0.8rem;
+  animation: lienzo-aparecer 220ms ease-out both;
+}
+.asistente-filtro button {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.asistente-filtro button:hover {
+  background: var(--panel-suave);
+  color: var(--texto);
+}
+.asistente-deshacer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Mientras llegan los datos nuevos, el dibujo anterior queda tenue (no se borra ni salta). */
+.asistente-actualizando {
+  opacity: 0.6;
+  transition: opacity 200ms ease;
+}
+
 /* --- Paleta de datos del lienzo -------------------------------------------
    8 colores categóricos validados (daltonismo y contraste) contra el fondo del
    panel en claro (#FFFFFF) y en oscuro (#181C23). El ORDEN es parte de la
@@ -278,6 +328,38 @@
   margin-top: 6px;
   color: var(--texto-atenuado);
   font-size: 0.78rem;
+}
+.lienzo-kpi-cabeza {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+}
+.lienzo-kpi .lienzo-kpi-cambio {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.lienzo-tendencia {
+  flex: none;
+  overflow: visible;
+}
+.lienzo-tendencia-linea {
+  fill: none;
+  stroke: var(--serie-otros);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  animation: lienzo-trazar 900ms cubic-bezier(0.4, 0.1, 0.2, 1) 200ms both;
+}
+.lienzo-tendencia-punto {
+  fill: var(--serie-unica);
+  stroke: var(--panel);
+  stroke-width: 2;
+  animation: lienzo-desvanecer 300ms ease-out 1000ms both;
 }
 
 /* --- Bloques (gráficos, tablas) ---------------------------------------------- */
@@ -426,6 +508,9 @@
 }
 .lienzo-zona {
   fill: transparent;
+}
+.lienzo-zona-seleccionable {
+  cursor: pointer;
 }
 .lienzo-categoria,
 .lienzo-porcion {
@@ -576,6 +661,13 @@
 }
 .lienzo-tooltip-fila span:last-child {
   color: var(--muted);
+}
+.lienzo-tooltip-pista {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--panel-suave);
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .lienzo-aparecer {

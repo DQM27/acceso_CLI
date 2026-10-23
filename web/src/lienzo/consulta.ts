@@ -1,3 +1,4 @@
+import { sumarDias } from "./calculo";
 import { ESTADOS_PRAIND, TIPOS_INGRESO } from "./catalogo";
 import type { Filtro, Lienzo } from "./esquema";
 
@@ -100,12 +101,6 @@ export function parametrosContratistas(lienzo: Lienzo): ParametrosContratistas {
     }
   }
   return p as ParametrosContratistas;
-}
-
-function sumarDias(ymd: string, dias: number): string {
-  const [a, m, d] = ymd.split("-").map(Number);
-  const fecha = new Date(Date.UTC(a, m - 1, d + dias));
-  return fecha.toISOString().slice(0, 10);
 }
 
 /** `hoy` (YYYY-MM-DD, día de Costa Rica) fija el rango por omisión: las últimas 2 semanas. */

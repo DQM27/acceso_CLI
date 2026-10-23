@@ -56,6 +56,14 @@ describe("herramientas del lienzo", () => {
     expect(con([kpi], { formato: { hora: "12h" } }).ok).toBe(false);
   });
 
+  it("KPI con comparación y tendencia: sólo con datos por día y al contar", () => {
+    expect(con([{ tipo: "kpi", titulo: "t", medida: "contar", comparar: true, tendencia: true }]).ok).toBe(true);
+    expect(errores(con([{ tipo: "kpi", titulo: "t", medida: "contar", comparar: true }], {}, "contratistas"))).toContain(
+      "datos por día",
+    );
+    expect(errores(con([{ tipo: "kpi", titulo: "t", medida: "maximo", campo: "dia", tendencia: true }]))).toContain("al contar");
+  });
+
   it("KPI con tono de estado", () => {
     expect(con([{ tipo: "kpi", titulo: "t", medida: "contar", tono: "exito" }]).ok).toBe(true);
     expect(con([{ tipo: "kpi", titulo: "t", medida: "contar", tono: "fucsia" }]).ok).toBe(false);

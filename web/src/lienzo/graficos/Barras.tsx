@@ -2,7 +2,6 @@ import { useId } from "react";
 import type { DatosGrafico } from "../calculo";
 import { Tooltip } from "./comun";
 import {
-  firmaDatos,
   formatoNumero,
   marcasEje,
   pasoEtiquetas,
@@ -10,6 +9,8 @@ import {
   retraso,
   useAncho,
   useIndiceActivo,
+  useInterpolado,
+  type Seleccion,
 } from "./utiles";
 
 /**
@@ -46,6 +47,8 @@ export interface PropsBarras {
   resaltarUltima?: boolean;
   /** Texto del eje para cada categoría. */
   etiquetar?: (clave: string, i: number) => string;
+  /** Clic (o Enter) sobre una categoría: profundizar en ella. */
+  seleccion?: Seleccion;
 }
 
 export default function GraficoBarras({
@@ -56,14 +59,27 @@ export default function GraficoBarras({
   alto,
   resaltarUltima = false,
   etiquetar = (c) => c,
+  seleccion,
 }: PropsBarras) {
   const idTitulo = useId();
   const { ref, ancho } = useAncho<HTMLDivElement>();
   const n = datos.categorias.length;
-  const activo = useIndiceActivo(n);
+  const seleccionar = (c: number) => {
+    const clave = datos.categorias[c];
+    if (seleccion?.puede(clave)) seleccion.alSeleccionar(clave);
+  };
+  const activo = useIndiceActivo(n, seleccionar);
+  // Lo que se dibuja: los valores en camino del dibujo anterior al nuevo.
+  const animados = useInterpolado(
+    datos.series.flatMap((s) => datos.categorias.map((c) => `${s.nombre}\u0000${c}`)),
+    datos.series.flatMap((s) => s.valores),
+  );
 
   if (n === 0 || datos.series.length === 0) return <p className="lienzo-vacio">Sin datos para mostrar.</p>;
 
+  const dibujo = datos.series.map((_, k) => animados.slice(k * n, (k + 1) * n));
+  const totalesDibujo = datos.categorias.map((_, c) => dibujo.reduce((s, valores) => s + (valores[c] ?? 0), 0));
+  // El eje se fija con los valores finales: no salta en cada cuadro de la transición.
   const totales = datos.categorias.map((_, i) => datos.series.reduce((s, serie) => s + (serie.valores[i] ?? 0), 0));
   const { marcas, techo } = marcasEje(Math.max(...totales, 0));
   const etiquetas = datos.categorias.map((c, i) => etiquetar(c, i));
@@ -105,6 +121,7 @@ export default function GraficoBarras({
             })),
             ...(varias ? [{ nombre: "Total", valor: formatoNumero(totales[i]) }] : []),
           ],
+          pista: seleccion?.puede(datos.categorias[i]) ? "Clic para filtrar por esto" : undefined,
         };
 
   return (
@@ -140,12 +157,12 @@ export default function GraficoBarras({
           );
         })}
 
-        {/* Barras: la animación de entrada se repite cuando cambian los datos. */}
-        <g key={firmaDatos(datos)}>
+        {/* Barras: entran creciendo; después, cada cambio de datos las mueve de su valor anterior al nuevo. */}
+        <g>
           {datos.categorias.map((clave, c) => {
             const inicioBanda = (horizontal ? m.arriba : m.izquierda) + banda * c;
             const centro = inicioBanda + (banda - grosor) / 2;
-            const ultimoConValor = datos.series.reduce((u, s, k) => ((s.valores[c] ?? 0) > 0 ? k : u), -1);
+            const ultimoConValor = dibujo.reduce((u, valores, k) => ((valores[c] ?? 0) > 0 ? k : u), -1);
             let acumulado = 0;
             const atenuada = i !== null && i !== c;
             return (
@@ -155,7 +172,7 @@ export default function GraficoBarras({
                   style={{ animationDelay: retraso(c, n) }}
                 >
                 {datos.series.map((s, k) => {
-                  const valor = s.valores[c] ?? 0;
+                  const valor = dibujo[k][c] ?? 0;
                   if (valor <= 0) return null;
                   const largoTotal = escala(valor);
                   // Aire entre segmentos apilados: cada uno, salvo el de la base, cede 2 px.
@@ -172,7 +189,7 @@ export default function GraficoBarras({
                 {/* Valor en la punta (barras horizontales, donde siempre hay lugar). */}
                 {horizontal && (
                   <text
-                    x={m.izquierda + escala(totales[c]) + 6}
+                    x={m.izquierda + escala(totalesDibujo[c]) + 6}
                     y={centro + grosor / 2 + 4}
                     className="lienzo-valor-texto"
                     style={{ animationDelay: retraso(c, n, 700) }}
@@ -220,11 +237,12 @@ export default function GraficoBarras({
         {datos.categorias.map((clave, c) => (
           <rect
             key={clave}
-            className="lienzo-zona"
+            className={`lienzo-zona${seleccion?.puede(clave) ? " lienzo-zona-seleccionable" : ""}`}
             {...(horizontal
               ? { x: 0, y: m.arriba + banda * c, width: ancho, height: banda }
               : { x: m.izquierda + banda * c, y: m.arriba, width: banda, height: altoUtil })}
             onPointerEnter={() => activo.alPuntero(c)}
+            onClick={() => seleccionar(c)}
           />
         ))}
       </svg>

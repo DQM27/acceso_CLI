@@ -81,15 +81,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("App -- navegación entre secciones", () => {
+// Esta prueba monta la app entera (sesión, pantalla y carga diferida de la sección):
+// sola tarda ~1 s, pero con la suite completa en paralelo la máquina va cargada y el
+// tope de 1 s de `findBy` (y el de 5 s por prueba) no alcanzaba. Más margen, misma prueba.
+const ESPERA = { timeout: 10_000 };
+
+describe("App -- navegación entre secciones", { timeout: 30_000 }, () => {
   it("no vuelve a montar una sección ya visitada al volver a ella", async () => {
     render(<App />);
 
-    await screen.findByText("Contenido de Historial");
+    await screen.findByText("Contenido de Historial", undefined, ESPERA);
     expect(montajes.historial).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("link", { name: /Contratistas/i }));
-    await screen.findByText("Contenido de Contratistas");
+    await screen.findByText("Contenido de Contratistas", undefined, ESPERA);
     expect(montajes.contratistas).toHaveBeenCalledTimes(1);
     // Historial sigue en el DOM (oculto), no debería haber sido desmontado.
     expect(screen.getByText("Contenido de Historial")).toBeDefined();
@@ -104,10 +109,10 @@ describe("App -- navegación entre secciones", () => {
 
   it("sólo la sección activa queda visible -- las demás quedan ocultas con la clase hidden", async () => {
     render(<App />);
-    await screen.findByText("Contenido de Historial");
+    await screen.findByText("Contenido de Historial", undefined, ESPERA);
 
     fireEvent.click(screen.getByRole("link", { name: /Usuarios/i }));
-    await screen.findByText("Contenido de Usuarios");
+    await screen.findByText("Contenido de Usuarios", undefined, ESPERA);
 
     const contenedorHistorial = screen.getByText("Contenido de Historial").parentElement;
     const contenedorUsuarios = screen.getByText("Contenido de Usuarios").parentElement;

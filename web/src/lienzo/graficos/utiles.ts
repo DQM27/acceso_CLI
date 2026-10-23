@@ -6,6 +6,12 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
  * animaciones. Los componentes (tooltip, leyenda, marco) están en `comun.tsx`.
  */
 
+/** Profundizar desde un gráfico: qué marcas aceptan clic y qué hacer con ellas. */
+export interface Seleccion {
+  puede: (clave: string) => boolean;
+  alSeleccionar: (clave: string) => void;
+}
+
 /** `useId()` sin caracteres que rompan un `url(#…)` de SVG. */
 export function idSvg(id: string): string {
   return `lienzo-${id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -73,12 +79,18 @@ export function recortar(texto: string, maximo: number): string {
  * Índice resaltado (por puntero o por teclado). Flechas para moverse, Inicio y
  * Fin para los extremos, Escape para soltar.
  */
-export function useIndiceActivo(cantidad: number) {
+export function useIndiceActivo(cantidad: number, alActivar?: (indice: number) => void) {
   const [indice, setIndice] = useState<number | null>(null);
   const alPresionar = (e: KeyboardEvent) => {
     if (cantidad === 0) return;
     if (e.key === "Escape") {
       setIndice(null);
+      return;
+    }
+    // Enter o espacio: lo mismo que un clic sobre la marca resaltada.
+    if ((e.key === "Enter" || e.key === " ") && indice !== null && alActivar) {
+      e.preventDefault();
+      alActivar(indice);
       return;
     }
     const actual = indice ?? -1;
@@ -140,6 +152,45 @@ export function useNumeroAnimado(destino: number, duracion = 650): number {
     return () => cancelAnimationFrame(cuadro);
   }, [destino, duracion]);
   return actual;
+}
+
+/**
+ * Valores que pasan suavemente del dibujo anterior al nuevo cuando cambian los
+ * datos (un filtro, una edición del lienzo): cada valor se reconoce por su
+ * clave, así una barra que sigue estando se mueve, una nueva crece desde 0 y
+ * una que se fue desaparece. La primera vez no interpola: de eso se encarga la
+ * animación de entrada.
+ */
+export function useInterpolado(claves: string[], valores: number[], duracion = 550): number[] {
+  const firma = JSON.stringify([claves, valores]);
+  const [mostrado, setMostrado] = useState<{ firma: string; valores: number[] }>({ firma, valores });
+  const actual = useRef(new Map(claves.map((c, i) => [c, valores[i]])));
+
+  useEffect(() => {
+    const [nuevasClaves, destino] = JSON.parse(firma) as [string[], number[]];
+    const desde = nuevasClaves.map((c) => actual.current.get(c) ?? 0);
+    const fijar = (lista: number[]) => {
+      actual.current = new Map(nuevasClaves.map((c, i) => [c, lista[i]]));
+      setMostrado({ firma, valores: lista });
+    };
+    if (prefiereMenosMovimiento() || typeof requestAnimationFrame === "undefined") {
+      void Promise.resolve().then(() => fijar(destino));
+      return;
+    }
+    const t0 = performance.now();
+    let cuadro = 0;
+    const paso = (ahora: number) => {
+      const t = Math.min(1, (ahora - t0) / duracion);
+      const suave = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+      fijar(destino.map((v, i) => desde[i] + (v - desde[i]) * suave));
+      if (t < 1) cuadro = requestAnimationFrame(paso);
+    };
+    cuadro = requestAnimationFrame(paso);
+    return () => cancelAnimationFrame(cuadro);
+  }, [firma, duracion]);
+
+  // Mientras la animación no arrancó (o si cambió la cantidad), se dibuja el destino.
+  return mostrado.valores.length === valores.length ? mostrado.valores : valores;
 }
 
 /** Retraso de la animación de entrada de la marca `i`, escalonado y con tope. */

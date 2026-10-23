@@ -20,7 +20,22 @@ export interface FilaTooltip {
 }
 
 /** Tooltip: el valor primero y fuerte, el nombre después. */
-export function Tooltip({ x, y, titulo, filas, ancho }: { x: number; y: number; titulo: string; filas: FilaTooltip[]; ancho: number }) {
+export function Tooltip({
+  x,
+  y,
+  titulo,
+  filas,
+  ancho,
+  pista,
+}: {
+  x: number;
+  y: number;
+  titulo: string;
+  filas: FilaTooltip[];
+  ancho: number;
+  /** Ayuda corta al pie ("Clic para filtrar por esto"). */
+  pista?: string;
+}) {
   // Del lado del puntero que tenga lugar.
   const izquierda = x > ancho * 0.6;
   return (
@@ -37,6 +52,7 @@ export function Tooltip({ x, y, titulo, filas, ancho }: { x: number; y: number; 
           <span>{f.nombre}</span>
         </div>
       ))}
+      {pista && <div className="lienzo-tooltip-pista">{pista}</div>}
     </div>
   );
 }

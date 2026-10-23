@@ -2,7 +2,6 @@ import { useId, type PointerEvent } from "react";
 import type { DatosGrafico } from "../calculo";
 import { Tooltip } from "./comun";
 import {
-  firmaDatos,
   formatoNumero,
   idSvg,
   marcasEje,
@@ -10,6 +9,7 @@ import {
   recortar,
   useAncho,
   useIndiceActivo,
+  useInterpolado,
 } from "./utiles";
 
 /**
@@ -35,8 +35,15 @@ export default function GraficoLinea({ datos, colores, titulo, alto = 240, area 
   const { ref, ancho } = useAncho<HTMLDivElement>();
   const n = datos.categorias.length;
   const activo = useIndiceActivo(n);
+  // Lo que se dibuja: los valores en camino del dibujo anterior al nuevo.
+  const animados = useInterpolado(
+    datos.series.flatMap((s) => datos.categorias.map((c) => `${s.nombre}\u0000${c}`)),
+    datos.series.flatMap((s) => s.valores),
+  );
 
   if (n === 0 || datos.series.length === 0) return <p className="lienzo-vacio">Sin datos para mostrar.</p>;
+
+  const dibujo = datos.series.map((_, k) => animados.slice(k * n, (k + 1) * n));
 
   const maximo = Math.max(...datos.series.flatMap((s) => s.valores), 0);
   const { marcas, techo } = marcasEje(maximo);
@@ -106,19 +113,19 @@ export default function GraficoLinea({ datos, colores, titulo, alto = 240, area 
           ),
         )}
 
-        {/* Las series: se dibujan de nuevo (animadas) cuando cambian los datos. */}
-        <g key={firmaDatos(datos)}>
+        {/* Las series: se trazan al entrar; después, cada cambio de datos mueve los puntos a su valor nuevo. */}
+        <g>
           {conArea && (
             <path
               className="lienzo-area"
-              d={`${trazo(datos.series[0].valores)}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z`}
+              d={`${trazo(dibujo[0])}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z`}
               fill={`url(#${idDegradado})`}
             />
           )}
           {datos.series.map((s, k) => (
             <path
               key={s.nombre}
-              d={trazo(s.valores)}
+              d={trazo(dibujo[k])}
               pathLength={1}
               className="lienzo-linea"
               stroke={colores[k]}
@@ -129,7 +136,7 @@ export default function GraficoLinea({ datos, colores, titulo, alto = 240, area 
             <circle
               key={s.nombre}
               cx={x(n - 1)}
-              cy={y(s.valores[n - 1] ?? 0)}
+              cy={y(dibujo[k][n - 1] ?? 0)}
               r={4}
               fill={colores[k]}
               className="lienzo-punto-final"

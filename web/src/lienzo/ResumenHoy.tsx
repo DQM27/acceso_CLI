@@ -55,7 +55,18 @@ export default function ResumenDeHoy({ resumen }: { resumen: ResumenHoy }) {
         />
       </div>
       <div className="lienzo-panel lienzo-ancho-cuarto" style={panel(1)}>
-        <TarjetaKpi valor={resumen.ingresos_hoy} titulo="Ingresos hoy" detalle="Día en curso" />
+        <TarjetaKpi
+          valor={resumen.ingresos_hoy}
+          titulo="Ingresos hoy"
+          detalle="Día en curso"
+          // Contra el mismo día de la semana pasada (los lunes no se parecen a los domingos).
+          comparacion={
+            resumen.ingresos_por_dia.length >= 8
+              ? { anterior: resumen.ingresos_por_dia[resumen.ingresos_por_dia.length - 8].cantidad, contra: "vs. el mismo día la semana pasada" }
+              : undefined
+          }
+          tendencia={resumen.ingresos_por_dia.map((d) => d.cantidad)}
+        />
       </div>
       <div className="lienzo-panel lienzo-ancho-cuarto" style={panel(2)}>
         <TarjetaKpi valor={vencidos} titulo="PRAIND vencidos" detalle="No pueden entrar" tono={vencidos > 0 ? "error" : "neutro"} />

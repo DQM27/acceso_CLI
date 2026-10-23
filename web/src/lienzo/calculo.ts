@@ -43,6 +43,24 @@ export function calcularKpi(widget: WidgetKpi, filas: Fila[]): number | string |
   return medir(widget.medida, widget.campo, filas);
 }
 
+/** Cambio relativo contra el período anterior (0,12 = +12 %); `null` si antes era 0. */
+export function variacion(actual: number, anterior: number): number | null {
+  return anterior === 0 ? null : (actual - anterior) / anterior;
+}
+
+/** El valor del KPI día por día dentro del rango (para la mini línea de tendencia). */
+export function calcularTendencia(widget: WidgetKpi, filas: Fila[], desde: string, hasta: string): number[] {
+  const porDia = new Map<string, Fila[]>();
+  for (const fila of filas) {
+    const dia = typeof fila.dia === "string" ? fila.dia : null;
+    if (dia) porDia.set(dia, [...(porDia.get(dia) ?? []), fila]);
+  }
+  const dias = Math.min(diasEntre(desde, hasta), 400);
+  return Array.from({ length: dias + 1 }, (_, i) =>
+    Number(medir(widget.medida, widget.campo, porDia.get(sumarDias(desde, i)) ?? [])) || 0,
+  );
+}
+
 // --- Fechas ---------------------------------------------------------------
 
 function aUtc(ymd: string): Date {
@@ -52,6 +70,18 @@ function aUtc(ymd: string): Date {
 
 function aYmd(fecha: Date): string {
   return fecha.toISOString().slice(0, 10);
+}
+
+/** "2026-10-22" más (o menos) `dias` días, cruzando meses y años. */
+export function sumarDias(ymd: string, dias: number): string {
+  const fecha = aUtc(ymd);
+  fecha.setUTCDate(fecha.getUTCDate() + dias);
+  return aYmd(fecha);
+}
+
+/** Días entre dos fechas YYYY-MM-DD (0 si son la misma). */
+export function diasEntre(desde: string, hasta: string): number {
+  return Math.round((aUtc(hasta).getTime() - aUtc(desde).getTime()) / 86_400_000);
 }
 
 /** Clave ordenable del grupo de fecha: día "2026-10-22", semana = su lunes, mes "2026-10". */

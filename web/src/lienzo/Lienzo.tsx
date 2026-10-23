@@ -5,17 +5,21 @@ import {
   calcularPorciones,
   calcularSeries,
   calcularTabla,
+  calcularTendencia,
+  diasEntre,
   etiquetaFecha,
   formatearFecha,
   type DatosGrafico,
   type Fila,
 } from "./calculo";
 import { COLOR_UNICO, RegistroColores } from "./colores";
-import type { Lienzo, Widget, WidgetBarras, WidgetLinea } from "./esquema";
+import { conFiltro, filtroParaCategoria } from "./edicion";
+import type { Lienzo, Widget, WidgetBarras, WidgetKpi, WidgetLinea } from "./esquema";
 import GraficoBarras from "./graficos/Barras";
 import { Leyenda, MarcoGrafico, type TablaDeDatos } from "./graficos/comun";
 import GraficoLinea from "./graficos/Linea";
 import GraficoTorta from "./graficos/Torta";
+import type { Seleccion } from "./graficos/utiles";
 import { TablaLienzo, TarjetaKpi } from "./widgets";
 
 /**
@@ -24,7 +28,8 @@ import { TablaLienzo, TarjetaKpi } from "./widgets";
  * widget es un dato que se lee, no código.
  *
  * Disposición: "cuadricula" (12 columnas; cada panel con su `ancho`) o
- * "enfoque" (un panel debajo del otro, grandes y al centro).
+ * "enfoque" (un panel debajo del otro, grandes y al centro). Con `onEditar`,
+ * tocar una barra o una porción devuelve el documento filtrado por ella.
  */
 const ANCHO_POR_OMISION: Record<Widget["tipo"], Ancho> = {
   kpi: "cuarto",
@@ -40,7 +45,7 @@ function etiquetaCampo(fuente: Fuente, campo: string): string {
   return definicionCampo(fuente, campo)?.etiqueta ?? campo;
 }
 
-/** "Contratistas", "Empresas distintas"… lo que mide un gráfico, dicho en palabras. */
+/** "Contratistas", "Empresas (distintos)"… lo que mide un gráfico, dicho en palabras. */
 function textoMedida(fuente: Fuente, medida: string, campo?: string): string {
   return medida === "contar_distintos" && campo
     ? `${etiquetaCampo(fuente, campo)} (distintos)`
@@ -67,26 +72,37 @@ function tablaDeSeries(datos: DatosGrafico, columnaEje: string, etiquetar: (c: s
   };
 }
 
-function GraficoDeSeries({
-  lienzo,
-  widget,
-  filas,
-  colores,
-  enfoque,
-}: {
+interface Contexto {
   lienzo: Lienzo;
-  widget: WidgetBarras | WidgetLinea;
   filas: Fila[];
+  anteriores?: Fila[];
+  rango?: { desde: string; hasta: string };
   colores: (campo: string, nombres: string[]) => string[];
   enfoque: boolean;
-}) {
+  onEditar?: (nuevo: Lienzo) => void;
+}
+
+/** Clic para profundizar: filtra el lienzo por la categoría tocada, si el campo lo permite. */
+function profundizar(ctx: Contexto, campo: string, agrupacion: AgrupacionFecha | null, crudo = (c: string) => c): Seleccion | undefined {
+  const { lienzo, onEditar } = ctx;
+  if (!onEditar) return undefined;
+  return {
+    puede: (clave) => filtroParaCategoria(lienzo.fuente, campo, crudo(clave), agrupacion) !== null,
+    alSeleccionar: (clave) => {
+      const filtro = filtroParaCategoria(lienzo.fuente, campo, crudo(clave), agrupacion);
+      if (filtro) onEditar(conFiltro(lienzo, filtro));
+    },
+  };
+}
+
+function GraficoDeSeries({ ctx, widget }: { ctx: Contexto; widget: WidgetBarras | WidgetLinea }) {
+  const { lienzo, filas, enfoque } = ctx;
   const medida = textoMedida(lienzo.fuente, widget.medida, widget.campo);
   const datos = calcularSeries(lienzo.fuente, widget, filas, medida);
   const eje = etiquetaCampo(lienzo.fuente, widget.eje_x);
-  const etiquetar = (c: string) =>
-    datos.agrupacion ? etiquetaFecha(c, datos.agrupacion, lienzo.formato?.fecha) : c;
+  const etiquetar = (c: string) => (datos.agrupacion ? etiquetaFecha(c, datos.agrupacion, lienzo.formato?.fecha) : c);
   const unica = !widget.serie;
-  const paleta = unica ? [COLOR_UNICO] : colores(widget.serie ?? "", datos.series.map((s) => s.nombre));
+  const paleta = unica ? [COLOR_UNICO] : ctx.colores(widget.serie ?? "", datos.series.map((s) => s.nombre));
   const titulo = widget.titulo ?? `${medida} por ${eje.toLowerCase()}`;
   const subtitulo = [
     datos.agrupacion ? TEXTO_AGRUPACION[datos.agrupacion] : null,
@@ -106,6 +122,7 @@ function GraficoDeSeries({
           alto={alto}
           horizontal={widget.orientacion ? widget.orientacion === "horizontal" : !datos.agrupacion}
           etiquetar={etiquetar}
+          seleccion={profundizar(ctx, widget.eje_x, datos.agrupacion)}
         />
       ) : (
         <GraficoLinea datos={datos} colores={paleta} titulo={titulo} alto={alto} area={widget.area} etiquetar={etiquetar} />
@@ -120,46 +137,44 @@ function GraficoDeSeries({
   );
 }
 
-function WidgetLienzo({
-  lienzo,
-  widget,
-  filas,
-  colores,
-  enfoque,
-}: {
-  lienzo: Lienzo;
-  widget: Widget;
-  filas: Fila[];
-  colores: (campo: string, nombres: string[]) => string[];
-  enfoque: boolean;
-}): ReactNode {
+function Kpi({ ctx, widget }: { ctx: Contexto; widget: WidgetKpi }) {
+  const { lienzo, filas, anteriores, rango } = ctx;
+  const valor = calcularKpi(widget, filas);
+  const esFecha = widget.campo && definicionCampo(lienzo.fuente, widget.campo)?.tipo === "fecha";
+  const dias = rango ? diasEntre(rango.desde, rango.hasta) + 1 : 0;
+  const anterior = widget.comparar && anteriores ? calcularKpi(widget, anteriores) : null;
+  return (
+    <TarjetaKpi
+      valor={esFecha && typeof valor === "string" ? formatearFecha(valor, lienzo.formato?.fecha) : valor}
+      titulo={widget.titulo}
+      tono={widget.tono}
+      comparacion={
+        typeof anterior === "number" ? { anterior, contra: `vs. ${dias === 1 ? "el día" : `los ${dias} días`} anteriores` } : undefined
+      }
+      tendencia={widget.tendencia && rango ? calcularTendencia(widget, filas, rango.desde, rango.hasta) : undefined}
+    />
+  );
+}
+
+function WidgetLienzo({ ctx, widget }: { ctx: Contexto; widget: Widget }): ReactNode {
+  const { lienzo, filas, enfoque } = ctx;
   switch (widget.tipo) {
     case "kpi":
-    {
-      const valor = calcularKpi(widget, filas);
-      const esFecha = widget.campo && definicionCampo(lienzo.fuente, widget.campo)?.tipo === "fecha";
-      return (
-        <TarjetaKpi
-          valor={esFecha && typeof valor === "string" ? formatearFecha(valor, lienzo.formato?.fecha) : valor}
-          titulo={widget.titulo}
-          tono={widget.tono}
-        />
-      );
-    }
+      return <Kpi ctx={ctx} widget={widget} />;
     case "barras":
     case "linea":
-      return <GraficoDeSeries lienzo={lienzo} widget={widget} filas={filas} colores={colores} enfoque={enfoque} />;
+      return <GraficoDeSeries ctx={ctx} widget={widget} />;
     case "torta": {
       const calculadas = calcularPorciones(widget, filas);
-      const total = calculadas.total;
-      const porciones =
-        definicionCampo(lienzo.fuente, widget.categoria)?.tipo === "fecha"
-          ? calculadas.porciones.map((p) => ({ ...p, nombre: formatearFecha(p.nombre, lienzo.formato?.fecha) }))
-          : calculadas.porciones;
+      // Una categoría de fecha se muestra en el formato del lienzo; el filtro usa la fecha real.
+      const esFecha = definicionCampo(lienzo.fuente, widget.categoria)?.tipo === "fecha";
+      const mostrar = (nombre: string) => (esFecha ? formatearFecha(nombre, lienzo.formato?.fecha) : nombre);
+      const crudo = new Map(calculadas.porciones.map((p) => [mostrar(p.nombre), p.nombre]));
+      const porciones = calculadas.porciones.map((p) => ({ ...p, nombre: mostrar(p.nombre) }));
       const categoria = etiquetaCampo(lienzo.fuente, widget.categoria);
       const medida = textoMedida(lienzo.fuente, widget.medida, widget.campo);
       const titulo = widget.titulo ?? `${medida} por ${categoria.toLowerCase()}`;
-      const paleta = colores(widget.categoria, porciones.map((p) => p.nombre));
+      const paleta = ctx.colores(widget.categoria, porciones.map((p) => p.nombre));
       const suma = porciones.reduce((s, p) => s + p.valor, 0) || 1;
       return (
         <MarcoGrafico
@@ -171,11 +186,12 @@ function WidgetLienzo({
         >
           <GraficoTorta
             porciones={porciones}
-            total={total}
+            total={calculadas.total}
             colores={paleta}
             titulo={titulo}
             dona={widget.dona ?? true}
             tamano={enfoque ? 380 : 260}
+            seleccion={profundizar(ctx, widget.categoria, null, (c) => crudo.get(c) ?? c)}
           />
         </MarcoGrafico>
       );
@@ -194,9 +210,24 @@ function WidgetLienzo({
   }
 }
 
-export default function LienzoVista({ lienzo, filas }: { lienzo: Lienzo; filas: Fila[] }) {
+export default function LienzoVista({
+  lienzo,
+  filas,
+  anteriores,
+  rango,
+  onEditar,
+}: {
+  lienzo: Lienzo;
+  filas: Fila[];
+  /** Filas del período anterior, para los KPI que comparan. */
+  anteriores?: Fila[];
+  rango?: { desde: string; hasta: string };
+  /** Con esto, los gráficos aceptan clic para profundizar. */
+  onEditar?: (nuevo: Lienzo) => void;
+}) {
   const colores = useColores();
   const enfoque = lienzo.disposicion === "enfoque";
+  const ctx: Contexto = { lienzo, filas, anteriores, rango, colores, enfoque, onEditar };
   return (
     <div className={`lienzo-documento ${enfoque ? "lienzo-enfoque" : "lienzo-cuadricula"}`} data-fuente={lienzo.fuente}>
       {lienzo.titulo && <h2 className="lienzo-titulo">{lienzo.titulo}</h2>}
@@ -206,7 +237,7 @@ export default function LienzoVista({ lienzo, filas }: { lienzo: Lienzo; filas: 
           className={`lienzo-panel lienzo-ancho-${enfoque ? "completo" : (widget.ancho ?? ANCHO_POR_OMISION[widget.tipo])}`}
           style={{ "--i": i } as CSSProperties}
         >
-          <WidgetLienzo lienzo={lienzo} widget={widget} filas={filas} colores={colores} enfoque={enfoque} />
+          <WidgetLienzo ctx={ctx} widget={widget} />
         </div>
       ))}
     </div>

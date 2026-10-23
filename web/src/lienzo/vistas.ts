@@ -76,9 +76,9 @@ export const VISTAS_PREDEFINIDAS: VistaPredefinida[] = [
       fuente: "ingresos",
       filtros: [],
       widgets: [
-        { tipo: "kpi", titulo: "Ingresos", medida: "contar" },
-        { tipo: "kpi", titulo: "Personas distintas", medida: "contar_distintos", campo: "nombre" },
-        { tipo: "kpi", titulo: "Empresas", medida: "contar_distintos", campo: "empresa" },
+        { tipo: "kpi", titulo: "Ingresos", medida: "contar", comparar: true, tendencia: true },
+        { tipo: "kpi", titulo: "Personas distintas", medida: "contar_distintos", campo: "nombre", comparar: true },
+        { tipo: "kpi", titulo: "Empresas", medida: "contar_distintos", campo: "empresa", tendencia: true },
         { tipo: "kpi", titulo: "Sitios", medida: "contar_distintos", campo: "sitio" },
         { tipo: "linea", titulo: "Ingresos por día", eje_x: "dia", medida: "contar", area: true, ancho: "dos_tercios" },
         { tipo: "torta", titulo: "Por tipo de ingreso", categoria: "tipo_ingreso", medida: "contar" },
