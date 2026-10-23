@@ -11,6 +11,7 @@ import {
 } from "../api/lienzo";
 import { listarUnidadesOperativas } from "../api/historial";
 import AlertasAsistente from "./AlertasAsistente";
+import isotipo from "../assets/lattis-isotipo.png";
 import LienzoVista from "../lienzo/Lienzo";
 import ResumenDeHoy from "../lienzo/ResumenHoy";
 import { describirFiltro, sinFiltro } from "../lienzo/edicion";
@@ -32,6 +33,11 @@ const SUGERENCIAS = [
 ];
 /** Turnos de la conversación que viajan con cada pedido (el resto queda sólo en pantalla). */
 const TURNOS_A_ENVIAR = 12;
+
+/** La foto del asistente en el chat: el isotipo de Lattis. */
+function Avatar() {
+  return <img className="asistente-avatar" src={isotipo} alt="" aria-hidden="true" />;
+}
 
 interface MensajeChat extends TurnoChat {
   id: number;
@@ -78,9 +84,7 @@ function PanelChat({
       </header>
       <div className="asistente-mensajes" aria-live="polite">
         <div className="asistente-fila">
-          <div className="asistente-avatar" aria-hidden="true">
-            IA
-          </div>
+          <Avatar />
           <div className="asistente-burbuja">
             Pídame cambiar, filtrar o profundizar en cualquier dato del <b>lienzo</b>. También puede tocar una barra o una
             porción para filtrar.
@@ -102,18 +106,14 @@ function PanelChat({
             </div>
           ) : (
             <div key={m.id} className="asistente-fila">
-              <div className="asistente-avatar" aria-hidden="true">
-                IA
-              </div>
+              <Avatar />
               <div className={`asistente-burbuja${m.aviso ? " asistente-burbuja-aviso" : ""}`}>{m.texto}</div>
             </div>
           ),
         )}
         {pensando && (
           <div className="asistente-fila" role="status">
-            <div className="asistente-avatar" aria-hidden="true">
-              IA
-            </div>
+            <Avatar />
             <div className="asistente-burbuja asistente-pensando" aria-label="El asistente está pensando">
               <span />
               <span />

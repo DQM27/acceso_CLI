@@ -78,17 +78,13 @@
   display: flex;
   gap: var(--espacio-2);
 }
+/* El isotipo de Lattis (la "L" con la ola) como foto del asistente. La imagen ya trae su
+   ficha blanca redondeada: así la L azul marino se lee igual en el tema oscuro. */
 .asistente-avatar {
   flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radio-chico);
-  background: var(--acento-suave);
-  color: var(--acento);
-  font-size: 0.7rem;
-  font-weight: 700;
-  display: grid;
-  place-items: center;
+  width: 30px;
+  height: 30px;
+  display: block;
 }
 .asistente-burbuja {
   background: var(--campo-fondo);
