@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowUp, Undo2, X } from "lucide-react";
-import { consultarLienzo, obtenerResumenHoy, preguntarAlAsistente, type TurnoChat } from "../api/lienzo";
+import {
+  consultarLienzo,
+  listarAlertas,
+  obtenerResumenHoy,
+  preguntarAlAsistente,
+  puedeVerAlertas,
+  type TurnoChat,
+} from "../api/lienzo";
 import { listarUnidadesOperativas } from "../api/historial";
+import AlertasAsistente from "./AlertasAsistente";
 import LienzoVista from "../lienzo/Lienzo";
 import ResumenDeHoy from "../lienzo/ResumenHoy";
 import { describirFiltro, sinFiltro } from "../lienzo/edicion";
@@ -14,6 +22,8 @@ import "./Asistente.css";
 const RESUMEN = "resumen";
 /** La vista que arma el asistente cuando se le pide algo desde el resumen. */
 const DEL_ASISTENTE = "asistente";
+/** Intentos de manipular al asistente (sólo para la cuenta que recibe las alertas). */
+const ALERTAS = "alertas-ia";
 const SUGERENCIAS = [
   "Ver los PRAIND vencidos por empresa",
   "Ingresos de esta semana por sitio",
@@ -187,7 +197,18 @@ function VistaDocumento({
       )}
       {data ? (
         <div className={isFetching ? "asistente-actualizando" : undefined}>
+          {data.truncado && (
+            <p className="asistente-aviso" role="status">
+              La consulta tiene más filas de las que se muestran: se ven sólo las primeras.
+            </p>
+          )}
           <LienzoVista lienzo={lienzo} filas={data.filas} anteriores={data.anteriores} rango={data.rango} onEditar={onEditar} />
+          {lienzo.consulta && (
+            <details className="asistente-sql">
+              <summary>Ver la consulta</summary>
+              <pre>{lienzo.consulta.sql}</pre>
+            </details>
+          )}
         </div>
       ) : (
         <Estado cargando={isLoading} error={error} />
@@ -239,8 +260,8 @@ export default function Asistente() {
     onSuccess: (respuesta) => {
       agregarMensaje({ rol: "asistente", texto: respuesta.mensaje });
       if (respuesta.tipo !== "editado") return;
-      if (vista === RESUMEN) {
-        // Desde el resumen, el asistente arma una vista nueva y se pasa a ella.
+      if (vista === RESUMEN || vista === ALERTAS) {
+        // Desde el resumen (o las alertas), el asistente arma una vista nueva y se pasa a ella.
         setHistoriales((h) => ({ ...h, [DEL_ASISTENTE]: [] }));
         aplicar(DEL_ASISTENTE, respuesta.lienzo);
         setVista(DEL_ASISTENTE);
@@ -254,11 +275,21 @@ export default function Asistente() {
   const enviar = (texto: string) => {
     const historialChat = mensajes.filter((m) => !m.aviso).slice(-TURNOS_A_ENVIAR).map(({ rol, texto: t }) => ({ rol, texto: t }));
     agregarMensaje({ rol: "usuario", texto });
-    pregunta.mutate({ pregunta: texto, lienzo: vista === RESUMEN ? null : lienzo, historial: historialChat });
+    pregunta.mutate({ pregunta: texto, lienzo: vista === RESUMEN || vista === ALERTAS ? null : lienzo, historial: historialChat });
   };
 
   const hayDelAsistente = (historiales[DEL_ASISTENTE] ?? []).length > 0;
   const esResumen = vista === RESUMEN;
+  const esAlertas = vista === ALERTAS;
+  const { data: recibeAlertas } = useQuery({ queryKey: ["lienzo-puede-alertas"], queryFn: puedeVerAlertas, staleTime: Infinity });
+  // Misma consulta que la lista de alertas: el contador y la lista se actualizan juntos.
+  const { data: alertas } = useQuery({
+    queryKey: ["lienzo-alertas"],
+    queryFn: listarAlertas,
+    enabled: recibeAlertas === true,
+    refetchInterval: 60_000,
+  });
+  const sinRevisar = alertas?.filter((a) => !a.revisada_en).length ?? 0;
 
   return (
     <div className="asistente">
@@ -281,6 +312,9 @@ export default function Asistente() {
                   {v.titulo}
                 </option>
               ))}
+              {recibeAlertas && (
+                <option value={ALERTAS}>{sinRevisar ? `Alertas del asistente (${sinRevisar})` : "Alertas del asistente"}</option>
+              )}
             </select>
           </div>
           {esResumen && <span className="asistente-vivo">En vivo</span>}
@@ -302,6 +336,8 @@ export default function Asistente() {
         <div className="asistente-contenido" key={vista}>
           {esResumen ? (
             <VistaResumen sitioId={sitioId} />
+          ) : esAlertas ? (
+            <AlertasAsistente />
           ) : predefinida && !predefinida.ok ? (
             <p className="asistente-error" role="alert">Vista inválida: {predefinida.errores.join("; ")}</p>
           ) : lienzo ? (

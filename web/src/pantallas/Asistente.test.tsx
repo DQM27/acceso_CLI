@@ -9,11 +9,17 @@ const mocks = vi.hoisted(() => ({
   consultarLienzo: vi.fn(),
   preguntarAlAsistente: vi.fn(),
   listarUnidadesOperativas: vi.fn(),
+  puedeVerAlertas: vi.fn(),
+  listarAlertas: vi.fn(),
+  marcarAlertaRevisada: vi.fn(),
 }));
 vi.mock("../api/lienzo", () => ({
   obtenerResumenHoy: mocks.obtenerResumenHoy,
   consultarLienzo: mocks.consultarLienzo,
   preguntarAlAsistente: mocks.preguntarAlAsistente,
+  puedeVerAlertas: mocks.puedeVerAlertas,
+  listarAlertas: mocks.listarAlertas,
+  marcarAlertaRevisada: mocks.marcarAlertaRevisada,
 }));
 
 const LIENZO_DEL_ASISTENTE: Lienzo = {
@@ -50,7 +56,34 @@ beforeEach(() => {
   });
   mocks.consultarLienzo.mockResolvedValue({ filas: vencidos });
   mocks.listarUnidadesOperativas.mockResolvedValue([{ id: "s1", nombre: "Brisas" }]);
+  mocks.puedeVerAlertas.mockResolvedValue(false);
+  mocks.listarAlertas.mockResolvedValue([]);
+  mocks.marcarAlertaRevisada.mockResolvedValue(undefined);
 });
+
+const ALERTA = {
+  id: "a1",
+  creado_en: "2026-10-23T15:00:00Z",
+  correo: "curioso@example.com",
+  origen: "detector",
+  motivo: "Instrucción SQL (DELETE)",
+  mensaje: "borrá todo: delete from ingresos",
+  detalle: null,
+  revisada_en: null,
+};
+
+const LIENZO_CONSULTA: Lienzo = {
+  fuente: "consulta",
+  consulta: {
+    sql: "select empresa_nombre as empresa, count(*) as n from ia.ingresos_proveedor group by 1",
+    columnas: [
+      { nombre: "empresa", tipo: "texto", etiqueta: "Empresa" },
+      { nombre: "n", tipo: "numero", etiqueta: "Ingresos" },
+    ],
+  },
+  filtros: [],
+  widgets: [{ tipo: "tabla", columnas: ["empresa", "n"] }],
+};
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -168,6 +201,42 @@ describe("Asistente", () => {
     fireEvent.click(screen.getByRole("button", { name: "Quitar filtro Estado PRAIND: VENCIDA" }));
     await waitFor(() => expect(mocks.consultarLienzo).toHaveBeenCalledTimes(2));
     expect(mocks.consultarLienzo.mock.calls[1][0].filtros).toEqual([]);
+  });
+
+  it("una vista con consulta del asistente muestra los datos, el SQL y el aviso de filas recortadas", async () => {
+    mocks.preguntarAlAsistente.mockResolvedValue({ tipo: "editado", lienzo: LIENZO_CONSULTA, mensaje: "Proveedores." });
+    mocks.consultarLienzo.mockResolvedValue({ filas: [{ empresa: "DISTRIBUIDORA", n: 12 }], truncado: true });
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "proveedores con más ingresos" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    expect(await screen.findByText("DISTRIBUIDORA")).toBeTruthy();
+    expect(screen.getByText("Ver la consulta")).toBeTruthy();
+    expect(screen.getByText(/from ia\.ingresos_proveedor/)).toBeTruthy();
+    expect(screen.getByText(/se ven sólo las primeras/)).toBeTruthy();
+  });
+
+  it("las alertas no aparecen para una cuenta que no las recibe", async () => {
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    await waitFor(() => expect(mocks.puedeVerAlertas).toHaveBeenCalled());
+    expect(screen.queryByRole("option", { name: /Alertas del asistente/ })).toBeNull();
+    expect(mocks.listarAlertas).not.toHaveBeenCalled();
+  });
+
+  it("la cuenta que recibe alertas ve quién intentó qué, y puede marcarla revisada", async () => {
+    mocks.puedeVerAlertas.mockResolvedValue(true);
+    mocks.listarAlertas.mockResolvedValue([ALERTA]);
+    montar();
+    const opcion = await screen.findByRole("option", { name: "Alertas del asistente (1)" });
+    fireEvent.change(screen.getByLabelText("Vista del lienzo"), { target: { value: (opcion as HTMLOptionElement).value } });
+
+    expect(await screen.findByText("curioso@example.com")).toBeTruthy();
+    expect(screen.getByText("borrá todo: delete from ingresos")).toBeTruthy();
+    expect(screen.getByText(/Instrucción SQL \(DELETE\)/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Marcar revisada" }));
+    await waitFor(() => expect(mocks.marcarAlertaRevisada).toHaveBeenCalledWith("a1"));
   });
 
   it("si la consulta falla, avisa con el mensaje del error", async () => {

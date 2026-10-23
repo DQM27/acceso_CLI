@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Lienzo } from "../lienzo/esquema";
 import { consultarLienzo, hoyCostaRica } from "./lienzo";
 
-const mocks = vi.hoisted(() => ({ rpc: vi.fn() }));
-vi.mock("../lib/supabase", () => ({ supabase: { rpc: mocks.rpc } }));
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), invoke: vi.fn() }));
+vi.mock("../lib/supabase", () => ({ supabase: { rpc: mocks.rpc, functions: { invoke: mocks.invoke } } }));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -63,6 +63,45 @@ describe("consultarLienzo", () => {
     await expect(
       consultarLienzo({ fuente: "contratistas", filtros: [], widgets: [{ tipo: "kpi", titulo: "t", medida: "contar" }] }),
     ).rejects.toThrow("administradores del panel");
+  });
+
+  describe('fuente "consulta"', () => {
+    const lienzo = (filtros: Lienzo["filtros"] = []): Lienzo => ({
+      fuente: "consulta",
+      consulta: {
+        sql: "select nombre, (hora_entrada at time zone 'America/Costa_Rica')::date as dia, datos from ia.x",
+        columnas: [
+          { nombre: "nombre", tipo: "texto" },
+          { nombre: "dia", tipo: "fecha" },
+          { nombre: "datos", tipo: "texto" },
+        ],
+      },
+      filtros,
+      widgets: [{ tipo: "tabla", columnas: ["nombre", "dia"] }],
+    });
+
+    it("la corre con lienzo-consulta (no con el modelo), deja las fechas en el día y aplica los filtros", async () => {
+      mocks.invoke.mockResolvedValue({
+        data: {
+          columnas: ["nombre", "dia", "datos"],
+          filas: [
+            { nombre: "Ana", dia: "2026-10-20T00:00:00", datos: { a: 1 } },
+            { nombre: "Beto", dia: "2026-10-21", datos: null },
+          ],
+          truncado: false,
+        },
+        error: null,
+      });
+      const r = await consultarLienzo(lienzo([{ campo: "nombre", op: "contiene", valor: "an" }]));
+      expect(mocks.invoke).toHaveBeenCalledWith("lienzo-consulta", { body: { sql: lienzo().consulta?.sql } });
+      expect(mocks.rpc).not.toHaveBeenCalled();
+      expect(r).toEqual({ filas: [{ nombre: "Ana", dia: "2026-10-20", datos: '{"a":1}' }], truncado: false });
+    });
+
+    it("si la consulta no devuelve las columnas declaradas, avisa en vez de dibujar a medias", async () => {
+      mocks.invoke.mockResolvedValue({ data: { columnas: ["nombre"], filas: [{ nombre: "Ana" }], truncado: false }, error: null });
+      await expect(consultarLienzo(lienzo())).rejects.toThrow("no devolvió: dia, datos");
+    });
   });
 });
 

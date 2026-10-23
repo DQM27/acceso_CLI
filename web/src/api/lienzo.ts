@@ -2,7 +2,8 @@ import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
 import { diasEntre, sumarDias, type Fila } from "../lienzo/calculo";
 import { parametrosContratistas, parametrosIngresos } from "../lienzo/consulta";
-import { validarLienzo, type Lienzo } from "../lienzo/esquema";
+import { aplicarFiltros } from "../lienzo/filtrar";
+import { origenDe, validarLienzo, type Lienzo } from "../lienzo/esquema";
 import { invocar } from "./_invocar";
 
 /**
@@ -69,9 +70,54 @@ export async function preguntarAlAsistente(pedido: {
   return { tipo: "editado", lienzo: validado.lienzo, mensaje: respuesta.mensaje };
 }
 
+const respuestaConsultaEsquema = z.object({
+  columnas: z.array(z.string()),
+  filas: z.array(z.record(z.string(), z.unknown())),
+  truncado: z.boolean(),
+});
+
+/** Un valor de la base como celda del lienzo: lo que no es texto, número o sí/no se muestra como texto. */
+function comoCelda(valor: unknown): Fila[string] {
+  if (valor === null || valor === undefined) return null;
+  if (typeof valor === "string" || typeof valor === "number" || typeof valor === "boolean") return valor;
+  return JSON.stringify(valor);
+}
+
+/**
+ * Corre la consulta del asistente (Edge Function `lienzo-consulta`, sin modelo)
+ * y deja las filas como las espera el lienzo: las columnas de fecha con sólo el
+ * día, y los filtros del documento aplicados.
+ */
+async function consultarSql(lienzo: Lienzo): Promise<DatosLienzo> {
+  const consulta = lienzo.consulta;
+  if (!consulta) throw new Error("El lienzo no trae su consulta.");
+  const datos = await invocar(
+    "lienzo-consulta",
+    (d): d is unknown => respuestaConsultaEsquema.safeParse(d).success,
+    { sql: consulta.sql },
+  );
+  const respuesta = respuestaConsultaEsquema.parse(datos);
+  if (respuesta.filas.length > 0) {
+    const faltan = consulta.columnas.filter((c) => !respuesta.columnas.includes(c.nombre));
+    if (faltan.length > 0) throw new Error(`La consulta no devolvió: ${faltan.map((c) => c.nombre).join(", ")}.`);
+  }
+  const deFecha = consulta.columnas.filter((c) => c.tipo === "fecha").map((c) => c.nombre);
+  const filas = respuesta.filas.map((f) => {
+    const fila: Fila = {};
+    for (const [nombre, valor] of Object.entries(f)) {
+      const celda = comoCelda(valor);
+      fila[nombre] = deFecha.includes(nombre) && typeof celda === "string" ? celda.slice(0, 10) : celda;
+    }
+    return fila;
+  });
+  return { filas: aplicarFiltros(origenDe(lienzo), filas, lienzo.filtros), truncado: respuesta.truncado };
+}
+
 /** Lo que necesita el lienzo para dibujarse. */
 export interface DatosLienzo {
   filas: Fila[];
+  /** La consulta tenía más filas que el límite: se ven sólo las primeras. */
+  truncado?: boolean;
   /** Filas del período anterior del mismo largo (sólo si algún KPI compara). */
   anteriores?: Fila[];
   /** Rango de días consultado (sólo fuentes por día). */
@@ -83,6 +129,7 @@ const MAXIMO_DIAS = 92;
 
 /** Filas de la fuente del lienzo con sus filtros; `lienzo` ya debe estar validado. */
 export async function consultarLienzo(lienzo: Lienzo): Promise<DatosLienzo> {
+  if (lienzo.fuente === "consulta") return consultarSql(lienzo);
   if (lienzo.fuente === "contratistas") {
     const { data, error } = await supabase.rpc("lienzo_contratistas", parametrosContratistas(lienzo));
     if (error) throw new Error(error.message);
@@ -101,4 +148,40 @@ export async function consultarLienzo(lienzo: Lienzo): Promise<DatosLienzo> {
   if (!compara) return { filas: todas, rango };
   const actual = (f: Fila) => typeof f.dia === "string" && f.dia >= rango.desde;
   return { filas: todas.filter(actual), anteriores: todas.filter((f) => !actual(f)), rango };
+}
+
+const alertaEsquema = z.object({
+  id: z.string(),
+  creado_en: z.string(),
+  correo: z.string(),
+  origen: z.enum(["detector", "modelo", "parser"]),
+  motivo: z.string(),
+  mensaje: z.string(),
+  detalle: z.string().nullable(),
+  revisada_en: z.string().nullable(),
+});
+
+export type AlertaIa = z.infer<typeof alertaEsquema>;
+
+/** ¿Esta cuenta recibe las alertas del asistente? La base sólo le muestra sus propios alcances. */
+export async function puedeVerAlertas(): Promise<boolean> {
+  const { data, error } = await supabase.from("ia_permisos").select("alcance").eq("alcance", "alertas").limit(1);
+  if (error) throw new Error(error.message);
+  return (data ?? []).length > 0;
+}
+
+/** Intentos de que el asistente ejecutara SQL o se saltara sus reglas: quién, qué escribió y por qué se marcó. */
+export async function listarAlertas(): Promise<AlertaIa[]> {
+  const { data, error } = await supabase
+    .from("ia_alertas")
+    .select("id, creado_en, correo, origen, motivo, mensaje, detalle, revisada_en")
+    .order("creado_en", { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  return z.array(alertaEsquema).parse(data);
+}
+
+export async function marcarAlertaRevisada(id: string): Promise<void> {
+  const { error } = await supabase.from("ia_alertas").update({ revisada_en: new Date().toISOString() }).eq("id", id);
+  if (error) throw new Error(error.message);
 }

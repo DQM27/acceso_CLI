@@ -745,6 +745,96 @@
   50% { opacity: 0.35; }
 }
 
+/* Consulta del asistente: aviso de filas recortadas y el SQL a la vista (auditable). */
+.asistente-aviso {
+  margin: 0 0 var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-3);
+  border: 1px solid var(--advertencia);
+  border-radius: var(--radio-chico);
+  background: var(--advertencia-suave);
+  font-size: 0.85rem;
+}
+.asistente-sql {
+  margin-top: var(--espacio-4);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.asistente-sql summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.asistente-sql pre,
+.asistente-alerta pre {
+  margin: var(--espacio-2) 0 0;
+  padding: var(--espacio-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+  color: var(--texto);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Alertas del asistente (sólo la cuenta que las recibe). */
+.asistente-vacio {
+  color: var(--muted);
+}
+.asistente-alertas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.asistente-alerta {
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 1px solid var(--error);
+  border-left-width: 4px;
+  border-radius: var(--radio);
+  background: var(--panel);
+  animation: lienzo-aparecer 220ms ease-out both;
+}
+.asistente-alerta-revisada {
+  border-color: var(--borde);
+  opacity: 0.75;
+}
+.asistente-alerta header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+  color: var(--texto);
+}
+.asistente-alerta header svg {
+  color: var(--error);
+}
+.asistente-alerta-revisada header svg {
+  color: var(--muted);
+}
+.asistente-alerta-fecha,
+.asistente-alerta-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.asistente-alerta-motivo {
+  margin: var(--espacio-2) 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.asistente-alerta blockquote {
+  margin: 0;
+  padding-left: var(--espacio-3);
+  border-left: 2px solid var(--borde);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Quien pidió menos movimiento en su sistema ve todo quieto, ya en su lugar. */
 @media (prefers-reduced-motion: reduce) {
   .asistente *,
