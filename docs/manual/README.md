@@ -136,6 +136,56 @@ Cuando se corrija una, se actualiza su proceso.
     sólo avisan, sin forma de resolverlos desde la pantalla. En
     construcción.
 
-## Índice — Móvil y panel web
+## Índice — Móvil (teléfono del puesto de control)
 
-Pendientes; se inventarían después de validar el formato con el escritorio.
+App Android **Lattis**. Sólo registros rápidos: el alta de empresas,
+la edición de contratistas, el Historial y la Auditoría se hacen en el
+escritorio.
+
+### Inicio y sesión
+
+- ✅ [Vincular el teléfono por primera vez (QR o código)](movil/vincular-telefono.md)
+- ✅ [Iniciar sesión y fijar la contraseña la primera vez](movil/iniciar-sesion.md)
+- ✅ [Menú de la cuenta: tema y cerrar sesión](movil/cuenta-tema-y-cerrar-sesion.md)
+- ✅ [La pantalla principal: secciones, botón redondo y avisos](movil/pantalla-principal.md)
+
+### Contratistas (Activos)
+
+- ✅ [Registrar el ingreso de un contratista (escaneando o buscando)](movil/registrar-ingreso-contratista.md)
+- ✅ [Registrar la salida de un contratista (lista, nombre o gafetes)](movil/registrar-salida-contratista.md)
+- ✅ [Nuevo contratista (con el carnet PRAIND)](movil/nuevo-contratista.md)
+
+### Externos y KOF
+
+- ✅ [Ingreso y salida de un proveedor](movil/ingreso-y-salida-proveedor.md)
+- ✅ [Ingreso y salida de una visita por correo](movil/ingreso-y-salida-por-correo.md)
+- ✅ [Entregar y recibir un gafete provisional KOF](movil/gafete-kof.md)
+
+### Avisos, conexión y actualizaciones
+
+- ✅ [Avisos de la administración (la campanita)](movil/avisos-de-la-administracion.md)
+- ✅ [Trabajar sin internet y sincronizar](movil/sin-internet-y-sincronizar.md)
+- ✅ [El teléfono fue retirado o la sesión se cerró sola](movil/telefono-retirado-o-sesion-cerrada.md)
+- ✅ [Buscar e instalar una actualización](movil/buscar-actualizacion.md)
+
+### Problemas frecuentes
+
+- ✅ [Cámara, permisos, sonido, ingreso activo, conflictos y hora](movil/problemas-frecuentes.md)
+
+### Fuera del manual
+
+- **Rutas** y **Visita** (agendadas en la web): ocultas en la app; se
+  documentan cuando se vuelvan a mostrar.
+
+### Mejoras de pantalla detectadas al documentar el móvil
+
+1. **Mensajes**: mezclan "usted" con voseo y tuteo ("Tocá de nuevo para
+   salir", "Tocá para leerlo", "Estás al día", "Acá vas a ver los avisos").
+   Unificar en "usted".
+2. **Salida por gafete escaneado**: se registra al instante, sin
+   confirmar (decisión de diseño). Un gafete mal leído saca a otra
+   persona; el mensaje verde/rojo es la única señal.
+
+## Índice — Panel web
+
+Pendiente.

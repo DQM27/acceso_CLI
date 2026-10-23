@@ -398,7 +398,8 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
 
 ## Pendiente
 
-- Manual: móvil y panel web.
+- Manual del móvil **redactado** (2026-10-23, `docs/manual/movil/`, 15
+  procesos de la app Android Lattis). Falta el del panel web.
 - Respuestas del dueño (2026-10-23), ya en el manual: el código de
   vinculación lo da sólo un administrador en el panel; al otro sitio se
   avisa por el medio acordado (p. ej., WhatsApp); la hora se corrige sola
