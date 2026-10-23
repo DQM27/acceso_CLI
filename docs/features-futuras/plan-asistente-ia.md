@@ -406,10 +406,10 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
   Pedro Molina, varios de madrugada) y 4 dudosos. El dueño lo dejó para
   después; no es crítico. Los ingresos cortos de proveedores (2 a 10 min)
   son reales y no se tocan.
-- Lienzo (Parte A, etapa 1): falta aplicar la migración
-  `20261022120000_lienzo_catalogo` (se aplica sola al mergear a `main`; hasta
-  entonces la pantalla "Asistente" muestra el error de función inexistente) y
-  que el dueño la revise en el panel.
+- Lienzo (Parte A, etapa 1): la migración `20261022120000_lienzo_catalogo` ya
+  está en staging; en producción se aplica sola al mergear a `main` (hasta
+  entonces, la pantalla "Asistente" de producción muestra el error de función
+  inexistente). Falta que el dueño la revise en el panel apuntado a staging.
 - Ayuda de uso (Parte B): nada implementado; la primera etapa es el manual
   navegable sin IA.
 
@@ -424,7 +424,8 @@ Elegida la **propuesta B** (resumen vivo + chat lateral). Sin modelo de IA.
   `supabase/tests/lienzo_catalogo.sql`): `lienzo_contratistas`,
   `lienzo_ingresos` y `lienzo_resumen_hoy`. Solo lectura, sin SQL dinámico,
   solo administradores del panel, grants a `authenticated` y `service_role`.
-  Probada en staging con `rollback`; **no aplicada** en ningún proyecto.
+  Probada en staging con `rollback` y luego **aplicada en staging** (herramienta
+  de migraciones, 2026-10-22); **no aplicada en producción** (llega al mergear).
 - **Pantalla** (`web/src/pantallas/Asistente.tsx`, `web/src/lienzo/`): resumen de
   hoy con selector de sitio, tres vistas de ejemplo dibujadas desde JSON
   (`vistas.ts`) y chat maquetado, apagado ("próximamente").
