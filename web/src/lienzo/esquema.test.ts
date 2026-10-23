@@ -70,6 +70,15 @@ describe("validarLienzo", () => {
     expect(conCambio((d) => (d.filtros[0] = { campo: "acceso_activo", op: "igual", valor: "si" })).ok).toBe(false);
   });
 
+  it("sólo admite los operadores que la función SQL del campo acepta", () => {
+    const sitio = (op: string) => conCambio((d) => (d.filtros[0] = { campo: "sitio", op, valor: "Brisas" })).ok;
+    expect(sitio("igual")).toBe(true);
+    expect(sitio("contiene")).toBe(false);
+    const nombre = (op: string) => conCambio((d) => (d.filtros[0] = { campo: "nombre", op, valor: "ana" })).ok;
+    expect(nombre("contiene")).toBe(true);
+    expect(nombre("igual")).toBe(false);
+  });
+
   it("exige dos fechas válidas en 'entre'", () => {
     const entre = (valor: unknown) =>
       conCambio((d) => (d.filtros[0] = { campo: "vencimiento", op: "entre", valor })).ok;

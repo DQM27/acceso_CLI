@@ -98,7 +98,7 @@ function revisarFiltro(fuente: Fuente, filtro: Filtro, ruta: (string | number)[]
     ctx.addIssue({ code: "custom", path: [...ruta, "campo"], message: `Campo "${filtro.campo}" fuera del catálogo` });
     return;
   }
-  if (!OPERADORES_POR_TIPO[def.tipo].includes(filtro.op)) {
+  if (!(def.operadores ?? OPERADORES_POR_TIPO[def.tipo]).includes(filtro.op)) {
     ctx.addIssue({ code: "custom", path: [...ruta, "op"], message: `"${filtro.op}" no aplica a "${filtro.campo}"` });
     return;
   }
