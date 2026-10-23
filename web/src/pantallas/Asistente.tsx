@@ -50,6 +50,14 @@ function PanelChat({
 }) {
   const [texto, setTexto] = useState("");
   const fin = useRef<HTMLDivElement>(null);
+  const caja = useRef<HTMLTextAreaElement>(null);
+  // La caja crece con lo escrito (hasta su alto máximo en CSS) y vuelve a una línea al enviar.
+  useEffect(() => {
+    const el = caja.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [texto]);
   useEffect(() => {
     fin.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
   }, [mensajes.length, pensando]);
@@ -117,17 +125,27 @@ function PanelChat({
       </div>
       <footer>
         <form className="asistente-entrada" onSubmit={enviar}>
-          <input
+          <textarea
+            ref={caja}
+            rows={1}
             placeholder="Escriba lo que quiere ver…"
             aria-label="Mensaje para el asistente"
             value={texto}
             maxLength={2000}
             onChange={(e) => setTexto(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter envía; Shift+Enter hace un salto de línea (y no se envía mientras se compone un acento).
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                enviar();
+              }
+            }}
           />
           <button type="submit" className="asistente-enviar" disabled={pensando || !texto.trim()} aria-label="Enviar">
-            <ArrowUp size={16} aria-hidden="true" />
+            <ArrowUp size={17} strokeWidth={2.5} aria-hidden="true" />
           </button>
         </form>
+        <p className="asistente-entrada-ayuda">Enter para enviar · Shift+Enter para otra línea</p>
       </footer>
     </aside>
   );

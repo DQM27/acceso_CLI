@@ -140,6 +140,21 @@ describe("Asistente", () => {
     ]);
   });
 
+  it("chat: Enter envía y Shift+Enter no (es salto de línea)", async () => {
+    mocks.preguntarAlAsistente.mockResolvedValue({ tipo: "respondido", mensaje: "ok" });
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    const caja = screen.getByLabelText("Mensaje para el asistente");
+    fireEvent.change(caja, { target: { value: "ingresos de hoy" } });
+    fireEvent.keyDown(caja, { key: "Enter", shiftKey: true });
+    expect(mocks.preguntarAlAsistente).not.toHaveBeenCalled();
+    fireEvent.keyDown(caja, { key: "Enter" });
+    await waitFor(() => expect(mocks.preguntarAlAsistente).toHaveBeenCalledTimes(1));
+    expect(mocks.preguntarAlAsistente.mock.calls[0][0].pregunta).toBe("ingresos de hoy");
+    // Se vacía al enviar.
+    expect((caja as HTMLTextAreaElement).value).toBe("");
+  });
+
   it("chat: un error (como el tope diario) se muestra como aviso y no se manda como historial", async () => {
     mocks.preguntarAlAsistente.mockRejectedValueOnce(new Error("Llegó al tope de 30 consultas de hoy. Mañana se renueva."));
     montar();

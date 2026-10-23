@@ -116,35 +116,73 @@
   padding: var(--espacio-3);
   border-top: 1px solid var(--borde);
 }
+/* Caja de mensaje: un área de texto que crece con lo escrito; el foco se ve en toda la caja. */
 .asistente-entrada {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: var(--espacio-2);
   border: 1px solid var(--borde);
-  border-radius: var(--radio);
+  border-radius: 1.25rem;
   background: var(--campo-fondo);
-  padding: var(--espacio-2) var(--espacio-2) var(--espacio-2) var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-2) var(--espacio-2) var(--espacio-4);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
-.asistente-entrada input {
+.asistente-entrada:focus-within {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 18%, transparent);
+}
+/* Con los estilos generales de los campos anulados: sin fondo, borde ni anillo propios. */
+.asistente-entrada textarea {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  max-height: 9.5rem;
+  margin: 0;
+  padding: 6px 0;
   border: 0;
+  outline: none;
+  box-shadow: none;
   background: transparent;
   color: var(--texto);
   font: inherit;
+  line-height: 1.45;
+  resize: none;
+  overflow-y: auto;
+  appearance: none;
+}
+.asistente-entrada textarea:focus,
+.asistente-entrada textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+}
+.asistente-entrada textarea::placeholder {
+  color: var(--muted);
 }
 .asistente-enviar {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radio-chico);
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
   border: 0;
   background: var(--acento);
   color: var(--sobre-acento);
   display: grid;
   place-items: center;
+  cursor: pointer;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+.asistente-enviar:not(:disabled):hover {
+  transform: scale(1.06);
 }
 .asistente-enviar:disabled {
-  opacity: 0.45;
+  opacity: 0.35;
+  cursor: default;
+}
+.asistente-entrada-ayuda {
+  margin: 6px var(--espacio-2) 0;
+  font-size: 0.72rem;
+  color: var(--muted);
 }
 
 .asistente-lienzo {
