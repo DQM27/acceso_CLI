@@ -398,7 +398,7 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
 
 - Manual: Historial (con exportar), Auditoría, inicio y sesión, conexión
   y actualizaciones, problemas frecuentes; después móvil y panel web.
-- Dueño: elegir propuesta del lienzo; decir si el operador puede
+- Dueño: decir si el operador puede
   activar/desactivar empresas; regla del gafete KOF con préstamo sin
   devolver.
 - Registros de prueba en producción: hay 8 ingresos de contratistas casi
@@ -406,5 +406,48 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
   Pedro Molina, varios de madrugada) y 4 dudosos. El dueño lo dejó para
   después; no es crítico. Los ingresos cortos de proveedores (2 a 10 min)
   son reales y no se tocan.
-- Nada del asistente está implementado: la primera etapa es el manual
-  navegable sin IA y, en paralelo, el lienzo sin IA (Parte A, etapa 1).
+- Lienzo (Parte A, etapa 1): falta aplicar la migración
+  `20261022120000_lienzo_catalogo` (se aplica sola al mergear a `main`; hasta
+  entonces la pantalla "Asistente" muestra el error de función inexistente) y
+  que el dueño la revise en el panel.
+- Ayuda de uso (Parte B): nada implementado; la primera etapa es el manual
+  navegable sin IA.
+
+## Lienzo sin IA — implementado (2026-10-22, sin PR todavía)
+
+Elegida la **propuesta B** (resumen vivo + chat lateral). Sin modelo de IA.
+
+- **Esquema y validador** (`web/src/lienzo/catalogo.ts`, `esquema.ts`): fuentes
+  `contratistas` e `ingresos`, widgets `kpi`, `tabla` y `barras`. Estricto
+  (zod). Cada campo declara los operadores que acepta la función SQL.
+- **SQL** (`supabase/migrations/20261022120000_lienzo_catalogo.sql`, batería en
+  `supabase/tests/lienzo_catalogo.sql`): `lienzo_contratistas`,
+  `lienzo_ingresos` y `lienzo_resumen_hoy`. Solo lectura, sin SQL dinámico,
+  solo administradores del panel, grants a `authenticated` y `service_role`.
+  Probada en staging con `rollback`; **no aplicada** en ningún proyecto.
+- **Pantalla** (`web/src/pantallas/Asistente.tsx`, `web/src/lienzo/`): resumen de
+  hoy con selector de sitio, tres vistas de ejemplo dibujadas desde JSON
+  (`vistas.ts`) y chat maquetado, apagado ("próximamente").
+
+Diferencias entre el plan y el código real, y cómo se resolvieron:
+
+- **"Sitio" en contratistas**: no existe como campo (los contratistas son
+  globales). El campo `sitio` de esa fuente es donde está adentro ahora.
+- **Fuentes**: el plan listaba sólo `contratistas`; el resumen de la propuesta B
+  necesita ingresos, así que se sumó `ingresos`.
+- **Widgets**: sólo `kpi`, `tabla` y `barras` (el plan también mencionaba línea
+  de tiempo y torta, para después).
+- **Chequeo de administrador**: las funciones no llaman a
+  `private.es_admin_global()` porque `authenticated` no tiene `USAGE` sobre
+  `private` fuera de las políticas; leen su propia fila de
+  `administradores_panel` (la RLS deja a cada administrador leerla).
+- **Resumen**: "adentro ahora" cuenta sólo contratistas (los proveedores van de
+  subtítulo) e "ingresos de hoy" sólo los de contratistas. El bloque "Requiere
+  atención" muestra PRAIND vencidos y por vencer; "nadie lleva más de 12 h
+  adentro" quedó fuera (necesita otra función).
+- **Agrupar y contar** se hacen en el navegador sobre las filas devueltas
+  (contratistas hasta 5.000; ingresos hasta 20.000 y 92 días).
+
+Pendiente de la etapa 2 (chat con modelo): Edge Function `lienzo-ia`, deshacer y
+rehacer, guardar vista y exportar (en la maqueta B pero no construidos), y tope
+de uso.
