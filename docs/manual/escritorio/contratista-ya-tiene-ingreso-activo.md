@@ -35,8 +35,8 @@ Aparece al intentar registrar un ingreso: **Ctrl+N** (contratista),
 4. Pulse **Ctrl+N** (o el atajo que corresponda) y registre el ingreso de
    nuevo.
 
-**⚠ Por confirmar**: si el sitio pide anotar algo cuando se encuentra un
-ingreso viejo sin salida (por ejemplo, avisar al supervisor).
+No hace falta anotar nada más. Si la persona lleva muchas horas adentro,
+el programa ya lo muestra con un [aviso de permanencia](avisos-de-permanencia.md).
 
 ## Si no aparece en Activos
 

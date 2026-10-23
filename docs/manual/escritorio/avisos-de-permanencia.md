@@ -31,8 +31,7 @@ Sólo aplica a contratistas.
    **sólo** a esas personas.
 2. Revise cada caso:
    - Si la persona **ya salió**, registre su salida con el botón **Salida**
-     de su fila. ⚠ Por confirmar: si el sitio pide anotar en algún lado que
-     la salida se registró tarde.
+     de su fila. No hace falta anotar nada más.
    - Si la persona **sigue adentro** (por ejemplo, un turno largo), no haga
      nada; el aviso seguirá visible mientras siga adentro.
 3. Para volver a ver a todos, pulse otra vez el mismo aviso.

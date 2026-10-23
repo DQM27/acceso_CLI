@@ -100,15 +100,21 @@ Cosas que el manual explica pero que conviene corregir en el programa.
 Cuando se corrija una, se actualiza su proceso.
 
 1. **Gafete KOF**: el aviso "Ya tiene prestado el gafete… sin devolver" se
-   ve como informativo (amarillo), pero el programa bloquea la entrega. O se
-   vuelve un bloqueo claro, o se permite (decisión pendiente del dueño).
+   ve como informativo (amarillo), pero el programa bloquea la entrega.
+   Decisión del dueño (2026-10-23): **es un bloqueo** (sin devolver no se
+   asigna otro), así que el aviso debe verse como bloqueo (rojo).
 2. **Activos**: el botón **Salida** de cada fila registra sin confirmar. Un
    clic en la fila equivocada saca a la persona equivocada.
 3. **Contratistas**: la columna **Acceso** se oculta al Operador, pero la
-   casilla **Con acceso** sí aparece en el formulario de edición.
+   casilla **Con acceso** sí aparece en el formulario de edición y la
+   puede cambiar.
 4. **Empresas**: cualquier usuario puede desactivar una empresa, lo que deja
-   sin entrada a todos sus contratistas. Revisar si debe quedar sólo para
-   administradores.
+   sin entrada a todos sus contratistas.
+
+   Decisión del dueño (2026-10-23) para 3 y 4: **sólo un administrador**
+   activa o desactiva empresas y contratistas. Hoy el programa no lo
+   impide (los roles están aplanados en `src/domain/autorizacion.rs`); el
+   manual ya lo indica como regla.
 5. **Gafetes**: **Dar de baja** se aplica sin confirmar y es definitivo.
 6. **Gafetes**: marcar perdido un gafete de **visita** busca la cédula entre
    las visitas agendadas en la web; con una visita **por correo** puede no
