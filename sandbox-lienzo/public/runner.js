@@ -31,8 +31,13 @@ function avisar(mensaje) {
   if (origenPadre) window.parent.postMessage(mensaje, origenPadre);
 }
 
+let ultimoAlto = 0;
+/** El alto del dibujo (no el de la ventana, que es el del marco): así el panel ajusta el marco al contenido. */
 function avisarAlto() {
-  avisar({ tipo: "alto", alto: Math.ceil(document.documentElement.scrollHeight) });
+  const alto = Math.ceil(raiz.getBoundingClientRect().height) + 4;
+  if (alto === ultimoAlto) return;
+  ultimoAlto = alto;
+  avisar({ tipo: "alto", alto });
 }
 
 function aplicarTema(tema) {
@@ -121,7 +126,7 @@ window.addEventListener("resize", () => {
   espera = setTimeout(() => dibujar(ultimoPedido), 180);
 });
 
-new ResizeObserver(() => avisarAlto()).observe(document.body);
+new ResizeObserver(() => avisarAlto()).observe(raiz);
 
 // Tooltips: cualquier elemento con data-tip, con el mouse o con el teclado.
 function mostrarTip(objetivo, x, y) {
