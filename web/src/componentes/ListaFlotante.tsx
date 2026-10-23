@@ -11,6 +11,8 @@ export function ListaFlotante({
   ancho,
   alinear = "izquierda",
   direccion = "abajo",
+  animacion,
+  saliendo = false,
   children,
 }: {
   posicion: PosicionLista;
@@ -31,19 +33,30 @@ export function ListaFlotante({
    * ventana. "izquierda" lo abre al costado izquierdo del disparador, con
    * el borde superior a su misma altura (ej. `SelectorRangoFecha`, para no
    * tapar la grilla debajo del botón); ahí `alinear` no aplica. */
-  direccion?: "abajo" | "arriba" | "izquierda";
+  direccion?: "abajo" | "arriba" | "izquierda" | "derecha";
+  /** Entrada y salida deslizando desde el disparador (la que usa el menú de
+   * cuenta, `direccion="derecha"`); sin esto, aparece de golpe como siempre. */
+  animacion?: "lateral";
+  /** Con `animacion`, la salida: el que la monta lo deja en pantalla el
+   * tiempo justo para que termine antes de desmontarla. */
+  saliendo?: boolean;
   children: ReactNode;
 }) {
   const ubicacion =
     direccion === "izquierda"
       ? { top: posicion.topCampo, right: posicion.rightDesdeIzquierda }
-      : {
-          ...(direccion === "arriba" ? { bottom: posicion.bottom } : { top: posicion.top }),
-          ...(alinear === "derecha" ? { right: posicion.right } : { left: posicion.left }),
-        };
+      : direccion === "derecha"
+        ? { bottom: posicion.bottomCampo, left: posicion.leftDesdeDerecha }
+        : {
+            ...(direccion === "arriba" ? { bottom: posicion.bottom } : { top: posicion.top }),
+            ...(alinear === "derecha" ? { right: posicion.right } : { left: posicion.left }),
+          };
+  const claseTarjeta = animacion
+    ? `tarjeta lista-flotante-${animacion}${saliendo ? " lista-flotante-saliendo" : ""}`
+    : "tarjeta";
   return createPortal(
     <div
-      className="tarjeta"
+      className={claseTarjeta}
       style={{
         position: "fixed",
         ...ubicacion,

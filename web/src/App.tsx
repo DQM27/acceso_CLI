@@ -5,7 +5,7 @@ import { BellRing, DoorOpen, History, LogIn, Menu, MonitorSmartphone, Sparkles, 
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
-import SelectorTema from "./componentes/SelectorTema";
+import { useTema } from "./componentes/useTema";
 import Login from "./pantallas/Login";
 import type { UsuarioSesion } from "./api";
 import { AuthProvider, useAuth } from "./contexto/AuthContexto";
@@ -145,6 +145,7 @@ function Contenido() {
 
 function Shell({ sesion }: { sesion: UsuarioSesion }) {
   const { cerrarSesion } = useAuth();
+  const { tema, alternarTema } = useTema();
   const location = useLocation();
   const seccionActual = SECCIONES.find((s) => rutaSeccion(s.id) === location.pathname)?.id;
   // Cada sección visitada se queda MONTADA (oculta con CSS) en vez de
@@ -261,6 +262,15 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             colapsado={colapsado}
             onToggleColapsado={alternarColapsado}
             abiertoEnMovil={menuMovilAbierto}
+            pie={
+              <MenuUsuario
+                sesion={sesion}
+                colapsado={colapsado}
+                tema={tema}
+                onAlternarTema={alternarTema}
+                onCerrarSesion={cerrarSesion}
+              />
+            }
           />
 
           <main className="flex min-w-0 flex-1 flex-col">
@@ -306,11 +316,6 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
               </div>
             ))}
           </main>
-        </div>
-
-        <div className="barra-estado">
-          <SelectorTema />
-          <MenuUsuario sesion={sesion} onCerrarSesion={cerrarSesion} />
         </div>
 
         <Toaster theme="system" position="bottom-right" richColors={false} />
