@@ -6,7 +6,9 @@
   --fondo: #ffffff;
   --tip-fondo: #1d2733;
   --tip-texto: #ffffff;
-  color-scheme: light dark;
+  /* "normal", igual que el iframe en el panel: si el esquema de color del marco y
+     el de la página difieren, el navegador le pinta un fondo opaco al marco. */
+  color-scheme: normal;
 }
 
 html,

@@ -41,6 +41,8 @@ export interface Ayudas {
   formatoFecha(ymd: unknown, opciones?: { anio?: boolean; dia?: boolean }): string;
   diasEntre(desde: string, hasta: string): number;
   sumarDias(ymd: string, dias: number): string;
+  rangoDias(desde: string, hasta: string): string[];
+  cadaCuanto(espacio: number, anchoRotulo?: number): number;
   diaSemana(ymd: unknown): number | null;
   recortar(texto: unknown, maximo?: number): string;
   mezclar(a: string, b: string, t: number): string;

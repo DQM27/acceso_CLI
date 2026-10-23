@@ -158,6 +158,20 @@ export function crearAyudas(tema = {}) {
     return new Date(tiempo(ymd) + dias * 86400000).toISOString().slice(0, 10);
   }
 
+  /** Todos los días de `desde` a `hasta` ("AAAA-MM-DD"), incluidos los que no tienen datos (hasta 400). */
+  function rangoDias(desde, hasta) {
+    const dias = [];
+    for (let d = String(desde).slice(0, 10); d <= String(hasta).slice(0, 10) && dias.length < 400; d = sumarDias(d, 1)) {
+      dias.push(d);
+    }
+    return dias;
+  }
+
+  /** Cada cuántos rótulos mostrar uno para que no se pisen: con `espacio` px por elemento y rótulos de `anchoRotulo` px. */
+  function cadaCuanto(espacio, anchoRotulo = 48) {
+    return Math.max(1, Math.ceil(anchoRotulo / Math.max(1, espacio)));
+  }
+
   /** Día de la semana de "AAAA-MM-DD": 0 = lunes … 6 = domingo. */
   function diaSemana(ymd) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ymd ?? ""));
@@ -230,7 +244,8 @@ export function crearAyudas(tema = {}) {
 
   return {
     esc, el, svg, numero, suma, minimo, maximo, agrupar, contar, marcas, escalaLineal, escalaBanda, escalaFecha,
-    formatoNumero, formatoFecha, diasEntre, sumarDias, diaSemana, recortar, mezclar, ejeIzquierdo, ejeAbajo, leyenda,
+    formatoNumero, formatoFecha, diasEntre, sumarDias, rangoDias, cadaCuanto, diaSemana, recortar, mezclar, ejeIzquierdo,
+    ejeAbajo, leyenda,
     tip, color, colorPara, intensidad, NOMBRES_DIAS, NOMBRES_MESES: MESES,
   };
 }

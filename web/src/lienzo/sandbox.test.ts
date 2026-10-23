@@ -54,6 +54,10 @@ describe("ayudas de dibujo", () => {
     expect(h.diaSemana("2026-10-19")).toBe(0);
     expect(h.diasEntre("2026-10-01", "2026-11-01")).toBe(31);
     expect(h.sumarDias("2026-12-31", 1)).toBe("2027-01-01");
+    expect(h.rangoDias("2026-10-30", "2026-11-02")).toEqual(["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02"]);
+    expect(h.rangoDias("2026-10-02", "2026-10-01")).toEqual([]);
+    expect(h.cadaCuanto(20, 48)).toBe(3);
+    expect(h.cadaCuanto(80, 48)).toBe(1);
   });
 
   it("colores: cada nombre siempre el mismo, Otros en gris, intensidad entre fondo y tono", () => {
@@ -99,6 +103,20 @@ describe("Worker del sandbox", () => {
     expect(r.html).not.toContain("<INTER>");
     // Sin datos, avisa con texto en vez de dibujar un hueco.
     expect(correrEnTrabajador(EJEMPLO_LIBRE, [])).toEqual({ ok: true, html: "<p>Sin ingresos en el rango.</p>" });
+  });
+
+  it("el ejemplo dibuja todos los días del rango y sus fechas no se pisan", () => {
+    // Dos semanas con un hueco en el medio (días sin ingresos).
+    const datos = ["2026-10-08", "2026-10-09", "2026-10-15", "2026-10-21"].map((dia) => ({ dia, empresa: "ALDAMA" }));
+    const r = correrEnTrabajador(EJEMPLO_LIBRE, datos);
+    expect(r.ok, r.mensaje).toBe(true);
+    // 14 celdas: del 8 al 21, también los días vacíos.
+    expect(r.html?.match(/<rect /g)).toHaveLength(14);
+    expect(r.html).toContain("ALDAMA · mar 13: 0 ingresos");
+    // Los rótulos de fecha quedan separados al menos el ancho de un rótulo (~48 px).
+    const xs = [...(r.html ?? "").matchAll(/<text x="([\d.]+)" y="16"/g)].map((m) => Number(m[1]));
+    expect(xs.length).toBeGreaterThan(1);
+    for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(48);
   });
 
   it("si el código falla o no devuelve texto, avisa en vez de romper", () => {
