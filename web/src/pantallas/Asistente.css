@@ -159,24 +159,41 @@
 .asistente-entrada textarea::placeholder {
   color: var(--muted);
 }
+/* Enviar: gris mientras no hay nada escrito, naranja (llama la atención) cuando ya se puede enviar. */
+.asistente-chat {
+  --chat-enviar: #c4501a;
+  --chat-enviar-hover: #a8430f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .asistente-chat {
+    --chat-enviar: #e0692e;
+    --chat-enviar-hover: #ec7d45;
+  }
+}
+[data-theme="dark"] .asistente-chat {
+  --chat-enviar: #e0692e;
+  --chat-enviar-hover: #ec7d45;
+}
 .asistente-enviar {
   flex: none;
   width: 34px;
   height: 34px;
   border-radius: 50%;
   border: 0;
-  background: var(--acento);
-  color: var(--sobre-acento);
+  background: var(--chat-enviar);
+  color: #fff;
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: opacity 150ms ease, transform 150ms ease;
+  transition: background-color 180ms ease, color 180ms ease, transform 150ms ease;
 }
 .asistente-enviar:not(:disabled):hover {
+  background: var(--chat-enviar-hover);
   transform: scale(1.06);
 }
 .asistente-enviar:disabled {
-  opacity: 0.35;
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+  color: var(--muted);
   cursor: default;
 }
 .asistente-entrada-ayuda {
