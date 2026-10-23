@@ -1,11 +1,21 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from "vite";
+import { defineConfig, searchForWorkspaceRoot } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // El esquema del lienzo vive en supabase/functions/_shared/lienzo (lo comparte
+  // con la Edge Function `lienzo-ia`) y está escrito para Deno: importa
+  // `npm:zod@…`. Acá ese import es el zod del panel.
+  resolve: {
+    alias: { "npm:zod@4.6.5": "zod" },
+    dedupe: ["zod"],
+  },
+  server: {
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), "../supabase/functions/_shared/lienzo"] },
+  },
   build: {
     // AG Grid Community (~875 KB, ver el grupo "ag-grid-vendor" abajo) ya
     // está deliberadamente aislado en su propio chunk cacheable -- no es
