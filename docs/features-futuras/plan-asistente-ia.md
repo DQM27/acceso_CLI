@@ -490,7 +490,42 @@ entrada en el catálogo y su traducción de filtros; los gráficos ya sirven.
 - Panel: chat de la pantalla Asistente. Desde el resumen arma una vista nueva;
   sobre una vista abierta la edita (con Deshacer).
 
+## Etapa 3 (consultas libres) — implementada (2026-10-23, sin PR todavía)
+
+El modelo ve toda la base (menos secretos) y escribe un SELECT cuando el
+catálogo no alcanza. Distinto del plan original: no corre con el JWT del
+usuario sino con `service_role` bajando a un rol de solo lectura, porque
+ejecutar SQL con el JWT dejaría a cualquier admin correr SQL arbitrario
+saltándose el parser.
+
+- Migración `20261024120000_ia_consultas` (**aplicada en staging**):
+  - esquema `ia` con 43 vistas (todo lo operativo; fuera: códigos de
+    vinculación, tokens push, claves y hashes de equipos, ids de sesión,
+    activaciones de anfitriones, IP, registro del asistente);
+  - roles `ia_lector` e `ia_lector_dueno` (el segundo ve además telemetría,
+    errores de las apps y eventos de seguridad);
+  - `ia_permisos` (alcances `telemetria` y `alertas` por cuenta, sembrados
+    para la cuenta del dueño; se editan por SQL);
+  - `ia_consultar` (sólo service_role: solo lectura, rol según la cuenta,
+    tope de filas, aborta si la consulta cambia de rol) e `ia_describir`;
+  - `ia_alertas`.
+- Revisor de SQL (`_shared/lienzo/sql.ts`, parser de Postgres): una sola
+  consulta de lectura, sólo `ia.*`, funciones de lista blanca; a la base va
+  el SQL regenerado desde el árbol.
+- Fuente "consulta" en el lienzo: SQL + columnas declaradas. `lienzo-ia` la
+  revisa y la prueba con una fila antes de devolverla; el panel la corre con
+  la nueva Edge Function `lienzo-consulta` (sin modelo) y aplica los
+  filtros sobre las filas. El SQL queda visible ("Ver la consulta").
+- Alertas (pedido del dueño): el modelo nunca ejecuta SQL que escriba la
+  persona. Tres detectores (patrones en el mensaje antes del modelo, la
+  herramienta `reportar_intento` del modelo y el parser) guardan quién, qué
+  escribió y por qué. Las ve sólo la cuenta con el alcance `alertas`, en el
+  selector de vistas del Asistente. Por correo, cuando esté el SMTP propio.
+- `lienzo-ia` y `lienzo-consulta` **desplegadas sólo en staging**. Para
+  producción: desplegar a mano las dos funciones (la migración entra al
+  mergear).
+
 Pendiente: rehacer, guardar vista y exportar (en la maqueta B, no
-construidos); modo libre en sandbox de dominio aparte (con Python/Pyodide
-adentro); presupuesto: tope mensual de USD 5 en el espacio de trabajo de
-Anthropic.
+construidos); etapa 4, modo libre en sandbox de dominio aparte (con
+Python/Pyodide adentro); alertas por correo (SMTP); presupuesto: tope
+mensual de USD 5 en el espacio de trabajo de Anthropic.
