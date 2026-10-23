@@ -8,19 +8,26 @@
   min-height: 0;
 }
 
+/* El chat es una tarjeta flotante como el menú lateral (mismo fondo, borde, radio y
+   separación), en vez de una columna pegada al borde. */
 .asistente-chat {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--panel);
-  border-right: 1px solid var(--borde);
+  margin: 0 0.375rem 0.375rem;
+  background: var(--panel-lateral);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  overflow: hidden;
+  font-size: 0.875rem;
 }
 .asistente-chat header {
   display: flex;
   align-items: center;
   gap: var(--espacio-2);
-  padding: var(--espacio-4);
+  padding: var(--espacio-3) var(--espacio-4);
   border-bottom: 1px solid var(--borde);
+  font-size: 0.95rem;
   font-weight: 700;
 }
 .asistente-chat header > span:first-child {
