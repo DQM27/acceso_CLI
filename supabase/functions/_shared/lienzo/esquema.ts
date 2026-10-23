@@ -271,6 +271,17 @@ export const lienzoEsquema = lienzoBase.superRefine((lienzo, ctx) => {
   lienzo.widgets.forEach((w, i) => revisarWidget(lienzo.fuente, w, i, ctx));
 });
 
+/**
+ * La forma del documento en JSON Schema, para describírsela al modelo (la
+ * herramienta `editar_lienzo` de `lienzo-ia`). Sale del mismo esquema zod; las
+ * reglas cruzadas (campo de la fuente, operador del tipo) las explican las
+ * instrucciones y las hace cumplir `validarLienzo`.
+ */
+export function esquemaJsonDelLienzo(): Record<string, unknown> {
+  const { $schema: _descartado, ...esquema } = z.toJSONSchema(lienzoBase) as Record<string, unknown>;
+  return esquema;
+}
+
 export type ResultadoValidacion = { ok: true; lienzo: Lienzo } | { ok: false; errores: string[] };
 
 export function validarLienzo(entrada: unknown): ResultadoValidacion {
