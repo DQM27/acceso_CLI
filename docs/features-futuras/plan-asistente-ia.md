@@ -406,9 +406,11 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
   conflictos desde la pantalla (en construcción), revincular un equipo
   retirado (por definir) y una tabla de auditoría en Supabase que reúna
   los cambios de todos los equipos.
-- Dueño: decir si el operador puede activar/desactivar empresas; regla
-  del gafete KOF con préstamo sin devolver; si el sitio pide anotar algo
-  al encontrar un ingreso viejo sin salida o un aviso de permanencia.
+- Más respuestas del dueño (2026-10-23), ya en el manual: sólo un
+  administrador activa o desactiva empresas y contratistas (el programa
+  todavía no lo impide); no se anota nada aparte por un ingreso viejo o un
+  aviso de permanencia; un gafete KOF sin devolver bloquea entregar otro.
+  El manual del escritorio queda sin puntos por confirmar.
 - Registros de prueba en producción: hay 8 ingresos de contratistas casi
   seguro de prueba (menos de 2 minutos, registrados por Daniel Quintana o
   Pedro Molina, varios de madrugada) y 4 dudosos. El dueño lo dejó para

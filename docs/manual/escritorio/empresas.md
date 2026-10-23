@@ -13,7 +13,9 @@ un contratista, ni al revés.
 
 ## Quién puede hacerlo
 
-Cualquier usuario con sesión abierta en el escritorio.
+Cualquier usuario con sesión abierta puede consultar, dar de alta y
+corregir empresas. **Activar o desactivar** una empresa lo hace **sólo un
+administrador**.
 
 ## Dónde
 
@@ -39,8 +41,8 @@ La columna **Activa** tiene un interruptor.
 ⚠ Desactivar una empresa de contratistas **impide la entrada de todos sus
 contratistas** ("Acceso denegado · la empresa está inactiva"). Desactivar
 una empresa proveedora impide registrar ingresos de proveedores con esa
-empresa. ⚠ Por confirmar: si el operador puede hacerlo o si es decisión de
-un administrador.
+empresa. Por eso **sólo un administrador** activa o desactiva empresas.
+Si usted es operador, no use el interruptor: pídaselo a un administrador.
 
 ## Qué se ve en la tabla
 

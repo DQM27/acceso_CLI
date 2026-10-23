@@ -37,7 +37,7 @@ escriba el número. Ver [Registrar una salida](registrar-salida.md).
 
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
-| "⚠ Ya tiene prestado el gafete #04 sin devolver" | El encargado tiene un gafete pendiente. | No se le puede entregar otro hasta que devuelva ese. Registre primero la devolución (Ctrl+S, por gafete). |
+| "⚠ Ya tiene prestado el gafete #04 sin devolver" | El encargado tiene un gafete pendiente. Aunque se vea en amarillo, **es un bloqueo**: mientras no lo devuelva, no se le puede entregar otro. | Registre primero la devolución (Ctrl+S, por gafete) y luego entregue el nuevo. |
 | "Este encargado ya tiene un gafete provisional prestado" | Al intentar entregar, el programa confirmó que tiene uno pendiente (en este sitio o en otro). | Igual que el anterior: primero la devolución. Si dice que lo devolvió en otro sitio, avise a un administrador. |
 | "El número de gafete es obligatorio" / "Ingrese un número de gafete válido" | Falta el número o no es válido. | Escriba el número del gafete provisional. |
 | "Ese número de gafete ya está prestado a otra persona" | Ese gafete lo tiene otro encargado. | Entregue otro gafete. |
