@@ -1,6 +1,6 @@
 package com.brisas.controlacceso
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,17 +35,37 @@ fun PantallaExternos(
     onSincronizar: () -> Unit = {},
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        FilaPildoras(
-            opciones = TIPOS_VISIBLES.map { it.etiqueta },
-            seleccionado = tipo,
-            onSeleccionar = onCambiarTipo,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        )
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when (tipoExternoVisible(tipo)) {
-                TipoExterno.VISITA -> PantallaVisitas(nucleo, refrescarNube)
-                TipoExterno.PROVEEDOR -> PantallaProveedores(nucleo, refrescarNube, sincronizando, onSincronizar)
-                TipoExterno.POR_CORREO -> PantallaPorCorreo(nucleo, refrescarNube, sincronizando, onSincronizar)
+        // Con una cámara o un formulario a la vista (ver
+        // [OcultarBarraSecciones]) el selector tampoco se muestra: esas
+        // pantallas ocupan todo el lugar.
+        if ((LocalPantallasCompletas.current?.cantidad ?: 0) == 0) {
+            FilaPildoras(
+                opciones = TIPOS_VISIBLES.map { it.etiqueta },
+                seleccionado = tipo,
+                onSeleccionar = onCambiarTipo,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+        }
+        // Mismo deslizamiento con fundido que las pestañas principales (ver
+        // `TransicionesPantalla.kt`); `AnimatedContent` y no un `Column` por el
+        // mismo motivo que en [PantallaPrincipal] (las listas necesitan un
+        // alto acotado).
+        AnimatedContent(
+            targetState = tipoExternoVisible(tipo),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            transitionSpec = {
+                transicionDePestana(TIPOS_VISIBLES.indexOf(initialState), TIPOS_VISIBLES.indexOf(targetState))
+            },
+            label = "tipoExterno",
+        ) { tipoMostrado ->
+            // Con su propio acento mientras sale: Proveedor y Correo tienen
+            // colores distintos (ver `AcentoSeccion.kt`).
+            TemaSeccion(SeccionPrincipal.EXTERNOS, tipoMostrado) {
+                when (tipoMostrado) {
+                    TipoExterno.VISITA -> PantallaVisitas(nucleo, refrescarNube)
+                    TipoExterno.PROVEEDOR -> PantallaProveedores(nucleo, refrescarNube, sincronizando, onSincronizar)
+                    TipoExterno.POR_CORREO -> PantallaPorCorreo(nucleo, refrescarNube, sincronizando, onSincronizar)
+                }
             }
         }
     }

@@ -124,6 +124,7 @@ class MetricasOcr(
     private val cadaCuantosFrames: Int = 30,
 ) {
     private val inicio = reloj()
+    private var msHastaImagenCamara: Long? = null
     private var primerFrame = 0L
     private var ultimoFrame = 0L
     private var frames = 0
@@ -138,7 +139,6 @@ class MetricasOcr(
     private val luminancias = ArrayDeque<Float>()
     private val reflejos = ArrayDeque<Float>()
     private var framesMedidos = 0
-    private var framesConLinterna = 0
 
     // Confianza de las palabras de ML Kit: para calibrar el umbral con que
     // los renglones visuales descartan palabras (`CONFIANZA_MINIMA`, 0,25).
@@ -169,6 +169,13 @@ class MetricasOcr(
     private val msRecorte = ArrayDeque<Float>()
     private val msReconocimiento = ArrayDeque<Float>()
 
+    /// Llegó una imagen de la cámara (procesada o no): la primera marca
+    /// cuánto tardó en arrancar la cámara, aparte de lo que tarda el OCR.
+    @Synchronized
+    fun registrarImagenCamara() {
+        if (habilitadas && msHastaImagenCamara == null) msHastaImagenCamara = (reloj() - inicio) / 1_000_000
+    }
+
     /// Un frame que terminó de pasar por ML Kit.
     @Synchronized
     fun registrarFrame(nanosRecorte: Long, nanosReconocimiento: Long) {
@@ -182,13 +189,11 @@ class MetricasOcr(
         if (frames % cadaCuantosFrames == 0) registrar(resumen())
     }
 
-    /// Calidad medida de un frame (procesado o descartado) y si la linterna
-    /// estaba encendida.
+    /// Calidad medida de un frame (procesado o descartado).
     @Synchronized
-    fun registrarCalidad(calidad: CalidadFrame, linternaEncendida: Boolean) {
+    fun registrarCalidad(calidad: CalidadFrame) {
         if (!habilitadas) return
         framesMedidos++
-        if (linternaEncendida) framesConLinterna++
         agregar(nitideces, calidad.nitidez, MUESTRAS_CONDICIONES)
         agregar(luminancias, calidad.luminancia, MUESTRAS_CONDICIONES)
         agregar(reflejos, calidad.fraccionReflejo, MUESTRAS_CONDICIONES)
@@ -286,6 +291,7 @@ class MetricasOcr(
     @Synchronized
     fun datos(): Map<String, Any?> = mapOf(
         "ms_sesion" to (reloj() - inicio) / 1_000_000,
+        "ms_hasta_imagen_camara" to msHastaImagenCamara,
         "ms_hasta_confirmar" to msHastaConfirmar,
         "frames" to frames,
         "fps" to framesPorSegundo(),
@@ -295,7 +301,6 @@ class MetricasOcr(
         "reconocimiento_mediana_ms" to mediana(msReconocimiento),
         // Condiciones de captura: con qué nitidez, luz y reflejo se trabajó.
         "frames_medidos" to framesMedidos,
-        "frames_con_linterna" to framesConLinterna,
         "nitidez_p10" to cuantil(nitideces, 0.1),
         "nitidez_p50" to cuantil(nitideces, 0.5),
         "nitidez_p90" to cuantil(nitideces, 0.9),

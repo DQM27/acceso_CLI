@@ -1,13 +1,14 @@
 package com.brisas.controlacceso
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.ViewTreeObserver
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -60,17 +61,25 @@ class MainActivity : ComponentActivity() {
         val inicioActividadMs = SystemClock.uptimeMillis()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // Sólo en release -- en debug bloqueaba también las capturas de
-        // pantalla/grabación usadas para revisar diseño en el emulador
-        // (adb screencap/screenrecord devuelven negro contra una ventana
-        // FLAG_SECURE, sea cual sea el backend de GPU). La protección real
-        // contra shoulder-surfing/grabación sigue intacta en cualquier APK
-        // de release o instalado desde un Release real de GitHub.
-        if (!BuildConfig.DEBUG) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // Sin el velo blanco que Android pone detrás de los tres botones de
+        // navegación para asegurar contraste: se veía como una franja más
+        // clara entre la barra de secciones flotante y los botones. El fondo
+        // de la app ya llega hasta ahí (ver el `Surface` de abajo) y los
+        // íconos del sistema se ajustan al tema (`isAppearanceLightNavigationBars`).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
         }
+        // Sin FLAG_SECURE (pedido del usuario 2026-10-21): las capturas de
+        // pantalla del operador sirven para reportar problemas y documentar,
+        // y bloquearlas estorbaba más de lo que protegía.
         GestorTema.inicializar(this)
         atenderIntent(intent)
+        // CameraX tarda en inicializarse la primera vez (enumera las cámaras
+        // y lee sus características): adelantarlo acá le quita ese tiempo a
+        // la primera apertura del escáner, que sólo tiene que abrir el sensor.
+        // Después del primer dibujo, para no competir con el arranque; la
+        // instancia queda cacheada en el proceso (`getInstance` no bloquea).
+        window.decorView.post { ProcessCameraProvider.getInstance(applicationContext) }
         if (Telemetria.activa) {
             // Duración de cada frame y fin del arranque (primer dibujo
             // completo). Sólo en el build de diagnóstico.
@@ -143,11 +152,10 @@ class MainActivity : ComponentActivity() {
                         Box(modifier = Modifier.widthIn(max = ANCHO_MAXIMO_CONTENIDO).fillMaxHeight()) {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 when (val actual = estado) {
-                                    EstadoAplicacion.Cargando -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                                    is EstadoAplicacion.Fallo -> Text(
-                                        actual.mensaje,
-                                        color = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                                    EstadoAplicacion.Cargando -> PantallaCargandoArranque()
+                                    is EstadoAplicacion.Fallo -> PantallaFalloArranque(
+                                        mensaje = actual.mensaje,
+                                        onReintentar = aplicacion::reintentar,
                                     )
                                     is EstadoAplicacion.Lista -> ContenidoAplicacion(actual.entorno)
                                 }

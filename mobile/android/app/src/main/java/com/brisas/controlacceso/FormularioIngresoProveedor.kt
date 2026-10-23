@@ -1,9 +1,8 @@
 package com.brisas.controlacceso
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -354,7 +353,7 @@ private fun PasoEmpresaProveedora(
                             .onSizeChanged { altoListaPx = it.height },
                         shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surface,
-                        shadowElevation = 6.dp,
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             resultados.take(6).forEach { empresa ->
@@ -409,10 +408,8 @@ internal fun PasoVehiculoYGafete(
 
 /// Tarjeta compartida por los tres pasos -- mismo fondo/forma/padding que
 /// las tarjetas de [PantallaRutas], con un botón de cámara cuadrado
-/// opcional a la derecha (pasos 1 y 3, el paso 2 no tiene nada
-/// escaneable), mismo look que `BotonCamaraCuadrado` de ese archivo --
-/// duplicado acá por el mismo motivo que [PasoEncabezadoProveedor]: es
-/// `private` allá).
+/// opcional a la derecha ([BotonCuadradoBordeBrisas]; pasos 1 y 3, el paso
+/// 2 no tiene nada escaneable).
 @Composable
 internal fun TarjetaPasoProveedor(
     numero: Int,
@@ -457,18 +454,12 @@ internal fun TarjetaPasoProveedor(
                 contenido()
             }
             if (onEscanear != null) {
-                val colorBoton =
-                    if (botonHabilitado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                Box(
-                    modifier = Modifier
-                        .size(AlturaBusquedaBrisas)
-                        .border(1.dp, colorBoton, FormaCampoBrisas)
-                        .clip(FormaCampoBrisas)
-                        .clickable(enabled = botonHabilitado, onClick = onEscanear),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(icono, contentDescription = descripcionIcono, tint = colorBoton)
-                }
+                BotonCuadradoBordeBrisas(
+                    icono = icono,
+                    descripcion = descripcionIcono,
+                    onClick = onEscanear,
+                    enabled = botonHabilitado,
+                )
             }
         }
         contenidoExtra?.invoke()

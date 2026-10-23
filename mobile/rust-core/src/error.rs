@@ -17,10 +17,15 @@ use control_acceso::services::error::UsuarioServiceError as UsuarioServiceErrorN
 pub enum NucleoError {
     #[error("{mensaje}")]
     Apertura { mensaje: String },
-    #[error("credenciales inválidas")]
+    #[error("Cédula o contraseña incorrecta")]
     CredencialesInvalidas,
-    #[error("usuario inactivo")]
+    #[error("Este usuario está inactivo. Hable con un administrador")]
     UsuarioInactivo,
+    /// La contraseña es correcta pero es la temporal del alta: no se abre
+    /// sesión, Kotlin pasa al paso de elegir una nueva
+    /// (`Nucleo::cambiar_password_temporal`).
+    #[error("Su contraseña es temporal: elija una nueva para continuar")]
+    PasswordTemporal,
     /// Usuario global (sincronizado) que todavía no fijó contraseña en
     /// este teléfono. `Nucleo::autenticar`/`autenticar`
     /// interceptan esto internamente y redirigen a `autenticar_supabase`

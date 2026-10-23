@@ -1,19 +1,26 @@
 package com.brisas.controlacceso
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,8 +33,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import uniffi.control_acceso_mobile.VotadorPorPosicion
 
 /// Tag común para volcar por `Log.d` el texto crudo que entrega ML Kit en
@@ -199,12 +209,24 @@ fun EscanerConPermisoCamara(
     contenido: @Composable () -> Unit,
 ) {
     BackHandler(onBack = onCerrar)
+    // La cámara ocupa toda la pantalla: la barra de secciones no debe quedar
+    // encima ni dejarse tocar (ver [OcultarBarraSecciones]).
+    OcultarBarraSecciones()
     val contexto = LocalContext.current
-    var permisoConcedido by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+    val tienePermiso = {
+        ContextCompat.checkSelfPermission(contexto, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
     }
+    var permisoConcedido by remember { mutableStateOf(tienePermiso()) }
+    var negadoUnaVez by remember { mutableStateOf(false) }
+    var mostrarExplicacion by remember { mutableStateOf(true) }
     val pedirPermiso = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
         permisoConcedido = concedido
+        if (!concedido) {
+            negadoUnaVez = true
+            mostrarExplicacion = contexto.buscarActivity()?.let {
+                ActivityCompat.shouldShowRequestPermissionRationale(it, Manifest.permission.CAMERA)
+            } ?: true
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -212,22 +234,94 @@ fun EscanerConPermisoCamara(
             pedirPermiso.launch(Manifest.permission.CAMERA)
         }
     }
-
-    if (permisoConcedido) {
-        contenido()
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(mensajePermiso, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BotonDiscretoBrisas(onClick = onCerrar) { Text("Volver") }
-                BotonBrisas(onClick = { pedirPermiso.launch(Manifest.permission.CAMERA) }) { Text("Dar permiso") }
-            }
-        }
+    // Al volver de Ajustes con el permiso ya dado, la cámara arranca sola.
+    LifecycleResumeEffect(Unit) {
+        if (!permisoConcedido && tienePermiso()) permisoConcedido = true
+        onPauseOrDispose { }
     }
+
+    val paso = pasoPermisoCamara(permisoConcedido, negadoUnaVez, mostrarExplicacion)
+    if (paso == PasoPermisoCamara.CONCEDIDO) {
+        contenido()
+        return
+    }
+    val irAAjustes = paso == PasoPermisoCamara.IR_A_AJUSTES
+    PantallaPermisoCamara(
+        mensaje = mensajePermiso,
+        irAAjustes = irAAjustes,
+        onPedir = {
+            if (irAAjustes) {
+                contexto.startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", contexto.packageName, null)),
+                )
+            } else {
+                pedirPermiso.launch(Manifest.permission.CAMERA)
+            }
+        },
+        onCerrar = onCerrar,
+    )
+}
+
+enum class PasoPermisoCamara { CONCEDIDO, PEDIR, IR_A_AJUSTES }
+
+/// Android deja de mostrar el diálogo del permiso después de que lo niegan
+/// "para siempre" (o dos veces): desde ahí `launch` vuelve sin preguntar nada
+/// y el botón "Dar permiso" no hacía nada. Se reconoce porque, tras una
+/// negativa, el sistema ya no pide explicar el motivo
+/// (`shouldShowRequestPermissionRationale` en `false`); entonces sólo queda
+/// mandarlo a los Ajustes de la app.
+fun pasoPermisoCamara(concedido: Boolean, negadoUnaVez: Boolean, mostrarExplicacion: Boolean): PasoPermisoCamara =
+    when {
+        concedido -> PasoPermisoCamara.CONCEDIDO
+        negadoUnaVez && !mostrarExplicacion -> PasoPermisoCamara.IR_A_AJUSTES
+        else -> PasoPermisoCamara.PEDIR
+    }
+
+@Composable
+private fun PantallaPermisoCamara(
+    mensaje: String,
+    irAAjustes: Boolean,
+    onPedir: () -> Unit,
+    onCerrar: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        IconoPorteria(Icons.Outlined.PhotoCamera)
+        Text(
+            "Permiso de cámara",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(top = 20.dp),
+        )
+        Text(
+            if (irAAjustes) {
+                "$mensaje El permiso quedó negado: actívelo en Ajustes › Permisos › Cámara."
+            } else {
+                mensaje
+            },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        BotonPorteria(
+            texto = if (irAAjustes) "Abrir Ajustes" else "Dar permiso",
+            onClick = onPedir,
+            modifier = Modifier.padding(top = 24.dp),
+        )
+        BotonDiscretoBrisas(onClick = onCerrar, modifier = Modifier.padding(top = 4.dp)) { Text("Volver") }
+    }
+}
+
+/// La Activity detrás de un `Context` de Compose (puede venir envuelto).
+private fun Context.buscarActivity(): Activity? {
+    var actual: Context? = this
+    while (actual is ContextWrapper) {
+        if (actual is Activity) return actual
+        actual = actual.baseContext
+    }
+    return null
 }
 
 /// Sonido corto y discreto de confirmación, compartido por las 4 pantallas

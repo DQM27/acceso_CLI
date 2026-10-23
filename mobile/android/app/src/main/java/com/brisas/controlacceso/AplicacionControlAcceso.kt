@@ -15,8 +15,7 @@ import android.system.Os
 ///
 /// Sólo en builds que apuntan al sandbox (`BuildConfig.AMBIENTE_STAGING`:
 /// debug y diagnóstico) -- release (firmado, distribuido vía GitHub
-/// Releases) sigue apuntando a producción sin tocar nada, mismo criterio
-/// que el `FLAG_SECURE` de MainActivity. La app ya está en producción real:
+/// Releases) sigue apuntando a producción sin tocar nada. La app ya está en producción real:
 /// un build de prueba NUNCA debe poder escribir en esa base por accidente.
 class AplicacionControlAcceso : Application() {
     override fun onCreate() {

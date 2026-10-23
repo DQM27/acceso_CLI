@@ -41,6 +41,9 @@ object NotificacionesPush {
     const val CANAL_EMERGENCIAS = "emergencias"
     /// Extra del intent de la notificación: MainActivity abre la bandeja.
     const val EXTRA_ABRIR_AVISOS = "abrir_avisos"
+
+    /// Con la etiqueta del aviso alcanza para distinguirlas: el id es fijo.
+    private const val ID_NOTIFICACION_AVISO = 0
     private val VIBRACION_EMERGENCIA = longArrayOf(0, 800, 300, 800, 300, 800)
     private const val ETIQUETA_LOG = "LattisPush"
     private const val PREFERENCIAS = "notificaciones_push"
@@ -105,14 +108,44 @@ object NotificacionesPush {
             .setPriority(if (aviso.emergente) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
             .setCategory(if (aviso.emergente) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
+            // Un duplicado de FCM reemplaza a la notificación (misma etiqueta)
+            // y no vuelve a sonar.
+            .setOnlyAlertOnce(true)
             .setContentIntent(abrirApp)
             .build()
         try {
-            // Id distinto por aviso: dos avisos seguidos no se pisan.
-            NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), notificacion)
+            val manager = NotificationManagerCompat.from(context)
+            val id = aviso.id
+            if (id != null) {
+                // Etiquetada con el id del aviso: así leerlo, archivarlo o
+                // borrarlo en la app puede quitar SU notificación de la barra
+                // (antes llevaba un número al azar y quedaba ahí hasta tocarla).
+                manager.notify(id, ID_NOTIFICACION_AVISO, notificacion)
+            } else {
+                // Sin id del servidor: dos avisos seguidos no se pisan.
+                manager.notify(System.currentTimeMillis().toInt(), notificacion)
+            }
         } catch (e: SecurityException) {
             // El permiso se revocó entre el chequeo y el `notify`.
             Log.w(ETIQUETA_LOG, "Sin permiso para notificar", e)
+        }
+    }
+
+    /// Quita de la barra la notificación de este aviso (ya se leyó, archivó o
+    /// borró en la app). No pasa nada si no estaba: ya la descartaron o el
+    /// aviso llegó sin id.
+    fun quitar(context: Context, idAviso: String) {
+        NotificationManagerCompat.from(context).cancel(idAviso, ID_NOTIFICACION_AVISO)
+    }
+
+    /// Quita todas las notificaciones de avisos y emergencias de la barra
+    /// ("Marcar leídos"). Sólo las de esos dos canales: la descarga de una
+    /// actualización, por ejemplo, queda.
+    fun quitarTodas(context: Context) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        for (activa in manager.activeNotifications) {
+            val canal = activa.notification.channelId
+            if (canal == CANAL_AVISOS || canal == CANAL_EMERGENCIAS) manager.cancel(activa.tag, activa.id)
         }
     }
 

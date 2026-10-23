@@ -5,15 +5,42 @@ use control_acceso::services::error::AutenticacionError as AutenticacionErrorNuc
 
 use crate::{Nucleo, NucleoError, UsuarioSesion};
 
-/// El celular no cambia contraseñas: sólo el escritorio (en Supabase Auth).
-/// Una cuenta con la contraseña temporal del alta todavía sin cambiar no
-/// entra acá hasta que la cambie en una computadora.
-const MENSAJE_PASSWORD_TEMPORAL: &str = "Su contraseña es temporal: cámbiela primero en una \
-     computadora del puesto de seguridad y luego ingrese aquí con la nueva.";
+/// Mismo mínimo que el escritorio (`esquemaCambioObligatorio` en
+/// `desktop/src/pantallas/Login.logica.ts`).
+const LARGO_MINIMO_PASSWORD: usize = 8;
 
-fn rechazo_password_temporal() -> NucleoError {
-    NucleoError::Rechazado {
-        mensaje: MENSAJE_PASSWORD_TEMPORAL.to_string(),
+/// Cada requisito de la contraseña nueva por separado, para que el teléfono
+/// los muestre como lista que se va tildando mientras se escribe.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RevisionPasswordNueva {
+    pub largo_suficiente: bool,
+    pub distinta_de_la_temporal: bool,
+    pub coinciden: bool,
+}
+
+impl RevisionPasswordNueva {
+    /// Los tres requisitos a la vez: se puede enviar. Kotlin tiene el mismo
+    /// atajo (`RevisionPasswordNueva.valida` en LoginViewModel.kt).
+    pub fn valida(&self) -> bool {
+        self.largo_suficiente && self.distinta_de_la_temporal && self.coinciden
+    }
+}
+
+/// Reglas de la contraseña nueva que reemplaza a la temporal. Pura (sin
+/// red ni base), así Kotlin la consulta en cada tecla.
+#[uniffi::export]
+pub fn revisar_password_nueva(
+    password_temporal: String,
+    password_nueva: String,
+    confirmacion: String,
+) -> RevisionPasswordNueva {
+    let largo_suficiente = password_nueva.chars().count() >= LARGO_MINIMO_PASSWORD;
+    let distinta_de_la_temporal = !password_nueva.is_empty() && password_nueva != password_temporal;
+    let coinciden = !confirmacion.is_empty() && password_nueva == confirmacion;
+    RevisionPasswordNueva {
+        largo_suficiente,
+        distinta_de_la_temporal,
+        coinciden,
     }
 }
 
@@ -81,7 +108,7 @@ impl Nucleo {
         };
         // Contraseña temporal cacheada de un login anterior sin conexión.
         if debe_cambiar_password {
-            return Err(rechazo_password_temporal());
+            return Err(NucleoError::PasswordTemporal);
         }
 
         let autorizado_para_nube = self.core_lock().autorizar_uso_nube(&sesion).is_ok();
@@ -109,6 +136,45 @@ impl Nucleo {
 
         *self.sesion_lock() = Some((sesion.clone(), control_acceso::nube::InicioSesion::ahora()));
         Ok(sesion.into())
+    }
+
+    /// Segundo paso del login cuando `autenticar` devolvió
+    /// `NucleoError::PasswordTemporal`: cambia la temporal por
+    /// `password_nueva` en Supabase Auth y abre la sesión con la nueva, sin
+    /// volver a pedir nada. Mismo cambio que hace el escritorio
+    /// (`cambiar_password_supabase`): `nube::cambiar_password` revalida la
+    /// temporal con un login real y limpia `debe_cambiar_password`. Después
+    /// `autenticar_supabase` cachea la nueva para entrar sin conexión, lo
+    /// que también pisa una temporal que hubiera quedado cacheada.
+    ///
+    /// Necesita red: sin conexión falla con el mensaje de red y la cuenta
+    /// sigue con la temporal. Las reglas (`revisar_password_nueva`) se
+    /// revisan antes de tocar la red.
+    pub fn cambiar_password_temporal(
+        &self,
+        cedula: String,
+        password_temporal: String,
+        password_nueva: String,
+        confirmacion: String,
+    ) -> Result<UsuarioSesion, NucleoError> {
+        let revision = revisar_password_nueva(
+            password_temporal.clone(),
+            password_nueva.clone(),
+            confirmacion,
+        );
+        if !revision.valida() {
+            return Err(NucleoError::Rechazado {
+                mensaje: "La contraseña nueva no cumple los requisitos".to_string(),
+            });
+        }
+        control_acceso::nube::cambiar_password(
+            control_acceso::nube::base_url(),
+            control_acceso::nube::apikey(),
+            &cedula,
+            &password_temporal,
+            &password_nueva,
+        )?;
+        self.autenticar_supabase(&cedula, &password_nueva)
     }
 
     /// Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
@@ -173,10 +239,11 @@ impl Nucleo {
             cedula,
             password,
         )?;
-        // La temporal del alta se cambia en escritorio; ni se abre sesión ni
-        // se cachea para entrar sin conexión.
+        // Con la temporal del alta ni se abre sesión ni se cachea para entrar
+        // sin conexión: primero hay que elegir una nueva
+        // (`cambiar_password_temporal`).
         if sesion_supabase.debe_cambiar_password {
-            return Err(rechazo_password_temporal());
+            return Err(NucleoError::PasswordTemporal);
         }
 
         // La identidad (nombre/rol/activo) ya está local -- llegó por el

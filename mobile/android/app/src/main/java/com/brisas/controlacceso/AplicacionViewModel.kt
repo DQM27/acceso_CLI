@@ -38,6 +38,17 @@ class AplicacionViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    /// "Reintentar" de la pantalla de fallo: vuelve a abrir la base desde
+    /// cero (un fallo pasajero, como el Keystore ocupado justo al arrancar,
+    /// no obliga a cerrar la app).
+    fun reintentar() {
+        if (_estado.value !is EstadoAplicacion.Fallo) return
+        _estado.value = EstadoAplicacion.Cargando
+        viewModelScope.launch {
+            _estado.value = abrirEntorno()
+        }
+    }
+
     @SuppressLint("HardwareIds")
     private suspend fun abrirEntorno(): EstadoAplicacion = withContext(Dispatchers.IO) {
         var nucleo: Nucleo? = null
