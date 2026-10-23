@@ -7,8 +7,8 @@ import {
   FileSpreadsheet,
   FileText,
   MessageSquarePlus,
+  MessageCircle,
   PanelLeftClose,
-  PanelLeftOpen,
   Printer,
   Redo2,
   RotateCcw,
@@ -277,6 +277,7 @@ function PanelChat({
             rows={1}
             placeholder="Escriba lo que quiere ver…"
             aria-label="Mensaje para el asistente"
+            title="Enter para enviar · Shift+Enter para otra línea"
             value={texto}
             maxLength={2000}
             onChange={(e) => setTexto(e.target.value)}
@@ -289,10 +290,9 @@ function PanelChat({
             }}
           />
           <button type="submit" className="asistente-enviar" disabled={pensando || !texto.trim()} aria-label="Enviar">
-            <ArrowUp size={17} strokeWidth={2.5} aria-hidden="true" />
+            <ArrowUp size={15} strokeWidth={2.5} aria-hidden="true" />
           </button>
         </form>
-        <p className="asistente-entrada-ayuda">Enter para enviar · Shift+Enter para otra línea</p>
       </footer>
     </aside>
   );
@@ -690,18 +690,17 @@ export default function Asistente() {
   return (
     <div className={`asistente${chatOculto ? " asistente-sin-chat" : ""}`}>
       {chatOculto ? (
-        <aside className="asistente-chat asistente-chat-oculto" aria-label="Chat del asistente (oculto)">
-          <button
-            type="button"
-            className="asistente-nueva"
-            onClick={() => cambiarChatOculto(false)}
-            title="Mostrar el chat"
-            aria-label="Mostrar el chat"
-          >
-            <PanelLeftOpen size={16} aria-hidden="true" />
-          </button>
-          {pregunta.isPending && <span className="asistente-oculto-pensando" title="El asistente está respondiendo" />}
-        </aside>
+        // Oculto, el chat es un botón flotante: no ocupa lugar en la pantalla.
+        <button
+          type="button"
+          className="asistente-flotante"
+          onClick={() => cambiarChatOculto(false)}
+          title={pregunta.isPending ? "Mostrar el chat (el asistente está respondiendo)" : "Mostrar el chat"}
+          aria-label="Mostrar el chat"
+        >
+          <MessageCircle size={22} aria-hidden="true" />
+          {pregunta.isPending && <span className="asistente-flotante-pensando" aria-hidden="true" />}
+        </button>
       ) : (
         <PanelChat
           mensajes={mensajes}
