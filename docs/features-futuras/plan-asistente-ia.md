@@ -386,9 +386,11 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
 
 - Este plan, con las decisiones del dueño fechadas.
 - `docs/features-futuras/plan-importador-excel.md` (proyecto aparte).
-- Manual de uso del escritorio (`docs/manual/`): ingresos (los cuatro),
-  salidas, Activos, permanencia, contratistas, empresas y gafetes, más la
-  lista de mejoras de pantalla detectadas.
+- Manual de uso del escritorio (`docs/manual/`), **completo** (2026-10-23,
+  rama `claude/ayuda-ia`): ingresos (los cuatro), salidas, Activos,
+  permanencia, contratistas, empresas, gafetes, inicio y sesión, Historial
+  con exportar, Auditoría, conexión y actualizaciones y problemas
+  frecuentes, más la lista de mejoras de pantalla detectadas.
 - Propuestas de la pantalla inicial del lienzo, con imágenes:
   `docs/features-futuras/asistente-ia/propuestas-lienzo/` (A: pregunta
   primero; B: resumen vivo + chat lateral, **la recomendada**; C: galería
@@ -396,9 +398,11 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
 
 ## Pendiente
 
-- Manual: Historial (con exportar), Auditoría, inicio y sesión, conexión
-  y actualizaciones, problemas frecuentes; después móvil y panel web.
-- Dueño: decir si el operador puede
+- Manual: móvil y panel web.
+- Dueño: revisar los **⚠ Por confirmar** del manual del escritorio (quién
+  da el código de vinculación, cómo se avisa a otro sitio, cómo se corrige
+  un gafete en conflicto o la hora de un equipo, si la Auditoría debe
+  mostrar los cambios del otro equipo); decir si el operador puede
   activar/desactivar empresas; regla del gafete KOF con préstamo sin
   devolver.
 - Registros de prueba en producción: hay 8 ingresos de contratistas casi

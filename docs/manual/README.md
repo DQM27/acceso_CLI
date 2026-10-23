@@ -35,11 +35,11 @@ Estado: ✅ redactado · ⬜ pendiente.
 
 ### Inicio y sesión
 
-- ⬜ Vincular el equipo por primera vez ("Vincular este equipo")
-- ⬜ Iniciar sesión y fijar la contraseña la primera vez
-- ⬜ Cambiar mi contraseña
-- ⬜ Cerrar sesión (Ctrl+Q)
-- ⬜ Cambiar el tema (claro u oscuro) y ordenar el menú lateral
+- ✅ [Vincular el equipo por primera vez ("Vincular este equipo")](escritorio/vincular-equipo.md)
+- ✅ [Iniciar sesión y fijar la contraseña la primera vez](escritorio/iniciar-sesion.md)
+- ✅ [Cambiar mi contraseña](escritorio/cambiar-contrasena.md)
+- ✅ [Cerrar sesión (Ctrl+Q)](escritorio/cerrar-sesion.md)
+- ✅ [Cambiar el tema (claro u oscuro) y ordenar el menú lateral](escritorio/tema-y-menu-lateral.md)
 
 ### Ingresos
 
@@ -70,21 +70,21 @@ Estado: ✅ redactado · ⬜ pendiente.
 
 ### Consultas
 
-- ⬜ Historial de ingresos y exportar a Excel o PDF
-- ⬜ Auditoría de cambios
+- ✅ [Historial de ingresos y exportar a Excel o PDF](escritorio/historial-y-exportar.md)
+- ✅ [Auditoría de cambios](escritorio/auditoria.md)
 
 ### Conexión y actualizaciones
 
-- ⬜ Trabajar sin internet y sincronizar a mano
-- ⬜ "Tiene un ingreso activo acá Y en otro sitio"
-- ⬜ El equipo fue retirado o la sesión se cerró sola
-- ⬜ Buscar e instalar una actualización
+- ✅ [Trabajar sin internet y sincronizar a mano](escritorio/trabajar-sin-internet.md)
+- ✅ ["Tiene un ingreso activo acá Y en otro sitio"](escritorio/ingreso-activo-en-otro-sitio.md)
+- ✅ [El equipo fue retirado o la sesión se cerró sola](escritorio/equipo-retirado-o-sesion-cerrada.md)
+- ✅ [Buscar e instalar una actualización](escritorio/buscar-actualizacion.md)
 
 ### Problemas frecuentes
 
 - ✅ [PRAIND vencido, acceso denegado y otros bloqueos](escritorio/praind-y-bloqueos-de-acceso.md)
-- ⬜ "El contratista ya tiene un ingreso activo"
-- ⬜ "Revise la fecha y hora del equipo"
+- ✅ ["El contratista ya tiene un ingreso activo"](escritorio/contratista-ya-tiene-ingreso-activo.md)
+- ✅ ["Revise la fecha y hora del equipo"](escritorio/fecha-y-hora-del-equipo.md)
 
 ### Fuera del manual
 
@@ -113,6 +113,17 @@ Cuando se corrija una, se actualiza su proceso.
 6. **Gafetes**: marcar perdido un gafete de **visita** busca la cédula entre
    las visitas agendadas en la web; con una visita **por correo** puede no
    encontrarla. Verificar.
+7. **Cerrar sesión**: Ctrl+Q y el botón cierran la sesión sin confirmar.
+   Un Ctrl+Q por error saca a la persona en pleno registro.
+8. **Equipo retirado**: el aviso dice "registrarlo como dispositivo nuevo",
+   pero la pantalla **Vincular este equipo** sólo aparece en un equipo sin
+   datos. Falta un camino claro para volver a vincular un equipo usado.
+9. **Mensajes**: varios textos mezclan "usted" con voseo ("pedí",
+   "intentá", "Revisá") y otros usan "tú" ("Ya tienes la última versión").
+   Unificar en "usted", como el resto de la app. El de archivo no guardado
+   ("No se pudo guardar el archivo…") trae espacios de más en el código.
+10. **Auditoría**: muestra sólo los cambios hechos desde este equipo; no
+    los del otro equipo del sitio ni los del panel.
 
 ## Índice — Móvil y panel web
 
