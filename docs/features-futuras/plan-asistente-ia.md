@@ -471,5 +471,26 @@ configurable en gráficos, y nuevas fuentes (proveedores, correo, KOF, quién
 registró). Cada fuente nueva lleva su función SQL con grants y batería, su
 entrada en el catálogo y su traducción de filtros; los gráficos ya sirven.
 
-Pendiente de la etapa 2 (chat con modelo): Edge Function `lienzo-ia`, rehacer,
-guardar vista y exportar (en la maqueta B pero no construidos), y tope de uso.
+## Etapa 2 (chat con modelo) — implementada (2026-10-22, sin PR todavía)
+
+- Esquema y catálogo en `supabase/functions/_shared/lienzo/`: el panel
+  (re-exporta, alias de Vite para `npm:zod`) y la función validan con el mismo
+  código.
+- Tabla `lienzo_ia_uso` (`20261023120000_lienzo_ia_uso`): una fila por consulta
+  con resultado, tokens y costo. Sólo la escribe la función (service_role);
+  cada admin lee lo suyo. **Aplicada en staging**; en producción entra al
+  mergear.
+- Edge Function `lienzo-ia` (Claude Haiku 5.5, esfuerzo bajo, máx. 4000 tokens,
+  instrucciones en caché, un solo reintento si el documento no valida).
+  Topes diarios 30 por admin y 100 global (`LIENZO_IA_TOPE_PERSONA`,
+  `LIENZO_IA_TOPE_GLOBAL`); `LIENZO_IA_APAGADO=1` la apaga. El modelo ve el
+  pedido, el catálogo y el documento actual; nunca filas ni cédulas.
+  **Desplegada sólo en staging** (secreto `ANTHROPIC_API_KEY` cargado ahí).
+  Para producción: desplegarla y cargar el secreto a mano.
+- Panel: chat de la pantalla Asistente. Desde el resumen arma una vista nueva;
+  sobre una vista abierta la edita (con Deshacer).
+
+Pendiente: rehacer, guardar vista y exportar (en la maqueta B, no
+construidos); modo libre en sandbox de dominio aparte (con Python/Pyodide
+adentro); presupuesto: tope mensual de USD 5 en el espacio de trabajo de
+Anthropic.
