@@ -291,6 +291,108 @@
   align-items: center;
   gap: 6px;
 }
+/* Acciones de la vista: Deshacer, Rehacer, Guardar, Exportar, Borrar. */
+.asistente-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+}
+.asistente-acciones .boton,
+.asistente-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.asistente-menu {
+  position: relative;
+}
+.asistente-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.asistente-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.asistente-menu-apagado {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.asistente-menu-opciones {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 230px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.18);
+  animation: lienzo-aparecer 160ms ease-out both;
+}
+.asistente-menu-opciones button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--texto);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.asistente-menu-opciones button:hover,
+.asistente-menu-opciones button:focus-visible {
+  background: var(--panel-suave);
+  outline: none;
+}
+.asistente-menu-grupo {
+  padding: 6px 10px 2px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* Guardar con nombre, en línea. */
+.asistente-guardar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+  padding: var(--espacio-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--panel);
+  animation: lienzo-aparecer 180ms ease-out both;
+}
+.asistente-guardar label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.asistente-guardar input {
+  flex: 1;
+  min-width: 180px;
+  padding: 6px 10px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+  color: var(--texto);
+  font: inherit;
+}
+.asistente-guardar-ayuda {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.asistente-ok {
+  color: var(--exito);
+}
 /* Mientras llegan los datos nuevos, el dibujo anterior queda tenue (no se borra ni salta). */
 .asistente-actualizando {
   opacity: 0.6;
@@ -491,6 +593,15 @@
 .lienzo-alternar:focus-visible {
   outline: 2px solid var(--acento);
   outline-offset: 2px;
+}
+/* Varios botones del marco (imagen, tabla) juntos a la derecha. */
+.lienzo-alternar + .lienzo-alternar {
+  margin-left: 0;
+}
+.lienzo-alternar:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
 }
 
 .lienzo-atencion-fila {
@@ -907,6 +1018,38 @@
   border-left: 2px solid var(--borde);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Imprimir / guardar PDF de la vista: sólo el lienzo, sin chat, menú ni botones. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .asistente-contenido,
+  .asistente-contenido * {
+    visibility: visible;
+  }
+  .asistente-contenido {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+  .asistente-acciones,
+  .asistente-filtro button,
+  .asistente-guardar,
+  .asistente-sql,
+  .lienzo-alternar,
+  .lienzo-tooltip {
+    display: none !important;
+  }
+  .lienzo-panel,
+  .lienzo-bloque {
+    break-inside: avoid;
+  }
+  .lienzo-documento * {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* Quien pidió menos movimiento en su sistema ve todo quieto, ya en su lugar. */

@@ -111,11 +111,63 @@ function dibujar(pedido) {
   });
 }
 
+// --- Exportar el dibujo como PNG (lo pide el panel; vuelve como data: URL) ---
+const PROPIEDADES_SVG = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-opacity", "stroke-dasharray", "opacity",
+  "font-family", "font-size", "font-weight", "text-anchor", "dominant-baseline", "visibility", "display"];
+
+async function exportarPng(titulo) {
+  const svg = raiz.querySelector("svg");
+  if (!svg) throw new Error("Este panel no tiene un dibujo para exportar como imagen.");
+  const caja = svg.getBoundingClientRect();
+  const ancho = Math.max(1, Math.round(caja.width));
+  const alto = Math.max(1, Math.round(caja.height));
+  const copia = svg.cloneNode(true);
+  const originales = [svg, ...svg.querySelectorAll("*")];
+  const copias = [copia, ...copia.querySelectorAll("*")];
+  originales.forEach((original, i) => {
+    const estilo = getComputedStyle(original);
+    copias[i].setAttribute("style", PROPIEDADES_SVG.map((p) => `${p}:${estilo.getPropertyValue(p)}`).join(";"));
+    copias[i].removeAttribute("class");
+  });
+  copia.setAttribute("width", String(ancho));
+  copia.setAttribute("height", String(alto));
+  const imagen = new Image();
+  await new Promise((resolver, rechazar) => {
+    imagen.onload = resolver;
+    imagen.onerror = () => rechazar(new Error("No se pudo preparar la imagen."));
+    imagen.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(copia))}`;
+  });
+  const estiloRaiz = getComputedStyle(document.documentElement);
+  const margen = 24;
+  const altoTitulo = titulo ? 30 : 0;
+  const escala = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = (ancho + margen * 2) * escala;
+  canvas.height = (alto + altoTitulo + margen * 2) * escala;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(escala, escala);
+  ctx.fillStyle = estiloRaiz.getPropertyValue("--fondo").trim() || "#ffffff";
+  ctx.fillRect(0, 0, ancho + margen * 2, alto + altoTitulo + margen * 2);
+  if (titulo) {
+    ctx.fillStyle = estiloRaiz.getPropertyValue("--texto").trim() || "#1d2733";
+    ctx.font = '600 16px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    ctx.textBaseline = "top";
+    ctx.fillText(String(titulo).slice(0, 120), margen, margen);
+  }
+  ctx.drawImage(imagen, margen, margen + altoTitulo, ancho, alto);
+  return canvas.toDataURL("image/png");
+}
+
 window.addEventListener("message", (evento) => {
   if (evento.source !== window.parent || !ORIGENES_PERMITIDOS.has(evento.origin)) return;
   origenPadre = evento.origin;
   const pedido = evento.data;
   if (pedido?.tipo === "dibujar" && typeof pedido.codigo === "string") dibujar(pedido);
+  if (pedido?.tipo === "exportar_png") {
+    exportarPng(pedido.titulo)
+      .then((datos) => avisar({ tipo: "png", datos }))
+      .catch((error) => avisar({ tipo: "png_error", mensaje: error instanceof Error ? error.message : String(error) }));
+  }
 });
 
 // Al cambiar el ancho se vuelve a dibujar (el código recibe el ancho disponible).

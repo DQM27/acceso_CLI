@@ -181,6 +181,50 @@ export async function listarAlertas(): Promise<AlertaIa[]> {
   return z.array(alertaEsquema).parse(data);
 }
 
+const vistaGuardadaEsquema = z.object({
+  id: z.string(),
+  nombre: z.string(),
+  lienzo: z.unknown(),
+  actualizado_en: z.string(),
+});
+
+export interface VistaGuardada {
+  id: string;
+  nombre: string;
+  /** Sin validar: se valida al abrirla (un documento viejo puede no pasar el validador de hoy). */
+  lienzo: unknown;
+  actualizado_en: string;
+}
+
+/** Las vistas que guardó esta cuenta (la base no devuelve las de otros). */
+export async function listarVistasGuardadas(): Promise<VistaGuardada[]> {
+  const { data, error } = await supabase
+    .from("lienzo_vistas_guardadas")
+    .select("id, nombre, lienzo, actualizado_en")
+    .order("actualizado_en", { ascending: false });
+  if (error) throw new Error(error.message);
+  return z.array(vistaGuardadaEsquema).parse(data);
+}
+
+/** Guarda con nombre; si ya hay una vista con ese nombre, la reemplaza. Devuelve su id. */
+export async function guardarVista(nombre: string, lienzo: Lienzo): Promise<string> {
+  const { data: sesion } = await supabase.auth.getUser();
+  const correo = sesion.user?.email;
+  if (!correo) throw new Error("No hay una sesión iniciada.");
+  const { data, error } = await supabase
+    .from("lienzo_vistas_guardadas")
+    .upsert({ correo, nombre: nombre.trim(), lienzo, actualizado_en: new Date().toISOString() }, { onConflict: "correo,nombre" })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return z.object({ id: z.string() }).parse(data).id;
+}
+
+export async function borrarVista(id: string): Promise<void> {
+  const { error } = await supabase.from("lienzo_vistas_guardadas").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function marcarAlertaRevisada(id: string): Promise<void> {
   const { error } = await supabase.from("ia_alertas").update({ revisada_en: new Date().toISOString() }).eq("id", id);
   if (error) throw new Error(error.message);

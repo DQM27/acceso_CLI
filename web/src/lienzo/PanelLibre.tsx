@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { ImageDown } from "lucide-react";
+import { descargarArchivo } from "../exportacion";
 import { CATALOGO, type Origen } from "./catalogo";
+import { nombreDeArchivo, pngDesdeDataUrl } from "./imagen";
 import type { Fila } from "./calculo";
 import type { WidgetLibre } from "./esquema";
 
@@ -55,6 +58,11 @@ function temaActual(elemento: Element | null) {
 
 export default function PanelLibre({ widget, filas, origen }: { widget: WidgetLibre; filas: Fila[]; origen: Origen }) {
   const marco = useRef<HTMLIFrameElement>(null);
+  // Para nombrar el PNG cuando vuelve del sandbox (el oyente se registra una sola vez).
+  const tituloActual = useRef(widget.titulo);
+  useEffect(() => {
+    tituloActual.current = widget.titulo;
+  }, [widget.titulo]);
   const [preparado, setPreparado] = useState(false);
   const [alto, setAlto] = useState(ALTO_INICIAL);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +77,11 @@ export default function PanelLibre({ widget, filas, origen }: { widget: WidgetLi
       else if (m?.tipo === "alto" && typeof m.alto === "number") setAlto(Math.min(1600, Math.max(60, Math.ceil(m.alto))));
       else if (m?.tipo === "listo") setError(null);
       else if (m?.tipo === "error") setError(typeof m.mensaje === "string" ? m.mensaje.slice(0, 300) : "Error desconocido");
+      else if (m?.tipo === "png") {
+        const png = pngDesdeDataUrl((evento.data as { datos?: unknown }).datos);
+        if (png) descargarArchivo(nombreDeArchivo(tituloActual.current, "png"), png, "image/png");
+        else setError("La imagen que devolvió el espacio de dibujo no es válida.");
+      } else if (m?.tipo === "png_error") setError(typeof m.mensaje === "string" ? m.mensaje.slice(0, 300) : "No se pudo exportar");
     };
     window.addEventListener("message", alRecibir);
     return () => window.removeEventListener("message", alRecibir);
@@ -98,6 +111,16 @@ export default function PanelLibre({ widget, filas, origen }: { widget: WidgetLi
         <span className="lienzo-libre-marca" title="Dibujo armado por el asistente, en un espacio aislado">
           A medida
         </span>
+        <button
+          type="button"
+          className="lienzo-alternar"
+          disabled={!preparado}
+          title="Descargar como imagen (PNG)"
+          aria-label={`Descargar ${widget.titulo} como imagen`}
+          onClick={() => marco.current?.contentWindow?.postMessage({ tipo: "exportar_png", titulo: widget.titulo }, "*")}
+        >
+          <ImageDown size={16} aria-hidden="true" />
+        </button>
       </header>
       {widget.descripcion && <p className="lienzo-libre-descripcion">{widget.descripcion}</p>}
       {sinSandbox && !preparado ? (

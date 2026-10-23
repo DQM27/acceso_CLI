@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => ({
   puedeVerAlertas: vi.fn(),
   listarAlertas: vi.fn(),
   marcarAlertaRevisada: vi.fn(),
+  listarVistasGuardadas: vi.fn(),
+  guardarVista: vi.fn(),
+  borrarVista: vi.fn(),
+  exportarFilas: vi.fn(),
 }));
 vi.mock("../api/lienzo", () => ({
   obtenerResumenHoy: mocks.obtenerResumenHoy,
@@ -20,7 +24,14 @@ vi.mock("../api/lienzo", () => ({
   puedeVerAlertas: mocks.puedeVerAlertas,
   listarAlertas: mocks.listarAlertas,
   marcarAlertaRevisada: mocks.marcarAlertaRevisada,
+  listarVistasGuardadas: mocks.listarVistasGuardadas,
+  guardarVista: mocks.guardarVista,
+  borrarVista: mocks.borrarVista,
 }));
+vi.mock("../lib/supabase", () => ({
+  supabase: { auth: { getUser: () => Promise.resolve({ data: { user: { email: "admin@example.com" } } }) } },
+}));
+vi.mock("../lienzo/exportar", () => ({ exportarFilas: mocks.exportarFilas }));
 
 const LIENZO_DEL_ASISTENTE: Lienzo = {
   fuente: "contratistas",
@@ -59,6 +70,10 @@ beforeEach(() => {
   mocks.puedeVerAlertas.mockResolvedValue(false);
   mocks.listarAlertas.mockResolvedValue([]);
   mocks.marcarAlertaRevisada.mockResolvedValue(undefined);
+  mocks.listarVistasGuardadas.mockResolvedValue([]);
+  mocks.guardarVista.mockResolvedValue("v1");
+  mocks.borrarVista.mockResolvedValue(undefined);
+  mocks.exportarFilas.mockResolvedValue(undefined);
 });
 
 const ALERTA = {
@@ -209,6 +224,76 @@ describe("Asistente", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Deshacer/ }));
     await waitFor(() => expect(screen.queryByText("Empresa: ACME")).toBeNull());
+  });
+
+  it("Rehacer vuelve a aplicar lo deshecho, y una edición nueva lo descarta", async () => {
+    await abrirVencidos();
+    fireEvent.click(screen.getByRole("button", { name: "Quitar filtro Estado PRAIND: VENCIDA" }));
+    await waitFor(() => expect(screen.queryByText("Estado PRAIND: VENCIDA")).toBeNull());
+    const rehacer = () => screen.getByRole("button", { name: /Rehacer/ }) as HTMLButtonElement;
+    expect(rehacer().disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /Deshacer/ }));
+    expect(await screen.findByText("Estado PRAIND: VENCIDA")).toBeTruthy();
+    expect(rehacer().disabled).toBe(false);
+    fireEvent.click(rehacer());
+    await waitFor(() => expect(screen.queryByText("Estado PRAIND: VENCIDA")).toBeNull());
+    expect(rehacer().disabled).toBe(true);
+  });
+
+  it("Guardar pide un nombre, guarda la vista y queda abierta en Mis vistas guardadas", async () => {
+    await abrirVencidos();
+    mocks.listarVistasGuardadas.mockResolvedValue([
+      { id: "v1", nombre: "Vencidos de octubre", lienzo: LIENZO_DEL_ASISTENTE, actualizado_en: "2026-10-23T10:00:00Z" },
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: /Guardar/ }));
+    const nombre = screen.getByLabelText("Nombre de la vista");
+    fireEvent.change(nombre, { target: { value: "  Vencidos de octubre " } });
+    fireEvent.submit(nombre.closest("form") as HTMLFormElement);
+
+    await waitFor(() => expect(mocks.guardarVista).toHaveBeenCalledWith("Vencidos de octubre", expect.objectContaining({ fuente: "contratistas" })));
+    await waitFor(() => expect((screen.getByLabelText("Vista del lienzo") as HTMLSelectElement).value).toBe("guardada:v1"));
+    expect(screen.getByRole("group", { name: "Mis vistas guardadas" })).toBeTruthy();
+  });
+
+  it("una vista guardada se abre sin llamar al modelo, y se puede borrar confirmando", async () => {
+    mocks.listarVistasGuardadas.mockResolvedValue([
+      { id: "v1", nombre: "Vencidos de octubre", lienzo: LIENZO_DEL_ASISTENTE, actualizado_en: "2026-10-23T10:00:00Z" },
+    ]);
+    montar();
+    await screen.findByRole("option", { name: "Vencidos de octubre" });
+    fireEvent.change(screen.getByLabelText("Vista del lienzo"), { target: { value: "guardada:v1" } });
+    await waitFor(() => expect(mocks.consultarLienzo).toHaveBeenCalledWith(LIENZO_DEL_ASISTENTE));
+    expect(mocks.preguntarAlAsistente).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Borrar vista guardada" }));
+    expect(mocks.borrarVista).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /¿Borrar esta vista\?/ }));
+    await waitFor(() => expect(mocks.borrarVista).toHaveBeenCalledWith("v1"));
+  });
+
+  it("una vista guardada que ya no pasa el validador avisa en vez de dibujarse", async () => {
+    mocks.listarVistasGuardadas.mockResolvedValue([
+      { id: "v2", nombre: "Vieja", lienzo: { fuente: "usuarios", filtros: [], widgets: [] }, actualizado_en: "2026-10-01T10:00:00Z" },
+    ]);
+    montar();
+    await screen.findByRole("option", { name: "Vieja" });
+    fireEvent.change(screen.getByLabelText("Vista del lienzo"), { target: { value: "guardada:v2" } });
+    expect((await screen.findByRole("alert")).textContent).toContain("Vista inválida");
+    expect(mocks.consultarLienzo).not.toHaveBeenCalled();
+  });
+
+  it("Exportar baja los datos de la vista con sus columnas y filtros", async () => {
+    await abrirVencidos();
+    fireEvent.click(screen.getByText("Exportar"));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Excel/ }));
+    await waitFor(() => expect(mocks.exportarFilas).toHaveBeenCalledTimes(1));
+    const [formato, opciones] = mocks.exportarFilas.mock.calls[0];
+    expect(formato).toBe("excel");
+    expect(opciones.filas).toEqual(vencidos);
+    expect(opciones.origen).toBe("contratistas");
+    expect(opciones.filtros).toBe("Estado PRAIND: VENCIDA");
+    expect(opciones.generadoPor).toBe("admin@example.com");
   });
 
   it("quitar un filtro desde su chip vuelve a consultar sin él", async () => {

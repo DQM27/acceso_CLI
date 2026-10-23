@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowUp, Undo2, X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowUp, Download, FileSpreadsheet, FileText, Printer, Redo2, Save, Trash2, Undo2, X } from "lucide-react";
 import {
+  borrarVista,
   consultarLienzo,
+  guardarVista,
   listarAlertas,
+  listarVistasGuardadas,
   obtenerResumenHoy,
   preguntarAlAsistente,
   puedeVerAlertas,
   type TurnoChat,
 } from "../api/lienzo";
 import { listarUnidadesOperativas } from "../api/historial";
+import { supabase } from "../lib/supabase";
+import { exportarFilas, type FormatoExportacion } from "../lienzo/exportar";
 import AlertasAsistente from "./AlertasAsistente";
 import isotipo from "../assets/lattis-isotipo.png";
 import LienzoVista from "../lienzo/Lienzo";
@@ -25,6 +30,8 @@ const RESUMEN = "resumen";
 const DEL_ASISTENTE = "asistente";
 /** Intentos de manipular al asistente (sólo para la cuenta que recibe las alertas). */
 const ALERTAS = "alertas-ia";
+/** Prefijo de las vistas guardadas en el selector ("guardada:<id>"). */
+const GUARDADA = "guardada:";
 const SUGERENCIAS = [
   "Ver los PRAIND vencidos por empresa",
   "Ingresos de esta semana por sitio",
@@ -167,22 +174,68 @@ function VistaResumen({ sitioId }: { sitioId: string }) {
   return data ? <ResumenDeHoy resumen={data} /> : <Estado cargando={isLoading} error={error} />;
 }
 
-/** Un documento del lienzo con sus filtros como chips y Deshacer. */
+/** Menú de exportación: los datos de la vista (Excel, CSV, PDF) o la vista entera para imprimir. */
+function MenuExportar({ onExportar, deshabilitado }: { onExportar: (f: FormatoExportacion | "imprimir") => void; deshabilitado: boolean }) {
+  const menu = useRef<HTMLDetailsElement>(null);
+  const elegir = (f: FormatoExportacion | "imprimir") => {
+    if (menu.current) menu.current.open = false;
+    onExportar(f);
+  };
+  return (
+    <details ref={menu} className="asistente-menu">
+      <summary className={`boton${deshabilitado ? " asistente-menu-apagado" : ""}`} aria-disabled={deshabilitado}>
+        <Download size={14} aria-hidden="true" /> Exportar
+      </summary>
+      <div className="asistente-menu-opciones" role="menu">
+        <span className="asistente-menu-grupo">Datos de la vista</span>
+        <button type="button" role="menuitem" onClick={() => elegir("excel")}>
+          <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+        </button>
+        <button type="button" role="menuitem" onClick={() => elegir("csv")}>
+          <FileText size={14} aria-hidden="true" /> CSV
+        </button>
+        <button type="button" role="menuitem" onClick={() => elegir("pdf")}>
+          <FileText size={14} aria-hidden="true" /> PDF (tabla)
+        </button>
+        <span className="asistente-menu-grupo">La vista con sus gráficos</span>
+        <button type="button" role="menuitem" onClick={() => elegir("imprimir")}>
+          <Printer size={14} aria-hidden="true" /> Imprimir o guardar PDF
+        </button>
+      </div>
+    </details>
+  );
+}
+
+/** Un documento del lienzo con sus filtros como chips, Deshacer/Rehacer, Guardar y Exportar. */
 function VistaDocumento({
   lienzo,
+  nombre,
   puedeDeshacer,
+  puedeRehacer,
   rechazo,
   verSql,
+  guardada,
   onEditar,
   onDeshacer,
+  onRehacer,
+  onGuardar,
+  onBorrar,
 }: {
   lienzo: Lienzo;
+  /** Cómo se llama la vista (para guardar y para los archivos exportados). */
+  nombre: string;
   puedeDeshacer: boolean;
+  puedeRehacer: boolean;
   rechazo: string | null;
   /** El SQL de una consulta sólo lo ve la cuenta que audita el asistente (alcance "alertas"). */
   verSql: boolean;
+  /** Es una vista guardada (se puede borrar). */
+  guardada: boolean;
   onEditar: (nuevo: Lienzo) => void;
   onDeshacer: () => void;
+  onRehacer: () => void;
+  onGuardar: (nombre: string) => Promise<void>;
+  onBorrar: () => Promise<void>;
 }) {
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ["lienzo-vista", lienzo],
@@ -190,16 +243,55 @@ function VistaDocumento({
     // Mientras llega lo nuevo se sigue viendo lo anterior: así los gráficos pasan de un estado al otro.
     placeholderData: (previo) => previo,
   });
+  const [guardando, setGuardando] = useState<string | null>(null);
+  const [confirmarBorrado, setConfirmarBorrado] = useState(false);
+  const [aviso, setAviso] = useState<{ texto: string; error?: boolean } | null>(null);
+  const origen = origenDe(lienzo);
+  const textoFiltros = lienzo.filtros.map((f) => describirFiltro(origen, f, lienzo.formato?.fecha)).join(" · ");
+
+  const exportar = async (formato: FormatoExportacion | "imprimir") => {
+    setAviso(null);
+    if (formato === "imprimir") {
+      window.print();
+      return;
+    }
+    if (!data) return;
+    try {
+      const { data: sesion } = await supabase.auth.getUser();
+      await exportarFilas(formato, {
+        titulo: lienzo.titulo ?? nombre,
+        origen,
+        filas: data.filas,
+        formatoFecha: lienzo.formato?.fecha,
+        generadoPor: sesion.user?.email ?? "Panel",
+        filtros: textoFiltros,
+      });
+    } catch (e) {
+      setAviso({ texto: mensajeError(e), error: true });
+    }
+  };
+
+  const guardar = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!guardando?.trim()) return;
+    try {
+      await onGuardar(guardando.trim());
+      setAviso({ texto: `Guardada como "${guardando.trim()}".` });
+      setGuardando(null);
+    } catch (err) {
+      setAviso({ texto: mensajeError(err), error: true });
+    }
+  };
 
   return (
     <div className="asistente-documento">
       <div className="asistente-filtros" aria-label="Filtros del lienzo">
         {lienzo.filtros.map((f, i) => (
           <span key={`${f.campo}-${i}`} className="asistente-filtro">
-            {describirFiltro(origenDe(lienzo), f, lienzo.formato?.fecha)}
+            {describirFiltro(origen, f, lienzo.formato?.fecha)}
             <button
               type="button"
-              aria-label={`Quitar filtro ${describirFiltro(origenDe(lienzo), f, lienzo.formato?.fecha)}`}
+              aria-label={`Quitar filtro ${describirFiltro(origen, f, lienzo.formato?.fecha)}`}
               onClick={() => onEditar(sinFiltro(lienzo, i))}
             >
               <X size={12} aria-hidden="true" />
@@ -207,10 +299,59 @@ function VistaDocumento({
           </span>
         ))}
         <span className="asistente-espacio" />
-        <button type="button" className="boton asistente-deshacer" disabled={!puedeDeshacer} onClick={onDeshacer}>
-          <Undo2 size={14} aria-hidden="true" /> Deshacer
-        </button>
+        <div className="asistente-acciones">
+          <button type="button" className="boton asistente-deshacer" disabled={!puedeDeshacer} onClick={onDeshacer}>
+            <Undo2 size={14} aria-hidden="true" /> Deshacer
+          </button>
+          <button type="button" className="boton" disabled={!puedeRehacer} onClick={onRehacer}>
+            <Redo2 size={14} aria-hidden="true" /> Rehacer
+          </button>
+          <button type="button" className="boton" onClick={() => setGuardando(lienzo.titulo ?? nombre)}>
+            <Save size={14} aria-hidden="true" /> Guardar
+          </button>
+          <MenuExportar onExportar={(f) => void exportar(f)} deshabilitado={!data} />
+          {guardada &&
+            (confirmarBorrado ? (
+              <button
+                type="button"
+                className="boton boton-peligro"
+                onClick={() => void onBorrar().catch((err) => setAviso({ texto: mensajeError(err), error: true }))}
+                onBlur={() => setConfirmarBorrado(false)}
+              >
+                <Trash2 size={14} aria-hidden="true" /> ¿Borrar esta vista?
+              </button>
+            ) : (
+              <button type="button" className="boton" onClick={() => setConfirmarBorrado(true)} aria-label="Borrar vista guardada">
+                <Trash2 size={14} aria-hidden="true" />
+              </button>
+            ))}
+        </div>
       </div>
+      {guardando !== null && (
+        <form className="asistente-guardar" onSubmit={(e) => void guardar(e)}>
+          <label htmlFor="nombre-vista">Nombre de la vista</label>
+          <input
+            id="nombre-vista"
+            value={guardando}
+            maxLength={80}
+            autoFocus
+            onChange={(e) => setGuardando(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setGuardando(null)}
+          />
+          <button type="submit" className="boton boton-primario" disabled={!guardando.trim()}>
+            Guardar
+          </button>
+          <button type="button" className="boton" onClick={() => setGuardando(null)}>
+            Cancelar
+          </button>
+          <span className="asistente-guardar-ayuda">Si ya tiene una vista con ese nombre, se reemplaza.</span>
+        </form>
+      )}
+      {aviso && (
+        <p className={aviso.error ? "asistente-error" : "asistente-ok"} role={aviso.error ? "alert" : "status"}>
+          {aviso.texto}
+        </p>
+      )}
       {rechazo && (
         <p className="asistente-error" role="alert">
           No se pudo aplicar ese cambio: {rechazo}
@@ -250,18 +391,27 @@ export default function Asistente() {
   const [sitioId, setSitioId] = useState("");
   const { data: sitios } = useQuery({ queryKey: ["lienzo-sitios"], queryFn: listarUnidadesOperativas });
 
-  // Historial de ediciones de cada vista (la última es la que se ve).
+  // Historial de ediciones de cada vista (la última es la que se ve) y lo deshecho, para Rehacer.
   const [historiales, setHistoriales] = useState<Record<string, Lienzo[]>>({});
+  const [rehechos, setRehechos] = useState<Record<string, Lienzo[]>>({});
   const [rechazo, setRechazo] = useState<string | null>(null);
   const [mensajes, setMensajes] = useState<MensajeChat[]>([]);
   const siguienteId = useRef(0);
+  const cliente = useQueryClient();
 
-  const predefinida = useMemo(() => {
+  const { data: guardadas } = useQuery({ queryKey: ["lienzo-guardadas"], queryFn: listarVistasGuardadas });
+  const vistaGuardada = vista.startsWith(GUARDADA) ? guardadas?.find((g) => GUARDADA + g.id === vista) : undefined;
+
+  // La base de la vista: una predefinida o una guardada (validada al abrirla).
+  const base = useMemo(() => {
     const v = VISTAS_PREDEFINIDAS.find((x) => x.id === vista);
-    return v ? validarLienzo(v.lienzo) : null;
-  }, [vista]);
+    if (v) return validarLienzo(v.lienzo);
+    return vistaGuardada ? validarLienzo(vistaGuardada.lienzo) : null;
+  }, [vista, vistaGuardada]);
   const historial = historiales[vista] ?? [];
-  const lienzo: Lienzo | null = historial.at(-1) ?? (predefinida?.ok ? predefinida.lienzo : null);
+  const lienzo: Lienzo | null = historial.at(-1) ?? (base?.ok ? base.lienzo : null);
+  const nombreVista =
+    vistaGuardada?.nombre ?? VISTAS_PREDEFINIDAS.find((x) => x.id === vista)?.titulo ?? lienzo?.titulo ?? "Vista del asistente";
 
   const aplicar = (destino: string, nuevo: Lienzo) => {
     const r = validarLienzo(nuevo);
@@ -271,6 +421,40 @@ export default function Asistente() {
     }
     setRechazo(null);
     setHistoriales((h) => ({ ...h, [destino]: [...(h[destino] ?? []), r.lienzo] }));
+    // Una edición nueva descarta lo que se podía rehacer.
+    setRehechos((r0) => ({ ...r0, [destino]: [] }));
+  };
+
+  const deshacer = () => {
+    setRechazo(null);
+    const ultimo = historial.at(-1);
+    if (!ultimo) return;
+    setHistoriales((h) => ({ ...h, [vista]: (h[vista] ?? []).slice(0, -1) }));
+    setRehechos((r) => ({ ...r, [vista]: [...(r[vista] ?? []), ultimo] }));
+  };
+
+  const rehacer = () => {
+    const siguiente = (rehechos[vista] ?? []).at(-1);
+    if (!siguiente) return;
+    setRehechos((r) => ({ ...r, [vista]: (r[vista] ?? []).slice(0, -1) }));
+    setHistoriales((h) => ({ ...h, [vista]: [...(h[vista] ?? []), siguiente] }));
+  };
+
+  const guardar = async (nombre: string) => {
+    if (!lienzo) return;
+    const id = await guardarVista(nombre, lienzo);
+    await cliente.invalidateQueries({ queryKey: ["lienzo-guardadas"] });
+    // Queda abierta la vista guardada, sin historial: lo guardado es su base.
+    setHistoriales((h) => ({ ...h, [GUARDADA + id]: [] }));
+    setRehechos((r) => ({ ...r, [GUARDADA + id]: [] }));
+    setVista(GUARDADA + id);
+  };
+
+  const borrar = async () => {
+    if (!vistaGuardada) return;
+    await borrarVista(vistaGuardada.id);
+    await cliente.invalidateQueries({ queryKey: ["lienzo-guardadas"] });
+    setVista(RESUMEN);
   };
 
   const agregarMensaje = (m: Omit<MensajeChat, "id">) =>
@@ -333,6 +517,15 @@ export default function Asistente() {
                   {v.titulo}
                 </option>
               ))}
+              {guardadas && guardadas.length > 0 && (
+                <optgroup label="Mis vistas guardadas">
+                  {guardadas.map((g) => (
+                    <option key={g.id} value={GUARDADA + g.id}>
+                      {g.nombre}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
               {recibeAlertas && (
                 <option value={ALERTAS}>{sinRevisar ? `Alertas del asistente (${sinRevisar})` : "Alertas del asistente"}</option>
               )}
@@ -359,20 +552,25 @@ export default function Asistente() {
             <VistaResumen sitioId={sitioId} />
           ) : esAlertas ? (
             <AlertasAsistente />
-          ) : predefinida && !predefinida.ok ? (
-            <p className="asistente-error" role="alert">Vista inválida: {predefinida.errores.join("; ")}</p>
+          ) : base && !base.ok ? (
+            <p className="asistente-error" role="alert">Vista inválida: {base.errores.join("; ")}</p>
           ) : lienzo ? (
             <VistaDocumento
               lienzo={lienzo}
+              nombre={nombreVista}
               verSql={recibeAlertas === true}
+              guardada={Boolean(vistaGuardada)}
               puedeDeshacer={historial.length > (vista === DEL_ASISTENTE ? 1 : 0)}
+              puedeRehacer={(rehechos[vista] ?? []).length > 0}
               rechazo={rechazo}
               onEditar={(nuevo) => aplicar(vista, nuevo)}
-              onDeshacer={() => {
-                setRechazo(null);
-                setHistoriales((h) => ({ ...h, [vista]: (h[vista] ?? []).slice(0, -1) }));
-              }}
+              onDeshacer={deshacer}
+              onRehacer={rehacer}
+              onGuardar={guardar}
+              onBorrar={borrar}
             />
+          ) : vista.startsWith(GUARDADA) ? (
+            <p role="status">Cargando…</p>
           ) : null}
         </div>
       </main>

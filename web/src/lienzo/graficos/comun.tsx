@@ -1,5 +1,7 @@
-import { useState, type ReactNode } from "react";
-import { ChartColumn, Table2 } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { ChartColumn, ImageDown, Table2 } from "lucide-react";
+import { descargarArchivo } from "../../exportacion";
+import { nombreDeArchivo, svgAPng } from "../imagen";
 import { formatoNumero } from "./utiles";
 
 /**
@@ -92,11 +94,50 @@ export function MarcoGrafico({
   children: ReactNode;
 }) {
   const [comoTabla, setComoTabla] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const marco = useRef<HTMLElement>(null);
+
+  // PNG del gráfico tal como se ve (colores del tema), con su título y leyenda.
+  const descargarImagen = async () => {
+    const seccion = marco.current;
+    const svg = seccion?.querySelector<SVGSVGElement>("svg");
+    if (!seccion || !svg) return;
+    setExportando(true);
+    try {
+      const estilo = getComputedStyle(seccion);
+      const leyenda = Array.from(seccion.querySelectorAll<HTMLElement>(".lienzo-leyenda li")).map((li) => ({
+        nombre: li.querySelector("span:not(.lienzo-clave)")?.textContent ?? "",
+        color: getComputedStyle(li.querySelector(".lienzo-clave") ?? li).backgroundColor,
+      }));
+      const png = await svgAPng(svg, {
+        titulo,
+        subtitulo,
+        leyenda,
+        fondo: estilo.backgroundColor,
+        texto: estilo.color,
+        textoSuave: getComputedStyle(seccion.querySelector(".lienzo-subtitulo") ?? seccion).color,
+      });
+      descargarArchivo(nombreDeArchivo(titulo, "png"), png, "image/png");
+    } finally {
+      setExportando(false);
+    }
+  };
+
   return (
-    <section className="tarjeta lienzo-bloque lienzo-grafico-marco">
+    <section ref={marco} className="tarjeta lienzo-bloque lienzo-grafico-marco">
       <header className="lienzo-bloque-cabecera">
         <h3>{titulo}</h3>
         {subtitulo && <span className="lienzo-subtitulo">{subtitulo}</span>}
+        <button
+          type="button"
+          className="lienzo-alternar"
+          onClick={() => void descargarImagen()}
+          disabled={comoTabla || exportando}
+          title="Descargar como imagen (PNG)"
+          aria-label={`Descargar ${titulo} como imagen`}
+        >
+          <ImageDown size={16} aria-hidden="true" />
+        </button>
         <button
           type="button"
           className="lienzo-alternar"
