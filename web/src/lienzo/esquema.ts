@@ -1,68 +1,131 @@
 import { z } from "../lib/validacion";
 import {
+  AGRUPACIONES_FECHA,
+  ANCHOS,
+  DISPOSICIONES,
+  FORMATOS_FECHA,
   FUENTES,
+  MAXIMO_CATEGORIAS,
+  MAXIMO_SERIES,
   MEDIDAS,
   OPERADORES,
   OPERADORES_POR_TIPO,
-  WIDGETS,
+  TONOS,
   definicionCampo,
   type DefinicionCampo,
   type Fuente,
 } from "./catalogo";
 
 /**
- * Documento JSON del lienzo (plan del asistente, Parte A, etapa 1). Estricto:
- * campos desconocidos, operadores que no van con el tipo del campo, valores
- * fuera del catálogo y medidas sin su campo se rechazan. Es la misma validación
- * que se aplicará a lo que devuelva el modelo en la etapa 2.
+ * Documento JSON del lienzo (plan del asistente, Parte A). Estricto: campos
+ * desconocidos, operadores que no van con el tipo del campo, valores fuera del
+ * catálogo y medidas sin su campo se rechazan. Es la misma validación que se
+ * aplicará a lo que devuelva el modelo en la etapa 2.
  */
 const escalar = z.union([z.string().max(200), z.number().finite(), z.boolean()]);
+const titulo = z.string().min(1).max(80);
+const campo = z.string().min(1).max(40);
 
 const filtroEsquema = z
   .object({
-    campo: z.string().min(1),
+    campo,
     op: z.enum(OPERADORES),
     valor: z.union([escalar, z.array(escalar).max(100)]),
   })
   .strict();
 
-const ordenEsquema = z.object({ campo: z.string().min(1), dir: z.enum(["asc", "desc"]) }).strict();
+const ordenEsquema = z.object({ campo, dir: z.enum(["asc", "desc"]) }).strict();
+
+/** Lo que comparten todos los paneles. */
+const panel = { ancho: z.enum(ANCHOS).optional() };
+/** Medidas que sirven para comparar grupos (un gráfico no muestra mínimos). */
+const medidaDeGrupo = z.enum(["contar", "contar_distintos"]);
 
 const kpiEsquema = z
   .object({
     tipo: z.literal("kpi"),
-    titulo: z.string().min(1).max(80),
+    titulo,
     medida: z.enum(MEDIDAS),
-    campo: z.string().min(1).optional(),
+    campo: campo.optional(),
+    tono: z.enum(TONOS).optional(),
+    ...panel,
   })
   .strict();
 
 const barrasEsquema = z
   .object({
     tipo: z.literal("barras"),
-    titulo: z.string().min(1).max(80).optional(),
-    eje_x: z.string().min(1),
-    medida: z.enum(["contar", "contar_distintos"]),
-    campo: z.string().min(1).optional(),
+    titulo: titulo.optional(),
+    eje_x: campo,
+    medida: medidaDeGrupo,
+    campo: campo.optional(),
+    /** Segunda dimensión: parte cada barra en segmentos apilados. */
+    serie: campo.optional(),
+    orientacion: z.enum(["vertical", "horizontal"]).optional(),
+    agrupar_fecha: z.enum(AGRUPACIONES_FECHA).optional(),
+    limite: z.number().int().min(1).max(MAXIMO_CATEGORIAS).optional(),
+    ...panel,
+  })
+  .strict();
+
+const lineaEsquema = z
+  .object({
+    tipo: z.literal("linea"),
+    titulo: titulo.optional(),
+    eje_x: campo,
+    medida: medidaDeGrupo,
+    campo: campo.optional(),
+    /** Una línea por cada valor de este campo. */
+    serie: campo.optional(),
+    agrupar_fecha: z.enum(AGRUPACIONES_FECHA).optional(),
+    /** Relleno suave bajo la línea (sólo con una serie). */
+    area: z.boolean().optional(),
+    ...panel,
+  })
+  .strict();
+
+const tortaEsquema = z
+  .object({
+    tipo: z.literal("torta"),
+    titulo: titulo.optional(),
+    categoria: campo,
+    medida: medidaDeGrupo,
+    campo: campo.optional(),
+    /** Porciones con nombre; el resto va a "Otros". */
+    limite: z.number().int().min(2).max(MAXIMO_SERIES).optional(),
+    /** Dona (con el total al centro) en vez de torta llena. */
+    dona: z.boolean().optional(),
+    ...panel,
   })
   .strict();
 
 const tablaEsquema = z
   .object({
     tipo: z.literal("tabla"),
-    titulo: z.string().min(1).max(80).optional(),
-    columnas: z.array(z.string().min(1)).min(1).max(12),
-    agrupar_por: z.string().min(1).optional(),
+    titulo: titulo.optional(),
+    columnas: z.array(campo).min(1).max(12),
+    agrupar_por: campo.optional(),
     orden: ordenEsquema.optional(),
     limite: z.number().int().min(1).max(500).optional(),
+    ...panel,
   })
   .strict();
 
-const widgetEsquema = z.discriminatedUnion("tipo", [kpiEsquema, barrasEsquema, tablaEsquema]);
+const widgetEsquema = z.discriminatedUnion("tipo", [
+  kpiEsquema,
+  barrasEsquema,
+  lineaEsquema,
+  tortaEsquema,
+  tablaEsquema,
+]);
 
 const lienzoBase = z
   .object({
     fuente: z.enum(FUENTES),
+    titulo: titulo.optional(),
+    disposicion: z.enum(DISPOSICIONES).optional(),
+    /** Presentación de los valores; no cambia los datos. */
+    formato: z.object({ fecha: z.enum(FORMATOS_FECHA).optional() }).strict().optional(),
     filtros: z.array(filtroEsquema).max(20),
     widgets: z.array(widgetEsquema).min(1).max(12),
   })
@@ -72,8 +135,12 @@ export type Filtro = z.infer<typeof filtroEsquema>;
 export type Widget = z.infer<typeof widgetEsquema>;
 export type WidgetKpi = z.infer<typeof kpiEsquema>;
 export type WidgetBarras = z.infer<typeof barrasEsquema>;
+export type WidgetLinea = z.infer<typeof lineaEsquema>;
+export type WidgetTorta = z.infer<typeof tortaEsquema>;
 export type WidgetTabla = z.infer<typeof tablaEsquema>;
 export type Lienzo = z.infer<typeof lienzoBase>;
+
+type Ruta = (string | number)[];
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -92,15 +159,15 @@ function valorCoincideConTipo(def: DefinicionCampo, valor: unknown): boolean {
   }
 }
 
-function revisarFiltro(fuente: Fuente, filtro: Filtro, ruta: (string | number)[], ctx: z.RefinementCtx) {
+function problema(ctx: z.RefinementCtx, path: Ruta, message: string) {
+  ctx.addIssue({ code: "custom", path, message });
+}
+
+function revisarFiltro(fuente: Fuente, filtro: Filtro, ruta: Ruta, ctx: z.RefinementCtx) {
   const def = definicionCampo(fuente, filtro.campo);
-  if (!def) {
-    ctx.addIssue({ code: "custom", path: [...ruta, "campo"], message: `Campo "${filtro.campo}" fuera del catálogo` });
-    return;
-  }
+  if (!def) return problema(ctx, [...ruta, "campo"], `Campo "${filtro.campo}" fuera del catálogo`);
   if (!(def.operadores ?? OPERADORES_POR_TIPO[def.tipo]).includes(filtro.op)) {
-    ctx.addIssue({ code: "custom", path: [...ruta, "op"], message: `"${filtro.op}" no aplica a "${filtro.campo}"` });
-    return;
+    return problema(ctx, [...ruta, "op"], `"${filtro.op}" no aplica a "${filtro.campo}"`);
   }
   const { op, valor } = filtro;
   const lista = Array.isArray(valor);
@@ -108,41 +175,76 @@ function revisarFiltro(fuente: Fuente, filtro: Filtro, ruta: (string | number)[]
   const forma =
     op === "entre" ? lista && valor.length === 2 : op === "en" || op === "no_en" ? lista && valor.length > 0 : !lista;
   if (!forma || !valores.every((v) => valorCoincideConTipo(def, v))) {
-    ctx.addIssue({ code: "custom", path: [...ruta, "valor"], message: `Valor inválido para "${filtro.campo}" con "${op}"` });
+    problema(ctx, [...ruta, "valor"], `Valor inválido para "${filtro.campo}" con "${op}"`);
   }
 }
 
-function exigirCampo(fuente: Fuente, campo: string, ruta: (string | number)[], ctx: z.RefinementCtx) {
-  if (!definicionCampo(fuente, campo)) {
-    ctx.addIssue({ code: "custom", path: ruta, message: `Campo "${campo}" fuera del catálogo` });
+/** Devuelve la definición del campo, o anota el problema si no existe. */
+function exigirCampo(fuente: Fuente, nombre: string, ruta: Ruta, ctx: z.RefinementCtx) {
+  const def = definicionCampo(fuente, nombre);
+  if (!def) problema(ctx, ruta, `Campo "${nombre}" fuera del catálogo`);
+  return def;
+}
+
+function revisarMedida(
+  fuente: Fuente,
+  w: { medida: string; campo?: string },
+  ruta: Ruta,
+  ctx: z.RefinementCtx,
+) {
+  if (w.campo) exigirCampo(fuente, w.campo, [...ruta, "campo"], ctx);
+  if (w.medida === "contar" && w.campo) problema(ctx, [...ruta, "campo"], '"contar" no lleva campo');
+  if (w.medida !== "contar" && !w.campo) problema(ctx, [...ruta, "campo"], `"${w.medida}" necesita un campo`);
+  if (w.campo && (w.medida === "minimo" || w.medida === "maximo")) {
+    const tipo = definicionCampo(fuente, w.campo)?.tipo;
+    if (tipo && tipo !== "fecha" && tipo !== "numero") {
+      problema(ctx, [...ruta, "campo"], `"${w.medida}" sólo sirve con fecha o número`);
+    }
+  }
+}
+
+/** Eje y serie de un gráfico de barras o de línea. */
+function revisarEjes(fuente: Fuente, w: WidgetBarras | WidgetLinea, ruta: Ruta, ctx: z.RefinementCtx) {
+  const eje = exigirCampo(fuente, w.eje_x, [...ruta, "eje_x"], ctx);
+  if (eje && w.tipo === "linea" && eje.tipo !== "fecha") {
+    problema(ctx, [...ruta, "eje_x"], "Una línea necesita un eje de fecha");
+  }
+  if (eje && w.agrupar_fecha && eje.tipo !== "fecha") {
+    problema(ctx, [...ruta, "agrupar_fecha"], "Sólo se agrupa por día, semana o mes un eje de fecha");
+  }
+  if (w.serie) {
+    const serie = exigirCampo(fuente, w.serie, [...ruta, "serie"], ctx);
+    if (w.serie === w.eje_x) problema(ctx, [...ruta, "serie"], "La serie no puede ser el mismo campo del eje");
+    else if (serie?.tipo === "fecha") problema(ctx, [...ruta, "serie"], "La serie no puede ser una fecha");
+  }
+  if (w.tipo === "linea" && w.area && w.serie) {
+    problema(ctx, [...ruta, "area"], "El área sólo se usa con una sola línea");
   }
 }
 
 function revisarWidget(fuente: Fuente, w: Widget, i: number, ctx: z.RefinementCtx) {
   const ruta = ["widgets", i];
-  if (w.tipo === "kpi" || w.tipo === "barras") {
-    if (w.campo) exigirCampo(fuente, w.campo, [...ruta, "campo"], ctx);
-    if (w.medida === "contar" && w.campo) {
-      ctx.addIssue({ code: "custom", path: [...ruta, "campo"], message: '"contar" no lleva campo' });
-    }
-    if (w.medida !== "contar" && !w.campo) {
-      ctx.addIssue({ code: "custom", path: [...ruta, "campo"], message: `"${w.medida}" necesita un campo` });
-    }
-    if (w.campo && (w.medida === "minimo" || w.medida === "maximo")) {
-      const tipo = definicionCampo(fuente, w.campo)?.tipo;
-      if (tipo && tipo !== "fecha" && tipo !== "numero") {
-        ctx.addIssue({ code: "custom", path: [...ruta, "campo"], message: `"${w.medida}" sólo sirve con fecha o número` });
+  switch (w.tipo) {
+    case "kpi":
+      revisarMedida(fuente, w, ruta, ctx);
+      break;
+    case "barras":
+    case "linea":
+      revisarMedida(fuente, w, ruta, ctx);
+      revisarEjes(fuente, w, ruta, ctx);
+      break;
+    case "torta":
+      revisarMedida(fuente, w, ruta, ctx);
+      exigirCampo(fuente, w.categoria, [...ruta, "categoria"], ctx);
+      break;
+    case "tabla":
+      w.columnas.forEach((c, j) => exigirCampo(fuente, c, [...ruta, "columnas", j], ctx));
+      if (w.agrupar_por) exigirCampo(fuente, w.agrupar_por, [...ruta, "agrupar_por"], ctx);
+      // Agrupada, la tabla sólo ordena por el campo de grupo o por la cantidad.
+      if (w.orden && !(w.agrupar_por && w.orden.campo === "cantidad")) {
+        exigirCampo(fuente, w.orden.campo, [...ruta, "orden", "campo"], ctx);
       }
-    }
-  }
-  if (w.tipo === "barras") exigirCampo(fuente, w.eje_x, [...ruta, "eje_x"], ctx);
-  if (w.tipo === "tabla") {
-    w.columnas.forEach((c, j) => exigirCampo(fuente, c, [...ruta, "columnas", j], ctx));
-    if (w.agrupar_por) exigirCampo(fuente, w.agrupar_por, [...ruta, "agrupar_por"], ctx);
-    // Agrupada, la tabla sólo ordena por el campo de grupo o por la cantidad.
-    if (w.orden && !(w.agrupar_por && w.orden.campo === "cantidad")) {
-      exigirCampo(fuente, w.orden.campo, [...ruta, "orden", "campo"], ctx);
-    }
+      break;
   }
 }
 
@@ -161,6 +263,3 @@ export function validarLienzo(entrada: unknown): ResultadoValidacion {
     errores: resultado.error.issues.map((e) => `${e.path.join(".") || "(raíz)"}: ${e.message}`),
   };
 }
-
-/** Los tipos de widget que el renderizador sabe dibujar. */
-export const TIPOS_WIDGET = WIDGETS;

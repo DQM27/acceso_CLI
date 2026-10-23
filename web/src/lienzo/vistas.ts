@@ -2,7 +2,7 @@ import type { Lienzo } from "./esquema";
 
 /**
  * Vistas de ejemplo del lienzo, escritas como documentos JSON del catálogo. Sin
- * modelo de IA todavía (etapa 1): sirven para comprobar que el JSON se dibuja
+ * modelo de IA todavía: sirven para comprobar que cada herramienta se dibuja
  * bien y, más adelante, serán el punto de partida de lo que edite el chat.
  */
 export interface VistaPredefinida {
@@ -19,12 +19,15 @@ export const VISTAS_PREDEFINIDAS: VistaPredefinida[] = [
       fuente: "contratistas",
       filtros: [{ campo: "estado_praind", op: "igual", valor: "VENCIDA" }],
       widgets: [
-        { tipo: "kpi", titulo: "PRAIND vencidos", medida: "contar" },
+        { tipo: "kpi", titulo: "PRAIND vencidos", medida: "contar", tono: "error" },
         { tipo: "kpi", titulo: "Empresas afectadas", medida: "contar_distintos", campo: "empresa" },
-        { tipo: "barras", titulo: "Vencidos por empresa", eje_x: "empresa", medida: "contar" },
+        { tipo: "kpi", titulo: "Venció hace más tiempo", medida: "minimo", campo: "vencimiento" },
+        { tipo: "kpi", titulo: "Venció más reciente", medida: "maximo", campo: "vencimiento" },
+        { tipo: "barras", titulo: "Vencidos por empresa", eje_x: "empresa", medida: "contar", limite: 12, ancho: "dos_tercios" },
+        { tipo: "torta", titulo: "Por tipo de ingreso", categoria: "tipo_ingreso", medida: "contar" },
         {
           tipo: "tabla",
-          titulo: "Más recientes primero",
+          titulo: "Detalle, vencidos más recientes primero",
           columnas: ["nombre", "empresa", "vencimiento", "dias_para_vencer"],
           orden: { campo: "dias_para_vencer", dir: "desc" },
           limite: 100,
@@ -33,41 +36,65 @@ export const VISTAS_PREDEFINIDAS: VistaPredefinida[] = [
     },
   },
   {
-    id: "praind-por-vencer",
-    titulo: "PRAIND por vencer (30 días)",
+    id: "estado-praind",
+    titulo: "Estado PRAIND de todos",
     lienzo: {
       fuente: "contratistas",
-      filtros: [{ campo: "estado_praind", op: "igual", valor: "POR_VENCER" }],
+      filtros: [{ campo: "acceso_activo", op: "igual", valor: true }],
       widgets: [
-        { tipo: "kpi", titulo: "Por vencer", medida: "contar" },
-        { tipo: "kpi", titulo: "Vence primero", medida: "minimo", campo: "vencimiento" },
+        { tipo: "torta", titulo: "Estado PRAIND", categoria: "estado_praind", medida: "contar", ancho: "tercio" },
         {
-          tipo: "tabla",
-          titulo: "Por empresa",
-          columnas: ["empresa"],
-          agrupar_por: "empresa",
-        },
-        {
-          tipo: "tabla",
-          titulo: "Detalle",
-          columnas: ["nombre", "empresa", "vencimiento", "dias_para_vencer"],
-          orden: { campo: "dias_para_vencer", dir: "asc" },
+          tipo: "barras",
+          titulo: "Estado por tipo de ingreso",
+          eje_x: "tipo_ingreso",
+          serie: "estado_praind",
+          medida: "contar",
+          orientacion: "vertical",
+          ancho: "dos_tercios",
         },
       ],
     },
   },
   {
-    id: "ingresos-por-empresa",
-    titulo: "Ingresos por empresa (2 semanas)",
+    id: "vencimientos-por-mes",
+    titulo: "Vencimientos del próximo año",
+    lienzo: {
+      fuente: "contratistas",
+      formato: { fecha: "texto" },
+      filtros: [{ campo: "dias_para_vencer", op: "entre", valor: [0, 365] }],
+      widgets: [
+        { tipo: "kpi", titulo: "Vencen en el año", medida: "contar", tono: "advertencia" },
+        { tipo: "kpi", titulo: "El próximo vence", medida: "minimo", campo: "vencimiento" },
+        { tipo: "barras", titulo: "Vencimientos por mes", eje_x: "vencimiento", agrupar_fecha: "mes", medida: "contar", ancho: "completo" },
+      ],
+    },
+  },
+  {
+    id: "ingresos-2-semanas",
+    titulo: "Ingresos de las últimas 2 semanas",
     lienzo: {
       fuente: "ingresos",
       filtros: [],
       widgets: [
         { tipo: "kpi", titulo: "Ingresos", medida: "contar" },
         { tipo: "kpi", titulo: "Personas distintas", medida: "contar_distintos", campo: "nombre" },
-        { tipo: "barras", titulo: "Ingresos por día", eje_x: "dia", medida: "contar" },
-        { tipo: "barras", titulo: "Ingresos por empresa", eje_x: "empresa", medida: "contar" },
+        { tipo: "kpi", titulo: "Empresas", medida: "contar_distintos", campo: "empresa" },
+        { tipo: "kpi", titulo: "Sitios", medida: "contar_distintos", campo: "sitio" },
+        { tipo: "linea", titulo: "Ingresos por día", eje_x: "dia", medida: "contar", area: true, ancho: "dos_tercios" },
+        { tipo: "torta", titulo: "Por tipo de ingreso", categoria: "tipo_ingreso", medida: "contar" },
+        { tipo: "linea", titulo: "Ingresos por día y sitio", eje_x: "dia", serie: "sitio", medida: "contar" },
+        { tipo: "barras", titulo: "Empresas con más ingresos", eje_x: "empresa", medida: "contar", limite: 10 },
       ],
+    },
+  },
+  {
+    id: "enfoque-tipos",
+    titulo: "Enfoque: tipos de ingreso",
+    lienzo: {
+      fuente: "ingresos",
+      disposicion: "enfoque",
+      filtros: [],
+      widgets: [{ tipo: "torta", titulo: "Ingresos por tipo, últimas 2 semanas", categoria: "tipo_ingreso", medida: "contar" }],
     },
   },
 ];

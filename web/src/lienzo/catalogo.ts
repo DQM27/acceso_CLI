@@ -5,6 +5,9 @@
  */
 export type TipoCampo = "texto" | "enumeracion" | "fecha" | "numero" | "booleano";
 
+export const OPERADORES = ["igual", "en", "no_en", "entre", "contiene"] as const;
+export type Operador = (typeof OPERADORES)[number];
+
 export interface DefinicionCampo {
   tipo: TipoCampo;
   etiqueta: string;
@@ -46,9 +49,6 @@ export const CATALOGO = {
 export type Fuente = keyof typeof CATALOGO;
 export const FUENTES = Object.keys(CATALOGO) as [Fuente, ...Fuente[]];
 
-export const OPERADORES = ["igual", "en", "no_en", "entre", "contiene"] as const;
-export type Operador = (typeof OPERADORES)[number];
-
 /** Operadores que admite cada tipo de campo. */
 export const OPERADORES_POR_TIPO: Record<TipoCampo, readonly Operador[]> = {
   texto: ["igual", "en", "no_en", "contiene"],
@@ -61,7 +61,26 @@ export const OPERADORES_POR_TIPO: Record<TipoCampo, readonly Operador[]> = {
 export const MEDIDAS = ["contar", "contar_distintos", "minimo", "maximo"] as const;
 export type Medida = (typeof MEDIDAS)[number];
 
-export const WIDGETS = ["kpi", "tabla", "barras"] as const;
+export const WIDGETS = ["kpi", "tabla", "barras", "linea", "torta"] as const;
+
+/** Cómo se reparten los paneles: en cuadrícula, o uno solo grande al centro. */
+export const DISPOSICIONES = ["cuadricula", "enfoque"] as const;
+/** Ancho de un panel dentro de la cuadrícula (de 12 columnas). */
+export const ANCHOS = ["cuarto", "tercio", "mitad", "dos_tercios", "completo"] as const;
+export type Ancho = (typeof ANCHOS)[number];
+/** Agrupar un eje de fecha por día, semana (que empieza el lunes) o mes. */
+export const AGRUPACIONES_FECHA = ["dia", "semana", "mes"] as const;
+export type AgrupacionFecha = (typeof AGRUPACIONES_FECHA)[number];
+/** Cómo se escriben las fechas: 22/10/2026, 2026-10-22 o "22 oct 2026". */
+export const FORMATOS_FECHA = ["dia_mes_anio", "anio_mes_dia", "texto"] as const;
+export type FormatoFecha = (typeof FORMATOS_FECHA)[number];
+/** Color de estado de una tarjeta KPI; siempre acompañado de su texto. */
+export const TONOS = ["neutro", "exito", "advertencia", "error"] as const;
+
+/** Tope de categorías en un gráfico: el resto se junta en "Otros". */
+export const MAXIMO_CATEGORIAS = 30;
+/** Tope de series (colores) en un gráfico: el resto se junta en "Otros". */
+export const MAXIMO_SERIES = 7;
 
 export function definicionCampo(fuente: Fuente, campo: string): DefinicionCampo | undefined {
   const campos: Record<string, DefinicionCampo> = CATALOGO[fuente].campos;

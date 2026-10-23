@@ -1,4 +1,6 @@
-/* Pantalla "Asistente" y el lienzo: sólo variables del sistema "brisas" (diseno.css). */
+/* Pantalla "Asistente" y el lienzo. Fondo, texto y bordes con los tokens del
+   panel (diseno.css), para seguir su tema claro u oscuro; los colores de los
+   datos son una paleta propia del lienzo (abajo). */
 .asistente {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
@@ -17,7 +19,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--espacio-4) var(--espacio-4);
+  padding: var(--espacio-4);
   border-bottom: 1px solid var(--borde);
   font-weight: 700;
 }
@@ -145,42 +147,128 @@
   height: 7px;
   border-radius: 50%;
   background: var(--exito);
+  animation: lienzo-latir 2s ease-in-out infinite;
 }
 .asistente-contenido {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .asistente-error {
   color: var(--error);
 }
 
-/* Lienzo */
+/* --- Paleta de datos del lienzo -------------------------------------------
+   8 colores categóricos validados (daltonismo y contraste) contra el fondo del
+   panel en claro (#FFFFFF) y en oscuro (#181C23). El ORDEN es parte de la
+   validación: se asignan en orden, nunca al azar. */
 .lienzo-documento {
+  --serie-1: #2a78d6;
+  --serie-2: #eb6834;
+  --serie-3: #1baf7a;
+  --serie-4: #eda100;
+  --serie-5: #e87ba4;
+  --serie-6: #008300;
+  --serie-7: #6250d6;
+  --serie-8: #e34948;
+  --serie-unica: #2a78d6;
+  --serie-otros: #a3a7ae;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .lienzo-documento {
+    --serie-1: #3987e5;
+    --serie-2: #d95926;
+    --serie-3: #199e70;
+    --serie-4: #c98500;
+    --serie-5: #d55181;
+    --serie-6: #008300;
+    --serie-7: #9085e9;
+    --serie-8: #e66767;
+    --serie-unica: #3987e5;
+    --serie-otros: #6b7280;
+  }
+}
+[data-theme="dark"] .lienzo-documento {
+  --serie-1: #3987e5;
+  --serie-2: #d95926;
+  --serie-3: #199e70;
+  --serie-4: #c98500;
+  --serie-5: #d55181;
+  --serie-6: #008300;
+  --serie-7: #9085e9;
+  --serie-8: #e66767;
+  --serie-unica: #3987e5;
+  --serie-otros: #6b7280;
+}
+
+/* --- Disposición ------------------------------------------------------------ */
+.lienzo-documento {
+  gap: var(--espacio-3);
+}
+.lienzo-cuadricula {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: stretch;
+}
+.lienzo-enfoque {
   display: flex;
   flex-direction: column;
-  gap: var(--espacio-3);
+  max-width: 980px;
+  margin: 0 auto;
+  width: 100%;
 }
-.lienzo-kpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: var(--espacio-3);
+.lienzo-titulo {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--fuente-titulo);
+  animation: lienzo-aparecer 380ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
+.lienzo-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  animation: lienzo-aparecer 460ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+.lienzo-panel > * {
+  flex: 1;
+}
+.lienzo-ancho-cuarto { grid-column: span 3; }
+.lienzo-ancho-tercio { grid-column: span 4; }
+.lienzo-ancho-mitad { grid-column: span 6; }
+.lienzo-ancho-dos_tercios { grid-column: span 8; }
+.lienzo-ancho-completo { grid-column: 1 / -1; }
+
+@media (max-width: 1180px) {
+  .lienzo-ancho-cuarto,
+  .lienzo-ancho-tercio { grid-column: span 6; }
+  .lienzo-ancho-mitad,
+  .lienzo-ancho-dos_tercios { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .lienzo-cuadricula > .lienzo-panel { grid-column: 1 / -1; }
+}
+
+/* --- Tarjetas KPI ------------------------------------------------------------ */
 .lienzo-kpi {
   padding: var(--espacio-3) var(--espacio-4);
 }
 .lienzo-kpi-valor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 1.9rem;
   font-weight: 700;
   line-height: 1.1;
   color: var(--texto);
 }
-.lienzo-kpi-error .lienzo-kpi-valor {
-  color: var(--error);
+.lienzo-kpi-icono {
+  flex: none;
 }
-.lienzo-kpi-advertencia .lienzo-kpi-valor {
-  color: var(--advertencia);
-}
+.lienzo-kpi-error .lienzo-kpi-valor { color: var(--error); }
+.lienzo-kpi-advertencia .lienzo-kpi-valor { color: var(--advertencia); }
+.lienzo-kpi-exito .lienzo-kpi-valor { color: var(--exito); }
 .lienzo-kpi-titulo {
   color: var(--muted);
   margin-top: 2px;
@@ -191,46 +279,50 @@
   color: var(--texto-atenuado);
   font-size: 0.78rem;
 }
-.lienzo-abajo {
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: var(--espacio-3);
-}
+
+/* --- Bloques (gráficos, tablas) ---------------------------------------------- */
 .lienzo-bloque {
   padding: var(--espacio-3) var(--espacio-4);
   min-width: 0;
 }
-.lienzo-bloque h3 {
+.lienzo-bloque-cabecera {
   display: flex;
-  justify-content: space-between;
-  margin: 0 0 var(--espacio-3);
+  align-items: center;
+  gap: var(--espacio-2);
+  margin-bottom: var(--espacio-3);
+  min-height: 28px;
+}
+.lienzo-bloque-cabecera h3 {
+  margin: 0;
   font-size: 0.9rem;
 }
-.lienzo-bloque h3 span {
-  font-weight: 500;
-  font-size: 0.8rem;
+.lienzo-subtitulo {
   color: var(--muted);
+  font-size: 0.8rem;
 }
-.lienzo-barras {
-  width: 100%;
-  height: auto;
-  max-height: 260px;
+.lienzo-alternar {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--duracion), color var(--duracion);
 }
-.lienzo-barras text {
-  fill: var(--muted);
-  font-size: 11px;
-  font-family: var(--fuente);
+.lienzo-alternar:hover,
+.lienzo-alternar[aria-pressed="true"] {
+  background: var(--panel-suave);
+  color: var(--texto);
 }
-.lienzo-eje {
-  stroke: var(--panel-suave);
+.lienzo-alternar:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
 }
-.lienzo-barra {
-  fill: var(--acento-relleno);
-}
-.lienzo-barra-hoy {
-  fill: var(--info);
-  opacity: 0.55;
-}
+
 .lienzo-atencion-fila {
   display: flex;
   gap: var(--espacio-3);
@@ -247,15 +339,9 @@
   border-radius: 50%;
   margin-top: 6px;
 }
-.lienzo-punto-error {
-  background: var(--error);
-}
-.lienzo-punto-advertencia {
-  background: var(--advertencia);
-}
-.lienzo-punto-exito {
-  background: var(--exito);
-}
+.lienzo-punto-error { background: var(--error); }
+.lienzo-punto-advertencia { background: var(--advertencia); }
+.lienzo-punto-exito { background: var(--exito); }
 .lienzo-atenuado,
 .lienzo-vacio,
 .lienzo-nota {
@@ -265,6 +351,7 @@
   margin: var(--espacio-2) 0 0;
   font-size: 0.8rem;
 }
+
 .lienzo-tabla-caja {
   overflow-x: auto;
 }
@@ -284,6 +371,260 @@
   color: var(--muted);
   font-weight: 600;
 }
+.lienzo-tabla tbody tr {
+  transition: background var(--duracion);
+}
+.lienzo-tabla tbody tr:hover {
+  background: var(--campo-fondo);
+}
+.lienzo-numero {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Gráficos ------------------------------------------------------------------ */
+.lienzo-grafico {
+  position: relative;
+  width: 100%;
+}
+.lienzo-svg {
+  display: block;
+  overflow: visible;
+  border-radius: var(--radio-chico);
+}
+.lienzo-svg:focus {
+  outline: none;
+}
+.lienzo-svg:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 4px;
+}
+.lienzo-rejilla {
+  stroke: var(--panel-suave);
+  stroke-width: 1;
+}
+.lienzo-base {
+  stroke: var(--borde);
+  stroke-width: 1;
+}
+.lienzo-eje-texto {
+  fill: var(--muted);
+  font-size: 11px;
+  font-family: var(--fuente);
+  font-variant-numeric: tabular-nums;
+}
+.lienzo-eje-categoria {
+  fill: var(--texto);
+}
+.lienzo-valor-texto {
+  fill: var(--texto);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: var(--fuente);
+  font-variant-numeric: tabular-nums;
+  animation: lienzo-desvanecer 300ms ease-out both;
+}
+.lienzo-zona {
+  fill: transparent;
+}
+.lienzo-categoria,
+.lienzo-porcion {
+  transition: opacity 160ms ease, transform 200ms ease;
+}
+.lienzo-atenuada {
+  opacity: 0.35;
+}
+.lienzo-barra-hoy {
+  opacity: 0.5;
+}
+.lienzo-crecer-v,
+.lienzo-crecer-h {
+  transform-box: fill-box;
+  animation: lienzo-crecer-v 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: 50% 100%;
+}
+.lienzo-crecer-h {
+  animation-name: lienzo-crecer-h;
+  transform-origin: 0 50%;
+}
+
+.lienzo-linea {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: lienzo-trazar 900ms cubic-bezier(0.4, 0.1, 0.2, 1) both;
+}
+.lienzo-area {
+  animation: lienzo-desvanecer 600ms ease-out 350ms both;
+}
+.lienzo-punto-final {
+  stroke: var(--panel);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lienzo-saltar 320ms ease-out 850ms both;
+}
+.lienzo-cursor line {
+  stroke: var(--borde-fuerte);
+  stroke-width: 1;
+}
+.lienzo-punto-cursor {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.lienzo-torta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-3);
+}
+.lienzo-torta-lado {
+  flex-direction: row;
+  justify-content: center;
+  gap: var(--espacio-6);
+}
+.lienzo-torta-lado .lienzo-leyenda {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+.lienzo-torta-dibujo {
+  position: relative;
+  flex: none;
+}
+.lienzo-porcion {
+  stroke: var(--panel);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.lienzo-barrido {
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 0;
+  animation: lienzo-barrer 850ms cubic-bezier(0.3, 0.7, 0.2, 1) both;
+}
+.lienzo-torta-total {
+  fill: var(--texto);
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--fuente);
+  animation: lienzo-desvanecer 400ms ease-out 450ms both;
+}
+
+.lienzo-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  list-style: none;
+  margin: var(--espacio-3) 0 0;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.lienzo-leyenda li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--texto);
+}
+.lienzo-leyenda-detalle {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.lienzo-clave {
+  display: inline-block;
+  flex: none;
+}
+.lienzo-clave-barra {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.lienzo-clave-linea {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.lienzo-tooltip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  min-width: 120px;
+  white-space: nowrap;
+  padding: 8px 10px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--elevado);
+  box-shadow: var(--sombra-panel);
+  font-size: 0.8rem;
+  animation: lienzo-desvanecer 120ms ease-out both;
+}
+.lienzo-tooltip-titulo {
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.lienzo-tooltip-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lienzo-tooltip-fila strong {
+  color: var(--texto);
+  font-variant-numeric: tabular-nums;
+}
+.lienzo-tooltip-fila span:last-child {
+  color: var(--muted);
+}
+
+.lienzo-aparecer {
+  animation: lienzo-aparecer 260ms ease-out both;
+}
+
+/* --- Animaciones ---------------------------------------------------------------- */
+@keyframes lienzo-aparecer {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes lienzo-desvanecer {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes lienzo-crecer-v {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes lienzo-crecer-h {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes lienzo-trazar {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes lienzo-barrer {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes lienzo-saltar {
+  from { opacity: 0; transform: scale(0.3); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes lienzo-latir {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Quien pidió menos movimiento en su sistema ve todo quieto, ya en su lugar. */
+@media (prefers-reduced-motion: reduce) {
+  .asistente *,
+  .asistente *::before,
+  .lienzo-documento * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 
 @media (max-width: 900px) {
   .asistente {
@@ -291,8 +632,5 @@
   }
   .asistente-chat {
     display: none;
-  }
-  .lienzo-abajo {
-    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -1,13 +1,22 @@
+import type { CSSProperties } from "react";
 import type { ResumenHoy } from "../api/lienzo";
-import type { Barra } from "./calculo";
-import { GraficoBarras, TarjetaKpi } from "./widgets";
+import { etiquetaFecha, type DatosGrafico } from "./calculo";
+import { COLOR_UNICO } from "./colores";
+import GraficoBarras from "./graficos/Barras";
+import { MarcoGrafico } from "./graficos/comun";
+import { TarjetaKpi } from "./widgets";
 
-/** "09" de "2026-10-09": la etiqueta corta de cada día del gráfico. */
-function etiquetaDia(ymd: string): string {
-  return ymd.slice(8, 10);
-}
-
-function Atencion({ tono, hecho, texto, aviso }: { tono: "error" | "advertencia" | "exito"; hecho: string; texto: string; aviso: string }) {
+function Atencion({
+  tono,
+  hecho,
+  texto,
+  aviso,
+}: {
+  tono: "error" | "advertencia" | "exito";
+  hecho: string;
+  texto: string;
+  aviso: string;
+}) {
   return (
     <div className="lienzo-atencion-fila">
       <span className={`lienzo-punto lienzo-punto-${tono}`} aria-hidden="true" />
@@ -20,26 +29,38 @@ function Atencion({ tono, hecho, texto, aviso }: { tono: "error" | "advertencia"
   );
 }
 
+const panel = (i: number) => ({ "--i": i }) as CSSProperties;
+
 /** Pantalla inicial del lienzo (propuesta B): los números de hoy, en vivo. */
 export default function ResumenDeHoy({ resumen }: { resumen: ResumenHoy }) {
-  const barras: Barra[] = resumen.ingresos_por_dia.map((d) => ({ etiqueta: etiquetaDia(d.dia), valor: d.cantidad }));
-  const hoy = barras.length - 1;
-  if (hoy >= 0) barras[hoy] = { ...barras[hoy], etiqueta: `${barras[hoy].etiqueta}·hoy` };
+  const datos: DatosGrafico = {
+    categorias: resumen.ingresos_por_dia.map((d) => d.dia),
+    series: [{ nombre: "Ingresos", valores: resumen.ingresos_por_dia.map((d) => d.cantidad) }],
+    agrupacion: "dia",
+  };
+  const ultima = datos.categorias.length - 1;
+  const etiquetar = (clave: string, i: number) => `${etiquetaFecha(clave, "dia")}${i === ultima ? " · hoy" : ""}`;
 
   const vencidos = resumen.praind_vencidos;
   const porVencer = resumen.praind_por_vencer;
   const plural = (n: number, uno: string, varios: string) => (n === 1 ? uno : varios);
 
   return (
-    <div className="lienzo-documento">
-      <div className="lienzo-kpis">
+    <div className="lienzo-documento lienzo-cuadricula">
+      <div className="lienzo-panel lienzo-ancho-cuarto" style={panel(0)}>
         <TarjetaKpi
           valor={resumen.adentro_contratistas}
           titulo="Contratistas adentro ahora"
           detalle={`${resumen.adentro_proveedores} ${plural(resumen.adentro_proveedores, "proveedor", "proveedores")}`}
         />
+      </div>
+      <div className="lienzo-panel lienzo-ancho-cuarto" style={panel(1)}>
         <TarjetaKpi valor={resumen.ingresos_hoy} titulo="Ingresos hoy" detalle="Día en curso" />
+      </div>
+      <div className="lienzo-panel lienzo-ancho-cuarto" style={panel(2)}>
         <TarjetaKpi valor={vencidos} titulo="PRAIND vencidos" detalle="No pueden entrar" tono={vencidos > 0 ? "error" : "neutro"} />
+      </div>
+      <div className="lienzo-panel lienzo-ancho-cuarto" style={panel(3)}>
         <TarjetaKpi
           valor={porVencer}
           titulo="PRAIND por vencer"
@@ -47,17 +68,31 @@ export default function ResumenDeHoy({ resumen }: { resumen: ResumenHoy }) {
           tono={porVencer > 0 ? "advertencia" : "neutro"}
         />
       </div>
-      <div className="lienzo-abajo">
+      <div className="lienzo-panel lienzo-ancho-dos_tercios" style={panel(4)}>
+        <MarcoGrafico
+          titulo="Ingresos por día"
+          subtitulo="últimas 2 semanas"
+          datos={{
+            columnas: ["Día", "Ingresos"],
+            filas: resumen.ingresos_por_dia.map((d) => [d.dia.split("-").reverse().join("/"), d.cantidad]),
+          }}
+        >
+          <GraficoBarras
+            datos={datos}
+            colores={[COLOR_UNICO]}
+            titulo="Ingresos por día, últimas 2 semanas"
+            alto={260}
+            resaltarUltima
+            etiquetar={etiquetar}
+          />
+        </MarcoGrafico>
+      </div>
+      <div className="lienzo-panel lienzo-ancho-tercio" style={panel(5)}>
         <section className="tarjeta lienzo-bloque">
-          <h3>
-            Ingresos por día <span>últimas 2 semanas</span>
-          </h3>
-          <GraficoBarras barras={barras} resaltarUltima titulo="Ingresos por día, últimas 2 semanas" />
-        </section>
-        <section className="tarjeta lienzo-bloque">
-          <h3>
-            Requiere atención <span>{(vencidos > 0 ? 1 : 0) + (porVencer > 0 ? 1 : 0)}</span>
-          </h3>
+          <header className="lienzo-bloque-cabecera">
+            <h3>Requiere atención</h3>
+            <span className="lienzo-subtitulo">{(vencidos > 0 ? 1 : 0) + (porVencer > 0 ? 1 : 0)}</span>
+          </header>
           {vencidos === 0 && porVencer === 0 && (
             <Atencion tono="exito" hecho="Nada" texto="pendiente por PRAIND" aviso="Ningún PRAIND vencido ni por vencer" />
           )}
@@ -65,7 +100,7 @@ export default function ResumenDeHoy({ resumen }: { resumen: ResumenHoy }) {
             <Atencion
               tono="error"
               hecho={`${vencidos} ${plural(vencidos, "contratista", "contratistas")}`}
-              texto={`con PRAIND vencido`}
+              texto="con PRAIND vencido"
               aviso="Revisar antes de su próximo ingreso"
             />
           )}

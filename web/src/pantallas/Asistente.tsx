@@ -127,7 +127,8 @@ export default function Asistente() {
             </div>
           )}
         </div>
-        <div className="asistente-contenido">
+        {/* La `key` vuelve a montar el contenido al cambiar de vista: así los paneles entran animados. */}
+        <div className="asistente-contenido" key={vista}>
           {esResumen ? <VistaResumen sitioId={sitioId} /> : <VistaDocumento id={vista} />}
         </div>
       </main>
