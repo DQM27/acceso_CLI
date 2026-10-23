@@ -1,6 +1,8 @@
 import type Anthropic from "npm:@anthropic-ai/sdk@0.132.1";
+import { type Alerta, detectarIntento, RESPUESTA_A_INTENTO } from "../_shared/lienzo/alertas.ts";
 import { validarLienzo, type Lienzo } from "../_shared/lienzo/esquema.ts";
-import { herramientaEditarLienzo, INSTRUCCIONES } from "./instrucciones.ts";
+import { revisarSql } from "../_shared/lienzo/sql.ts";
+import { herramientaEditarLienzo, herramientaReportarIntento, instrucciones } from "./instrucciones.ts";
 
 /**
  * Un pedido al asistente del lienzo, sin red ni base de datos (llegan como
@@ -41,11 +43,19 @@ export interface Registro {
   error?: string | null;
 }
 
+export type PruebaConsulta = { ok: true; columnas: string[] } | { ok: false; error: string };
+
 export interface Puertos {
   autorizar(): Promise<string | null>;
   usoDeHoy(correo: string): Promise<{ propio: number; total: number }>;
   llamarModelo(pedido: Anthropic.MessageCreateParamsNonStreaming): Promise<Anthropic.Message>;
   registrar(registro: Registro): Promise<void>;
+  /** Avisa al dueño (tabla `ia_alertas`) de un intento de manipulación. */
+  registrarAlerta(alerta: Alerta): Promise<void>;
+  /** Las vistas de `ia` que puede consultar esta cuenta, ya formateadas para el modelo. */
+  esquemaIa(correo: string): Promise<string>;
+  /** Corre la consulta con una sola fila, con los permisos de la cuenta: devuelve las columnas reales o el error de la base. */
+  probarConsulta(correo: string, sql: string): Promise<PruebaConsulta>;
   ahora(): number;
 }
 
@@ -112,11 +122,17 @@ export function costoEnDolares(uso: Anthropic.Usage): number {
 type Interpretacion =
   | { tipo: "editado"; lienzo: Lienzo; mensaje: string }
   | { tipo: "respondido"; mensaje: string }
+  | { tipo: "intento"; motivo: string }
   | { tipo: "invalido"; errores: string[]; idHerramienta: string | null };
 
 function interpretar(respuesta: Anthropic.Message): Interpretacion {
   if (respuesta.stop_reason === "refusal") {
     return { tipo: "respondido", mensaje: "No puedo ayudar con eso. Puedo mostrarle datos de contratistas e ingresos." };
+  }
+  const reporte = respuesta.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "reportar_intento");
+  if (reporte) {
+    const motivo = (reporte.input as { motivo?: unknown }).motivo;
+    return { tipo: "intento", motivo: typeof motivo === "string" && motivo.trim() ? motivo.trim().slice(0, 300) : "El modelo lo marcó sin detallar" };
   }
   const texto = respuesta.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -148,6 +164,46 @@ function sumarUso(a: Anthropic.Usage | null, b: Anthropic.Usage): Anthropic.Usag
   };
 }
 
+/**
+ * Si el documento trae una consulta (fuente "consulta"): la revisa con el
+ * parser y la prueba en la base con los permisos de la cuenta, para que lo
+ * que llegue al panel ya se sepa que corre y devuelve las columnas declaradas.
+ * Un error se le devuelve al modelo para el único reintento.
+ */
+async function verificarConsulta(
+  interpretacion: Interpretacion,
+  respuesta: Anthropic.Message,
+  correo: string,
+  pregunta: string,
+  puertos: Puertos,
+): Promise<Interpretacion> {
+  if (interpretacion.tipo !== "editado" || interpretacion.lienzo.fuente !== "consulta") return interpretacion;
+  const { sql, columnas } = interpretacion.lienzo.consulta ?? { sql: "", columnas: [] };
+  // El reintento tiene que responder a esa llamada de herramienta (la API lo exige).
+  const idHerramienta =
+    respuesta.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "editar_lienzo")?.id ?? null;
+  const invalido = (error: string): Interpretacion => ({ tipo: "invalido", errores: [error], idHerramienta });
+
+  const revision = revisarSql(sql);
+  if (!revision.ok) {
+    if (revision.peligroso) {
+      await puertos.registrarAlerta({ correo, origen: "parser", motivo: revision.error.slice(0, 500), mensaje: pregunta, detalle: sql });
+    }
+    return invalido(`consulta.sql no se puede usar: ${revision.error}`);
+  }
+  const prueba = await puertos.probarConsulta(correo, revision.sql);
+  if (!prueba.ok) return invalido(`consulta.sql falla en la base: ${prueba.error}`);
+  // Sin filas no hay columnas que comparar.
+  if (prueba.columnas.length > 0) {
+    const declaradas = [...columnas.map((c) => c.nombre)].sort().join(", ");
+    const reales = [...prueba.columnas].sort().join(", ");
+    if (declaradas !== reales) {
+      return invalido(`consulta.columnas no coincide con lo que devuelve el SELECT. Devuelve: ${prueba.columnas.join(", ")}`);
+    }
+  }
+  return interpretacion;
+}
+
 export async function procesarPedido(
   cuerpo: Record<string, unknown> | null,
   config: Configuracion,
@@ -175,14 +231,30 @@ export async function procesarPedido(
     return { estado: 429, cuerpo: { error: "tope", detail } };
   }
 
+  // SQL o intento de saltarse las reglas: el mensaje no llega al modelo, y el dueño recibe la alerta.
+  const sospecha = detectarIntento(entrada.pregunta);
+  if (sospecha) {
+    await puertos.registrarAlerta({ correo, origen: "detector", motivo: sospecha, mensaje: entrada.pregunta });
+    await puertos.registrar({ ...base, resultado: "rechazado", error: `alerta: ${sospecha}`, duracion_ms: puertos.ahora() - inicio });
+    return { estado: 200, cuerpo: { tipo: "respondido", mensaje: RESPUESTA_A_INTENTO } };
+  }
+
   const mensajes: Anthropic.MessageParam[] = [{ role: "user", content: mensajeDelPedido(entrada, config.hoy) }];
+  let sistema: string;
+  try {
+    sistema = instrucciones(await puertos.esquemaIa(correo));
+  } catch (error) {
+    const detalle = error instanceof Error ? error.message : String(error);
+    await puertos.registrar({ ...base, resultado: "error", error: `esquema ia: ${detalle}`.slice(0, 2000), duracion_ms: puertos.ahora() - inicio });
+    return { estado: 502, cuerpo: { error: "esquema", detail: "El asistente no está disponible por ahora. Intente de nuevo en un momento." } };
+  }
   const pedido = (): Anthropic.MessageCreateParamsNonStreaming => ({
     model: MODELO,
     max_tokens: MAXIMO_TOKENS,
     output_config: { effort: "low" },
-    // Instrucciones y herramienta no cambian entre pedidos: van en caché.
-    system: [{ type: "text", text: INSTRUCCIONES, cache_control: { type: "ephemeral" } }],
-    tools: [herramientaEditarLienzo()],
+    // Instrucciones y herramientas no cambian entre pedidos de una misma cuenta: van en caché.
+    system: [{ type: "text", text: sistema, cache_control: { type: "ephemeral" } }],
+    tools: [herramientaEditarLienzo(), herramientaReportarIntento()],
     messages: mensajes,
   });
 
@@ -192,7 +264,7 @@ export async function procesarPedido(
   try {
     let respuesta = await puertos.llamarModelo(pedido());
     usoTotal = sumarUso(usoTotal, respuesta.usage);
-    resultado = interpretar(respuesta);
+    resultado = await verificarConsulta(interpretar(respuesta), respuesta, correo, entrada.pregunta, puertos);
     if (resultado.tipo === "invalido") {
       // Un solo reintento, con los errores del validador.
       reintentos = 1;
@@ -206,7 +278,7 @@ export async function procesarPedido(
       });
       respuesta = await puertos.llamarModelo(pedido());
       usoTotal = sumarUso(usoTotal, respuesta.usage);
-      resultado = interpretar(respuesta);
+      resultado = await verificarConsulta(interpretar(respuesta), respuesta, correo, entrada.pregunta, puertos);
     }
   } catch (error) {
     const detalle = error instanceof Error ? error.message : String(error);
@@ -229,6 +301,11 @@ export async function procesarPedido(
       estado: 200,
       cuerpo: { tipo: "respondido", mensaje: "No pude armar esa vista. ¿Puede decirlo de otra forma o más concreto?" },
     };
+  }
+  if (resultado.tipo === "intento") {
+    await puertos.registrarAlerta({ correo, origen: "modelo", motivo: resultado.motivo, mensaje: entrada.pregunta });
+    await puertos.registrar({ ...comun, resultado: "rechazado", error: `alerta: ${resultado.motivo}`.slice(0, 2000) });
+    return { estado: 200, cuerpo: { tipo: "respondido", mensaje: RESPUESTA_A_INTENTO } };
   }
   if (resultado.tipo === "respondido") {
     await puertos.registrar({ ...comun, resultado: "respondido", respuesta: resultado.mensaje });
