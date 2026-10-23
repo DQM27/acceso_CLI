@@ -41,10 +41,17 @@ export interface TurnoChat {
   texto: string;
 }
 
-export type RespuestaAsistente = { tipo: "editado"; lienzo: Lienzo; mensaje: string } | { tipo: "respondido"; mensaje: string };
+export type RespuestaAsistente =
+  | { tipo: "editado"; lienzo: Lienzo; mensaje: string; sugerencias?: string[] }
+  | { tipo: "respondido"; mensaje: string };
 
 const respuestaAsistenteEsquema = z.union([
-  z.object({ tipo: z.literal("editado"), lienzo: z.unknown(), mensaje: z.string() }),
+  z.object({
+    tipo: z.literal("editado"),
+    lienzo: z.unknown(),
+    mensaje: z.string(),
+    sugerencias: z.array(z.string().max(80)).max(3).optional(),
+  }),
   z.object({ tipo: z.literal("respondido"), mensaje: z.string() }),
 ]);
 
@@ -67,7 +74,7 @@ export async function preguntarAlAsistente(pedido: {
   if (respuesta.tipo === "respondido") return respuesta;
   const validado = validarLienzo(respuesta.lienzo);
   if (!validado.ok) throw new Error("El asistente devolvió una vista que no se puede dibujar.");
-  return { tipo: "editado", lienzo: validado.lienzo, mensaje: respuesta.mensaje };
+  return { tipo: "editado", lienzo: validado.lienzo, mensaje: respuesta.mensaje, sugerencias: respuesta.sugerencias };
 }
 
 const respuestaConsultaEsquema = z.object({

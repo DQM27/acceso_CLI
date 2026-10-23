@@ -68,7 +68,7 @@ export interface Configuracion {
 }
 
 export type Respuesta =
-  | { estado: 200; cuerpo: { tipo: "editado"; lienzo: Lienzo; mensaje: string } | { tipo: "respondido"; mensaje: string } }
+  | { estado: 200; cuerpo: { tipo: "editado"; lienzo: Lienzo; mensaje: string; sugerencias?: string[] } | { tipo: "respondido"; mensaje: string } }
   | { estado: 400 | 401 | 429 | 502 | 503; cuerpo: { error: string; detail: string } };
 
 interface Turno {
@@ -121,10 +121,33 @@ export function costoEnDolares(uso: Anthropic.Usage): number {
 }
 
 type Interpretacion =
-  | { tipo: "editado"; lienzo: Lienzo; mensaje: string }
+  | { tipo: "editado"; lienzo: Lienzo; mensaje: string; sugerencias: string[] }
   | { tipo: "respondido"; mensaje: string }
   | { tipo: "intento"; motivo: string }
   | { tipo: "invalido"; errores: string[]; idHerramienta: string | null };
+
+/**
+ * Las sugerencias de próximos pedidos que propone el modelo, listas para ser
+ * botones en el chat: texto de una línea, cortas, como mucho 3, sin repetidas,
+ * y sin nada que el detector de manipulación marque (un botón que se envía con
+ * un toque no puede llevar SQL ni "ignorá tus reglas").
+ */
+export function limpiarSugerencias(valor: unknown): string[] {
+  if (!Array.isArray(valor)) return [];
+  const vistas = new Set<string>();
+  const limpias: string[] = [];
+  for (const s of valor) {
+    if (typeof s !== "string") continue;
+    const texto = s.replace(/\s+/g, " ").trim();
+    if (texto.length < 3 || texto.length > 80 || detectarIntento(texto)) continue;
+    const clave = texto.toLowerCase();
+    if (vistas.has(clave)) continue;
+    vistas.add(clave);
+    limpias.push(texto);
+    if (limpias.length === 3) break;
+  }
+  return limpias;
+}
 
 function interpretar(respuesta: Anthropic.Message): Interpretacion {
   if (respuesta.stop_reason === "refusal") {
@@ -147,11 +170,11 @@ function interpretar(respuesta: Anthropic.Message): Interpretacion {
     }
     return { tipo: "respondido", mensaje: texto.slice(0, 4000) };
   }
-  const entrada = uso.input as { mensaje?: unknown; lienzo?: unknown };
+  const entrada = uso.input as { mensaje?: unknown; lienzo?: unknown; sugerencias?: unknown };
   const validado = validarLienzo(entrada.lienzo);
   if (!validado.ok) return { tipo: "invalido", errores: validado.errores, idHerramienta: uso.id };
   const mensaje = typeof entrada.mensaje === "string" && entrada.mensaje.trim() ? entrada.mensaje.trim() : texto || "Listo.";
-  return { tipo: "editado", lienzo: validado.lienzo, mensaje: mensaje.slice(0, 400) };
+  return { tipo: "editado", lienzo: validado.lienzo, mensaje: mensaje.slice(0, 400), sugerencias: limpiarSugerencias(entrada.sugerencias) };
 }
 
 function sumarUso(a: Anthropic.Usage | null, b: Anthropic.Usage): Anthropic.Usage {
@@ -335,7 +358,8 @@ export async function procesarPedido(
     return { estado: 200, cuerpo: { tipo: "respondido", mensaje: resultado.mensaje } };
   }
   await puertos.registrar({ ...comun, resultado: "editado", lienzo: resultado.lienzo, respuesta: resultado.mensaje });
-  return { estado: 200, cuerpo: { tipo: "editado", lienzo: resultado.lienzo, mensaje: resultado.mensaje } };
+  const editado = { tipo: "editado" as const, lienzo: resultado.lienzo, mensaje: resultado.mensaje };
+  return { estado: 200, cuerpo: resultado.sugerencias.length ? { ...editado, sugerencias: resultado.sugerencias } : editado };
 }
 
 function tokens(uso: Anthropic.Usage | null) {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUp,
+  CircleHelp,
   Download,
   FileSpreadsheet,
   FileText,
@@ -31,6 +32,8 @@ import { listarUnidadesOperativas } from "../api/historial";
 import { supabase } from "../lib/supabase";
 import { exportarFilas, type FormatoExportacion } from "../lienzo/exportar";
 import AlertasAsistente from "./AlertasAsistente";
+import GuiaAsistente from "./GuiaAsistente";
+import { esPedidoDeAyuda } from "../lienzo/guia";
 import isotipo from "../assets/lattis-isotipo.png";
 import LienzoVista from "../lienzo/Lienzo";
 import ResumenDeHoy from "../lienzo/ResumenHoy";
@@ -67,6 +70,8 @@ interface MensajeChat extends TurnoChat {
   aviso?: boolean;
   /** En un aviso de error: el pedido que falló, para reintentarlo sin reescribirlo. */
   reintentar?: string;
+  /** Próximos pedidos que propone el asistente (botones bajo su respuesta). */
+  sugerencias?: string[];
 }
 
 /** La conversación se guarda en esta pestaña: sobrevive a cambiar de pantalla, se borra al cerrarla. */
@@ -91,12 +96,15 @@ function PanelChat({
   mensajes,
   pensando,
   consultasHoy,
+  hayVistaAbierta,
   onEnviar,
   onNueva,
   onReintentar,
 }: {
   mensajes: MensajeChat[];
   pensando: boolean;
+  /** Sobre una vista abierta, la guía suma ideas para esa vista. */
+  hayVistaAbierta: boolean;
   /** Consultas de hoy de esta cuenta (null mientras no se sabe). */
   consultasHoy: number | null;
   onEnviar: (texto: string) => void;
@@ -104,6 +112,11 @@ function PanelChat({
   onReintentar: (mensaje: MensajeChat) => void;
 }) {
   const [texto, setTexto] = useState("");
+  const [guiaAbierta, setGuiaAbierta] = useState(false);
+  const pedirDesdeGuia = (pedido: string) => {
+    setGuiaAbierta(false);
+    onEnviar(pedido);
+  };
   const fin = useRef<HTMLDivElement>(null);
   const caja = useRef<HTMLTextAreaElement>(null);
   // La caja crece con lo escrito (hasta su alto máximo en CSS) y vuelve a una línea al enviar.
@@ -121,8 +134,13 @@ function PanelChat({
     e?.preventDefault();
     const limpio = texto.trim();
     if (!limpio || pensando) return;
-    onEnviar(limpio);
     setTexto("");
+    // "¿Qué podés hacer?", "ayuda"…: la guía responde sola, sin gastar una consulta.
+    if (esPedidoDeAyuda(limpio)) {
+      setGuiaAbierta(true);
+      return;
+    }
+    onEnviar(limpio);
   };
 
   return (
@@ -140,7 +158,20 @@ function PanelChat({
         <button
           type="button"
           className="asistente-nueva"
-          onClick={onNueva}
+          onClick={() => setGuiaAbierta((a) => !a)}
+          aria-pressed={guiaAbierta}
+          title="¿Qué puedo pedir?"
+          aria-label="¿Qué puedo pedir?"
+        >
+          <CircleHelp size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="asistente-nueva"
+          onClick={() => {
+            setGuiaAbierta(false);
+            onNueva();
+          }}
           disabled={pensando || mensajes.length === 0}
           title="Nueva conversación"
           aria-label="Nueva conversación"
@@ -148,54 +179,73 @@ function PanelChat({
           <MessageSquarePlus size={16} aria-hidden="true" />
         </button>
       </header>
-      <div className="asistente-mensajes" aria-live="polite">
-        <div className="asistente-fila">
-          <Avatar />
-          <div className="asistente-burbuja">
-            Pídame cambiar, filtrar o profundizar en cualquier dato del <b>lienzo</b>. También puede tocar una barra o una
-            porción para filtrar.
-          </div>
-        </div>
-        {mensajes.length === 0 && (
-          <div className="asistente-sugerencias">
-            {SUGERENCIAS.map((s) => (
-              <button key={s} type="button" className="chip" onClick={() => onEnviar(s)} disabled={pensando}>
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
-        {mensajes.map((m) =>
-          m.rol === "usuario" ? (
-            <div key={m.id} className="asistente-fila asistente-fila-usuario">
-              <div className="asistente-burbuja asistente-burbuja-usuario">{m.texto}</div>
+      {guiaAbierta ? (
+        <GuiaAsistente
+          hayVistaAbierta={hayVistaAbierta}
+          pensando={pensando}
+          onPedir={pedirDesdeGuia}
+          onCerrar={() => setGuiaAbierta(false)}
+        />
+      ) : (
+        <div className="asistente-mensajes" aria-live="polite">
+          <div className="asistente-fila">
+            <Avatar />
+            <div className="asistente-burbuja">
+              Pídame cambiar, filtrar o profundizar en cualquier dato del <b>lienzo</b>. También puede tocar una barra o una
+              porción para filtrar. Para ver ideas, toque <b>?</b> arriba o escriba «¿qué podés hacer?».
             </div>
-          ) : (
-            <div key={m.id} className="asistente-fila">
+          </div>
+          {mensajes.length === 0 && (
+            <div className="asistente-sugerencias">
+              {SUGERENCIAS.map((s) => (
+                <button key={s} type="button" className="chip" onClick={() => onEnviar(s)} disabled={pensando}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          {mensajes.map((m) =>
+            m.rol === "usuario" ? (
+              <div key={m.id} className="asistente-fila asistente-fila-usuario">
+                <div className="asistente-burbuja asistente-burbuja-usuario">{m.texto}</div>
+              </div>
+            ) : (
+              <div key={m.id} className="asistente-fila">
+                <Avatar />
+                <div className={`asistente-burbuja${m.aviso ? " asistente-burbuja-aviso" : ""}`}>
+                  {m.texto}
+                  {m.reintentar && (
+                    <button type="button" className="asistente-reintentar" onClick={() => onReintentar(m)} disabled={pensando}>
+                      <RotateCcw size={13} aria-hidden="true" /> Reintentar
+                    </button>
+                  )}
+                </div>
+              </div>
+            ),
+          )}
+          {/* Las sugerencias del asistente, sólo bajo su última respuesta (las viejas ya no aplican). */}
+          {!pensando && mensajes.at(-1)?.sugerencias?.length ? (
+            <div className="asistente-sugerencias asistente-sugerencias-respuesta" aria-label="Sugerencias del asistente">
+              {mensajes.at(-1)?.sugerencias?.map((s) => (
+                <button key={s} type="button" className="chip" onClick={() => onEnviar(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {pensando && (
+            <div className="asistente-fila" role="status">
               <Avatar />
-              <div className={`asistente-burbuja${m.aviso ? " asistente-burbuja-aviso" : ""}`}>
-                {m.texto}
-                {m.reintentar && (
-                  <button type="button" className="asistente-reintentar" onClick={() => onReintentar(m)} disabled={pensando}>
-                    <RotateCcw size={13} aria-hidden="true" /> Reintentar
-                  </button>
-                )}
+              <div className="asistente-burbuja asistente-pensando" aria-label="El asistente está pensando">
+                <span />
+                <span />
+                <span />
               </div>
             </div>
-          ),
-        )}
-        {pensando && (
-          <div className="asistente-fila" role="status">
-            <Avatar />
-            <div className="asistente-burbuja asistente-pensando" aria-label="El asistente está pensando">
-              <span />
-              <span />
-              <span />
-            </div>
-          </div>
-        )}
-        <div ref={fin} />
-      </div>
+          )}
+          <div ref={fin} />
+        </div>
+      )}
       <footer>
         <form className="asistente-entrada" onSubmit={enviar}>
           <textarea
@@ -529,7 +579,11 @@ export default function Asistente() {
   const pregunta = useMutation({
     mutationFn: (pedido: Parameters<typeof preguntarAlAsistente>[0]) => preguntarAlAsistente(pedido),
     onSuccess: (respuesta) => {
-      agregarMensaje({ rol: "asistente", texto: respuesta.mensaje });
+      agregarMensaje({
+        rol: "asistente",
+        texto: respuesta.mensaje,
+        sugerencias: respuesta.tipo === "editado" ? respuesta.sugerencias : undefined,
+      });
       if (respuesta.tipo !== "editado") return;
       if (vista === RESUMEN || vista === ALERTAS) {
         // Desde el resumen (o las alertas), el asistente arma una vista nueva y se pasa a ella.
@@ -605,6 +659,7 @@ export default function Asistente() {
         mensajes={mensajes}
         pensando={pregunta.isPending}
         consultasHoy={consultasHoy ?? null}
+        hayVistaAbierta={!esResumen && !esAlertas && lienzo !== null}
         onEnviar={enviar}
         onNueva={nuevaConversacion}
         onReintentar={reintentar}

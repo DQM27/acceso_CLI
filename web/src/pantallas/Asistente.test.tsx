@@ -266,6 +266,56 @@ describe("Asistente", () => {
     await waitFor(() => expect(screen.queryByText("Empresa: sin OTRA")).toBeNull());
   });
 
+  it("chat: «¿qué podés hacer?» abre la guía sin gastar una consulta, y un ejemplo de la guía se envía", async () => {
+    mocks.preguntarAlAsistente.mockResolvedValue({ tipo: "respondido", mensaje: "ok" });
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "¿Qué podés hacer?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    expect(await screen.findByRole("heading", { name: "¿Qué puedo pedir?" })).toBeTruthy();
+    expect(mocks.preguntarAlAsistente).not.toHaveBeenCalled();
+    // Sin vista abierta (resumen) no hay ideas "Sobre esta vista".
+    expect(screen.queryByText("Sobre esta vista")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ingresos de esta semana por sitio" }));
+    await waitFor(() => expect(mocks.preguntarAlAsistente).toHaveBeenCalledTimes(1));
+    expect(mocks.preguntarAlAsistente.mock.calls[0][0].pregunta).toBe("Ingresos de esta semana por sitio");
+    // Al pedir, la guía se cierra y vuelve el chat.
+    expect(screen.queryByRole("heading", { name: "¿Qué puedo pedir?" })).toBeNull();
+  });
+
+  it("chat: el botón ? abre la guía; sobre una vista abierta trae ideas para esa vista", async () => {
+    await abrirVencidos();
+    fireEvent.click(screen.getByRole("button", { name: "¿Qué puedo pedir?" }));
+    expect(await screen.findByText("Sobre esta vista")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Volver al chat" }));
+    expect(screen.queryByText("Sobre esta vista")).toBeNull();
+  });
+
+  it("chat: las sugerencias del asistente salen sólo bajo su última respuesta y se envían al tocarlas", async () => {
+    mocks.preguntarAlAsistente
+      .mockResolvedValueOnce({
+        tipo: "editado",
+        lienzo: LIENZO_DEL_ASISTENTE,
+        mensaje: "Le muestro los vencidos.",
+        sugerencias: ["Agrupar por sitio"],
+      })
+      .mockResolvedValueOnce({ tipo: "respondido", mensaje: "Listo." });
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "vencidos" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    const sugerencia = await screen.findByRole("button", { name: "Agrupar por sitio" });
+    fireEvent.click(sugerencia);
+    await waitFor(() => expect(mocks.preguntarAlAsistente).toHaveBeenCalledTimes(2));
+    expect(mocks.preguntarAlAsistente.mock.calls[1][0].pregunta).toBe("Agrupar por sitio");
+    expect(await screen.findByText("Listo.")).toBeTruthy();
+    // La respuesta nueva no trae sugerencias: las viejas ya no se muestran.
+    expect(screen.queryByRole("button", { name: "Agrupar por sitio" })).toBeNull();
+  });
+
   it("al elegir un sitio vuelve a pedir el resumen de ese sitio", async () => {
     montar();
     await screen.findByText("Contratistas adentro ahora");
