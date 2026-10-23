@@ -374,8 +374,15 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  /* Lo que se corta al desplazarse se corta redondeado, con el mismo radio que el menú lateral. */
+  /* Lo que se corta al desplazarse se corta redondeado, con el mismo radio que el menú lateral.
+     Sin barra de desplazamiento visible: el navegador la dibuja dentro de la caja, a la
+     derecha, y las tarjetas quedaban antes del borde redondeado (corte recto de ese lado).
+     Se desplaza igual con la rueda, el touchpad o el teclado. */
   border-radius: var(--radio);
+  scrollbar-width: none;
+}
+.asistente-contenido::-webkit-scrollbar {
+  display: none;
 }
 .asistente-error {
   color: var(--error);
