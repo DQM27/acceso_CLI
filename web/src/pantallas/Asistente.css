@@ -374,6 +374,8 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* Lo que se corta al desplazarse se corta redondeado, con el mismo radio que el menú lateral. */
+  border-radius: var(--radio);
 }
 .asistente-error {
   color: var(--error);
