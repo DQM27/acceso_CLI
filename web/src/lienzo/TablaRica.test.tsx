@@ -25,7 +25,8 @@ describe("TablaRica", () => {
     expect(vencida.closest(".lienzo-estado-error")).toBeTruthy();
     expect(screen.getByText("Por vencer").closest(".lienzo-estado-advertencia")).toBeTruthy();
     expect(screen.queryByText(/-40/)).toBeNull();
-    expect(screen.getByText("3 filas.")).toBeTruthy();
+    // Sin recortar no hay nota de cantidad de filas.
+    expect(screen.queryByText(/Se muestran/)).toBeNull();
   });
 
   it("agrupada: cada grupo con su cantidad y su barra; se abre para ver sus filas y se vuelve a cerrar", async () => {
@@ -39,7 +40,6 @@ describe("TablaRica", () => {
     const aldama = await screen.findByRole("button", { name: "Ver las filas de ALDAMA" });
     expect(screen.queryByText("Ana Mora")).toBeNull();
     expect(container.querySelectorAll(".lienzo-celda-barra").length).toBeGreaterThan(0);
-    expect(screen.getByText("2 grupos.")).toBeTruthy();
 
     fireEvent.click(aldama);
     expect(await screen.findByText("Ana Mora")).toBeTruthy();
@@ -56,9 +56,15 @@ describe("TablaRica", () => {
     render(<TablaRica origen="contratistas" widget={{ tipo: "tabla", columnas: ["nombre", "empresa"] }} filas={muchas} />);
     const buscar = screen.getByRole("searchbox", { name: "Buscar en la tabla" });
     fireEvent.change(buscar, { target: { value: "sanchez" } });
-    expect(await screen.findByText("6 filas coinciden.")).toBeTruthy();
+    expect(await screen.findByText("Persona 0")).toBeTruthy();
+    expect(screen.queryByText("Persona 1")).toBeNull();
     fireEvent.change(buscar, { target: { value: "zzz" } });
     expect(await screen.findByText("Nada coincide con «zzz».")).toBeTruthy();
+  });
+
+  it("recortada por el límite, avisa cuántas se ven de cuántas hay", async () => {
+    render(<TablaRica origen="contratistas" widget={{ tipo: "tabla", columnas: ["nombre"], limite: 5 }} filas={muchas} />);
+    expect(await screen.findByText("Se muestran 5 de 12 filas.")).toBeTruthy();
   });
 
   it("con pocas filas no hay búsqueda, y sin filas avisa", () => {

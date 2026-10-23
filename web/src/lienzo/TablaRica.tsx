@@ -256,11 +256,12 @@ export default function TablaRica({
           />
         </div>
       )}
-      <p className="lienzo-nota">
-        {mostradas < modelo.total
-          ? `Se muestran ${mostradas.toLocaleString("es-CR")} de ${cuantas}.`
-          : `${cuantas}${hayBusqueda ? " coinciden" : ""}.`}
-      </p>
+      {/* Sólo si faltan filas: sin el aviso no se sabría que la tabla está recortada. */}
+      {mostradas < modelo.total && (
+        <p className="lienzo-nota">
+          Se muestran {mostradas.toLocaleString("es-CR")} de {cuantas}.
+        </p>
+      )}
     </div>
   );
 }

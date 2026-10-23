@@ -803,6 +803,11 @@
 .lienzo-enfoque .lienzo-tabla-grilla {
   max-height: 70vh;
 }
+/* Con alto automático AG Grid reserva un alto mínimo (para su mensaje de "sin filas"): la grilla mide sus filas. */
+.lienzo-tabla-grilla .ag-center-cols-viewport,
+.lienzo-tabla-grilla .ag-center-cols-container {
+  min-height: 0 !important;
+}
 .lienzo-tabla-grilla .ag-cell {
   display: flex;
   align-items: center;
