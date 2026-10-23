@@ -107,6 +107,7 @@ const LIENZO_CONSULTA: Lienzo = {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  localStorage.removeItem("asistente:chat-oculto");
 });
 
 async function abrirVencidos() {
@@ -314,6 +315,22 @@ describe("Asistente", () => {
     expect(await screen.findByText("Listo.")).toBeTruthy();
     // La respuesta nueva no trae sugerencias: las viejas ya no se muestran.
     expect(screen.queryByRole("button", { name: "Agrupar por sitio" })).toBeNull();
+  });
+
+  it("chat: se oculta para darle el espacio al lienzo, se vuelve a abrir, y se recuerda oculto", async () => {
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    fireEvent.click(screen.getByRole("button", { name: "Ocultar el chat" }));
+    expect(screen.queryByLabelText("Mensaje para el asistente")).toBeNull();
+    expect(localStorage.getItem("asistente:chat-oculto")).toBe("1");
+
+    cleanup();
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    expect(screen.queryByLabelText("Mensaje para el asistente")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar el chat" }));
+    expect(screen.getByLabelText("Mensaje para el asistente")).toBeTruthy();
+    expect(localStorage.getItem("asistente:chat-oculto")).toBeNull();
   });
 
   it("al elegir un sitio vuelve a pedir el resumen de ese sitio", async () => {

@@ -7,6 +7,8 @@ import {
   FileSpreadsheet,
   FileText,
   MessageSquarePlus,
+  PanelLeftClose,
+  PanelLeftOpen,
   Printer,
   Redo2,
   RotateCcw,
@@ -92,6 +94,17 @@ function conversacionGuardada(): MensajeChat[] {
   }
 }
 
+/** Chat oculto o visible: preferencia de este navegador (si no se puede guardar, sólo dura la visita). */
+const CLAVE_CHAT_OCULTO = "asistente:chat-oculto";
+
+function chatOcultoGuardado(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_CHAT_OCULTO) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function PanelChat({
   mensajes,
   pensando,
@@ -100,6 +113,7 @@ function PanelChat({
   onEnviar,
   onNueva,
   onReintentar,
+  onOcultar,
 }: {
   mensajes: MensajeChat[];
   pensando: boolean;
@@ -110,6 +124,8 @@ function PanelChat({
   onEnviar: (texto: string) => void;
   onNueva: () => void;
   onReintentar: (mensaje: MensajeChat) => void;
+  /** Oculta el chat para darle el espacio al lienzo. */
+  onOcultar: () => void;
 }) {
   const [texto, setTexto] = useState("");
   const [guiaAbierta, setGuiaAbierta] = useState(false);
@@ -146,7 +162,15 @@ function PanelChat({
   return (
     <aside className="asistente-chat" aria-label="Chat del asistente">
       <header>
-        <span>Asistente</span>
+        <button
+          type="button"
+          className="asistente-nueva asistente-ocultar"
+          onClick={onOcultar}
+          title="Ocultar el chat"
+          aria-label="Ocultar el chat"
+        >
+          <PanelLeftClose size={16} aria-hidden="true" />
+        </button>
         {consultasHoy !== null && (
           <span
             className={`asistente-contador${consultasHoy >= TOPE_DIARIO_ASISTENTE * 0.8 ? " asistente-contador-alto" : ""}`}
@@ -512,6 +536,16 @@ export default function Asistente() {
   const [rehechos, setRehechos] = useState<Record<string, Lienzo[]>>({});
   const [rechazo, setRechazo] = useState<string | null>(null);
   const [mensajes, setMensajes] = useState<MensajeChat[]>(conversacionGuardada);
+  const [chatOculto, setChatOculto] = useState(chatOcultoGuardado);
+  const cambiarChatOculto = (oculto: boolean) => {
+    setChatOculto(oculto);
+    try {
+      if (oculto) localStorage.setItem(CLAVE_CHAT_OCULTO, "1");
+      else localStorage.removeItem(CLAVE_CHAT_OCULTO);
+    } catch {
+      // Sin almacenamiento la preferencia dura sólo esta visita.
+    }
+  };
   const siguienteId = useRef(mensajes.reduce((max, m) => Math.max(max, m.id + 1), 0));
   const cliente = useQueryClient();
 
@@ -654,16 +688,32 @@ export default function Asistente() {
   const sinRevisar = alertas?.filter((a) => !a.revisada_en).length ?? 0;
 
   return (
-    <div className="asistente">
-      <PanelChat
-        mensajes={mensajes}
-        pensando={pregunta.isPending}
-        consultasHoy={consultasHoy ?? null}
-        hayVistaAbierta={!esResumen && !esAlertas && lienzo !== null}
-        onEnviar={enviar}
-        onNueva={nuevaConversacion}
-        onReintentar={reintentar}
-      />
+    <div className={`asistente${chatOculto ? " asistente-sin-chat" : ""}`}>
+      {chatOculto ? (
+        <aside className="asistente-chat asistente-chat-oculto" aria-label="Chat del asistente (oculto)">
+          <button
+            type="button"
+            className="asistente-nueva"
+            onClick={() => cambiarChatOculto(false)}
+            title="Mostrar el chat"
+            aria-label="Mostrar el chat"
+          >
+            <PanelLeftOpen size={16} aria-hidden="true" />
+          </button>
+          {pregunta.isPending && <span className="asistente-oculto-pensando" title="El asistente está respondiendo" />}
+        </aside>
+      ) : (
+        <PanelChat
+          mensajes={mensajes}
+          pensando={pregunta.isPending}
+          consultasHoy={consultasHoy ?? null}
+          hayVistaAbierta={!esResumen && !esAlertas && lienzo !== null}
+          onEnviar={enviar}
+          onNueva={nuevaConversacion}
+          onReintentar={reintentar}
+          onOcultar={() => cambiarChatOculto(true)}
+        />
+      )}
       <main className="asistente-lienzo">
         <div className="asistente-barra">
           <div className="campo asistente-selector">
