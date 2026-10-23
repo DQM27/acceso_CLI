@@ -186,6 +186,25 @@ escritorio.
    confirmar (decisión de diseño). Un gafete mal leído saca a otra
    persona; el mensaje verde/rojo es la única señal.
 
-## Índice — Panel web
+## Índice — Panel web (administradores)
 
-Pendiente.
+**En desarrollo**: estos procesos pueden cambiar. El panel se usa en el
+navegador, con una cuenta de Google autorizada.
+
+- ✅ [Entrar al panel y moverse por él](panel/entrar-al-panel.md)
+- ✅ [Adentro ahora (todas las unidades)](panel/adentro-ahora.md)
+- ✅ [Historial de ingresos y exportar](panel/historial.md)
+- ✅ [Contratistas: alta, edición y acceso](panel/contratistas.md)
+- ✅ [Usuarios del puesto de control (alta, contraseña temporal, baja)](panel/usuarios.md)
+- ✅ [Sesiones (bitácora de inicios de sesión)](panel/sesiones.md)
+- ✅ [Dispositivos: registrar y retirar equipos, unidades operativas](panel/dispositivos.md)
+- ✅ [Enviar avisos a los teléfonos](panel/avisos.md)
+- ✅ [Asistente (en desarrollo)](panel/asistente.md)
+
+### Mejoras de pantalla detectadas al documentar el panel
+
+1. **Usuarios**: **Resetear contraseña** se aplica al instante, sin
+   confirmar. Un clic en la fila equivocada le cambia la contraseña a otra
+   persona.
+2. **Mensajes**: algunos usan voseo ("recargá la página") y el resto
+   "usted". Unificar.

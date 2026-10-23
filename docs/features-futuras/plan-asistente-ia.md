@@ -399,7 +399,9 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
 ## Pendiente
 
 - Manual del móvil **redactado** (2026-10-23, `docs/manual/movil/`, 15
-  procesos de la app Android Lattis). Falta el del panel web.
+  procesos de la app Android Lattis) y del panel web (`docs/manual/panel/`,
+  9 procesos, marcado "en desarrollo"). El manual de las tres apps está
+  completo; el siguiente paso de la Parte B es el manual navegable sin IA.
 - Respuestas del dueño (2026-10-23), ya en el manual: el código de
   vinculación lo da sólo un administrador en el panel; al otro sitio se
   avisa por el medio acordado (p. ej., WhatsApp); la hora se corrige sola
