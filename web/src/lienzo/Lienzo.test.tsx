@@ -238,8 +238,8 @@ describe("KPI que compara contra el período anterior", () => {
     );
     // Ayer (3) contra el día justo anterior (antier: 3): sin cambio. No se mezcla el día de hace 3 (1)
     // ni el de hoy a medias (que con el período completo daría una caída que no existe).
-    const texto = screen.getByText(/sin contar hoy, que va a medias/).textContent ?? "";
-    expect(texto).toMatch(/^0% vs\. los 1 días anteriores/);
+    const texto = screen.getByText(/sin contar hoy/).textContent ?? "";
+    expect(texto).toMatch(/^Igual que el día anterior, sin contar hoy/);
     expect(texto).toContain("(3)");
   });
 

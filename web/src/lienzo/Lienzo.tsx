@@ -159,11 +159,10 @@ function comparacionKpi(widget: WidgetKpi, filas: Fila[], anteriores: Fila[] | u
   if (!widget.comparar || !anteriores || !rango) return undefined;
   const dias = diasEntre(rango.desde, rango.hasta) + 1;
   const terminaHoy = rango.hasta === hoyCostaRica();
+  const losAnteriores = (n: number) => (n === 1 ? "el día anterior" : `los ${n} días anteriores`);
   if (!terminaHoy) {
     const anterior = calcularKpi(widget, anteriores);
-    return typeof anterior === "number"
-      ? { anterior, contra: `vs. ${dias === 1 ? "el día" : `los ${dias} días`} anteriores` }
-      : undefined;
+    return typeof anterior === "number" ? { anterior, contra: `que ${losAnteriores(dias)}` } : undefined;
   }
   if (dias < 2) return undefined;
   const dia = (f: Fila) => (typeof f.dia === "string" ? f.dia : "");
@@ -173,7 +172,7 @@ function comparacionKpi(widget: WidgetKpi, filas: Fila[], anteriores: Fila[] | u
   const desdeAnterior = sumarDias(rango.desde, -(dias - 1));
   const anterior = calcularKpi(widget, anteriores.filter((f) => dia(f) !== "" && dia(f) >= desdeAnterior && dia(f) < rango.desde));
   if (typeof actual !== "number" || typeof anterior !== "number") return undefined;
-  return { actual, anterior, contra: `vs. los ${dias - 1} días anteriores (sin contar hoy, que va a medias)` };
+  return { actual, anterior, contra: `que ${losAnteriores(dias - 1)}, sin contar hoy` };
 }
 
 function Kpi({ ctx, widget }: { ctx: Contexto; widget: WidgetKpi }) {

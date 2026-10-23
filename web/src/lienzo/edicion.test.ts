@@ -114,9 +114,14 @@ describe("texto de la comparación de un KPI", () => {
     expect(textoComparacion(0, c)).not.toMatch(/%|-/);
   });
 
-  it("en porcentaje, y sin base no hay porcentaje", () => {
-    expect(textoComparacion(112, { anterior: 100, contra: "vs. antes" })).toBe("+12% vs. antes (100)");
-    expect(textoComparacion(5, { anterior: 0, contra: "vs. antes" })).toBe("0 vs. antes");
+  it("en porcentaje, en palabras y nunca con signo negativo; sin base, en cantidades", () => {
+    const contra = "que los 13 días anteriores";
+    expect(textoComparacion(112, { anterior: 100, contra })).toBe("12% más que los 13 días anteriores (100)");
+    expect(textoComparacion(52, { anterior: 102, contra })).toBe("49% menos que los 13 días anteriores (102)");
+    expect(textoComparacion(0, { anterior: 102, contra })).toBe("100% menos que los 13 días anteriores (102)");
+    expect(textoComparacion(40, { anterior: 40, contra })).toBe("Igual que los 13 días anteriores (40)");
+    expect(textoComparacion(5, { anterior: 0, contra })).toBe("5 más que los 13 días anteriores (0)");
+    for (const actual of [0, 3, 52, 99]) expect(textoComparacion(actual, { anterior: 102, contra })).not.toMatch(/-/);
   });
 });
 
