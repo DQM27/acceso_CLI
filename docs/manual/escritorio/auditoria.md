@@ -47,9 +47,9 @@ Algunos casos:
 Abajo, en la barra de estado, se ve cuántos cambios hay ("N cambio(s)
 auditado(s)").
 
-**⚠ Por confirmar**: la Auditoría muestra los cambios hechos **desde este
+Por ahora, la Auditoría muestra sólo los cambios hechos **desde este
 equipo**. Los cambios hechos en el otro equipo del sitio o en el panel web
-no aparecen aquí.
+no aparecen aquí. Está previsto reunirlos todos más adelante.
 
 ## Mensajes que pueden aparecer
 

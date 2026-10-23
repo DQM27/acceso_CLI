@@ -59,9 +59,9 @@ del sitio en el panel web.
 2. Avise **de inmediato** a un administrador. Si fue un error, hay que
    volver a registrar el equipo con un código nuevo.
 
-**⚠ Por confirmar**: el paso exacto para volver a registrar un equipo ya
-usado (la pantalla **Vincular este equipo** sólo aparece en un equipo sin
-datos), y qué pasa con lo registrado mientras estuvo retirado.
+Cómo volver a registrar un equipo ya usado **todavía está por definirse**:
+lo resuelve un administrador. Este apartado se completa cuando esté
+listo.
 
 ## Caso 4 — La sesión se cerró sin ningún mensaje
 
