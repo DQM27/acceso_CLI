@@ -449,6 +449,27 @@ Diferencias entre el plan y el código real, y cómo se resolvieron:
 - **Agrupar y contar** se hacen en el navegador sobre las filas devueltas
   (contratistas hasta 5.000; ingresos hasta 20.000 y 92 días).
 
-Pendiente de la etapa 2 (chat con modelo): Edge Function `lienzo-ia`, deshacer y
-rehacer, guardar vista y exportar (en la maqueta B pero no construidos), y tope
-de uso.
+Ampliado después (mismo día), todo dentro del esquema JSON y validado:
+
+- Gráficos propios en SVG: barras (verticales, horizontales, apiladas), línea
+  (una o varias series, área), torta y dona; "Otros" para lo que no entra.
+  Paleta categórica propia validada (daltonismo y contraste, claro y oscuro);
+  el color sigue a la entidad.
+- Fechas por día, semana o mes; formato de fecha del lienzo; disposición en
+  cuadrícula (ancho por panel) o "enfoque".
+- Tooltip con teclado, leyenda, "ver como tabla", animaciones de entrada y
+  transiciones entre ediciones (respetan "reducir movimiento").
+- Clic para profundizar (filtra por la barra o porción tocada), chips de
+  filtros y Deshacer: las ediciones pasan por el validador, como pasarán las
+  del modelo (`web/src/lienzo/edicion.ts`).
+- KPI con comparación contra el período anterior y mini línea de tendencia
+  (sólo fuentes por día).
+
+Queda para después: mapa de calor por hora (ninguna fuente trae la hora de
+entrada; necesita migración), formato de 12/24 horas (mismo motivo), orden
+configurable en gráficos, y nuevas fuentes (proveedores, correo, KOF, quién
+registró). Cada fuente nueva lleva su función SQL con grants y batería, su
+entrada en el catálogo y su traducción de filtros; los gráficos ya sirven.
+
+Pendiente de la etapa 2 (chat con modelo): Edge Function `lienzo-ia`, rehacer,
+guardar vista y exportar (en la maqueta B pero no construidos), y tope de uso.
