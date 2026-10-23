@@ -23,6 +23,23 @@ const RADIO = 4;
 const SEPARACION = 2;
 const GROSOR_MAXIMO = 24;
 const ANCHO_CARACTER = 6.6;
+/** Las mayúsculas (nombres y empresas vienen así) ocupan más que el promedio. */
+const ANCHO_MAYUSCULA = 8.2;
+
+/** Ancho aproximado de una etiqueta del eje, en píxeles. */
+function anchoTexto(texto: string): number {
+  let ancho = 0;
+  for (const letra of texto) ancho += letra !== letra.toLowerCase() ? ANCHO_MAYUSCULA : ANCHO_CARACTER;
+  return ancho;
+}
+
+/** La etiqueta entera si entra en `disponible` píxeles; si no, recortada con "…". */
+function ajustarAlAncho(texto: string, disponible: number): string {
+  if (anchoTexto(texto) <= disponible) return texto;
+  let corte = texto.length - 1;
+  while (corte > 1 && anchoTexto(texto.slice(0, corte)) + ANCHO_CARACTER > disponible) corte--;
+  return `${texto.slice(0, corte)}…`;
+}
 
 /** Rectángulo con sólo el extremo del dato redondeado (arriba o a la derecha). */
 function barra(x: number, y: number, w: number, h: number, redondeada: boolean, horizontal: boolean): string {
@@ -91,7 +108,7 @@ export default function GraficoBarras({
     ? {
         arriba: 4,
         abajo: 22,
-        izquierda: Math.min(ancho * 0.38, Math.max(...etiquetas.map((e) => e.length)) * ANCHO_CARACTER + 14),
+        izquierda: Math.min(ancho * 0.38, Math.max(...etiquetas.map(anchoTexto)) + 14),
         derecha: 52,
       }
     : { arriba: 14, abajo: 26, izquierda: anchoMarca, derecha: 8 };
@@ -101,7 +118,6 @@ export default function GraficoBarras({
   const banda = (horizontal ? altoUtil : anchoUtil) / n;
   const grosor = Math.min(GROSOR_MAXIMO, banda * (horizontal ? 0.62 : 0.68));
   const escala = (v: number) => (v / techo) * (horizontal ? anchoUtil : altoUtil);
-  const caracteresEje = Math.floor((m.izquierda - 14) / ANCHO_CARACTER);
   const cadaCuanto = horizontal ? 1 : pasoEtiquetas(n, anchoUtil, Math.max(...etiquetas.map((e) => e.length)) * ANCHO_CARACTER + 10);
 
   const i = activo.indice;
@@ -212,7 +228,7 @@ export default function GraficoBarras({
               textAnchor="end"
               className="lienzo-eje-texto lienzo-eje-categoria"
             >
-              {recortar(texto, caracteresEje)}
+              {ajustarAlAncho(texto, m.izquierda - 14)}
             </text>
           ) : (
             <text
