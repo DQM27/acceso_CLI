@@ -2,32 +2,41 @@ import { useLayoutEffect, useState } from "react";
 
 const CLAVE_TEMA = "web:tema";
 
-export type Tema = "light" | "dark";
+/** Los dos temas del panel, los mismos de escritorio: Tokyo Day (claro) y
+ * Tokyo Night (oscuro). Se definen en `tokyo-day.css` y `tokyo-night.css`. */
+export type Tema = "tokyo-day" | "tokyo-night";
 
-export const NOMBRE_TEMA: Record<Tema, string> = { light: "Claro", dark: "Oscuro" };
+export const NOMBRE_TEMA: Record<Tema, string> = {
+  "tokyo-day": "Tokyo Day",
+  "tokyo-night": "Tokyo Night",
+};
+
+/** Lo que se guardaba antes de los temas Tokyo: "claro" y "oscuro" pasan a su
+ * equivalente, así nadie pierde su elección. */
+const TEMAS_ANTERIORES: Record<string, Tema> = { light: "tokyo-day", dark: "tokyo-night" };
 
 function temaDelSistema(): Tema {
   try {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "tokyo-night" : "tokyo-day";
   } catch {
-    return "light";
+    return "tokyo-day";
   }
 }
 
-function leerTema(): Tema {
+export function leerTema(): Tema {
   try {
-    const guardado = localStorage.getItem(CLAVE_TEMA);
-    return guardado === "dark" || guardado === "light" ? guardado : temaDelSistema();
+    const guardado = localStorage.getItem(CLAVE_TEMA) ?? "";
+    if (guardado === "tokyo-day" || guardado === "tokyo-night") return guardado;
+    return TEMAS_ANTERIORES[guardado] ?? temaDelSistema();
   } catch {
     return temaDelSistema();
   }
 }
 
 /**
- * Tema claro/oscuro del panel: `diseno.css` ya soporta
- * `[data-theme="light"|"dark"]` como override explícito por encima de
- * `prefers-color-scheme`; esto lo aplica y guarda la elección. El control
- * vive en el menú de la cuenta (`MenuUsuario`), como en escritorio.
+ * Tema del panel: lo lee (o toma el del sistema), lo aplica al documento
+ * (`data-theme`) y devuelve cómo cambiarlo. El control vive en el menú de la
+ * cuenta (`MenuUsuario`), como en escritorio.
  *
  * `useLayoutEffect` (no `useEffect`) para aplicar el atributo antes del
  * primer paint -- si no, cuando el tema guardado contradice el del sistema
@@ -42,7 +51,7 @@ export function useTema(): { tema: Tema; alternarTema: () => void } {
 
   function alternarTema() {
     setTema((actual) => {
-      const siguiente: Tema = actual === "dark" ? "light" : "dark";
+      const siguiente: Tema = actual === "tokyo-night" ? "tokyo-day" : "tokyo-night";
       try {
         localStorage.setItem(CLAVE_TEMA, siguiente);
       } catch {

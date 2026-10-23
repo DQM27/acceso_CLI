@@ -85,7 +85,7 @@ export default function MenuUsuario({
     };
   }, [abierto, campoRef]);
 
-  const IconoTema = tema === "dark" ? Moon : Sun;
+  const IconoTema = tema === "tokyo-night" ? Moon : Sun;
 
   return (
     <div ref={campoRef} className="usuario">

@@ -11,7 +11,7 @@ function montar(props: { colapsado?: boolean; tema?: Tema; alternar?: () => void
     <MenuUsuario
       sesion={sesion}
       colapsado={props.colapsado ?? false}
-      tema={props.tema ?? "light"}
+      tema={props.tema ?? "tokyo-day"}
       onAlternarTema={props.alternar ?? (() => {})}
       onCerrarSesion={props.cerrar ?? (() => {})}
     />,
@@ -35,16 +35,16 @@ describe("MenuUsuario", () => {
     montar();
     fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
     expect(screen.getByText("daniel@ejemplo.com")).toBeTruthy();
-    expect(screen.getByText("Tema: Claro")).toBeTruthy();
+    expect(screen.getByText("Tema: Tokyo Day")).toBeTruthy();
     expect(screen.getByText("Cerrar sesión")).toBeTruthy();
     expect(screen.queryByText(/contraseña/i)).toBeNull();
   });
 
   it("la fila del tema dice cuál es el actual y lo cambia al pulsarla", () => {
     const alternar = vi.fn();
-    montar({ tema: "dark", alternar });
+    montar({ tema: "tokyo-night", alternar });
     fireEvent.click(screen.getByLabelText("Cuenta de Daniel"));
-    fireEvent.click(screen.getByText("Tema: Oscuro"));
+    fireEvent.click(screen.getByText("Tema: Tokyo Night"));
     expect(alternar).toHaveBeenCalledTimes(1);
   });
 

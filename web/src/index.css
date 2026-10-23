@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "./diseno.css";
+/* Temas Tokyo Day y Tokyo Night, los mismos de escritorio (copiados de desktop/src). */
+@import "./tokyo-day.css";
+@import "./tokyo-night.css";
 @import "./controles.css";
 
 @theme {
