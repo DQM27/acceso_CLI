@@ -2,7 +2,8 @@ import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
 import { diasEntre, sumarDias, type Fila } from "../lienzo/calculo";
 import { parametrosContratistas, parametrosIngresos } from "../lienzo/consulta";
-import type { Lienzo } from "../lienzo/esquema";
+import { validarLienzo, type Lienzo } from "../lienzo/esquema";
+import { invocar } from "./_invocar";
 
 /**
  * Consultas del lienzo de datos (Asistente): llaman a las funciones de sólo
@@ -32,6 +33,40 @@ const filasEsquema = z.array(z.record(z.string(), z.union([z.string(), z.number(
 /** Día de hoy en Costa Rica (YYYY-MM-DD), el mismo que usan las funciones SQL. */
 export function hoyCostaRica(ahora: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(ahora);
+}
+
+export interface TurnoChat {
+  rol: "usuario" | "asistente";
+  texto: string;
+}
+
+export type RespuestaAsistente = { tipo: "editado"; lienzo: Lienzo; mensaje: string } | { tipo: "respondido"; mensaje: string };
+
+const respuestaAsistenteEsquema = z.union([
+  z.object({ tipo: z.literal("editado"), lienzo: z.unknown(), mensaje: z.string() }),
+  z.object({ tipo: z.literal("respondido"), mensaje: z.string() }),
+]);
+
+/**
+ * Un pedido al asistente (Edge Function `lienzo-ia`). El documento que
+ * devuelve se vuelve a validar acá antes de usarlo: el panel no confía en lo
+ * que llega por la red, aunque la función ya lo validó.
+ */
+export async function preguntarAlAsistente(pedido: {
+  pregunta: string;
+  lienzo: Lienzo | null;
+  historial: TurnoChat[];
+}): Promise<RespuestaAsistente> {
+  const datos = await invocar(
+    "lienzo-ia",
+    (d): d is unknown => respuestaAsistenteEsquema.safeParse(d).success,
+    { pregunta: pedido.pregunta, lienzo: pedido.lienzo, historial: pedido.historial },
+  );
+  const respuesta = respuestaAsistenteEsquema.parse(datos);
+  if (respuesta.tipo === "respondido") return respuesta;
+  const validado = validarLienzo(respuesta.lienzo);
+  if (!validado.ok) throw new Error("El asistente devolvió una vista que no se puede dibujar.");
+  return { tipo: "editado", lienzo: validado.lienzo, mensaje: respuesta.mensaje };
 }
 
 /** Lo que necesita el lienzo para dibujarse. */

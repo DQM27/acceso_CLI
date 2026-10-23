@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowUp, Undo2, X } from "lucide-react";
-import { consultarLienzo, obtenerResumenHoy } from "../api/lienzo";
+import { consultarLienzo, obtenerResumenHoy, preguntarAlAsistente, type TurnoChat } from "../api/lienzo";
 import { listarUnidadesOperativas } from "../api/historial";
 import LienzoVista from "../lienzo/Lienzo";
 import ResumenDeHoy from "../lienzo/ResumenHoy";
@@ -12,46 +12,112 @@ import { mensajeError } from "../mensajeError";
 import "./Asistente.css";
 
 const RESUMEN = "resumen";
+/** La vista que arma el asistente cuando se le pide algo desde el resumen. */
+const DEL_ASISTENTE = "asistente";
 const SUGERENCIAS = [
   "Ver los PRAIND vencidos por empresa",
-  "¿Quiénes están adentro ahora?",
-  "Comparar dos sitios",
-  "Horas por semana de un contratista",
+  "Ingresos de esta semana por sitio",
+  "¿Qué PRAIND vencen el mes que viene?",
+  "Empresas con más ingresos en octubre",
 ];
+/** Turnos de la conversación que viajan con cada pedido (el resto queda sólo en pantalla). */
+const TURNOS_A_ENVIAR = 12;
 
-/** Panel de chat de la propuesta B: maquetado pero apagado hasta la etapa 2 (modelo de IA). */
-function PanelChat() {
+interface MensajeChat extends TurnoChat {
+  id: number;
+  /** Un aviso (tope, error) en vez de una respuesta del asistente. */
+  aviso?: boolean;
+}
+
+function PanelChat({
+  mensajes,
+  pensando,
+  onEnviar,
+}: {
+  mensajes: MensajeChat[];
+  pensando: boolean;
+  onEnviar: (texto: string) => void;
+}) {
+  const [texto, setTexto] = useState("");
+  const fin = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    fin.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
+  }, [mensajes.length, pensando]);
+
+  const enviar = (e?: FormEvent) => {
+    e?.preventDefault();
+    const limpio = texto.trim();
+    if (!limpio || pensando) return;
+    onEnviar(limpio);
+    setTexto("");
+  };
+
   return (
     <aside className="asistente-chat" aria-label="Chat del asistente">
       <header>
         <span>Asistente</span>
-        <span className="asistente-proximamente">Próximamente</span>
+        <span className="asistente-beta">Beta</span>
       </header>
-      <div className="asistente-mensajes">
+      <div className="asistente-mensajes" aria-live="polite">
         <div className="asistente-fila">
           <div className="asistente-avatar" aria-hidden="true">
             IA
           </div>
           <div className="asistente-burbuja">
-            Aquí podrá pedirme cambiar, filtrar o profundizar en cualquier dato del <b>lienzo</b>. Todavía no
-            está activo: mientras tanto, elija una vista arriba y toque una barra o una porción para filtrar.
+            Pídame cambiar, filtrar o profundizar en cualquier dato del <b>lienzo</b>. También puede tocar una barra o una
+            porción para filtrar.
           </div>
         </div>
-        <div className="asistente-sugerencias">
-          {SUGERENCIAS.map((texto) => (
-            <button key={texto} type="button" className="chip" disabled>
-              {texto}
-            </button>
-          ))}
-        </div>
+        {mensajes.length === 0 && (
+          <div className="asistente-sugerencias">
+            {SUGERENCIAS.map((s) => (
+              <button key={s} type="button" className="chip" onClick={() => onEnviar(s)} disabled={pensando}>
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+        {mensajes.map((m) =>
+          m.rol === "usuario" ? (
+            <div key={m.id} className="asistente-fila asistente-fila-usuario">
+              <div className="asistente-burbuja asistente-burbuja-usuario">{m.texto}</div>
+            </div>
+          ) : (
+            <div key={m.id} className="asistente-fila">
+              <div className="asistente-avatar" aria-hidden="true">
+                IA
+              </div>
+              <div className={`asistente-burbuja${m.aviso ? " asistente-burbuja-aviso" : ""}`}>{m.texto}</div>
+            </div>
+          ),
+        )}
+        {pensando && (
+          <div className="asistente-fila" role="status">
+            <div className="asistente-avatar" aria-hidden="true">
+              IA
+            </div>
+            <div className="asistente-burbuja asistente-pensando" aria-label="El asistente está pensando">
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
+        )}
+        <div ref={fin} />
       </div>
       <footer>
-        <div className="asistente-entrada">
-          <input placeholder="Escriba lo que quiere ver…" disabled aria-label="Mensaje para el asistente" />
-          <button type="button" className="asistente-enviar" disabled aria-label="Enviar">
+        <form className="asistente-entrada" onSubmit={enviar}>
+          <input
+            placeholder="Escriba lo que quiere ver…"
+            aria-label="Mensaje para el asistente"
+            value={texto}
+            maxLength={2000}
+            onChange={(e) => setTexto(e.target.value)}
+          />
+          <button type="submit" className="asistente-enviar" disabled={pensando || !texto.trim()} aria-label="Enviar">
             <ArrowUp size={16} aria-hidden="true" />
           </button>
-        </div>
+        </form>
       </footer>
     </aside>
   );
@@ -73,42 +139,26 @@ function VistaResumen({ sitioId }: { sitioId: string }) {
   return data ? <ResumenDeHoy resumen={data} /> : <Estado cargando={isLoading} error={error} />;
 }
 
-/**
- * Una vista del catálogo y sus ediciones. Cada edición (hoy, el clic para
- * profundizar o quitar un filtro; en la etapa 2, lo que pida el chat) pasa por
- * el validador antes de aplicarse, y se puede deshacer.
- */
-function VistaDocumento({ id }: { id: string }) {
-  const vista = VISTAS_PREDEFINIDAS.find((v) => v.id === id);
-  const [historial, setHistorial] = useState<Lienzo[]>([]);
-  const [rechazo, setRechazo] = useState<string | null>(null);
-  // Siempre por el validador, aunque el documento sea nuestro: es el mismo camino que seguirá lo que devuelva el modelo.
-  const validado = useMemo(() => (vista ? validarLienzo(vista.lienzo) : null), [vista]);
-  const original = validado?.ok ? validado.lienzo : null;
-  const lienzo = historial.at(-1) ?? original;
-
+/** Un documento del lienzo con sus filtros como chips y Deshacer. */
+function VistaDocumento({
+  lienzo,
+  puedeDeshacer,
+  rechazo,
+  onEditar,
+  onDeshacer,
+}: {
+  lienzo: Lienzo;
+  puedeDeshacer: boolean;
+  rechazo: string | null;
+  onEditar: (nuevo: Lienzo) => void;
+  onDeshacer: () => void;
+}) {
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ["lienzo-vista", lienzo],
-    queryFn: () => (lienzo ? consultarLienzo(lienzo) : Promise.resolve({ filas: [] })),
-    enabled: lienzo !== null,
+    queryFn: () => consultarLienzo(lienzo),
     // Mientras llega lo nuevo se sigue viendo lo anterior: así los gráficos pasan de un estado al otro.
     placeholderData: (previo) => previo,
   });
-
-  const editar = (nuevo: Lienzo) => {
-    const r = validarLienzo(nuevo);
-    if (!r.ok) {
-      setRechazo(r.errores.join("; "));
-      return;
-    }
-    setRechazo(null);
-    setHistorial((h) => [...h, r.lienzo]);
-  };
-
-  if (validado && !validado.ok) {
-    return <p className="asistente-error" role="alert">Vista inválida: {validado.errores.join("; ")}</p>;
-  }
-  if (!lienzo) return null;
 
   return (
     <div className="asistente-documento">
@@ -119,22 +169,14 @@ function VistaDocumento({ id }: { id: string }) {
             <button
               type="button"
               aria-label={`Quitar filtro ${describirFiltro(lienzo.fuente, f, lienzo.formato?.fecha)}`}
-              onClick={() => editar(sinFiltro(lienzo, i))}
+              onClick={() => onEditar(sinFiltro(lienzo, i))}
             >
               <X size={12} aria-hidden="true" />
             </button>
           </span>
         ))}
         <span className="asistente-espacio" />
-        <button
-          type="button"
-          className="boton asistente-deshacer"
-          disabled={historial.length === 0}
-          onClick={() => {
-            setRechazo(null);
-            setHistorial((h) => h.slice(0, -1));
-          }}
-        >
+        <button type="button" className="boton asistente-deshacer" disabled={!puedeDeshacer} onClick={onDeshacer}>
           <Undo2 size={14} aria-hidden="true" /> Deshacer
         </button>
       </div>
@@ -145,7 +187,7 @@ function VistaDocumento({ id }: { id: string }) {
       )}
       {data ? (
         <div className={isFetching ? "asistente-actualizando" : undefined}>
-          <LienzoVista lienzo={lienzo} filas={data.filas} anteriores={data.anteriores} rango={data.rango} onEditar={editar} />
+          <LienzoVista lienzo={lienzo} filas={data.filas} anteriores={data.anteriores} rango={data.rango} onEditar={onEditar} />
         </div>
       ) : (
         <Estado cargando={isLoading} error={error} />
@@ -156,24 +198,84 @@ function VistaDocumento({ id }: { id: string }) {
 }
 
 /**
- * Asistente — Parte A, etapa 1 ("Lienzo sin IA"): el resumen de hoy y vistas
- * del catálogo dibujadas desde un documento JSON, que se pueden filtrar
- * tocando los gráficos. El chat está maquetado y apagado: todavía no hay modelo.
+ * Asistente — Parte A del plan: el resumen de hoy y vistas del catálogo
+ * dibujadas desde un documento JSON, que se editan tocando los gráficos o
+ * pidiéndoselo al asistente (Edge Function `lienzo-ia`). Toda edición, venga
+ * de donde venga, pasa por el validador y se puede deshacer.
  */
 export default function Asistente() {
   const [vista, setVista] = useState<string>(RESUMEN);
   const [sitioId, setSitioId] = useState("");
   const { data: sitios } = useQuery({ queryKey: ["lienzo-sitios"], queryFn: listarUnidadesOperativas });
+
+  // Historial de ediciones de cada vista (la última es la que se ve).
+  const [historiales, setHistoriales] = useState<Record<string, Lienzo[]>>({});
+  const [rechazo, setRechazo] = useState<string | null>(null);
+  const [mensajes, setMensajes] = useState<MensajeChat[]>([]);
+  const siguienteId = useRef(0);
+
+  const predefinida = useMemo(() => {
+    const v = VISTAS_PREDEFINIDAS.find((x) => x.id === vista);
+    return v ? validarLienzo(v.lienzo) : null;
+  }, [vista]);
+  const historial = historiales[vista] ?? [];
+  const lienzo: Lienzo | null = historial.at(-1) ?? (predefinida?.ok ? predefinida.lienzo : null);
+
+  const aplicar = (destino: string, nuevo: Lienzo) => {
+    const r = validarLienzo(nuevo);
+    if (!r.ok) {
+      setRechazo(r.errores.join("; "));
+      return;
+    }
+    setRechazo(null);
+    setHistoriales((h) => ({ ...h, [destino]: [...(h[destino] ?? []), r.lienzo] }));
+  };
+
+  const agregarMensaje = (m: Omit<MensajeChat, "id">) =>
+    setMensajes((lista) => [...lista, { ...m, id: siguienteId.current++ }]);
+
+  const pregunta = useMutation({
+    mutationFn: (pedido: Parameters<typeof preguntarAlAsistente>[0]) => preguntarAlAsistente(pedido),
+    onSuccess: (respuesta) => {
+      agregarMensaje({ rol: "asistente", texto: respuesta.mensaje });
+      if (respuesta.tipo !== "editado") return;
+      if (vista === RESUMEN) {
+        // Desde el resumen, el asistente arma una vista nueva y se pasa a ella.
+        setHistoriales((h) => ({ ...h, [DEL_ASISTENTE]: [] }));
+        aplicar(DEL_ASISTENTE, respuesta.lienzo);
+        setVista(DEL_ASISTENTE);
+      } else {
+        aplicar(vista, respuesta.lienzo);
+      }
+    },
+    onError: (error) => agregarMensaje({ rol: "asistente", texto: mensajeError(error), aviso: true }),
+  });
+
+  const enviar = (texto: string) => {
+    const historialChat = mensajes.filter((m) => !m.aviso).slice(-TURNOS_A_ENVIAR).map(({ rol, texto: t }) => ({ rol, texto: t }));
+    agregarMensaje({ rol: "usuario", texto });
+    pregunta.mutate({ pregunta: texto, lienzo: vista === RESUMEN ? null : lienzo, historial: historialChat });
+  };
+
+  const hayDelAsistente = (historiales[DEL_ASISTENTE] ?? []).length > 0;
   const esResumen = vista === RESUMEN;
 
   return (
     <div className="asistente">
-      <PanelChat />
+      <PanelChat mensajes={mensajes} pensando={pregunta.isPending} onEnviar={enviar} />
       <main className="asistente-lienzo">
         <div className="asistente-barra">
           <div className="campo asistente-selector">
-            <select value={vista} onChange={(e) => setVista(e.target.value)} aria-label="Vista del lienzo">
+            <select
+              value={vista}
+              onChange={(e) => {
+                setRechazo(null);
+                setVista(e.target.value);
+              }}
+              aria-label="Vista del lienzo"
+            >
               <option value={RESUMEN}>Resumen de hoy</option>
+              {hayDelAsistente && <option value={DEL_ASISTENTE}>Armada por el asistente</option>}
               {VISTAS_PREDEFINIDAS.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.titulo}
@@ -198,7 +300,22 @@ export default function Asistente() {
         </div>
         {/* La `key` vuelve a montar el contenido al cambiar de vista: así los paneles entran animados. */}
         <div className="asistente-contenido" key={vista}>
-          {esResumen ? <VistaResumen sitioId={sitioId} /> : <VistaDocumento id={vista} />}
+          {esResumen ? (
+            <VistaResumen sitioId={sitioId} />
+          ) : predefinida && !predefinida.ok ? (
+            <p className="asistente-error" role="alert">Vista inválida: {predefinida.errores.join("; ")}</p>
+          ) : lienzo ? (
+            <VistaDocumento
+              lienzo={lienzo}
+              puedeDeshacer={historial.length > (vista === DEL_ASISTENTE ? 1 : 0)}
+              rechazo={rechazo}
+              onEditar={(nuevo) => aplicar(vista, nuevo)}
+              onDeshacer={() => {
+                setRechazo(null);
+                setHistoriales((h) => ({ ...h, [vista]: (h[vista] ?? []).slice(0, -1) }));
+              }}
+            />
+          ) : null}
         </div>
       </main>
     </div>

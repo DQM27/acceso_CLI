@@ -1,17 +1,26 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Lienzo } from "../lienzo/esquema";
 import Asistente from "./Asistente";
 
 const mocks = vi.hoisted(() => ({
   obtenerResumenHoy: vi.fn(),
   consultarLienzo: vi.fn(),
+  preguntarAlAsistente: vi.fn(),
   listarUnidadesOperativas: vi.fn(),
 }));
 vi.mock("../api/lienzo", () => ({
   obtenerResumenHoy: mocks.obtenerResumenHoy,
   consultarLienzo: mocks.consultarLienzo,
+  preguntarAlAsistente: mocks.preguntarAlAsistente,
 }));
+
+const LIENZO_DEL_ASISTENTE: Lienzo = {
+  fuente: "contratistas",
+  filtros: [{ campo: "estado_praind", op: "igual", valor: "VENCIDA" }],
+  widgets: [{ tipo: "barras", titulo: "Vencidos por empresa", eje_x: "empresa", medida: "contar" }],
+};
 vi.mock("../api/historial", () => ({ listarUnidadesOperativas: mocks.listarUnidadesOperativas }));
 
 function montar() {
@@ -61,12 +70,67 @@ describe("Asistente", () => {
     expect(mocks.obtenerResumenHoy).toHaveBeenCalledWith(undefined);
   });
 
-  it("el chat está maquetado pero apagado: 'próximamente'", () => {
+  it("chat: desde el resumen, el asistente arma una vista nueva y se pasa a ella", async () => {
+    mocks.preguntarAlAsistente.mockResolvedValue({ tipo: "editado", lienzo: LIENZO_DEL_ASISTENTE, mensaje: "Le muestro los vencidos." });
     montar();
-    expect(screen.getByText("Próximamente")).toBeTruthy();
-    expect((screen.getByLabelText("Mensaje para el asistente") as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Enviar" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Ver los PRAIND vencidos por empresa" }) as HTMLButtonElement).disabled).toBe(true);
+    await screen.findByText("Contratistas adentro ahora");
+    fireEvent.click(screen.getByRole("button", { name: "Ver los PRAIND vencidos por empresa" }));
+
+    expect(await screen.findByText("Le muestro los vencidos.")).toBeTruthy();
+    expect(mocks.preguntarAlAsistente).toHaveBeenCalledWith({
+      pregunta: "Ver los PRAIND vencidos por empresa",
+      lienzo: null,
+      historial: [],
+    });
+    expect((screen.getByLabelText("Vista del lienzo") as HTMLSelectElement).value).toBe("asistente");
+    await waitFor(() => expect(mocks.consultarLienzo).toHaveBeenCalledWith(LIENZO_DEL_ASISTENTE));
+    // La vista armada por el asistente es la base: no hay nada que deshacer todavía.
+    expect((await screen.findByRole("button", { name: /Deshacer/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("chat: si sólo responde, no toca el lienzo; los mensajes viajan como historial", async () => {
+    mocks.preguntarAlAsistente.mockResolvedValue({ tipo: "respondido", mensaje: "¿De qué sitio?" });
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    const entrada = screen.getByLabelText("Mensaje para el asistente");
+    fireEvent.change(entrada, { target: { value: "ingresos" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    expect(await screen.findByText("¿De qué sitio?")).toBeTruthy();
+    expect((screen.getByLabelText("Vista del lienzo") as HTMLSelectElement).value).toBe("resumen");
+
+    fireEvent.change(entrada, { target: { value: "Brisas" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    await waitFor(() => expect(mocks.preguntarAlAsistente).toHaveBeenCalledTimes(2));
+    expect(mocks.preguntarAlAsistente.mock.calls[1][0].historial).toEqual([
+      { rol: "usuario", texto: "ingresos" },
+      { rol: "asistente", texto: "¿De qué sitio?" },
+    ]);
+  });
+
+  it("chat: un error (como el tope diario) se muestra como aviso y no se manda como historial", async () => {
+    mocks.preguntarAlAsistente.mockRejectedValueOnce(new Error("Llegó al tope de 30 consultas de hoy. Mañana se renueva."));
+    montar();
+    await screen.findByText("Contratistas adentro ahora");
+    fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "hola" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    expect(await screen.findByText(/tope de 30 consultas/)).toBeTruthy();
+  });
+
+  it("chat: sobre una vista abierta, la edición del asistente se aplica ahí y se puede deshacer", async () => {
+    mocks.preguntarAlAsistente.mockResolvedValue({
+      tipo: "editado",
+      lienzo: { ...LIENZO_DEL_ASISTENTE, filtros: [...LIENZO_DEL_ASISTENTE.filtros, { campo: "empresa", op: "no_en", valor: ["OTRA"] }] },
+      mensaje: "Saqué a OTRA.",
+    });
+    await abrirVencidos();
+    fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "quitá OTRA" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    expect(await screen.findByText("Empresa: sin OTRA")).toBeTruthy();
+    // Viajó el lienzo actual de esa vista.
+    expect(mocks.preguntarAlAsistente.mock.calls[0][0].lienzo).toMatchObject({ fuente: "contratistas" });
+    fireEvent.click(screen.getByRole("button", { name: /Deshacer/ }));
+    await waitFor(() => expect(screen.queryByText("Empresa: sin OTRA")).toBeNull());
   });
 
   it("al elegir un sitio vuelve a pedir el resumen de ese sitio", async () => {

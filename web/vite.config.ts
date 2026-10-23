@@ -50,5 +50,11 @@ export default defineConfig({
     // Sin esto, vitest también levanta e2e/panel.spec.ts (Playwright, no
     // vitest) -- mismo ajuste que ya tiene web-visitas/vite.config.ts.
     include: ["src/**/*.test.{ts,tsx}"],
+    // Las pruebas de pantallas (montan formularios y la app) tardan 1-2 s solas,
+    // pero con los ~40 archivos en paralelo la máquina va cargada y a veces
+    // pasaban los 5 s por defecto: fallaban de forma intermitente sin ningún
+    // error real (App.test, Usuarios.test). 15 s da margen sin esconder una
+    // prueba colgada.
+    testTimeout: 15_000,
   },
 });
