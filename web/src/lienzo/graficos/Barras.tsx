@@ -86,19 +86,21 @@ export default function GraficoBarras({
     if (seleccion?.puede(clave)) seleccion.alSeleccionar(clave);
   };
   const activo = useIndiceActivo(n, seleccionar);
-  // Lo que se dibuja: los valores en camino del dibujo anterior al nuevo.
+  // Las marcas del eje salen de los valores finales.
+  const totales = datos.categorias.map((_, i) => datos.series.reduce((s, serie) => s + (serie.valores[i] ?? 0), 0));
+  const { marcas, techo: techoFinal } = marcasEje(Math.max(...totales, 0));
+  // Lo que se dibuja: los valores en camino del dibujo anterior al nuevo, y el
+  // techo del eje con ellos (si no, las barras viejas se salen del eje nuevo).
   const animados = useInterpolado(
-    datos.series.flatMap((s) => datos.categorias.map((c) => `${s.nombre}\u0000${c}`)),
-    datos.series.flatMap((s) => s.valores),
+    [...datos.series.flatMap((s) => datos.categorias.map((c) => `${s.nombre}\u0000${c}`)), "\u0000techo"],
+    [...datos.series.flatMap((s) => s.valores), techoFinal],
   );
 
   if (n === 0 || datos.series.length === 0) return <p className="lienzo-vacio">Sin datos para mostrar.</p>;
 
+  const techo = animados[animados.length - 1] || techoFinal;
   const dibujo = datos.series.map((_, k) => animados.slice(k * n, (k + 1) * n));
   const totalesDibujo = datos.categorias.map((_, c) => dibujo.reduce((s, valores) => s + (valores[c] ?? 0), 0));
-  // El eje se fija con los valores finales: no salta en cada cuadro de la transición.
-  const totales = datos.categorias.map((_, i) => datos.series.reduce((s, serie) => s + (serie.valores[i] ?? 0), 0));
-  const { marcas, techo } = marcasEje(Math.max(...totales, 0));
   const etiquetas = datos.categorias.map((c, i) => etiquetar(c, i));
   const varias = datos.series.length > 1;
   const anchoMarca = Math.max(...marcas.map((m) => formatoNumero(m, true).length)) * ANCHO_CARACTER + 10;
@@ -155,6 +157,8 @@ export default function GraficoBarras({
 
         {/* Cuadrícula y eje de valores. */}
         {marcas.map((v) => {
+          // Mientras el techo crece, las marcas nuevas esperan a entrar en el dibujo.
+          if (v > techo * 1.001) return null;
           const pos = horizontal ? m.izquierda + escala(v) : m.arriba + altoUtil - escala(v);
           return horizontal ? (
             <g key={v}>

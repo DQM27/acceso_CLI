@@ -35,18 +35,21 @@ export default function GraficoLinea({ datos, colores, titulo, alto = 240, area 
   const { ref, ancho } = useAncho<HTMLDivElement>();
   const n = datos.categorias.length;
   const activo = useIndiceActivo(n);
-  // Lo que se dibuja: los valores en camino del dibujo anterior al nuevo.
+  // Las marcas del eje salen de los valores finales.
+  const { marcas, techo: techoFinal } = marcasEje(Math.max(...datos.series.flatMap((s) => s.valores), 0));
+  // Lo que se dibuja: los valores en camino del dibujo anterior al nuevo, y el
+  // techo del eje con ellos (si no, la línea vieja se sale del eje nuevo).
   const animados = useInterpolado(
-    datos.series.flatMap((s) => datos.categorias.map((c) => `${s.nombre}\u0000${c}`)),
-    datos.series.flatMap((s) => s.valores),
+    [...datos.series.flatMap((s) => datos.categorias.map((c) => `${s.nombre}\u0000${c}`)), "\u0000techo"],
+    [...datos.series.flatMap((s) => s.valores), techoFinal],
   );
 
   if (n === 0 || datos.series.length === 0) return <p className="lienzo-vacio">Sin datos para mostrar.</p>;
 
+  const techo = animados[animados.length - 1] || techoFinal;
   const dibujo = datos.series.map((_, k) => animados.slice(k * n, (k + 1) * n));
-
-  const maximo = Math.max(...datos.series.flatMap((s) => s.valores), 0);
-  const { marcas, techo } = marcasEje(maximo);
+  // Mientras el techo crece, las marcas nuevas esperan a entrar en el dibujo.
+  const marcasVisibles = marcas.filter((v) => v <= techo * 1.001);
   const etiquetas = datos.categorias.map((c, i) => etiquetar(c, i));
   const m = {
     arriba: 14,
@@ -95,7 +98,7 @@ export default function GraficoLinea({ datos, colores, titulo, alto = 240, area 
           </defs>
         )}
 
-        {marcas.map((v) => (
+        {marcasVisibles.map((v) => (
           <g key={v}>
             <line x1={m.izquierda} x2={ancho - m.derecha} y1={y(v)} y2={y(v)} className="lienzo-rejilla" />
             <text x={m.izquierda - 8} y={y(v) + 4} textAnchor="end" className="lienzo-eje-texto">
