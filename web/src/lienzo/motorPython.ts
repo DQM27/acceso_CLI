@@ -26,7 +26,8 @@ export interface PedidoAnalisis {
 
 /** Respaldo por si el sandbox no contesta (incluye bajar Python la primera vez). */
 const ESPERA_MAXIMA_MS = 120_000;
-const URL_PYTHON = new URL("python.html", URL_SANDBOX).href;
+// Sin ".html": Cloudflare sirve la página así (con la extensión, redirige).
+const URL_PYTHON = new URL("python", URL_SANDBOX).href;
 
 let marco: HTMLIFrameElement | null = null;
 let preparado = false;
