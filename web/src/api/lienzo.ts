@@ -1,6 +1,7 @@
 import { z } from "../lib/validacion";
 import { supabase } from "../lib/supabase";
 import { diasEntre, hoyCostaRica, sumarDias, type Fila } from "../lienzo/calculo";
+import { CAMPOS_FILTRADOS_EN_PANEL } from "../lienzo/catalogo";
 import { parametrosContratistas, parametrosIngresos } from "../lienzo/consulta";
 import { aplicarFiltros } from "../lienzo/filtrar";
 import { origenDe, validarLienzo, type Lienzo } from "../lienzo/esquema";
@@ -151,7 +152,9 @@ export async function consultarLienzo(lienzo: Lienzo): Promise<DatosLienzo> {
   const desdePedido = compara ? sumarDias(rango.desde, -largo) : rango.desde;
   const { data, error } = await supabase.rpc("lienzo_ingresos", { ...parametros, p_desde: desdePedido });
   if (error) throw new Error(error.message);
-  const todas = filasEsquema.parse(data);
+  // Hora, día de la semana y horas adentro no los filtra la función SQL: se filtran acá.
+  const enPanel = lienzo.filtros.filter((f) => CAMPOS_FILTRADOS_EN_PANEL.includes(f.campo));
+  const todas = aplicarFiltros("ingresos", filasEsquema.parse(data), enPanel);
   if (!compara) return { filas: todas, rango };
   const actual = (f: Fila) => typeof f.dia === "string" && f.dia >= rango.desde;
   return { filas: todas.filter(actual), anteriores: todas.filter((f) => !actual(f)), rango };

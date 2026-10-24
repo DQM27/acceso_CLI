@@ -64,7 +64,7 @@ export function textoValor(valor: Valor | undefined): string {
 
 type Medida = WidgetKpi["medida"];
 
-function medir(medida: Medida, campo: string | undefined, filas: Fila[]): number | string | null {
+export function medir(medida: Medida, campo: string | undefined, filas: Fila[]): number | string | null {
   if (medida === "contar") return filas.length;
   const valores = filas.map((f) => f[campo ?? ""]).filter((v): v is string | number | boolean => v != null);
   if (medida === "contar_distintos") return new Set(valores).size;
@@ -224,7 +224,7 @@ function agrupar(filas: Fila[], clave: (f: Fila) => string): Map<string, Fila[]>
   return grupos;
 }
 
-function claveTexto(valor: Valor | undefined): string {
+export function claveTexto(valor: Valor | undefined): string {
   return valor === null || valor === undefined || valor === "" ? SIN_DATO : textoValor(valor);
 }
 
@@ -266,8 +266,14 @@ export function calcularSeries(
   } else {
     const usadas = new Set(filas.map(ejeFinal));
     const total = (x: string) => Number(medir(widget.medida, widget.campo, filas.filter((f) => ejeFinal(f) === x)));
-    categorias = [...usadas].filter((x) => x !== OTROS).sort((a, b) => total(b) - total(a) || a.localeCompare(b));
+    const def = definicionCampo(fuente, widget.eje_x);
+    const conDato = [...usadas].filter((x) => x !== OTROS && x !== SIN_DATO);
+    // Un eje con orden propio se lee en ese orden (horas 7, 8, 9…; lunes a domingo); lo demás, de mayor a menor.
+    if (def?.tipo === "numero") categorias = conDato.sort((a, b) => Number(a) - Number(b));
+    else if (def?.ordinal && def.valores) categorias = def.valores.filter((v) => usadas.has(v));
+    else categorias = conDato.sort((a, b) => total(b) - total(a) || a.localeCompare(b));
     if (usadas.has(OTROS)) categorias.push(OTROS);
+    if (usadas.has(SIN_DATO)) categorias.push(SIN_DATO);
   }
 
   const totalSerie = (s: string) => Number(medir(widget.medida, widget.campo, filas.filter((f) => serieFinal(f) === s)));

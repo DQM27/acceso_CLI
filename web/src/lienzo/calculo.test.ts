@@ -56,11 +56,26 @@ const barras = (w: Partial<WidgetBarras>): WidgetBarras => ({ tipo: "barras", ej
 const linea = (w: Partial<WidgetLinea>): WidgetLinea => ({ tipo: "linea", eje_x: "dia", medida: "contar", ...w });
 
 describe("calcularSeries", () => {
-  it("una serie: agrupa por el eje, de mayor a menor, con '(sin dato)' para los vacíos", () => {
+  it("una serie: agrupa por el eje, de mayor a menor, con '(sin dato)' para los vacíos al final", () => {
     const d = calcularSeries("contratistas", barras({}), filas, "Contratistas");
     expect(d.agrupacion).toBeNull();
-    expect(d.categorias).toEqual(["A", "(sin dato)", "B"]);
+    expect(d.categorias).toEqual(["A", "B", "(sin dato)"]);
     expect(d.series).toEqual([{ nombre: "Contratistas", valores: [2, 1, 1] }]);
+  });
+
+  it("un eje con orden propio va en ese orden: horas de menor a mayor, días de lunes a domingo", () => {
+    const ingresos: Fila[] = [
+      { hora: 14, dia_semana: "Viernes" },
+      { hora: 7, dia_semana: "Lunes" },
+      { hora: 7, dia_semana: "Lunes" },
+      { hora: 7, dia_semana: "Lunes" },
+      { hora: 9, dia_semana: "Domingo" },
+      { hora: 9, dia_semana: "Domingo" },
+    ];
+    const porHora = calcularSeries("ingresos", { tipo: "barras", eje_x: "hora", medida: "contar" }, ingresos);
+    expect(porHora.categorias).toEqual(["7", "9", "14"]);
+    const porDia = calcularSeries("ingresos", { tipo: "barras", eje_x: "dia_semana", medida: "contar" }, ingresos);
+    expect(porDia.categorias).toEqual(["Lunes", "Viernes", "Domingo"]);
   });
 
   it("mide distintos por grupo", () => {

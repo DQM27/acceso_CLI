@@ -27,6 +27,9 @@ import {
   type WidgetLinea,
 } from "./esquema";
 import AnalisisPython from "./AnalisisPython";
+import GraficoCalendario from "./graficos/Calendario";
+import GraficoCalor from "./graficos/Calor";
+import { calcularCalendario, calcularCalor, fechaLarga } from "./mapas";
 import GraficoBarras from "./graficos/Barras";
 import { Leyenda, MarcoGrafico, type TablaDeDatos } from "./graficos/comun";
 import GraficoLinea from "./graficos/Linea";
@@ -52,6 +55,8 @@ const ANCHO_POR_OMISION: Record<Widget["tipo"], Ancho> = {
   linea: "mitad",
   torta: "tercio",
   tabla: "completo",
+  calor: "completo",
+  calendario: "completo",
   libre: "completo",
   // Un análisis toma el ancho del panel que muestra su resultado (ver anchoPorOmision).
   analisis: "mitad",
@@ -258,6 +263,56 @@ function WidgetLienzo({ ctx, widget }: { ctx: Contexto; widget: Widget }): React
           <TablaRica origen={origenDe(lienzo)} widget={widget} filas={filas} formatoFecha={lienzo.formato?.fecha} />
         </section>
       );
+    case "calor": {
+      const origen = origenDe(lienzo);
+      const datos = calcularCalor(origen, widget, filas, lienzo.formato?.fecha);
+      const medida = textoMedida(origen, widget.medida, widget.campo);
+      const titulo = widget.titulo ?? `${medida} por ${etiquetaCampo(origen, widget.filas).toLowerCase()} y ${etiquetaCampo(origen, widget.columnas).toLowerCase()}`;
+      const { onEditar } = ctx;
+      // Clic en una celda: la vista filtrada por esa fila y esa columna (si los dos campos se pueden filtrar).
+      const alSeleccionar = onEditar
+        ? (fila: string, columna: string) => {
+            const porFila = filtroParaCategoria(origen, widget.filas, fila);
+            const porColumna = filtroParaCategoria(origen, widget.columnas, columna);
+            if (porFila && porColumna) onEditar(conFiltro(conFiltro(lienzo, porFila), porColumna));
+          }
+        : undefined;
+      return (
+        <MarcoGrafico
+          titulo={titulo}
+          datos={{
+            columnas: [etiquetaCampo(origen, widget.filas), ...datos.columnas.map((c) => c.etiqueta)],
+            filas: datos.filas.map((f, i) => [f.etiqueta, ...datos.valores[i]]),
+          }}
+        >
+          <GraficoCalor datos={datos} titulo={titulo} medida={medida} alSeleccionar={alSeleccionar} />
+        </MarcoGrafico>
+      );
+    }
+    case "calendario": {
+      const origen = origenDe(lienzo);
+      const datos = calcularCalendario(widget, filas);
+      const medida = textoMedida(origen, widget.medida, widget.campo);
+      const titulo = widget.titulo ?? `${medida} por ${etiquetaCampo(origen, widget.fecha).toLowerCase()}`;
+      const { onEditar } = ctx;
+      const alSeleccionar = onEditar
+        ? (fecha: string) => {
+            const filtro = filtroParaCategoria(origen, widget.fecha, fecha);
+            if (filtro) onEditar(conFiltro(lienzo, filtro));
+          }
+        : undefined;
+      return (
+        <MarcoGrafico
+          titulo={titulo}
+          datos={{
+            columnas: [etiquetaCampo(origen, widget.fecha), medida],
+            filas: datos.meses.flatMap((m) => m.dias.filter((d) => d.valor > 0).map((d) => [fechaLarga(d.fecha), d.valor])),
+          }}
+        >
+          <GraficoCalendario datos={datos} titulo={titulo} medida={medida} alSeleccionar={alSeleccionar} />
+        </MarcoGrafico>
+      );
+    }
     case "libre":
       return <PanelLibre widget={widget} filas={filas} origen={origenDe(lienzo)} />;
     case "analisis":

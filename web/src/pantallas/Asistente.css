@@ -966,6 +966,88 @@
   stroke: var(--borde);
   stroke-width: 1;
 }
+/* --- Mapa de calor y calendario -------------------------------------------------
+   Escala secuencial de un solo tono (azul de la serie única), cinco niveles de
+   menos a más; vacío en el gris del panel. En oscuro se invierte la luz: lo poco
+   se funde con el fondo y lo mucho brilla. El número de la celda cambia de color
+   en los dos niveles más fuertes para seguir leyéndose. */
+.lienzo-documento {
+  --calor-0: var(--panel-suave);
+  --calor-1: #d7e6f9;
+  --calor-2: #a8c9f1;
+  --calor-3: #6fa5e6;
+  --calor-4: #2f7bd8;
+  --calor-5: #1b4f93;
+  --calor-texto-fuerte: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="tokyo-day"]) .lienzo-documento {
+    --calor-1: #1d3150;
+    --calor-2: #24508a;
+    --calor-3: #2f6fc0;
+    --calor-4: #4f93ea;
+    --calor-5: #9cc4f7;
+    --calor-texto-fuerte: #0d1117;
+  }
+}
+[data-theme="dark"] .lienzo-documento,
+[data-theme="tokyo-night"] .lienzo-documento {
+  --calor-1: #1d3150;
+  --calor-2: #24508a;
+  --calor-3: #2f6fc0;
+  --calor-4: #4f93ea;
+  --calor-5: #9cc4f7;
+  --calor-texto-fuerte: #0d1117;
+}
+.lienzo-calor-n0 {
+  fill: var(--calor-0);
+}
+.lienzo-calor-n1 {
+  fill: var(--calor-1);
+}
+.lienzo-calor-n2 {
+  fill: var(--calor-2);
+}
+.lienzo-calor-n3 {
+  fill: var(--calor-3);
+}
+.lienzo-calor-n4 {
+  fill: var(--calor-4);
+}
+.lienzo-calor-n5 {
+  fill: var(--calor-5);
+}
+.lienzo-calor-celda {
+  animation: lienzo-aparecer 260ms ease-out both;
+  transition: opacity var(--duracion);
+}
+.lienzo-calor-numero,
+.lienzo-calendario-numero {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  fill: var(--texto);
+  pointer-events: none;
+}
+.lienzo-calendario-numero {
+  font-size: 10.5px;
+}
+.lienzo-calor-numero-n0 {
+  fill: var(--muted);
+}
+.lienzo-calor-numero-n4,
+.lienzo-calor-numero-n5 {
+  fill: var(--calor-texto-fuerte);
+}
+.lienzo-calendario-mes {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--texto);
+}
+/* Hoy: un borde, no un color (el color es del valor). */
+.lienzo-calendario-hoy {
+  stroke: var(--texto);
+  stroke-width: 1.5px;
+}
 .lienzo-eje-texto {
   fill: var(--muted);
   font-size: 11px;

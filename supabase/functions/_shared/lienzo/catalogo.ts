@@ -15,10 +15,14 @@ export interface DefinicionCampo {
   valores?: readonly string[];
   /** Operadores que acepta la función SQL de este campo, si son menos que los de su tipo. */
   operadores?: readonly Operador[];
+  /** Sus `valores` tienen un orden propio (lunes a domingo): los gráficos lo respetan en vez de ordenar por tamaño. */
+  ordinal?: boolean;
 }
 
 export const ESTADOS_PRAIND = ["VIGENTE", "POR_VENCER", "VENCIDA", "SIN_REGISTRO", "NO_REQUIERE"] as const;
 export const TIPOS_INGRESO = ["PRAIND", "IN_HOUSE", "POR_CORREO", "SWAT"] as const;
+/** En orden: así se ordenan los ejes y las filas (lunes primero, como en Costa Rica). */
+export const DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"] as const;
 
 export const CATALOGO = {
   contratistas: {
@@ -42,9 +46,19 @@ export const CATALOGO = {
       tipo_ingreso: { tipo: "enumeracion", etiqueta: "Tipo de ingreso", valores: TIPOS_INGRESO },
       sitio: { tipo: "texto", etiqueta: "Sitio", operadores: ["igual"] },
       dia: { tipo: "fecha", etiqueta: "Día" },
+      // Los tres que siguen se filtran en el panel, no en la función SQL (ver CAMPOS_FILTRADOS_EN_PANEL).
+      dia_semana: { tipo: "enumeracion", etiqueta: "Día de la semana", valores: DIAS_SEMANA, ordinal: true },
+      hora: { tipo: "numero", etiqueta: "Hora de entrada" },
+      horas_adentro: { tipo: "numero", etiqueta: "Horas adentro" },
     },
   },
 } as const satisfies Record<string, { etiqueta: string; campos: Record<string, DefinicionCampo> }>;
+
+/**
+ * Campos de ingresos que la función SQL devuelve pero no filtra: el panel los
+ * filtra sobre las filas que ya trajo (son pocas: como mucho 92 días).
+ */
+export const CAMPOS_FILTRADOS_EN_PANEL: readonly string[] = ["dia_semana", "hora", "horas_adentro"];
 
 export type Fuente = keyof typeof CATALOGO;
 export const FUENTES = Object.keys(CATALOGO) as [Fuente, ...Fuente[]];
@@ -80,7 +94,7 @@ export const OPERADORES_POR_TIPO: Record<TipoCampo, readonly Operador[]> = {
 export const MEDIDAS = ["contar", "contar_distintos", "sumar", "minimo", "maximo"] as const;
 export type Medida = (typeof MEDIDAS)[number];
 
-export const WIDGETS = ["kpi", "tabla", "barras", "linea", "torta", "libre", "analisis"] as const;
+export const WIDGETS = ["kpi", "tabla", "barras", "linea", "torta", "calor", "calendario", "libre", "analisis"] as const;
 
 /** Cómo se reparten los paneles: en cuadrícula, o uno solo grande al centro. */
 export const DISPOSICIONES = ["cuadricula", "enfoque"] as const;

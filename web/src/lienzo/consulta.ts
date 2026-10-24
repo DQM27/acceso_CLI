@@ -1,5 +1,5 @@
 import { sumarDias } from "./calculo";
-import { ESTADOS_PRAIND, TIPOS_INGRESO } from "./catalogo";
+import { CAMPOS_FILTRADOS_EN_PANEL, ESTADOS_PRAIND, TIPOS_INGRESO } from "./catalogo";
 import type { Filtro, Lienzo } from "./esquema";
 
 /**
@@ -127,6 +127,8 @@ export function parametrosIngresos(lienzo: Lienzo, hoy: string): ParametrosIngre
         break;
       }
       default:
+        // Hora, día de la semana y horas adentro: los filtra el panel sobre las filas traídas.
+        if (CAMPOS_FILTRADOS_EN_PANEL.includes(filtro.campo)) break;
         throw new Error(`Campo "${filtro.campo}" sin consulta en ingresos`);
     }
   }

@@ -129,6 +129,41 @@ const tablaEsquema = z
   .strict();
 
 /**
+ * Mapa de calor: una grilla con un campo en las filas y otro en las columnas
+ * (por ejemplo día de la semana × hora: las horas pico), cada celda más oscura
+ * cuanto más alto su valor.
+ */
+const calorEsquema = z
+  .object({
+    tipo: z.literal("calor"),
+    titulo: titulo.optional(),
+    filas: campo,
+    columnas: campo,
+    medida: medidaDeGrupo,
+    campo: campo.optional(),
+    ...panel,
+  })
+  .strict();
+
+/**
+ * Calendario: los meses con cada día coloreado según su valor (por ejemplo,
+ * cuántos PRAIND vencen ese día). `fecha` es el campo de fecha que ubica cada
+ * fila en el calendario.
+ */
+const calendarioEsquema = z
+  .object({
+    tipo: z.literal("calendario"),
+    titulo: titulo.optional(),
+    fecha: campo,
+    medida: medidaDeGrupo,
+    campo: campo.optional(),
+    /** Cuántos meses mostrar como máximo, desde el primero con datos (por omisión 6). */
+    meses: z.number().int().min(1).max(12).optional(),
+    ...panel,
+  })
+  .strict();
+
+/**
  * Panel "libre": un dibujo a medida para lo que los demás paneles no cubren.
  * `codigo` es el cuerpo de una función JavaScript que corre en el sandbox
  * (lienzo.megabrisas.com, Web Worker sin red ni DOM) con las filas del lienzo y
@@ -156,7 +191,15 @@ const columnaEsquema = z
   .strict();
 
 /** Los paneles que puede usar un análisis para mostrar su resultado. */
-const panelDeResultado = z.discriminatedUnion("tipo", [kpiEsquema, barrasEsquema, lineaEsquema, tortaEsquema, tablaEsquema]);
+const panelDeResultado = z.discriminatedUnion("tipo", [
+  kpiEsquema,
+  barrasEsquema,
+  lineaEsquema,
+  tortaEsquema,
+  tablaEsquema,
+  calorEsquema,
+  calendarioEsquema,
+]);
 
 /**
  * Panel "analisis": un cálculo en Python (pronósticos, estadística, días fuera de
@@ -184,6 +227,8 @@ const widgetEsquema = z.discriminatedUnion("tipo", [
   lineaEsquema,
   tortaEsquema,
   tablaEsquema,
+  calorEsquema,
+  calendarioEsquema,
   libreEsquema,
   analisisEsquema,
 ]);
@@ -219,6 +264,8 @@ export type WidgetBarras = z.infer<typeof barrasEsquema>;
 export type WidgetLinea = z.infer<typeof lineaEsquema>;
 export type WidgetTorta = z.infer<typeof tortaEsquema>;
 export type WidgetTabla = z.infer<typeof tablaEsquema>;
+export type WidgetCalor = z.infer<typeof calorEsquema>;
+export type WidgetCalendario = z.infer<typeof calendarioEsquema>;
 export type WidgetLibre = z.infer<typeof libreEsquema>;
 export type WidgetAnalisis = z.infer<typeof analisisEsquema>;
 /** Un panel común (el que muestra el resultado de un análisis). */
@@ -360,6 +407,19 @@ function revisarWidget(fuente: Origen, w: Widget, ruta: Ruta, ctx: z.RefinementC
         else if (def && def.tipo !== "fecha") problema(ctx, r, "La tendencia necesita un campo de fecha");
       }
       break;
+    case "calor": {
+      revisarMedida(fuente, w, ruta, ctx);
+      const filas = exigirCampo(fuente, w.filas, [...ruta, "filas"], ctx);
+      exigirCampo(fuente, w.columnas, [...ruta, "columnas"], ctx);
+      if (filas && w.filas === w.columnas) problema(ctx, [...ruta, "columnas"], "Filas y columnas tienen que ser campos distintos");
+      break;
+    }
+    case "calendario": {
+      revisarMedida(fuente, w, ruta, ctx);
+      const fecha = exigirCampo(fuente, w.fecha, [...ruta, "fecha"], ctx);
+      if (fecha && fecha.tipo !== "fecha") problema(ctx, [...ruta, "fecha"], "El calendario necesita un campo de fecha");
+      break;
+    }
     case "analisis": {
       // El panel que muestra el resultado se revisa contra las columnas que declara el análisis.
       const nombres = w.columnas.map((c) => c.nombre);

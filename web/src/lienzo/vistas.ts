@@ -69,6 +69,7 @@ export const VISTAS_PREDEFINIDAS: VistaPredefinida[] = [
         { tipo: "kpi", titulo: "Vencen en el año", medida: "contar", tono: "advertencia" },
         { tipo: "kpi", titulo: "El próximo vence", medida: "minimo", campo: "vencimiento" },
         { tipo: "barras", titulo: "Vencimientos por mes", eje_x: "vencimiento", agrupar_fecha: "mes", medida: "contar", ancho: "completo" },
+        { tipo: "calendario", titulo: "Calendario de vencimientos", fecha: "vencimiento", medida: "contar", meses: 6 },
         {
           tipo: "tabla",
           titulo: "Quién vence primero",
@@ -102,6 +103,19 @@ export const VISTAS_PREDEFINIDAS: VistaPredefinida[] = [
           orden: { campo: "dia", dir: "desc" },
           ancho: "completo",
         },
+      ],
+    },
+  },
+  {
+    id: "horas-pico",
+    titulo: "Horas pico",
+    lienzo: {
+      fuente: "ingresos",
+      filtros: [],
+      widgets: [
+        { tipo: "calor", titulo: "Ingresos por día de la semana y hora", filas: "dia_semana", columnas: "hora", medida: "contar" },
+        { tipo: "barras", titulo: "Ingresos por hora de entrada", eje_x: "hora", medida: "contar", orientacion: "vertical", ancho: "mitad" },
+        { tipo: "barras", titulo: "Ingresos por día de la semana", eje_x: "dia_semana", medida: "contar", orientacion: "vertical", ancho: "mitad" },
       ],
     },
   },

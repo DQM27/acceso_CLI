@@ -47,6 +47,26 @@ describe("consultarLienzo", () => {
     expect(r.anteriores).toEqual([{ dia: "2026-10-01" }, { dia: "2026-09-25" }]);
   });
 
+  it("hora, día de la semana y horas adentro no van a la función SQL: se filtran en el panel (también el período anterior)", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [
+        { dia: "2026-10-20", hora: 7, dia_semana: "Martes" },
+        { dia: "2026-10-20", hora: 15, dia_semana: "Martes" },
+        { dia: "2026-10-01", hora: 8, dia_semana: "Jueves" },
+        { dia: "2026-09-29", hora: 9, dia_semana: "Martes" },
+      ],
+      error: null,
+    });
+    const r = await consultarLienzo({
+      fuente: "ingresos",
+      filtros: [...rango, { campo: "hora", op: "entre", valor: [6, 9] }, { campo: "dia_semana", op: "igual", valor: "Martes" }],
+      widgets: [{ tipo: "kpi", titulo: "t", medida: "contar", comparar: true }],
+    });
+    expect(mocks.rpc).toHaveBeenCalledWith("lienzo_ingresos", { p_desde: "2026-09-25", p_hasta: "2026-10-22" });
+    expect(r.filas).toEqual([{ dia: "2026-10-20", hora: 7, dia_semana: "Martes" }]);
+    expect(r.anteriores).toEqual([{ dia: "2026-09-29", hora: 9, dia_semana: "Martes" }]);
+  });
+
   it("si el doble del rango pasa de 92 días, no compara (la función SQL no lo permite)", async () => {
     mocks.rpc.mockResolvedValue({ data: [], error: null });
     const r = await consultarLienzo({

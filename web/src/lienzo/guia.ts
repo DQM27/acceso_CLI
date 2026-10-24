@@ -19,9 +19,19 @@ const TEMAS_GENERALES: TemaGuia[] = [
     ejemplos: ["Ver los PRAIND vencidos por empresa", "¿Qué PRAIND vencen el mes que viene?", "Ingresos de esta semana por sitio"],
   },
   {
+    titulo: "Horas pico y calendario",
+    explicacion: "Cuándo entra más gente, y cuándo vencen los permisos, día por día.",
+    ejemplos: ["Horas pico de las últimas 4 semanas", "Calendario de vencimientos PRAIND de los próximos 6 meses"],
+  },
+  {
     titulo: "Comparar y ver tendencias",
     explicacion: "Contra la semana o el mes anterior, día por día.",
     ejemplos: ["Ingresos de las últimas 2 semanas contra las 2 anteriores", "Ingresos por día de este mes en una línea"],
+  },
+  {
+    titulo: "Análisis",
+    explicacion: "Cálculos que se hacen con Python: pronósticos, promedios y lo que se sale de lo normal.",
+    ejemplos: ["¿Cuántos ingresos espero la próxima semana?", "¿Qué días de este mes fueron fuera de lo normal?"],
   },
   {
     titulo: "Cruzar datos",
@@ -35,7 +45,7 @@ const TEMAS_GENERALES: TemaGuia[] = [
   {
     titulo: "Dibujos a medida",
     explicacion: "Cuando ningún gráfico común sirve, el asistente arma uno especial.",
-    ejemplos: ["Mapa de calor de ingresos por empresa y día", "Línea de tiempo de quién estuvo adentro hoy"],
+    ejemplos: ["Línea de tiempo de quién estuvo adentro hoy", "Embudo de ingresos por tipo de ingreso"],
   },
 ];
 
