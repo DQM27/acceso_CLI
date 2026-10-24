@@ -184,6 +184,9 @@ async function preparar(page: Page, desconocidas: string[]) {
 test.describe("asistente", () => {
   // El chat y el lienzo lado a lado: se prueba en escritorio.
   test.skip(({ isMobile }) => isMobile, "sólo escritorio");
+  // Sin animaciones (el panel respeta "reducir movimiento"): en una máquina lenta, como la
+  // de GitHub, los gráficos todavía moviéndose hacían que los clics cayeran a destiempo.
+  test.use({ reducedMotion: "reduce" });
 
   const errores: string[] = [];
   const desconocidas: string[] = [];
@@ -196,6 +199,11 @@ test.describe("asistente", () => {
       // Los pedidos abortados al sandbox no cuentan: se cortan a propósito.
       if (m.type() === "error" && !m.text().includes("lienzo.megabrisas.com") && !m.text().includes("ERR_FAILED")) errores.push(m.text());
     });
+    // LENTO=4 npx playwright test …: frena la CPU para imitar la máquina de GitHub.
+    if (process.env.LENTO) {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: Number(process.env.LENTO) });
+    }
     await preparar(page, desconocidas);
     await page.goto("/asistente");
     await expect(page.getByRole("combobox", { name: "Vista del lienzo" })).toBeVisible();
@@ -220,10 +228,16 @@ test.describe("asistente", () => {
     expect(deEjemplo.length).toBeGreaterThan(5);
     const quitar = page.getByLabel("Filtros del lienzo").getByRole("button", { name: /^Quitar filtro/ });
 
+    // Con datos en camino la vista se atenúa (`asistente-actualizando`): se espera a que lleguen.
+    const quieta = async () => {
+      await expect(page.locator(".lienzo-panel").first()).toBeVisible();
+      await expect(page.locator(".asistente-actualizando")).toHaveCount(0, { timeout: 15_000 });
+    };
+
     for (const vista of deEjemplo) {
       await test.step(vista.texto, async () => {
         await selector.selectOption(vista.valor);
-        await expect(page.locator(".lienzo-panel").first()).toBeVisible();
+        await quieta();
         const filtrosIniciales = await quitar.count();
         const graficos = page.locator(".lienzo-panel").filter({ has: page.locator(".lienzo-zona-seleccionable") });
         const cuantos = await graficos.count();
@@ -231,16 +245,20 @@ test.describe("asistente", () => {
         for (let g = 0; g < cuantos * 2; g++) {
           const marcas = graficos.nth(Math.floor(g / 2)).locator(".lienzo-zona-seleccionable");
           const zona = g % 2 === 0 ? marcas.first() : marcas.last();
-          await zona.hover({ force: true });
-          await zona.click({ force: true });
+          // Pasar el puntero (resaltado y tooltip) y el clic directo a la marca: mientras el
+          // gráfico anima, un clic por coordenadas puede caer al lado.
+          await zona.dispatchEvent("pointerover");
+          await zona.dispatchEvent("click");
           // El filtro nuevo aparece como chip (el mapa de calor pone dos: fila y columna)
           // y la vista se vuelve a dibujar sin romperse.
           await expect.poll(() => quitar.count()).toBeGreaterThan(filtrosIniciales);
+          await quieta();
           await expect(page.getByText("No se pudo dibujar este panel")).toHaveCount(0);
           while ((await quitar.count()) > filtrosIniciales) {
             const antes = await quitar.count();
             await quitar.last().click();
             await expect(quitar).toHaveCount(antes - 1);
+            await quieta();
           }
         }
       });
