@@ -1,6 +1,19 @@
 import type { Lienzo } from "./esquema";
-// El mismo pronóstico que el modelo tiene de ejemplo (y que una prueba corre con Pyodide).
-import { EJEMPLO_ANALISIS } from "../../../supabase/functions/lienzo-ia/instrucciones.ts";
+// Los mismos análisis que el modelo tiene de ejemplo (y que una prueba corre con Pyodide).
+import { EJEMPLO_ANALISIS, EJEMPLO_PANDAS } from "../../../supabase/functions/lienzo-ia/instrucciones.ts";
+
+/** Lo real día por día contra lo normal de su día de la semana (pandas); también lo corre la prueba. */
+export const REAL_CONTRA_NORMAL = `import pandas as pd
+
+resultado = []
+df = pd.DataFrame(datos)
+if not df.empty:
+    por_dia = df.groupby(pd.to_datetime(df["dia"])).size().asfreq("D", fill_value=0)
+    normal = por_dia.groupby(por_dia.index.dayofweek).transform("median")
+    resultado = pd.concat([
+        pd.DataFrame({"dia": por_dia.index, "cantidad": por_dia.values, "serie": "Real"}),
+        pd.DataFrame({"dia": normal.index, "cantidad": normal.values, "serie": "Lo normal"}),
+    ])`;
 
 /**
  * Vistas de ejemplo del lienzo, escritas como documentos JSON del catálogo. Sin
@@ -137,6 +150,43 @@ export const VISTAS_PREDEFINIDAS: VistaPredefinida[] = [
             { nombre: "serie", tipo: "texto", etiqueta: "Serie" },
           ],
           mostrar: { tipo: "linea", eje_x: "dia", medida: "sumar", campo: "cantidad", serie: "serie" },
+          ancho: "completo",
+        },
+      ],
+    },
+  },
+  {
+    id: "dias-fuera-de-lo-normal",
+    titulo: "Días fuera de lo normal (Python + pandas)",
+    lienzo: {
+      fuente: "ingresos",
+      filtros: [],
+      widgets: [
+        {
+          tipo: "analisis",
+          titulo: "Ingresos de cada día contra lo normal",
+          descripcion: "Lo normal es la mediana de ese día de la semana, calculada con pandas",
+          codigo: REAL_CONTRA_NORMAL,
+          columnas: [
+            { nombre: "dia", tipo: "fecha", etiqueta: "Día" },
+            { nombre: "cantidad", tipo: "numero", etiqueta: "Ingresos" },
+            { nombre: "serie", tipo: "texto", etiqueta: "Serie" },
+          ],
+          mostrar: { tipo: "linea", eje_x: "dia", medida: "sumar", campo: "cantidad", serie: "serie" },
+          ancho: "completo",
+        },
+        {
+          tipo: "analisis",
+          titulo: "Días fuera de lo normal",
+          descripcion: "La mitad más o menos de lo normal, y al menos 3 ingresos de diferencia",
+          codigo: EJEMPLO_PANDAS,
+          columnas: [
+            { nombre: "dia", tipo: "fecha", etiqueta: "Día" },
+            { nombre: "cantidad", tipo: "numero", etiqueta: "Ingresos" },
+            { nombre: "esperado", tipo: "numero", etiqueta: "Lo normal" },
+            { nombre: "diferencia", tipo: "numero", etiqueta: "Diferencia" },
+          ],
+          mostrar: { tipo: "tabla", columnas: ["dia", "cantidad", "esperado", "diferencia"] },
           ancho: "completo",
         },
       ],

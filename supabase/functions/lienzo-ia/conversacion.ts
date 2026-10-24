@@ -218,7 +218,7 @@ export function erroresDeCodigoLibre(lienzo: Lienzo): string[] {
 
 /** Lo que el sandbox de Python no deja importar (ver sandbox-lienzo/public/python-motor.js). */
 const IMPORTACION_PROHIBIDA =
-  /^\s*(?:import|from)\s+(js|pyodide|pyodide_js|micropip|pandas|scipy|os|sys|subprocess|socket|ssl|urllib|http|requests|importlib|ctypes|asyncio|threading|pickle|io|pathlib|shutil)\b/m;
+  /^\s*(?:import|from)\s+(js|pyodide|pyodide_js|micropip|scipy|os|sys|subprocess|socket|ssl|urllib|http|requests|importlib|ctypes|asyncio|threading|pickle|io|pathlib|shutil)\b/m;
 
 /**
  * Lo que se puede revisar del Python de un análisis sin correrlo (acá no hay
@@ -229,7 +229,7 @@ export function erroresDeAnalisis(codigo: string): string[] {
   const errores: string[] = [];
   if (!/^\s*resultado\s*(?::[^=\n]+)?=(?!=)/m.test(codigo)) errores.push("tiene que asignar la lista de filas a `resultado`");
   const prohibida = IMPORTACION_PROHIBIDA.exec(codigo);
-  if (prohibida) errores.push(`no se puede importar "${prohibida[1]}" (sólo la biblioteca estándar y numpy)`);
+  if (prohibida) errores.push(`no se puede importar "${prohibida[1]}" (sólo la biblioteca estándar, numpy y pandas)`);
   return errores;
 }
 

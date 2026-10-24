@@ -4,7 +4,8 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import { PREPARACION } from "../../../sandbox-lienzo/public/python-motor.js";
-import { EJEMPLO_ANALISIS } from "../../../supabase/functions/lienzo-ia/instrucciones.ts";
+import { EJEMPLO_ANALISIS, EJEMPLO_PANDAS } from "../../../supabase/functions/lienzo-ia/instrucciones.ts";
+import { REAL_CONTRA_NORMAL } from "./vistas";
 
 /**
  * El envoltorio de Python del panel "analisis" (sandbox-lienzo/public/python-motor.js)
@@ -134,6 +135,38 @@ resultado = [{"promedio": valores.mean(), "desvio": round(float(valores.std()), 
 `;
     expect(correr(codigo, [{ n: 2 }, { n: 4 }, { n: 6 }], ["promedio", "desvio", "maximo"]).filas).toEqual([
       { promedio: 4, desvio: 1.633, maximo: 6 },
+    ]);
+  }, 60_000);
+
+  it("pandas: los ejemplos encuentran el día fuera de lo normal y un DataFrame vuelve como filas", async () => {
+    const paquetes = py.globals.get("_paquetes");
+    const conPandas = paquetes(EJEMPLO_PANDAS) as { toJs(): string[]; destroy(): void };
+    expect(conPandas.toJs()).toEqual(["pandas"]);
+    conPandas.destroy();
+    await py.loadPackage("pandas", { messageCallback: () => {}, errorCallback: () => {} });
+
+    // Tres semanas con 10 ingresos por día (salvo el domingo 18, sin ingresos); el miércoles 21, 30.
+    const datos: { dia: string }[] = [];
+    for (let i = 0; i < 21; i++) {
+      const dia = new Date(Date.UTC(2026, 9, 5 + i)).toISOString().slice(0, 10);
+      const veces = dia === "2026-10-21" ? 30 : dia === "2026-10-18" ? 0 : 10;
+      for (let j = 0; j < veces; j++) datos.push({ dia });
+    }
+    expect(correr(EJEMPLO_PANDAS, datos, ["dia", "cantidad", "esperado", "diferencia"])).toEqual({
+      filas: [
+        { dia: "2026-10-21", cantidad: 30, esperado: 10, diferencia: 20 },
+        { dia: "2026-10-18", cantidad: 0, esperado: 10, diferencia: -10 },
+      ],
+    });
+    expect(correr(EJEMPLO_PANDAS, [], ["dia", "cantidad", "esperado", "diferencia"])).toEqual({ filas: [] });
+
+    const r = correr(REAL_CONTRA_NORMAL, datos, ["dia", "cantidad", "serie"]);
+    const filas = r.filas ?? [];
+    expect(filas.filter((f) => f.serie === "Real")).toHaveLength(21);
+    expect(filas.find((f) => f.serie === "Lo normal" && f.dia === "2026-10-21")?.cantidad).toBe(10);
+    // Los vacíos de pandas vuelven vacíos.
+    expect(correr("import pandas as pd\nresultado = pd.DataFrame({'a': [pd.NA], 'b': [pd.NaT]})", [], ["a", "b"]).filas).toEqual([
+      { a: null, b: null },
     ]);
   }, 60_000);
 });
