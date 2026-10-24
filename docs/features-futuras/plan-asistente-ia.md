@@ -566,6 +566,18 @@ saltándose el parser.
   que ser clásico (uno de tipo módulo no arranca con origen anónimo); Python
   listo en ~5 s con la descarga, statistics y numpy responden.
 
+## Horas pico y calendario — implementado (2026-10-23, sin PR todavía)
+
+- Paneles `calor` (filas × columnas, cinco tonos de un solo color, clic
+  filtra por fila y columna) y `calendario` (meses de lunes a domingo, clic
+  filtra por el día). Vista de ejemplo "Horas pico" y el calendario en
+  "Vencimientos del próximo año". `lienzo-ia` **v10 en staging**.
+- Migración `20261027120000_lienzo_ingresos_hora`: `lienzo_ingresos` devuelve
+  `hora`, `dia_semana` y `horas_adentro` (se filtran en el panel). **Falta
+  aplicarla en staging a mano** (la herramienta no deja correr el `drop
+  function` sin confirmación): pegar el archivo en el editor SQL de staging y
+  después correr `supabase/tests/lienzo_ingresos_hora.sql`.
+
 Pendiente: alertas
 por correo (SMTP); presupuesto: tope mensual de USD 5 en el espacio de
 trabajo de Anthropic. Para producción, además del merge: desplegar a mano
