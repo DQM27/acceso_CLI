@@ -4,6 +4,7 @@ import {
   SIN_DATO,
   claveTexto,
   diasEntre,
+  enRango,
   etiquetaFecha,
   formatearFecha,
   hoyCostaRica,
@@ -99,6 +100,7 @@ function categoriasDe(
     return [...def.valores, ...extras, ...alFinal];
   }
   if (def?.tipo === "numero") {
+    if (def.rango) return [...enRango(def.rango, conDato), ...alFinal];
     const numeros = conDato.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
     const enteros = numeros.every(Number.isInteger);
     if (enteros && numeros.length > 0 && numeros[numeros.length - 1] - numeros[0] <= MAXIMO_RELLENO_NUMEROS) {

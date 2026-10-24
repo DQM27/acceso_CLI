@@ -26,10 +26,10 @@ describe("mapa de calor", () => {
   it("dibuja una celda por día y hora, con los números, la leyenda de niveles y la tabla accesible", () => {
     const { container } = render(<LienzoVista lienzo={horasPico} filas={ingresos} />);
     expect(screen.getByText("Horas pico")).toBeTruthy();
-    // 7 días × 2 horas.
-    expect(container.querySelectorAll(".lienzo-calor-celda")).toHaveLength(14);
+    // 7 días × 24 horas.
+    expect(container.querySelectorAll(".lienzo-calor-celda")).toHaveLength(168);
     expect(container.querySelector(".lienzo-calor-n5")).toBeTruthy();
-    expect(screen.getByText("7 h")).toBeTruthy();
+    expect(screen.getByText("0 h")).toBeTruthy();
     expect(screen.getByText("Lunes")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Ver Horas pico como tabla" }));
     expect(screen.getByRole("columnheader", { name: "Día de la semana" })).toBeTruthy();
@@ -41,10 +41,10 @@ describe("mapa de calor", () => {
     const { container } = render(<LienzoVista lienzo={horasPico} filas={ingresos} onEditar={onEditar} />);
     const celdas = container.querySelectorAll(".lienzo-calor-celda");
     // Lunes a las 8: vacía, no hace nada.
-    fireEvent.click(celdas[1]);
+    fireEvent.click(celdas[8]);
     expect(onEditar).not.toHaveBeenCalled();
     // Lunes a las 7.
-    fireEvent.click(celdas[0]);
+    fireEvent.click(celdas[7]);
     expect(onEditar).toHaveBeenCalledTimes(1);
     expect(onEditar.mock.calls[0][0].filtros).toEqual([
       { campo: "dia_semana", op: "igual", valor: "Lunes" },

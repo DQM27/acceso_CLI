@@ -17,6 +17,8 @@ export interface DefinicionCampo {
   operadores?: readonly Operador[];
   /** Sus `valores` tienen un orden propio (lunes a domingo): los gráficos lo respetan en vez de ordenar por tamaño. */
   ordinal?: boolean;
+  /** Números enteros que siempre se muestran completos en un eje (0 a 23 h), aunque falten datos. */
+  rango?: readonly [number, number];
 }
 
 export const ESTADOS_PRAIND = ["VIGENTE", "POR_VENCER", "VENCIDA", "SIN_REGISTRO", "NO_REQUIERE"] as const;
@@ -48,7 +50,7 @@ export const CATALOGO = {
       dia: { tipo: "fecha", etiqueta: "Día" },
       // Los tres que siguen se filtran en el panel, no en la función SQL (ver CAMPOS_FILTRADOS_EN_PANEL).
       dia_semana: { tipo: "enumeracion", etiqueta: "Día de la semana", valores: DIAS_SEMANA, ordinal: true },
-      hora: { tipo: "numero", etiqueta: "Hora de entrada" },
+      hora: { tipo: "numero", etiqueta: "Hora de entrada", rango: [0, 23] },
       horas_adentro: { tipo: "numero", etiqueta: "Horas adentro" },
     },
   },

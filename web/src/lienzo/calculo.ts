@@ -224,6 +224,13 @@ function agrupar(filas: Fila[], clave: (f: Fila) => string): Map<string, Fila[]>
   return grupos;
 }
 
+/** Todos los enteros del rango, en orden, y después los valores que caigan afuera. */
+export function enRango([desde, hasta]: readonly [number, number], presentes: string[]): string[] {
+  const todos = Array.from({ length: hasta - desde + 1 }, (_, i) => String(desde + i));
+  const afuera = presentes.filter((c) => !todos.includes(c)).sort((a, b) => Number(a) - Number(b));
+  return [...todos, ...afuera];
+}
+
 export function claveTexto(valor: Valor | undefined): string {
   return valor === null || valor === undefined || valor === "" ? SIN_DATO : textoValor(valor);
 }
@@ -234,17 +241,17 @@ export function calcularSeries(
   filas: Fila[],
   nombreSerieUnica = "Cantidad",
 ): DatosGrafico {
-  const esFecha = definicionCampo(fuente, widget.eje_x)?.tipo === "fecha";
-  const agrupacion = esFecha ? (widget.agrupar_fecha ?? "dia") : null;
+  const def = definicionCampo(fuente, widget.eje_x);
+  const agrupacion = def?.tipo === "fecha" ? (widget.agrupar_fecha ?? "dia") : null;
   const claveEje = (f: Fila) => {
     const v = f[widget.eje_x];
     return agrupacion && typeof v === "string" ? grupoFecha(v, agrupacion) : claveTexto(v);
   };
 
-  // Eje: una fecha conserva todos sus grupos (rellenos); lo demás, los mayores + "Otros".
+  // Eje: una fecha o un rango (horas) conserva todos sus grupos (rellenos); lo demás, los mayores + "Otros".
   const porEje = agrupar(filas, claveEje);
   const limite = widget.tipo === "barras" ? (widget.limite ?? MAXIMO_CATEGORIAS) : MAXIMO_CATEGORIAS;
-  const ejeVisible = agrupacion ? null : quedarseConLasMayores(porEje, limite, widget.medida, widget.campo);
+  const ejeVisible = agrupacion || def?.rango ? null : quedarseConLasMayores(porEje, limite, widget.medida, widget.campo);
   const ejeFinal = (f: Fila) => {
     const k = claveEje(f);
     return !ejeVisible || ejeVisible.has(k) ? k : OTROS;
@@ -266,11 +273,12 @@ export function calcularSeries(
   } else {
     const usadas = new Set(filas.map(ejeFinal));
     const total = (x: string) => Number(medir(widget.medida, widget.campo, filas.filter((f) => ejeFinal(f) === x)));
-    const def = definicionCampo(fuente, widget.eje_x);
     const conDato = [...usadas].filter((x) => x !== OTROS && x !== SIN_DATO);
     // Un eje con orden propio se lee en ese orden (horas 7, 8, 9…; lunes a domingo); lo demás, de mayor a menor.
-    if (def?.tipo === "numero") categorias = conDato.sort((a, b) => Number(a) - Number(b));
-    else if (def?.ordinal && def.valores) categorias = def.valores.filter((v) => usadas.has(v));
+    // Las horas van completas, de 0 a 23: una hora sin ingresos también es un dato.
+    if (def?.rango) categorias = enRango(def.rango, conDato);
+    else if (def?.tipo === "numero") categorias = conDato.sort((a, b) => Number(a) - Number(b));
+    else if (def?.ordinal && def.valores) categorias = [...def.valores, ...conDato.filter((x) => !def.valores?.includes(x))];
     else categorias = conDato.sort((a, b) => total(b) - total(a) || a.localeCompare(b));
     if (usadas.has(OTROS)) categorias.push(OTROS);
     if (usadas.has(SIN_DATO)) categorias.push(SIN_DATO);

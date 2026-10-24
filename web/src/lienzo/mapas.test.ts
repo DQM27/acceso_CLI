@@ -33,15 +33,16 @@ describe("niveles de color", () => {
 });
 
 describe("calcularCalor", () => {
-  it("horas pico: los siete días en orden y las horas sin huecos; la celda cuenta sus ingresos", () => {
+  it("horas pico: los siete días en orden y el día completo de 0 a 23 h; la celda cuenta sus ingresos", () => {
     const d = calcularCalor("ingresos", { tipo: "calor", filas: "dia_semana", columnas: "hora", medida: "contar" }, ingresos);
     expect(d.filas.map((f) => f.clave)).toEqual(["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]);
-    // De 7 a 10 sin saltar las 8; el vacío al final.
-    expect(d.columnas.map((c) => c.clave)).toEqual(["7", "8", "9", "10", "(sin dato)"]);
-    expect(d.columnas[0].etiqueta).toBe("7 h");
-    expect(d.valores[0]).toEqual([2, 0, 1, 0, 0]);
-    expect(d.valores[4]).toEqual([0, 0, 0, 1, 0]);
-    expect(d.valores[6]).toEqual([0, 0, 0, 0, 1]);
+    // Las 24 horas aunque sólo haya datos de 7 a 10; el vacío al final.
+    expect(d.columnas.map((c) => c.clave)).toEqual([...Array.from({ length: 24 }, (_, i) => String(i)), "(sin dato)"]);
+    expect(d.columnas[7].etiqueta).toBe("7 h");
+    const fila = (valores: Record<number, number>) => [...Array.from({ length: 24 }, (_, i) => valores[i] ?? 0), valores[24] ?? 0];
+    expect(d.valores[0]).toEqual(fila({ 7: 2, 9: 1 }));
+    expect(d.valores[4]).toEqual(fila({ 10: 1 }));
+    expect(d.valores[6]).toEqual(fila({ 24: 1 }));
     expect(d.maximo).toBe(2);
   });
 

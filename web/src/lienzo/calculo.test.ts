@@ -63,7 +63,7 @@ describe("calcularSeries", () => {
     expect(d.series).toEqual([{ nombre: "Contratistas", valores: [2, 1, 1] }]);
   });
 
-  it("un eje con orden propio va en ese orden: horas de menor a mayor, días de lunes a domingo", () => {
+  it("un eje con orden propio va completo y en ese orden: las 24 horas, los siete días", () => {
     const ingresos: Fila[] = [
       { hora: 14, dia_semana: "Viernes" },
       { hora: 7, dia_semana: "Lunes" },
@@ -73,9 +73,14 @@ describe("calcularSeries", () => {
       { hora: 9, dia_semana: "Domingo" },
     ];
     const porHora = calcularSeries("ingresos", { tipo: "barras", eje_x: "hora", medida: "contar" }, ingresos);
-    expect(porHora.categorias).toEqual(["7", "9", "14"]);
+    expect(porHora.categorias).toEqual(Array.from({ length: 24 }, (_, i) => String(i)));
+    expect(porHora.series[0].valores.slice(6, 10)).toEqual([0, 3, 0, 2]);
+    // Con límite 5 las horas igual van completas (no se juntan en "Otros").
+    const conLimite = calcularSeries("ingresos", { tipo: "barras", eje_x: "hora", medida: "contar", limite: 5 }, ingresos);
+    expect(conLimite.categorias).toHaveLength(24);
     const porDia = calcularSeries("ingresos", { tipo: "barras", eje_x: "dia_semana", medida: "contar" }, ingresos);
-    expect(porDia.categorias).toEqual(["Lunes", "Viernes", "Domingo"]);
+    expect(porDia.categorias).toEqual(["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]);
+    expect(porDia.series[0].valores).toEqual([3, 0, 0, 0, 1, 0, 2]);
   });
 
   it("mide distintos por grupo", () => {
