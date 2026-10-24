@@ -2,7 +2,7 @@ import "./modulosTabla";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { themeQuartz } from "ag-grid-community";
+import { temaBrisas } from "./temaTabla";
 import { AG_GRID_LOCALE_ES } from "@ag-grid-community/locale";
 import { Columns3, Funnel, RotateCcw, UnfoldHorizontal } from "lucide-react";
 import type {
@@ -36,20 +36,8 @@ import { useDebounced } from "./useDebounced";
  * Deliberadamente NO expone cualquier prop de AgGridReact. Mostrar/ocultar
  * columnas es capacidad permanente (no un flag opcional). Selección múltiple
  * sí es opt-in (`seleccionMultiple`), porque no toda pantalla la necesita.
+ * El tema vive en `temaTabla.ts` (lo comparte la tabla del lienzo).
  */
-const temaBrisas = themeQuartz.withParams({
-  backgroundColor: "var(--panel)",
-  foregroundColor: "var(--texto)",
-  headerBackgroundColor: "var(--panel-suave)",
-  headerTextColor: "var(--muted)",
-  borderColor: "var(--borde)",
-  fontFamily: "var(--fuente)",
-  accentColor: "var(--acento)",
-  selectedRowBackgroundColor: "var(--acento-suave)",
-  oddRowBackgroundColor: "var(--campo-fondo)",
-  borderRadius: "var(--radio-chico)",
-  wrapperBorderRadius: "var(--radio)",
-});
 
 /** Sin tildes y en mayúsculas -- mismo criterio de "sin tildes/mayúsculas no
  * importa" que el buscador del núcleo. El `quickFilterText` propio de AG Grid
@@ -156,11 +144,11 @@ export interface EstadoGuardado {
 }
 
 // v2: el layout guardado incluye `pinned` por columna.
-export function claveAlmacenamiento(id: string): string {
+function claveAlmacenamiento(id: string): string {
   return `tabla:${id}:v2`;
 }
 
-export function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {
+function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {
   if (!id) return null;
   try {
     const crudo = localStorage.getItem(claveAlmacenamiento(id));
@@ -183,7 +171,7 @@ function idPorUsuario(id: string | undefined, usuarioId: number | null): string 
  * explícito (ej. dos columnas que leen el mismo `field`), si no el `field`.
  * Mismo criterio que usa AG Grid internamente para su propio
  * `getColumnState`. */
-export function identidad(columna: ColDef<unknown>): string | undefined {
+function identidad(columna: ColDef<unknown>): string | undefined {
   if (typeof columna.colId === "string") return columna.colId;
   if (typeof columna.field === "string") return columna.field;
   return undefined;

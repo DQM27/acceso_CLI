@@ -1,6 +1,6 @@
 import { useState } from "react";
 import marca from "../assets/marca.png";
-import { useAuth } from "../contexto/AuthContexto";
+import { useAuth } from "../contexto/useAuth";
 
 /**
  * Sin cédula/contraseña a propósito -- este panel es un espacio de actores

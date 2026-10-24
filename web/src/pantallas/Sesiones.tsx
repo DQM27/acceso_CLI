@@ -8,7 +8,7 @@ import AvisoTruncado from "../componentes/AvisoTruncado";
 import SelectorRangoFecha from "../componentes/SelectorRangoFecha";
 import { textoRangoFecha } from "../componentes/SelectorRangoFecha.logica";
 import { useLista } from "../componentes/useLista";
-import { useAuth } from "../contexto/AuthContexto";
+import { useAuth } from "../contexto/useAuth";
 import { MAXIMO_SESIONES, listarSesiones, textoDuracion, textoEstadoSesion } from "../api/sesiones";
 import type { SesionBitacora } from "../api/sesiones";
 import {
@@ -41,7 +41,7 @@ function textoEquipo(sesion: SesionBitacora): string {
 }
 
 /** Una sola definición por columna para la grilla y las tres exportaciones. */
-export const COLUMNAS_SESIONES: DefinicionColumnaExport<SesionBitacora>[] = [
+const COLUMNAS_SESIONES: DefinicionColumnaExport<SesionBitacora>[] = [
   { colId: "inicio", etiqueta: "Inicio", valor: (s) => fechaHora(s.iniciada_en) },
   { colId: "cierre", etiqueta: "Cierre", valor: (s) => (s.abierta ? "—" : fechaHora(s.cerrada_en)) },
   {

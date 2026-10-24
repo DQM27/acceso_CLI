@@ -1,0 +1,133 @@
+/* Los colores llegan del panel (tema claro u oscuro) como variables. */
+:root {
+  --texto: #1d2733;
+  --texto-suave: #5b6673;
+  --rejilla: #e3e7ec;
+  --fondo: #ffffff;
+  --tip-fondo: #1d2733;
+  --tip-texto: #ffffff;
+  /* "normal", igual que el iframe en el panel: si el esquema de color del marco y
+     el de la página difieren, el navegador le pinta un fondo opaco al marco. */
+  color-scheme: normal;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--texto);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+
+#raiz {
+  padding: 2px;
+}
+#raiz.entrando {
+  animation: aparecer 260ms ease-out both;
+}
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+svg {
+  display: block;
+  overflow: visible;
+}
+svg text {
+  fill: var(--texto);
+  font: 11px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+svg .eje {
+  fill: var(--texto-suave);
+  font-size: 11px;
+}
+svg .rejilla {
+  stroke: var(--rejilla);
+  stroke-width: 1;
+}
+svg .titulo {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-tip] {
+  cursor: default;
+  transition: opacity 120ms ease;
+}
+[data-tip]:hover,
+[data-tip]:focus {
+  opacity: 0.82;
+  outline: none;
+}
+[data-tip]:focus-visible {
+  outline: 2px solid var(--texto-suave);
+  outline-offset: 1px;
+}
+
+#tip {
+  position: fixed;
+  z-index: 10;
+  max-width: 260px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: var(--tip-fondo);
+  color: var(--tip-texto);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-line;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+}
+
+.leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  color: var(--texto-suave);
+  font-size: 12px;
+}
+.leyenda span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.leyenda i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th,
+td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--rejilla);
+  text-align: left;
+}
+th {
+  color: var(--texto-suave);
+  font-weight: 600;
+}
+
+.error {
+  color: #c0392b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #raiz.entrando {
+    animation: none;
+  }
+}

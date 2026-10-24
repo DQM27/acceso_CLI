@@ -22,4 +22,14 @@ ignore = [
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
     "RUSTSEC-2026-0369",
+    # RUSTSEC-2026-0387 (`crypto-bigint` 0.5.5, operaciones que debían ser de
+    # tiempo constante con ramas según el secreto) -- llega por `p256`/`ecdsa`
+    # 0.13. Sí aplica en principio: escritorio y móvil firman con la llave de
+    # cada equipo (nube/firmante.rs y mobile/rust-core/src/firmante.rs), y
+    # medir con mucha precisión el tiempo de muchas firmas podría filtrar esa
+    # llave; en la práctica exige estar en el mismo equipo. El arreglo está en
+    # `crypto-bigint` 0.7.6 (vía `p256` 0.14), pero `jsonwebtoken` 11.1 todavía
+    # exige `p256 ^0.13`. Pendiente: pasar los firmantes a `p256` 0.14, y
+    # quitar esta línea cuando `jsonwebtoken` suba a `p256` 0.14.
+    "RUSTSEC-2026-0387",
 ]

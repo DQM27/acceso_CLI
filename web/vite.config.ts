@@ -1,11 +1,21 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from "vite";
+import { defineConfig, searchForWorkspaceRoot } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // El esquema del lienzo vive en supabase/functions/_shared/lienzo (lo comparte
+  // con la Edge Function `lienzo-ia`) y está escrito para Deno: importa
+  // `npm:zod@…`. Acá ese import es el zod del panel.
+  resolve: {
+    alias: { "npm:zod@4.6.5": "zod" },
+    dedupe: ["zod"],
+  },
+  server: {
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), "../supabase/functions/_shared/lienzo"] },
+  },
   build: {
     // AG Grid Community (~875 KB, ver el grupo "ag-grid-vendor" abajo) ya
     // está deliberadamente aislado en su propio chunk cacheable -- no es
@@ -40,5 +50,11 @@ export default defineConfig({
     // Sin esto, vitest también levanta e2e/panel.spec.ts (Playwright, no
     // vitest) -- mismo ajuste que ya tiene web-visitas/vite.config.ts.
     include: ["src/**/*.test.{ts,tsx}"],
+    // Las pruebas de pantallas (montan formularios y la app) tardan 1-2 s solas,
+    // pero con los ~40 archivos en paralelo la máquina va cargada y a veces
+    // pasaban los 5 s por defecto: fallaban de forma intermitente sin ningún
+    // error real (App.test, Usuarios.test). 15 s da margen sin esconder una
+    // prueba colgada.
+    testTimeout: 15_000,
   },
 });

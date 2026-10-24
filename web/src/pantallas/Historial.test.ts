@@ -4,7 +4,7 @@ import {
   campoOrdenDeColumna,
   generarCsvHistorial,
   generarHtmlHistorial,
-} from "./Historial";
+} from "./Historial.logica";
 import type { MovimientoHistorial } from "../api/historial";
 
 // Mismos tres casos que desktop/src-tauri/src/pdf/html.rs -- una sola

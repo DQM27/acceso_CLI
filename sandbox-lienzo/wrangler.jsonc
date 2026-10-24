@@ -1,0 +1,13 @@
+{
+  "$schema": "../web/node_modules/wrangler/config-schema.json",
+  // Sandbox del panel "libre" del lienzo: página estática, sin datos ni secretos.
+  // Deploy: cd sandbox-lienzo && npx wrangler deploy
+  "name": "lienzo-sandbox",
+  "compatibility_date": "2026-10-23",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "lienzo.megabrisas.com", "custom_domain": true }],
+  "assets": {
+    "directory": "./public",
+  },
+}

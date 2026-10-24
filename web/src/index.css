@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "./diseno.css";
+/* Temas Tokyo Day y Tokyo Night, los mismos de escritorio (copiados de desktop/src). */
+@import "./tokyo-day.css";
+@import "./tokyo-night.css";
 @import "./controles.css";
 
 @theme {
@@ -130,7 +133,7 @@ input {
   gap: var(--espacio-2);
 }
 
-/* Ancho completo dentro del popover de `MenuUsuario` — su único control. */
+/* Ancho completo dentro del popover de `MenuUsuario` (sus acciones). */
 .boton-salir {
   width: 100%;
 }
@@ -403,44 +406,129 @@ input {
   }
 }
 
-/* Barra de estado — de lado a lado, debajo de sidebar + contenido, mismo
-   lugar que la de VSC. A propósito SIN fondo/borde propio (a diferencia de
-   `.shell-sidebar`/la grilla, que sí son tarjetas): vive directo sobre
-   `--fondo` (ver `body`). */
-.barra-estado {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  /* `flex-end` + `gap`, no `space-between` -- a diferencia de la barra de
-     escritorio (que sí tiene un texto de estado a la izquierda separado del
-     grupo de controles), acá `SelectorTema`/`MenuUsuario` son los únicos
-     hijos: con `space-between` quedaban en extremos opuestos (el modo
-     oscuro pegado al sidebar, el nombre solo del otro lado) en vez de
-     agrupados como en desktop (hallazgo real del usuario, 2026-09-21). */
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 0 0.375rem 0.375rem 0.75rem;
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1;
+/* La cuenta al fondo del menú (MenuUsuario.tsx): círculo con la inicial y,
+   con el menú abierto, el nombre. En reposo es discreta; al pasar el ratón se
+   tiñe, igual que el resto de botones de esa zona, para que se note que se
+   pulsa. */
+.usuario {
+  padding: 0 0.375rem 0.375rem;
 }
 
-/* Disparador de `MenuUsuario` — mismo lenguaje que los ítems de la status bar
-   de VSC: texto plano hasta que se pasa el mouse, ahí aparece el fondo de
-   botón (no se ve como un control de formulario en reposo). */
-.barra-estado-boton {
-  padding: 0.2rem 0.5rem;
+.usuario-tarjeta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.35rem 0.4rem;
   border: none;
   border-radius: var(--radio-chico);
   background: transparent;
-  color: inherit;
+  color: var(--texto);
   font: inherit;
+  font-size: 0.85rem;
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
 
-.barra-estado-boton:hover {
+.shell-sidebar-colapsada .usuario-tarjeta {
+  justify-content: center;
+  padding: 0.35rem 0;
+}
+
+.usuario-tarjeta:hover,
+.usuario-tarjeta[aria-expanded="true"] {
   background: color-mix(in srgb, var(--texto) 10%, transparent);
+}
+
+.usuario-tarjeta:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--acento);
+}
+
+/* Engranaje con la inicial en el centro (Engranaje.tsx): sin relleno (queda el
+   fondo del menú) y con el trazo y la letra del color de texto, igual que los
+   íconos de las secciones; borde redondeado para que los dientes no queden
+   filosos. */
+.engranaje {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  /* Del tamaño de los íconos de las secciones (18 px): el engranaje dibujado
+     ocupa casi todo su lienzo, por eso el lienzo es más chico que ellos. */
+  width: 1.4rem;
+  height: 1.4rem;
+  color: var(--texto);
+}
+
+.engranaje svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: transparent;
+  stroke: currentColor;
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+
+.engranaje-centro {
+  position: relative;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.usuario-nombre {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Menú de cuenta (ListaFlotante con animacion="lateral"): sale del botón hacia
+   la derecha -- un desplazamiento corto y un fundido, como los menús de macOS,
+   sin rebote. La salida es más corta que la entrada. */
+.lista-flotante-lateral {
+  transform-origin: left bottom;
+  animation: lista-entrar-lateral 160ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.lista-flotante-lateral.lista-flotante-saliendo {
+  animation: lista-salir-lateral 120ms ease-in forwards;
+}
+
+@keyframes lista-entrar-lateral {
+  from {
+    opacity: 0;
+    transform: translateX(-10px) scale(0.98);
+  }
+}
+
+@keyframes lista-salir-lateral {
+  to {
+    opacity: 0;
+    transform: translateX(-10px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lista-flotante-lateral {
+    animation: none;
+  }
+}
+
+.usuario-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem;
+}
+
+.usuario-menu-nombre {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--texto);
 }
 
 /* Spinner sin librería — mismo criterio que un ícono "girando" mientras una

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
@@ -6,8 +6,8 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { Seccion } from "../App";
-import { rutaSeccion } from "../App";
+import type { Seccion } from "../secciones";
+import { rutaSeccion } from "../secciones";
 import MenuContextualSecciones from "./MenuContextualSecciones";
 
 interface FilaSeccion {
@@ -69,8 +69,8 @@ function ItemSidebar({
  * igual que el de escritorio (`desktop/src/componentes/Sidebar.tsx`), salvo
  * que acá la sección activa la decide la URL (`NavLink`) y no hay pie con la
  * versión (el panel no tiene versión instalada). Arriba, el botón de
- * colapsar/expandir a la altura de la barra de herramientas. Usuario y
- * "Cerrar sesión" viven en `MenuUsuario`, en la barra de estado.
+ * colapsar/expandir a la altura de la barra de herramientas. La cuenta (tema y
+ * "Cerrar sesión") vive en `MenuUsuario`, al fondo del menú (`pie`).
  *
  * Sin estado propio de negocio: colapsado, orden y ocultas viven en `Shell`;
  * acá sólo el popover del menú contextual (visual y efímero).
@@ -85,6 +85,7 @@ export default function Sidebar({
   onCambiarVisibilidad,
   onRestablecer,
   abiertoEnMovil,
+  pie,
 }: {
   /** Todas las secciones, en el orden guardado -- incluye las ocultas
    * (Sidebar filtra internamente qué renderiza; el menú contextual necesita
@@ -103,6 +104,9 @@ export default function Sidebar({
    * index.css) -- independiente de `colapsado`, que solo aplica en
    * escritorio. */
   abiertoEnMovil: boolean;
+  /** Lo que va al fondo del menú (la cuenta de quien tiene la sesión, como en
+   * escritorio). El Sidebar sólo navega: no sabe qué es. */
+  pie?: ReactNode;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -175,6 +179,8 @@ export default function Sidebar({
         </DndContext>
 
         <div className="flex-1" title="Click derecho para mostrar/ocultar secciones" />
+
+        {pie}
 
         {menu && (
           <MenuContextualSecciones

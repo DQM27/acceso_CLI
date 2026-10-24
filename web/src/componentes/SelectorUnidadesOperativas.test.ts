@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { textoUnidadesOperativas } from "./SelectorUnidadesOperativas";
+import { textoUnidadesOperativas } from "./SelectorUnidadesOperativas.logica";
 
 describe("textoUnidadesOperativas", () => {
   it("sin unidades cargadas todavía", () => {

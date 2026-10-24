@@ -68,7 +68,8 @@ export default function Usuarios() {
     intervaloMs: 120_000,
     tablas: "usuarios",
   });
-  const filas = datos?.filas ?? [];
+  // Memorizado: un `[]` nuevo en cada render haría recalcular las filas con presencia.
+  const filas = useMemo(() => datos?.filas ?? [], [datos]);
   const truncado = datos?.truncado ?? false;
 
   // Presencia en tiempo real (docs/features-futuras/plan-sesion-unica-dispositivos.md,

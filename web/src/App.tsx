@@ -1,15 +1,17 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "sonner";
-import { BellRing, DoorOpen, History, LogIn, Menu, MonitorSmartphone, UserCog, Users } from "lucide-react";
+import { BellRing, DoorOpen, History, LogIn, Menu, MonitorSmartphone, Sparkles, UserCog, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
-import SelectorTema from "./componentes/SelectorTema";
+import { useTema } from "./componentes/useTema";
 import Login from "./pantallas/Login";
 import type { UsuarioSesion } from "./api";
-import { AuthProvider, useAuth } from "./contexto/AuthContexto";
+import { AuthProvider } from "./contexto/AuthContexto";
+import { useAuth } from "./contexto/useAuth";
 import { SesionProvider } from "./contexto/SesionContexto";
+import { rutaSeccion, type Seccion } from "./secciones";
 
 // Descargar cada pantalla cuando el usuario entra a su sección.
 const Dispositivos = lazy(() => import("./pantallas/Dispositivos"));
@@ -19,22 +21,7 @@ const AdentroAhora = lazy(() => import("./pantallas/AdentroAhora"));
 const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 const Sesiones = lazy(() => import("./pantallas/Sesiones"));
 const Avisos = lazy(() => import("./pantallas/Avisos"));
-
-export type Seccion =
-  | "dispositivos"
-  | "historial"
-  | "adentro"
-  | "contratistas"
-  | "usuarios"
-  | "sesiones"
-  | "avisos";
-
-/** Ruta real de cada sección -- `Sidebar` arma sus `NavLink` con esto y
- * `Shell` compara `location.pathname` contra el mismo valor para decidir
- * qué mostrar, así las dos fuentes no pueden desincronizarse en silencio. */
-export function rutaSeccion(id: Seccion): string {
-  return `/${id}`;
-}
+const Asistente = lazy(() => import("./pantallas/Asistente"));
 
 // Sin distinción de rol -- se eliminó `admin_regional` (nunca tuvo alcance
 // real, ver migración `elimina_admin_regional`). Cualquier fila en
@@ -62,6 +49,7 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "sesiones", etiqueta: "Sesiones", Icono: LogIn },
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
   { id: "avisos", etiqueta: "Avisos", Icono: BellRing },
+  { id: "asistente", etiqueta: "Asistente", Icono: Sparkles },
 ];
 
 const CLAVE_SIDEBAR_COLAPSADO = "web:sidebar:colapsado";
@@ -142,6 +130,7 @@ function Contenido() {
 
 function Shell({ sesion }: { sesion: UsuarioSesion }) {
   const { cerrarSesion } = useAuth();
+  const { tema, alternarTema } = useTema();
   const location = useLocation();
   const seccionActual = SECCIONES.find((s) => rutaSeccion(s.id) === location.pathname)?.id;
   // Cada sección visitada se queda MONTADA (oculta con CSS) en vez de
@@ -258,6 +247,15 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
             colapsado={colapsado}
             onToggleColapsado={alternarColapsado}
             abiertoEnMovil={menuMovilAbierto}
+            pie={
+              <MenuUsuario
+                sesion={sesion}
+                colapsado={colapsado}
+                tema={tema}
+                onAlternarTema={alternarTema}
+                onCerrarSesion={cerrarSesion}
+              />
+            }
           />
 
           <main className="flex min-w-0 flex-1 flex-col">
@@ -294,6 +292,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                     <Sesiones />
                   ) : id === "avisos" ? (
                     <Avisos />
+                  ) : id === "asistente" ? (
+                    <Asistente />
                   ) : (
                     <Dispositivos sesion={sesion} />
                   )}
@@ -301,11 +301,6 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
               </div>
             ))}
           </main>
-        </div>
-
-        <div className="barra-estado">
-          <SelectorTema />
-          <MenuUsuario sesion={sesion} onCerrarSesion={cerrarSesion} />
         </div>
 
         <Toaster theme="system" position="bottom-right" richColors={false} />

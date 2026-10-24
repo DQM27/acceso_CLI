@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Propuesta B</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .area { display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
+  .chat { background: var(--panel); border-right: 1px solid var(--borde); display: flex; flex-direction: column; min-height: 0; }
+  .chat header { padding: 16px 18px; border-bottom: 1px solid var(--borde); font-weight: 700; display: flex; justify-content: space-between; }
+  .mensajes { flex: 1; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .fila { display: flex; gap: 10px; }
+  .sugerencias { display: flex; flex-direction: column; gap: 8px; margin-left: 38px; }
+  .sugerencias .chip { display: block; border-radius: 10px; }
+  .chat footer { padding: 14px; border-top: 1px solid var(--borde); }
+  .chat .entrada { box-shadow: none; }
+  .lienzo { padding: 18px 22px; display: grid; grid-template-rows: auto auto 1fr; gap: 16px; min-height: 0; }
+  .barra { display: flex; align-items: center; gap: 8px; }
+  .barra h2 { margin: 0; font-size: 18px; }
+  .barra .esp { flex: 1; }
+  .vivo { display: inline-flex; align-items: center; gap: 6px; color: var(--exito); font-size: 12.5px; font-weight: 600; background: var(--exito-suave); padding: 3px 10px; border-radius: 999px; }
+  .vivo::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--exito); }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .kpi { padding: 14px 16px; }
+  .kpi.rojo .valor { color: var(--error); } .kpi.ambar .valor { color: var(--advertencia); }
+  .kpi small { display: block; margin-top: 6px; color: var(--atenuado); font-size: 12px; }
+  .abajo { display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; min-height: 0; }
+  .bloque { padding: 14px 16px; display: flex; flex-direction: column; }
+  .bloque h3 { margin: 0 0 10px; font-size: 14px; display: flex; justify-content: space-between; }
+  .bloque h3 span { font-weight: 500; color: var(--muted); font-size: 12.5px; }
+  svg text { fill: var(--muted); font-size: 11px; font-family: var(--fuente); }
+  .atencion div { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--panel-suave); }
+  .atencion div:first-of-type { border-top: 0; }
+  .punto { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none; }
+</style></head>
+<body><div class="app">
+  <nav class="nav">
+    <div class="marca"><i></i>Acceso · Panel</div>
+    <a class="activo"><span class="ico"></span>Asistente<span class="nuevo">NUEVO</span></a>
+    <a><span class="ico"></span>Adentro ahora</a><a><span class="ico"></span>Historial</a>
+    <a><span class="ico"></span>Contratistas</a><a><span class="ico"></span>Dispositivos</a>
+    <a><span class="ico"></span>Usuarios</a><a><span class="ico"></span>Avisos</a>
+    <div class="pie">Daniel Quintana<br>Administrador</div>
+  </nav>
+  <div class="area">
+    <aside class="chat">
+      <header>Asistente <span class="muted" style="font-weight:500">Nueva conversación</span></header>
+      <div class="mensajes">
+        <div class="fila"><div class="avatar">IA</div>
+          <div class="burbuja">Buenos días, Daniel. A la derecha está el <b>resumen de hoy</b> de sus dos sitios. Pídame cambiarlo, filtrarlo o profundizar en cualquier dato.</div></div>
+        <div class="sugerencias">
+          <span class="chip">Ver los <b>13</b> PRAIND vencidos por empresa</span>
+          <span class="chip">¿Quiénes están adentro ahora?</span>
+          <span class="chip">Comparar CDI Cartago y Brisas</span>
+          <span class="chip">Horas por semana de un contratista</span>
+        </div>
+      </div>
+      <footer><div class="entrada"><span>Escriba lo que quiere ver…</span><div class="enviar">↑</div></div></footer>
+    </aside>
+    <main class="lienzo">
+      <div class="barra"><h2>Resumen de hoy</h2><span class="vivo">En vivo</span><span class="esp"></span>
+        <span class="chip" style="padding:4px 10px">Todos los sitios ▾</span>
+        <span class="boton" disabled>↶ Deshacer</span><span class="boton">☆ Guardar vista</span><span class="boton">⇩ Exportar</span></div>
+      <div class="kpis">
+        <div class="tarjeta kpi"><div class="valor">19</div><div class="etq">Contratistas adentro ahora</div><small>0 proveedores</small></div>
+        <div class="tarjeta kpi"><div class="valor">7</div><div class="etq">Ingresos hoy</div><small>Día en curso</small></div>
+        <div class="tarjeta kpi rojo"><div class="valor">13</div><div class="etq">PRAIND vencidos</div><small>No pueden entrar</small></div>
+        <div class="tarjeta kpi ambar"><div class="valor">2</div><div class="etq">PRAIND por vencer</div><small>En los próximos 30 días</small></div>
+      </div>
+      <div class="abajo">
+        <div class="tarjeta bloque"><h3>Ingresos por día <span>últimas 2 semanas</span></h3><div id="grafico" style="flex:1;min-height:0"></div></div>
+        <div class="tarjeta bloque atencion"><h3>Requiere atención <span>2</span></h3>
+          <div><span class="punto" style="background:var(--error)"></span><span><b>13 contratistas</b> con PRAIND vencido<br><span class="muted">Revisar antes de su próximo ingreso</span></span></div>
+          <div><span class="punto" style="background:var(--advertencia)"></span><span><b>2 PRAIND</b> vencen este mes<br><span class="muted">Avisar a sus empresas</span></span></div>
+          <div><span class="punto" style="background:var(--exito)"></span><span><b>Nadie</b> lleva más de 12 h adentro<br><span class="muted">Sin salidas pendientes de revisar</span></span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div><div class="etiqueta-propuesta">Propuesta B · Resumen vivo + chat lateral</div>
+<script>
+  const datos = [["09",50],["10",55],["11",0],["12",61],["13",32],["14",62],["15",67],["16",59],["17",57],["18",0],["19",69],["20",55],["21",65],["22",7]];
+  const caja = document.getElementById("grafico").getBoundingClientRect(); const W = Math.round(caja.width), H = Math.round(caja.height), m = { t: 10, r: 6, b: 26, l: 30 }, ih = H - m.t - m.b, iw = W - m.l - m.r, max = 80;
+  const paso = iw / datos.length, ancho = paso * .62, y = (v) => m.t + ih - v / max * ih;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
+  for (let v = 0; v <= max; v += 20) s += `<line x1="${m.l}" x2="${W-m.r}" y1="${y(v)}" y2="${y(v)}" stroke="#E1E7EF"/><text x="${m.l-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+  datos.forEach(([d, v], i) => {
+    const x = m.l + i * paso + (paso - ancho) / 2, hoy = i === datos.length - 1;
+    s += `<rect x="${x}" y="${y(v)}" width="${ancho}" height="${Math.max(0, ih - (y(v) - m.t))}" rx="3" fill="${hoy ? "#A6BCD9" : "#203C63"}"/>`;
+    s += `<text x="${x + ancho/2}" y="${H-8}" text-anchor="middle">${d}${hoy ? "·hoy" : ""}</text>`;
+  });
+  document.getElementById("grafico").innerHTML = s + "</svg>";
+</script></body></html>

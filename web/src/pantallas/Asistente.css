@@ -1,0 +1,1447 @@
+/* Pantalla "Asistente" y el lienzo. Fondo, texto y bordes con los tokens del
+   panel (diseno.css), para seguir su tema claro u oscuro; los colores de los
+   datos son una paleta propia del lienzo (abajo). */
+.asistente {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+/* El chat es una tarjeta flotante como el menú lateral (mismo fondo, borde, radio y
+   separación), en vez de una columna pegada al borde. */
+/* Oculto, el chat es un botón flotante abajo a la derecha y el lienzo usa todo el ancho. */
+.asistente-sin-chat {
+  grid-template-columns: minmax(0, 1fr);
+}
+.asistente-flotante {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 30;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--acento);
+  color: var(--sobre-acento);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  animation: lienzo-aparecer 200ms ease-out both;
+}
+.asistente-flotante:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgb(0 0 0 / 0.4);
+}
+.asistente-flotante:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 3px;
+}
+/* Mientras responde con el chat oculto: un punto que late sobre el botón. */
+.asistente-flotante-pensando {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--chat-enviar, #e8692c);
+  animation: lienzo-latir 1.1s ease-in-out infinite;
+}
+.asistente-ocultar {
+  margin-right: auto;
+}
+.asistente-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Arriba, a la altura del menú lateral: debajo de su cabecera (la marca y el botón de colapsar). */
+  margin: calc(0.375rem * 3 + 1px + var(--control-altura)) 0.375rem 0.375rem;
+  background: var(--panel-lateral);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  overflow: hidden;
+  font-size: 0.875rem;
+}
+.asistente-chat header {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  padding: var(--espacio-3) var(--espacio-4);
+  border-bottom: 1px solid var(--borde);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+/* Consultas de hoy contra el tope diario; se pone en advertencia al acercarse. */
+.asistente-contador {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--panel-suave);
+  padding: 2px 9px;
+  border-radius: var(--radio-capsula);
+  white-space: nowrap;
+}
+.asistente-contador-alto {
+  color: var(--advertencia);
+  background: var(--advertencia-suave);
+}
+.asistente-nueva {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--duracion), color var(--duracion);
+}
+.asistente-nueva:hover:not(:disabled) {
+  background: var(--acento-suave);
+  border-color: var(--acento);
+  color: var(--acento);
+}
+.asistente-nueva:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.asistente-nueva:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+.asistente-reintentar {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--espacio-2);
+  padding: 3px 10px;
+  border: 1px solid currentColor;
+  border-radius: var(--radio-capsula);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.asistente-reintentar:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.asistente-fila-usuario {
+  justify-content: flex-end;
+}
+.asistente-fila {
+  animation: lienzo-aparecer 240ms ease-out both;
+}
+.asistente-burbuja-usuario {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--sobre-acento);
+  max-width: 85%;
+}
+.asistente-burbuja-aviso {
+  background: var(--advertencia-suave);
+  border-color: var(--advertencia);
+}
+.asistente-pensando {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.asistente-pensando span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: lienzo-latir 1.1s ease-in-out infinite;
+}
+.asistente-pensando span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.asistente-pensando span:nth-child(3) {
+  animation-delay: 0.36s;
+}
+.asistente-mensajes {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--espacio-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+.asistente-fila {
+  display: flex;
+  gap: var(--espacio-2);
+}
+/* El isotipo de Lattis (la "L" con la ola) como foto del asistente. La imagen ya trae su
+   ficha blanca redondeada: así la L azul marino se lee igual en el tema oscuro. */
+.asistente-avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: block;
+}
+.asistente-burbuja {
+  background: var(--campo-fondo);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: var(--espacio-3);
+  line-height: 1.45;
+}
+.asistente-sugerencias {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  margin-left: 36px;
+}
+.asistente-sugerencias .chip {
+  text-align: left;
+  border-radius: var(--radio-chico);
+  cursor: pointer;
+}
+.asistente-sugerencias .chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.asistente-sugerencias .chip:hover:not(:disabled) {
+  border-color: var(--acento);
+  color: var(--acento);
+}
+/* Bajo la última respuesta: en fila, para no empujar el chat. */
+.asistente-sugerencias-respuesta {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.asistente-nueva[aria-pressed="true"] {
+  background: var(--acento-suave);
+  color: var(--acento);
+}
+/* Guía "¿Qué puedo pedir?": ocupa el lugar de los mensajes. */
+.asistente-guia {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--espacio-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+.asistente-guia header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.asistente-guia h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.asistente-guia h3 {
+  margin: 0 0 4px;
+  font-size: 0.875rem;
+}
+.asistente-guia p,
+.asistente-guia ul {
+  margin: 0 0 var(--espacio-2);
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.asistente-guia ul {
+  padding-left: 18px;
+}
+.asistente-guia .asistente-sugerencias {
+  margin-left: 0;
+}
+.asistente-chat footer {
+  padding: var(--espacio-2) var(--espacio-3);
+  border-top: 1px solid var(--borde);
+}
+/* Caja de mensaje: un área de texto que crece con lo escrito; el foco se ve en toda la caja. */
+.asistente-entrada {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--espacio-2);
+  border: 1px solid var(--borde);
+  border-radius: 1.1rem;
+  background: var(--campo-fondo);
+  padding: 4px 4px 4px var(--espacio-3);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.asistente-entrada:focus-within {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 18%, transparent);
+}
+/* Con los estilos generales de los campos anulados: sin fondo, borde ni anillo propios. */
+.asistente-entrada textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  max-height: 9.5rem;
+  margin: 0;
+  padding: 4px 0;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: var(--texto);
+  font: inherit;
+  line-height: 1.45;
+  resize: none;
+  overflow-y: auto;
+  appearance: none;
+}
+.asistente-entrada textarea:focus,
+.asistente-entrada textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+}
+.asistente-entrada textarea::placeholder {
+  color: var(--muted);
+}
+/* Enviar: gris mientras no hay nada escrito, naranja (llama la atención) cuando ya se puede enviar. */
+.asistente-chat {
+  --chat-enviar: #c4501a;
+  --chat-enviar-hover: #a8430f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="tokyo-day"]) .asistente-chat {
+    --chat-enviar: #e0692e;
+    --chat-enviar-hover: #ec7d45;
+  }
+}
+[data-theme="dark"] .asistente-chat,
+[data-theme="tokyo-night"] .asistente-chat {
+  --chat-enviar: #e0692e;
+  --chat-enviar-hover: #ec7d45;
+}
+.asistente-enviar {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--chat-enviar);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background-color 180ms ease, color 180ms ease, transform 150ms ease;
+}
+.asistente-enviar:not(:disabled):hover {
+  background: var(--chat-enviar-hover);
+  transform: scale(1.06);
+}
+.asistente-enviar:disabled {
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+  color: var(--muted);
+  cursor: default;
+}
+
+.asistente-lienzo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  /* Abajo y a la derecha, el mismo margen que el menú lateral (0.375rem): el lienzo
+     termina a la misma altura que él, sin un corte desparejo. */
+  padding: calc(0.375rem * 2 + 1px) 0.375rem 0.375rem var(--espacio-4);
+  /* Entre la barra y el contenido, lo mismo que entre la cabecera del menú y el menú:
+     el contenido arranca a la misma altura que el menú lateral. */
+  gap: 0.375rem;
+}
+.asistente-barra {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  flex-wrap: wrap;
+}
+.asistente-selector select {
+  font-weight: 600;
+}
+.asistente-espacio {
+  flex: 1;
+}
+.asistente-contenido {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Lo que se corta al desplazarse se corta redondeado, con el mismo radio que el menú lateral.
+     Sin barra de desplazamiento visible: el navegador la dibuja dentro de la caja, a la
+     derecha, y las tarjetas quedaban antes del borde redondeado (corte recto de ese lado).
+     Se desplaza igual con la rueda, el touchpad o el teclado. */
+  border-radius: var(--radio);
+  scrollbar-width: none;
+}
+.asistente-contenido::-webkit-scrollbar {
+  display: none;
+}
+.asistente-error {
+  color: var(--error);
+}
+
+/* Filtros activos (chips) y Deshacer. */
+.asistente-documento {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+.asistente-filtros {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+  min-height: 32px;
+}
+.asistente-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-capsula);
+  background: var(--panel);
+  font-size: 0.8rem;
+  animation: lienzo-aparecer 220ms ease-out both;
+}
+.asistente-filtro button {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.asistente-filtro button:hover {
+  background: var(--panel-suave);
+  color: var(--texto);
+}
+.asistente-deshacer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Acciones de la vista: Deshacer, Rehacer, Guardar, Exportar, Borrar. */
+.asistente-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+}
+.asistente-acciones .boton,
+.asistente-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.asistente-menu {
+  position: relative;
+}
+.asistente-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.asistente-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.asistente-menu-apagado {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.asistente-menu-opciones {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 230px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.18);
+  animation: lienzo-aparecer 160ms ease-out both;
+}
+.asistente-menu-opciones button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--texto);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.asistente-menu-opciones button:hover,
+.asistente-menu-opciones button:focus-visible {
+  background: var(--panel-suave);
+  outline: none;
+}
+.asistente-menu-grupo {
+  padding: 6px 10px 2px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* Guardar con nombre, en línea. */
+.asistente-guardar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+  padding: var(--espacio-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--panel);
+  animation: lienzo-aparecer 180ms ease-out both;
+}
+.asistente-guardar label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.asistente-guardar input {
+  flex: 1;
+  min-width: 180px;
+  padding: 6px 10px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+  color: var(--texto);
+  font: inherit;
+}
+.asistente-guardar-ayuda {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.asistente-ok {
+  color: var(--exito);
+}
+/* Mientras llegan los datos nuevos, el dibujo anterior queda tenue (no se borra ni salta). */
+.asistente-actualizando {
+  opacity: 0.6;
+  transition: opacity 200ms ease;
+}
+
+/* --- Paleta de datos del lienzo -------------------------------------------
+   8 colores categóricos validados (daltonismo y contraste) contra el fondo del
+   panel en claro (#FFFFFF) y en oscuro (#181C23). El ORDEN es parte de la
+   validación: se asignan en orden, nunca al azar. */
+.lienzo-documento {
+  --serie-1: #2a78d6;
+  --serie-2: #eb6834;
+  --serie-3: #1baf7a;
+  --serie-4: #eda100;
+  --serie-5: #e87ba4;
+  --serie-6: #008300;
+  --serie-7: #6250d6;
+  --serie-8: #e34948;
+  --serie-unica: #2a78d6;
+  --serie-otros: #a3a7ae;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="tokyo-day"]) .lienzo-documento {
+    --serie-1: #3987e5;
+    --serie-2: #d95926;
+    --serie-3: #199e70;
+    --serie-4: #c98500;
+    --serie-5: #d55181;
+    --serie-6: #008300;
+    --serie-7: #9085e9;
+    --serie-8: #e66767;
+    --serie-unica: #3987e5;
+    --serie-otros: #6b7280;
+  }
+}
+[data-theme="dark"] .lienzo-documento,
+[data-theme="tokyo-night"] .lienzo-documento {
+  --serie-1: #3987e5;
+  --serie-2: #d95926;
+  --serie-3: #199e70;
+  --serie-4: #c98500;
+  --serie-5: #d55181;
+  --serie-6: #008300;
+  --serie-7: #9085e9;
+  --serie-8: #e66767;
+  --serie-unica: #3987e5;
+  --serie-otros: #6b7280;
+}
+
+/* --- Disposición ------------------------------------------------------------ */
+.lienzo-documento {
+  gap: var(--espacio-3);
+}
+.lienzo-cuadricula {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: stretch;
+}
+.lienzo-enfoque {
+  display: flex;
+  flex-direction: column;
+  max-width: 980px;
+  margin: 0 auto;
+  width: 100%;
+}
+.lienzo-titulo {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--fuente-titulo);
+  animation: lienzo-aparecer 380ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.lienzo-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  animation: lienzo-aparecer 460ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+.lienzo-panel > * {
+  flex: 1;
+}
+.lienzo-ancho-cuarto { grid-column: span 3; }
+.lienzo-ancho-tercio { grid-column: span 4; }
+.lienzo-ancho-mitad { grid-column: span 6; }
+.lienzo-ancho-dos_tercios { grid-column: span 8; }
+.lienzo-ancho-completo { grid-column: 1 / -1; }
+
+@media (max-width: 1180px) {
+  .lienzo-ancho-cuarto,
+  .lienzo-ancho-tercio { grid-column: span 6; }
+  .lienzo-ancho-mitad,
+  .lienzo-ancho-dos_tercios { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .lienzo-cuadricula > .lienzo-panel { grid-column: 1 / -1; }
+}
+
+/* --- Tarjetas KPI ------------------------------------------------------------ */
+.lienzo-kpi {
+  padding: var(--espacio-3) var(--espacio-4);
+}
+.lienzo-kpi-valor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--texto);
+}
+.lienzo-kpi-icono {
+  flex: none;
+}
+.lienzo-kpi-error .lienzo-kpi-valor { color: var(--error); }
+.lienzo-kpi-advertencia .lienzo-kpi-valor { color: var(--advertencia); }
+.lienzo-kpi-exito .lienzo-kpi-valor { color: var(--exito); }
+.lienzo-kpi-titulo {
+  color: var(--muted);
+  margin-top: 2px;
+}
+.lienzo-kpi small {
+  display: block;
+  margin-top: 6px;
+  color: var(--texto-atenuado);
+  font-size: 0.78rem;
+}
+.lienzo-kpi-cabeza {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+}
+.lienzo-kpi .lienzo-kpi-cambio {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.lienzo-tendencia {
+  flex: none;
+  overflow: visible;
+}
+.lienzo-tendencia-linea {
+  fill: none;
+  stroke: var(--serie-otros);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  animation: lienzo-trazar 900ms cubic-bezier(0.4, 0.1, 0.2, 1) 200ms both;
+}
+.lienzo-tendencia-punto {
+  fill: var(--serie-unica);
+  stroke: var(--panel);
+  stroke-width: 2;
+  animation: lienzo-desvanecer 300ms ease-out 1000ms both;
+}
+
+/* --- Bloques (gráficos, tablas) ---------------------------------------------- */
+.lienzo-bloque {
+  padding: var(--espacio-3) var(--espacio-4);
+  min-width: 0;
+}
+.lienzo-bloque-cabecera {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  margin-bottom: var(--espacio-3);
+  min-height: 28px;
+}
+.lienzo-bloque-cabecera h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.lienzo-subtitulo {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.lienzo-alternar {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--duracion), color var(--duracion);
+}
+.lienzo-alternar:hover,
+.lienzo-alternar[aria-pressed="true"] {
+  background: var(--panel-suave);
+  color: var(--texto);
+}
+.lienzo-alternar:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+/* Varios botones del marco (imagen, tabla) juntos a la derecha. */
+.lienzo-alternar + .lienzo-alternar {
+  margin-left: 0;
+}
+.lienzo-alternar:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
+
+.lienzo-atencion-fila {
+  display: flex;
+  gap: var(--espacio-3);
+  padding: var(--espacio-3) 0;
+  border-top: 1px solid var(--panel-suave);
+}
+.lienzo-atencion-fila:first-of-type {
+  border-top: 0;
+}
+.lienzo-punto {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+}
+.lienzo-punto-error { background: var(--error); }
+.lienzo-punto-advertencia { background: var(--advertencia); }
+.lienzo-punto-exito { background: var(--exito); }
+.lienzo-atenuado,
+.lienzo-vacio,
+.lienzo-nota {
+  color: var(--muted);
+}
+.lienzo-nota {
+  margin: var(--espacio-2) 0 0;
+  font-size: 0.8rem;
+}
+
+.lienzo-tabla-caja {
+  overflow-x: auto;
+}
+.lienzo-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.lienzo-tabla th,
+.lienzo-tabla td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--panel-suave);
+  white-space: nowrap;
+}
+.lienzo-tabla th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.lienzo-tabla tbody tr {
+  transition: background var(--duracion);
+}
+.lienzo-tabla tbody tr:hover {
+  background: var(--campo-fondo);
+}
+.lienzo-numero {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Tabla del lienzo (AG Grid) ------------------------------------------------ */
+.lienzo-tabla-rica {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+}
+.lienzo-tabla-buscar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(100%, 280px);
+  padding: 4px 10px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+  color: var(--muted);
+}
+.lienzo-tabla-buscar:focus-within {
+  border-color: var(--acento);
+}
+.lienzo-tabla-buscar input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--texto);
+  font: inherit;
+  font-size: 0.85rem;
+}
+/* La grilla dibuja todas sus filas (para imprimirla completa): en pantalla, la caja se desplaza. */
+.lienzo-tabla-grilla {
+  max-height: 460px;
+  overflow: auto;
+  border-radius: var(--radio);
+}
+.lienzo-enfoque .lienzo-tabla-grilla {
+  max-height: 70vh;
+}
+/* Con alto automático AG Grid reserva un alto mínimo (para su mensaje de "sin filas"): la grilla mide sus filas. */
+.lienzo-tabla-grilla .ag-center-cols-viewport,
+.lienzo-tabla-grilla .ag-center-cols-container {
+  min-height: 0 !important;
+}
+.lienzo-tabla-grilla .ag-cell {
+  display: flex;
+  align-items: center;
+}
+.lienzo-fila-grupo {
+  font-weight: 600;
+}
+.lienzo-fila-mas .ag-cell {
+  color: var(--muted);
+}
+.lienzo-nota-celda {
+  font-size: 0.8rem;
+  font-style: italic;
+  white-space: nowrap;
+}
+.lienzo-grupo-boton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lienzo-grupo-boton:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.lienzo-grupo-flecha {
+  flex: none;
+  color: var(--muted);
+  transition: transform var(--duracion);
+}
+.lienzo-grupo-boton[aria-expanded="true"] .lienzo-grupo-flecha {
+  transform: rotate(90deg);
+}
+/* Estado con ícono y texto (nunca sólo el color). */
+.lienzo-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
+  background: var(--campo-fondo);
+  color: var(--muted);
+}
+.lienzo-estado-exito {
+  background: color-mix(in srgb, var(--exito) 14%, transparent);
+  color: var(--exito);
+}
+.lienzo-estado-advertencia {
+  background: color-mix(in srgb, var(--advertencia) 16%, transparent);
+  color: var(--advertencia);
+}
+.lienzo-estado-error {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error);
+}
+/* Número con su barra: la barra al fondo, el número a la derecha. */
+.lienzo-celda-barra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.lienzo-celda-barra-fondo {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--panel-suave);
+  overflow: hidden;
+}
+.lienzo-celda-barra-fondo span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--acento);
+}
+.lienzo-celda-barra .lienzo-numero {
+  min-width: 3ch;
+}
+
+/* --- Gráficos ------------------------------------------------------------------ */
+.lienzo-grafico {
+  position: relative;
+  width: 100%;
+}
+.lienzo-svg {
+  display: block;
+  overflow: visible;
+  border-radius: var(--radio-chico);
+}
+.lienzo-svg:focus {
+  outline: none;
+}
+.lienzo-svg:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 4px;
+}
+.lienzo-rejilla {
+  stroke: var(--panel-suave);
+  stroke-width: 1;
+}
+.lienzo-base {
+  stroke: var(--borde);
+  stroke-width: 1;
+}
+/* --- Mapa de calor y calendario -------------------------------------------------
+   Escala secuencial de un solo tono (azul de la serie única), cinco niveles de
+   menos a más; vacío en el gris del panel. En oscuro se invierte la luz: lo poco
+   se funde con el fondo y lo mucho brilla. El número de la celda cambia de color
+   en los dos niveles más fuertes para seguir leyéndose. */
+.lienzo-documento {
+  --calor-0: var(--panel-suave);
+  --calor-1: #d7e6f9;
+  --calor-2: #a8c9f1;
+  --calor-3: #6fa5e6;
+  --calor-4: #2f7bd8;
+  --calor-5: #1b4f93;
+  --calor-texto-fuerte: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="tokyo-day"]) .lienzo-documento {
+    --calor-1: #1d3150;
+    --calor-2: #24508a;
+    --calor-3: #2f6fc0;
+    --calor-4: #4f93ea;
+    --calor-5: #9cc4f7;
+    --calor-texto-fuerte: #0d1117;
+  }
+}
+[data-theme="dark"] .lienzo-documento,
+[data-theme="tokyo-night"] .lienzo-documento {
+  --calor-1: #1d3150;
+  --calor-2: #24508a;
+  --calor-3: #2f6fc0;
+  --calor-4: #4f93ea;
+  --calor-5: #9cc4f7;
+  --calor-texto-fuerte: #0d1117;
+}
+.lienzo-calor-n0 {
+  fill: var(--calor-0);
+}
+.lienzo-calor-n1 {
+  fill: var(--calor-1);
+}
+.lienzo-calor-n2 {
+  fill: var(--calor-2);
+}
+.lienzo-calor-n3 {
+  fill: var(--calor-3);
+}
+.lienzo-calor-n4 {
+  fill: var(--calor-4);
+}
+.lienzo-calor-n5 {
+  fill: var(--calor-5);
+}
+.lienzo-calor-celda {
+  animation: lienzo-aparecer 260ms ease-out both;
+  transition: opacity var(--duracion);
+}
+.lienzo-calor-numero,
+.lienzo-calendario-numero {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  fill: var(--texto);
+  pointer-events: none;
+}
+.lienzo-calendario-numero {
+  font-size: 10.5px;
+}
+.lienzo-calor-numero-n0 {
+  fill: var(--muted);
+}
+.lienzo-calor-numero-n4,
+.lienzo-calor-numero-n5 {
+  fill: var(--calor-texto-fuerte);
+}
+.lienzo-calendario-mes {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--texto);
+}
+/* Hoy: un borde, no un color (el color es del valor). */
+.lienzo-calendario-hoy {
+  stroke: var(--texto);
+  stroke-width: 1.5px;
+}
+.lienzo-eje-texto {
+  fill: var(--muted);
+  font-size: 11px;
+  font-family: var(--fuente);
+  font-variant-numeric: tabular-nums;
+}
+.lienzo-eje-categoria {
+  fill: var(--texto);
+}
+.lienzo-valor-texto {
+  fill: var(--texto);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: var(--fuente);
+  font-variant-numeric: tabular-nums;
+  animation: lienzo-desvanecer 300ms ease-out both;
+}
+.lienzo-zona {
+  fill: transparent;
+}
+.lienzo-zona-seleccionable {
+  cursor: pointer;
+}
+.lienzo-categoria,
+.lienzo-porcion {
+  transition: opacity 160ms ease, transform 200ms ease;
+}
+.lienzo-atenuada {
+  opacity: 0.35;
+}
+.lienzo-barra-hoy {
+  opacity: 0.5;
+}
+.lienzo-crecer-v,
+.lienzo-crecer-h {
+  transform-box: fill-box;
+  animation: lienzo-crecer-v 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: 50% 100%;
+}
+.lienzo-crecer-h {
+  animation-name: lienzo-crecer-h;
+  transform-origin: 0 50%;
+}
+
+.lienzo-linea {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: lienzo-trazar 900ms cubic-bezier(0.4, 0.1, 0.2, 1) both;
+}
+.lienzo-area {
+  animation: lienzo-desvanecer 600ms ease-out 350ms both;
+}
+.lienzo-punto-final {
+  stroke: var(--panel);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lienzo-saltar 320ms ease-out 850ms both;
+}
+.lienzo-cursor line {
+  stroke: var(--borde-fuerte);
+  stroke-width: 1;
+}
+.lienzo-punto-cursor {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.lienzo-torta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-3);
+}
+.lienzo-torta-lado {
+  flex-direction: row;
+  justify-content: center;
+  gap: var(--espacio-6);
+}
+.lienzo-torta-lado .lienzo-leyenda {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+.lienzo-torta-dibujo {
+  position: relative;
+  flex: none;
+}
+.lienzo-porcion {
+  stroke: var(--panel);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.lienzo-barrido {
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 0;
+  animation: lienzo-barrer 850ms cubic-bezier(0.3, 0.7, 0.2, 1) both;
+}
+.lienzo-torta-total {
+  fill: var(--texto);
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--fuente);
+  animation: lienzo-desvanecer 400ms ease-out 450ms both;
+}
+
+.lienzo-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  list-style: none;
+  margin: var(--espacio-3) 0 0;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.lienzo-leyenda li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--texto);
+}
+.lienzo-leyenda-detalle {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.lienzo-clave {
+  display: inline-block;
+  flex: none;
+}
+.lienzo-clave-barra {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.lienzo-clave-linea {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.lienzo-tooltip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  min-width: 120px;
+  white-space: nowrap;
+  padding: 8px 10px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--elevado);
+  box-shadow: var(--sombra-panel);
+  font-size: 0.8rem;
+  animation: lienzo-desvanecer 120ms ease-out both;
+}
+.lienzo-tooltip-titulo {
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.lienzo-tooltip-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lienzo-tooltip-fila strong {
+  color: var(--texto);
+  font-variant-numeric: tabular-nums;
+}
+.lienzo-tooltip-fila span:last-child {
+  color: var(--muted);
+}
+.lienzo-tooltip-pista {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--panel-suave);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.lienzo-aparecer {
+  animation: lienzo-aparecer 260ms ease-out both;
+}
+
+/* --- Animaciones ---------------------------------------------------------------- */
+@keyframes lienzo-aparecer {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes lienzo-desvanecer {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes lienzo-crecer-v {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes lienzo-crecer-h {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes lienzo-trazar {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes lienzo-barrer {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes lienzo-saltar {
+  from { opacity: 0; transform: scale(0.3); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes lienzo-latir {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Panel "libre": el dibujo a medida vive en un iframe aislado (sandbox-lienzo/). */
+/* El marco de Python (motorPython.ts): abierto pero invisible, fuera del flujo. */
+.lienzo-motor-python {
+  position: fixed;
+  width: 0;
+  height: 0;
+  border: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.lienzo-libre-marco {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color-scheme: normal;
+  transition: height 220ms ease;
+}
+.lienzo-libre-marca {
+  margin-left: auto;
+  padding: 1px 8px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-capsula);
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.lienzo-libre-descripcion {
+  margin: 0 0 var(--espacio-2);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Consulta del asistente: aviso de filas recortadas y el SQL a la vista (auditable). */
+.asistente-aviso {
+  margin: 0 0 var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-3);
+  border: 1px solid var(--advertencia);
+  border-radius: var(--radio-chico);
+  background: var(--advertencia-suave);
+  font-size: 0.85rem;
+}
+.asistente-sql {
+  margin-top: var(--espacio-4);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.asistente-sql summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.asistente-sql pre,
+.asistente-alerta pre {
+  margin: var(--espacio-2) 0 0;
+  padding: var(--espacio-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+  background: var(--campo-fondo);
+  color: var(--texto);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Alertas del asistente (sólo la cuenta que las recibe). */
+.asistente-vacio {
+  color: var(--muted);
+}
+.asistente-alertas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.asistente-alerta {
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 1px solid var(--error);
+  border-left-width: 4px;
+  border-radius: var(--radio);
+  background: var(--panel);
+  animation: lienzo-aparecer 220ms ease-out both;
+}
+.asistente-alerta-revisada {
+  border-color: var(--borde);
+  opacity: 0.75;
+}
+.asistente-alerta header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+  color: var(--texto);
+}
+.asistente-alerta header svg {
+  color: var(--error);
+}
+.asistente-alerta-revisada header svg {
+  color: var(--muted);
+}
+.asistente-alerta-fecha,
+.asistente-alerta-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.asistente-alerta-motivo {
+  margin: var(--espacio-2) 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.asistente-alerta blockquote {
+  margin: 0;
+  padding-left: var(--espacio-3);
+  border-left: 2px solid var(--borde);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Imprimir / guardar PDF de la vista: sólo el lienzo, sin chat, menú ni botones. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .asistente-contenido,
+  .asistente-contenido * {
+    visibility: visible;
+  }
+  .asistente-contenido {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+  .asistente-acciones,
+  .asistente-filtro button,
+  .asistente-guardar,
+  .asistente-sql,
+  .lienzo-alternar,
+  .lienzo-tooltip,
+  .lienzo-tabla-buscar,
+  .asistente-flotante {
+    display: none !important;
+  }
+  .lienzo-tabla-grilla {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .lienzo-panel,
+  .lienzo-bloque {
+    break-inside: avoid;
+  }
+  .lienzo-documento * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Quien pidió menos movimiento en su sistema ve todo quieto, ya en su lugar. */
+@media (prefers-reduced-motion: reduce) {
+  .asistente *,
+  .asistente *::before,
+  .lienzo-documento * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .asistente {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .asistente-chat {
+    display: none;
+  }
+}

@@ -1,21 +1,9 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import type { UsuarioSesion } from "../api";
-
-interface EstadoAuth {
-  sesion: UsuarioSesion | null;
-  cargando: boolean;
-  /** No confundir con "credenciales inválidas" — Google ya autenticó a esta
-   * persona; esto significa que su correo no está en
-   * `administradores_panel` (ver esa migración). */
-  error: string | null;
-  iniciarSesionConGoogle: () => Promise<void>;
-  cerrarSesion: () => Promise<void>;
-}
-
-const AuthContexto = createContext<EstadoAuth | null>(null);
+import { AuthContexto } from "./useAuth";
 
 /**
  * "Iniciar sesión con Google" sólo prueba identidad -- la autorización real
@@ -169,10 +157,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContexto.Provider>
   );
-}
-
-export function useAuth(): EstadoAuth {
-  const contexto = useContext(AuthContexto);
-  if (!contexto) throw new Error("useAuth debe usarse dentro de AuthProvider");
-  return contexto;
 }
