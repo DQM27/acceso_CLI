@@ -109,7 +109,8 @@ export function useIndiceActivo(cantidad: number, alActivar?: (indice: number) =
     setIndice(destino);
   };
   return {
-    indice,
+    // Si los datos cambiaron (un filtro dejó menos barras), la marca resaltada puede ya no existir.
+    indice: indice !== null && indice < cantidad ? indice : null,
     alPuntero: setIndice,
     propsTeclado: {
       tabIndex: 0,
