@@ -546,8 +546,27 @@ saltándose el parser.
   corren a mano en el editor SQL de staging (la herramienta pide confirmar
   sentencias destructivas y en la sesión no llegaba la confirmación).
 
-Pendiente: Python (Pyodide) en el sandbox para análisis (pronósticos,
-estadística), no para exportar: PNG y PDF ya salen del navegador; alertas
+## Python en el sandbox (panel "analisis") — implementado (2026-10-23, sin PR todavía)
+
+- Widget `{"tipo": "analisis", titulo, descripcion?, codigo (Python), columnas,
+  mostrar (kpi|barras|linea|torta|tabla)}`: el código recibe `datos` y
+  `columnas` y deja en `resultado` una lista de filas; el panel de `mostrar`
+  se valida contra las columnas declaradas. Medida nueva `sumar` (también
+  sirve con la fuente "consulta").
+- Sandbox: `python.html`/`python.js` abren Pyodide 314.0.7 en un Web Worker
+  que queda vivo mientras el panel esté abierto (descarga una vez por
+  navegador, arranque una vez por visita, 15 s por cálculo). Pyodide y numpy
+  se bajan con `sandbox-lienzo/descargar-pyodide.mjs` (huellas fijadas, fuera
+  de git) antes de `wrangler deploy`. **Publicado** en lienzo.megabrisas.com.
+- Panel: `motorPython.ts` (un iframe oculto, pedidos por id) y
+  `AnalisisPython.tsx`. Vista de ejemplo "Pronóstico de ingresos (Python)".
+- `lienzo-ia`: instrucciones y revisión del código (resultado, importaciones
+  prohibidas) **sin desplegar**: falta desplegar la v9 en staging (el conector
+  de Supabase pedía volver a autorizarse).
+- Pendiente de verificar en el navegador: la carga de Pyodide dentro del
+  iframe con origen anónimo (CSP y CORS se revisaron con curl).
+
+Pendiente: alertas
 por correo (SMTP); presupuesto: tope mensual de USD 5 en el espacio de
 trabajo de Anthropic. Para producción, además del merge: desplegar a mano
 `lienzo-ia` y `lienzo-consulta` y cargar `ANTHROPIC_API_KEY` allá.
