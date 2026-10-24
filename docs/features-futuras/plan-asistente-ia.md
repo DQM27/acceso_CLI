@@ -573,10 +573,9 @@ saltándose el parser.
   filtra por el día). Vista de ejemplo "Horas pico" y el calendario en
   "Vencimientos del próximo año". `lienzo-ia` **v10 en staging**.
 - Migración `20261027120000_lienzo_ingresos_hora`: `lienzo_ingresos` devuelve
-  `hora`, `dia_semana` y `horas_adentro` (se filtran en el panel). **Falta
-  aplicarla en staging a mano** (la herramienta no deja correr el `drop
-  function` sin confirmación): pegar el archivo en el editor SQL de staging y
-  después correr `supabase/tests/lienzo_ingresos_hora.sql`.
+  `hora`, `dia_semana` y `horas_adentro` (se filtran en el panel). **Aplicada
+  en staging** (a mano en el editor SQL: la herramienta no deja correr el
+  `drop function` sin confirmación); batería `lienzo_ingresos_hora.sql` en verde.
 
 Pendiente: alertas
 por correo (SMTP); presupuesto: tope mensual de USD 5 en el espacio de
