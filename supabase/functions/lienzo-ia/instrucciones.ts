@@ -130,16 +130,35 @@ if por_dia:
         esperado = statistics.fmean(por_dia_semana.get(d.weekday(), [0]))
         resultado.append({"dia": d.isoformat(), "cantidad": round(esperado), "serie": "Pronóstico"})`;
 
+/** Ejemplo con pandas (días fuera de lo normal); también lo corre la prueba del panel. */
+export const EJEMPLO_PANDAS = `import pandas as pd
+
+resultado = []
+df = pd.DataFrame(datos)
+if not df.empty:
+    # Ingresos por día, con los días sin ingresos en 0.
+    por_dia = df.groupby(pd.to_datetime(df["dia"])).size().asfreq("D", fill_value=0)
+    tabla = por_dia.rename_axis("dia").to_frame("cantidad")
+    # Lo normal de cada día de la semana: su mediana (un día raro no la mueve).
+    tabla["esperado"] = tabla.groupby(tabla.index.dayofweek)["cantidad"].transform("median")
+    tabla["diferencia"] = tabla["cantidad"] - tabla["esperado"]
+    # Fuera de lo normal: la mitad más o menos de lo esperado, y al menos 3 ingresos de diferencia.
+    umbral = (tabla["esperado"] * 0.5).clip(lower=3)
+    raros = tabla[tabla["diferencia"].abs() >= umbral]
+    resultado = raros.loc[raros["diferencia"].abs().sort_values(ascending=False).index].reset_index()`;
+
 const INSTRUCCIONES_ANALISIS = `Panel "analisis" (cálculo en Python):
 - Usalo cuando hay que CALCULAR algo que los paneles comunes y una consulta no hacen: pronósticos (cuántos ingresos esperar la semana que viene), promedios por día de la semana o por hora, días o personas fuera de lo normal, tendencias, correlaciones, percentiles. Si contar, agrupar o filtrar alcanza, no uses Python.
 - Widget: {"tipo": "analisis", "titulo": "…", "descripcion": "qué calcula, en una frase", "codigo": "…", "columnas": [{"nombre": "dia", "tipo": "fecha", "etiqueta": "Día"}, …], "mostrar": {panel común}}.
 - "codigo" es Python 3 (corre en el navegador, sin red, hasta 15 segundos). Recibe datos (lista de diccionarios: las filas del lienzo, con su fuente y sus filtros; fechas como "AAAA-MM-DD") y columnas (lista de {nombre, tipo, etiqueta}). Tiene que dejar en resultado una lista de diccionarios con las columnas declaradas en "columnas" (fechas como "AAAA-MM-DD" o datetime.date; números int o float); hasta 2000 filas.
-- Sólo la biblioteca estándar (statistics, math, datetime, collections, itertools…) y numpy. Nada de pandas, scipy, js, pyodide, os, sys ni red: el panel lo rechaza.
+- Sólo la biblioteca estándar (statistics, math, datetime, collections, itertools…), numpy y pandas. Nada de scipy, js, pyodide, os, sys ni red: el panel lo rechaza. Con pandas: pd.DataFrame(datos); resultado puede ser un DataFrame (sus filas, con las columnas declaradas; una fecha del índice pasala a columna con reset_index()).
 - "mostrar" es un panel común (kpi, barras, linea, torta o tabla) sobre las columnas del resultado, con sus mismas reglas; su título es el del análisis. Como el resultado ya trae los números, usá la medida "sumar" con el campo numérico. Para comparar lo real con lo calculado en una misma línea, devolvé una columna de texto (por ejemplo "serie": "Real" / "Pronóstico") y usala como "serie".
 - Elegí la fuente pensando en lo que necesita el cálculo: para un pronóstico de ingresos, "ingresos" con un filtro de día que cubra varias semanas (por ejemplo las últimas 8); con "consulta" podés traer las columnas justas (la hora de entrada, la permanencia).
 - Como en el resto: no ves los datos; nunca escribas cifras de los datos en el código ni en "mensaje".
 - Ejemplo (pronóstico de los próximos 7 días por el promedio de cada día de la semana, fuente "ingresos"): columnas [{"nombre": "dia", "tipo": "fecha"}, {"nombre": "cantidad", "tipo": "numero", "etiqueta": "Ingresos"}, {"nombre": "serie", "tipo": "texto"}], mostrar {"tipo": "linea", "eje_x": "dia", "medida": "sumar", "campo": "cantidad", "serie": "serie"}, codigo:
-${EJEMPLO_ANALISIS}`;
+${EJEMPLO_ANALISIS}
+- Ejemplo con pandas (días fuera de lo normal contra la mediana de su día de la semana, fuente "ingresos"): columnas [{"nombre": "dia", "tipo": "fecha", "etiqueta": "Día"}, {"nombre": "cantidad", "tipo": "numero", "etiqueta": "Ingresos"}, {"nombre": "esperado", "tipo": "numero", "etiqueta": "Lo normal"}, {"nombre": "diferencia", "tipo": "numero", "etiqueta": "Diferencia"}], mostrar {"tipo": "tabla", "columnas": ["dia", "cantidad", "esperado", "diferencia"]}, codigo:
+${EJEMPLO_PANDAS}`;
 
 const INSTRUCCIONES_LIBRE = `Panel "libre" (dibujo a medida):
 - Usalo SÓLO cuando lo que piden no se puede mostrar con los paneles comunes (kpi, barras, linea, torta, tabla, calor, calendario): línea de tiempo o Gantt (quién estuvo adentro y cuándo), dispersión, embudo, comparaciones lado a lado, o cuando piden un diseño especial. Los mapas de calor y los calendarios ya son paneles (calor, calendario): no los dibujes a mano.

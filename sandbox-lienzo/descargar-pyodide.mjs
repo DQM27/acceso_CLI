@@ -1,6 +1,6 @@
 // Baja Pyodide (Python compilado a WebAssembly) a public/pyodide/ para que el
 // sandbox lo sirva desde su propio dominio: adentro del sandbox no hay acceso a
-// otros sitios. No se guarda en git (son ~16 MB); correr antes de publicar:
+// otros sitios. No se guarda en git (son ~21 MB); correr antes de publicar:
 //
 //   cd sandbox-lienzo && node descargar-pyodide.mjs && npx wrangler deploy
 //
@@ -22,12 +22,24 @@ const ARCHIVOS = [
   { nombre: "pyodide.asm.wasm", base: NPM, sha256: "cc36e3cab04fdfc9a63ff13eb52eae2b911bf46c025cc7b281f394bd3de1d5e6" },
   { nombre: "python_stdlib.zip", base: NPM, sha256: "fa1957e5777068fc4f7437f96d860ae2fbe9c19732ba06c84e004ec16dd7dd7a" },
   { nombre: "pyodide-lock.json", base: NPM, sha256: "5dc2fc119108bc148c7457dc86e7675b5c87e1cafd420b9c34c1eaef7b36c010" },
-  // Único paquete además de la biblioteca estándar.
+  // Los paquetes además de la biblioteca estándar: numpy y pandas (con lo que pandas necesita).
   {
     nombre: "numpy-2.4.6-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
     base: PAQUETES,
     sha256: "a292c1f5d7d8a2208cd5e94fc467604c131cabcd2fc14fed6eefde121e7fabdf",
   },
+  {
+    nombre: "pandas-3.0.2-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
+    base: PAQUETES,
+    sha256: "45ff57772cc2f366a8582c7d3097cc4e6676342ecd5a3c08184a43462d5a02ae",
+  },
+  {
+    nombre: "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+    base: PAQUETES,
+    sha256: "9b13365edf9c188f570baf9c540bbb3029ada2a2dacb9694b3659941693ee9e5",
+  },
+  { nombre: "six-1.17.0-py2.py3-none-any.whl", base: PAQUETES, sha256: "228c50f73aa7addf2c2ccf2979c256802a59ab69cad8152b31b9443cc8140f42" },
+  { nombre: "pytz-2026.1.post1-py2.py3-none-any.whl", base: PAQUETES, sha256: "b8249d6450146e0b61e6d710dc02ebb35a904796c4c2f97fe87d4ac5872db36a" },
 ];
 
 const destino = join(dirname(fileURLToPath(import.meta.url)), "public", "pyodide");

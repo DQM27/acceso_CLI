@@ -8,7 +8,7 @@
 # - Access-Control-Allow-Origin: el panel abre esto en un iframe con origen
 #   anónimo, que pide los módulos en modo CORS. Son archivos públicos sin datos.
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self' https://lienzo.megabrisas.com 'unsafe-eval' 'wasm-unsafe-eval'; worker-src blob:; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'self' https://lienzo.megabrisas.com; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors https://panel.megabrisas.com http://127.0.0.1:5173 http://localhost:5173
+  Content-Security-Policy: default-src 'none'; script-src 'self' https://lienzo.megabrisas.com 'unsafe-eval' 'wasm-unsafe-eval'; worker-src blob:; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'self' https://lienzo.megabrisas.com; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors https://megabrisas.com https://panel.megabrisas.com http://127.0.0.1:5173 http://localhost:5173
   Access-Control-Allow-Origin: *
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer

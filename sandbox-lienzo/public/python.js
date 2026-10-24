@@ -14,6 +14,7 @@ const URL_TRABAJADOR = URL.createObjectURL(new Blob([fuenteDelTrabajadorPython(B
 
 /** Únicos orígenes que pueden pedir un cálculo: el panel y el panel en desarrollo. */
 const ORIGENES_PERMITIDOS = new Set([
+  "https://megabrisas.com",
   "https://panel.megabrisas.com",
   "http://127.0.0.1:5173",
   "http://localhost:5173",

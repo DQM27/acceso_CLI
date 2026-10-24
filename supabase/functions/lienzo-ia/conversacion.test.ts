@@ -11,7 +11,7 @@ import {
   type Puertos,
   type Registro,
 } from "./conversacion.ts";
-import { formatearEsquemaIa, herramientaEditarLienzo, instrucciones } from "./instrucciones.ts";
+import { EJEMPLO_PANDAS, formatearEsquemaIa, herramientaEditarLienzo, instrucciones } from "./instrucciones.ts";
 import type { Alerta } from "../_shared/lienzo/alertas.ts";
 import type { Lienzo } from "../_shared/lienzo/esquema.ts";
 
@@ -384,9 +384,10 @@ Deno.test("panel libre: se compila pero NO se ejecuta en el servidor", () => {
 Deno.test("análisis en Python: tiene que dejar `resultado` y no importar lo que el sandbox rechaza", () => {
   assertEquals(erroresDeAnalisis("import statistics\nresultado = [{'x': 1}]"), []);
   assertEquals(erroresDeAnalisis("import numpy as np\nresultado: list = []"), []);
+  assertEquals(erroresDeAnalisis(EJEMPLO_PANDAS), []);
   assertEquals(erroresDeAnalisis("x = 1"), ["tiene que asignar la lista de filas a `resultado`"]);
   assertEquals(erroresDeAnalisis("if resultado == []:\n    pass"), ["tiene que asignar la lista de filas a `resultado`"]);
-  for (const linea of ["import js", "from pyodide.ffi import to_js", "import pandas as pd", "  import os", "from urllib import request"]) {
+  for (const linea of ["import js", "from pyodide.ffi import to_js", "import scipy.stats", "  import os", "from urllib import request"]) {
     assertEquals(erroresDeAnalisis(`${linea}\nresultado = []`).length, 1, linea);
   }
 });

@@ -15,7 +15,7 @@ export const PREPARACION = String.raw`
 import ast, builtins, datetime, decimal, json, math, traceback
 
 _MAXIMO_FILAS = 2000
-_PERMITIDOS = {"numpy"}  # además de la biblioteca estándar
+_PERMITIDOS = {"numpy", "pandas"}  # además de la biblioteca estándar
 # Nada que salga del cálculo: el puente a JavaScript, la red, procesos o el propio intérprete.
 _PROHIBIDOS = {
     "js", "pyodide", "pyodide_js", "_pyodide", "micropip", "pyodide_http", "ctypes", "socket", "ssl",
@@ -53,6 +53,8 @@ def _valor(v):
     """Un valor de una fila del resultado, como lo puede mostrar el panel."""
     if v is None or isinstance(v, bool):
         return v
+    if type(v).__name__ in ("NAType", "NaTType"):  # vacíos de pandas
+        return None
     if isinstance(v, str):
         return v[:500]
     if isinstance(v, int):
@@ -98,6 +100,8 @@ def _ejecutar(codigo, datos_json, columnas_json, salida_json):
     if "resultado" not in entorno:
         return _error("El análisis no dejó nada en «resultado» (una lista de filas).")
     resultado = entorno["resultado"]
+    if type(resultado).__name__ == "DataFrame":  # una tabla de pandas: sus filas
+        resultado = resultado.to_dict("records")
     if isinstance(resultado, dict):
         resultado = [resultado]
     if not isinstance(resultado, (list, tuple)):
@@ -114,7 +118,7 @@ def _ejecutar(codigo, datos_json, columnas_json, salida_json):
 `;
 
 export async function trabajarPython(base, preparacion) {
-  // Sin red, salvo para bajar Pyodide y numpy de este mismo sitio (y sólo mientras se bajan).
+  // Sin red, salvo para bajar Pyodide y sus paquetes de este mismo sitio (y sólo mientras se bajan).
   const fetchReal = self.fetch.bind(self);
   let conRed = true;
   self.fetch = (recurso, opciones) => {
