@@ -88,18 +88,29 @@ describe("calcularSeries", () => {
     expect(d.series[0].valores[d.categorias.indexOf("A")]).toBe(2);
   });
 
-  it("junta en 'Otros' lo que pasa del límite, al final", () => {
+  it("con un límite pedido es un top: las mayores, sin 'Otros'", () => {
     const muchas: Fila[] = Array.from({ length: 12 }, (_, i) => ({ empresa: `E${String(i).padStart(2, "0")}` }));
     muchas.push({ empresa: "E00" }, { empresa: "E00" });
     const d = calcularSeries("contratistas", barras({ limite: 3 }), muchas);
-    expect(d.categorias).toEqual(["E00", "E01", "E02", OTROS]);
-    expect(d.series[0].valores).toEqual([3, 1, 1, 9]);
+    expect(d.categorias).toEqual(["E00", "E01", "E02"]);
+    expect(d.series[0].valores).toEqual([3, 1, 1]);
+    expect(calcularSeries("contratistas", barras({ limite: 2 }), filas).categorias).toHaveLength(2);
+  });
+
+  it("sin límite, lo que pasa del máximo de categorías va a 'Otros', al final", () => {
+    const muchas: Fila[] = Array.from({ length: 40 }, (_, i) => ({ empresa: `E${String(i).padStart(2, "0")}` }));
+    muchas.push({ empresa: "E00" });
+    const d = calcularSeries("contratistas", barras({}), muchas);
+    expect(d.categorias).toHaveLength(31);
+    expect(d.categorias[0]).toBe("E00");
+    expect(d.categorias.at(-1)).toBe(OTROS);
+    expect(d.series[0].valores.at(-1)).toBe(10);
   });
 
   it("no junta en 'Otros' una sola categoría sobrante: la muestra con su nombre", () => {
-    const d = calcularSeries("contratistas", barras({ limite: 2 }), filas);
+    const d = calcularSeries("contratistas", barras({}), [...Array.from({ length: 31 }, (_, i) => ({ empresa: `E${i}` }))]);
     expect(d.categorias).not.toContain(OTROS);
-    expect(d.categorias).toHaveLength(3);
+    expect(d.categorias).toHaveLength(31);
   });
 
   it("un eje de fecha va en orden y rellena con 0 los días sin datos", () => {

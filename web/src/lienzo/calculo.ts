@@ -203,13 +203,16 @@ export interface DatosGrafico {
   agrupacion: AgrupacionFecha | null;
 }
 
-/** Las claves con más peso primero; las que pasan de `limite` se juntan en "Otros". */
-function quedarseConLasMayores(grupos: Map<string, Fila[]>, limite: number, medida: Medida, campo?: string) {
+/**
+ * Las claves con más peso primero; las que pasan de `limite` se juntan en "Otros".
+ * Con `soloLasMayores` (un "top N" pedido) las que sobran se dejan afuera.
+ */
+function quedarseConLasMayores(grupos: Map<string, Fila[]>, limite: number, medida: Medida, campo?: string, soloLasMayores = false) {
   const ordenadas = [...grupos.keys()].sort(
     (a, b) => Number(medir(medida, campo, grupos.get(b) ?? [])) - Number(medir(medida, campo, grupos.get(a) ?? [])) || a.localeCompare(b),
   );
   // Juntar sólo una clave en "Otros" no ahorra nada: se muestra con su nombre.
-  const cuantas = ordenadas.length === limite + 1 ? limite + 1 : limite;
+  const cuantas = !soloLasMayores && ordenadas.length === limite + 1 ? limite + 1 : limite;
   return new Set(ordenadas.slice(0, cuantas));
 }
 
@@ -249,9 +252,11 @@ export function calcularSeries(
   };
 
   // Eje: una fecha o un rango (horas) conserva todos sus grupos (rellenos); lo demás, los mayores + "Otros".
+  // Con un límite pedido ("las 5 personas con más ingresos") es un top: sin "Otros", que taparía a los de arriba.
   const porEje = agrupar(filas, claveEje);
-  const limite = widget.tipo === "barras" ? (widget.limite ?? MAXIMO_CATEGORIAS) : MAXIMO_CATEGORIAS;
-  const ejeVisible = agrupacion || def?.rango ? null : quedarseConLasMayores(porEje, limite, widget.medida, widget.campo);
+  const top = widget.tipo === "barras" ? widget.limite : undefined;
+  const ejeVisible =
+    agrupacion || def?.rango ? null : quedarseConLasMayores(porEje, top ?? MAXIMO_CATEGORIAS, widget.medida, widget.campo, top !== undefined);
   const ejeFinal = (f: Fila) => {
     const k = claveEje(f);
     return !ejeVisible || ejeVisible.has(k) ? k : OTROS;
@@ -280,7 +285,7 @@ export function calcularSeries(
     else if (def?.tipo === "numero") categorias = conDato.sort((a, b) => Number(a) - Number(b));
     else if (def?.ordinal && def.valores) categorias = [...def.valores, ...conDato.filter((x) => !def.valores?.includes(x))];
     else categorias = conDato.sort((a, b) => total(b) - total(a) || a.localeCompare(b));
-    if (usadas.has(OTROS)) categorias.push(OTROS);
+    if (usadas.has(OTROS) && top === undefined) categorias.push(OTROS);
     if (usadas.has(SIN_DATO)) categorias.push(SIN_DATO);
   }
 
