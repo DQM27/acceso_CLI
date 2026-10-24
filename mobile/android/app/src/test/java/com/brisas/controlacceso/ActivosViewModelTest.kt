@@ -265,6 +265,90 @@ class ActivosViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Bloqueada)
+        // Elegido a mano: no suena nada (sólo el escaneo avisa con sonido).
+        assertNull(viewModel.alertaEscaneo)
+    }
+
+    // --- Sonido tras escanear para ingresar ---
+
+    @Test
+    fun `escanear a alguien sin acceso avisa que fue denegado`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('222222222', 'Sin Acceso', 1, 'SWAT', 0, 0);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.usarDocumentoEscaneadoIngreso(DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "222222222"))
+        advanceUntilIdle()
+
+        assertEquals(AlertaEscaneo.DENEGADO, viewModel.alertaEscaneo?.alerta)
+    }
+
+    @Test
+    fun `la alerta sonada no se repite`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('222222222', 'Sin Acceso', 1, 'SWAT', 0, 0);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.usarDocumentoEscaneadoIngreso(DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "222222222"))
+        advanceUntilIdle()
+        val aviso = viewModel.alertaEscaneo
+        assertEquals(AlertaEscaneo.DENEGADO, aviso?.alerta)
+
+        viewModel.alertaSonada(aviso!!.id)
+
+        assertNull(viewModel.alertaEscaneo)
+    }
+
+    @Test
+    fun `escanear a alguien que no esta no suena`() = runTest(dispatcher) {
+        // La cámara ya hizo su "bip" al leer: un segundo sonido sonaba doble.
+        nucleo = NucleoDePrueba.abrir(archivo, NucleoDePrueba.sqlUsuarioRoot())
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.usarDocumentoEscaneadoIngreso(DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "999999999"))
+        advanceUntilIdle()
+
+        assertNull(viewModel.alertaEscaneo)
+    }
+
+    @Test
+    fun `escanear a alguien habilitado no suena`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO empresas (nombre) VALUES ('Empresa Test');",
+            """
+            INSERT INTO contratistas (
+                cedula, nombre, empresa_id, tipo_ingreso, es_personal_ruta, tiene_acceso
+            ) VALUES ('111111111', 'Contratista Escaneado', 1, 'SWAT', 0, 1);
+            """.trimIndent(),
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.usarDocumentoEscaneadoIngreso(DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "111111111"))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Formulario)
+        assertNull(viewModel.alertaEscaneo)
     }
 
     @Test
@@ -318,6 +402,35 @@ class ActivosViewModelTest {
         assertEquals(SeleccionIngreso.Ninguna, viewModel.seleccionIngreso)
         assertNull(viewModel.errorIngreso)
         assertEquals(1, nucleo.listarIngresosActivos("", ModoBusquedaActivos.NOMBRE_CEDULA).size)
+    }
+
+    @Test
+    fun `registrar ingreso lo confirma con el nombre y suma uno adentro`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+        assertEquals(0, viewModel.totalAdentro)
+
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")
+        advanceUntilIdle()
+
+        assertEquals("Ingreso registrado · Contratista Test", viewModel.confirmacion.actual?.texto)
+        assertEquals(1, viewModel.totalAdentro)
+    }
+
+    @Test
+    fun `la salida desde el modo Salida la confirma y descuenta del total`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")
+        advanceUntilIdle()
+        // En Salida la lista sólo trae lo buscado: el total se cuenta aparte.
+        viewModel.cambiarModo(ModoBusqueda.SALIDA_NOMBRE)
+        viewModel.cambiarTexto("Contratista")
+        advanceUntilIdle()
+
+        viewModel.confirmarSalida(viewModel.activos.single())
+        advanceUntilIdle()
+
+        assertEquals("Salida registrada · Contratista Test", viewModel.confirmacion.actual?.texto)
+        assertEquals(0, viewModel.totalAdentro)
     }
 
     @Test

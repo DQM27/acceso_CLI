@@ -3,15 +3,14 @@ package com.brisas.controlacceso
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -68,25 +67,22 @@ fun MarcoGuiaCedula(
     val colorMarco by animateColorAsState(color, tween(DURACION_CAMBIO_COLOR_MS), label = "colorMarcoOcr")
     val progresoSuave by animateFloatAsState(progreso, tween(DURACION_AVANCE_PROGRESO_MS), label = "progresoMarcoOcr")
 
-    val transicion = rememberInfiniteTransition(label = "marcoOcr")
-    val pulso by transicion.animateFloat(
-        initialValue = 0.55f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 850, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "pulsoMarcoOcr",
-    )
-    val avanceBarrido by transicion.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "barridoMarcoOcr",
-    )
+    // Rendimiento (revisión 2026-10-21): antes había dos animaciones infinitas
+    // (un pulso de color en las esquinas y el barrido) que redibujaban el
+    // marco en cada cuadro siempre, también con el documento ya leído, en
+    // pantallas que van justas de tiempo por cuadro con la cámara y el OCR.
+    // El pulso se fue (las esquinas quedan fijas) y el barrido sólo corre
+    // mientras se busca: leído o con error, el marco queda quieto y no se
+    // vuelve a dibujar hasta que algo cambia.
+    val barrido = remember { Animatable(0f) }
+    val buscando = estado == EstadoEscaneo.BUSCANDO
+    LaunchedEffect(buscando) {
+        if (!buscando) return@LaunchedEffect
+        while (true) {
+            barrido.snapTo(0f)
+            barrido.animateTo(1f, tween(DURACION_BARRIDO_MS, easing = FastOutSlowInEasing))
+        }
+    }
 
     Canvas(modifier = modifier) {
         // `region` es la misma fuente de verdad que usa el recorte real
@@ -118,7 +114,7 @@ fun MarcoGuiaCedula(
             size = Size(size.width - guia.right, guia.height),
         )
 
-        val colorConPulso = colorMarco.copy(alpha = 0.55f + pulso * 0.35f)
+        val colorEsquinas = colorMarco.copy(alpha = 0.9f)
 
         // Borde completo tenue (ayuda a "cerrar" el recuadro visualmente)...
         drawRoundRect(
@@ -130,20 +126,20 @@ fun MarcoGuiaCedula(
         )
 
         // ...más 4 esquinas marcadas (look de scanner de documentos), más
-        // gruesas y con el pulso de color -- son las que de verdad guían el
+        // gruesas -- son las que de verdad guían el
         // ojo hacia dónde encuadrar.
         val largoEsquina = anchoGuia * 0.09f
         val grosorEsquina = 4.dp.toPx()
         fun esquina(origen: Offset, haciaX: Float, haciaY: Float) {
             drawLine(
-                color = colorConPulso,
+                color = colorEsquinas,
                 start = origen,
                 end = Offset(origen.x + largoEsquina * haciaX, origen.y),
                 strokeWidth = grosorEsquina,
                 cap = StrokeCap.Round,
             )
             drawLine(
-                color = colorConPulso,
+                color = colorEsquinas,
                 start = origen,
                 end = Offset(origen.x, origen.y + largoEsquina * haciaY),
                 strokeWidth = grosorEsquina,
@@ -178,10 +174,10 @@ fun MarcoGuiaCedula(
         // Barrido vertical dentro del recuadro -- sólo mientras se busca
         // (una vez confirmado/inválido, un barrido en movimiento contradice
         // el mensaje de "ya terminé de leer").
-        if (estado == EstadoEscaneo.BUSCANDO) {
-            val yBarrido = guia.top + guia.height * avanceBarrido
+        if (buscando) {
+            val yBarrido = guia.top + guia.height * barrido.value
             drawLine(
-                color = colorConPulso,
+                color = colorEsquinas,
                 start = Offset(guia.left + 6.dp.toPx(), yBarrido),
                 end = Offset(guia.right - 6.dp.toPx(), yBarrido),
                 strokeWidth = 2.5.dp.toPx(),
@@ -193,3 +189,4 @@ fun MarcoGuiaCedula(
 
 private const val DURACION_CAMBIO_COLOR_MS = 250
 private const val DURACION_AVANCE_PROGRESO_MS = 150
+private const val DURACION_BARRIDO_MS = 1600

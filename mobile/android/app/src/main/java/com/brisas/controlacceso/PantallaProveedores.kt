@@ -1,27 +1,17 @@
 package com.brisas.controlacceso
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -30,8 +20,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
@@ -152,6 +140,8 @@ fun PantallaProveedores(
                 )
             }
             PanelConFormulario.FORMULARIO -> {
+                // Pantalla completa: sin barra de secciones encima.
+                OcultarBarraSecciones()
                 FormularioNuevoIngresoProveedor(
                     viewModel = viewModel,
                     gafeteTexto = gafeteTexto,
@@ -175,45 +165,13 @@ fun PantallaProveedores(
                     // Sin título propio: el selector de [PantallaExternos] ya dice dónde se
                     // está.
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                        Row(
+                        // "Nuevo ingreso" es el botón redondo de abajo.
+                        CampoBusquedaBrisas(
+                            valor = busqueda,
+                            onCambiar = { busqueda = it },
+                            ayuda = "Cédula, nombre, empresa…",
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            // Sin `.height(AlturaBusquedaBrisas)` a propósito -- combinado
-                            // con `leadingIcon` (a diferencia del buscador de
-                            // `PantallaActivos`, que no tiene `placeholder`) ese alto
-                            // dejaba el texto del placeholder recortado, casi invisible.
-                            OutlinedTextField(
-                                value = busqueda,
-                                onValueChange = { busqueda = it },
-                                placeholder = { Text("Cédula, nombre, empresa…") },
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                singleLine = true,
-                                shape = FormaCampoBrisas,
-                                colors = ColoresCampoBrisas(),
-                                modifier = Modifier.weight(1f),
-                            )
-                            // Mismo look que `BotonCamaraCuadrado` de [PantallaRutas]
-                            // (cuadrado, borde y ícono en el color primario) -- pedido
-                            // explícito del usuario en vez del botón "+ Nuevo ingreso"
-                            // ancho de antes, para que quede al lado del buscador como el
-                            // botón de cámara junto al buscador de [PantallaActivos].
-                            Box(
-                                modifier = Modifier
-                                    .size(AlturaBusquedaBrisas)
-                                    .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
-                                    .clip(FormaCampoBrisas)
-                                    .clickable(onClick = { mostrandoFormulario = true }),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Icons.Default.PersonAdd,
-                                    contentDescription = "Nuevo ingreso de proveedor",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
+                        )
 
                         viewModel.error?.let { mensaje ->
                             Text(
@@ -236,7 +194,7 @@ fun PantallaProveedores(
                             },
                             sincronizando = sincronizando,
                             onSincronizar = onSincronizar,
-                            contentPadding = PaddingValues(top = 10.dp),
+                            contentPadding = PaddingValues(top = 10.dp, bottom = EspacioPieLista),
                         ) { fila ->
                             FilaProveedorActivo(
                                 fila = fila,
@@ -244,6 +202,11 @@ fun PantallaProveedores(
                             )
                         }
                     }
+
+                    PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
+                    // "Nuevo ingreso" va en el botón redondo de abajo (ver
+                    // `AccionInferior.kt`).
+                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso de proveedor", onClick = { mostrandoFormulario = true })
 
                     DialogoConfirmarSalidaProveedor(
                         fila = filaParaSalida,

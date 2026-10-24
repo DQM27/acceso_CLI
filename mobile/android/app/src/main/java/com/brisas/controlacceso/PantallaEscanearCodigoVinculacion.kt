@@ -6,20 +6,37 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -30,6 +47,7 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.delay
 
 /// Lee el QR que muestra el panel al crear o re-vincular un dispositivo
 /// (`brisas-acceso://vincular?codigo=…`, ver [CodigoVinculacion.desdeQr]):
@@ -40,6 +58,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 @Composable
 fun PantallaEscanearCodigoVinculacion(
     onCodigoLeido: (String) -> Unit,
+    onEscribirCodigo: () -> Unit,
     onCerrar: () -> Unit,
 ) {
     RegistrarPantalla("escanear_codigo_vinculacion")
@@ -47,15 +66,32 @@ fun PantallaEscanearCodigoVinculacion(
         mensajePermiso = "Se necesita permiso de cámara para leer el código QR del panel.",
         onCerrar = onCerrar,
     ) {
-        VistaCamaraQr(onCodigoLeido = onCodigoLeido, onCerrar = onCerrar)
+        VistaCamaraQr(onCodigoLeido = onCodigoLeido, onEscribirCodigo = onEscribirCodigo, onCerrar = onCerrar)
     }
 }
 
+/// Lado del recuadro del visor, centrado en la vista de cámara. Es sólo una
+/// guía: ML Kit lee el QR en cualquier parte del cuadro.
+private val LadoVisor = 240.dp
+
 @Composable
-private fun VistaCamaraQr(onCodigoLeido: (String) -> Unit, onCerrar: () -> Unit) {
+private fun VistaCamaraQr(onCodigoLeido: (String) -> Unit, onEscribirCodigo: () -> Unit, onCerrar: () -> Unit) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val onCodigoActual by rememberUpdatedState(onCodigoLeido)
+    val haptica = LocalHapticFeedback.current
+    // Al leer: vibración de confirmación y un instante con el check en el
+    // visor antes de cerrar, para que se note que agarró el código.
+    var codigoLeido by remember { mutableStateOf<String?>(null) }
+    val onCodigoActual by rememberUpdatedState<(String) -> Unit>({ codigo ->
+        haptica.performHapticFeedback(HapticFeedbackType.Confirm)
+        codigoLeido = codigo
+    })
+    codigoLeido?.let { codigo ->
+        LaunchedEffect(codigo) {
+            delay(450)
+            onCodigoLeido(codigo)
+        }
+    }
     val lector = remember {
         BarcodeScanning.getClient(BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build())
     }
@@ -98,13 +134,46 @@ private fun VistaCamaraQr(onCodigoLeido: (String) -> Unit, onCerrar: () -> Unit)
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
-        Text(
-            "Apuntá al código QR que muestra el panel",
-            color = Color.White,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp),
-        )
+        VisorQr(leido = codigoLeido != null, modifier = Modifier.fillMaxSize())
         BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+        Column(
+            modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "Apunte al código QR que muestra el panel",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            TextButton(
+                onClick = onEscribirCodigo,
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+                modifier = Modifier.padding(top = 8.dp),
+            ) {
+                Text("Escribir el código")
+            }
+        }
+    }
+}
+
+/// Oscurece todo menos un recuadro redondeado al centro, con las esquinas
+/// marcadas; al leer, el marco pasa a verde.
+@Composable
+private fun VisorQr(leido: Boolean, modifier: Modifier = Modifier) {
+    val colorMarco by animateColorAsState(if (leido) ColorExitoBrisas else Color.White, label = "marcoVisor")
+    Canvas(modifier = modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+        val lado = LadoVisor.toPx()
+        val esquina = Offset((size.width - lado) / 2f, (size.height - lado) / 2f)
+        val radio = CornerRadius(24.dp.toPx())
+        drawRect(Color.Black.copy(alpha = 0.55f))
+        drawRoundRect(Color.Transparent, esquina, Size(lado, lado), radio, blendMode = BlendMode.Clear)
+        drawRoundRect(
+            colorMarco,
+            esquina,
+            Size(lado, lado),
+            radio,
+            style = Stroke(width = 4.dp.toPx()),
+        )
     }
 }
 

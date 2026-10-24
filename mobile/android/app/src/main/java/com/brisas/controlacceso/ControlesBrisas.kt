@@ -1,9 +1,16 @@
 package com.brisas.controlacceso
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FlashlightOff
-import androidx.compose.material.icons.filled.FlashlightOn
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
@@ -31,14 +37,27 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import uniffi.control_acceso_mobile.EmpresaProveedor
@@ -56,10 +75,14 @@ internal val FormaCampoBrisas = RoundedCornerShape(16.dp)
  * todas luzcan igual (2026-09-15). */
 internal val AlturaBusquedaBrisas = 50.dp
 
+// Antes que [FormaPildoraBrisas]: las propiedades de un archivo se inicializan
+// en orden.
+private val RADIO_PILDORA = 12.dp
+
 /** Forma de las píldoras de selector ([FilaPildoras]) -- antes cápsula
  * completa (percent=50), se veía más redondeada que el mockup, que usa
  * esquinas bien marcadas pero no un óvalo. */
-internal val FormaPildoraBrisas = RoundedCornerShape(12.dp)
+internal val FormaPildoraBrisas = RoundedCornerShape(RADIO_PILDORA)
 
 /** Colores compartidos para todo campo de texto de la app -- borde visible
  * (`outline` sin foco, `primary` con foco) sobre fondo transparente, mismo
@@ -73,6 +96,114 @@ internal fun ColoresCampoBrisas(): TextFieldColors = OutlinedTextFieldDefaults.c
     focusedBorderColor = MaterialTheme.colorScheme.primary,
     focusedLabelColor = MaterialTheme.colorScheme.primary,
 )
+
+/** El buscador de todas las pantallas (Activos, Proveedores, Por correo,
+ * KOF): [AlturaBusquedaBrisas] de alto, ícono de lupa y texto de ayuda.
+ * Un `OutlinedTextField` a ese alto recorta el texto de ayuda (deja 16dp de
+ * relleno arriba y abajo, pensado para 56dp; por eso Proveedores llegó a
+ * quedar más alto que su botón de al lado): acá es el mismo marco y los
+ * mismos colores ([ColoresCampoBrisas]) con menos relleno vertical. */
+@Composable
+internal fun CampoBusquedaBrisas(
+    valor: String,
+    onCambiar: (String) -> Unit,
+    ayuda: String,
+    modifier: Modifier = Modifier,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+) {
+    val interaccion = remember { MutableInteractionSource() }
+    val colores = ColoresCampoBrisas()
+    BasicTextField(
+        value = valor,
+        onValueChange = onCambiar,
+        modifier = modifier.height(AlturaBusquedaBrisas),
+        singleLine = true,
+        keyboardOptions = keyboardOptions,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        interactionSource = interaccion,
+    ) { campo ->
+        OutlinedTextFieldDefaults.DecorationBox(
+            value = valor,
+            innerTextField = campo,
+            enabled = true,
+            singleLine = true,
+            visualTransformation = VisualTransformation.None,
+            interactionSource = interaccion,
+            placeholder = { Text(ayuda, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            colors = colores,
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            container = {
+                OutlinedTextFieldDefaults.Container(
+                    enabled = true,
+                    isError = false,
+                    interactionSource = interaccion,
+                    colors = colores,
+                    shape = FormaCampoBrisas,
+                )
+            },
+        )
+    }
+}
+
+/** Cuánto tapa abajo la barra de secciones flotante de [PantallaPrincipal]:
+ * el contenido pasa por detrás de ella (apenas se ve a través de su velo), así que
+ * lo que tiene que quedar a la vista debe dejar ese espacio. Cero fuera de
+ * las pestañas (la bandeja de avisos o "Nuevo contratista" no la tienen). */
+internal val LocalMargenBarraInferior = compositionLocalOf { 0.dp }
+
+/** Cuántas pantallas a pantalla completa (cámaras, formularios de ingreso)
+ * hay a la vista ahora mismo: mientras haya alguna, [PantallaPrincipal]
+ * esconde la barra de secciones. Es un contador y no un sí/no porque durante
+ * una transición la pantalla que entra y la que sale conviven un instante. */
+internal class PantallasCompletas {
+    var cantidad by mutableIntStateOf(0)
+        private set
+
+    fun abrir() {
+        cantidad++
+    }
+
+    fun cerrar() {
+        cantidad--
+    }
+}
+
+internal val LocalPantallasCompletas = staticCompositionLocalOf<PantallasCompletas?> { null }
+
+/** Se llama dentro de una pantalla que ocupa todo el lugar (cámara, formulario)
+ * para que la barra de secciones flotante se esconda mientras esté a la vista:
+ * si no, quedaba encima de la cámara y se podía tocar (bug visto en el
+ * teléfono, 2026-10-21). Fuera de las pestañas no hace nada. */
+@Composable
+internal fun OcultarBarraSecciones() {
+    val pantallas = LocalPantallasCompletas.current ?: return
+    DisposableEffect(pantallas) {
+        pantallas.abrir()
+        onDispose { pantallas.cerrar() }
+    }
+}
+
+/** Espacio libre al final de las listas para que la última fila no quede
+ * debajo de [FranjaConfirmacion] ni de la barra de secciones. */
+internal val EspacioPieLista: Dp
+    @Composable get() = 72.dp + LocalMargenBarraInferior.current
+
+/** Lo que flota abajo de una pantalla con lista: la confirmación del último
+ * registro ([FranjaConfirmacion]), justo encima de la barra de secciones. La
+ * acción principal de la pantalla ya no flota acá: va en el botón redondo junto
+ * a la barra (ver `AccionInferior.kt`). Va dentro de un `Box` a pantalla
+ * completa, alineado abajo. */
+@Composable
+internal fun PieFlotante(confirmacion: ConfirmacionReciente, modifier: Modifier = Modifier) {
+    FranjaConfirmacion(
+        confirmacion,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + LocalMargenBarraInferior.current),
+    )
+}
 
 /** Acciones principales: forma y área táctil comunes en todas las pantallas. */
 @Composable
@@ -119,7 +250,7 @@ fun BotonDiscretoBrisas(
  * de fondo, la opción activa se pinta como una píldora sólida en el color
  * primario -- reemplaza el look de `SegmentedButton` de Material3 (gris,
  * rectangular) en las pantallas que ya lo usaban (`SelectorModoBusqueda` en
- * [PantallaActivos], las pestañas de [PantallaPrincipal]). No reemplaza a
+ * [PantallaActivos], el tipo en [PantallaExternos]). No reemplaza a
  * `SegmentedButton` en todos lados a propósito -- sólo donde el mockup lo pide. */
 @Composable
 fun FilaPildoras(
@@ -128,23 +259,42 @@ fun FilaPildoras(
     onSeleccionar: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Una sola píldora sólida que se desliza hasta la opción elegida (en vez de
+    // apagarse en una y prenderse en otra). Se dibuja detrás de la fila, en la
+    // fase de dibujo: animar la posición no vuelve a medir ni a componer nada.
+    // Si cambia el acento (ver `AcentoSeccion.kt`), el color nuevo entra con
+    // un fundido.
+    val posicion by animateFloatAsState(
+        targetValue = seleccionado.toFloat(),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
+        label = "posicionPildora",
+    )
+    val colorPildora by animateColorAsState(
+        targetValue = MaterialTheme.colorScheme.primary,
+        animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
+        label = "pildora",
+    )
+    val separacion = 4.dp
     Row(
         modifier = modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant, FormaPildoraBrisas)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(4.dp)
+            .drawBehind {
+                if (opciones.isEmpty() || seleccionado !in opciones.indices) return@drawBehind
+                val hueco = separacion.toPx()
+                val ancho = (size.width - hueco * (opciones.size - 1)) / opciones.size
+                drawRoundRect(
+                    color = colorPildora,
+                    topLeft = Offset(posicion * (ancho + hueco), 0f),
+                    size = Size(ancho, size.height),
+                    cornerRadius = CornerRadius(RADIO_PILDORA.toPx()),
+                )
+            },
+        horizontalArrangement = Arrangement.spacedBy(separacion),
     ) {
         opciones.forEachIndexed { indice, etiqueta ->
             val activo = indice == seleccionado
-            // La píldora que se apaga y la que se enciende se funden en vez de
-            // saltar; al cambiar de sección también cambia el acento (ver
-            // `AcentoSeccion.kt`) y el color nuevo entra con el mismo fundido.
-            val colorPildora by animateColorAsState(
-                targetValue = if (activo) MaterialTheme.colorScheme.primary else Color.Transparent,
-                animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
-                label = "pildora",
-            )
             val colorTexto by animateColorAsState(
                 targetValue = if (activo) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
@@ -154,7 +304,6 @@ fun FilaPildoras(
                 modifier = Modifier
                     .weight(1f)
                     .clip(FormaPildoraBrisas)
-                    .drawBehind { drawRect(colorPildora) }
                     .clickable { onSeleccionar(indice) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
@@ -209,16 +358,32 @@ fun BotonIconoCuadradoBrisas(
     }
 }
 
-/** Envuelve una lista con un degradé del color de fondo a transparente en
- * el borde superior -- el contenido se "desvanece" suave debajo del
- * buscador al hacer scroll, en vez de cortar en seco. Un `Modifier.blur()`
- * real sólo pinta en Android 12+ (API 31) -- con `minSdk 26` de esta app,
- * en un dispositivo más viejo simplemente no haría nada; el degradé sí
- * funciona en cualquier versión, y da el mismo efecto visual acá. Usa
- * `contentPadding` (no un `Modifier.padding` externo) en el `LazyColumn`
- * de adentro para que el degradé, no el primer ítem, ocupe ese espacio --
- * si no, el scroll dejaría un hueco sin nada que desvanecer. Compartido
- * entre [PantallaActivos] y [PantallaHistorial] (2026-09-15). */
+/** Botón cuadrado con borde e ícono en el color de la sección, al lado de un
+ * buscador o de un campo: cámara, "nuevo ingreso", etc. Mide lo mismo que
+ * [CampoBusquedaBrisas] para quedar parejo con él. Deshabilitado, borde e
+ * ícono pasan a `outline`. */
+@Composable
+internal fun BotonCuadradoBordeBrisas(
+    icono: ImageVector,
+    descripcion: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tamano: Dp = AlturaBusquedaBrisas,
+) {
+    val color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+    Box(
+        modifier = modifier
+            .size(tamano)
+            .border(1.dp, color, FormaCampoBrisas)
+            .clip(FormaCampoBrisas)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icono, contentDescription = descripcion, tint = color)
+    }
+}
+
 /** Botón circular de cerrar/cancelar para las 4 pantallas de escaneo OCR
  * (Cédula, Carnet KOF, Vehículo/Ruta, Comprobante) -- fondo oscuro
  * semitransparente porque flota directo sobre el preview de cámara, no
@@ -241,27 +406,16 @@ fun BotonCerrarCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** Linterna de la cámara, mismo estilo que [BotonCerrarCamara] -- va debajo
- * de él en las 4 pantallas de escaneo. De noche en la portería, o con una
- * placa en sombra, la luz es lo que más limita la lectura. */
-@Composable
-fun BotonLinterna(encendida: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.55f))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            if (encendida) Icons.Default.FlashlightOff else Icons.Default.FlashlightOn,
-            contentDescription = if (encendida) "Apagar linterna" else "Encender linterna",
-            tint = Color.White,
-        )
-    }
-}
-
+/** Envuelve una lista con un degradé del color de fondo a transparente en
+ * el borde superior -- el contenido se "desvanece" suave debajo del
+ * buscador al hacer scroll, en vez de cortar en seco. Un `Modifier.blur()`
+ * real sólo pinta en Android 12+ (API 31) -- con `minSdk 26` de esta app,
+ * en un dispositivo más viejo simplemente no haría nada; el degradé sí
+ * funciona en cualquier versión, y da el mismo efecto visual acá. Usa
+ * `contentPadding` (no un `Modifier.padding` externo) en el `LazyColumn`
+ * de adentro para que el degradé, no el primer ítem, ocupe ese espacio --
+ * si no, el scroll dejaría un hueco sin nada que desvanecer. Compartido
+ * entre [PantallaActivos] y [PantallaHistorial] (2026-09-15). */
 @Composable
 fun ListaConDesvanecido(contenido: @Composable () -> Unit) {
     Box {

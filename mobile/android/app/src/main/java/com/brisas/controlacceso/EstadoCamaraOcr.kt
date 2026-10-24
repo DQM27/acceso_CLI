@@ -2,7 +2,6 @@ package com.brisas.controlacceso
 
 import android.content.Context
 import android.util.Log
-import androidx.camera.core.Camera
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -31,8 +30,7 @@ import kotlinx.coroutines.Job
 /// separado.
 ///
 /// `mutableStateOf` (no propiedades simples) para lo que se asigna DESPUÉS
-/// de construir el estado, dentro del `factory` de `AndroidView`, y para lo
-/// que la pantalla dibuja (linterna).
+/// de construir el estado, dentro del `factory` de `AndroidView`.
 class EstadoCamaraOcr(contexto: Context) {
     val ejecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
@@ -104,24 +102,8 @@ class EstadoCamaraOcr(contexto: Context) {
     var vistaPreviaCamara: Preview? by mutableStateOf(null)
     var analisisCamara: ImageAnalysis? by mutableStateOf(null)
     var trabajoResultado: Job? by mutableStateOf(null)
-    var camaraFisica: Camera? by mutableStateOf(null)
-    var linternaEncendida by mutableStateOf(false)
-        private set
-
-    val tieneLinterna: Boolean get() = camaraFisica?.cameraInfo?.hasFlashUnit() == true
-
     init {
         ejecutor.execute(::precalentar)
-    }
-
-    /// De noche en la portería, o con placas en sombra, la luz es lo que
-    /// más limita la lectura.
-    fun alternarLinterna() {
-        val camara = camaraFisica ?: return
-        if (!tieneLinterna) return
-        val encender = !linternaEncendida
-        camara.cameraControl.enableTorch(encender)
-        linternaEncendida = encender
     }
 
     /// Ejecuta `bloque` en el hilo principal si la sesión sigue viva. Los

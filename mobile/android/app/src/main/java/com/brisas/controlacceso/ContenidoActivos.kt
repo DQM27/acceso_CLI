@@ -1,52 +1,38 @@
 package com.brisas.controlacceso
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import kotlinx.coroutines.launch
 import uniffi.control_acceso_mobile.ContratistaResumen
 
 // Bloques de la pantalla de Activos: selector de modo, buscador, mensajes,
@@ -66,59 +52,48 @@ internal fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) 
     )
 }
 
+/// El escáner ya no va en un botón chico al lado del campo: es el botón
+/// flotante de abajo ([BotonEscanearActivos]), al alcance del pulgar.
 @Composable
 internal fun CampoBusquedaActivos(
     modo: ModoBusqueda,
     texto: String,
     onCambiarTexto: (String) -> Unit,
+) {
+    // El mismo campo cambia de sentido según el modo: el texto de ayuda dice
+    // qué se busca en cada uno.
+    CampoBusquedaBrisas(
+        valor = texto,
+        onCambiar = onCambiarTexto,
+        ayuda = when (modo) {
+            ModoBusqueda.ENTRADA -> "Nombre o cédula para ingresar"
+            ModoBusqueda.SALIDA_NOMBRE -> "Nombre o cédula de quien sale"
+            ModoBusqueda.SALIDA_GAFETE -> "Gafetes: 2, 25, 85"
+        },
+        keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {
+            KeyboardOptions(keyboardType = KeyboardType.Number)
+        } else {
+            KeyboardOptions.Default
+        },
+        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+    )
+}
+
+/// Lo que hace el botón redondo de abajo en Activos (ver `AccionInferior.kt`):
+/// en Ingreso escanea el documento para entrar (lo que más se hace en la
+/// portería); en Gafete, el gafete que sale; en Salida por nombre es la lupa
+/// que abre el buscador de abajo.
+@Composable
+internal fun AccionActivos(
+    modo: ModoBusqueda,
     onEscanearCedula: () -> Unit,
     onEscanearGafete: () -> Unit,
+    onBuscarSalida: () -> Unit,
 ) {
-    // Color propio para "estoy buscando a quién SACAR" — evita confundir el
-    // modo entrada (color normal de la app) con el de salida, que es la
-    // acción de mayor consecuencia.
-    val colorModo = if (modo == ModoBusqueda.ENTRADA) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.secondary
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OutlinedTextField(
-            value = texto,
-            onValueChange = onCambiarTexto,
-            label = null,
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
-            keyboardOptions = if (modo == ModoBusqueda.SALIDA_GAFETE) {
-                KeyboardOptions(keyboardType = KeyboardType.Number)
-            } else {
-                KeyboardOptions.Default
-            },
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.weight(1f).height(AlturaBusquedaBrisas),
-        )
-        if (modo == ModoBusqueda.ENTRADA || modo == ModoBusqueda.SALIDA_GAFETE) {
-            Box(
-                modifier = Modifier
-                    .size(AlturaBusquedaBrisas)
-                    .border(1.dp, colorModo, FormaCampoBrisas)
-                    .clip(FormaCampoBrisas)
-                    .clickable(onClick = if (modo == ModoBusqueda.ENTRADA) onEscanearCedula else onEscanearGafete),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Default.PhotoCamera,
-                    contentDescription = if (modo == ModoBusqueda.ENTRADA) "Escanear documento" else "Escanear gafete",
-                    tint = colorModo,
-                )
-            }
-        }
+    when (modo) {
+        ModoBusqueda.ENTRADA -> AccionPrincipal(Icons.Default.PhotoCamera, "Escanear documento", onEscanearCedula)
+        ModoBusqueda.SALIDA_GAFETE -> AccionPrincipal(Icons.Default.PhotoCamera, "Escanear gafete", onEscanearGafete)
+        ModoBusqueda.SALIDA_NOMBRE -> AccionPrincipal(Icons.Default.Search, "Buscar a quien sale", onBuscarSalida)
     }
 }
 
@@ -170,22 +145,19 @@ internal fun ContenidoModoEntrada(
         )
         return
     }
-    if (resultadosBusqueda.isEmpty() && !verificando && !cargando) {
-        Text(
-            "Sin resultados",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-    }
-    ListaConDesvanecido {
-        LazyColumn(
-            contentPadding = PaddingValues(top = 5.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            items(resultadosBusqueda, key = { it.id }) { contratista ->
-                FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
-            }
-        }
+    // Misma lista que la de activos (animación, estados vacíos, tirar para
+    // sincronizar): mientras busca la primera vez muestra marcadores, y si no
+    // encuentra a nadie lo dice con el mismo mensaje que las demás listas.
+    ListaConEstados(
+        filas = resultadosBusqueda,
+        clave = { it.id },
+        cargando = cargando || verificando,
+        tituloVacio = "Sin resultados",
+        detalleVacio = "Pruebe con otro nombre o cédula.",
+        sincronizando = sincronizando,
+        onSincronizar = onSincronizar,
+    ) { contratista ->
+        FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
     }
 }
 
@@ -200,15 +172,23 @@ internal fun ContenidoModoSalidaNombre(
     onElegirActivo: (FilaActiva) -> Unit,
     sincronizando: Boolean = false,
     onSincronizar: () -> Unit = {},
+    // Dentro de [BuscadorInferior]: el campo está abajo y no hay barra ni
+    // botón que esquivar, así que la lista no deja espacio al final.
+    enBuscador: Boolean = false,
 ) {
     ListaActivos(
         activos = activos,
         cargando = cargando,
         tituloVacio = if (texto.isBlank()) "Busque a quien sale" else "Sin resultados",
-        detalleVacio = if (texto.isBlank()) "Escriba un nombre o una cédula." else "Pruebe con otro nombre o cédula.",
+        detalleVacio = when {
+            texto.isNotBlank() -> "Pruebe con otro nombre o cédula."
+            enBuscador -> "Escriba un nombre o una cédula."
+            else -> "Toque la lupa de abajo para buscar."
+        },
         onClick = onElegirActivo,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
+        contentPadding = if (enBuscador) PaddingValues(top = 5.dp, bottom = 8.dp) else null,
     )
 }
 
@@ -282,6 +262,8 @@ private fun ListaActivos(
     onClick: (FilaActiva) -> Unit,
     sincronizando: Boolean,
     onSincronizar: () -> Unit,
+    // `null` = el de siempre de [ListaConEstados].
+    contentPadding: PaddingValues? = null,
 ) {
     ListaConEstados(
         filas = activos,
@@ -291,6 +273,7 @@ private fun ListaActivos(
         detalleVacio = detalleVacio,
         sincronizando = sincronizando,
         onSincronizar = onSincronizar,
+        contentPadding = contentPadding ?: PaddingValues(top = 5.dp, bottom = EspacioPieLista),
     ) { fila ->
         FilaActivo(fila, onClick = { onClick(fila) })
     }
@@ -315,23 +298,38 @@ internal fun DialogoConfirmarSalida(
 
 internal const val TEXTO_OTRO_DISPOSITIVO = "registrado en otro dispositivo de la unidad operativa"
 
-/// Modal "Registrar salida" a mano en vez de `AlertDialog` -- el mockup pide
-/// un layout que `AlertDialog` no ofrece (icono circular arriba, botón
-/// principal de ancho completo, "Cancelar" como link chico debajo, todo
-/// centrado) en vez de los dos botones lado a lado de siempre. Lo comparten
-/// contratistas y visitas.
+/// "Registrar salida" (o "Registrar devolución" en KOF) como panel que sube
+/// desde abajo, en vez del cuadro centrado de antes: "Confirmar" queda al
+/// alcance del pulgar. Mismo contenido de siempre (ícono circular arriba,
+/// botón principal de ancho completo, "Cancelar" chico debajo, todo
+/// centrado). Lo comparten contratistas, proveedores, correo, visitas y KOF.
+///
+/// Al confirmar, el panel baja primero y recién entonces avisa: si el que
+/// llama lo quitara de la composición en el acto, desaparecería de golpe.
+/// `confirmado` evita que un segundo toque registre dos veces mientras baja.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DialogoRegistrarSalida(
     detalle: String,
     onDismiss: () -> Unit,
     onConfirmar: () -> Unit,
+    titulo: String = "Registrar salida",
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val alcance = rememberCoroutineScope()
+    var confirmado by remember { mutableStateOf(false) }
+    fun cerrarY(accion: () -> Unit) {
+        alcance.launch { estado.hide() }.invokeOnCompletion { accion() }
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = estado,
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium)
-                .padding(24.dp),
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
@@ -344,7 +342,7 @@ internal fun DialogoRegistrarSalida(
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             }
             Text(
-                "Registrar salida",
+                titulo,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 16.dp),
@@ -353,15 +351,21 @@ internal fun DialogoRegistrarSalida(
                 detalle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp),
             )
             BotonBrisas(
-                onClick = onConfirmar,
+                onClick = {
+                    if (!confirmado) {
+                        confirmado = true
+                        cerrarY(onConfirmar)
+                    }
+                },
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             ) {
                 Text("Confirmar")
             }
-            BotonDiscretoBrisas(onClick = onDismiss, modifier = Modifier.padding(top = 4.dp)) {
+            BotonDiscretoBrisas(onClick = { cerrarY(onDismiss) }, modifier = Modifier.padding(top = 4.dp)) {
                 Text("Cancelar")
             }
         }

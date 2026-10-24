@@ -17,7 +17,7 @@ package com.brisas.controlacceso
 /// - `fraccionReflejo`: proporción de píxeles saturados (Y >= 250), lo que
 ///   deja un reflejo sobre el plástico de la tarjeta.
 /// - `luminancia`: brillo medio del recorte (0-255). Sólo diagnóstico: dice
-///   cuánta luz había (de noche en la portería, con o sin linterna).
+///   cuánta luz había (de noche en la portería).
 data class CalidadFrame(val nitidez: Float, val fraccionReflejo: Float, val luminancia: Float = 0f)
 
 private const val UMBRAL_SATURACION = 250

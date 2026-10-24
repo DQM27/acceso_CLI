@@ -783,6 +783,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula_con_motivo(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_revisar_password_nueva(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_crear_contratista(
@@ -900,6 +902,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_ruta(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_temporal(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion(
     ): Int
@@ -1114,6 +1118,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_autenticar(`ptr`: Long,`cedula`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_temporal(`ptr`: Long,`cedula`: RustBuffer.ByValue,`passwordTemporal`: RustBuffer.ByValue,`passwordNueva`: RustBuffer.ByValue,`confirmacion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_cerrar_sesion_al_salir(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1255,6 +1261,8 @@ internal object UniffiLib {
     external fun uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula(`prefijo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_leer_pdf417_cedula_con_motivo(`prefijo`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_revisar_password_nueva(`passwordTemporal`: RustBuffer.ByValue,`passwordNueva`: RustBuffer.ByValue,`confirmacion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_control_acceso_mobile_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1468,6 +1476,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_pdf417_cedula_con_motivo() and 0xFFFF) != 65501) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_revisar_password_nueva() and 0xFFFF) != 18904) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_admite_personal_ruta_para_formulario() and 0xFFFF) != 65365) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1643,6 +1654,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_autenticar() and 0xFFFF) != 59674) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cambiar_password_temporal() and 0xFFFF) != 21318) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_sesion() and 0xFFFF) != 14163) {
@@ -4062,6 +4076,22 @@ public interface NucleoInterface {
     fun `autenticar`(`cedula`: kotlin.String, `password`: kotlin.String): UsuarioSesion
     
     /**
+     * Segundo paso del login cuando `autenticar` devolvió
+     * `NucleoError::PasswordTemporal`: cambia la temporal por
+     * `password_nueva` en Supabase Auth y abre la sesión con la nueva, sin
+     * volver a pedir nada. Mismo cambio que hace el escritorio
+     * (`cambiar_password_supabase`): `nube::cambiar_password` revalida la
+     * temporal con un login real y limpia `debe_cambiar_password`. Después
+     * `autenticar_supabase` cachea la nueva para entrar sin conexión, lo
+     * que también pisa una temporal que hubiera quedado cacheada.
+     *
+     * Necesita red: sin conexión falla con el mensaje de red y la cuenta
+     * sigue con la temporal. Las reglas (`revisar_password_nueva`) se
+     * revisan antes de tocar la red.
+     */
+    fun `cambiarPasswordTemporal`(`cedula`: kotlin.String, `passwordTemporal`: kotlin.String, `passwordNueva`: kotlin.String, `confirmacion`: kotlin.String): UsuarioSesion
+    
+    /**
      * Sólo olvida el actor en memoria — el `AppCore`/la conexión `SQLite`
      * se quedan abiertos (son del teléfono, no de la sesión) para que
      * `Nucleo::autenticar` pueda loguear al siguiente usuario sin
@@ -5452,6 +5482,38 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
         
         FfiConverterString.lower(`cedula`),
         FfiConverterString.lower(`password`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Segundo paso del login cuando `autenticar` devolvió
+     * `NucleoError::PasswordTemporal`: cambia la temporal por
+     * `password_nueva` en Supabase Auth y abre la sesión con la nueva, sin
+     * volver a pedir nada. Mismo cambio que hace el escritorio
+     * (`cambiar_password_supabase`): `nube::cambiar_password` revalida la
+     * temporal con un login real y limpia `debe_cambiar_password`. Después
+     * `autenticar_supabase` cachea la nueva para entrar sin conexión, lo
+     * que también pisa una temporal que hubiera quedado cacheada.
+     *
+     * Necesita red: sin conexión falla con el mensaje de red y la cuenta
+     * sigue con la temporal. Las reglas (`revisar_password_nueva`) se
+     * revisan antes de tocar la red.
+     */
+    @Throws(NucleoException::class)override fun `cambiarPasswordTemporal`(`cedula`: kotlin.String, `passwordTemporal`: kotlin.String, `passwordNueva`: kotlin.String, `confirmacion`: kotlin.String): UsuarioSesion {
+            return FfiConverterTypeUsuarioSesion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_cambiar_password_temporal(
+        it,
+        
+        FfiConverterString.lower(`cedula`),
+        FfiConverterString.lower(`passwordTemporal`),
+        FfiConverterString.lower(`passwordNueva`),
+        FfiConverterString.lower(`confirmacion`),_status)
 }
     }
     )
@@ -8882,6 +8944,53 @@ public object FfiConverterTypeResumenSincronizacion: FfiConverterRustBuffer<Resu
 
 
 /**
+ * Cada requisito de la contraseña nueva por separado, para que el teléfono
+ * los muestre como lista que se va tildando mientras se escribe.
+ */
+data class RevisionPasswordNueva (
+    var `largoSuficiente`: kotlin.Boolean
+    , 
+    var `distintaDeLaTemporal`: kotlin.Boolean
+    , 
+    var `coinciden`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRevisionPasswordNueva: FfiConverterRustBuffer<RevisionPasswordNueva> {
+    override fun read(buf: ByteBuffer): RevisionPasswordNueva {
+        return RevisionPasswordNueva(
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: RevisionPasswordNueva) = (
+            FfiConverterBoolean.allocationSize(value.`largoSuficiente`) +
+            FfiConverterBoolean.allocationSize(value.`distintaDeLaTemporal`) +
+            FfiConverterBoolean.allocationSize(value.`coinciden`)
+    )
+
+    override fun write(value: RevisionPasswordNueva, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`largoSuficiente`, buf)
+            FfiConverterBoolean.write(value.`distintaDeLaTemporal`, buf)
+            FfiConverterBoolean.write(value.`coinciden`, buf)
+    }
+}
+
+
+
+/**
  * Espejo de `Ruta` (catálogo de números válidos) -- el checklist mobile
  * sólo lo consume vía `Nucleo::buscar_rutas` para confirmar el número
  * leído por OCR contra el catálogo, nunca lo administra (alta/baja/rango
@@ -10083,6 +10192,13 @@ sealed class NucleoException(message: String): kotlin.Exception(message) {
         class UsuarioInactivo(message: String) : NucleoException(message)
         
     /**
+     * La contraseña es correcta pero es la temporal del alta: no se abre
+     * sesión, Kotlin pasa al paso de elegir una nueva
+     * (`Nucleo::cambiar_password_temporal`).
+     */
+        class PasswordTemporal(message: String) : NucleoException(message)
+        
+    /**
      * Usuario global (sincronizado) que todavía no fijó contraseña en
      * este teléfono. `Nucleo::autenticar`/`autenticar`
      * interceptan esto internamente y redirigen a `autenticar_supabase`
@@ -10142,13 +10258,14 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
             1 -> NucleoException.Apertura(FfiConverterString.read(buf))
             2 -> NucleoException.CredencialesInvalidas(FfiConverterString.read(buf))
             3 -> NucleoException.UsuarioInactivo(FfiConverterString.read(buf))
-            4 -> NucleoException.SinPasswordLocal(FfiConverterString.read(buf))
-            5 -> NucleoException.NoAutenticado(FfiConverterString.read(buf))
-            6 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
-            7 -> NucleoException.GafeteOcupadoEnSitio(FfiConverterString.read(buf))
-            8 -> NucleoException.ProveedorActivoEnOtroSitio(FfiConverterString.read(buf))
-            9 -> NucleoException.Rechazado(FfiConverterString.read(buf))
-            10 -> NucleoException.Interno(FfiConverterString.read(buf))
+            4 -> NucleoException.PasswordTemporal(FfiConverterString.read(buf))
+            5 -> NucleoException.SinPasswordLocal(FfiConverterString.read(buf))
+            6 -> NucleoException.NoAutenticado(FfiConverterString.read(buf))
+            7 -> NucleoException.FechaInvalida(FfiConverterString.read(buf))
+            8 -> NucleoException.GafeteOcupadoEnSitio(FfiConverterString.read(buf))
+            9 -> NucleoException.ProveedorActivoEnOtroSitio(FfiConverterString.read(buf))
+            10 -> NucleoException.Rechazado(FfiConverterString.read(buf))
+            11 -> NucleoException.Interno(FfiConverterString.read(buf))
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
         
@@ -10172,32 +10289,36 @@ public object FfiConverterTypeNucleoError : FfiConverterRustBuffer<NucleoExcepti
                 buf.putInt(3)
                 Unit
             }
-            is NucleoException.SinPasswordLocal -> {
+            is NucleoException.PasswordTemporal -> {
                 buf.putInt(4)
                 Unit
             }
-            is NucleoException.NoAutenticado -> {
+            is NucleoException.SinPasswordLocal -> {
                 buf.putInt(5)
                 Unit
             }
-            is NucleoException.FechaInvalida -> {
+            is NucleoException.NoAutenticado -> {
                 buf.putInt(6)
                 Unit
             }
-            is NucleoException.GafeteOcupadoEnSitio -> {
+            is NucleoException.FechaInvalida -> {
                 buf.putInt(7)
                 Unit
             }
-            is NucleoException.ProveedorActivoEnOtroSitio -> {
+            is NucleoException.GafeteOcupadoEnSitio -> {
                 buf.putInt(8)
                 Unit
             }
-            is NucleoException.Rechazado -> {
+            is NucleoException.ProveedorActivoEnOtroSitio -> {
                 buf.putInt(9)
                 Unit
             }
-            is NucleoException.Interno -> {
+            is NucleoException.Rechazado -> {
                 buf.putInt(10)
+                Unit
+            }
+            is NucleoException.Interno -> {
+                buf.putInt(11)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -12866,6 +12987,23 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
         
         FfiConverterByteArray.lower(`prefijo`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Reglas de la contraseña nueva que reemplaza a la temporal. Pura (sin
+         * red ni base), así Kotlin la consulta en cada tecla.
+         */ fun `revisarPasswordNueva`(`passwordTemporal`: kotlin.String, `passwordNueva`: kotlin.String, `confirmacion`: kotlin.String): RevisionPasswordNueva {
+            return FfiConverterTypeRevisionPasswordNueva.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_revisar_password_nueva(
+    
+        
+        FfiConverterString.lower(`passwordTemporal`),
+        FfiConverterString.lower(`passwordNueva`),
+        FfiConverterString.lower(`confirmacion`),_status)
 }
     )
     }

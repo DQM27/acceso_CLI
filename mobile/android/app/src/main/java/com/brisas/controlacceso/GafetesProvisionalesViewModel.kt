@@ -43,6 +43,10 @@ class GafetesProvisionalesViewModel(
 ) : ViewModel() {
     var activos by mutableStateOf<List<FilaGafeteProvisionalActiva>>(emptyList())
         private set
+
+    /// "Gafete N entregado · …" / "Gafete N devuelto · …" (ver
+    /// [FranjaConfirmacion]).
+    val confirmacion = ConfirmacionReciente()
     var cargando by mutableStateOf(false)
         private set
     var error by mutableStateOf<String?>(null)
@@ -105,6 +109,13 @@ class GafetesProvisionalesViewModel(
         }
     }
 
+    /// Se cierra el panel de entrega sin entregar: suelta al encargado elegido
+    /// y el error de la entrega, para que el próximo arranque de cero.
+    fun cancelarEntrega() {
+        cambiarTextoEncargado("")
+        error = null
+    }
+
     fun elegirEncargado(encargado: EncargadoRuta) {
         buscadorEncargado.cancelar()
         textoEncargado = "${encargado.nombre} · ${encargado.codigoEmpleado}"
@@ -129,6 +140,7 @@ class GafetesProvisionalesViewModel(
                 }
                 CambiosNube.cambioLocal()
                 mensaje = "Gafete entregado"
+                confirmacion.mostrar("Gafete $gafeteNumero entregado · ${encargado.nombre}")
                 error = null
                 textoEncargado = ""
                 encargadoSeleccionado = null
@@ -158,6 +170,14 @@ class GafetesProvisionalesViewModel(
                     }
                 }
                 CambiosNube.cambioLocal()
+                confirmacion.mostrar(
+                    when (fila) {
+                        is FilaGafeteProvisionalActiva.Local ->
+                            "Gafete ${fila.prestamo.gafeteNumero} devuelto · ${fila.prestamo.encargadoNombre}"
+                        is FilaGafeteProvisionalActiva.Remota ->
+                            "Gafete ${fila.remoto.gafeteNumero} devuelto · ${fila.remoto.encargadoNombre}"
+                    },
+                )
                 refrescarActivos()
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()

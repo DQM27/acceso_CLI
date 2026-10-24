@@ -234,8 +234,7 @@ cualquier Activity/ViewModel. Android no hereda variables de entorno de
 shell como Windows, así que `Os.setenv` es el único equivalente --
 mismo criterio de fondo que `scripts/activar_sandbox.ps1`.
 
-Gateado por `BuildConfig.DEBUG` (mismo patrón que el `FLAG_SECURE` de
-`MainActivity.kt`): **todo build de debug apunta a staging
+Gateado por `BuildConfig.DEBUG`: **todo build de debug apunta a staging
 automáticamente, sin nada que activar a mano** -- un `assembleDebug`/`run`
 normal desde Android Studio o `./gradlew installDebug` nunca toca
 producción. Un build de **release** (firmado, el que sale por GitHub

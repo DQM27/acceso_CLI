@@ -1,7 +1,6 @@
 package com.brisas.controlacceso
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,18 +97,8 @@ private fun PasoEncabezado(numero: Int, titulo: String, completado: Boolean) {
 }
 
 @Composable
-private fun BotonCamaraCuadrado(onEscanear: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(AlturaBusquedaBrisas)
-            .border(1.dp, MaterialTheme.colorScheme.primary, FormaCampoBrisas)
-            .clip(FormaCampoBrisas)
-            .clickable(onClick = onEscanear),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Default.PhotoCamera, contentDescription = "Escanear", tint = MaterialTheme.colorScheme.primary)
-    }
-}
+private fun BotonCamaraCuadrado(onEscanear: () -> Unit) =
+    BotonCuadradoBordeBrisas(icono = Icons.Default.PhotoCamera, descripcion = "Escanear", onClick = onEscanear)
 
 /// Paso "Encargado" -- buscador real por nombre o código de empleado
 /// (pedido explícito del usuario, 2026-09-15: "que funcione de las dos

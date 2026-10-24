@@ -67,7 +67,8 @@ internal fun <T> ListaConEstados(
     detalleVacio: String,
     sincronizando: Boolean,
     onSincronizar: () -> Unit,
-    contentPadding: PaddingValues = PaddingValues(top = 5.dp),
+    // Abajo, lugar para el botón flotante y la confirmación (ver [PieFlotante]).
+    contentPadding: PaddingValues = PaddingValues(top = 5.dp, bottom = EspacioPieLista),
     contenidoFila: @Composable (T) -> Unit,
 ) {
     val estado = when {

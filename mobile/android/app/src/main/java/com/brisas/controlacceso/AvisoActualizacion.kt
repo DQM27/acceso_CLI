@@ -43,7 +43,6 @@ fun AvisoActualizacion(
         shape = MaterialTheme.shapes.large,
         color = fondo.copy(alpha = OPACIDAD_TARJETA),
         contentColor = if (urgente) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onTertiaryContainer,
-        shadowElevation = 6.dp,
     ) {
         Column(
             modifier = Modifier.padding(horizontal = EspacioControlBrisas, vertical = 10.dp),
