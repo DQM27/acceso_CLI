@@ -21,6 +21,14 @@ const filas: Fila[] = [
   { nombre: "Ana", empresa: null, vencimiento: "2026-11-01", dias_para_vencer: 30, acceso_activo: true },
 ];
 
+describe("medida sumar", () => {
+  it("suma sólo los números del campo (vacíos y textos no suman), sin ruido de decimales", () => {
+    const valores: Fila[] = [{ v: 0.1 }, { v: 0.2 }, { v: null }, { v: "3" }, { v: 2 }];
+    expect(calcularKpi({ tipo: "kpi", titulo: "t", medida: "sumar", campo: "v" }, valores)).toBe(2.3);
+    expect(calcularKpi({ tipo: "kpi", titulo: "t", medida: "sumar", campo: "v" }, [])).toBe(0);
+  });
+});
+
 describe("calcularKpi", () => {
   const kpi = (medida: "contar" | "contar_distintos" | "minimo" | "maximo", campo?: string) =>
     calcularKpi({ tipo: "kpi", titulo: "t", medida, campo }, filas);

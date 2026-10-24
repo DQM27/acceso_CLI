@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ImageDown } from "lucide-react";
 import { descargarArchivo } from "../exportacion";
-import { CATALOGO, type Origen } from "./catalogo";
+import type { Origen } from "./catalogo";
 import { nombreDeArchivo, pngDesdeDataUrl } from "./imagen";
-import { URL_SANDBOX } from "./sandbox";
+import { URL_SANDBOX, columnasParaSandbox } from "./sandbox";
 import type { Fila } from "./calculo";
 import type { WidgetLibre } from "./esquema";
 
@@ -21,17 +21,6 @@ import type { WidgetLibre } from "./esquema";
 /** Si el sandbox no avisa que cargó en este tiempo, se muestra el problema en vez de un hueco. */
 const ESPERA_CARGA_MS = 10_000;
 const ALTO_INICIAL = 260;
-
-interface ColumnaParaDibujo {
-  nombre: string;
-  tipo: string;
-  etiqueta: string;
-}
-
-function columnasDe(origen: Origen): ColumnaParaDibujo[] {
-  if (typeof origen !== "string") return origen.columnas.map((c) => ({ nombre: c.nombre, tipo: c.tipo, etiqueta: c.etiqueta ?? c.nombre }));
-  return Object.entries(CATALOGO[origen].campos).map(([nombre, def]) => ({ nombre, tipo: def.tipo, etiqueta: def.etiqueta }));
-}
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -99,7 +88,7 @@ export default function PanelLibre({ widget, filas, origen }: { widget: WidgetLi
     if (!preparado || !destino) return;
     // "*": el marco tiene origen anónimo y no hay otro destino posible; sólo esa ventana lo recibe.
     destino.postMessage(
-      { tipo: "dibujar", id: Date.now(), codigo: widget.codigo, datos: filas, columnas: columnasDe(origen), tema: temaActual(marco.current) },
+      { tipo: "dibujar", id: Date.now(), codigo: widget.codigo, datos: filas, columnas: columnasParaSandbox(origen), tema: temaActual(marco.current) },
       "*",
     );
   }, [preparado, widget.codigo, filas, origen]);

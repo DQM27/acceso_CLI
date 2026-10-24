@@ -68,6 +68,11 @@ function medir(medida: Medida, campo: string | undefined, filas: Fila[]): number
   if (medida === "contar") return filas.length;
   const valores = filas.map((f) => f[campo ?? ""]).filter((v): v is string | number | boolean => v != null);
   if (medida === "contar_distintos") return new Set(valores).size;
+  // Suma sólo los números (un vacío o un texto no suma); redondea el ruido de los decimales.
+  if (medida === "sumar") {
+    const suma = valores.reduce<number>((total, v) => total + (typeof v === "number" && Number.isFinite(v) ? v : 0), 0);
+    return Math.round(suma * 1e6) / 1e6;
+  }
   if (valores.length === 0) return null;
   const ordenados = [...valores].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   return (medida === "minimo" ? ordenados[0] : ordenados[ordenados.length - 1]) as number | string;

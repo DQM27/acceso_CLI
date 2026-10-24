@@ -202,6 +202,10 @@ function sumarUso(a: Anthropic.Usage | null, b: Anthropic.Usage): Anthropic.Usag
 export function erroresDeCodigoLibre(lienzo: Lienzo): string[] {
   const errores: string[] = [];
   lienzo.widgets.forEach((w, i) => {
+    if (w.tipo === "analisis") {
+      errores.push(...erroresDeAnalisis(w.codigo).map((e) => `widgets.${i}.codigo: ${e}`));
+      return;
+    }
     if (w.tipo !== "libre") return;
     try {
       new Function("datos", "columnas", "h", "ancho", "tema", `"use strict";\n${w.codigo}`);
@@ -209,6 +213,23 @@ export function erroresDeCodigoLibre(lienzo: Lienzo): string[] {
       if (error instanceof SyntaxError) errores.push(`widgets.${i}.codigo: error de sintaxis de JavaScript: ${error.message}`);
     }
   });
+  return errores;
+}
+
+/** Lo que el sandbox de Python no deja importar (ver sandbox-lienzo/public/python-motor.js). */
+const IMPORTACION_PROHIBIDA =
+  /^\s*(?:import|from)\s+(js|pyodide|pyodide_js|micropip|pandas|scipy|os|sys|subprocess|socket|ssl|urllib|http|requests|importlib|ctypes|asyncio|threading|pickle|io|pathlib|shutil)\b/m;
+
+/**
+ * Lo que se puede revisar del Python de un análisis sin correrlo (acá no hay
+ * Python): que deje su `resultado` y que no importe nada que el sandbox
+ * rechaza. Los errores de sintaxis los muestra el panel al calcular.
+ */
+export function erroresDeAnalisis(codigo: string): string[] {
+  const errores: string[] = [];
+  if (!/^\s*resultado\s*(?::[^=\n]+)?=(?!=)/m.test(codigo)) errores.push("tiene que asignar la lista de filas a `resultado`");
+  const prohibida = IMPORTACION_PROHIBIDA.exec(codigo);
+  if (prohibida) errores.push(`no se puede importar "${prohibida[1]}" (sólo la biblioteca estándar y numpy)`);
   return errores;
 }
 

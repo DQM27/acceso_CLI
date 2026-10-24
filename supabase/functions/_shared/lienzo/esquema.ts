@@ -47,7 +47,7 @@ const ordenEsquema = z.object({ campo, dir: z.enum(["asc", "desc"]) }).strict();
 /** Lo que comparten todos los paneles. */
 const panel = { ancho: z.enum(ANCHOS).optional() };
 /** Medidas que sirven para comparar grupos (un gráfico no muestra mínimos). */
-const medidaDeGrupo = z.enum(["contar", "contar_distintos"]);
+const medidaDeGrupo = z.enum(["contar", "contar_distintos", "sumar"]);
 
 const kpiEsquema = z
   .object({
@@ -146,16 +146,7 @@ const libreEsquema = z
   })
   .strict();
 
-const widgetEsquema = z.discriminatedUnion("tipo", [
-  kpiEsquema,
-  barrasEsquema,
-  lineaEsquema,
-  tortaEsquema,
-  tablaEsquema,
-  libreEsquema,
-]);
-
-/** Una columna que devuelve la consulta: el nombre exacto del SELECT y su tipo. */
+/** Una columna que devuelve la consulta (o un análisis): el nombre exacto y su tipo. */
 const columnaEsquema = z
   .object({
     nombre: z.string().regex(/^[a-z_][a-z0-9_]{0,39}$/),
@@ -163,6 +154,39 @@ const columnaEsquema = z
     etiqueta: z.string().min(1).max(40).optional(),
   })
   .strict();
+
+/** Los paneles que puede usar un análisis para mostrar su resultado. */
+const panelDeResultado = z.discriminatedUnion("tipo", [kpiEsquema, barrasEsquema, lineaEsquema, tortaEsquema, tablaEsquema]);
+
+/**
+ * Panel "analisis": un cálculo en Python (pronósticos, estadística, días fuera de
+ * lo normal) que corre en el sandbox (lienzo.megabrisas.com, Pyodide en un Web
+ * Worker sin red) con las filas del lienzo. `codigo` deja en `resultado` una
+ * lista de filas con las `columnas` declaradas, y `mostrar` es el panel común
+ * (kpi, barras, línea, torta o tabla) que las dibuja. El modelo no ve los datos.
+ */
+const analisisEsquema = z
+  .object({
+    tipo: z.literal("analisis"),
+    titulo,
+    /** Qué calcula, en una frase. */
+    descripcion: z.string().min(1).max(200).optional(),
+    codigo: z.string().min(1).max(12000),
+    columnas: z.array(columnaEsquema).min(1).max(20),
+    mostrar: panelDeResultado,
+    ...panel,
+  })
+  .strict();
+
+const widgetEsquema = z.discriminatedUnion("tipo", [
+  kpiEsquema,
+  barrasEsquema,
+  lineaEsquema,
+  tortaEsquema,
+  tablaEsquema,
+  libreEsquema,
+  analisisEsquema,
+]);
 
 /**
  * Un SELECT sobre el esquema `ia` (fuente "consulta"). Acá sólo se valida la
@@ -196,6 +220,9 @@ export type WidgetLinea = z.infer<typeof lineaEsquema>;
 export type WidgetTorta = z.infer<typeof tortaEsquema>;
 export type WidgetTabla = z.infer<typeof tablaEsquema>;
 export type WidgetLibre = z.infer<typeof libreEsquema>;
+export type WidgetAnalisis = z.infer<typeof analisisEsquema>;
+/** Un panel común (el que muestra el resultado de un análisis). */
+export type WidgetComun = z.infer<typeof panelDeResultado>;
 export type Lienzo = z.infer<typeof lienzoBase>;
 export type Consulta = z.infer<typeof consultaEsquema>;
 
@@ -266,6 +293,10 @@ function revisarMedida(
       problema(ctx, [...ruta, "campo"], `"${w.medida}" sólo sirve con fecha o número`);
     }
   }
+  if (w.campo && w.medida === "sumar") {
+    const tipo = definicionCampo(fuente, w.campo)?.tipo;
+    if (tipo && tipo !== "numero") problema(ctx, [...ruta, "campo"], '"sumar" sólo sirve con un número');
+  }
 }
 
 /** Eje y serie de un gráfico de barras o de línea. */
@@ -287,8 +318,7 @@ function revisarEjes(fuente: Origen, w: WidgetBarras | WidgetLinea, ruta: Ruta, 
   }
 }
 
-function revisarWidget(fuente: Origen, w: Widget, i: number, ctx: z.RefinementCtx) {
-  const ruta = ["widgets", i];
+function revisarWidget(fuente: Origen, w: Widget, ruta: Ruta, ctx: z.RefinementCtx) {
   switch (w.tipo) {
     case "kpi":
       revisarMedida(fuente, w, ruta, ctx);
@@ -330,6 +360,13 @@ function revisarWidget(fuente: Origen, w: Widget, i: number, ctx: z.RefinementCt
         else if (def && def.tipo !== "fecha") problema(ctx, r, "La tendencia necesita un campo de fecha");
       }
       break;
+    case "analisis": {
+      // El panel que muestra el resultado se revisa contra las columnas que declara el análisis.
+      const nombres = w.columnas.map((c) => c.nombre);
+      if (new Set(nombres).size !== nombres.length) problema(ctx, [...ruta, "columnas"], "Columnas repetidas");
+      revisarWidget({ columnas: w.columnas }, w.mostrar, [...ruta, "mostrar"], ctx);
+      break;
+    }
   }
 }
 
@@ -343,7 +380,7 @@ export const lienzoEsquema = lienzoBase.superRefine((lienzo, ctx) => {
   }
   const origen = origenDe(lienzo);
   lienzo.filtros.forEach((f, i) => revisarFiltro(origen, f, ["filtros", i], ctx));
-  lienzo.widgets.forEach((w, i) => revisarWidget(origen, w, i, ctx));
+  lienzo.widgets.forEach((w, i) => revisarWidget(origen, w, ["widgets", i], ctx));
 });
 
 /**

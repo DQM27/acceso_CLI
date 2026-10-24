@@ -447,7 +447,8 @@ describe("Asistente", () => {
     await screen.findByText("Contratistas adentro ahora");
     fireEvent.change(screen.getByLabelText("Mensaje para el asistente"), { target: { value: "proveedores con más ingresos" } });
     fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
-    expect(await screen.findByText("DISTRIBUIDORA")).toBeTruthy();
+    // La tabla (AG Grid) dibuja sus filas un momento después; con la máquina cargada puede tardar más de 1 s.
+    expect(await screen.findByText("DISTRIBUIDORA", undefined, { timeout: 5000 })).toBeTruthy();
   }
 
   it("una vista con consulta del asistente muestra los datos y el aviso de filas recortadas, sin el SQL", async () => {

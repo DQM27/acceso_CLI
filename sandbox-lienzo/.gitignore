@@ -1,0 +1,3 @@
+# Pyodide se baja con `node descargar-pyodide.mjs` (huellas fijadas ahí); no va en git.
+public/pyodide/
+.wrangler/

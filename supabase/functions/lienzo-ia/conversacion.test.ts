@@ -3,6 +3,7 @@ import type Anthropic from "npm:@anthropic-ai/sdk@0.132.1";
 import {
   type Configuracion,
   costoEnDolares,
+  erroresDeAnalisis,
   erroresDeCodigoLibre,
   limpiarSugerencias,
   MODELO,
@@ -378,6 +379,41 @@ Deno.test("panel libre: se compila pero NO se ejecuta en el servidor", () => {
   };
   assertEquals(erroresDeCodigoLibre(conEfecto), []);
   assertEquals((globalThis as { __ejecutado?: boolean }).__ejecutado, undefined);
+});
+
+Deno.test("análisis en Python: tiene que dejar `resultado` y no importar lo que el sandbox rechaza", () => {
+  assertEquals(erroresDeAnalisis("import statistics\nresultado = [{'x': 1}]"), []);
+  assertEquals(erroresDeAnalisis("import numpy as np\nresultado: list = []"), []);
+  assertEquals(erroresDeAnalisis("x = 1"), ["tiene que asignar la lista de filas a `resultado`"]);
+  assertEquals(erroresDeAnalisis("if resultado == []:\n    pass"), ["tiene que asignar la lista de filas a `resultado`"]);
+  for (const linea of ["import js", "from pyodide.ffi import to_js", "import pandas as pd", "  import os", "from urllib import request"]) {
+    assertEquals(erroresDeAnalisis(`${linea}\nresultado = []`).length, 1, linea);
+  }
+});
+
+Deno.test("análisis en Python: un código que no deja `resultado` vuelve al modelo para el reintento", async () => {
+  const analisis = (codigo: string) => ({
+    fuente: "ingresos",
+    filtros: [],
+    widgets: [
+      {
+        tipo: "analisis",
+        titulo: "Pronóstico",
+        codigo,
+        columnas: [{ nombre: "dia", tipo: "fecha" }, { nombre: "cantidad", tipo: "numero" }],
+        mostrar: { tipo: "linea", eje_x: "dia", medida: "sumar", campo: "cantidad" },
+      },
+    ],
+  });
+  const { p, pedidos } = puertos([
+    mensaje([herramienta({ mensaje: "Pronóstico.", lienzo: analisis("x = 1") }, "toolu_a")], "tool_use"),
+    mensaje([herramienta({ mensaje: "Pronóstico.", lienzo: analisis("resultado = []") }, "toolu_b")], "tool_use"),
+  ]);
+  const r = await procesarPedido({ pregunta: "pronóstico de ingresos" }, CONFIG, p);
+  assertEquals(r.estado, 200);
+  assertEquals((r.cuerpo as { tipo: string }).tipo, "editado");
+  const resultado = (pedidos[1].messages.at(-1)!.content as Anthropic.ToolResultBlockParam[])[0];
+  assertStringIncludes(String(resultado.content), "resultado");
 });
 
 Deno.test("sugerencias: llegan al panel limpias (cortas, sin repetir, máximo 3, sin SQL ni manipulación)", async () => {

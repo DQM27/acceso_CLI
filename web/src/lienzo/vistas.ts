@@ -1,4 +1,6 @@
 import type { Lienzo } from "./esquema";
+// El mismo pronóstico que el modelo tiene de ejemplo (y que una prueba corre con Pyodide).
+import { EJEMPLO_ANALISIS } from "../../../supabase/functions/lienzo-ia/instrucciones.ts";
 
 /**
  * Vistas de ejemplo del lienzo, escritas como documentos JSON del catálogo. Sin
@@ -98,6 +100,29 @@ export const VISTAS_PREDEFINIDAS: VistaPredefinida[] = [
           agrupar_por: "empresa",
           tendencia: "dia",
           orden: { campo: "dia", dir: "desc" },
+          ancho: "completo",
+        },
+      ],
+    },
+  },
+  {
+    id: "pronostico-ingresos",
+    titulo: "Pronóstico de ingresos (Python)",
+    lienzo: {
+      fuente: "ingresos",
+      filtros: [],
+      widgets: [
+        {
+          tipo: "analisis",
+          titulo: "Ingresos por día y pronóstico de la próxima semana",
+          descripcion: "Promedio de cada día de la semana, calculado en Python",
+          codigo: EJEMPLO_ANALISIS,
+          columnas: [
+            { nombre: "dia", tipo: "fecha", etiqueta: "Día" },
+            { nombre: "cantidad", tipo: "numero", etiqueta: "Ingresos" },
+            { nombre: "serie", tipo: "texto", etiqueta: "Serie" },
+          ],
+          mostrar: { tipo: "linea", eje_x: "dia", medida: "sumar", campo: "cantidad", serie: "serie" },
           ancho: "completo",
         },
       ],

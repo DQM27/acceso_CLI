@@ -17,7 +17,16 @@ import {
 } from "./calculo";
 import { COLOR_UNICO, RegistroColores } from "./colores";
 import { conFiltro, filtroParaCategoria } from "./edicion";
-import { origenDe, type Lienzo, type Widget, type WidgetBarras, type WidgetKpi, type WidgetLinea } from "./esquema";
+import {
+  origenDe,
+  type Lienzo,
+  type Widget,
+  type WidgetAnalisis,
+  type WidgetBarras,
+  type WidgetKpi,
+  type WidgetLinea,
+} from "./esquema";
+import AnalisisPython from "./AnalisisPython";
 import GraficoBarras from "./graficos/Barras";
 import { Leyenda, MarcoGrafico, type TablaDeDatos } from "./graficos/comun";
 import GraficoLinea from "./graficos/Linea";
@@ -44,6 +53,8 @@ const ANCHO_POR_OMISION: Record<Widget["tipo"], Ancho> = {
   torta: "tercio",
   tabla: "completo",
   libre: "completo",
+  // Un análisis toma el ancho del panel que muestra su resultado (ver anchoPorOmision).
+  analisis: "mitad",
 };
 
 const TEXTO_AGRUPACION: Record<AgrupacionFecha, string> = { dia: "por día", semana: "por semana", mes: "por mes" };
@@ -54,9 +65,9 @@ function etiquetaCampo(fuente: Origen, campo: string): string {
 
 /** "Contratistas", "Empresas (distintos)"… lo que mide un gráfico, dicho en palabras. */
 function textoMedida(fuente: Origen, medida: string, campo?: string): string {
-  return medida === "contar_distintos" && campo
-    ? `${etiquetaCampo(fuente, campo)} (distintos)`
-    : etiquetaOrigen(fuente);
+  if (medida === "contar_distintos" && campo) return `${etiquetaCampo(fuente, campo)} (distintos)`;
+  if (medida === "sumar" && campo) return etiquetaCampo(fuente, campo);
+  return etiquetaOrigen(fuente);
 }
 
 /** Colores estables por entidad, uno por cada campo (empresa, sitio…). */
@@ -249,7 +260,42 @@ function WidgetLienzo({ ctx, widget }: { ctx: Contexto; widget: Widget }): React
       );
     case "libre":
       return <PanelLibre widget={widget} filas={filas} origen={origenDe(lienzo)} />;
+    case "analisis":
+      return (
+        <AnalisisPython
+          widget={widget}
+          filas={filas}
+          origen={origenDe(lienzo)}
+          dibujar={(resultado) => (
+            <WidgetLienzo ctx={contextoDeAnalisis(ctx, widget, resultado)} widget={{ ...widget.mostrar, titulo: widget.titulo }} />
+          )}
+        />
+      );
   }
+}
+
+/**
+ * El resultado de un análisis se dibuja como un lienzo propio: sus filas son las
+ * que devolvió Python, con las columnas que declara. Sin profundizar al tocar
+ * (un filtro sobre el resultado no se puede llevar a los datos de origen).
+ */
+function contextoDeAnalisis(ctx: Contexto, widget: WidgetAnalisis, resultado: Fila[]): Contexto {
+  return {
+    lienzo: {
+      fuente: "consulta",
+      consulta: { sql: "(análisis en Python)", columnas: widget.columnas },
+      filtros: [],
+      widgets: [widget.mostrar],
+      formato: ctx.lienzo.formato,
+    },
+    filas: resultado,
+    colores: ctx.colores,
+    enfoque: ctx.enfoque,
+  };
+}
+
+function anchoPorOmision(widget: Widget): Ancho {
+  return widget.tipo === "analisis" ? ANCHO_POR_OMISION[widget.mostrar.tipo] : ANCHO_POR_OMISION[widget.tipo];
 }
 
 export default function LienzoVista({
@@ -276,7 +322,7 @@ export default function LienzoVista({
       {lienzo.widgets.map((widget, i) => (
         <div
           key={i}
-          className={`lienzo-panel lienzo-ancho-${enfoque ? "completo" : (widget.ancho ?? ANCHO_POR_OMISION[widget.tipo])}`}
+          className={`lienzo-panel lienzo-ancho-${enfoque ? "completo" : (widget.ancho ?? anchoPorOmision(widget))}`}
           style={{ "--i": i } as CSSProperties}
         >
           <WidgetLienzo ctx={ctx} widget={widget} />

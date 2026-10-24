@@ -127,6 +127,49 @@ describe("validarLienzo", () => {
     expect(tabla({ agrupar_por: "empresa", tendencia: "sitio" })).toBe(false);
   });
 
+  it("'sumar' necesita un campo de número", () => {
+    const consulta = (medida: string, campo?: string) =>
+      validarLienzo({
+        fuente: "consulta",
+        consulta: { sql: "select 1", columnas: [{ nombre: "dia", tipo: "fecha" }, { nombre: "valor", tipo: "numero" }] },
+        filtros: [],
+        widgets: [{ tipo: "linea", eje_x: "dia", medida, ...(campo ? { campo } : {}) }],
+      }).ok;
+    expect(consulta("sumar", "valor")).toBe(true);
+    expect(consulta("sumar")).toBe(false);
+    expect(consulta("sumar", "dia")).toBe(false);
+  });
+
+  it("análisis en Python: su panel se revisa contra las columnas que declara", () => {
+    const analisis = (resto: Record<string, unknown>) =>
+      validarLienzo({
+        fuente: "ingresos",
+        filtros: [],
+        widgets: [
+          {
+            tipo: "analisis",
+            titulo: "Pronóstico",
+            codigo: "resultado = []",
+            columnas: [
+              { nombre: "dia", tipo: "fecha" },
+              { nombre: "esperado", tipo: "numero" },
+            ],
+            mostrar: { tipo: "linea", eje_x: "dia", medida: "sumar", campo: "esperado" },
+            ...resto,
+          },
+        ],
+      });
+    expect(analisis({}).ok).toBe(true);
+    // Un campo que el análisis no devuelve (aunque exista en la fuente del lienzo).
+    expect(analisis({ mostrar: { tipo: "barras", eje_x: "empresa", medida: "contar" } }).ok).toBe(false);
+    // Columnas repetidas, un panel que no es común, sin código.
+    expect(analisis({ columnas: [{ nombre: "dia", tipo: "fecha" }, { nombre: "dia", tipo: "fecha" }] }).ok).toBe(false);
+    expect(analisis({ mostrar: { tipo: "libre", titulo: "x", codigo: "return ''" } }).ok).toBe(false);
+    expect(analisis({ codigo: "" }).ok).toBe(false);
+    const errores = analisis({ mostrar: { tipo: "linea", eje_x: "nada", medida: "contar" } });
+    expect(!errores.ok && errores.errores.join(" ")).toMatch(/widgets\.0\.mostrar\.eje_x/);
+  });
+
   it("limita el tamaño: sin widgets o con demasiados filas no pasa", () => {
     expect(conCambio((d) => (d.widgets = [])).ok).toBe(false);
     expect(conCambio((d) => (d.widgets[2].limite = 501)).ok).toBe(false);
