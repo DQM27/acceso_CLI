@@ -215,35 +215,15 @@ create view ia.encargados_ruta as
   select id, sitio_id, codigo_empleado, nombre, cedula, activo, created_at, updated_at from public.encargados_ruta;
 comment on view ia.encargados_ruta is 'Encargados (choferes) de las rutas de reparto, personal KOF.';
 
-create view ia.viajes_ruta as
-  select id, sitio_id, vehiculo_id, vehiculo_placa, vehiculo_numero_unidad, encargado_id, encargado_nombre, estado,
-         hora_creacion, usuario_creacion_nombre, hora_cierre, usuario_cierre_nombre
-    from public.viajes_ruta;
-comment on view ia.viajes_ruta is 'Viajes de reparto. estado: ABIERTO, CERRADO.';
-
 create view ia.salidas_ruta as
-  select id, sitio_id, viaje_id, vehiculo_id, vehiculo_placa, vehiculo_numero_unidad, encargado_id, encargado_nombre,
+  select id, sitio_id, vehiculo_id, vehiculo_placa, vehiculo_numero_unidad, encargado_id, encargado_nombre,
          hora_salida, usuario_salida_nombre, hora_retorno, usuario_retorno_nombre
     from public.salidas_ruta;
 comment on view ia.salidas_ruta is 'Salidas y retornos de los vehículos de reparto. hora_retorno nula = afuera.';
 
-create view ia.documentos_ruta as
-  select id, sitio_id, ruta_id, numero_documento, sub_numero, fecha_documento, hora_creacion from public.documentos_ruta;
-comment on view ia.documentos_ruta is 'Documentos (facturas de carga) de las rutas.';
-
-create view ia.salida_ruta_documentos as
-  select id, sitio_id, salida_id, documento_id, resultado, motivo_resultado, created_at
-    from public.salida_ruta_documentos;
-comment on view ia.salida_ruta_documentos is
-  'Documentos revisados en cada salida de ruta. resultado: PERMITIDO, PERMITIDO_CON_AUTORIZACION.';
-
 create view ia.anfitriones as
-  select id, correo, nombre, activo, creado_en from public.anfitriones;
+  select correo, nombre, activo, creado_en from public.anfitriones;
 comment on view ia.anfitriones is 'Anfitriones: empleados que reciben visitas.';
-
-create view ia.anfitrion_sitios as
-  select anfitrion_id, sitio_id from public.anfitrion_sitios;
-comment on view ia.anfitrion_sitios is 'En qué sitios recibe visitas cada anfitrión.';
 
 create view ia.citas as
   select id, anfitrion_correo, motivo, fecha_desde, fecha_hasta, hora_estimada, estado, created_at, updated_at
@@ -258,57 +238,11 @@ create view ia.cita_sitios as
   select cita_id, sitio_id from public.cita_sitios;
 comment on view ia.cita_sitios is 'A qué sitios aplica cada cita.';
 
-create view ia.visitantes as
-  select id, tipo_documento, numero_documento, nombre, empresa, telefono, correo, creado_en, actualizado_en
-    from public.visitantes;
-comment on view ia.visitantes is 'Visitantes registrados. tipo_documento: CEDULA, DIMEX, PASAPORTE, OTRO.';
-
-create view ia.visitas as
-  select id, sitio_id, anfitrion_id, tipo_visita, motivo, fecha_desde, fecha_hasta, hora_desde, hora_hasta,
-         requiere_escolta, grupo_id, origen, estado, creado_por, creado_en, actualizado_en
-    from public.visitas;
-comment on view ia.visitas is 'Visitas (nuevo módulo). origen: PRE_REGISTRO, WALK_IN. estado: VIGENTE, CANCELADA.';
-
-create view ia.visita_invitados as
-  select id, visita_id, visitante_id, placa_vehiculo, estado, aprobado_por, aprobado_en, motivo_rechazo, creado_en
-    from public.visita_invitados;
-comment on view ia.visita_invitados is
-  'Invitados de cada visita. estado: PROGRAMADO, EN_SITIO, FUERA, FINALIZADO, CANCELADA, NO_SE_PRESENTO, '
-  'SOLICITADO, APROBADO, RECHAZADO.';
-
-create view ia.visita_movimientos as
-  select id, invitado_id, sitio_id, entrada_en, salida_en, gafete_numero, gafete_devuelto, usuario_entrada_id,
-         usuario_salida_id, dispositivo_entrada_id, dispositivo_salida_id, creado_en, actualizado_en
-    from public.visita_movimientos;
-comment on view ia.visita_movimientos is 'Entradas y salidas de los invitados de visitas. salida_en nula = sigue adentro.';
-
-create view ia.restricciones_visitante as
-  select id, visitante_id, nivel, motivo, desde, hasta, creado_por, creado_en from public.restricciones_visitante;
-comment on view ia.restricciones_visitante is 'Restricciones a visitantes. nivel: BLOQUEADO, REQUIERE_AUTORIZACION.';
-
-create view ia.aceptaciones as
-  select id, visitante_id, sitio_id, requisito, version, aceptado_en, vence_en from public.aceptaciones;
-comment on view ia.aceptaciones is
-  'Requisitos aceptados por visitantes. requisito: CONSENTIMIENTO_DATOS, REGLAMENTO, INDUCCION.';
-
-create view ia.requisitos_sitio as
-  select sitio_id, tipo_visita, requisito, version_vigente, validez_dias from public.requisitos_sitio;
-comment on view ia.requisitos_sitio is 'Requisitos que pide cada sitio por tipo de visita.';
-
 create view ia.administradores_panel as
   select correo, creado_en from public.administradores_panel;
 comment on view ia.administradores_panel is 'Correos con acceso al panel de administración.';
 
 -- ── Vistas sólo del dueño (ia_lector_dueno): telemetría y errores ────────────
-
-create view ia.telemetria_diagnostico as
-  select id, recibido_en, ocurrido_en, dispositivo, sesion, version_app, tipo, datos from public.telemetria_diagnostico;
-comment on view ia.telemetria_diagnostico is 'Eventos de diagnóstico enviados por las apps.';
-
-create view ia.telemetria_reglas as
-  select id, creada_en, vence_en, activa, nota, dispositivo, plataforma, version_desde, eventos, nivel
-    from public.telemetria_reglas;
-comment on view ia.telemetria_reglas is 'Reglas de qué telemetría mandan las apps. plataforma: movil, escritorio. nivel: ligero, diagnostico.';
 
 create view ia.telemetria_ordenes as
   select dispositivo_id, grupos, vence_en, version, nota, actualizado_en, actualizado_por from public.telemetria_ordenes;
@@ -319,13 +253,6 @@ create view ia.telemetria_ordenes_historial as
     from public.telemetria_ordenes_historial;
 comment on view ia.telemetria_ordenes_historial is 'Historial de cambios a las órdenes de telemetría.';
 
-create view ia.errores_app as
-  select id, recibido_en, ocurrido_en, event_id, plataforma, version_app, entorno, nivel, tipo, huella, titulo, traza,
-         contexto, estado
-    from public.errores_app;
-comment on view ia.errores_app is
-  'Errores reportados por las apps. plataforma: movil, escritorio, otra. estado: nuevo, visto, resuelto, ignorado.';
-
 create view ia.eventos_seguridad_dispositivos as
   select id, ocurrido_en, dispositivo_id, tipo, ip, detalle from public.eventos_seguridad_dispositivos;
 comment on view ia.eventos_seguridad_dispositivos is
@@ -334,10 +261,10 @@ comment on view ia.eventos_seguridad_dispositivos is
 -- Permisos: nadie fuera de los dos roles lee `ia`.
 revoke all on all tables in schema ia from public, anon, authenticated, service_role;
 grant select on all tables in schema ia to ia_lector;
-revoke select on ia.telemetria_diagnostico, ia.telemetria_reglas, ia.telemetria_ordenes,
-  ia.telemetria_ordenes_historial, ia.errores_app, ia.eventos_seguridad_dispositivos from ia_lector;
-grant select on ia.telemetria_diagnostico, ia.telemetria_reglas, ia.telemetria_ordenes,
-  ia.telemetria_ordenes_historial, ia.errores_app, ia.eventos_seguridad_dispositivos to ia_lector_dueno;
+revoke select on ia.telemetria_ordenes, ia.telemetria_ordenes_historial,
+  ia.eventos_seguridad_dispositivos from ia_lector;
+grant select on ia.telemetria_ordenes, ia.telemetria_ordenes_historial,
+  ia.eventos_seguridad_dispositivos to ia_lector_dueno;
 
 -- ── Quién ve la telemetría ───────────────────────────────────────────────────
 
