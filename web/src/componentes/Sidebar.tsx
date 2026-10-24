@@ -6,8 +6,8 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { Seccion } from "../App";
-import { rutaSeccion } from "../App";
+import type { Seccion } from "../secciones";
+import { rutaSeccion } from "../secciones";
 import MenuContextualSecciones from "./MenuContextualSecciones";
 
 interface FilaSeccion {

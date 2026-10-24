@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Check } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { Seccion } from "../App";
+import type { Seccion } from "../secciones";
 
 interface FilaSeccion {
   id: Seccion;

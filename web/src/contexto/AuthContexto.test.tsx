@@ -1,7 +1,8 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "@supabase/supabase-js";
-import { AuthProvider, useAuth } from "./AuthContexto";
+import { AuthProvider } from "./AuthContexto";
+import { useAuth } from "./useAuth";
 
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),

@@ -144,11 +144,11 @@ export interface EstadoGuardado {
 }
 
 // v2: el layout guardado incluye `pinned` por columna.
-export function claveAlmacenamiento(id: string): string {
+function claveAlmacenamiento(id: string): string {
   return `tabla:${id}:v2`;
 }
 
-export function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {
+function leerEstadoGuardado(id: string | undefined): EstadoGuardado | null {
   if (!id) return null;
   try {
     const crudo = localStorage.getItem(claveAlmacenamiento(id));
@@ -171,7 +171,7 @@ function idPorUsuario(id: string | undefined, usuarioId: number | null): string 
  * explícito (ej. dos columnas que leen el mismo `field`), si no el `field`.
  * Mismo criterio que usa AG Grid internamente para su propio
  * `getColumnState`. */
-export function identidad(columna: ColDef<unknown>): string | undefined {
+function identidad(columna: ColDef<unknown>): string | undefined {
   if (typeof columna.colId === "string") return columna.colId;
   if (typeof columna.field === "string") return columna.field;
   return undefined;

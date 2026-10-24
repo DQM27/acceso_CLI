@@ -8,8 +8,10 @@ import MenuUsuario from "./componentes/MenuUsuario";
 import { useTema } from "./componentes/useTema";
 import Login from "./pantallas/Login";
 import type { UsuarioSesion } from "./api";
-import { AuthProvider, useAuth } from "./contexto/AuthContexto";
+import { AuthProvider } from "./contexto/AuthContexto";
+import { useAuth } from "./contexto/useAuth";
 import { SesionProvider } from "./contexto/SesionContexto";
+import { rutaSeccion, type Seccion } from "./secciones";
 
 // Descargar cada pantalla cuando el usuario entra a su sección.
 const Dispositivos = lazy(() => import("./pantallas/Dispositivos"));
@@ -20,23 +22,6 @@ const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 const Sesiones = lazy(() => import("./pantallas/Sesiones"));
 const Avisos = lazy(() => import("./pantallas/Avisos"));
 const Asistente = lazy(() => import("./pantallas/Asistente"));
-
-export type Seccion =
-  | "dispositivos"
-  | "historial"
-  | "adentro"
-  | "contratistas"
-  | "usuarios"
-  | "sesiones"
-  | "avisos"
-  | "asistente";
-
-/** Ruta real de cada sección -- `Sidebar` arma sus `NavLink` con esto y
- * `Shell` compara `location.pathname` contra el mismo valor para decidir
- * qué mostrar, así las dos fuentes no pueden desincronizarse en silencio. */
-export function rutaSeccion(id: Seccion): string {
-  return `/${id}`;
-}
 
 // Sin distinción de rol -- se eliminó `admin_regional` (nunca tuvo alcance
 // real, ver migración `elimina_admin_regional`). Cualquier fila en
