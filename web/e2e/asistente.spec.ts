@@ -196,8 +196,16 @@ test.describe("asistente", () => {
     desconocidas.length = 0;
     page.on("pageerror", (e) => errores.push(`pageerror: ${e.message}`));
     page.on("console", (m) => {
+      if (m.type() !== "error") return;
       // Los pedidos abortados al sandbox no cuentan: se cortan a propósito.
-      if (m.type() === "error" && !m.text().includes("lienzo.megabrisas.com") && !m.text().includes("ERR_FAILED")) errores.push(m.text());
+      const deSandbox = (() => {
+        try {
+          return new URL(m.location().url).hostname === "lienzo.megabrisas.com";
+        } catch {
+          return false;
+        }
+      })();
+      if (!deSandbox && !m.text().includes("net::ERR_FAILED")) errores.push(m.text());
     });
     // LENTO=4 npx playwright test …: frena la CPU para imitar la máquina de GitHub.
     if (process.env.LENTO) {
