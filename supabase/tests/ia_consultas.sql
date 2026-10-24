@@ -99,7 +99,7 @@ begin
      or has_table_privilege('ia_lector', 'public.tokens_push', 'select') then
     raise exception 'ia_lector puede leer tablas reales';
   end if;
-  if has_table_privilege('ia_lector', 'ia.telemetria_reglas', 'select') then
+  if has_table_privilege('ia_lector', 'ia.telemetria_ordenes', 'select') then
     raise exception 'ia_lector puede leer telemetría';
   end if;
   if not has_table_privilege('ia_lector_dueno', 'ia.contratistas', 'select') then
@@ -119,10 +119,10 @@ declare
   v_otro text := public.ia_describir(current_setting('diagnostico.otro'))::text;
   v_dueno text := public.ia_describir(current_setting('diagnostico.dueno'))::text;
 begin
-  if v_otro not like '%"vista" : "contratistas"%' or v_otro like '%telemetria%' or v_otro like '%errores_app%' then
+  if v_otro not like '%"vista" : "contratistas"%' or v_otro like '%telemetria%' then
     raise exception 'ia_describir para otra cuenta: %', left(v_otro, 300);
   end if;
-  if v_dueno not like '%"vista" : "telemetria_reglas"%' or v_dueno not like '%"vista" : "contratistas"%' then
+  if v_dueno not like '%"vista" : "telemetria_ordenes"%' or v_dueno not like '%"vista" : "contratistas"%' then
     raise exception 'ia_describir para el dueño no trae telemetría';
   end if;
 end $$;
@@ -141,7 +141,7 @@ begin
   exception when invalid_parameter_value then null; end;
 
   begin
-    perform public.ia_consultar('select count(*) as n from ia.telemetria_reglas', current_setting('diagnostico.otro'));
+    perform public.ia_consultar('select count(*) as n from ia.telemetria_ordenes', current_setting('diagnostico.otro'));
     raise exception 'Otra cuenta leyó telemetría';
   exception when insufficient_privilege then null; end;
 
@@ -200,7 +200,7 @@ begin
     raise exception 'Una consulta sin filas: %', v;
   end if;
 
-  v := public.ia_consultar('select count(*) as n from ia.telemetria_reglas', current_setting('diagnostico.dueno'));
+  v := public.ia_consultar('select count(*) as n from ia.telemetria_ordenes', current_setting('diagnostico.dueno'));
   if json_array_length(v -> 'filas') <> 1 then
     raise exception 'El dueño no pudo leer telemetría: %', v;
   end if;
