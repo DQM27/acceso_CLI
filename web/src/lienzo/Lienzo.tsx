@@ -35,6 +35,7 @@ import { Leyenda, MarcoGrafico, type TablaDeDatos } from "./graficos/comun";
 import GraficoLinea from "./graficos/Linea";
 import GraficoTorta from "./graficos/Torta";
 import PanelLibre from "./PanelLibre";
+import PanelProtegido from "./PanelProtegido";
 import type { Seleccion } from "./graficos/utiles";
 import TablaRica from "./TablaRica";
 import { TarjetaKpi } from "./widgets";
@@ -380,7 +381,9 @@ export default function LienzoVista({
           className={`lienzo-panel lienzo-ancho-${enfoque ? "completo" : (widget.ancho ?? anchoPorOmision(widget))}`}
           style={{ "--i": i } as CSSProperties}
         >
-          <WidgetLienzo ctx={ctx} widget={widget} />
+          <PanelProtegido titulo={widget.titulo} reinicio={`${JSON.stringify(widget)}\u0000${JSON.stringify(lienzo.filtros)}\u0000${filas.length}`}>
+            <WidgetLienzo ctx={ctx} widget={widget} />
+          </PanelProtegido>
         </div>
       ))}
     </div>
