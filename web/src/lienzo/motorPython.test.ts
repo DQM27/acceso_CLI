@@ -34,7 +34,7 @@ describe("motorPython", () => {
     const iframes = document.querySelectorAll("iframe.lienzo-motor-python");
     expect(iframes).toHaveLength(1);
     expect(marco()?.getAttribute("sandbox")).toBe("allow-scripts");
-    expect(marco()?.src).toMatch(/python\.html$/);
+    expect(marco()?.src).toMatch(/\/python$/);
     const enviados = capturarEnvios<{ id: number; tipo: string; codigo: string }>();
 
     // Hasta que el sandbox avisa que está preparado, no se manda nada.
