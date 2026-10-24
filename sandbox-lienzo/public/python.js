@@ -45,7 +45,9 @@ function arrancar() {
   avisar({ tipo: "estado", estado: "cargando" });
   let actual;
   try {
-    actual = new Worker(URL_TRABAJADOR, { type: "module" });
+    // Worker clásico: con origen anónimo, Chrome no deja crear uno de tipo módulo
+    // ("Refused to cross-origin redirects of the top-level worker script").
+    actual = new Worker(URL_TRABAJADOR);
   } catch (error) {
     return fallarTodo(`No se pudo preparar Python: ${error instanceof Error ? error.message : error}`);
   }
