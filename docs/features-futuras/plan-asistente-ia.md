@@ -577,7 +577,8 @@ saltándose el parser.
   en staging** (a mano en el editor SQL: la herramienta no deja correr el
   `drop function` sin confirmación); batería `lienzo_ingresos_hora.sql` en verde.
 
-Pendiente: alertas
-por correo (SMTP); presupuesto: tope mensual de USD 5 en el espacio de
-trabajo de Anthropic. Para producción, además del merge: desplegar a mano
-`lienzo-ia` y `lienzo-consulta` y cargar `ANTHROPIC_API_KEY` allá.
+Producción: `ANTHROPIC_API_KEY` ya cargada (llave propia, distinta de la de
+staging) y tope de gasto de USD 10 en la consola de Anthropic. Falta: el
+merge (aplica las migraciones), después desplegar a mano `lienzo-ia` y
+`lienzo-consulta`, y recién entonces publicar el panel compilado con los
+valores de producción. Pendiente aparte: alertas por correo (SMTP).
