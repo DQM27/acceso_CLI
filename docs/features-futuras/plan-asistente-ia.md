@@ -542,9 +542,9 @@ saltándose el parser.
   staging**; cada admin ve sólo las suyas), Rehacer, exportar los datos a
   Excel/CSV/PDF, imprimir la vista y PNG de cada gráfico (también del panel
   libre, que lo arma el sandbox).
-- Pendiente de la batería de vistas guardadas: los casos de DELETE se
-  corren a mano en el editor SQL de staging (la herramienta pide confirmar
-  sentencias destructivas y en la sesión no llegaba la confirmación).
+- Batería de vistas guardadas completa en staging: los casos de DELETE se
+  corrieron a mano en el editor SQL (la herramienta pide confirmar
+  sentencias destructivas) y pasaron; el rollback no dejó datos de prueba.
 
 ## Python en el sandbox (panel "analisis") — implementado (2026-10-23, sin PR todavía)
 
