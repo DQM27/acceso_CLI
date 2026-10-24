@@ -561,10 +561,10 @@ saltándose el parser.
 - Panel: `motorPython.ts` (un iframe oculto, pedidos por id) y
   `AnalisisPython.tsx`. Vista de ejemplo "Pronóstico de ingresos (Python)".
 - `lienzo-ia`: instrucciones y revisión del código (resultado, importaciones
-  prohibidas) **sin desplegar**: falta desplegar la v9 en staging (el conector
-  de Supabase pedía volver a autorizarse).
-- Pendiente de verificar en el navegador: la carga de Pyodide dentro del
-  iframe con origen anónimo (CSP y CORS se revisaron con curl).
+  prohibidas): **v9 en staging**.
+- Verificado en Chrome sin ventana con el aislamiento real: el Worker tiene
+  que ser clásico (uno de tipo módulo no arranca con origen anónimo); Python
+  listo en ~5 s con la descarga, statistics y numpy responden.
 
 Pendiente: alertas
 por correo (SMTP); presupuesto: tope mensual de USD 5 en el espacio de
