@@ -14,8 +14,8 @@ un contratista, ni al revés.
 ## Quién puede hacerlo
 
 Cualquier usuario con sesión abierta puede consultar, dar de alta y
-corregir empresas. **Activar o desactivar** una empresa lo hace **sólo un
-administrador**.
+corregir empresas. **Activar o desactivar** una empresa no se hace desde el
+escritorio: lo hace la administración.
 
 ## Dónde
 
@@ -36,27 +36,28 @@ cambiar desde aquí.
 
 ## Activar o desactivar una empresa
 
-La columna **Activa** tiene un interruptor.
+No se hace desde el escritorio. Si una empresa debe activarse o
+desactivarse, **pídaselo a un administrador**.
 
-⚠ Desactivar una empresa de contratistas **impide la entrada de todos sus
+Desactivar una empresa de contratistas **impide la entrada de todos sus
 contratistas** ("Acceso denegado · la empresa está inactiva"). Desactivar
 una empresa proveedora impide registrar ingresos de proveedores con esa
-empresa. Por eso **sólo un administrador** activa o desactiva empresas.
-Si usted es operador, no use el interruptor: pídaselo a un administrador.
+empresa.
 
 ## Qué se ve en la tabla
 
 - **Nombre**.
 - **Contratistas**: cuántos contratistas tiene la empresa (sólo empresas de
   contratistas).
-- **Activa**: interruptor.
+- **Activa**: **Sí** o **No** (en rojo). Sólo dice cómo está; no se cambia
+  desde aquí.
 
 ## Mensajes que pueden aparecer
 
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
 | "El nombre es obligatorio" / "El nombre de la empresa es obligatorio" | Falta el nombre. | Escríbalo. |
-| "Ya existe una empresa con ese nombre" / "El nombre de la empresa ya existe" | La empresa ya está en el catálogo. | Búsquela en la tabla; si está desactivada, puede que haya que activarla. |
+| "Ya existe una empresa con ese nombre" / "El nombre de la empresa ya existe" | La empresa ya está en el catálogo. | Búsquela en la tabla; si dice **Activa: No**, pida a un administrador que la active. |
 
 ## Relacionado
 

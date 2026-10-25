@@ -9,7 +9,6 @@ function valores(overrides: Partial<Record<string, unknown>> = {}) {
     tipo_ingreso: "Swat",
     fecha_vencimiento_praind: "",
     es_personal_ruta: false,
-    tiene_acceso: true,
     ...overrides,
   };
 }

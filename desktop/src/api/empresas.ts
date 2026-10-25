@@ -48,7 +48,5 @@ export async function actualizarEmpresa(id: number, nombre: string): Promise<voi
   solicitarSincronizacionNube();
 }
 
-export async function establecerEmpresaActiva(id: number, activa: boolean): Promise<void> {
-  await invoke("establecer_empresa_activa", { id, activa });
-  solicitarSincronizacionNube();
-}
+// Activar/desactivar una empresa no se hace desde el escritorio: es sólo del
+// panel web (decisión del dueño 2026-10-24).

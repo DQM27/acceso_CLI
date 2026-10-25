@@ -60,13 +60,7 @@ export async function crearEmpresaProveedor(nombre: string): Promise<number> {
   return id;
 }
 
-export async function establecerEmpresaProveedorActiva(
-  id: number,
-  activa: boolean,
-): Promise<void> {
-  await invoke("establecer_empresa_proveedor_activa", { id, activa });
-  solicitarSincronizacionNube();
-}
+// Activar/desactivar una empresa proveedora es sólo del panel web.
 
 export async function registrarIngresoProveedor(
   solicitud: SolicitudIngresoProveedor,

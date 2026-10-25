@@ -1,46 +1,41 @@
 import { useCallback, useState } from "react";
 import { Plus } from "lucide-react";
-import { avisos } from "../avisos/avisos";
 import type { ColDef } from "ag-grid-community";
 import Tabla from "../componentes/Tabla";
-import InterruptorCelda from "../componentes/InterruptorCelda";
 import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioEmpresa from "./FormularioEmpresa";
 import FormularioEmpresaProveedor from "./FormularioEmpresaProveedor";
-import { buscarEmpresas, establecerEmpresaActiva } from "../api";
+import { buscarEmpresas } from "../api";
 import type { EmpresaResumen } from "../api";
-import { buscarEmpresasProveedor, establecerEmpresaProveedorActiva } from "../api/proveedores";
+import { buscarEmpresasProveedor } from "../api/proveedores";
 import type { EmpresaProveedor } from "../api/proveedores";
 
 type TipoEmpresa = "contratista" | "proveedor";
 type FilaEmpresa = EmpresaResumen | EmpresaProveedor;
 
-const columnasContratista: ColDef<EmpresaResumen>[] = [
-  { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
-  { field: "contratistas", headerName: "Contratistas", flex: 1.3, minWidth: 130 },
-  {
-    field: "activo",
+/** "Activa" sólo se lee: activar o desactivar una empresa es del panel web
+ * (decisión del dueño 2026-10-24). Texto, para poder filtrar ("No"). */
+function columnaActiva<T extends FilaEmpresa>(): ColDef<T> {
+  return {
+    colId: "activo",
     headerName: "Activa",
     flex: 1,
     minWidth: 100,
-    filter: false,
-    cellRenderer: InterruptorCelda,
-    cellRendererParams: { critico: true },
-  },
+    valueGetter: (p) => (p.data?.activo ? "Sí" : "No"),
+    cellStyle: (p) => (p.data && !p.data.activo ? { color: "var(--error)", fontWeight: 600 } : null),
+  };
+}
+
+const columnasContratista: ColDef<EmpresaResumen>[] = [
+  { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
+  { field: "contratistas", headerName: "Contratistas", flex: 1.3, minWidth: 130 },
+  columnaActiva<EmpresaResumen>(),
 ];
 
 const columnasProveedor: ColDef<EmpresaProveedor>[] = [
   { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
-  {
-    field: "activo",
-    headerName: "Activa",
-    flex: 1,
-    minWidth: 100,
-    filter: false,
-    cellRenderer: InterruptorCelda,
-    cellRendererParams: { critico: true },
-  },
+  columnaActiva<EmpresaProveedor>(),
 ];
 
 /**
@@ -49,9 +44,10 @@ const columnasProveedor: ColDef<EmpresaProveedor>[] = [
  * separados en el núcleo (`empresas`/`empresas_proveedor`, ver
  * docs/features-futuras/plan-control-proveedores.md), pero no ameritan dos
  * pestañas de sidebar aparte, son la misma clase de pantalla (catálogo con
- * alta + activar/desactivar). Proveedor no admite renombrar -- el núcleo no
- * lo expone (ver FormularioEmpresaProveedor), sólo activar/desactivar
- * inline en la grilla.
+ * alta). Proveedor no admite renombrar -- el núcleo no lo expone (ver
+ * FormularioEmpresaProveedor). Activar o desactivar no se hace acá: es sólo
+ * del panel web (decisión del dueño 2026-10-24); la columna "Activa" sólo
+ * dice cómo está.
  */
 export default function Empresas() {
   const [tipo, setTipo] = useState<TipoEmpresa>("contratista");
@@ -85,19 +81,6 @@ export default function Empresas() {
   );
 
   useCargaAlCambiar(recargar, true);
-
-  async function manejarEdicion(fila: FilaEmpresa) {
-    try {
-      if (tipo === "contratista") {
-        await establecerEmpresaActiva(fila.id, fila.activo);
-      } else {
-        await establecerEmpresaProveedorActiva(fila.id, fila.activo);
-      }
-    } catch (error) {
-      avisos.error(error);
-      recargar();
-    }
-  }
 
   // Orden pedido por el usuario (2026-09-23): "+ Nueva", el buscador y al
   // final el selector de tipo.
@@ -145,7 +128,6 @@ export default function Empresas() {
               id="empresas"
               columnas={columnasContratista}
               filas={filasContratista}
-              onCeldaEditada={manejarEdicion}
               onFilaDobleClic={setFormularioAbierto}
               controles={controles}
             />
@@ -156,7 +138,6 @@ export default function Empresas() {
               id="empresas-proveedor"
               columnas={columnasProveedor}
               filas={filasProveedor}
-              onCeldaEditada={manejarEdicion}
               controles={controles}
             />
           )}

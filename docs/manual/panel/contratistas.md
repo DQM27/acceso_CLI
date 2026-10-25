@@ -13,8 +13,8 @@ ninguna entrada lo deja pasar.
 
 ## Quién puede hacerlo
 
-Administradores del panel. En el puesto de control, activar o desactivar
-contratistas lo hace **sólo un administrador**.
+Administradores del panel. Dar o quitar el acceso a un contratista **sólo
+se hace aquí**: el escritorio del puesto de control no lo permite.
 
 ## Dónde
 

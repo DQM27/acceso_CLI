@@ -6,10 +6,10 @@ import { useCargaAlCambiar } from "../componentes/useCargaAlCambiar";
 import { useBarraEstado } from "../contexto/BarraEstadoContexto";
 import FormularioContratista from "./FormularioContratista";
 import { actualizarContratista, buscarContratistas, listarEmpresasSeleccionables } from "../api";
-import type { ContratistaResumen, Empresa, RolUsuario } from "../api";
-import { columnasPara } from "./Contratistas.logica";
+import type { ContratistaResumen, Empresa } from "../api";
+import { columnasContratistas } from "./Contratistas.logica";
 
-export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
+export default function Contratistas() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [filas, setFilas] = useState<ContratistaResumen[]>([]);
@@ -21,7 +21,7 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
   // useMemo -- mismo motivo que en Historial.tsx: si `columnas` se recrea en
   // cada render, AG Grid reaplica el orden/ancho literales encima del layout
   // que la persona ya acomodó (persistido en localStorage vía `Tabla`).
-  const columnas = useMemo(() => columnasPara(actorRol), [actorRol]);
+  const columnas = useMemo(() => columnasContratistas(), []);
 
   useBarraEstado(cargando ? "Cargando…" : `${filas.length} resultado(s)`);
 
@@ -58,7 +58,6 @@ export default function Contratistas({ actorRol }: { actorRol: RolUsuario }) {
         tipo_ingreso: fila.tipo_ingreso,
         fecha_vencimiento_praind: fila.fecha_vencimiento_praind,
         es_personal_ruta: fila.es_personal_ruta,
-        tiene_acceso: fila.tiene_acceso,
       });
     } catch (error) {
       // La grilla ya muestra el valor nuevo (edición optimista de AG Grid) —

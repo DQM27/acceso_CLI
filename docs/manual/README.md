@@ -116,16 +116,14 @@ Cuando se corrija una, se actualiza su proceso.
    asigna otro), así que el aviso debe verse como bloqueo (rojo).
 2. **Activos**: el botón **Salida** de cada fila registra sin confirmar. Un
    clic en la fila equivocada saca a la persona equivocada.
-3. **Contratistas**: la columna **Acceso** se oculta al Operador, pero la
-   casilla **Con acceso** sí aparece en el formulario de edición y la
-   puede cambiar.
-4. **Empresas**: cualquier usuario puede desactivar una empresa, lo que deja
-   sin entrada a todos sus contratistas.
-
-   Decisión del dueño (2026-10-23) para 3 y 4: **sólo un administrador**
-   activa o desactiva empresas y contratistas. Hoy el programa no lo
-   impide (los roles están aplanados en `src/domain/autorizacion.rs`); el
-   manual ya lo indica como regla.
+3. ~~**Contratistas** y **Empresas**: se podían activar o desactivar desde
+   el escritorio.~~ Corregido (2026-10-24): decisión del dueño, **nadie**
+   activa ni desactiva empresas o contratistas desde el escritorio; es sólo
+   del panel web. El escritorio ya no lo ofrece y el núcleo conserva el
+   acceso del contratista al guardar.
+4. **Empresas en el panel**: el panel web todavía no tiene sección
+   **Empresas**, así que activar o desactivar una empresa hoy se hace por
+   SQL en Supabase (decisión del dueño 2026-10-24, hasta que exista).
 5. **Gafetes**: **Dar de baja** se aplica sin confirmar y es definitivo.
 6. **Gafetes**: marcar perdido un gafete de **visita** busca la cédula entre
    las visitas agendadas en la web; con una visita **por correo** puede no

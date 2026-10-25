@@ -1,11 +1,11 @@
 import type { ColDef } from "ag-grid-community";
 import InterruptorCelda from "../componentes/InterruptorCelda";
 import { textoTipoIngreso } from "../api";
-import type { ContratistaResumen, EstadoAccesoLista, RolUsuario } from "../api";
+import type { ContratistaResumen, EstadoAccesoLista } from "../api";
 import { textoFechaDDMMYYYY } from "../tiempo";
 
-// "es de ruta"/"tiene acceso" se pueden tocar directo desde la grilla (ambos
-// booleanos, bajo riesgo) — el resto (cédula, nombre, empresa, tipo, PRAIND)
+// "es de ruta" se puede tocar directo desde la grilla (booleano, bajo
+// riesgo) — el resto (cédula, nombre, empresa, tipo, PRAIND)
 // pasa por FormularioContratista (doble click en una fila para editar, botón
 // "+ Nuevo" para dar de alta). Sin formulario de filtros a medida: el
 // buscador de arriba (`busqueda`, quickFilterText de AG Grid) más los
@@ -16,12 +16,10 @@ import { textoFechaDDMMYYYY } from "../tiempo";
 // no tiene un filtro booleano nativo decente, y ya se ven/tocan directo con
 // el switch.
 //
-// "Acceso" (`tiene_acceso`) se oculta para Operador (ver `Contratistas`,
-// más abajo) -- 2026-09-06: el cambio de este estado se delega a los
-// admins (panel web), un Operador viéndola sin poder usarla para nada
-// sólo generaba confusión. El núcleo todavía no lo exige (cualquier rol
-// autenticado puede llamar `actualizarContratista` igual) -- esto es sólo
-// la UI, no un candado de permisos nuevo.
+// Sin columna "Acceso": desde el escritorio nadie da ni quita el acceso, es
+// sólo del panel web (decisión del dueño 2026-10-24); el núcleo conserva el
+// que tenía al guardar (`actualizar_datos_contratista`). Si alguien no tiene
+// acceso, se ve en "Estado" ("Acceso denegado").
 /** Qué tan grave es el estado: define el color de la celda. */
 export type NivelEstado = "ok" | "aviso" | "bloqueo";
 
@@ -64,8 +62,8 @@ export function colorEstadoAcceso(estado: EstadoAccesoLista | null | undefined):
   return estado ? COLOR_NIVEL[ESTADOS_ACCESO[estado].nivel] : undefined;
 }
 
-export function columnasPara(actorRol: RolUsuario): ColDef<ContratistaResumen>[] {
-  const columnas: ColDef<ContratistaResumen>[] = [
+export function columnasContratistas(): ColDef<ContratistaResumen>[] {
+  return [
     { field: "cedula", headerName: "Cédula", flex: 1.4, minWidth: 140, cellStyle: { textAlign: "left" } },
     { field: "nombre", headerName: "Nombre", flex: 1.6, minWidth: 170, cellStyle: { textAlign: "left" } },
     { field: "empresa_nombre", headerName: "Empresa", flex: 1.4, minWidth: 140 },
@@ -116,16 +114,4 @@ export function columnasPara(actorRol: RolUsuario): ColDef<ContratistaResumen>[]
       filter: false,
     },
   ];
-  if (actorRol !== "Operador") {
-    columnas.push({
-      field: "tiene_acceso",
-      headerName: "Acceso",
-      flex: 1,
-      minWidth: 100,
-      cellRenderer: InterruptorCelda,
-      cellRendererParams: { critico: true },
-      filter: false,
-    });
-  }
-  return columnas;
 }
