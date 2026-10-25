@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -275,14 +276,17 @@ internal fun DivisorGrupo() {
 }
 
 /// Un renglón de [GrupoCampos]: el texto de ayuda adentro mientras está vacío
-/// y, a la derecha, lo que haga falta (el ojo de la contraseña). Con [error],
-/// el texto en rojo. [modifier] va al campo (para su `focusRequester`).
+/// y, a la derecha, lo que haga falta (el ojo de la contraseña, la cámara).
+/// Con [etiqueta], ésta va a la izquierda y el valor a su lado, como en los
+/// formularios de iOS: lo que llenó el escáner se revisa de un vistazo. Con
+/// [error], el texto en rojo. [modifier] va al campo (para su `focusRequester`).
 @Composable
 internal fun CampoAgrupado(
     valor: String,
     onCambiar: (String) -> Unit,
     ayuda: String,
     modifier: Modifier = Modifier,
+    etiqueta: String? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
@@ -297,6 +301,13 @@ internal fun CampoAgrupado(
             .padding(start = 16.dp, end = if (alFinal != null) 4.dp else 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (etiqueta != null) {
+            Text(
+                etiqueta,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.width(ANCHO_ETIQUETA_CAMPO),
+            )
+        }
         BasicTextField(
             value = valor,
             onValueChange = onCambiar,
@@ -322,6 +333,10 @@ internal fun CampoAgrupado(
         alFinal?.invoke()
     }
 }
+
+/// Ancho de la etiqueta de un [CampoAgrupado] (y de [FilaSelector]): todas
+/// del mismo ancho, así los valores quedan alineados en columna.
+internal val ANCHO_ETIQUETA_CAMPO = 96.dp
 
 /// Renglón de contraseña de [GrupoCampos], con ojo para mostrarla: con prisa
 /// o con guantes, revisar lo tipeado evita un intento fallido.

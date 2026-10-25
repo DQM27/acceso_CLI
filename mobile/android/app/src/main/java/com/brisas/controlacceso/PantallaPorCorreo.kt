@@ -1,20 +1,19 @@
 package com.brisas.controlacceso
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -227,9 +226,9 @@ fun PantallaPorCorreo(
     }
 }
 
-/// Formulario en pantalla completa, con las mismas tarjetas numeradas que
-/// [FormularioNuevoIngresoProveedor]: 1 datos de la persona, 2 motivo de la
-/// visita, 3 placa (opcional) y gafete de visita.
+/// Formulario en pantalla completa, con los mismos grupos que
+/// [FormularioNuevoIngresoProveedor]: el escáner arriba, la persona, el
+/// motivo de la visita, y la placa (opcional) y el gafete de visita.
 @Composable
 private fun FormularioNuevoIngresoCorreo(
     viewModel: CorreoViewModel,
@@ -239,10 +238,8 @@ private fun FormularioNuevoIngresoCorreo(
     onEscanearPlaca: () -> Unit,
     onVolver: () -> Unit,
 ) {
-    val paso1Completo = viewModel.cedula.isNotBlank() && viewModel.nombre.isNotBlank()
-    val paso2Completo = viewModel.motivo.isNotBlank()
-    val paso3Completo = gafeteTexto.isNotBlank()
-    val puedeRegistrar = paso1Completo && paso2Completo && paso3Completo &&
+    val puedeRegistrar = viewModel.cedula.isNotBlank() && viewModel.nombre.isNotBlank() &&
+        viewModel.motivo.isNotBlank() && gafeteTexto.isNotBlank() &&
         !viewModel.registrando && !viewModel.cedulaConIngresoActivo
 
     // Mientras se llenan los datos, las conexiones con la nube se calientan
@@ -258,50 +255,46 @@ private fun FormularioNuevoIngresoCorreo(
         Column(modifier = Modifier.verticalScroll(scrollState).imePadding()) {
             EncabezadoPantalla(titulo = "Ingreso por correo", onVolver = onVolver)
 
-            Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                PasoDatosProveedor(
-                    completado = paso1Completo,
-                    cedula = viewModel.cedula,
-                    nombre = viewModel.nombre,
-                    onCambiarCedula = viewModel::cambiarCedula,
-                    onCambiarNombre = viewModel::cambiarNombre,
-                    onEscanear = onEscanear,
-                    titulo = "Datos de la visita",
-                )
-                TarjetaPasoProveedor(2, "Motivo de la visita", paso2Completo) {
-                    OutlinedTextField(
-                        value = viewModel.motivo,
-                        onValueChange = viewModel::cambiarMotivo,
-                        placeholder = { Text("Ej.: Entrevista RH – a quién visita") },
-                        singleLine = true,
-                        shape = FormaCampoBrisas,
-                        colors = ColoresCampoBrisas(),
-                        modifier = Modifier.fillMaxWidth().height(AlturaBusquedaBrisas),
-                    )
-                }
-                PasoVehiculoYGafete(
-                    completado = paso3Completo,
-                    placa = viewModel.placa,
-                    onCambiarPlaca = viewModel::cambiarPlaca,
-                    onEscanearPlaca = onEscanearPlaca,
-                    gafeteTexto = gafeteTexto,
-                    onCambiarGafeteTexto = { onCambiarGafeteTexto(it.filter(Char::isDigit)) },
-                    // Lleva el scroll al botón de abajo mientras se abre el
-                    // teclado (mismo motivo que en proveedores).
-                    onGafeteEnfocado = {
-                        scope.launch {
-                            repeat(15) {
-                                scrollState.animateScrollTo(scrollState.maxValue)
-                                delay(30)
-                            }
-                        }
-                    },
-                    placeholderGafete = "Número de gafete de visita",
+            TarjetaEscaner("Escanear cédula", "Llena la cédula y el nombre.", onClick = onEscanear)
+
+            SeccionPersona(
+                cedula = viewModel.cedula,
+                nombre = viewModel.nombre,
+                onCambiarCedula = viewModel::cambiarCedula,
+                onCambiarNombre = viewModel::cambiarNombre,
+                titulo = "Visita",
+            )
+
+            SeccionFormulario("Motivo", pie = "Por ejemplo: entrevista RH, y a quién visita.") {
+                CampoAgrupado(
+                    valor = viewModel.motivo,
+                    onCambiar = viewModel::cambiarMotivo,
+                    ayuda = "Motivo de la visita",
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 )
             }
 
+            SeccionVehiculoYGafete(
+                placa = viewModel.placa,
+                onCambiarPlaca = viewModel::cambiarPlaca,
+                onEscanearPlaca = onEscanearPlaca,
+                gafeteTexto = gafeteTexto,
+                onCambiarGafeteTexto = { onCambiarGafeteTexto(it.filter(Char::isDigit)) },
+                // Lleva el scroll al botón de abajo mientras se abre el
+                // teclado (mismo motivo que en proveedores).
+                onGafeteEnfocado = {
+                    scope.launch {
+                        repeat(15) {
+                            scrollState.animateScrollTo(scrollState.maxValue)
+                            delay(30)
+                        }
+                    }
+                },
+                ayudaGafete = "De visita",
+            )
+
             viewModel.error?.let { mensaje ->
-                FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(top = 8.dp), vibrar = true)
+                FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(top = 16.dp), vibrar = true)
             }
 
             BotonBrisas(
@@ -313,7 +306,7 @@ private fun FormularioNuevoIngresoCorreo(
                     }
                 },
                 enabled = puedeRegistrar,
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             ) {
                 Text(if (viewModel.registrando) "Registrando…" else "Registrar ingreso")
             }

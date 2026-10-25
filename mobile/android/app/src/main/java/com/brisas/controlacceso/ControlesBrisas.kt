@@ -71,7 +71,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import uniffi.control_acceso_mobile.EmpresaProveedor
 import uniffi.control_acceso_mobile.EncargadoRuta
 
 /** Radio de los campos "filled" (buscadores, login) -- iguala el de
@@ -528,29 +527,5 @@ fun FilaEncargadoRuta(encargado: EncargadoRuta, onClick: () -> Unit) {
                 fontWeight = FontWeight.Bold,
             )
         }
-    }
-}
-
-/// Tarjeta de un resultado de búsqueda de empresa proveedora -- mismo look
-/// que [FilaEncargadoRuta] (una sola fuente de verdad para "resultado de
-/// búsqueda tocable"), pero sin segunda línea: `EmpresaProveedor` sólo tiene
-/// nombre, no hay un segundo dato que mostrarle protagonismo. Reemplaza al
-/// `ExposedDropdownMenuBox`/`DropdownMenu` que tenía antes
-/// `PasoEmpresaProveedora` (`PantallaProveedores.kt`) -- mismo bug que ya se
-/// arregló acá para Rutas y Gafetes Provisionales: el popup de
-/// `DropdownMenu` compite por el foco con el `TextField` en cada
-/// recomposición del anclaje y cerraba el teclado con cada letra tipeada
-/// (reportado en pruebas reales, 2026-09-21).
-@Composable
-fun FilaEmpresaProveedor(empresa: EmpresaProveedor, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-    ) {
-        Text(textoResaltado(empresa.nombre), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
     }
 }
