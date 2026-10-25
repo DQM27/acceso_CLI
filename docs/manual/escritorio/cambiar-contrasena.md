@@ -37,7 +37,7 @@ Necesita **internet**: sin conexión el cambio no se puede hacer.
 | "La nueva tiene que ser distinta de la actual" | Escribió la misma contraseña. | Elija otra. |
 | "Las contraseñas no coinciden" | La nueva y la confirmación son distintas. | Escriba la misma en los dos campos. |
 | "Cédula o contraseña incorrecta" | La **Contraseña actual** no es la correcta. | Vuelva a escribirla. |
-| "No se pudo conectar con el servidor, revisá la conexión a internet" | No hay internet. | Intente cuando el equipo tenga conexión. |
+| "No se pudo conectar con el servidor, revise la conexión a internet" | No hay internet. | Intente cuando el equipo tenga conexión. |
 
 ## Relacionado
 

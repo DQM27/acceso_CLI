@@ -103,8 +103,8 @@ Para trabajar con filtros sobre todo, elija un período más corto.
 |---|---|---|
 | "No hay filas para exportar con el filtro actual." | Con ese período, búsqueda y filtros, la tabla está vacía. | Amplíe el período o borre la búsqueda y los filtros. |
 | "No hay columnas visibles para exportar." | Ocultó todas las columnas. | Vuelva a mostrar alguna en **Columnas visibles**. |
-| "El CSV sólo incluye lo cargado. Para todo el rango usá Excel o PDF." | El período es muy largo y el CSV sale incompleto. | Use Excel o PDF, o acorte el período. |
-| "No se pudo guardar el archivo. Revisá que la carpeta exista, que tengas permiso y que no esté abierto en otro programa" | El archivo no se pudo escribir. | Cierre el archivo si está abierto en Excel, o guárdelo en otra carpeta (por ejemplo, Documentos). |
+| "El CSV sólo incluye lo cargado. Para todo el rango use Excel o PDF." | El período es muy largo y el CSV sale incompleto. | Use Excel o PDF, o acorte el período. |
+| "No se pudo guardar el archivo. Revise que la carpeta exista, que tenga permiso y que no esté abierto en otro programa" | El archivo no se pudo escribir. | Cierre el archivo si está abierto en Excel, o guárdelo en otra carpeta (por ejemplo, Documentos). |
 
 ## Relacionado
 

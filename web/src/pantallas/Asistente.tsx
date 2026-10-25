@@ -216,7 +216,7 @@ function PanelChat({
             <Avatar />
             <div className="asistente-burbuja">
               Pídame cambiar, filtrar o profundizar en cualquier dato del <b>lienzo</b>. También puede tocar una barra o una
-              porción para filtrar. Para ver ideas, toque <b>?</b> arriba o escriba «¿qué podés hacer?».
+              porción para filtrar. Para ver ideas, toque <b>?</b> arriba o escriba «¿qué puede hacer?».
             </div>
           </div>
           {mensajes.length === 0 && (

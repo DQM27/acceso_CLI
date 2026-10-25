@@ -27,7 +27,7 @@ en el teléfono.
 
 - Se ven en **rojo**, con el ícono de advertencia.
 - Mientras haya una emergencia sin leer, arriba de la pantalla principal
-  queda una franja roja **"Aviso urgente: (título)"** ("Tocá para leerlo").
+  queda una franja roja **"Aviso urgente: (título)"** ("Toque para leerlo").
   No se puede descartar: se va al leer el aviso.
 - Una emergencia sin leer no se puede archivar ni borrar.
 

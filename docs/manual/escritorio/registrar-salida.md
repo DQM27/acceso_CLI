@@ -34,7 +34,7 @@ La ventana **Salida** tiene dos formas de buscar, con los botones de
 1. Pulse **Ctrl+S** y elija **Gafete**.
 2. Escriba los números separados por coma, por ejemplo **2, 25, 85**.
 3. Debajo aparece a quién corresponde cada gafete.
-4. Si dice **"N personas tienen este gafete — elegí a quién:"**, pulse el
+4. Si dice **"N personas tienen este gafete — elija a quién:"**, pulse el
    nombre correcto. Pasa porque contratistas, proveedores y otros tienen su
    propia numeración: el gafete 1 de un proveedor y el 1 de un contratista
    son distintos.
@@ -60,7 +60,7 @@ provisional**.
 |---|---|---|
 | "Sin ingreso activo" (al lado de un gafete) | Nadie que esté adentro tiene ese número. | Revise el número del gafete. Si la persona salió sin gafete, búsquela por **Nombre o cédula**. |
 | "gafete 7: sin ingreso activo" | Al registrar, ese gafete no correspondía a nadie adentro. Los demás sí se registraron. | Revise ese número y repítalo si hace falta. |
-| "Elegí a quién corresponde cada gafete repetido" (al pasar sobre el botón) | Hay un gafete repetido sin elegir. | Pulse el nombre correcto debajo de ese gafete. |
+| "Elija a quién corresponde cada gafete repetido" (al pasar sobre el botón) | Hay un gafete repetido sin elegir. | Pulse el nombre correcto debajo de ese gafete. |
 | "No se registró la salida de N de M — (motivo)" | Al sacar a varios desde la tabla, algunos no se pudieron cerrar. Los demás sí. | Lea el motivo; revise esas filas y repita su salida. |
 
 ## Relacionado

@@ -139,7 +139,7 @@ fun PantallaPrincipal(
             (contexto as? Activity)?.finish()
         } else {
             ultimoTapAtras = ahora
-            Toast.makeText(contexto, "Tocá de nuevo para salir", Toast.LENGTH_SHORT).show()
+            Toast.makeText(contexto, "Toque de nuevo para salir", Toast.LENGTH_SHORT).show()
         }
     }
     // Notificaciones push (NotificacionesPush.kt): se piden acá, con la

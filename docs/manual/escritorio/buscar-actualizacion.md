@@ -35,7 +35,7 @@ Lo registrado no se pierde al actualizar.
    **Buscando…**.
 2. Si hay una nueva, aparece el aviso **"Versión X disponible"**: siga
    los pasos de arriba.
-3. Si no, verá **"Ya tienes la última versión (X)."**
+3. Si no, verá **"Ya tiene la última versión (X)."**
 
 El programa sólo busca solo al abrirse. Si queda abierto todo el turno,
 búsquela a mano de vez en cuando.
@@ -44,10 +44,10 @@ búsquela a mano de vez en cuando.
 
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
-| "Ya tienes la última versión (X)." | Está al día. | Nada. |
-| "No se pudo buscar actualizaciones, revisá la conexión" | Sin internet o el servidor de descargas no respondió. | Revise la conexión y vuelva a intentar más tarde. |
-| "No se pudo actualizar, intentá de nuevo más tarde" | La descarga o la instalación falló. El programa sigue en la versión anterior y funciona normal. | Intente más tarde. Si se repite, avise a un administrador. |
-| "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando" | La versión instalada ya no puede enviar datos. | Actualice cuanto antes. |
+| "Ya tiene la última versión (X)." | Está al día. | Nada. |
+| "No se pudo buscar actualizaciones, revise la conexión" | Sin internet o el servidor de descargas no respondió. | Revise la conexión y vuelva a intentar más tarde. |
+| "No se pudo actualizar, intente de nuevo más tarde" | La descarga o la instalación falló. El programa sigue en la versión anterior y funciona normal. | Intente más tarde. Si se repite, avise a un administrador. |
+| "Esta versión de la app ya no es compatible -- actualice la app para seguir sincronizando" | La versión instalada ya no puede enviar datos. | Actualice cuanto antes. |
 
 ## Relacionado
 

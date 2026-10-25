@@ -38,8 +38,8 @@ fn une_las_lineas_de_un_parrafo_y_lee_titulos_con_su_ancla() {
 #[test]
 fn anclas_como_las_de_github() {
     assert_eq!(
-        ancla("\"Tiene un ingreso activo acá Y en otro sitio\""),
-        "tiene-un-ingreso-activo-acá-y-en-otro-sitio"
+        ancla("\"Tiene un ingreso activo aquí Y en otro sitio\""),
+        "tiene-un-ingreso-activo-aquí-y-en-otro-sitio"
     );
     assert_eq!(
         ancla("Pasos — por gafete (una o varias)"),

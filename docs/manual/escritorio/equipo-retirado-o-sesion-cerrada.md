@@ -28,9 +28,9 @@ varios equipos del mismo sitio sí se puede). Gana el último que entró.
 
 Lo registrado antes del cierre no se pierde.
 
-## Caso 2 — "Tu usuario fue desactivado"
+## Caso 2 — "Su usuario fue desactivado"
 
-**Mensaje**: "Tu usuario fue desactivado — se cerró la sesión."
+**Mensaje**: "Su usuario fue desactivado — se cerró la sesión."
 
 **Qué pasó**: un administrador desactivó su usuario en el panel web.
 
@@ -46,7 +46,7 @@ disponible; para volver a usar la nube hay que registrarlo como
 dispositivo nuevo."
 
 También puede aparecer al sincronizar: "La nube ya no reconoce a este
-dispositivo (fue retirado en el panel) -- registralo como dispositivo
+dispositivo (fue retirado en el panel) -- regístrelo como dispositivo
 nuevo con un código del panel".
 
 **Qué pasó**: un administrador quitó este equipo de la lista de equipos

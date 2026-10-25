@@ -124,7 +124,7 @@ class ActualizacionViewModel(
         }
     }
 
-    /// Al cerrar el menú: el "Estás al día" o "No se pudo revisar" era para
+    /// Al cerrar el menú: el "Está al día" o "No se pudo revisar" era para
     /// esa vez, la próxima apertura vuelve a ofrecer el botón.
     fun olvidarBusqueda() {
         if (_busqueda.value != EstadoBusqueda.BUSCANDO) _busqueda.value = EstadoBusqueda.INACTIVA

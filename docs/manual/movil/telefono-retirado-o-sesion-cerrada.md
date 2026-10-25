@@ -30,7 +30,7 @@ inactivo" o "Este usuario fue desactivado". Hable con un administrador.
 
 **Mensaje**: "Este teléfono fue retirado en el panel y ya no sincroniza.
 El trabajo local sigue disponible; para volver a usar la nube hay que
-registrarlo como dispositivo nuevo."
+regístrelo como dispositivo nuevo."
 
 **Qué pasó**: un administrador quitó este teléfono de la lista de equipos
 en el panel web.

@@ -47,10 +47,10 @@ Tenga en cuenta:
 
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
-| "El código no es válido o ya venció -- pedí uno nuevo en el panel" | El código está mal, ya se usó o venció. | Pida un código nuevo al administrador. |
-| "No se pudo conectar con la nube, intentá de nuevo" | Sin internet o el servidor no respondió. | Revise la conexión (datos o wifi) y vuelva a intentar. |
-| "La clave de este equipo ya está vinculada a otro dispositivo -- pedí ayuda a un administrador" | El panel ya tiene registrado este teléfono como otro dispositivo. | Avise a un administrador. |
-| "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando" | La app instalada es demasiado vieja. | Pida al administrador la versión nueva. |
+| "El código no es válido o ya venció -- pida uno nuevo en el panel" | El código está mal, ya se usó o venció. | Pida un código nuevo al administrador. |
+| "No se pudo conectar con la nube, intente de nuevo" | Sin internet o el servidor no respondió. | Revise la conexión (datos o wifi) y vuelva a intentar. |
+| "La clave de este equipo ya está vinculada a otro dispositivo -- pida ayuda a un administrador" | El panel ya tiene registrado este teléfono como otro dispositivo. | Avise a un administrador. |
+| "Esta versión de la app ya no es compatible -- actualice la app para seguir sincronizando" | La app instalada es demasiado vieja. | Pida al administrador la versión nueva. |
 | "Se necesita permiso de cámara para leer el código QR del panel." | La app no tiene permiso para la cámara. | Toque **Dar permiso** (o **Abrir Ajustes** y active la cámara para Lattis). O escriba el código a mano. |
 
 ## Relacionado

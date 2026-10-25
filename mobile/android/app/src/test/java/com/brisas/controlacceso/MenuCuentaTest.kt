@@ -52,7 +52,7 @@ class MenuCuentaTest {
 
     @Test
     fun `cada resultado de la busqueda tiene su aviso corto`() {
-        assertEquals("Estás al día", avisoDeBusqueda(EstadoBusqueda.AL_DIA))
+        assertEquals("Está al día", avisoDeBusqueda(EstadoBusqueda.AL_DIA))
         assertEquals("No se pudo revisar", avisoDeBusqueda(EstadoBusqueda.SIN_RESPUESTA))
         assertNull(avisoDeBusqueda(EstadoBusqueda.INACTIVA))
         assertNull(avisoDeBusqueda(EstadoBusqueda.BUSCANDO))

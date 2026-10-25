@@ -35,15 +35,15 @@ pub fn mensaje_autenticacion(error: AutenticacionError) -> String {
         AutenticacionError::CredencialesInvalidas => "Credenciales inválidas".into(),
         AutenticacionError::UsuarioInactivo => "Usuario inactivo".into(),
         AutenticacionError::SinPasswordLocal => {
-            "Todavía no tenés contraseña en este dispositivo -- fijá una para continuar".into()
+            "Todavía no tiene contraseña en este dispositivo -- fije una para continuar".into()
         }
         AutenticacionError::HashInvalido => {
             log::error!("autenticación: hash de contraseña almacenado inválido");
-            "No se pudo iniciar sesión, intentá de nuevo".into()
+            "No se pudo iniciar sesión, intente de nuevo".into()
         }
         AutenticacionError::Database(error) => {
             log::error!("autenticación: {error}");
-            "No se pudo iniciar sesión, intentá de nuevo".into()
+            "No se pudo iniciar sesión, intente de nuevo".into()
         }
     }
 }
@@ -695,18 +695,18 @@ pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
     match error {
         NubeError::CredencialesInvalidas => {
             "La nube ya no reconoce a este dispositivo (fue retirado en el panel) \
-             -- registralo como dispositivo nuevo con un código del panel"
+             -- regístrelo como dispositivo nuevo con un código del panel"
                 .into()
         }
         NubeError::VersionDesactualizada => {
-            "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando"
+            "Esta versión de la app ya no es compatible -- actualice la app para seguir sincronizando"
                 .into()
         }
         NubeError::CodigoVinculacionInvalido => {
-            "El código no es válido o ya venció -- pedí uno nuevo en el panel".into()
+            "El código no es válido o ya venció -- pida uno nuevo en el panel".into()
         }
         NubeError::ClaveEnUso => {
-            "La clave de este equipo ya está vinculada a otro dispositivo -- pedí ayuda a un \
+            "La clave de este equipo ya está vinculada a otro dispositivo -- pida ayuda a un \
              administrador"
                 .into()
         }
@@ -717,7 +717,7 @@ pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
         }
         NubeError::Red(error) => {
             log::warn!("nube: {error}");
-            "No se pudo conectar con la nube, intentá de nuevo".into()
+            "No se pudo conectar con la nube, intente de nuevo".into()
         }
     }
 }
@@ -734,11 +734,11 @@ pub fn mensaje_sincronizacion(error: crate::nube::SincronizacionError) -> String
         SincronizacionError::Red(error) => mensaje_nube(error),
         SincronizacionError::RespuestaInesperada { status, cuerpo } => {
             log::error!("sincronización: respuesta inesperada del receptor ({status}): {cuerpo}");
-            "El receptor rechazó el pedido, intentá de nuevo más tarde".into()
+            "El receptor rechazó el pedido, intente de nuevo más tarde".into()
         }
         SincronizacionError::FechaInvalida(error) => {
             log::error!("sincronización: fecha inválida del receptor: {error}");
-            "El receptor mandó una fecha que no se pudo interpretar, intentá de nuevo más tarde"
+            "El receptor mandó una fecha que no se pudo interpretar, intente de nuevo más tarde"
                 .into()
         }
     }
@@ -847,7 +847,7 @@ fn mensaje_permanencia(cantidad: usize, horas: i64) -> String {
 /// tiene una variante de negocio detrás (un error de disco, de formato, de
 /// tarea interrumpida). El detalle va al registro técnico, nunca a pantalla.
 pub const MENSAJE_ERROR_INESPERADO: &str =
-    "Ocurrió un error inesperado, intentá de nuevo. Si sigue pasando, avisá a un administrador";
+    "Ocurrió un error inesperado, intente de nuevo. Si sigue pasando, avise a un administrador";
 
 /// Red de seguridad para un error sin variante de negocio: deja el detalle
 /// en el registro técnico y devuelve un texto genérico. Lo que a la persona
@@ -861,7 +861,7 @@ pub fn mensaje_generico<E: std::fmt::Display>(error: E) -> String {
 /// Las causas más comunes son accionables, así que se nombran.
 pub fn mensaje_archivo<E: std::fmt::Display>(error: E) -> String {
     log::error!("archivo: {error}");
-    "No se pudo guardar el archivo. Revisá que la carpeta exista, que tengas permiso y que no      esté abierto en otro programa"
+    "No se pudo guardar el archivo. Revise que la carpeta exista, que tenga permiso y que no esté abierto en otro programa"
         .into()
 }
 
@@ -869,7 +869,7 @@ pub fn mensaje_archivo<E: std::fmt::Display>(error: E) -> String {
 /// dice qué se intentaba, sin detalle técnico (`"No se pudo enviar a la nube"`).
 pub fn mensaje_tarea_interrumpida<E: std::fmt::Display>(contexto: &str, error: E) -> String {
     log::error!("{contexto}: {error}");
-    format!("{contexto}, intentá de nuevo")
+    format!("{contexto}, intente de nuevo")
 }
 
 /// El inicio de sesión contra Supabase Auth. `Red` trae el texto crudo de la
@@ -882,10 +882,10 @@ pub fn mensaje_auth_supabase(error: crate::nube::AuthSupabaseError) -> String {
         AuthSupabaseError::CredencialesInvalidas => "Cédula o contraseña incorrecta".into(),
         AuthSupabaseError::Red(detalle) => {
             log::warn!("auth supabase: {detalle}");
-            "No se pudo conectar con el servidor, revisá la conexión a internet".into()
+            "No se pudo conectar con el servidor, revise la conexión a internet".into()
         }
         AuthSupabaseError::RespuestaInvalida => {
-            "El servidor devolvió una respuesta inesperada, intentá de nuevo".into()
+            "El servidor devolvió una respuesta inesperada, intente de nuevo".into()
         }
         AuthSupabaseError::TokenInvalido => "La sesión no es válida o venció".into(),
     }
@@ -975,11 +975,11 @@ mod tests {
         ));
         assert_eq!(
             mensaje_autenticacion(error),
-            "No se pudo iniciar sesión, intentá de nuevo"
+            "No se pudo iniciar sesión, intente de nuevo"
         );
         assert_eq!(
             mensaje_autenticacion(AutenticacionError::HashInvalido),
-            "No se pudo iniciar sesión, intentá de nuevo"
+            "No se pudo iniciar sesión, intente de nuevo"
         );
     }
 
@@ -1083,7 +1083,7 @@ mod tests {
             uuid: uuid.into(),
             mensaje: mensaje.into(),
         };
-        let del_receptor = "El receptor rechazó el pedido, intentá de nuevo más tarde";
+        let del_receptor = "El receptor rechazó el pedido, intente de nuevo más tarde";
         assert_eq!(
             resumen.rechazados,
             [
@@ -1154,7 +1154,7 @@ mod tests {
         };
         assert_eq!(
             mensaje_sincronizacion(error),
-            "El receptor rechazó el pedido, intentá de nuevo más tarde"
+            "El receptor rechazó el pedido, intente de nuevo más tarde"
         );
     }
 
@@ -1196,7 +1196,7 @@ mod tests {
         );
         assert_eq!(
             mensaje_gestion_nube(error),
-            "El receptor rechazó el pedido, intentá de nuevo más tarde"
+            "El receptor rechazó el pedido, intente de nuevo más tarde"
         );
     }
 
@@ -1214,7 +1214,7 @@ mod tests {
 
         assert_ne!(rechazada, desactualizada);
         assert!(rechazada.contains("código"));
-        assert!(desactualizada.contains("actualizá") || desactualizada.contains("actualiza"));
+        assert!(desactualizada.contains("actualice"));
     }
 
     /// Mismo texto que ya mostraba escritorio (`desktop/src/api/ingresos.ts`,
@@ -1275,7 +1275,7 @@ mod tests {
     fn una_tarea_interrumpida_conserva_el_contexto_y_no_el_detalle() {
         let texto =
             mensaje_tarea_interrumpida("No se pudo enviar a la nube", "panicked at src/x.rs");
-        assert_eq!(texto, "No se pudo enviar a la nube, intentá de nuevo");
+        assert_eq!(texto, "No se pudo enviar a la nube, intente de nuevo");
     }
 
     #[cfg(feature = "nube")]
@@ -1287,7 +1287,7 @@ mod tests {
         ));
         assert_eq!(
             texto,
-            "No se pudo conectar con el servidor, revisá la conexión a internet"
+            "No se pudo conectar con el servidor, revise la conexión a internet"
         );
         assert_eq!(
             mensaje_auth_supabase(AuthSupabaseError::CredencialesInvalidas),

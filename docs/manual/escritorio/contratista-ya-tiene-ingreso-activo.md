@@ -50,5 +50,5 @@ Si el programa dice que ya tiene un ingreso activo pero no lo encuentra en
 
 - [Registrar una salida](registrar-salida.md)
 - [Registrar el ingreso de un contratista](registrar-ingreso-contratista.md)
-- ["Tiene un ingreso activo acá Y en otro sitio"](ingreso-activo-en-otro-sitio.md)
+- ["Tiene un ingreso activo aquí Y en otro sitio"](ingreso-activo-en-otro-sitio.md)
 - [PRAIND vencido, acceso denegado y otros bloqueos](praind-y-bloqueos-de-acceso.md)

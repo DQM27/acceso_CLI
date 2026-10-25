@@ -52,9 +52,9 @@ internal fun mensajesConflictos(
     gafete: List<ConflictoGafeteActivo>,
     hora: (String) -> String = ::textoFechaHora,
 ): List<String> =
-    ingreso.map { "${it.contratistaNombre} tiene un ingreso activo acá Y en ${it.sitioConflicto} — hay que resolverlo." } +
-        proveedor.map { "${it.nombre} tiene un ingreso de proveedor activo acá Y en ${it.sitioConflicto} — hay que resolverlo." } +
-        correo.map { "${it.nombre} tiene un ingreso por correo activo acá Y en ${it.sitioConflicto} — hay que resolverlo." } +
+    ingreso.map { "${it.contratistaNombre} tiene un ingreso activo aquí Y en ${it.sitioConflicto} — hay que resolverlo." } +
+        proveedor.map { "${it.nombre} tiene un ingreso de proveedor activo aquí Y en ${it.sitioConflicto} — hay que resolverlo." } +
+        correo.map { "${it.nombre} tiene un ingreso por correo activo aquí Y en ${it.sitioConflicto} — hay que resolverlo." } +
         gafete.map { mensajeConflictoGafete(it, hora(it.fechaHora)) }
 
 /// Título de la franja cuando hay más de un conflicto.

@@ -29,12 +29,12 @@ buscar por nombre (sin escanear) no suena nada: es normal.
 | "El contratista ya tiene un ingreso activo en (sitio)." | Figura adentro en otro sitio. No registre el ingreso. Avise al otro sitio (por ejemplo, por WhatsApp) o a un administrador. |
 | "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Está adentro por otra vía. Registre primero esa salida en **Externos**. |
 
-## "Tiene un ingreso activo acá Y en otro sitio"
+## "Tiene un ingreso activo aquí Y en otro sitio"
 
 Después de sincronizar puede aparecer arriba una franja de conflictos
 ("N conflictos por resolver"; tóquela para ver el detalle):
 
-- **"(nombre) tiene un ingreso activo acá Y en (sitio) — hay que
+- **"(nombre) tiene un ingreso activo aquí Y en (sitio) — hay que
   resolverlo."** (y las mismas para proveedor y por correo). Suele pasar
   porque el teléfono estuvo sin internet. Confirme dónde está la persona:
   si ya no está aquí, registre su salida; si está aquí, avise al otro

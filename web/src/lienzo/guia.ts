@@ -52,7 +52,7 @@ const TEMAS_GENERALES: TemaGuia[] = [
 const TEMA_DE_LA_VISTA: TemaGuia = {
   titulo: "Sobre esta vista",
   explicacion: "Pídale cambios a lo que está viendo; todo se puede deshacer.",
-  ejemplos: ["Agregá un gráfico de torta por empresa", "Mostralo sólo como tabla", "Quitá todos los filtros", "Ordená la tabla por fecha"],
+  ejemplos: ["Agregue un gráfico de torta por empresa", "Muéstrelo sólo como tabla", "Quite todos los filtros", "Ordene la tabla por fecha"],
 };
 
 /** Lo que se hace con los botones, sin pedírselo al asistente. */

@@ -65,9 +65,9 @@ se cierra sola: ver
 |---|---|---|
 | "Cédula o contraseña incorrecta" / "Credenciales inválidas" | La cédula o la contraseña no coinciden. El formulario se sacude y el teléfono vibra. | Revise la cédula y vuelva a escribir la contraseña. Si la olvidó, pida a un administrador que la restablezca. |
 | "Usuario inactivo" / "Este usuario fue desactivado" | Su usuario está desactivado. | El administrador tiene que reactivarlo. |
-| "No se pudo conectar con el servidor, revisá la conexión a internet" | Hace falta internet (primera vez en este teléfono). | Conecte el teléfono y vuelva a intentar. |
-| "El servidor devolvió una respuesta inesperada, intentá de nuevo" | Falla pasajera del servidor. | Espere un momento y vuelva a intentar. |
-| "No se pudo iniciar sesión, intentá de nuevo" | Falla interna. | Intente otra vez; si se repite, cierre y abra la app y, si sigue, avise a un administrador. |
+| "No se pudo conectar con el servidor, revise la conexión a internet" | Hace falta internet (primera vez en este teléfono). | Conecte el teléfono y vuelva a intentar. |
+| "El servidor devolvió una respuesta inesperada, intente de nuevo" | Falla pasajera del servidor. | Espere un momento y vuelva a intentar. |
+| "No se pudo iniciar sesión, intente de nuevo" | Falla interna. | Intente otra vez; si se repite, cierre y abra la app y, si sigue, avise a un administrador. |
 
 ## Relacionado
 

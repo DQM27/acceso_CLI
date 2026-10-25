@@ -469,7 +469,7 @@ internal fun opcionActualizacion(estado: EstadoActualizacion, busqueda: EstadoBu
                 AccionActualizacion.ACTUALIZAR,
                 resaltada = true,
             )
-        // El "Estás al día" y el "No se pudo revisar" salen como aviso corto
+        // El "Está al día" y el "No se pudo revisar" salen como aviso corto
         // (ver [avisoDeBusqueda]); el ítem sólo vuelve a ofrecer buscar.
         EstadoActualizacion.SinAviso ->
             if (busqueda == EstadoBusqueda.BUSCANDO) {
@@ -482,7 +482,7 @@ internal fun opcionActualizacion(estado: EstadoActualizacion, busqueda: EstadoBu
 /// El aviso corto con la respuesta de una búsqueda, o `null` si no hay nada
 /// que decir (todavía buscando, o ya apareció la versión nueva).
 internal fun avisoDeBusqueda(busqueda: EstadoBusqueda): String? = when (busqueda) {
-    EstadoBusqueda.AL_DIA -> "Estás al día"
+    EstadoBusqueda.AL_DIA -> "Está al día"
     EstadoBusqueda.SIN_RESPUESTA -> "No se pudo revisar"
     EstadoBusqueda.INACTIVA, EstadoBusqueda.BUSCANDO -> null
 }

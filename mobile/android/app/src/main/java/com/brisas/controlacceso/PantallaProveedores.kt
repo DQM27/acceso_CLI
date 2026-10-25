@@ -188,7 +188,7 @@ fun PantallaProveedores(
                             cargando = viewModel.cargando,
                             tituloVacio = if (busqueda.isBlank()) "Ningún proveedor adentro" else "Sin resultados",
                             detalleVacio = if (busqueda.isBlank()) {
-                                "Cuando entre uno, aparece acá."
+                                "Cuando entre uno, aparece aquí."
                             } else {
                                 "Pruebe con otra cédula, nombre o empresa."
                             },

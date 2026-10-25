@@ -52,7 +52,7 @@ correo, y tiene:
 |---|---|---|
 | "La cuenta de Google "(correo)" inició sesión, pero no está autorizada para este panel." | Esa cuenta no está en la lista de administradores. | Entre con la cuenta autorizada, o pida al dueño del sistema que la autorice. |
 | "No se pudo confirmar su acceso al panel (falla de conexión) -- pruebe iniciar sesión de nuevo." | Falla de conexión al revisar su acceso. | Vuelva a iniciar sesión. |
-| "No se pudo iniciar la verificación de tu sesión -- recargá la página." | Falla al abrir la sesión. | Recargue la página. |
+| "No se pudo iniciar la verificación de su sesión -- recargue la página." | Falla al abrir la sesión. | Recargue la página. |
 
 ## Relacionado
 

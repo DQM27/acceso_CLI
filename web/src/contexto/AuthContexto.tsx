@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ({ data }) => autorizar(data.session?.user ?? null),
       () => {
         if (!vigente) return;
-        setError("No se pudo iniciar la verificación de tu sesión -- recargá la página.");
+        setError("No se pudo iniciar la verificación de su sesión -- recargue la página.");
         setSesion(null);
         setCargando(false);
       },

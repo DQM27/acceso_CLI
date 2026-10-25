@@ -1,4 +1,4 @@
-# "Tiene un ingreso activo acá Y en otro sitio"
+# "Tiene un ingreso activo aquí Y en otro sitio"
 
 ## Para qué sirve
 
@@ -45,10 +45,10 @@ Para avisar al otro sitio use el medio que tengan acordado (por ejemplo,
 
 | Mensaje | Clase |
 |---|---|
-| "(nombre) tiene un ingreso activo acá Y en (sitio) — hay que resolverlo." | Contratista |
-| "(nombre) tiene un ingreso de proveedor activo acá Y en (sitio) — hay que resolverlo." | Proveedor |
-| "(nombre) tiene un ingreso por correo activo acá Y en (sitio) — hay que resolverlo." | Visita por correo |
-| "(nombre) tiene una visita activa acá Y en (sitio) — hay que resolverlo." | Visita agendada |
+| "(nombre) tiene un ingreso activo aquí Y en (sitio) — hay que resolverlo." | Contratista |
+| "(nombre) tiene un ingreso de proveedor activo aquí Y en (sitio) — hay que resolverlo." | Proveedor |
+| "(nombre) tiene un ingreso por correo activo aquí Y en (sitio) — hay que resolverlo." | Visita por correo |
+| "(nombre) tiene una visita activa aquí Y en (sitio) — hay que resolverlo." | Visita agendada |
 
 En todos los casos se resuelve igual: con los pasos de arriba.
 

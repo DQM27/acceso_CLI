@@ -166,7 +166,7 @@ export default function HistorialContratistas({
   // se avisa que no es el total.
   async function exportarCsv() {
     if (truncado) {
-      avisos.advertencia("El CSV sólo incluye lo cargado. Para todo el rango usá Excel o PDF.");
+      avisos.advertencia("El CSV sólo incluye lo cargado. Para todo el rango use Excel o PDF.");
     }
     await tablaRef.current?.exportarCsv("historial");
   }
@@ -338,8 +338,8 @@ export default function HistorialContratistas({
             }}
           >
             Este rango tiene más de {filas.length.toLocaleString("es-CR")} movimientos — se
-            muestran solo los primeros. El filtro por columna sólo aplica a lo cargado; acotá las
-            fechas para verlo todo, o exportá igual: Excel y PDF traen el rango completo aunque no
+            muestran solo los primeros. El filtro por columna sólo aplica a lo cargado; acote las
+            fechas para verlo todo, o exporte igual: Excel y PDF traen el rango completo aunque no
             esté cargado en pantalla.
           </p>
         )}
@@ -388,7 +388,7 @@ export default function HistorialContratistas({
                     type="button"
                     title={
                       truncado
-                        ? "Exportar a CSV — sólo lo cargado; para todo el rango usá Excel o PDF"
+                        ? "Exportar a CSV — sólo lo cargado; para todo el rango use Excel o PDF"
                         : "Exportar a CSV — respeta el filtro/orden/columnas actuales de la grilla"
                     }
                     onClick={exportarCsv}
