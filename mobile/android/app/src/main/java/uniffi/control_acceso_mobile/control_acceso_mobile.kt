@@ -771,6 +771,12 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_placa_como_se_imprime(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_buscar_en_manual(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_indice_manual(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_func_tema_manual(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_leer_mrz(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_func_nombre_en_mayusculas(
@@ -1250,6 +1256,12 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_placa_como_se_imprime(`valor`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_buscar_en_manual(`consulta`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_indice_manual(uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_func_tema_manual(`ruta`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_leer_mrz(`lineas`: RustBuffer.ByValue,`anioActual`: Int,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_func_nombre_en_mayusculas(`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1456,6 +1468,15 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_placa_como_se_imprime() and 0xFFFF) != 15330) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_buscar_en_manual() and 0xFFFF) != 6584) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_indice_manual() and 0xFFFF) != 35475) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_func_tema_manual() and 0xFFFF) != 63276) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_func_leer_mrz() and 0xFFFF) != 18012) {
@@ -6306,6 +6327,39 @@ public object FfiConverterTypeCarnetKofDetectado: FfiConverterRustBuffer<CarnetK
 
 
 
+data class CeldaManual (
+    var `tramos`: List<TramoManual>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCeldaManual: FfiConverterRustBuffer<CeldaManual> {
+    override fun read(buf: ByteBuffer): CeldaManual {
+        return CeldaManual(
+            FfiConverterSequenceTypeTramoManual.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: CeldaManual) = (
+            FfiConverterSequenceTypeTramoManual.allocationSize(value.`tramos`)
+    )
+
+    override fun write(value: CeldaManual, buf: ByteBuffer) {
+            FfiConverterSequenceTypeTramoManual.write(value.`tramos`, buf)
+    }
+}
+
+
+
 data class ComprobanteRutaDetectado (
     /**
      * Código antes de la barra en "Ruta / No.de Carga:" (ej. `CRR079`).
@@ -6652,6 +6706,49 @@ public object FfiConverterTypeConsensoVotacion: FfiConverterRustBuffer<ConsensoV
             FfiConverterFloat.write(value.`soporteMinimo`, buf)
             FfiConverterFloat.write(value.`margenMinimo`, buf)
             FfiConverterUInt.write(value.`lecturas`, buf)
+    }
+}
+
+
+
+data class ContenidoTemaManual (
+    var `ruta`: kotlin.String
+    , 
+    var `titulo`: kotlin.String
+    , 
+    var `bloques`: List<BloqueManual>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeContenidoTemaManual: FfiConverterRustBuffer<ContenidoTemaManual> {
+    override fun read(buf: ByteBuffer): ContenidoTemaManual {
+        return ContenidoTemaManual(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterSequenceTypeBloqueManual.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ContenidoTemaManual) = (
+            FfiConverterString.allocationSize(value.`ruta`) +
+            FfiConverterString.allocationSize(value.`titulo`) +
+            FfiConverterSequenceTypeBloqueManual.allocationSize(value.`bloques`)
+    )
+
+    override fun write(value: ContenidoTemaManual, buf: ByteBuffer) {
+            FfiConverterString.write(value.`ruta`, buf)
+            FfiConverterString.write(value.`titulo`, buf)
+            FfiConverterSequenceTypeBloqueManual.write(value.`bloques`, buf)
     }
 }
 
@@ -7373,6 +7470,39 @@ public object FfiConverterTypeFechaOcr: FfiConverterRustBuffer<FechaOcr> {
 
 
 
+data class FilaManual (
+    var `celdas`: List<CeldaManual>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFilaManual: FfiConverterRustBuffer<FilaManual> {
+    override fun read(buf: ByteBuffer): FilaManual {
+        return FilaManual(
+            FfiConverterSequenceTypeCeldaManual.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FilaManual) = (
+            FfiConverterSequenceTypeCeldaManual.allocationSize(value.`celdas`)
+    )
+
+    override fun write(value: FilaManual, buf: ByteBuffer) {
+            FfiConverterSequenceTypeCeldaManual.write(value.`celdas`, buf)
+    }
+}
+
+
+
 data class GrupoAvisos (
     var `grupo`: GrupoBandeja
     , 
@@ -7409,6 +7539,47 @@ public object FfiConverterTypeGrupoAvisos: FfiConverterRustBuffer<GrupoAvisos> {
     override fun write(value: GrupoAvisos, buf: ByteBuffer) {
             FfiConverterTypeGrupoBandeja.write(value.`grupo`, buf)
             FfiConverterSequenceTypeAvisoBandeja.write(value.`avisos`, buf)
+    }
+}
+
+
+
+data class GrupoManual (
+    /**
+     * Vacío si el índice no tiene subtítulos.
+     */
+    var `titulo`: kotlin.String
+    , 
+    var `temas`: List<TemaManual>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGrupoManual: FfiConverterRustBuffer<GrupoManual> {
+    override fun read(buf: ByteBuffer): GrupoManual {
+        return GrupoManual(
+            FfiConverterString.read(buf),
+            FfiConverterSequenceTypeTemaManual.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: GrupoManual) = (
+            FfiConverterString.allocationSize(value.`titulo`) +
+            FfiConverterSequenceTypeTemaManual.allocationSize(value.`temas`)
+    )
+
+    override fun write(value: GrupoManual, buf: ByteBuffer) {
+            FfiConverterString.write(value.`titulo`, buf)
+            FfiConverterSequenceTypeTemaManual.write(value.`temas`, buf)
     }
 }
 
@@ -8682,6 +8853,65 @@ public object FfiConverterTypeResultadoEstabilizacion: FfiConverterRustBuffer<Re
 
 
 
+data class ResultadoManual (
+    var `ruta`: kotlin.String
+    , 
+    var `titulo`: kotlin.String
+    , 
+    /**
+     * Sección donde está lo que se buscó, y su ancla para ir directo.
+     */
+    var `seccion`: kotlin.String?
+    , 
+    var `ancla`: kotlin.String?
+    , 
+    /**
+     * El trozo donde aparece, para mostrar debajo del título.
+     */
+    var `fragmento`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResultadoManual: FfiConverterRustBuffer<ResultadoManual> {
+    override fun read(buf: ByteBuffer): ResultadoManual {
+        return ResultadoManual(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ResultadoManual) = (
+            FfiConverterString.allocationSize(value.`ruta`) +
+            FfiConverterString.allocationSize(value.`titulo`) +
+            FfiConverterOptionalString.allocationSize(value.`seccion`) +
+            FfiConverterOptionalString.allocationSize(value.`ancla`) +
+            FfiConverterString.allocationSize(value.`fragmento`)
+    )
+
+    override fun write(value: ResultadoManual, buf: ByteBuffer) {
+            FfiConverterString.write(value.`ruta`, buf)
+            FfiConverterString.write(value.`titulo`, buf)
+            FfiConverterOptionalString.write(value.`seccion`, buf)
+            FfiConverterOptionalString.write(value.`ancla`, buf)
+            FfiConverterString.write(value.`fragmento`, buf)
+    }
+}
+
+
+
 data class ResultadoRegistroEntrada (
     var `registroId`: kotlin.Long
     , 
@@ -9274,6 +9504,113 @@ public object FfiConverterTypeSolicitudSalidaRuta: FfiConverterRustBuffer<Solici
 
 
 
+/**
+ * Un tema del índice.
+ */
+data class TemaManual (
+    /**
+     * Ruta dentro del manual, p. ej. `movil/gafete-kof.md`: se le pasa a
+     * [`tema_manual`].
+     */
+    var `ruta`: kotlin.String
+    , 
+    var `titulo`: kotlin.String
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTemaManual: FfiConverterRustBuffer<TemaManual> {
+    override fun read(buf: ByteBuffer): TemaManual {
+        return TemaManual(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: TemaManual) = (
+            FfiConverterString.allocationSize(value.`ruta`) +
+            FfiConverterString.allocationSize(value.`titulo`)
+    )
+
+    override fun write(value: TemaManual, buf: ByteBuffer) {
+            FfiConverterString.write(value.`ruta`, buf)
+            FfiConverterString.write(value.`titulo`, buf)
+    }
+}
+
+
+
+/**
+ * Un pedazo de texto con un solo estilo.
+ */
+data class TramoManual (
+    var `texto`: kotlin.String
+    , 
+    var `negrita`: kotlin.Boolean
+    , 
+    var `codigo`: kotlin.Boolean
+    , 
+    /**
+     * Tema al que lleva, si es un enlace a otro tema de este manual.
+     */
+    var `enlace`: kotlin.String?
+    , 
+    /**
+     * Sección del tema al que lleva (para saltar ahí con [`BloqueManual::Titulo`]).
+     */
+    var `anclaEnlace`: kotlin.String?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTramoManual: FfiConverterRustBuffer<TramoManual> {
+    override fun read(buf: ByteBuffer): TramoManual {
+        return TramoManual(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: TramoManual) = (
+            FfiConverterString.allocationSize(value.`texto`) +
+            FfiConverterBoolean.allocationSize(value.`negrita`) +
+            FfiConverterBoolean.allocationSize(value.`codigo`) +
+            FfiConverterOptionalString.allocationSize(value.`enlace`) +
+            FfiConverterOptionalString.allocationSize(value.`anclaEnlace`)
+    )
+
+    override fun write(value: TramoManual, buf: ByteBuffer) {
+            FfiConverterString.write(value.`texto`, buf)
+            FfiConverterBoolean.write(value.`negrita`, buf)
+            FfiConverterBoolean.write(value.`codigo`, buf)
+            FfiConverterOptionalString.write(value.`enlace`, buf)
+            FfiConverterOptionalString.write(value.`anclaEnlace`, buf)
+    }
+}
+
+
+
 data class UsuarioSesion (
     var `id`: kotlin.Long
     , 
@@ -9617,6 +9954,171 @@ public object FfiConverterTypeAlmacenClaveError : FfiConverterRustBuffer<Almacen
     }
 
 }
+
+
+
+/**
+ * Un bloque para dibujar. Las listas llegan aplanadas: cada elemento con su
+ * marca ("1.", "•") y su sangría (0 arriba, 1 en una sublista…).
+ */
+sealed class BloqueManual {
+    
+    data class Titulo(
+        val `nivel`: kotlin.UInt, 
+        val `tramos`: List<uniffi.control_acceso_mobile.TramoManual>, 
+        /**
+         * Para saltar a esta sección desde un enlace o un resultado.
+         */
+        val `ancla`: kotlin.String) : BloqueManual()
+        
+    {
+        
+
+        companion object
+    }
+    
+    data class Parrafo(
+        val `sangria`: kotlin.UInt, 
+        val `tramos`: List<uniffi.control_acceso_mobile.TramoManual>) : BloqueManual()
+        
+    {
+        
+
+        companion object
+    }
+    
+    data class Elemento(
+        val `sangria`: kotlin.UInt, 
+        val `marca`: kotlin.String, 
+        val `tramos`: List<uniffi.control_acceso_mobile.TramoManual>) : BloqueManual()
+        
+    {
+        
+
+        companion object
+    }
+    
+    /**
+     * "Mensajes que pueden aparecer": encabezado y filas.
+     */
+    data class Tabla(
+        val `encabezado`: List<uniffi.control_acceso_mobile.CeldaManual>, 
+        val `filas`: List<uniffi.control_acceso_mobile.FilaManual>) : BloqueManual()
+        
+    {
+        
+
+        companion object
+    }
+    
+
+    
+
+    
+    
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBloqueManual : FfiConverterRustBuffer<BloqueManual>{
+    override fun read(buf: ByteBuffer): BloqueManual {
+        return when(buf.getInt()) {
+            1 -> BloqueManual.Titulo(
+                FfiConverterUInt.read(buf),
+                FfiConverterSequenceTypeTramoManual.read(buf),
+                FfiConverterString.read(buf),
+                )
+            2 -> BloqueManual.Parrafo(
+                FfiConverterUInt.read(buf),
+                FfiConverterSequenceTypeTramoManual.read(buf),
+                )
+            3 -> BloqueManual.Elemento(
+                FfiConverterUInt.read(buf),
+                FfiConverterString.read(buf),
+                FfiConverterSequenceTypeTramoManual.read(buf),
+                )
+            4 -> BloqueManual.Tabla(
+                FfiConverterSequenceTypeCeldaManual.read(buf),
+                FfiConverterSequenceTypeFilaManual.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: BloqueManual): ULong = when(value) {
+        is BloqueManual.Titulo -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterUInt.allocationSize(value.`nivel`)
+                + FfiConverterSequenceTypeTramoManual.allocationSize(value.`tramos`)
+                + FfiConverterString.allocationSize(value.`ancla`)
+            )
+        }
+        is BloqueManual.Parrafo -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterUInt.allocationSize(value.`sangria`)
+                + FfiConverterSequenceTypeTramoManual.allocationSize(value.`tramos`)
+            )
+        }
+        is BloqueManual.Elemento -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterUInt.allocationSize(value.`sangria`)
+                + FfiConverterString.allocationSize(value.`marca`)
+                + FfiConverterSequenceTypeTramoManual.allocationSize(value.`tramos`)
+            )
+        }
+        is BloqueManual.Tabla -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterSequenceTypeCeldaManual.allocationSize(value.`encabezado`)
+                + FfiConverterSequenceTypeFilaManual.allocationSize(value.`filas`)
+            )
+        }
+    }
+
+    override fun write(value: BloqueManual, buf: ByteBuffer) {
+        when(value) {
+            is BloqueManual.Titulo -> {
+                buf.putInt(1)
+                FfiConverterUInt.write(value.`nivel`, buf)
+                FfiConverterSequenceTypeTramoManual.write(value.`tramos`, buf)
+                FfiConverterString.write(value.`ancla`, buf)
+                Unit
+            }
+            is BloqueManual.Parrafo -> {
+                buf.putInt(2)
+                FfiConverterUInt.write(value.`sangria`, buf)
+                FfiConverterSequenceTypeTramoManual.write(value.`tramos`, buf)
+                Unit
+            }
+            is BloqueManual.Elemento -> {
+                buf.putInt(3)
+                FfiConverterUInt.write(value.`sangria`, buf)
+                FfiConverterString.write(value.`marca`, buf)
+                FfiConverterSequenceTypeTramoManual.write(value.`tramos`, buf)
+                Unit
+            }
+            is BloqueManual.Tabla -> {
+                buf.putInt(4)
+                FfiConverterSequenceTypeCeldaManual.write(value.`encabezado`, buf)
+                FfiConverterSequenceTypeFilaManual.write(value.`filas`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
 
 
 
@@ -11367,6 +11869,38 @@ public object FfiConverterOptionalTypeConsensoVotacion: FfiConverterRustBuffer<C
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeContenidoTemaManual: FfiConverterRustBuffer<ContenidoTemaManual?> {
+    override fun read(buf: ByteBuffer): ContenidoTemaManual? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeContenidoTemaManual.read(buf)
+    }
+
+    override fun allocationSize(value: ContenidoTemaManual?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeContenidoTemaManual.allocationSize(value)
+        }
+    }
+
+    override fun write(value: ContenidoTemaManual?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeContenidoTemaManual.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeDatosPdf417Cedula: FfiConverterRustBuffer<DatosPdf417Cedula?> {
     override fun read(buf: ByteBuffer): DatosPdf417Cedula? {
         if (buf.get().toInt() == 0) {
@@ -11799,6 +12333,34 @@ public object FfiConverterSequenceTypeAvisoBandeja: FfiConverterRustBuffer<List<
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeCeldaManual: FfiConverterRustBuffer<List<CeldaManual>> {
+    override fun read(buf: ByteBuffer): List<CeldaManual> {
+        val len = buf.getInt()
+        return List<CeldaManual>(len) {
+            FfiConverterTypeCeldaManual.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<CeldaManual>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeCeldaManual.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<CeldaManual>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeCeldaManual.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeConflictoGafeteActivo: FfiConverterRustBuffer<List<ConflictoGafeteActivo>> {
     override fun read(buf: ByteBuffer): List<ConflictoGafeteActivo> {
         val len = buf.getInt()
@@ -12023,6 +12585,34 @@ public object FfiConverterSequenceTypeEncargadoRuta: FfiConverterRustBuffer<List
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeFilaManual: FfiConverterRustBuffer<List<FilaManual>> {
+    override fun read(buf: ByteBuffer): List<FilaManual> {
+        val len = buf.getInt()
+        return List<FilaManual>(len) {
+            FfiConverterTypeFilaManual.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<FilaManual>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeFilaManual.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<FilaManual>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeFilaManual.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeGrupoAvisos: FfiConverterRustBuffer<List<GrupoAvisos>> {
     override fun read(buf: ByteBuffer): List<GrupoAvisos> {
         val len = buf.getInt()
@@ -12041,6 +12631,34 @@ public object FfiConverterSequenceTypeGrupoAvisos: FfiConverterRustBuffer<List<G
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeGrupoAvisos.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeGrupoManual: FfiConverterRustBuffer<List<GrupoManual>> {
+    override fun read(buf: ByteBuffer): List<GrupoManual> {
+        val len = buf.getInt()
+        return List<GrupoManual>(len) {
+            FfiConverterTypeGrupoManual.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<GrupoManual>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeGrupoManual.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<GrupoManual>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeGrupoManual.write(it, buf)
         }
     }
 }
@@ -12331,6 +12949,34 @@ public object FfiConverterSequenceTypeRegistroIngresoProveedorActivoResumen: Ffi
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeResultadoManual: FfiConverterRustBuffer<List<ResultadoManual>> {
+    override fun read(buf: ByteBuffer): List<ResultadoManual> {
+        val len = buf.getInt()
+        return List<ResultadoManual>(len) {
+            FfiConverterTypeResultadoManual.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ResultadoManual>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeResultadoManual.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ResultadoManual>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeResultadoManual.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeRuta: FfiConverterRustBuffer<List<Ruta>> {
     override fun read(buf: ByteBuffer): List<Ruta> {
         val len = buf.getInt()
@@ -12387,6 +13033,62 @@ public object FfiConverterSequenceTypeSalidaRutaActivaResumen: FfiConverterRustB
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeTemaManual: FfiConverterRustBuffer<List<TemaManual>> {
+    override fun read(buf: ByteBuffer): List<TemaManual> {
+        val len = buf.getInt()
+        return List<TemaManual>(len) {
+            FfiConverterTypeTemaManual.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<TemaManual>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeTemaManual.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<TemaManual>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeTemaManual.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeTramoManual: FfiConverterRustBuffer<List<TramoManual>> {
+    override fun read(buf: ByteBuffer): List<TramoManual> {
+        val len = buf.getInt()
+        return List<TramoManual>(len) {
+            FfiConverterTypeTramoManual.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<TramoManual>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeTramoManual.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<TramoManual>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeTramoManual.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeVehiculoRuta: FfiConverterRustBuffer<List<VehiculoRuta>> {
     override fun read(buf: ByteBuffer): List<VehiculoRuta> {
         val len = buf.getInt()
@@ -12433,6 +13135,34 @@ public object FfiConverterSequenceTypeVisitaAdentro: FfiConverterRustBuffer<List
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeVisitaAdentro.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeBloqueManual: FfiConverterRustBuffer<List<BloqueManual>> {
+    override fun read(buf: ByteBuffer): List<BloqueManual> {
+        val len = buf.getInt()
+        return List<BloqueManual>(len) {
+            FfiConverterTypeBloqueManual.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<BloqueManual>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeBloqueManual.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<BloqueManual>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeBloqueManual.write(it, buf)
         }
     }
 }
@@ -12883,6 +13613,47 @@ public object FfiConverterMapStringString: FfiConverterRustBuffer<Map<kotlin.Str
     
         
         FfiConverterString.lower(`valor`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Busca en la ayuda: palabras sueltas o un mensaje pegado entero.
+         */ fun `buscarEnManual`(`consulta`: kotlin.String): List<ResultadoManual> {
+            return FfiConverterSequenceTypeResultadoManual.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_buscar_en_manual(
+    
+        
+        FfiConverterString.lower(`consulta`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Los temas de la ayuda, agrupados como el índice del manual.
+         */ fun `indiceManual`(): List<GrupoManual> {
+            return FfiConverterSequenceTypeGrupoManual.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_indice_manual(
+    
+        _status)
+}
+    )
+    }
+    
+
+        /**
+         * Un tema para leer, o `None` si esa ruta no existe.
+         */ fun `temaManual`(`ruta`: kotlin.String): ContenidoTemaManual? {
+            return FfiConverterOptionalTypeContenidoTemaManual.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_func_tema_manual(
+    
+        
+        FfiConverterString.lower(`ruta`),_status)
 }
     )
     }

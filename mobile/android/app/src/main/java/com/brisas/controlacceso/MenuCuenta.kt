@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,8 +78,8 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// 2026-10-21).
 ///
 /// Al tocarlo brota un panel chico, a la manera de los menús de iOS 26
-/// (rediseño 2026-10-21): el nombre, el tema (sol/luna), la actualización con
-/// la versión, y "Cerrar sesión" en rojo, apartado del resto por un separador
+/// (rediseño 2026-10-21): el nombre, el tema (sol/luna), la Ayuda, la
+/// actualización con la versión, y "Cerrar sesión" en rojo, apartado del resto por un separador
 /// grueso para no tocarlo por error. Es un panel propio y no un
 /// `DropdownMenu`: el de Material no deja cambiar cómo aparece.
 ///
@@ -86,12 +87,13 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// luego queda fijo; el ítem de actualización cambia de "Buscar" a "Actualizar".
 ///
 /// Sólo UI: el tema lo guarda [GestorTema], el estado de la actualización es de
-/// [ActualizacionViewModel] y cerrar sesión lo decide quien llama.
+/// [ActualizacionViewModel], y la Ayuda y cerrar sesión los decide quien llama.
 @Composable
 fun MenuCuenta(
     sesion: UsuarioSesion,
     tema: TemaApp,
     onAlternarTema: () -> Unit,
+    onAyuda: () -> Unit,
     onCerrarSesion: () -> Unit,
     actualizador: ActualizacionViewModel,
 ) {
@@ -168,7 +170,11 @@ fun MenuCuenta(
                         sesion = sesion,
                         tema = tema,
                         onAlternarTema = onAlternarTema,
-                        actualizacion = if (actualizador.activo) opcionActualizacion(estadoActualizacion, busqueda) else null,
+                        onAyuda = {
+                            cerrar()
+                            onAyuda()
+                        },
+                        actualizacion =if (actualizador.activo) opcionActualizacion(estadoActualizacion, busqueda) else null,
                         onActualizacion = { accion ->
                             when (accion) {
                                 // Cierra el menú: la respuesta llega como aviso corto.
@@ -203,6 +209,7 @@ private fun PanelCuenta(
     sesion: UsuarioSesion,
     tema: TemaApp,
     onAlternarTema: () -> Unit,
+    onAyuda: () -> Unit,
     actualizacion: OpcionActualizacion?,
     onActualizacion: (AccionActualizacion) -> Unit,
     onCerrarSesion: () -> Unit,
@@ -245,6 +252,17 @@ private fun PanelCuenta(
             }
             SeparadorFino()
             FilaEscalonada(indice = 2) {
+                // El manual de uso, sin internet (ver [PantallaAyuda]).
+                OpcionMenu(texto = "Ayuda", onClick = onAyuda) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.HelpOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            SeparadorFino()
+            FilaEscalonada(indice = 3) {
                 if (actualizacion != null) {
                     OpcionMenu(
                         texto = actualizacion.texto,
@@ -273,7 +291,7 @@ private fun PanelCuenta(
                     .height(6.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
             )
-            FilaEscalonada(indice = 3) {
+            FilaEscalonada(indice = 4) {
                 OpcionMenu(texto = "Cerrar sesión", color = MaterialTheme.colorScheme.error, onClick = onCerrarSesion) {
                     Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 }

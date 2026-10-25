@@ -40,10 +40,13 @@ a todos los que están adentro.
 
 ## Otras opciones del menú
 
+- **Ayuda**: este manual dentro de la app, ver
+  [Buscar ayuda en el manual](ayuda.md).
 - **Versión** y **Buscar actualizaciones**: ver
   [Buscar e instalar una actualización](buscar-actualizacion.md).
 
 ## Relacionado
 
 - [Iniciar sesión](iniciar-sesion.md)
+- [Buscar ayuda en el manual](ayuda.md)
 - [Buscar e instalar una actualización](buscar-actualizacion.md)

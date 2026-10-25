@@ -37,6 +37,12 @@ pub use avisos::{
     TipoAccionAviso, aviso_de_mensaje, cuerpo_registro_accion_aviso,
 };
 
+mod manual;
+pub use manual::{
+    BloqueManual, CeldaManual, ContenidoTemaManual, FilaManual, GrupoManual, ResultadoManual,
+    TemaManual, TramoManual, buscar_en_manual, indice_manual, tema_manual,
+};
+
 uniffi::setup_scaffolding!();
 
 mod catalogo;
