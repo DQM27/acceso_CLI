@@ -37,8 +37,13 @@ impl FiltroContratistasEntrada {
 /// modela crear y editar con dos structs idénticos en forma (distinto nombre
 /// nada más), así que del lado del webview alcanza con uno solo. Cubre tanto
 /// el formulario completo (crear/editar) como el toggle rápido de
-/// "es de ruta"/"tiene acceso" desde la grilla (la fila ya tiene todos los
-/// demás campos, se mandan de vuelta sin cambios).
+/// "es de ruta" desde la grilla (la fila ya tiene todos los demás campos, se
+/// mandan de vuelta sin cambios).
+///
+/// Sin `tiene_acceso`: desde el escritorio nadie da ni quita el acceso, es
+/// sólo del panel web (decisión del dueño 2026-10-24). El alta siempre queda
+/// con acceso (lo fija el núcleo) y al editar el núcleo conserva el que tenía
+/// (`AppCore::actualizar_datos_contratista`).
 #[derive(serde::Deserialize)]
 pub struct DatosContratistaEntrada {
     pub cedula: String,
@@ -47,7 +52,6 @@ pub struct DatosContratistaEntrada {
     pub tipo_ingreso: TipoIngreso,
     pub fecha_vencimiento_praind: Option<NaiveDate>,
     pub es_personal_ruta: bool,
-    pub tiene_acceso: bool,
 }
 
 impl From<DatosContratistaEntrada> for DatosContratista {
@@ -59,7 +63,8 @@ impl From<DatosContratistaEntrada> for DatosContratista {
             tipo_ingreso: entrada.tipo_ingreso,
             fecha_vencimiento_praind: entrada.fecha_vencimiento_praind,
             es_personal_ruta: entrada.es_personal_ruta,
-            tiene_acceso: entrada.tiene_acceso,
+            // El núcleo lo ignora al dar de alta (siempre con acceso).
+            tiene_acceso: true,
         }
     }
 }
@@ -73,7 +78,8 @@ impl From<DatosContratistaEntrada> for DatosActualizacionContratista {
             tipo_ingreso: entrada.tipo_ingreso,
             fecha_vencimiento_praind: entrada.fecha_vencimiento_praind,
             es_personal_ruta: entrada.es_personal_ruta,
-            tiene_acceso: entrada.tiene_acceso,
+            // `actualizar_datos_contratista` lo reemplaza por el que ya tenía.
+            tiene_acceso: true,
         }
     }
 }

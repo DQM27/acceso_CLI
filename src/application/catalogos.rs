@@ -206,6 +206,30 @@ impl AppCore {
         id: i64,
         datos: DatosActualizacionContratista,
     ) -> Result<(), ContratistaServiceError> {
+        self.actualizar_contratista_con(actor, id, datos, false)
+    }
+
+    /// Como [`Self::actualizar_contratista`], pero el acceso queda como
+    /// estaba: `datos.tiene_acceso` se ignora. Es lo que usa el escritorio,
+    /// donde nadie da ni quita el acceso (eso es sólo del panel web,
+    /// decisión del dueño 2026-10-24). Se decide dentro de la misma
+    /// transacción que lee el contratista, no con lo que mandó la pantalla.
+    pub fn actualizar_datos_contratista(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        datos: DatosActualizacionContratista,
+    ) -> Result<(), ContratistaServiceError> {
+        self.actualizar_contratista_con(actor, id, datos, true)
+    }
+
+    fn actualizar_contratista_con(
+        &self,
+        actor: &UsuarioSesion,
+        id: i64,
+        mut datos: DatosActualizacionContratista,
+        conservar_acceso: bool,
+    ) -> Result<(), ContratistaServiceError> {
         let transaction =
             Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)
                 .map_err(DatabaseError::from)?;
@@ -220,6 +244,9 @@ impl AppCore {
             fecha_costa_rica(self.reloj.ahora_utc()),
         );
         let actual = servicio.buscar_por_id(id)?;
+        if conservar_acceso {
+            datos.tiene_acceso = actual.tiene_acceso;
+        }
         let cedula_nueva = crate::domain::cedula::Cedula::normalizar(&datos.cedula).map_or_else(
             |_| datos.cedula.trim().to_string(),
             crate::domain::cedula::Cedula::into_string,

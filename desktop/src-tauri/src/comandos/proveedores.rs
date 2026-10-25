@@ -62,21 +62,8 @@ pub fn crear_empresa_proveedor(
         .map_err(mensaje_empresa_proveedor)
 }
 
-#[tauri::command(async)]
-pub fn establecer_empresa_proveedor_activa(
-    id: i64,
-    activa: bool,
-    state: tauri::State<GuiState>,
-) -> Result<(), String> {
-    let sesion = state.sesion_activa()?;
-    let core = state.core();
-    let resultado = if activa {
-        core.activar_empresa_proveedor(&sesion, id)
-    } else {
-        core.desactivar_empresa_proveedor(&sesion, id)
-    };
-    resultado.map_err(mensaje_empresa_proveedor)
-}
+// Sin comando para activar/desactivar una empresa proveedora: es sólo del
+// panel web (decisión del dueño 2026-10-24).
 
 // ---- Operación: ingreso / salida ----
 

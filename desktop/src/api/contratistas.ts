@@ -79,7 +79,8 @@ export interface DatosContratista {
   tipo_ingreso: TipoIngreso;
   fecha_vencimiento_praind: string | null;
   es_personal_ruta: boolean;
-  tiene_acceso: boolean;
+  // Sin `tiene_acceso`: desde el escritorio nadie da ni quita el acceso (sólo
+  // el panel web); el núcleo conserva el que tenía.
 }
 
 /** Reglas del formulario, calculadas por el núcleo

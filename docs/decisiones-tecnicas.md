@@ -806,3 +806,33 @@ es que la verificación ni llame a `device-auth`. Además, un `5xx` de
 `device-auth` (la Edge Function caída) ahora cuenta como falta de conexión
 (`NubeError::es_falta_de_conexion`); antes, por llegar como error de
 estado de `reqwest`, frenaba el registro.
+
+## 2026-10-24 — Activar o desactivar empresas y contratistas, sólo en el panel web
+
+**Antes:** el escritorio tenía el interruptor **Activa** en Empresas (de
+contratistas y proveedoras) y, en Contratistas, el interruptor **Acceso**
+(oculto al Operador) y la casilla **Con acceso** en el formulario de
+edición (visible para todos). Con los roles aplanados (2026-09-11),
+cualquier usuario podía usarlos.
+
+**Decisión (del dueño, 2026-10-24):** desde el escritorio **nadie** activa
+ni desactiva empresas o contratistas, sin importar el rol. Es una decisión
+administrativa, del panel web. Desactivar una empresa deja sin entrada a
+todos sus contratistas.
+
+- No es una regla de roles en `domain::autorizacion`. La opción se quita
+  del escritorio para todos:
+  - Tauri ya no registra `establecer_empresa_activa` ni
+    `establecer_empresa_proveedor_activa`.
+  - `DatosContratistaEntrada` ya no trae `tiene_acceso`.
+  - `actualizar_contratista` usa `AppCore::actualizar_datos_contratista`,
+    que conserva el acceso que tenía, decidido dentro de la misma
+    transacción.
+- El núcleo conserva `activar_empresa`/`desactivar_empresa` y
+  `actualizar_contratista` (con acceso) para los demás caminos.
+- En el escritorio, **Activa** de Empresas queda como texto de sólo lectura
+  (Sí/No).
+
+**Hueco conocido:** el panel web todavía no tiene sección **Empresas**.
+Mientras no exista, activar o desactivar una empresa se hace por SQL en
+Supabase (decisión del dueño). Contratistas ya se gestiona en el panel.

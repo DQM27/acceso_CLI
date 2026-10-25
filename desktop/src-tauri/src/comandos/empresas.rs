@@ -67,18 +67,5 @@ pub fn actualizar_empresa(
         .map_err(control_acceso::mensajes::mensaje_empresa)
 }
 
-#[tauri::command(async)]
-pub fn establecer_empresa_activa(
-    id: i64,
-    activa: bool,
-    state: tauri::State<GuiState>,
-) -> Result<(), String> {
-    let sesion = state.sesion_activa()?;
-    let core = state.core();
-    let resultado = if activa {
-        core.activar_empresa(&sesion, id)
-    } else {
-        core.desactivar_empresa(&sesion, id)
-    };
-    resultado.map_err(control_acceso::mensajes::mensaje_empresa)
-}
+// Sin comando para activar/desactivar una empresa: desde el escritorio nadie
+// lo hace, es sólo del panel web (decisión del dueño 2026-10-24).

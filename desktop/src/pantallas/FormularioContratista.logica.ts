@@ -16,5 +16,4 @@ export const esquema = z.object({
   tipo_ingreso: z.enum(TIPOS),
   fecha_vencimiento_praind: z.string(),
   es_personal_ruta: z.boolean(),
-  tiene_acceso: z.boolean(),
 });

@@ -847,7 +847,7 @@ function Shell({
                         ) : id === "historial" ? (
                           <Historial />
                         ) : id === "contratistas" ? (
-                          <Contratistas actorRol={sesion.rol} />
+                          <Contratistas />
                         ) : id === "auditoria" ? (
                           <Auditoria />
                         ) : id === "empresas" ? (

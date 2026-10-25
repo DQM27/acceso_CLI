@@ -42,8 +42,10 @@ pub fn crear_contratista(
 }
 
 /// Cubre tanto el formulario completo (crear/editar) como el toggle rápido de
-/// "es de ruta"/"tiene acceso" desde la grilla. El core exige el registro
-/// completo (`DatosActualizacionContratista` reemplaza, no aplica un parche).
+/// "es de ruta" desde la grilla. El core exige el registro completo
+/// (`DatosActualizacionContratista` reemplaza, no aplica un parche), salvo el
+/// acceso: desde el escritorio nadie lo cambia, el núcleo conserva el que
+/// tenía (sólo el panel web lo da o lo quita).
 #[tauri::command(async)]
 pub fn actualizar_contratista(
     id: i64,
@@ -53,7 +55,7 @@ pub fn actualizar_contratista(
     let sesion = state.sesion_activa()?;
     state
         .core()
-        .actualizar_contratista(&sesion, id, datos.into())
+        .actualizar_datos_contratista(&sesion, id, datos.into())
         .map_err(control_acceso::mensajes::mensaje_contratista)
 }
 

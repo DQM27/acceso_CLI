@@ -26,7 +26,6 @@ interface ValoresFormulario {
   tipo_ingreso: TipoIngreso;
   fecha_vencimiento_praind: string;
   es_personal_ruta: boolean;
-  tiene_acceso: boolean;
 }
 
 export default function FormularioContratista({
@@ -58,7 +57,6 @@ export default function FormularioContratista({
           tipo_ingreso: contratista.tipo_ingreso,
           fecha_vencimiento_praind: contratista.fecha_vencimiento_praind ?? "",
           es_personal_ruta: contratista.es_personal_ruta,
-          tiene_acceso: contratista.tiene_acceso,
         }
       : {
           cedula: "",
@@ -67,7 +65,6 @@ export default function FormularioContratista({
           tipo_ingreso: "Praind",
           fecha_vencimiento_praind: "",
           es_personal_ruta: false,
-          tiene_acceso: true,
         },
   });
 
@@ -137,9 +134,6 @@ export default function FormularioContratista({
           ? valores.fecha_vencimiento_praind
           : null,
       es_personal_ruta: reglas.admite_personal_ruta && valores.es_personal_ruta,
-      // El alta siempre queda con acceso (lo fija el núcleo); sólo al
-      // editar se puede quitar.
-      tiene_acceso: contratista ? valores.tiene_acceso : true,
     };
     try {
       if (contratista) {
@@ -238,14 +232,8 @@ export default function FormularioContratista({
           </label>
         )}
 
-        {contratista && (
-          <label
-            style={{ display: "flex", alignItems: "center", gap: "0.4rem", color: "var(--texto)" }}
-          >
-            <input type="checkbox" {...register("tiene_acceso")} />
-            Con acceso
-          </label>
-        )}
+        {/* Sin "Con acceso": dar o quitar el acceso es sólo del panel web
+            (decisión del dueño 2026-10-24); el núcleo conserva el que tenía. */}
 
         {mostrarPraind && (
           <label className="campo">
