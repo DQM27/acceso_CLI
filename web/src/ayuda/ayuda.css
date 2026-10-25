@@ -1,0 +1,224 @@
+/* Pantalla de Ayuda (`pantallas/Ayuda.tsx`), igual a la del escritorio
+   (`desktop/src/ayuda/ayuda.css`): lista de temas a la izquierda y el
+   proceso a la derecha. Sólo colores y medidas de la paleta (`diseno.css`). */
+
+.ayuda {
+  flex-direction: row;
+  gap: var(--espacio-2);
+}
+
+.ayuda-lateral {
+  flex: 0 0 20rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  min-height: 0;
+  padding: var(--espacio-3);
+}
+
+.ayuda-lista {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+}
+
+.ayuda-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--espacio-2);
+}
+
+.ayuda-grupo h3 {
+  margin: var(--espacio-1) var(--espacio-2);
+  color: var(--texto-atenuado);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ayuda-tema,
+.ayuda-resultado {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 0.4rem var(--espacio-2);
+  border: 0;
+  border-radius: var(--radio-chico);
+  background: transparent;
+  color: var(--texto);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duracion) ease;
+}
+
+.ayuda-tema:hover,
+.ayuda-resultado:hover {
+  background: var(--panel-suave);
+}
+
+.ayuda-tema.activo,
+.ayuda-resultado.activo {
+  background: var(--acento-suave);
+  color: var(--acento);
+}
+
+.ayuda-tema:focus-visible,
+.ayuda-resultado:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: -2px;
+}
+
+.ayuda-resultado-titulo {
+  font-weight: 600;
+}
+
+.ayuda-resultado-seccion {
+  color: var(--texto-atenuado);
+  font-size: 0.78rem;
+}
+
+.ayuda-resultado-fragmento {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.ayuda-vacio {
+  margin: var(--espacio-2);
+  color: var(--muted);
+}
+
+.ayuda-proceso {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--espacio-4) var(--espacio-6) var(--espacio-8);
+}
+
+.ayuda-atras {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espacio-1);
+  margin-bottom: var(--espacio-3);
+}
+
+.ayuda-contenido {
+  max-width: 52rem;
+  color: var(--texto);
+  line-height: 1.55;
+}
+
+.ayuda-contenido h1 {
+  margin: 0 0 var(--espacio-4);
+  font-size: var(--fuente-titulo);
+}
+
+.ayuda-contenido h2 {
+  margin: var(--espacio-6) 0 var(--espacio-2);
+  padding-bottom: var(--espacio-1);
+  border-bottom: 1px solid var(--borde);
+  font-size: 1.05rem;
+}
+
+.ayuda-contenido h3,
+.ayuda-contenido h4 {
+  margin: var(--espacio-4) 0 var(--espacio-2);
+  font-size: 0.95rem;
+}
+
+.ayuda-contenido p,
+.ayuda-contenido ul,
+.ayuda-contenido ol {
+  margin: 0 0 var(--espacio-3);
+}
+
+.ayuda-contenido ul,
+.ayuda-contenido ol {
+  padding-left: 1.4rem;
+}
+
+.ayuda-contenido li {
+  margin-bottom: var(--espacio-1);
+}
+
+.ayuda-contenido li > ul,
+.ayuda-contenido li > ol,
+.ayuda-contenido li > p {
+  margin: var(--espacio-1) 0 0;
+}
+
+.ayuda-contenido code {
+  padding: 0 0.3em;
+  border-radius: 4px;
+  background: var(--panel-suave);
+  font-size: 0.9em;
+}
+
+.ayuda-contenido a {
+  color: var(--acento);
+}
+
+.ayuda-tabla {
+  overflow-x: auto;
+  margin: 0 0 var(--espacio-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-chico);
+}
+
+.ayuda-tabla table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.ayuda-tabla th,
+.ayuda-tabla td {
+  padding: var(--espacio-2) var(--espacio-3);
+  border-bottom: 1px solid var(--borde);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ayuda-tabla th {
+  background: var(--panel-suave);
+  font-weight: 600;
+}
+
+.ayuda-tabla tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Selector de app (Panel web, Escritorio, Móvil) a todo el ancho. */
+.ayuda-apps {
+  display: flex;
+}
+
+.ayuda-apps button {
+  flex: 1;
+}
+
+/* En el teléfono: la lista arriba (más corta) y el tema debajo. */
+@media (max-width: 768px) {
+  .ayuda {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .ayuda-lateral {
+    flex: 0 0 auto;
+    max-height: 45vh;
+  }
+
+  .ayuda-proceso {
+    flex: 0 0 auto;
+    overflow-y: visible;
+    padding: var(--espacio-3);
+  }
+}

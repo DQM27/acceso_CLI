@@ -209,6 +209,7 @@ navegador, con una cuenta de Google autorizada.
 - ✅ [Dispositivos: registrar y retirar equipos, unidades operativas](panel/dispositivos.md)
 - ✅ [Enviar avisos a los teléfonos](panel/avisos.md)
 - ✅ [Asistente (en desarrollo)](panel/asistente.md)
+- ✅ [Ayuda: el manual de las tres apps](panel/ayuda.md)
 
 ### Mejoras de pantalla detectadas al documentar el panel
 

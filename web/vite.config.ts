@@ -14,7 +14,15 @@ export default defineConfig({
     dedupe: ["zod"],
   },
   server: {
-    fs: { allow: [searchForWorkspaceRoot(process.cwd()), "../supabase/functions/_shared/lienzo"] },
+    // La Ayuda lee `docs/manual/` con el lector compartido con el escritorio.
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        "../supabase/functions/_shared/lienzo",
+        "../supabase/functions/_shared/manual",
+        "../docs/manual",
+      ],
+    },
   },
   build: {
     // AG Grid Community (~875 KB, ver el grupo "ag-grid-vendor" abajo) ya

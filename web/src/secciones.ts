@@ -6,7 +6,8 @@ export type Seccion =
   | "usuarios"
   | "sesiones"
   | "avisos"
-  | "asistente";
+  | "asistente"
+  | "ayuda";
 
 /** Ruta real de cada sección -- `Sidebar` arma sus `NavLink` con esto y
  * `Shell` compara `location.pathname` contra el mismo valor para decidir
