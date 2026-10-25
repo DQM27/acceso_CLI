@@ -1,6 +1,8 @@
 # Asistentes con IA — plan
 
-Estado: **propuesta, sin código todavía** (2026-10-21).
+Estado (2026-10-24): **en marcha**. Lienzo (Parte A) en producción; de la
+ayuda (Parte B), el manual de las tres apps y el manual navegable en el
+escritorio y el panel. Ver "Estado y pendientes" al final.
 
 Son **dos productos separados**, con usuarios, alcance y riesgos distintos
 (decisión del dueño, 2026-10-21):
@@ -423,8 +425,29 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
   está en staging; en producción se aplica sola al mergear a `main` (hasta
   entonces, la pantalla "Asistente" de producción muestra el error de función
   inexistente). Falta que el dueño la revise en el panel apuntado a staging.
-- Ayuda de uso (Parte B): nada implementado; la primera etapa es el manual
-  navegable sin IA.
+- Ayuda de uso (Parte B), etapa 2 (manual navegable sin IA): **hecha en el
+  escritorio y el panel** (2026-10-24, rama `claude/ayuda-ia`), ver abajo.
+  Falta el móvil.
+
+## Manual navegable sin IA — implementado en escritorio y panel (2026-10-24)
+
+- `supabase/functions/_shared/manual/`: lector del markdown del manual
+  (`markdown.ts`), índice de cada app sacado de `docs/manual/README.md`
+  (`manual.ts`) y buscador local sin tildes ni mayúsculas que premia el
+  mensaje pegado entero (`buscar.ts`). Sin dependencias; la Edge Function
+  `ayuda-ia` (etapa 3) lo puede reutilizar para cargar el manual.
+- Escritorio: sección **Ayuda** y **F1** desde cualquier pantalla. Sólo
+  procesos del escritorio. El manual viaja dentro del programa (sin
+  internet), en un chunk que se carga al abrir la sección.
+- Panel: sección **Ayuda** con las tres apps (selector de app; el buscador
+  recorre las tres).
+- Pruebas (`desktop/src/ayuda/manual.test.ts`): además del lector y el
+  buscador, revisan el manual real: cada proceso en el índice del README y
+  ningún enlace ni ancla roto. Editar el manual sin romper eso es la única
+  regla nueva.
+- Móvil: pendiente. Por la regla de la app (el núcleo decide, Kotlin
+  dibuja), el lector y el buscador irían en `rust-core` con el manual
+  embebido al compilar, expuestos por UniFFI.
 
 ## Lienzo sin IA — implementado (2026-10-22, sin PR todavía)
 
