@@ -695,7 +695,7 @@ pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
     match error {
         NubeError::CredencialesInvalidas => {
             "La nube ya no reconoce a este dispositivo (fue retirado en el panel) \
-             -- regístrelo como dispositivo nuevo con un código del panel"
+             -- pida a un administrador un código de reconexión"
                 .into()
         }
         NubeError::VersionDesactualizada => {
