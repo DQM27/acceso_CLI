@@ -372,15 +372,7 @@ private fun DialogoConfirmarSalidaCorreo(
     val datos = fila.datos()
     DialogoRegistrarSalida(
         nombre = datos.nombre,
-        datos = datosIngreso(
-            cedula = datos.cedula,
-            afiliacion = "Motivo" to datos.motivo,
-            placa = datos.placa,
-            gafete = datos.gafete,
-            fechaHora = datos.ingreso,
-            dioIngreso = datos.usuario,
-            otroEquipo = datos.remota,
-        ),
+        detalle = textoGafeteSalida(datos.gafete),
         onDismiss = onDismiss,
         onConfirmar = { onConfirmar(fila) },
     )

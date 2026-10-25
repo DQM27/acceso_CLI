@@ -71,26 +71,12 @@ internal fun DialogoConfirmarSalidaProveedor(
             is FilaProveedorActiva.Local -> fila.registro.nombre
             is FilaProveedorActiva.Remota -> fila.remoto.nombre
         },
-        datos = when (fila) {
-            is FilaProveedorActiva.Local -> datosIngreso(
-                cedula = fila.registro.cedula,
-                afiliacion = "Empresa" to fila.registro.empresaNombre,
-                placa = fila.registro.placa,
-                gafete = fila.registro.gafeteNumero,
-                fechaHora = fila.registro.fechaHoraIngreso,
-                dioIngreso = fila.registro.usuarioIngresoNombre,
-                otroEquipo = false,
-            )
-            is FilaProveedorActiva.Remota -> datosIngreso(
-                cedula = fila.remoto.cedula,
-                afiliacion = "Empresa" to fila.remoto.empresaNombre,
-                placa = fila.remoto.placa,
-                gafete = fila.remoto.gafeteNumero,
-                fechaHora = fila.remoto.horaEntrada,
-                dioIngreso = fila.remoto.usuarioEntradaNombre,
-                otroEquipo = true,
-            )
-        },
+        detalle = textoGafeteSalida(
+            when (fila) {
+                is FilaProveedorActiva.Local -> fila.registro.gafeteNumero
+                is FilaProveedorActiva.Remota -> fila.remoto.gafeteNumero
+            },
+        ),
         onDismiss = onDismiss,
         onConfirmar = { onConfirmar(fila) },
     )

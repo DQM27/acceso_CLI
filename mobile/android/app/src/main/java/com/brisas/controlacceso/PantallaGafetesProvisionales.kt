@@ -468,21 +468,12 @@ private fun DialogoConfirmarDevolucionGafeteProvisional(
             is FilaGafeteProvisionalActiva.Local -> fila.prestamo.encargadoNombre
             is FilaGafeteProvisionalActiva.Remota -> fila.remoto.encargadoNombre
         },
-        datos = when (fila) {
-            is FilaGafeteProvisionalActiva.Local -> listOf(
-                DatoFicha("Código de empleado", fila.prestamo.encargadoCodigoEmpleado),
-                DatoFicha("Gafete", fila.prestamo.gafeteNumero.toString(), destacado = true),
-                DatoFicha("Entregado", textoFechaHora(fila.prestamo.fechaHoraEntrega)),
-                DatoFicha("Entregó", fila.prestamo.usuarioEntregaNombre),
-            )
-            is FilaGafeteProvisionalActiva.Remota -> listOf(
-                DatoFicha("Código de empleado", fila.remoto.encargadoCodigoEmpleado),
-                DatoFicha("Gafete", fila.remoto.gafeteNumero.toString(), destacado = true),
-                DatoFicha("Entregado", textoFechaHora(fila.remoto.horaEntrega)),
-                DatoFicha("Entregó", fila.remoto.usuarioEntregaNombre),
-                DatoFicha("Equipo", "Otro dispositivo de la unidad"),
-            )
-        },
+        detalle = textoGafeteSalida(
+            when (fila) {
+                is FilaGafeteProvisionalActiva.Local -> fila.prestamo.gafeteNumero
+                is FilaGafeteProvisionalActiva.Remota -> fila.remoto.gafeteNumero
+            },
+        ),
         onDismiss = onDismiss,
         onConfirmar = { onConfirmar(fila) },
     )

@@ -3,7 +3,6 @@ package com.brisas.controlacceso
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 class InterfazPrincipalTest {
@@ -20,39 +19,9 @@ class InterfazPrincipalTest {
     }
 
     @Test
-    fun `la ficha de salida lista los datos en orden y destaca el gafete`() {
-        val datos = datosIngreso(
-            cedula = "111111111",
-            afiliacion = "Empresa" to "Empresa Test",
-            placa = "CL 371931",
-            gafete = 25,
-            fechaHora = "2026-10-25 08:00",
-            dioIngreso = "Guardia",
-            otroEquipo = false,
-            hora = { "hoy 08:00" },
-        )
-        assertEquals(
-            listOf("Cédula", "Empresa", "Placa", "Gafete", "Ingresó", "Dio ingreso"),
-            datos.map { it.etiqueta },
-        )
-        assertEquals(DatoFicha("Gafete", "25", destacado = true), datos[3])
-        assertEquals("hoy 08:00", datos[4].valor)
-    }
-
-    @Test
-    fun `la ficha omite lo que falta y marca el otro equipo`() {
-        val datos = datosIngreso(
-            cedula = null,
-            afiliacion = "Motivo" to "",
-            gafete = null,
-            fechaHora = "x",
-            dioIngreso = null,
-            otroEquipo = true,
-            hora = { it },
-        )
-        assertEquals(listOf("Gafete", "Ingresó", "Equipo"), datos.map { it.etiqueta })
-        assertEquals("Sin gafete", datos[0].valor)
-        assertNull(datos.firstOrNull { it.etiqueta == "Cédula" })
+    fun `la confirmacion de salida solo acompana el nombre con el gafete`() {
+        assertEquals("Gafete 25", textoGafeteSalida(25))
+        assertEquals("Sin gafete", textoGafeteSalida(null))
     }
 
     @Test

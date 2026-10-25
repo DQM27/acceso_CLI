@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -327,24 +326,12 @@ internal fun DialogoConfirmarSalida(
     if (fila == null) return
     DialogoRegistrarSalida(
         nombre = fila.contratistaNombre,
-        datos = when (fila) {
-            is FilaActiva.Local -> datosIngreso(
-                cedula = fila.activo.cedula,
-                afiliacion = "Empresa" to fila.activo.empresaNombre,
-                gafete = fila.activo.gafeteNumero,
-                fechaHora = fila.activo.fechaHoraIngreso,
-                dioIngreso = fila.activo.usuarioIngresoNombre,
-                otroEquipo = false,
-            )
-            is FilaActiva.Remota -> datosIngreso(
-                cedula = fila.remoto.contratistaCedula,
-                afiliacion = "Empresa" to fila.remoto.empresaNombre,
-                gafete = fila.remoto.gafeteNumero,
-                fechaHora = fila.remoto.horaEntrada,
-                dioIngreso = fila.remoto.usuarioEntradaNombre,
-                otroEquipo = true,
-            )
-        },
+        detalle = textoGafeteSalida(
+            when (fila) {
+                is FilaActiva.Local -> fila.activo.gafeteNumero
+                is FilaActiva.Remota -> fila.remoto.gafeteNumero
+            },
+        ),
         onDismiss = onDismiss,
         onConfirmar = { onConfirmar(fila) },
     )
@@ -352,39 +339,17 @@ internal fun DialogoConfirmarSalida(
 
 internal const val TEXTO_OTRO_DISPOSITIVO = "registrado en otro dispositivo de la unidad operativa"
 
-/// Un renglón de la ficha de salida: la etiqueta a la izquierda y el valor a
-/// la derecha; [destacado] lo pinta en el color de la sección (el gafete, que
-/// es lo que el guardia confirma contra lo que la persona trae puesto).
-internal data class DatoFicha(val etiqueta: String, val valor: String, val destacado: Boolean = false)
+/// Lo único que acompaña al nombre en la confirmación de salida: el gafete,
+/// que es lo que el guardia coteja contra lo que la persona trae puesto.
+internal fun textoGafeteSalida(gafete: Long?): String = if (gafete != null) "Gafete $gafete" else "Sin gafete"
 
-/// Los renglones de la ficha de quien está adentro, iguales para
-/// contratistas, proveedores y correo. Lo que falta (un ingreso remoto viejo
-/// sin cédula, por ejemplo) no se muestra.
-internal fun datosIngreso(
-    cedula: String?,
-    afiliacion: Pair<String, String?>,
-    gafete: Long?,
-    fechaHora: String,
-    dioIngreso: String?,
-    otroEquipo: Boolean,
-    placa: String? = null,
-    hora: (String) -> String = ::textoFechaHora,
-): List<DatoFicha> = listOfNotNull(
-    cedula?.takeIf { it.isNotBlank() }?.let { DatoFicha("Cédula", it) },
-    afiliacion.second?.takeIf { it.isNotBlank() }?.let { DatoFicha(afiliacion.first, it) },
-    placa?.takeIf { it.isNotBlank() }?.let { DatoFicha("Placa", it) },
-    DatoFicha("Gafete", gafete?.toString() ?: "Sin gafete", destacado = true),
-    DatoFicha("Ingresó", hora(fechaHora)),
-    dioIngreso?.takeIf { it.isNotBlank() }?.let { DatoFicha("Dio ingreso", it) },
-    if (otroEquipo) DatoFicha("Equipo", "Otro dispositivo de la unidad") else null,
-)
-
-/// "Registrar salida" (o "Registrar devolución" en KOF) como ficha que sube
-/// desde abajo: el nombre grande y debajo los datos en un bloque agrupado
-/// (como una ficha de Contactos en iOS), y el botón principal al alcance del
-/// pulgar. Antes era una sola línea "nombre · cédula · empresa" difícil de
-/// leer de un vistazo. Lo comparten contratistas, proveedores, correo,
-/// visitas y KOF.
+/// "Registrar salida" (o "Registrar devolución" en KOF) como panel que sube
+/// desde abajo, a la manera de una hoja de acción de iOS: el nombre grande,
+/// debajo sólo el gafete ([detalle]) y el botón al alcance del pulgar. El
+/// resto de los datos ya está en la tarjeta que se tocó (pedido del usuario
+/// 2026-10-25: la ficha con cédula, empresa, hora y quién dio ingreso era
+/// demasiado para confirmar una salida). Lo comparten contratistas,
+/// proveedores, correo, visitas y KOF.
 ///
 /// Al confirmar, el panel baja primero y recién entonces avisa: si el que
 /// llama lo quitara de la composición en el acto, desaparecería de golpe.
@@ -393,7 +358,7 @@ internal fun datosIngreso(
 @Composable
 internal fun DialogoRegistrarSalida(
     nombre: String,
-    datos: List<DatoFicha>,
+    detalle: String?,
     onDismiss: () -> Unit,
     onConfirmar: () -> Unit,
     accion: String = "Registrar salida",
@@ -430,42 +395,13 @@ internal fun DialogoRegistrarSalida(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 12.dp),
             )
-            if (datos.isNotEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(MaterialTheme.colorScheme.surface),
-                ) {
-                    datos.forEachIndexed { indice, dato ->
-                        if (indice > 0) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 16.dp),
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                dato.etiqueta,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.width(16.dp))
-                            Text(
-                                dato.valor,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (dato.destacado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (dato.destacado) FontWeight.Bold else FontWeight.Medium,
-                                textAlign = TextAlign.End,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                }
+            if (detalle != null) {
+                Text(
+                    detalle.uppercase(),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
             }
             BotonBrisas(
                 onClick = {
