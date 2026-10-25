@@ -37,6 +37,24 @@ class AccionInferiorTest {
     }
 
     @Test
+    fun `la busqueda de la pildora sigue la misma pila que el boton`() {
+        val acciones = AccionesInferiores()
+        assertNull(acciones.busqueda)
+        var abierta = ""
+        val vieja = BusquedaInferior("Nombre o cédula para ingresar", mutableStateOf<() -> Unit>({ abierta = "vieja" }))
+        val nueva = BusquedaInferior("Cédula, nombre o motivo", mutableStateOf<() -> Unit>({ abierta = "nueva" }))
+        acciones.ponerBusqueda(vieja)
+        acciones.ponerBusqueda(nueva)
+
+        acciones.quitarBusqueda(vieja)
+        acciones.busqueda?.abrir()
+
+        assertEquals("nueva", abierta)
+        acciones.quitarBusqueda(nueva)
+        assertNull(acciones.busqueda)
+    }
+
+    @Test
     fun `tocar usa la accion vigente`() {
         var tocado = ""
         val alTocar = mutableStateOf<() -> Unit>({ tocado = "primera" })

@@ -11,8 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.background
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -28,14 +26,13 @@ import uniffi.control_acceso_mobile.Nucleo
 /// solo campo, la interpretación cambia), llevado a un selector de tres
 /// porque acá hace falta distinguir tres búsquedas, no dos:
 ///
-/// - **Ingreso** (por defecto, `ModoBusqueda.ENTRADA`): vacío lista quién
-///   está adentro (tocar un nombre confirma su salida); con texto busca en
+/// - **Ingreso** (por defecto, `ModoBusqueda.ENTRADA`): la lista es quién
+///   está adentro (tocar un nombre confirma su salida); el buscador busca en
 ///   el catálogo completo de contratistas (antes pestaña "Buscar" aparte)
 ///   para arrancar el flujo de confirmar entrada.
-/// - **Salida** (`ModoBusqueda.SALIDA_NOMBRE`): filtra la lista de activos
-///   por cédula/nombre — tocar un resultado abre el mismo diálogo de
-///   confirmar salida de siempre. Vacío no trae nada (es un buscador, no
-///   una lista para recorrer — para eso ya está la pestaña Ingreso).
+/// - **Salida** (`ModoBusqueda.SALIDA_NOMBRE`): la misma lista de quién está
+///   adentro, y el buscador la acota por cédula/nombre — tocar a alguien abre
+///   la ficha de salida de siempre.
 /// - **Gafete** (`ModoBusqueda.SALIDA_GAFETE`): acepta varios números de
 ///   gafete separados por coma ("2, 25, 85") — igual que el modo gafete de
 ///   `SalidaModal.tsx` —
@@ -45,12 +42,16 @@ import uniffi.control_acceso_mobile.Nucleo
 ///   (pensada para cargar varios gafetes de un tirón), la vista previa con
 ///   nombres hace las veces de confirmación.
 ///
+/// Se busca siempre con la píldora de abajo ([BuscadorInferior], rediseño
+/// 2026-10-25): el campo de arriba se fue y cada modo pone su texto de ayuda
+/// y su teclado.
+///
 /// Todo el estado y las llamadas a [Nucleo] viven en [ActivosViewModel]
 /// (ver mobile/android/arquitectura.md) — este archivo sólo dibuja lo que el
 /// ViewModel expone y le reporta eventos. Esta función orquesta: delega el
-/// selector, el campo, los mensajes y el contenido (uno por modo, ver
-/// [ContenidoModoEntrada]/[ContenidoModoSalidaNombre]/[ContenidoModoSalidaGafete]
-/// más abajo) a funciones chicas de una sola responsabilidad cada una, en
+/// selector, los mensajes, la lista y los resultados del buscador (uno por
+/// modo, ver [ContenidoListaActivos]/[ResultadosIngreso]/[ResultadosSalida]/
+/// [ResultadosGafete] en `ContenidoActivos.kt`) a funciones chicas de una sola responsabilidad cada una, en
 /// vez de tener los tres modos mezclados en un único bloque `if`/`else`.
 @Composable
 fun PantallaActivos(
@@ -66,8 +67,9 @@ fun PantallaActivos(
         viewModel(factory = ActivosViewModel.factory(nucleo))
     var escanerAbierto by remember { mutableStateOf(false) }
     var escanerGafeteSalidaAbierto by remember { mutableStateOf(false) }
-    // El buscador de abajo de Salida por nombre (lupa del botón redondo).
-    var buscandoSalida by remember { mutableStateOf(false) }
+    // El buscador de abajo (la píldora de búsqueda), en cualquiera de los
+    // tres modos.
+    var buscando by remember { mutableStateOf(false) }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescar()
@@ -150,6 +152,12 @@ fun PantallaActivos(
                         } finally {
                             escanerAbierto = false
                         }
+                        // Si el documento no llevó a nadie con claridad, lo leído
+                        // queda en el buscador de abajo, con sus resultados, para
+                        // corregirlo o elegir a mano.
+                        if (viewModel.seleccionIngreso == SeleccionIngreso.Ninguna && viewModel.texto.isNotBlank()) {
+                            buscando = true
+                        }
                     },
                     onCerrar = { escanerAbierto = false },
                 )
@@ -190,18 +198,11 @@ fun PantallaActivos(
             PanelActivos.Lista -> Box(modifier = Modifier.fillMaxSize()) {
             val verificando = viewModel.seleccionIngreso is SeleccionIngreso.Cargando
 
+            // Arriba sólo el modo, los mensajes y la lista: se busca con la
+            // píldora de abajo, igual en los tres modos (y en todas las
+            // pestañas), al alcance del pulgar.
             Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
                 SelectorModoBusqueda(modo = viewModel.modo, onCambiar = { viewModel.cambiarModo(it) })
-
-                // En Salida por nombre no hay campo arriba: se busca con la
-                // lupa de abajo (ver [BuscadorInferior] más abajo).
-                if (viewModel.modo != ModoBusqueda.SALIDA_NOMBRE) {
-                    CampoBusquedaActivos(
-                        modo = viewModel.modo,
-                        texto = viewModel.texto,
-                        onCambiarTexto = { viewModel.cambiarTexto(it) },
-                    )
-                }
 
                 MensajesEstado(
                     error = viewModel.error,
@@ -210,32 +211,17 @@ fun PantallaActivos(
                     verificando = verificando,
                 )
 
-                when (viewModel.modo) {
-                    ModoBusqueda.ENTRADA -> ContenidoModoEntrada(
-                        texto = viewModel.texto,
-                        activos = viewModel.activos,
-                        resultadosBusqueda = viewModel.resultadosBusqueda,
-                        verificando = verificando,
-                        cargando = viewModel.cargando,
-                        onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
-                        onElegirContratista = { viewModel.elegir(it) },
-                        sincronizando = sincronizando,
-                        onSincronizar = onSincronizar,
-                    )
-                    ModoBusqueda.SALIDA_NOMBRE -> ContenidoModoSalidaNombre(
-                        texto = viewModel.texto,
-                        activos = viewModel.activos,
-                        cargando = viewModel.cargando,
-                        onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
-                        sincronizando = sincronizando,
-                        onSincronizar = onSincronizar,
-                    )
-                    ModoBusqueda.SALIDA_GAFETE -> ContenidoModoSalidaGafete(
-                        texto = viewModel.texto,
-                        coincidencias = viewModel.coincidenciasGafete,
-                        enviando = viewModel.enviandoGafetes,
-                        onRegistrarSalidaGafetes = { viewModel.registrarSalidaPorGafetes() },
-                    )
+                Box(modifier = Modifier.padding(top = 4.dp)) {
+                    when (viewModel.modo) {
+                        ModoBusqueda.ENTRADA, ModoBusqueda.SALIDA_NOMBRE -> ContenidoListaActivos(
+                            activos = viewModel.activos,
+                            cargando = viewModel.cargando,
+                            onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
+                            sincronizando = sincronizando,
+                            onSincronizar = onSincronizar,
+                        )
+                        ModoBusqueda.SALIDA_GAFETE -> ContenidoModoSalidaGafete()
+                    }
                 }
             }
 
@@ -244,34 +230,59 @@ fun PantallaActivos(
                 modo = viewModel.modo,
                 onEscanearCedula = { escanerAbierto = true },
                 onEscanearGafete = { escanerGafeteSalidaAbierto = true },
-                onBuscarSalida = { buscandoSalida = true },
             )
+            BusquedaPrincipal(ayuda = ayudaBusquedaActivos(viewModel.modo), onAbrir = { buscando = true })
 
-            // Buscar a quién sale, desde abajo como en iOS: elegir a alguien
-            // abre el panel de salida y cierra la búsqueda.
-            if (buscandoSalida && viewModel.modo == ModoBusqueda.SALIDA_NOMBRE) {
-                val cerrarBusqueda = {
-                    buscandoSalida = false
-                    viewModel.cambiarTexto("")
-                }
-                BuscadorInferior(
-                    texto = viewModel.texto,
-                    onCambiar = { viewModel.cambiarTexto(it) },
-                    ayuda = "Nombre o cédula de quien sale",
-                    onCerrar = cerrarBusqueda,
-                    modifier = Modifier.background(MaterialTheme.colorScheme.background),
-                ) {
-                    ContenidoModoSalidaNombre(
+            // El buscador desde abajo, como en iOS, con los modos encima del
+            // campo (barra de alcances). Elegir a alguien abre su panel y
+            // cierra la búsqueda.
+            val cerrarBusqueda = {
+                buscando = false
+                viewModel.cambiarTexto("")
+            }
+            BuscadorInferior(
+                visible = buscando,
+                texto = viewModel.texto,
+                onCambiar = { viewModel.cambiarTexto(it) },
+                ayuda = ayudaBusquedaActivos(viewModel.modo),
+                onCerrar = cerrarBusqueda,
+                teclado = tecladoBusquedaActivos(viewModel.modo),
+                encabezado = { SelectorModoBusqueda(modo = viewModel.modo, onCambiar = { viewModel.cambiarModo(it) }) },
+            ) {
+                when (viewModel.modo) {
+                    ModoBusqueda.ENTRADA -> Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        ResultadosIngreso(
+                            texto = viewModel.texto,
+                            resultadosBusqueda = viewModel.resultadosBusqueda,
+                            cargando = viewModel.cargando,
+                            onElegirContratista = { contratista ->
+                                // `elegir` no depende del texto: limpiarlo no lo corta.
+                                viewModel.elegir(contratista)
+                                cerrarBusqueda()
+                            },
+                        )
+                    }
+                    ModoBusqueda.SALIDA_NOMBRE -> Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        ResultadosSalida(
+                            texto = viewModel.texto,
+                            activos = viewModel.activos,
+                            cargando = viewModel.cargando,
+                            onElegirActivo = { fila ->
+                                viewModel.elegirSeleccionSalida(fila)
+                                cerrarBusqueda()
+                            },
+                        )
+                    }
+                    ModoBusqueda.SALIDA_GAFETE -> ResultadosGafete(
                         texto = viewModel.texto,
-                        activos = viewModel.activos,
-                        cargando = viewModel.cargando,
-                        onElegirActivo = { fila ->
-                            viewModel.elegirSeleccionSalida(fila)
-                            cerrarBusqueda()
+                        coincidencias = viewModel.coincidenciasGafete,
+                        enviando = viewModel.enviandoGafetes,
+                        onRegistrarSalidaGafetes = {
+                            // Toma las coincidencias en el acto; el resultado
+                            // queda en la franja de arriba.
+                            viewModel.registrarSalidaPorGafetes()
+                            buscando = false
                         },
-                        sincronizando = sincronizando,
-                        onSincronizar = onSincronizar,
-                        enBuscador = true,
                     )
                 }
             }

@@ -56,11 +56,8 @@ private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirma
     )
 }
 
-/// Mismo layout e información que `DialogoConfirmarSalida` de
-/// PantallaActivos.kt (contratista) -- ícono circular, título "Registrar
-/// salida", y nombre · cédula · empresa (o "registrado en otro dispositivo"
-/// para una fila remota) en vez de sólo "Gafete N · nombre". Pedido
-/// explícito del usuario en pruebas reales, 2026-09-17: el modal de
+/// La misma ficha de salida que contratistas (`DialogoConfirmarSalida`):
+/// pedido explícito del usuario en pruebas reales, 2026-09-17, el modal de
 /// Proveedores quedaba "muy laxo" comparado con el de Contratista.
 @Composable
 internal fun DialogoConfirmarSalidaProveedor(
@@ -70,10 +67,29 @@ internal fun DialogoConfirmarSalidaProveedor(
 ) {
     if (fila == null) return
     DialogoRegistrarSalida(
-        detalle = when (fila) {
-            is FilaProveedorActiva.Local ->
-                "${fila.registro.nombre} · ${fila.registro.cedula} · ${fila.registro.empresaNombre} · Gafete ${fila.registro.gafeteNumero}"
-            is FilaProveedorActiva.Remota -> "${fila.remoto.nombre} · $TEXTO_OTRO_DISPOSITIVO"
+        nombre = when (fila) {
+            is FilaProveedorActiva.Local -> fila.registro.nombre
+            is FilaProveedorActiva.Remota -> fila.remoto.nombre
+        },
+        datos = when (fila) {
+            is FilaProveedorActiva.Local -> datosIngreso(
+                cedula = fila.registro.cedula,
+                afiliacion = "Empresa" to fila.registro.empresaNombre,
+                placa = fila.registro.placa,
+                gafete = fila.registro.gafeteNumero,
+                fechaHora = fila.registro.fechaHoraIngreso,
+                dioIngreso = fila.registro.usuarioIngresoNombre,
+                otroEquipo = false,
+            )
+            is FilaProveedorActiva.Remota -> datosIngreso(
+                cedula = fila.remoto.cedula,
+                afiliacion = "Empresa" to fila.remoto.empresaNombre,
+                placa = fila.remoto.placa,
+                gafete = fila.remoto.gafeteNumero,
+                fechaHora = fila.remoto.horaEntrada,
+                dioIngreso = fila.remoto.usuarioEntradaNombre,
+                otroEquipo = true,
+            )
         },
         onDismiss = onDismiss,
         onConfirmar = { onConfirmar(fila) },

@@ -96,7 +96,8 @@ fun PantallaVisitas(nucleo: Nucleo, refrescarNube: Int = 0) {
 
     viewModel.seleccionSalida?.let { visita ->
         DialogoRegistrarSalida(
-            detalle = detalleSalida(visita),
+            nombre = visita.nombre,
+            datos = datosSalida(visita),
             onDismiss = { viewModel.elegirSeleccionSalida(null) },
             onConfirmar = { viewModel.confirmarSalida(visita) },
         )
@@ -202,10 +203,10 @@ private fun clave(origen: OrigenVisita): String =
     }
 
 /// Mismo texto que el diálogo de salida de contratistas.
-private fun detalleSalida(visita: VisitaAdentro): String =
+private fun datosSalida(visita: VisitaAdentro): List<DatoFicha> =
     when (visita.origen) {
-        is OrigenVisita.EsteEquipo -> "${visita.nombre} · ${visita.cedula} · visita a ${visita.anfitrion}"
-        is OrigenVisita.OtroEquipo -> "${visita.nombre} · $TEXTO_OTRO_DISPOSITIVO"
+        is OrigenVisita.EsteEquipo -> listOf(DatoFicha("Cédula", visita.cedula), DatoFicha("Visita a", visita.anfitrion))
+        is OrigenVisita.OtroEquipo -> listOf(DatoFicha("Equipo", "Otro dispositivo de la unidad"))
     }
 
 @Composable

@@ -307,20 +307,17 @@ class ActivosViewModel(
                         }
                     }
                     ModoBusqueda.SALIDA_NOMBRE -> {
-                        // A diferencia de Entrada, acá un campo vacío no debe
-                        // traer a todo el mundo — es un buscador para acotar
-                        // entre muchos activos, no una lista para recorrer
-                        // (esa ya existe en el modo Entrada).
-                        activos = if (texto.isBlank()) {
-                            emptyList()
-                        } else {
-                            val locales = withContext(dispatcherIO) {
-                                medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.NOMBRE_CEDULA) }
-                            }
-                            val remotos = remotosSeguro()
-                                .filter { it.contratistaNombre.contains(texto, ignoreCase = true) }
-                            locales.map { FilaActiva.Local(it) } + remotos.map { FilaActiva.Remota(it) }
+                        // Vacío trae a todo el que está adentro, como una
+                        // lista de iOS con su buscador: se ve la lista y lo
+                        // escrito la acota. Antes vacío no traía a nadie y la
+                        // pantalla pedía tocar la lupa antes de ver algo.
+                        val locales = withContext(dispatcherIO) {
+                            medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.NOMBRE_CEDULA) }
                         }
+                        val remotos = remotosSeguro()
+                            .filter { texto.isBlank() || it.contratistaNombre.contains(texto, ignoreCase = true) }
+                        activos = locales.map { FilaActiva.Local(it) } + remotos.map { FilaActiva.Remota(it) }
+                        if (texto.isBlank()) totalAdentro = activos.size
                     }
                     ModoBusqueda.SALIDA_GAFETE -> {
                         val numeros = gafetesDeTexto(texto)

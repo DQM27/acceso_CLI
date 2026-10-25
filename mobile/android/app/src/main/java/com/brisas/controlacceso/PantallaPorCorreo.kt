@@ -1,12 +1,10 @@
 package com.brisas.controlacceso
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
@@ -40,12 +36,43 @@ private fun FilaCorreoActiva.clave(): String = when (this) {
     is FilaCorreoActiva.Remota -> "remota-${remoto.uuid}"
 }
 
+/// Sin distinguir mayúsculas ni tildes, igual que lo que se resalta
+/// ([rangosCoincidencia]).
 private fun FilaCorreoActiva.coincideCon(busqueda: String): Boolean {
+    if (busqueda.isBlank()) return true
     val (cedula, nombre, motivo, placa) = when (this) {
         is FilaCorreoActiva.Local -> listOf(registro.cedula, registro.nombre, registro.motivo, registro.placa)
         is FilaCorreoActiva.Remota -> listOf(remoto.cedula, remoto.nombre, remoto.motivo, remoto.placa)
     }
-    return listOfNotNull(cedula, nombre, motivo, placa).any { it.contains(busqueda, ignoreCase = true) }
+    return listOfNotNull(cedula, nombre, motivo, placa).any { rangosCoincidencia(it, busqueda).isNotEmpty() }
+}
+
+private const val AYUDA_BUSQUEDA_CORREO = "Cédula, nombre o motivo"
+
+/// La lista de quien entró por correo, la de la pantalla y la del buscador.
+@Composable
+private fun ListaCorreoActivos(
+    filas: List<FilaCorreoActiva>,
+    cargando: Boolean,
+    busqueda: String,
+    sincronizando: Boolean,
+    onSincronizar: () -> Unit,
+    contentPadding: PaddingValues,
+    onElegir: (FilaCorreoActiva) -> Unit,
+) {
+    ListaConEstados(
+        filas = filas,
+        clave = { it.clave() },
+        cargando = cargando,
+        tituloVacio = if (busqueda.isBlank()) "Nadie ingresó por correo" else "Sin resultados",
+        detalleVacio = if (busqueda.isBlank()) "Cuando alguien ingrese, aparece aquí." else "Pruebe con otro dato de la persona.",
+        sincronizando = sincronizando,
+        onSincronizar = onSincronizar,
+        contentPadding = contentPadding,
+        iconoVacio = IconosLucide.Sobre,
+    ) { fila ->
+        FilaCorreoActivo(fila = fila, onConfirmarSalida = { onElegir(fila) })
+    }
 }
 
 /// Ingreso "por correo": visitas autorizadas por correo (generalmente
@@ -77,6 +104,7 @@ fun PantallaPorCorreo(
     var mostrandoFormulario by remember { mutableStateOf(false) }
     var gafeteTexto by remember { mutableStateOf("") }
     var busqueda by remember { mutableStateOf("") }
+    var buscando by remember { mutableStateOf(false) }
     var escaneando by remember { mutableStateOf(false) }
     var escaneandoPlaca by remember { mutableStateOf(false) }
     var filaParaSalida by remember { mutableStateOf<FilaCorreoActiva?>(null) }
@@ -136,52 +164,55 @@ fun PantallaPorCorreo(
                 )
             }
             PanelConFormulario.LISTA -> Box(modifier = Modifier.fillMaxSize()) {
-                    val activosFiltrados = if (busqueda.isBlank()) {
-                        viewModel.activos
-                    } else {
-                        viewModel.activos.filter { it.coincideCon(busqueda) }
-                    }
-
+                    // Se busca con la píldora de abajo, como en todas las pestañas.
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                        // "Nuevo ingreso" es el botón redondo de abajo.
-                        CampoBusquedaBrisas(
-                            valor = busqueda,
-                            onCambiar = { busqueda = it },
-                            ayuda = "Cédula, nombre, motivo…",
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-
                         viewModel.error?.let { mensaje ->
-                            Text(
-                                mensaje,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
+                            FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(bottom = 4.dp))
                         }
 
-                        ListaConEstados(
-                            filas = activosFiltrados,
-                            clave = { it.clave() },
+                        ListaCorreoActivos(
+                            filas = viewModel.activos,
                             cargando = viewModel.cargando,
-                            tituloVacio = if (busqueda.isBlank()) "Nadie ingresó por correo" else "Sin resultados",
-                            detalleVacio = if (busqueda.isBlank()) {
-                                "Cuando alguien ingrese, aparece aquí."
-                            } else {
-                                "Pruebe con otro dato de la persona."
-                            },
+                            busqueda = "",
                             sincronizando = sincronizando,
                             onSincronizar = onSincronizar,
-                            contentPadding = PaddingValues(top = 10.dp, bottom = EspacioPieLista),
-                        ) { fila ->
-                            FilaCorreoActivo(fila = fila, onConfirmarSalida = { filaParaSalida = fila })
-                        }
+                            contentPadding = PaddingValues(top = 4.dp, bottom = EspacioPieLista),
+                            onElegir = { filaParaSalida = it },
+                        )
                     }
 
                     PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
-                    // "Nuevo ingreso" va en el botón redondo de abajo (ver
-                    // `AccionInferior.kt`).
+                    // "Nuevo ingreso" va en el botón redondo de abajo y la
+                    // búsqueda en la píldora (ver `AccionInferior.kt`).
                     AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso por correo", onClick = { mostrandoFormulario = true })
+                    BusquedaPrincipal(ayuda = AYUDA_BUSQUEDA_CORREO, onAbrir = { buscando = true })
+
+                    BuscadorInferior(
+                        visible = buscando,
+                        texto = busqueda,
+                        onCambiar = { busqueda = it },
+                        ayuda = AYUDA_BUSQUEDA_CORREO,
+                        onCerrar = {
+                            buscando = false
+                            busqueda = ""
+                        },
+                    ) {
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            ListaCorreoActivos(
+                                filas = viewModel.activos.filter { it.coincideCon(busqueda) },
+                                cargando = viewModel.cargando,
+                                busqueda = busqueda,
+                                sincronizando = sincronizando,
+                                onSincronizar = onSincronizar,
+                                contentPadding = PADDING_RESULTADOS,
+                                onElegir = { fila ->
+                                    filaParaSalida = fila
+                                    buscando = false
+                                    busqueda = ""
+                                },
+                            )
+                        }
+                    }
 
                     DialogoConfirmarSalidaCorreo(
                         fila = filaParaSalida,
@@ -214,28 +245,18 @@ private fun FormularioNuevoIngresoCorreo(
     val puedeRegistrar = paso1Completo && paso2Completo && paso3Completo &&
         !viewModel.registrando && !viewModel.cedulaConIngresoActivo
 
-    BackHandler(onBack = onVolver)
-
     // Mientras se llenan los datos, las conexiones con la nube se calientan
     // (ver `CorreoViewModel.precalentarNube`).
     LaunchedEffect(Unit) { viewModel.precalentarNube() }
 
     // `imePadding()` en un Column SIN `fillMaxSize`, mismo motivo que en
     // [FormularioNuevoIngresoProveedor].
+    PantallaConGestoVolver(onVolver = onVolver) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
         val scrollState = rememberScrollState()
         val scope = rememberCoroutineScope()
         Column(modifier = Modifier.verticalScroll(scrollState).imePadding()) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    "Nuevo ingreso por correo",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                BotonDiscretoBrisas(onClick = onVolver) {
-                    Text("← Volver")
-                }
-            }
+            EncabezadoPantalla(titulo = "Ingreso por correo", onVolver = onVolver)
 
             Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 PasoDatosProveedor(
@@ -280,12 +301,7 @@ private fun FormularioNuevoIngresoCorreo(
             }
 
             viewModel.error?.let { mensaje ->
-                Text(
-                    mensaje,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+                FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(top = 8.dp), vibrar = true)
             }
 
             BotonBrisas(
@@ -302,6 +318,7 @@ private fun FormularioNuevoIngresoCorreo(
                 Text(if (viewModel.registrando) "Registrando…" else "Registrar ingreso")
             }
         }
+    }
     }
 }
 
@@ -352,12 +369,18 @@ private fun DialogoConfirmarSalidaCorreo(
     onConfirmar: (FilaCorreoActiva) -> Unit,
 ) {
     if (fila == null) return
+    val datos = fila.datos()
     DialogoRegistrarSalida(
-        detalle = when (fila) {
-            is FilaCorreoActiva.Local ->
-                "${fila.registro.nombre} · ${fila.registro.cedula} · ${fila.registro.motivo} · Gafete ${fila.registro.gafeteNumero}"
-            is FilaCorreoActiva.Remota -> "${fila.remoto.nombre} · $TEXTO_OTRO_DISPOSITIVO"
-        },
+        nombre = datos.nombre,
+        datos = datosIngreso(
+            cedula = datos.cedula,
+            afiliacion = "Motivo" to datos.motivo,
+            placa = datos.placa,
+            gafete = datos.gafete,
+            fechaHora = datos.ingreso,
+            dioIngreso = datos.usuario,
+            otroEquipo = datos.remota,
+        ),
         onDismiss = onDismiss,
         onConfirmar = { onConfirmar(fila) },
     )

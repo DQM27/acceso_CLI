@@ -1,6 +1,5 @@
 package com.brisas.controlacceso
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -78,12 +76,6 @@ internal fun FormularioNuevoIngresoProveedor(
     val puedeRegistrar = paso1Completo && paso2Completo && paso3Completo &&
         !viewModel.registrando && !viewModel.cedulaConIngresoActivo
 
-    // Mismo destino que el botón "← Volver" visible de abajo -- sin esto,
-    // atrás del sistema se escapaba a la Activity en vez de volver a la
-    // lista (hallazgo 2026-09-19, mismo patrón ya usado en las pantallas de
-    // escaneo/PantallaConfirmarIngreso).
-    BackHandler(onBack = onVolver)
-
     // Mientras se llenan los datos, las conexiones con la nube se calientan
     // (ver `ProveedoresViewModel.precalentarNube`).
     LaunchedEffect(Unit) { viewModel.precalentarNube() }
@@ -93,18 +85,17 @@ internal fun FormularioNuevoIngresoProveedor(
     // entre el teclado y el contenido (bug reportado 2026-09-20), porque el
     // padding se suma sobre un alto que ya estaba fijado a pantalla completa
     // en vez de sobre el alto real del contenido.
+    //
+    // Atrás del sistema (con su gesto) va al mismo lugar que "‹ Volver": sin
+    // esto se escapaba a la Activity (hallazgo 2026-09-19).
+    PantallaConGestoVolver(onVolver = onVolver) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     Column(
         modifier = Modifier.verticalScroll(scrollState).imePadding(),
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Nuevo ingreso", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            BotonDiscretoBrisas(onClick = onVolver) {
-                Text("← Volver")
-            }
-        }
+        EncabezadoPantalla(titulo = "Ingreso de proveedor", onVolver = onVolver)
 
         Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             PasoDatosProveedor(
@@ -154,20 +145,10 @@ internal fun FormularioNuevoIngresoProveedor(
         }
 
         viewModel.error?.let { mensaje ->
-            Text(
-                mensaje,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 8.dp),
-            )
+            FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(top = 8.dp), vibrar = true)
         }
         viewModel.mensaje?.let { mensaje ->
-            Text(
-                mensaje,
-                style = MaterialTheme.typography.bodySmall,
-                color = ColorExitoBrisas,
-                modifier = Modifier.padding(top = 8.dp),
-            )
+            FranjaEstado(mensaje, TipoEstado.EXITO, modifier = Modifier.padding(top = 8.dp))
         }
 
         BotonBrisas(
@@ -188,6 +169,7 @@ internal fun FormularioNuevoIngresoProveedor(
         ) {
             Text(if (viewModel.registrando) "Registrando…" else "Registrar ingreso")
         }
+    }
     }
     }
 }

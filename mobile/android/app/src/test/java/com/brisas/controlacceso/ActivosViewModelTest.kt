@@ -417,6 +417,23 @@ class ActivosViewModelTest {
     }
 
     @Test
+    fun `modo Salida sin texto lista a todos los que estan adentro`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")
+        advanceUntilIdle()
+
+        viewModel.cambiarModo(ModoBusqueda.SALIDA_NOMBRE)
+        advanceUntilIdle()
+
+        assertEquals(listOf("Contratista Test"), viewModel.activos.map { it.contratistaNombre })
+        assertEquals(1, viewModel.totalAdentro)
+
+        viewModel.cambiarTexto("Nadie con este nombre")
+        advanceUntilIdle()
+        assertTrue(viewModel.activos.isEmpty())
+    }
+
+    @Test
     fun `la salida desde el modo Salida la confirma y descuenta del total`() = runTest(dispatcher) {
         val viewModel = formularioAbierto("SWAT")
         viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")

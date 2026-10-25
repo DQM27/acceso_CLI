@@ -10,6 +10,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -68,7 +72,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -225,6 +228,9 @@ fun PantallaPrincipal(
         viewModel(
             factory = NubeViewModel.factory(nucleo, alCerrarseLaSesion),
         )
+    // Los avisos cortos que bajan desde arriba (ver `FranjaEstado.kt`), en vez
+    // de Toasts que salían abajo tapando la barra de secciones.
+    val avisosBreves = remember { AvisosBreves() }
     val scope = rememberCoroutineScope()
     val realtime = remember(nucleo, scope, sesion) {
         NubeRealtime(
@@ -238,7 +244,7 @@ fun PantallaPrincipal(
             // El canal corre en `scope` (hilo principal): el aviso puede
             // mostrarse directo. El trabajo local sigue disponible.
             onExpulsado = {
-                Toast.makeText(contexto, ExpulsionNube.MENSAJE, Toast.LENGTH_LONG).show()
+                avisosBreves.mostrar(ExpulsionNube.MENSAJE, TipoEstado.AVISO)
                 equipoRetirado = true
             },
         )
@@ -372,36 +378,63 @@ fun PantallaPrincipal(
         falloSincronizacion = nubeViewModel.error != null,
     )
 
+    // Qué ocupa la pantalla debajo de la barra superior.
+    val panel = when {
+        mostrarAvisos -> PanelPrincipal.AVISOS
+        mostrarNuevoContratista -> PanelPrincipal.NUEVO_CONTRATISTA
+        mostrarAyuda -> PanelPrincipal.AYUDA
+        mostrarReconexion -> PanelPrincipal.RECONEXION
+        else -> PanelPrincipal.PESTANAS
+    }
+    // Cámaras y formularios dentro de las pestañas (ver [OcultarBarraSecciones]):
+    // esconden la barra de secciones de abajo y también la de arriba.
+    val pantallasCompletas = remember { PantallasCompletas() }
+    // La acción del botón redondo y la búsqueda de la píldora las pone la
+    // pantalla a la vista.
+    val accionesInferiores = remember { AccionesInferiores() }
+    val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
+    val externo = tipoExternoVisible(indiceExterno)
+
+    CompositionLocalProvider(LocalAvisosBreves provides avisosBreves) {
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
+        // La barra de arriba sólo con las pestañas a la vista: las pantallas
+        // que se abren encima (avisos, ayuda, formularios, cámaras) traen su
+        // propio "‹ Volver" y su título, como una pantalla nueva de iOS.
+        if (panel == PanelPrincipal.PESTANAS && pantallasCompletas.cantidad == 0) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // El nombre de la app y, debajo, sólo la unidad operativa (la
-            // etiqueta del equipo se ve en el login, acá saturaba). Quién
-            // tiene la sesión vive en el menú de la cuenta.
+            // El título grande es la sección a la vista (como el de cada
+            // pestaña de iOS) y, debajo, la unidad y cuántos hay adentro. El
+            // nombre de la app ya se ve en el login. Quién tiene la sesión
+            // vive en el menú de la cuenta.
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Lattis",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    AnimatedContent(
+                        targetState = seccion,
+                        transitionSpec = { (fadeIn(tween(MS_FUNDIDO_ENTRADA)) togetherWith fadeOut(tween(MS_SALIDA))) using null },
+                        label = "tituloSeccion",
+                    ) { seccionTitulo ->
+                        Text(
+                            seccionTitulo.etiqueta,
+                            style = MaterialTheme.typography.headlineMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     Spacer(Modifier.width(8.dp))
                     PuntoConexion(conexion)
                 }
-                if (textoUnidad != null) {
-                    Text(
-                        textoUnidad,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                Text(
+                    subtituloSeccion(textoUnidad, seccion, adentro[seccion] ?: 0),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BotonIconoCuadradoBrisas(onClick = {
@@ -439,6 +472,7 @@ fun PantallaPrincipal(
                 )
             }
         }
+        }
 
         // Arriba de todo lo demás: una emergencia sin leer es lo primero que
         // tiene que ver quien opera.
@@ -471,11 +505,10 @@ fun PantallaPrincipal(
 
         val errorSincronizacion = nubeViewModel.error
         if (errorSincronizacion != null) {
-            Text(
+            FranjaEstado(
                 errorSincronizacion,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                TipoEstado.ERROR,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
 
@@ -490,13 +523,6 @@ fun PantallaPrincipal(
         // La bandeja de avisos y "Nuevo contratista" suben encima de las
         // pestañas; al volver, las pestañas reaparecen (ver
         // `TransicionesPantalla.kt`).
-        val panel = when {
-            mostrarAvisos -> PanelPrincipal.AVISOS
-            mostrarNuevoContratista -> PanelPrincipal.NUEVO_CONTRATISTA
-            mostrarAyuda -> PanelPrincipal.AYUDA
-            mostrarReconexion -> PanelPrincipal.RECONEXION
-            else -> PanelPrincipal.PESTANAS
-        }
         AnimatedContent(
             targetState = panel,
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -523,7 +549,7 @@ fun PantallaPrincipal(
                     onReconectado = { unidad ->
                         mostrarReconexion = false
                         equipoRetirado = false
-                        Toast.makeText(contexto, "Teléfono reconectado en $unidad", Toast.LENGTH_SHORT).show()
+                        avisosBreves.mostrar("Teléfono reconectado en $unidad", TipoEstado.EXITO)
                         // Lo que quedó pendiente mientras estuvo retirado sube ya.
                         nubeViewModel.sincronizar()
                     },
@@ -538,12 +564,25 @@ fun PantallaPrincipal(
                 // `LocalMargenBarraInferior`.
                 // Cámaras y formularios la esconden mientras están a la vista
                 // (ver [OcultarBarraSecciones]).
-                val pantallasCompletas = remember { PantallasCompletas() }
-                // La acción del botón redondo la pone la pantalla a la vista.
-                val accionesInferiores = remember { AccionesInferiores() }
-                Box(modifier = Modifier.fillMaxSize()) {
-                    val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
-                    val externo = tipoExternoVisible(indiceExterno)
+                //
+                // Al deslizar la lista hacia abajo la píldora de búsqueda se
+                // repliega y deja más lista a la vista (como la barra de iOS 26
+                // al desplazar); al volver hacia arriba, o al cambiar de
+                // sección, reaparece.
+                var barraCompacta by remember { mutableStateOf(false) }
+                LaunchedEffect(seccion, externo) { barraCompacta = false }
+                val replegarAlDesplazar = remember {
+                    object : NestedScrollConnection {
+                        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                            if (source == NestedScrollSource.UserInput) {
+                                if (consumed.y < -UMBRAL_REPLIEGUE_PX) barraCompacta = true
+                                if (consumed.y > UMBRAL_REPLIEGUE_PX || available.y > 0f) barraCompacta = false
+                            }
+                            return Offset.Zero
+                        }
+                    }
+                }
+                Box(modifier = Modifier.fillMaxSize().nestedScroll(replegarAlDesplazar)) {
                     // `AnimatedContent` (que por dentro es un `Box`) le pasa a sus
                     // hijos restricciones acotadas: un `LazyColumn` (como el de
                     // `PantallaActivos`) revienta con `IllegalStateException` si lo
@@ -606,10 +645,7 @@ fun PantallaPrincipal(
                         exit = fadeOut(tween(MS_SALIDA)) + slideOutVertically(tween(MS_SALIDA)) { alto -> alto },
                         label = "barraSecciones",
                     ) {
-                        // La cápsula de secciones y, a su derecha, el botón
-                        // redondo con la acción de la pantalla a la vista (ver
-                        // `AccionInferior.kt`), como la app Teléfono de iOS.
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(
@@ -618,19 +654,40 @@ fun PantallaPrincipal(
                                     top = MARGEN_SUPERIOR_BARRA,
                                     bottom = MARGEN_INFERIOR_BARRA,
                                 ),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            BarraSecciones(
-                                seleccionada = seccion,
-                                externo = externo,
-                                adentro = adentro,
-                                onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
-                                modifier = Modifier.weight(1f),
-                            )
-                            val accion = accionesInferiores.actual
-                            if (accion != null) {
-                                BotonRedondoAccion(accion, tamano = ALTO_BARRA_SECCIONES)
+                            // Dónde se busca en todas las pestañas: la píldora,
+                            // encima de la barra (ver `AccionInferior.kt`).
+                            val busqueda = accionesInferiores.busqueda
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = busqueda != null && !barraCompacta,
+                                enter = fadeIn(tween(MS_FUNDIDO_ENTRADA)) + slideInVertically(tween(MS_ENTRADA)) { alto -> alto / 2 },
+                                exit = fadeOut(tween(MS_SALIDA)) + slideOutVertically(tween(MS_SALIDA)) { alto -> alto / 2 },
+                                label = "pildoraBusqueda",
+                            ) {
+                                // La última que hubo, para seguir dibujándola mientras se va.
+                                var mostrada by remember { mutableStateOf(busqueda) }
+                                if (busqueda != null) mostrada = busqueda
+                                mostrada?.let { PildoraBusqueda(it, modifier = Modifier.padding(bottom = ESPACIO_PILDORA_BARRA)) }
+                            }
+                            // La cápsula de secciones y, a su derecha, el botón
+                            // redondo con la acción de la pantalla a la vista (ver
+                            // `AccionInferior.kt`), como la app Teléfono de iOS.
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                BarraSecciones(
+                                    seleccionada = seccion,
+                                    externo = externo,
+                                    adentro = adentro,
+                                    onSeleccionar = { pestana = SECCIONES_VISIBLES.indexOf(it) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                val accion = accionesInferiores.actual
+                                if (accion != null) {
+                                    BotonRedondoAccion(accion, tamano = ALTO_BARRA_SECCIONES)
+                                }
                             }
                         }
                     }
@@ -638,7 +695,29 @@ fun PantallaPrincipal(
             }
         }
     }
+    // Encima de todo, los avisos cortos.
+    HostAvisosBreves(
+        avisosBreves,
+        modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 16.dp, end = 16.dp),
+    )
+    }
+    }
 }
+
+/// Lo que dice debajo del título de la sección: la unidad operativa y
+/// cuántos hay adentro (en KOF, cuántos gafetes hay prestados). La cuenta va
+/// acá y no sólo en el globito de la barra: es lo primero que se lee.
+internal fun subtituloSeccion(unidad: String?, seccion: SeccionPrincipal, cantidad: Int): String {
+    val cuenta = when (seccion) {
+        SeccionPrincipal.KOF -> if (cantidad == 1) "1 gafete prestado" else "$cantidad gafetes prestados"
+        else -> "$cantidad adentro"
+    }
+    return listOfNotNull(unidad, cuenta).joinToString(" · ")
+}
+
+/// Cuánto hay que desplazar de una vez para replegar o mostrar la píldora:
+/// un temblor del dedo no la hace aparecer y desaparecer.
+private const val UMBRAL_REPLIEGUE_PX = 6f
 
 /// Campanita de la barra superior: el globito (qué número, si se ve) y si
 /// hay una emergencia pendiente lo decide el núcleo (`EstadoBandeja`). El
@@ -695,6 +774,7 @@ private fun BarraSecciones(
         label = "posicionSeccion",
     )
     val forma = RoundedCornerShape(percent = 50)
+    val hapticos = rememberHapticos()
     Row(
         modifier = modifier
             .height(ALTO_BARRA_SECCIONES)
@@ -728,12 +808,31 @@ private fun BarraSecciones(
                     .weight(1f)
                     .fillMaxHeight()
                     .clip(forma)
-                    .selectable(selected = elegida, role = Role.Tab, onClick = { onSeleccionar(seccion) })
+                    .selectable(
+                        selected = elegida,
+                        role = Role.Tab,
+                        onClick = {
+                            if (!elegida) hapticos(Haptico.SELECCION)
+                            onSeleccionar(seccion)
+                        },
+                    )
                     .semantics { if (cantidad > 0) stateDescription = "$cantidad adentro" },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                BadgedBox(badge = { if (cantidad > 0) Badge { Text("$cantidad") } }) {
+                // Globito gris, no rojo: es una cuenta, no algo que pida
+                // atención (en iOS el rojo es para lo pendiente, como la
+                // campanita de avisos).
+                BadgedBox(
+                    badge = {
+                        if (cantidad > 0) {
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.surface,
+                            ) { Text("$cantidad") }
+                        }
+                    },
+                ) {
                     Icon(iconoSeccion(seccion, externo), contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
                 }
                 Text(
@@ -755,9 +854,15 @@ private val MARGEN_LATERAL_BARRA = 12.dp
 private val MARGEN_INFERIOR_BARRA = 24.dp
 private val MARGEN_SUPERIOR_BARRA = 6.dp
 
-/// Lo que tapa la barra flotante (alto + margen de abajo + un respiro), para
-/// [LocalMargenBarraInferior].
-private val MARGEN_BARRA_SECCIONES = ALTO_BARRA_SECCIONES + MARGEN_INFERIOR_BARRA + 6.dp
+/// Entre la píldora de búsqueda y la barra de secciones.
+private val ESPACIO_PILDORA_BARRA = 8.dp
+
+/// Lo que tapa la barra flotante con la píldora de búsqueda encima (altos +
+/// margen de abajo + un respiro), para [LocalMargenBarraInferior]. Fijo
+/// aunque la píldora se repliegue al desplazar: si cambiara, la lista
+/// saltaría mientras se la desliza.
+private val MARGEN_BARRA_SECCIONES =
+    ALTO_BARRA_SECCIONES + ALTO_PILDORA_BUSQUEDA + ESPACIO_PILDORA_BARRA + MARGEN_INFERIOR_BARRA + 6.dp
 
 /// Los mismos íconos que el escritorio (ver [IconosLucide]). Externos cambia
 /// con el tipo elegido, igual que su color: Proveedor o Correo.

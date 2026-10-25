@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +70,9 @@ internal fun <T> ListaConEstados(
     onSincronizar: () -> Unit,
     // Abajo, lugar para el botón flotante y la confirmación (ver [PieFlotante]).
     contentPadding: PaddingValues = PaddingValues(top = 5.dp, bottom = EspacioPieLista),
+    // El del mensaje sin filas: el de la sección (cajas en Proveedores, sobre
+    // en Correo, insignia en KOF), como el ícono de su pestaña.
+    iconoVacio: ImageVector = Icons.Default.Groups,
     contenidoFila: @Composable (T) -> Unit,
 ) {
     val estado = when {
@@ -103,7 +107,7 @@ internal fun <T> ListaConEstados(
                     }
                 }
                 EstadoLista.MARCADORES -> FilasMarcadoras(contentPadding.calculateTopPadding())
-                EstadoLista.VACIA -> EstadoVacioLista(tituloVacio, detalleVacio)
+                EstadoLista.VACIA -> EstadoVacio(tituloVacio, detalleVacio, iconoVacio)
             }
         }
     }
@@ -149,10 +153,14 @@ private fun BarraMarcadora(ancho: Float, alto: androidx.compose.ui.unit.Dp) {
     )
 }
 
+/// El mensaje de "no hay nada" de toda la app (listas, resultados de una
+/// búsqueda, bandeja de avisos), a la manera de iOS: ícono en un círculo del
+/// color de la sección, título y una línea que dice qué hacer.
+///
 /// Con `verticalScroll` aunque no haya nada que desplazar: sin un hijo
 /// desplazable, tirar hacia abajo para sincronizar no responde.
 @Composable
-private fun EstadoVacioLista(titulo: String, detalle: String) {
+internal fun EstadoVacio(titulo: String, detalle: String, icono: ImageVector = Icons.Default.Groups) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -168,7 +176,7 @@ private fun EstadoVacioLista(titulo: String, detalle: String) {
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.Groups, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
         }
         Text(titulo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Text(

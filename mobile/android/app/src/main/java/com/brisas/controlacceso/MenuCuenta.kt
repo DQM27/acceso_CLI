@@ -118,9 +118,16 @@ fun MenuCuenta(
     // La respuesta de "Buscar actualizaciones" sale como un aviso corto, sin
     // dejar el menú abierto; si hay versión nueva no hay aviso: aparece la
     // tarjeta flotante y el puntito en el engranaje.
+    val avisosBreves = LocalAvisosBreves.current
     LaunchedEffect(busqueda) {
         val aviso = avisoDeBusqueda(busqueda) ?: return@LaunchedEffect
-        Toast.makeText(contexto, aviso, Toast.LENGTH_SHORT).show()
+        // Baja desde arriba como el resto de los avisos cortos; fuera de la
+        // pantalla principal (no debería pasar) queda el Toast.
+        if (avisosBreves != null) {
+            avisosBreves.mostrar(aviso, if (busqueda == EstadoBusqueda.AL_DIA) TipoEstado.EXITO else TipoEstado.INFO)
+        } else {
+            Toast.makeText(contexto, aviso, Toast.LENGTH_SHORT).show()
+        }
         actualizador.olvidarBusqueda()
     }
 

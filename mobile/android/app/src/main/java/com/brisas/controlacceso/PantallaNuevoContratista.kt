@@ -1,7 +1,5 @@
 package com.brisas.controlacceso
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -73,10 +71,6 @@ private fun etiquetaTipo(tipo: TipoIngreso): String =
 @Composable
 fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
     RegistrarPantalla("nuevo_contratista")
-    // Mismo destino que el botón "← Volver" visible de abajo -- sin esto,
-    // atrás del sistema se escapaba a la Activity en vez de volver a
-    // Activos (hallazgo 2026-09-19).
-    BackHandler(onBack = onVolver)
     val claveFormulario = rememberSaveable { "nuevo-contratista-${UUID.randomUUID()}" }
     val vm: NuevoContratistaViewModel = viewModel(
         key = claveFormulario,
@@ -107,19 +101,15 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
     // de abajo.
     val scrollStateFormulario = rememberScrollState()
     val alcanceScroll = rememberCoroutineScope()
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    // Atrás del sistema (con su gesto) va al mismo lugar que "‹ Volver": sin
+    // esto se escapaba a la Activity (hallazgo 2026-09-19). Con la cámara
+    // abierta manda el atrás de la cámara (se registra después).
+    PantallaConGestoVolver(onVolver = onVolver) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
     Column(
         modifier = Modifier.verticalScroll(scrollStateFormulario).imePadding(),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Nuevo contratista", style = MaterialTheme.typography.titleMedium)
-            BotonDiscretoBrisas(onClick = onVolver) {
-                Text("← Volver")
-            }
-        }
+        EncabezadoPantalla(titulo = "Nuevo contratista", onVolver = onVolver)
 
         BotonBrisas(
             onClick = {
@@ -285,11 +275,11 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
 
         val mensajeError = vm.error
         if (mensajeError != null) {
-            Text(mensajeError, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 16.dp))
+            FranjaEstado(mensajeError, TipoEstado.ERROR, modifier = Modifier.padding(top = 16.dp), vibrar = true)
         }
         val mensajeExito = vm.mensaje
         if (mensajeExito != null) {
-            Text(mensajeExito, color = ColorExitoBrisas, modifier = Modifier.padding(top = 16.dp))
+            FranjaEstado(mensajeExito, TipoEstado.EXITO, modifier = Modifier.padding(top = 16.dp))
         }
 
         BotonBrisas(
@@ -303,6 +293,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
         ) {
             Text(if (vm.enviando) "Guardando…" else "Guardar")
         }
+    }
     }
     }
 }

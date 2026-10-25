@@ -1,22 +1,18 @@
 package com.brisas.controlacceso
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
@@ -76,8 +72,8 @@ fun PantallaConfirmarIngreso(
     var sinGafete by rememberSaveable { mutableStateOf(false) }
     var placaTexto by rememberSaveable { mutableStateOf("") }
     var escanerPlacaAbierto by remember { mutableStateOf(false) }
-    BackHandler(enabled = !escanerPlacaAbierto, onBack = onCambiar)
     val alcance = rememberCoroutineScope()
+    val hapticos = rememberHapticos()
 
     // La misma cámara que lee placas en Proveedores y Rutas
     // (`LectorVehiculoRuta.kt`), pedido del usuario 2026-10-21. Si lee un
@@ -117,67 +113,55 @@ fun PantallaConfirmarIngreso(
     // `fillMaxSize` -- combinarlo con `fillMaxSize` deja un hueco enorme
     // entre el teclado y el contenido (bug reportado 2026-09-20).
     val scrollStateFormulario = rememberScrollState()
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    // Atrás del sistema (con su gesto) vuelve a la lista, igual que
+    // "‹ Volver"; con el escáner de placa abierto manda el de la cámara.
+    PantallaConGestoVolver(onVolver = onCambiar, habilitado = !escanerPlacaAbierto) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
     Column(
         modifier = Modifier.verticalScroll(scrollStateFormulario).imePadding(),
     ) {
-        // Mismo lenguaje que [PantallaProveedores]: "← Volver" arriba a la
-        // derecha en vez de un botón propio abajo de todo (pedido explícito
-        // del usuario 2026-09-20, para homogeneizar los dos formularios).
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                preparacion.nombre,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
-            )
-            BotonDiscretoBrisas(onClick = onCambiar) {
-                Text("← Volver")
-            }
-        }
-        Text(
-            "${preparacion.cedula} · ${preparacion.empresaNombre}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 20.dp),
+        // El mismo encabezado que el resto de las pantallas que se abren
+        // encima de otra: "‹ Volver" arriba y el nombre en grande.
+        EncabezadoPantalla(
+            titulo = preparacion.nombre,
+            subtitulo = "${preparacion.cedula} · ${preparacion.empresaNombre}",
+            onVolver = onCambiar,
+            modifier = Modifier.padding(bottom = 16.dp),
         )
 
         // Texto y cuenta de días del núcleo (`aviso_praind`, con su reloj).
         preparacion.avisoPraind?.let { aviso ->
-            Text(
-                "⚠ $aviso",
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
+            FranjaEstado(aviso, TipoEstado.AVISO, modifier = Modifier.padding(bottom = 12.dp))
         }
         if (preparacion.gafetesDeuda.isNotEmpty()) {
-            Text(
-                "⚠ Este contratista debe el gafete " +
+            FranjaEstado(
+                "Este contratista debe el gafete " +
                     preparacion.gafetesDeuda.joinToString(", ") { "#${it.toString().padStart(2, '0')}" },
-                color = MaterialTheme.colorScheme.error,
+                TipoEstado.AVISO,
                 modifier = Modifier.padding(bottom = 12.dp),
             )
         }
 
-        Text("Medio de ingreso", style = MaterialTheme.typography.bodyMedium)
-        Row(modifier = Modifier.padding(bottom = 16.dp)) {
-            listOf(MedioIngreso.CAMINANDO to "Caminando", MedioIngreso.VEHICULO to "Vehículo").forEach { (opcion, etiqueta) ->
+        Text(
+            "Medio de ingreso",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+        )
+        // El mismo control segmentado que el resto de la app, en vez de dos
+        // botones de radio de Material.
+        val medios = listOf(MedioIngreso.CAMINANDO, MedioIngreso.VEHICULO)
+        FilaPildoras(
+            opciones = listOf("Caminando", "Vehículo"),
+            seleccionado = medios.indexOf(medio),
+            onSeleccionar = { indice ->
+                medio = medios[indice]
                 // Descarta la placa tipeada antes si el operador vuelve a
                 // Caminando: el núcleo descarta la placa (`placa_segun_medio`).
-                val elegir = {
-                    medio = opcion
-                    if (opcion == MedioIngreso.CAMINANDO) placaTexto = ""
-                }
-                Row(
-                    modifier = Modifier
-                        .selectable(selected = medio == opcion, onClick = elegir)
-                        .padding(end = 16.dp),
-                ) {
-                    RadioButton(selected = medio == opcion, onClick = elegir)
-                    Text(etiqueta, modifier = Modifier.padding(top = 12.dp, start = 4.dp))
-                }
-            }
-        }
+                if (medio == MedioIngreso.CAMINANDO) placaTexto = ""
+            },
+            modifier = Modifier.padding(bottom = 16.dp),
+        )
 
         if (medio == MedioIngreso.VEHICULO) {
             Row(
@@ -250,6 +234,7 @@ fun PantallaConfirmarIngreso(
                     activo = sinGafete,
                     onAlternar = {
                         sinGafete = !sinGafete
+                        hapticos(if (sinGafete) Haptico.ACTIVAR else Haptico.DESACTIVAR)
                         if (sinGafete) gafeteTexto = ""
                         onLimpiarError()
                     },
@@ -260,7 +245,7 @@ fun PantallaConfirmarIngreso(
 
         val mensajeError = error
         if (mensajeError != null) {
-            Text(mensajeError, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 12.dp))
+            FranjaEstado(mensajeError, TipoEstado.ERROR, modifier = Modifier.padding(bottom = 12.dp), vibrar = true)
         }
 
         // Mismo criterio que [PantallaProveedores]/[PantallaRutas]: el botón
@@ -282,36 +267,26 @@ fun PantallaConfirmarIngreso(
         }
     }
     }
+    }
 }
 
 @Composable
 fun PantallaIngresoBloqueado(preparacion: PreparacionIngreso, mensaje: String, onCambiar: () -> Unit) {
-    BackHandler(onBack = onCambiar)
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // Mismo lenguaje que [PantallaProveedores]/[PantallaConfirmarIngreso]:
-        // "← Volver" arriba a la derecha en vez de un botón propio abajo de
-        // todo (pedido explícito del usuario 2026-09-20, para que las tres
-        // pantallas se vean igual).
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                preparacion.nombre,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
+    PantallaConGestoVolver(onVolver = onCambiar) {
+        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+            // El mismo encabezado que [PantallaConfirmarIngreso].
+            EncabezadoPantalla(
+                titulo = preparacion.nombre,
+                subtitulo = "${preparacion.cedula} · ${preparacion.empresaNombre}",
+                onVolver = onCambiar,
+                modifier = Modifier.padding(bottom = 16.dp),
             )
-            BotonDiscretoBrisas(onClick = onCambiar) {
-                Text("← Volver")
-            }
+            // En una franja de error y en negrita -- pedido explícito del
+            // usuario 2026-09-20: que el motivo de la denegación se lea con
+            // más fuerza que el resto del texto. Sin toque de rechazo: tras un
+            // escaneo ya suena y vibra la alerta (`AlertaEscaneo.kt`).
+            FranjaEstado(mensaje, TipoEstado.ERROR)
         }
-        Text(
-            "${preparacion.cedula} · ${preparacion.empresaNombre}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 20.dp),
-        )
-        // Negrita -- pedido explícito del usuario 2026-09-20: que el motivo
-        // de la denegación se lea con más fuerza que el resto del texto.
-        Text(mensaje, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
     }
 }
 

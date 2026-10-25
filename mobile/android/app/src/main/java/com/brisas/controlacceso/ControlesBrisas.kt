@@ -9,7 +9,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -54,8 +57,16 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -97,12 +108,13 @@ internal fun ColoresCampoBrisas(): TextFieldColors = OutlinedTextFieldDefaults.c
     focusedLabelColor = MaterialTheme.colorScheme.primary,
 )
 
-/** El buscador de todas las pantallas (Activos, Proveedores, Por correo,
- * KOF): [AlturaBusquedaBrisas] de alto, ícono de lupa y texto de ayuda.
- * Un `OutlinedTextField` a ese alto recorta el texto de ayuda (deja 16dp de
- * relleno arriba y abajo, pensado para 56dp; por eso Proveedores llegó a
- * quedar más alto que su botón de al lado): acá es el mismo marco y los
- * mismos colores ([ColoresCampoBrisas]) con menos relleno vertical. */
+/** El campo de búsqueda de la app (el del buscador de abajo y el de la
+ * Ayuda), como el de iOS: cápsula del color de la superficie con lupa, una
+ * ⓧ para borrar lo escrito en cuanto hay texto, y la tecla "Buscar" del
+ * teclado, que lo esconde para ver los resultados enteros. Un
+ * `OutlinedTextField` a [AlturaBusquedaBrisas] recorta el texto de ayuda
+ * (deja 16dp de relleno arriba y abajo, pensado para 56dp): acá es el mismo
+ * marco con menos relleno vertical. */
 @Composable
 internal fun CampoBusquedaBrisas(
     valor: String,
@@ -112,13 +124,20 @@ internal fun CampoBusquedaBrisas(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
 ) {
     val interaccion = remember { MutableInteractionSource() }
-    val colores = ColoresCampoBrisas()
+    val teclado = LocalSoftwareKeyboardController.current
+    val colores = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = MaterialTheme.colorScheme.surface,
+        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+    )
     BasicTextField(
         value = valor,
         onValueChange = onCambiar,
         modifier = modifier.height(AlturaBusquedaBrisas),
         singleLine = true,
-        keyboardOptions = keyboardOptions,
+        keyboardOptions = keyboardOptions.copy(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { teclado?.hide() }),
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         interactionSource = interaccion,
@@ -132,6 +151,30 @@ internal fun CampoBusquedaBrisas(
             interactionSource = interaccion,
             placeholder = { Text(ayuda, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = if (valor.isEmpty()) {
+                null
+            } else {
+                {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .clickable { onCambiar("") }
+                            .semantics {
+                                contentDescription = "Borrar lo escrito"
+                                role = Role.Button
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Default.Cancel,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            },
             colors = colores,
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             container = {
@@ -140,12 +183,16 @@ internal fun CampoBusquedaBrisas(
                     isError = false,
                     interactionSource = interaccion,
                     colors = colores,
-                    shape = FormaCampoBrisas,
+                    shape = FormaBusquedaBrisas,
                 )
             },
         )
     }
 }
+
+/** Cápsula del buscador: la misma forma que la píldora de búsqueda de abajo
+ * ([PildoraBusqueda]), así el campo que se abre parece la misma pieza. */
+internal val FormaBusquedaBrisas = RoundedCornerShape(percent = 50)
 
 /** Cuánto tapa abajo la barra de secciones flotante de [PantallaPrincipal]:
  * el contenido pasa por detrás de ella (apenas se ve a través de su velo), así que
@@ -205,15 +252,16 @@ internal fun PieFlotante(confirmacion: ConfirmacionReciente, modifier: Modifier 
     )
 }
 
-/** Acciones principales: forma y área táctil comunes en todas las pantallas. */
+/** Acciones principales: forma y área táctil comunes en todas las pantallas.
+ * Dentro de una sección, en su color ([LocalRellenoBotones]). */
 @Composable
 fun BotonBrisas(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     colors: ButtonColors = ButtonDefaults.buttonColors(
-        containerColor = ColorRellenoBrisas,
-        contentColor = ColorSobreRellenoBrisas,
+        containerColor = LocalRellenoBotones.current?.color ?: ColorRellenoBrisas,
+        contentColor = LocalRellenoBotones.current?.sobreColor ?: ColorSobreRellenoBrisas,
     ),
     content: @Composable RowScope.() -> Unit,
 ) {
@@ -246,12 +294,12 @@ fun BotonDiscretoBrisas(
     )
 }
 
-/** Selector de opciones en formato píldora ("estilo Kash"): pista gris clara
- * de fondo, la opción activa se pinta como una píldora sólida en el color
- * primario -- reemplaza el look de `SegmentedButton` de Material3 (gris,
- * rectangular) en las pantallas que ya lo usaban (`SelectorModoBusqueda` en
- * [PantallaActivos], el tipo en [PantallaExternos]). No reemplaza a
- * `SegmentedButton` en todos lados a propósito -- sólo donde el mockup lo pide. */
+/** Selector de opciones (control segmentado), con el mismo lenguaje que la
+ * barra de secciones de abajo: pista gris, la opción elegida es una pastilla
+ * clara que se desliza hasta ella, y su texto va en el color de la sección.
+ * Antes la elegida era una píldora sólida de color mientras que abajo la
+ * barra marcaba con una píldora gris: dos maneras de decir "elegido". Cada
+ * cambio da un toque de vibración, como en iOS. */
 @Composable
 fun FilaPildoras(
     opciones: List<String>,
@@ -259,36 +307,40 @@ fun FilaPildoras(
     onSeleccionar: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Una sola píldora sólida que se desliza hasta la opción elegida (en vez de
+    // Una sola pastilla que se desliza hasta la opción elegida (en vez de
     // apagarse en una y prenderse en otra). Se dibuja detrás de la fila, en la
     // fase de dibujo: animar la posición no vuelve a medir ni a componer nada.
-    // Si cambia el acento (ver `AcentoSeccion.kt`), el color nuevo entra con
-    // un fundido.
     val posicion by animateFloatAsState(
         targetValue = seleccionado.toFloat(),
         animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
         label = "posicionPildora",
     )
-    val colorPildora by animateColorAsState(
-        targetValue = MaterialTheme.colorScheme.primary,
-        animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
-        label = "pildora",
-    )
+    val oscuro = temaActual().oscuro
+    val pista = MaterialTheme.colorScheme.surfaceVariant
+    // En oscuro la superficie es más oscura que la pista: ahí la pastilla
+    // aclara la pista, como el control de iOS en modo oscuro.
+    val colorPastilla = if (oscuro) lerp(pista, MaterialTheme.colorScheme.onSurface, 0.16f) else MaterialTheme.colorScheme.surfaceBright
+    val bordePastilla = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+    val hapticos = rememberHapticos()
     val separacion = 4.dp
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant, FormaPildoraBrisas)
-            .padding(4.dp)
+            .background(pista, FormaPildoraBrisas)
+            .padding(3.dp)
             .drawBehind {
                 if (opciones.isEmpty() || seleccionado !in opciones.indices) return@drawBehind
                 val hueco = separacion.toPx()
                 val ancho = (size.width - hueco * (opciones.size - 1)) / opciones.size
+                val radio = CornerRadius((RADIO_PILDORA - 2.dp).toPx())
+                val origen = Offset(posicion * (ancho + hueco), 0f)
+                drawRoundRect(color = colorPastilla, topLeft = origen, size = Size(ancho, size.height), cornerRadius = radio)
                 drawRoundRect(
-                    color = colorPildora,
-                    topLeft = Offset(posicion * (ancho + hueco), 0f),
+                    color = bordePastilla,
+                    topLeft = origen,
                     size = Size(ancho, size.height),
-                    cornerRadius = CornerRadius(RADIO_PILDORA.toPx()),
+                    cornerRadius = radio,
+                    style = Stroke(width = 0.5.dp.toPx()),
                 )
             },
         horizontalArrangement = Arrangement.spacedBy(separacion),
@@ -296,7 +348,7 @@ fun FilaPildoras(
         opciones.forEachIndexed { indice, etiqueta ->
             val activo = indice == seleccionado
             val colorTexto by animateColorAsState(
-                targetValue = if (activo) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                targetValue = if (activo) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(DURACION_FUNDIDO_PILDORA_MS),
                 label = "textoPildora",
             )
@@ -304,14 +356,22 @@ fun FilaPildoras(
                 modifier = Modifier
                     .weight(1f)
                     .clip(FormaPildoraBrisas)
-                    .clickable { onSeleccionar(indice) }
-                    .padding(vertical = 10.dp),
+                    .selectable(
+                        selected = activo,
+                        role = Role.Tab,
+                        onClick = {
+                            if (!activo) hapticos(Haptico.SELECCION)
+                            onSeleccionar(indice)
+                        },
+                    )
+                    .padding(vertical = 9.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     etiqueta,
                     color = colorTexto,
-                    fontWeight = if (activo) FontWeight.SemiBold else FontWeight.Normal,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (activo) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
                 )
             }
@@ -454,7 +514,7 @@ fun FilaEncargadoRuta(encargado: EncargadoRuta, onClick: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(encargado.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Text(textoResaltado(encargado.nombre), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Row {
             Text(
                 "Código de empleado: ",
@@ -491,6 +551,6 @@ fun FilaEmpresaProveedor(empresa: EmpresaProveedor, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(16.dp),
     ) {
-        Text(empresa.nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Text(textoResaltado(empresa.nombre), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
     }
 }

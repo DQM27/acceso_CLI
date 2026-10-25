@@ -2,6 +2,7 @@ package com.brisas.controlacceso
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -9,6 +10,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,17 +20,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -40,12 +50,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -62,12 +78,24 @@ internal class AccionInferior(
     fun tocar() = alTocar.value()
 }
 
-/// Las acciones registradas, la última manda. Es una pila y no un único
-/// valor porque en una transición la pantalla que entra y la que sale
-/// conviven un instante: al irse la vieja, queda la nueva.
+/// Lo que busca la píldora de búsqueda de abajo ([PildoraBusqueda]): el texto
+/// de ayuda y qué pasa al tocarla (la pantalla abre su [BuscadorInferior]).
+internal class BusquedaInferior(
+    val ayuda: String,
+    private val alAbrir: State<() -> Unit>,
+) {
+    fun abrir() = alAbrir.value()
+}
+
+/// Las acciones y las búsquedas registradas, la última manda. Son pilas y no
+/// un único valor porque en una transición la pantalla que entra y la que
+/// sale conviven un instante: al irse la vieja, queda la nueva.
 internal class AccionesInferiores {
     private val pila = mutableStateListOf<AccionInferior>()
     val actual: AccionInferior? get() = pila.lastOrNull()
+
+    private val pilaBusquedas = mutableStateListOf<BusquedaInferior>()
+    val busqueda: BusquedaInferior? get() = pilaBusquedas.lastOrNull()
 
     fun poner(accion: AccionInferior) {
         pila.add(accion)
@@ -75,6 +103,14 @@ internal class AccionesInferiores {
 
     fun quitar(accion: AccionInferior) {
         pila.remove(accion)
+    }
+
+    fun ponerBusqueda(busqueda: BusquedaInferior) {
+        pilaBusquedas.add(busqueda)
+    }
+
+    fun quitarBusqueda(busqueda: BusquedaInferior) {
+        pilaBusquedas.remove(busqueda)
     }
 }
 
@@ -93,6 +129,60 @@ internal fun AccionPrincipal(icono: ImageVector, descripcion: String, onClick: (
         onDispose { acciones.quitar(accion) }
     }
 }
+
+/// La pantalla que la llama pone su búsqueda en la píldora de abajo mientras
+/// esté a la vista. Misma mecánica que [AccionPrincipal].
+@Composable
+internal fun BusquedaPrincipal(ayuda: String, onAbrir: () -> Unit) {
+    val acciones = LocalAccionesInferiores.current ?: return
+    val alAbrir = rememberUpdatedState(onAbrir)
+    DisposableEffect(acciones, ayuda) {
+        val busqueda = BusquedaInferior(ayuda, alAbrir)
+        acciones.ponerBusqueda(busqueda)
+        onDispose { acciones.quitarBusqueda(busqueda) }
+    }
+}
+
+/// La píldora de búsqueda de abajo, encima de la barra de secciones: dónde se
+/// busca en todas las pestañas, al alcance del pulgar (como el buscador de
+/// abajo de iOS 26). Tocarla abre el [BuscadorInferior] de la pantalla, cuyo
+/// campo tiene la misma forma: parece la misma pieza que sube con el teclado.
+@Composable
+internal fun PildoraBusqueda(busqueda: BusquedaInferior, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(ALTO_PILDORA_BUSQUEDA)
+            .clip(FormaBusquedaBrisas)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = ALFA_VELO))
+            .border(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f), FormaBusquedaBrisas)
+            .clickable(onClick = busqueda::abrir)
+            .semantics {
+                contentDescription = busqueda.ayuda
+                role = Role.Button
+            }
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Default.Search,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            busqueda.ayuda,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/// Alto de [PildoraBusqueda].
+internal val ALTO_PILDORA_BUSQUEDA = 46.dp
 
 /// Botón redondo de vidrio junto a la barra de secciones, del mismo alto y el
 /// mismo vidrio que ella. Al cambiar de acción, el ícono nuevo entra con
@@ -145,56 +235,90 @@ internal fun BotonRedondoVidrio(
     }
 }
 
-/// Buscador que se abre desde abajo, como el de la app Teléfono de iOS: al
-/// abrirse sale el teclado y el campo queda pegado encima de él, con una X
-/// redonda al lado para cerrar; los resultados ([resultados]) ocupan el resto
-/// de la pantalla, encima. La barra de secciones se esconde mientras tanto.
-/// Atrás del sistema también lo cierra.
+/// Buscador que se abre desde abajo, como el de iOS 26: al abrirse sube con
+/// el teclado y el campo queda pegado encima de él, con una X redonda al lado
+/// para cerrar; los resultados ([resultados]) ocupan el resto de la pantalla,
+/// encima, con lo buscado resaltado ([LocalConsultaResaltada]). La barra de
+/// secciones se esconde mientras tanto. Atrás del sistema también lo cierra.
+///
+/// - Deslizar los resultados esconde el teclado (y el campo baja con él),
+///   para verlos enteros; la tecla "Buscar" hace lo mismo.
+/// - [encabezado]: lo que va justo encima del campo, como la barra de
+///   alcances de iOS (Ingreso/Salida/Gafete en Activos) o un título que dice
+///   para qué se busca.
+/// - Entra y sale con un deslizamiento corto y un fundido: antes aparecía de
+///   golpe mientras la barra sí se escondía animada.
 @Composable
 internal fun BuscadorInferior(
+    visible: Boolean,
     texto: String,
     onCambiar: (String) -> Unit,
     ayuda: String,
     onCerrar: () -> Unit,
     modifier: Modifier = Modifier,
+    teclado: KeyboardOptions = KeyboardOptions.Default,
+    encabezado: (@Composable () -> Unit)? = null,
     resultados: @Composable () -> Unit,
 ) {
-    OcultarBarraSecciones()
-    BackHandler(onBack = onCerrar)
-    val foco = remember { FocusRequester() }
-    val teclado = LocalSoftwareKeyboardController.current
-    LaunchedEffect(Unit) {
-        foco.requestFocus()
-        teclado?.show()
-    }
-    Column(modifier = modifier.fillMaxSize().imePadding()) {
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            resultados()
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = fadeIn(tween(MS_FUNDIDO_ENTRADA)) + slideInVertically(tween(MS_ENTRADA)) { alto -> alto / 10 },
+        exit = fadeOut(tween(MS_SALIDA)) + slideOutVertically(tween(MS_SALIDA)) { alto -> alto / 10 },
+        label = "buscadorInferior",
+    ) {
+        OcultarBarraSecciones()
+        BackHandler(enabled = visible, onBack = onCerrar)
+        val foco = remember { FocusRequester() }
+        val tecladoSistema = LocalSoftwareKeyboardController.current
+        val focos = LocalFocusManager.current
+        LaunchedEffect(Unit) {
+            foco.requestFocus()
+            tecladoSistema?.show()
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        // Al arrastrar la lista (no al desplazarla sola), fuera el teclado.
+        val esconderTeclado = remember(tecladoSistema, focos) {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (source == NestedScrollSource.UserInput && available.y != 0f) {
+                        tecladoSistema?.hide()
+                        focos.clearFocus()
+                    }
+                    return Offset.Zero
+                }
+            }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .imePadding(),
         ) {
-            CampoBusquedaBrisas(
-                valor = texto,
-                onCambiar = onCambiar,
-                ayuda = ayuda,
-                modifier = Modifier.weight(1f).focusRequester(foco),
-            )
-            Box(
-                modifier = Modifier
-                    .size(AlturaBusquedaBrisas)
-                    .clip(CircleShape)
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), CircleShape)
-                    .clickable(onClick = onCerrar)
-                    .semantics {
-                        contentDescription = "Cerrar búsqueda"
-                        role = Role.Button
-                    },
-                contentAlignment = Alignment.Center,
+            Box(modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(esconderTeclado)) {
+                CompositionLocalProvider(LocalConsultaResaltada provides texto) {
+                    resultados()
+                }
+            }
+            if (encabezado != null) {
+                Box(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp)) {
+                    encabezado()
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Default.Close, contentDescription = null)
+                CampoBusquedaBrisas(
+                    valor = texto,
+                    onCambiar = onCambiar,
+                    ayuda = ayuda,
+                    keyboardOptions = teclado,
+                    modifier = Modifier.weight(1f).focusRequester(foco),
+                )
+                BotonRedondoVidrio(tamano = AlturaBusquedaBrisas, descripcion = "Cerrar búsqueda", onClick = onCerrar) {
+                    Icon(Icons.Default.Close, contentDescription = null)
+                }
             }
         }
     }
