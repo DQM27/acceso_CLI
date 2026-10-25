@@ -204,6 +204,7 @@ Los números son los de la tabla de 0.2.
 | 5 | `rutas_documento_tramo_viaje` (+ `_fix_search_path`, `_indices_fk`) | **No existe en el repo** | `feat/rutas-documento-tramo-viaje` (19 sep, sin unir) | Desconocido |
 | ~~6~~ | ~~`hora_servidor_ms`~~ **Aplicada en producción el 2026-09-29 (ver sección 5)** | `supabase/migrations/20260929075809_hora_servidor_ms.sql` | `claude/fusion-integral` (reloj en ms) | No |
 | 7 | `cambio_nube_lleva_la_fila_de_las_cuatro_clases` — **sin aplicar todavía, ni en staging ni en producción (ver 2.12)** | `supabase/migrations/20261018130000_cambio_nube_lleva_la_fila_de_las_cuatro_clases.sql` | `perf/ingreso-http2` | No |
+| 8 | `reconexion_dispositivos_retirados` — probada en staging dentro de una transacción revertida (no quedó aplicada); se aplica sola al mergear (ver 2.14) | `supabase/migrations/20261028120000_reconexion_dispositivos_retirados.sql` | `docs/plan-reconexion-equipo` | No |
 
 ### 2.1 Aviso en vivo con los datos (`cambio_nube_lleva_la_fila_de_ingresos`)
 
@@ -590,6 +591,29 @@ Rama `feat/reglas-compartidas`. Contexto completo en
   `drop table public.avisos_enviados;` y volver a desplegar la versión
   anterior de `admin-enviar-push`.
 
+### 2.14 Reconexión de un equipo retirado (`reconexion_dispositivos_retirados`, 2026-10-24)
+
+- **Qué hace:** códigos de reconexión separados de los de alta
+  (`codigos_vinculacion.proposito`), `consultar_codigo_reconexion` y
+  `canjear_codigo_reconexion` (sólo `service_role`). Ver
+  `docs/features-futuras/plan-reconexion-equipo-retirado.md`.
+- **Probada:** en staging, junto con su batería
+  (`supabase/tests/reconexion_dispositivos.sql`), dentro de una sola
+  transacción revertida: staging quedó como estaba. Validada contra
+  producción: las columnas que usa existen, la restricción de eventos y la
+  función de canje de alta son las mismas que en staging.
+- **Compatibilidad:** no rompe apps viejas. El canje de alta sólo agrega
+  `proposito = 'alta'` (todo código existente es de alta).
+- **Edge Functions nuevas** (la integración no despliega funciones):
+  - `admin-autorizar-reconexion`, con `verify_jwt` **activo** (sólo
+    administradores del panel).
+  - `device-reconectar`, con `verify_jwt` **desactivado**, igual que
+    `device-vincular`: un equipo retirado ya no tiene credencial vigente.
+- **Orden:** mergear (aplica la migración), desplegar las dos funciones,
+  desplegar el panel (`wrangler deploy`) y después publicar escritorio y
+  móvil. Una app vieja nunca ofrece reconectar, así que convivir no tiene
+  riesgo.
+
 ## 3. Cambios de la base local de los equipos (SQLite)
 
 No se aplican a mano: cada equipo migra su base sola al abrir la app nueva.
@@ -600,6 +624,7 @@ Hay que tenerlos presentes al publicar versiones.
 | 52 | `sincronizacion_estado.desfase_reloj_ms` (hora de internet guardada entre arranques) | `claude/hora-de-internet` → `claude/prueba-integral` |
 | 57 | `movimientos_visita.placa` y `historial_visitas_sitio.placa` (medio de ingreso de las visitas agendadas) | `feat/escritorio-pendientes` |
 | 58 | `movimientos_visita_remotos` (visitas abiertas por el otro equipo) y `movimientos_visita_remotos` permitido en `remotos_cerrados_aca` | `feat/visitas-movil` |
+| 59 | `sincronizacion_estado.sitio_id`, `equipo_retirado` y `descartar_base` (reconexión de un equipo retirado) | `docs/plan-reconexion-equipo` |
 
 **Importante:** una vez que un equipo abre una versión con la migración 52,
 su base queda en el esquema 52 y **una app anterior ya no la abre**: la

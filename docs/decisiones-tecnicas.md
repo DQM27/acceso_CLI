@@ -836,3 +836,41 @@ todos sus contratistas.
 **Hueco conocido:** el panel web todavía no tiene sección **Empresas**.
 Mientras no exista, activar o desactivar una empresa se hace por SQL en
 Supabase (decisión del dueño). Contratistas ya se gestiona en el panel.
+
+## 2026-10-24 — Un equipo retirado se puede reconectar (`revoked_at` deja de ser definitivo)
+
+**Antes:** retirar un equipo era definitivo (migración
+`revocacion_efectiva_dispositivos`). Para volver a usarlo había que borrar
+su base o desinstalar la app y darlo de alta como nuevo: se perdía lo no
+sincronizado y el equipo volvía sin su historia.
+
+**Decisión (del dueño, 2026-10-24):** el panel autoriza la reconexión de
+ESE equipo con un código propio. Ver
+`docs/features-futuras/plan-reconexion-equipo-retirado.md`.
+
+- **Código de reconexión, separado del de alta**
+  (`codigos_vinculacion.proposito`): uno no sirve para lo otro. Es de un
+  solo uso, vence en 10 minutos y sólo vale mientras el equipo siga
+  retirado. El botón sólo aparece en un equipo retirado.
+- **Misma unidad:** no se borra nada; mismo registro de dispositivo, con
+  su fecha de alta original.
+- **Otra unidad:** se borra la base local y se baja la de la unidad nueva.
+  Con registros sin subir, el equipo avisa cuántos se pierden y pide
+  confirmación; queda en el evento quién confirmó.
+- **Siempre una clave nueva**, pero recién después de que la nube confirme
+  (consultando el código sin gastarlo) que el equipo está retirado: un
+  código mal escrito no deja sin clave a un equipo vigente.
+- **Sin mezclar unidades:** la marca `descartar_base` se pone antes del
+  canje y desde ahí la sincronización no corre. Al arrancar, una base
+  marcada se borra antes de usarla. Se borra el archivo entero porque la
+  base protege los movimientos de acceso contra el borrado (disparadores).
+- **Base vacía con el equipo ya vinculado** baja el catálogo de su unidad
+  sin pedir código (`preparar_base_de_equipo_vinculado`). Cubre el cambio
+  de unidad y también la reconstrucción de una base dañada.
+
+**Hueco conocido:** si el equipo se apaga justo entre la marca y el
+resultado del canje, y el canje falló, al arrancar borra la base igual
+(quien confirmó ya aceptó perder esos registros) y queda retirado con la
+base vacía. Para volver a usarlo hace falta un código nuevo; la pantalla
+de arranque hoy sólo acepta códigos de alta, así que se da de alta como
+equipo nuevo.

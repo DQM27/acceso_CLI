@@ -1,7 +1,19 @@
 # Reconexión de un equipo retirado — plan
 
-Estado: **plan, sin código** (2026-10-24). Decisiones del dueño del
+Estado: **implementado** (2026-10-24), pendiente de merge y despliegue (ver
+`docs/despliegue-produccion.md`, 2.14). Decisiones del dueño del
 2026-10-24.
+
+Diferencias con lo planeado, por lo que apareció al implementar:
+
+- Al cambiar de unidad no se vacían las tablas: la base local protege los
+  movimientos de acceso contra el borrado. Se borra el archivo entero al
+  arrancar, guiado por la marca `descartar_base` (migración local 59), que
+  además frena la sincronización desde antes del canje.
+- La pantalla de arranque baja sola el catálogo de un equipo que ya está
+  vinculado (`preparar_base_de_equipo_vinculado`), sin pedir código.
+- La marca de equipo retirado sólo la borra la reconexión (no cualquier
+  token): un token cacheado de antes del retiro podría borrarla de más.
 
 ## Problema
 

@@ -130,10 +130,11 @@ Cuando se corrija una, se actualiza su proceso.
    encontrarla. Verificar.
 7. **Cerrar sesión**: Ctrl+Q y el botón cierran la sesión sin confirmar.
    Un Ctrl+Q por error saca a la persona en pleno registro.
-8. **Equipo retirado**: el aviso dice "regístrelo como dispositivo nuevo",
-   pero la pantalla **Vincular este equipo** sólo aparece en un equipo sin
-   datos. Falta un camino claro para volver a vincular un equipo usado
-   (por definir, dueño 2026-10-23).
+8. ~~**Equipo retirado**: no había forma de volver a usar un equipo
+   retirado sin borrarle la base.~~ Resuelto (2026-10-24): el panel
+   autoriza la reconexión con un código propio de ese equipo; en la misma
+   unidad conserva todo, en otra borra su base y baja la nueva (ver
+   `docs/features-futuras/plan-reconexion-equipo-retirado.md`).
 9. ~~**Mensajes**: varios textos mezclaban "usted" con voseo y tuteo.~~
    Corregido (2026-10-24): todos los mensajes de las tres apps tratan de
    "usted" y dicen "aquí" en vez de "acá"; el de archivo no guardado ya no
