@@ -29,9 +29,9 @@ class FranjaConflictosTest {
         val mensajes = mensajesConflictos(listOf(ingreso), listOf(proveedor), listOf(correo), listOf(gafete), hora = { "08:00" })
         assertEquals(
             listOf(
-                "Ana Mora tiene un ingreso activo acá Y en Planta Norte — hay que resolverlo.",
-                "Luis Rojas tiene un ingreso de proveedor activo acá Y en Bodega — hay que resolverlo.",
-                "Eva Solís tiene un ingreso por correo activo acá Y en Oficinas — hay que resolverlo.",
+                "Ana Mora tiene un ingreso activo aquí Y en Planta Norte — hay que resolverlo.",
+                "Luis Rojas tiene un ingreso de proveedor activo aquí Y en Bodega — hay que resolverlo.",
+                "Eva Solís tiene un ingreso por correo activo aquí Y en Oficinas — hay que resolverlo.",
                 mensajeConflictoGafete(gafete, "08:00"),
             ),
             mensajes,

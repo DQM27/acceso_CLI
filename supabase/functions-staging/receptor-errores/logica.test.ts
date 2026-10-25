@@ -139,7 +139,7 @@ test("limpia datos personales", () => {
 });
 
 test("no toca lo que no es personal", () => {
-  const texto = "No se pudo conectar con la nube, intentá de nuevo (pool size = 0, 5 tareas)";
+  const texto = "No se pudo conectar con la nube, intente de nuevo (pool size = 0, 5 tareas)";
   assert.equal(limpiarTexto(texto), texto);
 });
 

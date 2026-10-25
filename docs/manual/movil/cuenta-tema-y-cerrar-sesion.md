@@ -33,7 +33,7 @@ a todos los que están adentro.
 ## Salir de la app
 
 - Con el botón **atrás** del teléfono en la pantalla principal aparece
-  **"Tocá de nuevo para salir"**; un segundo toque cierra la app.
+  **"Toque de nuevo para salir"**; un segundo toque cierra la app.
 - **Cerrar la app** (con atrás, o deslizándola fuera de las apps
   recientes) **también cierra la sesión**. La próxima vez hay que iniciar
   sesión de nuevo.

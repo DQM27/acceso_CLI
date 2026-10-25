@@ -138,7 +138,7 @@ internal fun ContenidoModoEntrada(
             activos = activos,
             cargando = cargando,
             tituloVacio = "Nadie adentro por ahora",
-            detalleVacio = "Cuando alguien ingrese, aparece acá.",
+            detalleVacio = "Cuando alguien ingrese, aparece aquí.",
             onClick = onElegirActivo,
             sincronizando = sincronizando,
             onSincronizar = onSincronizar,

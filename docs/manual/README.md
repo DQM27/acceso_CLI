@@ -87,7 +87,7 @@ Estado: ✅ redactado · ⬜ pendiente.
 ### Conexión y actualizaciones
 
 - ✅ [Trabajar sin internet y sincronizar a mano](escritorio/trabajar-sin-internet.md)
-- ✅ ["Tiene un ingreso activo acá Y en otro sitio"](escritorio/ingreso-activo-en-otro-sitio.md)
+- ✅ ["Tiene un ingreso activo aquí Y en otro sitio"](escritorio/ingreso-activo-en-otro-sitio.md)
 - ✅ [El equipo fue retirado o la sesión se cerró sola](escritorio/equipo-retirado-o-sesion-cerrada.md)
 - ✅ [Buscar e instalar una actualización](escritorio/buscar-actualizacion.md)
 
@@ -130,18 +130,18 @@ Cuando se corrija una, se actualiza su proceso.
    encontrarla. Verificar.
 7. **Cerrar sesión**: Ctrl+Q y el botón cierran la sesión sin confirmar.
    Un Ctrl+Q por error saca a la persona en pleno registro.
-8. **Equipo retirado**: el aviso dice "registrarlo como dispositivo nuevo",
+8. **Equipo retirado**: el aviso dice "regístrelo como dispositivo nuevo",
    pero la pantalla **Vincular este equipo** sólo aparece en un equipo sin
    datos. Falta un camino claro para volver a vincular un equipo usado
    (por definir, dueño 2026-10-23).
-9. **Mensajes**: varios textos mezclan "usted" con voseo ("pedí",
-   "intentá", "Revisá") y otros usan "tú" ("Ya tienes la última versión").
-   Unificar en "usted", como el resto de la app. El de archivo no guardado
-   ("No se pudo guardar el archivo…") trae espacios de más en el código.
+9. ~~**Mensajes**: varios textos mezclaban "usted" con voseo y tuteo.~~
+   Corregido (2026-10-24): todos los mensajes de las tres apps tratan de
+   "usted" y dicen "aquí" en vez de "acá"; el de archivo no guardado ya no
+   trae espacios de más.
 10. **Auditoría**: muestra sólo los cambios hechos desde este equipo; no
     los del otro equipo del sitio ni los del panel. Para reunirlos hace
     falta una tabla en Supabase (para después, dueño 2026-10-23).
-11. **Conflictos** (ingreso acá y en otro sitio, gafete en conflicto): hoy
+11. **Conflictos** (ingreso aquí y en otro sitio, gafete en conflicto): hoy
     sólo avisan, sin forma de resolverlos desde la pantalla. En
     construcción.
 
@@ -189,9 +189,8 @@ escritorio.
 
 ### Mejoras de pantalla detectadas al documentar el móvil
 
-1. **Mensajes**: mezclan "usted" con voseo y tuteo ("Tocá de nuevo para
-   salir", "Tocá para leerlo", "Estás al día", "Acá vas a ver los avisos").
-   Unificar en "usted".
+1. ~~**Mensajes**: mezclaban "usted" con voseo y tuteo.~~ Corregido
+   (2026-10-24), igual que en el escritorio.
 2. **Salida por gafete escaneado**: se registra al instante, sin
    confirmar (decisión de diseño). Un gafete mal leído saca a otra
    persona; el mensaje verde/rojo es la única señal.
@@ -217,5 +216,4 @@ navegador, con una cuenta de Google autorizada.
 1. **Usuarios**: **Resetear contraseña** se aplica al instante, sin
    confirmar. Un clic en la fila equivocada le cambia la contraseña a otra
    persona.
-2. **Mensajes**: algunos usan voseo ("recargá la página") y el resto
-   "usted". Unificar.
+2. ~~**Mensajes**: algunos usaban voseo.~~ Corregido (2026-10-24).

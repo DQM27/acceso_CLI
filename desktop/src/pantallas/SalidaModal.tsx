@@ -332,7 +332,7 @@ export default function SalidaModal({
                         </span>
                       ) : (
                         <span style={{ color: "var(--advertencia)" }}>
-                          {coincidencias.length} personas tienen este gafete — elegí a quién:
+                          {coincidencias.length} personas tienen este gafete — elija a quién:
                         </span>
                       )}
                       <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>
@@ -374,7 +374,7 @@ export default function SalidaModal({
                 type="submit"
                 className="boton boton-primario"
                 disabled={enviando || faltaElegir || buscandoGafetes}
-                title={faltaElegir ? "Elegí a quién corresponde cada gafete repetido" : undefined}
+                title={faltaElegir ? "Elija a quién corresponde cada gafete repetido" : undefined}
               >
                 {enviando ? "Registrando…" : "Registrar salida"}
               </button>

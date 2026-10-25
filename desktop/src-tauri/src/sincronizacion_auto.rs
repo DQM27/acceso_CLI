@@ -78,8 +78,8 @@ mod tests {
             "Su sesión no está autorizada para usar la nube",
             "Sólo una sesión ROOT activa puede gestionar la nube",
             "Este dispositivo todavía no está vinculado a la nube",
-            "Este dispositivo fue suspendido -- contactá a un administrador",
-            "No se pudo conectar con la nube, intentá de nuevo",
+            "Este dispositivo fue suspendido -- contacte a un administrador",
+            "No se pudo conectar con la nube, intente de nuevo",
         ] {
             assert!(es_fallo_esperado(mensaje), "{mensaje}");
         }
@@ -89,10 +89,10 @@ mod tests {
     fn lo_inesperado_si_se_reporta() {
         for mensaje in [
             "No se pudo leer la base de datos local",
-            "La nube ya no reconoce a este dispositivo (fue retirado en el panel) -- registralo \
+            "La nube ya no reconoce a este dispositivo (fue retirado en el panel) -- regístrelo \
              como dispositivo nuevo con un código del panel",
-            "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando",
-            "El receptor rechazó el pedido, intentá de nuevo más tarde",
+            "Esta versión de la app ya no es compatible -- actualice la app para seguir sincronizando",
+            "El receptor rechazó el pedido, intente de nuevo más tarde",
             "",
         ] {
             assert!(!es_fallo_esperado(mensaje), "{mensaje}");

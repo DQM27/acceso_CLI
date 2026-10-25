@@ -579,7 +579,7 @@ function Shell({
       avisos.error(
         resumen.sesion_en_otra_unidad
           ? MENSAJE_SESION_EN_OTRA_UNIDAD
-          : "Tu usuario fue desactivado — se cerró la sesión.",
+          : "Su usuario fue desactivado — se cerró la sesión.",
       );
       onCerrarSesion();
       return true;
@@ -595,26 +595,26 @@ function Shell({
     // dos ingresos) -- no es un error transitorio que convenga silenciar.
     for (const conflicto of resumen.conflictos_ingreso) {
       avisos.advertencia(
-        `${conflicto.contratista_nombre} tiene un ingreso activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
+        `${conflicto.contratista_nombre} tiene un ingreso activo aquí Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
     // Mismo criterio que `conflictos_ingreso`, pero para visitas (ver
     // `nube::visitantes_con_conflicto_activo`).
     for (const conflicto of resumen.conflictos_movimiento_visita) {
       avisos.advertencia(
-        `${conflicto.visitante_nombre} tiene una visita activa acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
+        `${conflicto.visitante_nombre} tiene una visita activa aquí Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
     // Mismo criterio que `conflictos_ingreso`, pero para proveedores (ver
     // `nube::proveedores_con_conflicto_activo`).
     for (const conflicto of resumen.conflictos_ingreso_proveedor) {
       avisos.advertencia(
-        `${conflicto.nombre} tiene un ingreso de proveedor activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
+        `${conflicto.nombre} tiene un ingreso de proveedor activo aquí Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
     for (const conflicto of resumen.conflictos_ingreso_correo) {
       avisos.advertencia(
-        `${conflicto.nombre} tiene un ingreso por correo activo acá Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
+        `${conflicto.nombre} tiene un ingreso por correo activo aquí Y en ${conflicto.sitio_conflicto} — hay que resolverlo.`,
       );
     }
     // A diferencia de los tres de arriba (simétricos: ambos lados "tienen
@@ -716,7 +716,7 @@ function Shell({
             exito: "Actualizado — reiniciando…",
             error: (causa) => {
               console.error("actualización:", causa);
-              return "No se pudo actualizar, intentá de nuevo más tarde";
+              return "No se pudo actualizar, intente de nuevo más tarde";
             },
           });
         },
@@ -755,12 +755,12 @@ function Shell({
       } else {
         const version = await getVersion().catch(() => null);
         avisos.exito(
-          version ? `Ya tienes la última versión (${version}).` : "Ya tienes la última versión.",
+          version ? `Ya tiene la última versión (${version}).` : "Ya tiene la última versión.",
         );
       }
     } catch (error) {
       console.error("buscar actualización:", error);
-      avisos.error("No se pudo buscar actualizaciones, revisá la conexión");
+      avisos.error("No se pudo buscar actualizaciones, revise la conexión");
     } finally {
       setBuscandoActualizacion(false);
     }
@@ -818,7 +818,7 @@ function Shell({
                       "reelegir la misma sección para reintentar" -- costo
                       aceptado, es un caso raro y la app entera sigue
                       funcionando en todas las demás secciones. */}
-                  <ErrorBoundary mensaje="Esta sección no pudo cargar. La sesión sigue activa — elegí otra desde el menú, o reiniciá la app si el problema persiste.">
+                  <ErrorBoundary mensaje="Esta sección no pudo cargar. La sesión sigue activa — elija otra desde el menú, o reinicie la app si el problema persiste.">
                     {/* Fallback `null`: las pantallas lazy vienen del mismo
                         bundle local (nada de red de por medio), el chunk
                         carga en milisegundos — no vale la pena un spinner

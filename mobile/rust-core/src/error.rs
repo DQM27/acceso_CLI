@@ -37,7 +37,7 @@ pub enum NucleoError {
     /// llamadores reales; el alta de contraseña de un usuario global pasa
     /// siempre por `autenticar_supabase` (Supabase Auth), así que esta
     /// variante no debería escapar sin interceptar desde acá.
-    #[error("todavía no tenés contraseña en este dispositivo")]
+    #[error("todavía no tiene contraseña en este dispositivo")]
     SinPasswordLocal,
     #[error("no hay una sesión iniciada")]
     NoAutenticado,
@@ -80,8 +80,8 @@ pub fn interno<E: std::fmt::Display>(error: E) -> String {
 /// Kotlin muestra sólo qué hacer.
 pub fn apertura<E: std::fmt::Display>(error: E) -> String {
     log::error!("apertura de la base de datos: {error}");
-    "No se pudo abrir la base de datos de este teléfono. Cerrá y volvé a abrir la app; si sigue \
-     pasando, avisá a un administrador"
+    "No se pudo abrir la base de datos de este teléfono. Cierre y vuelva a abrir la app; si sigue \
+     pasando, avise a un administrador"
         .into()
 }
 
@@ -151,7 +151,7 @@ pub fn convertir_fallo_sincronizacion(fallo: FalloSincronizacion) -> NucleoError
     match fallo {
         FalloSincronizacion::TokenVencido => NucleoError::Interno {
             mensaje:
-                "El token de este dispositivo venció y no se pudo renovar -- revisá la conexión"
+                "El token de este dispositivo venció y no se pudo renovar -- revise la conexión"
                     .to_string(),
         },
         FalloSincronizacion::Nucleo(error) => error,

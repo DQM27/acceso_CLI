@@ -256,7 +256,7 @@ pub fn ejecutar_sincronizacion_con_alcance(
             state.invalidar_token_cacheado();
             intentar_sincronizacion(state, alcance).map_err(|fallo| match fallo {
                 FalloSincronizacion::TokenVencido => {
-                    "El token de este dispositivo venció y no se pudo renovar -- revisá la conexión"
+                    "El token de este dispositivo venció y no se pudo renovar -- revise la conexión"
                         .to_string()
                 }
                 FalloSincronizacion::Mensaje(mensaje) => mensaje,

@@ -46,7 +46,7 @@ modo offline."**; al recuperarla, **"Conexión restablecida."**
   volver la conexión).
 - Confirmar con otros sitios si una persona ya está adentro allá. Por eso,
   al volver la conexión puede aparecer un aviso de ingreso duplicado: ver
-  ["Tiene un ingreso activo acá Y en otro sitio"](ingreso-activo-en-otro-sitio.md).
+  ["Tiene un ingreso activo aquí Y en otro sitio"](ingreso-activo-en-otro-sitio.md).
 
 ## Pasos — sincronizar a mano
 
@@ -64,13 +64,13 @@ momento, por ejemplo antes de cerrar el turno o después de un corte largo.
 |---|---|---|
 | "Sincronizado — N enviados." | Todo se envió bien. | Nada. |
 | "N enviados, M fallidos — reintenta más tarde." | Algunos registros no se pudieron enviar. Siguen guardados en el equipo. | Vuelva a pulsar **Sincronizar** más tarde. Si se repite durante horas, avise a un administrador. |
-| "No se pudo conectar con la nube, intentá de nuevo" | No hay internet o el servidor no responde. | Revise la conexión y vuelva a intentar. Mientras tanto, siga trabajando normal. |
-| "El receptor rechazó el pedido, intentá de nuevo más tarde" | El servidor no aceptó el envío en ese momento. | Intente más tarde. Si se repite, avise a un administrador. |
+| "No se pudo conectar con la nube, intente de nuevo" | No hay internet o el servidor no responde. | Revise la conexión y vuelva a intentar. Mientras tanto, siga trabajando normal. |
+| "El receptor rechazó el pedido, intente de nuevo más tarde" | El servidor no aceptó el envío en ese momento. | Intente más tarde. Si se repite, avise a un administrador. |
 | "Este dispositivo todavía no está vinculado a la nube" | El equipo nunca se vinculó. | Ver [Vincular el equipo](vincular-equipo.md). |
-| "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando" | El programa es demasiado viejo para enviar datos. | Actualice: ver [Buscar e instalar una actualización](buscar-actualizacion.md). |
+| "Esta versión de la app ya no es compatible -- actualice la app para seguir sincronizando" | El programa es demasiado viejo para enviar datos. | Actualice: ver [Buscar e instalar una actualización](buscar-actualizacion.md). |
 
 ## Relacionado
 
-- ["Tiene un ingreso activo acá Y en otro sitio"](ingreso-activo-en-otro-sitio.md)
+- ["Tiene un ingreso activo aquí Y en otro sitio"](ingreso-activo-en-otro-sitio.md)
 - [El equipo fue retirado o la sesión se cerró sola](equipo-retirado-o-sesion-cerrada.md)
 - ["Revise la fecha y hora del equipo"](fecha-y-hora-del-equipo.md)

@@ -64,7 +64,7 @@ export default class ErrorBoundary extends Component<
             {this.props.mensaje ?? (
               <>
                 La ventana no puede seguir en este estado. Los datos ya guardados no se
-                pierden — reiniciá la app para continuar.
+                pierden — reinicie la app para continuar.
               </>
             )}
           </p>

@@ -38,7 +38,7 @@ mientras tanto puede seguir registrando.
 ## Buscar a mano
 
 En el menú de la cuenta, toque **Buscar actualizaciones**. La respuesta
-sale como mensaje corto: **"Estás al día"** o **"No se pudo revisar"**
+sale como mensaje corto: **"Está al día"** o **"No se pudo revisar"**
 (sin internet). Si hay versión nueva, aparece la tarjeta.
 
 ## Mensajes que pueden aparecer

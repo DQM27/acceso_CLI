@@ -41,10 +41,10 @@ Tenga en cuenta:
 
 | Mensaje | Qué significa | Qué hacer |
 |---|---|---|
-| "El código no es válido o ya venció -- pedí uno nuevo en el panel" | El código está mal escrito, ya se usó o pasaron demasiados minutos. | Revise el código. Si está bien, pida uno nuevo al administrador (lo genera en el panel). |
-| "No se pudo conectar con la nube, intentá de nuevo" | El equipo no tiene internet o el servidor no respondió. | Revise la conexión y vuelva a pulsar **Vincular y sincronizar**. Si el código venció mientras tanto, pida otro. |
-| "La clave de este equipo ya está vinculada a otro dispositivo -- pedí ayuda a un administrador" | El panel ya tiene registrado este equipo como otro dispositivo. | Avise a un administrador. |
-| "Esta versión de la app ya no es compatible -- actualizá para seguir sincronizando" | El programa instalado es demasiado viejo. | Instale la versión nueva (pida el instalador a un administrador) y vuelva a intentar. |
+| "El código no es válido o ya venció -- pida uno nuevo en el panel" | El código está mal escrito, ya se usó o pasaron demasiados minutos. | Revise el código. Si está bien, pida uno nuevo al administrador (lo genera en el panel). |
+| "No se pudo conectar con la nube, intente de nuevo" | El equipo no tiene internet o el servidor no respondió. | Revise la conexión y vuelva a pulsar **Vincular y sincronizar**. Si el código venció mientras tanto, pida otro. |
+| "La clave de este equipo ya está vinculada a otro dispositivo -- pida ayuda a un administrador" | El panel ya tiene registrado este equipo como otro dispositivo. | Avise a un administrador. |
+| "Esta versión de la app ya no es compatible -- actualice la app para seguir sincronizando" | El programa instalado es demasiado viejo. | Instale la versión nueva (pida el instalador a un administrador) y vuelva a intentar. |
 
 ## Relacionado
 

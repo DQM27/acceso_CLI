@@ -8,7 +8,7 @@ export const esquemaLogin = z.object({
 export const esquemaCambioObligatorio = z
   .object({
     passwordNueva: z.string().min(8, "Al menos 8 caracteres"),
-    confirmar: z.string().min(1, "Confirmá la contraseña"),
+    confirmar: z.string().min(1, "Confirme la contraseña"),
   })
   .refine((valores) => valores.passwordNueva === valores.confirmar, {
     message: "Las contraseñas no coinciden",

@@ -58,9 +58,9 @@ sitio**, la sesión de este equipo se cierra sola: ver
 | "Cédula o contraseña incorrecta" | La cédula o la contraseña no coinciden. | Revise que la cédula esté completa y sin espacios, y vuelva a escribir la contraseña. Si la olvidó, pida a un administrador que la restablezca en el panel. |
 | "Credenciales inválidas" | Igual que el anterior, revisado en el propio equipo (por ejemplo, sin internet). | Igual que el anterior. |
 | "Usuario inactivo" / "Este usuario fue desactivado" | Su usuario está desactivado. | Hable con un administrador. |
-| "No se pudo conectar con el servidor, revisá la conexión a internet" | Hace falta internet para revisar su contraseña (primera vez en este equipo). | Conecte el equipo y vuelva a intentar. |
-| "El servidor devolvió una respuesta inesperada, intentá de nuevo" | Falla pasajera del servidor. | Espere un momento y vuelva a intentar. |
-| "No se pudo iniciar sesión, intentá de nuevo" / "No se pudo completar el login" | Falla interna del programa. | Intente otra vez. Si se repite, cierre y abra el programa; si sigue, avise a un administrador. |
+| "No se pudo conectar con el servidor, revise la conexión a internet" | Hace falta internet para revisar su contraseña (primera vez en este equipo). | Conecte el equipo y vuelva a intentar. |
+| "El servidor devolvió una respuesta inesperada, intente de nuevo" | Falla pasajera del servidor. | Espere un momento y vuelva a intentar. |
+| "No se pudo iniciar sesión, intente de nuevo" / "No se pudo completar el login" | Falla interna del programa. | Intente otra vez. Si se repite, cierre y abra el programa; si sigue, avise a un administrador. |
 | "Al menos 8 caracteres" | La contraseña nueva es muy corta. | Use 8 caracteres o más. |
 | "Las contraseñas no coinciden" | **Contraseña nueva** y **Confirmar contraseña** son distintas. | Escriba la misma en los dos campos. |
 

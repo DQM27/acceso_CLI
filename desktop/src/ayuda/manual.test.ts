@@ -24,8 +24,8 @@ describe("leerMarkdown", () => {
   });
 
   it("anclas como las de GitHub: sin signos, con tildes, y numeradas si se repiten", () => {
-    expect(ancla('"Tiene un ingreso activo acá Y en otro sitio"')).toBe(
-      "tiene-un-ingreso-activo-acá-y-en-otro-sitio",
+    expect(ancla('"Tiene un ingreso activo aquí Y en otro sitio"')).toBe(
+      "tiene-un-ingreso-activo-aquí-y-en-otro-sitio",
     );
     expect(ancla("Pasos — por gafete (una o varias)")).toBe("pasos--por-gafete-una-o-varias");
     const anclas = leerMarkdown("## Pasos\n\n## Pasos\n").map((b) => (b.tipo === "titulo" ? b.ancla : ""));

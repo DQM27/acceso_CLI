@@ -34,7 +34,7 @@ Cualquier usuario con sesión abierta.
 
 - **Roja, "Aviso urgente: (título)"**: hay una emergencia sin leer. Toque
   la franja para leerla. No se puede descartar sin leerla.
-- **De conflictos**: ver ["Tiene un ingreso activo acá Y en otro sitio"](problemas-frecuentes.md#tiene-un-ingreso-activo-acá-y-en-otro-sitio).
+- **De conflictos**: ver ["Tiene un ingreso activo aquí Y en otro sitio"](problemas-frecuentes.md#tiene-un-ingreso-activo-aquí-y-en-otro-sitio).
 - **Verde**, por ejemplo **"Ingreso registrado · (nombre)"** o **"Salida
   registrada · (nombre)"**: confirma lo último que se registró.
 

@@ -166,7 +166,7 @@ fun PantallaPorCorreo(
                             cargando = viewModel.cargando,
                             tituloVacio = if (busqueda.isBlank()) "Nadie ingresó por correo" else "Sin resultados",
                             detalleVacio = if (busqueda.isBlank()) {
-                                "Cuando alguien ingrese, aparece acá."
+                                "Cuando alguien ingrese, aparece aquí."
                             } else {
                                 "Pruebe con otro dato de la persona."
                             },

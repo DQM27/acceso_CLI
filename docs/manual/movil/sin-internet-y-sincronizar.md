@@ -35,7 +35,7 @@ principal:
 - Ver al instante lo que registra la PC del puesto.
 - Confirmar con otros sitios si una persona ya está adentro allá. Por eso,
   al volver la conexión puede aparecer un aviso de conflicto (ver
-  [Problemas frecuentes](problemas-frecuentes.md#tiene-un-ingreso-activo-acá-y-en-otro-sitio)).
+  [Problemas frecuentes](problemas-frecuentes.md#tiene-un-ingreso-activo-aquí-y-en-otro-sitio)).
 
 ## Pasos — sincronizar a mano
 

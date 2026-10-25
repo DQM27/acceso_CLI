@@ -128,7 +128,7 @@ fun PantallaAvisos(
         ) { mostrada ->
             if (mostrada == 0) {
                 if (estado.grupos.isEmpty()) {
-                    MensajeVacio("Todo al día", "Acá vas a ver los avisos que mande la administración.")
+                    MensajeVacio("Todo al día", "Aquí verá los avisos que mande la administración.")
                 } else {
                     LazyColumn(
                         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
@@ -156,7 +156,7 @@ fun PantallaAvisos(
                     }
                 }
             } else if (estado.archivados.isEmpty()) {
-                MensajeVacio("Sin archivados", "Los avisos que archives se guardan acá hasta que se borren solos.")
+                MensajeVacio("Sin archivados", "Los avisos que archive se guardan aquí hasta que se borren solos.")
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
@@ -378,7 +378,7 @@ fun FranjaEmergencia(aviso: AvisoBandeja, onAbrir: () -> Unit, modifier: Modifie
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text("Tocá para leerlo", style = MaterialTheme.typography.bodySmall)
+                Text("Toque para leerlo", style = MaterialTheme.typography.bodySmall)
             }
         }
     }
