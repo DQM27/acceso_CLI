@@ -1,7 +1,18 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Toaster } from "sonner";
-import { BellRing, DoorOpen, History, LogIn, Menu, MonitorSmartphone, Sparkles, UserCog, Users } from "lucide-react";
+import {
+  BellRing,
+  DoorOpen,
+  History,
+  LifeBuoy,
+  LogIn,
+  Menu,
+  MonitorSmartphone,
+  Sparkles,
+  UserCog,
+  Users,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Sidebar from "./componentes/Sidebar";
 import MenuUsuario from "./componentes/MenuUsuario";
@@ -22,6 +33,7 @@ const Usuarios = lazy(() => import("./pantallas/Usuarios"));
 const Sesiones = lazy(() => import("./pantallas/Sesiones"));
 const Avisos = lazy(() => import("./pantallas/Avisos"));
 const Asistente = lazy(() => import("./pantallas/Asistente"));
+const Ayuda = lazy(() => import("./pantallas/Ayuda"));
 
 // Sin distinción de rol -- se eliminó `admin_regional` (nunca tuvo alcance
 // real, ver migración `elimina_admin_regional`). Cualquier fila en
@@ -50,6 +62,8 @@ const SECCIONES: { id: Seccion; etiqueta: string; Icono: LucideIcon }[] = [
   { id: "dispositivos", etiqueta: "Dispositivos", Icono: MonitorSmartphone },
   { id: "avisos", etiqueta: "Avisos", Icono: BellRing },
   { id: "asistente", etiqueta: "Asistente", Icono: Sparkles },
+  // El manual de uso de las tres apps (`docs/manual/`).
+  { id: "ayuda", etiqueta: "Ayuda", Icono: LifeBuoy },
 ];
 
 const CLAVE_SIDEBAR_COLAPSADO = "web:sidebar:colapsado";
@@ -294,6 +308,8 @@ function Shell({ sesion }: { sesion: UsuarioSesion }) {
                     <Avisos />
                   ) : id === "asistente" ? (
                     <Asistente />
+                  ) : id === "ayuda" ? (
+                    <Ayuda />
                   ) : (
                     <Dispositivos sesion={sesion} />
                   )}

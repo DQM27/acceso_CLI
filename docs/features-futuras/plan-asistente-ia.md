@@ -1,6 +1,8 @@
 # Asistentes con IA — plan
 
-Estado: **propuesta, sin código todavía** (2026-10-21).
+Estado (2026-10-24): **en marcha**. Lienzo (Parte A) en producción; de la
+ayuda (Parte B), el manual de las tres apps y el manual navegable en el
+escritorio y el panel. Ver "Estado y pendientes" al final.
 
 Son **dos productos separados**, con usuarios, alcance y riesgos distintos
 (decisión del dueño, 2026-10-21):
@@ -386,9 +388,11 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
 
 - Este plan, con las decisiones del dueño fechadas.
 - `docs/features-futuras/plan-importador-excel.md` (proyecto aparte).
-- Manual de uso del escritorio (`docs/manual/`): ingresos (los cuatro),
-  salidas, Activos, permanencia, contratistas, empresas y gafetes, más la
-  lista de mejoras de pantalla detectadas.
+- Manual de uso del escritorio (`docs/manual/`), **completo** (2026-10-23,
+  rama `claude/ayuda-ia`): ingresos (los cuatro), salidas, Activos,
+  permanencia, contratistas, empresas, gafetes, inicio y sesión, Historial
+  con exportar, Auditoría, conexión y actualizaciones y problemas
+  frecuentes, más la lista de mejoras de pantalla detectadas.
 - Propuestas de la pantalla inicial del lienzo, con imágenes:
   `docs/features-futuras/asistente-ia/propuestas-lienzo/` (A: pregunta
   primero; B: resumen vivo + chat lateral, **la recomendada**; C: galería
@@ -396,11 +400,22 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
 
 ## Pendiente
 
-- Manual: Historial (con exportar), Auditoría, inicio y sesión, conexión
-  y actualizaciones, problemas frecuentes; después móvil y panel web.
-- Dueño: decir si el operador puede
-  activar/desactivar empresas; regla del gafete KOF con préstamo sin
-  devolver.
+- Manual del móvil **redactado** (2026-10-23, `docs/manual/movil/`, 15
+  procesos de la app Android Lattis) y del panel web (`docs/manual/panel/`,
+  9 procesos, marcado "en desarrollo"). El manual de las tres apps está
+  completo; el siguiente paso de la Parte B es el manual navegable sin IA.
+- Respuestas del dueño (2026-10-23), ya en el manual: el código de
+  vinculación lo da sólo un administrador en el panel; al otro sitio se
+  avisa por el medio acordado (p. ej., WhatsApp); la hora se corrige sola
+  (hora neutra del servidor). Quedan por hacer, más adelante: resolver
+  conflictos desde la pantalla (en construcción), revincular un equipo
+  retirado (por definir) y una tabla de auditoría en Supabase que reúna
+  los cambios de todos los equipos.
+- Más respuestas del dueño (2026-10-23), ya en el manual: sólo un
+  administrador activa o desactiva empresas y contratistas (el programa
+  todavía no lo impide); no se anota nada aparte por un ingreso viejo o un
+  aviso de permanencia; un gafete KOF sin devolver bloquea entregar otro.
+  El manual del escritorio queda sin puntos por confirmar.
 - Registros de prueba en producción: hay 8 ingresos de contratistas casi
   seguro de prueba (menos de 2 minutos, registrados por Daniel Quintana o
   Pedro Molina, varios de madrugada) y 4 dudosos. El dueño lo dejó para
@@ -410,8 +425,29 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
   está en staging; en producción se aplica sola al mergear a `main` (hasta
   entonces, la pantalla "Asistente" de producción muestra el error de función
   inexistente). Falta que el dueño la revise en el panel apuntado a staging.
-- Ayuda de uso (Parte B): nada implementado; la primera etapa es el manual
-  navegable sin IA.
+- Ayuda de uso (Parte B), etapa 2 (manual navegable sin IA): **hecha en el
+  escritorio y el panel** (2026-10-24, rama `claude/ayuda-ia`), ver abajo.
+  Falta el móvil.
+
+## Manual navegable sin IA — implementado en escritorio y panel (2026-10-24)
+
+- `supabase/functions/_shared/manual/`: lector del markdown del manual
+  (`markdown.ts`), índice de cada app sacado de `docs/manual/README.md`
+  (`manual.ts`) y buscador local sin tildes ni mayúsculas que premia el
+  mensaje pegado entero (`buscar.ts`). Sin dependencias; la Edge Function
+  `ayuda-ia` (etapa 3) lo puede reutilizar para cargar el manual.
+- Escritorio: sección **Ayuda** y **F1** desde cualquier pantalla. Sólo
+  procesos del escritorio. El manual viaja dentro del programa (sin
+  internet), en un chunk que se carga al abrir la sección.
+- Panel: sección **Ayuda** con las tres apps (selector de app; el buscador
+  recorre las tres).
+- Pruebas (`desktop/src/ayuda/manual.test.ts`): además del lector y el
+  buscador, revisan el manual real: cada proceso en el índice del README y
+  ningún enlace ni ancla roto. Editar el manual sin romper eso es la única
+  regla nueva.
+- Móvil: pendiente. Por la regla de la app (el núcleo decide, Kotlin
+  dibuja), el lector y el buscador irían en `rust-core` con el manual
+  embebido al compilar, expuestos por UniFFI.
 
 ## Lienzo sin IA — implementado (2026-10-22, sin PR todavía)
 

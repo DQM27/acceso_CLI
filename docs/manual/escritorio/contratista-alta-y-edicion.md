@@ -48,8 +48,9 @@ PRAIND** por la fecha del carnet nuevo. Lo puede hacer el operador.
 **Personal de ruta** también se puede cambiar directo en la tabla, con el
 interruptor de su columna, sin abrir el formulario.
 
-⚠ En el formulario de edición aparece la casilla **Con acceso**. No la
-cambie: quitar o devolver el acceso a una persona lo decide un
+⚠ En el formulario de edición aparece la casilla **Con acceso**. Quitar o
+devolver el acceso a una persona (activarla o desactivarla) lo hace **sólo
+un administrador**. Si usted es operador, no la cambie: pídaselo a un
 administrador.
 
 ## Mensajes que pueden aparecer

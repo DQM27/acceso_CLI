@@ -55,7 +55,7 @@ salida](registrar-salida.md).
 | "Esta persona tiene el acceso denegado." | Un administrador le quitó el acceso a esta cédula; aplica en todas las entradas. | No registre el ingreso. Sólo un administrador puede devolverle el acceso. |
 | "Esta persona ya está adentro (como contratista, por ejemplo) — registre primero esa salida" | Figura adentro por otra vía. | Registre primero esa salida (Ctrl+S) y luego este ingreso. |
 | "Esta cédula ya tiene un ingreso de proveedor activo en (sitio)" | Figura adentro en otro sitio. | No registre el ingreso. Avise a un administrador. |
-| "Revise la fecha y hora del equipo antes de continuar" | El reloj del equipo está mal. | Avise a un administrador para que lo corrija. |
+| "Revise la fecha y hora del equipo antes de continuar" | La hora del equipo quedó antes del último registro. | Ver ["Revise la fecha y hora del equipo"](fecha-y-hora-del-equipo.md). |
 
 ## Relacionado
 

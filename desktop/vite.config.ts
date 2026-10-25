@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from "vite";
+import { defineConfig, searchForWorkspaceRoot } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -42,6 +42,16 @@ export default defineConfig({
   clearScreen: false,
   server: {
     strictPort: true,
+    // La Ayuda lee el manual de `docs/manual/` con el lector compartido de
+    // `supabase/functions/_shared/manual` (el mismo del panel), los dos fuera
+    // de esta carpeta.
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        "../docs/manual",
+        "../supabase/functions/_shared/manual",
+      ],
+    },
     // Sin esto, el watcher de Vite vigila `src-tauri/target` (donde cargo
     // escribe los .dll/.exe de cada rebuild) y en Windows choca con esos
     // archivos a mitad de escritura -- EBUSY, tira abajo `tauri dev` entero.

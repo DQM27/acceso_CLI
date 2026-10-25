@@ -46,6 +46,7 @@ import {
   HardHat,
   History,
   IdCard,
+  LifeBuoy,
   Loader2,
   Route,
   Truck,
@@ -114,6 +115,7 @@ const Auditoria = lazy(() => import("./pantallas/Auditoria"));
 const Gafetes = lazy(() => import("./pantallas/Gafetes"));
 const Rutas = lazy(() => import("./pantallas/Rutas"));
 const CatalogoRutas = lazy(() => import("./pantallas/CatalogoRutas"));
+const Ayuda = lazy(() => import("./pantallas/Ayuda"));
 const NuevoIngresoModal = lazy(() => import("./pantallas/NuevoIngresoModal"));
 const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 const IngresoProveedorModal = lazy(() => import("./pantallas/IngresoProveedorModal"));
@@ -307,7 +309,8 @@ export type Seccion =
   | "auditoria"
   | "empresas"
   | "gafetes"
-  | "catalogoRutas";
+  | "catalogoRutas"
+  | "ayuda";
 
 /** Aplanado de autorización (ver docs/decisiones-tecnicas.md 2026-09-11):
  * ninguna sección se oculta por rol -- quien tiene una sesión válida puede
@@ -344,6 +347,8 @@ const TODAS_LAS_SECCIONES: {
   { id: "empresas", etiqueta: "Empresas", Icono: Building2 },
   { id: "gafetes", etiqueta: "Gafetes", Icono: IdCard },
   { id: "catalogoRutas", etiqueta: "Catálogo KOF", Icono: Truck },
+  // El manual de uso, también con F1 desde cualquier pantalla.
+  { id: "ayuda", etiqueta: "Ayuda", Icono: LifeBuoy },
   // "Por correo", "Proveedores" y "KOF" ya no son secciones: se registran desde
   // el menú "Ingreso" de Activos, están en su tabla y en Historial. "Por correo"
   // se quitó el 2026-10-05, las otras dos con el Activos unificado. Un orden
@@ -548,6 +553,18 @@ function Shell({
   // "Cerrar sesión" del sidebar tampoco la pide, así el atajo y el botón se
   // comportan igual.
   useHotkeys("ctrl+q", onCerrarSesion, { preventDefault: true, enableOnFormTags: true });
+  // F1 abre la Ayuda con el foco en su buscador, aunque esté oculta en el
+  // menú lateral (si no, el efecto de abajo la sacaría de ahí al instante).
+  const [senalBuscarAyuda, setSenalBuscarAyuda] = useState(0);
+  useHotkeys(
+    "f1",
+    () => {
+      if (seccionesOcultas.includes("ayuda")) alternarVisibilidadSeccion("ayuda", true);
+      cambiarSeccion("ayuda");
+      setSenalBuscarAyuda((n) => n + 1);
+    },
+    { preventDefault: true, enableOnFormTags: true },
+  );
 
   // Cualquier sincronización (Realtime, el pulso periódico, o "Sincronizar"
   // a mano) puede traer la baja/desactivación de quien tiene la sesión
@@ -837,6 +854,8 @@ function Shell({
                           <Empresas />
                         ) : id === "gafetes" ? (
                           <Gafetes />
+                        ) : id === "ayuda" ? (
+                          <Ayuda senalBuscar={senalBuscarAyuda} />
                         ) : (
                           <CatalogoRutas />
                         )}
