@@ -5,6 +5,14 @@ verdad de la ayuda de uso (ver `docs/features-futuras/plan-asistente-ia.md`,
 Parte B): el asistente sólo responde con lo que está escrito aquí, así que
 **si algo no está aquí, el asistente no lo sabe**.
 
+El manual también se lee dentro de las apps, sin internet: en el
+escritorio (sección **Ayuda**, F1) y en el panel web (**Ayuda**). Las dos
+lo toman tal cual de esta carpeta, y los índices de abajo son los que
+muestran, en el mismo orden. Un proceso nuevo se agrega a su índice; los
+enlaces entre procesos son relativos (`otro-proceso.md#seccion`). Las
+pruebas de `desktop/src/ayuda/manual.test.ts` revisan que cada proceso
+esté en el índice y que ningún enlace quede roto.
+
 ## Cómo se escribe cada proceso
 
 Un archivo por proceso, en la carpeta de su app (`escritorio/`, `movil/`,
@@ -40,6 +48,7 @@ Estado: ✅ redactado · ⬜ pendiente.
 - ✅ [Cambiar mi contraseña](escritorio/cambiar-contrasena.md)
 - ✅ [Cerrar sesión (Ctrl+Q)](escritorio/cerrar-sesion.md)
 - ✅ [Cambiar el tema (claro u oscuro) y ordenar el menú lateral](escritorio/tema-y-menu-lateral.md)
+- ✅ [Buscar ayuda en el manual (F1)](escritorio/ayuda.md)
 
 ### Ingresos
 
