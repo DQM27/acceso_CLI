@@ -84,8 +84,19 @@ impl GuiState {
     /// se sentía como que la app se colgaba en cada registro.
     ///
     /// Sin vincular falla con `NubeError::SinCredencial`.
+    ///
+    /// Si la nube ya no reconoce la clave del equipo (lo retiraron en el
+    /// panel), el núcleo lo anota: es lo que habilita "Reconectar este
+    /// equipo" (ver `AppCore::anotar_rechazo_de_la_nube`). Toma el candado
+    /// del núcleo sólo en ese caso; quien llama no debe tenerlo tomado
+    /// (ninguno lo tiene: todos lo piden recién después, para aplicar el
+    /// token).
     pub fn autenticar_con_cache(&self) -> Result<TokenDispositivo, NubeError> {
-        self.cache_token.autenticar_con_cache()
+        self.cache_token
+            .autenticar_con_cache()
+            .inspect_err(|error| {
+                self.core().anotar_rechazo_de_la_nube(error);
+            })
     }
 
     /// Descarta el `TokenDispositivo` cacheado -- ver

@@ -1,6 +1,7 @@
 pub mod contratistas;
 pub mod desfase_reloj;
 pub mod empresas;
+pub mod estado_equipo;
 pub mod gafetes;
 pub mod gafetes_incidentes;
 pub mod identidad_equipo;

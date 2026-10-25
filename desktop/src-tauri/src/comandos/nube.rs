@@ -394,46 +394,143 @@ pub async fn vincular_dispositivo_inicial(
                 nube::PerfilDispositivo::Escritorio,
             )
             .map_err(mensaje_gestion_nube)?;
-        Ok(ResumenSincronizacion {
-            enviados: resumen.enviados,
-            fallidos: resumen.fallidos,
-            remotos_abiertos: resumen.remotos_abiertos,
-            cierres_recibidos: resumen.cierres_recibidos,
-            // Núcleo (`AppCore::vincular_dispositivo_inicial`) no trae este
-            // campo -- mismo criterio que `conflictos_ingreso_proveedor` de
-            // abajo: base recién configurada, nada que traer todavía.
-            cierres_recibidos_proveedor: 0,
-            cierres_recibidos_correo: 0,
-            movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
-            citas_recibidas: resumen.citas_recibidas,
-            historial_visitas_recibidos: resumen.historial_visitas_recibidos,
-            historial_ingresos_proveedor_recibidos: 0,
-            historial_ingresos_correo_recibidos: 0,
-            historial_gafetes_provisionales_recibidos: 0,
-            empresas_recibidas: resumen.empresas_recibidas,
-            contratistas_recibidos: resumen.contratistas_recibidos,
-            gafetes_recibidos: resumen.gafetes_recibidos,
-            vehiculos_ruta_recibidos: resumen.vehiculos_ruta_recibidos,
-            encargados_ruta_recibidos: resumen.encargados_ruta_recibidos,
-            sitio_id: resumen.sitio_id,
-            dispositivo_id: resumen.dispositivo_id,
-            tipo: resumen.tipo,
-            sesion_expulsada: resumen.sesion_expulsada,
-            sesion_en_otra_unidad: false,
-            // Base recién configurada, sin ningún ingreso ni movimiento de
-            // visita local todavía -- no hay nada que pudiera chocar con
-            // otro sitio en este momento.
-            conflictos_ingreso: Vec::new(),
-            conflictos_movimiento_visita: Vec::new(),
-            conflictos_ingreso_proveedor: Vec::new(),
-            conflictos_ingreso_correo: Vec::new(),
-            conflictos_gafete: Vec::new(),
-        })
+        Ok(resumen_de_arranque(resumen))
     })
     .await
     .map_err(|error| {
         super::mensaje_tarea_interrumpida("No se pudo completar el arranque inicial", error)
     })?
+}
+
+/// Base vacía de un equipo que ya está vinculado (su clave sigue en
+/// `%APPDATA%`): baja el catálogo de su unidad sin pedir código. Pasa
+/// después de que un equipo reconectado en otra unidad borra la base de la
+/// anterior, y tras reconstruir una base dañada (ver `PrimerArranque.tsx`).
+/// Sin `sesion_activa()`, igual que `vincular_dispositivo_inicial`.
+#[tauri::command]
+pub async fn preparar_equipo_vinculado(
+    app: tauri::AppHandle,
+) -> Result<ResumenSincronizacion, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<GuiState>();
+        let token = state.autenticar_con_cache().map_err(mensaje_nube)?;
+        let resumen = state
+            .core()
+            .preparar_base_de_equipo_vinculado(token, nube::PerfilDispositivo::Escritorio)
+            .map_err(mensaje_gestion_nube)?;
+        Ok(resumen_de_arranque(resumen))
+    })
+    .await
+    .map_err(|error| {
+        super::mensaje_tarea_interrumpida("No se pudieron bajar los datos de la unidad", error)
+    })?
+}
+
+/// `true` si este equipo ya tiene una clave aceptada por la nube.
+#[tauri::command(async)]
+pub fn equipo_vinculado(state: tauri::State<'_, GuiState>) -> bool {
+    state.nube_vinculada()
+}
+
+/// `true` si la nube dijo que no reconoce a este equipo (lo retiraron en el
+/// panel): es cuando aparece "Reconectar este equipo". Lo decide el núcleo.
+#[tauri::command(async)]
+pub fn equipo_retirado(state: tauri::State<'_, GuiState>) -> bool {
+    state.core().equipo_retirado()
+}
+
+/// Lo que ve la pantalla de `reconectar_equipo` (ver
+/// `control_acceso::application::ResultadoReconexion`).
+#[derive(serde::Serialize)]
+#[serde(tag = "tipo")]
+pub enum ResultadoReconexion {
+    Reconectado { unidad: String },
+    NecesitaConfirmacion { pendientes: u64, unidad: String },
+    ReconectadoEnOtraUnidad { unidad: String },
+}
+
+/// Reconecta este equipo retirado con el código de reconexión del panel
+/// (ver `control_acceso::application::reconectar_equipo`). Con
+/// `pendientes_confirmados`, la persona ya vio el aviso de los registros que
+/// se pierden al cambiar de unidad; quién confirmó lo pone este comando con
+/// la sesión abierta, no la pantalla.
+#[tauri::command]
+pub async fn reconectar_equipo(
+    app: tauri::AppHandle,
+    codigo: String,
+    pendientes_confirmados: Option<u64>,
+) -> Result<ResultadoReconexion, String> {
+    use control_acceso::application::{ConfirmacionReconexion, ResultadoReconexion as Nucleo};
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<GuiState>();
+        let confirmacion = pendientes_confirmados.map(|pendientes| ConfirmacionReconexion {
+            pendientes,
+            confirmado_por: state.sesion_activa().ok().map(|sesion| sesion.nombre),
+        });
+        let metadata = metadata_de_esta_maquina();
+        let resultado = control_acceso::application::reconectar_equipo(
+            || state.core(),
+            state.nube_del_dispositivo(),
+            &codigo,
+            confirmacion.as_ref(),
+            Some(&metadata),
+        )
+        .map_err(control_acceso::mensajes::mensaje_reconexion)?;
+        Ok(match resultado {
+            Nucleo::Reconectado { unidad } => ResultadoReconexion::Reconectado { unidad },
+            Nucleo::NecesitaConfirmacion { pendientes, unidad } => {
+                ResultadoReconexion::NecesitaConfirmacion { pendientes, unidad }
+            }
+            Nucleo::ReconectadoEnOtraUnidad { unidad } => {
+                ResultadoReconexion::ReconectadoEnOtraUnidad { unidad }
+            }
+        })
+    })
+    .await
+    .map_err(|error| super::mensaje_tarea_interrumpida("No se pudo reconectar el equipo", error))?
+}
+
+/// Lo que muestra la pantalla después de bajar el catálogo de una base vacía
+/// (vinculación inicial o equipo ya vinculado).
+fn resumen_de_arranque(
+    resumen: control_acceso::application::ResumenSincronizacion,
+) -> ResumenSincronizacion {
+    ResumenSincronizacion {
+        enviados: resumen.enviados,
+        fallidos: resumen.fallidos,
+        remotos_abiertos: resumen.remotos_abiertos,
+        cierres_recibidos: resumen.cierres_recibidos,
+        // El núcleo no trae este campo en el arranque -- mismo criterio que
+        // `conflictos_ingreso_proveedor` de abajo: base recién configurada,
+        // nada que traer todavía.
+        cierres_recibidos_proveedor: 0,
+        cierres_recibidos_correo: 0,
+        movimientos_historial_recibidos: resumen.movimientos_historial_recibidos,
+        citas_recibidas: resumen.citas_recibidas,
+        historial_visitas_recibidos: resumen.historial_visitas_recibidos,
+        historial_ingresos_proveedor_recibidos: 0,
+        historial_ingresos_correo_recibidos: 0,
+        historial_gafetes_provisionales_recibidos: 0,
+        empresas_recibidas: resumen.empresas_recibidas,
+        contratistas_recibidos: resumen.contratistas_recibidos,
+        gafetes_recibidos: resumen.gafetes_recibidos,
+        vehiculos_ruta_recibidos: resumen.vehiculos_ruta_recibidos,
+        encargados_ruta_recibidos: resumen.encargados_ruta_recibidos,
+        sitio_id: resumen.sitio_id,
+        dispositivo_id: resumen.dispositivo_id,
+        tipo: resumen.tipo,
+        sesion_expulsada: resumen.sesion_expulsada,
+        sesion_en_otra_unidad: false,
+        // Base recién configurada, sin ningún ingreso ni movimiento de
+        // visita local todavía -- no hay nada que pudiera chocar con otro
+        // sitio en este momento.
+        conflictos_ingreso: Vec::new(),
+        conflictos_movimiento_visita: Vec::new(),
+        conflictos_ingreso_proveedor: Vec::new(),
+        conflictos_ingreso_correo: Vec::new(),
+        conflictos_gafete: Vec::new(),
+    }
 }
 
 /// Aviso en vivo con los datos (`cambio_nube` con `registro`): guarda la
@@ -534,9 +631,14 @@ fn preparar_sesion_realtime(state: &GuiState) -> Result<SesionRealtimeNube, Stri
 /// El aviso en vivo `dispositivo_expulsado` llegó para este equipo: el
 /// token cacheado ya no sirve (el servidor lo rechaza), así que se descarta
 /// para que la próxima operación de nube pida uno y muestre el motivo real.
+/// También queda anotado como retirado, para ofrecer "Reconectar este
+/// equipo" sin esperar a la próxima autenticación (que lo anotaría igual).
 #[tauri::command(async)]
 pub fn descartar_token_nube(state: tauri::State<'_, GuiState>) -> Result<(), String> {
     state.invalidar_token_cacheado();
+    state
+        .core()
+        .anotar_rechazo_de_la_nube(&nube::NubeError::CredencialesInvalidas);
     Ok(())
 }
 

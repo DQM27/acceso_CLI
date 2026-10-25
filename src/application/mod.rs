@@ -29,6 +29,8 @@ mod historial;
 #[cfg(feature = "nube")]
 mod nube;
 mod proveedores;
+#[cfg(feature = "nube")]
+mod reconexion;
 mod rutas;
 mod tenedores_gafete;
 mod unidad_de_trabajo;
@@ -51,6 +53,10 @@ pub use historial::{
 };
 #[cfg(feature = "nube")]
 pub use nube::{GestionNubeError, MovimientoHistorialSitio, ResumenSincronizacion};
+#[cfg(feature = "nube")]
+pub use reconexion::{
+    ConfirmacionReconexion, ReconexionError, ResultadoReconexion, reconectar_equipo,
+};
 pub use tenedores_gafete::{ClaseTenedorGafete, OrigenTenedorGafete, TenedorGafete};
 
 /// Tope de seguridad para las cargas "todo en un `Vec`" que alimentan AG

@@ -70,6 +70,7 @@ import {
   buscarActualizacion,
   cerrarSesion,
   descartarTokenNube,
+  equipoRetirado,
   instalarActualizacion,
   mostrarVentanaPrincipal,
   requiereConfiguracionInicial,
@@ -121,6 +122,10 @@ const SalidaModal = lazy(() => import("./pantallas/SalidaModal"));
 const IngresoProveedorModal = lazy(() => import("./pantallas/IngresoProveedorModal"));
 const EntregarGafeteProvisionalModal = lazy(() => import("./pantallas/EntregarGafeteProvisionalModal"));
 const NuevaVisitaModal = lazy(() => import("./pantallas/NuevaVisitaModal"));
+const ReconectarEquipoModal = lazy(() => import("./pantallas/ReconectarEquipoModal"));
+
+/** `id` del aviso fijo de equipo retirado: se cierra al reconectar. */
+const AVISO_EQUIPO_RETIRADO = "equipo-retirado";
 
 type Pantalla =
   | { tipo: "cargando" }
@@ -523,6 +528,28 @@ function Shell({
   const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
   // `null` hasta que `iniciarRealtimeNube` intenta conectar la primera vez.
   const [estadoConexionNube, setEstadoConexionNube] = useState<EstadoConexionNube>(null);
+  const [modalReconexion, setModalReconexion] = useState(false);
+
+  // Equipo retirado en el panel: el aviso queda fijo, con el botón para
+  // reconectarlo con un código del panel. Sólo se ofrece si el núcleo dice
+  // que está retirado (al abrir, o cuando llega la expulsión en vivo).
+  function ofrecerReconexion() {
+    avisos.error(MENSAJE_EXPULSION, {
+      id: AVISO_EQUIPO_RETIRADO,
+      persistente: true,
+      accion: { etiqueta: "Reconectar este equipo", alAccionar: () => setModalReconexion(true) },
+    });
+  }
+  const alAbrirSiEstaRetirado = useEffectEvent(() => {
+    equipoRetirado()
+      .then((retirado) => {
+        if (retirado) ofrecerReconexion();
+      })
+      .catch((error) => console.error("equipo_retirado:", error));
+  });
+  useEffect(() => {
+    alAbrirSiEstaRetirado();
+  }, []);
 
   // Ctrl+N/S globales, desde cualquier pantalla: ambos modales son
   // autosuficientes (buscan y registran sin depender de qué sección esté
@@ -656,8 +683,7 @@ function Shell({
       // token cacheado no sirve más. El trabajo local sigue disponible; el
       // aviso queda fijo hasta que alguien lo cierre.
       onExpulsado: () => {
-        void descartarTokenNube();
-        avisos.error(MENSAJE_EXPULSION, { persistente: true });
+        void descartarTokenNube().then(ofrecerReconexion);
       },
       usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
     });
@@ -932,6 +958,19 @@ function Shell({
                 modoInicial="correo"
                 onRegistrado={() => setRefrescarActivos((n) => n + 1)}
                 onCerrar={() => setOtroIngreso(null)}
+              />
+            )}
+
+            {modalReconexion && (
+              <ReconectarEquipoModal
+                onReconectado={(unidad) => {
+                  setModalReconexion(false);
+                  avisos.cerrar(AVISO_EQUIPO_RETIRADO);
+                  avisos.exito(`Equipo reconectado en ${unidad}.`);
+                  // Lo que quedó pendiente mientras estuvo retirado sube ya.
+                  void sincronizarManualmente();
+                }}
+                onCerrar={() => setModalReconexion(false)}
               />
             )}
 

@@ -354,6 +354,88 @@ pub(crate) fn vincular_con_codigo(
     token_de_respuesta(respuesta, NubeError::CodigoVinculacionInvalido)
 }
 
+/// A dónde va un equipo retirado con un código de reconexión (ver
+/// `device-reconectar`). Lo responde la nube sin gastar el código.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct DestinoReconexion {
+    pub sitio_id: String,
+    pub sitio_nombre: String,
+    pub etiqueta: String,
+    /// `true` si va a otra unidad: el equipo tiene que borrar su base y
+    /// bajar la de la unidad nueva.
+    pub cambio_de_unidad: bool,
+}
+
+/// Lo que el equipo confirma al reconectarse: queda en el evento del panel.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub struct DetalleReconexion {
+    /// Registros sin subir que se pierden al cambiar de unidad.
+    pub pendientes_descartados: u64,
+    /// Quién confirmó en el equipo (la sesión abierta), si hubo.
+    pub confirmado_por: Option<String>,
+}
+
+/// Consulta a qué unidad va el equipo con `codigo`, sin gastarlo. Sólo
+/// responde si el código es de reconexión, está vigente y el equipo sigue
+/// retirado; si no, [`NubeError::CodigoVinculacionInvalido`].
+pub(crate) fn consultar_reconexion(
+    base_url: &str,
+    codigo: &str,
+) -> Result<DestinoReconexion, NubeError> {
+    let respuesta = cliente_http()
+        .post(format!("{base_url}/functions/v1/device-reconectar"))
+        .json(&serde_json::json!({ "codigo": codigo, "confirmar": false }))
+        .send()?;
+    if respuesta.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(NubeError::CodigoVinculacionInvalido);
+    }
+    Ok(respuesta.error_for_status()?.json::<DestinoReconexion>()?)
+}
+
+/// Canjea un código de reconexión atando `clave_publica_jwk` (la clave NUEVA
+/// del equipo). Devuelve el primer token y si cambió de unidad.
+pub(crate) fn canjear_reconexion(
+    base_url: &str,
+    codigo: &str,
+    clave_publica_jwk: &str,
+    metadata: Option<&MetadatosDispositivo>,
+    detalle: &DetalleReconexion,
+) -> Result<(TokenDispositivo, bool), NubeError> {
+    #[derive(Deserialize)]
+    struct RespuestaReconexion {
+        #[serde(flatten)]
+        token: TokenDispositivo,
+        #[serde(default)]
+        cambio_de_unidad: bool,
+    }
+
+    let mut cuerpo = serde_json::json!({
+        "codigo": codigo,
+        "confirmar": true,
+        "clave_publica_jwk": jwk_como_valor(clave_publica_jwk)?,
+        "pendientes_descartados": detalle.pendientes_descartados,
+        "confirmado_por": detalle.confirmado_por,
+    });
+    agregar_metadata(&mut cuerpo, metadata);
+    let respuesta = cliente_http()
+        .post(format!("{base_url}/functions/v1/device-reconectar"))
+        .json(&cuerpo)
+        .send()?;
+    match respuesta.status() {
+        reqwest::StatusCode::UNAUTHORIZED => return Err(NubeError::CodigoVinculacionInvalido),
+        reqwest::StatusCode::CONFLICT => return Err(NubeError::ClaveEnUso),
+        _ => {}
+    }
+    let respuesta = respuesta.error_for_status()?;
+    let desfase_reloj_ms = desfase_reloj_ms_desde_header(&respuesta);
+    let RespuestaReconexion {
+        mut token,
+        cambio_de_unidad,
+    } = respuesta.json::<RespuestaReconexion>()?;
+    token.desfase_reloj_ms = desfase_reloj_ms;
+    Ok((token, cambio_de_unidad))
+}
+
 fn jwk_como_valor(jwk: &str) -> Result<serde_json::Value, NubeError> {
     serde_json::from_str(jwk).map_err(|error| {
         NubeError::Firmante(super::firmante::ErrorFirmante::ClaveInvalida(

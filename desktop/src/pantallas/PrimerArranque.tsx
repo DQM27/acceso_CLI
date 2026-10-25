@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { vincularDispositivoInicial } from "../api";
+import { useEffect, useEffectEvent, useState } from "react";
+import { equipoVinculado, prepararEquipoVinculado, vincularDispositivoInicial } from "../api";
 import { codigoCompleto, formatearCodigo } from "../componentes/CodigoVinculacion.logica";
 
 /**
@@ -20,6 +20,41 @@ export default function PrimerArranque({ onListo }: { onListo: () => void }) {
   const [codigo, setCodigo] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Un equipo que YA está vinculado (su clave sigue guardada) no necesita
+  // código: pasa al cambiar de unidad (se borró la base de la anterior) o
+  // tras reconstruir una base dañada. Baja los datos de su unidad solo; si
+  // falla, queda el formulario del código.
+  const [preparando, setPreparando] = useState(true);
+  // `onListo` llega nuevo en cada render de `App`: el efecto corre una sola vez.
+  const alListo = useEffectEvent(onListo);
+  useEffect(() => {
+    let vigente = true;
+    equipoVinculado()
+      .then(async (vinculado) => {
+        if (!vinculado) return;
+        await prepararEquipoVinculado();
+        if (vigente) alListo();
+      })
+      .catch((causa) => {
+        if (vigente) setError(String(causa));
+      })
+      .finally(() => {
+        if (vigente) setPreparando(false);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, []);
+
+  if (preparando) {
+    return (
+      <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>
+        <p role="status" style={{ color: "var(--muted)" }}>
+          Bajando los datos de la unidad…
+        </p>
+      </div>
+    );
+  }
 
   async function alEnviar(evento: React.FormEvent) {
     evento.preventDefault();

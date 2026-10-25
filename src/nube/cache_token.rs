@@ -23,9 +23,12 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-pub use super::cliente::{MetadatosDispositivo, NubeError, TokenDispositivo};
+pub use super::cliente::{
+    DestinoReconexion, DetalleReconexion, MetadatosDispositivo, NubeError, TokenDispositivo,
+};
 use super::cliente::{
-    autenticar_con_firmante, cliente_http, cliente_http_verificacion, vincular_con_codigo,
+    autenticar_con_firmante, canjear_reconexion, cliente_http, cliente_http_verificacion,
+    consultar_reconexion, vincular_con_codigo,
 };
 use super::firmante::FirmanteDispositivo;
 
@@ -200,6 +203,53 @@ impl CacheTokenDispositivo {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(codigo_normalizado);
         self.guardar(base_url, &token);
         Ok(token)
+    }
+
+    /// A dónde va este equipo retirado con un código de reconexión, sin
+    /// gastarlo (ver `device-reconectar`). Sólo responde si la nube confirma
+    /// que el equipo sigue retirado.
+    pub fn consultar_reconexion(&self, codigo: &str) -> Result<DestinoReconexion, NubeError> {
+        consultar_reconexion(super::base_url(), codigo)
+    }
+
+    /// Reconecta este equipo retirado con un código de reconexión del panel
+    /// y cachea el primer token. Devuelve también si cambió de unidad.
+    ///
+    /// A diferencia de [`Self::vincular`], acá **siempre** se estrena una
+    /// clave nueva: la anterior es la de un equipo retirado. Pero sólo
+    /// después de que la nube confirme, consultando el código sin gastarlo,
+    /// que el equipo de verdad está retirado y el código sirve: así un
+    /// código mal escrito, o un equipo que en realidad sigue vigente, no
+    /// pierden la clave que tienen.
+    pub fn reconectar(
+        &self,
+        codigo: &str,
+        metadata: Option<&MetadatosDispositivo>,
+        detalle: &DetalleReconexion,
+    ) -> Result<(TokenDispositivo, bool), NubeError> {
+        self.reconectar_en(super::base_url(), codigo, metadata, detalle)
+    }
+
+    fn reconectar_en(
+        &self,
+        base_url: &str,
+        codigo: &str,
+        metadata: Option<&MetadatosDispositivo>,
+        detalle: &DetalleReconexion,
+    ) -> Result<(TokenDispositivo, bool), NubeError> {
+        let firmante = self.firmante().ok_or(NubeError::SinCredencial)?;
+        consultar_reconexion(base_url, codigo)?;
+        firmante.regenerar()?;
+        let jwk = firmante.clave_publica_jwk()?;
+        let (token, cambio_de_unidad) =
+            canjear_reconexion(base_url, codigo, &jwk, metadata, detalle)?;
+        firmante.marcar_vinculada(&token.dispositivo_id)?;
+        *self
+            .ultimo_codigo_canjeado
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(normalizar_codigo(codigo));
+        self.guardar(base_url, &token);
+        Ok((token, cambio_de_unidad))
     }
 
     /// Reusa el último token mientras siga vigente para la misma
@@ -601,6 +651,66 @@ mod pruebas_vincular {
             "primero con la clave vigente"
         );
         assert!(pedidos[1].contains("clave-2"), "después con la nueva");
+    }
+
+    const DESTINO_MISMA_UNIDAD: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+        Connection: close\r\n\r\n{\"sitio_id\":\"s1\",\"sitio_nombre\":\"Planta\",\
+        \"etiqueta\":\"PC 1\",\"cambio_de_unidad\":false}";
+    const RECONECTADO_EN_OTRA: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+        Connection: close\r\n\r\n{\"access_token\":\"jwt\",\"expires_in\":3600,\
+        \"sitio_id\":\"s2\",\"dispositivo_id\":\"d1\",\"tipo\":\"pc\",\"cambio_de_unidad\":true}";
+
+    #[test]
+    fn reconectar_consulta_primero_y_recien_entonces_estrena_la_clave() {
+        let firmante = FirmanteDePrueba::vinculado_a("d1");
+        let (url, pedidos) = servidor(vec![DESTINO_MISMA_UNIDAD, RECONECTADO_EN_OTRA]);
+        let detalle = super::DetalleReconexion {
+            pendientes_descartados: 3,
+            confirmado_por: Some("Ana Mora".to_string()),
+        };
+
+        let (token, cambio) = cache_con(&firmante)
+            .reconectar_en(&url, "K7QMR4XT2P", None, &detalle)
+            .expect("reconecta");
+
+        assert!(cambio);
+        assert_eq!(token.sitio_id, "s2");
+        assert_eq!(firmante.generacion(), 2, "estrenó una clave nueva");
+        assert_eq!(firmante.dispositivo_vinculado().as_deref(), Some("d1"));
+        let pedidos = pedidos.lock().unwrap().clone();
+        assert!(
+            pedidos[0].contains("\"confirmar\":false"),
+            "primero consulta"
+        );
+        assert!(!pedidos[0].contains("clave-"), "la consulta no manda clave");
+        assert!(pedidos[1].contains("\"confirmar\":true"));
+        assert!(
+            pedidos[1].contains("clave-2"),
+            "el canje va con la clave nueva"
+        );
+        assert!(pedidos[1].contains("\"pendientes_descartados\":3"));
+        assert!(pedidos[1].contains("Ana Mora"));
+    }
+
+    #[test]
+    fn un_codigo_de_reconexion_invalido_no_toca_la_clave() {
+        let firmante = FirmanteDePrueba::vinculado_a("d1");
+        let (url, pedidos) = servidor(vec![CODIGO_INVALIDO]);
+
+        let resultado = cache_con(&firmante).reconectar_en(
+            &url,
+            "K7QMR4XT2P",
+            None,
+            &super::DetalleReconexion::default(),
+        );
+
+        assert!(matches!(
+            resultado,
+            Err(NubeError::CodigoVinculacionInvalido)
+        ));
+        assert_eq!(firmante.generacion(), 1, "la clave sigue siendo la misma");
+        assert_eq!(firmante.dispositivo_vinculado().as_deref(), Some("d1"));
+        assert_eq!(pedidos.lock().unwrap().len(), 1, "no hubo canje");
     }
 
     const HORA_DEL_SERVIDOR: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\

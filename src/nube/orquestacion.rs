@@ -86,6 +86,7 @@ pub fn sincronizar(
     alcance: AlcanceSincronizacion,
     perfil: PerfilDispositivo,
 ) -> Result<ResumenSincronizacionNube, SincronizacionError> {
+    exigir_base_vigente(conexion)?;
     let drenado = sincronizacion::drenar_cola(conexion, contexto, LOTE_BANDEJA_SALIDA)?;
     let mut resumen = recibir(conexion, contexto, alcance, perfil)?;
     resumen.enviados = drenado.enviados;
@@ -95,6 +96,21 @@ pub fn sincronizar(
         mantener_base_local(conexion, perfil);
     }
     Ok(resumen)
+}
+
+/// Una base de una unidad anterior (equipo reconectado en otra unidad, ver
+/// `estado_equipo::base_por_descartar`) no manda ni recibe nada: con el
+/// token de la unidad nueva, subiría a ella los registros de la vieja.
+fn exigir_base_vigente(conexion: &Connection) -> Result<(), SincronizacionError> {
+    use crate::database::{error::DatabaseError, queries::estado_equipo};
+
+    match estado_equipo::base_por_descartar(conexion) {
+        Ok(false) => Ok(()),
+        Err(DatabaseError::Sqlite(error)) => Err(SincronizacionError::BaseLocal(error)),
+        // `base_por_descartar` sólo falla con errores de SQLite; ante
+        // cualquier otro, no sincronizar es lo seguro.
+        Ok(true) | Err(_) => Err(SincronizacionError::BasePorDescartar),
+    }
 }
 
 /// Mantenimiento al final de cada sincronización COMPLETA (el pulso y el
@@ -123,6 +139,7 @@ pub fn recibir(
     alcance: AlcanceSincronizacion,
     perfil: PerfilDispositivo,
 ) -> Result<ResumenSincronizacionNube, SincronizacionError> {
+    exigir_base_vigente(conexion)?;
     // Las descargas salen en paralelo; las etapas siguen guardando en el
     // orden de abajo (ver `sincronizacion::anticipados`).
     let huella = format!(
