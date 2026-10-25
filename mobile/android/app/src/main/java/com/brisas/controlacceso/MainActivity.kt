@@ -228,6 +228,6 @@ private fun ContenidoAplicacion(entorno: EntornoAplicacion) {
             onListo = { requiereArranque = false },
         )
     } else {
-        PantallaLogin(entorno.nucleo, entorno.directorio)
+        PantallaLogin(entorno.nucleo, entorno.directorio, entorno.metadata)
     }
 }

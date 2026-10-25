@@ -37,4 +37,28 @@ describe("detalle de eventos de seguridad", () => {
     expect(detalleEvento("sesion_en_otra_unidad", null)).toBeNull();
     expect(detalleEvento("sesion_en_otra_unidad", {})).toBeNull();
   });
+
+  it("una reconexión dice quién la autorizó", () => {
+    expect(detalleEvento("reconexion_autorizada", { autorizado_por: "admin@example.com" })).toBe(
+      "por admin@example.com",
+    );
+    expect(detalleEvento("reconexion_autorizada", {})).toBeNull();
+  });
+
+  it("el canje dice si cambió de unidad y qué registros se descartaron", () => {
+    expect(
+      detalleEvento("reconexion_canjeada", { sitio_anterior: "s1", sitio_nuevo: "s1", pendientes_descartados: 0 }),
+    ).toBe("en la misma unidad");
+    expect(
+      detalleEvento("reconexion_canjeada", {
+        sitio_anterior: "s1",
+        sitio_nuevo: "s2",
+        pendientes_descartados: 3,
+        confirmado_por: "Ana Mora",
+      }),
+    ).toBe("en otra unidad; se descartaron 3 registros sin subir (confirmó Ana Mora)");
+    expect(
+      detalleEvento("reconexion_canjeada", { sitio_anterior: "s1", sitio_nuevo: "s2", pendientes_descartados: 1 }),
+    ).toBe("en otra unidad; se descartaron 1 registro sin subir");
+  });
 });

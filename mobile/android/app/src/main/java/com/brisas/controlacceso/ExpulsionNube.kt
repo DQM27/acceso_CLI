@@ -8,7 +8,7 @@ package com.brisas.controlacceso
 object ExpulsionNube {
     const val MENSAJE =
         "Este teléfono fue retirado en el panel y ya no sincroniza. El trabajo local sigue " +
-            "disponible; para volver a usar la nube hay que registrarlo como dispositivo nuevo."
+            "disponible; para volver a conectarlo, pida a un administrador un código de reconexión."
 
     fun esParaEsteEquipo(dispositivoIdAviso: String?, dispositivoId: String): Boolean =
         dispositivoIdAviso == dispositivoId

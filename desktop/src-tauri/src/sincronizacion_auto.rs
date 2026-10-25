@@ -89,8 +89,8 @@ mod tests {
     fn lo_inesperado_si_se_reporta() {
         for mensaje in [
             "No se pudo leer la base de datos local",
-            "La nube ya no reconoce a este dispositivo (fue retirado en el panel) -- regístrelo \
-             como dispositivo nuevo con un código del panel",
+            "La nube ya no reconoce a este dispositivo (fue retirado en el panel) -- pida a un \
+             administrador un código de reconexión",
             "Esta versión de la app ya no es compatible -- actualice la app para seguir sincronizando",
             "El receptor rechazó el pedido, intente de nuevo más tarde",
             "",

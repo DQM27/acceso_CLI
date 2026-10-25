@@ -219,6 +219,24 @@ pub fn abrir_conexion_secundaria_escritura(
     abrir_conexion_secundaria_base(path, clave)
 }
 
+/// Borra la base en `path` y sus archivos de diario (`-wal`, `-shm`,
+/// `-journal`), los que existan, para empezar con una base nueva (equipo
+/// reconectado en otra unidad, ver `estado_equipo::base_por_descartar`).
+/// Ninguna conexión puede tenerla abierta: en Windows no se borra un archivo
+/// abierto.
+pub fn borrar_archivos_de_base(path: impl AsRef<Path>) -> io::Result<()> {
+    let path = path.as_ref();
+    for sufijo in ["", "-wal", "-shm", "-journal"] {
+        let mut nombre = path.as_os_str().to_owned();
+        nombre.push(sufijo);
+        match fs::remove_file(PathBuf::from(nombre)) {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 fn clave_a_hex(clave: &[u8; 32]) -> String {
     use std::fmt::Write;
     clave
@@ -243,6 +261,31 @@ mod tests {
             "control_acceso_ruta_{nombre}_{}_{numero}",
             std::process::id()
         ))
+    }
+
+    #[test]
+    fn borrar_archivos_de_base_se_lleva_la_base_y_su_diario() {
+        let directorio = directorio_temporal("borrar");
+        fs::create_dir_all(&directorio).unwrap();
+        let base = directorio.join("control_acceso.db");
+        for nombre in [
+            "control_acceso.db",
+            "control_acceso.db-wal",
+            "control_acceso.db-shm",
+            "otra.db",
+        ] {
+            fs::write(directorio.join(nombre), b"x").unwrap();
+        }
+
+        borrar_archivos_de_base(&base).unwrap();
+
+        assert!(!base.exists());
+        assert!(!directorio.join("control_acceso.db-wal").exists());
+        assert!(!directorio.join("control_acceso.db-shm").exists());
+        assert!(directorio.join("otra.db").exists(), "sólo los de esa base");
+        // Sin archivos, no falla.
+        borrar_archivos_de_base(&base).unwrap();
+        fs::remove_dir_all(&directorio).unwrap();
     }
 
     #[test]

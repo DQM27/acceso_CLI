@@ -36,7 +36,27 @@ export const TEXTO_EVENTO: Record<TipoEventoSeguridad, string> = {
   hardware_distinto: "Hardware distinto al registrado",
   sesion_en_otra_unidad: "Sesión movida a otra unidad",
   sesion_en_duda: "Sesión en dos unidades (sin cerrar)",
+  reconexion_autorizada: "Reconexión autorizada",
+  reconexion_canjeada: "Equipo reconectado",
 };
+
+/** Detalle de los eventos de reconexión (ver `admin-autorizar-reconexion` y
+ * `canjear_codigo_reconexion`): quién la autorizó, y si al cambiar de unidad
+ * el equipo descartó registros que nunca subieron y quién lo confirmó. */
+function detalleReconexion(tipo: TipoEventoSeguridad, datos: Record<string, unknown>): string | null {
+  if (tipo === "reconexion_autorizada") {
+    return typeof datos.autorizado_por === "string" ? `por ${datos.autorizado_por}` : null;
+  }
+  const otraUnidad =
+    typeof datos.sitio_anterior === "string" && datos.sitio_anterior !== datos.sitio_nuevo;
+  const descartados = typeof datos.pendientes_descartados === "number" ? datos.pendientes_descartados : 0;
+  const partes = [otraUnidad ? "en otra unidad" : "en la misma unidad"];
+  if (descartados > 0) {
+    const quien = typeof datos.confirmado_por === "string" ? ` (confirmó ${datos.confirmado_por})` : "";
+    partes.push(`se descartaron ${descartados} ${descartados === 1 ? "registro" : "registros"} sin subir${quien}`);
+  }
+  return partes.join("; ");
+}
 
 /** Detalle legible de un evento, cuando lo tiene (lo arma
  * `sesion_usuario_en_unidad` en la base):
@@ -45,9 +65,10 @@ export const TEXTO_EVENTO: Record<TipoEventoSeguridad, string> = {
  *   dos ingresos fueron casi a la vez, así que no se cerró ninguno: ante la
  *   duda, ningún equipo queda sin poder operar. */
 export function detalleEvento(tipo: TipoEventoSeguridad, detalle: unknown): string | null {
-  if (tipo !== "sesion_en_otra_unidad" && tipo !== "sesion_en_duda") return null;
   if (!detalle || typeof detalle !== "object") return null;
   const datos = detalle as Record<string, unknown>;
+  if (tipo === "reconexion_autorizada" || tipo === "reconexion_canjeada") return detalleReconexion(tipo, datos);
+  if (tipo !== "sesion_en_otra_unidad" && tipo !== "sesion_en_duda") return null;
   const nombre = typeof datos.nombre === "string" ? datos.nombre : null;
   const cedula = typeof datos.cedula === "string" ? datos.cedula : null;
   if (!nombre && !cedula) return null;

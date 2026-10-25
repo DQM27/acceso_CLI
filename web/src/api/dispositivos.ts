@@ -58,7 +58,9 @@ export type TipoEventoSeguridad =
   | "firma_invalida"
   | "hardware_distinto"
   | "sesion_en_otra_unidad"
-  | "sesion_en_duda";
+  | "sesion_en_duda"
+  | "reconexion_autorizada"
+  | "reconexion_canjeada";
 
 export interface EventoSeguridad {
   id: number;
@@ -145,6 +147,21 @@ export function provisionarDispositivo(datos: {
   vigencia_minutos?: number;
 }): Promise<DispositivoProvisionado> {
   return invocar("admin-provision-device", esDispositivoProvisionado, datos);
+}
+
+/**
+ * Autoriza que un equipo RETIRADO vuelva a conectarse (ver
+ * docs/features-futuras/plan-reconexion-equipo-retirado.md). Devuelve un
+ * código de reconexión de un solo uso para ese equipo, con la unidad y la
+ * etiqueta que va a tener: un código de reconexión no sirve para dar de alta
+ * otro equipo, ni uno de alta para reconectar.
+ */
+export function autorizarReconexion(datos: {
+  dispositivo_id: string;
+  sitio_id: string;
+  etiqueta: string;
+}): Promise<DispositivoProvisionado> {
+  return invocar("admin-autorizar-reconexion", esDispositivoProvisionado, datos);
 }
 
 export function revocarDispositivo(dispositivoId: string): Promise<void> {

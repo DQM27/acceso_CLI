@@ -26,4 +26,4 @@ export const MENSAJE_SESION_EN_OTRA_UNIDAD =
 /** Texto para la persona que está frente al equipo. */
 export const MENSAJE_EXPULSION =
   "Este equipo fue retirado en el panel y ya no sincroniza. El trabajo local sigue disponible; " +
-  "para volver a usar la nube hay que registrarlo como dispositivo nuevo.";
+  "para volver a conectarlo, pida a un administrador un código de reconexión.";

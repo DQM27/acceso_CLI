@@ -452,6 +452,39 @@ impl AppCore {
             self.actualizar_desfase_reloj(desfase_ms);
         }
         self.recordar_identidad_equipo(token);
+        self.recordar_unidad_equipo(&token.sitio_id);
+    }
+
+    /// Guarda la unidad (`sitio_id`) del equipo, sólo si cambió.
+    fn recordar_unidad_equipo(&self, sitio_id: &str) {
+        use crate::database::queries::estado_equipo;
+
+        if sitio_id.is_empty()
+            || estado_equipo::sitio_id(&self.connection)
+                .is_ok_and(|actual| actual.as_deref() == Some(sitio_id))
+        {
+            return;
+        }
+        if let Err(error) = estado_equipo::guardar_sitio_id(&self.connection, sitio_id) {
+            log::warn!("no se pudo guardar la unidad de este equipo: {error}");
+        }
+    }
+
+    /// Base vacía de un equipo que YA está vinculado (su clave sigue
+    /// guardada fuera de la base): baja el catálogo de su unidad con su
+    /// propio token, sin pedir código. Es lo que pasa después de que un
+    /// equipo reconectado en otra unidad borra la base de la anterior, y
+    /// también tras reconstruir una base dañada.
+    pub fn preparar_base_de_equipo_vinculado(
+        &self,
+        token: crate::nube::TokenDispositivo,
+        perfil: crate::nube::PerfilDispositivo,
+    ) -> Result<ResumenSincronizacion, GestionNubeError> {
+        if !self.requiere_configuracion_inicial()? {
+            return Err(GestionNubeError::YaConfigurado);
+        }
+        self.aplicar_token(&token);
+        self.recibir_catalogo_inicial(token, perfil)
     }
 
     /// Guarda la unidad y la etiqueta que trae el token, sólo si cambiaron.

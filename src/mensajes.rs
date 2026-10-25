@@ -695,7 +695,7 @@ pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
     match error {
         NubeError::CredencialesInvalidas => {
             "La nube ya no reconoce a este dispositivo (fue retirado en el panel) \
-             -- regístrelo como dispositivo nuevo con un código del panel"
+             -- pida a un administrador un código de reconexión"
                 .into()
         }
         NubeError::VersionDesactualizada => {
@@ -740,6 +740,9 @@ pub fn mensaje_sincronizacion(error: crate::nube::SincronizacionError) -> String
             log::error!("sincronización: fecha inválida del receptor: {error}");
             "El receptor mandó una fecha que no se pudo interpretar, intente de nuevo más tarde"
                 .into()
+        }
+        SincronizacionError::BasePorDescartar => {
+            "Este equipo se está cambiando de unidad: reinicie la app para terminar".into()
         }
     }
 }
@@ -821,6 +824,27 @@ pub fn mensaje_gestion_nube(error: crate::application::GestionNubeError) -> Stri
         GestionNubeError::Sincronizacion(error) => mensaje_sincronizacion(error),
         GestionNubeError::YaConfigurado => {
             "Este dispositivo ya tiene usuarios locales -- no hace falta el arranque inicial".into()
+        }
+    }
+}
+
+/// Reconexión de un equipo retirado (ver `application::reconexion`).
+#[cfg(feature = "nube")]
+pub fn mensaje_reconexion(error: crate::application::ReconexionError) -> String {
+    use crate::application::ReconexionError;
+    use crate::nube::NubeError;
+
+    match error {
+        ReconexionError::NoRetirado => {
+            "Este equipo no está retirado: no hace falta reconectarlo".into()
+        }
+        ReconexionError::Nube(NubeError::CodigoVinculacionInvalido) => {
+            "El código de reconexión no es válido o ya venció -- pida uno nuevo en el panel".into()
+        }
+        ReconexionError::Nube(error) => mensaje_nube(error),
+        ReconexionError::Base(error) => {
+            log::error!("reconexión: {error}");
+            "No se pudo leer la base de datos local".into()
         }
     }
 }

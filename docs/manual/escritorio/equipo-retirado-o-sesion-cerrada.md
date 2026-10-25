@@ -40,28 +40,43 @@ desactivado").
 
 ## Caso 3 — "Este equipo fue retirado en el panel"
 
-**Mensaje** (queda fijo en pantalla hasta cerrarlo): "Este equipo fue
-retirado en el panel y ya no sincroniza. El trabajo local sigue
-disponible; para volver a usar la nube hay que registrarlo como
-dispositivo nuevo."
+**Mensaje** (queda fijo en pantalla, con el botón **Reconectar este
+equipo**): "Este equipo fue retirado en el panel y ya no sincroniza. El
+trabajo local sigue disponible; para volver a conectarlo, pida a un
+administrador un código de reconexión."
 
 También puede aparecer al sincronizar: "La nube ya no reconoce a este
-dispositivo (fue retirado en el panel) -- regístrelo como dispositivo
-nuevo con un código del panel".
+dispositivo (fue retirado en el panel) -- pida a un administrador un
+código de reconexión".
 
-**Qué pasó**: un administrador quitó este equipo de la lista de equipos
-del sitio en el panel web.
+**Qué pasó**: un administrador retiró este equipo en el panel web.
 
 **Qué hacer**:
 
 1. Puede seguir registrando en este equipo, pero **nada se envía**: el
    otro equipo del sitio y el panel no lo ven.
-2. Avise **de inmediato** a un administrador. Si fue un error, hay que
-   volver a registrar el equipo con un código nuevo.
+2. Avise **de inmediato** a un administrador. Si hay que volver a usar el
+   equipo, le da un **código de reconexión** desde el panel.
+3. Pulse **Reconectar este equipo**, escriba el código y pulse
+   **Reconectar**.
+   - Si el equipo **sigue en la misma unidad**, verá "Equipo reconectado
+     en (unidad)." y lo que registró mientras estuvo retirado se envía.
+     No se borra nada.
+   - Si el código lo pasa **a otra unidad**, se borran los datos de la
+     unidad anterior. Si hay registros que nunca llegaron a enviarse,
+     antes avisa cuántos se van a perder; pulse **Reconectar y borrar**
+     para seguir o **Cancelar** para no hacer nada. Después pulse
+     **Reiniciar ahora**: el programa se reinicia, baja los datos de la
+     unidad nueva y vuelve al inicio de sesión.
 
-Cómo volver a registrar un equipo ya usado **todavía está por definirse**:
-lo resuelve un administrador. Este apartado se completa cuando esté
-listo.
+El código sirve **una sola vez**, sólo para este equipo, y vence en pocos
+minutos.
+
+| Mensaje | Qué significa | Qué hacer |
+|---|---|---|
+| "El código de reconexión no es válido o ya venció -- pida uno nuevo en el panel" | El código está mal escrito, ya se usó, venció, o es un código de alta (de equipo nuevo) y no de reconexión. | Pida un código de reconexión nuevo a un administrador. |
+| "Este equipo no está retirado: no hace falta reconectarlo" | El equipo ya está conectado. | Nada. |
+| "Este equipo se está cambiando de unidad: reinicie la app para terminar" | Se reconectó en otra unidad y falta reiniciar. | Cierre el programa y vuelva a abrirlo. |
 
 ## Caso 4 — La sesión se cerró sin ningún mensaje
 

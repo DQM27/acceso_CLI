@@ -353,6 +353,32 @@ fn abrir_nucleo_con_recuperacion(
     }
 }
 
+/// Abre el núcleo y, si la base es de una unidad anterior (el equipo se
+/// reconectó en otra unidad, ver `AppCore::base_por_descartar`), la borra y
+/// abre una nueva con la misma clave de cifrado. La pantalla de arranque baja
+/// después la base de la unidad nueva con la clave del equipo, sin pedir
+/// código (`comandos::nube::preparar_equipo_vinculado`). Se borra antes de
+/// que nada más la abra: en Windows no se borra un archivo abierto.
+fn abrir_sin_base_descartada(
+    directorio_credenciales: &Path,
+    ruta_base_datos: &Path,
+) -> (Zeroizing<[u8; 32]>, AppCore) {
+    let (clave, core) = abrir_nucleo_con_recuperacion(directorio_credenciales, ruta_base_datos);
+    if !core.base_por_descartar() {
+        return (clave, core);
+    }
+    log::info!("la base es de la unidad anterior: se borra y se empieza una nueva");
+    drop(core);
+    if let Err(error) =
+        control_acceso::database::connection::borrar_archivos_de_base(ruta_base_datos)
+    {
+        mostrar_error_fatal_y_salir(&format!(
+            "No se pudo borrar la base de la unidad anterior: {error}"
+        ));
+    }
+    abrir_nucleo_con_recuperacion(directorio_credenciales, ruta_base_datos)
+}
+
 /// Cuánto espera la red de seguridad de `configurar_cierre_de_splash` antes
 /// de forzar el cierre si el frontend nunca invocó `mostrar_ventana_principal`.
 /// Generoso a propósito -- NO es el mecanismo normal de cierre (ese es el
@@ -494,7 +520,7 @@ fn preparar_nucleo() -> (
             || mostrar_error_fatal_y_salir("No se pudo resolver el directorio %APPDATA%"),
         );
     let (clave_base_datos, mut core) =
-        abrir_nucleo_con_recuperacion(&directorio_credenciales, &ruta_base_datos);
+        abrir_sin_base_descartada(&directorio_credenciales, &ruta_base_datos);
     // Para que el receptor pueda aplicar `VERSION_MINIMA_ACEPTADA` en
     // cualquier renovación de token, no sólo al activar el dispositivo --
     // ver `AppCore::establecer_version_app` y
@@ -671,6 +697,10 @@ fn manejador_de_comandos() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync 
         comandos::gafetes::marcar_gafete_perdido_provisional_kof,
         comandos::gafetes::resolver_gafete,
         comandos::nube::vincular_dispositivo_inicial,
+        comandos::nube::preparar_equipo_vinculado,
+        comandos::nube::equipo_vinculado,
+        comandos::nube::equipo_retirado,
+        comandos::nube::reconectar_equipo,
         comandos::nube::descartar_token_nube,
         comandos::nube::sincronizar_con_nube,
         comandos::nube::sincronizar_cambios_nube,

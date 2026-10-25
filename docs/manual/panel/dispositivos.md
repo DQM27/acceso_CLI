@@ -57,12 +57,36 @@ datos vuelven solos con la primera sincronización) y el viejo se retira.
 Para un equipo perdido, robado o que ya no se usa.
 
 1. Toque **Retirar** en su fila.
-2. Confirme ("¿Retirar "(etiqueta)"? Es definitivo…") con **Sí, enviar
-   código**.
+2. Confirme ("¿Retirar "(etiqueta)"? Ese equipo deja de sincronizar en el
+   acto…") con **Sí, enviar código**.
 3. Le llega un **código a su correo**. Escríbalo y toque **Confirmar**.
-4. El equipo **deja de sincronizar en el acto** y no se puede reactivar.
-   La persona que lo use ve el aviso "Este equipo fue retirado en el
-   panel…".
+4. El equipo **deja de sincronizar en el acto**. La persona que lo use ve
+   el aviso "Este equipo fue retirado en el panel…" y el botón para
+   reconectarlo, que sólo funciona con un código de reconexión.
+
+## Pasos — reconectar un equipo retirado
+
+Para volver a usar un equipo que se retiró (por error, o para moverlo a
+otra unidad). El equipo **no se borra ni se vuelve a registrar**: sigue
+siendo el mismo.
+
+1. En la fila del equipo **Retirado**, toque **Autorizar reconexión**.
+2. Elija la **unidad operativa** (por defecto, la misma) y la
+   **etiqueta** (por defecto, la que tenía), y toque **Generar código de
+   reconexión**.
+3. Confirme con el **código que le llega al correo**.
+4. El panel muestra el **código de reconexión** una sola vez: sirve sólo
+   para ese equipo y vence en 10 minutos. Désela a la persona que tiene
+   el equipo; ella lo escribe en **Reconectar este equipo**.
+
+- **Misma unidad**: el equipo conserva todos sus datos y envía lo que
+  registró mientras estuvo retirado.
+- **Otra unidad**: el equipo borra los datos de la unidad anterior y baja
+  los de la nueva. Si tenía registros sin enviar, el equipo avisa cuántos
+  se pierden y pide confirmar; queda anotado en **Intentos y alertas**.
+
+Un código de reconexión no sirve para dar de alta un equipo nuevo, ni uno
+de alta sirve para reconectar.
 
 ## Pasos — eliminar de la lista
 
@@ -74,7 +98,10 @@ historial y no se puede borrar del todo -- se ocultó de la lista.").
 
 El botón **Intentos y alertas (N)** muestra los intentos rechazados de
 vincular o usar un equipo (código usado o vencido, firma inválida…), con
-cuándo, qué pasó, el dispositivo y la IP.
+cuándo, qué pasó, el dispositivo y la IP. También las reconexiones:
+**Reconexión autorizada** (por quién) y **Equipo reconectado** (en la
+misma u otra unidad, y si se descartaron registros sin enviar y quién lo
+confirmó).
 
 ## Mensajes que pueden aparecer
 

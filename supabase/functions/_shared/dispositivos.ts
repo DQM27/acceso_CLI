@@ -4,6 +4,9 @@
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { SignJWT, importJWK, jwtVerify, type JWK } from "npm:jose@5";
+import { ALFABETO_CODIGO, LARGO_CODIGO, formatearCodigo } from "./codigos.ts";
+
+export { LARGO_CODIGO, formatearCodigo, normalizarCodigo } from "./codigos.ts";
 
 const SIGNING_KEY_JSON = Deno.env.get("DEVICE_SIGNING_KEY")!;
 
@@ -23,15 +26,8 @@ export const AUDIENCIA_ASERCION = "device-auth";
 
 const TIPO_DESAFIO = "desafio_dispositivo";
 
-// ---- Códigos de vinculación ----
+// ---- Códigos de vinculación (su forma vive en `codigos.ts`) ----
 
-/**
- * Sin 0/O/1/I: se leen de una pantalla y a veces se escriben a mano. 32
- * símbolos dividen 256 exacto, así que `byte % 32` no sesga la elección.
- * 10 símbolos son 50 bits: imposible de adivinar en los minutos que vive.
- */
-const ALFABETO_CODIGO = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-export const LARGO_CODIGO = 10;
 /**
  * Mientras está vigente, el código sirve a quien lo use primero (una foto de
  * la pantalla basta): la vigencia es la ventana de ese riesgo. Una hora
@@ -43,16 +39,6 @@ function generarCodigo(): string {
   const bytes = new Uint8Array(LARGO_CODIGO);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => ALFABETO_CODIGO[b % ALFABETO_CODIGO.length]).join("");
-}
-
-/** Mayúsculas y sin separadores; lo que no sea del alfabeto se descarta. */
-export function normalizarCodigo(entrada: string): string {
-  return entrada.toUpperCase().replace(/[^0-9A-Z]/g, "");
-}
-
-/** `K7QMR4XT2P` → `K7QM-R4XT-2P`, para mostrar. */
-export function formatearCodigo(codigo: string): string {
-  return [codigo.slice(0, 4), codigo.slice(4, 8), codigo.slice(8)].filter(Boolean).join("-");
 }
 
 export async function sha256Hex(texto: string): Promise<string> {
@@ -74,14 +60,30 @@ export interface CodigoEmitido {
 }
 
 /**
+ * Un código de reconexión vive menos que uno de alta: el equipo ya está
+ * instalado y quien lo autoriza suele estar hablando con el puesto de control.
+ */
+export const VIGENCIA_RECONEXION_MINUTOS = 10;
+
+/** A dónde va un equipo retirado al reconectarse (ver la migración
+ * `reconexion_dispositivos_retirados`). */
+export interface DestinoReconexion {
+  sitio_destino_id: string;
+  etiqueta_destino: string;
+}
+
+/**
  * Emite un código nuevo para `dispositivoId` y anula los pendientes: sólo
- * puede haber uno vigente por dispositivo.
+ * puede haber uno vigente por dispositivo. Con `reconexion`, el código es de
+ * reconexión (sólo sirve para reactivar ese equipo retirado, nunca para un
+ * alta) y lleva la unidad y la etiqueta que va a tener.
  */
 export async function emitirCodigoVinculacion(
   supabase: SupabaseClient,
   dispositivoId: string,
   creadoPor: string,
   vigenciaMinutos: number,
+  reconexion?: DestinoReconexion,
 ): Promise<CodigoEmitido> {
   const ahora = new Date();
   const { error: anularError } = await supabase
@@ -99,6 +101,7 @@ export async function emitirCodigoVinculacion(
     codigo_hash: await sha256Hex(codigo),
     creado_por: creadoPor,
     expira_en: expiraEn,
+    ...(reconexion ? { proposito: "reconexion", ...reconexion } : {}),
   });
   if (error) throw error;
 
@@ -282,6 +285,10 @@ export type TipoEventoSeguridad =
   | "codigo_anulado"
   | "firma_invalida"
   | "hardware_distinto"
+  | "reconexion_autorizada"
+  // `reconexion_canjeada` lo escribe `canjear_codigo_reconexion`, con lo que
+  // pasó (unidad anterior y nueva, registros descartados).
+  | "reconexion_canjeada"
   // Los escribe la base (`sesion_usuario_en_unidad`), no una Edge Function.
   | "sesion_en_otra_unidad"
   | "sesion_en_duda";

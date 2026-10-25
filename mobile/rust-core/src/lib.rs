@@ -68,9 +68,10 @@ pub use tipos::{
     IngresoRemoto, MedioIngreso, ModoBusquedaActivos, MotivoDenegacion, MotivoResultadoIngreso,
     PreparacionIngreso, PrestamoGafeteProvisionalActivoResumen, PrestamoGafeteProvisionalRemoto,
     RegistroIngresoCorreoActivoResumen, RegistroIngresoProveedorActivoResumen, ResultadoAcceso,
-    ResultadoIngresoRegistrado, ResultadoRegistroEntrada, ResultadoRegistroSalidaRuta,
-    ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta, SalidaRutaActivaResumen,
-    SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion, VehiculoRuta,
+    ResultadoIngresoRegistrado, ResultadoReconexion, ResultadoRegistroEntrada,
+    ResultadoRegistroSalidaRuta, ResultadoSalidaRuta, ResumenSincronizacion, RolUsuario, Ruta,
+    SalidaRutaActivaResumen, SesionRealtimeNube, SolicitudSalidaRuta, TipoIngreso, UsuarioSesion,
+    VehiculoRuta,
 };
 pub use visitas::{OrigenVisita, VerificacionVisita, VisitaAdentro, VisitaParaEntrar};
 
@@ -181,14 +182,8 @@ impl Nucleo {
         // solo) tiene el mismo problema que se vio en escritorio: cada
         // autenticación contra la nube mide el desfase real y lo aplica acá
         // (ver `application::nube::AppCore::actualizar_desfase_reloj`).
-        let core = AppCore::abrir_con_reloj(
-            &ruta_base_datos,
-            std::sync::Arc::new(RelojCorregido::nuevo()),
-        )
-        .map_err(|origen| NucleoError::Apertura {
-            mensaje: apertura(origen),
-        })?;
-        Ok(Self::desde_core(&ruta_base_datos, core, None))
+        let nucleo = Self::abrir_plano_intento(&ruta_base_datos)?;
+        Self::sin_base_descartada(nucleo, || Self::abrir_plano_intento(&ruta_base_datos))
     }
 
     /// MV-03 (auditoría 2026-09-24): variante cifrada de [`Self::abrir`] --
@@ -217,22 +212,61 @@ impl Nucleo {
             mensaje: interno("La clave de cifrado debe tener 32 bytes"),
         })?;
 
-        match Self::abrir_cifrado_intento(&ruta_base_datos, &clave) {
-            Ok(nucleo) => Ok(nucleo),
+        let nucleo = match Self::abrir_cifrado_intento(&ruta_base_datos, &clave) {
+            Ok(nucleo) => nucleo,
             Err(error) if std::path::Path::new(&ruta_base_datos).exists() => {
                 log::warn!(
                     "abrir_cifrado: archivo existente no legible con la clave nueva ({error:?}), \
                      se descarta y se reconstruye vacío"
                 );
                 borrar_archivo_y_sidecars(&ruta_base_datos);
-                Self::abrir_cifrado_intento(&ruta_base_datos, &clave)
+                Self::abrir_cifrado_intento(&ruta_base_datos, &clave)?
             }
-            Err(error) => Err(error),
-        }
+            Err(error) => return Err(error),
+        };
+        Self::sin_base_descartada(nucleo, || {
+            Self::abrir_cifrado_intento(&ruta_base_datos, &clave)
+        })
     }
 }
 
 impl Nucleo {
+    /// Helper de `abrir`, mismo motivo que [`Self::abrir_cifrado_intento`].
+    fn abrir_plano_intento(ruta_base_datos: &str) -> Result<Self, NucleoError> {
+        let core = AppCore::abrir_con_reloj(
+            ruta_base_datos,
+            std::sync::Arc::new(RelojCorregido::nuevo()),
+        )
+        .map_err(|origen| NucleoError::Apertura {
+            mensaje: apertura(origen),
+        })?;
+        Ok(Self::desde_core(ruta_base_datos, core, None))
+    }
+
+    /// Si la base es de una unidad anterior (el teléfono se reconectó en
+    /// otra unidad, ver `AppCore::base_por_descartar`), la cierra, la borra y
+    /// abre una nueva con `reabrir`. La pantalla de arranque baja después la
+    /// de la unidad nueva con la clave del teléfono, sin pedir código
+    /// (`preparar_equipo_vinculado`).
+    fn sin_base_descartada(
+        nucleo: Self,
+        reabrir: impl Fn() -> Result<Self, NucleoError>,
+    ) -> Result<Self, NucleoError> {
+        let descartar = nucleo.core_lock().base_por_descartar();
+        if !descartar {
+            return Ok(nucleo);
+        }
+        log::info!("la base es de la unidad anterior: se borra y se empieza una nueva");
+        let ruta = nucleo.ruta_base_datos.clone();
+        drop(nucleo);
+        control_acceso::database::connection::borrar_archivos_de_base(&ruta).map_err(|origen| {
+            NucleoError::Apertura {
+                mensaje: apertura(origen),
+            }
+        })?;
+        reabrir()
+    }
+
     /// Helper de `abrir_cifrado` -- separado en su propia función (no
     /// dentro del `impl` exportado por uniffi de más arriba) porque
     /// `#[uniffi::export]` no soporta funciones asociadas sin `&self` que
@@ -292,10 +326,17 @@ impl Nucleo {
     /// sólo se toma DESPUÉS, para aplicar el desfase de reloj medido (ver
     /// [`Nucleo::aplicar_token_de`]). Quien llama no debe tener tomado
     /// `core_lock()`.
+    ///
+    /// Si la nube ya no reconoce la clave del teléfono (lo retiraron en el
+    /// panel), el núcleo lo anota: habilita "Reconectar este teléfono" (ver
+    /// `AppCore::anotar_rechazo_de_la_nube`).
     fn autenticar_con_cache(
         &self,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        let token = self.cache_token.autenticar_con_cache()?;
+        let token = self
+            .cache_token
+            .autenticar_con_cache()
+            .inspect_err(|error| self.core_lock().anotar_rechazo_de_la_nube(error))?;
         self.aplicar_token_de(&token);
         Ok(token)
     }

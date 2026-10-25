@@ -155,6 +155,11 @@ pub enum SincronizacionError {
     RespuestaInesperada { status: u16, cuerpo: String },
     #[error("El receptor mandó una fecha inválida: {0}")]
     FechaInvalida(String),
+    /// El equipo se reconectó en otra unidad y esta base es de la anterior
+    /// (ver `estado_equipo::base_por_descartar`): no se sincroniza nada
+    /// hasta que la app la borre al arrancar.
+    #[error("La base de este equipo es de la unidad anterior y se va a descartar")]
+    BasePorDescartar,
 }
 
 impl SincronizacionError {
@@ -180,7 +185,7 @@ impl SincronizacionError {
         match self {
             Self::Red(error) => error.es_falta_de_conexion(),
             Self::RespuestaInesperada { status, .. } => *status >= 500,
-            Self::BaseLocal(_) | Self::FechaInvalida(_) => false,
+            Self::BaseLocal(_) | Self::FechaInvalida(_) | Self::BasePorDescartar => false,
         }
     }
 }

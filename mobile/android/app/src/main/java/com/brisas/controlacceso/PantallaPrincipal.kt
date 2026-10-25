@@ -77,9 +77,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uniffi.control_acceso_mobile.ConflictoGafeteActivo
 import uniffi.control_acceso_mobile.ConflictoIngresoActivo
 import uniffi.control_acceso_mobile.ConflictoIngresoProveedorActivo
@@ -107,6 +109,7 @@ fun PantallaPrincipal(
     nucleo: Nucleo,
     sesion: UsuarioSesion,
     directorio: String,
+    metadata: MetadatosDispositivoLocal,
     onCerrarSesion: () -> Unit,
 ) {
     RegistrarPantalla("principal")
@@ -117,6 +120,12 @@ fun PantallaPrincipal(
     var mostrarAvisos by remember { mutableStateOf(false) }
     // La Ayuda (manual de uso, desde el menú de la cuenta): otra más, igual.
     var mostrarAyuda by remember { mutableStateOf(false) }
+    // Reconectar este teléfono retirado en el panel (ver
+    // `PantallaReconectarEquipo`): otra más. `equipoRetirado` lo decide el
+    // núcleo; se vuelve a preguntar tras cada sincronización y al llegar la
+    // expulsión en vivo.
+    var mostrarReconexion by remember { mutableStateOf(false) }
+    var equipoRetirado by remember { mutableStateOf(false) }
     // La pestaña elegida y, dentro de Externos, el tipo (Proveedor o Correo,
     // que cambia el color de la sección y de la pestaña de arriba: ver
     // `AcentoSeccion.kt`). Viven acá y no junto a las pestañas: al abrir la
@@ -133,7 +142,7 @@ fun PantallaPrincipal(
     // está abierta.
     val contexto = LocalContext.current
     var ultimoTapAtras by remember { mutableLongStateOf(0L) }
-    BackHandler(enabled = !mostrarNuevoContratista && !mostrarAvisos && !mostrarAyuda) {
+    BackHandler(enabled = !mostrarNuevoContratista && !mostrarAvisos && !mostrarAyuda && !mostrarReconexion) {
         val ahora = System.currentTimeMillis()
         if (ahora - ultimoTapAtras < 2000) {
             (contexto as? Activity)?.finish()
@@ -228,8 +237,14 @@ fun PantallaPrincipal(
             onCambioAplicado = { refrescarNube += 1 },
             // El canal corre en `scope` (hilo principal): el aviso puede
             // mostrarse directo. El trabajo local sigue disponible.
-            onExpulsado = { Toast.makeText(contexto, ExpulsionNube.MENSAJE, Toast.LENGTH_LONG).show() },
+            onExpulsado = {
+                Toast.makeText(contexto, ExpulsionNube.MENSAJE, Toast.LENGTH_LONG).show()
+                equipoRetirado = true
+            },
         )
+    }
+    LaunchedEffect(refrescarNube, nubeViewModel.error) {
+        equipoRetirado = withContext(Dispatchers.IO) { nucleo.equipoRetirado() }
     }
     val sincronizacion = remember(nucleo, scope) {
         SincronizacionPeriodica(
@@ -343,7 +358,7 @@ fun PantallaPrincipal(
         if (refrescarNube == 0) return@LaunchedEffect
         val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
         val externo = tipoExternoVisible(indiceExterno)
-        val fueraDePestanas = mostrarAvisos || mostrarNuevoContratista || mostrarAyuda
+        val fueraDePestanas = mostrarAvisos || mostrarNuevoContratista || mostrarAyuda || mostrarReconexion
         val enExternos = seccion == SeccionPrincipal.EXTERNOS && !fueraDePestanas
         if (seccion != SeccionPrincipal.ACTIVOS || fueraDePestanas) activosViewModel.refrescar()
         if (seccion != SeccionPrincipal.KOF || fueraDePestanas) gafetesViewModel.refrescarActivos()
@@ -440,6 +455,20 @@ fun PantallaPrincipal(
             )
         }
 
+        // Teléfono retirado en el panel: la franja queda fija con el botón
+        // para reconectarlo con un código del panel.
+        if (equipoRetirado && !mostrarReconexion) {
+            FranjaEquipoRetirado(
+                onReconectar = {
+                    mostrarAvisos = false
+                    mostrarNuevoContratista = false
+                    mostrarAyuda = false
+                    mostrarReconexion = true
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
+
         val errorSincronizacion = nubeViewModel.error
         if (errorSincronizacion != null) {
             Text(
@@ -465,6 +494,7 @@ fun PantallaPrincipal(
             mostrarAvisos -> PanelPrincipal.AVISOS
             mostrarNuevoContratista -> PanelPrincipal.NUEVO_CONTRATISTA
             mostrarAyuda -> PanelPrincipal.AYUDA
+            mostrarReconexion -> PanelPrincipal.RECONEXION
             else -> PanelPrincipal.PESTANAS
         }
         AnimatedContent(
@@ -486,6 +516,19 @@ fun PantallaPrincipal(
                 PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
             } else if (mostrado == PanelPrincipal.AYUDA) {
                 PantallaAyuda(onVolver = { mostrarAyuda = false })
+            } else if (mostrado == PanelPrincipal.RECONEXION) {
+                PantallaReconectarEquipo(
+                    nucleo = nucleo,
+                    metadata = metadata,
+                    onReconectado = { unidad ->
+                        mostrarReconexion = false
+                        equipoRetirado = false
+                        Toast.makeText(contexto, "Teléfono reconectado en $unidad", Toast.LENGTH_SHORT).show()
+                        // Lo que quedó pendiente mientras estuvo retirado sube ya.
+                        nubeViewModel.sincronizar()
+                    },
+                    onVolver = { mostrarReconexion = false },
+                )
             } else {
                 // Las secciones van en una barra flotante abajo (ver
                 // [BarraSecciones]) y el contenido pasa por detrás, apenas
@@ -727,7 +770,7 @@ private fun iconoSeccion(seccion: SeccionPrincipal, externo: TipoExterno): Image
 }
 
 /// Qué ocupa la pantalla principal debajo de la barra superior.
-private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, AYUDA, PESTANAS }
+private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, AYUDA, RECONEXION, PESTANAS }
 
 /// Tiempo fuera de primer plano (app minimizada o teléfono bloqueado) tras
 /// el cual se cierra la sesión. Eran 2 minutos: en la portería el guardia

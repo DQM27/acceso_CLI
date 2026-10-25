@@ -60,7 +60,7 @@ import uniffi.control_acceso_mobile.Nucleo
 /// contraseña era la temporal del alta, elegir una nueva antes de entrar
 /// (antes eso sólo se podía en el escritorio).
 @Composable
-fun PantallaLogin(nucleo: Nucleo, directorio: String) {
+fun PantallaLogin(nucleo: Nucleo, directorio: String, metadata: MetadatosDispositivoLocal) {
     RegistrarPantalla("login")
     val viewModel: LoginViewModel =
         viewModel(factory = LoginViewModel.factory(nucleo))
@@ -73,6 +73,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String) {
                 nucleo = nucleo,
                 sesion = sesionActual,
                 directorio = directorio,
+                metadata = metadata,
                 onCerrarSesion = { viewModel.cerrarSesion() },
             )
         }

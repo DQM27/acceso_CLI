@@ -19,3 +19,9 @@ export async function instalarActualizacion(actualizacion: Update): Promise<void
   await actualizacion.downloadAndInstall();
   await relaunch();
 }
+
+/** Reinicia la app. Lo usa la reconexión en otra unidad: al arrancar, el
+ * núcleo borra la base de la unidad anterior y baja la nueva. */
+export function reiniciarApp(): Promise<void> {
+  return relaunch();
+}

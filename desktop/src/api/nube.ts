@@ -186,6 +186,41 @@ export function vincularDispositivoInicial(codigo: string): Promise<ResumenSincr
   return invoke("vincular_dispositivo_inicial", { codigo });
 }
 
+/** Base vacía de un equipo que ya está vinculado (su clave sigue guardada):
+ * baja el catálogo de su unidad sin pedir código. Pasa después de que un
+ * equipo reconectado en otra unidad borra la base de la anterior. */
+export function prepararEquipoVinculado(): Promise<ResumenSincronizacion> {
+  return invoke("preparar_equipo_vinculado");
+}
+
+/** `true` si el equipo ya tiene una clave aceptada por la nube. */
+export function equipoVinculado(): Promise<boolean> {
+  return invoke("equipo_vinculado");
+}
+
+/** `true` si la nube ya no reconoce a este equipo (lo retiraron en el
+ * panel): es cuando se ofrece "Reconectar este equipo". Lo decide el núcleo. */
+export function equipoRetirado(): Promise<boolean> {
+  return invoke("equipo_retirado");
+}
+
+/** Resultado de reconectar un equipo retirado (ver `reconectar_equipo`). */
+export type ResultadoReconexion =
+  | { tipo: "Reconectado"; unidad: string }
+  | { tipo: "NecesitaConfirmacion"; pendientes: number; unidad: string }
+  | { tipo: "ReconectadoEnOtraUnidad"; unidad: string };
+
+/** Reconecta este equipo con el código de reconexión del panel. Si va a
+ * otra unidad y hay registros sin subir, la primera vez responde
+ * `NecesitaConfirmacion` sin gastar el código; para seguir, se vuelve a
+ * llamar con los `pendientesConfirmados` que se mostraron. */
+export function reconectarEquipo(
+  codigo: string,
+  pendientesConfirmados?: number,
+): Promise<ResultadoReconexion> {
+  return invoke("reconectar_equipo", { codigo, pendientesConfirmados: pendientesConfirmados ?? null });
+}
+
 /** Descarta el token cacheado tras un aviso `dispositivo_expulsado`: la
  * próxima operación de nube pide uno nuevo y muestra el motivo real. */
 export function descartarTokenNube(): Promise<void> {

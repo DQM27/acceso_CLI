@@ -31,6 +31,34 @@ class PrimerArranqueViewModel(
     var error by mutableStateOf<String?>(null)
         private set
 
+    /// Bajando los datos de la unidad de un teléfono que ya estaba
+    /// vinculado (ver [prepararSiYaEstaVinculado]).
+    var preparando by mutableStateOf(false)
+        private set
+
+    /// Un teléfono que YA está vinculado (su clave sigue en Android
+    /// Keystore) no necesita código: pasa al cambiar de unidad, cuando el
+    /// núcleo borró la base de la anterior al arrancar. Baja los datos de
+    /// su unidad solo; si falla, queda el formulario del código con el
+    /// motivo.
+    fun prepararSiYaEstaVinculado(onListo: () -> Unit) {
+        if (preparando || vinculando || !nucleo.nubeConfigurada()) return
+        error = null
+        preparando = true
+        viewModelScope.launch {
+            try {
+                withContext(dispatcherIO) {
+                    medirNucleo("prepararEquipoVinculado") { nucleo.prepararEquipoVinculado() }
+                }
+                onListo()
+            } catch (excepcion: Exception) {
+                error = excepcion.mensajeDeErrorEsperado()
+            } finally {
+                preparando = false
+            }
+        }
+    }
+
     fun vincular(codigo: String, onListo: () -> Unit) {
         if (vinculando || !CodigoVinculacion.completo(codigo)) return
         error = null

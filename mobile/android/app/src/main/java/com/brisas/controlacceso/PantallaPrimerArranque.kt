@@ -78,6 +78,8 @@ fun PantallaPrimerArranque(
     var escribiendo by rememberSaveable { mutableStateOf(false) }
     var vinculado by rememberSaveable { mutableStateOf(false) }
     val vincular = { valor: String -> viewModel.vincular(valor) { vinculado = true } }
+    // Teléfono ya vinculado (cambió de unidad): baja los datos sin código.
+    LaunchedEffect(Unit) { viewModel.prepararSiYaEstaVinculado { vinculado = true } }
 
     if (escaneando) {
         PantallaEscanearCodigoVinculacion(
@@ -105,7 +107,7 @@ fun PantallaPrimerArranque(
     }
     val paso = when {
         vinculado -> PasoVinculacion.LISTO
-        viewModel.vinculando -> PasoVinculacion.SINCRONIZANDO
+        viewModel.vinculando || viewModel.preparando -> PasoVinculacion.SINCRONIZANDO
         else -> PasoVinculacion.CODIGO
     }
 

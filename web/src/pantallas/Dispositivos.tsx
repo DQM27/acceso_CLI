@@ -12,6 +12,7 @@ import { usePresenciaPorSitio } from "../presenciaSitios";
 import { fechaLocalYMD, textoFechaDDMMYYYY, textoHora } from "../tiempo";
 import { mensajeError } from "../mensajeError";
 import {
+  autorizarReconexion,
   crearSitio,
   eliminarDispositivo,
   listarDispositivosYSitios,
@@ -41,6 +42,8 @@ interface FilaDispositivo extends Dispositivo {
 
 /** Código recién emitido, para mostrarlo una sola vez. */
 interface CodigoMostrado {
+  /** De alta (equipo nuevo) o de reconexión (equipo retirado). */
+  clase: "vinculacion" | "reconexion";
   titulo: string;
   codigo: string;
   expira_en: string;
@@ -51,15 +54,19 @@ function textoFechaHora(iso: string): string {
 }
 
 /**
- * Dos acciones sobre un equipo, nada más: Registrar y Retirar (ver
- * docs/features-futuras/propuesta-registro-dispositivos.md). Autenticada con
+ * Las acciones sobre un equipo: Registrar, Retirar y, sobre uno retirado,
+ * Autorizar reconexión (ver
+ * docs/features-futuras/propuesta-registro-dispositivos.md y
+ * docs/features-futuras/plan-reconexion-equipo-retirado.md). Autenticada con
  * la misma sesión de Google que el resto del panel (ver `api/dispositivos.ts`).
  *
  * El panel es la única autoridad: un equipo nunca se da de alta solo. Al
  * registrarlo se emite un código de un solo uso, con QR, que vence en
  * minutos y se muestra UNA sola vez; el equipo lo canjea y genera su propia
  * clave. Un equipo reinstalado o reemplazado se registra como uno nuevo (los
- * datos vuelven con la primera sincronización) y el viejo se retira. Los
+ * datos vuelven con la primera sincronización) y el viejo se retira. Un
+ * equipo retirado se reconecta con su propio código de reconexión: en la
+ * misma unidad conserva todo; en otra, borra su base y baja la nueva. Los
  * rechazos (código usado, vencido, firma inválida...) quedan en "Intentos y
  * alertas", con la IP.
  *
@@ -82,6 +89,12 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const [nuevoSitioNombre, setNuevoSitioNombre] = useState("");
   const [creandoSitio, setCreandoSitio] = useState(false);
   const [errorSitio, setErrorSitio] = useState<string | null>(null);
+
+  // Autorizar la reconexión de un equipo retirado: unidad y etiqueta que va a
+  // tener (por defecto, las que ya tenía).
+  const [reconectando, setReconectando] = useState<FilaDispositivo | null>(null);
+  const [sitioReconexion, setSitioReconexion] = useState("");
+  const [etiquetaReconexion, setEtiquetaReconexion] = useState("");
 
   // Retirar/Eliminar piden código de correo además de confirmar -- ver el
   // doc-comment del componente. `accion` maneja su propio error/toast (no
@@ -180,6 +193,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       });
       cerrarModal();
       setCodigoMostrado({
+        clase: "vinculacion",
         titulo: `${etiqueta.trim()} (${resultado.sitio_nombre})`,
         codigo: resultado.codigo,
         expira_en: resultado.expira_en,
@@ -248,8 +262,8 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const alRetirar = useCallback((fila: FilaDispositivo) => {
     setConfirmacionSensible({
       titulo: "Retirar dispositivo",
-      pregunta: `¿Retirar "${fila.etiqueta}"? Es definitivo: ese equipo deja de sincronizar en el acto y no se puede reactivar.`,
-      descripcion: `retirar "${fila.etiqueta}" -- es definitivo, ese equipo deja de sincronizar en el acto`,
+      pregunta: `¿Retirar "${fila.etiqueta}"? Ese equipo deja de sincronizar en el acto. Para volver a usarlo hay que autorizar su reconexión.`,
+      descripcion: `retirar "${fila.etiqueta}" -- ese equipo deja de sincronizar en el acto`,
       accion: async () => {
         try {
           await revocarDispositivo(fila.id);
@@ -262,6 +276,48 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       },
     });
   }, [recargar]);
+
+  const alAutorizarReconexion = useCallback((fila: FilaDispositivo) => {
+    setReconectando(fila);
+    setSitioReconexion(fila.sitio_id);
+    setEtiquetaReconexion(fila.etiqueta);
+  }, []);
+
+  function alEnviarReconexion(evento: React.FormEvent) {
+    evento.preventDefault();
+    const fila = reconectando;
+    const sitio = sitios.find((s) => s.id === sitioReconexion);
+    const nuevaEtiqueta = etiquetaReconexion.trim();
+    if (!fila || !sitio || !nuevaEtiqueta) return;
+    setReconectando(null);
+    const otraUnidad = sitio.id !== fila.sitio_id;
+    setConfirmacionSensible({
+      titulo: "Autorizar reconexión",
+      pregunta: otraUnidad
+        ? `¿Autorizar que "${fila.etiqueta}" vuelva a conectarse en ${sitio.nombre}? Al reconectarse borra los datos de su unidad anterior.`
+        : `¿Autorizar que "${fila.etiqueta}" vuelva a conectarse en ${sitio.nombre}?`,
+      descripcion: `autorizar la reconexión de "${fila.etiqueta}" en ${sitio.nombre}`,
+      accion: async () => {
+        try {
+          const resultado = await autorizarReconexion({
+            dispositivo_id: fila.id,
+            sitio_id: sitio.id,
+            etiqueta: nuevaEtiqueta,
+          });
+          setConfirmacionSensible(null);
+          setCodigoMostrado({
+            clase: "reconexion",
+            titulo: `${nuevaEtiqueta} (${resultado.sitio_nombre})`,
+            codigo: resultado.codigo,
+            expira_en: resultado.expira_en,
+          });
+          await recargar();
+        } catch (error) {
+          toast.error(mensajeError(error));
+        }
+      },
+    });
+  }
 
   const columnas: ColDef<FilaDispositivo>[] = useMemo(
     () => [
@@ -374,7 +430,15 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         filter: false,
         cellRenderer: ({ data }: { data: FilaDispositivo }) => (
           <div className="flex h-full items-center justify-center gap-[0.4rem]">
-            {!data.revoked_at && (
+            {data.revoked_at ? (
+              <button
+                type="button"
+                className="boton boton-celda"
+                onClick={() => alAutorizarReconexion(data)}
+              >
+                Autorizar reconexión
+              </button>
+            ) : (
               <button
                 type="button"
                 className="boton boton-celda"
@@ -394,7 +458,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
         ),
       },
     ],
-    [alRetirar, alEliminar],
+    [alRetirar, alEliminar, alAutorizarReconexion],
   );
 
   return (
@@ -522,12 +586,59 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
       )}
 
       {codigoMostrado && (
-        <Modal titulo={`Código de vinculación — ${codigoMostrado.titulo}`} onCerrar={() => setCodigoMostrado(null)}>
+        <Modal
+          titulo={`${codigoMostrado.clase === "reconexion" ? "Código de reconexión" : "Código de vinculación"} — ${codigoMostrado.titulo}`}
+          onCerrar={() => setCodigoMostrado(null)}
+        >
           <CodigoVinculacionEmitido
             codigo={codigoMostrado.codigo}
             expiraEn={codigoMostrado.expira_en}
             onListo={() => setCodigoMostrado(null)}
           />
+        </Modal>
+      )}
+
+      {reconectando && (
+        <Modal titulo={`Autorizar reconexión — ${reconectando.etiqueta}`} onCerrar={() => setReconectando(null)}>
+          <form onSubmit={alEnviarReconexion} className="flex flex-col gap-4">
+            <p className="text-muted" style={{ margin: 0 }}>
+              El equipo recibe un código de reconexión de un solo uso, que sólo sirve para él. En la
+              misma unidad conserva todos sus datos; en otra, borra los de su unidad anterior y baja
+              los de la nueva.
+            </p>
+            <label className="campo">
+              Unidad operativa
+              <select
+                required
+                autoFocus
+                value={sitioReconexion}
+                onChange={(evento) => setSitioReconexion(evento.target.value)}
+              >
+                {sitios.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre}
+                    {s.id === reconectando.sitio_id ? " (la misma)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="campo">
+              Etiqueta
+              <input
+                required
+                value={etiquetaReconexion}
+                onChange={(evento) => setEtiquetaReconexion(evento.target.value)}
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="boton" onClick={() => setReconectando(null)}>
+                Cancelar
+              </button>
+              <button type="submit" className="boton boton-primario" disabled={!etiquetaReconexion.trim()}>
+                Generar código de reconexión
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 

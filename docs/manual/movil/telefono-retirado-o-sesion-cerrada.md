@@ -29,15 +29,31 @@ inactivo" o "Este usuario fue desactivado". Hable con un administrador.
 ## Caso 3 — "Este teléfono fue retirado en el panel"
 
 **Mensaje**: "Este teléfono fue retirado en el panel y ya no sincroniza.
-El trabajo local sigue disponible; para volver a usar la nube hay que
-regístrelo como dispositivo nuevo."
+El trabajo local sigue disponible; para volver a conectarlo, pida a un
+administrador un código de reconexión." Arriba de la pantalla principal
+queda la franja **"Este teléfono fue retirado en el panel."** con el botón
+**Reconectar**.
 
-**Qué pasó**: un administrador quitó este teléfono de la lista de equipos
-en el panel web.
+**Qué pasó**: un administrador retiró este teléfono en el panel web.
 
-**Qué hacer**: puede seguir registrando, pero **nada se envía**. Avise
-**de inmediato** a un administrador. Cómo volver a registrar un teléfono
-ya usado todavía está por definirse.
+**Qué hacer**:
+
+1. Puede seguir registrando, pero **nada se envía**. Avise **de
+   inmediato** a un administrador; si hay que volver a usar el teléfono,
+   le da un **código de reconexión** desde el panel.
+2. Toque **Reconectar** en la franja, escriba el código y toque
+   **Reconectar**.
+   - **Misma unidad**: verá "Teléfono reconectado en (unidad)" y lo que
+     registró mientras estuvo retirado se envía. No se borra nada.
+   - **Otra unidad**: se borran los datos de la unidad anterior. Si hay
+     registros que nunca se enviaron, antes avisa cuántos se van a
+     perder; toque **Reconectar y borrar** o **Cancelar**. Después toque
+     **Reiniciar ahora**: la app se reinicia, baja los datos de la unidad
+     nueva y vuelve al inicio de sesión.
+
+El código sirve una sola vez, sólo para este teléfono, y vence en pocos
+minutos. Si dice "El código de reconexión no es válido o ya venció -- pida
+uno nuevo en el panel", pida otro a un administrador.
 
 ## Caso 4 — Cerró la app
 
