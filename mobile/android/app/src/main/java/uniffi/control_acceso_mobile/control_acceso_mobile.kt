@@ -851,6 +851,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_enviar_cambios(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_equipo_retirado(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_establecer_almacen_clave(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_estado_reloj(
@@ -870,6 +872,10 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_nube_configurada(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_precalentar_nube(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_equipo_vinculado(
+    ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_reconectar_equipo(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial(
     ): Int
@@ -1066,6 +1072,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_enviar_cambios(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_equipo_retirado(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_establecer_almacen_clave(`ptr`: Long,`almacen`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_estado_reloj(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1086,6 +1094,10 @@ internal object UniffiLib {
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_precalentar_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_preparar_equipo_vinculado(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_reconectar_equipo(`ptr`: Long,`codigo`: RustBuffer.ByValue,`pendientesConfirmados`: RustBuffer.ByValue,`identificadorHardware`: RustBuffer.ByValue,`nombreDispositivo`: RustBuffer.ByValue,`plataforma`: RustBuffer.ByValue,`versionBuild`: RustBuffer.ByValue,`appVersion`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_requiere_configuracion_inicial(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Byte
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_sesion_realtime_nube(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -1590,6 +1602,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_enviar_cambios() and 0xFFFF) != 38113) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_equipo_retirado() and 0xFFFF) != 3978) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_establecer_almacen_clave() and 0xFFFF) != 60535) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1618,6 +1633,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_precalentar_nube() and 0xFFFF) != 50602) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_preparar_equipo_vinculado() and 0xFFFF) != 49213) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_reconectar_equipo() and 0xFFFF) != 17705) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_configuracion_inicial() and 0xFFFF) != 38622) {
@@ -3845,6 +3866,13 @@ public interface NucleoInterface {
     fun `enviarCambios`(): ResumenSincronizacion
     
     /**
+     * `true` si la nube ya no reconoce a este teléfono (lo retiraron en el
+     * panel): es cuando aparece "Reconectar este teléfono". Lo decide el
+     * núcleo.
+     */
+    fun `equipoRetirado`(): kotlin.Boolean
+    
+    /**
      * Configura quién firma por este teléfono (Android Keystore, ver
      * `AlmacenClaveKeystore.kt`). Kotlin lo llama una sola vez, apenas abre
      * el núcleo y antes de cualquier operación de nube.
@@ -3915,6 +3943,23 @@ public interface NucleoInterface {
      * hay una pausa mínima, así que llamarlo seguido no cuesta.
      */
     fun `precalentarNube`()
+    
+    /**
+     * Base vacía de un teléfono que YA está vinculado (su clave sigue en
+     * Android Keystore): baja el catálogo de su unidad sin pedir código.
+     * Pasa después de que un teléfono reconectado en otra unidad borra la
+     * base de la anterior (ver `PantallaPrimerArranque.kt`).
+     */
+    fun `prepararEquipoVinculado`(): ResumenSincronizacion
+    
+    /**
+     * Reconecta este teléfono retirado con el código de reconexión del
+     * panel (ver `control_acceso::application::reconectar_equipo`). Con
+     * `pendientes_confirmados`, la persona ya vio el aviso de los registros
+     * que se pierden al cambiar de unidad; quién confirmó lo pone el núcleo
+     * con la sesión abierta. La red corre sin el candado del núcleo.
+     */
+    fun `reconectarEquipo`(`codigo`: kotlin.String, `pendientesConfirmados`: kotlin.ULong?, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResultadoReconexion
     
     /**
      * `true` mientras la base no tenga ningún usuario todavía -- Kotlin lo
@@ -4892,6 +4937,24 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
+     * `true` si la nube ya no reconoce a este teléfono (lo retiraron en el
+     * panel): es cuando aparece "Reconectar este teléfono". Lo decide el
+     * núcleo.
+     */override fun `equipoRetirado`(): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_equipo_retirado(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Configura quién firma por este teléfono (Android Keystore, ver
      * `AlmacenClaveKeystore.kt`). Kotlin lo llama una sola vez, apenas abre
      * el núcleo y antes de cualquier operación de nube.
@@ -5073,6 +5136,54 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 }
     }
     
+    
+
+    
+    /**
+     * Base vacía de un teléfono que YA está vinculado (su clave sigue en
+     * Android Keystore): baja el catálogo de su unidad sin pedir código.
+     * Pasa después de que un teléfono reconectado en otra unidad borra la
+     * base de la anterior (ver `PantallaPrimerArranque.kt`).
+     */
+    @Throws(NucleoException::class)override fun `prepararEquipoVinculado`(): ResumenSincronizacion {
+            return FfiConverterTypeResumenSincronizacion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_preparar_equipo_vinculado(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Reconecta este teléfono retirado con el código de reconexión del
+     * panel (ver `control_acceso::application::reconectar_equipo`). Con
+     * `pendientes_confirmados`, la persona ya vio el aviso de los registros
+     * que se pierden al cambiar de unidad; quién confirmó lo pone el núcleo
+     * con la sesión abierta. La red corre sin el candado del núcleo.
+     */
+    @Throws(NucleoException::class)override fun `reconectarEquipo`(`codigo`: kotlin.String, `pendientesConfirmados`: kotlin.ULong?, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResultadoReconexion {
+            return FfiConverterTypeResultadoReconexion.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_reconectar_equipo(
+        it,
+        
+        FfiConverterString.lower(`codigo`),
+        FfiConverterOptionalULong.lower(`pendientesConfirmados`),
+        FfiConverterString.lower(`identificadorHardware`),
+        FfiConverterString.lower(`nombreDispositivo`),
+        FfiConverterString.lower(`plataforma`),
+        FfiConverterString.lower(`versionBuild`),
+        FfiConverterString.lower(`appVersion`),_status)
+}
+    }
+    )
+    }
     
 
     
@@ -11129,6 +11240,132 @@ public object FfiConverterTypeResultadoIngresoRegistrado : FfiConverterRustBuffe
             }
             is ResultadoIngresoRegistrado.Migrado -> {
                 buf.putInt(3)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
+/**
+ * Lo que ve la pantalla de reconexión de un teléfono retirado (ver
+ * `control_acceso::application::ResultadoReconexion`).
+ */
+sealed class ResultadoReconexion {
+    
+    /**
+     * Misma unidad: no se borró nada; conviene sincronizar ya.
+     */
+    data class Reconectado(
+        val `unidad`: kotlin.String) : ResultadoReconexion()
+        
+    {
+        
+
+        companion object
+    }
+    
+    /**
+     * Otra unidad con registros sin subir: hay que confirmar que se
+     * pierden. El código no se gastó.
+     */
+    data class NecesitaConfirmacion(
+        val `pendientes`: kotlin.ULong, 
+        val `unidad`: kotlin.String) : ResultadoReconexion()
+        
+    {
+        
+
+        companion object
+    }
+    
+    /**
+     * Otra unidad: la app tiene que reiniciarse para borrar esta base y
+     * bajar la de la unidad nueva.
+     */
+    data class ReconectadoEnOtraUnidad(
+        val `unidad`: kotlin.String) : ResultadoReconexion()
+        
+    {
+        
+
+        companion object
+    }
+    
+
+    
+
+    
+    
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResultadoReconexion : FfiConverterRustBuffer<ResultadoReconexion>{
+    override fun read(buf: ByteBuffer): ResultadoReconexion {
+        return when(buf.getInt()) {
+            1 -> ResultadoReconexion.Reconectado(
+                FfiConverterString.read(buf),
+                )
+            2 -> ResultadoReconexion.NecesitaConfirmacion(
+                FfiConverterULong.read(buf),
+                FfiConverterString.read(buf),
+                )
+            3 -> ResultadoReconexion.ReconectadoEnOtraUnidad(
+                FfiConverterString.read(buf),
+                )
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: ResultadoReconexion): ULong = when(value) {
+        is ResultadoReconexion.Reconectado -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`unidad`)
+            )
+        }
+        is ResultadoReconexion.NecesitaConfirmacion -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterULong.allocationSize(value.`pendientes`)
+                + FfiConverterString.allocationSize(value.`unidad`)
+            )
+        }
+        is ResultadoReconexion.ReconectadoEnOtraUnidad -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`unidad`)
+            )
+        }
+    }
+
+    override fun write(value: ResultadoReconexion, buf: ByteBuffer) {
+        when(value) {
+            is ResultadoReconexion.Reconectado -> {
+                buf.putInt(1)
+                FfiConverterString.write(value.`unidad`, buf)
+                Unit
+            }
+            is ResultadoReconexion.NecesitaConfirmacion -> {
+                buf.putInt(2)
+                FfiConverterULong.write(value.`pendientes`, buf)
+                FfiConverterString.write(value.`unidad`, buf)
+                Unit
+            }
+            is ResultadoReconexion.ReconectadoEnOtraUnidad -> {
+                buf.putInt(3)
+                FfiConverterString.write(value.`unidad`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

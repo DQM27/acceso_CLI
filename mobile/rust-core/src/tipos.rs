@@ -965,6 +965,20 @@ pub struct IdentidadEquipo {
     pub etiqueta: Option<String>,
 }
 
+/// Lo que ve la pantalla de reconexión de un teléfono retirado (ver
+/// `control_acceso::application::ResultadoReconexion`).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+pub enum ResultadoReconexion {
+    /// Misma unidad: no se borró nada; conviene sincronizar ya.
+    Reconectado { unidad: String },
+    /// Otra unidad con registros sin subir: hay que confirmar que se
+    /// pierden. El código no se gastó.
+    NecesitaConfirmacion { pendientes: u64, unidad: String },
+    /// Otra unidad: la app tiene que reiniciarse para borrar esta base y
+    /// bajar la de la unidad nueva.
+    ReconectadoEnOtraUnidad { unidad: String },
+}
+
 /// Estado del reloj confiable del teléfono (ver
 /// `control_acceso::tiempo::EstadoReloj`), para la telemetría de
 /// diagnóstico. Sólo números.

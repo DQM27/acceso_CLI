@@ -74,6 +74,10 @@ impl Nucleo {
     /// `descartar_token_nube` en escritorio.
     pub fn descartar_token_nube(&self) {
         self.invalidar_token_cacheado();
+        // Queda anotado como retirado para ofrecer "Reconectar este
+        // teléfono" sin esperar a la próxima autenticación.
+        self.core_lock()
+            .anotar_rechazo_de_la_nube(&control_acceso::nube::NubeError::CredencialesInvalidas);
     }
 
     /// Abre de antemano las conexiones que usa la verificación final de un
@@ -144,7 +148,89 @@ impl Nucleo {
         let token = self
             .vincular_y_cachear(&codigo, Some(&metadata))
             .map_err(error_de_nube_para_mostrar)?;
+        self.recibir_catalogo_inicial(token)
+    }
 
+    /// Base vacía de un teléfono que YA está vinculado (su clave sigue en
+    /// Android Keystore): baja el catálogo de su unidad sin pedir código.
+    /// Pasa después de que un teléfono reconectado en otra unidad borra la
+    /// base de la anterior (ver `PantallaPrimerArranque.kt`).
+    pub fn preparar_equipo_vinculado(&self) -> Result<ResumenSincronizacion, NucleoError> {
+        if !self.core_lock().requiere_configuracion_inicial()? {
+            return Err(NucleoError::from(GestionNubeErrorNucleo::YaConfigurado));
+        }
+        let token = self
+            .autenticar_con_cache()
+            .map_err(error_de_nube_para_mostrar)?;
+        self.recibir_catalogo_inicial(token)
+    }
+
+    /// `true` si la nube ya no reconoce a este teléfono (lo retiraron en el
+    /// panel): es cuando aparece "Reconectar este teléfono". Lo decide el
+    /// núcleo.
+    pub fn equipo_retirado(&self) -> bool {
+        self.core_lock().equipo_retirado()
+    }
+
+    /// Reconecta este teléfono retirado con el código de reconexión del
+    /// panel (ver `control_acceso::application::reconectar_equipo`). Con
+    /// `pendientes_confirmados`, la persona ya vio el aviso de los registros
+    /// que se pierden al cambiar de unidad; quién confirmó lo pone el núcleo
+    /// con la sesión abierta. La red corre sin el candado del núcleo.
+    #[allow(clippy::too_many_arguments)]
+    pub fn reconectar_equipo(
+        &self,
+        codigo: String,
+        pendientes_confirmados: Option<u64>,
+        identificador_hardware: String,
+        nombre_dispositivo: String,
+        plataforma: String,
+        version_build: String,
+        app_version: String,
+    ) -> Result<crate::ResultadoReconexion, NucleoError> {
+        use control_acceso::application::{ConfirmacionReconexion, ResultadoReconexion as Nucleo};
+
+        let confirmacion = pendientes_confirmados.map(|pendientes| ConfirmacionReconexion {
+            pendientes,
+            confirmado_por: self.actor_autenticado().ok().map(|sesion| sesion.nombre),
+        });
+        let metadata = metadata_del_telefono(
+            identificador_hardware,
+            nombre_dispositivo,
+            plataforma,
+            version_build,
+            app_version,
+        );
+        let resultado = control_acceso::application::reconectar_equipo(
+            || self.core_lock(),
+            &self.cache_token,
+            &codigo,
+            confirmacion.as_ref(),
+            Some(&metadata),
+        )
+        .map_err(|error| NucleoError::Rechazado {
+            mensaje: control_acceso::mensajes::mensaje_reconexion(error),
+        })?;
+        Ok(match resultado {
+            Nucleo::Reconectado { unidad } => crate::ResultadoReconexion::Reconectado { unidad },
+            Nucleo::NecesitaConfirmacion { pendientes, unidad } => {
+                crate::ResultadoReconexion::NecesitaConfirmacion { pendientes, unidad }
+            }
+            Nucleo::ReconectadoEnOtraUnidad { unidad } => {
+                crate::ResultadoReconexion::ReconectadoEnOtraUnidad { unidad }
+            }
+        })
+    }
+}
+
+impl Nucleo {
+    /// Base vacía recién vinculada o preparada: sólo catálogo y rutas, para
+    /// que el primer login tenga con quién autenticar y "Gafetes KOF" tenga
+    /// encargados.
+    fn recibir_catalogo_inicial(
+        &self,
+        token: control_acceso::nube::TokenDispositivo,
+    ) -> Result<ResumenSincronizacion, NucleoError> {
         let contexto = control_acceso::nube::ContextoSincronizacion {
             base_url: control_acceso::nube::base_url(),
             apikey: control_acceso::nube::apikey(),
@@ -193,7 +279,10 @@ impl Nucleo {
             conflictos_gafete: Vec::new(),
         })
     }
+}
 
+#[uniffi::export]
+impl Nucleo {
     /// Sincronización completa, autenticada con la clave del teléfono.
     pub fn sincronizar_con_nube(&self) -> Result<ResumenSincronizacion, NucleoError> {
         self.sincronizar(control_acceso::nube::AlcanceSincronizacion::completo())
