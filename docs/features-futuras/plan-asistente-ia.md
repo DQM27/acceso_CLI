@@ -1,8 +1,8 @@
 # Asistentes con IA — plan
 
 Estado (2026-10-24): **en marcha**. Lienzo (Parte A) en producción; de la
-ayuda (Parte B), el manual de las tres apps y el manual navegable en el
-escritorio y el panel. Ver "Estado y pendientes" al final.
+ayuda (Parte B), el manual de las tres apps y el manual navegable en las
+tres. Ver "Estado y pendientes" al final.
 
 Son **dos productos separados**, con usuarios, alcance y riesgos distintos
 (decisión del dueño, 2026-10-21):
@@ -425,11 +425,11 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
   está en staging; en producción se aplica sola al mergear a `main` (hasta
   entonces, la pantalla "Asistente" de producción muestra el error de función
   inexistente). Falta que el dueño la revise en el panel apuntado a staging.
-- Ayuda de uso (Parte B), etapa 2 (manual navegable sin IA): **hecha en el
-  escritorio y el panel** (2026-10-24, rama `claude/ayuda-ia`), ver abajo.
-  Falta el móvil.
+- Ayuda de uso (Parte B), etapa 2 (manual navegable sin IA): **hecha en las
+  tres apps** (2026-10-24; escritorio y panel en `claude/ayuda-ia`, móvil
+  en `feat/ayuda-movil`), ver abajo. Sigue la etapa 3 (chat `ayuda-ia`).
 
-## Manual navegable sin IA — implementado en escritorio y panel (2026-10-24)
+## Manual navegable sin IA — implementado (2026-10-24)
 
 - `supabase/functions/_shared/manual/`: lector del markdown del manual
   (`markdown.ts`), índice de cada app sacado de `docs/manual/README.md`
@@ -445,9 +445,13 @@ Al 2026-10-22, rama `claude/plan-asistente-ia` (sin PR todavía).
   buscador, revisan el manual real: cada proceso en el índice del README y
   ningún enlace ni ancla roto. Editar el manual sin romper eso es la única
   regla nueva.
-- Móvil: pendiente. Por la regla de la app (el núcleo decide, Kotlin
-  dibuja), el lector y el buscador irían en `rust-core` con el manual
-  embebido al compilar, expuestos por UniFFI.
+- Móvil (2026-10-24, rama `feat/ayuda-movil`): **Ayuda** en el menú de la
+  cuenta. Por la regla de la app (el núcleo decide, Kotlin dibuja), el
+  lector y el buscador están portados a `mobile/rust-core/src/manual/`, con
+  las mismas reglas y los mismos casos de prueba que los de TypeScript;
+  `build.rs` mete `docs/manual/movil/` en el `.so` y UniFFI expone
+  `indice_manual`, `tema_manual` (bloques ya aplanados para dibujar) y
+  `buscar_en_manual`. Las tablas de mensajes se ven como tarjetas.
 
 ## Lienzo sin IA — implementado (2026-10-22, sin PR todavía)
 

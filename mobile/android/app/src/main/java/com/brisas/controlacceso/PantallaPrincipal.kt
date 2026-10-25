@@ -95,8 +95,9 @@ import uniffi.control_acceso_mobile.UsuarioSesion
 /// nuevos siguen sin pantalla propia acá (escritorio/web/CLI), y tampoco
 /// volvió la pestaña de nube.
 ///
-/// `mostrarNuevoContratista` y `mostrarAvisos` (bandeja de la campanita,
-/// 2026-10-18) son toda la navegación que hace falta -- con dos pantallas
+/// `mostrarNuevoContratista`, `mostrarAvisos` (bandeja de la campanita,
+/// 2026-10-18) y `mostrarAyuda` (2026-10-24) son toda la navegación que hace
+/// falta -- con pocas pantallas
 /// adicionales que nunca se abren a la vez no se justifica un enum
 /// `Pantalla` como el que existió antes: la que está en `true` reemplaza por
 /// completo la Column de pestañas, igual que hacía aquel enum, sin la
@@ -114,6 +115,8 @@ fun PantallaPrincipal(
     // Bandeja de avisos (campanita): otra pantalla que reemplaza a las
     // pestañas, igual que `mostrarNuevoContratista`.
     var mostrarAvisos by remember { mutableStateOf(false) }
+    // La Ayuda (manual de uso, desde el menú de la cuenta): otra más, igual.
+    var mostrarAyuda by remember { mutableStateOf(false) }
     // La pestaña elegida y, dentro de Externos, el tipo (Proveedor o Correo,
     // que cambia el color de la sección y de la pestaña de arriba: ver
     // `AcentoSeccion.kt`). Viven acá y no junto a las pestañas: al abrir la
@@ -130,7 +133,7 @@ fun PantallaPrincipal(
     // está abierta.
     val contexto = LocalContext.current
     var ultimoTapAtras by remember { mutableLongStateOf(0L) }
-    BackHandler(enabled = !mostrarNuevoContratista && !mostrarAvisos) {
+    BackHandler(enabled = !mostrarNuevoContratista && !mostrarAvisos && !mostrarAyuda) {
         val ahora = System.currentTimeMillis()
         if (ahora - ultimoTapAtras < 2000) {
             (contexto as? Activity)?.finish()
@@ -171,6 +174,7 @@ fun PantallaPrincipal(
     LaunchedEffect(aperturaAvisos) {
         if (aperturaAvisos) {
             mostrarNuevoContratista = false
+            mostrarAyuda = false
             mostrarAvisos = true
             avisosViewModel.aperturaAtendida()
         }
@@ -339,9 +343,10 @@ fun PantallaPrincipal(
         if (refrescarNube == 0) return@LaunchedEffect
         val seccion = SECCIONES_VISIBLES.getOrElse(pestana) { SeccionPrincipal.ACTIVOS }
         val externo = tipoExternoVisible(indiceExterno)
-        val enExternos = seccion == SeccionPrincipal.EXTERNOS && !mostrarAvisos && !mostrarNuevoContratista
-        if (seccion != SeccionPrincipal.ACTIVOS || mostrarAvisos || mostrarNuevoContratista) activosViewModel.refrescar()
-        if (seccion != SeccionPrincipal.KOF || mostrarAvisos || mostrarNuevoContratista) gafetesViewModel.refrescarActivos()
+        val fueraDePestanas = mostrarAvisos || mostrarNuevoContratista || mostrarAyuda
+        val enExternos = seccion == SeccionPrincipal.EXTERNOS && !fueraDePestanas
+        if (seccion != SeccionPrincipal.ACTIVOS || fueraDePestanas) activosViewModel.refrescar()
+        if (seccion != SeccionPrincipal.KOF || fueraDePestanas) gafetesViewModel.refrescarActivos()
         if (!(enExternos && externo == TipoExterno.PROVEEDOR)) proveedoresViewModel.refrescarActivos()
         if (!(enExternos && externo == TipoExterno.POR_CORREO)) correoViewModel.refrescarActivos()
     }
@@ -386,12 +391,14 @@ fun PantallaPrincipal(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BotonIconoCuadradoBrisas(onClick = {
                     mostrarAvisos = false
+                    mostrarAyuda = false
                     mostrarNuevoContratista = true
                 }) {
                     Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
                 }
                 CampanitaAvisos(bandeja, onClick = {
                     mostrarNuevoContratista = false
+                    mostrarAyuda = false
                     mostrarAvisos = true
                 })
                 // Sin botón "Sincronizar": cada lista sincroniza tirando hacia
@@ -407,6 +414,11 @@ fun PantallaPrincipal(
                     sesion = sesion,
                     tema = tema,
                     onAlternarTema = { GestorTema.alternar(tema) },
+                    onAyuda = {
+                        mostrarAvisos = false
+                        mostrarNuevoContratista = false
+                        mostrarAyuda = true
+                    },
                     onCerrarSesion = onCerrarSesion,
                     actualizador = actualizador,
                 )
@@ -421,6 +433,7 @@ fun PantallaPrincipal(
                 emergencia,
                 onAbrir = {
                     mostrarNuevoContratista = false
+                    mostrarAyuda = false
                     mostrarAvisos = true
                 },
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -451,6 +464,7 @@ fun PantallaPrincipal(
         val panel = when {
             mostrarAvisos -> PanelPrincipal.AVISOS
             mostrarNuevoContratista -> PanelPrincipal.NUEVO_CONTRATISTA
+            mostrarAyuda -> PanelPrincipal.AYUDA
             else -> PanelPrincipal.PESTANAS
         }
         AnimatedContent(
@@ -470,6 +484,8 @@ fun PantallaPrincipal(
                 )
             } else if (mostrado == PanelPrincipal.NUEVO_CONTRATISTA) {
                 PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
+            } else if (mostrado == PanelPrincipal.AYUDA) {
+                PantallaAyuda(onVolver = { mostrarAyuda = false })
             } else {
                 // Las secciones van en una barra flotante abajo (ver
                 // [BarraSecciones]) y el contenido pasa por detrás, apenas
@@ -711,7 +727,7 @@ private fun iconoSeccion(seccion: SeccionPrincipal, externo: TipoExterno): Image
 }
 
 /// Qué ocupa la pantalla principal debajo de la barra superior.
-private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, PESTANAS }
+private enum class PanelPrincipal { AVISOS, NUEVO_CONTRATISTA, AYUDA, PESTANAS }
 
 /// Tiempo fuera de primer plano (app minimizada o teléfono bloqueado) tras
 /// el cual se cierra la sesión. Eran 2 minutos: en la portería el guardia

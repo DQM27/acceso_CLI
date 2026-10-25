@@ -6,12 +6,14 @@ Parte B): el asistente sólo responde con lo que está escrito aquí, así que
 **si algo no está aquí, el asistente no lo sabe**.
 
 El manual también se lee dentro de las apps, sin internet: en el
-escritorio (sección **Ayuda**, F1) y en el panel web (**Ayuda**). Las dos
-lo toman tal cual de esta carpeta, y los índices de abajo son los que
-muestran, en el mismo orden. Un proceso nuevo se agrega a su índice; los
-enlaces entre procesos son relativos (`otro-proceso.md#seccion`). Las
-pruebas de `desktop/src/ayuda/manual.test.ts` revisan que cada proceso
-esté en el índice y que ningún enlace quede roto.
+escritorio (sección **Ayuda**, F1), en el panel web (**Ayuda**) y en el
+móvil (menú de la cuenta → **Ayuda**). Las tres lo toman tal cual de esta
+carpeta (el móvil, sólo `movil/`, metido en la app al compilar), y los
+índices de abajo son los que muestran, en el mismo orden. Un proceso nuevo
+se agrega a su índice; los enlaces entre procesos son relativos
+(`otro-proceso.md#seccion`). Las pruebas de
+`desktop/src/ayuda/manual.test.ts` y `mobile/rust-core/src/manual/tests.rs`
+revisan que cada proceso esté en el índice y que ningún enlace quede roto.
 
 ## Cómo se escribe cada proceso
 
@@ -156,6 +158,7 @@ escritorio.
 - ✅ [Vincular el teléfono por primera vez (QR o código)](movil/vincular-telefono.md)
 - ✅ [Iniciar sesión y fijar la contraseña la primera vez](movil/iniciar-sesion.md)
 - ✅ [Menú de la cuenta: tema y cerrar sesión](movil/cuenta-tema-y-cerrar-sesion.md)
+- ✅ [Buscar ayuda en el manual](movil/ayuda.md)
 - ✅ [La pantalla principal: secciones, botón redondo y avisos](movil/pantalla-principal.md)
 
 ### Contratistas (Activos)
