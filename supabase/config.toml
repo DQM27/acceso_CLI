@@ -384,6 +384,65 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# `verify_jwt` de cada Edge Function, igual que en producción (revisado el
+# 2026-10-25). La integración con GitHub no despliega funciones: se suben a
+# mano, y este bloque es lo que el repo guarda de cómo tienen que quedar.
+#
+# Apagado sólo donde quien llama no trae una sesión de Supabase Auth: los
+# equipos (`device-*`, que se identifican con su clave o con un código) y
+# tres funciones del panel que validan la sesión por su cuenta con
+# `correoAdminAutorizado` (_shared/admin.ts).
+[functions.device-auth]
+verify_jwt = false
+
+[functions.device-vincular]
+verify_jwt = false
+
+[functions.device-reconectar]
+verify_jwt = false
+
+[functions.admin-list-devices]
+verify_jwt = false
+
+[functions.admin-create-usuario]
+verify_jwt = false
+
+[functions.admin-reset-password-usuario]
+verify_jwt = false
+
+[functions.admin-autorizar-reconexion]
+verify_jwt = true
+
+[functions.admin-crear-contratista]
+verify_jwt = true
+
+[functions.admin-create-site]
+verify_jwt = true
+
+[functions.admin-delete-device]
+verify_jwt = true
+
+[functions.admin-editar-contratista]
+verify_jwt = true
+
+[functions.admin-enviar-push]
+verify_jwt = true
+
+[functions.admin-provision-device]
+verify_jwt = true
+
+[functions.admin-revoke-device]
+verify_jwt = true
+
+[functions.lienzo-consulta]
+verify_jwt = true
+
+[functions.lienzo-ia]
+verify_jwt = true
+
+[functions.sync-access-policy]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
