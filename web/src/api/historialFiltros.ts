@@ -16,10 +16,11 @@ export type ModeloFiltros = Record<string, unknown>;
 
 type TipoFiltro = "texto" | "numero" | "fecha";
 
-interface ColumnaFiltrable {
+export interface ColumnaFiltrable {
   tipo: TipoFiltro;
-  /** Columna de `panel_movimientos` contra la que se compara. Para texto es la
-   * versión sin tildes ni mayúsculas (`*_p`), salvo las de texto plano. */
+  /** Columna de la vista (`panel_movimientos` y las de las otras clases)
+   * contra la que se compara. Para texto es la versión sin tildes ni
+   * mayúsculas (`*_p`), salvo las de texto plano. */
   columna: string;
 }
 
@@ -181,12 +182,16 @@ interface FiltroAg extends CondicionAg {
 }
 
 /** Una expresión de `.or(...)` por cada columna filtrada (las columnas que la
- * grilla conoce y que tienen un filtro con valor). */
-export function expresionesDeFiltros(modelo: ModeloFiltros | undefined): string[] {
+ * grilla conoce y que tienen un filtro con valor). `columnas` es el mapa de la
+ * clase de historial (por defecto, el de contratistas). */
+export function expresionesDeFiltros(
+  modelo: ModeloFiltros | undefined,
+  columnas: Record<string, ColumnaFiltrable> = COLUMNAS_FILTRABLES,
+): string[] {
   if (!modelo) return [];
   const expresiones: string[] = [];
   for (const [colId, valor] of Object.entries(modelo)) {
-    const config = COLUMNAS_FILTRABLES[colId];
+    const config = columnas[colId];
     if (!config || typeof valor !== "object" || valor === null) continue;
     const filtro = valor as FiltroAg;
     const condiciones = filtro.conditions ?? [filtro.condition1, filtro.condition2].filter((c) => c !== undefined);
@@ -201,4 +206,25 @@ export function expresionesDeFiltros(modelo: ModeloFiltros | undefined): string[
     );
   }
   return expresiones;
+}
+
+/** El buscador de las clases que no tienen función de búsqueda propia
+ * (proveedores, correo y KOF, ver la migración
+ * `historial_panel_proveedores_correo_kof`): la cédula (o el código de
+ * empleado) contiene lo escrito -- también sin guiones ni espacios, como se
+ * guarda la cédula --, o el nombre tiene todas las palabras, en cualquier
+ * orden. Sin tildes ni mayúsculas, contra las columnas `*_p`. Una expresión
+ * para `.or(...)`; `null` si no hay nada escrito. */
+export function expresionBusqueda(texto: string, columnaIdentificacion: string, columnaNombre: string): string | null {
+  const plegado = plegarTexto(texto.trim());
+  if (!plegado) return null;
+  const opciones = [hoja(columnaIdentificacion, "ilike", `*${escaparLike(plegado)}*`)];
+  const compacto = plegado.replace(/[\s-]/g, "");
+  if (compacto && compacto !== plegado) {
+    opciones.push(hoja(columnaIdentificacion, "ilike", `*${escaparLike(compacto)}*`));
+  }
+  const palabras = plegado.split(/\s+/).filter((palabra) => palabra.length > 0);
+  const nombre = palabras.map((palabra) => hoja(columnaNombre, "ilike", `*${escaparLike(palabra)}*`));
+  opciones.push(nombre.length === 1 ? nombre[0] : `and(${nombre.join(",")})`);
+  return `or(${opciones.join(",")})`;
 }
