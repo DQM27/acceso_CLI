@@ -74,6 +74,12 @@ class NubeRealtime(
                 } catch (excepcion: NucleoException) {
                     Log.w("SincronizacionNube", "No se pudo autenticar para Realtime", excepcion)
                     Telemetria.realtime?.error(excepcion.javaClass.simpleName)
+                    // La nube confirmó el retiro al autenticar (la marca la
+                    // pone sólo esa respuesta): no tiene sentido reintentar.
+                    if (withContext(dispatcherIO) { nucleo.equipoRetirado() }) {
+                        onExpulsado()
+                        break
+                    }
                     30_000L
                 } catch (excepcion: Throwable) {
                     // Antes esto se descartaba en silencio -- si Realtime nunca
@@ -202,12 +208,20 @@ class NubeRealtime(
                         if (!ExpulsionNube.esParaEsteEquipo(aviso.texto("dispositivo_id"), sesion.dispositivoId)) {
                             return@onEach
                         }
+                        // El aviso no decide: descarta el token (sin eso,
+                        // las consultas en vivo le devolvían vacío y los
+                        // chequeos pasaban como si no hubiera conflicto) y
+                        // le pregunta a `device-auth`. Sólo si la nube
+                        // confirma el retiro se muestra y se corta el canal.
+                        val confirmado = withContext(dispatcherIO) {
+                            ExpulsionNube.confirmadoPorLaNube(nucleo::descartarTokenNube, nucleo::equipoRetirado)
+                        }
+                        if (!confirmado) {
+                            Log.w("SincronizacionNube", "Aviso de expulsión sin retiro confirmado por la nube")
+                            return@onEach
+                        }
                         Log.w("SincronizacionNube", "Este teléfono fue retirado en el panel")
                         onExpulsado()
-                        // El token cacheado ya no sirve: sin descartarlo,
-                        // las consultas en vivo le devolvían vacío y los
-                        // chequeos pasaban como si no hubiera conflicto.
-                        withContext(dispatcherIO) { runCatching { nucleo.descartarTokenNube() } }
                         expulsado.complete(Unit)
                     }
                     .launchIn(this)

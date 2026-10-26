@@ -80,15 +80,55 @@ async function iniciar(opciones: Parameters<typeof iniciarRealtimeNube>[0] = {})
 describe("sincronización por Realtime", () => {
   it("avisa la expulsión sólo cuando el aviso es para este equipo", async () => {
     const onExpulsado = vi.fn();
-    const canal = await iniciar({ onExpulsado });
+    const confirmarExpulsion = vi.fn().mockResolvedValue(true);
+    const canal = await iniciar({ onExpulsado, confirmarExpulsion });
 
     canal.expulsion({ payload: { dispositivo_id: "equipo-b", motivo: "revocado" } });
     await vi.advanceTimersByTimeAsync(0);
+    expect(confirmarExpulsion).not.toHaveBeenCalled();
     expect(onExpulsado).not.toHaveBeenCalled();
 
     canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revocado" } });
     await vi.advanceTimersByTimeAsync(0);
     expect(onExpulsado).toHaveBeenCalledTimes(1);
+  });
+
+  // Incidente del 2026-10-26: el equipo se mostró como retirado sin estarlo.
+  // El aviso en vivo sólo dispara la pregunta a la nube.
+
+  it("un aviso que la nube no confirma no muestra el retiro ni corta el canal", async () => {
+    const onExpulsado = vi.fn();
+    const canal = await iniciar({ onExpulsado, confirmarExpulsion: vi.fn().mockResolvedValue(false) });
+    const primerCliente = mocks.crear.mock.results[0].value;
+
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revocado" } });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(onExpulsado).not.toHaveBeenCalled();
+    expect(primerCliente.realtime.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("si no se puede preguntar a la nube, el aviso no se toma como retiro", async () => {
+    const onExpulsado = vi.fn();
+    const canal = await iniciar({
+      onExpulsado,
+      confirmarExpulsion: vi.fn().mockRejectedValue(new Error("sin red")),
+    });
+
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revocado" } });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(onExpulsado).not.toHaveBeenCalled();
+  });
+
+  it("sin forma de confirmar con la nube, un aviso nunca es un retiro", async () => {
+    const onExpulsado = vi.fn();
+    const canal = await iniciar({ onExpulsado });
+
+    canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revocado" } });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(onExpulsado).not.toHaveBeenCalled();
   });
 
   it("el cierre de sesión por otra unidad sólo sincroniza si es del usuario de este equipo", async () => {
@@ -105,7 +145,7 @@ describe("sincronización por Realtime", () => {
   });
 
   it("al ser retirado cierra el canal y no vuelve a conectar", async () => {
-    const canal = await iniciar({ onExpulsado: vi.fn() });
+    const canal = await iniciar({ onExpulsado: vi.fn(), confirmarExpulsion: vi.fn().mockResolvedValue(true) });
     const primerCliente = mocks.crear.mock.results[0].value;
 
     canal.expulsion({ payload: { dispositivo_id: "equipo-a", motivo: "revocado" } });

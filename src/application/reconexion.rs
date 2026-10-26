@@ -49,21 +49,37 @@ pub enum ReconexionError {
 }
 
 impl AppCore {
-    /// `true` si la nube dijo que no reconoce la clave de este equipo (lo
-    /// retiraron en el panel): es cuando aparece "Reconectar este equipo".
+    /// `true` si la última respuesta con autoridad de la nube fue que este
+    /// equipo está retirado: es cuando aparece "Reconectar este equipo".
     pub fn equipo_retirado(&self) -> bool {
         estado_equipo::equipo_retirado(&self.connection).unwrap_or(false)
     }
 
-    /// Lo que las plataformas llaman cuando falla la autenticación del
-    /// equipo: si la nube dijo que no reconoce su clave, queda anotado como
-    /// retirado. Cualquier otro error (sin red, versión vieja) no cambia
-    /// nada. Sólo la reconexión borra la marca.
-    pub fn anotar_rechazo_de_la_nube(&self, error: &NubeError) {
-        if matches!(error, NubeError::CredencialesInvalidas)
-            && let Err(error) = estado_equipo::marcar_retirado(&self.connection, true)
-        {
-            log::warn!("no se pudo anotar que este equipo fue retirado: {error}");
+    /// Lo que las plataformas llaman después de CADA autenticación del
+    /// equipo. La marca de retirado no se decide acá ni se deja pegada:
+    /// refleja lo último que la nube dijo con autoridad.
+    ///
+    /// - `Ok`: la nube aceptó al equipo, así que no está retirado (se borra
+    ///   la marca si quedó de antes).
+    /// - [`NubeError::EquipoRetirado`]: la nube lo confirmó con prueba
+    ///   (`403 dispositivo_retirado`), se marca.
+    /// - Cualquier otro error (sin red, nube caída, `401`, versión vieja):
+    ///   no dice nada sobre el retiro, no cambia nada.
+    ///
+    /// Incidente del 2026-10-26: un `401` pasajero de la nube marcaba al
+    /// equipo y sólo una reconexión borraba la marca, aunque la siguiente
+    /// autenticación ya hubiera funcionado.
+    pub fn anotar_autenticacion<T>(&self, resultado: &Result<T, NubeError>) {
+        let retirado = match resultado {
+            Ok(_) => false,
+            Err(NubeError::EquipoRetirado) => true,
+            Err(_) => return,
+        };
+        if self.equipo_retirado() == retirado {
+            return;
+        }
+        if let Err(error) = estado_equipo::marcar_retirado(&self.connection, retirado) {
+            log::warn!("no se pudo anotar si este equipo está retirado: {error}");
         }
     }
 
@@ -233,17 +249,95 @@ mod tests {
         );
     }
 
+    fn fallo(error: NubeError) -> Result<(), NubeError> {
+        Err(error)
+    }
+
+    /// Todos los errores que NO son un retiro confirmado.
+    fn errores_que_no_son_retiro() -> Vec<NubeError> {
+        vec![
+            NubeError::CredencialesInvalidas,
+            NubeError::SinCredencial,
+            NubeError::VersionDesactualizada,
+            NubeError::CodigoVinculacionInvalido,
+            NubeError::ClaveEnUso,
+            NubeError::Firmante(crate::nube::ErrorFirmante::Almacen("keystore".into())),
+        ]
+    }
+
     #[test]
-    fn solo_el_rechazo_de_la_clave_marca_el_equipo_como_retirado() {
+    fn solo_un_retiro_confirmado_por_la_nube_marca_el_equipo() {
         let core = nucleo();
-        assert!(!core.equipo_retirado());
+        for error in errores_que_no_son_retiro() {
+            let descripcion = format!("{error:?}");
+            core.anotar_autenticacion(&fallo(error));
+            assert!(!core.equipo_retirado(), "{descripcion} no es un retiro");
+        }
 
-        core.anotar_rechazo_de_la_nube(&NubeError::SinCredencial);
-        core.anotar_rechazo_de_la_nube(&NubeError::VersionDesactualizada);
-        assert!(!core.equipo_retirado());
-
-        core.anotar_rechazo_de_la_nube(&NubeError::CredencialesInvalidas);
+        core.anotar_autenticacion(&fallo(NubeError::EquipoRetirado));
         assert!(core.equipo_retirado());
+    }
+
+    /// El incidente del 2026-10-26, paso a paso: un `401` pasajero y, un
+    /// segundo después, una autenticación que funciona.
+    #[test]
+    fn incidente_un_401_pasajero_no_marca_el_equipo_como_retirado() {
+        let core = nucleo();
+
+        core.anotar_autenticacion(&fallo(NubeError::CredencialesInvalidas));
+        assert!(!core.equipo_retirado(), "un 401 no es un retiro");
+
+        core.anotar_autenticacion(&Ok(()));
+        assert!(!core.equipo_retirado());
+    }
+
+    /// Un equipo que quedó marcado por la versión anterior (v1.7.0) se
+    /// arregla solo con la primera autenticación que funcione, sin
+    /// reconectar.
+    #[test]
+    fn una_autenticacion_exitosa_borra_una_marca_de_retirado_que_quedo_de_antes() {
+        let core = nucleo();
+        estado_equipo::marcar_retirado(&core.connection, true).unwrap();
+        assert!(core.equipo_retirado());
+
+        core.anotar_autenticacion(&Ok(()));
+
+        assert!(!core.equipo_retirado());
+    }
+
+    /// Con el equipo retirado de verdad, perder la red (o que la nube no
+    /// responda) no lo "des-retira": sólo una respuesta con autoridad cambia
+    /// la marca.
+    #[test]
+    fn un_error_que_no_es_retiro_tampoco_borra_un_retiro_confirmado() {
+        let core = nucleo();
+        core.anotar_autenticacion(&fallo(NubeError::EquipoRetirado));
+
+        for error in errores_que_no_son_retiro() {
+            let descripcion = format!("{error:?}");
+            core.anotar_autenticacion(&fallo(error));
+            assert!(core.equipo_retirado(), "{descripcion} no cambia el retiro");
+        }
+    }
+
+    /// Retirado, reconectado desde el panel sin pasar por la app (por
+    /// ejemplo, el retiro se deshizo por SQL): la nube vuelve a aceptarlo y
+    /// la franja se va sola.
+    #[test]
+    fn la_marca_sigue_a_la_nube_en_los_dos_sentidos() {
+        let core = nucleo();
+        let respuestas = [
+            (fallo(NubeError::EquipoRetirado), true),
+            (fallo(NubeError::CredencialesInvalidas), true),
+            (Ok(()), false),
+            (fallo(NubeError::SinCredencial), false),
+            (fallo(NubeError::EquipoRetirado), true),
+            (Ok(()), false),
+        ];
+        for (indice, (respuesta, esperado)) in respuestas.iter().enumerate() {
+            core.anotar_autenticacion(respuesta);
+            assert_eq!(core.equipo_retirado(), *esperado, "paso {indice}");
+        }
     }
 
     #[test]

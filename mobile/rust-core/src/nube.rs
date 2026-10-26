@@ -64,20 +64,23 @@ impl Nucleo {
             .establecer_firmante(std::sync::Arc::new(FirmanteMovil(almacen)));
     }
 
-    /// Descarta el token cacheado. Lo llama `NubeRealtime.kt` al recibir un
-    /// aviso de expulsión (retirado en el panel): sin esto el teléfono seguía
-    /// usando su token de hasta 1 h, las consultas en vivo le devolvían
-    /// vacío (la política restrictiva filtra en silencio) y un chequeo como
-    /// "ingreso activo en otro sitio" pasaba como si no hubiera conflicto.
-    /// Con el token descartado, la próxima operación de nube va a
-    /// `device-auth` y recibe el motivo real. Mismo criterio que
-    /// `descartar_token_nube` en escritorio.
+    /// Descarta el token cacheado y le pregunta a `device-auth` en el acto.
+    /// Lo llama `NubeRealtime.kt` al recibir un aviso de expulsión: sin
+    /// descartarlo, el teléfono seguía usando su token de hasta 1 h, las
+    /// consultas en vivo le devolvían vacío (la política restrictiva filtra
+    /// en silencio) y un chequeo como "ingreso activo en otro sitio" pasaba
+    /// como si no hubiera conflicto.
+    ///
+    /// El aviso por sí solo NO marca el teléfono como retirado: la marca la
+    /// pone la respuesta de `device-auth` (ver
+    /// `AppCore::anotar_autenticacion`), y Kotlin la lee después con
+    /// [`Nucleo::equipo_retirado`]. Hace red: Kotlin la llama en segundo
+    /// plano. Mismo criterio que `descartar_token_nube` en escritorio.
     pub fn descartar_token_nube(&self) {
         self.invalidar_token_cacheado();
-        // Queda anotado como retirado para ofrecer "Reconectar este
-        // teléfono" sin esperar a la próxima autenticación.
-        self.core_lock()
-            .anotar_rechazo_de_la_nube(&control_acceso::nube::NubeError::CredencialesInvalidas);
+        if let Err(error) = self.autenticar_con_cache() {
+            log::info!("tras el aviso de expulsión, device-auth respondió: {error}");
+        }
     }
 
     /// Abre de antemano las conexiones que usa la verificación final de un

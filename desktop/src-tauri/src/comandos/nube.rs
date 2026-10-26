@@ -628,18 +628,19 @@ fn preparar_sesion_realtime(state: &GuiState) -> Result<SesionRealtimeNube, Stri
     })
 }
 
-/// El aviso en vivo `dispositivo_expulsado` llegó para este equipo: el
-/// token cacheado ya no sirve (el servidor lo rechaza), así que se descarta
-/// para que la próxima operación de nube pida uno y muestre el motivo real.
-/// También queda anotado como retirado, para ofrecer "Reconectar este
-/// equipo" sin esperar a la próxima autenticación (que lo anotaría igual).
+/// El aviso en vivo `dispositivo_expulsado` llegó para este equipo: se
+/// descarta el token cacheado y se le pregunta a `device-auth` en el acto.
+/// El aviso por sí solo NO marca el equipo como retirado: lo decide la
+/// respuesta de la nube (ver `AppCore::anotar_autenticacion`). Devuelve si
+/// quedó retirado, para que la pantalla ofrezca "Reconectar este equipo"
+/// sólo entonces.
 #[tauri::command(async)]
-pub fn descartar_token_nube(state: tauri::State<'_, GuiState>) -> Result<(), String> {
+pub fn descartar_token_nube(state: tauri::State<'_, GuiState>) -> bool {
     state.invalidar_token_cacheado();
-    state
-        .core()
-        .anotar_rechazo_de_la_nube(&nube::NubeError::CredencialesInvalidas);
-    Ok(())
+    if let Err(error) = state.autenticar_con_cache() {
+        log::info!("tras el aviso de expulsión, device-auth respondió: {error}");
+    }
+    state.core().equipo_retirado()
 }
 
 /// Cuántas filas de `cola_salida` ya agotaron los reintentos automáticos
