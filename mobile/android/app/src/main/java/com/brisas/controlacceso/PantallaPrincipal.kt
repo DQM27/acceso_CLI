@@ -913,7 +913,10 @@ private const val DEMORA_BLOQUEO_SESION_MS = 25 * 60_000L
 /// `enDesarrollo` las oculta de la barra sin borrar su pantalla (ver
 /// [BarraSecciones]).
 enum class SeccionPrincipal(val etiqueta: String, val enDesarrollo: Boolean = false) {
-    ACTIVOS("Activos"),
+    // "Contratistas" y no "Activos" (pedido del usuario 2026-10-26): la
+    // pestaña es sólo de contratistas; KOF y Externos también tienen gente
+    // adentro.
+    ACTIVOS("Contratistas"),
     RUTAS("Rutas", enDesarrollo = true),
     KOF("KOF"),
     // Antes "Proveedores": ahora agrupa a quien entra sin catálogo
