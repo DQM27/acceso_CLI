@@ -131,9 +131,13 @@ internal fun AccionPrincipal(icono: ImageVector, descripcion: String, onClick: (
 }
 
 /// La pantalla que la llama pone su búsqueda en la píldora de abajo mientras
-/// esté a la vista. Misma mecánica que [AccionPrincipal].
+/// esté a la vista. Misma mecánica que [AccionPrincipal]. Con `visible` en
+/// `false` no hay píldora: en KOF, Proveedores y Correo, con la lista vacía
+/// no hay nada que buscar, y una búsqueda de más se confundía con la del
+/// "+" (en KOF, la de encargados).
 @Composable
-internal fun BusquedaPrincipal(ayuda: String, onAbrir: () -> Unit) {
+internal fun BusquedaPrincipal(ayuda: String, onAbrir: () -> Unit, visible: Boolean = true) {
+    if (!visible) return
     val acciones = LocalAccionesInferiores.current ?: return
     val alAbrir = rememberUpdatedState(onAbrir)
     DisposableEffect(acciones, ayuda) {

@@ -206,7 +206,12 @@ fun PantallaPorCorreo(
                         escaneando = true
                         escaneoDirecto = true
                     })
-                    BusquedaPrincipal(ayuda = AYUDA_BUSQUEDA_CORREO, onAbrir = { buscando = true })
+                    // Sólo con alguien adentro: con la lista vacía no hay qué buscar.
+                    BusquedaPrincipal(
+                        ayuda = AYUDA_BUSQUEDA_CORREO,
+                        onAbrir = { buscando = true },
+                        visible = viewModel.activos.isNotEmpty(),
+                    )
 
                     BuscadorInferior(
                         visible = buscando,

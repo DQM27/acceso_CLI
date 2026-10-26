@@ -91,7 +91,12 @@ fun PantallaGafetesProvisionales(
     }
 
     AccionPrincipal(Icons.Default.Add, "Entregar un gafete provisional", onClick = { buscandoEncargado = true })
-    BusquedaPrincipal(ayuda = "Nombre, código o gafete", onAbrir = { buscandoPrestamo = true })
+    // Sólo con gafetes prestados: si no, la única búsqueda es la del "+".
+    BusquedaPrincipal(
+        ayuda = "Nombre, código o gafete",
+        onAbrir = { buscandoPrestamo = true },
+        visible = viewModel.activos.isNotEmpty(),
+    )
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
