@@ -290,6 +290,7 @@ fun PantallaActivos(
                 fila = viewModel.seleccionSalida,
                 onDismiss = { viewModel.elegirSeleccionSalida(null) },
                 onConfirmar = { viewModel.confirmarSalida(it) },
+                yaAdentro = viewModel.salidaYaAdentro,
             )
 
             }

@@ -448,9 +448,15 @@ class ActivosViewModelTest {
         advanceUntilIdle()
 
         assertEquals("Contratista Test", viewModel.seleccionSalida?.contratistaNombre)
+        // La hoja avisa que ya estaba adentro (triángulo ámbar).
+        assertTrue(viewModel.salidaYaAdentro)
         assertEquals(SeleccionIngreso.Ninguna, viewModel.seleccionIngreso)
         assertNull(viewModel.alertaEscaneo)
         assertEquals("", viewModel.texto)
+
+        // Tocar a alguien en la lista es una salida a propósito: sin aviso.
+        viewModel.elegirSeleccionSalida(viewModel.activos.single())
+        assertFalse(viewModel.salidaYaAdentro)
     }
 
     @Test

@@ -174,6 +174,12 @@ class ActivosViewModel(
         private set
     var seleccionSalida by mutableStateOf<FilaActiva?>(null)
         private set
+
+    /// La salida abierta vino de escanear (o elegir en la búsqueda) a alguien
+    /// que ya estaba adentro, no de tocarlo en la lista: la hoja lo aclara
+    /// con un aviso, porque quien escaneó quizá esperaba darle el ingreso.
+    var salidaYaAdentro by mutableStateOf(false)
+        private set
     var seleccionIngreso by mutableStateOf<SeleccionIngreso>(SeleccionIngreso.Ninguna)
         private set
 
@@ -407,7 +413,10 @@ class ActivosViewModel(
                     preparacion.mensajeBloqueo != null -> SeleccionIngreso.Bloqueada(preparacion, preparacion.mensajeBloqueo!!)
                     else -> SeleccionIngreso.Formulario(preparacion)
                 }
-                if (salida != null) seleccionSalida = salida
+                if (salida != null) {
+                    seleccionSalida = salida
+                    salidaYaAdentro = true
+                }
                 resultado = when {
                     salida != null -> "salida"
                     preparacion.mensajeBloqueo != null -> "bloqueada"
@@ -514,6 +523,7 @@ class ActivosViewModel(
 
     fun elegirSeleccionSalida(fila: FilaActiva?) {
         seleccionSalida = fila
+        salidaYaAdentro = false
     }
 
     /// Ver [cerrarFila].

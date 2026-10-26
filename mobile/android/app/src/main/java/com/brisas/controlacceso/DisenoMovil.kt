@@ -139,6 +139,16 @@ internal val ColorExitoBrisas: Color
         TemaApp.TOKYO_DAY -> Color(0xFF4A6330)
         TemaApp.TOKYO_NIGHT -> Color(0xFF9ECE6A)
     }
+/// Ámbar de advertencia para íconos y puntos (el triángulo, el punto de
+/// conexión): igual en los dos temas.
+internal val ColorAdvertenciaBrisas = Color(0xFFE0A100)
+/// El mismo ámbar para texto: en el tema claro, más oscuro para que se lea
+/// sobre fondo blanco.
+internal val ColorTextoAdvertenciaBrisas: Color
+    @Composable get() = when (temaActual()) {
+        TemaApp.TOKYO_DAY -> Color(0xFF8C5F00)
+        TemaApp.TOKYO_NIGHT -> Color(0xFFE0AF68)
+    }
 /// Escala completa, con saltos claros entre niveles a la manera de iOS
 /// (título grande, cuerpo, subtítulo, nota): antes `bodyLarge` y
 /// `bodyMedium` medían lo mismo (14sp) y el nombre de una persona casi no se

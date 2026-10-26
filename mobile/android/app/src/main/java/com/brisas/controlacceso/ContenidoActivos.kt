@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -312,6 +313,9 @@ internal fun DialogoConfirmarSalida(
     fila: FilaActiva?,
     onDismiss: () -> Unit,
     onConfirmar: (FilaActiva) -> Unit,
+    // Se escaneó (o se eligió en la búsqueda) a alguien que ya estaba
+    // adentro: la hoja lo dice con el triángulo ámbar.
+    yaAdentro: Boolean = false,
 ) {
     if (fila == null) return
     DialogoRegistrarSalida(
@@ -324,8 +328,13 @@ internal fun DialogoConfirmarSalida(
         ),
         onDismiss = onDismiss,
         onConfirmar = { onConfirmar(fila) },
+        aviso = if (yaAdentro) AVISO_SALIDA_YA_ADENTRO else null,
     )
 }
+
+/// Lo que dice la hoja de salida cuando se escaneó a alguien que ya estaba
+/// adentro.
+internal const val AVISO_SALIDA_YA_ADENTRO = "Persona con ingreso activo"
 
 internal const val TEXTO_OTRO_DISPOSITIVO = "registrado en otro dispositivo de la unidad operativa"
 
@@ -344,6 +353,11 @@ internal fun textoGafeteSalida(gafete: Long?): String = if (gafete != null) "Gaf
 /// Al confirmar, el panel baja primero y recién entonces avisa: si el que
 /// llama lo quitara de la composición en el acto, desaparecería de golpe.
 /// `confirmado` evita que un segundo toque registre dos veces mientras baja.
+///
+/// Con [aviso] (se escaneó a alguien que ya estaba adentro, pedido del
+/// usuario 2026-10-26): triángulo ámbar en vez del ícono de salida, el aviso
+/// en ámbar arriba del nombre y la pregunta antes del botón, para que no se
+/// confunda con un ingreso.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DialogoRegistrarSalida(
@@ -352,6 +366,7 @@ internal fun DialogoRegistrarSalida(
     onDismiss: () -> Unit,
     onConfirmar: () -> Unit,
     accion: String = "Registrar salida",
+    aviso: String? = null,
 ) {
     val estado = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val alcance = rememberCoroutineScope()
@@ -374,16 +389,31 @@ internal fun DialogoRegistrarSalida(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .background(
+                        if (aviso != null) ColorAdvertenciaBrisas.copy(alpha = 0.16f) else MaterialTheme.colorScheme.primaryContainer,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                if (aviso != null) {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = ColorAdvertenciaBrisas)
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+            if (aviso != null) {
+                Text(
+                    aviso.uppercase(),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = ColorTextoAdvertenciaBrisas,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
             }
             Text(
                 nombre,
                 style = MaterialTheme.typography.titleLarge,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 12.dp),
+                modifier = Modifier.padding(top = if (aviso != null) 6.dp else 12.dp),
             )
             if (detalle != null) {
                 Text(
@@ -393,6 +423,15 @@ internal fun DialogoRegistrarSalida(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+            if (aviso != null) {
+                Text(
+                    "¿Desea registrar su salida?",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
             BotonBrisas(
                 onClick = {
                     if (!confirmado) {
@@ -400,7 +439,7 @@ internal fun DialogoRegistrarSalida(
                         cerrarY(onConfirmar)
                     }
                 },
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = if (aviso != null) 12.dp else 20.dp),
             ) {
                 Text(accion)
             }
