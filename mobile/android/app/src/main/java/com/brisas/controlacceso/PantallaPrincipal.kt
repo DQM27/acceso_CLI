@@ -533,7 +533,16 @@ fun PantallaPrincipal(
         AnimatedContent(
             targetState = panel,
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            transitionSpec = { transicionDePantalla(avanza = targetState != PanelPrincipal.PESTANAS) },
+            // "Nuevo contratista" se abre en la cámara, y las cámaras no se
+            // animan (ver `TransicionesPantalla.kt`): la vista previa arranca
+            // en el hilo principal y no debe competir con un deslizamiento.
+            // Tampoco al cerrarla desde la cámara (su X); desde el formulario
+            // sí vuelve con la transición de siempre.
+            transitionSpec = {
+                val conCamara = targetState == PanelPrincipal.NUEVO_CONTRATISTA ||
+                    (initialState == PanelPrincipal.NUEVO_CONTRATISTA && pantallasCompletas.cantidad > 0)
+                if (conCamara) SinTransicion else transicionDePantalla(avanza = targetState != PanelPrincipal.PESTANAS)
+            },
             label = "panelPrincipal",
         ) { mostrado ->
             if (mostrado == PanelPrincipal.AVISOS) {
@@ -546,18 +555,28 @@ fun PantallaPrincipal(
                     onVolver = { mostrarAvisos = false },
                 )
             } else if (mostrado == PanelPrincipal.NUEVO_CONTRATISTA) {
-                PantallaNuevoContratista(
-                    nucleo,
-                    onVolver = { mostrarNuevoContratista = false },
-                    // Recién dado de alta, directo a su ingreso en Activos: antes
-                    // volvía a la lista y había que buscarlo de nuevo.
-                    onGuardado = { id ->
-                        mostrarNuevoContratista = false
-                        pestana = SECCIONES_VISIBLES.indexOf(SeccionPrincipal.ACTIVOS)
-                        activosViewModel.elegir(id)
-                    },
-                    textoInicial = textoNuevoContratista,
-                )
+                // Con `LocalPantallasCompletas`, su cámara avisa que está a la
+                // vista (ver la transición de arriba).
+                CompositionLocalProvider(LocalPantallasCompletas provides pantallasCompletas) {
+                    PantallaNuevoContratista(
+                        nucleo,
+                        onVolver = { mostrarNuevoContratista = false },
+                        // Recién dado de alta, directo a su ingreso en Contratistas:
+                        // antes volvía a la lista y había que buscarlo de nuevo. Se
+                        // espera a que el formulario de ingreso esté listo y recién
+                        // entonces se cierra: así hay una sola transición (la de
+                        // volver), en vez de esa más la de la lista al formulario
+                        // encima.
+                        onGuardado = { id ->
+                            scope.launch {
+                                activosViewModel.elegir(id).join()
+                                pestana = SECCIONES_VISIBLES.indexOf(SeccionPrincipal.ACTIVOS)
+                                mostrarNuevoContratista = false
+                            }
+                        },
+                        textoInicial = textoNuevoContratista,
+                    )
+                }
             } else if (mostrado == PanelPrincipal.AYUDA) {
                 PantallaAyuda(onVolver = { mostrarAyuda = false })
             } else if (mostrado == PanelPrincipal.RECONEXION) {
