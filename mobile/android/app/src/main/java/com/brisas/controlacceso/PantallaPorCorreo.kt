@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
@@ -109,6 +110,10 @@ fun PantallaPorCorreo(
     var escaneoDirecto by remember { mutableStateOf(false) }
     var escaneandoPlaca by remember { mutableStateOf(false) }
     var filaParaSalida by remember { mutableStateOf<FilaCorreoActiva?>(null) }
+    // Se escaneó a alguien que ya está adentro: el motivo en vez del
+    // formulario, igual que en Proveedores y Contratistas.
+    var bloqueoEscaneo by remember { mutableStateOf<String?>(null) }
+    val contexto = LocalContext.current
 
     // Qué panel se ve ahora: la lista, el formulario o uno de los escáneres.
     // La lista y el formulario se abren y cierran con una transición corta; los
@@ -129,11 +134,17 @@ fun PantallaPorCorreo(
                 PantallaEscanearCedula(
                     modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
                     onDocumentoDetectado = { documento ->
-                        escaneando = false
-                        escaneoDirecto = false
                         val numero = documento.numeroDocumento.filter(Char::isDigit)
                             .ifBlank { documento.numeroDocumento }
-                        viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
+                        // Igual que en Proveedores: si ya está adentro, frena
+                        // ahí con la alarma, sin abrir el formulario.
+                        val aviso = viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
+                        if (aviso != null) {
+                            sonarAlertaEscaneo(contexto, AlertaEscaneo.DENEGADO)
+                            bloqueoEscaneo = aviso
+                        }
+                        escaneando = false
+                        escaneoDirecto = false
                     },
                     onCerrar = {
                         escaneando = false
@@ -167,7 +178,20 @@ fun PantallaPorCorreo(
             PanelConFormulario.FORMULARIO -> {
                 // Pantalla completa: sin barra de secciones encima.
                 OcultarBarraSecciones()
-                FormularioNuevoIngresoCorreo(
+                val motivoBloqueo = bloqueoEscaneo
+                if (motivoBloqueo != null) {
+                    PantallaBloqueoIngreso(
+                        titulo = viewModel.nombre.ifBlank { "Visita" },
+                        subtitulo = viewModel.cedula,
+                        mensaje = motivoBloqueo,
+                        onVolver = {
+                            bloqueoEscaneo = null
+                            viewModel.cancelarFormulario()
+                            gafeteTexto = ""
+                            mostrandoFormulario = false
+                        },
+                    )
+                } else FormularioNuevoIngresoCorreo(
                     viewModel = viewModel,
                     gafeteTexto = gafeteTexto,
                     onCambiarGafeteTexto = { gafeteTexto = it },
@@ -299,6 +323,10 @@ private fun FormularioNuevoIngresoCorreo(
                 onCambiarNombre = viewModel::cambiarNombre,
                 titulo = "Visita",
             )
+            // Ya está adentro: el aviso junto a la cédula, a la vista.
+            if (viewModel.cedulaConIngresoActivo) {
+                viewModel.error?.let { FranjaEstado(it, TipoEstado.ERROR, modifier = Modifier.padding(top = 12.dp), vibrar = true) }
+            }
 
             SeccionFormulario("Motivo", pie = "Por ejemplo: entrevista RH, y a quién visita.") {
                 CampoAgrupado(
@@ -329,7 +357,7 @@ private fun FormularioNuevoIngresoCorreo(
                 onListo = { if (puedeRegistrar) registrar() },
             )
 
-            viewModel.error?.let { mensaje ->
+            viewModel.error?.takeIf { !viewModel.cedulaConIngresoActivo }?.let { mensaje ->
                 FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(top = 16.dp), vibrar = true)
             }
 

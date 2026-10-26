@@ -1537,7 +1537,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_praind_para_formulario() and 0xFFFF) != 15325) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_correo_con_ingreso_activo() and 0xFFFF) != 28540) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_correo_con_ingreso_activo() and 0xFFFF) != 5132) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_correos_activos() and 0xFFFF) != 12985) {
@@ -1660,7 +1660,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_vincular_dispositivo_inicial() and 0xFFFF) != 3515) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 39964) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 6459) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_empresas_proveedor() and 0xFFFF) != 7299) {
@@ -3699,9 +3699,11 @@ public interface NucleoInterface {
     fun `requierePraindParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean
     
     /**
-     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si ya
-     * tiene un ingreso por correo abierto en este sitio (este equipo o el
-     * otro dispositivo), `None` si puede entrar. Sin actor: es una lectura.
+     * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
+     * está adentro en este sitio (este equipo o el otro dispositivo), por
+     * correo o por otra vía (contratista, proveedor), `None` si puede
+     * entrar. Las mismas reglas y textos que frenan el registro. Sin actor:
+     * es una lectura.
      */
     fun `avisoCorreoConIngresoActivo`(`cedula`: kotlin.String): kotlin.String?
     
@@ -4015,10 +4017,12 @@ public interface NucleoInterface {
     fun `vincularDispositivoInicial`(`codigo`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
     
     /**
-     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
-     * ya tiene un ingreso de proveedor abierto en este sitio (este equipo
-     * o el otro dispositivo), `None` si puede entrar. La regla y el texto
-     * son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+     * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
+     * está adentro en este sitio (este equipo o el otro dispositivo), como
+     * proveedor o por otra vía (contratista, por correo), `None` si puede
+     * entrar. Las mismas reglas y textos que frenan el registro
+     * (`IngresoActivo`, `AdentroPorOtraVia`), sin esperar a que se llene
+     * el formulario. Kotlin sólo lo muestra. Sin actor: es una lectura.
      */
     fun `avisoProveedorConIngresoActivo`(`cedula`: kotlin.String): kotlin.String?
     
@@ -4486,9 +4490,11 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si ya
-     * tiene un ingreso por correo abierto en este sitio (este equipo o el
-     * otro dispositivo), `None` si puede entrar. Sin actor: es una lectura.
+     * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
+     * está adentro en este sitio (este equipo o el otro dispositivo), por
+     * correo o por otra vía (contratista, proveedor), `None` si puede
+     * entrar. Las mismas reglas y textos que frenan el registro. Sin actor:
+     * es una lectura.
      */
     @Throws(NucleoException::class)override fun `avisoCorreoConIngresoActivo`(`cedula`: kotlin.String): kotlin.String? {
             return FfiConverterOptionalString.lift(
@@ -5319,10 +5325,12 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
-     * ya tiene un ingreso de proveedor abierto en este sitio (este equipo
-     * o el otro dispositivo), `None` si puede entrar. La regla y el texto
-     * son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+     * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
+     * está adentro en este sitio (este equipo o el otro dispositivo), como
+     * proveedor o por otra vía (contratista, por correo), `None` si puede
+     * entrar. Las mismas reglas y textos que frenan el registro
+     * (`IngresoActivo`, `AdentroPorOtraVia`), sin esperar a que se llene
+     * el formulario. Kotlin sólo lo muestra. Sin actor: es una lectura.
      */
     @Throws(NucleoException::class)override fun `avisoProveedorConIngresoActivo`(`cedula`: kotlin.String): kotlin.String? {
             return FfiConverterOptionalString.lift(

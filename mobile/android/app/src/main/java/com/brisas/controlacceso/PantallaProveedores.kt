@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
@@ -127,6 +128,10 @@ fun PantallaProveedores(
     var filaParaSalida by remember {
         mutableStateOf<FilaProveedorActiva?>(null)
     }
+    // Se escaneó a alguien que ya está adentro (como proveedor o por otra
+    // vía): en vez del formulario, el motivo, como en Contratistas.
+    var bloqueoEscaneo by remember { mutableStateOf<String?>(null) }
+    val contexto = LocalContext.current
 
     // Qué panel se ve ahora: la lista, el formulario o uno de los escáneres.
     // La lista y el formulario se abren y cierran con una transición corta; los
@@ -147,11 +152,18 @@ fun PantallaProveedores(
                 PantallaEscanearCedula(
                     modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
                     onDocumentoDetectado = { documento ->
-                        escaneando = false
-                        escaneoDirecto = false
                         val numero = documento.numeroDocumento.filter(Char::isDigit)
                             .ifBlank { documento.numeroDocumento }
-                        viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
+                        // La cámara se queda hasta saber si ya está adentro:
+                        // si lo está, frena ahí con la alarma de denegado, sin
+                        // abrir el formulario para llenarlo en balde.
+                        val aviso = viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
+                        if (aviso != null) {
+                            sonarAlertaEscaneo(contexto, AlertaEscaneo.DENEGADO)
+                            bloqueoEscaneo = aviso
+                        }
+                        escaneando = false
+                        escaneoDirecto = false
                     },
                     onCerrar = {
                         escaneando = false
@@ -186,7 +198,20 @@ fun PantallaProveedores(
             PanelConFormulario.FORMULARIO -> {
                 // Pantalla completa: sin barra de secciones encima.
                 OcultarBarraSecciones()
-                FormularioNuevoIngresoProveedor(
+                val motivoBloqueo = bloqueoEscaneo
+                if (motivoBloqueo != null) {
+                    PantallaBloqueoIngreso(
+                        titulo = viewModel.nombre.ifBlank { "Proveedor" },
+                        subtitulo = viewModel.cedula,
+                        mensaje = motivoBloqueo,
+                        onVolver = {
+                            bloqueoEscaneo = null
+                            viewModel.cancelarFormulario()
+                            gafeteTexto = ""
+                            mostrandoFormulario = false
+                        },
+                    )
+                } else FormularioNuevoIngresoProveedor(
                     viewModel = viewModel,
                     gafeteTexto = gafeteTexto,
                     onCambiarGafeteTexto = { gafeteTexto = it },

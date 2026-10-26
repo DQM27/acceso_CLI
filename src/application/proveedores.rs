@@ -17,6 +17,7 @@ use crate::database::repositories::registro_ingreso_proveedor_repository::{
 };
 use crate::models::empresa_proveedor::EmpresaProveedor;
 use crate::models::registro_ingreso_proveedor::RegistroIngresoProveedorActivoResumen;
+use crate::models::via_ingreso::ViaIngreso;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::empresa_proveedor_service::EmpresaProveedorService;
 use crate::services::error::{EmpresaProveedorServiceError, IngresoProveedorServiceError};
@@ -247,6 +248,23 @@ impl AppCore {
             .map_err(IngresoProveedorServiceError::Database)
     }
 
+    /// La otra vía (contratista o por correo) por la que esta cédula ya está
+    /// adentro, en este equipo o en el otro de la unidad. La misma regla que
+    /// frena el registro (`IngresoProveedorServiceError::AdentroPorOtraVia`),
+    /// para avisar apenas se escanea la cédula y no al final del formulario.
+    pub fn proveedor_adentro_por_otra_via(
+        &self,
+        cedula: &str,
+    ) -> Result<Option<ViaIngreso>, IngresoProveedorServiceError> {
+        let Ok(cedula) = crate::domain::cedula::Cedula::normalizar(cedula) else {
+            return Ok(None);
+        };
+        Ok(
+            SqliteRegistroIngresoProveedorRepository::new(&self.connection)
+                .adentro_por_otra_via(cedula.as_str())?,
+        )
+    }
+
     /// La empresa con la que entró la última vez este proveedor (por su
     /// cédula, en el historial de este equipo), si sigue activa: el
     /// formulario la propone y quien opera sólo la cambia si hace falta. Una
@@ -453,6 +471,33 @@ mod tests {
             core.registrar_salida_proveedor(&actor, id),
             Err(IngresoProveedorServiceError::RelojRetrocedido)
         ));
+    }
+
+    #[test]
+    fn proveedor_adentro_por_otra_via_ve_a_quien_entro_por_correo() {
+        let (core, actor, empresa_id) = nucleo_con_usuario_empresa_y_gafete();
+        core.connection
+            .execute(
+                "INSERT INTO registro_ingresos_correo (cedula, nombre, motivo, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid)
+                 VALUES ('222222222', 'Ana', 'Entrevista RH', 4,
+                    '2026-09-16T11:00:00Z', 1, 'Operador', 'u1')",
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            core.proveedor_adentro_por_otra_via("2-2222-2222").unwrap(),
+            Some(ViaIngreso::PorCorreo)
+        );
+
+        // Su propia vía no cuenta acá (la avisa `proveedor_con_ingreso_activo_en_sitio`).
+        core.registrar_ingreso_proveedor(&actor, "1-1111-1111", "Juan Perez", empresa_id, None, 7)
+            .unwrap();
+        assert_eq!(
+            core.proveedor_adentro_por_otra_via("111111111").unwrap(),
+            None
+        );
+        assert_eq!(core.proveedor_adentro_por_otra_via("abc").unwrap(), None);
     }
 
     #[test]

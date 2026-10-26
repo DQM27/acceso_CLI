@@ -92,26 +92,30 @@ class CorreoViewModel(
     fun cambiarCedula(nuevo: String) {
         cedula = nuevo.filter(Char::isDigit)
         val consultada = cedula
-        viewModelScope.launch {
-            val aviso = try {
-                withContext(dispatcherIO) {
-                    medirNucleo("avisoCorreoConIngresoActivo") { nucleo.avisoCorreoConIngresoActivo(consultada) }
-                }
-            } catch (excepcion: Exception) {
-                // Sin aviso si la consulta falla: al registrar, el núcleo
-                // vuelve a aplicar la regla. Lo inesperado se relanza.
-                excepcion.mensajeDeErrorEsperado()
-                null
+        viewModelScope.launch { revisarCedula(consultada) }
+    }
+
+    /// Si ya está adentro (por correo o por otra vía): regla y texto del
+    /// núcleo.
+    private suspend fun revisarCedula(consultada: String) {
+        val aviso = try {
+            withContext(dispatcherIO) {
+                medirNucleo("avisoCorreoConIngresoActivo") { nucleo.avisoCorreoConIngresoActivo(consultada) }
             }
-            if (consultada != cedula) return@launch // ya se tipeó otra
-            val anterior = avisoCedulaActiva
-            avisoCedulaActiva = aviso
-            cedulaConIngresoActivo = aviso != null
-            if (aviso != null) {
-                error = aviso
-            } else if (anterior != null && error == anterior) {
-                error = null
-            }
+        } catch (excepcion: Exception) {
+            // Sin aviso si la consulta falla: al registrar, el núcleo
+            // vuelve a aplicar la regla. Lo inesperado se relanza.
+            excepcion.mensajeDeErrorEsperado()
+            null
+        }
+        if (consultada != cedula) return // ya se tipeó otra
+        val anterior = avisoCedulaActiva
+        avisoCedulaActiva = aviso
+        cedulaConIngresoActivo = aviso != null
+        if (aviso != null) {
+            error = aviso
+        } else if (anterior != null && error == anterior) {
+            error = null
         }
     }
 
@@ -129,13 +133,17 @@ class CorreoViewModel(
         placa = nuevo.uppercase()
     }
 
-    /// Mismo criterio que [ProveedoresViewModel.rellenarDesdeDocumento].
-    fun rellenarDesdeDocumento(cedulaLeida: String?, nombreLeido: String?, apellidosLeido: String? = null) {
-        cedulaLeida?.let { cambiarCedula(it) }
+    /// Mismo criterio que [ProveedoresViewModel.rellenarDesdeDocumento]:
+    /// devuelve el aviso si la persona ya está adentro (por cualquier vía).
+    suspend fun rellenarDesdeDocumento(cedulaLeida: String?, nombreLeido: String?, apellidosLeido: String? = null): String? {
         val nombreCompleto = listOfNotNull(nombreLeido, apellidosLeido)
             .filter { it.isNotBlank() }
             .joinToString(" ")
         if (nombreCompleto.isNotBlank()) cambiarNombre(nombreCompleto)
+        val leida = cedulaLeida?.filter(Char::isDigit) ?: return null
+        cedula = leida
+        revisarCedula(leida)
+        return avisoCedulaActiva
     }
 
     /// Lo pide el formulario de ingreso al aparecer: mientras se escribe, las

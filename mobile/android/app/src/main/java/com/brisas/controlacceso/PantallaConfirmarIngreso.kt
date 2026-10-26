@@ -290,13 +290,26 @@ fun PantallaConfirmarIngreso(
 
 @Composable
 fun PantallaIngresoBloqueado(preparacion: PreparacionIngreso, mensaje: String, onCambiar: () -> Unit) {
-    PantallaConGestoVolver(onVolver = onCambiar) {
+    PantallaBloqueoIngreso(
+        titulo = preparacion.nombre,
+        subtitulo = "${preparacion.cedula} · ${preparacion.empresaNombre}",
+        mensaje = mensaje,
+        onVolver = onCambiar,
+    )
+}
+
+/// La persona no puede entrar: su nombre y, en una franja de error, el
+/// motivo. La misma para contratistas, proveedores y por correo (pedido del
+/// usuario 2026-10-26: que los tres frenen igual apenas se escanea).
+@Composable
+internal fun PantallaBloqueoIngreso(titulo: String, subtitulo: String, mensaje: String, onVolver: () -> Unit) {
+    PantallaConGestoVolver(onVolver = onVolver) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
             // El mismo encabezado que [PantallaConfirmarIngreso].
             EncabezadoPantalla(
-                titulo = preparacion.nombre,
-                subtitulo = "${preparacion.cedula} · ${preparacion.empresaNombre}",
-                onVolver = onCambiar,
+                titulo = titulo,
+                subtitulo = subtitulo,
+                onVolver = onVolver,
                 modifier = Modifier.padding(bottom = 16.dp),
             )
             // En una franja de error y en negrita -- pedido explícito del

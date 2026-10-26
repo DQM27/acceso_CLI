@@ -97,6 +97,11 @@ internal fun FormularioNuevoIngresoProveedor(
             onCambiarCedula = viewModel::cambiarCedula,
             onCambiarNombre = viewModel::cambiarNombre,
         )
+        // Ya está adentro (como proveedor o por otra vía): el aviso junto a
+        // la cédula, a la vista, no al fondo junto al botón.
+        if (viewModel.cedulaConIngresoActivo) {
+            viewModel.error?.let { FranjaEstado(it, TipoEstado.ERROR, modifier = Modifier.padding(top = 12.dp), vibrar = true) }
+        }
 
         SeccionFormulario("Empresa", pie = if (viewModel.creandoEmpresa) "Creando la empresa…" else null) {
             FilaSelector(
@@ -129,7 +134,7 @@ internal fun FormularioNuevoIngresoProveedor(
             onListo = { if (puedeRegistrar) registrar() },
         )
 
-        viewModel.error?.let { mensaje ->
+        viewModel.error?.takeIf { !viewModel.cedulaConIngresoActivo }?.let { mensaje ->
             FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(top = 16.dp), vibrar = true)
         }
         viewModel.mensaje?.let { mensaje ->
