@@ -33,25 +33,22 @@ import uniffi.control_acceso_mobile.PreparacionIngreso
 sealed class SeleccionIngreso {
     data object Ninguna : SeleccionIngreso()
 
-    data class Cargando(val contratista: ContratistaResumen) : SeleccionIngreso()
+    data object Cargando : SeleccionIngreso()
 
     data class Bloqueada(val preparacion: PreparacionIngreso, val mensaje: String) : SeleccionIngreso()
 
     data class Formulario(val preparacion: PreparacionIngreso) : SeleccionIngreso()
 }
 
-/// Con pocos activos alcanza con recorrer la lista a ojo, pero con muchos
-/// (imaginemos 100) hace falta poder acotarla — el mismo campo de texto no
-/// puede a la vez buscar en el catálogo completo (para entrada) Y filtrar
-/// los activos (para salida), así que un selector de tres decide cuál de
-/// las dos cosas está haciendo el campo. `SALIDA_NOMBRE`/`SALIDA_GAFETE` van
-/// separados (y no uno solo "salida") porque la búsqueda de texto libre de
-/// Rust ya mezcla nombre/cédula con gafete en el mismo OR — buscar "7" como
-/// gafete también traería cualquier cédula que lo contenga, ruidoso con
-/// muchos activos. `Nucleo.listarIngresosActivos` recibe `ModoBusquedaActivos`
-/// para pedirle a Rust el filtro exacto en vez de resolverlo del lado del
-/// teléfono.
-enum class ModoBusqueda { ENTRADA, SALIDA_NOMBRE, SALIDA_GAFETE }
+/// Qué busca el campo de abajo: personas (nombre o cédula) o números de
+/// gafete. Antes había un tercer modo, "Salida", que acotaba la lista de
+/// quién está adentro; se fue (2026-10-26) porque elegir —o escanear— a
+/// alguien que ya está adentro abre directo su salida (ver [elegir]), así
+/// que buscar a una persona sirve para entrar y para salir. `SALIDA_GAFETE`
+/// sigue aparte porque la búsqueda de texto libre de Rust mezcla
+/// nombre/cédula con gafete en el mismo OR — buscar "7" como gafete también
+/// traería cualquier cédula que lo contenga.
+enum class ModoBusqueda { ENTRADA, SALIDA_GAFETE }
 
 /// Un número de gafete escrito y, si ya se buscó, el activo encontrado (o
 /// `null` si nadie adentro tiene ese gafete puesto). Puede ser local o
@@ -227,8 +224,11 @@ class ActivosViewModel(
                 resultadosBusqueda = resultados
                 val contratista = contratistaEscaneadoClaro(valor, resultados)
                 if (contratista != null) {
-                    elegir(contratista, origen = "ocr", msBusqueda = milisegundosDesde(inicioBusqueda)).join()
+                    elegir(contratista.id, origen = "ocr", msBusqueda = milisegundosDesde(inicioBusqueda)).join()
                 }
+                // Ya estaba adentro: se abrió su salida y lo leído no queda
+                // en el buscador.
+                if (seleccionSalida != null) texto = ""
                 alertaTrasEscaneo(seleccionIngreso)?.let { alerta ->
                     alertaEscaneo = AvisoEscaneo(alerta, ++siguienteAlerta)
                 }
@@ -306,19 +306,6 @@ class ActivosViewModel(
                                 withContext(dispatcherIO) { medirNucleo("buscarContratistas") { nucleo.buscarContratistas(texto) } }
                         }
                     }
-                    ModoBusqueda.SALIDA_NOMBRE -> {
-                        // Vacío trae a todo el que está adentro, como una
-                        // lista de iOS con su buscador: se ve la lista y lo
-                        // escrito la acota. Antes vacío no traía a nadie y la
-                        // pantalla pedía tocar la lupa antes de ver algo.
-                        val locales = withContext(dispatcherIO) {
-                            medirNucleo("listarIngresosActivos") { nucleo.listarIngresosActivos(texto, ModoBusquedaActivos.NOMBRE_CEDULA) }
-                        }
-                        val remotos = remotosSeguro()
-                            .filter { texto.isBlank() || it.contratistaNombre.contains(texto, ignoreCase = true) }
-                        activos = locales.map { FilaActiva.Local(it) } + remotos.map { FilaActiva.Remota(it) }
-                        if (texto.isBlank()) totalAdentro = activos.size
-                    }
                     ModoBusqueda.SALIDA_GAFETE -> {
                         val numeros = gafetesDeTexto(texto)
                         coincidenciasGafete = if (numeros.isEmpty()) {
@@ -369,15 +356,38 @@ class ActivosViewModel(
         CambiosNube.cambioLocal()
     }
 
+    /// El ingreso abierto de esta persona en la unidad (en este teléfono o en
+    /// el otro equipo), o `null` si no está adentro acá. Sólo se busca cuando
+    /// el núcleo ya bloqueó el ingreso: quien está adentro no puede volver a
+    /// entrar, pero sí salir, y la salida se abre en vez de un "ya tiene un
+    /// ingreso activo" sin nada que hacer. Si está adentro en otra unidad no
+    /// aparece en ninguna de las dos listas y el bloqueo queda como estaba.
+    private suspend fun filaAdentro(preparacion: PreparacionIngreso): FilaActiva? {
+        val local = withContext(dispatcherIO) {
+            medirNucleo("listarIngresosActivos") {
+                nucleo.listarIngresosActivos(preparacion.cedula, ModoBusquedaActivos.NOMBRE_CEDULA)
+            }
+        }.firstOrNull { it.contratistaId == preparacion.contratistaId }
+        if (local != null) return FilaActiva.Local(local)
+        val cedula = preparacion.cedula.filter(Char::isDigit)
+        if (cedula.isEmpty()) return null
+        return remotosSeguro()
+            .firstOrNull { it.contratistaCedula?.filter(Char::isDigit) == cedula }
+            ?.let { FilaActiva.Remota(it) }
+    }
+
+    /// Elegir a una persona (del buscador, de un escaneo o recién dada de
+    /// alta): si puede entrar, el formulario de ingreso; si ya está adentro
+    /// en la unidad, su salida ([filaAdentro]); si no, el motivo del bloqueo.
     /// `origen` y `msBusqueda` sólo alimentan la telemetría de diagnóstico
     /// (`transicion_ingreso`): de dónde vino la elección ("ocr" o "manual") y
     /// cuánto tardó la búsqueda local previa.
-    fun elegir(contratista: ContratistaResumen, origen: String = "manual", msBusqueda: Double? = null): Job =
+    fun elegir(contratistaId: Long, origen: String = "manual", msBusqueda: Double? = null): Job =
         viewModelScope.launch {
             val inicioElegir = System.nanoTime()
             var resultado = "error"
             var msNucleo: Double? = null
-            seleccionIngreso = SeleccionIngreso.Cargando(contratista)
+            seleccionIngreso = SeleccionIngreso.Cargando
             errorIngreso = null
             try {
                 // Un solo cruce FFI, sólo local y sin red: Rust decide con
@@ -388,13 +398,21 @@ class ActivosViewModel(
                 // sabe la nube (otras unidades) se verifica una sola vez, al
                 // registrar (`registrarIngresoVerificado`).
                 val preparacion = withContext(dispatcherIO) {
-                    medirNucleo("prepararIngreso") { nucleo.prepararIngreso(contratista.id) }
+                    medirNucleo("prepararIngreso") { nucleo.prepararIngreso(contratistaId) }
                 }
                 msNucleo = milisegundosDesde(inicioElegir)
-                seleccionIngreso = preparacion.mensajeBloqueo?.let { mensaje ->
-                    SeleccionIngreso.Bloqueada(preparacion, mensaje)
-                } ?: SeleccionIngreso.Formulario(preparacion)
-                resultado = if (preparacion.mensajeBloqueo != null) "bloqueada" else "formulario"
+                val salida = if (preparacion.mensajeBloqueo != null) filaAdentro(preparacion) else null
+                seleccionIngreso = when {
+                    salida != null -> SeleccionIngreso.Ninguna
+                    preparacion.mensajeBloqueo != null -> SeleccionIngreso.Bloqueada(preparacion, preparacion.mensajeBloqueo!!)
+                    else -> SeleccionIngreso.Formulario(preparacion)
+                }
+                if (salida != null) seleccionSalida = salida
+                resultado = when {
+                    salida != null -> "salida"
+                    preparacion.mensajeBloqueo != null -> "bloqueada"
+                    else -> "formulario"
+                }
                 if (preparacion.mensajeBloqueo == null) {
                     // Mientras se escribe el gafete, las conexiones con la
                     // nube se calientan: la verificación al registrar ya no

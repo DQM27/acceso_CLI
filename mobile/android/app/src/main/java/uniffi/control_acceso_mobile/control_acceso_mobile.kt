@@ -901,6 +901,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_proveedor(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_ultima_empresa_proveedor(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas(
@@ -1122,6 +1124,8 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_proveedor(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_ultima_empresa_proveedor(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_rutas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1675,6 +1679,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_proveedor() and 0xFFFF) != 28898) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_ultima_empresa_proveedor() and 0xFFFF) != 47178) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta() and 0xFFFF) != 54734) {
@@ -4057,6 +4064,13 @@ public interface NucleoInterface {
     fun `registrarSalidaProveedor`(`registroId`: kotlin.Long)
     
     /**
+     * La empresa con la que entró la última vez este proveedor, para
+     * proponerla en el formulario apenas se escanea o se escribe su cédula
+     * (ver `AppCore::ultima_empresa_proveedor`). Sin actor: es una lectura.
+     */
+    fun `ultimaEmpresaProveedor`(`cedula`: kotlin.String): EmpresaProveedor?
+    
+    /**
      * Buscador del checklist de rutas (paso "Encargado KOF") -- por nombre
      * o código de empleado, mismo criterio que `buscar_contratistas`
      * ("busca por nombre o por número de cédula", pedido explícito del
@@ -5447,6 +5461,26 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 }
     }
     
+    
+
+    
+    /**
+     * La empresa con la que entró la última vez este proveedor, para
+     * proponerla en el formulario apenas se escanea o se escribe su cédula
+     * (ver `AppCore::ultima_empresa_proveedor`). Sin actor: es una lectura.
+     */
+    @Throws(NucleoException::class)override fun `ultimaEmpresaProveedor`(`cedula`: kotlin.String): EmpresaProveedor? {
+            return FfiConverterOptionalTypeEmpresaProveedor.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_ultima_empresa_proveedor(
+        it,
+        
+        FfiConverterString.lower(`cedula`),_status)
+}
+    }
+    )
+    }
     
 
     
@@ -12200,6 +12234,38 @@ public object FfiConverterOptionalTypeDocumentoLeido: FfiConverterRustBuffer<Doc
         } else {
             buf.put(1)
             FfiConverterTypeDocumentoLeido.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeEmpresaProveedor: FfiConverterRustBuffer<EmpresaProveedor?> {
+    override fun read(buf: ByteBuffer): EmpresaProveedor? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeEmpresaProveedor.read(buf)
+    }
+
+    override fun allocationSize(value: EmpresaProveedor?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeEmpresaProveedor.allocationSize(value)
+        }
+    }
+
+    override fun write(value: EmpresaProveedor?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeEmpresaProveedor.write(value, buf)
         }
     }
 }

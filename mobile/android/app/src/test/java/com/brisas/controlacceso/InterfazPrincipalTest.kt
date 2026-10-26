@@ -26,8 +26,7 @@ class InterfazPrincipalTest {
 
     @Test
     fun `el buscador de Activos cambia de ayuda y teclado con el modo`() {
-        assertEquals("Nombre o cédula para ingresar", ayudaBusquedaActivos(ModoBusqueda.ENTRADA))
-        assertEquals("Nombre o cédula de quien sale", ayudaBusquedaActivos(ModoBusqueda.SALIDA_NOMBRE))
+        assertEquals("Nombre o cédula", ayudaBusquedaActivos(ModoBusqueda.ENTRADA))
         assertEquals("Gafetes: 2, 25, 85", ayudaBusquedaActivos(ModoBusqueda.SALIDA_GAFETE))
         assertEquals(KeyboardType.Number, tecladoBusquedaActivos(ModoBusqueda.SALIDA_GAFETE).keyboardType)
         assertEquals(KeyboardOptions.Default, tecladoBusquedaActivos(ModoBusqueda.ENTRADA))

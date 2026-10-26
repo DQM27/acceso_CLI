@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -25,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -57,6 +59,16 @@ internal fun FormularioNuevoIngresoProveedor(
         viewModel.empresaSeleccionada != null && gafeteTexto.isNotBlank() &&
         !viewModel.registrando && !viewModel.cedulaConIngresoActivo
     var buscandoEmpresa by remember { mutableStateOf(false) }
+    val registrar = {
+        gafeteTexto.toLongOrNull()?.let { numero ->
+            // Al registrar, cierra y vuelve a la lista de activos (pedido
+            // explícito del usuario en pruebas reales, 2026-09-17).
+            viewModel.registrarIngreso(numero) {
+                onCambiarGafeteTexto("")
+                onVolver()
+            }
+        }
+    }
 
     // Mientras se llenan los datos, las conexiones con la nube se calientan
     // (ver `ProveedoresViewModel.precalentarNube`).
@@ -114,6 +126,7 @@ internal fun FormularioNuevoIngresoProveedor(
                     }
                 }
             },
+            onListo = { if (puedeRegistrar) registrar() },
         )
 
         viewModel.error?.let { mensaje ->
@@ -124,15 +137,7 @@ internal fun FormularioNuevoIngresoProveedor(
         }
 
         BotonBrisas(
-            onClick = {
-                val numero = gafeteTexto.toLongOrNull() ?: return@BotonBrisas
-                // Al registrar, cierra y vuelve a la lista de activos (pedido
-                // explícito del usuario en pruebas reales, 2026-09-17).
-                viewModel.registrarIngreso(numero) {
-                    onCambiarGafeteTexto("")
-                    onVolver()
-                }
-            },
+            onClick = { registrar() },
             enabled = puedeRegistrar,
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         ) {
@@ -225,6 +230,9 @@ internal fun SeccionVehiculoYGafete(
     onCambiarGafeteTexto: (String) -> Unit,
     onGafeteEnfocado: () -> Unit,
     ayudaGafete: String = "Número",
+    // La tecla ✓ del teclado en el gafete (lo último que se escribe):
+    // registra si ya no falta nada.
+    onListo: () -> Unit = {},
 ) {
     SeccionFormulario("Vehículo y gafete") {
         CampoAgrupado(
@@ -241,7 +249,8 @@ internal fun SeccionVehiculoYGafete(
             onCambiar = onCambiarGafeteTexto,
             etiqueta = "Gafete",
             ayuda = ayudaGafete,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onListo() }),
             modifier = Modifier.onFocusChanged { if (it.isFocused) onGafeteEnfocado() },
         )
     }

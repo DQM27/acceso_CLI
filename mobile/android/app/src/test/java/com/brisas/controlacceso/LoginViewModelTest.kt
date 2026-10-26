@@ -196,6 +196,21 @@ class LoginViewModelTest {
     }
 
     @Test
+    fun `el cierre por inactividad deja la cedula y borra la contrasena`() = runTest(dispatcher) {
+        val viewModel = LoginViewModel(nucleo, dispatcherIO = dispatcher)
+        viewModel.cambiarCedula("999999999")
+        viewModel.cambiarPassword(NucleoDePrueba.CLAVE_PRUEBA)
+        viewModel.autenticar()
+        advanceUntilIdle()
+
+        viewModel.cerrarSesion(conservarCedula = true)
+
+        assertNull(viewModel.sesion)
+        assertEquals("999999999", viewModel.cedula)
+        assertEquals("", viewModel.password)
+    }
+
+    @Test
     fun `doble toque durante autenticacion no abre dos intentos`() = runTest(dispatcher) {
         val viewModel = LoginViewModel(nucleo, dispatcherIO = dispatcher)
         viewModel.cambiarCedula("999999999")

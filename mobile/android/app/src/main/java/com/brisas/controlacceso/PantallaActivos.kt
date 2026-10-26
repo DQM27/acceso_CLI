@@ -23,16 +23,14 @@ import uniffi.control_acceso_mobile.Nucleo
 /// 2026-09-01). Acá no hay una pestaña "Buscar" aparte: el mismo campo de
 /// texto cambia de sentido según el modo elegido en el selector de arriba
 /// — mismo espíritu que el checkbox "Por gafete" de `SalidaModal.tsx` (un
-/// solo campo, la interpretación cambia), llevado a un selector de tres
-/// porque acá hace falta distinguir tres búsquedas, no dos:
+/// solo campo, la interpretación cambia):
 ///
-/// - **Ingreso** (por defecto, `ModoBusqueda.ENTRADA`): la lista es quién
-///   está adentro (tocar un nombre confirma su salida); el buscador busca en
-///   el catálogo completo de contratistas (antes pestaña "Buscar" aparte)
-///   para arrancar el flujo de confirmar entrada.
-/// - **Salida** (`ModoBusqueda.SALIDA_NOMBRE`): la misma lista de quién está
-///   adentro, y el buscador la acota por cédula/nombre — tocar a alguien abre
-///   la ficha de salida de siempre.
+/// - **Persona** (por defecto, `ModoBusqueda.ENTRADA`): la lista es quién
+///   está adentro (tocar un nombre confirma su salida); el buscador y la
+///   cámara buscan en el catálogo completo de contratistas. Elegir a alguien
+///   abre su ingreso o, si ya está adentro, su salida (2026-10-26: antes
+///   había un modo "Salida" aparte y escanear a quien salía terminaba en "ya
+///   tiene un ingreso activo"). Si no aparece, se lo registra ahí mismo.
 /// - **Gafete** (`ModoBusqueda.SALIDA_GAFETE`): acepta varios números de
 ///   gafete separados por coma ("2, 25, 85") — igual que el modo gafete de
 ///   `SalidaModal.tsx` —
@@ -61,6 +59,10 @@ fun PantallaActivos(
     // del encabezado de la pantalla principal (que es quien sabe hacerlo).
     sincronizando: Boolean = false,
     onSincronizar: () -> Unit = {},
+    // Registrar a quien no aparece en la búsqueda (con lo escrito o lo
+    // leído): lo abre la pantalla principal, que es la dueña de "Nuevo
+    // contratista".
+    onNuevoContratista: (String) -> Unit = {},
 ) {
     RegistrarPantalla("activos")
     val viewModel: ActivosViewModel =
@@ -154,8 +156,12 @@ fun PantallaActivos(
                         }
                         // Si el documento no llevó a nadie con claridad, lo leído
                         // queda en el buscador de abajo, con sus resultados, para
-                        // corregirlo o elegir a mano.
-                        if (viewModel.seleccionIngreso == SeleccionIngreso.Ninguna && viewModel.texto.isNotBlank()) {
+                        // corregirlo, elegir a mano o registrarlo. Si ya estaba
+                        // adentro, su salida ya está abierta.
+                        if (viewModel.seleccionIngreso == SeleccionIngreso.Ninguna &&
+                            viewModel.seleccionSalida == null &&
+                            viewModel.texto.isNotBlank()
+                        ) {
                             buscando = true
                         }
                     },
@@ -213,7 +219,7 @@ fun PantallaActivos(
 
                 Box(modifier = Modifier.padding(top = 4.dp)) {
                     when (viewModel.modo) {
-                        ModoBusqueda.ENTRADA, ModoBusqueda.SALIDA_NOMBRE -> ContenidoListaActivos(
+                        ModoBusqueda.ENTRADA -> ContenidoListaActivos(
                             activos = viewModel.activos,
                             cargando = viewModel.cargando,
                             onElegirActivo = { viewModel.elegirSeleccionSalida(it) },
@@ -257,19 +263,12 @@ fun PantallaActivos(
                             cargando = viewModel.cargando,
                             onElegirContratista = { contratista ->
                                 // `elegir` no depende del texto: limpiarlo no lo corta.
-                                viewModel.elegir(contratista)
+                                viewModel.elegir(contratista.id)
                                 cerrarBusqueda()
                             },
-                        )
-                    }
-                    ModoBusqueda.SALIDA_NOMBRE -> Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        ResultadosSalida(
-                            texto = viewModel.texto,
-                            activos = viewModel.activos,
-                            cargando = viewModel.cargando,
-                            onElegirActivo = { fila ->
-                                viewModel.elegirSeleccionSalida(fila)
+                            onNuevoContratista = { escrito ->
                                 cerrarBusqueda()
+                                onNuevoContratista(escrito)
                             },
                         )
                     }

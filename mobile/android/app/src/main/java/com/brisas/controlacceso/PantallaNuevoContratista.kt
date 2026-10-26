@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -67,15 +68,29 @@ private val TIPOS_CONTRATISTA = TipoIngreso.entries.filter { it != TipoIngreso.P
 /// de ingreso con el control segmentado, "Personal de ruta" con un
 /// interruptor y el vencimiento con un selector de fecha. Lo que llena el
 /// escáner entra igual en todos: el ViewModel no cambió.
+///
+/// Menos pasos (2026-10-26): se abre directo en la cámara del carnet ("Llenar
+/// a mano" lleva al formulario, la X cancela), arranca con lo que se buscó
+/// o se leyó en Activos ([textoInicial]: la cédula o el nombre) y, al
+/// guardar, [onGuardado] recibe el contratista nuevo para darle el ingreso
+/// enseguida, sin volver a buscarlo.
 @Composable
-fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
+fun PantallaNuevoContratista(
+    nucleo: Nucleo,
+    onVolver: () -> Unit,
+    onGuardado: (contratistaId: Long) -> Unit,
+    textoInicial: String = "",
+) {
     RegistrarPantalla("nuevo_contratista")
     val claveFormulario = rememberSaveable { "nuevo-contratista-${UUID.randomUUID()}" }
     val vm: NuevoContratistaViewModel = viewModel(
         key = claveFormulario,
         factory = NuevoContratistaViewModel.factory(nucleo),
     )
-    var escaneando by remember { mutableStateOf(false) }
+    LaunchedEffect(vm) { vm.prellenar(textoInicial) }
+    var escaneando by rememberSaveable { mutableStateOf(true) }
+    // La cámara que se abre sola al entrar: su X cancela todo.
+    var escaneoDirecto by rememberSaveable { mutableStateOf(true) }
     var buscandoEmpresa by remember { mutableStateOf(false) }
     var textoEmpresa by remember { mutableStateOf("") }
     var eligiendoFecha by remember { mutableStateOf(false) }
@@ -85,9 +100,21 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
             modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
             onDocumentoDetectado = { documento ->
                 escaneando = false
+                escaneoDirecto = false
                 vm.aplicarDocumentoEscaneado(documento)
             },
-            onCerrar = { escaneando = false },
+            onCerrar = {
+                escaneando = false
+                if (escaneoDirecto) onVolver()
+            },
+            onLlenarAMano = if (escaneoDirecto) {
+                {
+                    escaneando = false
+                    escaneoDirecto = false
+                }
+            } else {
+                null
+            },
         )
         return
     }
@@ -203,7 +230,7 @@ fun PantallaNuevoContratista(nucleo: Nucleo, onVolver: () -> Unit) {
         }
 
         BotonBrisas(
-            onClick = { vm.guardar(onGuardado = onVolver) },
+            onClick = { vm.guardar(onGuardado = onGuardado) },
             enabled = !vm.enviando && !praindVencido,
             // Sin padding inferior: sumado al `imePadding()` del teclado dejaba
             // un hueco de más entre el botón y el teclado (reportado 2026-09-20).

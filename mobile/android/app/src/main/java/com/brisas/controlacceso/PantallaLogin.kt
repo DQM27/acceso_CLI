@@ -66,6 +66,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, metadata: MetadatosDisposi
                 directorio = directorio,
                 metadata = metadata,
                 onCerrarSesion = { viewModel.cerrarSesion() },
+                onBloquear = { viewModel.cerrarSesion(conservarCedula = true) },
             )
         }
         return
@@ -143,6 +144,11 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, metadata: MetadatosDisposi
 private fun ColumnScope.PasoCredenciales(viewModel: LoginViewModel) {
     var mostrarAyuda by rememberSaveable { mutableStateOf(false) }
     val focoPassword = remember { FocusRequester() }
+    // Tras el cierre por inactividad la cédula ya está: el cursor espera en
+    // la contraseña.
+    LaunchedEffect(Unit) {
+        if (viewModel.cedula.isNotBlank()) focoPassword.requestFocus()
+    }
     val foco = LocalFocusManager.current
     val puedeEnviar = !viewModel.autenticando && viewModel.cedula.isNotBlank() && viewModel.password.isNotBlank()
     val enviar = {

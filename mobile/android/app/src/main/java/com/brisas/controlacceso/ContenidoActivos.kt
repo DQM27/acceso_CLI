@@ -47,15 +47,16 @@ import uniffi.control_acceso_mobile.ContratistaResumen
 // contenido por modo y la ficha de salida (sacado de `PantallaActivos.kt`,
 // punto M6 de la auditoría móvil).
 
-/// Píldoras "Ingreso"/"Salida"/"Gafete" (`FilaPildoras`, ver ControlesBrisas.kt).
-/// Son los mismos tres modos de siempre (ver [PantallaActivos]) y, dentro del
-/// buscador de abajo, hacen de barra de alcances como en iOS: se puede
-/// cambiar de modo sin cerrar la búsqueda.
+/// Píldoras "Persona"/"Gafete" (`FilaPildoras`, ver ControlesBrisas.kt): los
+/// dos modos de [PantallaActivos]. Dentro del buscador de abajo hacen de
+/// barra de alcances como en iOS: se puede cambiar de modo sin cerrar la
+/// búsqueda. Antes eran tres (Ingreso, Salida y Gafete); "Salida" se fue
+/// porque elegir a alguien que ya está adentro abre su salida.
 @Composable
 internal fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) -> Unit) {
-    val opciones = listOf(ModoBusqueda.ENTRADA, ModoBusqueda.SALIDA_NOMBRE, ModoBusqueda.SALIDA_GAFETE)
+    val opciones = listOf(ModoBusqueda.ENTRADA, ModoBusqueda.SALIDA_GAFETE)
     FilaPildoras(
-        opciones = listOf("Ingreso", "Salida", "Gafete"),
+        opciones = listOf("Persona", "Gafete"),
         seleccionado = opciones.indexOf(modo),
         onSeleccionar = { onCambiar(opciones[it]) },
     )
@@ -64,8 +65,7 @@ internal fun SelectorModoBusqueda(modo: ModoBusqueda, onCambiar: (ModoBusqueda) 
 /// Lo que dice la píldora y el campo de búsqueda de abajo en cada modo: el
 /// mismo buscador cambia de sentido.
 internal fun ayudaBusquedaActivos(modo: ModoBusqueda): String = when (modo) {
-    ModoBusqueda.ENTRADA -> "Nombre o cédula para ingresar"
-    ModoBusqueda.SALIDA_NOMBRE -> "Nombre o cédula de quien sale"
+    ModoBusqueda.ENTRADA -> "Nombre o cédula"
     ModoBusqueda.SALIDA_GAFETE -> "Gafetes: 2, 25, 85"
 }
 
@@ -74,9 +74,9 @@ internal fun tecladoBusquedaActivos(modo: ModoBusqueda): KeyboardOptions =
     if (modo == ModoBusqueda.SALIDA_GAFETE) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default
 
 /// Lo que hace el botón redondo de abajo en Activos (ver `AccionInferior.kt`):
-/// en Ingreso escanea el documento para entrar (lo que más se hace en la
-/// portería); en Salida y en Gafete, el gafete de quien sale. Buscar ya no
-/// pasa por acá: es la píldora de búsqueda, igual en los tres modos.
+/// en Persona escanea el documento (para entrar o, si ya está adentro, para
+/// salir: lo decide [ActivosViewModel.elegir]); en Gafete, el gafete de
+/// quien sale. Buscar ya no pasa por acá: es la píldora de búsqueda.
 @Composable
 internal fun AccionActivos(
     modo: ModoBusqueda,
@@ -85,8 +85,7 @@ internal fun AccionActivos(
 ) {
     when (modo) {
         ModoBusqueda.ENTRADA -> AccionPrincipal(Icons.Default.PhotoCamera, "Escanear documento", onEscanearCedula)
-        ModoBusqueda.SALIDA_NOMBRE, ModoBusqueda.SALIDA_GAFETE ->
-            AccionPrincipal(Icons.Default.PhotoCamera, "Escanear gafete", onEscanearGafete)
+        ModoBusqueda.SALIDA_GAFETE -> AccionPrincipal(Icons.Default.PhotoCamera, "Escanear gafete", onEscanearGafete)
     }
 }
 
@@ -131,20 +130,34 @@ internal fun ContenidoListaActivos(
     )
 }
 
-/// Resultados del buscador en modo Ingreso: el catálogo completo de
-/// contratistas (tocar = arrancar el flujo de entrada). Sin texto, qué
-/// escribir.
+/// Resultados del buscador en modo Persona: el catálogo completo de
+/// contratistas (tocar = entrar, o salir si ya está adentro). Sin texto, qué
+/// escribir. Sin resultados, registrarlo ahí mismo: antes había que volver,
+/// buscar el "+" de arriba y, después de guardarlo, volver a buscarlo para
+/// darle el ingreso.
 @Composable
 internal fun ResultadosIngreso(
     texto: String,
     resultadosBusqueda: List<ContratistaResumen>,
     cargando: Boolean,
     onElegirContratista: (ContratistaResumen) -> Unit,
+    onNuevoContratista: (String) -> Unit,
     sincronizando: Boolean = false,
     onSincronizar: () -> Unit = {},
 ) {
     if (texto.isBlank()) {
-        EstadoVacio("Busque a quien ingresa", "Escriba un nombre o una cédula.", Icons.Default.PersonSearch)
+        EstadoVacio("Busque a quien entra o sale", "Escriba un nombre o una cédula.", Icons.Default.PersonSearch)
+        return
+    }
+    if (resultadosBusqueda.isEmpty() && !cargando) {
+        Column(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
+            FilaCrear(texto, onClick = { onNuevoContratista(texto) }, etiqueta = "Registrar nuevo contratista")
+            EstadoVacio(
+                "No está registrado",
+                "Regístrelo con su carnet PRAIND y enseguida se le da el ingreso.",
+                Icons.Default.PersonSearch,
+            )
+        }
         return
     }
     ListaConEstados(
@@ -160,29 +173,6 @@ internal fun ResultadosIngreso(
     ) { contratista ->
         FilaContratista(contratista, onClick = { onElegirContratista(contratista) })
     }
-}
-
-/// Resultados del buscador en modo Salida: quién está adentro, acotado por
-/// cédula o nombre (sin texto, todos).
-@Composable
-internal fun ResultadosSalida(
-    texto: String,
-    activos: List<FilaActiva>,
-    cargando: Boolean,
-    onElegirActivo: (FilaActiva) -> Unit,
-    sincronizando: Boolean = false,
-    onSincronizar: () -> Unit = {},
-) {
-    ListaActivos(
-        activos = activos,
-        cargando = cargando,
-        tituloVacio = if (texto.isBlank()) "Nadie adentro por ahora" else "Sin resultados",
-        detalleVacio = if (texto.isBlank()) "Cuando alguien ingrese, aparece aquí." else "Pruebe con otro nombre o cédula.",
-        onClick = onElegirActivo,
-        sincronizando = sincronizando,
-        onSincronizar = onSincronizar,
-        contentPadding = PADDING_RESULTADOS,
-    )
 }
 
 /// Modo Gafete fuera del buscador: qué hacer (escribir los números abajo o

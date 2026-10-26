@@ -130,6 +130,21 @@ class ProveedoresViewModel(
                 null
             }
             if (consultada != cedula) return@launch // ya se tipeó otra
+            // Proveedor que vuelve: se propone la empresa de la última vez
+            // (se cambia en el mismo renglón si hoy viene por otra).
+            if (empresaSeleccionada == null) {
+                val ultima = try {
+                    withContext(dispatcherIO) { medirNucleo("ultimaEmpresaProveedor") { nucleo.ultimaEmpresaProveedor(consultada) } }
+                } catch (excepcion: Exception) {
+                    excepcion.mensajeDeErrorEsperado()
+                    null
+                }
+                if (consultada != cedula) return@launch
+                if (ultima != null && empresaSeleccionada == null) {
+                    empresaSeleccionada = ultima
+                    textoEmpresa = ultima.nombre
+                }
+            }
             val anterior = avisoCedulaActiva
             avisoCedulaActiva = aviso
             cedulaConIngresoActivo = aviso != null

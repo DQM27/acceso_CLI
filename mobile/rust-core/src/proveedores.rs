@@ -116,6 +116,19 @@ impl Nucleo {
         }))
     }
 
+    /// La empresa con la que entró la última vez este proveedor, para
+    /// proponerla en el formulario apenas se escanea o se escribe su cédula
+    /// (ver `AppCore::ultima_empresa_proveedor`). Sin actor: es una lectura.
+    pub fn ultima_empresa_proveedor(
+        &self,
+        cedula: String,
+    ) -> Result<Option<EmpresaProveedor>, NucleoError> {
+        Ok(self
+            .core_lock()
+            .ultima_empresa_proveedor(&cedula)?
+            .map(Into::into))
+    }
+
     /// Registra la salida (cierre) de un ingreso de proveedor activo --
     /// espejo de `AppCore::registrar_salida_proveedor`.
     pub fn registrar_salida_proveedor(&self, registro_id: i64) -> Result<(), NucleoError> {

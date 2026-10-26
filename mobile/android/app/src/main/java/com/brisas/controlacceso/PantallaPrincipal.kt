@@ -114,10 +114,16 @@ fun PantallaPrincipal(
     directorio: String,
     metadata: MetadatosDispositivoLocal,
     onCerrarSesion: () -> Unit,
+    // Cierre por inactividad (teléfono bloqueado o app minimizada mucho
+    // rato): el login vuelve con la cédula puesta, sólo falta la contraseña.
+    onBloquear: () -> Unit = onCerrarSesion,
 ) {
     RegistrarPantalla("principal")
     var refrescarNube by remember { mutableIntStateOf(0) }
     var mostrarNuevoContratista by remember { mutableStateOf(false) }
+    // Lo que se buscó en Activos sin encontrar a nadie, para arrancar el alta
+    // con eso (vacío desde el ícono de arriba).
+    var textoNuevoContratista by remember { mutableStateOf("") }
     // Bandeja de avisos (campanita): otra pantalla que reemplaza a las
     // pestañas, igual que `mostrarNuevoContratista`.
     var mostrarAvisos by remember { mutableStateOf(false) }
@@ -302,7 +308,7 @@ fun PantallaPrincipal(
             trabajoBloqueo?.cancel()
             trabajoBloqueo = scope.launch {
                 delay(DEMORA_BLOQUEO_SESION_MS)
-                onCerrarSesion()
+                onBloquear()
             }
         }
         val observador = LifecycleEventObserver { _, evento ->
@@ -440,6 +446,7 @@ fun PantallaPrincipal(
                 BotonIconoCuadradoBrisas(onClick = {
                     mostrarAvisos = false
                     mostrarAyuda = false
+                    textoNuevoContratista = ""
                     mostrarNuevoContratista = true
                 }) {
                     Icon(Icons.Default.PersonAdd, contentDescription = "Nuevo contratista")
@@ -539,7 +546,18 @@ fun PantallaPrincipal(
                     onVolver = { mostrarAvisos = false },
                 )
             } else if (mostrado == PanelPrincipal.NUEVO_CONTRATISTA) {
-                PantallaNuevoContratista(nucleo, onVolver = { mostrarNuevoContratista = false })
+                PantallaNuevoContratista(
+                    nucleo,
+                    onVolver = { mostrarNuevoContratista = false },
+                    // Recién dado de alta, directo a su ingreso en Activos: antes
+                    // volvía a la lista y había que buscarlo de nuevo.
+                    onGuardado = { id ->
+                        mostrarNuevoContratista = false
+                        pestana = SECCIONES_VISIBLES.indexOf(SeccionPrincipal.ACTIVOS)
+                        activosViewModel.elegir(id)
+                    },
+                    textoInicial = textoNuevoContratista,
+                )
             } else if (mostrado == PanelPrincipal.AYUDA) {
                 PantallaAyuda(onVolver = { mostrarAyuda = false })
             } else if (mostrado == PanelPrincipal.RECONEXION) {
@@ -614,6 +632,12 @@ fun PantallaPrincipal(
                                         refrescarNube,
                                         sincronizando = nubeViewModel.sincronizando,
                                         onSincronizar = nubeViewModel::sincronizar,
+                                        onNuevoContratista = { texto ->
+                                            mostrarAvisos = false
+                                            mostrarAyuda = false
+                                            textoNuevoContratista = texto
+                                            mostrarNuevoContratista = true
+                                        },
                                     )
                                     SeccionPrincipal.RUTAS -> PantallaRutas(nucleo)
                                     SeccionPrincipal.KOF -> PantallaGafetesProvisionales(

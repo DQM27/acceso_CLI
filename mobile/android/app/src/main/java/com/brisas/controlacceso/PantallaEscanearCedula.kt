@@ -3,8 +3,12 @@ package com.brisas.controlacceso
 import androidx.camera.core.ImageProxy
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +18,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -36,6 +41,11 @@ fun PantallaEscanearCedula(
     resultadoUltimoEscaneo: () -> Pair<String, Boolean>? = { null },
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
+    // Cuando "+" abre la cámara de una vez (el 99% de los formularios se
+    // llena escaneando), "Llenar a mano" sobre la X lleva al formulario
+    // vacío y la X cancela todo -- como "Escribir el código" en la cámara
+    // del QR. `null`: sólo la X.
+    onLlenarAMano: (() -> Unit)? = null,
 ) {
     RegistrarPantalla("escanear_cedula")
     // Antes el mensaje de permiso era fijo ("...para escanear cédulas"),
@@ -52,6 +62,7 @@ fun PantallaEscanearCedula(
             resultadoUltimoEscaneo = resultadoUltimoEscaneo,
             onDocumentoDetectado = onDocumentoDetectado,
             onCerrar = onCerrar,
+            onLlenarAMano = onLlenarAMano,
         )
     }
 }
@@ -63,6 +74,7 @@ private fun VistaCamaraCedula(
     resultadoUltimoEscaneo: () -> Pair<String, Boolean>?,
     onDocumentoDetectado: suspend (DocumentoDetectado) -> Unit,
     onCerrar: () -> Unit,
+    onLlenarAMano: (() -> Unit)?,
 ) {
     val contexto = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -326,7 +338,21 @@ private fun VistaCamaraCedula(
         )
         // Cerrar abajo al centro, al alcance del pulgar con el documento en la
         // otra mano (antes, arriba a la derecha). Igual en todas las cámaras.
-        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp))
+        Column(
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (onLlenarAMano != null) {
+                TextButton(
+                    onClick = onLlenarAMano,
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+                    modifier = Modifier.padding(bottom = 12.dp),
+                ) {
+                    Text("Llenar a mano")
+                }
+            }
+            BotonCerrarCamara(onClick = onCerrar)
+        }
     }
 }
 

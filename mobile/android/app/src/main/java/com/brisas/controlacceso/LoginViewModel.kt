@@ -204,7 +204,11 @@ class LoginViewModel(
     /// Sólo olvida el actor en memoria — el `Nucleo`/la conexión SQLite del
     /// teléfono se quedan abiertos (son de la Activity, no de la sesión) —
     /// mismo criterio que `Nucleo::cerrar_sesion` del lado de Rust.
-    fun cerrarSesion() {
+    ///
+    /// [conservarCedula]: el cierre por inactividad deja la cédula puesta
+    /// (el guardia que bloqueó el teléfono un rato vuelve con sólo la
+    /// contraseña); cerrar sesión a mano, en el cambio de turno, limpia todo.
+    fun cerrarSesion(conservarCedula: Boolean = false) {
         val cedulaSaliente = sesion?.cedula
         propietarioSesion?.cerrar()
         propietarioSesion = null
@@ -218,7 +222,7 @@ class LoginViewModel(
             }
         }
         sesion = null
-        cedula = ""
+        cedula = if (conservarCedula) cedulaSaliente.orEmpty() else ""
         password = ""
         error = null
         errorCredenciales = null

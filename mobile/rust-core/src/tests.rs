@@ -969,6 +969,40 @@ fn registrar_ingreso_y_salida_de_proveedor_redondea_el_viaje() {
 }
 
 #[test]
+fn ultima_empresa_proveedor_propone_la_del_ingreso_anterior() {
+    let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
+    assert_eq!(
+        nucleo
+            .ultima_empresa_proveedor("111111111".to_string())
+            .unwrap(),
+        None
+    );
+    let empresa = nucleo
+        .buscar_empresas_proveedor("maika".to_string())
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let registro_id = nucleo
+        .registrar_ingreso_proveedor(
+            "1-1111-1111".to_string(),
+            "Juan Perez".to_string(),
+            empresa.id,
+            None,
+            7,
+        )
+        .unwrap();
+    nucleo.registrar_salida_proveedor(registro_id).unwrap();
+
+    assert_eq!(
+        nucleo
+            .ultima_empresa_proveedor("111111111".to_string())
+            .unwrap(),
+        Some(empresa)
+    );
+}
+
+#[test]
 fn registrar_ingreso_proveedor_con_empresa_inexistente_falla() {
     let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
 

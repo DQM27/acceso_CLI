@@ -172,7 +172,7 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
         }
         if (contratista.tieneIngresoActivo) {
             Text(
-                "Ingreso activo (sin salida registrada)",
+                "Adentro · toque para registrar su salida",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
             )

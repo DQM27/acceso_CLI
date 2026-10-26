@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -40,6 +41,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -96,6 +98,23 @@ fun PantallaConfirmarIngreso(
 
     val focoGafete = remember { FocusRequester() }
     val focoConfirmar = remember { FocusRequester() }
+
+    // Mismo criterio que [PantallaProveedores]/[PantallaRutas]: el botón
+    // se ve gris (deshabilitado) mientras falten datos, en vez de dejar
+    // que el error salga recién al tocarlo -- pedido explícito del
+    // usuario 2026-09-20, para que las dos pantallas se sientan igual.
+    // Cuando el contratista no requiere gafete no hay nada más que
+    // completar (el medio de ingreso ya arranca con un valor elegido),
+    // así que el botón queda habilitado de entrada. Si lo requiere, hace
+    // falta el número o encender "S/G": nunca queda S/G por olvido.
+    val gafeteListo = !preparacion.requiereGafete || sinGafete || gafeteTexto.trim().toLongOrNull() != null
+    val placaLista = medio != MedioIngreso.VEHICULO || placaTexto.isNotBlank()
+    val puedeRegistrar = !registrando && gafeteListo && placaLista
+    // La tecla ✓ del teclado registra (el gafete suele ser lo último que se
+    // escribe): sin bajar la vista a buscar el botón.
+    val registrarSiListo = {
+        if (puedeRegistrar) onRegistrar(medio, gafeteTexto, placaTexto)
+    }
 
     // Mismo criterio que NuevoIngresoModal.tsx: sin gafete que requiera el
     // foco, éste se va directo al botón — Enter sobre un botón también
@@ -173,6 +192,14 @@ fun PantallaConfirmarIngreso(
                     onValueChange = { placaTexto = it },
                     label = { Text("Placa del vehículo") },
                     singleLine = true,
+                    // Con gafete por escribir, ✓ pasa a él; si no, registra.
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = if (preparacion.requiereGafete && !sinGafete) ImeAction.Next else ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focoGafete.requestFocus() },
+                        onDone = { registrarSiListo() },
+                    ),
                     shape = FormaCampoBrisas,
                     colors = ColoresCampoBrisas(),
                     modifier = Modifier.weight(1f),
@@ -200,7 +227,8 @@ fun PantallaConfirmarIngreso(
                     label = { Text("Número de gafete") },
                     singleLine = true,
                     enabled = !sinGafete,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { registrarSiListo() }),
                     shape = FormaCampoBrisas,
                     colors = ColoresCampoBrisas(),
                     // Al enfocar este último input, lleva el scroll hasta el
@@ -248,19 +276,9 @@ fun PantallaConfirmarIngreso(
             FranjaEstado(mensajeError, TipoEstado.ERROR, modifier = Modifier.padding(bottom = 12.dp), vibrar = true)
         }
 
-        // Mismo criterio que [PantallaProveedores]/[PantallaRutas]: el botón
-        // se ve gris (deshabilitado) mientras falten datos, en vez de dejar
-        // que el error salga recién al tocarlo -- pedido explícito del
-        // usuario 2026-09-20, para que las dos pantallas se sientan igual.
-        // Cuando el contratista no requiere gafete no hay nada más que
-        // completar (el medio de ingreso ya arranca con un valor elegido),
-        // así que el botón queda habilitado de entrada. Si lo requiere, hace
-        // falta el número o encender "S/G": nunca queda S/G por olvido.
-        val gafeteListo = !preparacion.requiereGafete || sinGafete || gafeteTexto.trim().toLongOrNull() != null
-        val placaLista = medio != MedioIngreso.VEHICULO || placaTexto.isNotBlank()
         BotonBrisas(
             onClick = { onRegistrar(medio, gafeteTexto, placaTexto) },
-            enabled = !registrando && gafeteListo && placaLista,
+            enabled = puedeRegistrar,
             modifier = Modifier.fillMaxWidth().focusRequester(focoConfirmar),
         ) {
             Text(if (registrando) "Registrando…" else "Registrar ingreso")

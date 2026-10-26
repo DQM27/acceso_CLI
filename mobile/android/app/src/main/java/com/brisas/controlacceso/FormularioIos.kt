@@ -216,9 +216,10 @@ internal fun FilaResultado(texto: String, onClick: () -> Unit) {
 }
 
 /// "Crear «TEXTO»" como primer resultado cuando lo buscado no existe, como
-/// cuando Contactos ofrece agregar lo que se escribió.
+/// cuando Contactos ofrece agregar lo que se escribió. [etiqueta] cambia lo
+/// que dice ("Registrar nuevo contratista").
 @Composable
-internal fun FilaCrear(texto: String, onClick: () -> Unit) {
+internal fun FilaCrear(texto: String, etiqueta: String = "Crear «$texto»", onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -231,7 +232,7 @@ internal fun FilaCrear(texto: String, onClick: () -> Unit) {
         Icon(Icons.Default.AddCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(12.dp))
         Text(
-            "Crear «$texto»",
+            etiqueta,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Medium,

@@ -105,6 +105,8 @@ fun PantallaPorCorreo(
     var busqueda by remember { mutableStateOf("") }
     var buscando by remember { mutableStateOf(false) }
     var escaneando by remember { mutableStateOf(false) }
+    // "+" abre la cámara de una vez, igual que en Proveedores.
+    var escaneoDirecto by remember { mutableStateOf(false) }
     var escaneandoPlaca by remember { mutableStateOf(false) }
     var filaParaSalida by remember { mutableStateOf<FilaCorreoActiva?>(null) }
 
@@ -128,11 +130,27 @@ fun PantallaPorCorreo(
                     modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
                     onDocumentoDetectado = { documento ->
                         escaneando = false
+                        escaneoDirecto = false
                         val numero = documento.numeroDocumento.filter(Char::isDigit)
                             .ifBlank { documento.numeroDocumento }
                         viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
                     },
-                    onCerrar = { escaneando = false },
+                    onCerrar = {
+                        escaneando = false
+                        if (escaneoDirecto) {
+                            escaneoDirecto = false
+                            viewModel.cancelarFormulario()
+                            mostrandoFormulario = false
+                        }
+                    },
+                    onLlenarAMano = if (escaneoDirecto) {
+                        {
+                            escaneando = false
+                            escaneoDirecto = false
+                        }
+                    } else {
+                        null
+                    },
                 )
             }
             PanelConFormulario.ESCANER_PLACA -> {
@@ -183,7 +201,11 @@ fun PantallaPorCorreo(
                     PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
                     // "Nuevo ingreso" va en el botón redondo de abajo y la
                     // búsqueda en la píldora (ver `AccionInferior.kt`).
-                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso por correo", onClick = { mostrandoFormulario = true })
+                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso por correo", onClick = {
+                        mostrandoFormulario = true
+                        escaneando = true
+                        escaneoDirecto = true
+                    })
                     BusquedaPrincipal(ayuda = AYUDA_BUSQUEDA_CORREO, onAbrir = { buscando = true })
 
                     BuscadorInferior(
@@ -241,6 +263,14 @@ private fun FormularioNuevoIngresoCorreo(
     val puedeRegistrar = viewModel.cedula.isNotBlank() && viewModel.nombre.isNotBlank() &&
         viewModel.motivo.isNotBlank() && gafeteTexto.isNotBlank() &&
         !viewModel.registrando && !viewModel.cedulaConIngresoActivo
+    val registrar = {
+        gafeteTexto.toLongOrNull()?.let { numero ->
+            viewModel.registrarIngreso(numero) {
+                onCambiarGafeteTexto("")
+                onVolver()
+            }
+        }
+    }
 
     // Mientras se llenan los datos, las conexiones con la nube se calientan
     // (ver `CorreoViewModel.precalentarNube`).
@@ -291,6 +321,7 @@ private fun FormularioNuevoIngresoCorreo(
                     }
                 },
                 ayudaGafete = "De visita",
+                onListo = { if (puedeRegistrar) registrar() },
             )
 
             viewModel.error?.let { mensaje ->
@@ -298,13 +329,7 @@ private fun FormularioNuevoIngresoCorreo(
             }
 
             BotonBrisas(
-                onClick = {
-                    val numero = gafeteTexto.toLongOrNull() ?: return@BotonBrisas
-                    viewModel.registrarIngreso(numero) {
-                        onCambiarGafeteTexto("")
-                        onVolver()
-                    }
-                },
+                onClick = { registrar() },
                 enabled = puedeRegistrar,
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             ) {

@@ -114,6 +114,9 @@ fun PantallaProveedores(
     var busqueda by remember { mutableStateOf("") }
     var buscando by remember { mutableStateOf(false) }
     var escaneando by remember { mutableStateOf(false) }
+    // "+" abre la cámara de una vez (el 99% de las veces se escanea): ahí la
+    // X cancela el ingreso y "Llenar a mano" lleva al formulario.
+    var escaneoDirecto by remember { mutableStateOf(false) }
     // Mismo lector que el paso 3 de [PantallaRutas] (`extraerVehiculo`,
     // `LectorVehiculoRuta.kt`) -- genérico, no específico de rutas. Acá
     // sólo interesa la placa: si el OCR detecta un número de unidad
@@ -145,11 +148,27 @@ fun PantallaProveedores(
                     modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
                     onDocumentoDetectado = { documento ->
                         escaneando = false
+                        escaneoDirecto = false
                         val numero = documento.numeroDocumento.filter(Char::isDigit)
                             .ifBlank { documento.numeroDocumento }
                         viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
                     },
-                    onCerrar = { escaneando = false },
+                    onCerrar = {
+                        escaneando = false
+                        if (escaneoDirecto) {
+                            escaneoDirecto = false
+                            viewModel.cancelarFormulario()
+                            mostrandoFormulario = false
+                        }
+                    },
+                    onLlenarAMano = if (escaneoDirecto) {
+                        {
+                            escaneando = false
+                            escaneoDirecto = false
+                        }
+                    } else {
+                        null
+                    },
                 )
             }
             PanelConFormulario.ESCANER_PLACA -> {
@@ -202,7 +221,11 @@ fun PantallaProveedores(
                     PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
                     // "Nuevo ingreso" va en el botón redondo de abajo y la
                     // búsqueda en la píldora (ver `AccionInferior.kt`).
-                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso de proveedor", onClick = { mostrandoFormulario = true })
+                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso de proveedor", onClick = {
+                        mostrandoFormulario = true
+                        escaneando = true
+                        escaneoDirecto = true
+                    })
                     BusquedaPrincipal(ayuda = AYUDA_BUSQUEDA_PROVEEDORES, onAbrir = { buscando = true })
 
                     BuscadorInferior(
