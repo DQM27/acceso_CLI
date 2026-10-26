@@ -59,8 +59,24 @@ fun PantallaReconectarEquipo(
     RegistrarPantalla("reconectar_equipo")
     val viewModel: ReconexionViewModel = viewModel(factory = ReconexionViewModel.factory(nucleo, metadata))
     var codigo by rememberSaveable { mutableStateOf("") }
+    var escaneando by rememberSaveable { mutableStateOf(false) }
     val contexto = LocalContext.current
     val paso = viewModel.paso
+
+    // El mismo lector que la vinculación: el panel muestra el código de
+    // reconexión con el mismo QR (`contenidoQr`).
+    if (escaneando) {
+        PantallaEscanearCodigoVinculacion(
+            onCodigoLeido = { leido ->
+                escaneando = false
+                codigo = CodigoVinculacion.formatear(leido)
+                viewModel.reconectar(leido, onReconectado = onReconectado)
+            },
+            onEscribirCodigo = { escaneando = false },
+            onCerrar = { escaneando = false },
+        )
+        return
+    }
 
     // Ya reconectado en otra unidad: la base de la anterior no sirve, sólo
     // queda reiniciar.
@@ -89,11 +105,18 @@ fun PantallaReconectarEquipo(
             PasoReconexion.Codigo -> {
                 Text("Reconectar este teléfono", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Escriba el código de reconexión que le dio un administrador desde el panel. " +
-                        "Sirve una sola vez y vence en pocos minutos.",
+                    "Escanee el código QR de reconexión que le muestra un administrador en el panel, " +
+                        "o escríbalo. Sirve una sola vez y vence en pocos minutos.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 AvisoPorteria(viewModel.error)
+                BotonBrisas(
+                    onClick = { escaneando = true },
+                    enabled = !viewModel.enviando,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Escanear código QR")
+                }
                 OutlinedTextField(
                     value = codigo,
                     onValueChange = { codigo = CodigoVinculacion.formatear(it) },
@@ -113,12 +136,12 @@ fun PantallaReconectarEquipo(
                     colors = ColoresCampoBrisas(),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                BotonBrisas(
+                BotonDiscretoBrisas(
                     onClick = { viewModel.reconectar(codigo, onReconectado = onReconectado) },
                     enabled = !viewModel.enviando && CodigoVinculacion.completo(codigo),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (viewModel.enviando) "Reconectando…" else "Reconectar")
+                    Text(if (viewModel.enviando) "Reconectando…" else "Reconectar con el código escrito")
                 }
             }
             is PasoReconexion.Confirmar -> {
