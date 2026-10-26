@@ -24,7 +24,7 @@ En el navegador (computadora o teléfono), en la dirección del panel.
 
 ## El menú lateral
 
-A la izquierda están las secciones: **Historial**, **Adentro ahora**,
+A la izquierda están las secciones: **Historial**, **Activos**,
 **Contratistas**, **Usuarios**, **Sesiones**, **Dispositivos**, **Avisos** y
 **Asistente**.
 

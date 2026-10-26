@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { listarAdentroAhora, llevaDemasiado, textoTiempoAdentro } from "./adentro";
+import { listarAdentroAhora, nivelPermanencia, textoTiempoAdentro } from "./adentro";
 
 function mockConsulta(resultado: { data: unknown; error: unknown }) {
   const encadenable: Record<string, unknown> = {
@@ -83,8 +83,13 @@ describe("tiempo adentro", () => {
     expect(textoTiempoAdentro(desde, mas(-5))).toBe("0 min");
   });
 
-  it("resalta desde las 12 horas", () => {
-    expect(llevaDemasiado(desde, mas(12 * 60 - 1))).toBe(false);
-    expect(llevaDemasiado(desde, mas(12 * 60))).toBe(true);
+  it("aviso después de 12 horas y crítico después de 14, como el núcleo", () => {
+    // Estricto: justo 12 h todavía es normal (`nivel_de_permanencia`).
+    expect(nivelPermanencia(desde, mas(12 * 60))).toBe("normal");
+    expect(nivelPermanencia(desde, mas(12 * 60 + 1))).toBe("aviso");
+    expect(nivelPermanencia(desde, mas(14 * 60))).toBe("aviso");
+    expect(nivelPermanencia(desde, mas(14 * 60 + 1))).toBe("critico");
+    // Reloj adelantado (entrada "en el futuro"): normal, nunca aviso.
+    expect(nivelPermanencia(desde, mas(-5))).toBe("normal");
   });
 });

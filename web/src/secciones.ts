@@ -1,7 +1,7 @@
 export type Seccion =
   | "dispositivos"
   | "historial"
-  | "adentro"
+  | "activos"
   | "contratistas"
   | "usuarios"
   | "sesiones"

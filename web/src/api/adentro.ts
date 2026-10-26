@@ -74,10 +74,20 @@ export function textoTiempoAdentro(desdeIso: string, ahora: Date = new Date()): 
   return horas % 24 === 0 ? `${diasCompletos} d` : `${diasCompletos} d ${horas % 24} h`;
 }
 
-/** Horas adentro a partir de las cuales la fila se resalta: casi siempre
- * es una salida que no se marcó. */
-export const HORAS_ALERTA_ADENTRO = 12;
+/** Qué tan grave es lo que lleva alguien adentro: casi siempre es una salida
+ * que no se marcó. */
+export type NivelPermanencia = "normal" | "aviso" | "critico";
 
-export function llevaDemasiado(desdeIso: string, ahora: Date = new Date()): boolean {
-  return ahora.getTime() - new Date(desdeIso).getTime() >= HORAS_ALERTA_ADENTRO * 3_600_000;
+/** La misma regla que el núcleo (`src/domain/permanencia.rs`), que es su única
+ * definición para escritorio y móvil: más de 12 horas es aviso y más de 14,
+ * crítico; justo 12 horas todavía es normal. El panel no corre el núcleo, así
+ * que los dos números se repiten acá; si cambian allá, cambian acá. */
+export const HORAS_AVISO_PERMANENCIA = 12;
+export const HORAS_CRITICO_PERMANENCIA = 14;
+
+export function nivelPermanencia(desdeIso: string, ahora: Date = new Date()): NivelPermanencia {
+  const horas = (ahora.getTime() - new Date(desdeIso).getTime()) / 3_600_000;
+  if (horas > HORAS_CRITICO_PERMANENCIA) return "critico";
+  if (horas > HORAS_AVISO_PERMANENCIA) return "aviso";
+  return "normal";
 }

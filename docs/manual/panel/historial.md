@@ -51,5 +51,5 @@ Se muestran de a **100 filas por página**.
 
 ## Relacionado
 
-- [Adentro ahora](adentro-ahora.md)
+- [Activos](activos.md)
 - [Sesiones](sesiones.md)
