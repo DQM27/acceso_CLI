@@ -173,6 +173,16 @@ export default function Activos() {
             claseFila={claseFilaActivo}
             controles={
               <>
+                {/* Primero el buscador y después los filtros (pedido del
+                    usuario 2026-10-26). */}
+                <div className="campo flex-[0_1_16rem]">
+                  <input
+                    placeholder="Cédula, nombre, gafete…"
+                    value={busqueda}
+                    disabled={cargando}
+                    onChange={(evento) => setBusqueda(evento.target.value)}
+                  />
+                </div>
                 <SegmentadoOpciones
                   opciones={opcionesFiltroClase(conteoClases)}
                   valor={filtroClase}
@@ -187,14 +197,6 @@ export default function Activos() {
                     etiqueta="Filtrar por gafete"
                   />
                 )}
-                <div className="campo flex-[0_1_16rem]">
-                  <input
-                    placeholder="Cédula, nombre, gafete…"
-                    value={busqueda}
-                    disabled={cargando}
-                    onChange={(evento) => setBusqueda(evento.target.value)}
-                  />
-                </div>
               </>
             }
           />
