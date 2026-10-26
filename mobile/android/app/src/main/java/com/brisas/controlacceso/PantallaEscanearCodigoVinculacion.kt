@@ -135,9 +135,8 @@ private fun VistaCamaraQr(onCodigoLeido: (String) -> Unit, onEscribirCodigo: () 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
         VisorQr(leido = codigoLeido != null, modifier = Modifier.fillMaxSize())
-        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
         Column(
-            modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(top = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -152,6 +151,9 @@ private fun VistaCamaraQr(onCodigoLeido: (String) -> Unit, onEscribirCodigo: () 
             ) {
                 Text("Escribir el código")
             }
+            // Cerrar abajo al centro, como en las demás cámaras (antes, arriba
+            // a la derecha, la esquina más lejos del pulgar).
+            BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.padding(top = 12.dp, bottom = 28.dp))
         }
     }
 }

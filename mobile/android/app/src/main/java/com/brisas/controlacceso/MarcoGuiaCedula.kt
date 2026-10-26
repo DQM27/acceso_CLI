@@ -5,6 +5,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -74,6 +77,11 @@ fun MarcoGuiaCedula(
     // El pulso se fue (las esquinas quedan fijas) y el barrido sólo corre
     // mientras se busca: leído o con error, el marco queda quieto y no se
     // vuelve a dibujar hasta que algo cambia.
+    //
+    // Revisión 2026-10-25: el barrido redibujaba igual todo el marco (fondo
+    // oscuro y esquinas) en cada cuadro mientras se buscaba, que es casi todo
+    // el tiempo. Ahora la línea va en su propia capa y la animación sólo la
+    // desplaza (`translationY`): ni se recompone ni se vuelve a dibujar nada.
     val barrido = remember { Animatable(0f) }
     val buscando = estado == EstadoEscaneo.BUSCANDO
     LaunchedEffect(buscando) {
@@ -84,20 +92,9 @@ fun MarcoGuiaCedula(
         }
     }
 
-    Canvas(modifier = modifier) {
-        // `region` es la misma fuente de verdad que usa el recorte real
-        // antes del OCR -- ver el doc-comment de `RegionGuiaOcr`. Sin
-        // región (`null`), el recuadro es toda la pantalla.
-        val anchoGuia = region?.let { size.width * it.fraccionAncho } ?: size.width
-        val altoGuia = region?.let { anchoGuia / it.proporcionAnchoAlto } ?: size.height
-        val izquierdaGuia = (size.width - anchoGuia) / 2f
-        val arribaGuia = region?.let { size.height * it.fraccionTopCentro - altoGuia / 2f } ?: 0f
-        val guia = Rect(
-            left = izquierdaGuia,
-            top = arribaGuia,
-            right = izquierdaGuia + anchoGuia,
-            bottom = arribaGuia + altoGuia,
-        )
+    Box(modifier = modifier) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val guia = rectGuia(size, region)
         val radioEsquina = 14.dp.toPx()
 
         // Fondo oscurecido FUERA del recuadro -- 4 rectángulos en vez de un
@@ -128,7 +125,7 @@ fun MarcoGuiaCedula(
         // ...más 4 esquinas marcadas (look de scanner de documentos), más
         // gruesas -- son las que de verdad guían el
         // ojo hacia dónde encuadrar.
-        val largoEsquina = anchoGuia * 0.09f
+        val largoEsquina = guia.width * 0.09f
         val grosorEsquina = 4.dp.toPx()
         fun esquina(origen: Offset, haciaX: Float, haciaY: Float) {
             drawLine(
@@ -171,20 +168,40 @@ fun MarcoGuiaCedula(
             )
         }
 
-        // Barrido vertical dentro del recuadro -- sólo mientras se busca
-        // (una vez confirmado/inválido, un barrido en movimiento contradice
-        // el mensaje de "ya terminé de leer").
-        if (buscando) {
-            val yBarrido = guia.top + guia.height * barrido.value
+    }
+
+    // Barrido vertical dentro del recuadro -- sólo mientras se busca (una vez
+    // confirmado/inválido, un barrido en movimiento contradice el mensaje de
+    // "ya terminé de leer"). Se dibuja una vez arriba del recuadro y la capa
+    // baja con la animación.
+    if (buscando) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { translationY = rectGuia(size, region).height * barrido.value },
+        ) {
+            val guia = rectGuia(size, region)
             drawLine(
-                color = colorEsquinas,
-                start = Offset(guia.left + 6.dp.toPx(), yBarrido),
-                end = Offset(guia.right - 6.dp.toPx(), yBarrido),
+                color = color.copy(alpha = 0.9f),
+                start = Offset(guia.left + 6.dp.toPx(), guia.top),
+                end = Offset(guia.right - 6.dp.toPx(), guia.top),
                 strokeWidth = 2.5.dp.toPx(),
                 cap = StrokeCap.Round,
             )
         }
     }
+    }
+}
+
+/// El recuadro guía dentro de un lienzo de [size]. `region` es la misma
+/// fuente de verdad que usa el recorte real antes del OCR -- ver el
+/// doc-comment de `RegionGuiaOcr`. Sin región (`null`), toda la pantalla.
+private fun rectGuia(size: Size, region: RegionGuiaOcr?): Rect {
+    val anchoGuia = region?.let { size.width * it.fraccionAncho } ?: size.width
+    val altoGuia = region?.let { anchoGuia / it.proporcionAnchoAlto } ?: size.height
+    val izquierdaGuia = (size.width - anchoGuia) / 2f
+    val arribaGuia = region?.let { size.height * it.fraccionTopCentro - altoGuia / 2f } ?: 0f
+    return Rect(left = izquierdaGuia, top = arribaGuia, right = izquierdaGuia + anchoGuia, bottom = arribaGuia + altoGuia)
 }
 
 private const val DURACION_CAMBIO_COLOR_MS = 250

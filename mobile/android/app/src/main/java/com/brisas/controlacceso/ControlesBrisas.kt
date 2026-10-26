@@ -455,7 +455,7 @@ internal fun BotonCuadradoBordeBrisas(
 fun BotonCerrarCamara(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .size(44.dp)
+            .size(56.dp)
             .clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.55f))
             .clickable(onClick = onClick),

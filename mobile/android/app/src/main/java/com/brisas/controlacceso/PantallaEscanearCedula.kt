@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -323,18 +322,11 @@ private fun VistaCamaraCedula(
             tono = tonoEscaneo(estado, vencido, resultadoEsError = resultado?.second),
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                // Centrado entre los bordes, dejando a la derecha el lugar de
-                // la X de cerrar.
-                .padding(top = 16.dp, start = 72.dp, end = 72.dp),
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp),
         )
-        // Círculo flotante en vez del texto "Cancelar" que vivía debajo del
-        // mensaje -- pedido explícito del usuario (2026-09-19): la posición
-        // esquina-superior es la convención de cualquier pantalla de cámara
-        // (cerrar sin competir visualmente con el mensaje de estado, y sin
-        // el `padding(end = 72.dp)` de arriba el mensaje se le metía debajo).
-        // Compartido (`ControlesBrisas.kt`) -- mismo botón en las 4 pantallas
-        // de escaneo (Cédula, Carnet KOF, Vehículo/Ruta, Comprobante).
-        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+        // Cerrar abajo al centro, al alcance del pulgar con el documento en la
+        // otra mano (antes, arriba a la derecha). Igual en todas las cámaras.
+        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp))
     }
 }
 
