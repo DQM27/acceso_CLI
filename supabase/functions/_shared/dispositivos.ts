@@ -3,7 +3,7 @@
 // docs/features-futuras/propuesta-registro-dispositivos.md.
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
-import { SignJWT, importJWK, jwtVerify, type JWK } from "npm:jose@5";
+import { SignJWT, errors, importJWK, jwtVerify, type JWK } from "npm:jose@5";
 import { ALFABETO_CODIGO, LARGO_CODIGO, formatearCodigo } from "./codigos.ts";
 
 export { LARGO_CODIGO, formatearCodigo, normalizarCodigo } from "./codigos.ts";
@@ -252,13 +252,28 @@ export async function emitirDesafio(): Promise<string> {
 }
 
 /**
- * `true` si `asercion` está firmada con `clave` (la del equipo), va dirigida
- * a `device-auth` y contiene un desafío vigente emitido por este servidor.
- * Los tiempos que se validan son todos del servidor (los del desafío).
+ * Resultado de verificar una aserción contra la clave de un equipo:
+ * - `valida`: firmada con esa clave, dirigida a `device-auth` y con un
+ *   desafío vigente emitido por este servidor;
+ * - `firma_invalida`: la aserción no es de esa clave (o está mal formada);
+ * - `desafio_invalido`: la firma es del equipo, pero el desafío venció o no
+ *   es de este servidor -- basta con pedir otro.
  */
-export async function asercionValida(asercion: string, clave: ClavePublicaP256): Promise<boolean> {
+export type ResultadoFirma = "valida" | "firma_invalida" | "desafio_invalido";
+
+/**
+ * Verifica `asercion` contra `clave` (la del equipo). Los tiempos que se
+ * validan son todos del servidor (los del desafío).
+ *
+ * Sólo un rechazo de la verificación misma (los errores de `jose`) es un
+ * "no". Si el servidor no puede verificar -- sus claves no cargan, la clave
+ * guardada del equipo no se puede importar --, lanza: antes eso salía como
+ * firma inválida.
+ */
+export async function verificarAsercion(asercion: string, clave: ClavePublicaP256): Promise<ResultadoFirma> {
+  const claveEquipo = await importJWK(clave, "ES256");
+  let desafio: unknown;
   try {
-    const claveEquipo = await importJWK(clave, "ES256");
     const { payload } = await jwtVerify(asercion, claveEquipo, {
       algorithms: ["ES256"],
       audience: AUDIENCIA_ASERCION,
@@ -266,13 +281,20 @@ export async function asercionValida(asercion: string, clave: ClavePublicaP256):
       // se exigen; la frescura la garantiza el desafío.
       clockTolerance: Number.MAX_SAFE_INTEGER,
     });
-    if (typeof payload.desafio !== "string") return false;
+    desafio = payload.desafio;
+  } catch (error) {
+    if (error instanceof errors.JOSEError) return "firma_invalida";
+    throw error;
+  }
+  if (typeof desafio !== "string") return "firma_invalida";
 
-    const { publica } = await clavesDelServidor();
-    const { payload: desafio } = await jwtVerify(payload.desafio, publica, { algorithms: ["ES256"] });
-    return desafio.typ === TIPO_DESAFIO;
-  } catch {
-    return false;
+  const { publica } = await clavesDelServidor();
+  try {
+    const { payload } = await jwtVerify(desafio, publica, { algorithms: ["ES256"] });
+    return payload.typ === TIPO_DESAFIO ? "valida" : "desafio_invalido";
+  } catch (error) {
+    if (error instanceof errors.JOSEError) return "desafio_invalido";
+    throw error;
   }
 }
 

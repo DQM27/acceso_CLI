@@ -5,15 +5,15 @@ import { enSegundoPlano, ipDelCliente, json, leerCuerpo, preflight } from "../_s
 import {
   COLUMNAS_NOMBRES,
   TTL_DESAFIO_SEGUNDOS,
-  asercionValida,
   emitirDesafio,
   emitirTokenDispositivo,
   metadataSaneada,
   nombresDe,
   registrarEvento,
-  type ClavePublicaP256,
+  verificarAsercion,
   type MetadatosDispositivo,
 } from "../_shared/dispositivos.ts";
+import { decidirAutenticacion, type FilaEquipo, type Puertos, respuestaDeRechazo } from "./autenticacion.ts";
 
 // Autentica un dispositivo ya vinculado (ver device-vincular) y le emite su
 // token de sesión. Dos pasos (ver
@@ -25,6 +25,10 @@ import {
 //    pública, `aud` = "device-auth").
 //
 // No existe otro camino: no hay secretos compartidos.
+//
+// Qué responde y por qué (200 / 403 `dispositivo_retirado` sólo con prueba /
+// 401 / 400 `desafio_invalido` / 503 ante cualquier duda): ver
+// `autenticacion.ts`.
 //
 // Pública a propósito (`verify_jwt = false`): es la puerta de entrada.
 
@@ -45,20 +49,8 @@ function versionPorDebajoDe(version: string, minima: string): boolean {
   return false;
 }
 
-interface FilaDispositivo {
-  id: string;
-  sitio_id: string;
-  tipo: string;
-  clave_huella: string | null;
-  clave_publica_jwk: ClavePublicaP256 | null;
-  identificador_hardware: string | null;
-  etiqueta: string | null;
-  sitios: { nombre: string } | null;
-}
-
-const COLUMNAS = `id, sitio_id, tipo, clave_huella, clave_publica_jwk, identificador_hardware, ${COLUMNAS_NOMBRES}`;
-
-const credencialesInvalidas = () => json({ error: "invalid_credentials" }, 401);
+const COLUMNAS =
+  `id, sitio_id, tipo, clave_huella, clave_publica_jwk, identificador_hardware, revoked_at, ${COLUMNAS_NOMBRES}`;
 
 Deno.serve(async (req: Request) => {
   const respuestaPreflight = preflight(req);
@@ -77,8 +69,13 @@ Deno.serve(async (req: Request) => {
   const metadata = metadataSaneada(cuerpo.metadata);
 
   if (typeof cuerpo.asercion !== "string") return json({ error: "bad_request" }, 400);
-  const dispositivo = await autenticarConAsercion(supabase, cuerpo.asercion, ip);
-  if (!dispositivo) return credencialesInvalidas();
+  const decision = await decidirAutenticacion(cuerpo.asercion, puertosDe(supabase, ip));
+  if (decision.tipo !== "vigente") {
+    if (decision.tipo === "no_verificable") console.error("device-auth:", decision.detalle);
+    const { estado, cuerpo: rechazo } = respuestaDeRechazo(decision);
+    return json(rechazo, estado);
+  }
+  const dispositivo = decision.equipo;
 
   // Sin versión mínima configurada, o sin que el cliente la mande, no se
   // bloquea: "no sé" nunca es motivo para rechazar. 426 Upgrade Required.
@@ -90,37 +87,41 @@ Deno.serve(async (req: Request) => {
     return json({ error: "version_desactualizada", version_minima: VERSION_MINIMA_ACEPTADA }, 426);
   }
 
+  let token: Awaited<ReturnType<typeof emitirTokenDispositivo>>;
+  try {
+    token = await emitirTokenDispositivo({ ...dispositivo, ...nombresDe(dispositivo) });
+  } catch (error) {
+    console.error("device-auth: no se pudo emitir el token:", error instanceof Error ? error.message : error);
+    return json({ error: "no_verificable" }, 503);
+  }
   enSegundoPlano(actualizarRastro(supabase, dispositivo, metadata, ip));
-
-  return json(await emitirTokenDispositivo({ ...dispositivo, ...nombresDe(dispositivo) }));
+  return json(token);
 });
 
-async function autenticarConAsercion(
-  supabase: ReturnType<typeof clienteServicio>,
-  asercion: string,
-  ip: string | null,
-): Promise<FilaDispositivo | null> {
-  let huella: string | undefined;
-  try {
-    huella = decodeProtectedHeader(asercion).kid;
-  } catch {
-    return null;
-  }
-  if (!huella) return null;
-
-  const { data: dispositivo } = await supabase
-    .from("dispositivos")
-    .select(COLUMNAS)
-    .eq("clave_huella", huella)
-    .is("revoked_at", null)
-    .maybeSingle<FilaDispositivo>();
-  if (!dispositivo?.clave_publica_jwk) return null;
-
-  if (!(await asercionValida(asercion, dispositivo.clave_publica_jwk))) {
-    await registrarEvento(supabase, { tipo: "firma_invalida", dispositivo_id: dispositivo.id, ip });
-    return null;
-  }
-  return dispositivo;
+function puertosDe(supabase: ReturnType<typeof clienteServicio>, ip: string | null): Puertos {
+  return {
+    huellaDe(asercion) {
+      try {
+        return decodeProtectedHeader(asercion).kid ?? null;
+      } catch {
+        return null;
+      }
+    },
+    // Sin filtrar por `revoked_at`: la fila retirada es la prueba del retiro.
+    async buscarPorHuella(huella) {
+      const { data, error } = await supabase
+        .from("dispositivos")
+        .select(COLUMNAS)
+        .eq("clave_huella", huella)
+        .maybeSingle<FilaEquipo>();
+      if (error) throw new Error(`${error.code ?? "sin código"}: ${error.message}`);
+      return data;
+    },
+    verificarFirma: verificarAsercion,
+    registrarFirmaInvalida: (dispositivoId) =>
+      registrarEvento(supabase, { tipo: "firma_invalida", dispositivo_id: dispositivoId, ip }),
+    esperar: (ms) => new Promise((resolver) => setTimeout(resolver, ms)),
+  };
 }
 
 /**
@@ -130,7 +131,7 @@ async function autenticarConAsercion(
  */
 async function actualizarRastro(
   supabase: ReturnType<typeof clienteServicio>,
-  dispositivo: FilaDispositivo,
+  dispositivo: FilaEquipo,
   metadata: MetadatosDispositivo,
   ip: string | null,
 ): Promise<void> {
