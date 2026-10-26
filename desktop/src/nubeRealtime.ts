@@ -29,8 +29,13 @@ export type EstadoCanalRealtime = "SUBSCRIBED" | "CHANNEL_ERROR" | "TIMED_OUT" |
 interface OpcionesRealtimeNube {
   onSincronizado?: (resumen: ResumenSincronizacion) => void;
   onEstado?: (estado: EstadoCanalRealtime) => void;
-  /** Este equipo fue retirado en el panel (ver `expulsionNube.ts`). El
-   * canal en vivo ya se detuvo para siempre. */
+  /** Llegó un aviso de expulsión para este equipo: le pregunta a la nube
+   * (`descartarTokenNube` pide un token a `device-auth`) y devuelve si
+   * quedó retirado. El aviso por sí solo no decide (incidente del
+   * 2026-10-26); sin esta opción, nunca se toma como retiro. */
+  confirmarExpulsion?: () => Promise<boolean>;
+  /** La nube confirmó que este equipo fue retirado en el panel (ver
+   * `expulsionNube.ts`). El canal en vivo ya se detuvo para siempre. */
   onExpulsado?: () => void;
   // Quién tiene la sesión abierta en esta PC ahora -- viaja en el mismo
   // `track()` que ya marca el dispositivo como presente, para que el panel
@@ -80,6 +85,19 @@ const REINTENTO_TOPE_MS = 60_000;
 const PAUSA_AGRUPACION_MS = 600;
 // Cada cuánto, como mucho, se relee el desfase del reloj (telemetría).
 const INTERVALO_DESFASE_MS = 10_000;
+
+/** `true` sólo si la nube confirmó el retiro. Sin forma de preguntar, o si
+ * la pregunta falla, no está confirmado: la próxima sincronización vuelve a
+ * preguntar. */
+export async function confirmarExpulsion(preguntar: (() => Promise<boolean>) | undefined): Promise<boolean> {
+  if (!preguntar) return false;
+  try {
+    return (await preguntar()) === true;
+  } catch (error) {
+    console.info("No se pudo confirmar la expulsión con la nube:", error);
+    return false;
+  }
+}
 
 export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => void {
   let cancelado = false;
@@ -305,12 +323,17 @@ export function iniciarRealtimeNube(opciones: OpcionesRealtimeNube = {}): () => 
         .on("broadcast", { event: "dispositivo_expulsado" }, ({ payload }) => {
           if (cancelado || cliente !== clienteActual) return;
           if (!esExpulsionDeEsteEquipo(payload, sesion.dispositivo_id)) return;
-          // El retiro es definitivo: el servidor ya no autoriza este canal
-          // ni emite tokens para este equipo, así que se deja de escuchar
-          // el sitio y no se reintenta la conexión.
-          anotarFinDeConexion("expulsado");
-          detener();
-          opciones.onExpulsado?.();
+          // El aviso no decide: la nube confirma (o no) el retiro. Sin
+          // confirmación el canal sigue como estaba.
+          void confirmarExpulsion(opciones.confirmarExpulsion).then((retirado) => {
+            if (!retirado || cancelado || cliente !== clienteActual) return;
+            // El retiro es definitivo: el servidor ya no autoriza este
+            // canal ni emite tokens para este equipo, así que se deja de
+            // escuchar el sitio y no se reintenta la conexión.
+            anotarFinDeConexion("expulsado");
+            detener();
+            opciones.onExpulsado?.();
+          });
         })
         .subscribe((estado, error) => {
           if (cancelado || cliente !== clienteActual) return;

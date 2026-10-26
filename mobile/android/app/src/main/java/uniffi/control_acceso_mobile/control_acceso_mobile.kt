@@ -1590,7 +1590,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_cerrar_prestamo_gafete_provisional_remoto() and 0xFFFF) != 7518) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_descartar_token_nube() and 0xFFFF) != 30803) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_descartar_token_nube() and 0xFFFF) != 58228) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_desfase_reloj_ms() and 0xFFFF) != 4032) {
@@ -3829,14 +3829,18 @@ public interface NucleoInterface {
     fun `cerrarPrestamoGafeteProvisionalRemoto`(`uuid`: kotlin.String)
     
     /**
-     * Descarta el token cacheado. Lo llama `NubeRealtime.kt` al recibir un
-     * aviso de expulsión (retirado en el panel): sin esto el teléfono seguía
-     * usando su token de hasta 1 h, las consultas en vivo le devolvían
-     * vacío (la política restrictiva filtra en silencio) y un chequeo como
-     * "ingreso activo en otro sitio" pasaba como si no hubiera conflicto.
-     * Con el token descartado, la próxima operación de nube va a
-     * `device-auth` y recibe el motivo real. Mismo criterio que
-     * `descartar_token_nube` en escritorio.
+     * Descarta el token cacheado y le pregunta a `device-auth` en el acto.
+     * Lo llama `NubeRealtime.kt` al recibir un aviso de expulsión: sin
+     * descartarlo, el teléfono seguía usando su token de hasta 1 h, las
+     * consultas en vivo le devolvían vacío (la política restrictiva filtra
+     * en silencio) y un chequeo como "ingreso activo en otro sitio" pasaba
+     * como si no hubiera conflicto.
+     *
+     * El aviso por sí solo NO marca el teléfono como retirado: la marca la
+     * pone la respuesta de `device-auth` (ver
+     * `AppCore::anotar_autenticacion`), y Kotlin la lee después con
+     * [`Nucleo::equipo_retirado`]. Hace red: Kotlin la llama en segundo
+     * plano. Mismo criterio que `descartar_token_nube` en escritorio.
      */
     fun `descartarTokenNube`()
     
@@ -4856,14 +4860,18 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Descarta el token cacheado. Lo llama `NubeRealtime.kt` al recibir un
-     * aviso de expulsión (retirado en el panel): sin esto el teléfono seguía
-     * usando su token de hasta 1 h, las consultas en vivo le devolvían
-     * vacío (la política restrictiva filtra en silencio) y un chequeo como
-     * "ingreso activo en otro sitio" pasaba como si no hubiera conflicto.
-     * Con el token descartado, la próxima operación de nube va a
-     * `device-auth` y recibe el motivo real. Mismo criterio que
-     * `descartar_token_nube` en escritorio.
+     * Descarta el token cacheado y le pregunta a `device-auth` en el acto.
+     * Lo llama `NubeRealtime.kt` al recibir un aviso de expulsión: sin
+     * descartarlo, el teléfono seguía usando su token de hasta 1 h, las
+     * consultas en vivo le devolvían vacío (la política restrictiva filtra
+     * en silencio) y un chequeo como "ingreso activo en otro sitio" pasaba
+     * como si no hubiera conflicto.
+     *
+     * El aviso por sí solo NO marca el teléfono como retirado: la marca la
+     * pone la respuesta de `device-auth` (ver
+     * `AppCore::anotar_autenticacion`), y Kotlin la lee después con
+     * [`Nucleo::equipo_retirado`]. Hace red: Kotlin la llama en segundo
+     * plano. Mismo criterio que `descartar_token_nube` en escritorio.
      */override fun `descartarTokenNube`()
         = 
     callWithHandle {

@@ -9,10 +9,19 @@ use serde::Deserialize;
 pub enum NubeError {
     #[error("No se pudo contactar al receptor: {0}")]
     Red(#[from] reqwest::Error),
-    /// `device-auth` no reconoce la clave del equipo: fue retirado en el
-    /// panel.
-    #[error("La nube ya no reconoce a este dispositivo")]
+    /// `device-auth` no reconoce la clave del equipo, o la firma no es de
+    /// esa clave (`401`). NO quiere decir que lo hayan retirado: un retiro
+    /// llega sólo como [`Self::EquipoRetirado`]. Antes del incidente del
+    /// 2026-10-26 este error marcaba el equipo como retirado, y un `401`
+    /// pasajero de la nube lo dejó así sin estarlo.
+    #[error("La nube no reconoce la clave de este dispositivo")]
     CredencialesInvalidas,
+    /// `device-auth` confirmó que este equipo fue retirado en el panel
+    /// (`403 dispositivo_retirado`): la nube sólo lo responde con la fila
+    /// retirada del equipo y su firma válida a la vista. Es lo único que
+    /// marca un equipo como retirado (ver `AppCore::anotar_autenticacion`).
+    #[error("Este dispositivo fue retirado en el panel")]
+    EquipoRetirado,
     /// `device-auth` rechazó esta versión por estar debajo del mínimo
     /// aceptado (`VERSION_MINIMA_ACEPTADA` en el receptor) -- ver
     /// `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
@@ -319,19 +328,39 @@ pub(crate) fn autenticar_con_firmante(
     }
 
     let url = format!("{base_url}/functions/v1/device-auth");
-    let desafio = cliente
-        .post(&url)
-        .json(&serde_json::json!({ "desafio": true }))
-        .send()?
-        .error_for_status()?
-        .json::<RespuestaDesafio>()?
-        .desafio;
+    // Un desafío vencido (`400 desafio_invalido`: el equipo tardó entre los
+    // dos pasos) se repite UNA vez con uno nuevo.
+    for intento in 0..2 {
+        let desafio = cliente
+            .post(&url)
+            .json(&serde_json::json!({ "desafio": true }))
+            .send()?
+            .error_for_status()?
+            .json::<RespuestaDesafio>()?
+            .desafio;
 
-    let asercion = super::firmante::construir_asercion(firmante, &desafio)?;
-    let mut cuerpo = serde_json::json!({ "asercion": asercion });
-    agregar_metadata(&mut cuerpo, metadata);
-    let respuesta = cliente.post(url).json(&cuerpo).send()?;
-    token_de_respuesta(respuesta, NubeError::CredencialesInvalidas)
+        let asercion = super::firmante::construir_asercion(firmante, &desafio)?;
+        let mut cuerpo = serde_json::json!({ "asercion": asercion });
+        agregar_metadata(&mut cuerpo, metadata);
+        let respuesta = cliente.post(&url).json(&cuerpo).send()?;
+        if intento == 0 && respuesta.status() == reqwest::StatusCode::BAD_REQUEST {
+            let error_http = respuesta.error_for_status_ref().err();
+            if codigo_de_error(respuesta).as_deref() == Some("desafio_invalido") {
+                continue;
+            }
+            return Err(error_http.map_or(NubeError::CredencialesInvalidas, NubeError::Red));
+        }
+        return token_de_respuesta(respuesta, NubeError::CredencialesInvalidas);
+    }
+    unreachable!("el segundo intento siempre devuelve")
+}
+
+/// `error` del cuerpo JSON de una respuesta de error (`{ "error": "..." }`).
+/// Quien lo llama toma antes el error HTTP con `error_for_status_ref`, que
+/// para un `4xx` siempre existe (el respaldo de su `map_or` no se usa).
+fn codigo_de_error(respuesta: reqwest::blocking::Response) -> Option<String> {
+    let cuerpo: serde_json::Value = respuesta.json().ok()?;
+    cuerpo.get("error")?.as_str().map(str::to_string)
 }
 
 /// Canjea el código de vinculación que emitió el panel, atando la clave
@@ -460,6 +489,18 @@ fn token_de_respuesta(
     match respuesta.status() {
         reqwest::StatusCode::UNAUTHORIZED => return Err(no_autorizado),
         reqwest::StatusCode::CONFLICT => return Err(NubeError::ClaveEnUso),
+        // Sólo `dispositivo_retirado` es un retiro; cualquier otro 403 queda
+        // como error HTTP, sin marcar nada.
+        reqwest::StatusCode::FORBIDDEN => {
+            let error_http = respuesta.error_for_status_ref().err();
+            return Err(
+                if codigo_de_error(respuesta).as_deref() == Some("dispositivo_retirado") {
+                    NubeError::EquipoRetirado
+                } else {
+                    error_http.map_or(NubeError::CredencialesInvalidas, NubeError::Red)
+                },
+            );
+        }
         // 426 Upgrade Required -- lo que `device-auth` manda cuando
         // `VERSION_MINIMA_ACEPTADA` rechaza esta versión. Ver
         // `docs/auditorias/plan-qa-buenas-practicas-2026-09-17.md`, punto 9.
@@ -699,6 +740,243 @@ mod tests {
         let resultado = canjear(&base_url);
 
         assert!(matches!(resultado, Err(NubeError::Red(_))));
+    }
+
+    // ---- device-auth: qué respuesta es un retiro y cuál no ----
+    //
+    // Incidente del 2026-10-26: un 401 pasajero de la nube marcó un teléfono
+    // como retirado sin estarlo. Desde entonces sólo `403
+    // dispositivo_retirado` es un retiro; todo lo demás es otro error.
+
+    /// Firmante con una clave pública válida (la firma da igual: el
+    /// servidor de estas pruebas no la verifica).
+    struct FirmanteDePrueba;
+
+    impl super::super::firmante::FirmanteDispositivo for FirmanteDePrueba {
+        fn clave_publica_jwk(&self) -> Result<String, super::super::firmante::ErrorFirmante> {
+            Ok(r#"{"crv":"P-256","kty":"EC","x":"f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU","y":"x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0"}"#.to_string())
+        }
+        fn firmar(&self, _datos: &[u8]) -> Result<Vec<u8>, super::super::firmante::ErrorFirmante> {
+            Ok(vec![0; 64])
+        }
+        fn regenerar(&self) -> Result<(), super::super::firmante::ErrorFirmante> {
+            Ok(())
+        }
+        fn dispositivo_vinculado(&self) -> Option<String> {
+            Some("d1".to_string())
+        }
+        fn marcar_vinculada(
+            &self,
+            _dispositivo_id: &str,
+        ) -> Result<(), super::super::firmante::ErrorFirmante> {
+            Ok(())
+        }
+    }
+
+    const DESAFIO: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+        Connection: close\r\n\r\n{\"desafio\":\"jwt-del-servidor\",\"expires_in\":120}";
+    const TOKEN: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+        Connection: close\r\n\r\n{\"access_token\":\"abc\",\"expires_in\":3600,\
+        \"sitio_id\":\"s1\",\"dispositivo_id\":\"d1\",\"tipo\":\"mobile\"}";
+    const RETIRADO: &str = "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\
+        Connection: close\r\n\r\n{\"error\":\"dispositivo_retirado\",\"retirado_en\":\"2026-10-26T12:10:49Z\"}";
+    const NO_RECONOCIDO: &str = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n\
+        Connection: close\r\n\r\n{\"error\":\"equipo_desconocido\"}";
+    const NO_VERIFICABLE: &str = "HTTP/1.1 503 Service Unavailable\r\n\
+        Content-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"no_verificable\"}";
+    const DESAFIO_VENCIDO: &str = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n\
+        Connection: close\r\n\r\n{\"error\":\"desafio_invalido\"}";
+
+    /// Responde `respuestas` en orden, una por conexión, y cuenta los
+    /// pedidos que llegaron.
+    fn servidor(
+        respuestas: Vec<&'static str>,
+    ) -> (String, std::sync::Arc<std::sync::Mutex<usize>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind en localhost");
+        let direccion = listener.local_addr().expect("dirección local");
+        let pedidos = std::sync::Arc::new(std::sync::Mutex::new(0));
+        let contador = std::sync::Arc::clone(&pedidos);
+        thread::spawn(move || {
+            for respuesta in respuestas {
+                let Ok((mut conexion, _)) = listener.accept() else {
+                    return;
+                };
+                conexion
+                    .set_read_timeout(Some(Duration::from_millis(200)))
+                    .expect("set_read_timeout");
+                let mut buffer = [0_u8; 4096];
+                while let Ok(n) = conexion.read(&mut buffer) {
+                    if n == 0 {
+                        break;
+                    }
+                }
+                *contador.lock().unwrap() += 1;
+                let _ = conexion.write_all(respuesta.as_bytes());
+                let _ = conexion.flush();
+            }
+        });
+        (format!("http://{direccion}"), pedidos)
+    }
+
+    fn autenticar(base_url: &str) -> Result<TokenDispositivo, NubeError> {
+        autenticar_con_firmante(&cliente_http(), base_url, &FirmanteDePrueba, None)
+    }
+
+    #[test]
+    fn device_auth_403_dispositivo_retirado_es_un_retiro() {
+        let (url, _) = servidor(vec![DESAFIO, RETIRADO]);
+
+        let error = autenticar(&url).expect_err("retirado no trae token");
+
+        assert!(matches!(error, NubeError::EquipoRetirado), "{error:?}");
+        assert!(!error.es_falta_de_conexion());
+    }
+
+    #[test]
+    fn device_auth_401_no_es_un_retiro() {
+        let (url, _) = servidor(vec![DESAFIO, NO_RECONOCIDO]);
+
+        let error = autenticar(&url).expect_err("401 no trae token");
+
+        assert!(
+            matches!(error, NubeError::CredencialesInvalidas),
+            "{error:?}"
+        );
+    }
+
+    #[test]
+    fn device_auth_403_sin_dispositivo_retirado_no_es_un_retiro() {
+        let (url, _) = servidor(vec![
+            DESAFIO,
+            "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n\
+             Connection: close\r\n\r\n{\"error\":\"otra_cosa\"}",
+        ]);
+
+        let error = autenticar(&url).expect_err("403 no trae token");
+
+        assert!(matches!(error, NubeError::Red(_)), "{error:?}");
+    }
+
+    #[test]
+    fn device_auth_403_sin_cuerpo_no_es_un_retiro() {
+        let (url, _) = servidor(vec![
+            DESAFIO,
+            "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        ]);
+
+        let error = autenticar(&url).expect_err("403 no trae token");
+
+        assert!(!matches!(error, NubeError::EquipoRetirado), "{error:?}");
+    }
+
+    #[test]
+    fn device_auth_503_no_verificable_es_falta_de_conexion() {
+        let (url, _) = servidor(vec![DESAFIO, NO_VERIFICABLE]);
+
+        let error = autenticar(&url).expect_err("503 no trae token");
+
+        assert!(error.es_falta_de_conexion(), "{error:?}");
+        assert!(!matches!(error, NubeError::EquipoRetirado));
+    }
+
+    #[test]
+    fn device_auth_caido_al_pedir_el_desafio_es_falta_de_conexion() {
+        let (url, _) = servidor(vec![NO_VERIFICABLE]);
+
+        let error = autenticar(&url).expect_err("sin desafío no hay token");
+
+        assert!(error.es_falta_de_conexion(), "{error:?}");
+    }
+
+    #[test]
+    fn device_auth_desafio_vencido_se_reintenta_una_vez_con_uno_nuevo() {
+        let (url, pedidos) = servidor(vec![DESAFIO, DESAFIO_VENCIDO, DESAFIO, TOKEN]);
+
+        let token = autenticar(&url).expect("el segundo intento funciona");
+
+        assert_eq!(token.dispositivo_id, "d1");
+        assert_eq!(*pedidos.lock().unwrap(), 4, "dos desafíos y dos aserciones");
+    }
+
+    #[test]
+    fn device_auth_desafio_vencido_dos_veces_se_rinde_sin_marcar_retiro() {
+        let (url, pedidos) = servidor(vec![DESAFIO, DESAFIO_VENCIDO, DESAFIO, DESAFIO_VENCIDO]);
+
+        let error = autenticar(&url).expect_err("dos desafíos vencidos");
+
+        assert!(matches!(error, NubeError::Red(_)), "{error:?}");
+        assert_eq!(*pedidos.lock().unwrap(), 4, "un solo reintento, sin bucle");
+    }
+
+    #[test]
+    fn device_auth_otro_400_no_se_reintenta() {
+        let (url, pedidos) = servidor(vec![
+            DESAFIO,
+            "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n\
+             Connection: close\r\n\r\n{\"error\":\"bad_request\"}",
+        ]);
+
+        let error = autenticar(&url).expect_err("400 no trae token");
+
+        assert!(matches!(error, NubeError::Red(_)), "{error:?}");
+        assert_eq!(*pedidos.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn device_auth_vigente_trae_el_token() {
+        let (url, _) = servidor(vec![DESAFIO, TOKEN]);
+        assert_eq!(autenticar(&url).expect("vigente").access_token, "abc");
+    }
+
+    /// De punta a punta, nube falsa → cliente → núcleo, como hacen las apps
+    /// (`autenticar_con_cache` + `AppCore::anotar_autenticacion`).
+    fn nucleo_en_memoria() -> crate::application::AppCore {
+        let conexion = rusqlite::Connection::open_in_memory().unwrap();
+        crate::database::schema::initialize_database(&conexion).unwrap();
+        crate::application::AppCore::new(conexion)
+    }
+
+    /// El incidente del 2026-10-26 tal cual: un 401 pasajero, la nube que no
+    /// puede verificar (503) y después una autenticación normal. El equipo
+    /// no se muestra como retirado en ningún momento.
+    #[test]
+    fn incidente_de_punta_a_punta_nunca_se_muestra_como_retirado() {
+        let core = nucleo_en_memoria();
+        let (url, _) = servidor(vec![
+            DESAFIO,
+            NO_RECONOCIDO,
+            DESAFIO,
+            NO_VERIFICABLE,
+            DESAFIO,
+            TOKEN,
+        ]);
+
+        for paso in ["401 pasajero", "503", "vigente"] {
+            core.anotar_autenticacion(&autenticar(&url));
+            assert!(!core.equipo_retirado(), "después de: {paso}");
+        }
+    }
+
+    /// Retiro real: la franja aparece con el 403 y se va sola apenas la nube
+    /// vuelve a aceptar al equipo.
+    #[test]
+    fn retiro_de_punta_a_punta_aparece_con_el_403_y_se_va_con_el_200() {
+        let core = nucleo_en_memoria();
+        let (url, _) = servidor(vec![
+            DESAFIO,
+            RETIRADO,
+            DESAFIO,
+            NO_VERIFICABLE,
+            DESAFIO,
+            TOKEN,
+        ]);
+
+        core.anotar_autenticacion(&autenticar(&url));
+        assert!(core.equipo_retirado(), "403 dispositivo_retirado");
+        core.anotar_autenticacion(&autenticar(&url));
+        assert!(core.equipo_retirado(), "un 503 no des-retira");
+        core.anotar_autenticacion(&autenticar(&url));
+        assert!(!core.equipo_retirado(), "la nube lo volvió a aceptar");
     }
 
     #[test]

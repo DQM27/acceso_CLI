@@ -198,8 +198,9 @@ export function equipoVinculado(): Promise<boolean> {
   return invoke("equipo_vinculado");
 }
 
-/** `true` si la nube ya no reconoce a este equipo (lo retiraron en el
- * panel): es cuando se ofrece "Reconectar este equipo". Lo decide el núcleo. */
+/** `true` si la última respuesta con autoridad de la nube fue que este
+ * equipo está retirado: es cuando se ofrece "Reconectar este equipo". Lo
+ * decide el núcleo con la respuesta de `device-auth`. */
 export function equipoRetirado(): Promise<boolean> {
   return invoke("equipo_retirado");
 }
@@ -221,9 +222,9 @@ export function reconectarEquipo(
   return invoke("reconectar_equipo", { codigo, pendientesConfirmados: pendientesConfirmados ?? null });
 }
 
-/** Descarta el token cacheado tras un aviso `dispositivo_expulsado`: la
- * próxima operación de nube pide uno nuevo y muestra el motivo real. */
-export function descartarTokenNube(): Promise<void> {
+/** Tras un aviso `dispositivo_expulsado`: descarta el token cacheado, le
+ * pregunta a `device-auth` y devuelve si la nube confirmó el retiro. */
+export function descartarTokenNube(): Promise<boolean> {
   return invoke("descartar_token_nube");
 }
 

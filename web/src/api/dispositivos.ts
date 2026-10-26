@@ -124,8 +124,10 @@ function esDispositivoProvisionado(valor: unknown): valor is DispositivoProvisio
   );
 }
 
-function esResultadoEliminar(valor: unknown): valor is { borrado: boolean } {
-  return esObjeto(valor) && typeof valor.borrado === "boolean";
+// `admin-delete-device` ya no borra filas (las deja retiradas y ocultas):
+// sólo responde `{ ok: true }`. La versión anterior también traía `ok`.
+function esResultadoEliminar(valor: unknown): valor is { ok: true } {
+  return esObjeto(valor) && valor.ok === true;
 }
 
 export function listarDispositivosYSitios(): Promise<EstadoDispositivos> {
@@ -169,15 +171,13 @@ export function revocarDispositivo(dispositivoId: string): Promise<void> {
 }
 
 /**
- * Intenta un borrado definitivo. Si el dispositivo ya generó historial real
- * (contratistas/ingresos/usuarios/gafetes con `dispositivo_origen_id`
- * apuntando a él), Postgres rechaza el borrado -- en ese caso
- * admin-delete-device no falla, lo marca `oculto_en_panel` y devuelve
- * `borrado: false`, así igual desaparece de la lista sin perder su
- * historial. Recuperar uno oculto es a propósito solo por SQL directo en
- * Supabase (`update dispositivos set oculto_en_panel = false where ...`),
- * no hay botón para eso en el panel.
+ * Retira el dispositivo (si no lo estaba) y lo oculta de la lista
+ * (`oculto_en_panel`). Nunca borra la fila: es la prueba con la que
+ * `device-auth` le confirma a ese equipo que fue retirado. Recuperar uno
+ * oculto es a propósito solo por SQL directo en Supabase
+ * (`update dispositivos set oculto_en_panel = false where ...`), no hay
+ * botón para eso en el panel.
  */
-export function eliminarDispositivo(dispositivoId: string): Promise<{ borrado: boolean }> {
+export function eliminarDispositivo(dispositivoId: string): Promise<{ ok: true }> {
   return invocar("admin-delete-device", esResultadoEliminar, { dispositivo_id: dispositivoId });
 }
