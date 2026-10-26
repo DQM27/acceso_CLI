@@ -16,7 +16,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -38,8 +37,6 @@ fun estadoConexion(hayRed: Boolean, falloSincronizacion: Boolean): EstadoConexio
     falloSincronizacion -> EstadoConexion.ERROR_SINCRONIZACION
     else -> EstadoConexion.EN_LINEA
 }
-
-private val ColorAdvertenciaBrisas = Color(0xFFE0A100)
 
 /// Puntito verde (en línea), ámbar (sin conexión) o rojo (la última
 /// sincronización falló). Sólo UI.

@@ -120,24 +120,44 @@ class ProveedoresViewModel(
     fun cambiarCedula(nuevo: String) {
         cedula = nuevo.filter(Char::isDigit)
         val consultada = cedula
-        viewModelScope.launch {
-            val aviso = try {
-                withContext(dispatcherIO) { medirNucleo("avisoProveedorConIngresoActivo") { nucleo.avisoProveedorConIngresoActivo(consultada) } }
+        viewModelScope.launch { revisarCedula(consultada) }
+    }
+
+    /// Lo que se sabe apenas está la cédula: si ya está adentro (como
+    /// proveedor o por otra vía, regla y texto del núcleo) y, si vuelve, la
+    /// empresa de la última vez.
+    private suspend fun revisarCedula(consultada: String) {
+        val aviso = try {
+            withContext(dispatcherIO) { medirNucleo("avisoProveedorConIngresoActivo") { nucleo.avisoProveedorConIngresoActivo(consultada) } }
+        } catch (excepcion: Exception) {
+            // Sin aviso si la consulta falla: al registrar, el núcleo
+            // vuelve a aplicar la regla. Lo inesperado se relanza.
+            excepcion.mensajeDeErrorEsperado()
+            null
+        }
+        if (consultada != cedula) return // ya se tipeó otra
+        // Proveedor que vuelve: se propone la empresa de la última vez
+        // (se cambia en el mismo renglón si hoy viene por otra).
+        if (empresaSeleccionada == null && aviso == null) {
+            val ultima = try {
+                withContext(dispatcherIO) { medirNucleo("ultimaEmpresaProveedor") { nucleo.ultimaEmpresaProveedor(consultada) } }
             } catch (excepcion: Exception) {
-                // Sin aviso si la consulta falla: al registrar, el núcleo
-                // vuelve a aplicar la regla. Lo inesperado se relanza.
                 excepcion.mensajeDeErrorEsperado()
                 null
             }
-            if (consultada != cedula) return@launch // ya se tipeó otra
-            val anterior = avisoCedulaActiva
-            avisoCedulaActiva = aviso
-            cedulaConIngresoActivo = aviso != null
-            if (aviso != null) {
-                error = aviso
-            } else if (anterior != null && error == anterior) {
-                error = null
+            if (consultada != cedula) return
+            if (ultima != null && empresaSeleccionada == null) {
+                empresaSeleccionada = ultima
+                textoEmpresa = ultima.nombre
             }
+        }
+        val anterior = avisoCedulaActiva
+        avisoCedulaActiva = aviso
+        cedulaConIngresoActivo = aviso != null
+        if (aviso != null) {
+            error = aviso
+        } else if (anterior != null && error == anterior) {
+            error = null
         }
     }
 
@@ -209,12 +229,21 @@ class ProveedoresViewModel(
     /// incompleto cada vez que el nombre de pila viajaba en un campo MRZ
     /// distinto al apellido -- bug reportado en pruebas reales en
     /// dispositivo (2026-09-17).
-    fun rellenarDesdeDocumento(cedulaLeida: String?, nombreLeido: String?, apellidosLeido: String? = null) {
-        cedulaLeida?.let { cambiarCedula(it) }
+    ///
+    /// Espera la revisión de la cédula y devuelve el aviso si la persona ya
+    /// está adentro (por cualquier vía): la pantalla frena ahí, con la alarma,
+    /// sin abrir el formulario para llenarlo en balde (pedido del usuario
+    /// 2026-10-26, igual que al escanear en Contratistas). `null` si puede
+    /// entrar.
+    suspend fun rellenarDesdeDocumento(cedulaLeida: String?, nombreLeido: String?, apellidosLeido: String? = null): String? {
         val nombreCompleto = listOfNotNull(nombreLeido, apellidosLeido)
             .filter { it.isNotBlank() }
             .joinToString(" ")
         if (nombreCompleto.isNotBlank()) cambiarNombre(nombreCompleto)
+        val leida = cedulaLeida?.filter(Char::isDigit) ?: return null
+        cedula = leida
+        revisarCedula(leida)
+        return avisoCedulaActiva
     }
 
     /// Lo pide el formulario de ingreso al aparecer: mientras se escribe, las

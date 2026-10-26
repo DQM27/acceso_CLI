@@ -97,6 +97,19 @@ class NuevoContratistaViewModel(
         nombre = nombreMientrasSeEscribe(texto)
     }
 
+    private var prellenado = false
+
+    /// Lo que se buscó (o se leyó) en Activos sin encontrar a nadie: una
+    /// cédula va a la cédula y cualquier otra cosa al nombre. Una sola vez
+    /// por formulario, para que girar la pantalla no pise lo ya corregido.
+    fun prellenar(texto: String) {
+        if (prellenado) return
+        prellenado = true
+        val limpio = texto.trim()
+        if (limpio.isEmpty()) return
+        if (limpio.all { it.isDigit() || it == '-' || it.isWhitespace() }) cambiarCedula(limpio) else cambiarNombre(limpio)
+    }
+
     fun elegirEmpresa(empresa: Empresa) {
         empresaSeleccionada = empresa
         empresaSugeridaTexto = null
@@ -158,11 +171,11 @@ class NuevoContratistaViewModel(
         mensaje = "Carnet PRAIND leído — revise los datos antes de guardar"
     }
 
-    /// Guarda y, si sale bien, llama a [onGuardado] (la pantalla vuelve a
-    /// la lista de activos, pedido del usuario 2026-09-17). Corre en
+    /// Guarda y, si sale bien, llama a [onGuardado] con el contratista nuevo
+    /// (la pantalla pasa a darle el ingreso). Corre en
     /// `viewModelScope`: salir de la pantalla a mitad de camino ya no
     /// cancela el aviso a la nube (antes hacía falta `NonCancellable`).
-    fun guardar(onGuardado: () -> Unit) {
+    fun guardar(onGuardado: (contratistaId: Long) -> Unit) {
         error = null
         mensaje = null
         // Sin empresa no hay `empresa_id` que mandar; el resto (cédula,
@@ -176,7 +189,7 @@ class NuevoContratistaViewModel(
         enviando = true
         viewModelScope.launch {
             try {
-                withContext(dispatcherIO) {
+                val id = withContext(dispatcherIO) {
                     medirNucleo("crearContratista") { nucleo.crearContratista(
                         DatosContratista(
                             cedula = cedula,
@@ -189,7 +202,7 @@ class NuevoContratistaViewModel(
                     ) }
                 }
                 CambiosNube.cambioLocal()
-                onGuardado()
+                onGuardado(id)
             } catch (excepcion: Exception) {
                 error = excepcion.mensajeDeErrorEsperado()
             } finally {

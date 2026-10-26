@@ -22,12 +22,17 @@ buscar por nombre (sin escanear) no suena nada: es normal.
 
 ## "El contratista ya tiene un ingreso activo"
 
+Si escanea o elige a un contratista que **ya está adentro en esta unidad**
+(en este teléfono o en la PC del puesto), la app no muestra este mensaje:
+sube su salida con el triángulo ámbar **"PERSONA CON INGRESO ACTIVO"**. Lo
+normal es que salió y no le registraron la salida: registre la salida y
+luego el ingreso. Ver [Registrar la salida de un contratista](registrar-salida-contratista.md#pasos--escaneando-la-cédula-de-quien-sale).
+
 | Mensaje | Qué hacer |
 |---|---|
-| "El contratista ya tiene un ingreso activo." | Ya figura adentro: lo normal es que salió y no le registraron la salida. Búsquelo en **Activos**, registre su salida y luego el ingreso. |
-| "El contratista ya tiene un ingreso activo en el otro dispositivo del sitio." | Lo registraron en la PC del puesto. Igual que el anterior: búsquelo en **Activos** (con el ícono de la PC), registre la salida y luego el ingreso. |
 | "El contratista ya tiene un ingreso activo en (sitio)." | Figura adentro en otro sitio. No registre el ingreso. Avise al otro sitio (por ejemplo, por WhatsApp) o a un administrador. |
 | "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Está adentro por otra vía. Registre primero esa salida en **Externos**. |
+| "Esta persona ya está adentro como contratista — registre primero esa salida" (al escanear en **Externos**) | Está adentro como contratista. Registre primero esa salida en **Contratistas**. |
 
 ## "Tiene un ingreso activo aquí Y en otro sitio"
 

@@ -14,7 +14,7 @@ Cualquier usuario con sesión abierta. Hace falta internet.
 - **Sola**: cuando hay versión nueva aparece una tarjeta abajo, **"Nueva
   versión: X"** (o **"Actualización obligatoria: X"**), y un puntito sobre
   el círculo de su inicial.
-- **A mano**: menú de la cuenta (círculo con su inicial) → **Buscar
+- **A mano**: menú de la cuenta (engranaje con su inicial) → **Buscar
   actualizaciones**.
 
 ## Pasos

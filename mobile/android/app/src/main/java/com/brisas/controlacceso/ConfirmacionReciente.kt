@@ -67,8 +67,12 @@ fun FranjaConfirmacion(confirmacion: ConfirmacionReciente, modifier: Modifier = 
     // La última que se vio, para seguir dibujándola mientras se va.
     var mostrada by remember { mutableStateOf<Confirmacion?>(null) }
     if (actual != null) mostrada = actual
+    val hapticos = rememberHapticos()
     LaunchedEffect(actual?.id) {
         val id = actual?.id ?: return@LaunchedEffect
+        // El toque de confirmación de iOS: el registro salió bien aunque no
+        // se esté mirando la pantalla.
+        hapticos(Haptico.CONFIRMAR)
         delay(MS_CONFIRMACION_VISIBLE)
         confirmacion.ocultar(id)
     }

@@ -1,6 +1,6 @@
 package com.brisas.controlacceso
 
-import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -10,17 +10,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -83,31 +78,28 @@ fun PantallaAyuda(onVolver: () -> Unit) {
         }
     }
 
-    BackHandler(onBack = ::volver)
-
-    AnimatedContent(
-        targetState = actual,
-        modifier = Modifier.fillMaxSize(),
-        transitionSpec = { transicionDePantalla(avanza = targetState != null) },
-        label = "ayuda",
-    ) { destino ->
-        if (destino == null) {
-            ListaAyuda(consulta = consulta, onConsulta = { consulta = it }, onAbrir = ::abrir, onVolver = ::volver)
-        } else {
-            TemaAyuda(destino, onAbrir = ::abrir, onVolver = ::volver)
+    // Atrás del sistema, con su gesto, desanda igual que "‹ Volver".
+    PantallaConGestoVolver(onVolver = ::volver) {
+        AnimatedContent(
+            targetState = actual,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = { transicionDePantalla(avanza = targetState != null) },
+            label = "ayuda",
+        ) { destino ->
+            if (destino == null) {
+                ListaAyuda(consulta = consulta, onConsulta = { consulta = it }, onAbrir = ::abrir, onVolver = ::volver)
+            } else {
+                TemaAyuda(destino, onAbrir = ::abrir, onVolver = ::volver)
+            }
         }
     }
 }
 
+/// Como el resto de las pantallas completas: "‹ Volver" chico arriba y el
+/// título grande debajo ([EncabezadoPantalla]).
 @Composable
 private fun EncabezadoAyuda(titulo: String, onVolver: () -> Unit) {
-    // Como el resto de las pantallas completas (Avisos): "‹ Volver" chico
-    // arriba y el título grande debajo.
-    BotonDiscretoBrisas(onClick = onVolver, modifier = Modifier.offset(x = (-12).dp)) {
-        Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = null, modifier = Modifier.size(16.dp))
-        Text("Volver")
-    }
-    Text(titulo, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+    EncabezadoPantalla(titulo = titulo, onVolver = onVolver)
 }
 
 @Composable
@@ -121,16 +113,11 @@ private fun ListaAyuda(
     val buscando = consulta.trim().length >= 2
     val resultados = remember(consulta) { if (buscando) buscarEnManual(consulta) else emptyList() }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+    // El buscador abajo, pegado al teclado, como en el resto de la app.
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).imePadding()) {
         EncabezadoAyuda("Ayuda", onVolver)
-        CampoBusquedaBrisas(
-            valor = consulta,
-            onCambiar = onConsulta,
-            ayuda = "Buscar, o pegar un mensaje",
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        )
         LazyColumn(
-            contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
             modifier = Modifier.weight(1f),
         ) {
@@ -170,6 +157,12 @@ private fun ListaAyuda(
                 }
             }
         }
+        CampoBusquedaBrisas(
+            valor = consulta,
+            onCambiar = onConsulta,
+            ayuda = "Buscar, o pegar un mensaje",
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        )
     }
 }
 

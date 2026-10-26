@@ -24,8 +24,11 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -36,11 +39,11 @@ import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,8 +56,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -71,11 +76,15 @@ import androidx.compose.ui.unit.dp
 /// desplazar para ver el botón.
 ///
 /// `arriba` dibuja sobre la esquina superior (cambio de tema, versión).
+///
+/// `conHoja = false` (el login): el formulario va directo sobre el fondo, sin
+/// la hoja elevada, con los campos agrupados como en iOS ([GrupoCampos]).
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun HojaPorteria(
     encabezado: @Composable ColumnScope.(compacto: Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    conHoja: Boolean = true,
     arriba: @Composable BoxScope.() -> Unit = {},
     contenido: @Composable ColumnScope.() -> Unit,
 ) {
@@ -90,14 +99,24 @@ internal fun HojaPorteria(
             }
             arriba()
         }
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 1.dp,
-            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-        ) {
+        if (conHoja) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+            ) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
+                    content = contenido,
+                )
+            }
+        } else {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
                 content = contenido,
             )
         }
@@ -106,8 +125,8 @@ internal fun HojaPorteria(
 
 /// Logo de la app que se achica con el teclado abierto (`compacto`).
 @Composable
-internal fun MarcaPorteria(compacto: Boolean) {
-    val tamano by animateDpAsState(if (compacto) 56.dp else 104.dp, label = "tamanoMarca")
+internal fun MarcaPorteria(compacto: Boolean, tamanoNormal: Dp = 104.dp, tamanoCompacto: Dp = 56.dp) {
+    val tamano by animateDpAsState(if (compacto) tamanoCompacto else tamanoNormal, label = "tamanoMarca")
     Image(
         painter = painterResource(id = R.drawable.marca),
         contentDescription = null,
@@ -230,45 +249,132 @@ internal fun BotonPorteria(
     }
 }
 
-/// Campo de contraseña con ojo para mostrarla: con prisa o con guantes,
-/// revisar lo tipeado evita un intento fallido. `KeyboardType.Password`
-/// apaga el predictivo del teclado (ver la nota en el login).
+/// Campos agrupados como en los formularios de iOS (Ajustes, iniciar sesión
+/// con la cuenta): un solo bloque redondeado del color de la superficie, un
+/// renglón por campo separados por una línea fina, sin íconos ni marcos. Más
+/// discreto que un campo con borde y etiqueta flotante por cada dato.
 @Composable
-internal fun CampoClavePorteria(
+internal fun GrupoCampos(modifier: Modifier = Modifier, contenido: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface),
+        content = contenido,
+    )
+}
+
+/// La línea fina entre dos renglones de [GrupoCampos], corrida desde el borde
+/// izquierdo como en iOS.
+@Composable
+internal fun DivisorGrupo() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 16.dp),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+    )
+}
+
+/// Un renglón de [GrupoCampos]: el texto de ayuda adentro mientras está vacío
+/// y, a la derecha, lo que haga falta (el ojo de la contraseña, la cámara).
+/// Con [etiqueta], ésta va a la izquierda y el valor a su lado, como en los
+/// formularios de iOS: lo que llenó el escáner se revisa de un vistazo. Con
+/// [error], el texto en rojo. [modifier] va al campo (para su `focusRequester`).
+@Composable
+internal fun CampoAgrupado(
     valor: String,
     onCambiar: (String) -> Unit,
-    etiqueta: String,
+    ayuda: String,
     modifier: Modifier = Modifier,
-    error: String? = null,
+    etiqueta: String? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    habilitado: Boolean = true,
+    error: Boolean = false,
+    alFinal: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .padding(start = 16.dp, end = if (alFinal != null) 4.dp else 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (etiqueta != null) {
+            Text(
+                etiqueta,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.width(ANCHO_ETIQUETA_CAMPO),
+            )
+        }
+        BasicTextField(
+            value = valor,
+            onValueChange = onCambiar,
+            enabled = habilitado,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            visualTransformation = visualTransformation,
+            modifier = modifier.weight(1f),
+            decorationBox = { campo ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (valor.isEmpty()) {
+                        Text(ayuda, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    campo()
+                }
+            },
+        )
+        alFinal?.invoke()
+    }
+}
+
+/// Ancho de la etiqueta de un [CampoAgrupado] (y de [FilaSelector]): todas
+/// del mismo ancho, así los valores quedan alineados en columna.
+internal val ANCHO_ETIQUETA_CAMPO = 96.dp
+
+/// Renglón de contraseña de [GrupoCampos], con ojo para mostrarla: con prisa
+/// o con guantes, revisar lo tipeado evita un intento fallido.
+/// `KeyboardType.Password` es lo que de verdad apaga predicción,
+/// autocorrección y diccionario personal: sin él la barra de sugerencias
+/// mostraba lo tipeado (hallazgo real del usuario 2026-09-21).
+@Composable
+internal fun CampoClaveAgrupado(
+    valor: String,
+    onCambiar: (String) -> Unit,
+    ayuda: String,
+    modifier: Modifier = Modifier,
+    error: Boolean = false,
     imeAction: ImeAction = ImeAction.Done,
     onAccionTeclado: () -> Unit = {},
     habilitado: Boolean = true,
-    icono: ImageVector? = null,
 ) {
     var visible by rememberSaveable { mutableStateOf(false) }
-    OutlinedTextField(
-        value = valor,
-        onValueChange = onCambiar,
-        label = { Text(etiqueta) },
-        singleLine = true,
-        enabled = habilitado,
-        isError = error != null,
-        supportingText = error?.let { { Text(it) } },
-        leadingIcon = icono?.let { { Icon(it, contentDescription = null) } },
-        trailingIcon = {
+    CampoAgrupado(
+        valor = valor,
+        onCambiar = onCambiar,
+        ayuda = ayuda,
+        modifier = modifier,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = imeAction),
+        keyboardActions = KeyboardActions(onAny = { onAccionTeclado() }),
+        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        habilitado = habilitado,
+        error = error,
+        alFinal = {
             IconButton(onClick = { visible = !visible }) {
                 Icon(
                     if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                     contentDescription = if (visible) "Ocultar contraseña" else "Mostrar contraseña",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
                 )
             }
         },
-        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = imeAction),
-        keyboardActions = KeyboardActions(onAny = { onAccionTeclado() }),
-        shape = FormaCampoBrisas,
-        colors = ColoresCampoBrisas(),
-        modifier = modifier.fillMaxWidth(),
     )
 }
 

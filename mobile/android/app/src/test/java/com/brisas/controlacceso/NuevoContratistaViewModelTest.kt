@@ -168,15 +168,32 @@ class NuevoContratistaViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
         vm.aplicarDocumentoEscaneado(praind("Sodexo", FechaDocumento(3, 8, 2099)))
-        var guardado = false
-        vm.guardar { guardado = true }
+        var guardado: Long? = null
+        vm.guardar { id -> guardado = id }
         advanceUntilIdle()
-        assertTrue(guardado)
         assertNull(vm.error)
         assertFalse(vm.enviando)
-        assertEquals(
-            "ANA ROJAS VEGA",
-            nucleo.buscarContratistas("701000000").single().nombre,
-        )
+        // Avisa con el contratista nuevo, para darle el ingreso enseguida.
+        val creado = nucleo.buscarContratistas("701000000").single()
+        assertEquals("ANA ROJAS VEGA", creado.nombre)
+        assertEquals(creado.id, guardado)
+    }
+
+    @Test
+    fun `prellenar pone una cedula en la cedula y lo demas en el nombre, una sola vez`() = runTest(dispatcher) {
+        abrirConEmpresas()
+        val cedula = viewModel()
+        cedula.prellenar("701000000")
+        assertEquals("701000000", cedula.cedula)
+        assertEquals("", cedula.nombre)
+
+        val nombre = viewModel()
+        nombre.prellenar("ana rojas")
+        assertEquals("ANA ROJAS", nombre.nombre)
+        assertEquals("", nombre.cedula)
+        // Al girar la pantalla vuelve a llamarse: no pisa lo ya corregido.
+        nombre.cambiarNombre("ANA ROJAS VEGA")
+        nombre.prellenar("ana rojas")
+        assertEquals("ANA ROJAS VEGA", nombre.nombre)
     }
 }

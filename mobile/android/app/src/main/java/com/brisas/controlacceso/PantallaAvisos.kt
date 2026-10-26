@@ -1,6 +1,5 @@
 package com.brisas.controlacceso
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,8 +39,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.layout.offset
-import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.ui.draw.clip
@@ -49,7 +46,6 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import uniffi.control_acceso_mobile.AvisoBandeja
@@ -80,33 +76,22 @@ fun PantallaAvisos(
     onVolver: () -> Unit,
 ) {
     RegistrarPantalla("avisos")
-    BackHandler(onBack = onVolver)
     var pestana by rememberSaveable { mutableIntStateOf(0) }
     var porBorrar by rememberSaveable { mutableStateOf<String?>(null) }
 
+    PantallaConGestoVolver(onVolver = onVolver) {
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         // Como iOS: "‹ Volver" chico arriba y el título grande debajo, con la
         // acción de la pantalla a su derecha.
-        BotonDiscretoBrisas(onClick = onVolver, modifier = Modifier.offset(x = (-12).dp)) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBackIos, contentDescription = null, modifier = Modifier.size(16.dp))
-            Text("Volver")
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Avisos",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f),
-            )
-            if (estado != null && pestana == 0 && estado.noLeidos > 0u) {
-                BotonDiscretoBrisas(onClick = onLeerTodos) {
-                    Text("Marcar leídos")
-                }
-            }
-        }
+        EncabezadoPantalla(
+            titulo = "Avisos",
+            onVolver = onVolver,
+            accion = if (estado != null && pestana == 0 && estado.noLeidos > 0u) {
+                { BotonDiscretoBrisas(onClick = onLeerTodos) { Text("Marcar leídos") } }
+            } else {
+                null
+            },
+        )
         if (estado == null) return@Column
 
         FilaPildoras(
@@ -128,7 +113,7 @@ fun PantallaAvisos(
         ) { mostrada ->
             if (mostrada == 0) {
                 if (estado.grupos.isEmpty()) {
-                    MensajeVacio("Todo al día", "Aquí verá los avisos que mande la administración.")
+                    EstadoVacio("Todo al día", "Aquí verá los avisos que mande la administración.", Icons.Default.NotificationsNone)
                 } else {
                     LazyColumn(
                         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
@@ -156,7 +141,7 @@ fun PantallaAvisos(
                     }
                 }
             } else if (estado.archivados.isEmpty()) {
-                MensajeVacio("Sin archivados", "Los avisos que archive se guardan aquí hasta que se borren solos.")
+                EstadoVacio("Sin archivados", "Los avisos que archive se guardan aquí hasta que se borren solos.", Icons.Default.Archive)
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
@@ -174,6 +159,7 @@ fun PantallaAvisos(
                 }
             }
         }
+    }
     }
 
     val idPorBorrar = porBorrar
@@ -321,38 +307,6 @@ private fun PildoraAccion(texto: String, icono: ImageVector, color: Color, onCli
         Icon(icono, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(6.dp))
         Text(texto, color = color, style = MaterialTheme.typography.labelLarge)
-    }
-}
-
-@Composable
-private fun MensajeVacio(titulo: String, detalle: String) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Default.NotificationsNone,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(36.dp),
-            )
-        }
-        Spacer(Modifier.size(16.dp))
-        Text(titulo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text(
-            detalle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp),
-        )
     }
 }
 

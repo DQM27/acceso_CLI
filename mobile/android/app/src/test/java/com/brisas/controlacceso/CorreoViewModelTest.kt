@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -37,7 +38,7 @@ class CorreoViewModelTest {
     /// Como el resto de los nombres de la app: en mayúscula al escribirlo y
     /// al leerlo del documento.
     @Test
-    fun `el nombre de la visita queda en mayuscula al escribirlo y al escanearlo`() {
+    fun `el nombre de la visita queda en mayuscula al escribirlo y al escanearlo`() = runTest(dispatcher) {
         val viewModel = CorreoViewModel(nucleo, dispatcherIO = dispatcher)
 
         viewModel.cambiarNombre("Ana Solano")

@@ -11,17 +11,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Badge
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,12 +34,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -75,6 +66,7 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, metadata: MetadatosDisposi
                 directorio = directorio,
                 metadata = metadata,
                 onCerrarSesion = { viewModel.cerrarSesion() },
+                onBloquear = { viewModel.cerrarSesion(conservarCedula = true) },
             )
         }
         return
@@ -91,29 +83,42 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, metadata: MetadatosDisposi
         if (viewModel.intentosFallidos > 0) haptica.performHapticFeedback(HapticFeedbackType.Reject)
     }
 
+    // Discreto, a la manera del inicio de sesión de iOS (pedido del usuario
+    // 2026-10-25: el anterior se sentía pomposo): ícono de la app mediano, el
+    // título de lo que se hace ("Iniciar sesión") y, debajo, la unidad en una
+    // línea gris; los campos agrupados en un solo bloque sobre el fondo, sin
+    // hoja elevada, íconos ni marcos.
     HojaPorteria(
+        conHoja = false,
         encabezado = { compacto ->
-            MarcaPorteria(compacto)
-            // "ACCESO" liviano y "MÓVIL" en negrita: distingue esta app de
-            // las otras plataformas (desktop/web) que comparten la marca.
+            MarcaPorteria(compacto, tamanoNormal = 72.dp, tamanoCompacto = 44.dp)
             Text(
-                buildAnnotatedString {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Normal)) { append("ACCESO ") }
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("MÓVIL") }
-                },
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(top = if (compacto) 8.dp else 16.dp),
+                if (viewModel.cambiandoTemporal) "Contraseña nueva" else "Iniciar sesión",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.padding(top = if (compacto) 10.dp else 18.dp),
             )
-            // Unidad y etiqueta con que quedó registrado el teléfono: si lo
-            // registraron en la unidad equivocada, se ve antes de entrar.
+            // Unidad con que quedó registrado el teléfono: si lo registraron
+            // en la unidad equivocada, se ve antes de entrar.
             if (textoUnidad != null) {
-                ChipUnidad(textoUnidad, estadoRed, modifier = Modifier.padding(top = 10.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(top = 6.dp),
+                ) {
+                    PuntoConexion(estadoRed)
+                    Text(
+                        textoUnidad,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
             }
         },
         arriba = {
-            BotonIconoCuadradoBrisas(
+            IconButton(
                 onClick = { GestorTema.alternar(tema) },
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
             ) {
                 IconoTema(tema)
             }
@@ -139,6 +144,11 @@ fun PantallaLogin(nucleo: Nucleo, directorio: String, metadata: MetadatosDisposi
 private fun ColumnScope.PasoCredenciales(viewModel: LoginViewModel) {
     var mostrarAyuda by rememberSaveable { mutableStateOf(false) }
     val focoPassword = remember { FocusRequester() }
+    // Tras el cierre por inactividad la cédula ya está: el cursor espera en
+    // la contraseña.
+    LaunchedEffect(Unit) {
+        if (viewModel.cedula.isNotBlank()) focoPassword.requestFocus()
+    }
     val foco = LocalFocusManager.current
     val puedeEnviar = !viewModel.autenticando && viewModel.cedula.isNotBlank() && viewModel.password.isNotBlank()
     val enviar = {
@@ -149,35 +159,36 @@ private fun ColumnScope.PasoCredenciales(viewModel: LoginViewModel) {
     }
 
     AvisoPorteria(viewModel.error)
-    TituloHoja("Iniciar sesión", "Ingrese con su cédula y contraseña.")
 
-    Column(modifier = Modifier.padding(top = 16.dp).sacudirAl(viewModel.intentosFallidos)) {
-        OutlinedTextField(
-            value = viewModel.cedula,
-            onValueChange = { viewModel.cambiarCedula(it) },
-            label = { Text("Cédula") },
-            leadingIcon = { Icon(Icons.Outlined.Badge, contentDescription = null) },
-            singleLine = true,
-            enabled = !viewModel.autenticando,
+    // Cédula y contraseña en un solo bloque, como en iOS; el formulario
+    // entero se sacude con un intento fallido.
+    GrupoCampos(modifier = Modifier.sacudirAl(viewModel.intentosFallidos)) {
+        CampoAgrupado(
+            valor = viewModel.cedula,
+            onCambiar = { viewModel.cambiarCedula(it) },
+            ayuda = "Cédula",
+            habilitado = !viewModel.autenticando,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             keyboardActions = KeyboardActions(onNext = { focoPassword.requestFocus() }),
-            shape = FormaCampoBrisas,
-            colors = ColoresCampoBrisas(),
-            modifier = Modifier.fillMaxWidth(),
         )
-        // `KeyboardType.Password` (adentro de [CampoClavePorteria]) es lo que
-        // de verdad apaga predicción/autocorrección/diccionario personal: sin
-        // él la barra de sugerencias mostraba lo tipeado en la contraseña
-        // (hallazgo real del usuario 2026-09-21).
-        CampoClavePorteria(
+        DivisorGrupo()
+        CampoClaveAgrupado(
             valor = viewModel.password,
             onCambiar = { viewModel.cambiarPassword(it) },
-            etiqueta = "Contraseña",
-            icono = Icons.Outlined.Lock,
-            error = viewModel.errorCredenciales,
+            ayuda = "Contraseña",
+            error = viewModel.errorCredenciales != null,
             habilitado = !viewModel.autenticando,
             onAccionTeclado = enviar,
-            modifier = Modifier.padding(top = 8.dp).focusRequester(focoPassword),
+            modifier = Modifier.focusRequester(focoPassword),
+        )
+    }
+    // Cédula o contraseña incorrecta: debajo del bloque, chico y en rojo.
+    viewModel.errorCredenciales?.let { mensaje ->
+        Text(
+            mensaje,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(start = 16.dp, top = 6.dp),
         )
     }
 
@@ -189,20 +200,19 @@ private fun ColumnScope.PasoCredenciales(viewModel: LoginViewModel) {
         modifier = Modifier.padding(top = 16.dp),
     )
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    TextButton(
+        onClick = { mostrarAyuda = true },
+        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp),
     ) {
-        TextButton(onClick = { mostrarAyuda = true }) { Text("¿No puede entrar?") }
-        // Versión instalada, discreta.
-        Text(
-            "v${BuildConfig.VERSION_NAME}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(end = 8.dp),
-        )
+        Text("¿No puede entrar?")
     }
+    // Versión instalada, discreta.
+    Text(
+        "Versión ${BuildConfig.VERSION_NAME}",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.align(Alignment.CenterHorizontally),
+    )
 
     if (mostrarAyuda) {
         AlertDialog(
@@ -234,32 +244,37 @@ private fun ColumnScope.PasoPasswordTemporal(viewModel: LoginViewModel) {
         }
     }
 
-    // Texto corto a propósito: con el teclado abierto, cada renglón de más
-    // empujaba "Guardar y entrar" debajo del teclado (visto en el teléfono
-    // 2026-10-21).
-    TituloHoja("Contraseña nueva", "La suya es temporal: elija una nueva para entrar.")
-
-    CampoClavePorteria(
-        valor = viewModel.passwordNueva,
-        onCambiar = { viewModel.cambiarPasswordNueva(it) },
-        etiqueta = "Contraseña nueva",
-        icono = Icons.Outlined.Lock,
-        imeAction = ImeAction.Next,
-        onAccionTeclado = { focoConfirmacion.requestFocus() },
-        habilitado = !viewModel.guardandoNueva,
-        modifier = Modifier.padding(top = 12.dp),
-    )
-    CampoClavePorteria(
-        valor = viewModel.confirmacion,
-        onCambiar = { viewModel.cambiarConfirmacion(it) },
-        etiqueta = "Repetir contraseña",
-        icono = Icons.Outlined.Lock,
-        onAccionTeclado = enviar,
-        habilitado = !viewModel.guardandoNueva,
-        modifier = Modifier.padding(top = 8.dp).focusRequester(focoConfirmacion),
+    // El título ("Contraseña nueva") ya va arriba; acá una línea corta: con el
+    // teclado abierto, cada renglón de más empujaba "Guardar y entrar" debajo
+    // del teclado (visto en el teléfono 2026-10-21).
+    Text(
+        "La suya es temporal: elija una nueva para entrar.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
     )
 
-    Column(modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)) {
+    GrupoCampos {
+        CampoClaveAgrupado(
+            valor = viewModel.passwordNueva,
+            onCambiar = { viewModel.cambiarPasswordNueva(it) },
+            ayuda = "Contraseña nueva",
+            imeAction = ImeAction.Next,
+            onAccionTeclado = { focoConfirmacion.requestFocus() },
+            habilitado = !viewModel.guardandoNueva,
+        )
+        DivisorGrupo()
+        CampoClaveAgrupado(
+            valor = viewModel.confirmacion,
+            onCambiar = { viewModel.cambiarConfirmacion(it) },
+            ayuda = "Repetir contraseña",
+            onAccionTeclado = enviar,
+            habilitado = !viewModel.guardandoNueva,
+            modifier = Modifier.focusRequester(focoConfirmacion),
+        )
+    }
+
+    Column(modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 12.dp)) {
         RequisitoPorteria("Al menos 8 caracteres", revision.largoSuficiente)
         RequisitoPorteria("Distinta de la temporal", revision.distintaDeLaTemporal)
         RequisitoPorteria("Las dos coinciden", revision.coinciden)

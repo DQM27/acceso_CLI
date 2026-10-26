@@ -2,8 +2,10 @@ package com.brisas.controlacceso
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 
@@ -73,5 +75,19 @@ fun TemaSeccion(seccion: SeccionPrincipal, externo: TipoExterno? = null, conteni
             inversePrimary = acento.color,
         )
     }
-    MaterialTheme(colorScheme = esquema, content = contenido)
+    val relleno = remember(seccion, externo, oscuro) { acentoDeSeccion(seccion, oscuro, externo) }
+    MaterialTheme(colorScheme = esquema) {
+        // Los botones principales ([BotonBrisas]) también van en el color de la
+        // sección: antes quedaban en el azul fijo de la app (un "Entregar" azul
+        // en la sección roja de KOF).
+        if (relleno != null) {
+            CompositionLocalProvider(LocalRellenoBotones provides relleno, content = contenido)
+        } else {
+            contenido()
+        }
+    }
 }
+
+/// Relleno y texto de [BotonBrisas]. `null` = el azul de siempre
+/// ([ColorRellenoBrisas]), fuera de las secciones (login, avisos, ayuda).
+internal val LocalRellenoBotones = staticCompositionLocalOf<AcentoSeccion?> { null }

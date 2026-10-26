@@ -5,13 +5,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uniffi.control_acceso_mobile.Nucleo
@@ -33,15 +30,43 @@ private fun FilaProveedorActiva.clave(): String = when (this) {
     is FilaProveedorActiva.Remota -> "remota-${remoto.uuid}"
 }
 
-private fun FilaProveedorActiva.coincideCon(busqueda: String): Boolean = when (this) {
-    is FilaProveedorActiva.Local -> registro.cedula.contains(busqueda, ignoreCase = true) ||
-        registro.nombre.contains(busqueda, ignoreCase = true) ||
-        registro.empresaNombre.contains(busqueda, ignoreCase = true) ||
-        (registro.placa?.contains(busqueda, ignoreCase = true) == true)
-    is FilaProveedorActiva.Remota -> remoto.cedula.contains(busqueda, ignoreCase = true) ||
-        remoto.nombre.contains(busqueda, ignoreCase = true) ||
-        remoto.empresaNombre.contains(busqueda, ignoreCase = true) ||
-        (remoto.placa?.contains(busqueda, ignoreCase = true) == true)
+/// Sin distinguir mayúsculas ni tildes, igual que lo que se resalta
+/// ([rangosCoincidencia]).
+private fun FilaProveedorActiva.coincideCon(busqueda: String): Boolean {
+    if (busqueda.isBlank()) return true
+    val campos = when (this) {
+        is FilaProveedorActiva.Local -> listOf(registro.cedula, registro.nombre, registro.empresaNombre, registro.placa)
+        is FilaProveedorActiva.Remota -> listOf(remoto.cedula, remoto.nombre, remoto.empresaNombre, remoto.placa)
+    }
+    return campos.filterNotNull().any { rangosCoincidencia(it, busqueda).isNotEmpty() }
+}
+
+private const val AYUDA_BUSQUEDA_PROVEEDORES = "Cédula, nombre, empresa o placa"
+
+/// La lista de proveedores adentro, la de la pantalla y la del buscador.
+@Composable
+private fun ListaProveedoresActivos(
+    filas: List<FilaProveedorActiva>,
+    cargando: Boolean,
+    busqueda: String,
+    sincronizando: Boolean,
+    onSincronizar: () -> Unit,
+    contentPadding: PaddingValues,
+    onElegir: (FilaProveedorActiva) -> Unit,
+) {
+    ListaConEstados(
+        filas = filas,
+        clave = { it.clave() },
+        cargando = cargando,
+        tituloVacio = if (busqueda.isBlank()) "Ningún proveedor adentro" else "Sin resultados",
+        detalleVacio = if (busqueda.isBlank()) "Cuando entre uno, aparece aquí." else "Pruebe con otra cédula, nombre o empresa.",
+        sincronizando = sincronizando,
+        onSincronizar = onSincronizar,
+        contentPadding = contentPadding,
+        iconoVacio = IconosLucide.Cajas,
+    ) { fila ->
+        FilaProveedorActivo(fila = fila, onConfirmarSalida = { onElegir(fila) })
+    }
 }
 
 /// Control de proveedores -- ver
@@ -88,7 +113,11 @@ fun PantallaProveedores(
     var mostrandoFormulario by remember { mutableStateOf(false) }
     var gafeteTexto by remember { mutableStateOf("") }
     var busqueda by remember { mutableStateOf("") }
+    var buscando by remember { mutableStateOf(false) }
     var escaneando by remember { mutableStateOf(false) }
+    // "+" abre la cámara de una vez (el 99% de las veces se escanea): ahí la
+    // X cancela el ingreso y "Llenar a mano" lleva al formulario.
+    var escaneoDirecto by remember { mutableStateOf(false) }
     // Mismo lector que el paso 3 de [PantallaRutas] (`extraerVehiculo`,
     // `LectorVehiculoRuta.kt`) -- genérico, no específico de rutas. Acá
     // sólo interesa la placa: si el OCR detecta un número de unidad
@@ -99,6 +128,10 @@ fun PantallaProveedores(
     var filaParaSalida by remember {
         mutableStateOf<FilaProveedorActiva?>(null)
     }
+    // Se escaneó a alguien que ya está adentro (como proveedor o por otra
+    // vía): en vez del formulario, el motivo, como en Contratistas.
+    var bloqueoEscaneo by remember { mutableStateOf<String?>(null) }
+    val contexto = LocalContext.current
 
     // Qué panel se ve ahora: la lista, el formulario o uno de los escáneres.
     // La lista y el formulario se abren y cierran con una transición corta; los
@@ -119,12 +152,35 @@ fun PantallaProveedores(
                 PantallaEscanearCedula(
                     modo = ModoEscaneoDocumento.DOCUMENTO_CONTRATISTA,
                     onDocumentoDetectado = { documento ->
-                        escaneando = false
                         val numero = documento.numeroDocumento.filter(Char::isDigit)
                             .ifBlank { documento.numeroDocumento }
-                        viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
+                        // La cámara se queda hasta saber si ya está adentro:
+                        // si lo está, frena ahí con la alarma de denegado, sin
+                        // abrir el formulario para llenarlo en balde.
+                        val aviso = viewModel.rellenarDesdeDocumento(numero, documento.nombre, documento.apellidos)
+                        if (aviso != null) {
+                            sonarAlertaEscaneo(contexto, AlertaEscaneo.DENEGADO)
+                            bloqueoEscaneo = aviso
+                        }
+                        escaneando = false
+                        escaneoDirecto = false
                     },
-                    onCerrar = { escaneando = false },
+                    onCerrar = {
+                        escaneando = false
+                        if (escaneoDirecto) {
+                            escaneoDirecto = false
+                            viewModel.cancelarFormulario()
+                            mostrandoFormulario = false
+                        }
+                    },
+                    onLlenarAMano = if (escaneoDirecto) {
+                        {
+                            escaneando = false
+                            escaneoDirecto = false
+                        }
+                    } else {
+                        null
+                    },
                 )
             }
             PanelConFormulario.ESCANER_PLACA -> {
@@ -142,7 +198,20 @@ fun PantallaProveedores(
             PanelConFormulario.FORMULARIO -> {
                 // Pantalla completa: sin barra de secciones encima.
                 OcultarBarraSecciones()
-                FormularioNuevoIngresoProveedor(
+                val motivoBloqueo = bloqueoEscaneo
+                if (motivoBloqueo != null) {
+                    PantallaBloqueoIngreso(
+                        titulo = viewModel.nombre.ifBlank { "Proveedor" },
+                        subtitulo = viewModel.cedula,
+                        mensaje = motivoBloqueo,
+                        onVolver = {
+                            bloqueoEscaneo = null
+                            viewModel.cancelarFormulario()
+                            gafeteTexto = ""
+                            mostrandoFormulario = false
+                        },
+                    )
+                } else FormularioNuevoIngresoProveedor(
                     viewModel = viewModel,
                     gafeteTexto = gafeteTexto,
                     onCambiarGafeteTexto = { gafeteTexto = it },
@@ -156,57 +225,65 @@ fun PantallaProveedores(
                 )
             }
             PanelConFormulario.LISTA -> Box(modifier = Modifier.fillMaxSize()) {
-                    val activosFiltrados = if (busqueda.isBlank()) {
-                        viewModel.activos
-                    } else {
-                        viewModel.activos.filter { it.coincideCon(busqueda) }
-                    }
-
                     // Sin título propio: el selector de [PantallaExternos] ya dice dónde se
-                    // está.
+                    // está. Se busca con la píldora de abajo, como en todas las pestañas.
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                        // "Nuevo ingreso" es el botón redondo de abajo.
-                        CampoBusquedaBrisas(
-                            valor = busqueda,
-                            onCambiar = { busqueda = it },
-                            ayuda = "Cédula, nombre, empresa…",
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-
                         viewModel.error?.let { mensaje ->
-                            Text(
-                                mensaje,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
+                            FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(bottom = 4.dp))
                         }
 
-                        ListaConEstados(
-                            filas = activosFiltrados,
-                            clave = { it.clave() },
+                        ListaProveedoresActivos(
+                            filas = viewModel.activos,
                             cargando = viewModel.cargando,
-                            tituloVacio = if (busqueda.isBlank()) "Ningún proveedor adentro" else "Sin resultados",
-                            detalleVacio = if (busqueda.isBlank()) {
-                                "Cuando entre uno, aparece aquí."
-                            } else {
-                                "Pruebe con otra cédula, nombre o empresa."
-                            },
+                            busqueda = "",
                             sincronizando = sincronizando,
                             onSincronizar = onSincronizar,
-                            contentPadding = PaddingValues(top = 10.dp, bottom = EspacioPieLista),
-                        ) { fila ->
-                            FilaProveedorActivo(
-                                fila = fila,
-                                onConfirmarSalida = { filaParaSalida = fila },
-                            )
-                        }
+                            contentPadding = PaddingValues(top = 4.dp, bottom = EspacioPieLista),
+                            onElegir = { filaParaSalida = it },
+                        )
                     }
 
                     PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
-                    // "Nuevo ingreso" va en el botón redondo de abajo (ver
-                    // `AccionInferior.kt`).
-                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso de proveedor", onClick = { mostrandoFormulario = true })
+                    // "Nuevo ingreso" va en el botón redondo de abajo y la
+                    // búsqueda en la píldora (ver `AccionInferior.kt`).
+                    AccionPrincipal(Icons.Default.PersonAdd, "Nuevo ingreso de proveedor", onClick = {
+                        mostrandoFormulario = true
+                        escaneando = true
+                        escaneoDirecto = true
+                    })
+                    // Sólo con alguien adentro: con la lista vacía no hay qué buscar.
+                    BusquedaPrincipal(
+                        ayuda = AYUDA_BUSQUEDA_PROVEEDORES,
+                        onAbrir = { buscando = true },
+                        visible = viewModel.activos.isNotEmpty(),
+                    )
+
+                    BuscadorInferior(
+                        visible = buscando,
+                        texto = busqueda,
+                        onCambiar = { busqueda = it },
+                        ayuda = AYUDA_BUSQUEDA_PROVEEDORES,
+                        onCerrar = {
+                            buscando = false
+                            busqueda = ""
+                        },
+                    ) {
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            ListaProveedoresActivos(
+                                filas = viewModel.activos.filter { it.coincideCon(busqueda) },
+                                cargando = viewModel.cargando,
+                                busqueda = busqueda,
+                                sincronizando = sincronizando,
+                                onSincronizar = onSincronizar,
+                                contentPadding = PADDING_RESULTADOS,
+                                onElegir = { fila ->
+                                    filaParaSalida = fila
+                                    buscando = false
+                                    busqueda = ""
+                                },
+                            )
+                        }
+                    }
 
                     DialogoConfirmarSalidaProveedor(
                         fila = filaParaSalida,

@@ -11,14 +11,15 @@ Cualquier usuario con sesión abierta.
 
 ## Dónde
 
-Menú de la cuenta (el círculo con su inicial, arriba a la derecha) →
+Menú de la cuenta (el engranaje con su inicial, arriba a la derecha) →
 **Ayuda**.
 
 ## Pasos — buscar
 
-1. Toque el círculo con su inicial y luego **Ayuda**.
-2. En el buscador, escriba una o dos palabras (por ejemplo, **gafete** o
-   **PRAIND**), o pegue el mensaje que le apareció en pantalla.
+1. Toque el engranaje con su inicial y luego **Ayuda**.
+2. Toque la búsqueda de abajo (**"Buscar, o pegar un mensaje"**) y escriba
+   una o dos palabras (por ejemplo, **gafete** o **PRAIND**), o pegue el
+   mensaje que le apareció en pantalla.
 3. Aparecen los temas que coinciden, con la parte del tema donde está lo
    que buscó.
 4. Toque un tema. Se abre en esa parte.

@@ -17,6 +17,7 @@ use crate::database::repositories::registro_ingreso_proveedor_repository::{
 };
 use crate::models::empresa_proveedor::EmpresaProveedor;
 use crate::models::registro_ingreso_proveedor::RegistroIngresoProveedorActivoResumen;
+use crate::models::via_ingreso::ViaIngreso;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::empresa_proveedor_service::EmpresaProveedorService;
 use crate::services::error::{EmpresaProveedorServiceError, IngresoProveedorServiceError};
@@ -246,6 +247,58 @@ impl AppCore {
             .map_err(DatabaseError::from)
             .map_err(IngresoProveedorServiceError::Database)
     }
+
+    /// La otra vía (contratista o por correo) por la que esta cédula ya está
+    /// adentro, en este equipo o en el otro de la unidad. La misma regla que
+    /// frena el registro (`IngresoProveedorServiceError::AdentroPorOtraVia`),
+    /// para avisar apenas se escanea la cédula y no al final del formulario.
+    pub fn proveedor_adentro_por_otra_via(
+        &self,
+        cedula: &str,
+    ) -> Result<Option<ViaIngreso>, IngresoProveedorServiceError> {
+        let Ok(cedula) = crate::domain::cedula::Cedula::normalizar(cedula) else {
+            return Ok(None);
+        };
+        Ok(
+            SqliteRegistroIngresoProveedorRepository::new(&self.connection)
+                .adentro_por_otra_via(cedula.as_str())?,
+        )
+    }
+
+    /// La empresa con la que entró la última vez este proveedor (por su
+    /// cédula, en el historial de este equipo), si sigue activa: el
+    /// formulario la propone y quien opera sólo la cambia si hace falta. Una
+    /// cédula que no se puede normalizar no tiene historial.
+    pub fn ultima_empresa_proveedor(
+        &self,
+        cedula: &str,
+    ) -> Result<Option<EmpresaProveedor>, IngresoProveedorServiceError> {
+        use rusqlite::OptionalExtension;
+
+        let Ok(cedula) = crate::domain::cedula::Cedula::normalizar(cedula) else {
+            return Ok(None);
+        };
+        self.connection
+            .query_row(
+                "SELECT e.id, e.nombre, e.activo
+                 FROM registro_ingresos_proveedor AS r
+                 JOIN empresas_proveedor AS e ON e.id = r.empresa_id
+                 WHERE NORMALIZAR_CEDULA(r.cedula) = ?1 AND e.activo = 1
+                 ORDER BY r.fecha_hora_ingreso DESC, r.id DESC
+                 LIMIT 1",
+                [cedula.as_str()],
+                |fila| {
+                    Ok(EmpresaProveedor {
+                        id: fila.get(0)?,
+                        nombre: fila.get(1)?,
+                        activo: fila.get::<_, i64>(2)? != 0,
+                    })
+                },
+            )
+            .optional()
+            .map_err(DatabaseError::from)
+            .map_err(IngresoProveedorServiceError::Database)
+    }
 }
 
 #[cfg(test)]
@@ -418,5 +471,83 @@ mod tests {
             core.registrar_salida_proveedor(&actor, id),
             Err(IngresoProveedorServiceError::RelojRetrocedido)
         ));
+    }
+
+    #[test]
+    fn proveedor_adentro_por_otra_via_ve_a_quien_entro_por_correo() {
+        let (core, actor, empresa_id) = nucleo_con_usuario_empresa_y_gafete();
+        core.connection
+            .execute(
+                "INSERT INTO registro_ingresos_correo (cedula, nombre, motivo, gafete_numero,
+                    fecha_hora_ingreso, usuario_ingreso_id, usuario_ingreso_nombre, uuid)
+                 VALUES ('222222222', 'Ana', 'Entrevista RH', 4,
+                    '2026-09-16T11:00:00Z', 1, 'Operador', 'u1')",
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            core.proveedor_adentro_por_otra_via("2-2222-2222").unwrap(),
+            Some(ViaIngreso::PorCorreo)
+        );
+
+        // Su propia vía no cuenta acá (la avisa `proveedor_con_ingreso_activo_en_sitio`).
+        core.registrar_ingreso_proveedor(&actor, "1-1111-1111", "Juan Perez", empresa_id, None, 7)
+            .unwrap();
+        assert_eq!(
+            core.proveedor_adentro_por_otra_via("111111111").unwrap(),
+            None
+        );
+        assert_eq!(core.proveedor_adentro_por_otra_via("abc").unwrap(), None);
+    }
+
+    #[test]
+    fn ultima_empresa_proveedor_es_la_del_ingreso_mas_reciente_y_activa() {
+        let (core, actor, maika) = nucleo_con_usuario_empresa_y_gafete();
+        assert!(
+            core.ultima_empresa_proveedor("1-1111-1111")
+                .unwrap()
+                .is_none()
+        );
+
+        let repositorio = SqliteEmpresaProveedorRepository::new(&core.connection);
+        let dos_pinos = repositorio
+            .crear(&EmpresaProveedor {
+                id: 0,
+                nombre: "Dos Pinos".to_string(),
+                activo: true,
+            })
+            .unwrap();
+        let id = core
+            .registrar_ingreso_proveedor(&actor, "1-1111-1111", "Juan Perez", maika, None, 7)
+            .unwrap();
+        core.registrar_salida_proveedor(&actor, id).unwrap();
+        // Después, con otra empresa (más tarde, mismo reloj fijo: desempata el id).
+        core.registrar_ingreso_proveedor(&actor, "1-1111-1111", "Juan Perez", dos_pinos, None, 7)
+            .unwrap();
+
+        // En cualquier formato de cédula.
+        let ultima = core
+            .ultima_empresa_proveedor(" 111111111 ")
+            .unwrap()
+            .unwrap();
+        assert_eq!(ultima.id, dos_pinos);
+
+        // Desactivada ya no se propone: queda la anterior que sigue activa.
+        repositorio.establecer_activo(dos_pinos, false).unwrap();
+        assert_eq!(
+            core.ultima_empresa_proveedor("1-1111-1111")
+                .unwrap()
+                .unwrap()
+                .id,
+            maika
+        );
+
+        // Otra cédula, sin historial; una ilegible, tampoco.
+        assert!(
+            core.ultima_empresa_proveedor("2-2222-2222")
+                .unwrap()
+                .is_none()
+        );
+        assert!(core.ultima_empresa_proveedor("abc").unwrap().is_none());
     }
 }

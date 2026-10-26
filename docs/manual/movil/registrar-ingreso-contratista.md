@@ -12,19 +12,23 @@ Cualquier usuario con sesión abierta.
 
 ## Dónde
 
-Sección **Activos**, con **Ingreso** elegido arriba (es lo que se ve al
-entrar).
+Sección **Contratistas**, con **Persona** elegido arriba (es lo que se ve
+al entrar).
 
 ## Pasos — escaneando el documento (lo más rápido)
 
-1. En **Activos → Ingreso**, toque el botón redondo de la cámara
-   (**Escanear documento**).
-2. Coloque la cédula (o el carnet) **dentro del recuadro**. Al leerla dice
-   "Documento (número) procesado".
+1. En **Contratistas**, toque el botón redondo de la cámara (**Escanear
+   documento**).
+2. Coloque la cédula (o el carnet) **dentro del recuadro**.
 3. Si la app reconoce a la persona, pasa directo al formulario de ingreso.
-   Si hay varias parecidas, elija la correcta de la lista.
-4. Complete el formulario (ver más abajo) y toque **Registrar ingreso**.
+   Si hay varias parecidas, lo leído queda en la búsqueda: elija la
+   correcta.
+4. Escriba el número de gafete y toque **Registrar ingreso** (o la tecla
+   **✓** del teclado).
 5. Verá **"Ingreso registrado · (nombre)"**.
+
+Si la persona **ya está adentro**, en vez del formulario sube su salida:
+ver [Registrar la salida de un contratista](registrar-salida-contratista.md#pasos--escaneando-la-cédula-de-quien-sale).
 
 **Sonido y vibración** al escanear, para saber qué pasó sin mirar la
 pantalla:
@@ -38,11 +42,13 @@ esté en silencio.
 
 ## Pasos — buscando por nombre o cédula
 
-1. En **Activos → Ingreso**, escriba en **"Nombre o cédula para ingresar"**.
+1. En **Contratistas**, toque la búsqueda de abajo (**"Nombre o cédula"**)
+   y escriba.
 2. Toque a la persona en los resultados.
 3. Complete el formulario y toque **Registrar ingreso**.
 
-Con el campo vacío, la lista muestra a los contratistas que están adentro.
+Quien ya está adentro aparece con **"Adentro · toque para registrar su
+salida"**: tocarlo abre su salida, no un ingreso.
 
 ## El formulario de ingreso
 
@@ -56,9 +62,9 @@ Arriba se ve el nombre y "cédula · empresa". Luego:
    Sólo aparece para los tipos que llevan gafete (PRAIND).
 4. **Registrar ingreso** se activa cuando está todo: el número de gafete o
    **S/G** encendido, y la placa si entra en vehículo. Así nunca queda "sin
-   gafete" por olvido.
+   gafete" por olvido. La tecla **✓** del teclado también registra.
 
-**← Volver** (arriba a la derecha) cancela sin registrar.
+**‹ Volver** (arriba a la izquierda) cancela sin registrar.
 
 Avisos que pueden verse en el formulario (dejan entrar):
 
@@ -70,7 +76,7 @@ Avisos que pueden verse en el formulario (dejan entrar):
 ## Si no se puede registrar
 
 Si la persona no puede entrar, en vez del formulario se ve el motivo, con
-**← Volver**. Los más comunes:
+**‹ Volver**. Los más comunes:
 
 | Mensaje | Qué hacer |
 |---|---|
@@ -78,7 +84,8 @@ Si la persona no puede entrar, en vez del formulario se ve el motivo, con
 | "Acceso denegado · PRAIND sin fecha registrada" | Falta la fecha del PRAIND en sus datos. Avise a un administrador o corríjala en el escritorio. |
 | "Acceso denegado · no tiene acceso autorizado" | Un administrador le quitó el acceso. No puede entrar. |
 | "Acceso denegado · la empresa está inactiva" | Su empresa está desactivada. Avise a un administrador. |
-| "El contratista ya tiene un ingreso activo." (o "…en el otro dispositivo del sitio.", "…en (sitio).") | Ver [Problemas frecuentes](problemas-frecuentes.md#el-contratista-ya-tiene-un-ingreso-activo). |
+| "El contratista ya tiene un ingreso activo en (sitio)." | Ver [Problemas frecuentes](problemas-frecuentes.md#el-contratista-ya-tiene-un-ingreso-activo). |
+| "Esta persona ya está adentro como proveedor — registre primero esa salida" (o "por correo") | Registre primero esa salida en **Externos**. |
 
 Otros mensajes al registrar:
 
@@ -94,9 +101,10 @@ Otros mensajes al registrar:
 
 ## Si la persona no aparece
 
-Si escanea o busca y dice **"Sin resultados"**, la persona no está
-registrada. Puede darla de alta con el **+** de arriba: ver
-[Nuevo contratista](nuevo-contratista.md).
+Si escanea o busca y no aparece, dice **"No está registrado"** con la
+opción **Registrar nuevo contratista**. Tóquela: se abre la cámara del
+carnet PRAIND con lo que buscó ya puesto y, al guardar, pasa directo a su
+ingreso. Ver [Nuevo contratista](nuevo-contratista.md).
 
 ## Relacionado
 

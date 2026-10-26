@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import uniffi.control_acceso_mobile.ContratistaResumen
@@ -95,14 +96,18 @@ internal fun TarjetaActivo(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(nombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(textoResaltado(nombre), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             // Mayúscula + negrita en toda la línea, gafete en azul -- pedido
             // explícito del usuario 2026-09-20: es lo que el guardia de
             // salida confirma contra lo que la persona trae puesto, tiene
-            // que resaltar más que cédula/empresa.
+            // que resaltar más que cédula/empresa. Dentro de una búsqueda, lo
+            // buscado (una cédula, por ejemplo) se subraya en el color de la
+            // sección.
+            val consulta = LocalConsultaResaltada.current
+            val estiloCoincidencia = SpanStyle(color = MaterialTheme.colorScheme.primary, textDecoration = TextDecoration.Underline)
             Text(
                 buildAnnotatedString {
-                    append("$detalle · ".uppercase())
+                    agregarResaltado("$detalle · ".uppercase(), consulta, estiloCoincidencia)
                     withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
                         append((if (gafeteNumero != null) "Gafete $gafeteNumero" else "Sin gafete").uppercase())
                     }
@@ -146,12 +151,12 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
-            contratista.nombre,
+            textoResaltado(contratista.nombre),
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
         )
         Text(
-            "${contratista.cedula} · ${contratista.empresaNombre} · ${etiquetaTipoIngreso(contratista.tipoIngreso)}",
+            textoResaltado("${contratista.cedula} · ${contratista.empresaNombre} · ${etiquetaTipoIngreso(contratista.tipoIngreso)}"),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -167,7 +172,7 @@ internal fun FilaContratista(contratista: ContratistaResumen, onClick: () -> Uni
         }
         if (contratista.tieneIngresoActivo) {
             Text(
-                "Ingreso activo (sin salida registrada)",
+                "Adentro · toque para registrar su salida",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
             )

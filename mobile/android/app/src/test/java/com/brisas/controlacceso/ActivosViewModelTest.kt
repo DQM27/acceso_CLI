@@ -99,7 +99,7 @@ class ActivosViewModelTest {
         advanceUntilIdle()
         val contratista = viewModel.resultadosBusqueda.single()
 
-        viewModel.elegir(contratista)
+        viewModel.elegir(contratista.id)
         advanceUntilIdle()
 
         val seleccion = viewModel.seleccionIngreso
@@ -261,7 +261,7 @@ class ActivosViewModelTest {
         advanceUntilIdle()
         val contratista = viewModel.resultadosBusqueda.single()
 
-        viewModel.elegir(contratista)
+        viewModel.elegir(contratista.id)
         advanceUntilIdle()
 
         assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Bloqueada)
@@ -386,7 +386,7 @@ class ActivosViewModelTest {
         advanceUntilIdle()
         viewModel.cambiarTexto("Contratista")
         advanceUntilIdle()
-        viewModel.elegir(viewModel.resultadosBusqueda.single())
+        viewModel.elegir(viewModel.resultadosBusqueda.single().id)
         advanceUntilIdle()
         assertTrue(viewModel.seleccionIngreso is SeleccionIngreso.Formulario)
         return viewModel
@@ -417,20 +417,46 @@ class ActivosViewModelTest {
     }
 
     @Test
-    fun `la salida desde el modo Salida la confirma y descuenta del total`() = runTest(dispatcher) {
+    fun `elegir a quien ya esta adentro abre su salida en vez del bloqueo`() = runTest(dispatcher) {
         val viewModel = formularioAbierto("SWAT")
         viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")
         advanceUntilIdle()
-        // En Salida la lista sólo trae lo buscado: el total se cuenta aparte.
-        viewModel.cambiarModo(ModoBusqueda.SALIDA_NOMBRE)
         viewModel.cambiarTexto("Contratista")
         advanceUntilIdle()
 
-        viewModel.confirmarSalida(viewModel.activos.single())
+        viewModel.elegir(viewModel.resultadosBusqueda.single().id)
+        advanceUntilIdle()
+
+        assertEquals(SeleccionIngreso.Ninguna, viewModel.seleccionIngreso)
+        val salida = viewModel.seleccionSalida
+        assertEquals("Contratista Test", salida?.contratistaNombre)
+
+        viewModel.confirmarSalida(salida!!)
         advanceUntilIdle()
 
         assertEquals("Salida registrada · Contratista Test", viewModel.confirmacion.actual?.texto)
         assertEquals(0, viewModel.totalAdentro)
+    }
+
+    @Test
+    fun `escanear a quien ya esta adentro abre su salida sin alerta ni texto en el buscador`() = runTest(dispatcher) {
+        val viewModel = formularioAbierto("SWAT")
+        viewModel.registrarIngreso(MedioIngreso.CAMINANDO, "", "")
+        advanceUntilIdle()
+
+        viewModel.usarDocumentoEscaneadoIngreso(DocumentoDetectado(TipoDocumento.CEDULA_NACIONAL, "111111111"))
+        advanceUntilIdle()
+
+        assertEquals("Contratista Test", viewModel.seleccionSalida?.contratistaNombre)
+        // La hoja avisa que ya estaba adentro (triángulo ámbar).
+        assertTrue(viewModel.salidaYaAdentro)
+        assertEquals(SeleccionIngreso.Ninguna, viewModel.seleccionIngreso)
+        assertNull(viewModel.alertaEscaneo)
+        assertEquals("", viewModel.texto)
+
+        // Tocar a alguien en la lista es una salida a propósito: sin aviso.
+        viewModel.elegirSeleccionSalida(viewModel.activos.single())
+        assertFalse(viewModel.salidaYaAdentro)
     }
 
     @Test

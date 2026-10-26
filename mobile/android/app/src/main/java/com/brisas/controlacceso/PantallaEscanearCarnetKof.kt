@@ -150,14 +150,10 @@ private fun VistaCamaraCarnetKof(
             tono = tonoEscaneo(estado),
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                // Centrado entre los bordes, dejando a la derecha el lugar de
-                // la X de cerrar.
-                .padding(top = 16.dp, start = 72.dp, end = 72.dp),
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp),
         )
-        // Mismo botón compartido que las otras 3 pantallas de escaneo
-        // (`ControlesBrisas.kt`) -- antes era el texto "Cancelar" (hallazgo
-        // 2026-09-19).
-        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp))
+        // Cerrar abajo al centro, al alcance del pulgar, como en las demás cámaras (`ControlesBrisas.kt`).
+        BotonCerrarCamara(onClick = onCerrar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp))
     }
 }
 

@@ -98,22 +98,37 @@ impl Nucleo {
         )
     }
 
-    /// Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
-    /// ya tiene un ingreso de proveedor abierto en este sitio (este equipo
-    /// o el otro dispositivo), `None` si puede entrar. La regla y el texto
-    /// son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+    /// Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
+    /// está adentro en este sitio (este equipo o el otro dispositivo), como
+    /// proveedor o por otra vía (contratista, por correo), `None` si puede
+    /// entrar. Las mismas reglas y textos que frenan el registro
+    /// (`IngresoActivo`, `AdentroPorOtraVia`), sin esperar a que se llene
+    /// el formulario. Kotlin sólo lo muestra. Sin actor: es una lectura.
     pub fn aviso_proveedor_con_ingreso_activo(
         &self,
         cedula: String,
     ) -> Result<Option<String>, NucleoError> {
-        let activo = self
+        let core = self.core_lock();
+        let error = if core.proveedor_con_ingreso_activo_en_sitio(&cedula)? {
+            Some(IngresoProveedorServiceErrorNucleo::IngresoActivo)
+        } else {
+            core.proveedor_adentro_por_otra_via(&cedula)?
+                .map(IngresoProveedorServiceErrorNucleo::AdentroPorOtraVia)
+        };
+        Ok(error.map(control_acceso::mensajes::mensaje_ingreso_proveedor))
+    }
+
+    /// La empresa con la que entró la última vez este proveedor, para
+    /// proponerla en el formulario apenas se escanea o se escribe su cédula
+    /// (ver `AppCore::ultima_empresa_proveedor`). Sin actor: es una lectura.
+    pub fn ultima_empresa_proveedor(
+        &self,
+        cedula: String,
+    ) -> Result<Option<EmpresaProveedor>, NucleoError> {
+        Ok(self
             .core_lock()
-            .proveedor_con_ingreso_activo_en_sitio(&cedula)?;
-        Ok(activo.then(|| {
-            control_acceso::mensajes::mensaje_ingreso_proveedor(
-                IngresoProveedorServiceErrorNucleo::IngresoActivo,
-            )
-        }))
+            .ultima_empresa_proveedor(&cedula)?
+            .map(Into::into))
     }
 
     /// Registra la salida (cierre) de un ingreso de proveedor activo --

@@ -42,21 +42,23 @@ impl Nucleo {
             })
     }
 
-    /// Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si ya
-    /// tiene un ingreso por correo abierto en este sitio (este equipo o el
-    /// otro dispositivo), `None` si puede entrar. Sin actor: es una lectura.
+    /// Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
+    /// está adentro en este sitio (este equipo o el otro dispositivo), por
+    /// correo o por otra vía (contratista, proveedor), `None` si puede
+    /// entrar. Las mismas reglas y textos que frenan el registro. Sin actor:
+    /// es una lectura.
     pub fn aviso_correo_con_ingreso_activo(
         &self,
         cedula: String,
     ) -> Result<Option<String>, NucleoError> {
-        let activo = self
-            .core_lock()
-            .correo_con_ingreso_activo_en_sitio(&cedula)?;
-        Ok(activo.then(|| {
-            control_acceso::mensajes::mensaje_ingreso_correo(
-                IngresoCorreoServiceErrorNucleo::IngresoActivo,
-            )
-        }))
+        let core = self.core_lock();
+        let error = if core.correo_con_ingreso_activo_en_sitio(&cedula)? {
+            Some(IngresoCorreoServiceErrorNucleo::IngresoActivo)
+        } else {
+            core.correo_adentro_por_otra_via(&cedula)?
+                .map(IngresoCorreoServiceErrorNucleo::AdentroPorOtraVia)
+        };
+        Ok(error.map(control_acceso::mensajes::mensaje_ingreso_correo))
     }
 
     pub fn registrar_salida_correo(&self, registro_id: i64) -> Result<(), NucleoError> {

@@ -9,10 +9,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,7 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -40,6 +41,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -58,11 +60,12 @@ import uniffi.control_acceso_mobile.PrestamoGafeteProvisionalRemoto
 /// de gafete de la categoría física aparte.
 ///
 /// Rediseño 2026-10-21 (como la app Teléfono de iOS 26, pedido del usuario):
-/// la pantalla es sólo la lista de gafetes prestados. La lupa del botón
-/// redondo de abajo abre el buscador de encargado pegado al teclado
-/// ([BuscadorInferior]); elegir a alguien cierra la búsqueda y sube el panel
-/// "Entregar gafete" con el número. Antes el buscador y el formulario vivían
-/// arriba y había que subir a buscarlos.
+/// la pantalla es sólo la lista de gafetes prestados. Con el buscador de
+/// abajo en todas las pestañas (2026-10-25) queda igual que Proveedores y
+/// Correo: la píldora de búsqueda acota la lista de prestados, y el botón
+/// redondo "+" abre el buscador de encargado para entregar uno ([BuscadorInferior]);
+/// elegir a alguien cierra la búsqueda y sube el panel "Entregar gafete" con
+/// el número.
 @Composable
 fun PantallaGafetesProvisionales(
     nucleo: Nucleo,
@@ -76,70 +79,100 @@ fun PantallaGafetesProvisionales(
     val viewModel: GafetesProvisionalesViewModel =
         viewModel(factory = GafetesProvisionalesViewModel.factory(nucleo))
     var filaParaDevolver by remember { mutableStateOf<FilaGafeteProvisionalActiva?>(null) }
-    var buscando by remember { mutableStateOf(false) }
+    // Los dos buscadores de abajo: el de encargado (para entregar) y el que
+    // acota la lista de prestados.
+    var buscandoEncargado by remember { mutableStateOf(false) }
+    var buscandoPrestamo by remember { mutableStateOf(false) }
+    var textoPrestamo by remember { mutableStateOf("") }
     LaunchedEffect(refrescarNube) {
         if (refrescarNube > 0) {
             viewModel.refrescarActivos()
         }
     }
 
-    AccionPrincipal(Icons.Default.Search, "Buscar encargado para entregar un gafete", onClick = { buscando = true })
+    AccionPrincipal(Icons.Default.Add, "Entregar un gafete provisional", onClick = { buscandoEncargado = true })
+    // Sólo con gafetes prestados: si no, la única búsqueda es la del "+".
+    BusquedaPrincipal(
+        ayuda = "Nombre, código o gafete",
+        onAbrir = { buscandoPrestamo = true },
+        visible = viewModel.activos.isNotEmpty(),
+    )
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
-            Text(
-                "Gafete provisional KOF",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-
             // Fallas de la lista (la entrega muestra las suyas en su panel).
             if (viewModel.encargadoSeleccionado == null) {
                 viewModel.error?.let { mensaje ->
-                    Text(
-                        mensaje,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
+                    FranjaEstado(mensaje, TipoEstado.ERROR, modifier = Modifier.padding(bottom = 4.dp))
                 }
             }
 
-            // Sin encabezado "Gafetes prestados" -- pedido explícito del usuario
-            // en pruebas reales, 2026-09-17: dejarlo limpio, igual que la lista
-            // de activos de Contratista (que tampoco tiene título propio).
-            ListaConEstados(
+            // Sin encabezado propio: el título grande de arriba ya dice "KOF"
+            // y cuántos hay prestados.
+            ListaGafetesPrestados(
                 filas = viewModel.activos,
-                clave = { it.clave() },
                 cargando = viewModel.cargando,
                 tituloVacio = "Ningún gafete prestado",
-                detalleVacio = "Para entregar uno, toque la lupa de abajo.",
+                detalleVacio = "Para entregar uno, toque el + de abajo.",
                 sincronizando = sincronizando,
                 onSincronizar = onSincronizar,
-                contentPadding = PaddingValues(top = 10.dp, bottom = EspacioPieLista),
-            ) { fila ->
-                FilaPrestamoGafeteProvisional(
-                    fila = fila,
-                    onConfirmarDevolucion = { filaParaDevolver = fila },
-                )
-            }
+                contentPadding = PaddingValues(top = 4.dp, bottom = EspacioPieLista),
+                onElegir = { filaParaDevolver = it },
+            )
         }
         PieFlotante(viewModel.confirmacion, modifier = Modifier.align(Alignment.BottomCenter))
 
-        if (buscando) {
-            BuscadorInferior(
-                texto = viewModel.textoEncargado,
-                onCambiar = viewModel::cambiarTextoEncargado,
-                ayuda = "Nombre o código de empleado",
-                onCerrar = {
-                    buscando = false
-                    viewModel.cambiarTextoEncargado("")
-                },
-                modifier = Modifier.background(MaterialTheme.colorScheme.background),
-            ) {
+        BuscadorInferior(
+            visible = buscandoPrestamo,
+            texto = textoPrestamo,
+            onCambiar = { textoPrestamo = it },
+            ayuda = "Nombre, código o gafete",
+            onCerrar = {
+                buscandoPrestamo = false
+                textoPrestamo = ""
+            },
+        ) {
+            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                ListaGafetesPrestados(
+                    filas = viewModel.activos.filter { it.coincideCon(textoPrestamo) },
+                    cargando = viewModel.cargando,
+                    tituloVacio = if (textoPrestamo.isBlank()) "Ningún gafete prestado" else "Sin resultados",
+                    detalleVacio = if (textoPrestamo.isBlank()) "Para entregar uno, toque el + de abajo." else "Pruebe con otro nombre, código o gafete.",
+                    sincronizando = sincronizando,
+                    onSincronizar = onSincronizar,
+                    contentPadding = PADDING_RESULTADOS,
+                    onElegir = { fila ->
+                        filaParaDevolver = fila
+                        buscandoPrestamo = false
+                        textoPrestamo = ""
+                    },
+                )
+            }
+        }
+
+        BuscadorInferior(
+            visible = buscandoEncargado,
+            texto = viewModel.textoEncargado,
+            onCambiar = viewModel::cambiarTextoEncargado,
+            ayuda = "Nombre o código de empleado",
+            onCerrar = {
+                buscandoEncargado = false
+                viewModel.cambiarTextoEncargado("")
+            },
+            // Dice para qué se busca: este buscador no acota la lista, entrega.
+            encabezado = {
+                Text(
+                    "Entregar gafete provisional",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            },
+        ) {
+            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                 ResultadosEncargado(viewModel.textoEncargado, viewModel.resultadosEncargado) { encargado ->
                     viewModel.elegirEncargado(encargado)
-                    buscando = false
+                    buscandoEncargado = false
                 }
             }
         }
@@ -166,21 +199,60 @@ fun PantallaGafetesProvisionales(
     )
 }
 
+/// La lista de gafetes prestados, la de la pantalla y la del buscador de abajo.
+@Composable
+private fun ListaGafetesPrestados(
+    filas: List<FilaGafeteProvisionalActiva>,
+    cargando: Boolean,
+    tituloVacio: String,
+    detalleVacio: String,
+    sincronizando: Boolean,
+    onSincronizar: () -> Unit,
+    contentPadding: PaddingValues,
+    onElegir: (FilaGafeteProvisionalActiva) -> Unit,
+) {
+    ListaConEstados(
+        filas = filas,
+        clave = { it.clave() },
+        cargando = cargando,
+        tituloVacio = tituloVacio,
+        detalleVacio = detalleVacio,
+        sincronizando = sincronizando,
+        onSincronizar = onSincronizar,
+        contentPadding = contentPadding,
+        iconoVacio = IconosLucide.InsigniaConCheck,
+    ) { fila ->
+        FilaPrestamoGafeteProvisional(fila = fila, onConfirmarDevolucion = { onElegir(fila) })
+    }
+}
+
+/// Si el préstamo coincide con lo escrito en el buscador: nombre, código de
+/// empleado o número de gafete, sin distinguir mayúsculas ni tildes.
+internal fun FilaGafeteProvisionalActiva.coincideCon(busqueda: String): Boolean {
+    if (busqueda.isBlank()) return true
+    val (nombre, codigo, gafete) = when (this) {
+        is FilaGafeteProvisionalActiva.Local ->
+            Triple(prestamo.encargadoNombre, prestamo.encargadoCodigoEmpleado, prestamo.gafeteNumero.toString())
+        is FilaGafeteProvisionalActiva.Remota ->
+            Triple(remoto.encargadoNombre, remoto.encargadoCodigoEmpleado, remoto.gafeteNumero.toString())
+    }
+    return listOf(nombre, codigo, gafete).any { rangosCoincidencia(it, busqueda).isNotEmpty() }
+}
+
 /// Los encargados que coinciden con lo escrito, como tarjetas tocables (igual
-/// que `FilaContratista` en modo Ingreso). Sin texto, una indicación.
+/// que `FilaContratista` en modo Ingreso). Sin texto, qué escribir.
 @Composable
 private fun ResultadosEncargado(texto: String, resultados: List<EncargadoRuta>, onElegir: (EncargadoRuta) -> Unit) {
     if (resultados.isEmpty()) {
-        Text(
-            if (texto.isBlank()) "Escriba el nombre o el código de empleado." else "Sin resultados",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(24.dp),
-        )
+        if (texto.isBlank()) {
+            EstadoVacio("¿A quién se le entrega?", "Escriba el nombre o el código de empleado.", Icons.Default.PersonSearch)
+        } else {
+            EstadoVacio("Sin resultados", "Pruebe con otro nombre o código.", Icons.Default.PersonSearch)
+        }
         return
     }
     LazyColumn(
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        contentPadding = PADDING_RESULTADOS,
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         items(resultados, key = { it.id }) { encargado ->
@@ -249,18 +321,15 @@ private fun HojaEntregaGafete(
                 onValueChange = { gafeteTexto = it.filter(Char::isDigit) },
                 placeholder = { Text("Número de gafete") },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                // ✓ del teclado entrega, igual que el botón.
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (numero != null && !registrando) onEntregar(numero) }),
                 shape = FormaCampoBrisas,
                 colors = ColoresCampoBrisas(),
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp).focusRequester(foco),
             )
             if (error != null) {
-                Text(
-                    error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+                FranjaEstado(error, TipoEstado.ERROR, modifier = Modifier.padding(top = 8.dp), vibrar = true)
             }
             BotonBrisas(
                 onClick = {
@@ -318,20 +387,21 @@ private fun FilaPrestamoGafeteProvisionalLocal(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(prestamo.encargadoNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        Text(textoResaltado(prestamo.encargadoNombre), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         // Mismo criterio que la tarjeta de Contratista activo
         // (`PantallaActivos.kt::FilaActivoLocal`) -- mayúscula + negrita en
-        // toda la línea, gafete resaltado -- pero acá en rojo en vez de azul
-        // (`colorScheme.error` en vez de `colorScheme.primary`), pedido
-        // explícito del usuario 2026-09-21 para distinguir de un vistazo un
-        // gafete PROVISIONAL KOF de uno de contratista. "Código de empleado:"
+        // toda la línea, gafete resaltado. En rojo (pedido explícito del
+        // usuario 2026-09-21, para distinguir de un vistazo un gafete
+        // PROVISIONAL KOF de uno de contratista): desde que KOF tiene su color
+        // de sección (rojo), sale de `primary` y no de `colorScheme.error`,
+        // que queda para los errores. "Código de empleado:"
         // explícito (no sólo el valor pelado) para consistencia con el resto
         // de tarjetas del mismo módulo (ver ControlesBrisas.kt/el diálogo de
         // asignación más arriba en este archivo, que ya usan esa etiqueta).
         Text(
             buildAnnotatedString {
                 append("Código de empleado: ${prestamo.encargadoCodigoEmpleado} · ".uppercase())
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) {
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
                     append("Gafete ${prestamo.gafeteNumero}".uppercase())
                 }
             },
@@ -367,13 +437,13 @@ private fun FilaPrestamoGafeteProvisionalRemota(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(remoto.encargadoNombre, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(textoResaltado(remoto.encargadoNombre), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             // Mismo criterio que FilaPrestamoGafeteProvisionalLocal -- ver ese
             // comentario.
             Text(
                 buildAnnotatedString {
                     append("Código de empleado: ${remoto.encargadoCodigoEmpleado} · ".uppercase())
-                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) {
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
                         append("Gafete ${remoto.gafeteNumero}".uppercase())
                     }
                 },
@@ -392,9 +462,8 @@ private fun FilaPrestamoGafeteProvisionalRemota(
     }
 }
 
-/// El mismo panel que la salida de contratistas ([DialogoRegistrarSalida]),
-/// con título "Registrar devolución" e info completa en vez de sólo
-/// "Gafete N · nombre".
+/// La misma ficha que la salida de contratistas ([DialogoRegistrarSalida]),
+/// con "Registrar devolución" y los datos del préstamo.
 @Composable
 private fun DialogoConfirmarDevolucionGafeteProvisional(
     fila: FilaGafeteProvisionalActiva?,
@@ -403,13 +472,17 @@ private fun DialogoConfirmarDevolucionGafeteProvisional(
 ) {
     if (fila == null) return
     DialogoRegistrarSalida(
-        titulo = "Registrar devolución",
-        detalle = when (fila) {
-            is FilaGafeteProvisionalActiva.Local ->
-                "${fila.prestamo.encargadoNombre} · ${fila.prestamo.encargadoCodigoEmpleado} · Gafete ${fila.prestamo.gafeteNumero}"
-            is FilaGafeteProvisionalActiva.Remota ->
-                "${fila.remoto.encargadoNombre} · $TEXTO_OTRO_DISPOSITIVO"
+        accion = "Registrar devolución",
+        nombre = when (fila) {
+            is FilaGafeteProvisionalActiva.Local -> fila.prestamo.encargadoNombre
+            is FilaGafeteProvisionalActiva.Remota -> fila.remoto.encargadoNombre
         },
+        detalle = textoGafeteSalida(
+            when (fila) {
+                is FilaGafeteProvisionalActiva.Local -> fila.prestamo.gafeteNumero
+                is FilaGafeteProvisionalActiva.Remota -> fila.remoto.gafeteNumero
+            },
+        ),
         onDismiss = onDismiss,
         onConfirmar = { onConfirmar(fila) },
     )

@@ -95,4 +95,51 @@ class ProveedoresViewModelTest {
         assertEquals(false, viewModel.cedulaConIngresoActivo)
         assertNull(viewModel.error)
     }
+
+    @Test
+    fun `el proveedor que vuelve trae propuesta la empresa de la ultima vez`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (7, 'PROVEEDOR', 'DISPONIBLE');",
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        val empresaId = nucleo.crearEmpresaProveedor("Empresa Proveedora Test")
+        val registro = nucleo.registrarIngresoProveedor("111222333", "Proveedor Test", empresaId, null, 7L)
+        nucleo.registrarSalidaProveedor(registro)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.cambiarCedula("111-222-333")
+        advanceUntilIdle()
+        assertEquals(empresaId, viewModel.empresaSeleccionada?.id)
+
+        // Alguien nuevo no trae ninguna.
+        val otro = viewModel()
+        otro.cambiarCedula("444555666")
+        advanceUntilIdle()
+        assertNull(otro.empresaSeleccionada)
+    }
+
+    @Test
+    fun `escanear a quien ya esta adentro por correo avisa en el acto y no deja registrar`() = runTest(dispatcher) {
+        nucleo = NucleoDePrueba.abrir(
+            archivo,
+            "INSERT INTO gafetes (numero, tipo, estado) VALUES (5, 'VISITA', 'DISPONIBLE');",
+            NucleoDePrueba.sqlUsuarioRoot(),
+        )
+        nucleo.autenticar("999999999", NucleoDePrueba.CLAVE_PRUEBA)
+        nucleo.registrarIngresoCorreoVerificado("111222333", "Ana Solano", "Entrevista RH", null, 5L)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        // El escaneo espera la revisión: la pantalla frena antes del formulario.
+        val aviso = viewModel.rellenarDesdeDocumento("111-222-333", "Ana", "Solano")
+
+        assertEquals("Esta persona ya está adentro por correo — registre primero esa salida", aviso)
+        assertEquals(true, viewModel.cedulaConIngresoActivo)
+
+        // Quien no está adentro pasa al formulario.
+        assertNull(viewModel().rellenarDesdeDocumento("444555666", "Luis", null))
+    }
 }

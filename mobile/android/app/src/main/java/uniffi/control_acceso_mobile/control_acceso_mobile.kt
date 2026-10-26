@@ -901,6 +901,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_proveedor(
     ): Int
+    external fun uniffi_control_acceso_mobile_checksum_method_nucleo_ultima_empresa_proveedor(
+    ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta(
     ): Int
     external fun uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_rutas(
@@ -1122,6 +1124,8 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_registrar_salida_proveedor(`ptr`: Long,`registroId`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_control_acceso_mobile_fn_method_nucleo_ultima_empresa_proveedor(`ptr`: Long,`cedula`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_encargados_ruta(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_control_acceso_mobile_fn_method_nucleo_buscar_rutas(`ptr`: Long,`texto`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1533,7 +1537,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_requiere_praind_para_formulario() and 0xFFFF) != 15325) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_correo_con_ingreso_activo() and 0xFFFF) != 28540) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_correo_con_ingreso_activo() and 0xFFFF) != 5132) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_listar_correos_activos() and 0xFFFF) != 12985) {
@@ -1656,7 +1660,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_vincular_dispositivo_inicial() and 0xFFFF) != 3515) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 39964) {
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_aviso_proveedor_con_ingreso_activo() and 0xFFFF) != 6459) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_empresas_proveedor() and 0xFFFF) != 7299) {
@@ -1675,6 +1679,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_registrar_salida_proveedor() and 0xFFFF) != 28898) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_ultima_empresa_proveedor() and 0xFFFF) != 47178) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_control_acceso_mobile_checksum_method_nucleo_buscar_encargados_ruta() and 0xFFFF) != 54734) {
@@ -3692,9 +3699,11 @@ public interface NucleoInterface {
     fun `requierePraindParaFormulario`(`tipoIngreso`: TipoIngreso, `personalRuta`: kotlin.Boolean): kotlin.Boolean
     
     /**
-     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si ya
-     * tiene un ingreso por correo abierto en este sitio (este equipo o el
-     * otro dispositivo), `None` si puede entrar. Sin actor: es una lectura.
+     * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
+     * está adentro en este sitio (este equipo o el otro dispositivo), por
+     * correo o por otra vía (contratista, proveedor), `None` si puede
+     * entrar. Las mismas reglas y textos que frenan el registro. Sin actor:
+     * es una lectura.
      */
     fun `avisoCorreoConIngresoActivo`(`cedula`: kotlin.String): kotlin.String?
     
@@ -4008,10 +4017,12 @@ public interface NucleoInterface {
     fun `vincularDispositivoInicial`(`codigo`: kotlin.String, `identificadorHardware`: kotlin.String, `nombreDispositivo`: kotlin.String, `plataforma`: kotlin.String, `versionBuild`: kotlin.String, `appVersion`: kotlin.String): ResumenSincronizacion
     
     /**
-     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
-     * ya tiene un ingreso de proveedor abierto en este sitio (este equipo
-     * o el otro dispositivo), `None` si puede entrar. La regla y el texto
-     * son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+     * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
+     * está adentro en este sitio (este equipo o el otro dispositivo), como
+     * proveedor o por otra vía (contratista, por correo), `None` si puede
+     * entrar. Las mismas reglas y textos que frenan el registro
+     * (`IngresoActivo`, `AdentroPorOtraVia`), sin esperar a que se llene
+     * el formulario. Kotlin sólo lo muestra. Sin actor: es una lectura.
      */
     fun `avisoProveedorConIngresoActivo`(`cedula`: kotlin.String): kotlin.String?
     
@@ -4055,6 +4066,13 @@ public interface NucleoInterface {
      * espejo de `AppCore::registrar_salida_proveedor`.
      */
     fun `registrarSalidaProveedor`(`registroId`: kotlin.Long)
+    
+    /**
+     * La empresa con la que entró la última vez este proveedor, para
+     * proponerla en el formulario apenas se escanea o se escribe su cédula
+     * (ver `AppCore::ultima_empresa_proveedor`). Sin actor: es una lectura.
+     */
+    fun `ultimaEmpresaProveedor`(`cedula`: kotlin.String): EmpresaProveedor?
     
     /**
      * Buscador del checklist de rutas (paso "Encargado KOF") -- por nombre
@@ -4472,9 +4490,11 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si ya
-     * tiene un ingreso por correo abierto en este sitio (este equipo o el
-     * otro dispositivo), `None` si puede entrar. Sin actor: es una lectura.
+     * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
+     * está adentro en este sitio (este equipo o el otro dispositivo), por
+     * correo o por otra vía (contratista, proveedor), `None` si puede
+     * entrar. Las mismas reglas y textos que frenan el registro. Sin actor:
+     * es una lectura.
      */
     @Throws(NucleoException::class)override fun `avisoCorreoConIngresoActivo`(`cedula`: kotlin.String): kotlin.String? {
             return FfiConverterOptionalString.lift(
@@ -5305,10 +5325,12 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 
     
     /**
-     * Aviso para mostrar mientras se tipea la cédula: `Some(mensaje)` si
-     * ya tiene un ingreso de proveedor abierto en este sitio (este equipo
-     * o el otro dispositivo), `None` si puede entrar. La regla y el texto
-     * son del núcleo; Kotlin sólo lo muestra. Sin actor: es una lectura.
+     * Aviso apenas se escanea o se tipea la cédula: `Some(mensaje)` si ya
+     * está adentro en este sitio (este equipo o el otro dispositivo), como
+     * proveedor o por otra vía (contratista, por correo), `None` si puede
+     * entrar. Las mismas reglas y textos que frenan el registro
+     * (`IngresoActivo`, `AdentroPorOtraVia`), sin esperar a que se llene
+     * el formulario. Kotlin sólo lo muestra. Sin actor: es una lectura.
      */
     @Throws(NucleoException::class)override fun `avisoProveedorConIngresoActivo`(`cedula`: kotlin.String): kotlin.String? {
             return FfiConverterOptionalString.lift(
@@ -5447,6 +5469,26 @@ open class Nucleo: Disposable, AutoCloseable, NucleoInterface
 }
     }
     
+    
+
+    
+    /**
+     * La empresa con la que entró la última vez este proveedor, para
+     * proponerla en el formulario apenas se escanea o se escribe su cédula
+     * (ver `AppCore::ultima_empresa_proveedor`). Sin actor: es una lectura.
+     */
+    @Throws(NucleoException::class)override fun `ultimaEmpresaProveedor`(`cedula`: kotlin.String): EmpresaProveedor? {
+            return FfiConverterOptionalTypeEmpresaProveedor.lift(
+    callWithHandle {
+    uniffiRustCallWithError(NucleoException) { _status ->
+    UniffiLib.uniffi_control_acceso_mobile_fn_method_nucleo_ultima_empresa_proveedor(
+        it,
+        
+        FfiConverterString.lower(`cedula`),_status)
+}
+    }
+    )
+    }
     
 
     
@@ -12200,6 +12242,38 @@ public object FfiConverterOptionalTypeDocumentoLeido: FfiConverterRustBuffer<Doc
         } else {
             buf.put(1)
             FfiConverterTypeDocumentoLeido.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeEmpresaProveedor: FfiConverterRustBuffer<EmpresaProveedor?> {
+    override fun read(buf: ByteBuffer): EmpresaProveedor? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeEmpresaProveedor.read(buf)
+    }
+
+    override fun allocationSize(value: EmpresaProveedor?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeEmpresaProveedor.allocationSize(value)
+        }
+    }
+
+    override fun write(value: EmpresaProveedor?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeEmpresaProveedor.write(value, buf)
         }
     }
 }

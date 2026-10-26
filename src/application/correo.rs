@@ -10,6 +10,7 @@ use crate::database::repositories::registro_ingreso_correo_repository::{
     RegistroIngresoCorreoRepository, SqliteRegistroIngresoCorreoRepository,
 };
 use crate::models::registro_ingreso_correo::RegistroIngresoCorreoActivoResumen;
+use crate::models::via_ingreso::ViaIngreso;
 use crate::services::autenticacion_service::UsuarioSesion;
 use crate::services::error::IngresoCorreoServiceError;
 use crate::services::ingreso_correo_service::{DatosIngresoCorreo, IngresoCorreoService};
@@ -95,6 +96,21 @@ impl AppCore {
             )
             .map_err(DatabaseError::from)
             .map_err(IngresoCorreoServiceError::Database)
+    }
+
+    /// La otra vía (contratista o proveedor) por la que esta cédula ya está
+    /// adentro, en este equipo o en el otro de la unidad. La misma regla que
+    /// frena el registro (`IngresoCorreoServiceError::AdentroPorOtraVia`),
+    /// para avisar apenas se escanea la cédula y no al final del formulario.
+    pub fn correo_adentro_por_otra_via(
+        &self,
+        cedula: &str,
+    ) -> Result<Option<ViaIngreso>, IngresoCorreoServiceError> {
+        let Ok(cedula) = crate::domain::cedula::Cedula::normalizar(cedula) else {
+            return Ok(None);
+        };
+        Ok(SqliteRegistroIngresoCorreoRepository::new(&self.connection)
+            .adentro_por_otra_via(cedula.as_str())?)
     }
 }
 
@@ -231,5 +247,30 @@ mod tests {
             core.registrar_salida_correo(&actor, id),
             Err(IngresoCorreoServiceError::RelojRetrocedido)
         ));
+    }
+
+    #[test]
+    fn correo_adentro_por_otra_via_ve_al_proveedor_del_otro_equipo() {
+        let (core, actor) = nucleo();
+        core.connection
+            .execute(
+                "INSERT INTO ingresos_proveedor_remotos (uuid, sitio_id, cedula, nombre,
+                    empresa_nombre, gafete_numero, hora_entrada, usuario_entrada_nombre,
+                    dispositivo_entrada_id, actualizado_en)
+                 VALUES ('r1', 's1', '333333333', 'Luis', 'ACME', 9,
+                    '2026-10-03T13:00:00Z', 'Otro', 'd2', '2026-10-03T13:00:00Z')",
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            core.correo_adentro_por_otra_via("3-3333-3333").unwrap(),
+            Some(ViaIngreso::Proveedor)
+        );
+
+        // Su propia vía no cuenta acá (la avisa `correo_con_ingreso_activo_en_sitio`).
+        core.registrar_ingreso_correo(&actor, &datos("111111111"))
+            .unwrap();
+        assert_eq!(core.correo_adentro_por_otra_via("111111111").unwrap(), None);
+        assert_eq!(core.correo_adentro_por_otra_via("abc").unwrap(), None);
     }
 }

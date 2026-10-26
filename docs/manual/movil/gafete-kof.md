@@ -15,14 +15,15 @@ Sección **KOF**. Se ve la lista de gafetes prestados.
 
 ## Pasos — entregar
 
-1. En **KOF**, toque el botón redondo de la lupa (**Buscar encargado para
-   entregar un gafete**).
-2. Escriba el **nombre o el código de empleado** y toque a la persona.
+1. En **KOF**, toque el botón redondo **+** (**Entregar un gafete
+   provisional**).
+2. Abajo se abre la búsqueda de encargados: escriba el **nombre o el código
+   de empleado** y toque a la persona.
 3. Sube el panel **Entregar gafete**, con su **Código de empleado**.
    **Corrobore** ese código con lo que dice la persona, y mire su cédula
    para confirmar el nombre.
-4. Escriba el **Número de gafete** y toque **Entregar** (se activa al
-   escribir el número).
+4. Escriba el **Número de gafete** y toque **Entregar** (o la tecla **✓**
+   del teclado). Se activa al escribir el número.
 5. Verá **"Gafete N entregado · (nombre)"**.
 
 **Una persona no puede tener dos gafetes provisionales**: si no devolvió
@@ -30,8 +31,10 @@ el anterior, no se le puede entregar otro hasta registrar esa devolución.
 
 ## Pasos — recibir la devolución
 
-1. En **KOF**, toque a la persona en la lista.
-2. En **Registrar devolución**, toque **Confirmar**.
+1. En **KOF**, toque a la persona en la lista. Si hay muchos, use la
+   búsqueda de abajo (**"Nombre, código o gafete"**); sólo aparece cuando
+   hay gafetes prestados.
+2. Toque **Registrar devolución**.
 3. Verá **"Gafete N devuelto · (nombre)"**.
 
 ## Mensajes que pueden aparecer

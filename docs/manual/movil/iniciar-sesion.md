@@ -13,14 +13,24 @@ unidad.
 
 ## Dónde
 
-Pantalla **ACCESO MÓVIL** → **Iniciar sesión**.
+Pantalla **Iniciar sesión**, con el nombre de la unidad debajo.
 
 ## Pasos — inicio de sesión normal
 
 1. Escriba su **Cédula**.
 2. Escriba su **Contraseña**.
-3. Toque **Ingresar**. Mientras revisa dice **Verificando…**.
-4. Se abre la pantalla principal, en **Activos**.
+3. Toque **Ingresar** (o la tecla **✓** del teclado). Mientras revisa dice
+   **Verificando…**.
+4. Se abre la pantalla principal, en **Contratistas**.
+
+## Después de un rato sin usar la app
+
+Si la app queda minimizada o el teléfono bloqueado **más de 25 minutos**,
+la sesión se cierra sola. Al volver, la **cédula ya está puesta**: sólo
+escriba la contraseña.
+
+Cuando cierra la sesión a mano (por ejemplo, en el cambio de turno), la
+cédula se borra y el siguiente escribe la suya.
 
 ## Pasos — la primera vez (contraseña temporal)
 

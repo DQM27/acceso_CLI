@@ -969,6 +969,40 @@ fn registrar_ingreso_y_salida_de_proveedor_redondea_el_viaje() {
 }
 
 #[test]
+fn ultima_empresa_proveedor_propone_la_del_ingreso_anterior() {
+    let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
+    assert_eq!(
+        nucleo
+            .ultima_empresa_proveedor("111111111".to_string())
+            .unwrap(),
+        None
+    );
+    let empresa = nucleo
+        .buscar_empresas_proveedor("maika".to_string())
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let registro_id = nucleo
+        .registrar_ingreso_proveedor(
+            "1-1111-1111".to_string(),
+            "Juan Perez".to_string(),
+            empresa.id,
+            None,
+            7,
+        )
+        .unwrap();
+    nucleo.registrar_salida_proveedor(registro_id).unwrap();
+
+    assert_eq!(
+        nucleo
+            .ultima_empresa_proveedor("111111111".to_string())
+            .unwrap(),
+        Some(empresa)
+    );
+}
+
+#[test]
 fn registrar_ingreso_proveedor_con_empresa_inexistente_falla() {
     let nucleo = nucleo_con_actor_empresa_proveedora_y_gafete();
 
@@ -1089,6 +1123,45 @@ fn ingreso_por_correo_redondea_el_viaje() {
 
     nucleo.registrar_salida_correo(id).unwrap();
     assert_eq!(nucleo.listar_correos_activos().unwrap(), Vec::new());
+}
+
+/// Quien está adentro por una vía se avisa apenas se escanea en otra, con el
+/// mismo texto que después frenaría el registro (antes, en proveedor y por
+/// correo, recién al tocar "Registrar").
+#[test]
+fn el_aviso_de_proveedor_y_de_correo_ve_a_quien_esta_adentro_por_otra_via() {
+    let nucleo = nucleo_con_actor_y_gafete_de_visita();
+    nucleo
+        .registrar_ingreso_correo_verificado(
+            "1-1111-1111".to_string(),
+            "Ana Solano".to_string(),
+            "Entrevista RH".to_string(),
+            None,
+            5,
+        )
+        .unwrap();
+
+    assert_eq!(
+        nucleo
+            .aviso_proveedor_con_ingreso_activo("111111111".to_string())
+            .unwrap()
+            .as_deref(),
+        Some("Esta persona ya está adentro por correo — registre primero esa salida")
+    );
+    // En su propia vía, el aviso de siempre.
+    assert_eq!(
+        nucleo
+            .aviso_correo_con_ingreso_activo("111111111".to_string())
+            .unwrap()
+            .as_deref(),
+        Some("Esta persona ya tiene un ingreso por correo activo")
+    );
+    assert!(
+        nucleo
+            .aviso_proveedor_con_ingreso_activo("222222222".to_string())
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]

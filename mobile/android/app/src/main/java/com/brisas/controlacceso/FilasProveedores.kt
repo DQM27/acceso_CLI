@@ -56,11 +56,8 @@ private fun FilaProveedorActivoRemota(remoto: IngresoProveedorRemoto, onConfirma
     )
 }
 
-/// Mismo layout e información que `DialogoConfirmarSalida` de
-/// PantallaActivos.kt (contratista) -- ícono circular, título "Registrar
-/// salida", y nombre · cédula · empresa (o "registrado en otro dispositivo"
-/// para una fila remota) en vez de sólo "Gafete N · nombre". Pedido
-/// explícito del usuario en pruebas reales, 2026-09-17: el modal de
+/// La misma ficha de salida que contratistas (`DialogoConfirmarSalida`):
+/// pedido explícito del usuario en pruebas reales, 2026-09-17, el modal de
 /// Proveedores quedaba "muy laxo" comparado con el de Contratista.
 @Composable
 internal fun DialogoConfirmarSalidaProveedor(
@@ -70,11 +67,16 @@ internal fun DialogoConfirmarSalidaProveedor(
 ) {
     if (fila == null) return
     DialogoRegistrarSalida(
-        detalle = when (fila) {
-            is FilaProveedorActiva.Local ->
-                "${fila.registro.nombre} · ${fila.registro.cedula} · ${fila.registro.empresaNombre} · Gafete ${fila.registro.gafeteNumero}"
-            is FilaProveedorActiva.Remota -> "${fila.remoto.nombre} · $TEXTO_OTRO_DISPOSITIVO"
+        nombre = when (fila) {
+            is FilaProveedorActiva.Local -> fila.registro.nombre
+            is FilaProveedorActiva.Remota -> fila.remoto.nombre
         },
+        detalle = textoGafeteSalida(
+            when (fila) {
+                is FilaProveedorActiva.Local -> fila.registro.gafeteNumero
+                is FilaProveedorActiva.Remota -> fila.remoto.gafeteNumero
+            },
+        ),
         onDismiss = onDismiss,
         onConfirmar = { onConfirmar(fila) },
     )
