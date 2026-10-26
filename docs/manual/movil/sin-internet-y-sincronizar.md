@@ -12,8 +12,8 @@ Cualquier usuario con sesión abierta.
 
 ## Dónde
 
-El **puntito de color** junto a **Lattis**, arriba en la pantalla
-principal:
+El **puntito de color** junto al nombre de la sección, arriba en la
+pantalla principal:
 
 | Color | Qué significa |
 |---|---|
@@ -42,7 +42,7 @@ principal:
 La app sincroniza sola: al volver la conexión, cada pocos minutos y al
 volver a abrirla. Para forzarlo:
 
-1. En cualquier lista (Activos, KOF, Externos), **tire la lista hacia
+1. En cualquier lista (Contratistas, KOF, Externos), **tire la lista hacia
    abajo** con el dedo y suelte.
 2. Espere a que termine. El puntito debería quedar en verde.
 

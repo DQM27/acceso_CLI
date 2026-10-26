@@ -11,24 +11,31 @@ Cualquier usuario con sesión abierta.
 
 ## Arriba
 
-- **Lattis** y, debajo, la **unidad** (el sitio) del teléfono.
-- Un **puntito de color** junto al nombre: el estado de la conexión (ver
-  [Trabajar sin internet](sin-internet-y-sincronizar.md)).
-- **+** (persona con un +): [Nuevo contratista](nuevo-contratista.md).
+- El **nombre de la sección** en grande (**Contratistas**, **KOF** o
+  **Externos**) y, debajo, la **unidad** (el sitio) y **cuántos hay
+  adentro** (en KOF, cuántos gafetes hay prestados).
+- Un **puntito de color** junto al nombre de la sección: el estado de la
+  conexión (ver [Trabajar sin internet](sin-internet-y-sincronizar.md)).
+- **Persona con un +**: [Nuevo contratista](nuevo-contratista.md).
 - **Campanita**: [avisos de la administración](avisos-de-la-administracion.md).
   Un globito dice cuántos hay sin leer.
-- **Círculo con su inicial**: el [menú de la cuenta](cuenta-tema-y-cerrar-sesion.md).
+- **Engranaje con su inicial**: el [menú de la cuenta](cuenta-tema-y-cerrar-sesion.md).
 
-## Abajo
+## Abajo, al alcance del pulgar
 
-- **Barra de secciones**, para cambiar con el pulgar:
-  - **Activos**: contratistas.
+- **Barra de secciones**:
+  - **Contratistas**: ingreso y salida de contratistas.
   - **KOF**: gafetes provisionales KOF.
   - **Externos**: proveedores y visitas por correo.
 
-  Cada sección tiene un globito con **cuántas personas hay adentro**.
-- **Botón redondo**, a la derecha de la barra: hace la acción principal de
-  la pantalla que está viendo (escanear, buscar o nuevo ingreso).
+  Cada sección tiene un globito gris con **cuántas personas hay adentro**.
+- **Botón redondo**, a la derecha de la barra: la acción principal de la
+  sección (escanear un documento, entregar un gafete o un nuevo ingreso).
+- **Búsqueda**, encima de la barra: tóquela para buscar en la sección. El
+  campo sube con el teclado y lo que coincide se marca en la lista. En
+  **KOF** y **Externos** sólo aparece cuando hay alguien en la lista. Al
+  deslizar la lista hacia abajo se esconde para dejar más lugar; vuelve al
+  subir.
 
 ## Franjas que pueden aparecer arriba
 
@@ -46,8 +53,15 @@ En cada sección se ve una lista de quién está adentro.
   lleva el **ícono de una PC** a la derecha. También se le puede registrar
   la salida desde el teléfono.
 - **Tirar la lista hacia abajo** sincroniza con la nube.
-- **Tocar una persona** abre **Registrar salida** (o **Registrar
-  devolución** en KOF), siempre con **Confirmar**.
+- **Tocar una persona** sube un panel con su nombre y su gafete, y el botón
+  **Registrar salida** (o **Registrar devolución** en KOF). **Cancelar**
+  lo cierra sin registrar.
+
+## Pantallas que se abren encima
+
+Los formularios, los avisos y la ayuda se abren encima de la pantalla
+principal, con **‹ Volver** arriba a la izquierda. También se vuelve con el
+gesto o el botón **atrás** del teléfono.
 
 Las secciones **Rutas** y **Visita** (visitas agendadas en la web) no se
 muestran todavía.
