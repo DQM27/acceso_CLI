@@ -73,6 +73,7 @@ function textoFechaHora(iso: string): string {
  * Retirar y Eliminar piden código de confirmación por correo -- misma "sos
  * vos ahora mismo" que alta/baja de administradores (ver
  * `ConfirmacionSensible`): le cortan el paso al equipo para siempre.
+ * Autorizar reconexión no: devuelve un equipo a trabajar.
  */
 export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const clienteConsultas = useQueryClient();
@@ -95,6 +96,7 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const [reconectando, setReconectando] = useState<FilaDispositivo | null>(null);
   const [sitioReconexion, setSitioReconexion] = useState("");
   const [etiquetaReconexion, setEtiquetaReconexion] = useState("");
+  const [autorizandoReconexion, setAutorizandoReconexion] = useState(false);
 
   // Retirar/Eliminar piden código de correo además de confirmar -- ver el
   // doc-comment del componente. `accion` maneja su propio error/toast (no
@@ -240,16 +242,12 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
   const alEliminar = useCallback((fila: FilaDispositivo) => {
     setConfirmacionSensible({
       titulo: "Borrar dispositivo",
-      pregunta: `¿Borrar "${fila.etiqueta}" de la lista? Esto no se puede deshacer.`,
-      descripcion: `borrar "${fila.etiqueta}" de la lista -- esto no se puede deshacer`,
+      pregunta: `¿Borrar "${fila.etiqueta}" de la lista? Queda retirado y deja de aparecer; su historial se conserva.`,
+      descripcion: `borrar "${fila.etiqueta}" de la lista -- queda retirado y deja de aparecer`,
       accion: async () => {
         try {
-          const { borrado } = await eliminarDispositivo(fila.id);
-          toast.success(
-            borrado
-              ? `${fila.etiqueta} borrado.`
-              : `${fila.etiqueta} ya tiene historial y no se puede borrar del todo -- se ocultó de la lista.`,
-          );
+          await eliminarDispositivo(fila.id);
+          toast.success(`${fila.etiqueta} retirado y quitado de la lista.`);
           setConfirmacionSensible(null);
           await recargar();
         } catch (error) {
@@ -283,40 +281,37 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
     setEtiquetaReconexion(fila.etiqueta);
   }, []);
 
-  function alEnviarReconexion(evento: React.FormEvent) {
+  // Sin código por correo (pedido del dueño, 2026-10-26): retirar y borrar
+  // le cortan el paso a un equipo y siguen con `ConfirmacionSensible`, pero
+  // reconectar lo devuelve a trabajar -- el formulario es la confirmación,
+  // con el aviso a la vista si cambia de unidad. El servidor igual exige
+  // sesión de administrador del panel.
+  async function alEnviarReconexion(evento: React.FormEvent) {
     evento.preventDefault();
     const fila = reconectando;
     const sitio = sitios.find((s) => s.id === sitioReconexion);
     const nuevaEtiqueta = etiquetaReconexion.trim();
-    if (!fila || !sitio || !nuevaEtiqueta) return;
-    setReconectando(null);
-    const otraUnidad = sitio.id !== fila.sitio_id;
-    setConfirmacionSensible({
-      titulo: "Autorizar reconexión",
-      pregunta: otraUnidad
-        ? `¿Autorizar que "${fila.etiqueta}" vuelva a conectarse en ${sitio.nombre}? Al reconectarse borra los datos de su unidad anterior.`
-        : `¿Autorizar que "${fila.etiqueta}" vuelva a conectarse en ${sitio.nombre}?`,
-      descripcion: `autorizar la reconexión de "${fila.etiqueta}" en ${sitio.nombre}`,
-      accion: async () => {
-        try {
-          const resultado = await autorizarReconexion({
-            dispositivo_id: fila.id,
-            sitio_id: sitio.id,
-            etiqueta: nuevaEtiqueta,
-          });
-          setConfirmacionSensible(null);
-          setCodigoMostrado({
-            clase: "reconexion",
-            titulo: `${nuevaEtiqueta} (${resultado.sitio_nombre})`,
-            codigo: resultado.codigo,
-            expira_en: resultado.expira_en,
-          });
-          await recargar();
-        } catch (error) {
-          toast.error(mensajeError(error));
-        }
-      },
-    });
+    if (!fila || !sitio || !nuevaEtiqueta || autorizandoReconexion) return;
+    setAutorizandoReconexion(true);
+    try {
+      const resultado = await autorizarReconexion({
+        dispositivo_id: fila.id,
+        sitio_id: sitio.id,
+        etiqueta: nuevaEtiqueta,
+      });
+      setReconectando(null);
+      setCodigoMostrado({
+        clase: "reconexion",
+        titulo: `${nuevaEtiqueta} (${resultado.sitio_nombre})`,
+        codigo: resultado.codigo,
+        expira_en: resultado.expira_en,
+      });
+      await recargar();
+    } catch (error) {
+      toast.error(mensajeError(error));
+    } finally {
+      setAutorizandoReconexion(false);
+    }
   }
 
   const columnas: ColDef<FilaDispositivo>[] = useMemo(
@@ -630,12 +625,26 @@ export default function Dispositivos({ sesion }: { sesion: UsuarioSesion }) {
                 onChange={(evento) => setEtiquetaReconexion(evento.target.value)}
               />
             </label>
+            {sitioReconexion !== reconectando.sitio_id && (
+              <p className="login-error" role="alert" style={{ margin: 0 }}>
+                Va a otra unidad: al reconectarse, el equipo borra los datos de su unidad anterior.
+              </p>
+            )}
             <div className="flex justify-end gap-2">
-              <button type="button" className="boton" onClick={() => setReconectando(null)}>
+              <button
+                type="button"
+                className="boton"
+                disabled={autorizandoReconexion}
+                onClick={() => setReconectando(null)}
+              >
                 Cancelar
               </button>
-              <button type="submit" className="boton boton-primario" disabled={!etiquetaReconexion.trim()}>
-                Generar código de reconexión
+              <button
+                type="submit"
+                className="boton boton-primario"
+                disabled={!etiquetaReconexion.trim() || autorizandoReconexion}
+              >
+                {autorizandoReconexion ? "Generando…" : "Generar código de reconexión"}
               </button>
             </div>
           </form>

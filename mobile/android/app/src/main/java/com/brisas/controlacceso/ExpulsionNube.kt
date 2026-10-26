@@ -13,6 +13,18 @@ object ExpulsionNube {
     fun esParaEsteEquipo(dispositivoIdAviso: String?, dispositivoId: String): Boolean =
         dispositivoIdAviso == dispositivoId
 
+    /// El aviso en vivo no alcanza para mostrarse como retirado: sólo dispara
+    /// la pregunta a la nube. [preguntarALaNube] es `Nucleo.descartarTokenNube`
+    /// (descarta el token y pide uno a `device-auth`, que anota la respuesta
+    /// en el núcleo) y [retirado] es `Nucleo.equipoRetirado`. Si la pregunta
+    /// falla, no está confirmado: la próxima sincronización vuelve a
+    /// preguntar. Hace red: llamarla fuera del hilo principal.
+    fun confirmadoPorLaNube(preguntarALaNube: () -> Unit, retirado: () -> Boolean): Boolean =
+        runCatching {
+            preguntarALaNube()
+            retirado()
+        }.getOrDefault(false)
+
     /// Aviso cuando la sesión se cerró porque el usuario entró en otra unidad
     /// (sesión única por unidad, migración `sesion_unica_por_unidad`).
     const val MENSAJE_SESION_EN_OTRA_UNIDAD =

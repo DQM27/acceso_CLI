@@ -76,6 +76,22 @@ class ReconexionViewModelTest {
         assertEquals("Este equipo no está retirado: no hace falta reconectarlo", vm.error)
     }
 
+    /// El QR de reconexión del panel es el mismo que el de vinculación
+    /// (`contenidoQr` en web/): lo que lee el escáner llega entero al núcleo,
+    /// que acá se niega porque este teléfono no está retirado (sin tocar la
+    /// nube).
+    @Test
+    fun `el codigo leido del QR de reconexion del panel llega al nucleo`() = runTest(dispatcher) {
+        val leido = CodigoVinculacion.desdeQr("brisas-acceso://vincular?codigo=K7QMR4XT2P")
+            ?: error("el QR del panel no se leyó")
+        val vm = viewModel()
+
+        vm.reconectar(leido) { }
+        advanceUntilIdle()
+
+        assertEquals("Este equipo no está retirado: no hace falta reconectarlo", vm.error)
+    }
+
     @Test
     fun `el aviso dice registro o registros`() {
         assertEquals("1 registro", textoRegistros(1uL))

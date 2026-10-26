@@ -327,16 +327,15 @@ impl Nucleo {
     /// [`Nucleo::aplicar_token_de`]). Quien llama no debe tener tomado
     /// `core_lock()`.
     ///
-    /// Si la nube ya no reconoce la clave del teléfono (lo retiraron en el
-    /// panel), el núcleo lo anota: habilita "Reconectar este teléfono" (ver
-    /// `AppCore::anotar_rechazo_de_la_nube`).
+    /// El resultado, bueno o malo, lo anota el núcleo: la franja de
+    /// "teléfono retirado" refleja la última respuesta con autoridad de la
+    /// nube (ver `AppCore::anotar_autenticacion`).
     fn autenticar_con_cache(
         &self,
     ) -> Result<control_acceso::nube::TokenDispositivo, control_acceso::nube::NubeError> {
-        let token = self
-            .cache_token
-            .autenticar_con_cache()
-            .inspect_err(|error| self.core_lock().anotar_rechazo_de_la_nube(error))?;
+        let resultado = self.cache_token.autenticar_con_cache();
+        self.core_lock().anotar_autenticacion(&resultado);
+        let token = resultado?;
         self.aplicar_token_de(&token);
         Ok(token)
     }

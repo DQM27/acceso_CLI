@@ -693,10 +693,15 @@ pub fn mensaje_nube(error: crate::nube::NubeError) -> String {
     use crate::nube::NubeError;
 
     match error {
-        NubeError::CredencialesInvalidas => {
-            "La nube ya no reconoce a este dispositivo (fue retirado en el panel) \
-             -- pida a un administrador un código de reconexión"
+        NubeError::EquipoRetirado => {
+            "Este dispositivo fue retirado en el panel -- pida a un administrador un código de \
+             reconexión"
                 .into()
+        }
+        // No es un retiro (ver `NubeError::CredencialesInvalidas`): no se
+        // ofrece reconectar, se avisa a quien puede revisarlo.
+        NubeError::CredencialesInvalidas => {
+            "La nube no reconoce la clave de este dispositivo -- avise a un administrador".into()
         }
         NubeError::VersionDesactualizada => {
             "Esta versión de la app ya no es compatible -- actualice la app para seguir sincronizando"
@@ -1224,21 +1229,36 @@ mod tests {
         );
     }
 
-    /// `CredencialesInvalidas`/`VersionDesactualizada` cada uno con su propio
+    /// `EquipoRetirado`/`VersionDesactualizada` cada uno con su propio
     /// mensaje -- no deben caer los dos en el mismo texto genérico (mismo
     /// motivo que el test de arriba para gestión/uso), porque uno se resuelve
-    /// registrando el equipo de nuevo y el otro actualizando la app.
+    /// reconectando el equipo y el otro actualizando la app.
     #[cfg(feature = "nube")]
     #[test]
-    fn credencial_rechazada_y_version_desactualizada_no_comparten_mensaje() {
+    fn equipo_retirado_y_version_desactualizada_no_comparten_mensaje() {
         use crate::nube::NubeError;
 
-        let rechazada = mensaje_nube(NubeError::CredencialesInvalidas);
+        let retirado = mensaje_nube(NubeError::EquipoRetirado);
         let desactualizada = mensaje_nube(NubeError::VersionDesactualizada);
 
-        assert_ne!(rechazada, desactualizada);
-        assert!(rechazada.contains("código"));
+        assert_ne!(retirado, desactualizada);
+        assert!(retirado.contains("código de reconexión"));
         assert!(desactualizada.contains("actualice"));
+    }
+
+    /// Incidente del 2026-10-26: un `401` le decía a la persona "fue
+    /// retirado" y le pedía reconectar un equipo que no estaba retirado.
+    /// Sólo `EquipoRetirado` habla de retiro y de reconexión.
+    #[cfg(feature = "nube")]
+    #[test]
+    fn solo_un_retiro_confirmado_habla_de_retiro_y_reconexion() {
+        use crate::nube::NubeError;
+
+        let no_reconocida = mensaje_nube(NubeError::CredencialesInvalidas);
+
+        assert!(!no_reconocida.contains("retirado"), "{no_reconocida}");
+        assert!(!no_reconocida.contains("reconexión"), "{no_reconocida}");
+        assert!(mensaje_nube(NubeError::EquipoRetirado).contains("retirado"));
     }
 
     /// Mismo texto que ya mostraba escritorio (`desktop/src/api/ingresos.ts`,

@@ -674,17 +674,24 @@ function Shell({
     if (manejarResumenSincronizacion(resumen)) return;
     startTransition(() => setRefrescarActivos((n) => n + 1));
     if (emitir) emitirActualizacion(resumen);
+    // Sincronizó: la nube aceptó al equipo y el núcleo ya borró la marca de
+    // retirado. Si el aviso quedó a la vista, se va solo.
+    equipoRetirado()
+      .then((retirado) => {
+        if (!retirado) avisos.cerrar(AVISO_EQUIPO_RETIRADO);
+      })
+      .catch((error) => console.error("equipo_retirado:", error));
   });
   useEffect(() => {
     const cancelarRealtime = iniciarRealtimeNube({
       onSincronizado: (resumen) => alSincronizarNube(resumen, false),
       onEstado: setEstadoConexionNube,
-      // Este equipo fue retirado en el panel (ver `expulsionNube.ts`): el
-      // token cacheado no sirve más. El trabajo local sigue disponible; el
-      // aviso queda fijo hasta que alguien lo cierre.
-      onExpulsado: () => {
-        void descartarTokenNube().then(ofrecerReconexion);
-      },
+      // Aviso de expulsión: la nube confirma (o no) el retiro. Sólo si lo
+      // confirma se ofrece reconectar (ver `expulsionNube.ts`). El trabajo
+      // local sigue disponible; el aviso queda fijo hasta que alguien lo
+      // cierre o la nube vuelva a aceptar al equipo.
+      confirmarExpulsion: descartarTokenNube,
+      onExpulsado: ofrecerReconexion,
       usuario: { cedula: sesion.cedula, nombre: sesion.nombre },
     });
     const cancelarSincronizacionAutomatica = listen<ResumenSincronizacion>(
