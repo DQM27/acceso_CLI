@@ -103,7 +103,11 @@ function leerListaSecciones(clave: string): Seccion[] | null {
   try {
     const guardado = localStorage.getItem(clave);
     if (!guardado) return null;
-    return (JSON.parse(guardado) as unknown[]).filter(seccionValida);
+    return (JSON.parse(guardado) as unknown[])
+      // "Adentro ahora" pasó a ser "Activos" (2026-10-26): conserva su lugar
+      // en el orden (y si estaba oculta) que este navegador ya había guardado.
+      .map((id) => (id === "adentro" ? "activos" : id))
+      .filter(seccionValida);
   } catch {
     return null;
   }

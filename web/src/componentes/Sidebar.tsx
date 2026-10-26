@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
@@ -9,6 +9,10 @@ import type { LucideIcon } from "lucide-react";
 import type { Seccion } from "../secciones";
 import { rutaSeccion } from "../secciones";
 import MenuContextualSecciones from "./MenuContextualSecciones";
+
+/** Ventana tras soltar un arrastre en la que el clic que dispara el navegador
+ * se ignora: llega enseguida (mismo gesto), un clic de verdad no tan pronto. */
+const MS_CLIC_TRAS_ARRASTRE = 250;
 
 interface FilaSeccion {
   id: Seccion;
@@ -25,10 +29,14 @@ function ItemSidebar({
   seccion,
   colapsado,
   onNavegar,
+  recienArrastrado,
 }: {
   seccion: FilaSeccion;
   colapsado: boolean;
   onNavegar: () => void;
+  /** `true` si un arrastre acaba de terminar: el clic que el navegador
+   * dispara al soltar no es una navegación. */
+  recienArrastrado: () => boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: seccion.id,
@@ -41,8 +49,20 @@ function ItemSidebar({
       {...listeners}
       // dnd-kit lo marca como "button"; acá es un enlace de navegación.
       role={undefined}
+      // Sin el arrastre nativo del navegador: un enlace se puede arrastrar, y
+      // al soltarlo dentro de la página el navegador abría esa dirección
+      // (recargaba el panel entero) en vez de dejar que dnd-kit reordene.
+      draggable={false}
       to={rutaSeccion(seccion.id)}
-      onClick={onNavegar}
+      onClick={(evento) => {
+        // Al soltar, el puntero queda sobre el ítem movido y el navegador
+        // dispara un clic: sin esto, reordenar también llevaba a esa sección.
+        if (recienArrastrado()) {
+          evento.preventDefault();
+          return;
+        }
+        onNavegar();
+      }}
       title={colapsado ? seccion.etiqueta : undefined}
       className={({ isActive }) => `nav-item ${isActive ? "nav-item-activo" : ""}`}
       // Sólo la transformación del arrastre es dinámica.
@@ -110,10 +130,14 @@ export default function Sidebar({
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  // Cuándo terminó el último arrastre (ver `recienArrastrado` en `ItemSidebar`).
+  const finArrastre = useRef(0);
+  const recienArrastrado = () => performance.now() - finArrastre.current < MS_CLIC_TRAS_ARRASTRE;
 
   const visibles = secciones.filter((seccion) => !ocultas.includes(seccion.id));
 
   function alSoltar(evento: DragEndEvent) {
+    finArrastre.current = performance.now();
     const { active, over } = evento;
     if (!over || active.id === over.id) return;
     // Índices contra la lista COMPLETA (no sólo visibles) -- así una
@@ -168,11 +192,24 @@ export default function Sidebar({
           setMenu({ x: evento.clientX, y: evento.clientY });
         }}
       >
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={alSoltar}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={alSoltar}
+          onDragCancel={() => {
+            finArrastre.current = performance.now();
+          }}
+        >
           <SortableContext items={visibles.map((seccion) => seccion.id)} strategy={verticalListSortingStrategy}>
             <div className="shell-nav">
               {visibles.map((seccion) => (
-                <ItemSidebar key={seccion.id} seccion={seccion} colapsado={colapsado} onNavegar={onNavegar} />
+                <ItemSidebar
+                  key={seccion.id}
+                  seccion={seccion}
+                  colapsado={colapsado}
+                  onNavegar={onNavegar}
+                  recienArrastrado={recienArrastrado}
+                />
               ))}
             </div>
           </SortableContext>
